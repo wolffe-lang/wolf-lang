@@ -2,6 +2,86 @@
 
 ## Unreleased
 
+### The operator bridge (s155 — #5 closes, #176's `==` row closes)
+
+**Operators dispatch through traits when an operand is a type
+parameter or a user type (#5).** Chapter 5's `total[T](xs: List[T])
+-> int { xs[0] + 1 }` was refused with "no trait covers this operator
+yet (operator traits are a later sprint)"; the maintainer hit it as a
+learner and asked whether the sprint should be bumped up "now that
+we've encountered it in the wild — we want to attract people to the
+language with friendliness". This is that sprint, ruled 2026-09-11:
+**`[type.trait.op]`** (spec/10 §11). `+ - * / %` are `Add.add`
+`Sub.sub` `Mul.mul` `Div.div` `Rem.rem`; prefix `-` is `Neg.neg`;
+`==`/`!=` are `Eq.eq` (negated); `< <= > >=` are `Ord.cmp` read
+against `Less`/`Greater` and `<=>` is the `Ordering` itself. The
+operator IS the trait call — the same checking, the same dispatch
+record, the same lowering as `Add.add(a, b)`, with the operands as
+`read` arguments (lent, never moved: `a` serves two operators without
+a `copy`). It applies when the left operand is a type parameter or a
+user nominal type, never to two primitives (`int + int`, `str ==
+str`, `str + char` stay builtin whatever impls are in scope).
+**Homogeneous this edition**: `fn add(self, other: Self) -> Self`, no
+output type; a trait of the table's name with another shape is the new
+**E0514** at the operator, and `Money * int` waits on a stated need.
+**The messages.** A bare `T` stays E0501 — "the bounds on `T` say
+nothing about `+`" — with the note the ruling asked for, **"add `T:
+Add` to the bound"**, and a machine edit that inserts it (the "later
+sprint" sentence is retired everywhere it appeared: the diagnostic, the
+E0501 registry prose, `golden_arith.lu`, `golden_eq.lu`). `==` on a
+struct with no `Eq` in scope is **E0301** naming the trait and where
+it comes from (std.cmp), not "operator traits"; a struct with the
+trait in scope and no impl is **E0502** naming the trait and the
+operator. `!`, `&&`, `||` and the bitwise family have no trait and say
+so. Nothing is synthesized (D49): an enum without `impl Eq` is refused
+like a struct.
+
+**`Num` is an alias bound** — `[type.trait.op.alias]`, and the one
+grammar move: `trait_item` gains the `=` form (`[gram.item.trait]`),
+`trait Num = Add + Sub + Mul + Div + Rem + Eq + Ord`. A bound naming
+it means every trait in its list, in every position a bound is read
+(the body's capabilities, the instantiation's obligations — an unmet
+one is E0502 naming the trait, never `Num` — and the impl search); a
+cycle is E0503 once; `impl Num for T` is E0507. So the chapter's
+function reads `fn total[T: Num](xs: List[T], zero: T) -> T` and
+compiles at `int` and `f64`. std's half (the traits, `Neg`, the
+primitive impls, `Num`) is wolf-std sc44's, filed with the exact
+signatures; the witnesses carry the same declarations word for word.
+
+**The compiler.** `Lower::resolve_bounds` expands alias bounds at
+elaboration so every consumer sees traits only; `synth_bin` and
+`synth_prefix` route a type-parameter or nominal left operand through
+`operator_dispatch` (bound lookup or `trait_target` by name, the shape
+check, the right operand against the left, an `OblOrigin::Operator`
+obligation for a nominal, the `Dispatch::Trait` record at the
+operator's span); WIR's `lower_bin`/`lower_prefix` read the record and
+call `lower_trait_call_exprs` (the qualified-call lowering, now over
+expressions instead of `Arg`s), then `operator_dispatch_result` turns
+`Ord.cmp`'s tag into the comparison and negates `Eq.eq` for `!=`; the
+mem tier lends the operands and types the answer as a call result;
+the checked machine runs the impl body through the same
+`trait_concrete`/`resolve_trait_body` path a qualified call takes.
+Also on the checked machine: a payload-free variant as a bare value
+(`Ordering.Less`) now evaluates (#23's member form) — every `Ord.cmp`
+body needs it, and std.cmp could not run there before. Not moved: `%`
+on `f64` has no native lowering (no `frem` op — filed), so the
+witness's `impl Rem for f64` spells the remainder by hand; compound
+assignment on a user type keeps its E0409.
+
+**Predicted before measuring, measured at this tree.** `op_total_num`
+(`6` / `7.5`), `op_money` (`150` / `-150` / `50`), `op_eq_inverting`
+(`false` / `true` / `true` — the inverting impl IS consulted, #176's
+row), `op_ord_struct` (`true` / `false` / `true` / `less`): exit 0 on
+both tiers, byte-identical. Under lupin 0.1.32, as predicted: the
+alias form is `E0201: expected \`{\`, found \`=\``; `+`/`<` on a
+struct are `unsupported: \`+\` is not defined on Money and Money`;
+`op_eq_inverting` prints `true` / `false` / `false` — structural, the
+impl never consulted — which is is46's clause (wolf-interp, filed).
+The book rows that close by name are in the lane report for bs41:
+§5.3's E0501 transcript (the note re-renders), §5.5's boundary
+sentence ("`==` and `<=>` do not dispatch through `Eq` or `Ord`"), and
+the ledger's #176 row 2.
+
 ### The key protocol (s152 — #11 and #154's `Map` rows ruled)
 
 **`Map[K, V]` is typed, keyed by the four, and an absent key is a
