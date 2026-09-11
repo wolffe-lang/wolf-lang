@@ -686,7 +686,19 @@ impl<'t> Lowerer<'t> {
     /// co-location — wolf has no safe cross-region references outside
     /// `iso`/`imm` (which are s20), so the `[mem.region.edge]` table's
     /// ❌ column reports here as E1004.
-    fn demand_store(&mut self, val: &Val, target: RegionId, container: Option<Span>, span: Span) {
+    /// `lend` is the container-element store (`m[k] = v`, `xs[i] = v`
+    /// — `[mem.region.edge]`, s156, wolf-lang#333): the regions still
+    /// unify, so the placement is inferred rather than annotation-free
+    /// by accident, but two independent PARAMETER regions merging is
+    /// not reported. See [`Lower::flow_store`] for why.
+    fn demand_store(
+        &mut self,
+        val: &Val,
+        target: RegionId,
+        container: Option<Span>,
+        span: Span,
+        lend: bool,
+    ) {
         for &s in &val.sites {
             if self.already_conflicted(s) {
                 continue;
@@ -708,6 +720,9 @@ impl<'t> Lowerer<'t> {
             let into = self.show_region(target);
             match self.rt.unify(target, sr) {
                 Unify::Ok => {}
+                // The merge stands either way; a lending store simply
+                // does not report it.
+                Unify::ParamsMerged if lend => {}
                 Unify::ParamsMerged => {
                     self.conflicted = true;
                     self.mark_escape(s, "conflicting placement");
@@ -2273,7 +2288,7 @@ impl<'t> Lowerer<'t> {
                             val.region_fields.push((f, r));
                         }
                     }
-                    self.demand_store(&fv, region, Some(e.span), sp);
+                    self.demand_store(&fv, region, Some(e.span), sp, false);
                     let fields = std::mem::take(&mut val.region_fields);
                     val.merge(fv);
                     val.region_fields = fields;
@@ -3581,7 +3596,7 @@ impl<'t> Lowerer<'t> {
                     self.moved_region[r.0 as usize] = true;
                     self.region_parent.insert(r.0, region);
                 }
-                self.demand_store(&pv, region, Some(e.span), sp);
+                self.demand_store(&pv, region, Some(e.span), sp, false);
                 val.merge(pv);
             }
             val.region = None;
@@ -4514,7 +4529,37 @@ impl<'t> Lowerer<'t> {
                     if let Some(&(c, _)) = containers.first() {
                         let target = self.sites[c.0 as usize].region;
                         let cspan = self.sites[c.0 as usize].span;
-                        self.demand_store(val, target, Some(cspan), place_expr.span);
+                        // `[mem.region.edge]` (s156, wolf-lang#333): a
+                        // store THROUGH a container index lends the
+                        // value, the way the builtin container methods
+                        // already do. `fn set_g[K, V](mut m: Map[K, V],
+                        // k: K, v: V) { m[k] = v }` was E1004 — the
+                        // single most ordinary function a keyed
+                        // container has, unwritable without a `copy` —
+                        // while its `List` twin `fn push_g[T](mut xs:
+                        // List[T], v: T) { (mut xs).push(v) }` was
+                        // fine, because `push`'s value parameter is a
+                        // `read` and a read is a lend, so nothing ever
+                        // told the solver the value lands inside the
+                        // receiver. Two operations that are one
+                        // operation to a reader needed different
+                        // source, and only one of them had a
+                        // diagnostic explaining itself. `push` is the
+                        // permissive one and the one the whole
+                        // container corpus is written against, so the
+                        // index store is lent to match rather than
+                        // `push` tightened to match it. What is NOT
+                        // lent is the region-block escape below
+                        // (`Unify::Conflict`): a value provably
+                        // outliving its region is a different claim,
+                        // and `region tmp { xs[i] = … }` still refuses.
+                        // The debt this defers is a signature surface
+                        // for declaring two parameters share a region,
+                        // which the E1004 note has named as planned
+                        // since s19 and which would let BOTH forms say
+                        // what they mean.
+                        let lend = matches!(self.places.get(place).proj.last(), Some(Proj::Opaque));
+                        self.demand_store(val, target, Some(cspan), place_expr.span, lend);
                     }
                 } else if let Some(rid) = val.region {
                     match self.region_local.get(&l).copied() {

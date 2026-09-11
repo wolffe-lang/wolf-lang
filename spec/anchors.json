@@ -274,6 +274,7 @@
     "mem.region.create.3": "02-memory-model.md",
     "mem.region.create.4": "02-memory-model.md",
     "mem.region.edge": "02-memory-model.md",
+    "mem.region.edge.elem": "02-memory-model.md",
     "mem.region.edge.imm": "02-memory-model.md",
     "mem.region.edge.iso": "02-memory-model.md",
     "mem.region.edge.raw": "02-memory-model.md",

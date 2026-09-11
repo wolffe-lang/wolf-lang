@@ -210,6 +210,26 @@ Edge legality (source stores a reference to target):
   value or the iso field holding it) is affine like the region itself.
 - `[mem.region.edge.imm]` Frozen (`imm`) data may be referenced from
   anywhere, forever.
+- `[mem.region.edge.elem]` A store **through a container index**
+  (`m[k] = v`, `xs[i] = v`) LENDS the value: the container's region and
+  the value's unify, and two independent parameter regions merging
+  there is not an error (s156, wolf-lang#333). The builtin container
+  methods already worked this way and never said so — `push`'s value
+  parameter is a `read`, and a read is a lend — so
+  `fn set_g[K, V](mut m: Map[K, V], k: K, v: V) { m[k] = v }` was E1004
+  while its twin `fn push_g[T](mut xs: List[T], v: T) { (mut xs).push(v) }`
+  was not: two operations that are one operation to a reader, needing
+  different source for the same generic signature, and only one of them
+  with a diagnostic explaining itself. The permissive reading is the one
+  the whole container surface is already written against, so the index
+  store joins it rather than `push` being tightened to meet it. A FIELD
+  store (`holder.item = item`) keeps its E1004 — that is the one
+  annotation Cyclone's measurement says exists — and so does a value
+  provably outliving its region (`region tmp { xs[i] = … }`), which is
+  a different claim and a different arm. The debt this defers is the
+  signature surface for declaring that two parameters share a region,
+  which E1004's own note has named as planned since s19 and which would
+  let both forms say what they mean instead of one of them guessing.
 - `[mem.region.edge.raw]` Cross-region raw edges exist only in Tier 3 and
   carry §7 obligations.
 
