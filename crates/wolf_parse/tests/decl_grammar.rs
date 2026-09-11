@@ -321,6 +321,29 @@ fn generic_struct_and_enum() {
 
 // ----------------------------------------------------------- trait/impl --
 
+/// The alias form (s155, `[type.trait.op]`): `trait Num = Add + Sub`
+/// is a `TraitDecl` with a `TypeBound` and no members; the brace form
+/// has members and no bound.
+#[test]
+fn trait_alias_form_carries_a_bound_list() {
+    let src = "trait Num = Add + Sub + Mul\ntrait Show {\n    fn show(self) -> str\n}\n";
+    let root = clean(src);
+    let decls: Vec<TraitDecl<'_>> = root.nodes().filter_map(TraitDecl::cast).collect();
+    assert_eq!(decls.len(), 2);
+    let alias = decls[0];
+    assert_eq!(text(src, alias.name().expect("name").span), "Num");
+    let bound = alias.alias_bound().expect("alias bound");
+    let names: Vec<&str> = bound
+        .paths()
+        .map(|p| text(src, p.syntax().span))
+        .collect();
+    assert_eq!(names, ["Add", "Sub", "Mul"]);
+    assert_eq!(alias.members().count(), 0);
+    let brace = decls[1];
+    assert!(brace.alias_bound().is_none());
+    assert_eq!(brace.members().count(), 1);
+}
+
 #[test]
 fn trait_and_impl_members_reentrant() {
     let src = "trait Show[T] {\n    fn show(self) -> str\n    type Out = int\n    const N = 3\n}\nimpl Show for Point {\n    fn show(self) -> str { \"p\" }\n}\n";

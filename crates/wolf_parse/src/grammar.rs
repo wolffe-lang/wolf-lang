@@ -1165,6 +1165,29 @@ pub(crate) fn trait_item(p: &mut Parser<'_>, m: Marker) {
     if p.at_punct(Punct::LBracket) {
         generic_param_list(p);
     }
+    if p.at_punct(Punct::Eq) {
+        // The alias form (s155, `[type.trait.op]`): `trait Num = Add +
+        // Sub` names a bound list, not a member set — a `[T: Num]`
+        // bound means every trait in the list. The `=` is the whole
+        // difference from the brace form; the list is the same
+        // `TypeBound` node a generic parameter's `: A + B` builds.
+        p.bump(); // `=`
+        let b = p.start();
+        loop {
+            path(p, "bound");
+            if p.at_punct(Punct::Plus) {
+                p.bump();
+            } else {
+                break;
+            }
+        }
+        b.complete(p, SyntaxKind::TypeBound);
+        if p.at(TokenKind::Term) {
+            p.bump(); // TERM? — optional, as [gram.item.type]'s
+        }
+        m.complete(p, SyntaxKind::TraitDecl);
+        return;
+    }
     member_body(p);
     m.complete(p, SyntaxKind::TraitDecl);
 }

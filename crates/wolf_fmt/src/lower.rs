@@ -2645,7 +2645,13 @@ impl<'a> Fmt<'a> {
                     }
                 }
             }
-            K::TraitDecl | K::ImplDecl => self.container_decl(n, out),
+            // The alias form `trait Num = Add + Sub` has no body: it is
+            // a header-only declaration, formatted by the generic walk
+            // below (the `=` and the `+`s space as pairs).
+            K::TraitDecl if n.tokens().any(|t| t.kind == K::LBrace) => {
+                self.container_decl(n, out)
+            }
+            K::ImplDecl => self.container_decl(n, out),
             K::LetDecl | K::VarDecl if n.nodes().any(|m| m.kind == K::Binder) => {
                 // A comma-grouped binding (D63) stays ONE statement
                 // (D34): flat when it fits, one binder per line when it

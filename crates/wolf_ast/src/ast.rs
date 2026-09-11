@@ -328,6 +328,12 @@ impl<'a> TraitDecl<'a> {
     pub fn members(self) -> impl Iterator<Item = &'a GreenNode> {
         self.0.nodes().filter(|n| n.kind.is_item())
     }
+
+    /// The alias form's bound list — `trait Num = Add + Sub` (s155,
+    /// `[type.trait.op]`). `None` for the brace form.
+    pub fn alias_bound(self) -> Option<TypeBound<'a>> {
+        self.0.nodes().find_map(TypeBound::cast)
+    }
 }
 
 ast_node!(

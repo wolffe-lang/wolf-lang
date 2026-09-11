@@ -345,6 +345,16 @@ fn empty_blocks_close_up() {
 
 // ------------------------------------------------- container bodies ----
 
+/// The alias form (s155) is a one-line header: `=` and `+` spaced as
+/// pairs, no trailing space, no body.
+#[test]
+fn trait_alias_form_is_one_line() {
+    check(
+        "trait Num=Add+Sub +  Mul\n\nfn main() -> !int {\n    0\n}\n",
+        "trait Num = Add + Sub + Mul\n\nfn main() -> !int {\n    0\n}\n",
+    );
+}
+
 #[test]
 fn trait_and_impl_bodies_are_always_multiline() {
     check(
