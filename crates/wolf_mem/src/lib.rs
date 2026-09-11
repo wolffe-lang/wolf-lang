@@ -401,6 +401,9 @@ fn contains_ptr(table: &TypeTable, id: TyId, depth: u32) -> bool {
         | TyKind::Handle(t)
         | TyKind::List(t)
         | TyKind::Pool(t) => contains_ptr(table, *t, depth + 1),
+        TyKind::Map(k, v) => {
+            contains_ptr(table, *k, depth + 1) || contains_ptr(table, *v, depth + 1)
+        }
         TyKind::Tuple(elems) => elems.iter().any(|&t| contains_ptr(table, t, depth + 1)),
         TyKind::Fn(params, ret) => params
             .iter()

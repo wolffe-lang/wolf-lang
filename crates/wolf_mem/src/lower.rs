@@ -123,6 +123,7 @@ fn mentions_rigid(table: &TypeTable, ty: TyId) -> bool {
         | TyKind::Pool(t)
         | TyKind::Chan(t)
         | TyKind::Mutex(t) => mentions_rigid(table, *t),
+        TyKind::Map(k, v) => mentions_rigid(table, *k) || mentions_rigid(table, *v),
         TyKind::Tuple(ts) => ts.iter().any(|t| mentions_rigid(table, *t)),
         TyKind::Fn(ps, r) => {
             ps.iter().any(|t| mentions_rigid(table, *t)) || mentions_rigid(table, *r)
@@ -1506,7 +1507,10 @@ impl<'t> Lowerer<'t> {
                 let recv = b.callee()?;
                 let (base_id, base_ty) = self.as_place(recv)?;
                 let container = base_ty.map(|t| t.kind().clone());
-                if !matches!(container, Some(TyKind::Pool(_) | TyKind::List(_))) {
+                if !matches!(
+                    container,
+                    Some(TyKind::Pool(_) | TyKind::List(_) | TyKind::Map(..))
+                ) {
                     return None; // not a container place (s17 surface)
                 }
                 for a in b.args().into_iter().flat_map(|l| l.args()) {
@@ -1525,7 +1529,21 @@ impl<'t> Lowerer<'t> {
                     proj,
                 };
                 let elem_ty = self.expr_ty(e.span);
-                let copy = elem_ty.map(|t| is_copy(t, 0)).unwrap_or(false);
+                // s152: `m[k]` READS as `V ! {none}` — a fresh value
+                // answered by the lookup, so the place copies exactly
+                // when `V` does (an `int`-valued map is read twice
+                // without a move); the union wrapper is the row, not
+                // storage.
+                let copy = match (&container, base_ty) {
+                    (Some(TyKind::Map(_, v)), Some(bt)) => is_copy(
+                        Ty {
+                            table: bt.table,
+                            id: *v,
+                        },
+                        0,
+                    ),
+                    _ => elem_ty.map(|t| is_copy(t, 0)).unwrap_or(false),
+                };
                 let pid = self.places.intern(place, copy);
                 match container {
                     Some(TyKind::Pool(_)) => {
@@ -1535,6 +1553,10 @@ impl<'t> Lowerer<'t> {
                         });
                         self.blocks[self.cur.0 as usize].trap = true;
                     }
+                    // s152 (`[mem.map.absent]`): a `Map` index never
+                    // traps — an absent key is the `none` row on the
+                    // read and an insert on the write.
+                    Some(TyKind::Map(..)) => {}
                     _ => {
                         self.push(Stmt::CheckedOp { span: e.span });
                         self.blocks[self.cur.0 as usize].trap = true;

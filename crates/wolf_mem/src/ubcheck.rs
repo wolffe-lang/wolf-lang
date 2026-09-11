@@ -399,6 +399,10 @@ enum Value {
         payload: Vec<Value>,
     },
     List(usize),
+    /// A `Map[K, V]` (s152, `[type.map]`): an index into the
+    /// machine's map arena — entries in insertion order, keys one of
+    /// the four `[type.map.key]` admits. Moves, like a `List`.
+    Map(usize),
     Pool(usize),
     Handle {
         index: usize,
@@ -438,12 +442,51 @@ impl Value {
     }
 }
 
+/// A `Map` key as the machine compares it (s152, `[type.map.key]`):
+/// exactly the four admitted key types, so equality is the language's
+/// own and never a user impl's.
+#[derive(Debug, Clone, PartialEq)]
+enum MapKey {
+    Int(i64),
+    Str(String),
+    Char(char),
+    Bool(bool),
+}
+
+impl MapKey {
+    fn of(v: &Value) -> Option<MapKey> {
+        match v {
+            Value::Int(i) => Some(MapKey::Int(*i)),
+            Value::Str(s) => Some(MapKey::Str(s.clone())),
+            Value::Char(c) => Some(MapKey::Char(*c)),
+            Value::Bool(b) => Some(MapKey::Bool(*b)),
+            _ => None,
+        }
+    }
+
+    fn value(&self) -> Value {
+        match self {
+            MapKey::Int(i) => Value::Int(*i),
+            MapKey::Str(s) => Value::Str(s.clone()),
+            MapKey::Char(c) => Value::Char(*c),
+            MapKey::Bool(b) => Value::Bool(*b),
+        }
+    }
+}
+
 /// One step of a place path, indices resolved at path-build time.
 #[derive(Debug, Clone, PartialEq)]
 enum PStep {
     Field(String),
     ListIdx {
         index: i64,
+        span: Span,
+    },
+    /// `m[k]` as a WRITE target (`[mem.map.absent]`): the insert-or-
+    /// replace place. Reads never build this step — an absent key
+    /// answers the `none` row at the expression, not a place fault.
+    MapKey {
+        key: MapKey,
         span: Span,
     },
     PoolIdx {
@@ -1072,6 +1115,10 @@ struct Machine<'t> {
     /// the birth region"), so the ledger charges pushes to the region
     /// that owns the storage, not the region open at the push site.
     list_region: Vec<usize>,
+    /// The map arena (s152): each map's entries in insertion order,
+    /// and each map's birth region, as for lists.
+    maps: Vec<Vec<(MapKey, Value)>>,
+    map_region: Vec<usize>,
     pools: Vec<Vec<PoolSlot>>,
     cells: Vec<RcCell>,
     frames: Vec<Frame<'t>>,
@@ -1301,6 +1348,46 @@ impl<'t> Machine<'t> {
         self.lists.push(items);
         self.list_region.push(rid);
         Ok(id)
+    }
+
+    /// `Map[K, V]()` (s152): an empty map born in the ambient region;
+    /// each insert charges the birth region one key slot and one
+    /// value slot, the `push` rule applied to a keyed store.
+    fn mint_map(&mut self, span: Span) -> E<usize> {
+        let rid = self.ambient.last().copied().unwrap_or(0);
+        self.charge_region_bytes(rid, 0, span)?;
+        let id = self.maps.len();
+        self.maps.push(Vec::new());
+        self.map_region.push(rid);
+        Ok(id)
+    }
+
+    /// `m[k]` as a READ (`[mem.map.absent]`): the bound value, or the
+    /// payload-free `none` row. Never a trap, never `()`.
+    fn map_lookup(&self, id: usize, key: &MapKey) -> Flow {
+        match self.maps[id].iter().find(|(k, _)| k == key) {
+            Some((_, v)) => Flow::Val(v.clone()),
+            None => raise(Value::ErrTag {
+                tag: "none".to_string(),
+                payload: Vec::new(),
+            }),
+        }
+    }
+
+    /// `m[k] = v` (`[mem.map.absent]`): replace the bound value, or
+    /// append a fresh entry — insertion order is the iteration order
+    /// `pairs()` reports.
+    fn map_insert(&mut self, id: usize, key: MapKey, v: Value, span: Span) -> E<()> {
+        if let Some(slot) = self.maps[id].iter_mut().find(|(k, _)| *k == key) {
+            slot.1 = v;
+            return Ok(());
+        }
+        let bytes = slot_bytes(&key.value()) + slot_bytes(&v);
+        self.charge_mem(bytes)?;
+        let rid = self.map_region.get(id).copied().unwrap_or(0);
+        self.charge_region_bytes(rid, bytes, span)?;
+        self.maps[id].push((key, v));
+        Ok(())
     }
 
     /// s77's byte VIEW on this tier (s136, wolf-lang#232): `<str>.bytes()`
@@ -1889,6 +1976,8 @@ impl<'t> Machine<'t> {
             regions: Vec::new(),
             lists: Vec::new(),
             list_region: Vec::new(),
+            maps: Vec::new(),
+            map_region: Vec::new(),
             pools: Vec::new(),
             cells: Vec::new(),
             frames: Vec::new(),
@@ -2277,6 +2366,15 @@ impl<'t> Machine<'t> {
                     }
                 }
                 let mut place = base;
+                // s152: a `Map` receiver keys the place, whatever the
+                // key's value shape (an `int` key is not a list index).
+                if matches!(self.expr_ty(recv.span), Some(TyKind::Map(..))) {
+                    let Some(key) = idx_val.as_ref().and_then(MapKey::of) else {
+                        return Ok(None);
+                    };
+                    place.path.push(PStep::MapKey { key, span: e.span });
+                    return Ok(Some(place));
+                }
                 match idx_val {
                     Some(Value::Int(i)) => {
                         // The origin shift (D61) — the place spelling
@@ -2342,6 +2440,22 @@ impl<'t> Machine<'t> {
             (PStep::Field(f), Value::List(id)) if f == "len" => {
                 let n = self.lists[id].len() as i64;
                 self.walk_read(Value::Int(n), rest, span)
+            }
+            (PStep::Field(f), Value::Map(id)) if f == "len" => {
+                let n = self.maps[id].len() as i64;
+                self.walk_read(Value::Int(n), rest, span)
+            }
+            // A `Map` entry through a place PATH (`m[k].field`): the
+            // bound value walks on; an absent key is the row at the
+            // expression, which no place read can answer.
+            (PStep::MapKey { key, .. }, Value::Map(id)) => {
+                match self.maps[id].iter().find(|(k, _)| k == key) {
+                    Some((_, v)) => {
+                        let v = v.clone();
+                        self.walk_read(v, rest, span)
+                    }
+                    None => self.refuse("reading an absent Map entry through a place path", span),
+                }
             }
             // s37: `s.len` through a place — bytes, O(1) (D24/D25).
             (PStep::Field(f), Value::Str(s)) if f == "len" => {
@@ -2424,6 +2538,22 @@ impl<'t> Machine<'t> {
                 let mut elem = std::mem::replace(&mut self.lists[id][index as usize], Value::Moved);
                 let r = self.patch(&mut elem, rest, v, span);
                 self.lists[id][index as usize] = elem;
+                r
+            }
+            // s152 (`[mem.map.absent]`): the whole-entry write inserts
+            // or replaces; a deeper path patches a bound entry.
+            (PStep::MapKey { key, span: ksp }, Value::Map(id)) => {
+                let id = *id;
+                let (key, ksp) = (key.clone(), *ksp);
+                if rest.is_empty() {
+                    return self.map_insert(id, key, v, ksp);
+                }
+                let Some(pos) = self.maps[id].iter().position(|(k, _)| *k == key) else {
+                    return self.refuse("writing through an absent Map entry's field", span);
+                };
+                let mut elem = std::mem::replace(&mut self.maps[id][pos].1, Value::Moved);
+                let r = self.patch(&mut elem, rest, v, span);
+                self.maps[id][pos].1 = elem;
                 r
             }
             (
@@ -2887,6 +3017,34 @@ impl<'t> Machine<'t> {
                     && matches!(self.expr_ty(recv.span), Some(TyKind::Ptr(_)))
                 {
                     return self.raw_index_read(e);
+                }
+                // s152 — `m[k]` reads as `V ! {none}` ([mem.map.absent]):
+                // the receiver is read in place (never moved), the key
+                // evaluated once, and a miss is the row — not a trap,
+                // not `()`.
+                if let Some(recv) = b.callee()
+                    && matches!(self.expr_ty(recv.span), Some(TyKind::Map(..)))
+                {
+                    let mv = match self.place_of(recv)? {
+                        Some(place) => self.read_place(&place, recv.span)?,
+                        None => val!(self.eval(recv)),
+                    };
+                    let Value::Map(id) = mv else {
+                        return self.refuse("Map index on a non-map", e.span);
+                    };
+                    let Some(kx) = b
+                        .args()
+                        .into_iter()
+                        .flat_map(|l| l.args())
+                        .find_map(Arg::value)
+                    else {
+                        return self.refuse("Map index without a key", e.span);
+                    };
+                    let kv = val!(self.eval(kx));
+                    let Some(key) = MapKey::of(&kv) else {
+                        return self.refuse("a Map key outside the four admitted types", kx.span);
+                    };
+                    return Ok(self.map_lookup(id, &key));
                 }
                 // s37 — `s[a..b]` byte-offset checked slicing (D25).
                 if let Some(recv) = b.callee()
@@ -3589,6 +3747,9 @@ impl<'t> Machine<'t> {
         let items: Vec<Value> = match iter {
             Value::Range { start, end } => (start..end).map(Value::Int).collect(),
             Value::List(id) => self.lists[id].clone(),
+            Value::Map(_) => {
+                return self.refuse("iterating a `Map` directly (walk `m.pairs()`)", e.span);
+            }
             _ => return self.refuse("iteration outside ranges and List", e.span),
         };
         for item in items {
@@ -3753,6 +3914,15 @@ impl<'t> Machine<'t> {
                 let nid = self.pools.len();
                 self.pools.push(slots);
                 Value::Pool(nid)
+            }
+            Value::Map(id) => {
+                let entries = self.maps[id].clone();
+                let nid = self.mint_map(span)?;
+                for (k, v) in entries {
+                    let cv = self.deep_copy(v, span)?;
+                    self.map_insert(nid, k, cv, span)?;
+                }
+                Value::Map(nid)
             }
             Value::Struct { fields } => {
                 let mut out = Vec::with_capacity(fields.len());
@@ -5962,6 +6132,9 @@ impl<'t> Machine<'t> {
                     Value::List(id) if field == "len" => {
                         Ok(Flow::Val(Value::Int(self.lists[id].len() as i64)))
                     }
+                    Value::Map(id) if field == "len" => {
+                        Ok(Flow::Val(Value::Int(self.maps[id].len() as i64)))
+                    }
                     // s37: `s.len` — bytes, O(1) (D24/D25).
                     Value::Str(s) if field == "len" => Ok(Flow::Val(Value::Int(s.len() as i64))),
                     Value::Shared(c) => {
@@ -6552,6 +6725,10 @@ impl<'t> Machine<'t> {
                 let id = self.pools.len();
                 self.pools.push(Vec::new());
                 return Ok(Flow::Val(Value::Pool(id)));
+            }
+            Some(TyKind::Map(..)) if is_container_ctor(d.callee()) => {
+                let id = self.mint_map(e.span)?;
+                return Ok(Flow::Val(Value::Map(id)));
             }
             _ => {}
         }
@@ -7146,6 +7323,47 @@ impl<'t> Machine<'t> {
                         Ok(Flow::Val(Value::Unit))
                     }
                     _ => self.refuse("this List method", e.span),
+                }
+            }
+            // s152 — the `Map` surface ([type.map]): the count, the
+            // emptiness probe, the drain, and `pairs()` as a fresh
+            // `List[(K, V)]` in insertion order (the tuple is the
+            // positional struct the TupleExpr evaluator builds).
+            Some(TyKind::Map(..)) => {
+                let recv_place = self.place_of(recv)?;
+                let recv_val = match &recv_place {
+                    Some(place) => self.read_place(place, recv.span)?,
+                    None => val!(self.eval(recv)),
+                };
+                let Value::Map(id) = recv_val else {
+                    return self.refuse("Map method on a non-map", e.span);
+                };
+                if method == "clear" && recv_place.is_none() {
+                    return self.refuse("mutating a temporary Map", e.span);
+                }
+                match method {
+                    "len" | "count" => Ok(Flow::Val(Value::Int(self.maps[id].len() as i64))),
+                    "is_empty" => Ok(Flow::Val(Value::Bool(self.maps[id].is_empty()))),
+                    "pairs" => {
+                        let items: Vec<Value> = self.maps[id]
+                            .iter()
+                            .map(|(k, v)| Value::Struct {
+                                fields: vec![
+                                    ("0".to_string(), k.value()),
+                                    ("1".to_string(), v.clone()),
+                                ],
+                            })
+                            .collect();
+                        let bytes: u64 = items.iter().map(slot_bytes).sum();
+                        self.charge_mem(bytes)?;
+                        let nid = self.mint_list(items, e.span)?;
+                        Ok(Flow::Val(Value::List(nid)))
+                    }
+                    "clear" => {
+                        self.maps[id].clear();
+                        Ok(Flow::Val(Value::Unit))
+                    }
+                    _ => self.refuse("this Map method", e.span),
                 }
             }
             Some(TyKind::Pool(_)) => {

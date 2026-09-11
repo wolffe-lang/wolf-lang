@@ -127,6 +127,10 @@ fn collect(
         | TyKind::Wrapping(t)
         | TyKind::Distinct(t)
         | TyKind::Range(t) => collect(sigs, *t, via_shared, from, span, edges, not_yet, depth + 1),
+        TyKind::Map(k, v) => {
+            collect(sigs, *k, via_shared, from, span, edges, not_yet, depth + 1);
+            collect(sigs, *v, via_shared, from, span, edges, not_yet, depth + 1);
+        }
         TyKind::Tuple(ts) => {
             for &t in ts {
                 collect(sigs, t, via_shared, from, span, edges, not_yet, depth + 1);
