@@ -147,6 +147,17 @@ fn callee_ids(m: &Module, fid: FuncId, by_name: &HashMap<&str, FuncId>) -> Vec<F
     out
 }
 
+/// Does `f` call itself directly? (The inliner's own no-self-inlining
+/// rule, asked of a callee: s150's forwarder guard.)
+fn calls_itself(f: &Function) -> bool {
+    f.layout.iter().any(|&b| {
+        f.blocks[b].insts.iter().any(|&inst| {
+            f.insts[inst].op == Opcode::Call
+                && matches!(f.insts[inst].aux, Aux::Callee(ef) if f.ext_funcs[ef].name == f.name)
+        })
+    })
+}
+
 /// One prepared call-site splice.
 struct Plan {
     block: Block,
@@ -191,6 +202,15 @@ pub(crate) fn run(
     if caller.consttime.is_some() {
         return Ok(false);
     }
+    // s150 (#300): a fn-value forwarder (`{target}.fv`, the shim a
+    // static callable record's slot holds — `[abi.native.closure]`)
+    // exists to make one call. A small target dissolving into it is a
+    // win (the call's marshaling goes); a RECURSIVE target is not —
+    // one level of the recursion unrolls into the forwarder and stays
+    // alive behind the table for as long as the table is
+    // (`rows/inferred_private.lu` went 196 -> 322 lines the day the
+    // forwarder appeared). The forwarder keeps calling such a target.
+    let forwarder = caller.name.ends_with(".fv");
     let cfg = analysis::cfg(caller);
     let doms = analysis::dominators(&cfg);
     let loops = analysis::loops(caller, &cfg, &doms);
@@ -217,6 +237,9 @@ pub(crate) fn run(
             let callee = &m.funcs[cid];
             if callee.consttime.is_some() {
                 continue; // c28 [ct.attr.barrier]: never dissolved into a caller
+            }
+            if forwarder && calls_itself(callee) {
+                continue; // s150: a forwarder never unrolls a recursion
             }
             if decide(
                 m,
