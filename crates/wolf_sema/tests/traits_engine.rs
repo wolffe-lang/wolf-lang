@@ -542,3 +542,110 @@ fn impl_addition_moves_hashes_generic_body_edits_do_not() {
     assert_eq!(a.dyns[0].methods, ["show"]);
     assert_eq!(a.impls.len(), 1);
 }
+
+const OPS_WORLD: &str = "\
+trait Add {
+    fn add(self, other: Self) -> Self
+}
+
+trait Sub {
+    fn sub(self, other: Self) -> Self
+}
+
+trait Num = Add + Sub
+
+impl Add for int {
+    fn add(self, other: Self) -> Self { self + other }
+}
+
+struct Money {
+    cents: int,
+}
+
+impl Add for Money {
+    fn add(self, other: Self) -> Self {
+        Money { cents: self.cents + other.cents }
+    }
+}
+
+impl Sub for Money {
+    fn sub(self, other: Self) -> Self {
+        Money { cents: self.cents - other.cents }
+    }
+}
+
+fn total[T: Num](a: T, b: T) -> T {
+    a + b - a
+}
+";
+
+/// `[type.trait.op]` (s155): an alias bound means every trait in its
+/// list — `[T: Num]` grants `+` and `-` inside the body, and an
+/// instantiation must satisfy each of them: `Money` implements both;
+/// `int` implements only `Add` here, so the call is E0502 naming
+/// `Sub`, never `Num`.
+#[test]
+fn alias_bound_means_every_trait_in_its_list() {
+    let ok = check_one(&format!(
+        "{OPS_WORLD}
+fn main() -> !int {{
+    let m = total(Money {{ cents: 3 }}, Money {{ cents: 1 }})
+    0
+}}
+"
+    ));
+    assert!(codes(&ok).is_empty(), "{:?}", ok.diagnostics);
+    let bad = check_one(&format!(
+        "{OPS_WORLD}
+fn main() -> !int {{
+    let x: int = 3
+    let n = total(x, x)
+    0
+}}
+"
+    ));
+    assert_eq!(codes(&bad), vec!["E0502"], "{:?}", bad.diagnostics);
+    let msg = bad.diagnostics[0].message.clone();
+    assert!(msg.contains("`Sub`"), "{msg}");
+    assert!(!msg.contains("`Num`"), "{msg}");
+}
+
+/// The operator dispatch record: every operator that went through a
+/// trait leaves a `Dispatch::Trait` at its span, which is what both
+/// machines read (`[type.trait.op]`).
+#[test]
+fn operators_on_user_types_record_their_dispatch() {
+    let tc = check_one(&format!(
+        "{OPS_WORLD}
+fn main() -> !int {{
+    let a = Money {{ cents: 3 }}
+    let b = Money {{ cents: 1 }}
+    let c = a + b
+    let d = c - a
+    0
+}}
+"
+    ));
+    assert!(codes(&tc).is_empty(), "{:?}", tc.diagnostics);
+    let mut ops: Vec<(String, String)> = tc
+        .bodies
+        .iter()
+        .filter_map(|b| match &b.result {
+            wolf_sema::BodyResult::Checked(tb) => Some(tb),
+            _ => None,
+        })
+        .flat_map(|tb| tb.dispatch.iter())
+        .filter_map(|(_, d)| match d {
+            wolf_sema::Dispatch::Trait { name, method, .. } => {
+                Some((name.clone(), method.clone()))
+            }
+            _ => None,
+        })
+        .collect();
+    ops.sort();
+    // Two in `total`'s generic body (checked once, against `[T:
+    // Num]`), two in `main` on `Money`.
+    let add = ("Add".to_string(), "add".to_string());
+    let sub = ("Sub".to_string(), "sub".to_string());
+    assert_eq!(ops, vec![add.clone(), add, sub.clone(), sub]);
+}

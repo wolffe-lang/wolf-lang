@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0503]: the alias bound `A` names itself
+ --> mem:///main.lu:2:11
+  |
+2 | trait B = A
+  |           ^ this alias is cyclic
+  |
+  = note: `trait A = B` lists the traits a `[T: A]` bound means, so the list cannot contain `A`
+    again — name traits with members.

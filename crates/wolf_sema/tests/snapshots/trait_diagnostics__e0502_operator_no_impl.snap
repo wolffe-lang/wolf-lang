@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0502]: `Money` does not implement `Add`, so `+` cannot take it
+  --> mem:///main.lu:10:13
+   |
+10 |     let c = a + b
+   |             ^ this is `Money`
+   |
+   = note: an operator on a user type dispatches through its trait ([type.trait.op]): write `impl
+     Add for Money` and `+` runs it.

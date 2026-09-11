@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0514]: `Add.add` is not `fn add(self, other: Self) -> Self`, so `+` cannot dispatch through it
+  --> mem:///main.lu:15:13
+   |
+ 5 |     fn add(self, other: int) -> Self
+   |        --- the method is declared here
+...
+15 |     let c = a + b
+   |             ^ `+` is `Add.add` here
+   |
+   = note: the operator traits are homogeneous this edition ([type.trait.op]): `Add` must declare
+     `fn add(self, other: Self) -> Self` — one type in, the same type out — for `Add.add` to
+     be an operator; heterogeneous operands wait on a stated need.

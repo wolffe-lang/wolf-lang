@@ -5,8 +5,14 @@ expression: "render_types(&[(&[], \"main.lu\", src)])"
 error[E0501]: the bounds on `T` say nothing about `+`
  --> mem:///main.lu:2:5
   |
+1 | fn sum[T](a: T, b: T) -> T {
+  |        - `T` is declared here
 2 |     a + b
   |     ^ `T` could be any type here
   |
-  = note: bounds grant trait members only, and no trait covers this operator yet (operator traits
-    are a later sprint); take a concrete type here, or dispatch through a trait method.
+  = note: add `T: Add` to the bound — `+` on a type parameter dispatches through `Add.add`
+    ([type.trait.op]), and a generic body may use only what its bounds provide.
+help: add the bound: `T: Add`
+  |
+1 | fn sum[T: Add](a: T, b: T) -> T {
+  |

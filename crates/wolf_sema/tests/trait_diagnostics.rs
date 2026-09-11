@@ -49,7 +49,8 @@ fn e0501_add_this_bound() {
     );
 }
 
-/// E0501 — an operator capability no bound can grant yet.
+/// E0501 — an operator on a bare archetype names the bound to add
+/// (`[type.trait.op]`, s155: `+` is `Add.add` under `T: Add`).
 #[test]
 fn e0501_operator_capability() {
     snap_one(
@@ -209,6 +210,79 @@ fn e0513_rewrite_cycle() {
         "trait Pair {\n    type A = type\n    type B = type\n}\n\
          struct P {\n    n: int,\n}\n\
          impl Pair for P {\n    type A = Self.B\n    type B = Self.A\n}\n\
+         fn main() -> !int {\n    0\n}\n",
+    );
+}
+
+/// E0514 — the trait named `Add` declares a heterogeneous `add`, so
+/// `+` cannot dispatch through it (`[type.trait.op]`: homogeneous).
+#[test]
+fn e0514_heterogeneous_operator_method() {
+    snap_one(
+        "e0514_hetero_add",
+        "struct Money {\n    cents: int,\n}\n\
+         trait Add {\n    fn add(self, other: int) -> Self\n}\n\
+         impl Add for Money {\n    fn add(self, other: int) -> Self {\n        Money { cents: self.cents + other }\n    }\n}\n\
+         fn main() -> !int {\n    let a = Money { cents: 1 }\n    let b = Money { cents: 2 }\n    let c = a + b\n    0\n}\n",
+    );
+}
+
+/// E0502 — `+` on a user type with the trait in scope and no impl:
+/// the obligation names the trait and the operator.
+#[test]
+fn e0502_operator_without_impl() {
+    snap_one(
+        "e0502_operator_no_impl",
+        "struct Money {\n    cents: int,\n}\n\
+         trait Add {\n    fn add(self, other: Self) -> Self\n}\n\
+         fn main() -> !int {\n    let a = Money { cents: 1 }\n    let b = Money { cents: 2 }\n    let c = a + b\n    0\n}\n",
+    );
+}
+
+/// E0301 — `==` on a struct with no `Eq` in scope names the trait
+/// and where it comes from, never "operator traits are later".
+#[test]
+fn e0301_operator_trait_not_in_scope() {
+    snap_one(
+        "e0301_operator_no_trait",
+        "struct P {\n    x: int,\n}\n\
+         fn main() -> !int {\n    let a = P { x: 1 }\n    let b = P { x: 1 }\n    if a == b { 0 } else { 1 }\n}\n",
+    );
+}
+
+/// E0507 — an alias bound is not implemented; its traits are.
+#[test]
+fn e0507_alias_bound_is_not_implemented() {
+    snap_one(
+        "e0507_alias_impl",
+        "trait Add {\n    fn add(self, other: Self) -> Self\n}\n\
+         trait Sub {\n    fn sub(self, other: Self) -> Self\n}\n\
+         trait Num = Add + Sub\n\
+         struct Money {\n    cents: int,\n}\n\
+         impl Num for Money {\n}\n\
+         fn main() -> !int {\n    0\n}\n",
+    );
+}
+
+/// E0503 — an alias bound naming itself resolves to nothing, once.
+#[test]
+fn e0503_alias_bound_cycle() {
+    snap_one(
+        "e0503_alias_cycle",
+        "trait A = B\n\
+         trait B = A\n\
+         fn f[T: A](v: T) -> T {\n    v\n}\n\
+         fn main() -> !int {\n    0\n}\n",
+    );
+}
+
+/// E0501 — the ordering family and negation name their traits too.
+#[test]
+fn e0501_operator_ord_and_neg() {
+    snap_one(
+        "e0501_operator_ord_neg",
+        "fn lo[T](a: T, b: T) -> bool {\n    a < b\n}\n\
+         fn flip[T](a: T) -> T {\n    -a\n}\n\
          fn main() -> !int {\n    0\n}\n",
     );
 }

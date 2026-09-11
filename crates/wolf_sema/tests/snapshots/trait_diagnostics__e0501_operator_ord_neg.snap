@@ -1,0 +1,33 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0501]: the bounds on `T` say nothing about `<`
+ --> mem:///main.lu:2:5
+  |
+1 | fn lo[T](a: T, b: T) -> bool {
+  |       - `T` is declared here
+2 |     a < b
+  |     ^ `T` could be any type here
+  |
+  = note: add `T: Ord` to the bound — `<` on a type parameter dispatches through `Ord.cmp`
+    ([type.trait.op]), and a generic body may use only what its bounds provide.
+help: add the bound: `T: Ord`
+  |
+1 | fn lo[T: Ord](a: T, b: T) -> bool {
+  |
+
+error[E0501]: the bounds on `T` say nothing about `-`
+ --> mem:///main.lu:5:6
+  |
+4 | fn flip[T](a: T) -> T {
+  |         - `T` is declared here
+5 |     -a
+  |      ^ `T` could be any type here
+  |
+  = note: add `T: Neg` to the bound — `-` on a type parameter dispatches through `Neg.neg`
+    ([type.trait.op]), and a generic body may use only what its bounds provide.
+help: add the bound: `T: Neg`
+  |
+4 | fn flip[T: Neg](a: T) -> T {
+  |

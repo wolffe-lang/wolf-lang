@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/trait_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0507]: `Num` is an alias bound, and an alias is not implemented
+  --> mem:///main.lu:11:6
+   |
+11 | impl Num for Money {
+   |      ^^^ an alias bound, not a trait
+   |
+   = note: `trait Num = Add + Sub` lists traits; a type satisfies `[T: Num]` by implementing each
+     of them — write those impls instead.

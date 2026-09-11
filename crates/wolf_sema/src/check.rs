@@ -60,7 +60,7 @@ use crate::exhaust;
 use crate::graph::{BindTarget, Package};
 use crate::prelude;
 use crate::sig::{FnSig, GenericSig, ItemSig, Lower, ParamSig, SigTables, StructSig, bindings_for};
-use crate::traits::{self, TraitRef};
+use crate::traits::{self, TraitMethod, TraitRef};
 use crate::types::{MetaTy, Prim, TyId, TyKind, TypeTable, diff, render, subst};
 use crate::unify::{NumKind, UnifyErr, VarStore, join, unify};
 
@@ -450,6 +450,22 @@ enum OblOrigin {
     Instantiation { callee: String, param: String },
     /// A qualified call `Trait.method(…)` constrains its `Self`.
     Qualified { method: String },
+    /// An operator on a user type dispatches through its trait
+    /// (`[type.trait.op]`, s155): `+` needs `Add`, `==` needs `Eq`.
+    Operator { op: String },
+}
+
+/// The shape an operator trait's method must have (`[type.trait.op]`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OpShape {
+    /// `fn m(self, other: Self) -> Self` — `+ - * / %`.
+    Arith,
+    /// `fn neg(self) -> Self` — prefix `-`.
+    Neg,
+    /// `fn eq(self, other: Self) -> bool` — `==` / `!=`.
+    Eq,
+    /// `fn cmp(self, other: Self) -> Ordering` — `< <= > >= <=>`.
+    Cmp,
 }
 
 #[derive(Debug, Clone)]
@@ -2289,23 +2305,278 @@ impl<'a> Checker<'a> {
         self.diags.push(d);
     }
 
-    /// E0501 for operator/comparison capabilities on archetypes: no
-    /// bound can grant these yet (operator traits are later), so the
-    /// message says so instead of hinting a bound.
-    fn golden_rule_op(&mut self, span: Span, param: &str, op: &str) {
-        self.diags.push(
-            Diagnostic::error(
-                codes::E0501,
-                span,
-                format!("the bounds on `{param}` say nothing about `{op}`"),
-            )
-            .with_label(format!("`{param}` could be any type here"))
-            .with_note(
-                "bounds grant trait members only, and no trait covers this \
-                 operator yet (operator traits are a later sprint); take a \
-                 concrete type here, or dispatch through a trait method.",
-            ),
-        );
+    /// E0501 for an operator on an archetype whose bounds do not
+    /// name the operator's trait (`[type.trait.op]`, s155): the note
+    /// says which bound to add — "add `T: Add` to the bound" — and a
+    /// machine edit inserts it when the parameter has no bounds yet.
+    /// `tr` is `None` for the operators no trait covers (`!`, `&&`,
+    /// `||`, the bitwise family): those say so and point at a
+    /// concrete type.
+    fn golden_rule_op(&mut self, span: Span, param: &str, op: &str, tr: Option<(&str, &str)>) {
+        let mut d = Diagnostic::error(
+            codes::E0501,
+            span,
+            format!("the bounds on `{param}` say nothing about `{op}`"),
+        )
+        .with_label(format!("`{param}` could be any type here"));
+        match tr {
+            Some((trait_name, method)) => {
+                let info = self.generic_info.get(param).copied();
+                if let Some((decl, _)) = info {
+                    d = d.with_secondary(decl, format!("`{param}` is declared here"));
+                }
+                d = d.with_note(format!(
+                    "add `{param}: {trait_name}` to the bound — `{op}` on a type parameter \
+                     dispatches through `{trait_name}.{method}` ([type.trait.op]), and a \
+                     generic body may use only what its bounds provide."
+                ));
+                match info {
+                    Some((decl, false)) => {
+                        let insert = Span::new(decl.file, decl.hi, decl.hi);
+                        d = d.with_suggestion(Suggestion::new(
+                            format!("add the bound: `{param}: {trait_name}`"),
+                            vec![(insert, format!(": {trait_name}"))],
+                            Applicability::Maybe,
+                        ));
+                    }
+                    Some((_, true)) => {
+                        d = d.with_note(format!(
+                            "`{param}` has bounds already: add `+ {trait_name}` to them."
+                        ));
+                    }
+                    None => {}
+                }
+            }
+            None => {
+                d = d.with_note(
+                    "no trait covers this operator: `!`, `&&` and `||` are `bool`'s and \
+                     the bitwise operators are the integers' alone this edition \
+                     ([type.trait.op]); take a concrete type here.",
+                );
+            }
+        }
+        self.diags.push(d);
+    }
+
+    /// The operator ↔ trait table (`[type.trait.op]`, s155): the
+    /// trait and method an operator dispatches through when an
+    /// operand is a type parameter or a user type, and the shape the
+    /// method must have. `prefix` selects `-x` over `a - b`.
+    fn op_trait(op: SyntaxKind, prefix: bool) -> Option<(&'static str, &'static str, OpShape)> {
+        Some(match (op, prefix) {
+            (SyntaxKind::Plus, false) => ("Add", "add", OpShape::Arith),
+            (SyntaxKind::Minus, false) => ("Sub", "sub", OpShape::Arith),
+            (SyntaxKind::Star, false) => ("Mul", "mul", OpShape::Arith),
+            (SyntaxKind::Slash, false) => ("Div", "div", OpShape::Arith),
+            (SyntaxKind::Percent, false) => ("Rem", "rem", OpShape::Arith),
+            (SyntaxKind::Minus, true) => ("Neg", "neg", OpShape::Neg),
+            (SyntaxKind::EqEq | SyntaxKind::NotEq, false) => ("Eq", "eq", OpShape::Eq),
+            (
+                SyntaxKind::Lt
+                | SyntaxKind::Gt
+                | SyntaxKind::LtEq
+                | SyntaxKind::GtEq
+                | SyntaxKind::Spaceship,
+                false,
+            ) => ("Ord", "cmp", OpShape::Cmp),
+            _ => return None,
+        })
+    }
+
+    /// An operator whose left operand is a type parameter or a user
+    /// type dispatches through its trait (`[type.trait.op]`, s155):
+    /// `a + b` is `Add.add(a, b)`, `-a` is `Neg.neg(a)`, `a == b` is
+    /// `Eq.eq(a, b)` (negated for `!=`), `a < b` is `Ord.cmp(a, b)`
+    /// read against `Less`. Homogeneous: the right operand is the
+    /// left's type, the arithmetic result is that type. `None` when
+    /// the left operand is not a candidate — the caller's builtin
+    /// path proceeds (two primitives never dispatch). On a type
+    /// parameter the bound must name the trait (E0501, add it); on a
+    /// user type the trait must be in scope (E0301) and implemented
+    /// (E0502, discharged with the body's other obligations); the
+    /// trait's method must have the table's shape (E0514). The
+    /// dispatch record at the operator's span is what both machines
+    /// read to run the impl.
+    fn operator_dispatch(
+        &mut self,
+        e: &GreenNode,
+        lhs: &GreenNode,
+        lt: TyId,
+        rhs: Option<(&GreenNode, TyId)>,
+        op: SyntaxKind,
+        op_text: &str,
+    ) -> R<Option<TyId>> {
+        let Some((tname, method, shape)) = Self::op_trait(op, rhs.is_none()) else {
+            return Ok(None);
+        };
+        let bool_ = self.lo.table.prim(Prim::Bool);
+        let lt = self.shallow(lt);
+        let rigid = match self.kind_of(lt) {
+            TyKind::Rigid(n) => Some(n),
+            TyKind::Nominal { .. } => None,
+            _ => return Ok(None),
+        };
+        // The answer when the dispatch cannot be resolved: no cascade
+        // off the operator, a `bool` where a comparison was written.
+        let poisoned = match shape {
+            OpShape::Arith | OpShape::Neg => self.error_ty(),
+            OpShape::Eq | OpShape::Cmp => bool_,
+        };
+        let tr = match &rigid {
+            Some(n) => match self
+                .bounds
+                .get(n)
+                .and_then(|bs| bs.iter().find(|b| b.name == tname))
+            {
+                Some(b) => TraitRef {
+                    module: b.module,
+                    name: b.name.clone(),
+                },
+                None => {
+                    self.golden_rule_op(lhs.span, n, op_text, Some((tname, method)));
+                    if let Some((r, _)) = rhs {
+                        let _ = r;
+                    }
+                    return Ok(Some(poisoned));
+                }
+            },
+            None => match self.trait_target(tname) {
+                Some(tr) => tr,
+                None => {
+                    let shown = self.show(lt);
+                    self.diags.push(
+                        Diagnostic::error(
+                            codes::E0301,
+                            lhs.span,
+                            format!(
+                                "`{op_text}` on `{shown}` needs the trait `{tname}`, and nothing \
+                                 named `{tname}` is in scope"
+                            ),
+                        )
+                        .with_label(format!("this is `{shown}`, not a primitive"))
+                        .with_note(format!(
+                            "an operator on a user type dispatches through its trait \
+                             ([type.trait.op]): `{op_text}` is `{tname}.{method}`. Bring \
+                             `{tname}` into scope (std.ops and std.cmp declare the operator \
+                             traits) and write `impl {tname} for {shown}`."
+                        )),
+                    );
+                    return Ok(Some(poisoned));
+                }
+            },
+        };
+        let Some(td) = self.sigs.traits.get(&tr) else {
+            return Ok(Some(poisoned));
+        };
+        let Some(m) = td.method(method).cloned() else {
+            let decl = td.name_span;
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E0514,
+                    lhs.span,
+                    format!("`{tname}` has no method `{method}`, so `{op_text}` cannot dispatch through it"),
+                )
+                .with_label(format!("`{op_text}` is `{tname}.{method}` here"))
+                .with_secondary(decl, format!("`{tname}` is declared here"))
+                .with_note(Self::op_shape_note(tname, method, shape)),
+            );
+            return Ok(Some(poisoned));
+        };
+        if !self.op_method_fits(&m, shape) {
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E0514,
+                    lhs.span,
+                    format!(
+                        "`{tname}.{method}` is not `{}`, so `{op_text}` cannot dispatch through it",
+                        Self::op_shape_spelling(method, shape)
+                    ),
+                )
+                .with_label(format!("`{op_text}` is `{tname}.{method}` here"))
+                .with_secondary(m.name_span, "the method is declared here")
+                .with_note(Self::op_shape_note(tname, method, shape)),
+            );
+            return Ok(Some(poisoned));
+        }
+        if let Some((rn, rt)) = rhs {
+            let exp = Expect {
+                ty: lt,
+                reason: Reason::OpOperands(op_text.to_string()),
+                because: Some(lhs.span),
+            };
+            self.expect_unify(rn.span, rt, &exp);
+        }
+        if rigid.is_none() {
+            self.obligate(
+                lt,
+                tr.clone(),
+                lhs.span,
+                None,
+                OblOrigin::Operator {
+                    op: op_text.to_string(),
+                },
+            );
+        }
+        self.dispatch.push((
+            e.span,
+            Dispatch::Trait {
+                module: tr.module,
+                name: tr.name.clone(),
+                method: method.to_string(),
+                dyn_call: false,
+            },
+        ));
+        Ok(Some(match shape {
+            OpShape::Arith | OpShape::Neg => lt,
+            OpShape::Eq => bool_,
+            OpShape::Cmp if op == SyntaxKind::Spaceship => {
+                let map: BTreeMap<String, TyId> = [("Self".to_string(), lt)].into();
+                let ret = subst(&mut self.lo.table, m.sig.ret, &map);
+                self.normalize(ret)
+            }
+            OpShape::Cmp => bool_,
+        }))
+    }
+
+    /// Does the trait method have the operator table's shape? The
+    /// receiver and every other operand are `Self`; the result is
+    /// `Self` for arithmetic and negation, `bool` for `eq`, and a
+    /// nominal (`Ordering`) for `cmp`.
+    fn op_method_fits(&self, m: &TraitMethod, shape: OpShape) -> bool {
+        let arity = match shape {
+            OpShape::Neg => 1,
+            _ => 2,
+        };
+        if m.sig.params.len() != arity {
+            return false;
+        }
+        let is_self = |t: TyId| matches!(self.lo.table.kind(t), TyKind::Rigid(n) if n == "Self");
+        if !m.sig.params.iter().all(|p| is_self(p.ty)) {
+            return false;
+        }
+        match shape {
+            OpShape::Arith | OpShape::Neg => is_self(m.sig.ret),
+            OpShape::Eq => matches!(self.lo.table.kind(m.sig.ret), TyKind::Prim(Prim::Bool)),
+            OpShape::Cmp => matches!(self.lo.table.kind(m.sig.ret), TyKind::Nominal { .. }),
+        }
+    }
+
+    fn op_shape_spelling(method: &str, shape: OpShape) -> String {
+        match shape {
+            OpShape::Arith => format!("fn {method}(self, other: Self) -> Self"),
+            OpShape::Neg => format!("fn {method}(self) -> Self"),
+            OpShape::Eq => format!("fn {method}(self, other: Self) -> bool"),
+            OpShape::Cmp => format!("fn {method}(self, other: Self) -> Ordering"),
+        }
+    }
+
+    fn op_shape_note(tname: &str, method: &str, shape: OpShape) -> String {
+        format!(
+            "the operator traits are homogeneous this edition ([type.trait.op]): `{tname}` \
+             must declare `{}` — one type in, the same type out — for `{tname}.{method}` to \
+             be an operator; heterogeneous operands wait on a stated need.",
+            Self::op_shape_spelling(method, shape)
+        )
     }
 
     /// Record a bound obligation, discharged after defaulting.
@@ -2369,6 +2640,9 @@ impl<'a> Checker<'a> {
                             OblOrigin::Qualified { method } => {
                                 format!("`{}` (needed to call `{}.{method}`)", o.tr.name, o.tr.name)
                             }
+                            OblOrigin::Operator { op } => {
+                                format!("`{}` (needed for `{op}`)", o.tr.name)
+                            }
                         };
                         let mut sub = None;
                         if self.generic_info.contains_key(&param) {
@@ -2396,19 +2670,32 @@ impl<'a> Checker<'a> {
                                 "`{shown}` does not implement `{}`, so `{}.{method}` cannot take it",
                                 o.tr.name, o.tr.name
                             ),
+                            OblOrigin::Operator { op } => format!(
+                                "`{shown}` does not implement `{}`, so `{op}` cannot take it",
+                                o.tr.name
+                            ),
                         };
                         let mut d = Diagnostic::error(codes::E0502, o.span, what)
                             .with_label(format!("this is `{shown}`"));
                         if let Some(bs) = o.bound_span {
                             d = d.with_secondary(bs, "the bound is declared here");
                         }
-                        d = d.with_note(format!(
-                            "write `impl {} for {shown}` in the trait's module or the \
-                             type's module — or, when both are foreign, adapt: \
-                             `type Local = distinct {shown}` and implement the trait \
-                             for the adapter.",
-                            o.tr.name
-                        ));
+                        if let OblOrigin::Operator { op } = &o.origin {
+                            d = d.with_note(format!(
+                                "an operator on a user type dispatches through its trait \
+                                 ([type.trait.op]): write `impl {} for {shown}` and `{op}` \
+                                 runs it.",
+                                o.tr.name
+                            ));
+                        } else {
+                            d = d.with_note(format!(
+                                "write `impl {} for {shown}` in the trait's module or the \
+                                 type's module — or, when both are foreign, adapt: \
+                                 `type Local = distinct {shown}` and implement the trait \
+                                 for the adapter.",
+                                o.tr.name
+                            ));
+                        }
                         self.diags.push(d);
                     }
                 }
@@ -4485,7 +4772,7 @@ impl<'a> Checker<'a> {
                 let t = self.synth_expr(operand)?;
                 let bool_ = self.lo.table.prim(Prim::Bool);
                 if let Some(n) = self.rigid_name(t) {
-                    self.golden_rule_op(operand.span, &n, "!");
+                    self.golden_rule_op(operand.span, &n, "!", None);
                 } else if unify(&mut self.lo.table, &mut self.vars, t, bool_).is_err() {
                     self.report_bad_operand(operand.span, "!", "`bool`", t);
                 }
@@ -4493,9 +4780,12 @@ impl<'a> Checker<'a> {
             }
             Some(SyntaxKind::Minus) => {
                 let t = self.synth_expr(operand)?;
-                if let Some(n) = self.rigid_name(t) {
-                    self.golden_rule_op(operand.span, &n, "-");
-                    return Ok(self.error_ty());
+                // A type parameter or a user type negates through
+                // `Neg.neg` ([type.trait.op]).
+                if let Some(r) =
+                    self.operator_dispatch(e, operand, t, None, SyntaxKind::Minus, "-")?
+                {
+                    return Ok(r);
                 }
                 // `-b` on a byte widens first (D72, [type.byte.op]):
                 // the negation is `int`'s and so is the result.
@@ -4547,7 +4837,7 @@ impl<'a> Checker<'a> {
                     let t = self.synth_expr(side)?;
                     if let Some(n) = self.rigid_name(t) {
                         if !reported {
-                            self.golden_rule_op(side.span, &n, &op_text);
+                            self.golden_rule_op(side.span, &n, &op_text, None);
                             reported = true;
                         }
                         continue;
@@ -4564,6 +4854,18 @@ impl<'a> Checker<'a> {
             Some(SyntaxKind::EqEq | SyntaxKind::NotEq) => {
                 let lt = self.synth_expr(lhs)?;
                 let rt = self.synth_expr(rhs)?;
+                // A type parameter or a user type compares through
+                // `Eq.eq` ([type.trait.op]); `!=` is its negation.
+                if let Some(r) = self.operator_dispatch(
+                    e,
+                    lhs,
+                    lt,
+                    Some((rhs, rt)),
+                    op_kind.expect("op"),
+                    &op_text,
+                )? {
+                    return Ok(r);
+                }
                 self.equatable(lhs.span, lt)?;
                 let exp = Expect {
                     ty: lt,
@@ -4582,9 +4884,18 @@ impl<'a> Checker<'a> {
             ) => {
                 let lt = self.synth_expr(lhs)?;
                 let rt = self.synth_expr(rhs)?;
-                if let Some(n) = self.rigid_name(lt) {
-                    self.golden_rule_op(lhs.span, &n, &op_text);
-                    return Ok(self.lo.table.prim(Prim::Bool));
+                // A type parameter or a user type orders through
+                // `Ord.cmp` ([type.trait.op]); `<=>` answers the
+                // `Ordering` itself.
+                if let Some(r) = self.operator_dispatch(
+                    e,
+                    lhs,
+                    lt,
+                    Some((rhs, rt)),
+                    op_kind.expect("op"),
+                    &op_text,
+                )? {
+                    return Ok(r);
                 }
                 // `char` orders by scalar value (D58): total, defined,
                 // no locale — the same temperament as str's byte order.
@@ -4667,9 +4978,18 @@ impl<'a> Checker<'a> {
                 // wrapping — `wrapping[T]` is just another number type.
                 let lt = self.synth_expr(lhs)?;
                 let rt = self.synth_expr(rhs)?;
-                if let Some(n) = self.rigid_name(lt) {
-                    self.golden_rule_op(lhs.span, &n, &op_text);
-                    return Ok(self.error_ty());
+                // A type parameter or a user type dispatches through
+                // `Add.add` and its four siblings ([type.trait.op]);
+                // two primitives never do.
+                if let Some(r) = self.operator_dispatch(
+                    e,
+                    lhs,
+                    lt,
+                    Some((rhs, rt)),
+                    op_kind.expect("op"),
+                    &op_text,
+                )? {
+                    return Ok(r);
                 }
                 // D62 (s128): `s + u` is legal exactly when BOTH are
                 // `str` and means `"{s}{u}"` — a builtin on the
@@ -4722,7 +5042,7 @@ impl<'a> Checker<'a> {
                 let lt = self.synth_expr(lhs)?;
                 let rt = self.synth_expr(rhs)?;
                 if let Some(n) = self.rigid_name(lt) {
-                    self.golden_rule_op(lhs.span, &n, &op_text);
+                    self.golden_rule_op(lhs.span, &n, &op_text, None);
                     return Ok(self.error_ty());
                 }
                 if let Some(t) = self.byte_operand_widens(lhs, lt, rhs, rt, &op_text) {
@@ -4784,9 +5104,10 @@ impl<'a> Checker<'a> {
         Some(int_)
     }
 
-    /// `==`/`!=` compare the primitive family; archetypes answer from
-    /// their bounds (no trait covers `==` yet — E0501, the golden
-    /// rule); nominal equality waits for the operator traits (s17).
+    /// `==`/`!=` compare the primitive family builtin; a type
+    /// parameter or a user type went through `Eq.eq` before this is
+    /// asked (`[type.trait.op]`). What is left — containers, tuples,
+    /// fn values, handles — has no equality this edition.
     fn equatable(&mut self, span: Span, ty: TyId) -> R<()> {
         match self.kind_of(ty) {
             TyKind::Prim(_)
@@ -4794,12 +5115,8 @@ impl<'a> Checker<'a> {
             | TyKind::Var(_)
             | TyKind::Error
             | TyKind::Never => Ok(()),
-            TyKind::Rigid(n) => {
-                self.golden_rule_op(span, &n, "==");
-                Ok(())
-            }
             _ => Err(NotYet {
-                construct: "`==` on non-primitive types (operator traits)",
+                construct: "`==` on a container, tuple or handle (no `Eq` for these this edition)",
                 span,
             }),
         }

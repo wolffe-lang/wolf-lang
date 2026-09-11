@@ -362,13 +362,17 @@ fn str_slicing_types_since_s37() {
     assert!(is_nyc(&tc, "main"));
 }
 
+/// `==` on a struct is `Eq.eq` (`[type.trait.op]`, s155): with no
+/// `Eq` in scope it is E0301 naming the trait — a checked verdict,
+/// never a not-yet refusal.
 #[test]
-fn equality_on_structs_waits_for_traits() {
+fn equality_on_structs_goes_through_eq() {
     let tc = check_one(
         "struct Point { x: int }\n\
          fn main() -> !int {\n    let p = Point { x: 0 }\n    if p == (Point { x: 0 }) { 0 } else { 1 }\n}\n",
     );
-    assert!(is_nyc(&tc, "main"));
+    assert!(!is_nyc(&tc, "main"));
+    assert_eq!(codes(&tc), ["E0301"]);
 }
 
 // ----------------------------------------------------------- errors ----
