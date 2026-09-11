@@ -602,3 +602,92 @@ filing left open, not the home).)
   (wolf-interp, filed with the clause); std.map's header and F-0011's
   filed question (wolf-std sc44); the book's §5.2 and its tally
   samples (wolf-book bs40).
+
+## §11 Operators through traits `[type.trait.op]`
+
+(Appended 2026-09-11, s155 — wolf-lang#5, the bridge, ruled by the
+maintainer on reading chapter 5's `total[T]`. The compiler answered
+`xs[0] + 1` under a bare `T` with "no trait covers this operator yet
+(operator traits are a later sprint)", and the maintainer, hitting it
+as a learner, asked whether the sprint should be bumped up "now that
+we've encountered it in the wild — we want to attract people to the
+language with friendliness". This section is that sprint. Positions
+surveyed: Rust (operator traits with an output type — the checking,
+minus the wordiness), Go (type sets — the ergonomics, without a second
+kind of bound), Java (no path at all — the cautionary case). D49's
+riders stand: nothing is synthesized, and the primitive impls are the
+substrate.)
+
+- `[type.trait.op]` **An operator dispatches through a trait when its
+  left operand is a type parameter or a user type.** The table:
+
+  | operator | trait member | shape |
+  |---|---|---|
+  | `a + b` `a - b` `a * b` `a / b` `a % b` | `Add.add` `Sub.sub` `Mul.mul` `Div.div` `Rem.rem` | `fn add(self, other: Self) -> Self` |
+  | `-a` | `Neg.neg` | `fn neg(self) -> Self` |
+  | `a == b`, `a != b` | `Eq.eq` (`!=` is its negation) | `fn eq(self, other: Self) -> bool` |
+  | `a < b` `a <= b` `a > b` `a >= b` | `Ord.cmp` read against `Less`/`Greater` | `fn cmp(self, other: Self) -> Ordering` |
+  | `a <=> b` | `Ord.cmp` — the `Ordering` itself | |
+
+  `a + b` IS `Add.add(a, b)`: the same checking, the same dispatch
+  record, the same lowering as the qualified call, with the operands
+  as `read` arguments (a place is lent for the call, never moved, so
+  `a` serves two operators without a `copy`). **When it applies**: the
+  left operand's type is a type parameter (`T`) or a user nominal
+  type (a struct, an enum, a `distinct`); **never two primitives** —
+  `int + int`, `str == str`, `f64 < f64`, `str + char` stay the
+  builtin operations they were (`[type.numlit]`, `[mem.str.order]`,
+  `[type.str.concat]`), whatever impls are in scope. **Which trait**:
+  on a type parameter, the bound must name a trait called `Add` (etc.)
+  — a bare `T` is **E0501** at the definition with the note "add `T:
+  Add` to the bound" and a machine edit that inserts it; on a user
+  type, the trait called `Add` in scope at the operator — nothing by
+  that name in scope is **E0301** naming the trait and where it comes
+  from (std.ops and std.cmp declare the eight), and a type without an
+  impl is **E0502** naming the trait and the operator, discharged with
+  the body's other obligations. `!`, `&&`, `||` and the bitwise
+  family have no trait this edition: on a type parameter they stay
+  E0501 saying so. **Homogeneous this edition**: the method's
+  receiver and other operand are `Self` and the result is `Self`
+  (`bool` for `eq`, a nominal `Ordering` for `cmp`) — no output type
+  parameter; a trait of the table's name whose method has another
+  shape is **E0514** at the operator ("`Add.add` is not `fn add(self,
+  other: Self) -> Self`"), and heterogeneous operands (`Money * int`)
+  wait on a stated need. The right operand is checked against the
+  left's type; a literal adopts it (`m + 1` on a `Money` is the
+  ordinary mismatch, since `1` is not a `Money`). **Nothing is
+  synthesized** (D49): a struct or enum without `impl Eq` does not
+  compare, structurally or otherwise. Compound assignment (`a += b`)
+  on a user type is not ruled here and refuses as it did (E0409).
+  **On primitives the traits' impls are the same operations**: std's
+  `impl Add for int { fn add(self, other: Self) -> Self { self + other
+  } }` and its siblings for `f64`, `char`, `bool`, `str` (where the
+  builtin operator exists) are what `[T: Add]` instantiated at `int`
+  runs, so the machine add is what the generic body does — the
+  instance calls the impl, and the impl is the builtin. Witnesses:
+  `corpus/traits/op_total_num.lu` (the chapter's `total` at `int` and
+  `f64`), `op_money.lu` (`Add`, `Sub`, `Neg` on a struct),
+  `op_eq_inverting.lu` (an inverting `impl Eq` IS consulted —
+  wolf-lang#176's row), `op_ord_struct.lu` (the ordering family and
+  `<=>`), all four on both tiers; `golden_arith.lu` and
+  `golden_eq.lu` (the bare `T`), `op_missing_impl.lu` (E0502),
+  `op_hetero_add.lu` (E0514), `op_eq_no_trait.lu` (E0301). Cost
+  stated: the interpreter's operator dispatch on a struct and its
+  alias-form parse (wolf-interp, filed with the clause); std.ops's
+  five traits, `Neg`, and the primitive impls (wolf-std sc44); the
+  book's §5.3 transcript and §5.5 boundary sentence (wolf-book bs41).
+
+- `[type.trait.op.alias]` **`trait Num = Add + Sub + Mul + Div + Rem +
+  Eq + Ord` is an alias bound.** The `=` form of `trait_item`
+  (`[gram.item.trait]`) declares no members: a bound naming it means
+  every trait in its list, in every position a bound is read — the
+  body's capabilities (`[T: Num]` grants `+` through `Add`), the
+  instantiation's obligations (each trait is checked, and an unmet
+  one is E0502 naming that trait, never `Num`), and the impl search
+  (`satisfies` never asks about the alias). An alias may name an
+  alias; a cycle is E0503 at the alias, once. An alias is not
+  implemented (`impl Num for T` is E0507 — implement its traits) and
+  is not a `dyn` object. std's `Num` is the one the chapter's `fn
+  total[T: Num](xs: List[T], zero: T) -> T` reads; a program that
+  spells its own `Num` gets the same reading. The witness is
+  `op_total_num.lu`'s `Num`, word for word std's.
