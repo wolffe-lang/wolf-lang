@@ -1,0 +1,23 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: type.trait.op
+//!
+//! s156 (#336): `==` on a type its own module publishes, used from a
+//! file that imports that module. The operator trait was looked up by
+//! BARE name, and `use cmp` binds `cmp` — the trait is `cmp.Eq` and
+//! never `Eq` — so importing the type was the very thing that made its
+//! operator undispatchable, and the E0301 that followed asked for an
+//! impl the module already ships. The lookup reads the operand type's
+//! own module and the file's imports now, which is what "bring `Eq`
+//! into scope" always meant to a reader.
+
+use cmp
+
+fn main() -> !int {
+    let less = cmp.total_cmp(1.0, 2.0)
+    let greater = cmp.total_cmp(2.0, 1.0)
+    let also_less = cmp.total_cmp(3.0, 4.0)
+    if less == greater { return 1 }
+    if less != also_less { return 2 }
+    0
+}

@@ -463,6 +463,7 @@ traits/dyn_temp_refused.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_arith.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_eq.lu: not mem-clean (pre-wir rungs own it)
 traits/golden_missing_bound.lu: not mem-clean (pre-wir rungs own it)
+traits/op_eq_imported/main.lu: lowers
 traits/op_eq_inverting.lu: lowers
 traits/op_eq_no_trait.lu: not mem-clean (pre-wir rungs own it)
 traits/op_hetero_add.lu: not mem-clean (pre-wir rungs own it)

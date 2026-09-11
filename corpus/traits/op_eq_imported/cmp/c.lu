@@ -1,0 +1,24 @@
+//! member: true
+//!
+//! The trait's home module, and the type's. `[type.trait.op]`'s
+//! operator lookup finds `Eq` here twice over: it is `Ordering`'s own
+//! module, and it is a module the entry file imports.
+
+/// A three-way comparison result, `std.cmp.Ordering`'s shape.
+pub struct Ordering {
+    v: int,
+}
+
+/// Equality, the operator trait `==` dispatches through.
+pub trait Eq {
+    fn eq(self, other: Self) -> bool
+}
+
+impl Eq for Ordering {
+    fn eq(self, other: Self) -> bool { self.v == other.v }
+}
+
+/// The total order over two floats, by the sign of their difference.
+pub fn total_cmp(a: f64, b: f64) -> Ordering {
+    if a < b { Ordering { v: -1 } } else if a > b { Ordering { v: 1 } } else { Ordering { v: 0 } }
+}

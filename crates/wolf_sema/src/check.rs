@@ -2445,7 +2445,10 @@ impl<'a> Checker<'a> {
                     return Ok(Some(poisoned));
                 }
             },
-            None => match self.trait_target(tname) {
+            None => match self
+                .trait_target(tname)
+                .or_else(|| self.op_trait_reachable(tname, lt))
+            {
                 Some(tr) => tr,
                 None => {
                     let shown = self.show(lt);
@@ -2454,16 +2457,18 @@ impl<'a> Checker<'a> {
                             codes::E0301,
                             lhs.span,
                             format!(
-                                "`{op_text}` on `{shown}` needs the trait `{tname}`, and nothing \
-                                 named `{tname}` is in scope"
+                                "`{op_text}` on `{shown}` needs the trait `{tname}`, and no \
+                                 `{tname}` is in scope or reachable from this file"
                             ),
                         )
                         .with_label(format!("this is `{shown}`, not a primitive"))
                         .with_note(format!(
                             "an operator on a user type dispatches through its trait \
-                             ([type.trait.op]): `{op_text}` is `{tname}.{method}`. Bring \
-                             `{tname}` into scope (std.ops and std.cmp declare the operator \
-                             traits) and write `impl {tname} for {shown}`."
+                             ([type.trait.op]): `{op_text}` is `{tname}.{method}`. The trait is \
+                             looked for under that name in scope, then in `{shown}`'s own \
+                             module, then in the modules this file imports (std.ops and std.cmp \
+                             declare the eight) — declare it, or import the module that does, \
+                             and give `{shown}` an `impl {tname}`."
                         )),
                     );
                     return Ok(Some(poisoned));
@@ -6992,6 +6997,61 @@ impl<'a> Checker<'a> {
             return Some(tr);
         }
         None
+    }
+
+    /// The operator trait `tname` REACHABLE from this file without
+    /// being bound to a bare name (`[type.trait.op]`, s156,
+    /// wolf-lang#336).
+    ///
+    /// The lookup used to be bare-name only, which made every user type
+    /// a library publishes a type whose operators cannot dispatch from
+    /// any file that imports it: `use std.cmp` binds the name `cmp`, so
+    /// the trait is `cmp.Eq` and never `Eq`, and importing the type was
+    /// the very thing that qualified its trait's name. Inside
+    /// `std/cmp/*.lu` `==` on an `Ordering` worked; one `use` away it
+    /// was E0301, with a help whose first half ("bring `Eq` into
+    /// scope") named no spelling that reaches it and whose second
+    /// ("write `impl Eq for Ordering`") asked for a duplicate of an
+    /// impl `std.cmp` already ships — the NAME was what failed.
+    ///
+    /// Two places are consulted, in order. The operand type's own
+    /// module first: coherence already implies it (`Ordering`'s
+    /// operators are `std.cmp`'s), it needs no import, and it can never
+    /// be ambiguous. Then the modules this file imports, which is what
+    /// a reader of the old help expected `use std.cmp` to have done.
+    /// Two imports declaring the same operator trait is no answer at
+    /// all, and keeps the E0301.
+    fn op_trait_reachable(&self, tname: &str, lt: TyId) -> Option<TraitRef> {
+        // The operand type's home module.
+        if let TyKind::Nominal { module, .. } = self.kind_of(lt) {
+            let tr = TraitRef {
+                module: module as usize,
+                name: tname.to_string(),
+            };
+            if self.sigs.traits.contains_key(&tr) {
+                return Some(tr);
+            }
+        }
+        let mut found: Option<TraitRef> = None;
+        for b in bindings_for(self.pkg(), self.module, self.file) {
+            let module = match &b.target {
+                BindTarget::PkgModule(m) => *m,
+                _ => continue,
+            };
+            let tr = TraitRef {
+                module,
+                name: tname.to_string(),
+            };
+            if !self.sigs.traits.contains_key(&tr) {
+                continue;
+            }
+            if found.as_ref().is_some_and(|f| f.module != tr.module) {
+                // Two imports declare one — the operator cannot choose.
+                return None;
+            }
+            found = Some(tr);
+        }
+        found
     }
 
     /// A callee of the shape `Trait.method` or `ns.Trait.method`:

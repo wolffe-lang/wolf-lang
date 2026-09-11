@@ -671,11 +671,21 @@ substrate.)
   on a type parameter, the bound must name a trait called `Add` (etc.)
   — a bare `T` is **E0501** at the definition with the note "add `T:
   Add` to the bound" and a machine edit that inserts it; on a user
-  type, the trait called `Add` in scope at the operator — nothing by
-  that name in scope is **E0301** naming the trait and where it comes
-  from (std.ops and std.cmp declare the eight), and a type without an
-  impl is **E0502** naming the trait and the operator, discharged with
-  the body's other obligations. `!`, `&&`, `||` and the bitwise
+  type, the trait called `Add` **reachable** at the operator — the name
+  in scope if one is bound, else the `Add` declared by the operand
+  type's own module (coherence already implies it: `Ordering`'s
+  operators are `std.cmp`'s), else the `Add` declared by a module this
+  file imports, which is what "bring `Add` into scope" means to a
+  reader who wrote `use std.ops` (s156, wolf-lang#336 — the lookup was
+  bare-name only, and since `use std.cmp` binds `cmp` and nothing else,
+  importing a library's type was the very thing that made its operators
+  undispatchable: every user type any library publishes had operators
+  that worked inside its own module and nowhere else). Two imported
+  modules declaring one operator trait is no answer and keeps the
+  E0301. Nothing by that name reachable is **E0301** naming the trait
+  and the three places looked in, and a type without an impl is
+  **E0502** naming the trait and the operator, discharged with the
+  body's other obligations. `!`, `&&`, `||` and the bitwise
   family have no trait this edition: on a type parameter they stay
   E0501 saying so. **Homogeneous this edition**: the method's
   receiver and other operand are `Self` and the result is `Self`
@@ -701,7 +711,8 @@ substrate.)
   wolf-lang#176's row), `op_ord_struct.lu` (the ordering family and
   `<=>`), all four on both tiers; `golden_arith.lu` and
   `golden_eq.lu` (the bare `T`), `op_missing_impl.lu` (E0502),
-  `op_hetero_add.lu` (E0514), `op_eq_no_trait.lu` (E0301). Cost
+  `op_hetero_add.lu` (E0514), `op_eq_no_trait.lu` (E0301),
+  `op_eq_imported.lu`'s pair (the reachable trait, s156). Cost
   stated: the interpreter's operator dispatch on a struct and its
   alias-form parse (wolf-interp, filed with the clause); std.ops's
   five traits, `Neg`, and the primitive impls (wolf-std sc44); the

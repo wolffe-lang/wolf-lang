@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 276..311 name=Ordering pub fields=1
+TraitDecl 371..424 name=Eq pub
+  FnDecl 390..423 name=eq
+ImplDecl 426..509 path=Eq for=Ordering
+  FnDecl 453..507 name=eq body=Block
+FnDecl 581..728 name=total_cmp pub body=Block
