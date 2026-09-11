@@ -5606,7 +5606,8 @@ impl<'a> Checker<'a> {
             && !crate::types::map_key_admitted(&self.kind_of(kt))
         {
             let shown = self.show(kt);
-            let d = crate::sig::map_key_refusal(&shown, kspan);
+            let nominal = matches!(self.kind_of(kt), TyKind::Nominal { .. });
+            let d = crate::sig::map_key_refusal(&shown, nominal, kspan);
             self.diags.push(d);
         }
         let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
@@ -5670,7 +5671,8 @@ impl<'a> Checker<'a> {
                 let vt = self.type_from_bracket_arg(v)?;
                 if !crate::types::map_key_admitted(&self.kind_of(kt)) {
                     let shown = self.show(kt);
-                    let d = crate::sig::map_key_refusal(&shown, k.span);
+                    let nominal = matches!(self.kind_of(kt), TyKind::Nominal { .. });
+                    let d = crate::sig::map_key_refusal(&shown, nominal, k.span);
                     self.diags.push(d);
                 }
                 return Some(self.lo.table.intern(TyKind::Map(kt, vt)));

@@ -1522,7 +1522,8 @@ impl<'a> Lower<'a> {
                         ("Map", &[k, v]) => {
                             if !crate::types::map_key_admitted(self.table.kind(k)) {
                                 let shown = render(&self.table, k, &|_| Err("_"));
-                                let d = map_key_refusal(&shown, arg_nodes[0].span);
+                                let nominal = matches!(self.table.kind(k), TyKind::Nominal { .. });
+                                let d = map_key_refusal(&shown, nominal, arg_nodes[0].span);
                                 self.diags.push(d);
                             }
                             self.table.intern(TyKind::Map(k, v))
@@ -1695,8 +1696,8 @@ impl<'a> Lower<'a> {
 /// (s152). One builder for both spellings — the signature position
 /// (`fn f(m: Map[Point, int])`) and the constructor (`Map[Point,
 /// int]()`) — so the two sites answer word for word.
-pub(crate) fn map_key_refusal(shown: &str, span: Span) -> Diagnostic {
-    Diagnostic::error(
+pub(crate) fn map_key_refusal(shown: &str, nominal: bool, span: Span) -> Diagnostic {
+    let d = Diagnostic::error(
         codes::E0418,
         span,
         format!("`{shown}` cannot be a `Map` key"),
@@ -1707,11 +1708,15 @@ pub(crate) fn map_key_refusal(shown: &str, span: Span) -> Diagnostic {
          defines ([type.map.key]); a struct key waits on derived equality, and a \
          float or a container has no key equality at all."
             .to_string(),
-    )
-    .with_note(format!(
-        "key the map by one of the four — an `int` id, a `str` name — or build a \
-         `str` from `{shown}`'s fields."
-    ))
+    );
+    if nominal {
+        d.with_note(format!(
+            "key the map by one of the four — an `int` id, a `str` name — or build a \
+             `str` from `{shown}`'s fields."
+        ))
+    } else {
+        d.with_note("key the map by one of the four — an `int` id, a `str` name.".to_string())
+    }
 }
 
 pub(crate) enum TypeHead {

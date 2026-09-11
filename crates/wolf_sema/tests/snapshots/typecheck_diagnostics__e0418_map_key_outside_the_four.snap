@@ -1,0 +1,38 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0418]: `Point` cannot be a `Map` key
+ --> mem:///main.lu:6:20
+  |
+6 | fn count(seen: Map[Point, bool]) -> int {
+  |                    ^^^^^ a `Map` key is `str`, `int`, `char` or `bool`
+  |
+  = note: a `Map[K, V]` admits the four key types whose equality the language itself defines
+    ([type.map.key]); a struct key waits on derived equality, and a float or a container has
+    no key equality at all.
+  = note: key the map by one of the four — an `int` id, a `str` name — or build a `str` from
+    `Point`'s fields.
+
+error[E0418]: `Point` cannot be a `Map` key
+  --> mem:///main.lu:11:20
+   |
+11 |     var seen = Map[Point, bool]()
+   |                    ^^^^^ a `Map` key is `str`, `int`, `char` or `bool`
+   |
+   = note: a `Map[K, V]` admits the four key types whose equality the language itself defines
+     ([type.map.key]); a struct key waits on derived equality, and a float or a container has
+     no key equality at all.
+   = note: key the map by one of the four — an `int` id, a `str` name — or build a `str` from
+     `Point`'s fields.
+
+error[E0418]: `f64` cannot be a `Map` key
+  --> mem:///main.lu:12:20
+   |
+12 |     var by_f = Map[f64, int]()
+   |                    ^^^ a `Map` key is `str`, `int`, `char` or `bool`
+   |
+   = note: a `Map[K, V]` admits the four key types whose equality the language itself defines
+     ([type.map.key]); a struct key waits on derived equality, and a float or a container has
+     no key equality at all.
+   = note: key the map by one of the four — an `int` id, a `str` name.

@@ -603,3 +603,46 @@ fn closure_return_disagreeing_with_the_tail() {
         "fn main() -> !int {\n    let f = fn(n: int) {\n        if n > 2 { return \"big\" }\n        n * 2\n    }\n    print(\"{f(1)}\")\n    0\n}\n",
     );
 }
+
+// ---------------------------------------------------------- E0417 -----
+
+/// s152 (wolf-lang#11/#154, `[mem.map.absent]`): the wordcount idiom's
+/// `m[k] += 1`. `m[k]` is `V ! {none}`, so the compound spelling has
+/// no place to update; the note names the two spellings that do the
+/// work (`else` + `=`, std's `tally`). The plain `=` stays legal.
+#[test]
+fn e0417_map_compound_assign() {
+    snap_one(
+        "e0417_map_compound_assign",
+        "fn main() -> !int {\n    var totals = Map[str, int]()\n    totals[\"drink\"] = 340\n    totals[\"drink\"] += 100\n    totals[\"food\"] -= 1\n    0\n}\n",
+    );
+}
+
+// ---------------------------------------------------------- E0418 -----
+
+/// s152 (`[type.map.key]`): a struct key is refused where it is
+/// spelled — the constructor and the signature position answer word
+/// for word — and a float key names the reason it can never be one.
+#[test]
+fn e0418_map_key_outside_the_four() {
+    snap_one(
+        "e0418_map_key_outside_the_four",
+        "struct Point {\n    x: int,\n    y: int,\n}\n\nfn count(seen: Map[Point, bool]) -> int {\n    seen.len\n}\n\nfn main() -> !int {\n    var seen = Map[Point, bool]()\n    var by_f = Map[f64, int]()\n    0\n}\n",
+    );
+}
+
+/// The four admitted keys and a rigid one type clean: `Map[str, int]`,
+/// `Map[int, int]`, `Map[char, int]`, `Map[bool, str]` construct, and a
+/// generic `Map[K, V]` parameter elaborates with `K` unchecked until
+/// its call sites spell a key.
+#[test]
+fn map_admitted_keys_stay_clean() {
+    assert_eq!(
+        render_types(&[(
+            &[],
+            "main.lu",
+            "fn size[K, V](m: Map[K, V]) -> int {\n    m.len\n}\n\nfn main() -> !int {\n    var a = Map[str, int]()\n    var b = Map[int, int]()\n    var c = Map[char, int]()\n    var d = Map[bool, str]()\n    a[\"k\"] = 1\n    b[2] = 2\n    c['c'] = 3\n    d[true] = \"t\"\n    let n = a[\"k\"] else 0\n    size(a) + size(b) + size(c) + size(d) + n\n}\n",
+        )]),
+        ""
+    );
+}
