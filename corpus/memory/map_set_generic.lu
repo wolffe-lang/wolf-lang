@@ -4,15 +4,16 @@
 //!
 //! s156 (#333): a `[K, V]`-generic `set` — the single most ordinary
 //! function a keyed container has — beside its `List` twin. `m[k] = v`
-//! was E1004 ("this stores a value from `v`'s region into `m`'s
-//! region") and `(mut xs).push(v)` was not, because `push`'s value
+//! was refused ("this stores a value from `v`'s region into `m`'s
+//! region" — the code is pinned by `region_conflict_params.lu`) and
+//! `(mut xs).push(v)` was not, because `push`'s value
 //! parameter is a `read` and a read is a lend, so nothing ever told
 //! the region solver the value lands inside the receiver. The refusal
 //! took the WHOLE module down on both compiler rungs, so every one of
-//! std.map's twelve functions was `fail(E1004)` until a `copy` its
-//! `List` neighbour does not need went in. A store through a container
-//! index lends now (`[mem.region.edge.elem]`); a FIELD store keeps its
-//! E1004, in `region_conflict_params.lu`.
+//! std.map's twelve functions was refused until a `copy` its `List`
+//! neighbour does not need went in. A store through a container
+//! index lends now (`[mem.region.edge.elem]`); a FIELD store keeps the
+//! refusal, in `region_conflict_params.lu`.
 
 fn set_g[K, V](mut m: Map[K, V], k: K, v: V) {
     m[k] = v

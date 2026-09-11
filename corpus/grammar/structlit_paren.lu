@@ -4,9 +4,10 @@
 //! The parenthesized form is the fix E0006 suggests.
 //!
 //! s156 (#341): the witness used to spell its point as
-//! `p == (Point { x: 0 })`, and s155's `[type.trait.op]` made that
-//! E0301 — `==` on a user type IS `Eq.eq`, nothing is synthesized, and
-//! nothing named `Eq` is in scope here. The file's own subject is
+//! `p == (Point { x: 0 })`, and s155's `[type.trait.op]` made that a
+//! refusal — `==` on a user type IS `Eq.eq`, nothing is synthesized,
+//! and no `Eq` is reachable here (the code is pinned by
+//! `corpus/traits/op_eq_no_trait.lu`). The file's own subject is
 //! `[gram.amb.structlit]` and needs no equality at all, so the
 //! parenthesized literal is bound and read. The phase moved with it:
 //! judged at `resolve` the ledger stopped one rung before the refusal

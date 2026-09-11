@@ -3,84 +3,84 @@ source: crates/wolf_parse/tests/ambiguity_trees.rs
 expression: out
 ---
 == tree ==
-SourceFile 726..843
-  StructDecl 726..749
-    StructKw 726..732 "struct"
-    Ident 733..738 "Point"
-    LBrace 739..740 "{"
-    StructField 741..747
-      Ident 741..742 "x"
-      Colon 742..743 ":"
-      PathType 744..747
-        Path 744..747
-          Ident 744..747 "int"
-    RBrace 748..749 "}"
-  Term 749..750 "\n"
-  FnDecl 751..842
-    FnKw 751..753 "fn"
-    Ident 754..758 "main"
-    ParamList 758..760
-      LParen 758..759 "("
-      RParen 759..760 ")"
-    RetType 761..768
-      Arrow 761..763 "->"
-      ErrorUnionType 764..768
-        Not 764..765 "!"
-        PathType 765..768
-          Path 765..768
-            Ident 765..768 "int"
-    Block 769..842
-      LBrace 769..770 "{"
-      LetDecl 775..798
-        LetKw 775..778 "let"
-        IdentPat 779..780
-          Ident 779..780 "p"
-        Eq 781..782 "="
-        StructLit 783..797
-          PathExpr 783..788
-            Ident 783..788 "Point"
-          LBrace 789..790 "{"
-          FieldInit 791..795
-            Ident 791..792 "x"
-            Colon 792..793 ":"
-            LiteralExpr 794..795
-              Int 794..795 "0"
-          RBrace 796..797 "}"
-        Term 797..798 "\n"
-      LetDecl 802..827
-        LetKw 802..805 "let"
-        IdentPat 806..807
-          Ident 806..807 "q"
-        Eq 808..809 "="
-        ParenExpr 810..826
-          LParen 810..811 "("
-          StructLit 811..825
-            PathExpr 811..816
-              Ident 811..816 "Point"
-            LBrace 817..818 "{"
-            FieldInit 819..823
-              Ident 819..820 "x"
-              Colon 820..821 ":"
-              LiteralExpr 822..823
-                Int 822..823 "0"
-            RBrace 824..825 "}"
-          RParen 825..826 ")"
-        Term 826..827 "\n"
-      ExprStmt 831..841
-        BinExpr 831..840
-          MemberExpr 831..834
-            PathExpr 831..832
-              Ident 831..832 "p"
-            Dot 832..833 "."
-            Ident 833..834 "x"
-          Plus 835..836 "+"
-          MemberExpr 837..840
-            PathExpr 837..838
-              Ident 837..838 "q"
-            Dot 838..839 "."
-            Ident 839..840 "x"
-        Term 840..841 "\n"
-      RBrace 841..842 "}"
-  Term 842..843 "\n"
-  Eof 843..843 ""
+SourceFile 782..899
+  StructDecl 782..805
+    StructKw 782..788 "struct"
+    Ident 789..794 "Point"
+    LBrace 795..796 "{"
+    StructField 797..803
+      Ident 797..798 "x"
+      Colon 798..799 ":"
+      PathType 800..803
+        Path 800..803
+          Ident 800..803 "int"
+    RBrace 804..805 "}"
+  Term 805..806 "\n"
+  FnDecl 807..898
+    FnKw 807..809 "fn"
+    Ident 810..814 "main"
+    ParamList 814..816
+      LParen 814..815 "("
+      RParen 815..816 ")"
+    RetType 817..824
+      Arrow 817..819 "->"
+      ErrorUnionType 820..824
+        Not 820..821 "!"
+        PathType 821..824
+          Path 821..824
+            Ident 821..824 "int"
+    Block 825..898
+      LBrace 825..826 "{"
+      LetDecl 831..854
+        LetKw 831..834 "let"
+        IdentPat 835..836
+          Ident 835..836 "p"
+        Eq 837..838 "="
+        StructLit 839..853
+          PathExpr 839..844
+            Ident 839..844 "Point"
+          LBrace 845..846 "{"
+          FieldInit 847..851
+            Ident 847..848 "x"
+            Colon 848..849 ":"
+            LiteralExpr 850..851
+              Int 850..851 "0"
+          RBrace 852..853 "}"
+        Term 853..854 "\n"
+      LetDecl 858..883
+        LetKw 858..861 "let"
+        IdentPat 862..863
+          Ident 862..863 "q"
+        Eq 864..865 "="
+        ParenExpr 866..882
+          LParen 866..867 "("
+          StructLit 867..881
+            PathExpr 867..872
+              Ident 867..872 "Point"
+            LBrace 873..874 "{"
+            FieldInit 875..879
+              Ident 875..876 "x"
+              Colon 876..877 ":"
+              LiteralExpr 878..879
+                Int 878..879 "0"
+            RBrace 880..881 "}"
+          RParen 881..882 ")"
+        Term 882..883 "\n"
+      ExprStmt 887..897
+        BinExpr 887..896
+          MemberExpr 887..890
+            PathExpr 887..888
+              Ident 887..888 "p"
+            Dot 888..889 "."
+            Ident 889..890 "x"
+          Plus 891..892 "+"
+          MemberExpr 893..896
+            PathExpr 893..894
+              Ident 893..894 "q"
+            Dot 894..895 "."
+            Ident 895..896 "x"
+        Term 896..897 "\n"
+      RBrace 897..898 "}"
+  Term 898..899 "\n"
+  Eof 899..899 ""
 == diagnostics ==
