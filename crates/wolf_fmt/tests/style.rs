@@ -187,6 +187,65 @@ fn long_member_chains_break_after_the_dot() {
     );
 }
 
+// --------------------------------------------------- [gram.fmt.break] ----
+
+#[test]
+fn a_call_broken_after_the_dot_is_a_last_resort() {
+    // wolf-lang#339 one. The argument break alone brings this inside
+    // the width (97 columns), so the receiver stays joined to its
+    // method, the argument sits one level past the line `push(` is on,
+    // and the `)` closes at that line's own column. Before s156 the
+    // dot broke first: `(mut kw).` / `push(` with the argument at the
+    // METHOD's column and the `)` dedented outside both.
+    let src = "fn main() {\n    (mut kw).push(word32_le(key[i] as int, key[i + 1] as int, key[i + 2] as int, key[i + 3] as int) as int)\n}\n";
+    check(
+        src,
+        "fn main() {\n    (mut kw).push(\n        word32_le(key[i] as int, key[i + 1] as int, key[i + 2] as int, key[i + 3] as int) as int,\n    )\n}\n",
+    );
+}
+
+#[test]
+fn a_chain_with_nothing_to_break_still_breaks_at_every_dot() {
+    // The last resort is still a resort: empty argument lists offer no
+    // break, so the dots take it — and take it as one, not greedily.
+    check(
+        "fn main() { let v = collection.aaaaaaaaaaaaaaaaaaaa().bbbbbbbbbbbbbbbbbbbb().cccccccccccccccccccc().dddddddddddddddddddd() }\n",
+        "fn main() {\n    let v = collection.\n        aaaaaaaaaaaaaaaaaaaa().\n        bbbbbbbbbbbbbbbbbbbb().\n        cccccccccccccccccccc().\n        dddddddddddddddddddd()\n}\n",
+    );
+}
+
+#[test]
+fn a_dot_break_that_cannot_achieve_the_width_is_not_taken() {
+    // `[gram.fmt.indent]` licenses a line past the width when the
+    // token past it may not be split. Orphaning the receiver makes
+    // such a line one longer and no narrower, so it is left alone.
+    let src = "fn f(mut t: T) {\n    t.err = \"proxy_pass with a variable is named_error at v0 (nginx changes resolution mode entirely)\"\n}\n";
+    check(src, src);
+}
+
+#[test]
+fn a_type_application_is_not_a_break_point() {
+    // wolf-lang#339 two. `List[byte]` is two tokens and reads as one
+    // name; `] {` at the head of a line reads as a block close, which
+    // is precisely what it is not. The parameter list is the break.
+    check(
+        "fn make_sh(random: List[byte], suite: int, group: int, selected: int, compression: int) -> List[byte] {\n    copy random\n}\n",
+        "fn make_sh(\n    random: List[byte],\n    suite: int,\n    group: int,\n    selected: int,\n    compression: int,\n) -> List[byte] {\n    copy random\n}\n",
+    );
+}
+
+#[test]
+fn a_signature_past_the_width_breaks_its_parameter_list_not_its_error_row() {
+    // wolf-lang#339 three, and wolf-lang#303's second half outside an
+    // `if` chain: the formatter broke the error set — one name — and
+    // left the signature at 105 columns, a fixed point `--check`
+    // accepted. A break is measured against the whole line now.
+    check(
+        "fn accept_finished(base_secret: List[byte], transcript_hash: List[byte], received: List[byte]) -> int ! {decrypt_error} {\n    0\n}\n",
+        "fn accept_finished(\n    base_secret: List[byte],\n    transcript_hash: List[byte],\n    received: List[byte],\n) -> int ! {decrypt_error} {\n    0\n}\n",
+    );
+}
+
 // -------------------------------------------------- [gram.fmt.inline] ----
 
 #[test]

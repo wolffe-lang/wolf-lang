@@ -1535,7 +1535,76 @@ impl<'a> Fmt<'a> {
                 }
                 self.list(open, close, &elems, &commas, false, false, false, out, ectx);
             }
-            K::ParamList | K::GenericParamList | K::TypeArgList | K::CaptureList => {
+            // `[gram.fmt.break]` (wolf-lang#339): a type application is
+            // NOT a break point. `List[byte]` is two tokens and a
+            // reader reads it as one name; splitting it to rescue a
+            // signature put `] {` at the head of a line, where it reads
+            // as a block close — precisely what it is not — and turned
+            // `else List[byte]()` into three lines of handler. Every
+            // break that can really fix such a line (the parameter
+            // list, the argument list, the operator chain) is ABOVE it,
+            // and the tail-aware `fits` is what lets them see the width
+            // they have to fix. A comment inside is the one thing that
+            // still forces the broken form: a comment keeps its line.
+            K::TypeArgList => {
+                let (open, elems, commas, close) = if n.child_token(K::LParen).is_some() {
+                    self.split_list(n, K::LParen, K::RParen)
+                } else {
+                    self.split_list(n, K::LBracket, K::RBracket)
+                };
+                let Some(open) = open else {
+                    self.walk_children(n, out, ctx);
+                    return;
+                };
+                let commented = elems.iter().any(|e| self.subtree_has_comment(e))
+                    || self.subtree_token_has_comment(open)
+                    || commas.iter().any(|c| self.subtree_token_has_comment(c))
+                    || self.has_lead_comment_opt(close);
+                if commented || elems.is_empty() {
+                    self.list(
+                        open,
+                        close,
+                        &elems,
+                        &commas,
+                        false,
+                        false,
+                        false,
+                        out,
+                        Ctx::Free,
+                    );
+                    return;
+                }
+                let mut d = Vec::new();
+                self.lead(open, &mut d);
+                d.push(Doc::Text(self.slice(open.span).to_vec()));
+                self.trail(open, &mut d);
+                for (i, e) in elems.iter().enumerate() {
+                    if i > 0 {
+                        // A separator is printed ONLY where the source
+                        // carries one — `list`'s rule, and the reason a
+                        // damaged list does not grow a comma per pass
+                        // (idem_broken_generics_comma).
+                        if let Some(c) = commas.get(i - 1) {
+                            d.push(Doc::text(","));
+                            self.tok_trivia_only(c, &mut d);
+                        }
+                        d.push(Doc::text(" "));
+                    }
+                    self.expr(e, &mut d, Ctx::Free);
+                }
+                // A comma trailing the last element in source may carry
+                // trivia; the comma itself is not printed flat.
+                if commas.len() >= elems.len()
+                    && let Some(c) = commas.last()
+                {
+                    self.tok_trivia_only(c, &mut d);
+                }
+                if let Some(c) = close {
+                    self.tok(c, &mut d);
+                }
+                out.push(Doc::Concat(d));
+            }
+            K::ParamList | K::GenericParamList | K::CaptureList => {
                 let (open, elems, commas, close) = if n.child_token(K::LParen).is_some() {
                     self.split_list(n, K::LParen, K::RParen)
                 } else {
@@ -2271,7 +2340,13 @@ impl<'a> Fmt<'a> {
         let mut g = Vec::new();
         g.push(Doc::Concat(base));
         g.extend(ops);
-        out.push(Doc::Group(g));
+        // `[gram.fmt.break]` (wolf-lang#339): the receiver-dot break is
+        // a LAST RESORT, taken only when breaking the calls' argument
+        // lists cannot bring the line inside the width. A plain `Group`
+        // took it first — `(mut kw).` / `push(` for a statement whose
+        // one-break layout is 97 columns — and the chain still breaks
+        // as one when its calls have nothing to break with.
+        out.push(Doc::LastResort(g));
     }
 
     fn flatten_postfix(&self, n: &GreenNode, base: &mut Vec<Doc>, ops: &mut Vec<Doc>) {
@@ -3195,11 +3270,18 @@ fn huggable(n: &GreenNode) -> bool {
     }
 }
 
+/// A postfix operator's doc, pushed onto the chain's base (before any
+/// member link) or as a rider on the last link. A rider indents with
+/// the link it rides: an argument list broken open sits one level past
+/// the line its callee name landed on and closes at that name's own
+/// column, and that line is one level in exactly when the receiver-dot
+/// break put it there (`[gram.fmt.break]`, wolf-lang#339 — the closing
+/// `)` used to dedent past both the argument and the method name).
 fn push_op(base: &mut Vec<Doc>, ops: &mut Vec<Doc>, d: Vec<Doc>) {
     if ops.is_empty() {
         base.extend(d);
     } else {
-        ops.push(Doc::Concat(d));
+        ops.push(Doc::IndentIfBroken(d));
     }
 }
 

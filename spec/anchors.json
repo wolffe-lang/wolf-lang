@@ -180,6 +180,7 @@
     "gram.expr.unsafe": "01-grammar.md",
     "gram.fmt": "01-grammar.md",
     "gram.fmt.brace": "01-grammar.md",
+    "gram.fmt.break": "01-grammar.md",
     "gram.fmt.canon": "01-grammar.md",
     "gram.fmt.commas": "01-grammar.md",
     "gram.fmt.continuation": "01-grammar.md",

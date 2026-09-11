@@ -1020,6 +1020,31 @@ no `goto`, no *required* semicolons (terminators are inserted;
   operators and after `.` (trailing style — required by
   `[gram.lex.newline]`); continuations indent one level.
 - `[gram.fmt.commas]` Trailing comma in every multiline list; none inline.
+- `[gram.fmt.break]` **A break is taken where it achieves the width,
+  and the outermost break that achieves it is the one taken.** Every
+  break decision is measured against the whole line the construct lands
+  on, not the construct alone (s156, wolf-lang#339): a parameter list
+  ending at column 93 does not "fit" when the ` -> List[byte] {` after
+  it runs the line to 103, and measuring it in isolation left the
+  return type as the only group still able to break. Three rules follow,
+  all normative. (1) A **type application is not a break point**:
+  `List[byte]` is two tokens and a reader reads it as one name, `] {`
+  at the head of a line reads as a block close, and every break that
+  can really fix such a line is above it — only a comment inside one
+  breaks it. (2) The **receiver-dot break is a last resort**: a member
+  chain breaks at its dots only when breaking the calls' argument lists
+  cannot bring the line inside the width, and then it breaks at every
+  dot at once, as `[gram.fmt.if]`'s chains do. (3) An **argument list
+  broken open indents one level past the line its callee name is on and
+  closes at that name's own column** — the statement's own column when
+  the dot did not break, one level in when it did. A break that cannot
+  achieve the width is not taken at all: a line pushed past 100 by a
+  token nothing may split keeps `[gram.fmt.indent]`'s licence and stays
+  one line rather than becoming two that are no narrower. The prior
+  first-fit measure is what let a 105-column signature and a
+  101-column call argument be fixed points `wolf fmt --check` accepted
+  (#339's three, #303's second half outside an `if` chain). Pinned in
+  `crates/wolf_fmt/tests/style.rs` under this anchor.
 - `[gram.fmt.inline]` A block stays on one line (with `;` separators) only
   when it is a guard-clause-shaped body (≤2 statements, fits the width);
   otherwise the formatter breaks it multiline and strips the semicolons.

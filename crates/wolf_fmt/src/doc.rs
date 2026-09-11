@@ -44,8 +44,29 @@ pub enum Doc {
     Concat(Vec<Doc>),
     /// Flat-if-it-fits region.
     Group(Vec<Doc>),
+    /// A group whose OWN breaks are a last resort: it stays flat
+    /// whenever the groups nested inside it can bring the line inside
+    /// the width by themselves (s156, wolf-lang#339). A member chain is
+    /// the one construct with two competing break points on one line —
+    /// the receiver dots and the calls' argument lists — and a plain
+    /// `Group` takes the outer one first, which is why
+    /// `(mut kw).push(word32_le(…) as int)` came back as `(mut kw).` /
+    /// `push(` when breaking the argument list alone gives a 97-column
+    /// line with every token where a reader expects it. Measured with
+    /// its nested groups treated as BROKEN — i.e. asking "is there a
+    /// break below me that fixes this line?" rather than "does all of
+    /// this fit flat?" — so a chain whose calls have nothing to break
+    /// (`a.bbbb().cccc().dddd()`) still breaks at its dots, and as one.
+    LastResort(Vec<Doc>),
     /// Indent one level (applies to line breaks inside).
     Indent(Vec<Doc>),
+    /// Indent one level only when the ENCLOSING group renders broken.
+    /// The member-link rider: a call's argument list is laid against
+    /// the line its callee name landed on, and that line is one level
+    /// in exactly when the receiver-dot break put it there
+    /// (`[gram.fmt.break]`, wolf-lang#339 — the closing `)` used to
+    /// dedent past both the argument and the method name).
+    IndentIfBroken(Vec<Doc>),
     /// `broken` bytes when the enclosing group is broken, `flat` when flat.
     IfBreak { broken: Vec<u8>, flat: Vec<u8> },
     /// Bytes stashed until just before the next emitted newline
@@ -70,7 +91,11 @@ impl Doc {
         match self {
             Doc::Hardline | Doc::FreshLine | Doc::Blankline | Doc::BreakParent => true,
             Doc::Raw(bytes) => bytes.contains(&b'\n'),
-            Doc::Concat(ds) | Doc::Group(ds) | Doc::Indent(ds) => ds.iter().any(Doc::forced),
+            Doc::Concat(ds)
+            | Doc::Group(ds)
+            | Doc::LastResort(ds)
+            | Doc::Indent(ds)
+            | Doc::IndentIfBroken(ds) => ds.iter().any(Doc::forced),
             Doc::Shield(_) => false,
             _ => false,
         }
@@ -92,9 +117,12 @@ pub(crate) fn wont_render_inline(d: &Doc) -> bool {
         match d {
             Doc::Hardline | Doc::FreshLine | Doc::Blankline | Doc::BreakParent => true,
             Doc::Raw(bytes) => bytes.contains(&b'\n'),
-            Doc::Concat(ds) | Doc::Group(ds) | Doc::Indent(ds) | Doc::Shield(ds) => {
-                ds.iter().any(pierced)
-            }
+            Doc::Concat(ds)
+            | Doc::Group(ds)
+            | Doc::LastResort(ds)
+            | Doc::Indent(ds)
+            | Doc::IndentIfBroken(ds)
+            | Doc::Shield(ds) => ds.iter().any(pierced),
             _ => false,
         }
     }
@@ -121,21 +149,61 @@ pub(crate) fn wont_render_inline(d: &Doc) -> bool {
                 *budget -= flat.iter().filter(|&&b| (b & 0xC0) != 0x80).count() as isize;
                 *budget < 0
             }
-            Doc::Concat(ds) | Doc::Group(ds) | Doc::Indent(ds) | Doc::Shield(ds) => {
-                ds.iter().any(|c| overflows(c, budget))
-            }
+            Doc::Concat(ds)
+            | Doc::Group(ds)
+            | Doc::LastResort(ds)
+            | Doc::Indent(ds)
+            | Doc::IndentIfBroken(ds)
+            | Doc::Shield(ds) => ds.iter().any(|c| overflows(c, budget)),
             _ => false,
         }
     }
     pierced(d) || overflows(d, &mut (WIDTH as isize))
 }
 
-/// Would `docs`, rendered flat starting at `col`, stay within the width
-/// through its next hard stop? (Classic first-fit measure.)
-fn fits(docs: &[Doc], col: usize) -> bool {
+/// Would `docs`, rendered flat starting at `col`, stay within the
+/// width **to the end of the line they land on**?
+///
+/// `rest` is the renderer's own pending stack (its last element is the
+/// next doc to be emitted), each entry carrying the mode it will be
+/// rendered in. Measuring `docs` alone — the first-fit form this was
+/// until s156 — asks whether a construct fits *in isolation*, and the
+/// page is not written in isolation: a parameter list ending at column
+/// 93 "fits", and then the ` -> List[byte] {` the renderer has already
+/// committed to putting after it runs the line to 103, where the only
+/// group still able to break is the return type's (wolf-lang#339's two
+/// and three: a two-token type application split across three lines to
+/// rescue a signature, and a 105-column line that `--check` accepts
+/// because a second pass reproduces it). Measuring the tail makes the
+/// outermost group that CAN fix the line the one that breaks, which is
+/// also why a receiver-dot break stops being taken ahead of the
+/// argument break that would have sufficed (#339's one).
+///
+/// Measurement ends at the first newline the renderer will really
+/// emit: a `Line`/`Softline` reached in `Broken` mode, or any forced
+/// break. Groups in `docs` are measured flat (that is the question
+/// being asked); groups in `rest` inherit the mode recorded for them
+/// and so stop the measurement at their first break opportunity —
+/// Prettier's rule, and the reason this is not quadratic in practice.
+///
+/// `probe_breaks_nested` is [`Doc::LastResort`]'s question: measure
+/// `docs` flat, but treat every group nested inside them as BROKEN, so
+/// the measurement stops at the first break a group *below* this one
+/// could take. "Can something under me fix this line?" rather than
+/// "does all of this fit flat?".
+fn fits(
+    docs: &[&Doc],
+    rest: &[(usize, Mode, &Doc)],
+    col: usize,
+    probe_breaks_nested: bool,
+) -> bool {
     let mut budget = WIDTH as isize - col as isize;
-    let mut stack: Vec<&Doc> = docs.iter().rev().collect();
-    while let Some(d) = stack.pop() {
+    let mut stack: Vec<(Mode, &Doc)> = Vec::with_capacity(docs.len() + rest.len());
+    // `rest` is a stack: its last element is emitted first, so it is
+    // pushed onto the measuring stack first (deepest).
+    stack.extend(rest.iter().map(|(_, m, d)| (*m, *d)));
+    stack.extend(docs.iter().rev().map(|d| (Mode::Flat, *d)));
+    while let Some((mode, d)) = stack.pop() {
         if budget < 0 {
             return false;
         }
@@ -149,13 +217,37 @@ fn fits(docs: &[Doc], col: usize) -> bool {
                     None => budget -= chars(r) as isize,
                 }
             }
-            Doc::Line => budget -= 1,
-            Doc::Softline => {}
+            Doc::Line => match mode {
+                Mode::Flat | Mode::FlatOpen => budget -= 1,
+                Mode::Broken => return budget >= 0,
+            },
+            Doc::Softline => match mode {
+                Mode::Flat | Mode::FlatOpen => {}
+                Mode::Broken => return budget >= 0,
+            },
             // A forced break ends the line: everything up to here fit.
             Doc::Hardline | Doc::FreshLine | Doc::Blankline => return budget >= 0,
-            Doc::Concat(ds) | Doc::Group(ds) | Doc::Indent(ds) => {
+            Doc::Concat(ds) | Doc::Indent(ds) | Doc::IndentIfBroken(ds) => {
                 for c in ds.iter().rev() {
-                    stack.push(c);
+                    stack.push((mode, c));
+                }
+            }
+            Doc::Group(ds) | Doc::LastResort(ds) => {
+                // A group whose content forces a break will break
+                // wherever it lands; otherwise it inherits — flat
+                // inside the docs under question, and the renderer's
+                // recorded mode out in the tail. Under a last-resort
+                // probe the nested groups are read as broken instead:
+                // the question being asked is whether they can rescue
+                // the line, and a group that can break ends it.
+                let m = if ds.iter().any(Doc::forced) || (probe_breaks_nested && mode == Mode::Flat)
+                {
+                    Mode::Broken
+                } else {
+                    mode
+                };
+                for c in ds.iter().rev() {
+                    stack.push((m, c));
                 }
             }
             // The hug shield's contract is that the construct inside
@@ -168,7 +260,9 @@ fn fits(docs: &[Doc], col: usize) -> bool {
             // hardline and the chain joined — one flip per pass
             // (idem_member_chain_width).
             Doc::Shield(_) => return budget >= 0,
-            Doc::IfBreak { flat, .. } => budget -= chars(flat) as isize,
+            Doc::IfBreak { broken, flat } => {
+                budget -= chars(if mode == Mode::Broken { broken } else { flat }) as isize
+            }
             Doc::LineSuffix(_) | Doc::BreakParent => {}
         }
     }
@@ -181,9 +275,49 @@ fn chars(bytes: &[u8]) -> usize {
     bytes.iter().filter(|&&b| (b & 0xC0) != 0x80).count()
 }
 
+/// Would taking this doc's own break actually achieve the width?
+///
+/// A line is sometimes past the width because of a token nothing may
+/// split — `[gram.fmt.indent]` licenses exactly that — and orphaning a
+/// receiver on a line of its own does not make such a line shorter:
+/// `t.err = "<a 140-column message>"` came back as `t.` / `err = …`,
+/// one line longer and no narrower. The last break this doc owns is
+/// the one that decides the final line, so that line is what is
+/// measured, at the indent the break would put it on. Nested groups
+/// count as breakable (they are), and a doc with no break of its own
+/// has nothing to gain.
+fn break_would_help(ds: &[Doc], rest: &[(usize, Mode, &Doc)], ind: usize) -> bool {
+    fn own<'a>(ds: &'a [Doc], out: &mut Vec<&'a Doc>) {
+        for d in ds {
+            match d {
+                // The doc's OWN sequence: a group below it makes its
+                // own decision and is one item here, not a break.
+                Doc::Concat(cs) | Doc::Indent(cs) | Doc::IndentIfBroken(cs) => own(cs, out),
+                _ => out.push(d),
+            }
+        }
+    }
+    let mut flat: Vec<&Doc> = Vec::new();
+    own(ds, &mut flat);
+    let Some(i) = flat
+        .iter()
+        .rposition(|d| matches!(d, Doc::Line | Doc::Softline))
+    else {
+        return false;
+    };
+    fits(&flat[i + 1..], rest, ind + INDENT, true)
+}
+
 #[derive(Clone, Copy, PartialEq)]
 enum Mode {
     Flat,
+    /// Flat for this doc's OWN `Line`s and `IfBreak`s, but the groups
+    /// nested inside it still measure themselves: the mode a
+    /// [`Doc::LastResort`] hands its children when it decided to stay
+    /// flat *because* a group below it can break. Plain `Flat` would
+    /// propagate down and make that break impossible, which is the
+    /// whole point of the construct.
+    FlatOpen,
     Broken,
 }
 
@@ -239,7 +373,7 @@ pub fn render(doc: &Doc) -> Vec<u8> {
                 }
             }
             Doc::Line => match mode {
-                Mode::Flat => {
+                Mode::Flat | Mode::FlatOpen => {
                     if pending_indent.is_none() {
                         out.push(b' ');
                         col += 1;
@@ -300,6 +434,43 @@ pub fn render(doc: &Doc) -> Vec<u8> {
                     stack.push((ind + INDENT, mode, c));
                 }
             }
+            Doc::IndentIfBroken(ds) => {
+                let i = if mode == Mode::Broken {
+                    ind + INDENT
+                } else {
+                    ind
+                };
+                for c in ds.iter().rev() {
+                    stack.push((i, mode, c));
+                }
+            }
+            Doc::LastResort(ds) => {
+                // Like `Group`, but the measure asks whether a group
+                // BELOW this one can bring the line inside the width
+                // (see the variant's own note): the chain's dots break
+                // only when the argument lists cannot do it alone —
+                // and then those lists must actually be free to break,
+                // which is what `FlatOpen` preserves. Under a flat
+                // parent the whole subtree is already committed flat.
+                let m = if mode == Mode::Flat {
+                    Mode::Flat
+                } else if ds.iter().any(Doc::forced) {
+                    Mode::Broken
+                } else if fits(
+                    &ds.iter().collect::<Vec<_>>(),
+                    &stack,
+                    pending_indent.unwrap_or(col).max(col),
+                    true,
+                ) || !break_would_help(ds, &stack, ind)
+                {
+                    Mode::FlatOpen
+                } else {
+                    Mode::Broken
+                };
+                for c in ds.iter().rev() {
+                    stack.push((ind, m, c));
+                }
+            }
             Doc::Group(ds) => {
                 // A group under a FLAT parent inherits flat (the
                 // classic algorithm's invariant) instead of
@@ -319,7 +490,13 @@ pub fn render(doc: &Doc) -> Vec<u8> {
                 // defers to the shield's contract that the
                 // surroundings stay flat.
                 let flat = !ds.iter().any(Doc::forced)
-                    && (mode == Mode::Flat || fits(ds, pending_indent.unwrap_or(col).max(col)));
+                    && (mode == Mode::Flat
+                        || fits(
+                            &ds.iter().collect::<Vec<_>>(),
+                            &stack,
+                            pending_indent.unwrap_or(col).max(col),
+                            false,
+                        ));
                 let m = if flat { Mode::Flat } else { Mode::Broken };
                 for c in ds.iter().rev() {
                     stack.push((ind, m, c));
