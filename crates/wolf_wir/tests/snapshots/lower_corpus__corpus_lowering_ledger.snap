@@ -144,7 +144,7 @@ grammar/index_origin_scopes.lu: lowers
 grammar/intdot_exponent.lu: not mem-clean (pre-wir rungs own it)
 grammar/intdot_member.lu: not mem-clean (pre-wir rungs own it)
 grammar/intdot_range.lu: lowers
-grammar/interp_fmtcolon.lu: refused — a format spec on a non-primitive value
+grammar/interp_fmtcolon.lu: refused — a computed format spec (s38 formatting)
 grammar/interp_nested.lu: lowers
 grammar/let_group.lu: lowers
 grammar/let_group_bare_tuple.lu: not mem-clean (pre-wir rungs own it)
@@ -496,6 +496,7 @@ typecheck/fn_value_captured_var_write.lu: not mem-clean (pre-wir rungs own it)
 typecheck/fn_value_capturing.lu: lowers
 typecheck/fn_value_import/main.lu: lowers
 typecheck/if_branch.lu: not mem-clean (pre-wir rungs own it)
+typecheck/interp_spec_on_union.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_compound_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_field_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_reassign.lu: not mem-clean (pre-wir rungs own it)
