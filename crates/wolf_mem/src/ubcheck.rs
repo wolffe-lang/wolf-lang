@@ -6720,8 +6720,53 @@ impl<'t> Machine<'t> {
             }
             _ => {
                 let v = val!(self.eval(inner));
-                // Numeric/adapter/identity casts are value-preserving
-                // here; out-of-range narrowing traps (X3 posture).
+                // A numeric cast CONVERTS (D54.4, `[type.numlit.cast]`).
+                // This arm used to be "value-preserving" in the Rust
+                // sense — it handed the operand's `Value` straight
+                // back — so `n as f64` stayed a `Value::Int` and
+                // `4 as f64 == 4.0` compared an `Int` against an `F64`
+                // through `values_equal`'s variant pairs and answered
+                // FALSE, while `a == a` answered true: the UB-detecting
+                // machine gave a verdict, and the wrong one, where the
+                // native rung and lupin both said true (wolf-lang#337).
+                // The float→int direction was the same hole from the
+                // other side: `3.7 as int` came back `F64(3.7)` and
+                // printed `3.7`, and `1e300 as int` and `nan as int`
+                // ran to exit 0 where `[type.numlit.cast.trunc]` traps.
+                // The target type decides, exactly as the literal path
+                // has decided since s38.
+                match (self.expr_ty(e.span), &v) {
+                    (Some(TyKind::Prim(Prim::F64)), Value::Int(n)) => {
+                        return Ok(Flow::Val(Value::F64(*n as f64)));
+                    }
+                    (Some(TyKind::Prim(Prim::F64)), Value::F64(_)) => {
+                        return Ok(Flow::Val(v));
+                    }
+                    (Some(TyKind::Prim(Prim::F32)), Value::Int(_) | Value::F64(_)) => {
+                        return self.refuse(
+                            "`f32` in checked execution (f64 is the supported float)",
+                            e.span,
+                        );
+                    }
+                    (Some(TyKind::Prim(p)), Value::F64(x)) => {
+                        if let Some((lo, hi)) = int_cast_bounds(*p) {
+                            // Truncate TOWARD ZERO, and trap on a value
+                            // no integer of the target represents — NaN
+                            // and both infinities included. The upper
+                            // test is `>= hi + 1` because `i64::MAX as
+                            // f64` rounds UP to 2^63, and `t == 2^63`
+                            // is the first value that does not fit.
+                            let t = x.trunc();
+                            if !t.is_finite() || t < lo as f64 || t >= (hi as f64) + 1.0 {
+                                return self.trap("overflow", "mem.ub.defined", e.span);
+                            }
+                            return Ok(Flow::Val(Value::Int(t as i64)));
+                        }
+                    }
+                    _ => {}
+                }
+                // Adapter/identity casts are value-preserving here;
+                // out-of-range narrowing traps (X3 posture).
                 if let Value::Int(n) = v {
                     // A WRAPPING-typed cast target wraps at its width
                     // (#131's checked twin): mask-to-width, the
@@ -8558,6 +8603,20 @@ fn prim_size(p: Prim) -> u64 {
         Some(b) => (b / 8) as u64,
         None => 1,
     }
+}
+
+/// The integer domain a FLOAT may be truncated into, as `i64` edges.
+/// [`prim_range`] declines the 64-bit prims (they ride `i64`'s own
+/// checked arithmetic and have no narrowing question), but the
+/// float→int trap of `[type.numlit.cast.trunc]` needs their edges by
+/// name — `1e300 as int` has to find one. `byte` and `char` are not
+/// float targets and keep their own cast arms.
+fn int_cast_bounds(p: Prim) -> Option<(i64, i64)> {
+    Some(match p {
+        Prim::I64 | Prim::Int => (i64::MIN, i64::MAX),
+        Prim::Byte | Prim::Char | Prim::Bool | Prim::Str | Prim::F32 | Prim::F64 => return None,
+        _ => return prim_range(p),
+    })
 }
 
 fn prim_range(p: Prim) -> Option<(i64, i64)> {

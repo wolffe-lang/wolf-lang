@@ -908,3 +908,63 @@ fn tuple_destructure_nested_and_wildcards() {
         0,
     );
 }
+
+// ------------------------------------------ numeric casts (#337) ----
+
+/// The value a cast produces, plus its verdict.
+fn run_out(src: &str) -> (Verdict, String) {
+    let mut ml = MemoryLoader::new("ub");
+    ml.add_file(&[], "main.lu", src);
+    let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    let tc = typecheck_package_with(&res.package, true);
+    assert!(
+        !tc.has_errors(),
+        "input typechecks clean: {:?}",
+        tc.diagnostics
+    );
+    let out = ubcheck::run_checked(&res.package, &tc, Budget::default())
+        .expect("the program is within the executable surface");
+    (out.verdict, out.stdout)
+}
+
+/// wolf-lang#337: `int as f64` used to hand back a `Value::Int`, so the
+/// UB-detecting machine answered `(4 as f64) == 4.0` FALSE — a verdict,
+/// and the wrong one — while `a == a` was true and both the native rung
+/// and lupin said true. A cast CONVERTS; the target type decides.
+#[test]
+fn an_int_widened_to_f64_equals_the_float_it_equals() {
+    let (v, out) = run_out(
+        "fn main() -> !int {\n    let n: int = 4\n    let a = n as f64\n    \
+         print(\"{a} {a == 4.0} {a == a} {a + 0.5}\")\n    0\n}\n",
+    );
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "4 true true 4.5\n");
+}
+
+/// The same hole from the other side: `3.7 as int` came back
+/// `F64(3.7)`. `[type.numlit.cast.trunc]` truncates toward zero.
+#[test]
+fn a_float_narrowed_to_int_truncates_toward_zero() {
+    let (v, out) = run_out(
+        "fn main() -> !int {\n    let x: f64 = 3.7\n    let y: f64 = -3.7\n    \
+         print(\"{x as int} {y as int}\")\n    0\n}\n",
+    );
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "3 -3\n");
+}
+
+/// And it TRAPS where no integer represents the value — the machine
+/// used to run both of these to exit 0.
+#[test]
+fn a_float_that_fits_no_integer_traps() {
+    for src in [
+        "fn main() -> !int {\n    let x: f64 = 1e300\n    x as int\n}\n",
+        "fn main() -> !int {\n    let x: f64 = 0.0 / 0.0\n    x as int\n}\n",
+    ] {
+        let (v, _) = run_out(src);
+        match v {
+            Verdict::Trap(t) => assert_eq!(t.kind, "overflow", "{src}"),
+            other => panic!("expected trap(overflow) for {src}: {other:?}"),
+        }
+    }
+}
