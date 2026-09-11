@@ -775,7 +775,49 @@ impl<'t> Lowerer<'t> {
     /// value): its region must outlive the caller — `ρ_static` always
     /// does, flexible parameter regions join `ρ_caller` (the default
     /// effect), and a frame-local region is an escape (E1010).
+    /// s150 (#300, `[type.fn.value]`): a capturing closure LEAVING its
+    /// body — returned from the function, or the tail of an enclosing
+    /// closure — is claimed by that exit: its captures were copied
+    /// when the record was built and the record lives in the caller's
+    /// region, so the borrow of the captured places ends with the
+    /// frame. What must outlive the frame is each captured VALUE (a
+    /// list handle, a region-interior value): demand it of every
+    /// captured place, exactly as if the place itself were returned.
+    /// A dyn pair is not this shape (its data half is a spilled place)
+    /// and stays unclaimed.
+    fn claim_closure_leaving(&mut self, val: &Val, span: Span) {
+        if val.borrowed.is_empty() {
+            return;
+        }
+        let Some(origin) = val.origin else { return };
+        let Some(i) = self
+            .unclaimed_pairs
+            .iter()
+            .position(|&(s, closure)| s == origin && closure)
+        else {
+            return;
+        };
+        self.unclaimed_pairs.remove(i);
+        for &place in &val.borrowed {
+            let captured = self.val_of_place(place, span);
+            self.demand_outlives_frame(&captured, span);
+        }
+    }
+
     fn demand_outlives_frame(&mut self, val: &Val, span: Span) {
+        self.demand_outlives_frame_how(val, span, "returned");
+    }
+
+    /// s150 (`[conc.chan.payload]`): a value SENT through a channel
+    /// leaves the frame the way a returned one does — a `str` view
+    /// crosses by reference, so its bytes must outlive the sender.
+    fn demand_sent_outlives_frame(&mut self, val: &Val, span: Span) {
+        self.demand_outlives_frame_how(val, span, "sent");
+    }
+
+    fn demand_outlives_frame_how(&mut self, val: &Val, span: Span, how: &'static str) {
+        self.claim_closure_leaving(val, span);
+        let reader = if how == "sent" { "receiver" } else { "caller" };
         for &s in &val.sites {
             if self.already_conflicted(s) {
                 continue;
@@ -783,26 +825,26 @@ impl<'t> Lowerer<'t> {
             // Frozen data outlives everything ([mem.region.freeze.1]:
             // immutable forever — returning it is always legal).
             if self.frozen_site.contains_key(&s) {
-                self.mark_escape(s, "returned");
+                self.mark_escape(s, how);
                 continue;
             }
             // A `shared` cell outlives any frame while a strong count
             // holds it (s21: RC frees it, never a region).
             if self.shared_site.contains(&s) {
-                self.mark_escape(s, "returned");
+                self.mark_escape(s, how);
                 continue;
             }
             let sr = self.sites[s.0 as usize].region;
             match self.rt.binding(sr) {
                 Some(Binding::Static) | Some(Binding::Caller) => {
-                    self.mark_escape(s, "returned");
+                    self.mark_escape(s, how);
                 }
                 None => {
                     // Fresh parameter region: the default scheme's
                     // "result is in the caller's region" binds it.
                     let caller = self.ambient[0];
                     let _ = self.rt.unify(caller, sr);
-                    self.mark_escape(s, "returned");
+                    self.mark_escape(s, how);
                 }
                 Some(Binding::Local(rid)) => {
                     self.conflicted = true;
@@ -815,7 +857,7 @@ impl<'t> Lowerer<'t> {
                         span,
                         format!(
                             "this value is allocated in {region}, which is freed \
-                             before the caller could ever use it"
+                             before the {reader} could ever use it"
                         ),
                     )
                     .with_label("the value would outlive its region")
@@ -2749,15 +2791,19 @@ impl<'t> Lowerer<'t> {
                 }
             }
         }
-        let r = match d.body() {
+        let tail = match d.body() {
             Some(b) if b.kind == SyntaxKind::Block => {
                 let blk = AstBlock::cast(b).expect("kind");
-                self.walk_block(blk, false).map(|_| ())
+                self.walk_block(blk, true)?
             }
-            Some(b) => self.eval_value(b).map(|_| ()),
-            None => Ok(()),
+            Some(b) => self.eval_value(b)?,
+            None => Val::none(),
         };
-        r?;
+        // s150 (#300): the tail leaves the closure — a capturing
+        // closure produced there (`fn(f, g) fn(x) f(g(x))`) is claimed
+        // by that exit, its captured values demanded to outlive the
+        // frame, exactly as a function's return claims one.
+        self.claim_closure_leaving(&tail, e.span);
         self.close_scope(end_span(e.span))?;
         self.goto(self.cur, closure_exit);
         self.cur = closure_exit;
@@ -3248,6 +3294,10 @@ impl<'t> Lowerer<'t> {
         // The receiver, when the resolved callee takes `self` and the
         // call site spells `recv.method(…)`.
         let mut receiver_done = false;
+        // s150 (`[conc.chan.payload]`): `ch.send(v)` — the payload
+        // leaves this frame for a receiver, so it is demanded to
+        // outlive the frame exactly as a returned value is.
+        let mut chan_send = false;
         if let Some(cs) = cs
             && cs.has_self
             && let Some(callee) = d.callee()
@@ -3260,6 +3310,11 @@ impl<'t> Lowerer<'t> {
                 Some(p) if p.mode().is_some() => p.expr().unwrap_or(base),
                 _ => base,
             };
+            chan_send = cs.callee == "send"
+                && matches!(
+                    self.expr_ty(recv_expr.span).map(|t| t.kind().clone()),
+                    Some(TyKind::Chan(_))
+                );
             if let Some(selfp) = selfp {
                 self.lower_receiver(recv_expr, base.span, &selfp, &mut surface, &mut carry)?;
             }
@@ -3367,6 +3422,7 @@ impl<'t> Lowerer<'t> {
                         &mut surface,
                         &mut carry,
                         &mut arg_muts,
+                        chan_send,
                     )?;
                 }
                 _ => {
@@ -3610,6 +3666,7 @@ impl<'t> Lowerer<'t> {
         surface: &mut CallSurface,
         carry: &mut Vec<SiteId>,
         arg_muts: &mut Vec<(PlaceId, Span)>,
+        sent: bool,
     ) -> R<()> {
         if site_mode != param.mode {
             self.mode_mismatch(cs, param, arg, v, site_mode, param.mode);
@@ -3626,6 +3683,10 @@ impl<'t> Lowerer<'t> {
                 if let Some((place, _)) = self.as_place(v) {
                     self.emit_read(place, v.span);
                     self.mark_region_lent(place);
+                    if sent {
+                        let pv = self.val_of_place(place, v.span);
+                        self.demand_sent_outlives_frame(&pv, v.span);
+                    }
                     if !self.places.is_copy(place) {
                         // Non-`Copy` read arguments are lent for the
                         // whole call; `Copy` ones were copied at
@@ -3649,6 +3710,9 @@ impl<'t> Lowerer<'t> {
                     }
                 } else {
                     let av = self.eval_value(v)?;
+                    if sent {
+                        self.demand_sent_outlives_frame(&av, v.span);
+                    }
                     // s98: a dyn cast in argument position — the
                     // pair's borrow is call-extent: the place joins
                     // the read surface (immutably lent for the call)
@@ -4517,8 +4581,8 @@ impl<'t> Lowerer<'t> {
             None => Ok(()),
             Some(&(span, closure)) => Err(NotYet {
                 construct: if closure {
-                    "a capturing closure outside a binding or argument position \
-                     (bind it or pass it)"
+                    "a capturing closure inside a container or a struct literal \
+                     (bind it, pass it, or return it — [type.fn.value])"
                 } else {
                     "a dyn pair outside a binding or argument position (bind it or pass it)"
                 },
