@@ -521,6 +521,72 @@ pub unsafe extern "C" fn __wolf_rt_str_get(sp: i64, sl: i64, a: i64, b: i64, out
     1
 }
 
+/// The longest needle that takes the byte loop rather than the
+/// general searcher (s156, wolf-lang#335). Four covers every needle a
+/// wire-format parser splits on.
+const SHORT_NEEDLE: usize = 4;
+
+/// `find` / `rfind` with a short-needle fast path.
+///
+/// `str::find` with a `&str` pattern constructs a `StrSearcher` — the
+/// Two-Way preprocessing: critical factorization, period, byteset — on
+/// EVERY call, and then runs it. lobo's ws31 profile (v0.2.11, linux,
+/// `perf record` on one serving hand under four `ab -k -c 8`) put the
+/// family at **1.9%** of a keepalive request's cpu, the third largest
+/// user-space row on the serving path, with `StrSearcher::new` alone
+/// at 0.69% — the construction, not the search. A request parser's
+/// needles are one to four bytes (`"\r\n"` for the head cut and the
+/// line split, `":"` for a header name, `" "` for the request line,
+/// `"/"` and `"?"` for the path) and at those lengths the setup costs
+/// more than the whole scan of a 117-byte head. `core` already
+/// special-cases a `char` pattern to memchr; a one-byte `&str` pattern
+/// took the general searcher, and a program cannot write around it —
+/// `"\r\n"` has no `char` spelling.
+///
+/// Byte search is exact for `str`: UTF-8 is self-synchronizing, so a
+/// valid sequence can only ever match at a character boundary. D15
+/// keeps this crate's dependency list to `libc`, so this is the byte
+/// loop and not the `memchr` crate.
+fn str_find(s: &str, n: &str, rev: bool) -> Option<usize> {
+    let (h, p) = (s.as_bytes(), n.as_bytes());
+    if p.is_empty() {
+        // `core`'s own answer, and `[mem.str.empty]`'s (#56): the
+        // empty needle is found at the near end.
+        return Some(if rev { h.len() } else { 0 });
+    }
+    if p.len() > h.len() {
+        return None;
+    }
+    if p.len() > SHORT_NEEDLE {
+        return if rev { s.rfind(n) } else { s.find(n) };
+    }
+    let first = p[0];
+    let last = h.len() - p.len();
+    if rev {
+        let mut i = last;
+        loop {
+            if h[i] == first && h[i + 1..i + p.len()] == p[1..] {
+                return Some(i);
+            }
+            if i == 0 {
+                return None;
+            }
+            i -= 1;
+        }
+    } else {
+        let mut i = 0;
+        while i <= last {
+            let off = h[i..=last].iter().position(|&c| c == first)?;
+            let j = i + off;
+            if h[j + 1..j + p.len()] == p[1..] {
+                return Some(j);
+            }
+            i = j + 1;
+        }
+        None
+    }
+}
+
 /// `find` (rev = 0) / `rfind` (rev = 1): the byte offset, or -1 miss.
 ///
 /// # Safety
@@ -529,8 +595,7 @@ pub unsafe extern "C" fn __wolf_rt_str_get(sp: i64, sl: i64, a: i64, b: i64, out
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_str_find(sp: i64, sl: i64, np: i64, nl: i64, rev: i64) -> i64 {
     let (s, n) = unsafe { (view(sp, sl), view(np, nl)) };
-    let hit = if rev == 0 { s.find(n) } else { s.rfind(n) };
-    hit.map_or(-1, |o| o as i64)
+    str_find(s, n, rev != 0).map_or(-1, |o| o as i64)
 }
 
 /// `starts_with` (0) / `ends_with` (1) / `contains` (2) — 1 = hit.
@@ -542,9 +607,13 @@ pub unsafe extern "C" fn __wolf_rt_str_find(sp: i64, sl: i64, np: i64, nl: i64, 
 pub unsafe extern "C" fn __wolf_rt_str_probe(sp: i64, sl: i64, np: i64, nl: i64, mode: i64) -> i64 {
     let (s, n) = unsafe { (view(sp, sl), view(np, nl)) };
     i64::from(match mode {
+        // `starts_with`/`ends_with` need no fast path: `core`
+        // specializes a `&str` pattern there to a bounded compare with
+        // no searcher. `contains` is `find(..).is_some()` and pays the
+        // whole construction (wolf-lang#335).
         0 => s.starts_with(n),
         1 => s.ends_with(n),
-        _ => s.contains(n),
+        _ => str_find(s, n, false).is_some(),
     })
 }
 
@@ -918,6 +987,67 @@ mod tests {
             assert_eq!(__wolf_rt_str_get(sp, sl, 0, 1, o), 0); // split code point
             assert_eq!(__wolf_rt_str_get(sp, sl, 3, 2, o), 0); // b < a
             assert_eq!(__wolf_rt_str_get(sp, sl, 0, 99, o), 0); // oob
+        }
+    }
+
+    /// The short-needle fast path is a REPLACEMENT for `str::find`,
+    /// so `core` is the oracle: every needle length across the
+    /// threshold, both directions, hits and misses, the empty needle
+    /// (`find("")` is 0 and `rfind("")` is the length — `[mem.str.empty]`,
+    /// #56), a needle longer than its haystack, overlapping repeats,
+    /// and multi-byte characters, where byte search is exact only
+    /// because UTF-8 is self-synchronizing (wolf-lang#335). There was
+    /// one `find` assertion in this file before this: a forward hit.
+    #[test]
+    fn the_short_needle_path_answers_exactly_as_core_does() {
+        let haystacks = [
+            "",
+            "a",
+            "aaaa",
+            "the wolf runs",
+            "GET /p?q=1 HTTP/1.1\r\nHost: x\r\n\r\n",
+            "abababab",
+            "géométrie et gestion",
+            "\u{1f600}ab\u{1f600}",
+        ];
+        let needles = [
+            "",
+            "a",
+            "b",
+            "z",
+            "\r\n",
+            "ab",
+            "aaa",
+            "abab",
+            "HTTP/",
+            "runs",
+            "é",
+            "\u{1f600}",
+            "the wolf runs and runs",
+        ];
+        for h in haystacks {
+            for n in needles {
+                assert_eq!(h.find(n), str_find(h, n, false), "find({h:?}, {n:?})");
+                assert_eq!(h.rfind(n), str_find(h, n, true), "rfind({h:?}, {n:?})");
+                assert_eq!(h.contains(n), str_find(h, n, false).is_some());
+            }
+        }
+    }
+
+    /// Through the ABI, both directions, since the shim is where the
+    /// `rev` flag is read — and `rev = 1` had no test at all.
+    #[test]
+    fn the_find_shim_reads_its_direction_flag() {
+        let (sp, sl) = pair_of("ab.cd.ef");
+        let (np, nl) = pair_of(".");
+        unsafe {
+            assert_eq!(__wolf_rt_str_find(sp, sl, np, nl, 0), 2);
+            assert_eq!(__wolf_rt_str_find(sp, sl, np, nl, 1), 5);
+            let (mp, ml) = pair_of("!");
+            assert_eq!(__wolf_rt_str_find(sp, sl, mp, ml, 0), -1);
+            assert_eq!(__wolf_rt_str_find(sp, sl, mp, ml, 1), -1);
+            assert_eq!(__wolf_rt_str_probe(sp, sl, np, nl, 2), 1);
+            assert_eq!(__wolf_rt_str_probe(sp, sl, mp, ml, 2), 0);
         }
     }
 
