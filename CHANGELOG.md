@@ -2,8 +2,6 @@
 
 ## Unreleased
 
-## Unreleased
-
 ### The key protocol (s152 — #11 and #154's `Map` rows ruled)
 
 **`Map[K, V]` is typed, keyed by the four, and an absent key is a
