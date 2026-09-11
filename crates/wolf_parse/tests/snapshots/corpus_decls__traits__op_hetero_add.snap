@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 439..471 name=Money fields=1
+TraitDecl 473..523 name=Add
+  FnDecl 489..522 name=add
+ImplDecl 525..636 path=Add for=Money
+  FnDecl 550..634 name=add body=Block
+FnDecl 638..745 name=main body=Block

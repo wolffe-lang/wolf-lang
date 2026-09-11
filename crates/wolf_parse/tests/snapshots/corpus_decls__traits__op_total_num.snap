@@ -1,0 +1,50 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TraitDecl 654..705 name=Add
+  FnDecl 670..704 name=add
+TraitDecl 707..758 name=Sub
+  FnDecl 723..757 name=sub
+TraitDecl 760..811 name=Mul
+  FnDecl 776..810 name=mul
+TraitDecl 813..864 name=Div
+  FnDecl 829..863 name=div
+TraitDecl 866..917 name=Rem
+  FnDecl 882..916 name=rem
+EnumDecl 919..970 name=Ordering variants=3
+TraitDecl 972..1021 name=Eq
+  FnDecl 987..1020 name=eq
+TraitDecl 1023..1078 name=Ord
+  FnDecl 1039..1077 name=cmp
+TraitDecl 1080..1131 name=Num
+ImplDecl 1132..1207 path=Add for=int
+  FnDecl 1155..1205 name=add body=Block
+ImplDecl 1209..1284 path=Sub for=int
+  FnDecl 1232..1282 name=sub body=Block
+ImplDecl 1286..1361 path=Mul for=int
+  FnDecl 1309..1359 name=mul body=Block
+ImplDecl 1363..1438 path=Div for=int
+  FnDecl 1386..1436 name=div body=Block
+ImplDecl 1440..1515 path=Rem for=int
+  FnDecl 1463..1513 name=rem body=Block
+ImplDecl 1517..1591 path=Eq for=int
+  FnDecl 1539..1589 name=eq body=Block
+ImplDecl 1593..1787 path=Ord for=int
+  FnDecl 1616..1785 name=cmp body=Block
+ImplDecl 1789..1864 path=Add for=f64
+  FnDecl 1812..1862 name=add body=Block
+ImplDecl 1866..1941 path=Sub for=f64
+  FnDecl 1889..1939 name=sub body=Block
+ImplDecl 1943..2018 path=Mul for=f64
+  FnDecl 1966..2016 name=mul body=Block
+ImplDecl 2020..2095 path=Div for=f64
+  FnDecl 2043..2093 name=div body=Block
+ImplDecl 2097..2568 path=Rem for=f64
+  FnDecl 2431..2566 name=rem body=Block
+ImplDecl 2570..2644 path=Eq for=f64
+  FnDecl 2592..2642 name=eq body=Block
+ImplDecl 2646..2840 path=Ord for=f64
+  FnDecl 2669..2838 name=cmp body=Block
+FnDecl 2842..2962 name=total body=Block
+FnDecl 2964..3227 name=main body=Block

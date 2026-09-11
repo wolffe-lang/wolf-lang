@@ -1,0 +1,18 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 508..540 name=Money fields=1
+TraitDecl 542..593 name=Add
+  FnDecl 558..592 name=add
+TraitDecl 595..646 name=Sub
+  FnDecl 611..645 name=sub
+TraitDecl 648..686 name=Neg
+  FnDecl 664..685 name=neg
+ImplDecl 688..806 path=Add for=Money
+  FnDecl 713..804 name=add body=Block
+ImplDecl 808..926 path=Sub for=Money
+  FnDecl 833..924 name=sub body=Block
+ImplDecl 928..1020 path=Neg for=Money
+  FnDecl 953..1018 name=neg body=Block
+FnDecl 1022..1234 name=main body=Block
