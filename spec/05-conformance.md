@@ -20,7 +20,7 @@ reporting. Consumed by both implementation tracks; wolf-interp reads only
   `proto` → 06-differential-protocol.md ·
   `sched` → 07-schedule-points.md · `pkg` → 08-package.md ·
   `ct` → 09-constant-time.md · `type` → 10-types.md ·
-  `os` → 11-os.md.
+  `os` → 11-os.md · `exec` → 05-conformance.md.
   **Reserved forward namespaces** (owned by spec documents not yet
   written; tags in them are legal, reported as *forward*): `str`, `err`,
   `task`, `proc`, `sync`, `generics`, `arith`, `ffi`, `unsafe`,
@@ -61,7 +61,14 @@ reporting. Consumed by both implementation tracks; wolf-interp reads only
   been published, so `[conf.anchor.stable]` had nothing to pin.
   `ty` stays reserved and unused —
   10-types.md chose `type`, and a reservation nothing cites is cheaper
-  to leave standing than to withdraw.)
+  to leave standing than to withdraw. `exec` appended 2026-09-11 by
+  s153 for wolf-lang#308: the checked tier's budgets went normative
+  (`[exec.checked.budget]`, §5 below) and no execution document
+  exists, so this document owns the namespace — a tier's budget
+  decides what `unsupported` means on that lane, which is a
+  conformance fact. Registered in the clause and in `NS_OWNERS` in the
+  one change `[conf.anchor.ns.admit]` requires; additive, nothing
+  renumbered.)
 - `[conf.anchor.ns.admit]` **A namespace is admitted in one change or
   not at all.** When the document that owns a namespace becomes
   normative, that same change appends the namespace to the registered
@@ -266,3 +273,53 @@ read-mode write barrier, D39), `region-fault`
   `[conf.tag.must]`), never on coverage percentage — debt is visible,
   not blocking (c01 ships clauses faster than phases can test them; the
   ratchet arrives with the phases).
+
+## §5 Execution tiers `[exec]`
+
+(Appended 2026-09-11 by s153 — wolf-lang#308. The checked tier's
+budget counted steps and not bytes, and one wolf-std row reached
+16.6 GiB of resident set on a 16 GB runner before `step budget
+exhausted` arrived — an OOM where an honest refusal was owed.)
+
+- `[exec.checked]` The **checked tier** (`wolf conform-run --checked`,
+  `wolf_mem::ubcheck`) runs `[mem.model.machine]`'s abstract machine
+  as an interpreter: single-threaded, run-to-completion, every
+  allocation modelled in shadow memory, every UB row of `[mem.ub]`
+  detected rather than exploited. Its answers are `[conf.trap]`
+  verdicts or an honest `unsupported` (`[proto.record.unsupported]`);
+  it never guesses.
+- `[exec.checked.budget]` **The tier keeps two budgets — steps AND
+  bytes — and exhausting either is `unsupported`, never a verdict.**
+  The *step* budget counts expression evaluations (20,000,000 at
+  s153). The *byte* budget counts allocation volume in the machine's
+  own units, cumulatively over the run (256 MiB at s153): every
+  allocation the program performs — a container and its growth, a
+  materialized `List[byte]`, a `str` built by `+`, `+=`, `repeat` or
+  an interpolation with a hole — is charged when it is made and the
+  charge is never refunded (the ledger is monotone, as a region's
+  `[mem.region.account.1]` ledger is). Bytes are not a step cost and
+  steps are not a byte cost: a loop that allocates nothing runs to its
+  step budget, a single expression that allocates runs to its byte
+  budget, and a program whose per-step cost is O(n) in memory is
+  refused by the byte budget long before a step budget could see it.
+  **What the byte budget buys is the invariant behind it: the machine
+  retains on the host nothing the ledger has not charged.** A view
+  (`[mem.str.view]` — a consumed `s.bytes()`, a `str` slice, `trim`,
+  `get`, `strip_*`) charges zero AND retains zero: the machine reads
+  the receiver's own bytes and mints nothing; whatever the program
+  asks the machine to keep is charged. The tier's resident set is
+  therefore bounded by the byte budget times the machine's per-unit
+  overhead (one `Value` slot per charged unit), plus the program's own
+  live sources — a constant, not a term that grows with steps — so a
+  bounded host sees the refusal, not the kill. (Ruled 2026-09-11 by
+  s153 for #308. Between s136 and s153 the consumed `bytes()` view was
+  charged zero — correctly, per `[mem.str.view]` — and STILL
+  materialized and retained a list per call: the ledger said 0 while
+  the host paid O(len) per step for the rest of the run, ×3.8 per
+  doubling of sc43's twelve-line reduction, 16.6 GiB on
+  `cavp_sha384_long.lu`, flat on native and lupin. Weighed and
+  rejected: bytes as a step cost, one ceiling — it prices a 64 KiB
+  walk and a 64 KiB allocation the same, and the whole finding was
+  that they are not. Witnesses: `corpus/strings/bytes_view_walk.lu`
+  and the driver's `checked_budget` test, which asserts the peak
+  resident set of the reduction as a subprocess.)

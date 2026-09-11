@@ -286,7 +286,7 @@ pub fn anchor_index(docs: &[(&str, &str)]) -> std::collections::BTreeMap<String,
 /// (declared but unpublished), and it stayed silent for the mirror
 /// reason: nothing looks at a document nothing lists. Deriving all four
 /// from this table is why there is no fifth copy to drift.
-pub const NS_OWNERS: [(&str, &str); 12] = [
+pub const NS_OWNERS: [(&str, &str); 13] = [
     ("gram", "01-grammar.md"),
     ("diag", "01-grammar.md"), // §9, the diagnostics tier (s67)
     ("mem", "02-memory-model.md"),
@@ -305,6 +305,10 @@ pub const NS_OWNERS: [(&str, &str); 12] = [
     ("ct", "09-constant-time.md"),
     ("type", "10-types.md"), // §D54 numeric-literal typing (s113)
     ("os", "11-os.md"),      // signal reception + the os surface (s114)
+    // Admitted 2026-09-11 by s153 (#308): the checked tier's budgets
+    // went normative (`[exec.checked.budget]`); no execution document
+    // exists, so 05-conformance.md owns the namespace beside `conf`.
+    ("exec", "05-conformance.md"),
 ];
 
 /// The document owning `anchor`'s namespace, if the namespace is

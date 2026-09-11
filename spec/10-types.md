@@ -351,7 +351,9 @@ values that have none.)
   fresh `str` per application — the compiler lowers `+` onto the same
   strbuf path an interpolated string materializes through, so `+=` in
   a loop is quadratic, never an amortized push. `std.strbuf` is the
-  builder. The diagnostics say so beside the refusal note.
+  builder. The diagnostics say so beside the refusal note. The fresh
+  `str` is an allocation site in the ambient region for the escape
+  rule — `[mem.region.escape]` (s153, wolf-lang#310).
 
 ## §6 Closures `[type.closure]`
 

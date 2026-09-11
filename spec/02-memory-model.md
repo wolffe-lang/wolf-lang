@@ -170,6 +170,33 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   it is freed **wholesale**. Per-allocation frees do not exist in safe
   code.
 
+### Escape `[mem.region.escape]`
+
+- `[mem.region.escape]` A value whose allocation site lies in a region
+  must not outlive that region: it is E1010 (dynamically `region-fault`,
+  `[conf.trap.map]`) for such a value to be the block's own value, to be
+  returned from the frame that owns the region, sent on a channel
+  (`[conc.chan.payload]`), stored into module state, or held by a
+  binding declared outside the region's block. The sites are
+  `[mem.model.alloc]`'s — struct and enum literals, container
+  constructors and their growth, closures, non-`Copy` call results —
+  **and every built `str`**: `s + u`, `s += u` (`[type.str.concat]`) and
+  an interpolation with at least one hole. A built `str` is an
+  allocation in the ambient region of the building expression
+  (`[mem.region.create.3]`) — never in an operand's region; the
+  operands' bytes are copied, not shared. A `str` is `Copy` — its
+  two-word view copies freely — but the bytes it views live where they
+  were built, so a `str` read from a binding carries that binding's
+  sites out with it. A literal's bytes are static and a literal is no
+  site; a slice and every `[mem.str.view]` product allocate nothing.
+  (Ruled 2026-09-11 by s153 for wolf-lang#310: `region scratch { let s
+  = "re" + "gions"; s }` returned from a function printed `regions`
+  from freed bytes on wolf 0.2.10 and lupin 0.1.31 alike, with a W1001
+  saying the region never allocates, while the same block with a
+  `List[int]()` was E1010 all along — the escape rule saw the list and
+  not the `str`. Witnesses `corpus/memory/region_str_concat_return.lu`
+  and `region_str_concat_send.lu`.)
+
 ### Cross-region edges `[mem.region.edge]`
 
 Edge legality (source stores a reference to target):
