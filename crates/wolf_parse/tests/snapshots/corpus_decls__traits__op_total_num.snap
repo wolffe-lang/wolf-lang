@@ -40,11 +40,11 @@ ImplDecl 1943..2018 path=Mul for=f64
   FnDecl 1966..2016 name=mul body=Block
 ImplDecl 2020..2095 path=Div for=f64
   FnDecl 2043..2093 name=div body=Block
-ImplDecl 2097..2568 path=Rem for=f64
-  FnDecl 2431..2566 name=rem body=Block
-ImplDecl 2570..2644 path=Eq for=f64
-  FnDecl 2592..2642 name=eq body=Block
-ImplDecl 2646..2840 path=Ord for=f64
-  FnDecl 2669..2838 name=cmp body=Block
-FnDecl 2842..2962 name=total body=Block
-FnDecl 2964..3227 name=main body=Block
+ImplDecl 2097..2573 path=Rem for=f64
+  FnDecl 2521..2571 name=rem body=Block
+ImplDecl 2575..2649 path=Eq for=f64
+  FnDecl 2597..2647 name=eq body=Block
+ImplDecl 2651..2845 path=Ord for=f64
+  FnDecl 2674..2843 name=cmp body=Block
+FnDecl 2847..2967 name=total body=Block
+FnDecl 2969..3232 name=main body=Block

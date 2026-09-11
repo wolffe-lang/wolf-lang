@@ -207,3 +207,34 @@ fn insertion_order_does_not_change_the_dump() {
     let re = wolf_wir::parse_module(&d1).expect("canonical dump parses");
     assert_eq!(wolf_wir::print_module(&re), d1);
 }
+
+/// `frem` (s156, `[type.float.rem]`) — the float opcode added for
+/// wolf-lang#327. The textual IR is the one half of a new opcode that
+/// fails SILENTLY: a mnemonic missing from the parser's table and an
+/// arity arm that never names it break no build and no lowering, they
+/// just make the printed module unreadable. `print → parse → print` is
+/// the cheapest guard, and it catches both halves at once.
+#[test]
+fn frem_survives_the_textual_ir() {
+    use wolf_wir::types::F64;
+
+    let mut m = Module::new();
+    let sig = m.make_sig(vec![Param::val(F64), Param::val(F64)], vec![F64]);
+    let mut f = Function::new("rem", sig);
+    let entry = f.make_block(&[F64, F64]);
+    let p = f.block_params(entry);
+    let (a, b) = (p[0], p[1]);
+    let (_, r) = f.append_inst(entry, Opcode::Frem, &[a, b], &[F64], Aux::None);
+    f.append_inst(entry, Opcode::Ret, &[r[0]], &[], Aux::None);
+    m.add_func(f);
+    verify_module(&m).expect("frem verifies: two float operands, one result, same type");
+
+    let p1 = wolf_wir::print_module(&m);
+    assert!(p1.contains("frem"), "the mnemonic reaches the page:\n{p1}");
+    let m2 = wolf_wir::parse_module(&p1).expect("the printed frem parses back");
+    assert_eq!(
+        p1,
+        wolf_wir::print_module(&m2),
+        "print→parse→print fixpoint"
+    );
+}

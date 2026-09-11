@@ -1090,6 +1090,39 @@ impl<'a, 'b> Tx<'a, 'b> {
         Ok(fr)
     }
 
+    /// A libm math symbol, `(ty, ty) -> ty` under the C convention.
+    /// Keyed `libm::<name>` in the shared caches so a wolf function
+    /// that happens to be called `fmod` can never collide with it —
+    /// `lower_call` reads `fref_cache` by the callee's own name.
+    fn libm_ref(
+        &mut self,
+        symbol: &'static str,
+        ty: ctypes::Type,
+    ) -> Result<cranelift_codegen::ir::FuncRef, BackendError> {
+        let key = format!("libm::{symbol}");
+        if let Some(&(fr, _)) = self.fref_cache.get(&key) {
+            return Ok(fr);
+        }
+        let fid = match self.imports.get(&key) {
+            Some(&fid) => fid,
+            None => {
+                let mut sig = Signature::new(self.om.isa().default_call_conv());
+                sig.params.push(AbiParam::new(ty));
+                sig.params.push(AbiParam::new(ty));
+                sig.returns.push(AbiParam::new(ty));
+                let fid = self
+                    .om
+                    .declare_function(symbol, cranelift_module::Linkage::Import, &sig)
+                    .map_err(|e| ice(e.to_string()))?;
+                self.imports.insert(key.clone(), fid);
+                fid
+            }
+        };
+        let fr = self.om.declare_func_in_func(fid, self.b.func);
+        self.fref_cache.insert(key, (fr, Conv::C));
+        Ok(fr)
+    }
+
     /// A fresh slot big enough to hold `units` whole eightbytes (the
     /// [`Tx::store_unit`] invariant: full-width unit stores are always
     /// in bounds), returning its address.
@@ -1341,6 +1374,30 @@ impl<'a, 'b> Tx<'a, 'b> {
                     Opcode::Fmul => self.b.ins().fmul(a, b),
                     _ => self.b.ins().fdiv(a, b),
                 };
+                self.vals.insert(results[0], Repr::Scalar(r));
+            }
+            // Cranelift has no `frem` instruction, and the naive
+            // `a - trunc(a / b) * b` expansion is NOT `fmod` — it
+            // loses precision badly once `|a|` is far above `|b|`. The
+            // ruled semantics are C's, so C's function is what this
+            // calls (`[type.float.rem]`, s156): the same routine LLVM's
+            // own `frem` lowers to, so the two backends agree by
+            // construction rather than by testing. libm needs no new
+            // link flag on the targets this gate opens for — it is
+            // inside libSystem on darwin and inside libc on glibc
+            // ≥ 2.34, both of which the runtime already pulls.
+            Opcode::Frem => {
+                let a = self.scalar(args[0])?;
+                let b = self.scalar(args[1])?;
+                let f32ty = self.b.func.dfg.value_type(a) == ctypes::F32;
+                let (symbol, ty) = if f32ty {
+                    ("fmodf", ctypes::F32)
+                } else {
+                    ("fmod", ctypes::F64)
+                };
+                let fr = self.libm_ref(symbol, ty)?;
+                let call = self.b.ins().call(fr, &[a, b]);
+                let r = self.b.inst_results(call)[0];
                 self.vals.insert(results[0], Repr::Scalar(r));
             }
             Opcode::Fneg => {

@@ -52,7 +52,7 @@ op-line  := "iconst." sty INT | "fconst." fty FLOAT | "bconst" BOOL
           | iop VALUE "," VALUE                     ; iadd.chk isub.chk
           ;   imul.chk idiv.chk irem.chk iadd.wrap isub.wrap imul.wrap
           ;   iadd.sat isub.sat imul.sat band bor bxor shl lshr ashr
-          | fop VALUE "," VALUE                     ; fadd fsub fmul fdiv
+          | fop VALUE "," VALUE                     ; fadd fsub fmul fdiv frem
           | "fneg" VALUE | "fma" VALUE "," VALUE "," VALUE
           | "icmp." icc VALUE "," VALUE             ; eq ne slt sle sgt
           ;   sge ult ule ugt uge

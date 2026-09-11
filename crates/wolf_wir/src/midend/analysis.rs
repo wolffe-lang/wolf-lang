@@ -302,6 +302,7 @@ pub(crate) fn is_gvn_pure(op: Opcode) -> bool {
             | Opcode::Fsub
             | Opcode::Fmul
             | Opcode::Fdiv
+            | Opcode::Frem
             | Opcode::Fneg
             | Opcode::Fma
             | Opcode::Icmp
@@ -350,6 +351,7 @@ pub(crate) fn is_removable(op: Opcode) -> bool {
             | Opcode::Fsub
             | Opcode::Fmul
             | Opcode::Fdiv
+            | Opcode::Frem
             | Opcode::Fneg
             | Opcode::Fma
             | Opcode::Icmp

@@ -438,6 +438,7 @@
     "type.char.order": "10-types.md",
     "type.closure": "10-types.md",
     "type.closure.return": "10-types.md",
+    "type.float.rem": "10-types.md",
     "type.fn": "10-types.md",
     "type.fn.ret": "10-types.md",
     "type.fn.value": "10-types.md",

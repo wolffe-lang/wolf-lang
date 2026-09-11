@@ -7395,7 +7395,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 SyntaxKind::Minus => Opcode::Fsub,
                 SyntaxKind::Star => Opcode::Fmul,
                 SyntaxKind::Slash => Opcode::Fdiv,
-                _ => return Err(refuse("this float operator (no frem op)", span)),
+                // `[type.float.rem]` (s156, #327): `%` on a float is C
+                // `fmod`. It was the one arithmetic operator the
+                // checker admitted, CTFE folded and the native rung
+                // refused.
+                SyntaxKind::Percent => Opcode::Frem,
+                _ => return Err(refuse("this float operator", span)),
             };
             return Ok(Some(self.b.ins(fop, &[a, b], &[wty], Aux::None).one()));
         }

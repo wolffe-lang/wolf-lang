@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TraitDecl 600..651 name=Rem
+  FnDecl 616..650 name=rem
+ImplDecl 653..728 path=Rem for=f64
+  FnDecl 676..726 name=rem body=Block
+FnDecl 730..896 name=main body=Block

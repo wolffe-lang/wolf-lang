@@ -132,6 +132,26 @@ conversion, and its numeric arms are closed and total:
   explicit unsafe-tier operation, never this `as` cast's silent default —
   the same posture as saturation on the float row.
 
+## §3b The float remainder `[type.float.rem]`
+
+- `[type.float.rem]` **`%` on a float is C's `fmod`** — the remainder
+  of the truncated division: `7.5 % 3.0` is `1.5`, `-7.5 % 3.0` is
+  `-1.5` (the sign is the **dividend's**, not the divisor's), `x % 0.0`
+  and `inf % y` are NaN, and nothing traps — floats are IEEE and X3's
+  trap law is integer law (`[type.numlit.cast.trunc]`'s trap is a
+  cast's, not an operator's). Not the IEEE `remainder` function, which
+  rounds the quotient to nearest-even and would make `7.5 % 3.0` be
+  `-1.5`; `fmod` is what every neighbour language's `%` means at a
+  float, what LLVM's `frem` is defined as, and what this compiler's own
+  comptime folder has answered since it could fold a float at all.
+  Ruled at s156 (wolf-lang#327), where `%` was the one arithmetic
+  operator the checker admitted, the constant folder folded and the
+  checked machine evaluated while the native rung refused the program —
+  so `[type.trait.op]`'s `impl Rem for f64 { fn rem(self, other: Self)
+  -> Self { self % other } }` could not be written, and `Num` at `f64`
+  had a hole in it. Witness: `corpus/typecheck/float_rem.lu`, both
+  tiers.
+
 ## §4 The `char` type `[type.char]`
 
 - `[type.char]` **`char` is a Unicode scalar value** (D58, s121): its

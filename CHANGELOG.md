@@ -441,10 +441,11 @@ the checked machine runs the impl body through the same
 `trait_concrete`/`resolve_trait_body` path a qualified call takes.
 Also on the checked machine: a payload-free variant as a bare value
 (`Ordering.Less`) now evaluates (#23's member form) — every `Ord.cmp`
-body needs it, and std.cmp could not run there before. Not moved: `%`
-on `f64` has no native lowering (no `frem` op — filed), so the
-witness's `impl Rem for f64` spells the remainder by hand; compound
-assignment on a user type keeps its E0409.
+body needs it, and std.cmp could not run there before. Not moved: compound
+assignment on a user type keeps its E0409. (`%` on `f64` had no native
+lowering when this shipped, so the witness's `impl Rem for f64` spelled
+the remainder by hand; s156 ruled it `fmod` and lowered it — the body
+is `self % other` now.)
 
 **Predicted before measuring, measured at this tree.** `op_total_num`
 (`6` / `7.5`), `op_money` (`150` / `-150` / `50`), `op_eq_inverting`

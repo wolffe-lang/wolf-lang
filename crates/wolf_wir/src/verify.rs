@@ -469,7 +469,7 @@ impl<'a> Verifier<'a> {
                 }
                 self.same_tys(inst, &[args[0], args[1], results[0]])?;
             }
-            Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv => {
+            Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv | Opcode::Frem => {
                 self.expect_counts(inst, 2, 1)?;
                 if !float(args[0]) || !float(args[1]) {
                     return Err(self.type_err(inst, "float op needs float operands"));

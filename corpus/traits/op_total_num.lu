@@ -96,18 +96,13 @@ impl Div for f64 {
 }
 
 impl Rem for f64 {
-    // std's body is `self % other`; `%` on `f64` has no native
-    // lowering yet (no `frem` op — filed with this witness), so the
-    // truncated remainder is spelled by hand for non-negative
-    // operands until it does. `total` never calls it: `Num` demands
-    // the impl, the witness demands `Add`.
-    fn rem(self, other: Self) -> Self {
-        var r = self
-        while r >= other {
-            r = r - other
-        }
-        r
-    }
+    // std's own body, and it lowers now: `%` on a float is C's `fmod`
+    // (`[type.float.rem]`, s156, #327). It used to be spelled as a
+    // repeated subtraction here — correct only for non-negative
+    // operands, non-terminating for a non-positive divisor — because
+    // the native rung had no `frem` op. `total` never calls it: `Num`
+    // demands the impl, the witness demands `Add`.
+    fn rem(self, other: Self) -> Self { self % other }
 }
 
 impl Eq for f64 {

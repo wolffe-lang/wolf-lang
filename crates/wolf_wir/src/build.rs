@@ -1748,6 +1748,7 @@ impl<'m> FuncBuilder<'m> {
                 | Opcode::Fsub
                 | Opcode::Fmul
                 | Opcode::Fdiv
+                | Opcode::Frem
                 | Opcode::Fneg
                 | Opcode::Fma
                 | Opcode::Icmp

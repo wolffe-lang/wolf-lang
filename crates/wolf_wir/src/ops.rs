@@ -300,6 +300,10 @@ pub enum Opcode {
     Fmul,
     /// `%r = fdiv %a, %b` — float divide (IEEE: /0 is ±inf/NaN, no trap).
     Fdiv,
+    /// `%r = frem %a, %b` — float remainder, C `fmod`: truncated
+    /// toward zero, the sign of the dividend, `x % 0.0` is NaN, never
+    /// a trap (`[type.float.rem]`, s156).
+    Frem,
     /// `%r = fneg %a` — float negate.
     Fneg,
     /// `%r = fma %a, %b, %c` — fused multiply-add, a*b+c with one rounding.
@@ -583,6 +587,7 @@ impl Opcode {
             Opcode::Fsub => "fsub",
             Opcode::Fmul => "fmul",
             Opcode::Fdiv => "fdiv",
+            Opcode::Frem => "frem",
             Opcode::Fneg => "fneg",
             Opcode::Fma => "fma",
             Opcode::Icmp => "icmp",

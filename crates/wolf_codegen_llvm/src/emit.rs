@@ -2060,14 +2060,17 @@ impl<'a> Fx<'a> {
             }
 
             // ---- floats (IEEE, no traps) ----
-            Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv => {
+            Opcode::Fadd | Opcode::Fsub | Opcode::Fmul | Opcode::Fdiv | Opcode::Frem => {
                 let ty = self.sty(results[0])?;
                 let (a, b) = (self.op(args[0])?, self.op(args[1])?);
+                // LLVM's `frem` is defined as C `fmod` and lowers to
+                // the libm call by itself (`[type.float.rem]`, s156).
                 let mn = match op {
                     Opcode::Fadd => "fadd",
                     Opcode::Fsub => "fsub",
                     Opcode::Fmul => "fmul",
-                    _ => "fdiv",
+                    Opcode::Fdiv => "fdiv",
+                    _ => "frem",
                 };
                 let t = self.tmp();
                 self.line(format!("  {t} = {mn} {ty} {a}, {b}"));

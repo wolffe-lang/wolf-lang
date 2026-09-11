@@ -4351,18 +4351,17 @@ impl<'t> Machine<'t> {
                 Ok(Value::Int(out))
             }
             // Floats are IEEE (s38): arithmetic never traps — inf and
-            // nan are VALUES; X3's trap law is integer law. `%` on
-            // floats has no ruled semantics (fmod vs IEEE remainder)
-            // and refuses honestly.
+            // nan are VALUES; X3's trap law is integer law. `%` is C
+            // `fmod` (`[type.float.rem]`, s156) — which is exactly
+            // what Rust's `f64 % f64` computes, what LLVM's `frem`
+            // lowers to, and what CTFE has folded all along.
             (Value::F64(a), Value::F64(b)) => {
                 let out = match op {
                     SyntaxKind::Plus => a + b,
                     SyntaxKind::Minus => a - b,
                     SyntaxKind::Star => a * b,
                     SyntaxKind::Slash => a / b,
-                    SyntaxKind::Percent => {
-                        return self.refuse("`%` on floats (unruled: fmod vs remainder)", span);
-                    }
+                    SyntaxKind::Percent => a % b,
                     _ => a,
                 };
                 Ok(Value::F64(out))

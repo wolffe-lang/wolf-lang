@@ -1,0 +1,29 @@
+//! check: run(exit=0, stdout="1.5 -1.5 0.5 true\n")
+//! phase: run
+//! conforms: type.float.rem, type.trait.op
+//!
+//! `%` on a float is C's `fmod` (`[type.float.rem]`, s156, #327): the
+//! remainder of the TRUNCATED division, so the sign is the dividend's
+//! — `-7.5 % 3.0` is `-1.5`, not `1.5` and not IEEE `remainder`'s
+//! `-1.5`-by-another-route. Nothing traps: `x % 0.0` is NaN, which is
+//! the one value not equal to itself. The last column is std's own
+//! `impl Rem for f64` body, `self % other`, which had no native
+//! lowering until this clause and is the reason the clause exists.
+
+trait Rem {
+    fn rem(self, other: Self) -> Self
+}
+
+impl Rem for f64 {
+    fn rem(self, other: Self) -> Self { self % other }
+}
+
+fn main() -> !int {
+    let a = 7.5
+    let b = 3.0
+    let c = -7.5
+    let z = 0.0
+    let nan = a % z
+    print("{a % b} {c % b} {3.5 % 1.5} {nan != nan}")
+    0
+}

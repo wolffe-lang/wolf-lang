@@ -1048,6 +1048,7 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
         ("fsub", Opcode::Fsub),
         ("fmul", Opcode::Fmul),
         ("fdiv", Opcode::Fdiv),
+        ("frem", Opcode::Frem),
         ("fneg", Opcode::Fneg),
         ("fma", Opcode::Fma),
         ("ptr.off", Opcode::PtrOff),
@@ -1320,7 +1321,8 @@ fn parse_inst(
         | Opcode::Fadd
         | Opcode::Fsub
         | Opcode::Fmul
-        | Opcode::Fdiv => {
+        | Opcode::Fdiv
+        | Opcode::Frem => {
             args = parse_val_list(line, values, func)?;
             if args.len() != 2 {
                 return line.fail(format!("`{mname}` takes exactly 2 operands"));
