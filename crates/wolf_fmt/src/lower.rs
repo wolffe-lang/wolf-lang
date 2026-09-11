@@ -1369,8 +1369,17 @@ impl<'a> Fmt<'a> {
                     // dropped parens change what sits on the page.
                     let cctx = child_ctx(n.kind, m, ctx);
                     let first = self.rendered_first(m, cctx).map(|t| t.kind);
+                    // #314: a closure's body is always separated from
+                    // its parameter list by one space, whatever token
+                    // it starts with. The generic pair rule is tight
+                    // after `)` before `(` — the right answer for
+                    // `f(a)(b)`, and the wrong one here: `fn(c) (c +
+                    // to / 2) / to` came back as `fn(c)(c + to / 2) /
+                    // to`, which parses the same and reads as a call
+                    // of `fn(c)`.
+                    let closure_body = n.kind == K::ClosureExpr && m.kind != K::ParamList;
                     if let (Some(p), Some(f)) = (prev, first)
-                        && self.child_space(p, f, m.kind)
+                        && (closure_body || self.child_space(p, f, m.kind))
                     {
                         out.push(Doc::text(" "));
                     }

@@ -3,5 +3,5 @@ source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
 FnDecl 679..730 name=apply body=Block
-FnDecl 732..801 name=rounder body=Block
-FnDecl 803..1068 name=main body=Block
+FnDecl 732..802 name=rounder body=Block
+FnDecl 804..1069 name=main body=Block

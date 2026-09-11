@@ -90,6 +90,26 @@ fn a_leading_else_is_relaid_onto_the_closing_brace_line() {
     );
 }
 
+/// wolf-lang#314: a closure's expression body is separated from its
+/// parameter list by one space whatever token it starts with. The
+/// generic pair rule is tight after `)` before `(` — right for
+/// `f(a)(b)`, wrong here: `fn(c)(c + to / 2)` parses as the closure it
+/// is and reads as a call of `fn(c)`.
+#[test]
+fn a_closure_body_keeps_its_space() {
+    check(
+        "fn rounder(to: int) -> fn(int) -> int { fn(c) (c + to / 2) / to * to }\n",
+        "fn rounder(to: int) -> fn(int) -> int { fn(c) (c + to / 2) / to * to }\n",
+    );
+    // The space-less spelling is not canonical: it comes back spaced.
+    check(
+        "fn rounder(to: int) -> fn(int) -> int { fn(c)(c + to / 2) / to * to }\n",
+        "fn rounder(to: int) -> fn(int) -> int { fn(c) (c + to / 2) / to * to }\n",
+    );
+    // A real call of a call stays tight.
+    check("fn main() { f(1)(2) }\n", "fn main() { f(1)(2) }\n");
+}
+
 #[test]
 fn exactly_one_blank_line_between_items() {
     check(

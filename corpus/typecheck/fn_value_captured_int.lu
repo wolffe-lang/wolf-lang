@@ -13,7 +13,7 @@
 
 fn apply(x: int, f: fn(int) -> int) -> int { f(x) }
 
-fn rounder(to: int) -> fn(int) -> int { fn(c)(c + to / 2) / to * to }
+fn rounder(to: int) -> fn(int) -> int { fn(c) (c + to / 2) / to * to }
 
 fn main() -> !int {
     let k = 10
