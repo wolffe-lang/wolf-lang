@@ -81,6 +81,121 @@ clauses disagreed about what the list is; wolf-interp holds its table
 to §6.2 in both directions by a test, so `then` could not join it
 (#318).
 
+THE PAPERCUTS II. Eleven filings, ten of them moved. Several are the
+same defect wearing different clothes: a rule that was right about the
+program and could not be reached from where the reader stood — a trait
+whose name the import qualified, a cast that skipped its target type,
+a break measured against the wrong line.
+
+**An operator's trait is the one REACHABLE, not the one bare** (#336).
+`[type.trait.op]` resolved the operator trait by bare name, and wolf
+binds whole modules — `use std.cmp` binds `cmp`, so the trait is
+`cmp.Eq` and `Eq` is a name no importer can have. Importing a
+library's type was therefore the very thing that made its operators
+undispatchable: `==` on an `Ordering` worked inside `std/cmp/*.lu` and
+was E0301 one `use` away, which is every user type any library
+publishes, in the release whose headline is `==` on a library's type.
+Neither half of the help could be followed — "bring `Eq` into scope"
+named no spelling that reaches it, and "write `impl Eq for Ordering`"
+asked for a duplicate of an impl std.cmp already ships. Three places
+are consulted now, in order: the name in scope; the trait declared by
+the operand type's own module, which coherence already implies and
+which needs no import; then the modules this file imports. Two imports
+declaring one operator trait is no answer and keeps the E0301.
+
+**A numeric cast converts** (#337). The checked tier — the machine
+`[exec.checked]` calls the one that "never guesses" — answered
+`(4 as f64) == 4.0` FALSE while `a == a` was true, and the native rung
+and lupin both said true. `eval_cast`'s catch-all handed the operand's
+value straight back without consulting the target type, so `n as f64`
+stayed an integer and `values_equal`'s variant pairs did the rest. The
+float→int direction was the same hole and worse than the filing knew:
+`3.7 as int` printed `3.7`, and `1e300 as int` and `nan as int` ran to
+exit 0 where `[type.numlit.cast.trunc]` traps. Four corpus witnesses
+answer correctly now that did not.
+
+**`%` on a float is `fmod`, and it lowers** — `[type.float.rem]`
+(#327). Ruled because it had to be ruled before it could be lowered:
+the remainder of the truncated division, the sign of the dividend,
+`x % 0.0` NaN, nothing traps. Three quarters of the ruling was already
+in the tree and unwritten — sema typed it, the comptime folder folded
+it as Rust's `f64::rem`, the checked machine refused it as "unruled" —
+so a program the language accepted ran on one tier and was declined by
+the other, and `[type.trait.op]`'s own `impl Rem for f64` could not be
+written. `Opcode::Frem` through the whole set the ledger demands; LLVM
+emits `frem`, and cranelift, which has no such instruction and whose
+naive expansion is not `fmod`, calls the routine LLVM's frem lowers to.
+
+**A trait alias's right-hand side marks its imports used** (#334). The
+alias is usually the ONLY consumer of the imports it names —
+`[type.trait.op.alias]`'s own worked example spans std.ops and std.cmp
+— and `resolve_item` walked the members and never the alias bound, so
+both imports came back E0305 with a fix-it that deleted the names three
+lines below. A generic BOUND has always counted, through the very same
+three lines.
+
+**A store through a container index lends** — `[mem.region.edge.elem]`
+(#333). `fn set_g[K, V](mut m: Map[K, V], k: K, v: V) { m[k] = v }` was
+E1004 and `fn push_g[T](mut xs: List[T], v: T) { (mut xs).push(v) }`
+was not: two operations that are one operation to a reader, needing
+different source for the same generic signature, on the most ordinary
+function a keyed container has. The asymmetry was never a decision —
+`push`'s value parameter is a `read`, and a read is a lend. A field
+store keeps its E1004, and so does a value provably outliving its
+region.
+
+**A format spec on a `!T` hole is E0413** — `[type.interp.union]`
+(#323). `{m[k]:>5}` refused on both tiers and sema let it through, so a
+typing question arrived as `unsupported` at run time and read as a
+missing feature. The value is two values and a spec describes one:
+handle the row, then format what is left.
+
+**The break that achieves the width, outermost first** —
+`[gram.fmt.break]` (#339). Every break was measured against the
+construct alone, and the page is not written a construct at a time: a
+parameter list ending at column 93 "fit", and the ` -> List[byte] {`
+already committed to follow it ran the line to 103 — so the return
+type, a two-token type application, was the only group left able to
+break, and `] {` landed at the head of a line where it reads as a block
+close. `fits` measures the tail of the line now. A type application is
+not a break point; the receiver-dot break is a last resort, taken only
+when breaking the argument lists cannot bring the line inside the
+width, and then taken at every dot at once; an argument list broken
+open indents one level past the line its callee name is on and closes
+at that name's own column. A break that cannot achieve the width is not
+taken at all. Measured re-lay against trunk: wolf-std `7582e7a` 33
+files (245 orphaned receiver-dot lines to 0, breakable over-width code
+lines 14 to 3); lobo `1148318` 28 files (71 to 0, 8 to 0); wolf-book
+`a27b684` 0.
+
+**A binary `else` fallback keeps the author's parens** —
+`[gram.fmt.paren]` (#340). `x else (0 - 1)` printed as `x else 0 - 1`.
+The meaning is the same either way, which is exactly why the parens are
+the reader's; W0307 stands down when the author has "parenthesized
+either reading", and the formatter erased one of the two readings that
+sentence names.
+
+**`str.find` dispatches on the needle's length** (#335). A `&str`
+pattern constructs a Two-Way searcher on every call, and lobo's ws31
+profile priced the family at 1.9% of a keepalive request — with the
+searcher's CONSTRUCTION at 0.69% by itself — for needles of one to four
+bytes. Short needles take a first-byte scan and a tail compare;
+`contains` joins them. 1.6–2.0x on the find itself, measured on a
+request head with a parser's six needles. No exported symbol moves.
+
+**Two seed corpus files pinned verdicts their clauses had retired**
+(#341). `wordcount.lu` taught `tally[w] += 1` — the idiom s152 retired
+— and `grammar/structlit_paren.lu` spelled its point with an equality
+s155 made a refusal; the compiler's own ledger could not see either,
+because the phase each header named stops before the rung that
+answers. wolf-interp's is46 census found them from the other side.
+
+Not moved: **#345** was already discharged at `3a7703c` — s154's #318
+added `then` to `[gram.inv.ctx]` §6.2 with its position, and §6.2 is
+the only contextual-keyword inventory in the tree (verified at
+`be348b9`: no second table, and the grammar carries no `contextual_kw`
+production). It was measured at the v0.2.11 tag, one commit early.
+
 ## 0.2.11 — 2026-09-11
 
 THE CHAPTER THE MAINTAINER READ. 0.2.11 is the release where the two
