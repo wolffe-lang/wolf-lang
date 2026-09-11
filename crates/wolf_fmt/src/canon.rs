@@ -232,6 +232,10 @@ fn norm_node(
             Child::Token(t) => match t.kind {
                 // Terminators and separators are layout, not shape.
                 K::Term | K::Comma | K::Eof => {}
+                // A `then` is the if's FORM, not its shape ([gram.expr.if]):
+                // dropped before `{`, and the bare form normalizes to the
+                // braced one below.
+                K::ThenKw => {}
                 _ => kids.push(NTree::Tok(t.kind, t.text(src).to_vec())),
             },
             Child::Node(m) => {
@@ -280,6 +284,14 @@ fn norm_node(
                 kids.push(norm_node(m, src, sugar, drops));
             }
         }
+    }
+
+    // A bare `if … then` branch ↔ `{ expr }`: the width fallback lays
+    // the bare form braced (`[gram.fmt.if]`), and the bare block the
+    // parser builds has the block's shape without its delimiters.
+    if n.kind == K::Block && n.child_token(K::LBrace).is_none() {
+        kids.insert(0, NTree::Tok(K::LBrace, b"{".to_vec()));
+        kids.push(NTree::Tok(K::RBrace, b"}".to_vec()));
     }
 
     // `else if` ↔ `else { if }`: normalize the collapsed spelling to

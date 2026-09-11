@@ -77,6 +77,11 @@ pub(crate) enum Ctx {
     RangeEnd,
     /// `[…]` argument (also `Free`, minus the `[-1]` E0209 trap).
     IndexArg,
+    /// A bare `if … then` branch (`[gram.expr.if]`): `Free`, except
+    /// that parens around a defaulting `else` are load-bearing — the
+    /// `if`'s own `else` binds first there (`[gram.amb.else]`), so
+    /// `(f() else 0)` unwrapped would re-bind the `else`.
+    BareBranch,
 }
 
 // ---------------------------------------------------------- utilities ---
@@ -203,10 +208,29 @@ fn shallow_error(n: &GreenNode) -> bool {
 }
 
 /// A block whose `{`/`}` frame itself is damaged cannot self-repair.
+/// A bare `if … then` branch has no frame to damage (`[gram.expr.if]`).
 fn block_frame_damaged(b: &GreenNode) -> bool {
+    if is_bare_block(b) {
+        return false;
+    }
     let has_open = b.tokens().any(|t| t.kind == K::LBrace);
     let has_close = b.tokens().any(|t| t.kind == K::RBrace);
     !has_open || !has_close
+}
+
+/// The brace-less block the parser builds for a bare `if … then`
+/// branch: one trailing `ExprStmt`, no delimiters (`[gram.expr.if]`).
+fn is_bare_block(b: &GreenNode) -> bool {
+    b.kind == K::Block
+        && !b.tokens().any(|t| matches!(t.kind, K::LBrace | K::RBrace))
+        && b.nodes().count() == 1
+        && b.nodes().next().is_some_and(|s| s.kind == K::ExprStmt)
+}
+
+/// An `if` in the bare form: its then-branch is a bare block (the two
+/// branches of one `if` share a form).
+fn is_bare_if(n: &GreenNode) -> bool {
+    n.kind == K::IfExpr && n.nodes().nth(1).is_some_and(is_bare_block)
 }
 
 fn is_comment(kind_bytes: &[u8]) -> bool {
@@ -2255,7 +2279,15 @@ impl<'a> Fmt<'a> {
 
     // ------------------------------------------------------------- ifs --
 
+    /// `[gram.fmt.if]`: the formatter never converts between the braced
+    /// and the bare form — the author's choice stands. The braced form
+    /// is laid as it always was, a `then` before `{` dropped (one
+    /// spelling); the bare form goes through [`Self::bare_if`].
     fn if_expr(&self, n: &GreenNode, out: &mut Vec<Doc>) {
+        if is_bare_if(n) {
+            self.bare_if(n, out);
+            return;
+        }
         self.kw(n.child_token(K::IfKw), "if", out);
         out.push(Doc::text(" "));
         let mut nodes: Vec<&GreenNode> = n.nodes().collect();
@@ -2264,6 +2296,10 @@ impl<'a> Fmt<'a> {
         }
         let cond = nodes.remove(0);
         self.expr(cond, out, Ctx::Cond);
+        // `then` before `{` is dropped; its comments ride along.
+        if let Some(t) = n.child_token(K::ThenKw) {
+            self.tok_trivia_only(t, out);
+        }
         out.push(Doc::text(" "));
         if !nodes.is_empty() {
             let then = nodes.remove(0);
@@ -2285,6 +2321,110 @@ impl<'a> Fmt<'a> {
                 self.node(branch, out, Ctx::Free);
             }
         }
+    }
+
+    /// The bare form `if c then a else b` (`[gram.fmt.if]`): one group
+    /// per chain whose BROKEN rendering is the braced form, so the
+    /// width fallback is the only conversion, one direction, and a
+    /// fixed point — the braced result is braced on every later pass.
+    /// A bare `else if` joins the group (the chain breaks as one); a
+    /// braced `else if` keeps its braces behind a shield and does not
+    /// make the bare head break.
+    fn bare_if(&self, n: &GreenNode, out: &mut Vec<Doc>) {
+        let mut g = Vec::new();
+        self.bare_if_links(n, &mut g);
+        out.push(Doc::Group(g));
+    }
+
+    fn bare_if_links(&self, n: &GreenNode, g: &mut Vec<Doc>) {
+        self.kw(n.child_token(K::IfKw), "if", g);
+        g.push(Doc::text(" "));
+        let mut nodes: Vec<&GreenNode> = n.nodes().collect();
+        if nodes.is_empty() {
+            return;
+        }
+        let cond = nodes.remove(0);
+        self.expr(cond, g, Ctx::Cond);
+        let then_kw = n.child_token(K::ThenKw);
+        if let Some(t) = then_kw {
+            self.lead(t, g);
+        }
+        g.push(Doc::IfBreak {
+            flat: b" then ".to_vec(),
+            broken: b" {".to_vec(),
+        });
+        if let Some(t) = then_kw {
+            self.trail(t, g);
+        }
+        if !nodes.is_empty() {
+            self.bare_branch(nodes.remove(0), g);
+        }
+        g.push(Doc::Softline);
+        let Some(else_kw) = n.child_token(K::ElseKw) else {
+            g.push(Doc::IfBreak {
+                flat: Vec::new(),
+                broken: b"}".to_vec(),
+            });
+            return;
+        };
+        g.push(Doc::IfBreak {
+            flat: b" ".to_vec(),
+            broken: b"} ".to_vec(),
+        });
+        self.kw(Some(else_kw), "else", g);
+        match nodes.first() {
+            Some(link) if link.kind == K::IfExpr => {
+                g.push(Doc::text(" "));
+                if is_bare_if(link) {
+                    self.bare_if_links(link, g);
+                } else {
+                    let mut d = Vec::new();
+                    self.if_expr(link, &mut d);
+                    g.push(Doc::Shield(d));
+                }
+            }
+            Some(branch) if is_bare_block(branch) => {
+                g.push(Doc::IfBreak {
+                    flat: b" ".to_vec(),
+                    broken: b" {".to_vec(),
+                });
+                self.bare_branch(branch, g);
+                g.push(Doc::Softline);
+                g.push(Doc::IfBreak {
+                    flat: Vec::new(),
+                    broken: b"}".to_vec(),
+                });
+            }
+            Some(branch) => {
+                // Mixed forms (a parse error the parser reported): the
+                // braced `else` block forces the chain braced.
+                g.push(Doc::BreakParent);
+                g.push(Doc::text(" "));
+                self.node(branch, g, Ctx::Free);
+            }
+            None => g.push(Doc::IfBreak {
+                flat: Vec::new(),
+                broken: b"}".to_vec(),
+            }),
+        }
+    }
+
+    /// One bare branch: its expression indented under a softline, so
+    /// the broken rendering is the block body. A block-like expression
+    /// (one that forces a break on its own) rides in a shield — the
+    /// author chose the bare form and only the width may undo it.
+    fn bare_branch(&self, b: &GreenNode, g: &mut Vec<Doc>) {
+        let mut d = Vec::new();
+        if let Some(s) = b.nodes().next() {
+            if shallow_error(s) {
+                d.push(self.verbatim(lead_start(s), trail_end(s)));
+            } else if let Some(e) = s.nodes().next() {
+                self.expr(e, &mut d, Ctx::BareBranch);
+            }
+        }
+        let d = Doc::Concat(d);
+        let d = if d.forced() { Doc::Shield(vec![d]) } else { d };
+        g.push(Doc::Indent(vec![Doc::Softline, d]));
     }
 
     fn block_frame_has_comment(&self, b: &GreenNode) -> bool {
@@ -3033,6 +3173,10 @@ fn spine_ctx(n: &GreenNode, m: &GreenNode, ctx: Ctx, leftmost: bool) -> Ctx {
             assoc_left: false,
         },
         K::RangeExpr => Ctx::RangeEnd,
+        // A bare `if … then` branch: the spine walk must see the same
+        // context `bare_branch` emits with, or the paren-dropper and the
+        // spacing walk disagree about `(f() else 0)`.
+        K::Block if is_bare_block(n) => Ctx::BareBranch,
         _ => child_ctx(n.kind, m, ctx),
     }
 }
@@ -3044,6 +3188,9 @@ fn child_ctx(parent: K, _child: &GreenNode, outer: Ctx) -> Ctx {
         // `Arg` is transparent: an index argument's guard (the `[-1]`
         // E0209 trap) must reach the expression inside it.
         K::Arg => outer,
+        // So is the one statement of a bare branch (a braced block's
+        // statements are only ever reached with `Free`).
+        K::ExprStmt => outer,
         _ => Ctx::Free,
     }
 }
@@ -3056,6 +3203,9 @@ fn ctx_allows_bare(ctx: Ctx, inner: &GreenNode) -> bool {
     }
     match ctx {
         Ctx::Free => t <= 15,
+        // Everything but the defaulting `else` (tier 15), whose parens
+        // are what keep it from the `if`'s own `else`.
+        Ctx::BareBranch => t <= 14,
         Ctx::Cond => t <= 13 && !exposed_brace(inner),
         Ctx::BinOperand {
             tier: pt,
