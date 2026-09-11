@@ -2445,16 +2445,24 @@ impl<'t> Machine<'t> {
                 let n = self.maps[id].len() as i64;
                 self.walk_read(Value::Int(n), rest, span)
             }
-            // A `Map` entry through a place PATH (`m[k].field`): the
-            // bound value walks on; an absent key is the row at the
-            // expression, which no place read can answer.
+            // A `Map` entry through a place PATH — an interpolation
+            // hole reads `{m[k]}` as a place so the map is not moved
+            // (`[type.interp.union]` renders the row when the key is
+            // absent), and `m[k].field` walks on through the bound
+            // value. An absent key at the end of the path is the
+            // `none` row VALUE (#122's binding rule: a raw row value
+            // reads like the err flow); deeper, nothing can answer.
             (PStep::MapKey { key, .. }, Value::Map(id)) => {
                 match self.maps[id].iter().find(|(k, _)| k == key) {
                     Some((_, v)) => {
                         let v = v.clone();
                         self.walk_read(v, rest, span)
                     }
-                    None => self.refuse("reading an absent Map entry through a place path", span),
+                    None if rest.is_empty() => Ok(Value::ErrTag {
+                        tag: "none".to_string(),
+                        payload: Vec::new(),
+                    }),
+                    None => self.refuse("reading through an absent Map entry's field", span),
                 }
             }
             // s37: `s.len` through a place — bytes, O(1) (D24/D25).
