@@ -188,8 +188,7 @@ fn shallow_error(n: &GreenNode) -> bool {
     // error the parser reported and kept the shape of; laying it out
     // would repair the program, so it passes verbatim.
     if is_bare_if(n)
-        && n
-            .nodes()
+        && n.nodes()
             .nth(2)
             .is_some_and(|b| b.kind == K::Block && !is_bare_block(b))
     {
