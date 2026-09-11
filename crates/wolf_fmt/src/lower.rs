@@ -998,6 +998,24 @@ impl<'a> Fmt<'a> {
     // ------------------------------------------------------------ block --
 
     fn block(&self, b: &GreenNode, out: &mut Vec<Doc>) {
+        self.block_in(b, out, true);
+    }
+
+    /// A block laid as one link of an `if` chain (`[gram.fmt.if]`,
+    /// s154/wolf-lang#303): identical to [`Self::block`] except that
+    /// its inline form is a `Concat`, not a `Group`, so the chain's
+    /// group decides flat-or-broken for every arm at once. With a
+    /// group per arm the decision was per-arm against the remaining
+    /// width, which laid `if … { … } else if … {` / body / `} else {
+    /// … }` — three arms, two shapes, and a first line 101 columns
+    /// long that `--check` then accepted as a fixed point, because the
+    /// group measures its own content and never the chain tail that
+    /// follows it on the line.
+    fn block_chained(&self, b: &GreenNode, out: &mut Vec<Doc>) {
+        self.block_in(b, out, false);
+    }
+
+    fn block_in(&self, b: &GreenNode, out: &mut Vec<Doc>, own_group: bool) {
         let Some(lbrace) = b.child_token(K::LBrace) else {
             // Damaged frame: pass through.
             out.push(self.verbatim(lead_start(b), trail_end(b)));
@@ -1125,7 +1143,11 @@ impl<'a> Fmt<'a> {
             if let Some(r) = rbrace {
                 self.trail(r, &mut g);
             }
-            out.push(Doc::Group(g));
+            out.push(if own_group {
+                Doc::Group(g)
+            } else {
+                Doc::Concat(g)
+            });
             return;
         }
 
@@ -2313,7 +2335,39 @@ impl<'a> Fmt<'a> {
             self.bare_if(n, out);
             return;
         }
-        self.kw(n.child_token(K::IfKw), "if", out);
+        // One group per CHAIN, not per arm (`[gram.fmt.if]`, #303):
+        // an arm that cannot stay inline breaks them all, so the width
+        // holds along the whole chain and one shape serves it. The
+        // bare form has read this way since s147; the braced form
+        // decided per arm, which is how a 101-column line became a
+        // fixed point `--check` accepted.
+        //
+        // The head keyword's LEADING comments stay in the statement
+        // stream, outside the group: an own-line comment pushes a
+        // FreshLine, which forces every enclosing group broken, and a
+        // comment written above a chain would otherwise explode every
+        // arm of it (corpus/memory/prov_two_phase.lu). A comment
+        // anywhere INSIDE the chain does break it, as it always broke
+        // the arm it sat in.
+        if let Some(t) = n.child_token(K::IfKw) {
+            self.lead(t, out);
+        }
+        let mut g = Vec::new();
+        self.braced_if_links(n, &mut g, true);
+        out.push(Doc::Group(g));
+    }
+
+    fn braced_if_links(&self, n: &GreenNode, out: &mut Vec<Doc>, head: bool) {
+        let if_kw = n.child_token(K::IfKw);
+        if head {
+            // `lead` already emitted by the caller, outside the group.
+            out.push(Doc::text("if"));
+            if let Some(t) = if_kw {
+                self.trail(t, out);
+            }
+        } else {
+            self.kw(if_kw, "if", out);
+        }
         out.push(Doc::text(" "));
         let mut nodes: Vec<&GreenNode> = n.nodes().collect();
         if nodes.is_empty() {
@@ -2328,7 +2382,7 @@ impl<'a> Fmt<'a> {
         out.push(Doc::text(" "));
         if !nodes.is_empty() {
             let then = nodes.remove(0);
-            self.node(then, out, Ctx::Free);
+            self.chain_branch(then, out);
         }
         if let Some(else_kw) = n.child_token(K::ElseKw) {
             out.push(Doc::text(" "));
@@ -2340,11 +2394,26 @@ impl<'a> Fmt<'a> {
                 if let Some(inner_if) = sole_if_of_block(branch)
                     && !self.block_frame_has_comment(branch)
                 {
-                    self.if_expr(inner_if, out);
+                    self.chain_branch(inner_if, out);
                     return;
                 }
-                self.node(branch, out, Ctx::Free);
+                self.chain_branch(branch, out);
             }
+        }
+    }
+
+    /// One link of a braced `if` chain: a block joins the chain's
+    /// group (`[gram.fmt.if]`, #303), and a nested braced `if` is more
+    /// chain rather than a group of its own. Anything else — a bare
+    /// `if` under a braced head, a damaged branch — keeps the generic
+    /// path and its own shielding.
+    fn chain_branch(&self, b: &GreenNode, out: &mut Vec<Doc>) {
+        if b.kind == K::Block {
+            self.block_chained(b, out);
+        } else if b.kind == K::IfExpr && !is_bare_if(b) {
+            self.braced_if_links(b, out, false);
+        } else {
+            self.node(b, out, Ctx::Free);
         }
     }
 

@@ -349,12 +349,6 @@ const_item ::= 'const' IDENT (':' type)? '=' expr TERM
 `let` immutable, `var` mutable, `const` comptime-evaluated. Item-level and
 statement-level share the grammar. `let (a, b) = pair` destructures.
 
-**Comma groups** (D63): one keyword may carry several *complete* binders
-— `var i = 0, c = 1`, `let a: int = 1, (x, y) = pair()` — each with its
-own pattern, optional ascription, and initializer. Unambiguous by
-construction: every binder has its own `=`, call arguments are
-bracketed, and wolf has no unparenthesized tuple expressions, so a
-comma at statement depth can only begin the next binder. Semantics are
 **A `let` binding's FIELDS are as immutable as the binding** (s154,
 wolf-lang#331): `let r = Row{…}` then `r.cents = 5` is E0410 at the
 field write, exactly as `r = …` is. `let` is a rule about the value,
@@ -367,6 +361,12 @@ question, left where they were (`[mem.tier0]`'s exclusivity and
 freeze); write a field through a `var`, or build the value complete in
 the `let`.
 
+**Comma groups** (D63): one keyword may carry several *complete* binders
+— `var i = 0, c = 1`, `let a: int = 1, (x, y) = pair()` — each with its
+own pattern, optional ascription, and initializer. Unambiguous by
+construction: every binder has its own `=`, call arguments are
+bracketed, and wolf has no unparenthesized tuple expressions, so a
+comma at statement depth can only begin the next binder. Semantics are
 exactly the sequence of single bindings, left to right — a later
 binder may read an earlier one. `wolf fmt` keeps a group on one line
 when it fits and breaks one-binder-per-line when it does not; the
@@ -1053,7 +1053,18 @@ no `goto`, no *required* semicolons (terminators are inserted;
   direction, and a fixed point (the braced result is braced on every
   later pass). A bare chain breaks as one: its bare `else if`s go braced
   together; a braced `else if` inside a bare chain keeps its braces and
-  does not make the bare head break.
+  does not make the bare head break. **A braced chain breaks as one
+  too** (s154, wolf-lang#303): the inline decision belongs to the
+  chain, not to each arm, so one arm that cannot stay inline breaks
+  them all. Per-arm, the decision was taken against the remaining width
+  with no knowledge of the chain tail that follows on the same line,
+  which laid an inline first arm, an exploded second and an inline
+  third — one chain, two shapes — with a first line of 101 columns that
+  `wolf fmt --check` then accepted, since a second pass reproduced it:
+  an over-width fixed point nothing in the toolchain would ever object
+  to. A closure's expression body is separated from its parameter list
+  by one space whatever token it starts with (#314): `fn(c) (c + 1)`,
+  never `fn(c)(c + 1)`, which parses the same and reads as a call.
 
 ---
 
@@ -1091,6 +1102,13 @@ Each entry: the rule, and its paired files in `corpus/grammar/`.
   neither `if` nor `{` following is the defaulting operator on the
   `if`, as it always was. The newline rule holds for the bare form too:
   `if c then a` newline `else b` is the two-way `if`.
+  The defaulting `else` takes a COMPLETE expression on its right, so
+  `x else 0 + y` is `x else (0 + y)` — the default swallows the term,
+  and both readings type-check: W0318 marks it when the fallback's
+  leftmost term is a literal or a bare name and the term after the
+  operator is not a literal, naming `(x else 0) + y` (W0307 is the
+  same scar on a comparison). A two-literal fallback (`e else 0 - 1`,
+  the `-1` sentinel) folds to a constant and is left alone.
   Files: `else_default.lu`, `else_chain.lu`, `else_default_newline.lu`,
   `if_then_paren_default.lu`.
 - `[gram.amb.bang]` `!` prefix in expression position = not; `!` in type
@@ -1120,13 +1138,6 @@ line — retired 2026-09-09 by wolf-lang#276, `[gram.lex.newline]` looks
 ahead for `else` now; the number is never reused), E0006 (struct literal in condition; primary span = the opening `{`), E0007 (interp nesting depth),
 E0008 (keyword as identifier — names the keyword and suggests `r#`-free
 rename; wolf has no raw identifiers, pick another name).
-  The defaulting `else` takes a COMPLETE expression on its right, so
-  `x else 0 + y` is `x else (0 + y)` — the default swallows the term,
-  and both readings type-check: W0318 marks it when the fallback's
-  leftmost term is a literal or a bare name and the term after the
-  operator is not a literal, naming `(x else 0) + y` (W0307 is the
-  same scar on a comparison). A two-literal fallback (`e else 0 - 1`,
-  the `-1` sentinel) folds to a constant and is left alone.
 
 ### 9.1 The severity contract `[diag.sev]`
 

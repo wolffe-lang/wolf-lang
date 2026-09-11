@@ -74,9 +74,13 @@ fn a_leading_else_is_relaid_onto_the_closing_brace_line() {
     // (`[gram.lex.newline]`'s lookahead); `[gram.fmt.brace]` does not
     // move, so the maintainer's aligned layout formats to the canonical
     // `} else` form — and `check` proves the result is a fixed point.
+    // The chain does not fit flat at this indent, so it breaks as ONE
+    // (`[gram.fmt.if]`, s154/wolf-lang#303): until s154 each arm chose
+    // against the remaining width on its own and this very chain came
+    // back inline, inline, exploded.
     check(
         "fn main() {\n    if (s[i..i+1] == \"\\t\")      { t += \"<tab>\" }\n    else if (s[i..i+1] == \"\\n\") { t += \"<nl>\" }\n    else                        { t += s[i..i+1] }\n}\n",
-        "fn main() {\n    if s[i..i + 1] == \"\\t\" { t += \"<tab>\" } else if s[i..i + 1] == \"\\n\" { t += \"<nl>\" } else {\n        t += s[i..i + 1]\n    }\n}\n",
+        "fn main() {\n    if s[i..i + 1] == \"\\t\" {\n        t += \"<tab>\"\n    } else if s[i..i + 1] == \"\\n\" {\n        t += \"<nl>\"\n    } else {\n        t += s[i..i + 1]\n    }\n}\n",
     );
     // The multiline shape: `}` newline `else {` becomes `} else {`.
     check(
@@ -87,6 +91,35 @@ fn a_leading_else_is_relaid_onto_the_closing_brace_line() {
     check(
         "fn main() {\n    let v = f()\n        else 0\n}\n",
         "fn main() {\n    let v = f() else 0\n}\n",
+    );
+}
+
+/// `[gram.fmt.if]` (s154, wolf-lang#303): a BRACED chain breaks as
+/// one. The width is the chain's, not each arm's — a group per arm
+/// measured only its own content and never the chain tail that
+/// follows it on the line, so a chain whose inline head fit and whose
+/// tail did not came back 101 columns wide, and `--check` accepted it
+/// as a fixed point. The padding below is the whole experiment.
+#[test]
+fn a_braced_if_chain_breaks_as_one() {
+    let wide = "a".repeat(64);
+    let src = format!(
+        "fn f(n: int) -> str {{\n    if n < 10 {{ \"{wide}\" }} else if n < 80 {{ \"b\" }} else {{ \"c\" }}\n}}\n"
+    );
+    let want = format!(
+        "fn f(n: int) -> str {{\n    if n < 10 {{\n        \"{wide}\"\n    }} else if n < 80 {{\n        \"b\"\n    }} else {{\n        \"c\"\n    }}\n}}\n"
+    );
+    check(&src, &want);
+    for line in want.lines() {
+        assert!(
+            line.chars().count() <= 100,
+            "every line inside the width: {line}"
+        );
+    }
+    // A chain that DOES fit stays inline, every arm of it.
+    check(
+        "fn f(n: int) -> str {\n    if n < 10 { \"a\" } else if n < 80 { \"b\" } else { \"c\" }\n}\n",
+        "fn f(n: int) -> str {\n    if n < 10 { \"a\" } else if n < 80 { \"b\" } else { \"c\" }\n}\n",
     );
 }
 
