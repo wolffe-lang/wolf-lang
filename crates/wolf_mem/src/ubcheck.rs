@@ -1390,24 +1390,29 @@ impl<'t> Machine<'t> {
         Ok(())
     }
 
-    /// s77's byte VIEW on this tier (s136, wolf-lang#232): `<str>.bytes()`
-    /// in a position that consumes it on the spot — iterated, indexed,
-    /// asked for `len`/`count`/`is_empty`/`get`/`first`/`last` — is the
+    /// s77's byte VIEW on this tier (s136, wolf-lang#232; s153,
+    /// wolf-lang#308): `<str>.bytes()` in a position that consumes it
+    /// on the spot — iterated, indexed, asked for
+    /// `len`/`count`/`is_empty`/`get`/`first`/`last` — is the
     /// receiver's own `{ptr, len}` and allocates nothing
-    /// (`[mem.str.view]`). The machine models the view as a list it
-    /// does NOT charge: the octets are the `str`'s storage, already
-    /// paid for wherever that `str` lives, so a consumed walk moves
-    /// the region ledger by zero — what native and lupin report.
-    /// Before s136 every such position evaluated the call as the
-    /// materializing fallback and charged a full `List[int]` for a
-    /// walk that allocated nothing: 1,048,576 for a 64 KiB `str` on
-    /// this tier against 0 on the other two (#232's table).
+    /// (`[mem.str.view]`). The machine hands the consumer the
+    /// receiver's OCTETS and mints nothing: no list, no ledger charge,
+    /// nothing retained past the expression — what native and lupin
+    /// do, and what the ledger has said since s136. Between s136 and
+    /// s153 the ledger said zero while the machine still materialized
+    /// a `Vec<Value>` per call and pushed it onto `lists` for the rest
+    /// of the run — uncharged AND retained, so a walk re-reading
+    /// `rest.bytes()[0]` over a shrinking `rest` held n + (n-1) + …
+    /// values: 1.9 GiB at n = 8192, 16.6 GiB on wolf-std's CAVP rows,
+    /// under a step budget that could not see it (#308). This is the
+    /// invariant `[exec.checked.budget]` states: a view retains nothing
+    /// on the host that the ledger does not charge.
     ///
-    /// `Some(list)` when `e` is that call (the receiver read as a
+    /// `Some(octets)` when `e` is that call (the receiver read as a
     /// place or evaluated); `None` for every other expression — the
     /// caller evaluates as before, and `let bs = s.bytes()` still
     /// materializes through the `"bytes"` method arm, charged.
-    fn eval_bytes_view(&mut self, e: &'t GreenNode) -> E<Option<Value>> {
+    fn eval_bytes_view(&mut self, e: &'t GreenNode) -> E<Option<Vec<u8>>> {
         let src = &self.pkg.files[self.ctx().src_file].raw.src;
         let Some(recv) = crate::byteview::view_recv(e, src, &|sp| self.expr_ty(sp).cloned()) else {
             return Ok(None);
@@ -1423,12 +1428,34 @@ impl<'t> Machine<'t> {
         let Value::Str(s) = sv else {
             return Ok(None);
         };
-        let items: Vec<Value> = s.bytes().map(Value::Byte).collect();
+        Ok(Some(s.into_bytes()))
+    }
+
+    /// A fresh `str` built by `+`/`+=` or by an interpolation with a
+    /// hole (s153, wolf-lang#308/#310): an allocation in the ambient
+    /// region (`[mem.region.escape]`, `[type.str.concat.cost]`),
+    /// charged one byte per byte to the shadow budget and to that
+    /// region's ledger — what the native strbuf path pays. Until s153
+    /// neither ledger moved for a built `str`, so the byte budget was
+    /// blind to `s = s + s` the way it was blind to the retained view.
+    /// A literal, a slice and every `[mem.str.view]` product allocate
+    /// nothing and stay uncharged.
+    fn mint_str(&mut self, s: String, span: Span) -> E<Value> {
+        self.charge_str(s.len() as u64, span)?;
+        Ok(Value::Str(s))
+    }
+
+    /// The charge half of `mint_str`, callable BEFORE the bytes are
+    /// built: `+` knows its result's length from its operands, so the
+    /// refusal for a build the budget will not admit arrives before
+    /// the host allocates it (the doubling witness in the driver's
+    /// `checked_budget` test peaks at the operands, not at the
+    /// refused result). An interpolation charges after assembling —
+    /// one transient string, bounded by its own holes.
+    fn charge_str(&mut self, bytes: u64, span: Span) -> E<()> {
+        self.charge_mem(bytes)?;
         let rid = self.ambient.last().copied().unwrap_or(0);
-        let id = self.lists.len();
-        self.lists.push(items);
-        self.list_region.push(rid);
-        Ok(Some(Value::List(id)))
+        self.charge_region_bytes(rid, bytes, span)
     }
 
     /// A region's `cap:` budget, evaluated at creation (s132,
@@ -3087,10 +3114,14 @@ impl<'t> Machine<'t> {
                 if let Some(recv) = b.callee()
                     && matches!(self.expr_ty(recv.span), Some(TyKind::List(_)))
                 {
-                    // `s.bytes()[i]` reads the view (#232): uncharged.
-                    let base = match self.eval_bytes_view(recv)? {
-                        Some(v) => v,
-                        None => val!(self.eval(recv)),
+                    // `s.bytes()[i]` reads the view (#232; s153,
+                    // #308): the receiver's octets — uncharged, and
+                    // unretained: the byte is read off the `str`'s
+                    // own storage and no list is minted.
+                    let view = self.eval_bytes_view(recv)?;
+                    let base = match view {
+                        Some(_) => None,
+                        None => Some(val!(self.eval(recv))),
                     };
                     let Some(ix) = b
                         .args()
@@ -3109,10 +3140,17 @@ impl<'t> Machine<'t> {
                     } else {
                         i
                     };
+                    if let Some(octets) = view {
+                        let Some(b) = usize::try_from(i).ok().and_then(|i| octets.get(i)) else {
+                            return self.trap("bounds", "mem.ub.defined", isp);
+                        };
+                        return Ok(Flow::Val(Value::Byte(*b)));
+                    }
                     let step = [PStep::ListIdx {
                         index: i,
                         span: isp,
                     }];
+                    let base = base.expect("a non-view receiver was evaluated");
                     let v = self.walk_read(base, &step, e.span)?;
                     return Ok(Flow::Val(v));
                 }
@@ -3732,6 +3770,7 @@ impl<'t> Machine<'t> {
 
     fn eval_for(&mut self, e: &'t GreenNode) -> E<Flow> {
         let d = ForExpr::cast(e).expect("kind");
+        let mut view_items: Option<Vec<Value>> = None;
         let iter = match d.iterable() {
             // s72, D40 ([mem.iter.excl]): iterating a place is a
             // READ, never a move — the container stays live behind
@@ -3742,9 +3781,14 @@ impl<'t> Machine<'t> {
             // static E1013 rejects the mutating shapes before this
             // lane ever runs them.
             // `for b in s.bytes()` is the canonical consumed position
-            // (#232): the view, uncharged.
+            // (#232): the view, uncharged — and since s153 (#308)
+            // unretained: the octets ARE the loop's items, and no
+            // list is minted for them.
             Some(it) => match self.eval_bytes_view(it)? {
-                Some(v) => v,
+                Some(octets) => {
+                    view_items = Some(octets.into_iter().map(Value::Byte).collect());
+                    Value::Unit
+                }
                 None => match self.place_of(it)? {
                     Some(place) => self.read_place(&place, it.span)?,
                     None => val!(self.eval(it)),
@@ -3752,10 +3796,11 @@ impl<'t> Machine<'t> {
             },
             None => Value::Unit,
         };
-        let items: Vec<Value> = match iter {
-            Value::Range { start, end } => (start..end).map(Value::Int).collect(),
-            Value::List(id) => self.lists[id].clone(),
-            Value::Map(_) => {
+        let items: Vec<Value> = match (view_items, iter) {
+            (Some(items), _) => items,
+            (None, Value::Range { start, end }) => (start..end).map(Value::Int).collect(),
+            (None, Value::List(id)) => self.lists[id].clone(),
+            (None, Value::Map(_)) => {
                 return self.refuse("iterating a `Map` directly (walk `m.pairs()`)", e.span);
             }
             _ => return self.refuse("iteration outside ranges and List", e.span),
@@ -4110,14 +4155,24 @@ impl<'t> Machine<'t> {
             // same append, the scalar's UTF-8 bytes — `{c}`'s
             // rendering. Sema admits no other mix, so any other pair
             // here falls through to the modelled-surface refusal.
-            (Value::Str(a), Value::Str(b)) if op == SyntaxKind::Plus => {
-                Ok(Value::Str(format!("{a}{b}")))
+            // s153 (#308/#310): the fresh str is an allocation in the
+            // ambient region — charged (`mint_str`).
+            (Value::Str(mut a), Value::Str(b)) if op == SyntaxKind::Plus => {
+                self.charge_str((a.len() + b.len()) as u64, span)?;
+                a.push_str(&b);
+                Ok(Value::Str(a))
             }
-            (Value::Str(a), Value::Char(c)) if op == SyntaxKind::Plus => {
-                Ok(Value::Str(format!("{a}{c}")))
+            (Value::Str(mut a), Value::Char(c)) if op == SyntaxKind::Plus => {
+                self.charge_str((a.len() + c.len_utf8()) as u64, span)?;
+                a.push(c);
+                Ok(Value::Str(a))
             }
             (Value::Char(c), Value::Str(b)) if op == SyntaxKind::Plus => {
-                Ok(Value::Str(format!("{c}{b}")))
+                self.charge_str((c.len_utf8() + b.len()) as u64, span)?;
+                let mut out = String::with_capacity(c.len_utf8() + b.len());
+                out.push(c);
+                out.push_str(&b);
+                Ok(Value::Str(out))
             }
             (Value::Int(a), Value::Int(b)) => {
                 // Wrapping types wrap at their width; checked prims
@@ -4230,7 +4285,11 @@ impl<'t> Machine<'t> {
                 };
                 Ok(Value::F64(out))
             }
-            (Value::Str(a), Value::Str(b)) if op == SyntaxKind::Plus => Ok(Value::Str(a + &b)),
+            (Value::Str(mut a), Value::Str(b)) if op == SyntaxKind::Plus => {
+                self.charge_str((a.len() + b.len()) as u64, span)?;
+                a.push_str(&b);
+                Ok(Value::Str(a))
+            }
             _ => self.refuse("arithmetic outside integers", span),
         }
     }
@@ -4452,7 +4511,13 @@ impl<'t> Machine<'t> {
             i += 1;
         }
         let out = String::from_utf8_lossy(&outb).into_owned();
-        Ok(Flow::Val(Value::Str(out)))
+        if holes.is_empty() {
+            // A plain literal: static bytes, no allocation.
+            return Ok(Flow::Val(Value::Str(out)));
+        }
+        // s153 (#308/#310): a hole makes this a BUILT str — the same
+        // fresh allocation `+` is ([type.str.concat]), charged.
+        Ok(Flow::Val(self.mint_str(out, e.span)?))
     }
 
     /// The checked tier's format-spec application (s38): the full
@@ -6126,9 +6191,15 @@ impl<'t> Machine<'t> {
             let m = MemberExpr::cast(e).expect("kind");
             if let (Some(base), Some(member)) = (m.base(), m.member()) {
                 let field = self.text(member.span);
-                // `s.bytes().len` reads the view (#232): uncharged.
+                // `s.bytes().len` reads the view (#232; s153, #308):
+                // the receiver's byte count, nothing minted.
                 let bv = match self.eval_bytes_view(base)? {
-                    Some(v) => v,
+                    Some(octets) if field == "len" => {
+                        return Ok(Flow::Val(Value::Int(octets.len() as i64)));
+                    }
+                    Some(_) => {
+                        return self.refuse("field access outside the modelled surface", e.span);
+                    }
                     None => val!(self.eval(base)),
                 };
                 return match bv {
@@ -7245,9 +7316,57 @@ impl<'t> Machine<'t> {
                 let recv_val = match &recv_place {
                     Some(place) => self.read_place(place, recv.span)?,
                     // `s.bytes().len` and the query family read the
-                    // view (#232): uncharged.
+                    // view (#232): uncharged — and since s153 (#308)
+                    // unretained: the four queries answer off the
+                    // receiver's octets and no list is minted. The
+                    // mutators refuse by the same sentence a
+                    // materialized temporary gets (below).
                     None => match self.eval_bytes_view(recv)? {
-                        Some(v) => v,
+                        Some(octets) => {
+                            let none = || {
+                                Ok(raise(Value::ErrTag {
+                                    tag: "none".to_string(),
+                                    payload: Vec::new(),
+                                }))
+                            };
+                            return match method {
+                                "len" | "count" => Ok(Flow::Val(Value::Int(octets.len() as i64))),
+                                "is_empty" => Ok(Flow::Val(Value::Bool(octets.is_empty()))),
+                                "get" => {
+                                    let idx = args
+                                        .into_iter()
+                                        .flat_map(|l| l.args())
+                                        .find_map(Arg::value);
+                                    let Some(v) = idx else {
+                                        return self.refuse("List.get without an index", e.span);
+                                    };
+                                    let Value::Int(i) = val!(self.eval(v)) else {
+                                        return self
+                                            .refuse("List.get with a non-int index", e.span);
+                                    };
+                                    match usize::try_from(i).ok().and_then(|i| octets.get(i)) {
+                                        Some(b) => Ok(Flow::Val(Value::Byte(*b))),
+                                        None => none(),
+                                    }
+                                }
+                                "first" | "last" => {
+                                    let b = if method == "first" {
+                                        octets.first()
+                                    } else {
+                                        octets.last()
+                                    };
+                                    match b {
+                                        Some(b) => Ok(Flow::Val(Value::Byte(*b))),
+                                        None => none(),
+                                    }
+                                }
+                                "push" | "pop" | "clear" => self.refuse(
+                                    "mutating a temporary List (a `bytes()` view is read-only)",
+                                    e.span,
+                                ),
+                                _ => self.refuse("this List method", e.span),
+                            };
+                        }
                         None => val!(self.eval(recv)),
                     },
                 };
