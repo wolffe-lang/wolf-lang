@@ -274,6 +274,11 @@ fn transfer(src: &TypeTable, dst: &mut TypeTable, ty: TyId) -> TyId {
             let s = transfer(src, dst, t);
             dst.intern(TyKind::Pool(s))
         }
+        TyKind::Map(k, v) => {
+            let k = transfer(src, dst, k);
+            let v = transfer(src, dst, v);
+            dst.intern(TyKind::Map(k, v))
+        }
         TyKind::Chan(t) => {
             let s = transfer(src, dst, t);
             dst.intern(TyKind::Chan(s))

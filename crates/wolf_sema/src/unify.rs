@@ -350,6 +350,10 @@ fn occurs_adjust(
             occurs_adjust(store, table, var, level, t)?;
             occurs_adjust(store, table, var, level, row)
         }
+        TyKind::Map(k, v) => {
+            occurs_adjust(store, table, var, level, k)?;
+            occurs_adjust(store, table, var, level, v)
+        }
         TyKind::Row { tags, tail } => {
             for (_, payload) in tags {
                 for t in payload {
@@ -500,6 +504,10 @@ pub fn unify(
         | (TyKind::Pool(x), TyKind::Pool(y))
         | (TyKind::Chan(x), TyKind::Chan(y))
         | (TyKind::Mutex(x), TyKind::Mutex(y)) => unify(table, store, x, y),
+        (TyKind::Map(kx, vx), TyKind::Map(ky, vy)) => {
+            unify(table, store, kx, ky)?;
+            unify(table, store, vx, vy)
+        }
         (TyKind::Tuple(xs), TyKind::Tuple(ys)) => {
             if xs.len() != ys.len() {
                 return Err(UnifyErr::Mismatch);

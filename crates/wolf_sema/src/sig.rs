@@ -29,7 +29,7 @@ use wolf_diag::{Applicability, Diagnostic, Suggestion, codes};
 use wolf_span::Span;
 
 use crate::graph::{BindTarget, Binding, ItemKind, Package};
-use crate::types::{Prim, TyId, TyKind, TypeTable};
+use crate::types::{Prim, TyId, TyKind, TypeTable, render};
 
 /// One function parameter's elaborated signature.
 #[derive(Debug, Clone)]
@@ -1481,7 +1481,9 @@ impl<'a> Lower<'a> {
                 if generics.contains(&first) || Prim::from_name(&first).is_some() {
                     // qualified/applied builtin form — not a s13 type
                     self.opaque(file, node)
-                } else if segs.len() == 1 && matches!(first.as_str(), "List" | "Pool" | "channel") {
+                } else if segs.len() == 1
+                    && matches!(first.as_str(), "List" | "Pool" | "channel" | "Map")
+                {
                     // The two prelude containers the Tier-2 corpus
                     // rests on (s21): typed as builtins so `handle`
                     // pools and the region litmuses check. Every other
@@ -1495,17 +1497,36 @@ impl<'a> Lower<'a> {
                     // local. Opaque until now, which is why seven of
                     // the book's proc programs refused at the `for`
                     // with "the iteration protocol" as the reason.
-                    let arg_tys: Vec<TyId> = d
+                    let arg_nodes: Vec<&GreenNode> = d
                         .args()
                         .into_iter()
                         .flat_map(|a| a.args())
                         .filter(|a| is_type_kind(a.kind))
+                        .collect();
+                    let arg_tys: Vec<TyId> = arg_nodes
+                        .iter()
                         .map(|a| self.lower_type(module, file, generics, a))
                         .collect();
                     match (first.as_str(), arg_tys.as_slice()) {
                         ("List", &[elem]) => self.table.intern(TyKind::List(elem)),
                         ("Pool", &[elem]) => self.table.intern(TyKind::Pool(elem)),
                         ("channel", &[elem]) => self.table.intern(TyKind::Chan(elem)),
+                        // s152 (`[type.map]`): `Map[K, V]` in a
+                        // signature position — a parameter, a field, a
+                        // return — is the same `TyKind::Map` the
+                        // expression `Map[K, V]()` mints. The key is
+                        // checked where it is spelled (E0418,
+                        // `[type.map.key]`); a rigid `K` passes and its
+                        // instantiations are checked at their own
+                        // spellings.
+                        ("Map", &[k, v]) => {
+                            if !crate::types::map_key_admitted(self.table.kind(k)) {
+                                let shown = render(&self.table, k, &|_| Err("_"));
+                                let d = map_key_refusal(&shown, arg_nodes[0].span);
+                                self.diags.push(d);
+                            }
+                            self.table.intern(TyKind::Map(k, v))
+                        }
                         _ => self.opaque(file, node),
                     }
                 } else {
@@ -1668,6 +1689,29 @@ impl<'a> Lower<'a> {
         let norm = text.split_whitespace().collect::<Vec<_>>().join(" ");
         self.table.intern(TyKind::Unsupported(norm))
     }
+}
+
+/// E0418 — a type `[type.map.key]` does not admit as a `Map` key
+/// (s152). One builder for both spellings — the signature position
+/// (`fn f(m: Map[Point, int])`) and the constructor (`Map[Point,
+/// int]()`) — so the two sites answer word for word.
+pub(crate) fn map_key_refusal(shown: &str, span: Span) -> Diagnostic {
+    Diagnostic::error(
+        codes::E0418,
+        span,
+        format!("`{shown}` cannot be a `Map` key"),
+    )
+    .with_label("a `Map` key is `str`, `int`, `char` or `bool`")
+    .with_note(
+        "a `Map[K, V]` admits the four key types whose equality the language itself \
+         defines ([type.map.key]); a struct key waits on derived equality, and a \
+         float or a container has no key equality at all."
+            .to_string(),
+    )
+    .with_note(format!(
+        "key the map by one of the four — an `int` id, a `str` name — or build a \
+         `str` from `{shown}`'s fields."
+    ))
 }
 
 pub(crate) enum TypeHead {

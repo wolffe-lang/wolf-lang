@@ -490,6 +490,11 @@ struct Checker<'a> {
     obligations: Vec<Obligation>,
     /// Satisfaction cache keyed on (type, trait) — the s14 contract.
     sat_cache: HashMap<(TyId, usize, String), bool>,
+    /// The receiver of the `Map` index the assignment being checked
+    /// writes through (s152): set by [`Self::bracket_place_type`],
+    /// read once by [`Self::check_assign`] to turn a compound operator
+    /// into E0417. `None` between statements.
+    map_index_place: Option<(Span, String)>,
     level: u32,
     in_closure: bool,
     loops: Vec<LoopCtx>,
@@ -697,6 +702,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         self_ty: None,
         obligations: Vec::new(),
         sat_cache: HashMap::new(),
+        map_index_place: None,
         level: 0,
         in_closure: false,
         loops: Vec::new(),
@@ -854,6 +860,7 @@ pub(crate) fn collect_body_rows(
         self_ty: None,
         obligations: Vec::new(),
         sat_cache: HashMap::new(),
+        map_index_place: None,
         level: 0,
         in_closure: false,
         loops: Vec::new(),
@@ -977,6 +984,11 @@ fn zonk(table: &mut TypeTable, vars: &VarStore, ty: TyId) -> TyId {
         TyKind::Pool(t) => {
             let z = zonk(table, vars, t);
             table.intern(TyKind::Pool(z))
+        }
+        TyKind::Map(k, v) => {
+            let k = zonk(table, vars, k);
+            let v = zonk(table, vars, v);
+            table.intern(TyKind::Map(k, v))
         }
         TyKind::Proj(base, name) => {
             let z = zonk(table, vars, base);
@@ -1394,6 +1406,10 @@ impl<'a> Checker<'a> {
             | TyKind::Distinct(t)
             | TyKind::List(t)
             | TyKind::Pool(t) => self.validate_projections_in(t, span),
+            TyKind::Map(k, v) => {
+                self.validate_projections_in(k, span);
+                self.validate_projections_in(v, span);
+            }
             TyKind::ErrUnion(t, row) => {
                 self.validate_projections_in(t, span);
                 self.validate_projections_in(row, span);
@@ -3672,6 +3688,18 @@ impl<'a> Checker<'a> {
         if let Some(op_kind) = op
             && op_kind != SyntaxKind::Eq
         {
+            // s152 (`[mem.map.absent]`, E0417): `m[k] op= v` has no
+            // place to read-modify-write — the key may be absent, and
+            // `m[k]` is a row. E0416's sibling; the note names the two
+            // spellings that do the work (`else` + `=`, `map.tally`).
+            if let Some(map_place) = self.map_index_place.take() {
+                let op_text = a.op().map(|t| self.text(t.span)).unwrap_or_default();
+                self.report_map_compound(place.span, map_place, &place_text, &op_text);
+                if let Some(v) = a.value() {
+                    self.synth_expr(v)?;
+                }
+                return Ok(());
+            }
             let op_text = a.op().map(|t| self.text(t.span)).unwrap_or_default();
             // D62 (s128): `s += u` is `s = s + u` — legal exactly when
             // both are `str`, or the value is a `char` (#278,
@@ -3705,6 +3733,7 @@ impl<'a> Checker<'a> {
                 self.report_bad_operand(place.span, &op_text, needs, place_ty);
             }
         }
+        self.map_index_place = None;
         if let Some(v) = a.value() {
             let exp = Expect {
                 ty: place_ty,
@@ -3714,6 +3743,40 @@ impl<'a> Checker<'a> {
             self.check_expr(v, &exp)?;
         }
         Ok(())
+    }
+
+    /// E0417 — `m[k] op= v` (s152, `[mem.map.absent]`): the `Map`
+    /// index is not a place, because the entry may not exist. The
+    /// fix is the two-statement spelling or std's `tally`.
+    fn report_map_compound(
+        &mut self,
+        place: Span,
+        recv: (Span, String),
+        place_text: &str,
+        op: &str,
+    ) {
+        let (recv_span, recv_text) = recv;
+        let plain = op.trim_end_matches('=');
+        self.diags.push(
+            Diagnostic::error(
+                codes::E0417,
+                place,
+                format!("cannot update `{place_text}` in place: the key may be absent"),
+            )
+            .with_label("a `Map` index is a row, not a place")
+            .with_secondary(recv_span, format!("`{recv_text}` is a `Map`"))
+            .with_note(
+                "`m[k]` is `V ! {none}` ([mem.map.absent]): reading it asks whether the key \
+                 is bound, and an absent key has no value to update. `m[k] = v` alone \
+                 inserts or replaces."
+                    .to_string(),
+            )
+            .with_note(format!(
+                "spell the two halves — `{place_text} = ({place_text} else 0) {plain} …` — or \
+                 count with std's named operation, `map.tally(mut {recv_text}, k)` \
+                 (`use std.map`), which is that statement for an `int`-valued map."
+            )),
+        );
     }
 
     /// The type of an assignable place. Mutability/exclusivity are
@@ -3791,6 +3854,16 @@ impl<'a> Checker<'a> {
                 let int_ = self.lo.table.prim(Prim::Int);
                 self.check_index_arg(d.args(), int_, "raw pointer index")?;
                 Ok(elem)
+            }
+            // s152 (`[mem.map.absent]`): `m[k] = v` inserts when `k` is
+            // absent and replaces when it is bound — the place types
+            // as `V`. The compound spellings are E0417, decided by the
+            // assignment once it knows the operator (`map_index_place`).
+            TyKind::Map(k, v) => {
+                self.check_index_arg(d.args(), k, "Map key")?;
+                let recv_text = self.text(recv.span);
+                self.map_index_place = Some((recv.span, recv_text));
+                Ok(v)
             }
             TyKind::Prim(Prim::Str) => {
                 let is_slice = d
@@ -4155,6 +4228,7 @@ impl<'a> Checker<'a> {
             | TyKind::Row { .. }
             | TyKind::ExitReason
             | TyKind::List(_) => return Ok(()),
+            TyKind::Map(..) => "string interpolation of a `Map` (iterate `pairs()`)",
             TyKind::Nominal { module, name, args } => {
                 let generic = !args.is_empty()
                     || matches!(
@@ -5311,6 +5385,19 @@ impl<'a> Checker<'a> {
                 self.check_index_arg(d.args(), h, "pool access")?;
                 elem
             }
+            // s152 (`[mem.map.absent]`): `m[k]` asks whether `k` is
+            // bound, and the answer is a row — `V ! {none}`, never a
+            // `V` and never `()`. The key types as `K`; the miss is
+            // the payload-free `none` the caller handles with `else`,
+            // `?` or a `match`, exactly as `xs.get(i)` is handled.
+            TyKind::Map(k, v) => {
+                self.check_index_arg(d.args(), k, "Map key")?;
+                let row = self
+                    .lo
+                    .table
+                    .row(vec![("none".to_string(), Vec::new())], None);
+                self.lo.table.intern(TyKind::ErrUnion(v, row))
+            }
             // s22 — raw-pointer indexing `p[i]`: C-shaped element
             // access, no bounds, no validity ([mem.unsafe.raw.1]).
             // Typing admits it; wolf_mem gates the access to `unsafe`
@@ -5482,8 +5569,24 @@ impl<'a> Checker<'a> {
             .flat_map(|a| a.args())
             .filter_map(Arg::value)
             .collect();
-        let elem = match ty_nodes.as_slice() {
-            [one] => match self.type_from_bracket_arg(one) {
+        // s152 (`[type.map]`): `Map[K, V]()` carries two type
+        // arguments; the key is checked where it is spelled (E0418).
+        let mut map_key: Option<(TyId, Span)> = None;
+        let elem = match (name, ty_nodes.as_slice()) {
+            ("Map", [k, v]) => match (self.type_from_bracket_arg(k), self.type_from_bracket_arg(v))
+            {
+                (Some(kt), Some(vt)) => {
+                    map_key = Some((kt, k.span));
+                    vt
+                }
+                _ => {
+                    return Err(NotYet {
+                        construct: "this prelude container instantiation (generic data)",
+                        span: e.span,
+                    });
+                }
+            },
+            (_, [one]) if name != "Map" => match self.type_from_bracket_arg(one) {
                 Some(t) => t,
                 None => {
                     return Err(NotYet {
@@ -5499,6 +5602,13 @@ impl<'a> Checker<'a> {
                 });
             }
         };
+        if let Some((kt, kspan)) = map_key
+            && !crate::types::map_key_admitted(&self.kind_of(kt))
+        {
+            let shown = self.show(kt);
+            let d = crate::sig::map_key_refusal(&shown, kspan);
+            self.diags.push(d);
+        }
         let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
         if !arg_nodes.is_empty() {
             self.wrong_arg_count(name, e.span, None, 0, arg_nodes.len());
@@ -5519,6 +5629,10 @@ impl<'a> Checker<'a> {
         ));
         Ok(match name {
             "List" => self.lo.table.intern(TyKind::List(elem)),
+            "Map" => {
+                let (kt, _) = map_key.expect("a Map ctor carries its key");
+                self.lo.table.intern(TyKind::Map(kt, elem))
+            }
             _ => self.lo.table.intern(TyKind::Pool(elem)),
         })
     }
@@ -5549,6 +5663,18 @@ impl<'a> Checker<'a> {
                 .flat_map(|a| a.args())
                 .filter_map(Arg::value)
                 .collect();
+            if name == "Map"
+                && let [k, v] = inner.as_slice()
+            {
+                let kt = self.type_from_bracket_arg(k)?;
+                let vt = self.type_from_bracket_arg(v)?;
+                if !crate::types::map_key_admitted(&self.kind_of(kt)) {
+                    let shown = self.show(kt);
+                    let d = crate::sig::map_key_refusal(&shown, k.span);
+                    self.diags.push(d);
+                }
+                return Some(self.lo.table.intern(TyKind::Map(kt, vt)));
+            }
             let [one] = inner.as_slice() else { return None };
             let elem = self.type_from_bracket_arg(one)?;
             return match name.as_str() {
@@ -5745,6 +5871,30 @@ impl<'a> Checker<'a> {
             (TyKind::List(_), "clear") => {
                 let u = self.lo.table.unit();
                 (vec![pm("self", recv_ty)], u)
+            }
+            // s152 — the `Map` surface (`[type.map]`): the entry
+            // count, the emptiness probe, the drain, and `pairs()` —
+            // every entry as a `(K, V)` tuple in the map's iteration
+            // order (insertion order on both machines, unspecified by
+            // the clause), the one door std's key functions walk
+            // through. `has`/`get`/`get_or`/`remove`/`tally` are
+            // std.map's, written over `pairs()` and the index.
+            (TyKind::Map(..), "len" | "count") => {
+                let int_ = self.lo.table.prim(Prim::Int);
+                (vec![p("self", recv_ty)], int_)
+            }
+            (TyKind::Map(..), "is_empty") => {
+                let b = self.lo.table.prim(Prim::Bool);
+                (vec![p("self", recv_ty)], b)
+            }
+            (TyKind::Map(..), "clear") => {
+                let u = self.lo.table.unit();
+                (vec![pm("self", recv_ty)], u)
+            }
+            (TyKind::Map(k, v), "pairs") => {
+                let pair = self.lo.table.intern(TyKind::Tuple(vec![k, v]));
+                let r = self.lo.table.intern(TyKind::List(pair));
+                (vec![p("self", recv_ty)], r)
             }
             // s37 — Pool observability (the wolf-lang#11 gap: no
             // length, no liveness probe): `len`/`is_empty` count live
@@ -6351,7 +6501,9 @@ impl<'a> Checker<'a> {
             && let Some(t) = PathExpr::cast(head).and_then(|pp| pp.ident())
         {
             let name = self.text(t.span);
-            if self.lookup_local(&name).is_none() && matches!(name.as_str(), "List" | "Pool") {
+            if self.lookup_local(&name).is_none()
+                && matches!(name.as_str(), "List" | "Pool" | "Map")
+            {
                 return self.call_container_ctor(&name, b, e, d.args());
             }
             // `channel[T](n)` — the conc surface's ctor (spec 03).
@@ -7963,7 +8115,11 @@ impl<'a> Checker<'a> {
             }),
             // The s21 Tier-2 builtins: shared/weak cells and the
             // prelude containers carry their typed stub methods.
-            TyKind::Shared(_) | TyKind::Weak(_) | TyKind::List(_) | TyKind::Pool(_) => {
+            TyKind::Shared(_)
+            | TyKind::Weak(_)
+            | TyKind::List(_)
+            | TyKind::Pool(_)
+            | TyKind::Map(..) => {
                 self.tier2_method_call(base, recv_ty, recv_mode, member.span, &mname, e, args)
             }
             // The conc builtins (spec 03): channel ops, the scope's
@@ -9039,6 +9195,19 @@ impl<'a> Checker<'a> {
                 } else {
                     Err(NotYet {
                         construct: "members on generic std data (the std surface)",
+                        span: e.span,
+                    })
+                }
+            }
+            // s152: `m.len` — the entry count, the same field-shaped
+            // member `List` carries (std.map's `len` reads it).
+            TyKind::Map(..) => {
+                let mname = self.text(member.span);
+                if mname == "len" {
+                    Ok(self.lo.table.prim(Prim::Int))
+                } else {
+                    Err(NotYet {
+                        construct: "this `Map` member (the surface is `len` + methods)",
                         span: e.span,
                     })
                 }
@@ -10382,6 +10551,15 @@ impl<'a> Checker<'a> {
                     // [conc.cancel.points]).
                     TyKind::Chan(elem) => elem,
                     TyKind::Error | TyKind::Never => self.error_ty(),
+                    // s152: a `Map` is walked through `pairs()`
+                    // (`[type.map]`); iterating the map value itself
+                    // is not ruled — refused by name, not typed.
+                    TyKind::Map(..) => {
+                        return Err(NotYet {
+                            construct: "iterating a `Map` directly (walk `m.pairs()`)",
+                            span: it.span,
+                        });
+                    }
                     _ => {
                         return Err(NotYet {
                             construct: "the iteration protocol (for-trait wiring)",

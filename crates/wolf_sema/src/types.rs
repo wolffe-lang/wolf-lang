@@ -250,6 +250,13 @@ pub enum TyKind {
     /// generic instantiation still lands in [`TyKind::Unsupported`].
     List(TyId),
     Pool(TyId),
+    /// `Map[K, V]` (s152, `[type.map]`): the keyed store the prelude
+    /// names, typed as a builtin like `List` — `K` is one of the four
+    /// key types `[type.map.key]` admits (`str`, `int`, `char`,
+    /// `bool`) or a rigid inside a generic body, `V` is any value
+    /// type. `m[k]` reads as `V ! {none}` (`[mem.map.absent]`),
+    /// `m[k] = v` inserts or replaces, `pairs()` is `List[(K, V)]`.
+    Map(TyId, TyId),
     /// The concurrency surface's builtin types (spec 03, D14). Typed
     /// as builtins exactly like the containers above — the real std
     /// sync surface subsumes these later. `Chan` is `channel[T](n)`'s
@@ -376,6 +383,24 @@ impl TypeTable {
 
 /// Render one row tag as source would spell it: `Tag` or
 /// `Tag(payload, …)`.
+/// Is `kind` a type `[type.map.key]` admits as a `Map` key this
+/// edition? The four whose equality the language itself defines —
+/// `str`, `int`, `char`, `bool` — plus a rigid (a generic body's `K`,
+/// bound-checked at its call sites) and the silent kinds (a wreck
+/// already reported; an unsolved variable). Every other type — a
+/// struct (derived equality is unruled), a `List`, a float, a
+/// narrower integer — is E0418 at the site that spells it.
+pub fn map_key_admitted(kind: &TyKind) -> bool {
+    matches!(
+        kind,
+        TyKind::Prim(Prim::Str | Prim::Int | Prim::Char | Prim::Bool)
+            | TyKind::Rigid(_)
+            | TyKind::Error
+            | TyKind::Never
+            | TyKind::Var(_)
+    )
+}
+
 pub fn render_tag(
     table: &TypeTable,
     name: &str,
@@ -537,6 +562,11 @@ pub fn render(
         TyKind::Distinct(t) => format!("distinct {}", render(table, *t, resolve)),
         TyKind::List(t) => format!("List[{}]", render(table, *t, resolve)),
         TyKind::Pool(t) => format!("Pool[{}]", render(table, *t, resolve)),
+        TyKind::Map(k, v) => format!(
+            "Map[{}, {}]",
+            render(table, *k, resolve),
+            render(table, *v, resolve)
+        ),
         TyKind::Chan(t) => format!("channel[{}]", render(table, *t, resolve)),
         TyKind::Mutex(t) => format!("Mutex[{}]", render(table, *t, resolve)),
         TyKind::TaskScope => "scope".to_string(),
@@ -731,6 +761,11 @@ pub fn subst(
         TyKind::Pool(t) => {
             let s = subst(table, t, map);
             table.intern(TyKind::Pool(s))
+        }
+        TyKind::Map(k, v) => {
+            let k = subst(table, k, map);
+            let v = subst(table, v, map);
+            table.intern(TyKind::Map(k, v))
         }
         TyKind::Chan(t) => {
             let s = subst(table, t, map);
