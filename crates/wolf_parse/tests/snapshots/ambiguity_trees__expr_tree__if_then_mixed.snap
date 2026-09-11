@@ -1,0 +1,61 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 206..300
+  FnDecl 206..299
+    FnKw 206..208 "fn"
+    Ident 209..213 "main"
+    ParamList 213..215
+      LParen 213..214 "("
+      RParen 214..215 ")"
+    RetType 216..223
+      Arrow 216..218 "->"
+      ErrorUnionType 219..223
+        Not 219..220 "!"
+        PathType 220..223
+          Path 220..223
+            Ident 220..223 "int"
+    Block 224..299
+      LBrace 224..225 "{"
+      LetDecl 230..246
+        LetKw 230..233 "let"
+        IdentPat 234..238
+          Ident 234..238 "leap"
+        Eq 239..240 "="
+        LiteralExpr 241..245
+          TrueKw 241..245 "true"
+        Term 245..246 "\n"
+      LetDecl 250..289
+        LetKw 250..253 "let"
+        IdentPat 254..258
+          Ident 254..258 "days"
+        Eq 259..260 "="
+        IfExpr 261..288
+          IfKw 261..263 "if"
+          PathExpr 264..268
+            Ident 264..268 "leap"
+          ThenKw 269..273 "then"
+          Block 274..276
+            ExprStmt 274..276
+              LiteralExpr 274..276
+                Int 274..276 "29"
+          ElseKw 277..281 "else"
+          Block 282..288
+            LBrace 282..283 "{"
+            ExprStmt 284..286
+              LiteralExpr 284..286
+                Int 284..286 "28"
+            RBrace 287..288 "}"
+        Term 288..289 "\n"
+      ExprStmt 293..298
+        PathExpr 293..297
+          Ident 293..297 "days"
+        Term 297..298 "\n"
+      RBrace 298..299 "}"
+  Term 299..300 "\n"
+  Eof 300..300 ""
+== diagnostics ==
+E0201 [Error] 282..283 the two branches of one `if` share a form — after `then …`, the `else` branch is a bare expression too
+    note an `if` is written `if c { a } else { b }`, or on one line `if c then a else b` — braces or `then`, never neither, and both branches the same way ([gram.expr.if])

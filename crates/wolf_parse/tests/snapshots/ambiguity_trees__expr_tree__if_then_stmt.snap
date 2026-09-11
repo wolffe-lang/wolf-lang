@@ -1,0 +1,133 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 247..432
+  FnDecl 247..431
+    FnKw 247..249 "fn"
+    Ident 250..254 "main"
+    ParamList 254..256
+      LParen 254..255 "("
+      RParen 255..256 ")"
+    RetType 257..264
+      Arrow 257..259 "->"
+      ErrorUnionType 260..264
+        Not 260..261 "!"
+        PathType 261..264
+          Path 261..264
+            Ident 261..264 "int"
+    Block 265..431
+      LBrace 265..266 "{"
+      VarDecl 271..281
+        VarKw 271..274 "var"
+        IdentPat 275..276
+          Ident 275..276 "i"
+        Eq 277..278 "="
+        LiteralExpr 279..280
+          Int 279..280 "0"
+        Term 280..281 "\n"
+      ExprStmt 285..424
+        WhileExpr 285..423
+          WhileKw 285..290 "while"
+          BinExpr 291..296
+            PathExpr 291..292
+              Ident 291..292 "i"
+            Lt 293..294 "<"
+            LiteralExpr 295..296
+              Int 295..296 "4"
+          Block 297..423
+            LBrace 297..298 "{"
+            ExprStmt 307..366
+              IfExpr 307..365
+                IfKw 307..309 "if"
+                BinExpr 310..320
+                  BinExpr 310..315
+                    PathExpr 310..311
+                      Ident 310..311 "i"
+                    Percent 312..313 "%"
+                    LiteralExpr 314..315
+                      Int 314..315 "2"
+                  EqEq 316..318 "=="
+                  LiteralExpr 319..320
+                    Int 319..320 "0"
+                ThenKw 321..325 "then"
+                Block 326..343
+                  ExprStmt 326..343
+                    CallExpr 326..343
+                      PathExpr 326..331
+                        Ident 326..331 "print"
+                      ArgList 331..343
+                        LParen 331..332 "("
+                        Arg 332..342
+                          StringExpr 332..342
+                            StrBegin 332..333 "\""
+                            StrFragment 333..338 "even "
+                            Interp 338..341
+                              InterpOpen 338..339 "{"
+                              PathExpr 339..340
+                                Ident 339..340 "i"
+                              InterpClose 340..341 "}"
+                            StrEnd 341..342 "\""
+                        RParen 342..343 ")"
+                ElseKw 344..348 "else"
+                Block 349..365
+                  ExprStmt 349..365
+                    CallExpr 349..365
+                      PathExpr 349..354
+                        Ident 349..354 "print"
+                      ArgList 354..365
+                        LParen 354..355 "("
+                        Arg 355..364
+                          StringExpr 355..364
+                            StrBegin 355..356 "\""
+                            StrFragment 356..360 "odd "
+                            Interp 360..363
+                              InterpOpen 360..361 "{"
+                              PathExpr 361..362
+                                Ident 361..362 "i"
+                              InterpClose 362..363 "}"
+                            StrEnd 363..364 "\""
+                        RParen 364..365 ")"
+              Term 365..366 "\n"
+            ExprStmt 374..403
+              IfExpr 374..402
+                IfKw 374..376 "if"
+                BinExpr 377..383
+                  PathExpr 377..378
+                    Ident 377..378 "i"
+                  EqEq 379..381 "=="
+                  LiteralExpr 382..383
+                    Int 382..383 "3"
+                ThenKw 384..388 "then"
+                Block 389..402
+                  ExprStmt 389..402
+                    CallExpr 389..402
+                      PathExpr 389..394
+                        Ident 389..394 "print"
+                      ArgList 394..402
+                        LParen 394..395 "("
+                        Arg 395..401
+                          StringExpr 395..401
+                            StrBegin 395..396 "\""
+                            StrFragment 396..400 "last"
+                            StrEnd 400..401 "\""
+                        RParen 401..402 ")"
+              Term 402..403 "\n"
+            AssignStmt 411..418
+              PathExpr 411..412
+                Ident 411..412 "i"
+              PlusEq 413..415 "+="
+              LiteralExpr 416..417
+                Int 416..417 "1"
+              Term 417..418 "\n"
+            RBrace 422..423 "}"
+        Term 423..424 "\n"
+      ExprStmt 428..430
+        LiteralExpr 428..429
+          Int 428..429 "0"
+        Term 429..430 "\n"
+      RBrace 430..431 "}"
+  Term 431..432 "\n"
+  Eof 432..432 ""
+== diagnostics ==

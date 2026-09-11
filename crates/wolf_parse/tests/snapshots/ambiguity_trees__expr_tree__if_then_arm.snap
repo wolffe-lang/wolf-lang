@@ -1,0 +1,220 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 313..613
+  FnDecl 313..464
+    FnKw 313..315 "fn"
+    Ident 316..320 "days"
+    ParamList 320..344
+      LParen 320..321 "("
+      Param 321..331
+        Ident 321..326 "month"
+        Colon 326..327 ":"
+        PathType 328..331
+          Path 328..331
+            Ident 328..331 "int"
+      Comma 331..332 ","
+      Param 333..343
+        Ident 333..337 "leap"
+        Colon 337..338 ":"
+        PathType 339..343
+          Path 339..343
+            Ident 339..343 "bool"
+      RParen 343..344 ")"
+    RetType 345..351
+      Arrow 345..347 "->"
+      PathType 348..351
+        Path 348..351
+          Ident 348..351 "int"
+    Block 352..464
+      LBrace 352..353 "{"
+      ExprStmt 358..463
+        MatchExpr 358..462
+          MatchKw 358..363 "match"
+          PathExpr 364..369
+            Ident 364..369 "month"
+          LBrace 370..371 "{"
+          MatchArm 380..409
+            LiteralPat 380..381
+              Int 380..381 "2"
+            FatArrow 382..384 "=>"
+            IfExpr 385..408
+              IfKw 385..387 "if"
+              PathExpr 388..392
+                Ident 388..392 "leap"
+              ThenKw 393..397 "then"
+              Block 398..400
+                ExprStmt 398..400
+                  LiteralExpr 398..400
+                    Int 398..400 "29"
+              ElseKw 401..405 "else"
+              Block 406..408
+                ExprStmt 406..408
+                  LiteralExpr 406..408
+                    Int 406..408 "28"
+            Comma 408..409 ","
+          MatchArm 418..439
+            OrPat 418..432
+              LiteralPat 418..419
+                Int 418..419 "4"
+              Pipe 420..421 "|"
+              LiteralPat 422..423
+                Int 422..423 "6"
+              Pipe 424..425 "|"
+              LiteralPat 426..427
+                Int 426..427 "9"
+              Pipe 428..429 "|"
+              LiteralPat 430..432
+                Int 430..432 "11"
+            FatArrow 433..435 "=>"
+            LiteralExpr 436..438
+              Int 436..438 "30"
+            Comma 438..439 ","
+          MatchArm 448..456
+            WildcardPat 448..449
+              Underscore 448..449 "_"
+            FatArrow 450..452 "=>"
+            LiteralExpr 453..455
+              Int 453..455 "31"
+            Comma 455..456 ","
+          RBrace 461..462 "}"
+        Term 462..463 "\n"
+      RBrace 463..464 "}"
+  Term 464..465 "\n"
+  FnDecl 466..612
+    FnKw 466..468 "fn"
+    Ident 469..473 "main"
+    ParamList 473..475
+      LParen 473..474 "("
+      RParen 474..475 ")"
+    RetType 476..483
+      Arrow 476..478 "->"
+      ErrorUnionType 479..483
+        Not 479..480 "!"
+        PathType 480..483
+          Path 480..483
+            Ident 480..483 "int"
+    Block 484..612
+      LBrace 484..485 "{"
+      ExprStmt 490..516
+        CallExpr 490..515
+          PathExpr 490..495
+            Ident 490..495 "print"
+          ArgList 495..515
+            LParen 495..496 "("
+            Arg 496..514
+              StringExpr 496..514
+                StrBegin 496..497 "\""
+                Interp 497..513
+                  InterpOpen 497..498 "{"
+                  CallExpr 498..512
+                    PathExpr 498..502
+                      Ident 498..502 "days"
+                    ArgList 502..512
+                      LParen 502..503 "("
+                      Arg 503..504
+                        LiteralExpr 503..504
+                          Int 503..504 "1"
+                      Comma 504..505 ","
+                      Arg 506..511
+                        LiteralExpr 506..511
+                          FalseKw 506..511 "false"
+                      RParen 511..512 ")"
+                  InterpClose 512..513 "}"
+                StrEnd 513..514 "\""
+            RParen 514..515 ")"
+        Term 515..516 "\n"
+      ExprStmt 520..545
+        CallExpr 520..544
+          PathExpr 520..525
+            Ident 520..525 "print"
+          ArgList 525..544
+            LParen 525..526 "("
+            Arg 526..543
+              StringExpr 526..543
+                StrBegin 526..527 "\""
+                Interp 527..542
+                  InterpOpen 527..528 "{"
+                  CallExpr 528..541
+                    PathExpr 528..532
+                      Ident 528..532 "days"
+                    ArgList 532..541
+                      LParen 532..533 "("
+                      Arg 533..534
+                        LiteralExpr 533..534
+                          Int 533..534 "2"
+                      Comma 534..535 ","
+                      Arg 536..540
+                        LiteralExpr 536..540
+                          TrueKw 536..540 "true"
+                      RParen 540..541 ")"
+                  InterpClose 541..542 "}"
+                StrEnd 542..543 "\""
+            RParen 543..544 ")"
+        Term 544..545 "\n"
+      ExprStmt 549..575
+        CallExpr 549..574
+          PathExpr 549..554
+            Ident 549..554 "print"
+          ArgList 554..574
+            LParen 554..555 "("
+            Arg 555..573
+              StringExpr 555..573
+                StrBegin 555..556 "\""
+                Interp 556..572
+                  InterpOpen 556..557 "{"
+                  CallExpr 557..571
+                    PathExpr 557..561
+                      Ident 557..561 "days"
+                    ArgList 561..571
+                      LParen 561..562 "("
+                      Arg 562..563
+                        LiteralExpr 562..563
+                          Int 562..563 "2"
+                      Comma 563..564 ","
+                      Arg 565..570
+                        LiteralExpr 565..570
+                          FalseKw 565..570 "false"
+                      RParen 570..571 ")"
+                  InterpClose 571..572 "}"
+                StrEnd 572..573 "\""
+            RParen 573..574 ")"
+        Term 574..575 "\n"
+      ExprStmt 579..605
+        CallExpr 579..604
+          PathExpr 579..584
+            Ident 579..584 "print"
+          ArgList 584..604
+            LParen 584..585 "("
+            Arg 585..603
+              StringExpr 585..603
+                StrBegin 585..586 "\""
+                Interp 586..602
+                  InterpOpen 586..587 "{"
+                  CallExpr 587..601
+                    PathExpr 587..591
+                      Ident 587..591 "days"
+                    ArgList 591..601
+                      LParen 591..592 "("
+                      Arg 592..593
+                        LiteralExpr 592..593
+                          Int 592..593 "4"
+                      Comma 593..594 ","
+                      Arg 595..600
+                        LiteralExpr 595..600
+                          FalseKw 595..600 "false"
+                      RParen 600..601 ")"
+                  InterpClose 601..602 "}"
+                StrEnd 602..603 "\""
+            RParen 603..604 ")"
+        Term 604..605 "\n"
+      ExprStmt 609..611
+        LiteralExpr 609..610
+          Int 609..610 "0"
+        Term 610..611 "\n"
+      RBrace 611..612 "}"
+  Term 612..613 "\n"
+  Eof 613..613 ""
+== diagnostics ==

@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 304..392 name=sign body=Block
+FnDecl 394..521 name=sign_braced_tail body=Block
+FnDecl 523..671 name=main body=Block

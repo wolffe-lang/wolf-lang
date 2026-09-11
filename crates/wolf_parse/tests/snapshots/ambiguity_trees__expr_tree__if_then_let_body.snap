@@ -1,0 +1,56 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 189..268
+  FnDecl 189..267
+    FnKw 189..191 "fn"
+    Ident 192..196 "main"
+    ParamList 196..198
+      LParen 196..197 "("
+      RParen 197..198 ")"
+    RetType 199..206
+      Arrow 199..201 "->"
+      ErrorUnionType 202..206
+        Not 202..203 "!"
+        PathType 203..206
+          Path 203..206
+            Ident 203..206 "int"
+    Block 207..267
+      LBrace 207..208 "{"
+      LetDecl 213..229
+        LetKw 213..216 "let"
+        IdentPat 217..221
+          Ident 217..221 "leap"
+        Eq 222..223 "="
+        LiteralExpr 224..228
+          TrueKw 224..228 "true"
+        Term 228..229 "\n"
+      ExprStmt 233..245
+        IfExpr 233..245
+          IfKw 233..235 "if"
+          PathExpr 236..240
+            Ident 236..240 "leap"
+          ThenKw 241..245 "then"
+          Block 245..245
+            ExprStmt 245..245
+              Missing 245..245 ""
+      LetDecl 246..260
+        LetKw 246..249 "let"
+        IdentPat 250..254
+          Ident 250..254 "days"
+        Eq 255..256 "="
+        LiteralExpr 257..259
+          Int 257..259 "29"
+        Term 259..260 "\n"
+      ExprStmt 264..266
+        LiteralExpr 264..265
+          Int 264..265 "0"
+        Term 265..266 "\n"
+      RBrace 266..267 "}"
+  Term 267..268 "\n"
+  Eof 268..268 ""
+== diagnostics ==
+E0201 [Error] 246..249 a bare `then` branch holds one expression — a `let` needs the braced form
+    note an `if` is written `if c { a } else { b }`, or on one line `if c then a else b` — braces or `then`, never neither, and both branches the same way ([gram.expr.if])

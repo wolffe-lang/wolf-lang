@@ -197,8 +197,13 @@ fn corpus_parse_expectations() {
     // wolf-lang#230); plus s147's E0201 open range in pattern position
     // (grammar/match_range_open — `10..` refused at its missing high
     // end with the note that names the range form, `[gram.pat.range]`,
-    // wolf-lang#287); everything else must pass.
-    assert_eq!(fail, 23, "syntax-tier fail-file count drifted");
+    // wolf-lang#287); plus s151's three E0201 refusals of the bare `if`
+    // (grammar/if_then_missing — neither `{` nor `then` after the
+    // condition, if_then_mixed — a bare `then` branch with a braced
+    // `else`, if_then_let_body — a `let` in a bare branch; each with
+    // the note that names both spellings, `[gram.expr.if]`,
+    // wolf-lang#307); everything else must pass.
+    assert_eq!(fail, 26, "syntax-tier fail-file count drifted");
     assert_eq!(
         member_fail, 2,
         "member-sibling fail-file count drifted (the broken_sibling \

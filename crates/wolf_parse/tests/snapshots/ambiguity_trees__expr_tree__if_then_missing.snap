@@ -1,0 +1,54 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 231..316
+  FnDecl 231..315
+    FnKw 231..233 "fn"
+    Ident 234..238 "main"
+    ParamList 238..240
+      LParen 238..239 "("
+      RParen 239..240 ")"
+    RetType 241..248
+      Arrow 241..243 "->"
+      ErrorUnionType 244..248
+        Not 244..245 "!"
+        PathType 245..248
+          Path 245..248
+            Ident 245..248 "int"
+    Block 249..315
+      LBrace 249..250 "{"
+      LetDecl 255..271
+        LetKw 255..258 "let"
+        IdentPat 259..263
+          Ident 259..263 "leap"
+        Eq 264..265 "="
+        LiteralExpr 266..270
+          TrueKw 266..270 "true"
+        Term 270..271 "\n"
+      LetDecl 275..305
+        LetKw 275..278 "let"
+        IdentPat 279..283
+          Ident 279..283 "days"
+        Eq 284..285 "="
+        IfExpr 286..293
+          IfKw 286..288 "if"
+          PathExpr 289..293
+            Ident 289..293 "leap"
+          Missing 293..293 ""
+        ErrorNode 294..304
+          Int 294..296 "29"
+          ElseKw 297..301 "else"
+          Int 302..304 "28"
+        Term 304..305 "\n"
+      ExprStmt 309..314
+        PathExpr 309..313
+          Ident 309..313 "days"
+        Term 313..314 "\n"
+      RBrace 314..315 "}"
+  Term 315..316 "\n"
+  Eof 316..316 ""
+== diagnostics ==
+E0201 [Error] 294..296 expected `{` or `then` after the `if` condition
+    note an `if` is written `if c { a } else { b }`, or on one line `if c then a else b` — braces or `then`, never neither, and both branches the same way ([gram.expr.if])

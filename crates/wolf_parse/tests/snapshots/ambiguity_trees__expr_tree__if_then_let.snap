@@ -1,0 +1,122 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 384..557
+  FnDecl 384..466
+    FnKw 384..386 "fn"
+    Ident 387..395 "february"
+    ParamList 395..407
+      LParen 395..396 "("
+      Param 396..406
+        Ident 396..400 "leap"
+        Colon 400..401 ":"
+        PathType 402..406
+          Path 402..406
+            Ident 402..406 "bool"
+      RParen 406..407 ")"
+    RetType 408..414
+      Arrow 408..410 "->"
+      PathType 411..414
+        Path 411..414
+          Ident 411..414 "int"
+    Block 415..466
+      LBrace 415..416 "{"
+      LetDecl 421..456
+        LetKw 421..424 "let"
+        IdentPat 425..429
+          Ident 425..429 "days"
+        Eq 430..431 "="
+        IfExpr 432..455
+          IfKw 432..434 "if"
+          PathExpr 435..439
+            Ident 435..439 "leap"
+          ThenKw 440..444 "then"
+          Block 445..447
+            ExprStmt 445..447
+              LiteralExpr 445..447
+                Int 445..447 "29"
+          ElseKw 448..452 "else"
+          Block 453..455
+            ExprStmt 453..455
+              LiteralExpr 453..455
+                Int 453..455 "28"
+        Term 455..456 "\n"
+      ExprStmt 460..465
+        PathExpr 460..464
+          Ident 460..464 "days"
+        Term 464..465 "\n"
+      RBrace 465..466 "}"
+  Term 466..467 "\n"
+  FnDecl 468..556
+    FnKw 468..470 "fn"
+    Ident 471..475 "main"
+    ParamList 475..477
+      LParen 475..476 "("
+      RParen 476..477 ")"
+    RetType 478..485
+      Arrow 478..480 "->"
+      ErrorUnionType 481..485
+        Not 481..482 "!"
+        PathType 482..485
+          Path 482..485
+            Ident 482..485 "int"
+    Block 486..556
+      LBrace 486..487 "{"
+      ExprStmt 492..518
+        CallExpr 492..517
+          PathExpr 492..497
+            Ident 492..497 "print"
+          ArgList 497..517
+            LParen 497..498 "("
+            Arg 498..516
+              StringExpr 498..516
+                StrBegin 498..499 "\""
+                Interp 499..515
+                  InterpOpen 499..500 "{"
+                  CallExpr 500..514
+                    PathExpr 500..508
+                      Ident 500..508 "february"
+                    ArgList 508..514
+                      LParen 508..509 "("
+                      Arg 509..513
+                        LiteralExpr 509..513
+                          TrueKw 509..513 "true"
+                      RParen 513..514 ")"
+                  InterpClose 514..515 "}"
+                StrEnd 515..516 "\""
+            RParen 516..517 ")"
+        Term 517..518 "\n"
+      ExprStmt 522..549
+        CallExpr 522..548
+          PathExpr 522..527
+            Ident 522..527 "print"
+          ArgList 527..548
+            LParen 527..528 "("
+            Arg 528..547
+              StringExpr 528..547
+                StrBegin 528..529 "\""
+                Interp 529..546
+                  InterpOpen 529..530 "{"
+                  CallExpr 530..545
+                    PathExpr 530..538
+                      Ident 530..538 "february"
+                    ArgList 538..545
+                      LParen 538..539 "("
+                      Arg 539..544
+                        LiteralExpr 539..544
+                          FalseKw 539..544 "false"
+                      RParen 544..545 ")"
+                  InterpClose 545..546 "}"
+                StrEnd 546..547 "\""
+            RParen 547..548 ")"
+        Term 548..549 "\n"
+      ExprStmt 553..555
+        LiteralExpr 553..554
+          Int 553..554 "0"
+        Term 554..555 "\n"
+      RBrace 555..556 "}"
+  Term 556..557 "\n"
+  Eof 557..557 ""
+== diagnostics ==

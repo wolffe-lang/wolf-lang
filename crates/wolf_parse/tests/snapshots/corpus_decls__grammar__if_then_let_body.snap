@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 189..267 name=main body=Block
+-- diagnostics --
+E0201 [Error] 246..249 a bare `then` branch holds one expression — a `let` needs the braced form

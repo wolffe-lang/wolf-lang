@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 393..421 name=Order fields=1
+ImplDecl 423..530 path=Order
+  FnDecl 440..528 name=then body=Block
+FnDecl 532..763 name=main body=Block

@@ -124,6 +124,18 @@ grammar/defer_loop_turn.lu: lowers
 grammar/else_chain.lu: lowers
 grammar/else_default.lu: lowers
 grammar/else_default_newline.lu: lowers
+grammar/if_then_arm.lu: lowers
+grammar/if_then_block.lu: lowers
+grammar/if_then_chain.lu: lowers
+grammar/if_then_ident.lu: lowers
+grammar/if_then_let.lu: lowers
+grammar/if_then_let_body.lu: not mem-clean (pre-wir rungs own it)
+grammar/if_then_member.lu: lowers
+grammar/if_then_missing.lu: not mem-clean (pre-wir rungs own it)
+grammar/if_then_mixed.lu: not mem-clean (pre-wir rungs own it)
+grammar/if_then_paren_default.lu: lowers
+grammar/if_then_stmt.lu: lowers
+grammar/if_then_width.lu: lowers
 grammar/index_origin_bad.lu: not mem-clean (pre-wir rungs own it)
 grammar/index_origin_closure.lu: lowers
 grammar/index_origin_file.lu: lowers

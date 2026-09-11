@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 384..466 name=february body=Block
+FnDecl 468..556 name=main body=Block

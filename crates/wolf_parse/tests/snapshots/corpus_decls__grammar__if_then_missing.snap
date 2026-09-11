@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 231..315 name=main body=Block
+-- diagnostics --
+E0201 [Error] 294..296 expected `{` or `then` after the `if` condition

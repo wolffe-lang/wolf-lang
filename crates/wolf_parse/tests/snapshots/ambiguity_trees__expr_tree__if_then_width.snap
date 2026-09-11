@@ -1,0 +1,72 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 423..631
+  FnDecl 423..630
+    FnKw 423..425 "fn"
+    Ident 426..430 "main"
+    ParamList 430..432
+      LParen 430..431 "("
+      RParen 431..432 ")"
+    RetType 433..440
+      Arrow 433..435 "->"
+      ErrorUnionType 436..440
+        Not 436..437 "!"
+        PathType 437..440
+          Path 437..440
+            Ident 437..440 "int"
+    Block 441..630
+      LBrace 441..442 "{"
+      LetDecl 447..463
+        LetKw 447..450 "let"
+        IdentPat 451..455
+          Ident 451..455 "leap"
+        Eq 456..457 "="
+        LiteralExpr 458..462
+          TrueKw 458..462 "true"
+        Term 462..463 "\n"
+      LetDecl 467..600
+        LetKw 467..470 "let"
+        IdentPat 471..482
+          Ident 471..482 "description"
+        Eq 483..484 "="
+        IfExpr 485..599
+          IfKw 485..487 "if"
+          PathExpr 488..492
+            Ident 488..492 "leap"
+          ThenKw 493..497 "then"
+          Block 498..544
+            ExprStmt 498..544
+              StringExpr 498..544
+                StrBegin 498..499 "\""
+                StrFragment 499..543 "a leap year has twenty-nine …"
+                StrEnd 543..544 "\""
+          ElseKw 545..549 "else"
+          Block 550..599
+            ExprStmt 550..599
+              StringExpr 550..599
+                StrBegin 550..551 "\""
+                StrFragment 551..598 "a common year has twenty-eig…"
+                StrEnd 598..599 "\""
+        Term 599..600 "\n"
+      ExprStmt 604..623
+        CallExpr 604..622
+          PathExpr 604..609
+            Ident 604..609 "print"
+          ArgList 609..622
+            LParen 609..610 "("
+            Arg 610..621
+              PathExpr 610..621
+                Ident 610..621 "description"
+            RParen 621..622 ")"
+        Term 622..623 "\n"
+      ExprStmt 627..629
+        LiteralExpr 627..628
+          Int 627..628 "0"
+        Term 628..629 "\n"
+      RBrace 629..630 "}"
+  Term 630..631 "\n"
+  Eof 631..631 ""
+== diagnostics ==

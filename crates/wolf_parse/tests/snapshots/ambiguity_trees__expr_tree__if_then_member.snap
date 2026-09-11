@@ -1,0 +1,232 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 393..764
+  StructDecl 393..421
+    StructKw 393..399 "struct"
+    Ident 400..405 "Order"
+    LBrace 406..407 "{"
+    StructField 412..419
+      Ident 412..413 "v"
+      Colon 413..414 ":"
+      PathType 415..418
+        Path 415..418
+          Ident 415..418 "int"
+      Comma 418..419 ","
+    RBrace 420..421 "}"
+  Term 421..422 "\n"
+  ImplDecl 423..530
+    ImplKw 423..427 "impl"
+    Path 428..433
+      Ident 428..433 "Order"
+    LBrace 434..435 "{"
+    FnDecl 440..528
+      FnKw 440..442 "fn"
+      Ident 443..447 "then"
+      ParamList 447..467
+        LParen 447..448 "("
+        Param 448..452
+          SelfKw 448..452 "self"
+        Comma 452..453 ","
+        Param 454..466
+          Ident 454..459 "other"
+          Colon 459..460 ":"
+          PathType 461..466
+            Path 461..466
+              Ident 461..466 "Order"
+        RParen 466..467 ")"
+      RetType 468..476
+        Arrow 468..470 "->"
+        PathType 471..476
+          Path 471..476
+            Ident 471..476 "Order"
+      Block 477..528
+        LBrace 477..478 "{"
+        ExprStmt 487..523
+          IfExpr 487..522
+            IfKw 487..489 "if"
+            BinExpr 490..501
+              MemberExpr 490..496
+                PathExpr 490..494
+                  Ident 490..494 "self"
+                Dot 494..495 "."
+                Ident 495..496 "v"
+              NotEq 497..499 "!="
+              LiteralExpr 500..501
+                Int 500..501 "0"
+            ThenKw 502..506 "then"
+            Block 507..511
+              ExprStmt 507..511
+                PathExpr 507..511
+                  Ident 507..511 "self"
+            ElseKw 512..516 "else"
+            Block 517..522
+              ExprStmt 517..522
+                PathExpr 517..522
+                  Ident 517..522 "other"
+          Term 522..523 "\n"
+        RBrace 527..528 "}"
+    Term 528..529 "\n"
+    RBrace 529..530 "}"
+  Term 530..531 "\n"
+  FnDecl 532..763
+    FnKw 532..534 "fn"
+    Ident 535..539 "main"
+    ParamList 539..541
+      LParen 539..540 "("
+      RParen 540..541 ")"
+    RetType 542..549
+      Arrow 542..544 "->"
+      ErrorUnionType 545..549
+        Not 545..546 "!"
+        PathType 546..549
+          Path 546..549
+            Ident 546..549 "int"
+    Block 550..763
+      LBrace 550..551 "{"
+      LetDecl 556..583
+        LetKw 556..559 "let"
+        IdentPat 560..564
+          Ident 560..564 "less"
+        Eq 565..566 "="
+        StructLit 567..582
+          PathExpr 567..572
+            Ident 567..572 "Order"
+          LBrace 573..574 "{"
+          FieldInit 575..580
+            Ident 575..576 "v"
+            Colon 576..577 ":"
+            PrefixExpr 578..580
+              Minus 578..579 "-"
+              LiteralExpr 579..580
+                Int 579..580 "1"
+          RBrace 581..582 "}"
+        Term 582..583 "\n"
+      LetDecl 587..614
+        LetKw 587..590 "let"
+        IdentPat 591..596
+          Ident 591..596 "equal"
+        Eq 597..598 "="
+        StructLit 599..613
+          PathExpr 599..604
+            Ident 599..604 "Order"
+          LBrace 605..606 "{"
+          FieldInit 607..611
+            Ident 607..608 "v"
+            Colon 608..609 ":"
+            LiteralExpr 610..611
+              Int 610..611 "0"
+          RBrace 612..613 "}"
+        Term 613..614 "\n"
+      ExprStmt 618..682
+        IfExpr 618..681
+          IfKw 618..620 "if"
+          BinExpr 621..643
+            MemberExpr 621..639
+              CallExpr 621..637
+                MemberExpr 621..631
+                  PathExpr 621..626
+                    Ident 621..626 "equal"
+                  Dot 626..627 "."
+                  Ident 627..631 "then"
+                ArgList 631..637
+                  LParen 631..632 "("
+                  Arg 632..636
+                    PathExpr 632..636
+                      Ident 632..636 "less"
+                  RParen 636..637 ")"
+              Dot 637..638 "."
+              Ident 638..639 "v"
+            Lt 640..641 "<"
+            LiteralExpr 642..643
+              Int 642..643 "0"
+          ThenKw 644..648 "then"
+          Block 649..662
+            ExprStmt 649..662
+              CallExpr 649..662
+                PathExpr 649..654
+                  Ident 649..654 "print"
+                ArgList 654..662
+                  LParen 654..655 "("
+                  Arg 655..661
+                    StringExpr 655..661
+                      StrBegin 655..656 "\""
+                      StrFragment 656..660 "less"
+                      StrEnd 660..661 "\""
+                  RParen 661..662 ")"
+          ElseKw 663..667 "else"
+          Block 668..681
+            ExprStmt 668..681
+              CallExpr 668..681
+                PathExpr 668..673
+                  Ident 668..673 "print"
+                ArgList 673..681
+                  LParen 673..674 "("
+                  Arg 674..680
+                    StringExpr 674..680
+                      StrBegin 674..675 "\""
+                      StrFragment 675..679 "more"
+                      StrEnd 679..680 "\""
+                  RParen 680..681 ")"
+        Term 681..682 "\n"
+      ExprStmt 686..756
+        IfExpr 686..755
+          IfKw 686..688 "if"
+          BinExpr 689..713
+            MemberExpr 689..708
+              CallExpr 689..706
+                MemberExpr 689..699
+                  PathExpr 689..694
+                    Ident 689..694 "equal"
+                  Dot 694..695 "."
+                  Ident 695..699 "then"
+                ArgList 699..706
+                  LParen 699..700 "("
+                  Arg 700..705
+                    PathExpr 700..705
+                      Ident 700..705 "equal"
+                  RParen 705..706 ")"
+              Dot 706..707 "."
+              Ident 707..708 "v"
+            EqEq 709..711 "=="
+            LiteralExpr 712..713
+              Int 712..713 "0"
+          ThenKw 714..718 "then"
+          Block 719..733
+            ExprStmt 719..733
+              CallExpr 719..733
+                PathExpr 719..724
+                  Ident 719..724 "print"
+                ArgList 724..733
+                  LParen 724..725 "("
+                  Arg 725..732
+                    StringExpr 725..732
+                      StrBegin 725..726 "\""
+                      StrFragment 726..731 "equal"
+                      StrEnd 731..732 "\""
+                  RParen 732..733 ")"
+          ElseKw 734..738 "else"
+          Block 739..755
+            ExprStmt 739..755
+              CallExpr 739..755
+                PathExpr 739..744
+                  Ident 739..744 "print"
+                ArgList 744..755
+                  LParen 744..745 "("
+                  Arg 745..754
+                    StringExpr 745..754
+                      StrBegin 745..746 "\""
+                      StrFragment 746..753 "unequal"
+                      StrEnd 753..754 "\""
+                  RParen 754..755 ")"
+        Term 755..756 "\n"
+      ExprStmt 760..762
+        LiteralExpr 760..761
+          Int 760..761 "0"
+        Term 761..762 "\n"
+      RBrace 762..763 "}"
+  Term 763..764 "\n"
+  Eof 764..764 ""
+== diagnostics ==

@@ -1,0 +1,78 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 343..458
+  FnDecl 343..457
+    FnKw 343..345 "fn"
+    Ident 346..350 "main"
+    ParamList 350..352
+      LParen 350..351 "("
+      RParen 351..352 ")"
+    RetType 353..360
+      Arrow 353..355 "->"
+      ErrorUnionType 356..360
+        Not 356..357 "!"
+        PathType 357..360
+          Path 357..360
+            Ident 357..360 "int"
+    Block 361..457
+      LBrace 361..362 "{"
+      LetDecl 367..383
+        LetKw 367..370 "let"
+        IdentPat 371..375
+          Ident 371..375 "leap"
+        Eq 376..377 "="
+        LiteralExpr 378..382
+          TrueKw 378..382 "true"
+        Term 382..383 "\n"
+      LetDecl 387..430
+        LetKw 387..390 "let"
+        IdentPat 391..395
+          Ident 391..395 "days"
+        Eq 396..397 "="
+        IfExpr 398..429
+          IfKw 398..400 "if"
+          PathExpr 401..405
+            Ident 401..405 "leap"
+          ThenKw 406..410 "then"
+          Block 411..417
+            LBrace 411..412 "{"
+            ExprStmt 413..415
+              LiteralExpr 413..415
+                Int 413..415 "29"
+            RBrace 416..417 "}"
+          ElseKw 418..422 "else"
+          Block 423..429
+            LBrace 423..424 "{"
+            ExprStmt 425..427
+              LiteralExpr 425..427
+                Int 425..427 "28"
+            RBrace 428..429 "}"
+        Term 429..430 "\n"
+      ExprStmt 434..450
+        CallExpr 434..449
+          PathExpr 434..439
+            Ident 434..439 "print"
+          ArgList 439..449
+            LParen 439..440 "("
+            Arg 440..448
+              StringExpr 440..448
+                StrBegin 440..441 "\""
+                Interp 441..447
+                  InterpOpen 441..442 "{"
+                  PathExpr 442..446
+                    Ident 442..446 "days"
+                  InterpClose 446..447 "}"
+                StrEnd 447..448 "\""
+            RParen 448..449 ")"
+        Term 449..450 "\n"
+      ExprStmt 454..456
+        LiteralExpr 454..455
+          Int 454..455 "0"
+        Term 455..456 "\n"
+      RBrace 456..457 "}"
+  Term 457..458 "\n"
+  Eof 458..458 ""
+== diagnostics ==
