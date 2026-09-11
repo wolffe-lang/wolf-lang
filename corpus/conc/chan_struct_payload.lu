@@ -25,7 +25,11 @@ fn main() -> !int {
             inbox.send(Doc { title: "channels", words: 1200 })?
             inbox.close()
         })
-        for d in inbox { total += d.words; seen += 1; print("{d.title}") }
+        for d in inbox {
+            total += d.words
+            seen += 1
+            print("{d.title}")
+        }
     }
     print("{seen} documents shelved, {total} words")
     let last = inbox.recv() else |err| { print("last: {err}"); return 0 }
