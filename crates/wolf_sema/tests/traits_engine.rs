@@ -636,9 +636,7 @@ fn main() -> !int {{
         })
         .flat_map(|tb| tb.dispatch.iter())
         .filter_map(|(_, d)| match d {
-            wolf_sema::Dispatch::Trait { name, method, .. } => {
-                Some((name.clone(), method.clone()))
-            }
+            wolf_sema::Dispatch::Trait { name, method, .. } => Some((name.clone(), method.clone())),
             _ => None,
         })
         .collect();

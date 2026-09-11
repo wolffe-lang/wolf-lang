@@ -333,10 +333,7 @@ fn trait_alias_form_carries_a_bound_list() {
     let alias = decls[0];
     assert_eq!(text(src, alias.name().expect("name").span), "Num");
     let bound = alias.alias_bound().expect("alias bound");
-    let names: Vec<&str> = bound
-        .paths()
-        .map(|p| text(src, p.syntax().span))
-        .collect();
+    let names: Vec<&str> = bound.paths().map(|p| text(src, p.syntax().span)).collect();
     assert_eq!(names, ["Add", "Sub", "Mul"]);
     assert_eq!(alias.members().count(), 0);
     let brace = decls[1];

@@ -3060,7 +3060,11 @@ impl<'t> Lowerer<'t> {
     /// for the call, a temporary is evaluated — and the answer is a
     /// call result: nothing for a `Copy` answer, a fresh site for a
     /// non-`Copy` one (a user `Money` from `Money + Money`).
-    fn eval_op_dispatch(&mut self, e: &'t GreenNode, operands: [Option<&'t GreenNode>; 2]) -> R<Val> {
+    fn eval_op_dispatch(
+        &mut self,
+        e: &'t GreenNode,
+        operands: [Option<&'t GreenNode>; 2],
+    ) -> R<Val> {
         for side in operands.into_iter().flatten() {
             if let Some((place, _)) = self.as_place(side) {
                 self.emit_read(place, side.span);
@@ -3069,7 +3073,10 @@ impl<'t> Lowerer<'t> {
                 self.eval_value(side)?;
             }
         }
-        let ret_heap = self.expr_ty(e.span).map(|t| !result_is_copy(t)).unwrap_or(false);
+        let ret_heap = self
+            .expr_ty(e.span)
+            .map(|t| !result_is_copy(t))
+            .unwrap_or(false);
         if !ret_heap {
             return Ok(Val::none());
         }

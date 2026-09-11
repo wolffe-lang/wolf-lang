@@ -3912,7 +3912,15 @@ impl<'t> Machine<'t> {
                 }) = self.ctx().dispatch.get(&e.span).cloned()
                 {
                     let v = self.eval_arg(operand, None)?;
-                    return self.op_dispatch_call(operand, v, Vec::new(), *module, name, method, e.span);
+                    return self.op_dispatch_call(
+                        operand,
+                        v,
+                        Vec::new(),
+                        *module,
+                        name,
+                        method,
+                        e.span,
+                    );
                 }
                 // The direct `-<int literal>` spelling decodes as the
                 // NEGATED value in one step (#151, mirroring WIR
