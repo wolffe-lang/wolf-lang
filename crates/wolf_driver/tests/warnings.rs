@@ -245,7 +245,10 @@ fn mode_error_retires_the_mut_parameter_lint() {
     );
     let (code, err) = build_wir(&dir, &[]);
     assert_eq!(code, 1, "the mode error still stops the build:\n{err}");
-    assert!(err.contains("error[E0804]"), "the mode error renders:\n{err}");
+    assert!(
+        err.contains("error[E0804]"),
+        "the mode error renders:\n{err}"
+    );
     assert!(
         !err.contains("W1002"),
         "the lint that contradicts it is retired:\n{err}"

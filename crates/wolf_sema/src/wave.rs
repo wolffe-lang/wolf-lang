@@ -1326,7 +1326,10 @@ fn swallowed_term_op(fb: &GreenNode) -> Option<(&GreenToken, u32)> {
     let value_shaped = match head.kind {
         SyntaxKind::LiteralExpr => true,
         SyntaxKind::PathExpr => {
-            head.tokens().filter(|t| t.kind == SyntaxKind::Ident).count() == 1
+            head.tokens()
+                .filter(|t| t.kind == SyntaxKind::Ident)
+                .count()
+                == 1
                 && !head.tokens().any(|t| t.kind == SyntaxKind::Dot)
         }
         _ => false,
