@@ -252,12 +252,21 @@ pub(crate) fn fn_item(p: &mut Parser<'_>, m: Marker) {
     if p.at_punct(Punct::Arrow) {
         ret_type(p);
     }
-    // Body: a block, or TERM for the bodyless form.
+    // Body: a block, or TERM for the bodyless form — or the enclosing
+    // `}`, which closes a bodyless signature written on one line
+    // (s154, wolf-lang#332). `trait Add { fn add(self, other: Self) ->
+    // Self }` is the shape: the reader wrote a member whose whole
+    // point is the missing body, and "expected a function body" sent
+    // them to write one inside a trait. The multi-line form has always
+    // parsed (the newline IS the TERM), so the one-liner was a rule
+    // about layout; lupin accepted it at 0.1.32.
     if p.at_punct(Punct::LBrace) {
         crate::exprs::block(p);
     } else if p.at(TokenKind::Term) {
         p.bump();
-    } else if !p.at_eof() && !p.at_decl_start() && !p.at_punct(Punct::RBrace) {
+    } else if p.at_punct(Punct::RBrace) {
+        p.missing();
+    } else if !p.at_eof() && !p.at_decl_start() {
         // One report per broken header: a missing parameter list or
         // return type was already diagnosed above.
         if params_ok {

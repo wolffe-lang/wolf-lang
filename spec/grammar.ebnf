@@ -42,7 +42,8 @@ use_item ::= 'use' path ( '.' '{' IDENT (',' IDENT)* ','? '}' )? ('as' IDENT)? T
 import_c_item ::= 'import' 'c' STRING TERM
 path ::= IDENT ('.' IDENT)*
 
-fn_item   ::= fn_qual* 'fn' IDENT generics? '(' params? ')' fn_ret? (block | TERM)
+fn_item   ::= fn_qual* 'fn' IDENT generics? '(' params? ')' fn_ret? fn_body?
+fn_body   ::= block | TERM   /* absent only before the enclosing '}' */
 fn_qual   ::= 'comptime' | 'extern' STRING | 'export'
 generics  ::= '[' generic_param (',' generic_param)* ','? ']'
 generic_param ::= IDENT (':' bound)? | IDENT ':' 'type'

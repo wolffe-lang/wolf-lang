@@ -304,7 +304,8 @@ string is a header name, not wolf syntax. A prelude (spec 02-…, D31) makes
 ### 2.3 Functions `[gram.item.fn]`
 
 ```ebnf
-fn_item   ::= fn_qual* 'fn' IDENT generics? '(' params? ')' fn_ret? (block | TERM)
+fn_item   ::= fn_qual* 'fn' IDENT generics? '(' params? ')' fn_ret? fn_body?
+fn_body   ::= block | TERM   /* absent only before the enclosing '}' */
 fn_qual   ::= 'comptime' | 'extern' STRING | 'export'
 generics  ::= '[' generic_param (',' generic_param)* ','? ']'
 generic_param ::= IDENT (':' bound)? | IDENT ':' 'type'
@@ -323,8 +324,13 @@ ret_type  ::= type ('!' error_row)?   /* `-> !T` parses via type's '!' type */
 - Returns: `-> T` plain; `-> !T` error union with inferred private row;
   `-> T ! {Tag(Payload), io.Error}` explicit row (`[gram.type.row]`).
 - Generic params use `[]` — there is no `<>` anywhere in the language.
-- Bodyless form (TERM) under `extern`, or as a trait member
-  (a required method the impl must provide).
+- Bodyless form under `extern`, or as a trait member (a required
+  method the impl must provide). Its terminator is the TERM — the
+  newline of the multi-line spelling, or an explicit `;` — and it may
+  be omitted when the enclosing `}` follows immediately, so
+  `trait Add { fn add(self, other: Self) -> Self }` parses (s154,
+  wolf-lang#332). Nothing else may omit it: a body-less signature
+  followed by another declaration is still E0201.
 
 Examples: see `corpus/wordcount.lu` (`fn top[T](m: Map[T, int], n: int)`).
 
