@@ -349,6 +349,18 @@ own pattern, optional ascription, and initializer. Unambiguous by
 construction: every binder has its own `=`, call arguments are
 bracketed, and wolf has no unparenthesized tuple expressions, so a
 comma at statement depth can only begin the next binder. Semantics are
+**A `let` binding's FIELDS are as immutable as the binding** (s154,
+wolf-lang#331): `let r = Row{…}` then `r.cents = 5` is E0410 at the
+field write, exactly as `r = …` is. `let` is a rule about the value,
+not about rebinding — E0410's note has always said "`let` names a
+value once", and the value includes its fields. Both machines ran the
+field write to completion until s154 (they agreed, so the differential
+could not see it), and a reader told the rule by chapter 3 could not
+predict it. Elements reached through an index are a different
+question, left where they were (`[mem.tier0]`'s exclusivity and
+freeze); write a field through a `var`, or build the value complete in
+the `let`.
+
 exactly the sequence of single bindings, left to right — a later
 binder may read an earlier one. `wolf fmt` keeps a group on one line
 when it fits and breaks one-binder-per-line when it does not; the

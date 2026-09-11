@@ -22,7 +22,7 @@
 
 use wolf_ast::{
     AssignStmt, ClosureExpr, ElseExpr, FnDecl, ForExpr, GreenNode, LetDecl, MatchArm, MatchExpr,
-    ParenExpr, PathExpr, SyntaxKind, VarDecl,
+    MemberExpr, ParenExpr, PathExpr, SyntaxKind, VarDecl,
 };
 use wolf_diag::{Applicability, Diagnostic, Diagnostics, Suggestion, codes};
 use wolf_span::Span;
@@ -215,15 +215,35 @@ impl Walk<'_> {
     }
 
     /// E0410 proper: the place of an assignment must not be a
-    /// `let`-bound name. Fields, elements, and everything reached
-    /// *through* a binding stay c04's exclusivity/freeze territory.
+    /// `let`-bound name, nor a FIELD of one (s154, wolf-lang#331).
+    /// Elements and everything reached through an index stay c04's
+    /// exclusivity/freeze territory; a field is not, because a field
+    /// write is a write to the value the `let` named. Both machines
+    /// ran `let r = Row{…}; r.cents = 5` to completion until s154 —
+    /// they agreed, so the differential could not see it — which made
+    /// `let` a rule about rebinding rather than about the value, and
+    /// left E0410's own note ("`let` names a value once") overstating
+    /// what the compiler enforced.
     fn check_place(&mut self, place: &GreenNode) {
-        // Peel parens: `(x) = 2` assigns to `x`.
+        // Peel parens: `(x) = 2` assigns to `x`. Then peel field
+        // projections: `r.cents = 5` and `r.inner.n = 5` write the
+        // value `r` names.
         let mut root = place;
-        while root.kind == SyntaxKind::ParenExpr {
-            match ParenExpr::cast(root).and_then(|p| p.expr()) {
-                Some(inner) => root = inner,
-                None => return,
+        let mut through_field = false;
+        loop {
+            match root.kind {
+                SyntaxKind::ParenExpr => match ParenExpr::cast(root).and_then(|p| p.expr()) {
+                    Some(inner) => root = inner,
+                    None => return,
+                },
+                SyntaxKind::MemberExpr => match MemberExpr::cast(root).and_then(|m| m.base()) {
+                    Some(base) => {
+                        root = base;
+                        through_field = true;
+                    }
+                    None => return,
+                },
+                _ => break,
             }
         }
         if root.kind != SyntaxKind::PathExpr {
@@ -236,24 +256,33 @@ impl Walk<'_> {
         let Some(kw) = self.let_provenance(&name) else {
             return;
         };
-        self.sink.push(
-            Diagnostic::error(
-                codes::E0410,
-                root.span,
-                format!("`{name}` is bound with `let`, so it cannot be assigned again"),
+        let span = if through_field { place.span } else { root.span };
+        let (message, note) = if through_field {
+            (
+                format!("`{name}` is bound with `let`, so its fields cannot be assigned either"),
+                "`let` names a value once, and the value includes its fields: a \
+                 `let` binding's fields are as immutable as the binding \
+                 ([gram.item.let]). Declare the binding with `var` to update it \
+                 in place, or build the value complete in the `let`.",
             )
-            .with_label("this assignment needs a mutable binding")
-            .with_secondary(kw, "the binding is made immutable here")
-            .with_note(
+        } else {
+            (
+                format!("`{name}` is bound with `let`, so it cannot be assigned again"),
                 "`let` names a value once. Declare the binding with `var` \
                  to update it in place, or shadow it with a second \
                  `let` if the next value is really a new thing.",
             )
-            .with_suggestion(Suggestion::new(
-                "make the binding mutable: `var`",
-                vec![(kw, "var".to_string())],
-                Applicability::Maybe,
-            )),
+        };
+        self.sink.push(
+            Diagnostic::error(codes::E0410, span, message)
+                .with_label("this assignment needs a mutable binding")
+                .with_secondary(kw, "the binding is made immutable here")
+                .with_note(note)
+                .with_suggestion(Suggestion::new(
+                    "make the binding mutable: `var`",
+                    vec![(kw, "var".to_string())],
+                    Applicability::Maybe,
+                )),
         );
     }
 

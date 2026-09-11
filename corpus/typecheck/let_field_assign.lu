@@ -1,0 +1,28 @@
+//! check: fail(E0410)
+//! phase: parse
+//! conforms: gram.item.let
+//!
+//! wolf-lang#331 (s154, from wolf-book bs42's chapter 5 §5.5): a
+//! field of a `let` binding. Until s154 this ran to exit 0 and
+//! printed `5` on BOTH machines — they agreed, so the differential
+//! could not see it — while `n += 1` on a `let` was E0410 on both.
+//! That made `let` a rule about REBINDING while E0410's own note said
+//! "`let` names a value once", and a reader told the rule by chapter 3
+//! could not predict it. `[gram.item.let]` rules the value: a `let`
+//! binding's fields are as immutable as the binding, E0410 at the
+//! field write. `let_reassign.lu` is the plain shape; the phase is
+//! `parse` for the same reason it is there — binding structure is
+//! lexical, so E0410 fires at the RESOLVE rung. lupin's mirror is
+//! filed with the clause (wolf-interp, is46).
+
+struct Row {
+    kind: str,
+    cents: int,
+}
+
+fn main() -> !int {
+    let r = Row { kind: "drink", cents: 340 }
+    r.cents = 5
+    print("{r.cents}")
+    0
+}

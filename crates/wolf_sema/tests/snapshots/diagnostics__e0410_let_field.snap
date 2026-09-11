@@ -1,0 +1,36 @@
+---
+source: crates/wolf_sema/tests/diagnostics.rs
+expression: render(&res)
+---
+error[E0410]: `r` is bound with `let`, so its fields cannot be assigned either
+ --> mem:///main.lu:8:14
+  |
+7 |     let r = Row { kind: "drink", cents: 340 }
+  |     --- the binding is made immutable here
+8 |              r.cents = 5
+  |              ^^^^^^^ this assignment needs a mutable binding
+  |
+  = note: `let` names a value once, and the value includes its fields: a `let` binding's fields
+    are as immutable as the binding ([gram.item.let]). Declare the binding with `var` to
+    update it in place, or build the value complete in the `let`.
+help: make the binding mutable: `var`
+  |
+7 |     var r = Row { kind: "drink", cents: 340 }
+  |
+
+error[E0410]: `r` is bound with `let`, so its fields cannot be assigned either
+ --> mem:///main.lu:9:5
+  |
+7 |     let r = Row { kind: "drink", cents: 340 }
+  |     --- the binding is made immutable here
+8 |              r.cents = 5
+9 |     r.kind = "food"
+  |     ^^^^^^ this assignment needs a mutable binding
+  |
+  = note: `let` names a value once, and the value includes its fields: a `let` binding's fields
+    are as immutable as the binding ([gram.item.let]). Declare the binding with `var` to
+    update it in place, or build the value complete in the `let`.
+help: make the binding mutable: `var`
+  |
+7 |     var r = Row { kind: "drink", cents: 340 }
+  |

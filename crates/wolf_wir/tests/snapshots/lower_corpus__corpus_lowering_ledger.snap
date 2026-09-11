@@ -494,6 +494,7 @@ typecheck/fn_value_capturing.lu: lowers
 typecheck/fn_value_import/main.lu: lowers
 typecheck/if_branch.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_compound_assign.lu: not mem-clean (pre-wir rungs own it)
+typecheck/let_field_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_reassign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_shadow_var_ok.lu: lowers
 typecheck/main_returns_str.lu: not mem-clean (pre-wir rungs own it)

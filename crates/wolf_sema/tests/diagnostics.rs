@@ -287,12 +287,27 @@ fn e0410_global_let_assign() {
     insta::assert_snapshot!("e0410_global", render(&res));
 }
 
+/// wolf-lang#331 (s154): a FIELD of a `let` binding is as immutable
+/// as the binding — `let` is a rule about the value, not about
+/// rebinding. Both machines ran this to completion until s154. The
+/// nested projection is the same write one level down.
+#[test]
+fn e0410_let_field_assign() {
+    let res = resolve(&[(
+        &[],
+        "main.lu",
+        "struct Row {\n    kind: str,\n    cents: int,\n}\n\n         fn main() -> !int {\n    let r = Row { kind: \"drink\", cents: 340 }\n             r.cents = 5\n    r.kind = \"food\"\n    0\n}\n",
+    )]);
+    insta::assert_snapshot!("e0410_let_field", render(&res));
+}
+
 /// The non-cases: `var` reassigns fine; a `var` shadowing a `let`
 /// assigns fine; a parameter is not a `let` binding; a fresh `let`
-/// *shadowing* is not an assignment.
+/// *shadowing* is not an assignment. A field of a `var` is a field of
+/// a mutable binding and assigns fine (#331's other direction).
 #[test]
 fn e0410_non_cases_stay_clean() {
-    let src = "fn bump(n: int) -> int {\n    var m = n\n    m = m + 1\n    let k = m\n    let k = k + 1\n    var k = k\n    k += 2\n    k\n}\n\nfn main() -> !int {\n    bump(1)\n    0\n}\n";
+    let src = "struct Row {\n    cents: int,\n}\n\nfn bump(n: int) -> int {\n    var m = n\n    m = m + 1\n    let k = m\n    let k = k + 1\n    var k = k\n    k += 2\n    var r = Row { cents: k }\n    r.cents = 1\n    r.cents += 1\n    k\n}\n\nfn main() -> !int {\n    bump(1)\n    0\n}\n";
     let res = resolve(&[(&[], "main.lu", src)]);
     assert_eq!(render(&res), "");
 }
