@@ -9,6 +9,7 @@ error[E1102]: `List[int]` cannot be sent through a channel
   |                      ^^^^^^^^^ not a sendable payload type
   |
   = note: channel payloads must be `Copy` data, `imm` data, a region value (the send is its affine
-    move), or a `sync` type ([conc.chan.type]) — sending anything else would give two tasks
-    one mutable value. D14's verbs are the ways out: `move` the data into a region and send
-    the region, `freeze` it into shareable `imm` data, or guard it with a `Mutex`.
+    move), a `sync` type, or a struct, enum or tuple whose every field is one of those
+    ([conc.chan.type], [conc.chan.payload]) — sending anything else would give two tasks one
+    mutable value. D14's verbs are the ways out: `move` the data into a region and send the
+    region, `freeze` it into shareable `imm` data, or guard it with a `Mutex`.
