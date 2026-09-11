@@ -1,6 +1,145 @@
 # Changelog
 
-## Unreleased
+## 0.2.12 — 2026-09-11
+
+THE PAPERCUTS. 0.2.12 is twenty filed defects, nineteen of them
+moved, and one sentence covers most of them: the compiler was right
+about the program and wrong about the reader. Five came out of one
+week's reading of chapter 5; the rest out of writing wolf-std, lobo
+and the book against v0.2.11.
+
+    use cmp
+    if less == greater { return 1 }    // dispatches, one `use` away
+    (4 as f64) == 4.0                  // true on every machine
+    let r = x % 2.5                    // `fmod`, and it lowers
+    n + 1                              // E0409 on a row, whichever side
+
+**What a reader gets.** A row is E0409 on either side of an operator,
+so `n + 1` and `1 + n` answer one code. A `!T` left at a unit tail is
+a warning, not a return-type diagnosis. `let r = Row{…}` then
+`r.cents = 5` is E0410 on both machines, where 0.2.11 ran it. A
+body-less trait member parses on one line. `==` on a type a library
+publishes works one `use` away — `[type.trait.op]` reads the trait
+from the operand's own module and the file's imports, not the bare
+name. The checked tier's casts convert (`(4 as f64) == 4.0` is true,
+`1e300 as int` traps). `%` on a float is `fmod` and lowers on both
+backends. A `[K, V]`-generic `set` compiles. `{m[k]:>5}` is E0413, a
+typing refusal, not a silent `unsupported`. `wolf fmt` measures a
+break against the tail of the line, breaks outermost first, keeps a
+fallback's parens, puts one space after a closure's parameter list
+and breaks a braced `if` chain as one — 33 std files and 28 lobo
+files re-lay at their next pins. `str.find` is 1.6–2.0x faster on a
+short needle, and no runtime symbol moved (`RT_SYMBOLS` 143).
+
+The pairing is stamped at **lupin 0.1.34** (`b83049a`, pin `c9237c1`
+— the v0.2.11 tag). The stamp moves two releases at once: 0.1.33
+(is45, the one-line `if`, #85's two) and 0.1.34 (is46, the map
+mirror, the operator bridge, the region `str`, four small mirrors).
+After this cut the interpreter declares v0.2.11 and the compiler
+names 0.1.34: **the gap is one release, on the compiler's side only,
+and for the first time both halves are named at tags.** Every hard
+divergence left is a warning-parity row — zero Verdict, zero
+SOUNDNESS, on both tiers.
+
+### The pairing takes lupin 0.1.34 (#87 ritual, #281 control)
+
+wolf is now differentially tested against **lupin 0.1.34**
+(`b83049a`), which declares `c9237c1` — the v0.2.11 tag — as its
+conformance pin. PAIRING named 0.1.32 (pin `e0ce018`, a dev stamp
+inside v0.2.10) because r16 cut before is45 tagged, so this stamp
+moves 0.1.32 -> 0.1.34. The gap to this release is s154 and s156, the
+compiler's side only, one release wide with both halves at tags —
+which no earlier stamp could say.
+
+**Predicted before the run: eleven counts per tier**, control 0.1.33
+-> 0.1.34 (is46 alone), by name — s152's `Map` witnesses and s155's
+positive operator witnesses leaving `unsupported`, `op_total_num`
+leaving Verdict (the alias form parses), s153's two region rows
+leaving Completeness (lupin traps `region-fault`, E1010's paired
+kind), and three `fail`-pinned files leaving the unsupported count
+because lupin refuses them by the compiler's code now. **Measured:
+ten per tier, the same ten on both** — the eleventh,
+`memory/map_std_keys.lu`, was already an agreement at 0.1.33. Over
+the full 580-file corpus (545 entries), both tiers, against
+`target/release/wolf` built by `cargo xtask dist` at `842a296`, with
+the control against the 0.1.33 release archive on the same tree:
+
+                    checked                     native
+    agreements      308 -> 315  (+7)            335 -> 342  (+7)
+    completeness    145 -> 143  (-2)            145 -> 143  (-2)
+    soundness         0 ->   0   (0)              0 ->   0   (0)
+    unsupported     121 -> 114  (-7)             94 ->  87  (-7)
+    hard              9 ->   8  (-1)              9 ->   8  (-1)
+    coverage A      318 -> 318   (0)            347 -> 347   (0)
+    coverage B      414 -> 412  (-2)            414 -> 412  (-2)
+    coverage BOTH   295 -> 300  (+5)            322 -> 327  (+5)
+
+    corpus/memory/map_count.lu                 unsupported -> agreement   (wolf-interp#91)
+    corpus/memory/map_int_keys.lu              unsupported -> agreement   (#91)
+    corpus/traits/op_money.lu                  unsupported -> agreement   (#92)
+    corpus/traits/op_ord_struct.lu             unsupported -> agreement   (#92)
+    corpus/traits/op_total_num.lu              Verdict -> agreement       (#92, the alias form)
+    corpus/memory/region_str_concat_return.lu  Completeness -> agreement  (#88, trap(region-fault))
+    corpus/memory/region_str_concat_send.lu    Completeness -> agreement  (#88)
+    corpus/traits/op_hetero_add.lu             unsupported+Completeness -> Completeness  (B fail(E0514))
+    corpus/traits/op_missing_impl.lu           unsupported+Completeness -> Completeness  (B fail(E0502))
+    corpus/typecheck/map_compound_absent.lu    unsupported+Completeness -> Completeness  (B fail(E0417))
+
+    below the ledger — ten, the ten predicted by name:
+    corpus/memory/map_absent_else.lu       B prints `none`, not `()`
+    corpus/memory/map_char_bool_keys.lu    B's bytes changed
+    corpus/traits/op_eq_inverting.lu       B consults the impl
+    corpus/traits/op_eq_no_trait.lu        B exit(0) -> fail(E0301)
+    corpus/traits/golden_arith.lu          B exit(0) -> fail(E0501)
+    corpus/traits/golden_eq.lu             B exit(0) -> fail(E0501)
+    corpus/traits/golden_missing_bound.lu  B exit(0) -> fail(E0501)
+    corpus/traits/dyn_temp_refused.lu      B exit(0) -> fail(E0810)   (#98)
+    corpus/typecheck/let_field_assign.lu   B exit(0) -> fail(E0410)   (#99, s154 from trunk)
+    corpus/typecheck/map_struct_key.lu     B exit(1) -> fail(E0418)
+
+The prediction's other miss is worth its sentence: coverage B was
+predicted +5 and measured -2, because the seven refusals lupin now
+issues by the compiler's code leave B's run rung while the five
+witnesses it now runs enter it — a machine that grows stricter covers
+less at run and agrees more. The whole stamp move, control 0.1.32 ->
+0.1.34, measured twenty counts per tier (predicted twenty-one, the
+same miss): the ten above plus is45's nine `grammar/if_then_*`
+witnesses Verdict -> agreement and `typecheck/str_slice_assign.lu`
+leaving the unsupported count; eleven below,
+`rows/negative/row_operand_compare.lu` (E0401 -> E0409) joining the
+ten.
+
+**What stands at 0.1.34.** `checked 8 = 8 Diag`, `native 8 = 8 Diag`:
+#167's warning asymmetry (`binder_capitalized`, `discarded_result`,
+`float_zero_minus`, `region_never_allocates`, `byte_view_escape`, plus
+`safety_comment_missing` on checked and `unit_context_discard` on
+native) and s154's two new warning witnesses,
+`lints/else_arithmetic.lu` (W0318) and
+`typecheck/unit_tail_value_discard.lu` (W0601's widened tail) — lupin
+emits no warnings. Zero Verdict rows, for the first time. Zero
+SOUNDNESS on the checked tier, where 0.2.11 carried #168's two
+float-cast twins: s156's #337 made the checked tier's casts trap, a
+move on the compiler's side that the control cannot attribute and the
+table shows as `0 -> 0`. In the completeness class the named rows now
+answer the same code on both sides (`op_eq_no_trait`,
+`op_missing_impl`, `op_hetero_add`, `golden_*`, `dyn_temp_refused`,
+`map_compound_absent`, `map_struct_key`, `let_field_assign`,
+`row_operand_compare`, `str_slice_assign`); a `fail`-pinned file never
+counts. The one row that could have opened,
+`traits/op_eq_imported/main.lu` (s156's #336, past the pin), stayed an
+agreement: its operands are enum values and lupin keeps the structural
+comparison there. #341's two seed files were fixed on trunk at
+`0bb7024`, before the tag lupin pins next: `grammar/structlit_paren.lu`
+stays an agreement here (on its old text 0.1.34 answers E0301 — a
+Verdict row this cut would otherwise carry) and `wordcount.lu` is
+`unsupported` on the compiler at resolve, invisible either way;
+DIV-2026-022 and -023 close on lupin's side at its next pin, and
+DIV-2026-019 stands. Two of is46's mirrors this ledger cannot see:
+#94's E0408 and #95's E0301 at an unresolved bound name have sema
+fixtures and no corpus file (#353). The CI sibling step needed zero
+edits, the sixth re-stamp in a row.
+
+### The papercuts (s154 — #297, #303, #314, #318, #325, #326, #329, #331, #332)
 
 THE PAPERCUTS. Nine filed defects, each small, each one a place where
 the compiler was right about the program and wrong about the reader.
@@ -80,6 +219,8 @@ enumerates them, `[gram.expr.if]` calls `then` contextual, and the two
 clauses disagreed about what the list is; wolf-interp holds its table
 to §6.2 in both directions by a test, so `then` could not join it
 (#318).
+
+### The papercuts II (s156 — #323, #327, #333, #334, #335, #336, #337, #339, #340, #341; #345 measured)
 
 THE PAPERCUTS II. Eleven filings, ten of them moved. Several are the
 same defect wearing different clothes: a rule that was right about the
