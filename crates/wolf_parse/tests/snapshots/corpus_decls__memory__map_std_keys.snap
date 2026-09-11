@@ -1,0 +1,12 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TraitDecl 679..728 name=Eq
+  FnDecl 694..727 name=eq
+ImplDecl 730..803 path=Eq for=str
+  FnDecl 752..801 name=eq body=Block
+FnDecl 805..961 name=has body=Block
+FnDecl 963..1126 name=get body=Block
+FnDecl 1128..1236 name=tally body=Block
+FnDecl 1238..1508 name=main body=Block

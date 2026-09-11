@@ -144,7 +144,7 @@ grammar/index_origin_scopes.lu: lowers
 grammar/intdot_exponent.lu: not mem-clean (pre-wir rungs own it)
 grammar/intdot_member.lu: not mem-clean (pre-wir rungs own it)
 grammar/intdot_range.lu: lowers
-grammar/interp_fmtcolon.lu: not mem-clean (pre-wir rungs own it)
+grammar/interp_fmtcolon.lu: refused — a format spec on a non-primitive value
 grammar/interp_nested.lu: lowers
 grammar/let_group.lu: lowers
 grammar/let_group_bare_tuple.lu: not mem-clean (pre-wir rungs own it)
@@ -264,6 +264,11 @@ memory/list_slice.lu: lowers
 memory/list_slice_edges.lu: lowers
 memory/list_slice_inline_owned.lu: lowers
 memory/list_slice_owned_call.lu: lowers
+memory/map_absent_else.lu: lowers
+memory/map_char_bool_keys.lu: lowers
+memory/map_count.lu: lowers
+memory/map_int_keys.lu: lowers
+memory/map_std_keys.lu: lowers
 memory/match_arm_whole_move.lu: not mem-clean (pre-wir rungs own it)
 memory/mode_missing_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/move_ok.lu: lowers
@@ -481,6 +486,8 @@ typecheck/let_reassign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_shadow_var_ok.lu: lowers
 typecheck/main_returns_str.lu: not mem-clean (pre-wir rungs own it)
 typecheck/main_unit_row.lu: lowers
+typecheck/map_compound_absent.lu: not mem-clean (pre-wir rungs own it)
+typecheck/map_struct_key.lu: not mem-clean (pre-wir rungs own it)
 typecheck/match_arm_product_nonexhaustive.lu: not mem-clean (pre-wir rungs own it)
 typecheck/match_arm_product_unreachable.lu: lowers
 typecheck/match_chain_reuse.lu: lowers
