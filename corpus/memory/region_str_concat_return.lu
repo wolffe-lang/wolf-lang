@@ -1,0 +1,24 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, type.str.concat, mem.region.intra.2
+//!
+//! s153 (wolf-lang#310) — a `str` built by `+` inside a region block
+//! is an allocation in that region ([mem.region.escape]: the result
+//! lands in the ambient region of the `+`, never in an operand's), so
+//! the block's own value is the freed bytes. wolf 0.2.10 printed
+//! `regions` from them, exit 0, with a W1001 saying `scratch` never
+//! allocates; the same program with a `List[int]()` in place of the
+//! concatenation was E1010 all along. Dynamically this is a
+//! region-fault at the read.
+
+fn build() -> str {
+    region scratch {
+        let s = "re" + "gions"
+        s                          // ERROR E1010: built in scratch
+    }
+}
+
+fn main() -> !int {
+    print("{build()}")
+    0
+}

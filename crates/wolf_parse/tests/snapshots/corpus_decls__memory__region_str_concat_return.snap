@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 625..772 name=build body=Block
+FnDecl 774..824 name=main body=Block

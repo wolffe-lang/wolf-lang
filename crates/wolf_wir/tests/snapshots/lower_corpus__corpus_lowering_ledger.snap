@@ -302,6 +302,8 @@ memory/region_multiopen_ok.lu: lowers
 memory/region_multiopen_swap.lu: refused — Pool/shared constructor lowering (runtime shapes, c06)
 memory/region_multiopen_values_ok.lu: lowers
 memory/region_open_ancestor.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_concat_return.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_concat_send.lu: not mem-clean (pre-wir rungs own it)
 memory/region_transfer_open.lu: not mem-clean (pre-wir rungs own it)
 memory/region_unit_tail_call.lu: lowers
 memory/region_value_container.lu: refused — a region inside another value (extent tracking stops at the aggregate boundary — c25 closeout)
@@ -412,6 +414,7 @@ strings/byte_view.lu: lowers
 strings/byte_view_lend.lu: lowers
 strings/byte_view_slice_lent.lu: lowers
 strings/bytes_roundtrip.lu: lowers
+strings/bytes_view_walk.lu: lowers
 strings/char_battery.lu: lowers
 strings/char_index_fail.lu: not mem-clean (pre-wir rungs own it)
 strings/char_interp.lu: lowers

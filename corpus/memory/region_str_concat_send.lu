@@ -1,0 +1,22 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, conc.chan.payload, type.str.concat
+//!
+//! s153 (wolf-lang#310) — the send half. `s += u` is `s = s + u`
+//! ([type.str.concat]): a fresh allocation in the ambient region, here
+//! `scratch`, landing in `s`. A `str` payload crosses a channel as its
+//! view ([conc.chan.payload]: the bytes stay where they were built),
+//! so sending it out of the frame that owns `scratch` is the same
+//! escape as returning it — E1010 at the send, naming the receiver.
+
+fn main() -> !int {
+    let ch = channel[str](1)
+    region scratch {
+        var s = "re"
+        s += "gions"
+        ch.send(s)?                // ERROR E1010: built in scratch
+    }
+    let got = ch.recv()?
+    print("{got}")
+    0
+}

@@ -1,0 +1,31 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: exec.checked.budget, mem.str.view
+//!
+//! s153 (wolf-lang#308) — sc43's twelve-line reduction, at the size
+//! that cost the checked tier 1.9 GiB before this sprint. A consumed
+//! `s.bytes()` is a VIEW ([mem.str.view]): `rest.bytes()[0]` reads one
+//! octet of the receiver's own storage and allocates nothing, on every
+//! lane. Between s136 and s153 the checked machine charged the view
+//! zero and STILL materialized a list per call that it never reclaimed,
+//! so this walk over a shrinking `rest` held n + (n-1) + … values —
+//! quadratic in memory, ×3.8 per doubling, 16.6 GiB on wolf-std's
+//! CAVP rows — under a step budget that could not see it. The machine
+//! now hands the consumer the octets and mints nothing, which is the
+//! invariant [exec.checked.budget] states: a view retains nothing on
+//! the host that the ledger does not charge. The driver's
+//! `checked_budget` test runs this same shape as a subprocess and
+//! asserts the peak resident set.
+
+fn main() -> int {
+    let n = 8192
+    var rest = "a".repeat(n)
+    var seen = 0
+    while rest.len > 0 {
+        let c = rest.bytes()[0] as int
+        if c < 0 { return 1 }
+        rest = rest[1..]
+        seen = seen + 1
+    }
+    if seen == n { 0 } else { 1 }
+}
