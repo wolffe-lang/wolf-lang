@@ -2,6 +2,81 @@
 
 ## Unreleased
 
+### The closure as a value, then the payload (s150 — #300 closes, #282 closes)
+
+**A capturing closure is a `fn` value (#300).** Chapter 4's
+`fn_as_value` — `let both = fn(c) tax(discount(c))`, then
+`adjusted(340, both)` — was refused at the WIR tier as "a capturing
+closure read as a value (the pair stays in its frame)": s105 lowered a
+capturing closure to a two-word pair that never left the frame that
+built it, and the `fn(int) -> int` a callee receives is one word. It is
+still one word, and the word now means the same thing whatever stands
+behind it: **`[abi.native.closure]` is rewritten** so every fn value is
+a pointer to a callable record whose first word is the entry (a
+function taking the record first, the declared parameters after); a
+call through a fn value is one load and one indirect call, record
+leading. A named function or a capture-free closure sits behind a
+static one-slot record (the named function's slot holds a shim that
+drops the leading pointer); a capturing closure's record is the entry
+word followed by its captured values, allocated in the **ambient
+region** of the frame that builds it — the placement every container
+gets, so a closure returned from `rounder(5)` outlives `rounder`. Spec/10
+gains **`[type.fn.value]`**: a closure is a fn value whatever it
+captures, and its captures are COPIED when it is written — the value
+never sees a later write to a captured place (W1102 already said so),
+and while it is still needed a write to a captured `var` is E1002
+(`[mem.tier0.borrow.2]`'s loan, which is what keeps copy and reference
+indistinguishable). The mem tier lets a capturing closure be claimed
+by a `return` or by an enclosing closure's tail, demanding each
+captured value outlive the frame; a closure inside a container or a
+struct literal still refuses by name. Witnesses:
+`typecheck/fn_value_capturing.lu` (the chapter's program, verbatim),
+`typecheck/fn_value_captured_int.lu` (passed, returned, captured by
+another closure), `typecheck/fn_value_captured_var_write.lu`
+(`fail(E1002)`; lupin traps `exclusivity` at the same write).
+
+**A payload beyond one word (#268's largest family).** s39's channel
+carried one machine word and E1102 refused every aggregate, which held
+chapter 12 §12.1's `channel[Doc]` on one machine through two releases.
+**`[conc.chan.payload]`**: a payload is any value the type system can
+move — `[conc.chan.type]`'s four kinds, and a struct, enum or tuple
+whose every field is a payload other than a region value (a region
+crosses on its own, never inside another value: a copied handle would
+be two owners). A send copies the payload into the channel, the
+channel owns that copy in flight, `recv` (a `for`, a `select` arm)
+hands it to the receiver. The cost, stated in the clause: a payload of
+one word or less crosses in the word; anything wider — a `str` view, a
+struct, a tuple, a float, a handle — crosses in a heap box the sender
+fills and the receiver empties (`__wolf_rt_box_new` / `box_take`, one
+allocation and two copies per message); a send that fails frees its
+box before answering, and a boxed channel frees what is still in it
+when it goes. A payload built in a frame-local region is E1010 at the
+send, the way it would be at a return, and the message names the
+receiver. Witnesses: `conc/chan_struct_payload.lu` (§12.1's shape,
+byte-identical under lupin 0.1.31), `conc/chan_payload_escape.lu`
+(`fail(E1010)`; lupin traps `region-fault` at the read).
+
+Measured against wolf-book's 91 one-machine samples, one
+`conform-run --native` each, prediction first: **14 close** — chapter
+4's `s6`, `s7` and exercise 4-9; the whole payload family of eight
+(`ch10/part-served`, `ch10/s7`, `ch12/s5`, `ch12/s6`,
+`ch15/part-roster`, `ch15/part-sup`, exercises 11-5 and 14-10); and
+the three `fail(E1102)` rows underneath it (`ch12/s1`, `ch12/s2`,
+`ch14/s8`). Exercise 4-1 (`compose = fn(f, g) fn(x) f(g(x))`) clears
+the mem tier and stops at sema: `f(g(x))` through an unannotated
+closure parameter records no call surface. The `fail(E1001)` six are
+the language's, not the compiler's (`ch12/s4` is a trap fence; the
+rest are `copy` — the `best[T]` reading); `mut` arguments beyond local
+places stays a sprint (c06's runtime shape).
+
+**`wolf --version | head -1` (#282).** The toolchain's own text —
+`--version`, `--help`, `--explain`, `--man`, `--completions` — is
+written through one helper that treats EPIPE as a quiet exit 0 and any
+other write failure as the failure it is (reported, exit 1);
+`println!` had panicked with `failed printing to stdout: Broken pipe`
+on every one-line read of the version. A test closes the pipe before
+the child can write.
+
 ### Two syscalls a request, gone (s149 — #289 closes, #290 closes)
 
 lobo's ws27 counted, with `strace -c -f` over a whole `ab` drive on
