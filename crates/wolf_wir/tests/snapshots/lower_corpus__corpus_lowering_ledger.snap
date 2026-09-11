@@ -207,6 +207,7 @@ lints/as_view_consuming.lu: lowers
 lints/assume_reassigned.lu: refused — assume noalias (unsafe-tier WIR ops, deferred from s26 — see closeout)
 lints/binder_capitalized.lu: lowers
 lints/discarded_result.lu: lowers
+lints/else_arithmetic.lu: lowers
 lints/else_comparison.lu: lowers
 lints/float_zero_minus.lu: lowers
 lints/get_prefix.lu: lowers

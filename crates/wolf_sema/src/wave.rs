@@ -924,32 +924,56 @@ impl Wave<'_> {
         self.expr_children(e);
     }
 
-    /// W0307 — a comparison operator in fallback position.
+    /// W0307 — a comparison operator in fallback position; W0318 —
+    /// an arithmetic or bitwise one (s154, wolf-lang#329) whose left
+    /// operand is a literal or a bare name, which is the shape of a
+    /// fallback value that was meant to end at itself.
     fn else_chain(&mut self, e: &GreenNode) {
         let Some(x) = ElseExpr::cast(e) else { return };
         let Some(fb) = x.fallback() else { return };
         if fb.kind != SyntaxKind::BinExpr {
             return;
         }
-        let Some(op) = fb.tokens().find(|t| {
-            matches!(
-                t.kind,
-                SyntaxKind::EqEq
-                    | SyntaxKind::NotEq
-                    | SyntaxKind::Lt
-                    | SyntaxKind::Gt
-                    | SyntaxKind::LtEq
-                    | SyntaxKind::GtEq
-                    | SyntaxKind::Spaceship
-            )
-        }) else {
+        let Some(op) = fb
+            .tokens()
+            .find(|t| {
+                matches!(
+                    t.kind,
+                    SyntaxKind::EqEq
+                        | SyntaxKind::NotEq
+                        | SyntaxKind::Lt
+                        | SyntaxKind::Gt
+                        | SyntaxKind::LtEq
+                        | SyntaxKind::GtEq
+                        | SyntaxKind::Spaceship
+                )
+            })
+            .map(|t| (t, codes::W0307))
+            // #329: `x else 0 + y` is `x else (0 + y)` — the default
+            // swallows the term and the program type-checks in
+            // silence.
+            .or_else(|| swallowed_term_op(fb).map(|(t, _)| (t, codes::W0318)))
+        else {
             return;
         };
+        let (op, code) = op;
         let opt = self.text(op.span);
-        // The probable intent: default first, compare second.
-        let lhs_hi = fb.nodes().next().map(|n| n.span.hi).unwrap_or(op.span.lo);
+        // The probable intent: default first, compute second. The
+        // closing paren lands after the DEFAULT — the leftmost leaf of
+        // the fallback, not its top-level left operand, so a chain
+        // `0 + y + z` groups as `(x else 0) + y + z`.
+        let lhs_hi = match code {
+            c if c == codes::W0318 => swallowed_term_op(fb)
+                .map(|(_, hi)| hi)
+                .unwrap_or(op.span.lo),
+            _ => fb.nodes().next().map(|n| n.span.hi).unwrap_or(op.span.lo),
+        };
         let sugg = Suggestion::new(
-            "to default first and compare second, group the `else`",
+            if code == codes::W0307 {
+                "to default first and compare second, group the `else`"
+            } else {
+                "to default first and compute second, group the `else`"
+            },
             vec![
                 (
                     Span::new(e.span.file, e.span.lo, e.span.lo),
@@ -959,7 +983,8 @@ impl Wave<'_> {
             ],
             Applicability::Maybe,
         );
-        self.warn(
+        let tail = self.text(Span::new(op.span.file, op.span.lo, fb.span.hi));
+        let d = if code == codes::W0307 {
             Diagnostic::warning(
                 codes::W0307,
                 op.span,
@@ -971,8 +996,31 @@ impl Wave<'_> {
                  after it; parenthesize the reading you mean."
                     .to_string(),
             )
-            .with_suggestion(sugg),
-        );
+        } else {
+            let value = x
+                .scrutinized()
+                .map(|v| self.text(v.span))
+                .unwrap_or_else(|| "…".to_string());
+            let fallback = self.text(fb.span);
+            Diagnostic::warning(
+                codes::W0318,
+                op.span,
+                format!("the default extends over `{tail}`"),
+            )
+            .with_label("computed on the fallback, not on the value")
+            .with_note(format!(
+                "`else` binds loosest, so the fallback is the whole operator chain \
+                 after it: this reads `{value} else ({fallback})`, and the default \
+                 swallows the `{tail}`. Group the value if the default was meant to \
+                 end at itself — the edit below is that grouping."
+            ))
+            .with_note(format!(
+                "in a fallible function the clean spelling removes the `else` \
+                 altogether: `{value}?` propagates the failure and the arithmetic \
+                 reads as written."
+            ))
+        };
+        self.warn(d.with_suggestion(sugg));
     }
 
     /// W0308 — `{f(mut x)}` inside a string.
@@ -1245,6 +1293,67 @@ fn all_tokens(node: &GreenNode, f: &mut impl FnMut(&GreenToken)) {
 /// match/`for` binders, closure parameters. A parameter whose name is
 /// in this set is shadowed somewhere, and the flat write scan cannot
 /// tell the two apart.
+/// W0318's trigger (s154, wolf-lang#329): the operator that begins the
+/// term a defaulting `else` swallowed, if this fallback has one.
+///
+/// `x else 0 + y` is `x else (0 + y)`, so the default eats the `+ y`
+/// and both readings type-check. Two conditions, and each carries its
+/// weight:
+///
+/// * the LEFTMOST leaf down the fallback's left spine is a literal or
+///   a bare name — `0`, `n`, `""` are what a reader writes as a
+///   default and expects to end there. A computed head (`f(n) * 2`,
+///   `xs.len() + 1`) reads as one deliberate expression.
+/// * the term after that operator is NOT a literal. Two literals fold
+///   to a constant the reader computes in their head, and `e else
+///   0 - 1` is how this ecosystem spells a `-1` sentinel — wolf-std
+///   writes exactly that 177 times. The scar is a default that
+///   swallows a term of the expression AROUND it, and a non-literal
+///   operand is what that looks like.
+fn swallowed_term_op(fb: &GreenNode) -> Option<(&GreenToken, u32)> {
+    // Down the left spine to the innermost binary application: the
+    // first operator after the default is where the swallow begins.
+    let mut inner = fb;
+    while let Some(lhs) = inner.nodes().next() {
+        if lhs.kind != SyntaxKind::BinExpr {
+            break;
+        }
+        inner = lhs;
+    }
+    let mut kids = inner.nodes();
+    let head = kids.next()?;
+    let term = kids.next()?;
+    let value_shaped = match head.kind {
+        SyntaxKind::LiteralExpr => true,
+        SyntaxKind::PathExpr => {
+            head.tokens().filter(|t| t.kind == SyntaxKind::Ident).count() == 1
+                && !head.tokens().any(|t| t.kind == SyntaxKind::Dot)
+        }
+        _ => false,
+    };
+    if !value_shaped || term.kind == SyntaxKind::LiteralExpr {
+        return None;
+    }
+    inner
+        .tokens()
+        .find(|t| {
+            matches!(
+                t.kind,
+                SyntaxKind::Plus
+                    | SyntaxKind::Minus
+                    | SyntaxKind::Star
+                    | SyntaxKind::Slash
+                    | SyntaxKind::Percent
+                    | SyntaxKind::Amp
+                    | SyntaxKind::Pipe
+                    | SyntaxKind::Caret
+                    | SyntaxKind::Shl
+                    | SyntaxKind::Shr
+            )
+        })
+        .map(|t| (t, head.span.hi))
+}
+
 fn rebound_names(body: &GreenNode, src: &[u8]) -> BTreeSet<String> {
     let mut out = BTreeSet::new();
     for d in descendants(body) {

@@ -1,0 +1,28 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: diag.sev.warn, gram.amb.else
+//! warns: W0318
+//!
+//! W0318 — arithmetic in `else` fallback position (wolf-lang#329,
+//! s154): `else` binds loosest, so `to_num(s) else 0 + extra` is
+//! `to_num(s) else (0 + extra)` — the default swallows the sum and
+//! both readings are `int`, so nothing refused it and nothing told
+//! the writer. Found in the maintainer's RPN first pass, where every
+//! `tokens.pop().to_int() else 0 + …` defaulted the whole tail.
+//! The guard is the fallback's own left operand: a literal or a bare
+//! name is what a reader writes as a default and expects to end
+//! there, and the term it swallows comes from the expression AROUND
+//! the `else`. `chosen` is the control — the grouped reading warns
+//! nowhere, and neither does `sentinel`, whose two-literal fallback
+//! folds to a constant (`else 0 - 1` is how a `-1` sentinel is
+//! spelled; wolf-std writes it 177 times).
+
+fn to_num(s: str) -> int ! {parse} { s.to_int() }
+
+fn main() -> !int {
+    let extra = 5
+    let swallowed = to_num("x") else 0 + extra
+    let chosen = (to_num("x") else 0) + extra
+    let sentinel = to_num("x") else 0 - 1
+    if swallowed == 5 && chosen == 5 && sentinel == 0 - 1 { 0 } else { 1 }
+}

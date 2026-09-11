@@ -1102,6 +1102,13 @@ line — retired 2026-09-09 by wolf-lang#276, `[gram.lex.newline]` looks
 ahead for `else` now; the number is never reused), E0006 (struct literal in condition; primary span = the opening `{`), E0007 (interp nesting depth),
 E0008 (keyword as identifier — names the keyword and suggests `r#`-free
 rename; wolf has no raw identifiers, pick another name).
+  The defaulting `else` takes a COMPLETE expression on its right, so
+  `x else 0 + y` is `x else (0 + y)` — the default swallows the term,
+  and both readings type-check: W0318 marks it when the fallback's
+  leftmost term is a literal or a bare name and the term after the
+  operator is not a literal, naming `(x else 0) + y` (W0307 is the
+  same scar on a comparison). A two-literal fallback (`e else 0 - 1`,
+  the `-1` sentinel) folds to a constant and is left alone.
 
 ### 9.1 The severity contract `[diag.sev]`
 
@@ -1137,7 +1144,8 @@ rows, E07xx comptime, E08xx sema completion, E1xxx memory tiers
   (bare prefix-operator statement — the broken-continuation shape),
   W0307 (comparison binds to an `else` fallback), W0308 (`mut`
   argument inside an interpolation), W0309 (interpolation-shaped
-  braces in a raw literal).
+  braces in a raw literal), W0318 (arithmetic binds to an `else`
+  fallback whose leftmost term is a literal or a bare name).
 - **W04xx** — typing-adjacent warnings, mirroring E04xx. W0401
   (literal outside the cast target's range), W0402 (`0.0 - x` as
   negation — loses `-0.0`).

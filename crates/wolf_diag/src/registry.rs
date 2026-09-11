@@ -2173,6 +2173,25 @@ warning marks the literal so the off-by-one is a choice, not an
 accident.
 "#);
 
+code!(W0318, "the arithmetic after `else` extends the default, not the value", r#"
+`else` binds more loosely than any operator, so `n else 0 + step`
+parses as `n else (0 + step)`: the sum is computed on the fallback
+alone, and the `else` then defaults that. Both sides are usually the
+same type, so nothing refuses the program and nothing tells the
+writer — the default silently swallows the rest of the expression.
+The warning fires when the fallback's leftmost term is a literal or a
+bare name, because that is what a reader writes as a default and
+expects to end there; a computed head (`f(n) * 2`) reads as one
+deliberate expression and is left alone. It also stays quiet when the
+term after the operator is itself a literal: `e else 0 - 1` folds to
+a constant a reader computes in their head, and that is how a `-1`
+sentinel is spelled. What the warning is for is a default that
+swallows a term of the expression AROUND it. Group the value —
+`(n else 0) + step` — and the warning stands down. In a fallible
+function the clean spelling drops the `else` altogether: `n? + step`
+propagates the failure and the arithmetic reads as written.
+"#);
+
 // ------------------------------------------------------------------------
 // W04xx — typing-adjacent warnings (mirror of the E04xx family).
 // ------------------------------------------------------------------------

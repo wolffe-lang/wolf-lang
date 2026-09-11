@@ -581,3 +581,22 @@ fn package_shape_counterparts_stay_silent() {
         res.diagnostics
     );
 }
+
+/// W0318 (s154, wolf-lang#329): arithmetic in `else` fallback
+/// position. `else` binds loosest, so the default swallows the term
+/// and both readings type-check. Two controls in the same fixture:
+/// the grouped twin, and the two-literal `0 - 1` sentinel that folds
+/// to a constant — one warning renders.
+#[test]
+fn w0318_arithmetic_after_else() {
+    snap(
+        "w0318_else_arithmetic",
+        "fn to_num(s: str) -> int ! {parse} {\n    s.to_int()\n}\n\
+         fn main() -> !int {\n    \
+             let extra = 5\n    \
+             let swallowed = to_num(\"x\") else 0 + extra\n    \
+             let chosen = (to_num(\"x\") else 0) + extra\n    \
+             let sentinel = to_num(\"x\") else 0 - 1\n    \
+             if swallowed == 5 && chosen == 5 && sentinel == 0 - 1 { 0 } else { 1 }\n}\n",
+    );
+}

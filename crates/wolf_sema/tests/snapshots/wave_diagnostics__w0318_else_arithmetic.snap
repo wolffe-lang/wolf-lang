@@ -1,0 +1,19 @@
+---
+source: crates/wolf_sema/tests/wave_diagnostics.rs
+expression: "render_warnings(src, false)"
+---
+warning[W0318]: the default extends over `+ extra`
+ --> mem:///main.lu:6:40
+  |
+6 |     let swallowed = to_num("x") else 0 + extra
+  |                                        ^ computed on the fallback, not on the value
+  |
+  = note: `else` binds loosest, so the fallback is the whole operator chain after it: this reads
+    `to_num("x") else (0 + extra)`, and the default swallows the `+ extra`. Group the value
+    if the default was meant to end at itself — the edit below is that grouping.
+  = note: in a fallible function the clean spelling removes the `else` altogether: `to_num("x")?`
+    propagates the failure and the arithmetic reads as written.
+help: to default first and compute second, group the `else`
+  |
+6 |     let swallowed = (to_num("x") else 0) + extra
+  |
