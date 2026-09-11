@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## Unreleased
+
 ### The key protocol (s152 — #11 and #154's `Map` rows ruled)
 
 **`Map[K, V]` is typed, keyed by the four, and an absent key is a
@@ -93,6 +95,77 @@ the lowering ledger takes the seven (five lower, two refuse at
 typecheck) and one existing line moves — `grammar/interp_fmtcolon`
 reaches the mem tier now that `Map` types, and stops at the format
 spec on its `!int` hole.
+
+### The bytes and the region (s153 — #308, #310)
+
+**The checked tier's byte budget is real now, and the view is a view
+(#308).** sc43 reduced wolf-std's runner kill to twelve lines: a walk
+that re-reads `rest.bytes()[0]` over a shrinking `rest` cost the
+checked tier ×3.8 per doubling of the input — 1867 MiB at 8192
+characters, 16.6 GiB on `cavp_sha384_long.lu` — flat on native and
+lupin, under a step budget that could not see it. The allocation was
+`eval_bytes_view`: since s136 the machine charged a consumed
+`s.bytes()` zero (correctly, `[mem.str.view]`) and STILL materialized a
+`Vec<Value>` per call and pushed it onto its list table for the rest
+of the run — uncharged and retained, n + (n-1) + … values. The view now
+hands its consumer the receiver's octets and mints nothing: indexing
+reads one byte off the `str`'s own storage, `for b in s.bytes()` walks
+the octets, the `len`/`count`/`is_empty`/`get`/`first`/`last` family
+answers off them, and nothing survives the expression. Measured on the
+reduction, peak resident set (`/usr/bin/time -l`, macOS aarch64):
+2048/4096/8192 characters were 131/485/1867 MiB and are 10/11/11 MiB;
+the CAVP row is `unsupported: step budget exhausted` at **47.8 MiB**
+where it was 16.6 GiB. The other half of the same blindness: a `str`
+built by `+`, `+=` or an interpolation with a hole charged nothing
+either, so `s = s + s` forty times was a tebibyte the budget never saw;
+builders now charge the shadow budget and the ambient region's ledger
+(one byte per byte, what the native strbuf path pays), `+` charging
+BEFORE it builds so the refusal precedes the allocation. **The rule,
+stated — `[exec.checked.budget]`, new, in a new `exec` namespace
+05-conformance.md owns:** the tier keeps two budgets, steps AND bytes,
+each cumulative, and exhausting either is `unsupported`, never a
+verdict; bytes are not a step cost (weighed and rejected: one ceiling
+prices a 64 KiB walk and a 64 KiB allocation the same, and the finding
+was that they are not). What the byte budget buys is the invariant
+behind it — the machine retains on the host nothing the ledger has not
+charged — so the resident set is bounded by the budget times the
+machine's per-unit overhead, and a bounded host sees the refusal, not
+the kill. Witnesses: `corpus/strings/bytes_view_walk.lu` (the
+reduction, all three lanes) and the driver's `checked_budget` test,
+which runs the reduction as a subprocess and asserts the peak under
+200 MiB and flat across three doublings (`wait4`'s `ru_maxrss` on
+unix, `K32GetProcessMemoryInfo`'s peak working set on windows), and
+runs the doubling and asserts the honest refusal under 1.5 GiB.
+
+**A built `str` is an allocation site (#310).** `region scratch { let s
+= "re" + "gions"; s }` returned from a function printed `regions` from
+freed bytes on wolf 0.2.10 and lupin 0.1.31 alike — with a W1001 saying
+`scratch` never allocates — while the same block holding a `List[int]()`
+was E1010 all along: the mem tier modelled `+`'s result as a site-free
+copy view. **`[mem.region.escape]`, new:** a value whose site lies in a
+region must not outlive it (returned, sent, stored to module state,
+held outside, or the block's own value — E1010, dynamically
+`region-fault`), and the sites include every built `str`: `s + u`,
+`s += u` (`[type.str.concat]`) and an interpolation with a hole, each an
+allocation in the ambient region of the building expression, never an
+operand's. A `str` is `Copy` — the two-word view copies — but the bytes
+it views live where they were built, so a whole-local `str` read now
+carries its binding's sites out with it; a literal is no site, and
+views allocate nothing. In the compiler: `+` on `str` and a holed
+interpolation mint a `CallResult` site; `+=` on a `str` place mints one
+and lands it through the same region flow `=` uses (extracted as
+`flow_store`); the `+=` target is recognized by its operand, because
+sema types an assignment target through `place_type` and records
+nothing under its span. Witnesses `corpus/memory/region_str_concat_return.lu`
+and `region_str_concat_send.lu`, `fail(E1010)` on both tiers; four
+`mem_diagnostics` snapshots (block value, interpolation held outside,
+append held outside, and the clean shapes — builders in the caller's
+region returned, a scratch-region build consumed in place, no W1001).
+Corpus motion: zero existing verdicts; wolf-std's tests at the mem
+phase re-swept under the new rule (see the s153 report). lupin 0.1.32
+runs both region witnesses to `regions`, exit 0 — wolf-interp#88 is the
+mirror, now carrying the clause text and the send shape.
+
 
 ### The one-line if (s151 — #307 ruled)
 
