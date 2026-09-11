@@ -938,6 +938,23 @@ D28). Bind at least one of the associated types in the cycle to a
 concrete type and let the others build on it.
 "#);
 
+code!(E0514, "the operator trait's method does not have the operator's shape", r#"
+An operator on a type parameter or a user type dispatches through a
+trait named in the operator table (`[type.trait.op]`): `+` is
+`Add.add`, `-` is `Sub.sub` (prefix `-` is `Neg.neg`), `*` `/` `%` are
+`Mul.mul` `Div.div` `Rem.rem`, `==` and `!=` are `Eq.eq`, and the
+ordering family is `Ord.cmp`. The trait the operator found — by that
+name in the parameter's bounds, or in scope at a user type — either has
+no method of the table's name or declares it with another shape. The
+operator traits are homogeneous this edition: `fn add(self, other:
+Self) -> Self`, `fn neg(self) -> Self`, `fn eq(self, other: Self) ->
+bool`, `fn cmp(self, other: Self) -> Ordering` — one type in, the same
+type out. Declare the method with that shape (std.ops and std.cmp
+declare the eight this way), or give the trait another name if it is
+not meant to be the operator's; a heterogeneous operator (`Money *
+int`) waits on a stated need.
+"#);
+
 // ------------------------------------------------------------------------
 // E06xx — error rows, `?`, `else`, `errdefer` (s15, D30).
 // ------------------------------------------------------------------------
