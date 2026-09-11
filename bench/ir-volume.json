@@ -853,6 +853,31 @@
       "naive": 137,
       "ratio": 0.993
     },
+    "corpus/memory/map_absent_else.lu": {
+      "midend": 194,
+      "naive": 205,
+      "ratio": 0.946
+    },
+    "corpus/memory/map_char_bool_keys.lu": {
+      "midend": 195,
+      "naive": 195,
+      "ratio": 1.0
+    },
+    "corpus/memory/map_count.lu": {
+      "midend": 392,
+      "naive": 441,
+      "ratio": 0.889
+    },
+    "corpus/memory/map_int_keys.lu": {
+      "midend": 140,
+      "naive": 154,
+      "ratio": 0.909
+    },
+    "corpus/memory/map_std_keys.lu": {
+      "midend": 413,
+      "naive": 293,
+      "ratio": 1.41
+    },
     "corpus/memory/move_ok.lu": {
       "midend": 42,
       "naive": 49,
