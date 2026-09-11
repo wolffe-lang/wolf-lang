@@ -977,7 +977,8 @@ are spec commits with corpus updates.
 Identifier everywhere except the noted position: `c` (`import c`,
 `unsafe c`), `rc` / `pool` (region strategies), `from` / `timeout`
 (select arms), `noalias` (after `assume`), `pkg` (in `pub(pkg)`), the v1 asm register class `reg` (target-specific classes arrive with c10),
-`self` (receiver), `in`/`out`/`inout`/`lateout`/register classes (asm
+`self` (receiver), `then` (after a complete `if` condition,
+`[gram.expr.if]`), `in`/`out`/`inout`/`lateout`/register classes (asm
 operands). Rationale: each appears only after a reserved keyword or inside
 a closed construct, so reserving them would steal good identifiers
 (`from`, `timeout`, `c`) for no parsing benefit.
