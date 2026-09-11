@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: resolve
+//! phase: mem
 //! conforms: gram.amb.fmtcolon
 //! First TOP-LEVEL `:` in an interpolation starts the format spec.
 
