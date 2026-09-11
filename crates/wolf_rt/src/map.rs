@@ -39,7 +39,7 @@
 
 use core::ffi::c_void;
 
-use crate::list::{ListHdr, alloc_in, list_from_bytes};
+use crate::list::{alloc_in, list_from_bytes};
 use crate::native::ambient_region;
 
 #[repr(C)]
@@ -212,7 +212,7 @@ pub unsafe extern "C" fn __wolf_rt_map_pairs(hdr: i64) -> i64 {
         } else {
             core::slice::from_raw_parts(h.data, n)
         };
-        list_from_bytes(h.elem as usize, bytes) as *mut ListHdr as i64
+        list_from_bytes(h.elem as usize, bytes) as i64
     }
 }
 
@@ -231,6 +231,7 @@ pub unsafe extern "C" fn __wolf_rt_map_clear(hdr: i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::list::ListHdr;
 
     /// One `(int, int)` map: insert, replace, miss, pairs, clear —
     /// the entry layout is two 8-byte words.
