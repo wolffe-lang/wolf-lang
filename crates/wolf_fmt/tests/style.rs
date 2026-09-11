@@ -391,3 +391,115 @@ fn binding_group_never_splits_into_statements() {
         "fn main() {\n    let a = 1, b = 2\n}\n",
     );
 }
+
+// ---------------------------------------------------- [gram.fmt.if] ----
+//
+// s151 (wolf-lang#307): the formatter never converts between the braced
+// and the bare `if` — the author's choice stands. Inside a form it
+// normalizes; the one conversion is the width fallback, bare → braced.
+
+#[test]
+fn bare_if_stays_bare_and_braced_stays_braced() {
+    let bare = "fn f(leap: bool) -> int {\n    if leap then 29 else 28\n}\n";
+    check(bare, bare);
+    let inline = "fn f(leap: bool) -> int {\n    if leap { 29 } else { 28 }\n}\n";
+    check(inline, inline);
+    let braced = "fn f(leap: bool) -> int {\n    if leap {\n        29\n    } else {\n        28\n    }\n}\n";
+    check(braced, braced);
+}
+
+#[test]
+fn bare_if_normalizes_spacing_inside_the_form() {
+    check(
+        "fn f(leap: bool) -> int {\n    if   leap   then   29   else   28\n}\n",
+        "fn f(leap: bool) -> int {\n    if leap then 29 else 28\n}\n",
+    );
+    // One-armed, in statement position.
+    let stmt = "fn f(c: bool) {\n    if c then print(\"a\")\n}\n";
+    check(stmt, stmt);
+}
+
+#[test]
+fn then_before_a_block_is_dropped() {
+    // The braced form has one spelling.
+    check(
+        "fn f(leap: bool) -> int {\n    if leap then { 29 } else { 28 }\n}\n",
+        "fn f(leap: bool) -> int {\n    if leap { 29 } else { 28 }\n}\n",
+    );
+}
+
+#[test]
+fn bare_if_keeps_the_parens_around_a_defaulting_else() {
+    // `[gram.amb.else]`: the parens are what keep `else 0` from the
+    // `if`'s own `else` — in either branch.
+    let src = "fn f(c: bool) -> int {\n    let v = if c then (parse(s) else 0) else (parse(t) else 1)\n    v\n}\n";
+    check(src, src);
+    // Redundant parens elsewhere in a bare branch still go.
+    check(
+        "fn f(c: bool) -> int {\n    if c then (29) else (28)\n}\n",
+        "fn f(c: bool) -> int {\n    if c then 29 else 28\n}\n",
+    );
+}
+
+#[test]
+fn if_chain_links_keep_their_own_form() {
+    let bare = "fn f(n: int) -> str {\n    if n < 0 then \"neg\" else if n == 0 then \"zero\" else \"pos\"\n}\n";
+    check(bare, bare);
+    // A braced link inside a bare chain keeps its braces and does not
+    // make the bare head break.
+    let mixed = "fn f(n: int) -> str {\n    if n < 0 then \"neg\" else if n == 0 {\n        \"zero\"\n    } else {\n        \"pos\"\n    }\n}\n";
+    check(mixed, mixed);
+    let tail = "fn f(n: int) -> str {\n    if n < 0 { \"neg\" } else if n == 0 then \"zero\" else \"pos\"\n}\n";
+    check(tail, tail);
+}
+
+#[test]
+fn bare_if_past_the_width_breaks_to_the_braced_form_once() {
+    // The only conversion, one direction: the broken rendering IS the
+    // braced form, and `check`'s idempotence assertion is the fixed
+    // point (a braced `if` never comes back).
+    let long = "if some_rather_long_condition(alpha, beta) then compute_the_first_branch(gamma) else compute_the_other_branch(delta)";
+    assert!(4 + long.len() > 100);
+    check(
+        &format!("fn f() -> int {{\n    {long}\n}}\n"),
+        "fn f() -> int {\n    if some_rather_long_condition(alpha, beta) {\n        compute_the_first_branch(gamma)\n    } else {\n        compute_the_other_branch(delta)\n    }\n}\n",
+    );
+    // A bare chain breaks as one.
+    let chain = "if aaaaaaaaaaaaaaaaaaaaaaaaaaaa then 1 else if bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb then 2 else 33333333333333333333";
+    assert!(4 + chain.len() > 100);
+    check(
+        &format!("fn f() -> int {{\n    {chain}\n}}\n"),
+        "fn f() -> int {\n    if aaaaaaaaaaaaaaaaaaaaaaaaaaaa {\n        1\n    } else if bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb {\n        2\n    } else {\n        33333333333333333333\n    }\n}\n",
+    );
+    // One-armed.
+    let one = "if some_rather_long_condition(alpha, beta, gamma, delta) then do_the_one_thing(epsilon, zeta, eta)";
+    assert!(4 + one.len() > 100);
+    check(
+        &format!("fn f() {{\n    {one}\n}}\n"),
+        "fn f() {\n    if some_rather_long_condition(alpha, beta, gamma, delta) {\n        do_the_one_thing(epsilon, zeta, eta)\n    }\n}\n",
+    );
+}
+
+#[test]
+fn bare_if_with_a_leading_else_is_relaid_trailing() {
+    // `[gram.lex.newline]` admits the leading `else` in the bare form
+    // too; the formatter re-lays it on one line (`[gram.fmt.brace]`).
+    check(
+        "fn f(c: bool) -> int {\n    let v = if c then f()\n        else 0\n    v\n}\n",
+        "fn f(c: bool) -> int {\n    let v = if c then f() else 0\n    v\n}\n",
+    );
+}
+
+#[test]
+fn bare_if_in_a_match_arm_and_a_call() {
+    let arm = "fn days(m: int, leap: bool) -> int {\n    match m {\n        2 => if leap then 29 else 28,\n        4 | 6 | 9 | 11 => 30,\n        _ => 31,\n    }\n}\n";
+    check(arm, arm);
+    let call = "fn f(c: bool) -> int {\n    g(if c then 1 else 2, 3)\n}\n";
+    check(call, call);
+}
+
+#[test]
+fn then_is_an_identifier_everywhere_else() {
+    let src = "fn f(then: bool, a: Ordering, b: Ordering) -> int {\n    if then { 1 } else if a.then(b) == a then 2 else 3\n}\n";
+    check(src, src);
+}
