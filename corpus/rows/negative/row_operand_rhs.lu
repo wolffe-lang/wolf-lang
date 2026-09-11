@@ -1,0 +1,21 @@
+//! check: fail(E0409)
+//! phase: resolve
+//! conforms: type.row.operand, gram.type.row
+//!
+//! wolf-lang#297 (s154): the row on the RIGHT of an operator.
+//! `[type.row.operand]` rules ONE code for both sides — the fact
+//! refused is the same wherever the row sits, and a code that
+//! depended on the side would be a rule about position. Until s154
+//! the numeric path fixed the family from the left operand and then
+//! reported the row as a mismatch against it (E0401, "the other side
+//! of `+` makes it `{integer}`"), so `n + 1` and `1 + n` answered
+//! different codes for one defect; `row_operand_add.lu` and
+//! `row_operand_compare.lu` are the left-hand twins. lupin 0.1.33
+//! answers E0409 on either side already (wolf-interp is43, #81).
+
+fn main() -> !int {
+    let n: !int = 3
+    let m = 1 + n
+    print("{m}")
+    0
+}

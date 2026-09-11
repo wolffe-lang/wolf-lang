@@ -397,6 +397,7 @@ rows/negative/payload_mismatch.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/pub_inferred.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/row_operand_add.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/row_operand_compare.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/row_operand_rhs.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/tag_undeclared_arg.lu: not mem-clean (pre-wir rungs own it)
 rows/nested_row_merge_payload.lu: lowers
 rows/nested_row_param.lu: lowers

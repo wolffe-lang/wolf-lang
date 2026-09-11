@@ -4818,6 +4818,45 @@ impl<'a> Checker<'a> {
         }
     }
 
+    /// `[type.row.operand]` (s148/#284, s154/#297): a `!T` is two
+    /// values and no operator reads it, so an operator applied to one
+    /// is E0409 — **on either side**. The fact refused is the same
+    /// whichever operand carries the row, and a code that depended on
+    /// the side would be a rule about position: `1 + n` and `n + 1`,
+    /// `5 <= n` and `n <= 5` are one refusal. Reports the leftmost row
+    /// once (the second operand's echo is the same root cause) and
+    /// answers whether it refused, so the caller skips the family
+    /// probe and the unification that would have named the other side.
+    fn row_operand(
+        &mut self,
+        op: &str,
+        needs: &str,
+        lhs: &GreenNode,
+        lt: TyId,
+        rhs: &GreenNode,
+        rt: TyId,
+    ) -> bool {
+        for (side, t) in [(lhs, lt), (rhs, rt)] {
+            if matches!(self.kind_of(t), TyKind::ErrUnion(..)) {
+                self.report_bad_operand(side.span, op, needs, t);
+                // The clause's own reason, once the family note has
+                // said what the operator wants: a row is two values,
+                // and `?`, `else` and `match` are the whole of how one
+                // is handled.
+                if let Some(d) = self.diags.last_mut() {
+                    d.notes.push(format!(
+                        "a `!T` is two values, never one, and no operator reads it \
+                         ([type.row.operand]): `?`, `else` and `match` are the whole \
+                         of how a row is handled. Handle it first — `n? {op} …`, \
+                         `(n else 0) {op} …` — and operate on what it yields."
+                    ));
+                }
+                return true;
+            }
+        }
+        false
+    }
+
     fn synth_bin(&mut self, e: &GreenNode) -> R<TyId> {
         let d = BinExpr::cast(e).expect("kind");
         let (Some(lhs), Some(rhs)) = (d.lhs(), d.rhs()) else {
@@ -4854,6 +4893,9 @@ impl<'a> Checker<'a> {
             Some(SyntaxKind::EqEq | SyntaxKind::NotEq) => {
                 let lt = self.synth_expr(lhs)?;
                 let rt = self.synth_expr(rhs)?;
+                if self.row_operand(&op_text, "values", lhs, lt, rhs, rt) {
+                    return Ok(self.lo.table.prim(Prim::Bool));
+                }
                 // A type parameter or a user type compares through
                 // `Eq.eq` ([type.trait.op]); `!=` is its negation.
                 if let Some(r) = self.operator_dispatch(
@@ -4884,6 +4926,13 @@ impl<'a> Checker<'a> {
             ) => {
                 let lt = self.synth_expr(lhs)?;
                 let rt = self.synth_expr(rhs)?;
+                if self.row_operand(&op_text, "numbers", lhs, lt, rhs, rt) {
+                    return Ok(if op_kind == Some(SyntaxKind::Spaceship) {
+                        self.lo.table.prim(Prim::Int)
+                    } else {
+                        self.lo.table.prim(Prim::Bool)
+                    });
+                }
                 // A type parameter or a user type orders through
                 // `Ord.cmp` ([type.trait.op]); `<=>` answers the
                 // `Ordering` itself.
@@ -4944,11 +4993,8 @@ impl<'a> Checker<'a> {
                         self.lo.table.prim(Prim::Bool)
                     });
                 }
-                // A `!int` on the left is E0409 (`[type.row.operand]`:
-                // a row is in no operator's family). The clause rules
-                // the same code with the row on the right, where this
-                // path reports E0401 naming the other side today — the
-                // s148 follow-up, not moved here.
+                // A row on either side left above (`[type.row.operand]`,
+                // #297); what is left is an ordinary family probe.
                 let probe = self.fresh(NumKind::Num, lhs.span);
                 if unify(&mut self.lo.table, &mut self.vars, lt, probe).is_err() {
                     self.report_bad_operand(lhs.span, &op_text, "numbers", lt);
@@ -4978,6 +5024,9 @@ impl<'a> Checker<'a> {
                 // wrapping — `wrapping[T]` is just another number type.
                 let lt = self.synth_expr(lhs)?;
                 let rt = self.synth_expr(rhs)?;
+                if self.row_operand(&op_text, "numbers", lhs, lt, rhs, rt) {
+                    return Ok(self.error_ty());
+                }
                 // A type parameter or a user type dispatches through
                 // `Add.add` and its four siblings ([type.trait.op]);
                 // two primitives never do.
@@ -5041,6 +5090,9 @@ impl<'a> Checker<'a> {
             ) => {
                 let lt = self.synth_expr(lhs)?;
                 let rt = self.synth_expr(rhs)?;
+                if self.row_operand(&op_text, "integer types", lhs, lt, rhs, rt) {
+                    return Ok(self.error_ty());
+                }
                 if let Some(n) = self.rigid_name(lt) {
                     self.golden_rule_op(lhs.span, &n, &op_text, None);
                     return Ok(self.error_ty());

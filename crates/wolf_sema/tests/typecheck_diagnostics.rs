@@ -272,6 +272,32 @@ fn str_plus_char_is_append() {
     assert!(out.is_empty(), "str + char is append, not E0409:\n{out}");
 }
 
+/// wolf-lang#297 (s154): `[type.row.operand]` rules ONE code for a
+/// `!T` operand on EITHER side — the fact refused is the same wherever
+/// the row sits. Until s154 the numeric and comparison paths fixed the
+/// family from the left operand and reported a right-hand row as a
+/// mismatch against it (E0401 naming the other side). All four
+/// families answer E0409 at the row now.
+#[test]
+fn e0409_row_on_either_side() {
+    snap_one(
+        "e0409_row_rhs_add",
+        "fn main() -> !int {\n    let n: !int = 3\n    let m = 1 + n\n    print(\"{m}\")\n    0\n}\n",
+    );
+    snap_one(
+        "e0409_row_rhs_compare",
+        "fn main() -> !int {\n    let n: !int = 3\n    if 5 <= n { print(\"s\") }\n    0\n}\n",
+    );
+    snap_one(
+        "e0409_row_rhs_bitand",
+        "fn main() -> !int {\n    let n: !int = 3\n    let m = 1 & n\n    print(\"{m}\")\n    0\n}\n",
+    );
+    snap_one(
+        "e0409_row_rhs_eq",
+        "fn main() -> !int {\n    let n: !int = 3\n    if 1 == n { print(\"s\") }\n    0\n}\n",
+    );
+}
+
 #[test]
 fn e0409_logic_on_numbers() {
     snap_one(

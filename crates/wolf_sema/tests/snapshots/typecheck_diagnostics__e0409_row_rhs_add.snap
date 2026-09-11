@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0409]: `+` cannot be applied to `!int`
+ --> mem:///main.lu:3:17
+  |
+3 |     let m = 1 + n
+  |                 ^ this is `!int`
+  |
+  = note: `+` works on numbers.
+  = note: a `!T` is two values, never one, and no operator reads it ([type.row.operand]): `?`,
+    `else` and `match` are the whole of how a row is handled. Handle it first — `n? + …`,
+    `(n else 0) + …` — and operate on what it yields.
