@@ -704,8 +704,13 @@ fn bare_if_in_value_position() {
 
 #[test]
 fn bare_if_in_a_match_arm_and_as_a_statement() {
-    let root = clean_body("match m {\n        2 => if leap then 29 else 28,\n        _ => 30,\n    }");
-    assert!(IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if").is_bare());
+    let root =
+        clean_body("match m {\n        2 => if leap then 29 else 28,\n        _ => 30,\n    }");
+    assert!(
+        IfExpr::cast(first(&root, SyntaxKind::IfExpr))
+            .expect("if")
+            .is_bare()
+    );
     let root = clean_body("if c then print(\"a\") else print(\"b\")\n    0");
     let e = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
     assert!(e.is_bare());
@@ -733,7 +738,10 @@ fn bare_if_own_else_binds_before_the_defaulting_else() {
     let e = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
     assert!(e.is_bare());
     let els = Block::cast(e.else_branch().expect("else")).expect("else branch");
-    assert_eq!(els.trailing_expr().expect("value").kind, SyntaxKind::ParenExpr);
+    assert_eq!(
+        els.trailing_expr().expect("value").kind,
+        SyntaxKind::ParenExpr
+    );
 }
 
 #[test]
@@ -750,7 +758,9 @@ fn bare_if_with_else_leading_its_line() {
 #[test]
 fn if_chain_links_pick_their_own_form() {
     // Bare head, braced tail.
-    let root = clean_body("let s = if n < 0 then \"neg\" else if n == 0 { \"zero\" } else { \"pos\" }\n    s");
+    let root = clean_body(
+        "let s = if n < 0 then \"neg\" else if n == 0 { \"zero\" } else { \"pos\" }\n    s",
+    );
     assert_eq!(count(&root, SyntaxKind::IfExpr), 2);
     assert_eq!(count(&root, SyntaxKind::ElseExpr), 0);
     let outer = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
@@ -758,7 +768,8 @@ fn if_chain_links_pick_their_own_form() {
     let inner = IfExpr::cast(outer.else_branch().expect("else if")).expect("inner");
     assert!(!inner.is_bare());
     // Braced head, bare tail.
-    let root = clean_body("let s = if n < 0 { \"neg\" } else if n == 0 then \"zero\" else \"pos\"\n    s");
+    let root =
+        clean_body("let s = if n < 0 { \"neg\" } else if n == 0 then \"zero\" else \"pos\"\n    s");
     assert_eq!(count(&root, SyntaxKind::IfExpr), 2);
     assert_eq!(count(&root, SyntaxKind::ElseExpr), 0);
     let outer = IfExpr::cast(first(&root, SyntaxKind::IfExpr)).expect("if");
