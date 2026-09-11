@@ -1,0 +1,35 @@
+//! check: run(exit=0, stdout="false\ntrue\ntrue\n")
+//! phase: run
+//! conforms: type.trait.op
+//!
+//! `==` on a struct runs `impl Eq` (s155, wolf-lang#176's row): the
+//! impl here INVERTS equality — `eq` answers `self.x != other.x` — and
+//! the operator reports what the impl says, `false` for two equal
+//! points, `true` for two different ones. `!=` is the negation of the
+//! same call. Structural equality is never synthesized (D49); lupin
+//! 0.1.32's struct `==` is structural and prints `true`/`false`/`true`
+//! (wolf-interp, is46).
+
+struct P {
+    x: int,
+}
+
+trait Eq {
+    fn eq(self, other: Self) -> bool
+}
+
+impl Eq for P {
+    fn eq(self, other: Self) -> bool {
+        self.x != other.x
+    }
+}
+
+fn main() -> !int {
+    let a = P { x: 1 }
+    let b = P { x: 1 }
+    let c = P { x: 2 }
+    print("{a == b}")
+    print("{a == c}")
+    print("{a != b}")
+    0
+}

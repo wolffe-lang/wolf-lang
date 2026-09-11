@@ -2,8 +2,10 @@
 //! phase: resolve
 //! conforms: generics.golden.def-site
 //!
-//! `==` on an archetype is a capability like any other — unstated,
-//! so the generic body is rejected at its definition.
+//! `==` on an archetype is a capability like any other — `Eq.eq`
+//! under a `T: Eq` bound (`[type.trait.op]`, s155) — and unstated
+//! here, so the generic body is rejected at its definition with the
+//! bound to add.
 
 fn same[T](a: T, b: T) -> bool {
     a == b

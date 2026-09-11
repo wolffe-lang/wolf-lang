@@ -1,0 +1,146 @@
+//! check: run(exit=0, stdout="6\n7.5\n")
+//! phase: run
+//! conforms: type.trait.op, type.trait.op.alias
+//!
+//! The book's chapter-5 `total` under `[T: Num]` (s155, wolf-lang#5):
+//! `acc + x` on a type parameter dispatches through `Add.add` because
+//! the bound names `Add` — through `Num`, the alias bound `trait Num =
+//! Add + Sub + Mul + Div + Rem + Eq + Ord`, which means every trait in
+//! its list. The traits, the alias and the `int`/`f64` impls are
+//! std.ops's and std.cmp's shape word for word (wolf-std sc44), so
+//! `total` instantiated at `int` is the machine add and at `f64` the
+//! IEEE one. Both tiers print the same two lines.
+
+trait Add {
+    fn add(self, other: Self) -> Self
+}
+
+trait Sub {
+    fn sub(self, other: Self) -> Self
+}
+
+trait Mul {
+    fn mul(self, other: Self) -> Self
+}
+
+trait Div {
+    fn div(self, other: Self) -> Self
+}
+
+trait Rem {
+    fn rem(self, other: Self) -> Self
+}
+
+enum Ordering {
+    Less,
+    Equal,
+    Greater,
+}
+
+trait Eq {
+    fn eq(self, other: Self) -> bool
+}
+
+trait Ord {
+    fn cmp(self, other: Self) -> Ordering
+}
+
+trait Num = Add + Sub + Mul + Div + Rem + Eq + Ord
+
+impl Add for int {
+    fn add(self, other: Self) -> Self { self + other }
+}
+
+impl Sub for int {
+    fn sub(self, other: Self) -> Self { self - other }
+}
+
+impl Mul for int {
+    fn mul(self, other: Self) -> Self { self * other }
+}
+
+impl Div for int {
+    fn div(self, other: Self) -> Self { self / other }
+}
+
+impl Rem for int {
+    fn rem(self, other: Self) -> Self { self % other }
+}
+
+impl Eq for int {
+    fn eq(self, other: Self) -> bool { self == other }
+}
+
+impl Ord for int {
+    fn cmp(self, other: Self) -> Ordering {
+        if self < other { return Ordering.Less }
+        if other < self { return Ordering.Greater }
+        Ordering.Equal
+    }
+}
+
+impl Add for f64 {
+    fn add(self, other: Self) -> Self { self + other }
+}
+
+impl Sub for f64 {
+    fn sub(self, other: Self) -> Self { self - other }
+}
+
+impl Mul for f64 {
+    fn mul(self, other: Self) -> Self { self * other }
+}
+
+impl Div for f64 {
+    fn div(self, other: Self) -> Self { self / other }
+}
+
+impl Rem for f64 {
+    // std's body is `self % other`; `%` on `f64` has no native
+    // lowering yet (no `frem` op — filed with this witness), so the
+    // truncated remainder is spelled by hand for non-negative
+    // operands until it does. `total` never calls it: `Num` demands
+    // the impl, the witness demands `Add`.
+    fn rem(self, other: Self) -> Self {
+        var r = self
+        while r >= other {
+            r = r - other
+        }
+        r
+    }
+}
+
+impl Eq for f64 {
+    fn eq(self, other: Self) -> bool { self == other }
+}
+
+impl Ord for f64 {
+    fn cmp(self, other: Self) -> Ordering {
+        if self < other { return Ordering.Less }
+        if other < self { return Ordering.Greater }
+        Ordering.Equal
+    }
+}
+
+fn total[T: Num](xs: List[T], zero: T) -> T {
+    var acc = zero
+    for x in xs {
+        acc = acc + x
+    }
+    acc
+}
+
+fn main() -> !int {
+    var a = List[int]()
+    (mut a).push(1)
+    (mut a).push(2)
+    (mut a).push(3)
+    let s = total(a, 0)
+    print("{s}")
+    var b = List[f64]()
+    (mut b).push(2.5)
+    (mut b).push(5.0)
+    let t = total(b, 0.0)
+    print("{t}")
+    0
+}

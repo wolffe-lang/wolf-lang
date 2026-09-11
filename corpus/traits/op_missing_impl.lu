@@ -1,0 +1,24 @@
+//! check: fail(E0502)
+//! phase: resolve
+//! conforms: type.trait.op
+//!
+//! `+` on a user type with the trait in scope and no impl (s155,
+//! wolf-lang#5): `Add` is declared, `Money` never implements it, so
+//! `a + b` — which is `Add.add(a, b)` — is E0502 naming the trait and
+//! the operator, the same call-site shape an unmet bound gets. Nothing
+//! is synthesized (D49): the fix is `impl Add for Money`.
+
+struct Money {
+    cents: int,
+}
+
+trait Add {
+    fn add(self, other: Self) -> Self
+}
+
+fn main() -> !int {
+    let a = Money { cents: 1 }
+    let b = Money { cents: 2 }
+    let c = a + b
+    0
+}

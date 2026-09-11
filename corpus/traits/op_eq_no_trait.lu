@@ -1,0 +1,18 @@
+//! check: fail(E0301)
+//! phase: resolve
+//! conforms: type.trait.op
+//!
+//! `==` on a struct with no `Eq` anywhere in scope (s155, wolf-lang#5,
+//! #176): the operator is `Eq.eq`, and nothing named `Eq` is in scope
+//! — E0301 names the trait and says where it comes from (declare it,
+//! or std.cmp's), instead of "operator traits are a later sprint".
+
+struct P {
+    x: int,
+}
+
+fn main() -> !int {
+    let a = P { x: 1 }
+    let b = P { x: 1 }
+    if a == b { 0 } else { 1 }
+}

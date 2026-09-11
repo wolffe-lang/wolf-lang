@@ -1,0 +1,49 @@
+//! check: run(exit=0, stdout="true\nfalse\ntrue\nless\n")
+//! phase: run
+//! conforms: type.trait.op
+//!
+//! The ordering family on a struct runs `impl Ord` (s155,
+//! wolf-lang#5): `a < b` is `Ord.cmp(a, b)` read against `Less`, `a >=
+//! b` is `cmp != Less`, `a <= b` is `cmp != Greater`, and `a <=> b` is
+//! the `Ordering` itself, matched like any enum. The impl orders
+//! versions by `major` first.
+
+enum Ordering {
+    Less,
+    Equal,
+    Greater,
+}
+
+trait Ord {
+    fn cmp(self, other: Self) -> Ordering
+}
+
+struct Version {
+    major: int,
+    minor: int,
+}
+
+impl Ord for Version {
+    fn cmp(self, other: Self) -> Ordering {
+        if self.major < other.major { return Ordering.Less }
+        if other.major < self.major { return Ordering.Greater }
+        if self.minor < other.minor { return Ordering.Less }
+        if other.minor < self.minor { return Ordering.Greater }
+        Ordering.Equal
+    }
+}
+
+fn main() -> !int {
+    let a = Version { major: 1, minor: 9 }
+    let b = Version { major: 2, minor: 0 }
+    print("{a < b}")
+    print("{a >= b}")
+    print("{a <= b}")
+    let word = match a <=> b {
+        Less => "less",
+        Equal => "equal",
+        Greater => "greater",
+    }
+    print("{word}")
+    0
+}

@@ -2,8 +2,10 @@
 //! phase: resolve
 //! conforms: generics.golden.def-site
 //!
-//! Arithmetic on an archetype: no bound can grant `+` yet (operator
-//! traits are a later sprint), so the definition is the error site.
+//! Arithmetic on a bare archetype: `+` on a type parameter dispatches
+//! through `Add.add` when the bound names `Add` (`[type.trait.op]`,
+//! s155), and this bound names nothing — so the definition is the
+//! error site, and the note says what to add: `T: Add`.
 
 fn sum[T](a: T, b: T) -> T {
     a + b

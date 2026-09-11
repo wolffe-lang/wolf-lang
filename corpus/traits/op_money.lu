@@ -1,0 +1,56 @@
+//! check: run(exit=0, stdout="150\n-150\n50\n")
+//! phase: run
+//! conforms: type.trait.op
+//!
+//! A user `Money` with `impl Add`, `impl Sub` and `impl Neg` (s155,
+//! wolf-lang#5): `a + b` is `Add.add(a, b)`, `a - b` is `Sub.sub(a,
+//! b)`, `-c` is `Neg.neg(c)` — the operator IS the trait call, and its
+//! operands are read arguments, so `a` serves two operators without a
+//! `copy`. Homogeneous: `Money + Money` is `Money`. lupin 0.1.32 has
+//! no operator dispatch on a struct (wolf-interp, is46).
+
+struct Money {
+    cents: int,
+}
+
+trait Add {
+    fn add(self, other: Self) -> Self
+}
+
+trait Sub {
+    fn sub(self, other: Self) -> Self
+}
+
+trait Neg {
+    fn neg(self) -> Self
+}
+
+impl Add for Money {
+    fn add(self, other: Self) -> Self {
+        Money { cents: self.cents + other.cents }
+    }
+}
+
+impl Sub for Money {
+    fn sub(self, other: Self) -> Self {
+        Money { cents: self.cents - other.cents }
+    }
+}
+
+impl Neg for Money {
+    fn neg(self) -> Self {
+        Money { cents: -self.cents }
+    }
+}
+
+fn main() -> !int {
+    let a = Money { cents: 100 }
+    let b = Money { cents: 50 }
+    let c = a + b
+    print("{c.cents}")
+    let d = -c
+    print("{d.cents}")
+    let e = a - b
+    print("{e.cents}")
+    0
+}

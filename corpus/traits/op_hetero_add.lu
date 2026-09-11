@@ -1,0 +1,31 @@
+//! check: fail(E0514)
+//! phase: resolve
+//! conforms: type.trait.op
+//!
+//! A heterogeneous `add` (s155, `[type.trait.op]`): the trait named
+//! `Add` declares `fn add(self, other: int) -> Self`, not the table's
+//! `fn add(self, other: Self) -> Self`, so `a + b` cannot dispatch
+//! through it — E0514 at the operator, naming the shape. The operator
+//! traits are homogeneous this edition; `Money * int` waits on a
+//! stated need.
+
+struct Money {
+    cents: int,
+}
+
+trait Add {
+    fn add(self, other: int) -> Self
+}
+
+impl Add for Money {
+    fn add(self, other: int) -> Self {
+        Money { cents: self.cents + other }
+    }
+}
+
+fn main() -> !int {
+    let a = Money { cents: 1 }
+    let b = Money { cents: 2 }
+    let c = a + b
+    0
+}
