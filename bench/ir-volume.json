@@ -1338,6 +1338,11 @@
       "naive": 355,
       "ratio": 0.958
     },
+    "corpus/strings/bytes_view_walk.lu": {
+      "midend": 78,
+      "naive": 93,
+      "ratio": 0.839
+    },
     "corpus/strings/char_battery.lu": {
       "midend": 89,
       "naive": 94,
