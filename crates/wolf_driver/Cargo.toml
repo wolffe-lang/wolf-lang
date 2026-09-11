@@ -51,3 +51,10 @@ object = { version = "0.39", default-features = false, features = ["read_core", 
 # Command Prompt still links. Windows only; no other host pays for it.
 [target.'cfg(windows)'.dependencies]
 find-msvc-tools = "0.1"
+
+# s153 (wolf-lang#308): the checked tier's memory-ceiling test reaps
+# its subprocess with `wait4(2)` to read the child's own `ru_maxrss` —
+# the OS's high-water mark, not the machine's ledger. `libc` is already
+# in the graph (wolf_rt, wolf_mem); unix only, dev only.
+[target.'cfg(unix)'.dev-dependencies]
+libc = "0.2"
