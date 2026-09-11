@@ -468,6 +468,7 @@ enum Bound {
     /// — a `List(TyId)` leaf would smuggle a per-table id.
     List(Box<Bound>),
     Pool(Box<Bound>),
+    Map(Box<Bound>, Box<Bound>),
     Nominal {
         module: u32,
         name: String,
@@ -486,6 +487,7 @@ fn mentions_self(table: &TypeTable, ty: TyId) -> bool {
         TyKind::List(t) | TyKind::Range(t) | TyKind::Chan(t) | TyKind::Mutex(t) => {
             mentions_self(table, *t)
         }
+        TyKind::Map(k, v) => mentions_self(table, *k) || mentions_self(table, *v),
         TyKind::Tuple(ts) => ts.iter().any(|t| mentions_self(table, *t)),
         TyKind::Fn(ps, r) => {
             ps.iter().any(|t| mentions_self(table, *t)) || mentions_self(table, *r)
@@ -506,6 +508,7 @@ fn freeze(table: &TypeTable, ty: TyId) -> Bound {
         TyKind::Wrapping(t) => Bound::Wrapping(Box::new(freeze(table, t))),
         TyKind::List(t) => Bound::List(Box::new(freeze(table, t))),
         TyKind::Pool(t) => Bound::Pool(Box::new(freeze(table, t))),
+        TyKind::Map(k, v) => Bound::Map(Box::new(freeze(table, k)), Box::new(freeze(table, v))),
         TyKind::Nominal { module, name, args } if !args.is_empty() => Bound::Nominal {
             module,
             name,
@@ -553,6 +556,7 @@ fn thaw(b: &Bound, into: &mut TypeTable) -> TyId {
         Bound::Ptr(t) => TyKind::Ptr(thaw(t, into)),
         Bound::List(t) => TyKind::List(thaw(t, into)),
         Bound::Pool(t) => TyKind::Pool(thaw(t, into)),
+        Bound::Map(k, v) => TyKind::Map(thaw(k, into), thaw(v, into)),
         Bound::Nominal { module, name, args } => TyKind::Nominal {
             module: *module,
             name: name.clone(),
@@ -1432,6 +1436,22 @@ const LIST_DATA_OFF: u64 = 0;
 const LIST_LEN_OFF: u64 = 8;
 const LIST_CAP_OFF: u64 = 16;
 
+/// A `Map[K, V]`'s entry layout at the native tier (s152): see
+/// `wolf_rt::map` — the `(K, V)` tuple's flat layout is the entry.
+#[derive(Clone, Copy)]
+struct MapLayout {
+    /// The `(K, V)` aggregate — what `pairs()`'s list holds.
+    #[allow(dead_code)]
+    pair: TypeId,
+    vwty: TypeId,
+    /// 0: the key's bytes compare; 1: a `str` pair, bytes it names.
+    key_kind: i64,
+    key_size: u64,
+    val_off: u64,
+    val_size: u64,
+    stride: u64,
+}
+
 /// The longest operand `==` on `str` compares INLINE (s81). Above it,
 /// lowering routes to `__wolf_rt_str_eq`, whose body is a `memcmp`.
 ///
@@ -1932,6 +1952,10 @@ fn wir_ty_frame(
         // (s40, `wolf_rt::list`); element shapes are checked at the
         // operation sites, so the handle lowers for any element.
         TyKind::List(_) => Ok(Some(types::PTR)),
+        // s152: a `Map[K, V]` VALUE is one pointer to its runtime
+        // header (`wolf_rt::map`, a `ListHdr` prefix); the entry
+        // layout is checked at the operation sites.
+        TyKind::Map(..) => Ok(Some(types::PTR)),
         TyKind::Shared(_) | TyKind::Weak(_) | TyKind::Handle(_) | TyKind::Pool(_) => Err(refuse(
             "shared-tier surface lowering (rc receivers + runtime cells, c06)",
             span,
@@ -2133,6 +2157,7 @@ fn ty_mentions_rigid(table: &TypeTable, ty: TyId) -> bool {
         | TyKind::Pool(t)
         | TyKind::Chan(t)
         | TyKind::Mutex(t) => ty_mentions_rigid(table, *t),
+        TyKind::Map(k, v) => ty_mentions_rigid(table, *k) || ty_mentions_rigid(table, *v),
         TyKind::Tuple(ts) => ts.iter().any(|t| ty_mentions_rigid(table, *t)),
         TyKind::Fn(ps, r) => {
             ps.iter().any(|t| ty_mentions_rigid(table, *t)) || ty_mentions_rigid(table, *r)
@@ -4832,6 +4857,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 TyKind::List(_) => {
                     let Some(hdr) = flow_val!(self.lower_expr(base)) else {
                         return Err(refuse("a valueless List receiver", base.span));
+                    };
+                    return Ok(Flow::Val(Some(self.list_len_of(hdr))));
+                }
+                // s152: `m.len` reads the entry count through the
+                // list-header prefix every map header carries.
+                TyKind::Map(..) => {
+                    let Some(hdr) = flow_val!(self.lower_expr(base)) else {
+                        return Err(refuse("a valueless Map receiver", base.span));
                     };
                     return Ok(Flow::Val(Some(self.list_len_of(hdr))));
                 }
@@ -9327,6 +9360,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             | (TyKind::List(a), TyKind::List(b))
             | (TyKind::Pool(a), TyKind::Pool(b))
             | (TyKind::Ptr(a), TyKind::Ptr(b)) => self.match_binding(a, b, map, span),
+            (TyKind::Map(dk, dv), TyKind::Map(sk, sv)) => {
+                self.match_binding(dk, sk, map, span)?;
+                self.match_binding(dv, sv, map, span)
+            }
             // s94: an applied nominal matches argument-wise — a
             // `Pair[K, V]` receiver declaration against a
             // `Pair[int, str]` site binds both rigids.
@@ -12374,10 +12411,186 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 Ok(Flow::Val(Some(self.list_load_at(hdr, idx, ewty, e.span)?)))
             }
+            // s152 (`[mem.map.absent]`): `m[k]` is `V ! {none}`. The
+            // key is stored into an entry-shaped slot, the runtime
+            // scans (`map_get`: 1 with the value written into the
+            // slot, 0 on a miss), and the hit joins into the eu as
+            // the ok half, the miss as the `none` tag — the same
+            // join `xs.get(i)` makes.
+            TyKind::Map(k, v) => {
+                let (k, v) = (*k, *v);
+                let lay = self.map_layout(k, v, e.span)?;
+                let Some(hdr) = flow_val!(self.lower_expr(recv)) else {
+                    return Err(refuse("a valueless Map receiver", recv.span));
+                };
+                let kx = d
+                    .args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .filter_map(Arg::value)
+                    .next()
+                    .ok_or_else(|| refuse("an index without a key", e.span))?;
+                let Some(kval) = flow_val!(self.lower_expr(kx)) else {
+                    return Err(refuse("a valueless Map key", kx.span));
+                };
+                let (region, slot) = self.rt_slot(lay.stride);
+                self.store_flat(kval, slot, region, kx.span)?;
+                let hit = self
+                    .rt_call_foreign(
+                        "__wolf_rt_map_get",
+                        &[hdr],
+                        Some((slot, region)),
+                        Some(types::I64),
+                    )
+                    .expect("hit flag");
+                let hit = self.nonzero(hit);
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| {
+                        let vp = z.field_addr(slot, lay.val_off);
+                        Ok(Some(z.load_flat(lay.vwty, vp, region, e.span)?))
+                    },
+                    |z| Ok(z.none_tag()),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
             _ => Err(refuse(
                 "indexing outside str/List (Pool/Map runtime shapes, c06/std)",
                 e.span,
             )),
+        }
+    }
+
+    /// The entry layout of a `Map[K, V]` (s152): the `(K, V)` tuple's
+    /// flat layout — key at 0, value at the tuple's second offset,
+    /// the tuple's list stride per entry — so `pairs()` hands compiled
+    /// code a `List[(K, V)]` it loads without conversion. The key
+    /// kind is `[type.map.key]`'s split: a `str` compares by the bytes
+    /// its pair names, every other admitted key by its own bytes.
+    fn map_layout(&mut self, k: TyId, v: TyId, span: Span) -> R<MapLayout> {
+        self.refuse_region_elem(k, span)?;
+        self.refuse_region_elem(v, span)?;
+        let Some(kwty) = wir_ty(&mut self.b.module.types, self.table, self.sigs, k, span)? else {
+            return Err(refuse("unit-typed Map keys", span));
+        };
+        let Some(vwty) = wir_ty(&mut self.b.module.types, self.table, self.sigs, v, span)? else {
+            return Err(refuse("unit-typed Map values", span));
+        };
+        let pair = self
+            .b
+            .module
+            .types
+            .intern(types::TypeData::Agg(vec![kwty, vwty]));
+        let (Some(key_size), Some(val_size)) = (
+            flat_size(&self.b.module.types, kwty),
+            flat_size(&self.b.module.types, vwty),
+        ) else {
+            return Err(refuse("Map entries without a flat layout", span));
+        };
+        let Some(stride) = list_stride_of(&self.b.module.types, pair) else {
+            return Err(refuse("Map entries without a flat layout", span));
+        };
+        let str_key = matches!(self.table.kind(self.strip_sema(k)), TyKind::Prim(Prim::Str));
+        Ok(MapLayout {
+            pair,
+            vwty,
+            key_kind: i64::from(str_key),
+            key_size,
+            val_off: key_size,
+            val_size,
+            stride,
+        })
+    }
+
+    /// `m[k] = v` (s152, `[mem.map.absent]`): insert or replace — the
+    /// key and the value stored into one entry-shaped slot, the
+    /// runtime scans and appends or overwrites. Never a trap. The
+    /// compound spellings are E0417 at the checker, so none arrives.
+    fn lower_map_index_assign(
+        &mut self,
+        d: AssignStmt<'t>,
+        b: BracketApply<'t>,
+        recv: &'t GreenNode,
+        k: TyId,
+        v: TyId,
+        span: Span,
+    ) -> R<Flow> {
+        let lay = self.map_layout(k, v, span)?;
+        if d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq) != SyntaxKind::Eq {
+            return Err(refuse("a compound assignment through a Map index", span));
+        }
+        let Some(hdr) = flow_val!(self.lower_expr(recv)) else {
+            return Err(refuse("a valueless Map receiver", recv.span));
+        };
+        let kx = b
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .filter_map(Arg::value)
+            .next()
+            .ok_or_else(|| refuse("an index without a key", span))?;
+        let Some(kval) = flow_val!(self.lower_expr(kx)) else {
+            return Err(refuse("a valueless Map key", kx.span));
+        };
+        let Some(vx) = d.value() else {
+            return Ok(Flow::Val(None));
+        };
+        let Some(vval) = flow_val!(self.lower_expr(vx)) else {
+            return Err(refuse("assignment of a valueless expression", vx.span));
+        };
+        let (region, slot) = self.rt_slot(lay.stride);
+        self.store_flat(kval, slot, region, kx.span)?;
+        let vp = self.field_addr(slot, lay.val_off);
+        self.store_flat(vval, vp, region, vx.span)?;
+        self.rt_call_foreign("__wolf_rt_map_set", &[hdr], Some((slot, region)), None);
+        Ok(Flow::Val(None))
+    }
+
+    /// The `Map` method depth, natively (s152, `[type.map]`): the
+    /// count and the emptiness probe read the header prefix; `pairs()`
+    /// is one runtime copy into a fresh `List[(K, V)]`; `clear` drops
+    /// the count in the header.
+    fn lower_map_method(
+        &mut self,
+        d: CallExpr<'t>,
+        recv_place: &'t GreenNode,
+        k: TyId,
+        v: TyId,
+        mname: &str,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        let _ = d;
+        let _lay = self.map_layout(k, v, e.span)?;
+        if mname == "clear" {
+            self.check_capture_write(recv_place, "mutating")?;
+        }
+        let Some(hdr) = flow_val!(self.lower_expr(recv_place)) else {
+            return Err(refuse("a valueless Map receiver", recv_place.span));
+        };
+        match mname {
+            "len" | "count" => Ok(Flow::Val(Some(self.list_len_of(hdr)))),
+            "is_empty" => {
+                let n = self.list_len_of(hdr);
+                let z = self.b.iconst(types::I64, 0);
+                let empty = self
+                    .b
+                    .ins(Opcode::Icmp, &[n, z], &[types::BOOL], Aux::IntCc(IntCc::Eq))
+                    .one();
+                Ok(Flow::Val(Some(empty)))
+            }
+            "pairs" => {
+                let out = self
+                    .rt_call_foreign("__wolf_rt_map_pairs", &[hdr], None, Some(types::PTR))
+                    .expect("hdr");
+                Ok(Flow::Val(Some(out)))
+            }
+            "clear" => {
+                self.rt_call_foreign("__wolf_rt_map_clear", &[hdr], None, None);
+                Ok(Flow::Val(None))
+            }
+            _ => Err(refuse("this Map method", e.span)),
         }
     }
 
@@ -12404,6 +12617,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 "writing through a `bytes()` view (a byte view is read-only, s77)",
                 span,
             ));
+        }
+        if let TyKind::Map(k, v) = self.table.kind(self.strip_sema(base_sema)) {
+            let (k, v) = (*k, *v);
+            return self.lower_map_index_assign(d, b, recv, k, v, span);
         }
         let TyKind::List(elem) = self.table.kind(self.strip_sema(base_sema)) else {
             return Err(refuse(
@@ -15273,6 +15490,23 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 .expect("hdr");
             return Ok(Flow::Val(Some(hdr)));
         }
+        // s152: `Map[K, V]()` — the runtime header, sized by the
+        // `(K, V)` entry layout.
+        if let TyKind::Map(k, v) = self.table.kind(ty) {
+            let (k, v) = (*k, *v);
+            let lay = self.map_layout(k, v, e.span)?;
+            let args = [
+                self.b.iconst(types::I64, lay.key_kind),
+                self.b.iconst(types::I64, lay.key_size as i64),
+                self.b.iconst(types::I64, lay.val_off as i64),
+                self.b.iconst(types::I64, lay.val_size as i64),
+                self.b.iconst(types::I64, lay.stride as i64),
+            ];
+            let hdr = self
+                .rt_call_foreign("__wolf_rt_map_new", &args, None, Some(types::PTR))
+                .expect("hdr");
+            return Ok(Flow::Val(Some(hdr)));
+        }
         // s73: `channel[T](n)` — the runtime channel; omitted capacity
         // is rendezvous ([conc.chan.default]).
         if let TyKind::Chan(el) = self.table.kind(ty).clone() {
@@ -15459,6 +15693,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         return self.lower_bytes_view_method(d, base, n, &mname, e);
                     }
                     return self.lower_list_method(d, recv_place, elem, &mname, e);
+                }
+                // s152: the `Map` receiver dispatches to the runtime
+                // seams too.
+                TyKind::Map(k, v) => {
+                    let (k, v) = (*k, *v);
+                    return self.lower_map_method(d, recv_place, k, v, &mname, e);
                 }
                 // s73: the conc receivers dispatch to the runtime
                 // seams, never to an impl.
