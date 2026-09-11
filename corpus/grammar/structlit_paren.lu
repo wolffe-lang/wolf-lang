@@ -1,11 +1,22 @@
-//! check: pass
-//! phase: resolve
+//! check: run(exit=0)
+//! phase: run
 //! conforms: gram.amb.structlit
 //! The parenthesized form is the fix E0006 suggests.
+//!
+//! s156 (#341): the witness used to spell its point as
+//! `p == (Point { x: 0 })`, and s155's `[type.trait.op]` made that
+//! E0301 — `==` on a user type IS `Eq.eq`, nothing is synthesized, and
+//! nothing named `Eq` is in scope here. The file's own subject is
+//! `[gram.amb.structlit]` and needs no equality at all, so the
+//! parenthesized literal is bound and read. The phase moved with it:
+//! judged at `resolve` the ledger stopped one rung before the refusal
+//! and reported a pass, which is how the staleness stayed invisible on
+//! the compiler side while lupin's walk reported it.
 
 struct Point { x: int }
 
 fn main() -> !int {
     let p = Point { x: 0 }
-    if p == (Point { x: 0 }) { 0 } else { 1 }
+    let q = (Point { x: 0 })
+    p.x + q.x
 }

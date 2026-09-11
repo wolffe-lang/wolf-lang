@@ -1,6 +1,6 @@
 //! check: run(exit=2)
 //! phase: resolve
-//! conforms: str.interp, str.views, err.union, err.propagate, task.par, generics.brackets
+//! conforms: str.interp, str.views, err.union, err.propagate, task.par, generics.brackets, mem.map.absent
 //!
 //! THE canonical program — the syntax bake-off sample from reports/05
 //! (Candidate A, locked in R2). Exercises: generics with `[]`, structured
@@ -8,6 +8,15 @@
 //! word views (D25), f-string format specs (D26), zero ownership
 //! annotations in application code (D10 Tier 0).
 //! Run with no args -> prints usage, exits 2 (the checked expectation).
+//!
+//! s156 (#341): the tally read `tally[w] += 1` with the comment
+//! "absent key defaults to zero value", which is the idiom s152
+//! retired — `m[k]` is `V ! {none}` and `m[k] op= v` is E0417 in every
+//! profile (`[mem.map.absent]`, `corpus/typecheck/map_compound_absent.lu`).
+//! The seed program teaches the clause's own spelling now. The phase
+//! stays `resolve`: `text.words()` is still unsupported one rung
+//! before the checker, which is why the compiler's ledger could not
+//! see the stale line and lupin's walk could.
 
 use std.fs
 
@@ -20,7 +29,7 @@ fn count(text: str) -> Map[str, int] {
     var tally = Map[str, int]()
     for word in text.words() {             // zero-copy word slices, Unicode-aware
         let w = word.trim(".,!?").lower()
-        if !w.is_empty() { tally[w] += 1 } // absent key defaults to zero value
+        if !w.is_empty() { tally[w] = (tally[w] else 0) + 1 } // absent key is the `none` row
     }
     tally                                  // last expression is the value
 }

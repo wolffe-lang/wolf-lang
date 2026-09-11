@@ -180,7 +180,7 @@ grammar/struct_pattern_no_separator.lu: not mem-clean (pre-wir rungs own it)
 grammar/struct_pattern_rest_bare.lu: not mem-clean (pre-wir rungs own it)
 grammar/struct_pattern_unknown_field.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_cond.lu: not mem-clean (pre-wir rungs own it)
-grammar/structlit_paren.lu: not mem-clean (pre-wir rungs own it)
+grammar/structlit_paren.lu: lowers
 grammar/tuple_pattern_match_arm.lu: lowers
 grammar/tuple_pattern_no_separator.lu: not mem-clean (pre-wir rungs own it)
 grammar/when_reserved.lu: not mem-clean (pre-wir rungs own it)
