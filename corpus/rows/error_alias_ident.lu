@@ -1,4 +1,4 @@
-//! check: run(exit=0, stdout="3\n5\n")
+//! check: run(exit=0, stdout="3\n4\n")
 //! phase: run
 //! conforms: gram.item.error, gram.inv.ctx
 //!

@@ -2,7 +2,7 @@
 source: crates/wolf_lex/tests/corpus_snapshots.rs
 expression: lexed.dump(&bytes)
 ---
-    lead  InnerDocComment 0..39 "//! check: run(exit=0, stdout=\"3\\n5\\…"
+    lead  InnerDocComment 0..39 "//! check: run(exit=0, stdout=\"3\\n4\\…"
     lead  Whitespace 39..40 "\n"
     lead  InnerDocComment 40..54 "//! phase: run"
     lead  Whitespace 54..55 "\n"
