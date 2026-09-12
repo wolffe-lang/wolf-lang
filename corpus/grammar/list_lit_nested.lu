@@ -1,0 +1,14 @@
+//! check: run(exit=0, stdout="2\n4\n")
+//! phase: run
+//! conforms: gram.expr.list, type.list.lit
+//!
+//! s158 (#154) — nesting is ordinary recursion: the inner literals
+//! type first, the outer one unifies them, and the whole is
+//! `List[List[int]]` ([type.list.lit.elem]).
+
+fn main() -> !int {
+    let grid = [[1, 2], [3, 4]]
+    print("{grid.len}")
+    print("{grid[1][1]}")
+    0
+}

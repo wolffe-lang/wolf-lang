@@ -1,0 +1,19 @@
+//! check: run(exit=0, stdout="4\n")
+//! phase: run
+//! conforms: gram.expr.list, gram.fmt.list
+//!
+//! s158 (#154) — a literal too wide for one line breaks one element
+//! per line with a trailing comma, exactly an argument list
+//! ([gram.fmt.list], [gram.fmt.commas]). This file is the canonical
+//! rendering: `wolf fmt` is the identity on it.
+
+fn main() -> !int {
+    let wide = [
+        "an espresso machine with a heat exchanger",
+        "a refrigerated pastry case",
+        "a set of replacement grinder burrs",
+        "a steam wand and milk frother",
+    ]
+    print("{wide.len}")
+    0
+}

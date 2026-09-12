@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="0\n3\n")
+//! phase: run
+//! conforms: gram.expr.list, type.list.lit
+//!
+//! s158 (#154) — the expectation flows into a call argument, so `[]`
+//! needs no annotation there ([type.list.lit.expect]): the parameter
+//! says what it holds. The same rule covers a declared return.
+
+fn count(xs: List[str]) -> int {
+    xs.len
+}
+
+fn three() -> List[int] {
+    [1, 2, 3]
+}
+
+fn main() -> !int {
+    print("{count([])}")
+    print("{three().len}")
+    0
+}

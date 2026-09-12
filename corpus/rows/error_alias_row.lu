@@ -1,0 +1,23 @@
+//! check: run(exit=0, stdout="7\n0\n")
+//! phase: run
+//! conforms: gram.item.error, type.err.alias
+//!
+//! s158 (#36) — `error IoErrors = {none, parse}` names a set of tags,
+//! and `-> int ! IoErrors` is the brace-less spelling of
+//! `-> int ! {none, parse}`. The name is TRANSPARENT: it is not a
+//! type, has no identity a program can observe, and the two
+//! signatures are the same type ([type.err.alias.transparent]). The
+//! raise site still names a TAG — `return parse` resolves through the
+//! expanded row, [gram.expr.tagident] unchanged.
+
+error IoErrors = {none, parse}
+
+fn parse_it(ok: bool) -> int ! IoErrors {
+    if ok { 7 } else { return parse }
+}
+
+fn main() -> !int {
+    print("{parse_it(true) else 0}")
+    print("{parse_it(false) else 0}")
+    0
+}

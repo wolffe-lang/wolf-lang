@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="0\n1\n")
+//! phase: run
+//! conforms: gram.expr.list, type.list.lit
+//!
+//! s158 (#154) — `[]` takes its element type from the annotation
+//! ([type.list.lit.expect]/[type.list.lit.empty]). The bare
+//! `let xs = []` this one annotates is E0419, in
+//! `list_lit_untyped_empty.lu`.
+
+fn main() -> !int {
+    var names: List[str] = []
+    print("{names.len}")
+    (mut names).push("espresso")
+    print("{names.len}")
+    0
+}

@@ -1,0 +1,18 @@
+//! check: run(exit=0, stdout="3\n340\n100\n")
+//! phase: run
+//! conforms: gram.expr.list, type.list.lit
+//!
+//! s158 (#154) — the ruling's own shape: `[1, 2, 3]` in value
+//! position. The element type unifies across the elements
+//! ([type.list.lit.elem]); the value is a fresh `List[int]` in the
+//! ambient region, the same one `List[int]()` plus a push per element
+//! builds ([type.list.lit.value]). lupin 0.1.34 stops at the `[`;
+//! wolf-interp's mirror carries the clause.
+
+fn main() -> !int {
+    let cents = [340, 275, 100]
+    print("{cents.len}")
+    print("{cents[0]}")
+    print("{cents[2]}")
+    0
+}

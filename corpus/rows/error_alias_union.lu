@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="1\n9\n")
+//! phase: run
+//! conforms: gram.item.error, type.err.alias, gram.type.row.flatten
+//!
+//! s158 (#36) — aliases compose by NAMING ([type.err.alias.union]):
+//! an entry whose path resolves to an alias contributes that alias's
+//! tags, everything else is a tag, and the union is
+//! [gram.type.row.flatten]'s — an alias is one more layer, and layers
+//! flatten. `{IoErrors, closed}` here is `{none, parse, closed}`, and
+//! a tag repeated across the layers is one tag.
+
+error IoErrors = {none, parse}
+
+error ConfigErrors = {IoErrors, closed}
+
+fn load(ok: bool) -> int ! ConfigErrors {
+    if ok { 1 } else { return closed }
+}
+
+fn main() -> !int {
+    print("{load(true) else 9}")
+    print("{load(false) else 9}")
+    0
+}

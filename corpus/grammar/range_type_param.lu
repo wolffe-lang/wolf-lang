@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="2\n7\n5\n")
+//! phase: run
+//! conforms: type.range, mem.iter.range
+//!
+//! s158 (#24) — `range[int]` is a type: a range passes as a parameter
+//! and `start`/`end` read its endpoints ([type.range.name],
+//! [type.range.accessor]). This is wolf-std F-0030's blocker exactly:
+//! `len`, `contains` and `clamp_to` were unwritable because the
+//! bounds had no spelling at all.
+
+fn width(r: range[int]) -> int {
+    r.end - r.start
+}
+
+fn main() -> !int {
+    let r = 2..7
+    print("{r.start}")
+    print("{r.end}")
+    print("{width(r)}")
+    0
+}

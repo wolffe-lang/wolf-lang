@@ -1,0 +1,22 @@
+//! check: fail(E0610)
+//! phase: resolve
+//! conforms: gram.item.error, type.err.alias
+//!
+//! s158 (#36) — a cycle is E0610, reported ONCE, at the alias that
+//! closes it, with the loop named in full ([type.err.alias.cycle]):
+//! the sibling of E0503 for trait aliases and E0513 for
+//! associated-type bindings. An alias may name an alias to any depth
+//! that terminates; only a loop is refused.
+
+error A = {B, io}
+
+error B = {A, parse}
+
+fn f() -> int ! A {
+    0
+}
+
+fn main() -> !int {
+    print("{f() else 0}")
+    0
+}

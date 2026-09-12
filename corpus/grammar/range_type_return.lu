@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="0\n4\n6\n")
+//! phase: run
+//! conforms: type.range, mem.iter.range, mem.iter.for
+//!
+//! s158 (#24) — a range returns, binds, and iterates. `for` is
+//! unchanged ([type.range.value]): a `for` over a range HEADER still
+//! lowers without materializing one, and a `for` over a range VALUE
+//! is the `Iter[int]` [mem.iter.range] has always promised, driven by
+//! the same counted loop.
+
+fn window(n: int) -> range[int] {
+    0..n
+}
+
+fn main() -> !int {
+    let w = window(4)
+    print("{w.start}")
+    print("{w.end}")
+    var total = 0
+    for i in w {
+        total = total + i
+    }
+    print("{total}")
+    0
+}

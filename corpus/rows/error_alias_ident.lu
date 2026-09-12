@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="3\n5\n")
+//! phase: run
+//! conforms: gram.item.error, gram.inv.ctx
+//!
+//! s158 (#36) — `error` is CONTEXTUAL, not reserved
+//! ([gram.inv.ctx]): the keyword only in item position with an
+//! `IDENT` and an `=` after it. Two tokens of lookahead decide, so a
+//! binding named `error`, a field named `error` and a function named
+//! `error` all still parse, and [gram.inv.kw]'s fifty are unchanged.
+
+type Report = struct {
+    error: int,
+}
+
+fn error(n: int) -> int {
+    n + 1
+}
+
+fn main() -> !int {
+    let error = 3
+    print("{error}")
+    let r = Report { error: error + 1 }
+    print("{r.error}")
+    0
+}

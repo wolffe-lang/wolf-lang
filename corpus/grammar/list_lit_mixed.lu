@@ -1,0 +1,14 @@
+//! check: fail(E0401)
+//! phase: resolve
+//! conforms: gram.expr.list, type.list.lit
+//!
+//! s158 (#154) — the first element fixes the type and the FIRST
+//! element that does not fit is the error site
+//! ([type.list.lit.elem]), with the first element as the "because" —
+//! not the whole literal, and not the last element.
+
+fn main() -> !int {
+    let xs = [1, "two", 3]
+    print("{xs.len}")
+    0
+}

@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="20\n2\n")
+//! phase: run
+//! conforms: gram.expr.list, gram.amb.brackets
+//!
+//! s158 (#154) — POSITION settles the bracket clash, and nothing else
+//! does ([gram.amb.brackets]): the `[10, 20, 30]` opens a primary, the
+//! `[1]` after it continues one, so both readings appear in a single
+//! expression and neither needs a lookahead to find. `xs[1..]` is the
+//! slice on the same shape.
+
+fn main() -> !int {
+    print("{[10, 20, 30][1]}")
+    let xs = [1, 2, 3]
+    print("{xs[1..].len}")
+    0
+}

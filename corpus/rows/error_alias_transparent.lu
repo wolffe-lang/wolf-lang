@@ -1,0 +1,31 @@
+//! check: run(exit=0, stdout="1\n9\n")
+//! phase: run
+//! conforms: gram.item.error, type.err.alias
+//!
+//! s158 (#36) — interchangeable in BOTH directions, with no
+//! conversion between them ([type.err.alias.transparent]): the
+//! spelled-out row propagates into the aliased signature by `?`, and
+//! the aliased one propagates back into the spelled-out row. Argued
+//! from D30 and not a preference — rows are structural and `?`
+//! propagates by width subtyping, so a nominal error set would make
+//! two rows "the same" two different ways.
+
+error IoErrors = {none, parse}
+
+fn spelled_out(ok: bool) -> int ! {none, parse} {
+    if ok { 1 } else { return parse }
+}
+
+fn aliased(ok: bool) -> int ! IoErrors {
+    spelled_out(ok)?
+}
+
+fn back(ok: bool) -> int ! {none, parse} {
+    aliased(ok)?
+}
+
+fn main() -> !int {
+    print("{back(true) else 9}")
+    print("{back(false) else 9}")
+    0
+}

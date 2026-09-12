@@ -1,0 +1,26 @@
+//! check: run(exit=0, stdout="8\n6\n7\n5\n")
+//! phase: run
+//! conforms: type.range, mem.iter.range
+//!
+//! s158 (#24) — **`end` is exclusive, always**: `a..=b` normalizes at
+//! CONSTRUCTION to `b + 1`, under the checked arithmetic
+//! [mem.iter.range] already rules ([type.range.accessor]). One
+//! exclusive `end` is what makes `r.end - r.start` the count; two
+//! accessors whose meaning depended on a spelling the type does not
+//! carry would close nothing. The reference machine has normalized
+//! inclusive ranges at construction since its first range arm, so the
+//! two tiers agree by construction.
+
+fn width(r: range[int]) -> int {
+    r.end - r.start
+}
+
+fn main() -> !int {
+    let inc = 2..=7
+    print("{inc.end}")
+    print("{width(inc)}")
+    let exc = 2..7
+    print("{exc.end}")
+    print("{width(exc)}")
+    0
+}

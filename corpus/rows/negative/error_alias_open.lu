@@ -1,0 +1,19 @@
+//! check: fail(E0201)
+//! phase: lex
+//! conforms: gram.item.error, type.err.alias
+//!
+//! s158 (#36) — an alias cannot name an OPEN row
+//! ([gram.item.error]): it is a spelling for the tags it lists, and
+//! "these tags and any others" is not a set a name can stand for. A
+//! row that stays open is written open at each use, with no name.
+
+error Loose = { none, ..}
+
+fn f() -> int ! Loose {
+    0
+}
+
+fn main() -> !int {
+    print("{f() else 0}")
+    0
+}

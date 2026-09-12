@@ -1,0 +1,15 @@
+//! check: fail(E0419)
+//! phase: resolve
+//! conforms: gram.expr.list, type.list.lit
+//!
+//! s158 (#154) — `let xs = []` is the one position nothing supplies
+//! an element type to ([type.list.lit.empty]), so it is E0419 and the
+//! message spells the annotation for this binding. Every other
+//! position takes one from its context; `list_lit_arg.lu` is the
+//! counter.
+
+fn main() -> !int {
+    let xs = []
+    print("{xs.len}")
+    0
+}

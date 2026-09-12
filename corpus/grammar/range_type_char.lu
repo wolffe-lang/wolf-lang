@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="a\nd\ne\n")
+//! phase: run
+//! conforms: type.range, type.char
+//!
+//! s158 (#24) — the family is closed at the two element types `..`
+//! steps by one ([type.range.name]): `range[int]` and `range[char]`.
+//! The FIRST endpoint decides which, so every range that typed before
+//! this clause types exactly as it did, and `range[f64]` is E0401.
+
+fn last_of(r: range[char]) -> char {
+    r.end
+}
+
+fn main() -> !int {
+    let cs: range[char] = 'a'..'d'
+    print("{cs.start}")
+    print("{last_of(cs)}")
+    let inc = 'a'..='d'
+    print("{inc.end}")
+    0
+}
