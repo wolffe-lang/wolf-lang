@@ -525,3 +525,49 @@ fn a_type_declaration_without_eq_reports_once() {
     );
 }
 
+/// The contextual `error` item starts a declaration, so recovery must
+/// stop at one — wolf-lang#360's neighbours.
+///
+/// `error` (s158, `[gram.item.error]`) lexes as an `Ident` and is
+/// reclassified only in item position. Every `TokenKind::Kw`-only
+/// test of "does a declaration start here?" was blind to it, so the
+/// D22 escapes built on those tests walked straight through the next
+/// declaration and ate it. That is the same shape as wolf-lang#356 in
+/// the semantic-token walk: a contextual keyword added later, and an
+/// older "is this a keyword?" test nobody taught about it.
+///
+/// Both witnesses are the blast-radius property's
+/// untouched-declarations invariant, which was red at
+/// `MUTATE_BUDGET=300` on trunk v0.2.13.
+#[test]
+fn recovery_stops_at_a_contextual_error_declaration() {
+    let decls = |src: &str| {
+        fn walk(n: &wolf_ast::GreenNode, out: &mut Vec<String>) {
+            if n.kind == wolf_ast::SyntaxKind::ErrorDecl {
+                out.push(format!("ErrorDecl {}..{}", n.span.lo, n.span.hi));
+            }
+            if n.kind == wolf_ast::SyntaxKind::FnDecl {
+                out.push(format!("FnDecl {}..{}", n.span.lo, n.span.hi));
+            }
+            for c in n.nodes() {
+                walk(c, out);
+            }
+        }
+        let parse = util::parse(src);
+        let mut out = Vec::new();
+        walk(&parse.root, &mut out);
+        out.len()
+    };
+    // Healthy: two aliases and a function, three declarations.
+    let good = "error A = {B, io}\n\nerror B = {A, parse}\n\nfn f() -> int { 1 }\n";
+    assert_eq!(decls(good), 3, "the healthy file");
+    // The `}` of the first alias deleted: the row is unclosed, but the
+    // SECOND alias and the function are untouched and still parse.
+    // Recovery used to swallow them as more row entries.
+    let deleted = "error A = {B, io\n\nerror B = {A, parse}\n\nfn f() -> int { 1 }\n";
+    assert_eq!(decls(deleted), 3, "a deleted `}} ` eats no neighbour");
+    // The `}` replaced by `=>`, which suppresses the inserted
+    // terminator — so the skip found no stop and ran to end of file.
+    let arrowed = "error A = {B, io =>\n\nerror B = {A, parse}\n\nfn f() -> int { 1 }\n";
+    assert_eq!(decls(arrowed), 3, "a `=>` eats no neighbour either");
+}

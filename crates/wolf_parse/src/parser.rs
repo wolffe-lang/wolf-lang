@@ -316,12 +316,37 @@ impl<'a> Parser<'a> {
         )
     }
 
-    pub(crate) fn at_decl_start(&self) -> bool {
+    /// A declaration KEYWORD at the cursor — one of the reserved
+    /// fifty, or the contextual `error` item (s158,
+    /// `[gram.item.error]`), which lexes as an `Ident` and is
+    /// reclassified only in item position.
+    ///
+    /// Every `TokenKind::Kw`-only test of "does a declaration start
+    /// here?" is blind to that contextual spelling, and recovery built
+    /// on such a test walks straight through the next declaration.
+    /// Measured: deleting the `}` of `error IoErrors = {none, parse}`
+    /// made the row parser swallow the whole `error ConfigErrors = …`
+    /// after it, and replacing that `}` with `=>` (which suppresses
+    /// the inserted terminator, so the skip found no stop) did the
+    /// same from inside `skip_until`. Both were the blast-radius
+    /// property's untouched-declarations invariant, red at
+    /// `MUTATE_BUDGET=300` on `rows/error_alias_union.lu` and
+    /// `rows/negative/error_alias_cycle.lu`. `at_error_item` is the
+    /// parser's OWN reclassification test, so recovery and the item
+    /// parser now answer this question the same way.
+    pub(crate) fn at_decl_keyword(&self) -> bool {
         match self.current() {
-            TokenKind::PoundBracket | TokenKind::PoundBangBracket => true,
             TokenKind::Kw(k) => is_decl_keyword(k),
+            TokenKind::Ident => crate::grammar::at_error_item(self),
             _ => false,
         }
+    }
+
+    pub(crate) fn at_decl_start(&self) -> bool {
+        matches!(
+            self.current(),
+            TokenKind::PoundBracket | TokenKind::PoundBangBracket
+        ) || self.at_decl_keyword()
     }
 
     // ------------------------------------------------------ consumption --
@@ -655,16 +680,18 @@ impl<'a> Parser<'a> {
             }
             // Depth-independent: a sibling-level item keyword ends
             // recovery even inside a brace that claims to contain it.
-            if let (Some(floor), TokenKind::Kw(kw)) = (sibling_floor, k)
-                && is_decl_keyword(kw)
+            if let Some(floor) = sibling_floor
+                && self.at_decl_keyword()
                 && self.line_indent(self.current_span().lo) <= floor
             {
                 break;
             }
             if shield == 0 {
+                if self.at_decl_keyword() {
+                    break;
+                }
                 match k {
                     TokenKind::PoundBracket | TokenKind::PoundBangBracket => break,
-                    TokenKind::Kw(kw) if is_decl_keyword(kw) => break,
                     TokenKind::Punct(Punct::RBrace) if stop_at_rbrace => break,
                     _ => {}
                 }
