@@ -276,7 +276,7 @@ impl<'a> Verifier<'a> {
                     return Err(self.fail(
                         ErrClass::ReservedOp,
                         format!(
-                            "`{}` is reserved until its semantics land (c05): {}",
+                            "`{}` is reserved until its semantics land: {}",
                             op.base_mnemonic(),
                             self.at_inst(inst)
                         ),
@@ -1987,14 +1987,14 @@ impl<'a> Verifier<'a> {
                             return Err(self.fact_fail(
                                 ErrClass::FactJust,
                                 id,
-                                "summary justifications mint range facts only (s99)",
+                                "summary justifications mint range facts only",
                             ));
                         }
                         Just::Guard(_) => {
                             return Err(self.fact_fail(
                                 ErrClass::FactJust,
                                 id,
-                                "guard justifications mint noalias facts only (s104)",
+                                "guard justifications mint noalias facts only",
                             ));
                         }
                         Just::DefOp | Just::Op(_) => {
@@ -2149,14 +2149,14 @@ impl<'a> Verifier<'a> {
                             return Err(self.fact_fail(
                                 ErrClass::FactJust,
                                 id,
-                                "summary justifications mint range facts only (s99)",
+                                "summary justifications mint range facts only",
                             ));
                         }
                         Just::Guard(_) => {
                             return Err(self.fact_fail(
                                 ErrClass::FactJust,
                                 id,
-                                "guard justifications mint noalias facts only (s104)",
+                                "guard justifications mint noalias facts only",
                             ));
                         }
                         Just::DefOp | Just::Op(_) => {

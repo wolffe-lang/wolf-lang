@@ -84,6 +84,16 @@ THE PAPERCUTS III — the language's ten, each a witness plus a fix.
   missing arm is E0801 naming it). Witness
   `corpus/grammar/match_nullary_variant.lu`, both compiler tiers —
   lupin refuses it at the old rule and takes the clause as its mirror.
+- **wording** (#39, #157): no sprint or campaign id in any
+  user-facing string. Every conservatism refusal the ledger prints
+  lost its `(c06)` / `(s39 std sync)` / `(c25 closeout)` /
+  `deferred from s26` tail and kept the words that say what is
+  refused — 70 distinct strings, 92 sites. `wolf add` and `wolf pkg`
+  stopped calling a manifest "an s51 manifest", the publish log
+  stopped citing `X7`, the LLVM banner stopped naming s41, and the
+  two `str` hovers stopped citing s120/s136/D58. Witness: `wolf run`
+  on a `Pool` program printed "Pool/shared constructor lowering
+  (runtime shapes, c06)" and prints "(runtime shapes)".
 
 ## 0.2.12 — 2026-09-11
 

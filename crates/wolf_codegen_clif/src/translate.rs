@@ -1829,7 +1829,7 @@ impl<'a, 'b> Tx<'a, 'b> {
             }
             Opcode::RcDup | Opcode::RcDrop => {
                 return Err(nyi(
-                    "shared-tier rc ops (runtime shape lands with the shared cells, s42)",
+                    "shared-tier rc ops (the runtime shape lands with the shared cells)",
                 ));
             }
             Opcode::SyncTransfer => {

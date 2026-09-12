@@ -697,7 +697,7 @@ fn lower_body(
             match node.kind {
                 SyntaxKind::FnDecl => {}
                 SyntaxKind::LetDecl | SyntaxKind::VarDecl | SyntaxKind::ConstDecl => {
-                    return Err(refuse("item-initializer lowering (globals, c06)", span));
+                    return Err(refuse("item-initializer lowering (globals)", span));
                 }
                 _ => return Ok(None),
             }
@@ -1947,7 +1947,7 @@ fn wir_ty_frame(
         TyKind::Chan(_) | TyKind::Mutex(_) | TyKind::TaskScope => Ok(Some(types::PTR)),
         TyKind::Proc | TyKind::ExitReason => Ok(Some(types::I64)),
         TyKind::Range(_) => Err(refuse(
-            "range VALUES outside `for` headers (owned `Iter[int]` ranges, c06/std)",
+            "range VALUES outside `for` headers (owned `Iter[int]` ranges)",
             span,
         )),
         // A `List[T]` VALUE is one pointer to its runtime header
@@ -1959,7 +1959,7 @@ fn wir_ty_frame(
         // layout is checked at the operation sites.
         TyKind::Map(..) => Ok(Some(types::PTR)),
         TyKind::Shared(_) | TyKind::Weak(_) | TyKind::Handle(_) | TyKind::Pool(_) => Err(refuse(
-            "shared-tier surface lowering (rc receivers + runtime cells, c06)",
+            "shared-tier surface lowering (rc receivers + runtime cells)",
             span,
         )),
         // Raw pointers are opaque `ptr` VALUES (s29 — the C membrane
@@ -2345,7 +2345,7 @@ fn wir_sig_of(
         // identity this frame does not own.
         if matches!(table.kind(p.ty), TyKind::RegionTy) && p.mode.is_some() {
             return Err(refuse(
-                "a moded region parameter (a region arrives read-only — c25 closeout)",
+                "a moded region parameter (a region arrives read-only)",
                 p.span,
             ));
         }
@@ -2361,7 +2361,7 @@ fn wir_sig_of(
             Some(ParamMode::Mut) => {
                 if flat_size(&module.types, ty).is_none() {
                     return Err(refuse(
-                        "`mut` parameters of non-flat types (spill layout, c06)",
+                        "`mut` parameters of non-flat types (spill layout)",
                         p.span,
                     ));
                 }
@@ -3365,7 +3365,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(Flow::Val(None))
             }
             SyntaxKind::AssumeStmt => Err(refuse(
-                "assume noalias (unsafe-tier WIR ops, deferred from s26 — see closeout)",
+                "assume noalias (unsafe-tier WIR ops)",
                 stmt.span,
             )),
             // #116b: a nested named fn — a capture-free fn value with
@@ -3450,7 +3450,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(Flow::Val(None))
             }
             _ => Err(refuse(
-                "destructuring bindings (this pattern shape, c06)",
+                "destructuring bindings (this pattern shape)",
                 pat.span,
             )),
         }
@@ -3545,7 +3545,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(())
             }
             _ => Err(refuse(
-                "this pattern shape in a destructuring binding (c06)",
+                "this pattern shape in a destructuring binding",
                 sub.span,
             )),
         }
@@ -3615,7 +3615,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 _ if ty_mentions_rigid(self.sig_table, ss.fields[i].ty) => {
                     return Err(refuse(
-                        "a struct pattern under a generic field's compound type (c06)",
+                        "a struct pattern under a generic field's compound type",
                         sub.span,
                     ));
                 }
@@ -3815,7 +3815,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     fn expect_region(&mut self, e: &'t GreenNode) -> R<(RegionId, Value, bool)> {
         if e.kind != SyntaxKind::PathExpr {
             return Err(refuse(
-                "region operands beyond named bindings (c05)",
+                "region operands beyond named bindings",
                 e.span,
             ));
         }
@@ -3828,7 +3828,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 ..
             }) => Ok((region, handle, owned)),
             _ => Err(refuse(
-                "region operands beyond named bindings (c05)",
+                "region operands beyond named bindings",
                 e.span,
             )),
         }
@@ -3976,14 +3976,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return self.lower_index_assign(d, place, stmt.span);
         }
         if place.kind != SyntaxKind::PathExpr {
-            return Err(refuse("assignment through nested places (c06)", place.span));
+            return Err(refuse("assignment through nested places", place.span));
         }
         let name = self.text(place.span);
         let bind = match self.lookup(&name) {
             Some(b) => b,
             None => {
                 return Err(refuse(
-                    "assignment to a non-local name (globals, c06)",
+                    "assignment to a non-local name (globals)",
                     place.span,
                 ));
             }
@@ -3997,7 +3997,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(Flow::Val(None))
             }
             LocalBind::Region { .. } => Err(refuse(
-                "region rebinding (c05 identity backlog)",
+                "region rebinding (region identity)",
                 place.span,
             )),
             // s105: the pair is claimed by ITS binding for its whole
@@ -4014,7 +4014,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // disagreement an honest `NotYet` rather than a write into
             // a caller's string.
             LocalBind::BytesView { .. } => Err(refuse(
-                "assignment to a lent `bytes()` view (a byte view is read-only, s77/s89)",
+                "assignment to a lent `bytes()` view (a byte view is read-only)",
                 place.span,
             )),
             LocalBind::Val {
@@ -4148,7 +4148,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Ok(Flow::Val(None));
         };
         if base.kind != SyntaxKind::PathExpr {
-            return Err(refuse("assignment through nested places (c06)", place.span));
+            return Err(refuse("assignment through nested places", place.span));
         }
         let name = self.text(base.span);
         // `self.x = v` through a `mut` receiver: a store at the
@@ -4165,7 +4165,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             ..
         }) = self.lookup(&name)
         else {
-            return Err(refuse("assignment through nested places (c06)", place.span));
+            return Err(refuse("assignment through nested places", place.span));
         };
         let Some(base_sema) = self.expr_sema_ty(base.span) else {
             return Err(refuse("a member write without a recorded type", place.span));
@@ -4319,7 +4319,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         ty = *base;
                         table = self.sig_table;
                     }
-                    _ => return Err(refuse("member access on this type (c06/std)", span)),
+                    _ => return Err(refuse("member access on this type", span)),
                 },
                 TyKind::Tuple(elems) => {
                     let Ok(idx) = mname.parse::<usize>() else {
@@ -4332,7 +4332,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     let unsigned = sema_unsigned(table, fty);
                     return Ok((idx, wrapping, unsigned));
                 }
-                _ => return Err(refuse("member access on this type (c06/std)", span)),
+                _ => return Err(refuse("member access on this type", span)),
             }
         }
     }
@@ -4469,7 +4469,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             return Ok(Flow::Val(Some(self.fn_value_named(&qname, ext, e.span))));
                         }
                         Err(refuse(
-                            "module-item reads (mutable module state, c06)",
+                            "module-item reads (mutable module state)",
                             e.span,
                         ))
                     }
@@ -4566,13 +4566,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             SyntaxKind::MemberExpr => self.lower_member(e),
             SyntaxKind::BracketApply => self.lower_index(e),
             SyntaxKind::RangeExpr | SyntaxKind::FromEndExpr => Err(refuse(
-                "range VALUES outside `for` headers (owned `Iter[int]` ranges, c06/std)",
+                "range VALUES outside `for` headers (owned `Iter[int]` ranges)",
                 e.span,
             )),
             SyntaxKind::RegionBlock => self.lower_region_block(e, want),
             SyntaxKind::InBlock => self.lower_in_block(e, want),
             SyntaxKind::RegionValue => Err(refuse(
-                "first-class region values beyond local bindings (c05)",
+                "first-class region values beyond local bindings",
                 e.span,
             )),
             SyntaxKind::FreezeExpr => {
@@ -4590,7 +4590,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     Ok(Flow::Val(None))
                 } else {
                     Err(refuse(
-                        "first-class region values beyond local bindings (c05)",
+                        "first-class region values beyond local bindings",
                         e.span,
                     ))
                 }
@@ -4607,7 +4607,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
             }
             SyntaxKind::BorrowExpr => Err(refuse(
-                "unsafe-tier WIR ops (deferred from s26 — see closeout)",
+                "unsafe-tier WIR ops",
                 e.span,
             )),
             // s105: a closure VALUE. Capture-free closures lambda-lift
@@ -4637,7 +4637,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             SyntaxKind::SelectExpr => self.lower_select_expr(e),
             SyntaxKind::WhenExpr => self.lower_when_expr(e, want),
             SyntaxKind::SpawnExpr => self.lower_proc_spawn(e),
-            SyntaxKind::InlineC | SyntaxKind::AsmExpr => Err(refuse("inline C/asm (c10)", e.span)),
+            SyntaxKind::InlineC | SyntaxKind::AsmExpr => Err(refuse("inline C/asm", e.span)),
             _ => Err(refuse("this expression shape in WIR lowering", e.span)),
         }
     }
@@ -4663,10 +4663,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
         }
         let TyKind::Nominal { module, name, .. } = table.kind(ty) else {
-            return Err(refuse("struct literals of this type (c06)", e.span));
+            return Err(refuse("struct literals of this type", e.span));
         };
         let Some(ItemSig::Struct(ss)) = self.sigs.get(*module as usize, name) else {
-            return Err(refuse("struct literals of this type (c06)", e.span));
+            return Err(refuse("struct literals of this type", e.span));
         };
         let declared: Vec<String> = ss.fields.iter().map(|f| f.name.clone()).collect();
         // Source-order evaluation.
@@ -4707,7 +4707,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         for fname in &declared {
             let Some((_, v)) = by_name.iter().find(|(n, _)| n == fname) else {
                 return Err(refuse(
-                    "struct literals with defaulted fields (c06)",
+                    "struct literals with defaulted fields",
                     e.span,
                 ));
             };
@@ -4885,7 +4885,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         let agg_ty = self.b.func.value_ty(agg);
         let types::TypeData::Agg(fields) = self.b.module.types.get(agg_ty).clone() else {
-            return Err(refuse("member access on non-aggregates (c06/std)", e.span));
+            return Err(refuse("member access on non-aggregates", e.span));
         };
         let Some(&fty) = fields.get(index) else {
             return Err(refuse("a member the aggregate does not carry", e.span));
@@ -5337,7 +5337,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .filter(|n| n.kind == SyntaxKind::ClosureExpr)
         else {
             return Err(refuse(
-                "spawn of a non-closure task (fn values, c05)",
+                "spawn of a non-closure task (fn values)",
                 e.span,
             ));
         };
@@ -5445,7 +5445,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     unreachable!("eu shape");
                 };
                 if !slots.is_empty() {
-                    return Err(refuse("task error payloads (s39 typed rows)", closure.span));
+                    return Err(refuse("task error payloads (typed error rows)", closure.span));
                 }
                 Ok(Some(eu))
             }
@@ -5506,7 +5506,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         for (_, sema) in &params {
             if matches!(self.table.kind(self.strip_sema(*sema)), TyKind::RegionTy) {
                 return Err(refuse(
-                    "a region parameter on a closure (c25 closeout)",
+                    "a region parameter on a closure",
                     e.span,
                 ));
             }
@@ -5925,7 +5925,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Ok(self.b.ins(op, &[v], &[types::I64], Aux::None).one());
         }
         Err(refuse(
-            "sync-cell payloads beyond one word (s39 std sync)",
+            "sync-cell payloads beyond one word",
             span,
         ))
     }
@@ -5994,7 +5994,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 .one());
         }
         Err(refuse(
-            "sync-cell payloads beyond one word (s39 std sync)",
+            "sync-cell payloads beyond one word",
             span,
         ))
     }
@@ -6093,7 +6093,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 })?;
                 Ok(Flow::Val(Some(v)))
             }
-            _ => Err(refuse("this channel method (s39 std sync)", e.span)),
+            _ => Err(refuse("this channel method", e.span)),
         }
     }
 
@@ -6217,7 +6217,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 self.rt_call("__wolf_rt_proc_link", &[id, other], None);
                 Ok(Flow::Val(None))
             }
-            _ => Err(refuse("this proc method (s39 supervisors)", e.span)),
+            _ => Err(refuse("this proc method", e.span)),
         }
     }
 
@@ -6258,7 +6258,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "is_killed" => 2,
             "is_cancelled" => 3,
             "is_fault" => 4,
-            _ => return Err(refuse("this exit-reason method (s39)", e.span)),
+            _ => return Err(refuse("this exit-reason method", e.span)),
         };
         let mask = self.b.iconst(types::I64, 0xFF);
         let kind = self
@@ -7080,11 +7080,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             Some(SyntaxKind::CopyKw) | Some(SyntaxKind::MoveKw) => self.lower_expr(operand),
             Some(SyntaxKind::SharedKw) => Err(refuse(
-                "shared-cell surface lowering (rc.* receivers, s27)",
+                "shared-cell surface lowering (rc.* receivers)",
                 e.span,
             )),
             Some(SyntaxKind::Amp) | Some(SyntaxKind::Star) => Err(refuse(
-                "borrow/deref lowering (unsafe-tier WIR ops, deferred from s26 — see closeout)",
+                "borrow/deref lowering (unsafe-tier WIR ops)",
                 e.span,
             )),
             _ => self.lower_expr(operand),
@@ -7628,7 +7628,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             )));
                         }
                         Err(refuse(
-                            "narrowing numeric casts (range-check semantics, s27)",
+                            "narrowing numeric casts (range-check semantics)",
                             e.span,
                         ))
                     }
@@ -7674,7 +7674,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
             }
             CastKind::Raw => Err(refuse(
-                "raw-pointer casts (unsafe-tier WIR ops, deferred from s26 — see closeout)",
+                "raw-pointer casts (unsafe-tier WIR ops)",
                 e.span,
             )),
             CastKind::Unsize => self.lower_dyn_cast(e, v, from, to),
@@ -9636,7 +9636,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // runs; this is the defensive twin (c10's importer).
             _ => {
                 return Err(refuse(
-                    "imported C beyond the modelled intrinsic set (c10)",
+                    "imported C beyond the modelled intrinsic set",
                     e.span,
                 ));
             }
@@ -9688,7 +9688,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     fn refuse_region_elem(&self, elem: TyId, span: Span) -> R<()> {
         if matches!(self.table.kind(self.strip_sema(elem)), TyKind::RegionTy) {
             return Err(refuse(
-                "a region element in a container (extent tracking stops at the handle — c25 closeout)",
+                "a region element in a container (extent tracking stops at the handle)",
                 span,
             ));
         }
@@ -10161,7 +10161,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             && sd.interps().any(|i| i.expr().is_some())
         {
             return Err(refuse(
-                "interpolation inside a multiline string (s38 formatting)",
+                "interpolation inside a multiline string",
                 e.span,
             ));
         }
@@ -11021,7 +11021,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 self.list_set_len(hdr, z);
                 Ok(Flow::Val(None))
             }
-            _ => Err(refuse("this List method (s05 std surface)", e.span)),
+            _ => Err(refuse("this List method", e.span)),
         }
     }
 
@@ -12612,7 +12612,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(Flow::Val(Some(out)))
             }
             _ => Err(refuse(
-                "indexing outside str/List (Pool/Map runtime shapes, c06/std)",
+                "indexing outside str/List (Pool/Map runtime shapes)",
                 e.span,
             )),
         }
@@ -12769,7 +12769,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // enforcement; see the byte-view block.
         if self.view_src(recv).is_some() {
             return Err(refuse(
-                "writing through a `bytes()` view (a byte view is read-only, s77)",
+                "writing through a `bytes()` view (a byte view is read-only)",
                 span,
             ));
         }
@@ -12779,7 +12779,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
         let TyKind::List(elem) = self.table.kind(self.strip_sema(base_sema)) else {
             return Err(refuse(
-                "index writes outside List (raw-pointer writes c10; Pool/Map c06/std)",
+                "index writes outside List (raw-pointer writes; Pool and Map)",
                 span,
             ));
         };
@@ -12894,7 +12894,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             Some(p) => {
                 return Err(refuse(
-                    "destructuring `for` patterns (tuple yields, c06/std)",
+                    "destructuring `for` patterns (tuple yields)",
                     p.span,
                 ));
             }
@@ -13523,7 +13523,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             Some(p) if p.kind == SyntaxKind::WildcardPat => None,
             Some(p) => {
                 return Err(refuse(
-                    "destructuring `for` patterns (tuple yields, c06/std)",
+                    "destructuring `for` patterns (tuple yields)",
                     p.span,
                 ));
             }
@@ -13647,10 +13647,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // materializing silently, which would make `push` write a
             // copy nobody can read.
             "push" | "pop" | "clear" => Err(refuse(
-                "mutation through a `bytes()` view (a byte view is read-only, s77)",
+                "mutation through a `bytes()` view (a byte view is read-only)",
                 e.span,
             )),
-            _ => Err(refuse("this List method (s05 std surface)", e.span)),
+            _ => Err(refuse("this List method", e.span)),
         }
     }
 
@@ -14345,7 +14345,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             Some(p) if p.kind == SyntaxKind::IdentPat => Ok(Some(self.text(p.span))),
             Some(p) if p.kind == SyntaxKind::WildcardPat => Ok(None),
             Some(p) => Err(refuse(
-                "destructuring `for` patterns (tuple yields, c06/std)",
+                "destructuring `for` patterns (tuple yields)",
                 p.span,
             )),
         }
@@ -14525,7 +14525,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             TyKind::Prim(Prim::F64) => PrintSeg::F64 { v, spec },
             TyKind::Prim(Prim::F32) => {
                 return Err(refuse(
-                    "`f32` print formatting (f64 is the s38 float)",
+                    "`f32` print formatting (`f64` is the float that prints)",
                     span,
                 ));
             }
@@ -15073,7 +15073,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 self.emit_list(sink, hdr, table, elem, span)
             }
             TyKind::Shared(_) | TyKind::Handle(_) | TyKind::Weak(_) | TyKind::Pool(_) => Err(
-                refuse("string interpolation of a shared-tier value (c06)", span),
+                refuse("string interpolation of a shared-tier value", span),
             ),
             _ => Err(refuse(
                 "string interpolation of a value with no promised rendering (a channel, proc, \
@@ -15280,7 +15280,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     fn packed_spec(&mut self, spec: Option<&'t GreenNode>) -> R<i64> {
         let Some(node) = spec else { return Ok(0) };
         if node.nodes().any(|n| n.kind == SyntaxKind::Interp) {
-            return Err(refuse("a computed format spec (s38 formatting)", node.span));
+            return Err(refuse("a computed format spec", node.span));
         }
         let text = self.text(node.span);
         let src = text.strip_prefix(':').unwrap_or(&text);
@@ -15350,7 +15350,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     && sd.interps().any(|i| i.expr().is_some())
                 {
                     return Err(refuse(
-                        "interpolation inside a multiline string (s38 formatting)",
+                        "interpolation inside a multiline string",
                         vexpr.span,
                     ));
                 }
@@ -15549,7 +15549,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     }) => {
                         let Some(size) = flat_size(&self.b.module.types, wty) else {
                             return Err(refuse(
-                                "`mut` arguments of non-flat types (spill layout, c06)",
+                                "`mut` arguments of non-flat types (spill layout)",
                                 vexpr.span,
                             ));
                         };
@@ -15564,7 +15564,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         Ok(MutArg::Relend { ptr, region })
                     }
                     _ => Err(refuse(
-                        "`mut` arguments beyond local places (c06)",
+                        "`mut` arguments beyond local places",
                         vexpr.span,
                     )),
                 }
@@ -15573,7 +15573,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let (base, path, off, fty) = self.resolve_member_chain(vexpr)?;
                 let Some(size) = flat_size(&self.b.module.types, fty) else {
                     return Err(refuse(
-                        "`mut` arguments of non-flat types (spill layout, c06)",
+                        "`mut` arguments of non-flat types (spill layout)",
                         vexpr.span,
                     ));
                 };
@@ -15609,7 +15609,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
             }
             _ => Err(refuse(
-                "`mut` arguments beyond local places (c06)",
+                "`mut` arguments beyond local places",
                 vexpr.span,
             )),
         }
@@ -15729,7 +15729,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
         if matches!(self.table.kind(ty), TyKind::Pool(_) | TyKind::Shared(_)) {
             return Err(refuse(
-                "Pool/shared constructor lowering (runtime shapes, c06)",
+                "Pool/shared constructor lowering (runtime shapes)",
                 e.span,
             ));
         }
@@ -16247,7 +16247,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         if sslots.len() > tslots.len() || sslots[..] != tslots[..sslots.len()] {
             return Err(refuse(
-                "row widening with non-prefix payload slots (spilled union layout, c06)",
+                "row widening with non-prefix payload slots (spilled union layout)",
                 span,
             ));
         }
@@ -16661,7 +16661,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         PatShape::Tests(cs, binds) => {
                             if !binds.is_empty() {
                                 return Err(refuse(
-                                    "or-patterns with payload bindings (join params, c06)",
+                                    "or-patterns with payload bindings (join params)",
                                     alt.span,
                                 ));
                             }
@@ -16673,7 +16673,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         }
                         PatShape::Product => {
                             return Err(refuse(
-                                "or-patterns over product patterns (join params, c06)",
+                                "or-patterns over product patterns (join params)",
                                 alt.span,
                             ));
                         }
@@ -16855,7 +16855,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // nested case test is the deep-tree residue.
                 if self.names_sema_case(tbl, sema_ty, &name) {
                     return Err(refuse(
-                        "an enum or row test inside a product pattern (deep trees, c06)",
+                        "an enum or row test inside a product pattern (deep trees)",
                         sub.span,
                     ));
                 }
@@ -16969,7 +16969,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             }
                             _ if ty_mentions_rigid(self.sig_table, ss.fields[i].ty) => {
                                 return Err(refuse(
-                                    "a struct pattern under a generic field's compound type (c06)",
+                                    "a struct pattern under a generic field's compound type",
                                     fsub.span,
                                 ));
                             }
@@ -16987,11 +16987,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(())
             }
             SyntaxKind::PathPat => Err(refuse(
-                "an enum or row test inside a product pattern (deep trees, c06)",
+                "an enum or row test inside a product pattern (deep trees)",
                 sub.span,
             )),
             SyntaxKind::OrPat => Err(refuse(
-                "or-patterns inside product patterns (join params, c06)",
+                "or-patterns inside product patterns (join params)",
                 sub.span,
             )),
             _ => Err(refuse("this pattern shape in match lowering", sub.span)),
@@ -17044,7 +17044,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .any(|n| matches!(n.kind, SyntaxKind::StringLit | SyntaxKind::StringExpr))
         {
             return Err(refuse(
-                "a str literal inside a product pattern (c06)",
+                "a str literal inside a product pattern",
                 sub.span,
             ));
         }
@@ -17082,7 +17082,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Some(n) => n,
                 None => {
                     return Err(refuse(
-                        "this literal shape inside a product pattern (c06)",
+                        "this literal shape inside a product pattern",
                         sub.span,
                     ));
                 }
@@ -17323,7 +17323,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         }
                         _ if ty_mentions_rigid(self.sig_table, *pid) => {
                             return Err(refuse(
-                                "a product pattern under a generic payload's compound type (c06)",
+                                "a product pattern under a generic payload's compound type",
                                 span,
                             ));
                         }
@@ -18249,7 +18249,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             Some(p) if p.kind == SyntaxKind::WildcardPat => None,
             Some(p) => {
                 return Err(refuse(
-                    "destructuring `for` patterns (tuple yields, c06/std)",
+                    "destructuring `for` patterns (tuple yields)",
                     p.span,
                 ));
             }
@@ -18589,7 +18589,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let Some(m) = Arg::value(extra) else { continue };
             if !matches!(m.kind, SyntaxKind::StringExpr | SyntaxKind::LiteralExpr) {
                 return Err(refuse(
-                    "assert messages with effects (trap payload rendering, c06)",
+                    "assert messages with effects (trap payload rendering)",
                     m.span,
                 ));
             }

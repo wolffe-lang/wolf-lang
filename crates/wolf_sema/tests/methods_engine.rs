@@ -347,7 +347,7 @@ fn interpolation_holes_refuse_unrendered_kinds_by_name() {
         ),
         (
             "fn main() -> !int {\n    let p = Pool[int]()\n    print(\"{p}\")\n    0\n}\n",
-            "string interpolation of a shared-tier value (c06)",
+            "string interpolation of a shared-tier value",
         ),
     ] {
         let tc = check_one(src);

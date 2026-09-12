@@ -4600,7 +4600,7 @@ impl<'a> Checker<'a> {
                 "string interpolation of an applied generic value (the std surface)"
             }
             TyKind::Shared(_) | TyKind::Handle(_) | TyKind::Weak(_) | TyKind::Pool(_) => {
-                "string interpolation of a shared-tier value (c06)"
+                "string interpolation of a shared-tier value"
             }
             TyKind::Rigid(_) | TyKind::Proj(..) => {
                 "string interpolation of a generic parameter's value"

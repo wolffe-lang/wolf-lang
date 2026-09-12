@@ -374,7 +374,7 @@ fn resolve_dep(
                 e1505(
                     dep.span,
                     format!(
-                        "`{}` is a registry dependency, and the hosted registry arrives at c15",
+                        "`{}` is a registry dependency, and no hosted registry exists yet",
                         pkg
                     ),
                 )

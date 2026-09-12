@@ -97,7 +97,7 @@ fn require_manifest(dir: &Path, cmd: &str) -> String {
         Ok(text) if wolf_pkg::is_manifest(&text) => text,
         Ok(_) => {
             eprintln!(
-                "wolf {cmd}: {} is not an s51 manifest (expected a `pkg {{ }}` block)",
+                "wolf {cmd}: {} is not a wolf manifest (expected a `pkg {{ }}` block)",
                 show_path(&path)
             );
             std::process::exit(2);
@@ -357,7 +357,7 @@ pub fn add(args: &[String]) {
         Ok(text) if wolf_pkg::is_manifest(&text) => text,
         Ok(_) => {
             eprintln!(
-                "wolf add: {} is not an s51 manifest (expected a `pkg {{ }}` block)",
+                "wolf add: {} is not a wolf manifest (expected a `pkg {{ }}` block)",
                 show_path(&manifest_path)
             );
             std::process::exit(2);

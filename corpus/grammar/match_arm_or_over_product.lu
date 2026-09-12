@@ -5,7 +5,7 @@
 //! s131 (#196) — the c06 residue's or-pattern half, pinned loud: an
 //! or-pattern whose alternatives are PRODUCT patterns
 //! (`Left(A { n }) | Right(B { n })`) refuses by name on the native
-//! pipe ("or-patterns over product patterns (join params, c06)") —
+//! pipe ("or-patterns over product patterns (join params)") —
 //! and, unlike the deep-tree class, the checked executor refuses the
 //! SAME shape at the same rung, so no wolfc lane runs this file
 //! today. lupin 0.1.20 RUNS it (plain alternation, pre-dating

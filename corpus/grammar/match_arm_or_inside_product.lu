@@ -5,7 +5,7 @@
 //! s131 (#196) — the c06 residue's other or-pattern half: an
 //! or-pattern INSIDE a product pattern (`Pair(1 | 2, b)` — an
 //! alternation in one payload slot) refuses by name on the native
-//! pipe ("or-patterns inside product patterns (join params, c06)").
+//! pipe ("or-patterns inside product patterns (join params)").
 //! The checked executor RUNS this file (its value-wise matcher takes
 //! the alternation slot-wise), so the lanes stay honestly non-nested
 //! — the pin measures the native half, the deep-tree posture exactly.

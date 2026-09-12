@@ -256,7 +256,7 @@ impl LlvmBackend {
     /// Pure text: byte-identical input yields byte-identical IR.
     pub fn module_ir(&self) -> String {
         let mut out = String::new();
-        out.push_str("; wolf release tier (s41) - WIR -> LLVM IR\n");
+        out.push_str("; wolf release tier - WIR -> LLVM IR\n");
         out.push_str("source_filename = \"wolf\"\n");
         out.push_str(&format!(
             "target datalayout = \"{}\"\n",

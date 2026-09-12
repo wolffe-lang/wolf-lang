@@ -894,12 +894,12 @@ const STR_MEMBERS: &[(&str, &str, &str)] = &[
     (
         "bytes",
         "fn bytes() -> List[byte]",
-        "The byte view: one `byte` per octet (s136); materializes only where it must.",
+        "The byte view: one `byte` per octet; materializes only where it must.",
     ),
     (
         "chars",
         "fn chars() -> List[char]",
-        "The code points as `char` values (s120; typed by D58).",
+        "The code points as `char` values.",
     ),
     (
         "starts_with",

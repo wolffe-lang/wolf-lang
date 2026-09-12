@@ -24,7 +24,7 @@
 //!
 //! Interpolation is deliberately absent: it lexes here (INTERP is a
 //! `MULTI_PART`) and the mid-end refuses it by name — "interpolation
-//! inside a multiline string (s38 formatting)" — so a witness carrying
+//! inside a multiline string" — so a witness carrying
 //! one would measure the conservatism ledger, not the grammar.
 
 fn main() -> !int {

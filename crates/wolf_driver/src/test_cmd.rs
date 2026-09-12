@@ -452,7 +452,7 @@ pub fn test_cmd(args: &[String]) {
             let (status, detail, out) = if *arity != 0 {
                 (
                     Status::Unsupported,
-                    "a test fn with parameters (s39 runs zero-parameter tests)".to_string(),
+                    "a test fn with parameters (only zero-parameter tests run)".to_string(),
                     None,
                 )
             } else if name == "main"

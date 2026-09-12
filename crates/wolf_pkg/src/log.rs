@@ -116,7 +116,7 @@ pub fn lookup(log_file: &Path, key: &str) -> Result<Option<LogRecord>, String> {
 pub fn append(log_file: &Path, rec: &LogRecord) -> Result<(), String> {
     if lookup(log_file, &rec.key)?.is_some() {
         return Err(format!(
-            "`{}` is already in the log — a published version is immutable (append-only, X7)",
+            "`{}` is already in the log — a published version is immutable (the log is append-only)",
             rec.key
         ));
     }
