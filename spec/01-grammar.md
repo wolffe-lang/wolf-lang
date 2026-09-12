@@ -98,7 +98,11 @@ INTERP     ::= '{' expr FORMAT_SPEC? '}'
 FORMAT_SPEC ::= ':' /* fill/align/sign/width/precision/type, spec §7.4 */
 ```
 
-- `{{` and `}}` are literal braces `[gram.lex.str.escape]`.
+- `{{` and `}}` are literal braces `[gram.lex.str.escape]`. `$` is an
+  ordinary character and escapes nothing, so a literal `${` is spelled
+  `${{` — `"$host${{uri}}"` is the text `$host${uri}` (wolf-lang#134,
+  appended 2026-09-11: nothing said so, and `$`+`{` is the commonest
+  two bytes in configuration text).
 - The `:` beginning a format spec is the first top-level `:` inside the
   interpolation (top-level = not inside nested `(` `[` `{` or a nested
   string) `[gram.amb.fmtcolon]`.

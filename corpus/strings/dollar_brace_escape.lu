@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="$host${uri}\n${\n")
+//! phase: run
+//! conforms: gram.lex.str.escape
+//!
+//! s157 (wolf-lang#134) — the working spelling, beside the refusal
+//! `corpus/grammar/str_dollar_brace.lu` pins. `$` escapes nothing, so
+//! a literal `${` is the brace escape one byte later: `${{`. This is
+//! the line every configuration-processing program wants to write, and
+//! nothing said it was spelled this way until `[gram.lex.str.escape]`
+//! gained the sentence.
+
+fn main() -> !int {
+    print("$host${{uri}}")
+    print("${{")
+    0
+}

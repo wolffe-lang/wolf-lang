@@ -1,0 +1,19 @@
+//! check: fail(E0102)
+//! phase: none
+//! conforms: gram.lex.str.escape
+//!
+//! s157 (wolf-lang#134) — the `${` half of `str_bare_brace.lu`'s rule.
+//! `$` escapes nothing: it is an ordinary character, so `${` is a `$`
+//! and then an interpolation-opening `{`, and every shell or nginx
+//! variable written into a wolf string opens one. E0102 as the bare
+//! brace does, with a second note that names the pair and the escape
+//! — `${{` — because the first note's "for a literal brace, write
+//! `{{`" sends a reader looking for a delimiter bug instead. The
+//! working spelling is `"$host${{uri}}"`, which prints `$host${uri}`,
+//! and `corpus/strings/dollar_brace_escape.lu` runs it.
+
+fn main() -> !int {
+    let m = "seg ${unclosed"
+    print(m)
+    0
+}

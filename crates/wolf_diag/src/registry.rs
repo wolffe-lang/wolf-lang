@@ -188,6 +188,12 @@ opens an interpolation, so `"hello {world"` is a string whose
 interpolation never closes before its line ends — close it with `}`, or
 write `{{` for a literal brace (D74 assigns the bare brace here, one
 family for everything that fails to close).
+
+`$` escapes nothing: it is an ordinary character, so `${` is a `$`
+followed by an interpolation-opening `{`, and a string full of shell or
+nginx variables (`"$host${uri}"`) is a string full of interpolations.
+The escape for a literal `${` is `${{` — the brace escape, one byte
+later than it looks (wolf-lang#134).
 "#);
 
 code!(E0103, "a `\"\"\"` delimiter shares its line with text", r#"

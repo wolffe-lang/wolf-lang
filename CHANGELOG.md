@@ -67,6 +67,14 @@ THE PAPERCUTS III — the language's ten, each a witness plus a fix.
   name and typed a shadowing `read_line()` against the AMBIENT
   signature, on both tiers. W0304 already names the shadow. Witness
   `corpus/lints/shadow_prelude_call.lu`, three lanes.
+- **lex/spec** (#134): `$` escapes nothing, and now something says
+  so. `[gram.lex.str.escape]` gains the sentence — a literal `${` is
+  spelled `${{`, so `"$host${{uri}}"` is the text `$host${uri}` — and
+  E0102 adds a second note naming the pair whenever the unclosed
+  string carries `${`, because "for a literal brace, write `{{`" sends
+  a reader hunting a delimiter bug. `--explain E0102` says it too.
+  Witnesses `corpus/grammar/str_dollar_brace.lu` (the refusal) and
+  `corpus/strings/dollar_brace_escape.lu` (the spelling that works).
 
 ## 0.2.12 — 2026-09-11
 
