@@ -351,6 +351,12 @@ pub(crate) struct Lowerer<'t> {
     /// `ρ_static`, once demanded (fn bodies; item initializers use it
     /// as their ambient).
     static_region: Option<RegionId>,
+    /// s160 (wolf-lang#355, `[mem.region.proc]`): this body is a
+    /// `spawn proc` entry, and this is the region its allocations
+    /// land in — the PROC's own root, frame-local to the proc and
+    /// bulk-freed by `[conc.proc.kill]` step 3, not the spawner's
+    /// caller region. `None` for every ordinary body.
+    proc_region: Option<RegionId>,
 
     // ------------------------------------------ region checker (s20) ----
     /// The open set as a stack of (region, open-site) pairs — every
@@ -667,6 +673,30 @@ impl<'t> Lowerer<'t> {
 
     /// The shared fix-ladder note (Target 6): allocation-site
     /// vocabulary, never lifetimes or internal variable names.
+    /// s160 (`[mem.region.proc]`): is this the proc-entry body's own
+    /// root region? The fix ladder differs — a proc has no enclosing
+    /// block to widen and no longer-lived region of its own to aim at.
+    fn is_proc_region(&mut self, r: RegionId) -> bool {
+        match self.proc_region {
+            Some(p) => self.rt.same(p, r),
+            None => false,
+        }
+    }
+
+    /// The proc-boundary fix ladder. A proc's region cannot be
+    /// widened — its extent IS the proc — so the rungs are: build the
+    /// bytes where they must live and hand them in, or change the
+    /// ownership so the value outlives every region.
+    fn proc_ladder() -> &'static str {
+        "a proc's regions die with the proc ([conc.proc.kill] step 3), so the value \
+         must be built somewhere that outlives it: build it in the SPAWNER and pass \
+         it in as a parameter (a parameter's region is the spawner's, which outlives \
+         the proc by [conc.proc.1]), or send a payload that owns no region storage — \
+         a literal, an `int`, a `bool`. Two keep-alive alternatives change the \
+         ownership instead: `freeze` the value (immutable forever) or make it a \
+         `shared` cell (reference-counted, never dangles)."
+    }
+
     fn ladder() -> &'static str {
         "to keep the value, allocate it where it must live: build it outside the \
          region block, or aim the allocation at a longer-lived region explicitly \
@@ -868,26 +898,48 @@ impl<'t> Lowerer<'t> {
                     self.mark_escape(s, "outlives its region");
                     let region = self.show_region(sr);
                     let alloc = self.sites[s.0 as usize].span;
-                    let mut d = Diagnostic::error(
-                        codes::E1010,
-                        span,
+                    let is_proc = self.is_proc_region(sr);
+                    let headline = if is_proc {
+                        format!(
+                            "this value is allocated in {region}, the proc's own \
+                             region, which is freed when the proc exits — before \
+                             the {reader} could ever use it"
+                        )
+                    } else {
                         format!(
                             "this value is allocated in {region}, which is freed \
                              before the {reader} could ever use it"
-                        ),
-                    )
-                    .with_label("the value would outlive its region")
-                    .with_secondary(alloc, format!("allocated here, into {region}"));
+                        )
+                    };
+                    let mut d = Diagnostic::error(codes::E1010, span, headline)
+                        .with_label(if is_proc {
+                            "the value would outlive the proc that built it"
+                        } else {
+                            "the value would outlive its region"
+                        })
+                        .with_secondary(alloc, format!("allocated here, into {region}"));
                     if let Some((name, intro)) = self.region_span(sr) {
                         d = d.with_secondary(
                             intro,
-                            format!(
-                                "region `{name}` is created here and freed with its \
-                                 scope — everything in it is freed wholesale"
-                            ),
+                            if is_proc {
+                                format!(
+                                    "`{name}` is a `spawn proc` entry: a proc owns its \
+                                     regions and they bulk-free at its exit, so nothing \
+                                     built here outlives it ([conc.proc.kill])"
+                                )
+                            } else {
+                                format!(
+                                    "region `{name}` is created here and freed with its \
+                                     scope — everything in it is freed wholesale"
+                                )
+                            },
                         );
                     }
-                    d = d.with_note(Self::ladder());
+                    d = d.with_note(if is_proc {
+                        Self::proc_ladder()
+                    } else {
+                        Self::ladder()
+                    });
                     self.diags.push(d);
                 }
             }
@@ -4741,6 +4793,7 @@ impl<'t> Lowerer<'t> {
             conflicted: false,
             pattern_moves: Default::default(),
             static_region: None,
+            proc_region: None,
             open_stack: Vec::new(),
             region_parent: HashMap::new(),
             frozen_region: HashMap::new(),
@@ -4758,11 +4811,28 @@ impl<'t> Lowerer<'t> {
 
     /// Lower a function body. `params` come from the elaborated
     /// signature (modes and view sets included).
+    ///
+    /// `proc_entry` (s160, wolf-lang#355, `[mem.region.proc]`): this
+    /// function is named by a `spawn proc` somewhere in the package.
+    /// `[mem.region.create.3]`'s default — "the caller's current
+    /// region" — has no caller to name here: `spawn proc` starts a
+    /// failure domain (`[conc.proc.1]`) that outlives its spawner's
+    /// frame by design, and `[conc.proc.kill]` step 3 bulk-frees the
+    /// proc's regions at its exit. So the body's ambient is a region
+    /// frame-local to the PROC, and anything allocated in it that
+    /// leaves the proc — a channel payload above all — is E1010,
+    /// exactly as a `region scratch { }`-built value leaving its
+    /// block is. Parameters are untouched: their regions are the
+    /// spawner's, which outlive the proc, so handing the bytes in is
+    /// the fix the diagnostic prescribes. `Some(span)` carries the
+    /// function's name token — where the proc's region is introduced,
+    /// and where the diagnostic's "created here" secondary points.
     pub(crate) fn lower_fn(
         mut self,
         name: &str,
         params: &[ParamSig],
         body: AstBlock<'t>,
+        proc_entry: Option<Span>,
     ) -> R<Lowered> {
         // The implicit caller-region parameter: the ambient default
         // (D12, [mem.region.create.3]).
@@ -4810,7 +4880,24 @@ impl<'t> Lowerer<'t> {
                 _ => {}
             }
         }
+        if let Some(intro) = proc_entry {
+            // The proc's own root region. It is never swept at a
+            // close (there is no close: the proc's exit frees it) and
+            // never promoted, so it can neither trip W1001 nor claim
+            // a stack-promotion fact it has not earned.
+            let rid = self.new_region(
+                &format!("proc:{name}"),
+                RegionKind::Scope,
+                Strategy::Arena,
+                intro,
+            );
+            self.proc_region = Some(rid);
+            self.ambient.push(rid);
+        }
         let val = self.walk_block(body, true)?;
+        if proc_entry.is_some() {
+            self.ambient.pop();
+        }
         // The trailing value is the function's result: the default
         // scheme's "result lands in the caller's region".
         let result_span = val.origin.unwrap_or_else(|| end_span(body.syntax().span));

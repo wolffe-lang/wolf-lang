@@ -184,7 +184,13 @@ pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
             continue;
         };
         byteview::check_body(&lender, pkg, tb, &outcome.body, &mut out.diagnostics);
-        match lower_body(pkg, &tc.sigs, tb, &outcome.body) {
+        match lower_body(
+            pkg,
+            &tc.sigs,
+            tb,
+            &outcome.body,
+            is_proc_entry(tc, &outcome.body),
+        ) {
             None => {}
             Some(Err(nyc)) => out.not_yet.push(nyc),
             Some(Ok(lowered)) => {
@@ -260,7 +266,13 @@ pub fn dump_package(pkg: &Package, tc: &Typecheck) -> String {
         let BodyResult::Checked(tb) = &outcome.result else {
             continue;
         };
-        if let Some(Ok(lowered)) = lower_body(pkg, &tc.sigs, tb, &outcome.body) {
+        if let Some(Ok(lowered)) = lower_body(
+            pkg,
+            &tc.sigs,
+            tb,
+            &outcome.body,
+            is_proc_entry(tc, &outcome.body),
+        ) {
             out.push_str(&lowered.cfg.dump());
             out.push('\n');
         }
@@ -276,12 +288,34 @@ pub fn dump_regions_package(pkg: &Package, tc: &Typecheck) -> String {
         let BodyResult::Checked(tb) = &outcome.result else {
             continue;
         };
-        if let Some(Ok(lowered)) = lower_body(pkg, &tc.sigs, tb, &outcome.body) {
+        if let Some(Ok(lowered)) = lower_body(
+            pkg,
+            &tc.sigs,
+            tb,
+            &outcome.body,
+            is_proc_entry(tc, &outcome.body),
+        ) {
             out.push_str(&lowered.regions.render());
             out.push('\n');
         }
     }
     out
+}
+
+/// s160 (wolf-lang#355, `[mem.region.proc]`): is this body named by
+/// some `spawn proc` in the package? Such a body lowers with the
+/// PROC's own root region as its ambient, not its caller's — a proc
+/// is a failure domain owning its regions (`[conc.proc.1]`) and
+/// `[conc.proc.kill]` step 3 bulk-frees them at its exit, so
+/// `[mem.region.create.3]`'s "the caller's current region" default has
+/// no caller to name. The set is sema's (`Typecheck::proc_entries`) —
+/// the one place a spawn's name is resolved; this must never
+/// re-resolve it. A function used BOTH ways — spawned somewhere and
+/// called directly elsewhere — is checked under the proc rule in
+/// both: the conservative reading, and the one a reader can predict
+/// from the source without tracing every call site.
+fn is_proc_entry(tc: &Typecheck, body: &BodyRef) -> bool {
+    body.member.is_none() && tc.proc_entries.contains(&(body.module, body.name.clone()))
 }
 
 /// Lower one checked body. `None`: the item has no lowerable body
@@ -291,6 +325,7 @@ fn lower_body(
     sigs: &SigTables,
     tb: &TypedBody,
     body: &BodyRef,
+    proc_entry: bool,
 ) -> Option<Result<Lowered, NotYet>> {
     let root = &pkg.files[body.file].parse.root;
     let node = root.nodes().filter(|n| n.kind.is_item()).nth(body.decl)?;
@@ -307,7 +342,11 @@ fn lower_body(
             let d = wolf_ast::FnDecl::cast(node)?;
             let block = d.body()?;
             let params = fn_params(pkg, sigs, body, outer)?;
-            Some(lowerer.lower_fn(&body.name, params, block))
+            // s160: the proc's own region is introduced at the
+            // function's NAME — where a reader sees which proc this
+            // is, and where lupin's `region-fault` points too.
+            let proc_intro = proc_entry.then(|| d.name().map_or(block.syntax().span, |t| t.span));
+            Some(lowerer.lower_fn(&body.name, params, block, proc_intro))
         }
         SyntaxKind::ConstDecl => {
             let init = node.nodes().find(|n| is_expr_kind(n.kind))?;

@@ -17,6 +17,8 @@
 //! - type errors with no NotYetCheckable bodies ⇒ `typecheck` +
 //!   `fail(E04xx)`.
 
+use std::collections::BTreeSet;
+
 use rayon::prelude::*;
 use wolf_diag::Diagnostic;
 
@@ -47,6 +49,14 @@ pub struct Typecheck {
     /// Comptime evaluation counters (s16): memo hit rate rides the
     /// D5 bench stream.
     pub ctfe: crate::ctfe::CtfeStats,
+    /// s160 (wolf-lang#355, `[mem.region.proc]`): the package-wide
+    /// union of every `spawn proc` target, as `(module, item name)`.
+    /// `wolf_mem` lowers exactly these bodies with a proc-local
+    /// ambient region. The union is over CHECKED bodies only — a body
+    /// that failed or refused contributes nothing, which cannot make
+    /// a passing package wrong because such a package never reaches
+    /// the mem rung.
+    pub proc_entries: BTreeSet<(usize, String)>,
 }
 
 impl Typecheck {
@@ -82,6 +92,7 @@ pub fn typecheck_package_with(pkg: &Package, single_thread: bool) -> Typecheck {
     let mut bodies = Vec::new();
     let mut diagnostics: Vec<Diagnostic> = Vec::new();
     let mut not_yet = Vec::new();
+    let mut proc_entries: BTreeSet<(usize, String)> = BTreeSet::new();
     // Signature diagnostics ride along, cascade-suppressed per file.
     let mut sink = wolf_diag::Diagnostics::new();
     for unit in &pkg.files {
@@ -104,6 +115,7 @@ pub fn typecheck_package_with(pkg: &Package, single_thread: bool) -> Typecheck {
             BodyResult::Checked(tb) => {
                 diagnostics.extend(tb.warnings.iter().cloned());
                 diagnostics.extend(crate::wave::check_typed_body(pkg, &body, tb));
+                proc_entries.extend(tb.proc_entries.iter().cloned());
             }
         }
         bodies.push(BodyOutcome { body, result });
@@ -132,6 +144,7 @@ pub fn typecheck_package_with(pkg: &Package, single_thread: bool) -> Typecheck {
     Typecheck {
         sigs,
         bodies,
+        proc_entries,
         diagnostics,
         not_yet,
         ctfe: ctfe_pass.stats,

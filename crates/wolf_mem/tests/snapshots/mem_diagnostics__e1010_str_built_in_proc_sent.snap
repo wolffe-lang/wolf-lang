@@ -1,0 +1,19 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1010]: this value is allocated in region `proc:worker`, the proc's own region, which is freed when the proc exits — before the receiver could ever use it
+ --> mem:///main.lu:2:14
+  |
+1 | fn worker(n: int, out: channel[str]) -> !int {
+  |    ------ `proc:worker` is a `spawn proc` entry: a proc owns its regions and they bulk-free at its exit, so nothing built here outlives it ([conc.proc.kill])
+2 |     out.send("built {n} here")?
+  |              ^^^^^^^^^^^^^^^^ the value would outlive the proc that built it
+  |              ---------------- allocated here, into region `proc:worker`
+  |
+  = note: a proc's regions die with the proc ([conc.proc.kill] step 3), so the value must be built
+    somewhere that outlives it: build it in the SPAWNER and pass it in as a parameter (a
+    parameter's region is the spawner's, which outlives the proc by [conc.proc.1]), or send
+    a payload that owns no region storage — a literal, an `int`, a `bool`. Two keep-alive
+    alternatives change the ownership instead: `freeze` the value (immutable forever) or
+    make it a `shared` cell (reference-counted, never dangles).

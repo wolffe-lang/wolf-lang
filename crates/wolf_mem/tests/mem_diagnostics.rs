@@ -1314,6 +1314,53 @@ fn e1010_region_built_str_by_interpolation_held_outside() {
 }
 
 #[test]
+fn e1010_str_built_in_a_proc_and_sent() {
+    // s160 (wolf-lang#355, `[mem.region.proc]`): a `spawn proc` entry
+    // has no caller region to inherit — `[conc.proc.1]` makes the proc
+    // its own failure domain and `[conc.proc.kill]` step 3 bulk-frees
+    // its regions at exit — so the interpolation is a site in
+    // `proc:worker`, and sending it out is the same escape a
+    // region-block-built payload is. The fix ladder is the proc's own:
+    // build it in the spawner and hand it in.
+    snap(
+        "e1010_str_built_in_proc_sent",
+        "fn worker(n: int, out: channel[str]) -> !int {\n    \
+             out.send(\"built {n} here\")?\n    \
+             0\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let out = channel[str](4)\n    \
+             let c = spawn proc worker(7, out)\n    \
+             out.close()\n    \
+             for line in out { print(line) }\n    \
+             0\n\
+         }\n",
+    );
+}
+
+#[test]
+fn clean_str_built_in_the_spawner_and_handed_to_a_proc() {
+    // The accepted twin: a parameter's region is the SPAWNER's, which
+    // outlives the proc, so the bytes never lived in `proc:worker`.
+    snap(
+        "clean_str_param_sent_from_proc",
+        "fn worker(msg: str, out: channel[str]) -> !int {\n    \
+             out.send(msg)?\n    \
+             0\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let n = 7\n    \
+             let msg = \"built {n} here\"\n    \
+             let out = channel[str](4)\n    \
+             let c = spawn proc worker(msg, out)\n    \
+             out.close()\n    \
+             for line in out { print(line) }\n    \
+             0\n\
+         }\n",
+    );
+}
+
+#[test]
 fn e1010_region_built_str_by_append_held_outside() {
     // `keep += u` is `keep = keep + u`: the fresh allocation lands in
     // the ambient region — `scratch` — and `keep` is declared outside.

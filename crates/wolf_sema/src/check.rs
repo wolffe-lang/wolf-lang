@@ -248,6 +248,14 @@ pub struct TypedBody {
     /// unit context, in visit order — W0601 sites for the typed wave,
     /// beside the non-trailing statements it finds on its own.
     pub unit_discards: Vec<Span>,
+    /// s160 (wolf-lang#355, `[mem.region.proc]`): every function this
+    /// body names in a `spawn proc f(args)`, as the resolved
+    /// `(module, item name)` — the same pair `named_fn_target`
+    /// answers, so an imported entry is recorded in the module that
+    /// DEFINES it. `wolf_mem` reads the package-wide union to decide
+    /// which bodies lower with a proc-local ambient region instead of
+    /// the caller's; it must never re-resolve the name itself.
+    pub proc_entries: Vec<(usize, String)>,
 }
 
 /// One captured binding of a task closure (the s73 handoff record).
@@ -567,6 +575,9 @@ struct Checker<'a> {
     /// E1103. The stack survives into closures deliberately — the
     /// clause's word is *lexically*.
     when_stack: Vec<Span>,
+    /// s160: `spawn proc f(args)` targets resolved in this body
+    /// (`[mem.region.proc]`), in visit order.
+    proc_entries: Vec<(usize, String)>,
     /// Inside the argument of a `s.spawn(…)` call ([conc.task.spawn]):
     /// the scope depth at the spawn site and the spawn call's span.
     /// An assignment whose target binding sits below that depth writes
@@ -752,6 +763,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         row_tags: BTreeSet::new(),
         when_stack: Vec::new(),
         spawn_ctx: None,
+        proc_entries: Vec::new(),
         closure_rows: Vec::new(),
         closure_rets: Vec::new(),
         capture_frames: Vec::new(),
@@ -859,6 +871,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
                     member_refs: c.member_refs,
                     task_captures,
                     unit_discards: c.unit_discards,
+                    proc_entries: c.proc_entries,
                 })
             } else {
                 BodyResult::Errors(diags)
@@ -925,6 +938,7 @@ pub(crate) fn collect_body_rows(
         row_tags: BTreeSet::new(),
         when_stack: Vec::new(),
         spawn_ctx: None,
+        proc_entries: Vec::new(),
         closure_rows: Vec::new(),
         closure_rets: Vec::new(),
         capture_frames: Vec::new(),
@@ -2957,6 +2971,15 @@ impl<'a> Checker<'a> {
             );
             return Ok(self.error_ty());
         };
+        // s160 (wolf-lang#355, `[mem.region.proc]`): record the entry
+        // before typing the call. A proc's body allocates into the
+        // PROC's own region, not its spawner's — `wolf_mem` cannot
+        // learn that without knowing which bodies are proc entries,
+        // and this is the one place the name is resolved.
+        let entry = (module, item.clone());
+        if !self.proc_entries.contains(&entry) {
+            self.proc_entries.push(entry);
+        }
         let ret = self.call_named(&item, module, seg.span, e, d.args())?;
         // v0 completion values: the int slot (or nothing), possibly
         // behind an error row (the row becomes `error(tag)`).
