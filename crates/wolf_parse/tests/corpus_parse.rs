@@ -212,7 +212,7 @@ fn corpus_parse_expectations() {
     // must pass. s158's other two refusals are NOT syntax-tier —
     // `E0419` (an empty list literal with no context) and `E0610` (an
     // error-set alias cycle) are the checker's, and parse them clean.
-    assert_eq!(fail, 27, "syntax-tier fail-file count drifted");
+    assert_eq!(fail, 28, "syntax-tier fail-file count drifted");
     assert_eq!(
         member_fail, 2,
         "member-sibling fail-file count drifted (the broken_sibling \

@@ -18360,7 +18360,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     Some(p) if p.kind == SyntaxKind::WildcardPat => None,
                     Some(p) => {
                         return Err(refuse(
-                            "destructuring `for` patterns (tuple yields, c06/std)",
+                            "destructuring `for` patterns (tuple yields)",
                             p.span,
                         ));
                     }

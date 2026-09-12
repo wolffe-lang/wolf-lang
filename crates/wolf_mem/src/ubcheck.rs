@@ -6443,13 +6443,23 @@ impl<'t> Machine<'t> {
     /// answer rides back as `Value::Range { lo, hi }`.
     fn slice_bounds(&mut self, rn: &'t GreenNode, len: i64, at: Span) -> E<Flow> {
         let bounds = self.range_endpoints(rn, len, self.origin_at(at))?;
-        let Flow::Val(Value::Range { start: lo, end: hi }) = bounds else {
+        let Flow::Val(Value::Range {
+            start: lo, end: hi, ..
+        }) = bounds
+        else {
             return Ok(bounds);
         };
         if lo < 0 || hi < lo || hi > len {
             return self.trap("bounds", "mem.ub.defined", at);
         }
-        Ok(Flow::Val(Value::Range { start: lo, end: hi }))
+        // A SUBSCRIPT range is never a `range[char]` (s158): `^n` and
+        // the open sides resolve against a length, and only `int`
+        // indexes a collection.
+        Ok(Flow::Val(Value::Range {
+            start: lo,
+            end: hi,
+            chars: false,
+        }))
     }
 
     /// A range node's endpoints resolved against `len`, with NO
