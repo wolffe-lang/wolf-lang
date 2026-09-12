@@ -92,6 +92,18 @@ law: `.docs/refs/papers/swift-ownership-manifesto.md`.
   question as mutation, and the worse answer — the value the caller
   kept would be gone. `copy` the parameter and hand the duplicate on,
   or declare the parameter `take` and let the call site say so.
+  The **plain** move-out — `fn f(b: T) -> T { b }`, no `take`
+  spelled — is a DIFFERENT question, and this clause does not refuse
+  it. Ruled 2026-09-12 (wolf-lang#359). `take` ends the caller's
+  value: the binding the caller kept is gone, which is what the
+  sentence above forbids in terms. A plain move-out does not do that.
+  Measured at v0.2.13: the caller's binding survives the call and its
+  value is intact — what the callee hands back is a SECOND live path
+  to the same value. So the two spellings are not the same act by a
+  quieter name; the plain one gives nothing away and instead creates
+  an **undeclared alias**, with both paths writable and no `shared`
+  spelling anywhere. The rule that breaks is `[mem.tier0.excl.1]`,
+  not this one, and it carries that clause's code rather than E1014.
 - `[mem.tier0.mode.mut]` `mut` parameters are **exclusive inout**: for the
   duration of the call no other access (read or write) to the argument
   place or any conflicting path may occur. Call sites must write `mut`
