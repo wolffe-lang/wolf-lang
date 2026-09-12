@@ -10,4 +10,5 @@ error[E0708]: the size of `Vec2` is not resolved until codegen lays it out
   |               ------------- while evaluating `main`, entered here
   |
   = note: layout (sizes, offsets) is decided by the code generator, not the type checker; comptime
-    can answer for fixed-width primitives today, but not yet for aggregates.
+    answers for fixed-width primitives, whose widths the type alone settles, and cannot
+    answer for an aggregate until the layout that decides its offsets exists.

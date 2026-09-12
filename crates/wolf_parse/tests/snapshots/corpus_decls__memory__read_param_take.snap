@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 608..656 name=eat body=Block
+FnDecl 658..758 name=hand_on body=Block
+FnDecl 760..844 name=main body=Block

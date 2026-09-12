@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 695..764 name=main body=Block
+-- diagnostics --
+E0102 [Error] 727..743 this string never closes

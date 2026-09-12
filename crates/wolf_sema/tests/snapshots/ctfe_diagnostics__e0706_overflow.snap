@@ -12,5 +12,5 @@ error[E0706]: this `+` on `i32` faults at compile time: 2147483647 + 1 leaves `i
   |               ------ while evaluating `brim`, entered here
   |               ------ while evaluating `main`, entered here
   |
-  = note: checked arithmetic has one semantics everywhere (X3): what would trap at runtime is an
-    error at comptime — intended wraparound is spelled `wrapping[T]`, never a mode.
+  = note: checked arithmetic has one semantics everywhere: what would trap at runtime is an error
+    at comptime — intended wraparound is spelled `wrapping[T]`, never a mode.

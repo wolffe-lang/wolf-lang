@@ -110,7 +110,13 @@ interpolation never closes before its line ends — close it with `}`, or
 write `{{` for a literal brace (D74 assigns the bare brace here, one
 family for everything that fails to close).
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__str_bare_brace.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_bare_brace.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_bare_brace_code.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_eol.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_multiline_eof.snap, crates/wolf_lex/tests/snapshots/render__render_e0102_unterminated.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__str_bare_brace.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__str_bare_brace.snap
+`$` escapes nothing: it is an ordinary character, so `${` is a `$`
+followed by an interpolation-opening `{`, and a string full of shell or
+nginx variables (`"$host${uri}"`) is a string full of interpolations.
+The escape for a literal `${` is `${{` — the brace escape, one byte
+later than it looks (wolf-lang#134).
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__str_bare_brace.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__str_dollar_brace.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_bare_brace.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_bare_brace_code.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_eol.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0102_multiline_eof.snap, crates/wolf_lex/tests/snapshots/render__render_e0102_unterminated.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__str_bare_brace.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__str_dollar_brace.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__str_bare_brace.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__str_dollar_brace.snap
 
 ## E0103 — a `\
 
@@ -492,7 +498,7 @@ was meant for a different call; passing too few often means a value
 was dropped while refactoring. Check the order too: a swapped argument
 pair usually surfaces as a type mismatch on the *next* argument.
 
-Fixtures: crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_count.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0402_arg_count.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0402_assert_arity.snap
+Fixtures: crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__proc_link_root.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_count.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0402_arg_count.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0402_assert_arity.snap
 
 ## E0403 — no such field
 
@@ -1243,7 +1249,7 @@ a guard can be false, so only unguarded arms prove anything. Add arms
 for the listed witnesses, or end the `match` with a `_` arm (or a
 binding) to catch the rest deliberately.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_arm_product_nonexhaustive.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_missing.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_str_nonexhaustive.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_enum_witnesses.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_guard_non_contribution.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_int_witness.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_row_missing_tag.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_witness_past_range.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__match_nullary_variant.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_arm_product_nonexhaustive.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_missing.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_str_nonexhaustive.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_enum_witnesses.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_guard_non_contribution.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_int_witness.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_row_missing_tag.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_witness_past_range.snap
 
 ## E0802 — this `match` arm can never match
 
@@ -1456,7 +1462,7 @@ where the move happens — `copy a` produces an independent value of
 any type — or give the name a new value first: assigning to a
 moved-from place makes it live again.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__destructure_partial_move.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__match_arm_whole_move.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__move_use_after.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__struct_destructure_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_branchy_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_defer_capture.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_reinit_residue.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_tuple_destructure.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_whole_value.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__destructure_partial_move.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__list_elem_copy_loop.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__match_arm_whole_move.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__move_use_after.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__struct_destructure_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_branchy_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_defer_capture.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_reinit_residue.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_tuple_destructure.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_whole_value.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap
 
 ## E1002 — this needs exclusive access, but the value is in use here
 
@@ -1576,10 +1582,10 @@ in the caller's region, aim the allocation at a longer-lived region
 explicitly (`let r = region()` … `in r { … }`), or widen the region
 block so it covers every use. Note that `copy` inside the block does
 not help — a copy is a fresh allocation in the *current* ambient
-region, which is still the dying one. `freeze` (making the whole
-region immortal and immutable) and `shared` (counted escape) are
-coming in later tiers for the cases that genuinely need to outlive
-the region. A `str` built inside the block — by `+`, `+=`, or an
+region, which is still the dying one. For a value that genuinely must
+outlive the region, `freeze` makes the whole region immortal and
+immutable and `shared` gives a counted escape — both are spellings
+this compiler takes today. A `str` built inside the block — by `+`, `+=`, or an
 interpolation with a hole — is such a value too: the two-word view
 copies out freely, but the bytes it points at were allocated in the
 region ([mem.region.escape]).
@@ -1648,7 +1654,7 @@ consumes the value and the caller is done with it. Or keep it `read`
 and work on this function's own duplicate: `var local = copy p` gives
 a value it owns outright.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__closure_kill_list.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_write.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__receiver_bare_mut_param.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_mut_lend.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_projected_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_read_self_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_whole_and_compound.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__closure_kill_list.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_take.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_write.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__receiver_bare_mut_param.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_mut_lend.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_projected_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_read_self_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_whole_and_compound.snap
 
 ## E1015 — RETIRED — an escaping byte-view lend now copies and warns W1004
 
@@ -1807,7 +1813,7 @@ The `--checked` execution machine (the miri-lite UB checker) ran this
 program against the operational memory model and reached a state the
 spec's closed UB enumeration names: every finding cites its `[mem.ub]`
 row (P1-P6, L1, L2, T1), the raw-tier operation responsible, and the
-licensed optimization the D2 pairing attaches to that row — the
+licensed optimization the spec pairs with that row — the
 transformation compiled code is entitled to make, which is exactly why
 the unchecked behavior is undefined rather than merely wrong. The
 static tier accepts this program by design: raw pointers carry no
@@ -2110,7 +2116,7 @@ that read as the intrinsic quietly run the local one. Pick another
 name; the prelude's inventory is small, fixed, and worth avoiding
 wholesale.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__shadow_prelude.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0304_shadow_binding.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0304_shadow_prelude.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__shadow_prelude.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__shadow_prelude_call.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0304_shadow_binding.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w0304_shadow_prelude.snap
 
 ## W0305 — this row tag shares its name with something else in scope
 

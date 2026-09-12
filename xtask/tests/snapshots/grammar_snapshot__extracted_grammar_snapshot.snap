@@ -202,6 +202,7 @@ row_entry ::= path ('(' type (',' type)* ')')?
 
 pattern ::= closed_pattern ('|' closed_pattern)*
 closed_pattern ::= '_' | literal | IDENT
+          | path                               /* [gram.pat.nullary] */
           | path '(' pattern (',' pattern)* ','? ')'
           | path '{' field_pat (',' field_pat)* (',' '..'?)? '}'
           | '(' pattern (',' pattern)* ','? ')'

@@ -1379,17 +1379,16 @@ impl Lexer<'_> {
     fn unterminated_interp(&mut self, f: StrFrame) {
         let at = self.pos;
         let span = self.span(f.open_lo, at);
-        let mut d =
-            Diagnostic::error(codes::UNTERMINATED_STRING, span, "this string never closes")
-                .with_label(
-                    "it opens here, and an interpolation `{` inside it is still open \
+        let mut d = Diagnostic::error(codes::UNTERMINATED_STRING, span, "this string never closes")
+            .with_label(
+                "it opens here, and an interpolation `{` inside it is still open \
                      when the line ends",
-                )
-                .with_note(
-                    "a `\"…\"` string — and every `{…}` interpolation inside it — must \
+            )
+            .with_note(
+                "a `\"…\"` string — and every `{…}` interpolation inside it — must \
                      close before the line ends. Close the interpolation with `}` and \
                      the string with `\"`; for a literal brace, write `{{`.",
-                );
+            );
         // `$` does not escape anything (wolf-lang#134). A string
         // carrying the two bytes `$` `{` — every shell and nginx
         // variable ever written — opens an interpolation at the `{`,

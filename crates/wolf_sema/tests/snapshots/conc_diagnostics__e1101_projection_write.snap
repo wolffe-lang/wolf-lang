@@ -12,5 +12,5 @@ error[E1101]: this task writes to `t`, which it captures from the enclosing func
   = note: task captures are copies, `imm` shares, or region moves (D14) — never mutable windows
     onto the parent's locals; two tasks writing one binding is the data race the memory
     model forbids. Three ways out: send results over a `channel` and let one owner mutate;
-    guard truly shared state with a `Mutex` acquired in a `when` block; or, for loop-shaped
-    work, use `par` with a reduction.
+    guard truly shared state with a `Mutex` acquired in a `when` block; or give each task
+    its own copy and combine the results after the scope joins.

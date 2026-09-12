@@ -1,0 +1,60 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 695..765
+  FnDecl 695..764
+    FnKw 695..697 "fn"
+    Ident 698..702 "main"
+    ParamList 702..704
+      LParen 702..703 "("
+      RParen 703..704 ")"
+    RetType 705..712
+      Arrow 705..707 "->"
+      ErrorUnionType 708..712
+        Not 708..709 "!"
+        PathType 709..712
+          Path 709..712
+            Ident 709..712 "int"
+    Block 713..764
+      LBrace 713..714 "{"
+      LetDecl 719..744
+        LetKw 719..722 "let"
+        IdentPat 723..724
+          Ident 723..724 "m"
+        Eq 725..726 "="
+        StringExpr 727..743
+          StrBegin 727..728 "\""
+          StrFragment 728..733 "seg $"
+          Interp 733..743
+            InterpOpen 733..734 "{"
+            StringExpr 734..743
+              StrBegin 734..743 "unclosed\""
+              StrEnd 743..743 ""
+            InterpClose 743..743 ""
+          StrEnd 743..743 ""
+        Term 743..744 "\n"
+      ExprStmt 748..757
+        CallExpr 748..756
+          PathExpr 748..753
+            Ident 748..753 "print"
+          ArgList 753..756
+            LParen 753..754 "("
+            Arg 754..755
+              PathExpr 754..755
+                Ident 754..755 "m"
+            RParen 755..756 ")"
+        Term 756..757 "\n"
+      ExprStmt 761..763
+        LiteralExpr 761..762
+          Int 761..762 "0"
+        Term 762..763 "\n"
+      RBrace 763..764 "}"
+  Term 764..765 "\n"
+  Eof 765..765 ""
+== diagnostics ==
+E0102 [Error] 727..743 this string never closes
+    label it opens here, and an interpolation `{` inside it is still open when the line ends
+    note a `"…"` string — and every `{…}` interpolation inside it — must close before the line ends. Close the interpolation with `}` and the string with `"`; for a literal brace, write `{{`.
+    note this string carries `${`: `$` is an ordinary character and escapes nothing, so the `{` after it opens an interpolation like any other. Write `${{` for a literal `${` — the brace escape, one byte later than it looks.

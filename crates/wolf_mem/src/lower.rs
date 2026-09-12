@@ -3781,7 +3781,12 @@ impl<'t> Lowerer<'t> {
             Some(ParamMode::Mut) => match self.as_place(recv) {
                 Some((place, ty)) => {
                     self.check_frozen_write(place, recv_span, "passed as `mut`");
-                    self.check_read_param_write(place, recv_span, "lent `mut`", "write through a `read` parameter");
+                    self.check_read_param_write(
+                        place,
+                        recv_span,
+                        "lent `mut`",
+                        "write through a `read` parameter",
+                    );
                     self.check_iter_claim(place, recv_span, "lent `mut`");
                     self.check_region_lend(place, recv_span);
                     self.escape_to_callee(place, carry);
@@ -3902,7 +3907,12 @@ impl<'t> Lowerer<'t> {
             Some(ParamMode::Mut) => match self.as_place(v) {
                 Some((place, _)) => {
                     self.check_frozen_write(place, v.span, "passed as `mut`");
-                    self.check_read_param_write(place, v.span, "lent `mut`", "write through a `read` parameter");
+                    self.check_read_param_write(
+                        place,
+                        v.span,
+                        "lent `mut`",
+                        "write through a `read` parameter",
+                    );
                     self.check_iter_claim(place, v.span, "lent `mut`");
                     self.check_region_lend(place, v.span);
                     self.escape_to_callee(place, carry);

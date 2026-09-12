@@ -1573,8 +1573,7 @@ fn decide_cc(cc: IntCc, a: Range, b: Range) -> Option<bool> {
 // ------------------------------------------------------ versioning ----
 
 /// Doc anchor for the metric (referenced from the crate root).
-pub const HOT_LOOP_NOTE: &str =
-    "hot-loop overflow checks: eliminated / seen, the acceptance rate";
+pub const HOT_LOOP_NOTE: &str = "hot-loop overflow checks: eliminated / seen, the acceptance rate";
 
 /// Demand-driven loop versioning (amendment 3). For each innermost,
 /// call-free, single-entry, single-exit-target loop with unproven

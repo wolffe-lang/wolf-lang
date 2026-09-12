@@ -3364,10 +3364,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 Ok(Flow::Val(None))
             }
-            SyntaxKind::AssumeStmt => Err(refuse(
-                "assume noalias (unsafe-tier WIR ops)",
-                stmt.span,
-            )),
+            SyntaxKind::AssumeStmt => {
+                Err(refuse("assume noalias (unsafe-tier WIR ops)", stmt.span))
+            }
             // #116b: a nested named fn — a capture-free fn value with
             // a name. The entry lifts through s105's closure queue
             // (the checker enforced zero captures and recorded the fn
@@ -3814,10 +3813,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// consume its token chain).
     fn expect_region(&mut self, e: &'t GreenNode) -> R<(RegionId, Value, bool)> {
         if e.kind != SyntaxKind::PathExpr {
-            return Err(refuse(
-                "region operands beyond named bindings",
-                e.span,
-            ));
+            return Err(refuse("region operands beyond named bindings", e.span));
         }
         let name = self.text(e.span);
         match self.lookup(&name) {
@@ -3827,10 +3823,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 owned,
                 ..
             }) => Ok((region, handle, owned)),
-            _ => Err(refuse(
-                "region operands beyond named bindings",
-                e.span,
-            )),
+            _ => Err(refuse("region operands beyond named bindings", e.span)),
         }
     }
 
@@ -3996,10 +3989,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 Ok(Flow::Val(None))
             }
-            LocalBind::Region { .. } => Err(refuse(
-                "region rebinding (region identity)",
-                place.span,
-            )),
+            LocalBind::Region { .. } => {
+                Err(refuse("region rebinding (region identity)", place.span))
+            }
             // s105: the pair is claimed by ITS binding for its whole
             // extent (the mem tier scoped the loans to it); rebinding
             // would need loan transfer nothing models yet.
@@ -4468,10 +4460,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             };
                             return Ok(Flow::Val(Some(self.fn_value_named(&qname, ext, e.span))));
                         }
-                        Err(refuse(
-                            "module-item reads (mutable module state)",
-                            e.span,
-                        ))
+                        Err(refuse("module-item reads (mutable module state)", e.span))
                     }
                 }
             }
@@ -4606,10 +4595,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     None => Err(refuse("an unsafe block without a body", e.span)),
                 }
             }
-            SyntaxKind::BorrowExpr => Err(refuse(
-                "unsafe-tier WIR ops",
-                e.span,
-            )),
+            SyntaxKind::BorrowExpr => Err(refuse("unsafe-tier WIR ops", e.span)),
             // s105: a closure VALUE. Capture-free closures lambda-lift
             // to a synthesized module fn — the value is one code
             // pointer (`func.addr`), indistinguishable from the s95
@@ -4706,10 +4692,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let mut parts = Vec::with_capacity(declared.len());
         for fname in &declared {
             let Some((_, v)) = by_name.iter().find(|(n, _)| n == fname) else {
-                return Err(refuse(
-                    "struct literals with defaulted fields",
-                    e.span,
-                ));
+                return Err(refuse("struct literals with defaulted fields", e.span));
             };
             parts.push(*v);
         }
@@ -5336,10 +5319,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .find_map(Arg::value)
             .filter(|n| n.kind == SyntaxKind::ClosureExpr)
         else {
-            return Err(refuse(
-                "spawn of a non-closure task (fn values)",
-                e.span,
-            ));
+            return Err(refuse("spawn of a non-closure task (fn values)", e.span));
         };
         let caps: Vec<(String, TyId)> = self
             .task_captures
@@ -5445,7 +5425,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     unreachable!("eu shape");
                 };
                 if !slots.is_empty() {
-                    return Err(refuse("task error payloads (typed error rows)", closure.span));
+                    return Err(refuse(
+                        "task error payloads (typed error rows)",
+                        closure.span,
+                    ));
                 }
                 Ok(Some(eu))
             }
@@ -5505,10 +5488,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }];
         for (_, sema) in &params {
             if matches!(self.table.kind(self.strip_sema(*sema)), TyKind::RegionTy) {
-                return Err(refuse(
-                    "a region parameter on a closure",
-                    e.span,
-                ));
+                return Err(refuse("a region parameter on a closure", e.span));
             }
             let Some(w) = self.wir_value_ty(*sema, e.span)? else {
                 return Err(refuse("unit-typed closure parameters", e.span));
@@ -5924,10 +5904,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             };
             return Ok(self.b.ins(op, &[v], &[types::I64], Aux::None).one());
         }
-        Err(refuse(
-            "sync-cell payloads beyond one word",
-            span,
-        ))
+        Err(refuse("sync-cell payloads beyond one word", span))
     }
 
     /// s150 (`[conc.chan.payload]`): how a channel payload of this
@@ -5993,10 +5970,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 .ins(Opcode::Itrunc, &[w], &[elem_wty], Aux::None)
                 .one());
         }
-        Err(refuse(
-            "sync-cell payloads beyond one word",
-            span,
-        ))
+        Err(refuse("sync-cell payloads beyond one word", span))
     }
 
     /// Channel methods — send/recv/close over the s33 runtime seam.
@@ -7673,10 +7647,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     }
                 }
             }
-            CastKind::Raw => Err(refuse(
-                "raw-pointer casts (unsafe-tier WIR ops)",
-                e.span,
-            )),
+            CastKind::Raw => Err(refuse("raw-pointer casts (unsafe-tier WIR ops)", e.span)),
             CastKind::Unsize => self.lower_dyn_cast(e, v, from, to),
             // s121 (D58): `char as int` is TOTAL — the 32-bit scalar
             // zero-extends (the representation invariant keeps the
@@ -10160,10 +10131,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             && self.text(e.span).starts_with("\"\"\"")
             && sd.interps().any(|i| i.expr().is_some())
         {
-            return Err(refuse(
-                "interpolation inside a multiline string",
-                e.span,
-            ));
+            return Err(refuse("interpolation inside a multiline string", e.span));
         }
         let segs = self.string_segments(e);
         if !segs.iter().any(|s| matches!(s, StrSeg::Hole { .. })) {
@@ -15072,9 +15040,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 };
                 self.emit_list(sink, hdr, table, elem, span)
             }
-            TyKind::Shared(_) | TyKind::Handle(_) | TyKind::Weak(_) | TyKind::Pool(_) => Err(
-                refuse("string interpolation of a shared-tier value", span),
-            ),
+            TyKind::Shared(_) | TyKind::Handle(_) | TyKind::Weak(_) | TyKind::Pool(_) => {
+                Err(refuse("string interpolation of a shared-tier value", span))
+            }
             _ => Err(refuse(
                 "string interpolation of a value with no promised rendering (a channel, proc, \
                  region, scope, pointer or fn)",
@@ -15563,10 +15531,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     Some(LocalBind::MutRef { ptr, region, .. }) => {
                         Ok(MutArg::Relend { ptr, region })
                     }
-                    _ => Err(refuse(
-                        "`mut` arguments beyond local places",
-                        vexpr.span,
-                    )),
+                    _ => Err(refuse("`mut` arguments beyond local places", vexpr.span)),
                 }
             }
             SyntaxKind::MemberExpr => {
@@ -15608,10 +15573,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     }
                 }
             }
-            _ => Err(refuse(
-                "`mut` arguments beyond local places",
-                vexpr.span,
-            )),
+            _ => Err(refuse("`mut` arguments beyond local places", vexpr.span)),
         }
     }
 
@@ -17043,10 +17005,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .nodes()
             .any(|n| matches!(n.kind, SyntaxKind::StringLit | SyntaxKind::StringExpr))
         {
-            return Err(refuse(
-                "a str literal inside a product pattern",
-                sub.span,
-            ));
+            return Err(refuse("a str literal inside a product pattern", sub.span));
         }
         let text = self.text(sub.span);
         if text == "true" || text == "false" {

@@ -3554,7 +3554,10 @@ fn print_gate() -> ExitCode {
     // `--explain` prose; this one covers every other string a phase
     // hands a reader. Spec clause anchors (`[mem.ub.defined]`) and
     // D-numbered decisions are public vocabulary and stay.
-    for krate in gated.iter().chain(["wolf_driver", "wolf_pkg", "wolf_query"].iter()) {
+    for krate in gated
+        .iter()
+        .chain(["wolf_driver", "wolf_pkg", "wolf_query"].iter())
+    {
         let src = Path::new("crates").join(krate).join("src");
         let mut files = Vec::new();
         collect_rs_files(&src, &mut files);

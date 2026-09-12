@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 851..879 name=quiet body=Block
+FnDecl 881..1183 name=main body=Block

@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+EnumDecl 901..932 name=Color variants=3
+FnDecl 934..1072 name=name body=Block
+FnDecl 1074..1174 name=pick body=Block
+FnDecl 1176..1340 name=main body=Block
