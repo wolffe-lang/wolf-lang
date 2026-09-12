@@ -1,0 +1,32 @@
+//! check: run(exit=0, stdout="built 7 here")
+//! phase: run
+//! conforms: mem.region.proc, conc.chan.payload, conc.chan.imm
+//!
+//! s160 (wolf-lang#355) — the accepted twin of
+//! `chan_payload_escape_proc.lu`, and the fix the book took at bs44.
+//! A proc's ambient region is its own and dies with it
+//! (`[mem.region.proc]`), but its PARAMETERS are not: their regions
+//! come from the spawner, whose frame outlives the proc by
+//! `[conc.proc.1]`. So a `str` built by the supervisor and handed in
+//! crosses the channel legally — the bytes never lived in the proc.
+//! Both tiers print the same line.
+
+fn worker(msg: str, out: channel[str]) -> !int {
+    out.send(msg)?
+    0
+}
+
+fn main() -> !int {
+    let n = 7
+    let msg = "built {n} here"
+    let out = channel[str](4)
+    let c = spawn proc worker(msg, out)
+    let m = c.monitor()
+    select {
+        exit(reason) from m => {},
+        timeout(1.s) => { return 1 },
+    }
+    out.close()
+    for line in out { print(line) }
+    0
+}
