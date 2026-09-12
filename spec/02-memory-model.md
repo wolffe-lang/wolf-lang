@@ -587,7 +587,11 @@ adopt that design and give `for` its desugar.)
   `for` iterates ascending, `+1` steps, checked arithmetic (X3); both
   endpoints are evaluated exactly once, left-to-right, before the first
   test. An owned range value implements `Iter[int]` with identical
-  semantics.
+  semantics. Since s158 that value has a **name** — `range[int]` /
+  `range[char]`, with `start` and `end` — and `[type.range]` has it;
+  the loop is unchanged by that clause in every respect, `..=`
+  normalizing to an exclusive `end` at construction under the same
+  checked arithmetic this one already rules.
 - `[mem.iter.impl]` `List[T]` and `Pool[T]` adopt `Iter` builtin-side
   (std surface); user types implement the trait **by name** — no
   structural conformance.
@@ -596,7 +600,11 @@ adopt that design and give `for` its desugar.)
   slices got in sc24 — open sides default to the edges (`cs[1..]`,
   `cs[..n]`), `^n` counts from the end (`cs[a..^b]`, both ends may be
   end-relative), `..=` is inclusive, and the D61 origin marker shifts
-  spelled plain endpoints exactly as it does for `str`. The domain is
+  spelled plain endpoints exactly as it does for `str`. That endpoint
+  surface is **subscript-position only**, and `[type.range]` states it
+  once for both slice clauses to cite: the open and end-relative
+  spellings are resolved against this collection's length here, so
+  they are not `range[T]` values and never escape the brackets. The domain is
   `lo <= hi <= len`; outside it the slice faults `bounds`
   (`[mem.ub.defined]`), the reversed range included. The value is a
   **fresh `List[T]`** — the elements copied in order, the source

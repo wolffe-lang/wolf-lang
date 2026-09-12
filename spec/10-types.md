@@ -746,3 +746,152 @@ substrate.)
   total[T: Num](xs: List[T], zero: T) -> T` reads; a program that
   spells its own `Num` gets the same reading. The witness is
   `op_total_num.lu`'s `Num`, word for word std's.
+
+---
+
+## §12 The list literal `[type.list.lit]`
+
+(s158, wolf-lang#154 / BACKLOG B23. The grammar half is
+`[gram.expr.list]`; this is the typing half.)
+
+- `[type.list.lit.elem]` **The element type unifies across the
+  elements, left to right.** `[1, 2, 3]` is `List[int]`; `["a", "b"]`
+  is `List[str]`; `[[1], [2, 3]]` is `List[List[int]]`. The first
+  element fixes the type the rest are checked against, so the **first
+  element that does not fit is the error site** — E0401 at that
+  element, with the first element's span as the "because", never at
+  the whole literal and never at the last element. A literal of one
+  element is that element's type; nesting is ordinary recursion, the
+  inner literals typing before the outer one unifies them. Numeric
+  literals default exactly as they do anywhere else
+  (`[type.numlit]`): `[1, 2]` in a `List[i32]` context is `List[i32]`,
+  and the literals adopt, they do not force.
+- `[type.list.lit.expect]` **An expected type flows in.** In an
+  annotated `let`/`var`, a call argument, a field initializer, a
+  declared return and a declared element position, the expected
+  `List[T]` is pushed into the literal and every element is checked
+  against `T` directly — so `let xs: List[i64] = [1, 2]` needs no
+  widening step and `f([])` against `fn f(xs: List[str])` is
+  `List[str]`. An expected type that is not a `List` is E0401 at the
+  literal, not at an element: the shape is wrong before the contents
+  are.
+- `[type.list.lit.empty]` **`[]` takes its element type from the
+  context, or it is E0419.** There is nothing in an empty literal to
+  infer from, and wolf does not leave a type open to be decided by a
+  later use (`[type.numlit]`'s posture: inference reads down, never
+  back up). `let xs: List[int] = []`, `f([])` against a declared
+  parameter and `-> List[str] { [] }` all type; bare `let xs = []` is
+  **E0419**, and the message names the annotation that would fix it,
+  with the spelling for this binding written out. This is the one
+  place a list literal needs help, and the diagnostic says which help.
+- `[type.list.lit.value]` **The value is a fresh `List[T]`**, an
+  allocation into the ambient region, with the elements evaluated
+  left to right exactly once each before the list exists
+  (`[mem.model.order]`) — the same value `List[T]()` followed by
+  `push` per element produces, and the same value a slice produces
+  (`[mem.list.slice]`). The literal is sugar with no new lifetime, no
+  new ownership rule and no static storage: `[1, 2, 3]` written twice
+  is two lists.
+
+## §13 The range type `[type.range]`
+
+(s158, wolf-lang#24 / BACKLOG B19 — ruled 2026-09-11. `range` was the
+one type the compiler could build a value of and not name.)
+
+- `[type.range.name]` **`range[int]` and `range[char]` are types**,
+  spelled like any other type application (`[gram.type]`), legal in
+  every type position — parameter, `let`/`var` annotation, field,
+  return, element. `range` is an ordinary identifier the prelude
+  binds, not a keyword; `range` with no argument is E0405 (the
+  element type is not inferable from the name alone) and a `range[T]`
+  for any other `T` is E0401 — the family is closed at the two types
+  `..` iterates, exactly `[mem.iter.range]`'s closed builtin family.
+  The type was already the one diagnostics printed (`range[int]` is
+  how a mismatched `2..7` has always been rendered); this clause makes
+  what they print spellable.
+- `[type.range.endpoints]` **A range VALUE has two present, plain
+  endpoints.** `a..b` and `a..=b` are `range[T]`; the end-relative
+  and open-sided spellings — `^n`, `a..`, `..b`, `..=b` — are
+  **subscript-position only** and are not values of this type, because
+  each of them is a shorthand that a collection's length resolves at
+  the subscript and nothing resolves anywhere else. That surface is
+  stated once here and cited, not restated, by `[mem.list.slice]` and
+  the `str` slice clauses. Outside a subscript, `let r = 1..` is
+  refused by name at the site rather than typed. (This is not new: the
+  reference implementation has refused range values outside `for`
+  headers since D25; the clause writes the boundary down and moves the
+  supported side of it into the language.)
+- `[type.range.accessor]` **`start` and `end` read the endpoints**,
+  as properties, spelled without parentheses the way `xs.len` is —
+  `r.start` and `r.end` are `T`. **`end` is exclusive, always**:
+  `(2..7).start` is 2 and `(2..7).end` is 7, and `a..=b` **normalizes
+  at construction** to `end = b + 1` under the checked arithmetic
+  `[mem.iter.range]` already rules, so `(2..=7).end` is 8 and
+  `0..=T.MAX` traps `overflow` where it is built, not where it is
+  read. One exclusive `end` is what makes `len` and `contains`
+  writable at all (`end - start`, `start <= x && x < end`), which is
+  the gap wolf-std F-0030 filed; two accessors whose meaning depended
+  on a spelling the type does not carry would not close it. The
+  reference interpreter has normalized inclusive ranges at
+  construction since its first range arm, so the two machines agree
+  by construction and not by a new rule.
+- `[type.range.value]` A range passes as a parameter, returns, binds,
+  and iterates; `for` is **unchanged** in every way
+  (`[mem.iter.for]`/`[mem.iter.range]` still describe the loop, and a
+  `for` over a range header still lowers without ever materializing
+  one). A range is not ordered, not a collection, and has no `len` property
+  of its own — `r.end - r.start` is the count, spelled in the program
+  that wants it, and std.range is where the named functions live
+  (wolf-std F-0030's `contains`, `len`, `clamp_to`, unwritable until
+  this clause). The witnesses are
+  `grammar/range_type_param.lu`, `grammar/range_type_return.lu`,
+  `grammar/range_type_inclusive.lu`, `grammar/range_type_char.lu`;
+  refused: `grammar/range_type_open.lu`.
+
+## §14 Error-set aliases `[type.err.alias]`
+
+(s158, wolf-lang#36 / BACKLOG B20 — ruled 2026-09-11 on s155's alias
+precedent, `[type.trait.op.alias]`. The item grammar is
+`[gram.item.error]`.)
+
+- `[type.err.alias.transparent]` **An alias is a spelling, never a
+  type.** `error IoErrors = {none, parse, io}` makes `T ! IoErrors`
+  and `T ! {none, parse, io}` **the same type**, interchangeable in
+  both directions, with no conversion between them and no coarsening
+  function anywhere. This is argued from D30 and not a preference:
+  rows are structural and `?` propagates by width subtyping, so a
+  nominal error set would create a second way for two rows to be the
+  same and a cast between them. The alias has no identity a program
+  can observe — it cannot be compared, matched on, or made a `dyn`
+  object, and `impl` over it is E0507 the way it is over a trait
+  alias.
+- `[type.err.alias.union]` **Aliases compose by naming.** An alias's
+  name in a row entry expands to its tags: `error ConfigErrors =
+  {IoErrors, parse}` is `{none, parse, io}` ∪ `{parse}` =
+  `{none, parse, io}`. **Resolution decides**, in one step: a row
+  entry whose path names an error-set alias in scope is that alias's
+  tags; every other path is a tag. Tags are structural, so the union
+  merges a repeated tag into one, and a tag whose two sources disagree
+  on payload types is E0609 — exactly `[gram.type.row.flatten]`'s
+  rule, which this clause reuses rather than restates: an alias is one
+  more layer, and layers flatten. An alias entry carries no payload
+  (`{IoErrors(int)}` is E0601): the alias already names what its tags
+  carry.
+- `[type.err.alias.cycle]` **A cycle is E0515**, reported once, at the
+  alias — the sibling of E0503 for trait aliases and of E0513 for
+  associated-type bindings. `error A = {B}` with `error B = {A}` is
+  one diagnostic naming the loop, not a hang and not a report per
+  member. An alias may name an alias to any depth that terminates.
+- `[type.err.alias.diag]` **Diagnostics expand the alias and keep
+  naming tags.** The missing-tag report that names exactly which tags
+  a handler does not cover is the best thing rows have, and an alias
+  does not take it away: the report lists TAGS, and mentions the alias
+  as the source of the ones it contributed ("`parse` and `io` come
+  from `IoErrors`"), never "expected `IoErrors`". A rendered type
+  prints the tags, for the same reason — a reader who has to go and
+  read an alias declaration to know what a signature raises has lost
+  what the row was for. The witnesses are `rows/error_alias_row.lu`,
+  `rows/error_alias_union.lu`, `rows/error_alias_transparent.lu`,
+  `rows/error_alias_ident.lu`; refused:
+  `rows/negative/error_alias_cycle.lu`,
+  `rows/negative/error_alias_open.lu`.

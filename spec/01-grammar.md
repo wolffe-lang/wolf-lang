@@ -287,6 +287,7 @@ unit  ::= inner_doc* inner_attribute* item*
 item  ::= attribute* visibility? bare_item
 bare_item ::= fn_item | let_item | var_item | type_item | trait_item
             | impl_item | use_item | import_c_item | const_item
+            | error_item
 visibility ::= 'pub' ('(' 'pkg' ')')?
 ```
 
@@ -319,7 +320,7 @@ param     ::= param_mode? IDENT ':' type | param_mode? 'self' view_set?
 param_mode ::= 'mut' | 'take'
 view_set  ::= '.' '{' IDENT (',' IDENT)* '}'
 fn_ret    ::= '->' ret_type
-ret_type  ::= type ('!' error_row)?   /* `-> !T` parses via type's '!' type */
+ret_type  ::= type ('!' (error_row | path))?   /* `-> !T` parses via type's '!' type */
 ```
 
 - Modes (D10 Tier 0): default is `read` (no keyword — the absence *is* the
@@ -432,6 +433,49 @@ Punctuation asymmetry, intentional: struct **fields** are
 newline-separated declarations (per-field `','?`); enum **variants**
 and error-**row** entries are comma-punctuated lists. Fields read like
 items; variants and rows read like alternatives.
+
+### 2.8 Error-set aliases `[gram.item.error]`
+
+```ebnf
+error_item ::= 'error' IDENT '=' error_row TERM?
+```
+
+`error IoErrors = {none, parse, io}` names a set of tags. The name is
+**transparent**: it is a spelling for the tags, never a type of its
+own, and `[type.err.alias]` has the semantics. `error` is
+**contextual, not reserved** (`[gram.inv.ctx]`): it is the keyword only
+in item position with an `IDENT` and an `=` after it, so `let error =
+1`, `error(reason)` and a field named `error` all still parse — two
+tokens of lookahead decide, and a file that used `error` as a name
+before this clause parses to the same shape after it. An alias is an
+item like any other: `pub` applies, attributes apply, and it may be
+declared at module scope or inside a block.
+
+The right-hand side is exactly `error_row` (`[gram.type]`), so an
+alias composes by naming another alias in a row entry —
+`error ConfigErrors = {IoErrors, closed}` — and the checker flattens
+at use (`[gram.type.row.flatten]`). The open marker `..` is refused
+in an alias's row (E0201): an alias is a closed set of tags by
+definition, and a row that is open at its source is open at every use
+whether an alias names it or not. An alias entry carries no payload
+of its own (`{IoErrors(int)}` is E0601 — the tags it names already
+declare what they carry).
+
+**The bare spelling.** A postfix row position also admits a bare
+`path`: `-> Config ! IoErrors` is `-> Config ! {IoErrors}`, the same
+one-entry row with the braces off, and the same type as the tags
+written out. This is the spelling wolf-std#36 filed for — a signature
+that has stopped communicating once it reaches six tags — and it is
+the whole reason the item exists. A path there that names no alias is
+one tag, exactly as `{tag}` is: resolution decides, and it decides the
+same way in both spellings. The formatter keeps whichever the author
+wrote (`! IoErrors` and `! {IoErrors}` are one type, and rewriting
+either into the other would relay a line that already says what it
+means — `[gram.fmt.if]`'s precedent for the one place the one-shape
+rule yields). Files: `rows/error_alias_row.lu`,
+`rows/error_alias_union.lu`, `rows/error_alias_transparent.lu`,
+`rows/error_alias_ident.lu`; refused: `rows/negative/error_alias_cycle.lu`,
+`rows/negative/error_alias_open.lu`.
 
 ### 2.7 Attributes `[gram.item.attr]`
 
@@ -567,10 +611,12 @@ member     ::= IDENT | INT | reserved_kw
 /* tuple access: pair.0, pair.1. Member position is keyword-transparent:
    nothing competes with a member name after `.`, so `.take(n)` and
    `s.spawn(…)` parse — member names live in their own namespace. */
-primary ::= literal | path | struct_lit | '(' expr (',' expr)* ','? ')' | block
+primary ::= literal | list_lit | path | struct_lit
+          | '(' expr (',' expr)* ','? ')' | block
           | if_expr | match_expr | loop_expr | closure | region_expr
           | scope_expr | select_expr | when_expr | unsafe_expr | spawn_expr
           | asm_expr | borrow_expr
+list_lit ::= '[' (expr (',' expr)* ','?)? ']'
 struct_lit ::= path '{' (field_init (',' field_init)* ','?)? '}'
 field_init ::= IDENT ':' expr | IDENT
 literal ::= INT | FLOAT | CHAR_LIT | STRING | MULTILINE_STRING | RAW_STRING
@@ -589,6 +635,27 @@ layout, not a separator. (Added 2026-09-01, s132 — blast radius
 measured first at zero working code: the corpus, wolf-book, wolf-std,
 lobo; the one flagged file anywhere is a fuzz-minimized broken-input
 formatter fixture.)
+
+**List literals `[gram.expr.list]`** (ruled 2026-09-11, wolf-lang#154).
+`[1, 2, 3]` builds a `List[T]`. **Position settles the clash with
+indexing**, and nothing else does: a `[` that BEGINS a primary opens a
+list literal; a `[` that FOLLOWS a complete expression is the postfix
+`index_args` of `[gram.amb.brackets]`, indexing or generic application
+as sema decides. The parser always knows which it is — it is either
+starting an operand or continuing a postfix chain — so the two forms
+never compete for the same token, and `[10, 20, 30][1]` is a literal
+indexed, the literal being the primary and the `[1]` the postfix. No
+program that parsed before this clause changes shape: a leading `[` was
+E0201 everywhere it now opens a literal. The typing (`[type.list.lit]`)
+is the other half: the element type unifies across the elements, the
+FIRST element that does not fit is the error site, and an empty `[]`
+takes its element type from the context — an annotation, a parameter,
+a field, a declared return — with E0419 naming the missing annotation
+when there is none. Files: `grammar/list_lit_let.lu`,
+`grammar/list_lit_empty.lu`, `grammar/list_lit_index.lu`,
+`grammar/list_lit_nested.lu`, `grammar/list_lit_arg.lu`,
+`grammar/list_lit_multiline.lu`; refused:
+`grammar/list_lit_untyped_empty.lu`, `grammar/list_lit_mixed.lu`.
 
 - **Call-site modes (X1)**: `f(mut x)`, `pool[mut prev]` — `mut`/`take`
   are argument prefixes in both call and index argument lists.
@@ -837,6 +904,7 @@ is a `stmt`; `borrow_expr` is a `primary`.
 type ::= path type_args?
        | '!' type
        | type '!' error_row          /* postfix row: T ! {row}, any type position */
+       | type '!' path               /* an error-set alias: T ! IoErrors (s158) */
        | prefix_type_kw type
        | '*' type                    /* raw pointer, unsafe tier */
        | 'dyn' path
@@ -868,8 +936,13 @@ row_entry ::= path ('(' type (',' type)* ')')?
   and a tag whose layers disagree is rejected (E0609) — layering that
   must stay separable is a nominal wrapper type, spelled as one. (Ruled
   2026-08-26, D51 / issue #34; the reference implementation always
-  flattened.) Files: `rows/nested_row_return.lu`,
+  flattened.) **An error-set alias is one more layer** (s158,
+  `[gram.item.error]`, `[type.err.alias]`): a `row_entry` whose path
+  names an alias in scope contributes that alias's tags instead of one
+  tag of its own, and the union, the merge and the payload conflict are
+  this rule's, unchanged. Files: `rows/nested_row_return.lu`,
   `rows/nested_row_param.lu`, `rows/nested_row_merge_payload.lu`,
+  `rows/error_alias_union.lu`,
   `rows/negative/nested_row_conflict.lu` (counter).
 - `handle Node`, `shared Config`, `weak Parent`: prefix type keywords.
 - `Map[str, int]`, `List[(T, int)]`: `[]` type application.
@@ -1012,8 +1085,9 @@ Identifier everywhere except the noted position: `c` (`import c`,
 `unsafe c`), `rc` / `pool` (region strategies), `from` / `timeout`
 (select arms), `noalias` (after `assume`), `pkg` (in `pub(pkg)`), the v1 asm register class `reg` (target-specific classes arrive with c10),
 `self` (receiver), `then` (after a complete `if` condition,
-`[gram.expr.if]`), `in`/`out`/`inout`/`lateout`/register classes (asm
-operands). Rationale: each appears only after a reserved keyword or inside
+`[gram.expr.if]`), `error` (item position, before an `IDENT` and an
+`=`, `[gram.item.error]`), `in`/`out`/`inout`/`lateout`/register
+classes (asm operands). Rationale: each appears only after a reserved keyword or inside
 a closed construct, so reserving them would steal good identifiers
 (`from`, `timeout`, `c`) for no parsing benefit.
 
@@ -1036,6 +1110,16 @@ no `goto`, no *required* semicolons (terminators are inserted;
   operators and after `.` (trailing style — required by
   `[gram.lex.newline]`); continuations indent one level.
 - `[gram.fmt.commas]` Trailing comma in every multiline list; none inline.
+- `[gram.fmt.list]` A **list literal breaks like an argument list**
+  (s158, wolf-lang#154): inline while it fits — `[1, 2, 3]`, one space
+  after each comma, none inside the brackets, and no trailing comma —
+  and when it does not fit, one element per line at one indent with a
+  trailing comma after the last, exactly `[gram.fmt.commas]`'s rule and
+  exactly what a call's arguments do. `[]` is two tokens with nothing
+  between them. The literal is not a break point for the line that
+  holds it any more than a call is: `[gram.fmt.break]`'s outermost-first
+  measure sees it as one group among the others. Pinned in
+  `crates/wolf_fmt/tests/style.rs` under this anchor.
 - `[gram.fmt.break]` **A break is taken where it achieves the width,
   and the outermost break that achieves it is the one taken.** Every
   break decision is measured against the whole line the construct lands
@@ -1129,7 +1213,13 @@ Each entry: the rule, and its paired files in `corpus/grammar/`.
   indexing or generic application is resolved in sema (types-as-values,
   D29) — the grammar has a single `index_args` production, so there is
   nothing to disambiguate at parse time. `f[int](x)` and `m[k]` are the
-  same shape. Files: `brackets_index.lu`, `brackets_generic_call.lu`.
+  same shape. A `[` with **no** `e` before it is a third thing and not
+  part of this ambiguity at all: it opens a list literal
+  (`[gram.expr.list]`, s158). The two are disjoint by position, the way
+  `[gram.amb.bang]`'s two `!`s are — postfix `[` continues an operand,
+  primary `[` starts one — so no lookahead and no sema decides between
+  them. Files: `brackets_index.lu`, `brackets_generic_call.lu`,
+  `list_lit_index.lu`.
 - `[gram.amb.intdot]` `1.s` = member on int; `1.0` float; `1..2` range;
   `1.` = int then member-dot (awaiting member). Files: `intdot_member.lu`,
   `intdot_range.lu`.

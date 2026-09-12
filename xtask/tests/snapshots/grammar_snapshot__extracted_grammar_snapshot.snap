@@ -40,6 +40,7 @@ unit  ::= inner_doc* inner_attribute* item*
 item  ::= attribute* visibility? bare_item
 bare_item ::= fn_item | let_item | var_item | type_item | trait_item
             | impl_item | use_item | import_c_item | const_item
+            | error_item
 visibility ::= 'pub' ('(' 'pkg' ')')?
 
 use_item ::= 'use' path ( '.' '{' IDENT (',' IDENT)* ','? '}' )? ('as' IDENT)? TERM
@@ -57,7 +58,7 @@ param     ::= param_mode? IDENT ':' type | param_mode? 'self' view_set?
 param_mode ::= 'mut' | 'take'
 view_set  ::= '.' '{' IDENT (',' IDENT)* '}'
 fn_ret    ::= '->' ret_type
-ret_type  ::= type ('!' error_row)?   /* `-> !T` parses via type's '!' type */
+ret_type  ::= type ('!' (error_row | path))?   /* `-> !T` parses via type's '!' type */
 
 let_item ::= 'let' binder (',' binder)* TERM
 var_item ::= 'var' binder (',' binder)* TERM
@@ -78,6 +79,8 @@ trait_item ::= 'trait' IDENT generics? ('{' trait_member* '}' | '=' bound TERM?)
 trait_member ::= fn_item | type_item | const_item
 impl_item  ::= 'impl' generics? type ('for' type)? '{' impl_member* '}'
 impl_member ::= fn_item | type_item | const_item
+
+error_item ::= 'error' IDENT '=' error_row TERM?
 
 attribute ::= '#[' attr (',' attr)* ']'
 inner_attribute ::= '#![' attr (',' attr)* ']'
@@ -132,10 +135,12 @@ member     ::= IDENT | INT | reserved_kw
 /* tuple access: pair.0, pair.1. Member position is keyword-transparent:
    nothing competes with a member name after `.`, so `.take(n)` and
    `s.spawn(…)` parse — member names live in their own namespace. */
-primary ::= literal | path | struct_lit | '(' expr (',' expr)* ','? ')' | block
+primary ::= literal | list_lit | path | struct_lit
+          | '(' expr (',' expr)* ','? ')' | block
           | if_expr | match_expr | loop_expr | closure | region_expr
           | scope_expr | select_expr | when_expr | unsafe_expr | spawn_expr
           | asm_expr | borrow_expr
+list_lit ::= '[' (expr (',' expr)* ','?)? ']'
 struct_lit ::= path '{' (field_init (',' field_init)* ','?)? '}'
 field_init ::= IDENT ':' expr | IDENT
 literal ::= INT | FLOAT | CHAR_LIT | STRING | MULTILINE_STRING | RAW_STRING
@@ -187,6 +192,7 @@ borrow_expr ::= 'borrow' expr 'from' expr
 type ::= path type_args?
        | '!' type
        | type '!' error_row          /* postfix row: T ! {row}, any type position */
+       | type '!' path               /* an error-set alias: T ! IoErrors (s158) */
        | prefix_type_kw type
        | '*' type                    /* raw pointer, unsafe tier */
        | 'dyn' path
