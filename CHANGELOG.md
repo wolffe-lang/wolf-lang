@@ -110,6 +110,60 @@ THE PAPERCUTS III — the language's ten, each a witness plus a fix.
   the package manager or the query layer that names a sprint,
   campaign or X id fails CI.
 
+### The literals (s158 — wolf-lang#154, #24, #36)
+
+Three surface additions the maintainer ruled on one day, landed
+together because their clauses read as one section of spec/01.
+
+    let cents = [340, 275, 100]        // a list literal
+    fn width(r: range[int]) -> int { r.end - r.start }
+    error IoErrors = {none, parse, io} // a transparent name for a row
+
+**List literals** `[gram.expr.list]`. `[1, 2, 3]` builds a `List[T]`,
+and **position** settles the clash with indexing: a `[` that begins a
+primary opens a literal, a `[` that follows a complete expression is
+the postfix form it always was, so `[10, 20, 30][1]` is a literal
+indexed and no lookahead decides between them. No program that parsed
+before changes shape — a leading `[` was E0201 everywhere it now opens
+a literal. The element type unifies across the elements and the FIRST
+element that does not fit is the error site; an expected type flows in
+from an annotation, a parameter, a field or a declared return, so `[]`
+is written bare in all of them. A bare `let xs = []` is **E0419**, and
+the message spells the annotation for that binding. The value is a
+fresh `List[T]` in the ambient region — the same one `List[T]()` plus
+a push per element builds, which is also how it lowers, so no runtime
+symbol moved (`RT_SYMBOLS` 143). `wolf fmt` breaks a literal exactly
+like an argument list (`[gram.fmt.list]`).
+
+**A nameable range** `[type.range]`. `range[int]` and `range[char]`
+are types now, in every type position, with `start` and `end` as
+properties. **`end` is exclusive, always**: `a..=b` normalizes at
+construction to `b + 1`, which is what the reference interpreter has
+always done and what makes `r.end - r.start` the count — three of
+`std.range`'s four functions were unwritable without it (wolf-std
+F-0030). A range passes, returns, binds and iterates; `for` is
+unchanged. The end-relative and open-sided spellings (`^n`, `a..`,
+`..b`) stay subscript-position only, stated once here and cited by
+`[mem.list.slice]`.
+
+**Transparent error-set aliases** `[gram.item.error]`,
+`[type.err.alias]`. `error IoErrors = {none, parse, io}` names a set
+of tags, and `-> T ! IoErrors` is the same TYPE as
+`-> T ! {none, parse, io}` — interchangeable both ways, no conversion,
+no coarsening (D30: rows are structural, so a nominal error set would
+make two rows the same two different ways). Aliases compose by naming
+(`{IoErrors, closed}`), flattened by `[gram.type.row.flatten]`'s own
+rule; a cycle is **E0610**, once, with the loop named. `error` is
+contextual, not reserved — `let error = 1`, `error(reason)` and a
+field named `error` all still parse, and `[gram.inv.kw]`'s fifty are
+unchanged.
+
+Eighteen witnesses, all eighteen byte-identical on both tiers. Nothing
+in wolf-std, lobo or the book spells any of the three, and `wolf fmt
+--check` over all three trees is unchanged file-for-file — except that
+`wolf-std/std/range/range.lu`'s `pub fn is_empty(r: range[int])`, the
+one function F-0030 said survived, now has a type that resolves.
+
 ## 0.2.12 — 2026-09-11
 
 THE PAPERCUTS. 0.2.12 is twenty filed defects, nineteen of them
