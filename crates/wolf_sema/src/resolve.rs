@@ -42,8 +42,20 @@ pub const SINGLE_THREAD_ENV: &str = "WOLF_SEMA_SINGLE_THREAD";
 /// miss that matches a row written in the enclosing fn (return row,
 /// parameter row, `let` annotation row) may be a tag, and only typing
 /// can decide. Plain misses keep their E0301.
-pub(crate) fn lexical_row_tags(node: &GreenNode, src: &[u8]) -> BTreeSet<String> {
-    fn walk(node: &GreenNode, src: &[u8], out: &mut BTreeSet<String>) {
+pub(crate) fn lexical_row_tags(
+    node: &GreenNode,
+    src: &[u8],
+    pkg: &Package,
+    module: usize,
+) -> BTreeSet<String> {
+    fn walk(
+        node: &GreenNode,
+        src: &[u8],
+        pkg: &Package,
+        module: usize,
+        seen: &mut Vec<String>,
+        out: &mut BTreeSet<String>,
+    ) {
         if node.kind == SyntaxKind::ErrorRow
             && let Some(row) = wolf_ast::ErrorRow::cast(node)
         {
@@ -57,17 +69,64 @@ pub(crate) fn lexical_row_tags(node: &GreenNode, src: &[u8]) -> BTreeSet<String>
                         })
                         .collect::<Vec<_>>()
                         .join(".");
+                    // s158 — an entry naming an error-set alias
+                    // contributes that alias's TAGS, not its own name
+                    // (`[type.err.alias.union]`): the deferral set is
+                    // what `[gram.expr.tagident]` reads, so a raise of
+                    // `parse` under `! IoErrors` has to find `parse`
+                    // here, exactly as it would under `{none, parse}`.
+                    // A cycle among aliases is E0610 at signature
+                    // elaboration; this scan is not the place to
+                    // report it, only the place not to hang on it.
+                    if let Some((asrc, arow)) = error_alias_row(pkg, module, &name) {
+                        if !seen.contains(&name) {
+                            seen.push(name.clone());
+                            walk(arow, asrc, pkg, module, seen, out);
+                            seen.pop();
+                        }
+                        continue;
+                    }
                     out.insert(name);
                 }
             }
         }
         for child in node.nodes() {
-            walk(child, src, out);
+            walk(child, src, pkg, module, seen, out);
         }
     }
     let mut out = BTreeSet::new();
-    walk(node, src, &mut out);
+    walk(node, src, pkg, module, &mut Vec::new(), &mut out);
     out
+}
+
+/// The `ErrorRow` syntax of the error-set alias `name` in `module`,
+/// with the source it belongs to (s158, `[type.err.alias]`). `None`
+/// when nothing of that name is an `error` item — which is how the
+/// resolution rule reads: an alias name expands, everything else is a
+/// tag.
+///
+/// Returning syntax rather than an elaborated set is deliberate and
+/// matches `Lower::error_alias_row`: these scans run BEFORE signature
+/// elaboration, so the item's own row is the only thing that exists to
+/// read, and there is exactly one source of truth for an alias's tags.
+fn error_alias_row<'p>(
+    pkg: &'p Package,
+    module: usize,
+    name: &str,
+) -> Option<(&'p [u8], &'p GreenNode)> {
+    let item = pkg.tables.get(module)?.get(name)?;
+    if item.kind != crate::graph::ItemKind::Error {
+        return None;
+    }
+    let file = pkg.files.get(item.file)?;
+    let node = file
+        .parse
+        .root
+        .nodes()
+        .filter(|n| n.kind.is_item())
+        .nth(item.decl)?;
+    let row = node.nodes().find(|n| n.kind == SyntaxKind::ErrorRow)?;
+    Some((&file.raw.src, row))
 }
 
 /// Every SINGLE-SEGMENT tag name spelled in an `ErrorRow` under `node`
@@ -518,7 +577,8 @@ impl Resolver<'_> {
 
     fn resolve_fn(&mut self, node: &GreenNode) {
         let Some(d) = FnDecl::cast(node) else { return };
-        self.row_tags.push(lexical_row_tags(node, self.src()));
+        self.row_tags
+            .push(lexical_row_tags(node, self.src(), self.pkg, self.module));
         self.push_scope();
         self.bind_generics(d.generics());
         if let Some(params) = d.params() {

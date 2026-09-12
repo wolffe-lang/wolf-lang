@@ -549,9 +549,15 @@ fn classify_token(
                 let item = res.package.tables[*module].get(name)?;
                 let (kind, readonly) = match item.kind {
                     ItemKind::Fn => (SemKind::Function, false),
-                    ItemKind::Struct | ItemKind::Enum | ItemKind::Type | ItemKind::Trait => {
-                        (SemKind::Type, false)
-                    }
+                    // s158: an error-set alias highlights as a type —
+                    // it is a name in type position, even though it is
+                    // a spelling for tags rather than a type of its own
+                    // (`[type.err.alias.transparent]`).
+                    ItemKind::Struct
+                    | ItemKind::Enum
+                    | ItemKind::Type
+                    | ItemKind::Trait
+                    | ItemKind::Error => (SemKind::Type, false),
                     ItemKind::Const | ItemKind::Let => (SemKind::Variable, true),
                     ItemKind::Var => (SemKind::Variable, false),
                 };

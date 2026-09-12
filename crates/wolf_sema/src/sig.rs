@@ -209,6 +209,13 @@ pub enum ItemSig {
         name_span: Span,
     },
     Trait,
+    /// `error IoErrors = {…}` — an error-set alias (s158,
+    /// `[type.err.alias]`). No type is recorded because the alias IS
+    /// not a type: its row is read from the item's own syntax at every
+    /// use, the way a trait alias's bound list is.
+    ErrorSet {
+        name_span: Span,
+    },
     Global(GlobalSig),
 }
 
@@ -255,6 +262,7 @@ pub fn build_sigs(pkg: &Package) -> SigTables {
         pkg,
         table: TypeTable::new(),
         alias_stack: Vec::new(),
+        err_alias_stack: Vec::new(),
         diags: Vec::new(),
     };
     let mut modules: Vec<BTreeMap<String, ItemSig>> = vec![BTreeMap::new(); pkg.modules.len()];
@@ -413,6 +421,12 @@ pub(crate) struct Lower<'a> {
     pub table: TypeTable,
     /// Alias-expansion cycle guard: (module, item name).
     alias_stack: Vec<(usize, String)>,
+    /// Error-set alias expansion cycle guard (s158,
+    /// `[type.err.alias.cycle]`): (module, item name). Separate from
+    /// `alias_stack` — a type alias and an error set are different
+    /// namespaces of thing, and a cycle in one is not a cycle in the
+    /// other.
+    err_alias_stack: Vec<(usize, String)>,
     pub(crate) diags: Vec<Diagnostic>,
 }
 
@@ -422,6 +436,7 @@ impl<'a> Lower<'a> {
             pkg,
             table,
             alias_stack: Vec::new(),
+            err_alias_stack: Vec::new(),
             diags: Vec::new(),
         }
     }
@@ -545,6 +560,9 @@ impl<'a> Lower<'a> {
                 }
             }
             SyntaxKind::TraitDecl => ItemSig::Trait,
+            SyntaxKind::ErrorDecl => ItemSig::ErrorSet {
+                name_span: item.name_span,
+            },
             SyntaxKind::ConstDecl => {
                 let d = ConstDecl::cast(node).expect("kind");
                 let ty = d.ty().map(|t| self.lower_type(module, file, &[], t));
@@ -917,6 +935,41 @@ impl<'a> Lower<'a> {
         generics: &[String],
         row: wolf_ast::ErrorRow<'_>,
     ) -> TyId {
+        let (tags, tail) = self.lower_row_parts(module, file, generics, row);
+        self.table.row(tags, tail)
+    }
+
+    /// Find the error-set alias named `name` in `module`, and its row
+    /// syntax (s158, `[type.err.alias]`). The shape mirrors
+    /// [`Lower::alias_bound_of`]: the alias is read from the item's own
+    /// syntax at every use, so there is one source of truth for its
+    /// tags and no elaborated copy to keep in step.
+    fn error_alias_row<'n>(
+        &self,
+        module: usize,
+        name: &str,
+    ) -> Option<(usize, wolf_ast::ErrorRow<'n>)>
+    where
+        'a: 'n,
+    {
+        let item = self.pkg.tables[module].get(name)?;
+        if item.kind != crate::graph::ItemKind::Error {
+            return None;
+        }
+        let node = item_node(self.pkg, item);
+        let d = wolf_ast::ErrorDecl::cast(node)?;
+        Some((item.file, d.row()?))
+    }
+
+    /// The tags and tail of one `! {…}` row, with error-set aliases
+    /// expanded in place (`[type.err.alias.union]`).
+    fn lower_row_parts(
+        &mut self,
+        module: usize,
+        file: usize,
+        generics: &[String],
+        row: wolf_ast::ErrorRow<'_>,
+    ) -> (Vec<(String, Vec<TyId>)>, Option<TyId>) {
         let mut tags: Vec<(String, Vec<TyId>)> = Vec::new();
         let mut tail: Option<TyId> = if row.is_open() {
             Some(self.table.intern(TyKind::OpenTail))
@@ -953,6 +1006,77 @@ impl<'a> Lower<'a> {
                 tail = Some(self.table.intern(TyKind::Rigid(name)));
                 continue;
             }
+            // s158 — an error-set alias entry
+            // (`[type.err.alias.union]`): a single-segment path naming
+            // an `error` item in this module contributes that alias's
+            // tags, not a tag of its own. Resolution decides, in one
+            // step: everything else here is a tag.
+            if segs.len() == 1
+                && let Some((afile, arow)) = self.error_alias_row(module, &name)
+            {
+                if !payload.is_empty() {
+                    self.diags.push(
+                        Diagnostic::error(
+                            codes::E0601,
+                            span,
+                            format!("the error-set alias `{name}` cannot carry a payload"),
+                        )
+                        .with_label("an alias entry names tags, it does not declare one")
+                        .with_note(
+                            "an alias is a spelling for the tags it lists, and \
+                             each of those already declares what it carries \
+                             ([type.err.alias]). Drop the payload.",
+                        ),
+                    );
+                    continue;
+                }
+                let key = (module, name.clone());
+                if self.err_alias_stack.contains(&key) {
+                    let loop_text: Vec<String> = self
+                        .err_alias_stack
+                        .iter()
+                        .skip_while(|k| **k != key)
+                        .map(|(_, n)| n.clone())
+                        .chain(std::iter::once(name.clone()))
+                        .collect();
+                    self.diags.push(
+                        Diagnostic::error(
+                            codes::E0610,
+                            span,
+                            format!("the error-set alias `{name}` names itself"),
+                        )
+                        .with_label("this alias expands to itself")
+                        .with_note(format!(
+                            "the loop is {} — an alias is a spelling for a set \
+                             of tags, so the set has to be writable without it \
+                             ([type.err.alias.cycle]). Name tags, or a shorter \
+                             alias.",
+                            loop_text.join(" -> ")
+                        )),
+                    );
+                    continue;
+                }
+                self.err_alias_stack.push(key);
+                let (inner, inner_tail) = self.lower_row_parts(module, afile, generics, arow);
+                self.err_alias_stack.pop();
+                if inner_tail.is_some() && tail.is_none() {
+                    tail = inner_tail;
+                }
+                for (n, p) in inner {
+                    match tags.iter().find(|(m, _)| *m == n) {
+                        None => tags.push((n, p)),
+                        // The same tag from two sources with the same
+                        // payload is ONE tag — set union, exactly
+                        // `[gram.type.row.flatten]`'s silent merge.
+                        Some((_, have)) if *have == p => {}
+                        Some((_, have)) => {
+                            let have = have.clone();
+                            self.layer_payload_conflict(file, &n, &have, &p, Some(&row), span);
+                        }
+                    }
+                }
+                continue;
+            }
             if tags.iter().any(|(n, _)| *n == name) {
                 self.diags.push(
                     Diagnostic::error(
@@ -971,7 +1095,7 @@ impl<'a> Lower<'a> {
             }
             tags.push((name, payload));
         }
-        self.table.row(tags, tail)
+        (tags, tail)
     }
 
     /// D51 (#34) — a nested error row FLATTENS: `T ! {a} ! {b}` means
@@ -1552,7 +1676,10 @@ impl<'a> Lower<'a> {
                     // qualified/applied builtin form — not a s13 type
                     self.opaque(file, node)
                 } else if segs.len() == 1
-                    && matches!(first.as_str(), "List" | "Pool" | "channel" | "Map")
+                    && matches!(
+                        first.as_str(),
+                        "List" | "Pool" | "channel" | "Map" | "range"
+                    )
                 {
                     // The two prelude containers the Tier-2 corpus
                     // rests on (s21): typed as builtins so `handle`
@@ -1579,6 +1706,40 @@ impl<'a> Lower<'a> {
                         .collect();
                     match (first.as_str(), arg_tys.as_slice()) {
                         ("List", &[elem]) => self.table.intern(TyKind::List(elem)),
+                        // s158 (`[type.range.name]`, wolf-lang#24):
+                        // `range[int]` / `range[char]` in a signature
+                        // position is the same `TyKind::Range` the
+                        // expression `a..b` mints — the type wolf has
+                        // always PRINTED for a range and never let a
+                        // program spell, which is why three of
+                        // std.range's four functions were unwritable
+                        // (wolf-std F-0030). The family is closed at
+                        // the two element types `..` iterates.
+                        ("range", &[elem]) => {
+                            if !matches!(
+                                self.table.kind(elem),
+                                TyKind::Prim(Prim::Int | Prim::Char) | TyKind::Rigid(_)
+                            ) {
+                                let shown = render(&self.table, elem, &|_| Err("_"));
+                                self.diags.push(
+                                    Diagnostic::error(
+                                        codes::E0401,
+                                        arg_nodes[0].span,
+                                        format!("`range[{shown}]` is not a range type"),
+                                    )
+                                    .with_label("only `int` and `char` range")
+                                    .with_note(
+                                        "a range is the closed builtin family `a..b` \
+                                         iterates ([mem.iter.range]), so its element \
+                                         type is one of the two the language steps \
+                                         by one: `range[int]` or `range[char]` \
+                                         ([type.range.name]).",
+                                    ),
+                                );
+                                return self.table.error();
+                            }
+                            self.table.intern(TyKind::Range(elem))
+                        }
                         ("Pool", &[elem]) => self.table.intern(TyKind::Pool(elem)),
                         ("channel", &[elem]) => self.table.intern(TyKind::Chan(elem)),
                         // s152 (`[type.map]`): `Map[K, V]` in a

@@ -303,6 +303,9 @@ pub enum Reason {
     AssignTo(String),
     StructField(String),
     ForRange,
+    /// A list literal's element, checked against the first element's
+    /// type or against the expectation's (s158, `[type.list.lit]`).
+    ListElement,
     Pattern,
     /// An `if` without `else` produces `()`.
     BareIf,
@@ -357,6 +360,7 @@ impl Reason {
             Reason::AssignTo(p) => format!("`{p}` is"),
             Reason::StructField(n) => format!("the field `{n}` is"),
             Reason::ForRange => "the range's start makes this".to_string(),
+            Reason::ListElement => "the list's first element makes this".to_string(),
             Reason::Pattern => "the pattern requires".to_string(),
             Reason::BareIf => "an `if` without `else` produces".to_string(),
             Reason::LoopBody => "a loop body produces".to_string(),
@@ -392,6 +396,7 @@ impl Reason {
             Reason::AssignTo(_) => "the assignment target is here",
             Reason::StructField(_) => "the field is declared here",
             Reason::ForRange => "the start endpoint is here",
+            Reason::ListElement => "the first element is here",
             Reason::Pattern => "the pattern is here",
             Reason::BareIf => "there is no `else` branch on this `if`",
             Reason::LoopBody => "the loop starts here",
@@ -1163,7 +1168,8 @@ impl<'a> Checker<'a> {
     // ------------------------------------------------------- entry ----
 
     fn run(&mut self, node: &GreenNode, body: &BodyRef) -> R<()> {
-        self.row_tags = crate::resolve::lexical_row_tags(node, self.src());
+        self.row_tags =
+            crate::resolve::lexical_row_tags(node, self.src(), self.lo.pkg, self.module);
         match node.kind {
             SyntaxKind::FnDecl => self.run_fn(node, body),
             SyntaxKind::ConstDecl | SyntaxKind::LetDecl | SyntaxKind::VarDecl => {
@@ -1220,7 +1226,8 @@ impl<'a> Checker<'a> {
     /// const inside an `impl` block. `Self` is the impl's self type;
     /// the archetype facts are the impl's bounds plus the method's.
     fn run_impl_member(&mut self, node: &GreenNode, body: &BodyRef, member: usize) -> R<()> {
-        self.row_tags = crate::resolve::lexical_row_tags(node, self.src());
+        self.row_tags =
+            crate::resolve::lexical_row_tags(node, self.src(), self.lo.pkg, self.module);
         let Some(imp) = self
             .sigs
             .impls
@@ -1307,7 +1314,8 @@ impl<'a> Checker<'a> {
         body: &BodyRef,
         _member: usize,
     ) -> R<()> {
-        self.row_tags = crate::resolve::lexical_row_tags(node, self.src());
+        self.row_tags =
+            crate::resolve::lexical_row_tags(node, self.src(), self.lo.pkg, self.module);
         let Some(tname_tok) = wolf_ast::TraitDecl::cast(outer).and_then(|d| d.name()) else {
             return Err(NotYet {
                 construct: "a trait member without a named trait",
@@ -4276,6 +4284,7 @@ impl<'a> Checker<'a> {
             }
             SyntaxKind::ClosureExpr => self.check_closure(e, exp),
             SyntaxKind::TupleExpr => self.check_tuple(e, exp),
+            SyntaxKind::ListLit => self.check_list(e, exp),
             // Divergence checks itself; `Never ⇐ T` always holds.
             SyntaxKind::ReturnExpr | SyntaxKind::BreakExpr | SyntaxKind::ContinueExpr => {
                 self.synth_expr(e).map(|_| ())
@@ -4358,6 +4367,7 @@ impl<'a> Checker<'a> {
                 }
                 Ok(self.lo.table.intern(TyKind::Tuple(tys)))
             }
+            SyntaxKind::ListLit => self.synth_list(e),
             SyntaxKind::Block => self.synth_block(Block::cast(e).expect("kind")),
             SyntaxKind::PrefixExpr => self.synth_prefix(e),
             SyntaxKind::BinExpr => self.synth_bin(e),
@@ -4822,6 +4832,14 @@ impl<'a> Checker<'a> {
             }
             Some(ItemSig::Trait) => Err(NotYet {
                 construct: "a trait used as a value (comptime)",
+                span,
+            }),
+            // s158: an error-set alias is a spelling for tags, not a
+            // value and not a type (`[type.err.alias.transparent]`) —
+            // it has no identity a program can observe, so there is
+            // nothing here to be.
+            Some(ItemSig::ErrorSet { .. }) => Err(NotYet {
+                construct: "an error-set alias used as a value (it names tags, not a type)",
                 span,
             }),
             None => Ok(self.error_ty()),
@@ -5532,10 +5550,28 @@ impl<'a> Checker<'a> {
                 span: e.span,
             });
         }
-        // Ranges iterate integers (the builtin closed family, D25).
-        let elem = self.fresh(NumKind::Integer, endpoints[0].span);
+        // Ranges iterate integers or chars — the closed builtin
+        // family (D25, `[mem.iter.range]`; `range[char]` named by
+        // s158's `[type.range.name]`). The FIRST endpoint decides
+        // which: a `char` there makes a `range[char]`, and anything
+        // else takes the integer-literal variable that has always been
+        // the default, so every existing range types exactly as it
+        // did.
         let first_span = endpoints[0].span;
-        for ep in endpoints {
+        let first_ty = self.synth_expr(endpoints[0])?;
+        let elem = if matches!(self.kind_of(first_ty), TyKind::Prim(Prim::Char)) {
+            self.lo.table.prim(Prim::Char)
+        } else {
+            let v = self.fresh(NumKind::Integer, first_span);
+            let exp = Expect {
+                ty: v,
+                reason: Reason::ForRange,
+                because: Some(first_span),
+            };
+            self.expect_unify(first_span, first_ty, &exp);
+            v
+        };
+        for ep in &endpoints[1..] {
             let t = self.synth_expr(ep)?;
             let exp = Expect {
                 ty: elem,
@@ -8137,6 +8173,13 @@ impl<'a> Checker<'a> {
                 }
                 Ok(self.error_ty())
             }
+            Some(ItemSig::ErrorSet { .. }) => {
+                self.not_callable(callee_span, &format!("the error set `{name}`"));
+                if let Some(a) = args {
+                    self.synth_args_loosely(a)?;
+                }
+                Ok(self.error_ty())
+            }
             None => {
                 if let Some(a) = args {
                     self.synth_args_loosely(a)?;
@@ -9797,6 +9840,42 @@ impl<'a> Checker<'a> {
                     })
                 }
             }
+            // s158 (`[type.range.accessor]`, wolf-lang#24): `r.start`
+            // and `r.end` — the two field-shaped members a range
+            // carries, spelled without parentheses the way `xs.len`
+            // is. `end` is EXCLUSIVE, always: `a..=b` normalized to
+            // `b + 1` where it was built, which is what makes
+            // `r.end - r.start` the count and `contains` writable at
+            // all (the wolf-std F-0030 gap).
+            TyKind::Range(t) => {
+                let mname = self.text(member.span);
+                if mname == "start" || mname == "end" {
+                    Ok(t)
+                } else {
+                    let mut d = Diagnostic::error(
+                        codes::E0403,
+                        member.span,
+                        format!("a range has no member named `{mname}`"),
+                    )
+                    .with_label("unknown range member");
+                    if let Some(hit) = wolf_diag::suggest::best_match(&mname, &["start", "end"]) {
+                        d = d.with_suggestion(Suggestion::new(
+                            format!("did you mean `{hit}`?"),
+                            vec![(member.span, hit.to_string())],
+                            Applicability::Maybe,
+                        ));
+                    } else {
+                        d = d.with_note(
+                            "a range carries its two endpoints and nothing else: \
+                             `start` and `end`, with `end` exclusive \
+                             ([type.range.accessor]). The count is `r.end - \
+                             r.start`; std.range has the named functions.",
+                        );
+                    }
+                    self.diags.push(d);
+                    Ok(self.error_ty())
+                }
+            }
             // s152: `m.len` — the entry count, the same field-shaped
             // member `List` carries (std.map's `len` reads it).
             TyKind::Map(..) => {
@@ -11287,6 +11366,135 @@ impl<'a> Checker<'a> {
     }
 
     // ------------------------------------------------------ closures ---
+
+    /// `[a, b, c]` in SYNTHESIS position (`[type.list.lit.elem]`,
+    /// s158 wolf-lang#154): the first element fixes the element type
+    /// and every later one is checked against it, so the first element
+    /// that does not fit is the error site and the first element is
+    /// its "because". An empty literal has nothing to read and nothing
+    /// to read it from — E0419 (`[type.list.lit.empty]`).
+    fn synth_list(&mut self, e: &GreenNode) -> R<TyId> {
+        let d = wolf_ast::ListLit::cast(e).expect("kind");
+        let elems: Vec<&GreenNode> = d.elems().collect();
+        let Some(first) = elems.first() else {
+            self.empty_list_needs_a_type(e);
+            return Ok(self.error_ty());
+        };
+        let elem = self.synth_expr(first)?;
+        let first_span = first.span;
+        for rest in &elems[1..] {
+            let exp = Expect {
+                ty: elem,
+                reason: Reason::ListElement,
+                because: Some(first_span),
+            };
+            self.check_expr(rest, &exp)?;
+        }
+        let ty = self.lo.table.intern(TyKind::List(elem));
+        self.record(e.span, ty);
+        Ok(ty)
+    }
+
+    /// `[a, b, c]` in CHECKING position (`[type.list.lit.expect]`):
+    /// the expected `List[T]` pushes `T` into every element, which is
+    /// what makes `let xs: List[i64] = [1, 2]` need no widening step
+    /// and `[]` need no elements. An expected type that is not a
+    /// `List` is one E0401 at the literal — the shape is wrong before
+    /// the contents are.
+    fn check_list(&mut self, e: &GreenNode, exp: &Expect) -> R<()> {
+        let d = wolf_ast::ListLit::cast(e).expect("kind");
+        if let TyKind::List(elem) = self.kind_of(exp.ty) {
+            for item in d.elems() {
+                let sub = Expect {
+                    ty: elem,
+                    reason: Reason::ListElement,
+                    because: exp.because.or(Some(e.span)),
+                };
+                self.check_expr(item, &sub)?;
+            }
+            self.record(e.span, exp.ty);
+            return Ok(());
+        }
+        if d.elems().next().is_none() {
+            // An empty literal against a non-`List` expectation: the
+            // annotation is present and says something else. One
+            // E0401 at the literal, not an E0419 about an absent
+            // annotation that is right there.
+            let shown = self.show(exp.ty);
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E0401,
+                    e.span,
+                    format!("this is a list literal, but {} `{shown}`", exp.reason.phrase()),
+                )
+                .with_label("a `[…]` literal is always a `List[T]`"),
+            );
+            return Ok(());
+        }
+        let t = self.synth_expr(e)?;
+        self.expect_unify(e.span, t, exp);
+        Ok(())
+    }
+
+    /// E0419 — `let xs = []` with nothing to read the element type
+    /// from (`[type.list.lit.empty]`). The message spells the
+    /// annotation for THIS binding when it can name it, because the
+    /// fix is one edit and the reader should not have to compose it.
+    fn empty_list_needs_a_type(&mut self, e: &GreenNode) {
+        let name = self.enclosing_binder_name(e);
+        let subject = match &name {
+            Some(n) => format!("`{n}`"),
+            None => "this binding".to_string(),
+        };
+        let spelled = match &name {
+            Some(n) => format!("`let {n}: List[int] = []`"),
+            None => "`let xs: List[int] = []`".to_string(),
+        };
+        self.diags.push(
+            Diagnostic::error(
+                codes::E0419,
+                e.span,
+                format!("`[]` does not say what {subject} holds"),
+            )
+            .with_label("an empty list literal has no element to read a type from")
+            .with_note(format!(
+                "annotate the binding and the literal takes its element type \
+                 from the annotation — {spelled}, with the element type you \
+                 mean. Every other position already supplies one (a call \
+                 argument, a field, a declared return), so `[]` is written \
+                 bare everywhere except here. A literal with elements needs \
+                 nothing: `let xs = [1, 2, 3]`."
+            )),
+        );
+    }
+
+    /// The name of the `let`/`var` binder whose initializer `e` is, for
+    /// E0419's spelled-out fix. `None` when the literal is not an
+    /// initializer, or the binder is a pattern rather than a name.
+    fn enclosing_binder_name(&self, e: &GreenNode) -> Option<String> {
+        fn walk(node: &GreenNode, target: Span, out: &mut Option<Span>) {
+            if matches!(node.kind, SyntaxKind::LetDecl | SyntaxKind::VarDecl) {
+                for b in wolf_ast::binding_binders(node) {
+                    if b.init.is_some_and(|i| i.span == target)
+                        && let Some(pat) = b.pattern
+                        && pat.kind == SyntaxKind::IdentPat
+                    {
+                        *out = Some(pat.span);
+                        return;
+                    }
+                }
+            }
+            for child in node.nodes() {
+                if child.span.lo <= target.lo && target.hi <= child.span.hi {
+                    walk(child, target, out);
+                }
+            }
+        }
+        let root = &self.lo.pkg.files[self.file].parse.root;
+        let mut out = None;
+        walk(root, e.span, &mut out);
+        out.map(|s| self.text(s))
+    }
 
     fn check_tuple(&mut self, e: &GreenNode, exp: &Expect) -> R<()> {
         let d = TupleExpr::cast(e).expect("kind");

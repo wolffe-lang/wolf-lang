@@ -307,9 +307,18 @@ impl Wave<'_> {
                     .collect()
             })
             .unwrap_or_default();
+        // s158: an entry naming an error-set ALIAS is not a tag — it
+        // is a spelling for the tags of another declaration, which
+        // carry the shape rules themselves at their own site
+        // (`[type.err.alias]`). Judging `IoErrors` as a mark would ask
+        // an alias to be lowercase and then collide it with the item
+        // it is deliberately named after.
         for (tag, span, payload) in &entries {
             if generics.contains(tag)
                 || (tag.len() == 1 && tag.chars().next().is_some_and(|c| c.is_ascii_uppercase()))
+                || self.pkg.tables[self.module]
+                    .get(tag)
+                    .is_some_and(|it| it.kind == crate::graph::ItemKind::Error)
             {
                 continue;
             }
@@ -350,6 +359,16 @@ impl Wave<'_> {
             }
         }
         for (tag, span, _) in entries {
+            // s158: naming an error-set alias is not a collision — it
+            // is the point (`[type.err.alias]`). The alias and the
+            // entry are the SAME declaration, not two meanings of one
+            // word, which is what this lint is about.
+            if self.pkg.tables[self.module]
+                .get(&tag)
+                .is_some_and(|it| it.kind == crate::graph::ItemKind::Error)
+            {
+                continue;
+            }
             let clash = if self.pkg.tables[self.module]
                 .get(&tag)
                 .is_some_and(|it| self.text(span) == it.name)

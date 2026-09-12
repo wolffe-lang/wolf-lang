@@ -543,6 +543,10 @@ pub enum ItemKind {
     Const,
     Let,
     Var,
+    /// `error IoErrors = {…}` — an error-set alias
+    /// (`[gram.item.error]`, s158). A module-level name like any
+    /// other, and transparent at every use (`[type.err.alias]`).
+    Error,
 }
 
 impl ItemKind {
@@ -552,7 +556,7 @@ impl ItemKind {
 
     pub fn from_u8(v: u8) -> Option<ItemKind> {
         use ItemKind::*;
-        [Fn, Struct, Enum, Type, Trait, Const, Let, Var]
+        [Fn, Struct, Enum, Type, Trait, Const, Let, Var, Error]
             .into_iter()
             .find(|k| k.as_u8() == v)
     }
@@ -567,6 +571,7 @@ impl ItemKind {
             ItemKind::Const => "const",
             ItemKind::Let => "let",
             ItemKind::Var => "var",
+            ItemKind::Error => "error",
         }
     }
 }
@@ -1584,7 +1589,7 @@ pub(crate) fn pattern_names(node: &GreenNode, src: &[u8]) -> Vec<(String, Span)>
 /// Collect the top-level items of one file: (name, kind, vis, name
 /// span, decl index among item nodes).
 fn collect_items(root: &GreenNode, src: &[u8]) -> Vec<(String, ItemKind, Vis, Span, usize)> {
-    use wolf_ast::{ConstDecl, EnumDecl, FnDecl, StructDecl, TraitDecl, TypeDecl};
+    use wolf_ast::{ConstDecl, EnumDecl, ErrorDecl, FnDecl, StructDecl, TraitDecl, TypeDecl};
     let mut out = Vec::new();
     for (decl, node) in root.nodes().filter(|n| n.kind.is_item()).enumerate() {
         let vis = item_vis(node);
@@ -1612,6 +1617,10 @@ fn collect_items(root: &GreenNode, src: &[u8]) -> Vec<(String, ItemKind, Vis, Sp
             SyntaxKind::ConstDecl => single(
                 ConstDecl::cast(node).and_then(|d| d.name()),
                 ItemKind::Const,
+            ),
+            SyntaxKind::ErrorDecl => single(
+                ErrorDecl::cast(node).and_then(|d| d.name()),
+                ItemKind::Error,
             ),
             SyntaxKind::LetDecl => {
                 for b in wolf_ast::binding_binders(node) {

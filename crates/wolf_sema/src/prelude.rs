@@ -27,6 +27,10 @@ pub const PRELUDE: &[&str] = &[
     "Pool",
     "Mutex",
     "channel",
+    // s158 (`[type.range]`, wolf-lang#24): `range[int]` / `range[char]`
+    // — the type of `a..b`. A prelude NAME, like `List`, not a
+    // `BUILTIN_TYPES` prim: it takes an argument.
+    "range",
     // small helpers the corpus leans on
     "min",
     "zip",

@@ -396,6 +396,9 @@ fn item_completion(pkg: &Package, module: usize, item: &Item) -> Completion {
         ItemKind::Enum => CompletionKind::Enum,
         ItemKind::Type => CompletionKind::TypeAlias,
         ItemKind::Trait => CompletionKind::Trait,
+        // An error-set alias completes as a type alias: a name that
+        // stands for something else and expands at every use (s158).
+        ItemKind::Error => CompletionKind::TypeAlias,
         ItemKind::Const => CompletionKind::Const,
         ItemKind::Let | ItemKind::Var => CompletionKind::Variable,
     };
