@@ -43,6 +43,12 @@ pub enum SyntaxKind {
     /// identifier, and `if then { … }` reads the identifier as the
     /// condition.
     ThenKw,
+    /// Contextual `error` (`[gram.item.error]`, s158 wolf-lang#36):
+    /// lexes as `Ident`; the parser reclassifies it only in item
+    /// position with an `IDENT` and an `=` after it (text unchanged —
+    /// lossless). `let error = 1`, `error(reason)` and a field named
+    /// `error` are all still the identifier.
+    ErrorKw,
 
     // Punctuation, mirroring `wolf_lex::Punct`.
     LParen, RParen, LBracket, RBracket, LBrace, RBrace,
@@ -79,6 +85,11 @@ pub enum SyntaxKind {
     // Items.
     FnDecl, UseDecl, ImportCDecl, TypeDecl, StructDecl, EnumDecl,
     TraitDecl, ImplDecl, LetDecl, VarDecl, ConstDecl,
+    /// `error IoErrors = {none, parse, io}` — an error-set alias
+    /// (`[gram.item.error]`, s158). The row is an ordinary `ErrorRow`
+    /// child; the alias is a spelling for its tags, never a type
+    /// (`[type.err.alias]`).
+    ErrorDecl,
 
     // Item pieces.
     Attribute, AttrItem, AttrInput, Visibility, Path, UseGroup,
@@ -154,6 +165,11 @@ pub enum SyntaxKind {
     ParenExpr,
     /// `( expr, … )` tuple construction (incl. `(a,)`).
     TupleExpr,
+    /// `[a, b, c]` — a list literal in PRIMARY position
+    /// (`[gram.expr.list]`, s158 wolf-lang#154). A `[` that follows a
+    /// complete expression is `BracketApply` instead; position is the
+    /// whole difference (`[gram.amb.brackets]`).
+    ListLit,
     /// `{ stmt* expr? }` — blocks are expressions `[gram.expr.block]`.
     Block,
     /// `! - & &mut * move copy shared` prefix operators (tier 3).
@@ -250,6 +266,7 @@ impl SyntaxKind {
                 | SyntaxKind::LetDecl
                 | SyntaxKind::VarDecl
                 | SyntaxKind::ConstDecl
+                | SyntaxKind::ErrorDecl
         )
     }
 }

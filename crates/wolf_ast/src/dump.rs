@@ -155,6 +155,24 @@ fn dump_item(node: &GreenNode, src: &[u8], depth: usize, out: &mut String) {
                 .map_or(String::new(), |i| format!(" init={:?}", i.kind));
             let _ = writeln!(out, "{head} name={}{flags}{init}", name_of(c.name()));
         }
+        SyntaxKind::ErrorDecl => {
+            let e = crate::ast::ErrorDecl::cast(node).expect("kind checked");
+            let tags: Vec<String> = e
+                .row()
+                .map(|r| {
+                    r.entries()
+                        .filter_map(|en| en.path())
+                        .map(|p| text(src, p.syntax().span))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let _ = writeln!(
+                out,
+                "{head} name={}{flags} tags={{{}}}",
+                name_of(e.name()),
+                tags.join(",")
+            );
+        }
         SyntaxKind::ErrorNode => {
             let _ = writeln!(out, "{head} {}", preview(src, node.span));
         }

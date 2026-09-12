@@ -57,6 +57,7 @@ pub fn is_expr_kind(kind: SyntaxKind) -> bool {
             | SyntaxKind::StringExpr
             | SyntaxKind::ParenExpr
             | SyntaxKind::TupleExpr
+            | SyntaxKind::ListLit
             | SyntaxKind::Block
             | SyntaxKind::PrefixExpr
             | SyntaxKind::BinExpr
@@ -333,6 +334,26 @@ impl<'a> TraitDecl<'a> {
     /// `[type.trait.op]`). `None` for the brace form.
     pub fn alias_bound(self) -> Option<TypeBound<'a>> {
         self.0.nodes().find_map(TypeBound::cast)
+    }
+}
+
+ast_node!(
+    /// `error IoErrors = {none, parse, io}` — an error-set alias
+    /// (`[gram.item.error]`, s158 wolf-lang#36). The tags are the
+    /// ordinary `ErrorRow` child; the name is transparent
+    /// (`[type.err.alias]`).
+    ErrorDecl
+);
+common_item_accessors!(ErrorDecl);
+
+impl<'a> ErrorDecl<'a> {
+    pub fn name(self) -> Option<&'a GreenToken> {
+        self.0.child_token(SyntaxKind::Ident)
+    }
+
+    /// The alias's tag set. `None` only on a broken parse (D22).
+    pub fn row(self) -> Option<ErrorRow<'a>> {
+        self.0.nodes().find_map(ErrorRow::cast)
     }
 }
 
@@ -1079,6 +1100,20 @@ ast_node!(
 );
 
 impl<'a> TupleExpr<'a> {
+    pub fn elems(self) -> impl Iterator<Item = &'a GreenNode> {
+        self.0.nodes().filter(|n| is_expr_kind(n.kind))
+    }
+}
+
+ast_node!(
+    /// `[a, b, c]` — a list literal (`[gram.expr.list]`, s158
+    /// wolf-lang#154). Elements in source order; an empty literal has
+    /// none and takes its element type from the context
+    /// (`[type.list.lit.empty]`).
+    ListLit
+);
+
+impl<'a> ListLit<'a> {
     pub fn elems(self) -> impl Iterator<Item = &'a GreenNode> {
         self.0.nodes().filter(|n| is_expr_kind(n.kind))
     }
