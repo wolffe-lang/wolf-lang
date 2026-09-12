@@ -327,6 +327,8 @@ memory/region_multiopen_values_ok.lu: lowers
 memory/region_open_ancestor.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_concat_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_concat_send.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_field_return.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_repeat_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_transfer_open.lu: not mem-clean (pre-wir rungs own it)
 memory/region_unit_tail_call.lu: lowers
 memory/region_value_container.lu: refused — a region inside another value (extent tracking stops at the aggregate boundary — c25 closeout)

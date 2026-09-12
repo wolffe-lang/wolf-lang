@@ -1,0 +1,28 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.intra.2
+//!
+//! s160 (wolf-lang#321) — the second half. Returning `d` itself was
+//! E1010 all along (the struct's own site); returning `d.title` was
+//! not, because a `Copy` field read flowed no site. That rule is right
+//! for an `int` — a copied scalar pins nothing — and wrong for a `str`,
+//! whose two-word view copies freely while its BYTES stay in the
+//! region the struct was built in. s153 scoped its fix to whole-local
+//! `str` reads; a projection carries the place's sites too since s160.
+//! The net is the parent's whole site set, so this is conservative
+//! rather than exact — a literal-initialized field is refused as well.
+
+struct Doc { title: str, words: int }
+
+fn build() -> str {
+    region scratch {
+        let d = Doc { title: "re" + "gions", words: 1 }
+        let t = d.title
+        t                          // ERROR E1010: the bytes live in scratch
+    }
+}
+
+fn main() -> !int {
+    print("{build()}")
+    0
+}

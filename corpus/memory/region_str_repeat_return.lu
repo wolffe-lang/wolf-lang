@@ -1,0 +1,25 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.str.view, mem.region.intra.2
+//!
+//! s160 (wolf-lang#321) — the first half, one step out from s153's
+//! `+`. `repeat` builds a fresh `str` ([mem.str.view] names the other
+//! side: `trim`, `get`, `strip_*` and the `split`/`words`/`lines`
+//! pieces are subslices of the receiver and allocate nothing), so it
+//! is an allocation in the ambient region — here `scratch` — exactly
+//! as `+` is. The mem tier minted a call-result site only for a
+//! non-`Copy` return, and a `str` is `Copy`, so this ran to exit 0
+//! printing `rere` from freed bytes on both tiers at v0.2.13.
+//! `upper`, `lower` and `replace` are the same site.
+
+fn build() -> str {
+    region scratch {
+        let s = "re".repeat(2)
+        s                          // ERROR E1010: built in scratch
+    }
+}
+
+fn main() -> !int {
+    print("{build()}")
+    0
+}
