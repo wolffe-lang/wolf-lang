@@ -327,3 +327,175 @@ fn semantic_tokens_count_columns_in_the_negotiated_encoding() {
     assert!(toks.contains(&(2, 8, 1, 3, 3)), "{toks:?}");
     client.shutdown();
 }
+
+/// The legend's type names, in the order `initialize` advertises them.
+const TYPES: [&str; 8] = [
+    "namespace",
+    "type",
+    "parameter",
+    "variable",
+    "property",
+    "enumMember",
+    "function",
+    "keyword",
+];
+
+/// One decoded token, rendered `line:col len type[+modifiers] 'text'`
+/// — the stream as a reader of the issue's table would write it.
+fn render(text: &str, toks: &[(u64, u64, u64, u64, u64)]) -> Vec<String> {
+    let lines: Vec<&str> = text.split('\n').collect();
+    toks.iter()
+        .map(|&(l, c, len, ty, m)| {
+            let s: String = lines[l as usize]
+                .chars()
+                .skip(c as usize)
+                .take(len as usize)
+                .collect();
+            let mut mods = String::new();
+            if m & 1 != 0 {
+                mods.push_str("+declaration");
+            }
+            if m & 2 != 0 {
+                mods.push_str("+readonly");
+            }
+            format!("{l}:{c} {len} {}{mods} {s:?}", TYPES[ty as usize])
+        })
+        .collect()
+}
+
+/// wolf-lang#356 — the contextual `then` got **no token at all**: a
+/// hole in the stream, not a miscolouring.
+///
+/// `is_keyword_kind` in the semantic-token walk carried its own
+/// `AsKw..=WhileKw` range with `SelfKw` special-cased past the end, so
+/// `ThenKw` — a kind declared after `SelfKw` by s151 — matched neither
+/// that test nor the `Ident` test under it, and `classify_token`
+/// returned `None`. The editor rendered `if c then a else b` with `if`
+/// and `else` coloured and `then` as plain text.
+///
+/// The whole decoded stream is pinned, not the one token, and that is
+/// the point: the defect survived `v0.2.5..v0.2.12` because every
+/// existing assertion looks a token up by position and an absent token
+/// is only ever a count nobody took. A hole is what a count missed.
+#[test]
+fn the_contextual_then_is_a_keyword_and_the_whole_stream_is_pinned() {
+    let (mut client, _) = Client::start(&["utf-8"]);
+    let path = support::corpus("grammar/if_then_ident.lu");
+    let text = std::fs::read_to_string(&path).unwrap();
+    let uri = client.open_from_disk(&path);
+    client.wait_publish(&uri);
+    let id = client.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": uri.as_str() } }),
+    );
+    let toks = decode(&client.wait_response(id).unwrap()["data"]);
+    // The whole stream, in source order. `then` appears four times in
+    // this file and each one is classified for what it is in its own
+    // position: the binder, two identifier reads, and — at 11:20,
+    // between the `if` at 11:12 and the `else` at 11:27 — the keyword.
+    // The fifth `then`, inside the string literal, is not a token.
+    assert_eq!(
+        render(&text, &toks),
+        [
+            "8:0 2 keyword \"fn\"",
+            "8:3 4 function+declaration \"main\"",
+            "8:14 3 type \"int\"",
+            "9:4 3 keyword \"let\"",
+            "9:8 4 variable+declaration+readonly \"then\"",
+            "9:15 4 keyword \"true\"",
+            "10:4 2 keyword \"if\"",
+            "10:7 4 variable+readonly \"then\"",
+            "10:14 5 function \"print\"",
+            "11:4 3 keyword \"let\"",
+            "11:8 1 variable+declaration+readonly \"n\"",
+            "11:12 2 keyword \"if\"",
+            "11:15 4 variable+readonly \"then\"",
+            "11:20 4 keyword \"then\"",
+            "11:27 4 keyword \"else\"",
+            "12:4 5 function \"print\"",
+            "12:12 1 variable+readonly \"n\"",
+        ]
+    );
+
+    // Said again as a property, because the pin above is a list a
+    // future edit can "fix" by deleting a row: every `then` this file
+    // spells outside the string literal reaches the stream, and the
+    // one between `if` and `else` is the keyword.
+    let rendered = render(&text, &toks);
+    let thens: Vec<&String> = rendered
+        .iter()
+        .filter(|r| r.ends_with("\"then\""))
+        .collect();
+    assert_eq!(thens.len(), 4, "four `then` tokens, no hole: {thens:?}");
+    assert_eq!(
+        thens.iter().filter(|r| r.contains(" keyword ")).count(),
+        1,
+        "exactly one of them is the contextual keyword: {thens:?}"
+    );
+
+    // The `/range` request over line 11 is the same stream, clipped —
+    // the hole was not a full-document artifact, so neither is the fix.
+    let id = client.request("textDocument/semanticTokens/range", json!({
+        "textDocument": { "uri": uri.as_str() },
+        "range": { "start": { "line": 11, "character": 0 }, "end": { "line": 12, "character": 0 } },
+    }));
+    let ranged = decode(&client.wait_response(id).unwrap()["data"]);
+    assert_eq!(
+        render(&text, &ranged),
+        [
+            "11:4 3 keyword \"let\"",
+            "11:8 1 variable+declaration+readonly \"n\"",
+            "11:12 2 keyword \"if\"",
+            "11:15 4 variable+readonly \"then\"",
+            "11:20 4 keyword \"then\"",
+            "11:27 4 keyword \"else\"",
+        ]
+    );
+    client.shutdown();
+}
+
+/// The same hole, one kind over, and nobody had measured it:
+/// `ErrorKw` — the contextual `error` of an error-set alias, s158's
+/// `[gram.item.error]` — was declared right after `ThenKw` and fell
+/// through the same two tests, so `error IoErrors = {none, parse}`
+/// opened with a word the server classified as nothing at all.
+///
+/// s158 did think about this item's tokens: it taught the walk that
+/// the alias NAME highlights as a `type`. The keyword introducing it
+/// was still a hole, because a lookup-by-position assertion for the
+/// name passes either way.
+#[test]
+fn the_contextual_error_keyword_is_a_keyword_too() {
+    let (mut client, _) = Client::start(&["utf-8"]);
+    let path = support::corpus("rows/error_alias_row.lu");
+    let text = std::fs::read_to_string(&path).unwrap();
+    let uri = client.open_from_disk(&path);
+    client.wait_publish(&uri);
+    let id = client.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": uri.as_str() } }),
+    );
+    let toks = decode(&client.wait_response(id).unwrap()["data"]);
+    let rendered = render(&text, &toks);
+    // The alias declaration line, whole: the keyword, then the name as
+    // a `type` declaration. The tags inside the row are not names the
+    // resolver binds, so they carry no token — that is by design and
+    // is pinned here so it stays a decision rather than a hole.
+    let line: Vec<&String> = rendered.iter().filter(|r| r.starts_with("12:")).collect();
+    assert_eq!(
+        line,
+        [
+            "12:0 5 keyword \"error\"",
+            "12:6 8 type+declaration \"IoErrors\"",
+        ],
+        "whole stream: {rendered:?}"
+    );
+    // And `error` as an identifier stays an identifier: the `else`
+    // spelling below binds no `error`, but the tag `parse` in
+    // `return parse` is a tag, not a keyword, either way.
+    assert!(
+        !rendered.iter().any(|r| r.contains(" keyword \"parse\"")),
+        "a tag is not a keyword: {rendered:?}"
+    );
+    client.shutdown();
+}

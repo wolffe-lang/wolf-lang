@@ -26,7 +26,11 @@
 //!
 //! # Semantic tokens
 //!
-//! Keywords from the parse tree; every other token from the binding
+//! Keywords from the parse tree — reserved and contextual alike, so
+//! the `then` of `if c then a else b` and the `error` of an error-set
+//! alias are `keyword` in the one position the parser reclassifies
+//! them and the identifier they are spelled as everywhere else
+//! (wolf-lang#356); every other token from the binding
 //! table's target: a `Local` is a `parameter` when its binder sits in
 //! a parameter list and a `variable` otherwise (`readonly` unless the
 //! binder is `var`'s); an `Item` is what its kind says (`function`, or
@@ -521,7 +525,13 @@ fn classify_token(
     if t.span.lo == t.span.hi {
         return None;
     }
-    if is_keyword_kind(t.kind) {
+    // Every keyword, reserved or contextual — `SyntaxKind::is_keyword`
+    // owns the boundary. This test used to carry its own
+    // `AsKw..=WhileKw` range with `SelfKw` bolted on, which meant the
+    // contextual `then` (s151) and `error` (s158) matched neither it
+    // nor the `Ident` test below, and the walk emitted no token at all
+    // for them — wolf-lang#356.
+    if t.kind.is_keyword() {
         return Some(SemToken {
             span: t.span,
             kind: SemKind::Keyword,
@@ -616,10 +626,6 @@ fn classify_token(
         declaration: decl == t.span,
         readonly: false,
     })
-}
-
-fn is_keyword_kind(kind: SyntaxKind) -> bool {
-    (SyntaxKind::AsKw..=SyntaxKind::WhileKw).contains(&kind) || kind == SyntaxKind::SelfKw
 }
 
 /// A `Local`'s token kind and readonly-ness, from where its binder

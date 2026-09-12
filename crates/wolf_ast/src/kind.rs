@@ -251,6 +251,27 @@ impl SyntaxKind {
         self >= SyntaxKind::SourceFile
     }
 
+    /// Is this a keyword token — one of the 50 reserved keywords
+    /// (`[gram.inv.kw]`) or a contextual keyword the parser
+    /// reclassifies in one position (`self`, `then`, `error`)?
+    ///
+    /// The range is half-open at the first punctuation kind on
+    /// purpose. Every keyword, reserved or contextual, is declared in
+    /// the block between [`SyntaxKind::AsKw`] and
+    /// [`SyntaxKind::LParen`], so a contextual keyword added there is
+    /// a keyword here with no second edit anywhere. That second edit
+    /// is exactly what wolf-lang#356 was: the semantic-token walk
+    /// carried its own `AsKw..=WhileKw` range with `SelfKw`
+    /// special-cased past the end, and the two contextual kinds added
+    /// after it — `ThenKw` (s151) and `ErrorKw` (s158) — fell through
+    /// both that test and the `Ident` test below it, so the walk
+    /// emitted *nothing* for either. A hole in a stream is what a
+    /// count misses; the boundary test below is what keeps this one
+    /// shut.
+    pub fn is_keyword(self) -> bool {
+        (SyntaxKind::AsKw..SyntaxKind::LParen).contains(&self)
+    }
+
     /// Is this one of the item (declaration) node kinds?
     pub fn is_item(self) -> bool {
         matches!(
@@ -288,5 +309,34 @@ mod tests {
         assert!(SyntaxKind::Block.is_node());
         assert!(SyntaxKind::FnDecl.is_item());
         assert!(!SyntaxKind::Attribute.is_item());
+    }
+
+    /// The keyword block is a contiguous run, and its ends are pinned
+    /// (wolf-lang#356). A new contextual keyword belongs *inside*
+    /// `AsKw..LParen`, where [`SyntaxKind::is_keyword`] picks it up
+    /// with no second edit; declaring one outside that run, or
+    /// slipping a non-keyword inside it, trips this test rather than
+    /// silently opening another hole in the semantic-token stream.
+    #[test]
+    fn the_keyword_block_is_contiguous_and_its_ends_are_pinned() {
+        // 50 reserved `[gram.inv.kw]` + 3 contextual (`self`, `then`,
+        // `error`). Raise this number only together with the keyword
+        // you added — and only if it is a keyword.
+        assert_eq!(SyntaxKind::LParen as u16 - SyntaxKind::AsKw as u16, 53);
+        // Both ends, and every contextual kind between them.
+        assert!(SyntaxKind::AsKw.is_keyword());
+        assert!(SyntaxKind::WhileKw.is_keyword());
+        assert!(SyntaxKind::SelfKw.is_keyword());
+        assert!(SyntaxKind::ThenKw.is_keyword());
+        assert!(SyntaxKind::ErrorKw.is_keyword());
+        // And nothing on either side of the run.
+        assert!(!SyntaxKind::Ident.is_keyword());
+        assert!(!SyntaxKind::Char.is_keyword());
+        assert!(!SyntaxKind::LParen.is_keyword());
+        assert!(!SyntaxKind::Term.is_keyword());
+        assert!(!SyntaxKind::Eof.is_keyword());
+        assert!(!SyntaxKind::SourceFile.is_keyword());
+        // Every keyword is a token kind.
+        assert!(SyntaxKind::ErrorKw.is_token());
     }
 }
