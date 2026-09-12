@@ -468,6 +468,36 @@
       "naive": 40,
       "ratio": 0.4
     },
+    "corpus/grammar/list_lit_arg.lu": {
+      "midend": 31,
+      "naive": 31,
+      "ratio": 1.0
+    },
+    "corpus/grammar/list_lit_empty.lu": {
+      "midend": 37,
+      "naive": 37,
+      "ratio": 1.0
+    },
+    "corpus/grammar/list_lit_index.lu": {
+      "midend": 67,
+      "naive": 67,
+      "ratio": 1.0
+    },
+    "corpus/grammar/list_lit_let.lu": {
+      "midend": 47,
+      "naive": 47,
+      "ratio": 1.0
+    },
+    "corpus/grammar/list_lit_multiline.lu": {
+      "midend": 31,
+      "naive": 31,
+      "ratio": 1.0
+    },
+    "corpus/grammar/list_lit_nested.lu": {
+      "midend": 56,
+      "naive": 56,
+      "ratio": 1.0
+    },
     "corpus/grammar/match_arm_at_binding.lu": {
       "midend": 31,
       "naive": 122,
@@ -497,6 +527,31 @@
       "midend": 42,
       "naive": 42,
       "ratio": 1.0
+    },
+    "corpus/grammar/range_type_char.lu": {
+      "midend": 18,
+      "naive": 28,
+      "ratio": 0.643
+    },
+    "corpus/grammar/range_type_inclusive.lu": {
+      "midend": 24,
+      "naive": 50,
+      "ratio": 0.48
+    },
+    "corpus/grammar/range_type_overflow.lu": {
+      "midend": 5,
+      "naive": 19,
+      "ratio": 0.263
+    },
+    "corpus/grammar/range_type_param.lu": {
+      "midend": 18,
+      "naive": 38,
+      "ratio": 0.474
+    },
+    "corpus/grammar/range_type_return.lu": {
+      "midend": 29,
+      "naive": 55,
+      "ratio": 0.527
     },
     "corpus/grammar/shebang.lu": {
       "midend": 8,
@@ -1237,6 +1292,26 @@
       "midend": 157,
       "naive": 128,
       "ratio": 1.227
+    },
+    "corpus/rows/error_alias_ident.lu": {
+      "midend": 12,
+      "naive": 19,
+      "ratio": 0.632
+    },
+    "corpus/rows/error_alias_row.lu": {
+      "midend": 22,
+      "naive": 66,
+      "ratio": 0.333
+    },
+    "corpus/rows/error_alias_transparent.lu": {
+      "midend": 34,
+      "naive": 126,
+      "ratio": 0.27
+    },
+    "corpus/rows/error_alias_union.lu": {
+      "midend": 22,
+      "naive": 66,
+      "ratio": 0.333
     },
     "corpus/rows/eu_main_err_exit.lu": {
       "midend": 33,
