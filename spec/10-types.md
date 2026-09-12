@@ -852,8 +852,9 @@ one type the compiler could build a value of and not name.)
   (wolf-std F-0030's `contains`, `len`, `clamp_to`, unwritable until
   this clause). The witnesses are
   `grammar/range_type_param.lu`, `grammar/range_type_return.lu`,
-  `grammar/range_type_inclusive.lu`, `grammar/range_type_char.lu`;
-  refused: `grammar/range_type_open.lu`.
+  `grammar/range_type_inclusive.lu`, `grammar/range_type_char.lu`,
+  `grammar/range_type_overflow.lu` (the normalization's price, trapped
+  where the range is built).
 
 ## §14 Error-set aliases `[type.err.alias]`
 
