@@ -43,7 +43,7 @@
 //! mutable state — each body is an independent inference problem
 //! (Target 5; parallelized in [`crate::typecheck`]).
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use wolf_ast::{
     Arg, ArgList, AssignStmt, BinExpr, Block, BracketApply, CallExpr, CastExpr, ClosureExpr,
     ConstDecl, DeferStmt, ExprStmt, FieldInit, FnDecl, ForExpr, FreezeExpr, FromEndExpr, GreenNode,
@@ -542,6 +542,14 @@ struct Checker<'a> {
     match_facts: Vec<(Span, bool)>,
     /// Resolved call-site mode surfaces in visit order (s18).
     calls: Vec<(Span, CallSig)>,
+    /// Range expressions sitting in a SLICE position that the
+    /// bracket syntax does not spell — today exactly `s.get(a..b)`'s
+    /// argument (#164). `[mem.str.get]`: "End-relative endpoints
+    /// (`^n`) and open ends resolve exactly as in `s[a..b]` before
+    /// the domain question is asked", so the range is typed by
+    /// [`Checker::check_slice_endpoints`], not by the general
+    /// range-value rule that refuses those forms.
+    slice_pos_ranges: HashSet<Span>,
     /// Member resolutions (s133): (use span, declaration name span).
     member_refs: Vec<(Span, Span)>,
     /// Every tag name spelled in an error row of the item under check
@@ -734,6 +742,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         match_recs: Vec::new(),
         match_facts: Vec::new(),
         calls: Vec::new(),
+        slice_pos_ranges: HashSet::new(),
         member_refs: Vec::new(),
         row_tags: BTreeSet::new(),
         when_stack: Vec::new(),
@@ -906,6 +915,7 @@ pub(crate) fn collect_body_rows(
         match_recs: Vec::new(),
         match_facts: Vec::new(),
         calls: Vec::new(),
+        slice_pos_ranges: HashSet::new(),
         member_refs: Vec::new(),
         row_tags: BTreeSet::new(),
         when_stack: Vec::new(),
@@ -5505,6 +5515,15 @@ impl<'a> Checker<'a> {
 
     fn synth_range(&mut self, e: &GreenNode) -> R<TyId> {
         let d = RangeExpr::cast(e).expect("kind");
+        // A slice-position range (`s.get(0..^1)`) resolves by the
+        // subscript rule, open ends and `^n` included — the same
+        // endpoints `s[0..^1]` takes, which is what `[mem.str.get]`
+        // says GET takes too (#164).
+        if self.slice_pos_ranges.contains(&e.span) {
+            self.check_slice_endpoints(e, "get")?;
+            let int_ = self.lo.table.prim(Prim::Int);
+            return Ok(self.lo.table.intern(TyKind::Range(int_)));
+        }
         let endpoints: Vec<&GreenNode> = d.endpoints().collect();
         if endpoints.len() != 2 || endpoints.iter().any(|n| n.kind == SyntaxKind::FromEndExpr) {
             return Err(NotYet {
@@ -6636,7 +6655,17 @@ impl<'a> Checker<'a> {
         let (params, ret) = match mname {
             "is_empty" => (vec![p("self", recv_ty)], bool_),
             // The boundary primitive (D25's anti-landmine form).
+            // Its range is a SLICE-position range: `^n` and open ends
+            // resolve exactly as in `s[a..b]`, before the domain
+            // question ([mem.str.get], #164).
             "get" => {
+                for a in args.into_iter().flat_map(|l| l.args()) {
+                    if let Some(v) = Arg::value(a)
+                        && v.kind == SyntaxKind::RangeExpr
+                    {
+                        self.slice_pos_ranges.insert(v.span);
+                    }
+                }
                 let r = self.lo.table.intern(TyKind::Range(int_));
                 let ret = none_of(self, str_);
                 (vec![p("self", recv_ty), p("range", r)], ret)

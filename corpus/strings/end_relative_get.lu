@@ -1,0 +1,32 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.str.get
+//!
+//! s157 (wolf-lang#164, wolf-std F-0096) — `[mem.str.get]`'s last
+//! sentence made true: "End-relative endpoints (`^n`) and open ends
+//! resolve exactly as in `s[a..b]` before the domain question is
+//! asked." Until this pin `get`'s range was typed by the general
+//! range-value rule, which refuses both forms, so `s.get(0..^1)` was
+//! `unsupported` at RESOLVE on both compiler rungs while lupin ran
+//! it — the slice `s[..^1]` meanwhile ran three-lane. Every row here
+//! pairs the `get` spelling with the slice spelling it must agree
+//! with, and `^4..^0` is the clause's ORDER witness: the endpoints
+//! resolve first (to `2..6`, and byte 2 is the second half of `é`),
+//! and only then does the domain question answer `none`.
+
+fn main() -> !int {
+    let s = "héllo"
+    let a = s.get(0..^1) else "MISS"
+    let b = s.get(..^1) else "MISS"
+    let c = s.get(^2..) else "MISS"
+    let d = s.get(^6..^0) else "MISS"
+    // The endpoints resolve, THEN the domain refuses: `^4..^0` is
+    // `2..6`, and byte 2 is the tail of the two-byte `é`.
+    let split = s.get(^4..^0) else "MISS"
+    let same = a == s[0..^1] && b == s[..^1] && c == s[^2..] && d == s[^6..^0]
+    if same && a == "héll" && c == "lo" && d == "héllo" && split == "MISS" {
+        0
+    } else {
+        1
+    }
+}

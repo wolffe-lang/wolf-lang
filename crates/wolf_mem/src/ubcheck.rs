@@ -6384,6 +6384,26 @@ impl<'t> Machine<'t> {
     /// and `lo <= hi <= len` traps `bounds` otherwise. The in-domain
     /// answer rides back as `Value::Range { lo, hi }`.
     fn slice_bounds(&mut self, rn: &'t GreenNode, len: i64, at: Span) -> E<Flow> {
+        let bounds = self.range_endpoints(rn, len, self.origin_at(at))?;
+        let Flow::Val(Value::Range { start: lo, end: hi }) = bounds else {
+            return Ok(bounds);
+        };
+        if lo < 0 || hi < lo || hi > len {
+            return self.trap("bounds", "mem.ub.defined", at);
+        }
+        Ok(Flow::Val(Value::Range { start: lo, end: hi }))
+    }
+
+    /// A range node's endpoints resolved against `len`, with NO
+    /// domain question asked: open sides default to the edges, `^n`
+    /// counts from the end, `..=` bumps the upper bound, and the
+    /// origin shift applies to a spelled plain start. The trapping
+    /// slice ([`Self::slice_bounds`]) and the recoverable `get`
+    /// ([mem.str.get], #164) share this resolution exactly — which is
+    /// what the clause means by "resolve exactly as in `s[a..b]`
+    /// before the domain question is asked". Mirrors the native
+    /// tier's `range_endpoints`.
+    fn range_endpoints(&mut self, rn: &'t GreenNode, len: i64, origin: u8) -> E<Flow> {
         let d = RangeExpr::cast(rn).expect("kind");
         // Which side of the dots each endpoint sits on decides which
         // bound it names — open sides default to the edges.
@@ -6397,8 +6417,7 @@ impl<'t> Machine<'t> {
         // (checked), a spelled plain END endpoint is inclusive — the
         // 0-based exclusive bound numerically, so `..=` adds nothing —
         // and `^n` endpoints, open sides, and their `..=` interaction
-        // resolve exactly as in origin 0. Mirrors `range_endpoints`.
-        let origin = self.origin_at(at);
+        // resolve exactly as in origin 0.
         let mut lo = 0i64;
         let mut hi = len;
         let mut plain_hi_spelled = false;
@@ -6432,9 +6451,6 @@ impl<'t> Machine<'t> {
         }
         if d.is_inclusive() && !(origin == 1 && plain_hi_spelled) {
             hi += 1;
-        }
-        if lo < 0 || hi < lo || hi > len {
-            return self.trap("bounds", "mem.ub.defined", at);
         }
         Ok(Flow::Val(Value::Range { start: lo, end: hi }))
     }
@@ -7790,10 +7806,31 @@ impl<'t> Machine<'t> {
                 let Value::Str(s) = sv else {
                     return self.refuse("str method on a non-str", e.span);
                 };
+                // `get`'s range is a SLICE-position range: its
+                // endpoints resolve by the subscript rule — open ends
+                // and `^n` included — before the domain question is
+                // asked ([mem.str.get], #164). The generic argument
+                // evaluation below cannot do that: it has no length
+                // to count `^n` from. Method position is origin-free
+                // (D61), so the origin is 0 whatever scope the call
+                // sits in, exactly as the native tier passes it.
                 let mut argv = Vec::new();
-                for a in args.into_iter().flat_map(|l| l.args()) {
-                    if let Some(v) = Arg::value(a) {
-                        argv.push(val!(self.eval(v)));
+                if method == "get" {
+                    let rn = args
+                        .into_iter()
+                        .flat_map(|l| l.args())
+                        .find_map(Arg::value)
+                        .filter(|v| v.kind == SyntaxKind::RangeExpr);
+                    if let Some(rn) = rn {
+                        let len = s.len() as i64;
+                        argv.push(val!(self.range_endpoints(rn, len, 0)));
+                    }
+                }
+                if argv.is_empty() {
+                    for a in args.into_iter().flat_map(|l| l.args()) {
+                        if let Some(v) = Arg::value(a) {
+                            argv.push(val!(self.eval(v)));
+                        }
                     }
                 }
                 let none_miss = || {

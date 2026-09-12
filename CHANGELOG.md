@@ -13,6 +13,16 @@ THE PAPERCUTS III — the language's ten, each a witness plus a fix.
   body's finish, so a surface recorded against variables lands
   solved. Witness `corpus/typecheck/closure_param_call.lu` — the
   book's exercise 4-1 `compose` included.
+- **strings** (#164, wolf-std F-0096): `s.get(0..^1)` resolves.
+  `[mem.str.get]` says end-relative endpoints and open ends "resolve
+  exactly as in `s[a..b]` before the domain question is asked"; until
+  now `get`'s range was typed by the general range-value rule, which
+  refuses both forms, so the recoverable spelling was `unsupported`
+  at resolve on both compiler rungs while the slice ran three-lane.
+  `get`'s range is now a slice-position range on both tiers, and the
+  checked machine resolves its endpoints against the receiver's
+  length before asking the domain question. Witness
+  `corpus/strings/end_relative_get.lu`.
 
 ## 0.2.12 — 2026-09-11
 
