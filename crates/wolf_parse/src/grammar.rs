@@ -962,7 +962,21 @@ pub(crate) fn type_item(p: &mut Parser<'_>, m: Marker) {
     if p.at_punct(Punct::LBracket) {
         generic_param_list(p);
     }
-    p.expect_punct(Punct::Eq, "`=` in the type declaration");
+    // No `=` means there is no alias body to parse, and pressing on
+    // reported the SAME token three times: `expected `=`` here, then
+    // `expected a type` from `type_required` below, then `expected a
+    // declaration here` when the top level met the token still
+    // sitting there. wolf-lang#360 measured it as 4 cascade against
+    // the tight bound of 3 on
+    // `comptime/assert_static.lu [swap tokens 6/7 at 316..321]`,
+    // where a swapped `,`/`type` strands a bare `type` inside a
+    // parameter list. Consume the wreck once and say one thing — the
+    // same shape as the hopeless-header fold above (#243, #285).
+    if !p.expect_punct(Punct::Eq, "`=` in the type declaration") {
+        p.recover_until(false, |k| k == TokenKind::Term);
+        m.complete(p, SyntaxKind::ErrorNode);
+        return;
+    }
     match p.current() {
         TokenKind::Kw(Keyword::Struct) => {
             let d = p.start();

@@ -482,3 +482,46 @@ fn e0201_if_forms() {
         codes::EXPECTED_TOKEN,
     );
 }
+
+/// wolf-lang#360 — a type declaration with no `=` is ONE wreck, and
+/// the parser says one thing about it.
+///
+/// Pressing on past the missing `=` reported the SAME token three
+/// times: `expected `=` in the type declaration` here, `expected a
+/// type` from the alias body below it, and `expected a declaration
+/// here` when the top level met the token still sitting there. The
+/// blast-radius property caught it at `MUTATE_BUDGET=1000` as 4
+/// cascade against the tight bound of 3 on
+/// `comptime/assert_static.lu [swap tokens 6/7 at 316..321]`, where
+/// swapping a `,` with the `type` keyword strands a bare `type`
+/// inside a parameter list.
+///
+/// The whole code list is pinned, not a count of one code: three
+/// reports on one token is precisely what a per-code count hides.
+#[test]
+fn a_type_declaration_without_eq_reports_once() {
+    let all = |src: &str| {
+        util::parse(src)
+            .diagnostics
+            .iter()
+            .map(|d| format!("{}", d.code))
+            .collect::<Vec<_>>()
+    };
+    // The reduced shape of the mutation: a named alias, no `=`.
+    assert_eq!(all("type n: int\n"), [format!("{}", codes::EXPECTED_TOKEN)]);
+    // And with nothing after the name at all.
+    assert_eq!(all("type n\n"), [format!("{}", codes::EXPECTED_TOKEN)]);
+    // A well-formed alias is still a well-formed alias.
+    assert!(
+        all("type N = int\n").is_empty(),
+        "{:?}",
+        all("type N = int\n")
+    );
+    // The declaration AFTER the wreck still parses: recovery consumes
+    // the line it could not read, not the file.
+    assert_eq!(
+        all("type n: int\nfn g() -> int { 1 }\n"),
+        [format!("{}", codes::EXPECTED_TOKEN)]
+    );
+}
+
