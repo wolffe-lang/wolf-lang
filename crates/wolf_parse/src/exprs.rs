@@ -395,6 +395,12 @@ fn stmt(p: &mut Parser<'_>) {
         TokenKind::Kw(Keyword::Impl) => grammar::impl_item(p, m),
         TokenKind::Kw(Keyword::Use) => grammar::use_item(p, m),
         TokenKind::Kw(Keyword::Import) => grammar::import_c_item(p, m),
+        // `error N = {…}` in a block — `stmt_base` re-enters the item
+        // grammar, and `bare_item` names `error_item`
+        // ([gram.item.error], s158), so the block form is the same
+        // item and not a second production. Contextual as everywhere
+        // else: `error` then a NAME then `=`, and nothing shorter.
+        TokenKind::Ident if grammar::at_error_item(p) => grammar::error_item(p, m),
         TokenKind::Kw(Keyword::Defer | Keyword::Errdefer) => defer_stmt(p, m),
         TokenKind::Kw(Keyword::Assume) => assume_stmt(p, m),
         // A `#![…]` in statement position: the file-wide form belongs at

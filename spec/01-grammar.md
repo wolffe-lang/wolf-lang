@@ -448,8 +448,10 @@ in item position with an `IDENT` and an `=` after it, so `let error =
 1`, `error(reason)` and a field named `error` all still parse — two
 tokens of lookahead decide, and a file that used `error` as a name
 before this clause parses to the same shape after it. An alias is an
-item like any other: `pub` applies, attributes apply, and it may be
-declared at module scope or inside a block.
+item like any other: `pub` applies, attributes apply, and `stmt_base`
+re-enters the item grammar, so the block form parses to the same item
+and meets the same nested-item refusal every other item kind meets
+there today (a nested `type` answers word for word).
 
 The right-hand side is exactly `error_row` (`[gram.type]`), so an
 alias composes by naming another alias in a row entry —

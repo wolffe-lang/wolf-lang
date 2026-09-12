@@ -854,3 +854,23 @@ fn a_bare_alias_name_after_the_bang_is_a_row() {
     // one for the item, one for the return tail, one for the parameter
     assert_eq!(rows, 3);
 }
+
+/// `stmt_base` re-enters the item grammar, and `bare_item` names
+/// `error_item`, so the block form is the same item — one production,
+/// two positions (`[gram.item.error]`).
+#[test]
+fn error_set_alias_parses_in_a_block_too() {
+    let src = "fn main() -> !int {\n    error Local = {none}\n    0\n}\n";
+    let root = clean(src);
+    let mut found = 0;
+    fn walk(n: &wolf_ast::GreenNode, found: &mut usize) {
+        if n.kind == SyntaxKind::ErrorDecl {
+            *found += 1;
+        }
+        for c in n.nodes() {
+            walk(c, found);
+        }
+    }
+    walk(&root, &mut found);
+    assert_eq!(found, 1);
+}
