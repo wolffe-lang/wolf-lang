@@ -106,6 +106,7 @@ fn item_inner(p: &mut Parser<'_>, in_body: bool) {
                     | Keyword::Pub
             )
     ) || (p.at_kw(Keyword::Fn) && p.nth(1) != TokenKind::Punct(Punct::LParen))
+        || at_error_item(p)
     {
         let col = p.line_indent(p.current_span().lo);
         if p.decl_floor.is_none_or(|f| col <= f) {
@@ -138,6 +139,11 @@ fn item_inner(p: &mut Parser<'_>, in_body: bool) {
         TokenKind::Kw(Keyword::Impl) => impl_item(p, m),
         TokenKind::Kw(Keyword::Use) => use_item(p, m),
         TokenKind::Kw(Keyword::Import) => import_c_item(p, m),
+        // `error Name = {…}` — the error-set alias
+        // ([gram.item.error], s158 wolf-lang#36). `error` is
+        // CONTEXTUAL: two tokens of lookahead decide, so `error(x)`,
+        // `error.field` and a binding named `error` are untouched.
+        TokenKind::Ident if at_error_item(p) => error_item(p, m),
         _ => {
             // The typo machinery (s10): an identifier in declaration
             // position within edit distance of a declaration keyword
@@ -160,8 +166,8 @@ fn item_inner(p: &mut Parser<'_>, in_body: bool) {
                     .with_note(
                         "the top level of a file holds declarations only, each starting \
                          with its keyword: `fn`, `let`, `var`, `type`, `struct`, `enum`, \
-                         `trait`, `impl`, `use`, `import`. If this line belongs inside a \
-                         function, a `{` is probably missing above it.",
+                         `trait`, `impl`, `use`, `import`, `error`. If this line belongs \
+                         inside a function, a `{` is probably missing above it.",
                     ),
             );
             if p.at_punct(Punct::LBrace) {
@@ -180,7 +186,7 @@ fn item_inner(p: &mut Parser<'_>, in_body: bool) {
 /// suggester (same set as [`is_decl_keyword`]).
 const DECL_KEYWORD_TEXTS: &[&str] = &[
     "fn", "let", "var", "type", "struct", "enum", "trait", "impl", "use", "import", "const",
-    "extern", "export", "comptime", "pub",
+    "extern", "export", "comptime", "pub", "error",
 ];
 
 /// `fnn` → "did you mean `fn`?" with the machine-applicable edit
@@ -583,11 +589,22 @@ fn ret_type(p: &mut Parser<'_>) {
             // tree shape holds, and sema refuses the nested meaning
             // by name until the spec rules it.
             error_row(p);
+        } else if p.at(TokenKind::Ident) {
+            // s158 — `-> T ! IoErrors`: the error-set alias spelling
+            // (`[gram.item.error]`). One brace-less `ErrorRow` with a
+            // single `RowEntry`, so the alias expands exactly where
+            // `{IoErrors}` would (`[type.err.alias.union]`).
+            let r = p.start();
+            let e = p.start();
+            path(p, "error set");
+            e.complete(p, SyntaxKind::RowEntry);
+            r.complete(p, SyntaxKind::ErrorRow);
         } else {
             p.error(
                 codes::EXPECTED_TOKEN,
                 p.here(),
-                "expected `{` to open the error row after `!`",
+                "expected `{` to open the error row after `!`, or the name of \
+                 an error set",
             );
             p.missing();
             // One report per broken header tail.
@@ -600,6 +617,13 @@ fn ret_type(p: &mut Parser<'_>) {
 
 /// `{ path(payload)?, …, ..? }` — the explicit error row (D30).
 fn error_row(p: &mut Parser<'_>) {
+    error_row_at(p, &mut None);
+}
+
+/// [`error_row`], reporting the span of the `..` open marker when the
+/// row carries one — the one caller that needs to know is the
+/// error-set alias item (`[gram.item.error]`, s158), which refuses it.
+fn error_row_at(p: &mut Parser<'_>, open_at: &mut Option<wolf_span::Span>) {
     let m = p.start();
     let opener = p.current_span();
     p.bump(); // `{`
@@ -622,6 +646,7 @@ fn error_row(p: &mut Parser<'_>) {
         }
         if p.at_punct(Punct::DotDot) {
             // `..` — the open-row marker.
+            *open_at = Some(p.current_span());
             p.bump();
             if p.at_punct(Punct::Comma) {
                 p.bump();
@@ -1175,6 +1200,72 @@ fn enum_variant(p: &mut Parser<'_>) {
     m.complete(p, SyntaxKind::EnumVariant);
 }
 
+// ------------------------------------------------------- error aliases --
+
+/// Is the parser at the contextual `error` of an error-set alias item
+/// (`[gram.item.error]`, s158 wolf-lang#36)?
+///
+/// Two tokens of lookahead, and no more: `error` then a NAME then `=`.
+/// Everything else that starts with the identifier `error` — a call
+/// `error(reason)`, a member `error.kind`, a binding `let error = 1`
+/// (whose `error` is preceded by `let`, so it never reaches item
+/// position) — is untouched, which is what "contextual, not reserved"
+/// buys. `[gram.inv.kw]`'s fifty are unchanged.
+pub(crate) fn at_error_item(p: &Parser<'_>) -> bool {
+    p.at(TokenKind::Ident)
+        && p.current_text() == b"error"
+        && p.nth(1) == TokenKind::Ident
+        && p.nth(2) == TokenKind::Punct(Punct::Eq)
+}
+
+/// `error_item ::= 'error' IDENT '=' error_row TERM?`
+/// (`[gram.item.error]`, s158 wolf-lang#36).
+///
+/// The right-hand side is exactly [`error_row`], so composition needs
+/// no production of its own: `error ConfigErrors = {IoErrors, parse}`
+/// is a row whose first entry happens to name another alias, and the
+/// checker flattens it (`[gram.type.row.flatten]`,
+/// `[type.err.alias.union]`). The one shape this position refuses is
+/// the open marker — an alias is a closed set of tags by definition.
+pub(crate) fn error_item(p: &mut Parser<'_>, m: Marker) {
+    p.bump_as(SyntaxKind::ErrorKw);
+    name_token(p, "error set");
+    p.expect_punct(Punct::Eq, "`=` after the error-set name");
+    if p.at_punct(Punct::LBrace) {
+        let mut open_at = None;
+        error_row_at(p, &mut open_at);
+        // `{a, ..}` names a row that is open at its source, and an
+        // alias for one would be a name for "these tags and any
+        // others" — unusable as the transparent spelling
+        // `[type.err.alias.transparent]` promises. Refused here, at
+        // the row, so the reader sees which `..`.
+        if let Some(dots) = open_at {
+            p.push_diag(
+                wolf_diag::Diagnostic::error(
+                    codes::EXPECTED_TOKEN,
+                    dots,
+                    "an error-set alias cannot name an open row",
+                )
+                .with_label("the `..` open marker is not admitted here")
+                .with_note(
+                    "an alias is a closed set of tags — it is a spelling for                      the tags it lists ([type.err.alias]). A row that stays                      open is written open at each use, with no name.",
+                ),
+            );
+        }
+    } else {
+        p.error(
+            codes::EXPECTED_TOKEN,
+            p.here(),
+            "expected `{` — an error set is a row of tags, `{none, parse, io}`",
+        );
+        p.missing();
+    }
+    if p.at(TokenKind::Term) {
+        p.bump(); // TERM? — optional, as `[gram.item.type]`'s
+    }
+    m.complete(p, SyntaxKind::ErrorDecl);
+}
+
 // ---------------------------------------------------------- trait/impl --
 
 pub(crate) fn trait_item(p: &mut Parser<'_>, m: Marker) {
@@ -1726,11 +1817,31 @@ fn type_general(p: &mut Parser<'_>, postfix_row: bool) -> bool {
     // question (it refuses by name until the spec rules); the
     // parser's job is to stop answering a grammar question with
     // E0201.
+    //
+    // s158: the tail also admits a bare PATH — `int ! IoErrors`, the
+    // error-set alias spelling (`[gram.item.error]`,
+    // `[type.err.alias]`). It builds the same `ErrorRow` node with one
+    // `RowEntry` in it, brace-less, so everything downstream reads one
+    // shape and the alias expands exactly where `{IoErrors}` would.
     let mut cm = cm;
-    while postfix_row && p.at_punct(Punct::Not) && p.nth(1) == TokenKind::Punct(Punct::LBrace) {
+    while postfix_row
+        && p.at_punct(Punct::Not)
+        && matches!(
+            p.nth(1),
+            TokenKind::Punct(Punct::LBrace) | TokenKind::Ident
+        )
+    {
         let m = cm.precede(p);
         p.bump(); // `!`
-        error_row(p);
+        if p.at_punct(Punct::LBrace) {
+            error_row(p);
+        } else {
+            let r = p.start();
+            let e = p.start();
+            path(p, "error set");
+            e.complete(p, SyntaxKind::RowEntry);
+            r.complete(p, SyntaxKind::ErrorRow);
+        }
         cm = m.complete(p, SyntaxKind::ErrorUnionType);
     }
     true

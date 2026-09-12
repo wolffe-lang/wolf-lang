@@ -98,6 +98,10 @@ fn can_start_expr(k: TokenKind) -> bool {
         | TokenKind::StrBegin(_) => true,
         TokenKind::Punct(
             Punct::LParen
+            // A `[` in OPERAND position opens a list literal
+            // ([gram.expr.list], s158); the postfix reading needs an
+            // operand before it and can never reach here.
+            | Punct::LBracket
             | Punct::LBrace
             | Punct::Not
             | Punct::Minus
@@ -869,6 +873,13 @@ fn primary(p: &mut Parser<'_>, ctx: Ctx) -> Option<(CompletedMarker, bool)> {
             return Some((cm, true));
         }
         TokenKind::Punct(Punct::LParen) => paren_or_tuple(p, ctx),
+        // `[1, 2, 3]` — a list literal ([gram.expr.list], s158
+        // wolf-lang#154). Position is the whole difference from the
+        // postfix `e[…]`: that arm lives in the climb and precedes an
+        // `lhs` that already exists, so a `[` reaching `primary` has
+        // no operand before it and can only be a literal
+        // ([gram.amb.brackets]).
+        TokenKind::Punct(Punct::LBracket) => list_lit(p, ctx),
         // A leading `{` in condition/scrutinee position begins the
         // construct's block — never a block expression
         // ([gram.amb.structlit]). Letting it parse as one made
@@ -987,6 +998,64 @@ fn jump_expr(p: &mut Parser<'_>, ctx: Ctx, kind: SyntaxKind) -> CompletedMarker 
 }
 
 // ------------------------------------------------------ compound forms --
+
+/// `'[' (expr (',' expr)* ','?)? ']'` — a list literal
+/// (`[gram.expr.list]`, s158 wolf-lang#154).
+///
+/// Its own element loop, deliberately, rather than [`arg_list`]: a
+/// list element is a plain expression, so none of the bracket
+/// argument list's extras apply — no `mut`/`take` modes, no type-only
+/// forms, and above all no E0209 negative-index hint, which would
+/// otherwise read `[-1, -2]` as a subscript and offer to rewrite it
+/// `[^1]`. The empty literal `[]` is well-formed here; whether it has
+/// an element type is `[type.list.lit.empty]`'s question, not this
+/// one's.
+fn list_lit(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
+    let m = p.start();
+    let opener = p.current_span();
+    p.bump(); // `[`
+    let inner = ctx.inner();
+    loop {
+        if p.at_punct(Punct::RBracket) {
+            p.bump();
+            break;
+        }
+        if arg_escape(p, Punct::RBracket) {
+            grammar::unclosed(p, opener, "[");
+            break;
+        }
+        let before = p.pos();
+        if expr_bp(p, 0, inner).is_none() {
+            p.arg_list_error(p.current_span(), "expected an expression in the list literal");
+            p.recover_until(true, |k| {
+                matches!(k, TokenKind::Punct(Punct::Comma | Punct::RBracket))
+                    || k == TokenKind::Term
+            });
+        }
+        if p.at_punct(Punct::Comma) {
+            p.bump();
+            continue;
+        }
+        if p.at_punct(Punct::RBracket) {
+            continue; // closed at the top of the loop
+        }
+        if p.pos() == before {
+            grammar::unclosed(p, opener, "[");
+            break;
+        }
+        if !arg_escape(p, Punct::RBracket) {
+            p.arg_list_error(p.here(), "expected `,` or `]` in the list literal");
+            p.recover_until(true, |k| {
+                matches!(k, TokenKind::Punct(Punct::Comma | Punct::RBracket))
+                    || k == TokenKind::Term
+            });
+            if p.at_punct(Punct::Comma) {
+                p.bump();
+            }
+        }
+    }
+    m.complete(p, SyntaxKind::ListLit)
+}
 
 /// `'(' expr (',' expr)* ','? ')'` — grouping or tuple; comma decides.
 fn paren_or_tuple(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
