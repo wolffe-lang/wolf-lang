@@ -1,6 +1,149 @@
 # Changelog
 
-## Unreleased
+## 0.2.13 — 2026-09-12
+
+THE LITERALS AND THE PAPERCUTS III. 0.2.13 is three surface additions
+the maintainer ruled on in one day and ten filed defects, and it is
+the first cut since the pairing began where **only the compiler
+moved**: no lupin release happened between v0.2.12 and this one, so
+the stamp stands where r17 left it and every count that moved is the
+compiler's, measured rather than argued.
+
+    let cents = [340, 275, 100]        // a list literal
+    fn width(r: range[int]) -> int { r.end - r.start }
+    error IoErrors = {none, parse, io} // a transparent name for a row
+    let call1 = fn(f) f(1)             // the call records its surface
+    s.get(0..^1)                       // end-relative, and it resolves
+
+**What a reader gets.** Three things that could not be spelled at all
+now can. `[1, 2, 3]` is a list literal and **position** settles the
+clash with indexing, so `[10, 20, 30][1]` needs no lookahead; a bare
+`let xs = []` is E0419 and the message spells the annotation.
+`range[int]` and `range[char]` are types in every position, with
+`start` and `end` as properties and `end` **always exclusive**, which
+is what makes `r.end - r.start` the count. `error IoErrors = {none,
+parse, io}` names a row and is the same TYPE as its expansion both
+ways, with no conversion and no coarsening; a cycle is E0610, and
+`error` stays contextual, so `let error = 1` and a field named `error`
+still parse. Beside them, ten places where the compiler was right
+about the program and wrong about the reader: a call through an
+unannotated closure parameter records its surface (the book's exercise
+4-1 `compose`); `s.get(0..^1)` resolves; an `int` element read after an
+index write is no longer reported moved (exercises 16-7 and 16-8 were
+this, not a missing `copy`); `w.link()` compiles; `take` on a `read`
+parameter is E1014; a spilled body containing a nested `fn` is ONE
+E0203; **a declaration wins its own name** at a call site as
+everywhere else, so a shadowing `read_line()` stops being typed
+against the ambient signature and W0304 stopped lying; E0102 names the
+`${` pair and `${{` is the escape; a bare dotted path is a pattern;
+and no user-facing string carries a sprint, campaign or X id any more
+— 70 strings across 92 sites, with `cargo xtask print-gate` holding
+the line. No runtime symbol moved (`RT_SYMBOLS` 143).
+
+The pairing **stands** at **lupin 0.1.34** (`b83049a`, pin `c9237c1`
+— the v0.2.11 tag). is47, the interpreter's answer to these clauses,
+is cut on its branch and not yet tagged, so `crates/wolf_driver/PAIRING`
+is the one release file this cut does not touch — the first time in
+the ritual's life that it needed no edit. The interpreter still
+declares v0.2.11 while the compiler names 0.1.34, so **the gap widens
+to two releases, still on the compiler's side only**: v0.2.12 and
+v0.2.13 both go unanswered. The ledger names the price exactly —
+fifteen Verdict rows opened, every one a file spelling a clause lupin
+has not shipped, and every one of them closes at the interpreter's
+next tag.
+
+### The pairing stands at lupin 0.1.34 (#87 ritual, #281 control)
+
+wolf is differentially tested against **lupin 0.1.34** (`b83049a`),
+which declares `c9237c1` — the v0.2.11 tag — as its conformance pin.
+PAIRING already named it at r17's cut and no lupin release has
+happened since, so the stamp does not move and the control is the
+same binary on both arms: 0.1.34 -> 0.1.34. That is not a degenerate
+run, it is the point of #281 — it is what licenses every number below
+being attributed to the compiler.
+
+**Predicted before the run** (scratch `r18-prediction.txt`, written
+before any differ ran): the control moves **zero** ledger counts and
+**zero** files below the ledger on both tiers, because B and the
+control are the same binary. **Measured: exactly that** — `THE
+INTERPRETER BUMP MOVED 0 LEDGER COUNT(S)`, zero below the ledger, and
+the differ printed no cell line at all, on both tiers. Over the full
+608-file corpus (573 entries), both tiers, against
+`target/release/wolf` built by `cargo xtask dist` at `c1e62fa`, with
+the control against the 0.1.34 release archive on the same tree.
+
+Since the control is flat, the release-over-release table below is the
+COMPILER's own movement — v0.2.12's ledger against this one, 580 files
+and 545 entries grown to 608 and 573:
+
+                    checked                     native
+    agreements      315 -> 320  (+5)            342 -> 349  (+7)
+    completeness    143 -> 149  (+6)            143 -> 149  (+6)
+    soundness         0 ->   0   (0)              0 ->   0   (0)
+    unsupported     114 -> 116  (+2)             87 ->  87   (0)
+    hard              8 ->  23 (+15)              8 ->  23 (+15)
+    coverage A      318 -> 338 (+20)            347 -> 369 (+22)
+    coverage B      412 -> 420  (+8)            412 -> 420  (+8)
+    coverage BOTH   300 -> 305  (+5)            327 -> 334  (+7)
+
+**The prediction's miss is worth its sentence.** The control half was
+exact; the absolute half was not. Predicted `hard` 8 per tier and
+`unsupported` 132 checked / 105 native; measured 23 and 116 / 87. The
+whole error is one wrong assumption, and it is the same assumption in
+sixteen places: s158's new surface was predicted to land in the
+CONSERVATISM ledger, lupin answering `unsupported`. It does not —
+lupin 0.1.34 answers a hard refusal, `E0201` at the parse rung for a
+leading `[` and for an `error` item, `E0301` for the unresolved type
+name `range`. A refusal by code is a Verdict divergence, not a
+conservatism note, so the files moved bucket rather than tier. Every
+one is named below.
+
+**What stands at 0.1.34.** `checked 23 = 8 Diag + 15 Verdict`,
+`native 23 = 8 Diag + 15 Verdict` — the same fifteen files on both
+tiers. The eight Diag rows are v0.2.12's eight, unchanged and still
+warning parity (lupin emits no warnings): `binder_capitalized`,
+`discarded_result`, `else_arithmetic` (W0318), `float_zero_minus`,
+`region_never_allocates`, `byte_view_escape` and
+`unit_tail_value_discard`, plus `safety_comment_missing` on checked
+and `unit_context_discard` on native. Zero SOUNDNESS on both tiers, a
+second cut running. The fifteen Verdict rows are all new and all one
+thing — a clause this release shipped and the interpreter has not:
+
+    corpus/grammar/list_lit_arg.lu            Exit(0) vs Fail(E0201)
+    corpus/grammar/list_lit_empty.lu          Exit(0) vs Fail(E0201)
+    corpus/grammar/list_lit_index.lu          Exit(0) vs Fail(E0201)
+    corpus/grammar/list_lit_let.lu            Exit(0) vs Fail(E0201)
+    corpus/grammar/list_lit_multiline.lu      Exit(0) vs Fail(E0201)
+    corpus/grammar/list_lit_nested.lu         Exit(0) vs Fail(E0201)
+    corpus/grammar/range_type_char.lu         Exit(0) vs Fail(E0301)
+    corpus/grammar/range_type_inclusive.lu    Exit(0) vs Fail(E0301)
+    corpus/grammar/range_type_param.lu        Exit(0) vs Fail(E0301)
+    corpus/grammar/range_type_return.lu       Exit(0) vs Fail(E0301)
+    corpus/grammar/range_type_overflow.lu     Trap(overflow) vs Fail(E0301)
+    corpus/rows/error_alias_row.lu            Exit(0) vs Fail(E0201)
+    corpus/rows/error_alias_transparent.lu    Exit(0) vs Fail(E0201)
+    corpus/rows/error_alias_union.lu          Exit(0) vs Fail(E0201)
+    corpus/grammar/match_nullary_variant.lu   Exit(0) vs Fail(E0201)
+
+Fourteen are s158's; the fifteenth is s157's `[gram.pat.nullary]` row,
+which that sprint already filed as the pair's named divergence.
+`range_type_overflow.lu` is the one with two stories: wolf answers
+`trap(overflow)` where `0..=int.MAX` normalizes past the end, which is
+s158's own defect fix, and lupin never reaches the question because
+the type name does not resolve.
+
+**One predicted refusal that is not one.** s158 predicted
+`corpus/rows/error_alias_ident.lu` would refuse on 0.1.34 and it does
+not — `error` is contextual, so lupin parses the program and prints
+`3\n4\n`, and the file is an agreement here. It was re-measured for
+this entry rather than carried over, which is the whole reason the
+ritual re-runs the differ instead of quoting the last lane.
+
+The CI sibling step needed zero edits for the seventh cut in a row —
+this time trivially, since it reads the version off PAIRING and
+PAIRING did not move.
+
+### The papercuts III (s157 — #311, #164, #313, #153, #60, #285, #44, #134, #162, #39, #157)
 
 THE PAPERCUTS III — the language's ten, each a witness plus a fix.
 
