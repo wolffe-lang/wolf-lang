@@ -1314,6 +1314,70 @@ fn e1010_region_built_str_by_interpolation_held_outside() {
 }
 
 #[test]
+fn e1010_str_from_a_materializing_builtin() {
+    // s160 (wolf-lang#321, `[mem.region.escape]`): `repeat` builds
+    // fresh bytes in the ambient region — a site, exactly as `+` is.
+    // `str` is `Copy`, so the call-result rule (non-`Copy` returns
+    // only) never saw it.
+    snap(
+        "e1010_str_repeat_block_value",
+        "fn build() -> str {\n    \
+             region scratch {\n        \
+                 let s = \"re\".repeat(2)\n        \
+                 s\n    \
+             }\n\
+         }\n\
+         fn main() -> !int {\n    \
+             print(\"{build()}\")\n    \
+             0\n\
+         }\n",
+    );
+}
+
+#[test]
+fn clean_str_from_a_view_builtin_is_no_site() {
+    // The other side of `[mem.str.view]`: `trim` is a subslice of the
+    // receiver, whose bytes are a static literal's — no allocation, no
+    // site, and nothing to escape.
+    snap(
+        "clean_str_trim_block_value",
+        "fn build() -> str {\n    \
+             region scratch {\n        \
+                 let s = \"  re  \".trim()\n        \
+                 s\n    \
+             }\n\
+         }\n\
+         fn main() -> !int {\n    \
+             print(\"{build()}\")\n    \
+             0\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1010_str_field_read_out_of_a_region_local_struct() {
+    // s160 (wolf-lang#321): returning `d` was E1010 all along;
+    // returning `d.title` was not, because a `Copy` field read flowed
+    // no site. Right for an `int`, wrong for a `str` whose bytes live
+    // in the parent's region.
+    snap(
+        "e1010_str_field_escape",
+        "struct Doc { title: str, words: int }\n\
+         fn build() -> str {\n    \
+             region scratch {\n        \
+                 let d = Doc { title: \"re\" + \"gions\", words: 1 }\n        \
+                 let t = d.title\n        \
+                 t\n    \
+             }\n\
+         }\n\
+         fn main() -> !int {\n    \
+             print(\"{build()}\")\n    \
+             0\n\
+         }\n",
+    );
+}
+
+#[test]
 fn e1010_str_built_in_a_proc_and_sent() {
     // s160 (wolf-lang#355, `[mem.region.proc]`): a `spawn proc` entry
     // has no caller region to inherit — `[conc.proc.1]` makes the proc

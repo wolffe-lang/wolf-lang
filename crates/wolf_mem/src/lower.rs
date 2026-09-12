@@ -2158,13 +2158,22 @@ impl<'t> Lowerer<'t> {
                     // read from pinning its parent's region).
                     // s153 (#310): a `str` is `Copy` — its two-word
                     // view copies — but the BYTES it views live where
-                    // they were built, so a whole-local `str` read
-                    // carries the local's sites (`[mem.region.escape]`:
-                    // a region-built `str` leaving its frame is E1010).
-                    // A field read stays site-free: the parent's own
-                    // site already covers it.
-                    let str_view =
-                        self.is_str_expr(e.span) && self.places.get(place).proj.is_empty();
+                    // they were built, so a `str` read carries the
+                    // place's sites (`[mem.region.escape]`: a
+                    // region-built `str` leaving its frame is E1010).
+                    // s160 (#321) extended this from whole-local reads
+                    // to PROJECTED ones: `d.title` out of a
+                    // region-local `Doc` returned `regions` from freed
+                    // bytes, because a `Copy` field read flowed no
+                    // site — the rule that rightly keeps an `int`
+                    // field from pinning its parent's region, and is
+                    // wrong for a `str` whose bytes live in it. The
+                    // net is deliberately the parent's whole site set:
+                    // per-field site tracking does not exist, so a
+                    // literal-initialized field (`Doc { title:
+                    // "static" }`) is flagged too — conservative,
+                    // never unsound, and `copy` is the first rung.
+                    let str_view = self.is_str_expr(e.span);
                     let val = if self.places.is_copy(place) && !str_view {
                         Val::none()
                     } else {
@@ -3181,6 +3190,52 @@ impl<'t> Lowerer<'t> {
         }
     }
 
+    /// s160 (wolf-lang#321, `[mem.region.escape]`): does this call
+    /// MATERIALIZE a `str` — build a genuinely new byte sequence —
+    /// rather than answer a view of its receiver?
+    ///
+    /// `[mem.str.view]` names the view side: `trim`/`trim_start`/
+    /// `trim_end`, `get`, `strip_prefix`/`strip_suffix`, and the
+    /// pieces of `split`/`words`/`lines` are all subslices of the
+    /// receiver's own storage and allocate nothing, so they are no
+    /// site. The four below are the other side — each builds fresh
+    /// bytes in the ambient region exactly as `+` does — and the mem
+    /// tier could not see them, because `str` is `Copy` and a `Copy`
+    /// result never made `ret_heap`. That is how `region scratch {
+    /// let s = "re".repeat(2); s }` printed `rere` from freed bytes
+    /// with no diagnostic on either tier.
+    fn is_materializing_str_call(&self, e: &'t GreenNode) -> bool {
+        if !self.is_str_expr(e.span) {
+            return false;
+        }
+        let Some(callee) = CallExpr::cast(e).and_then(|d| d.callee()) else {
+            return false;
+        };
+        let Some(m) = MemberExpr::cast(callee) else {
+            return false;
+        };
+        let Some(name) = m.member() else {
+            return false;
+        };
+        if !matches!(
+            self.text(name.span).as_str(),
+            "upper" | "lower" | "repeat" | "replace"
+        ) {
+            return false;
+        }
+        // The receiver must be a `str`: a user type with a method by
+        // one of these names is somebody else's, and its result is
+        // already a call result by the ordinary rule.
+        let Some(base) = m.base() else {
+            return false;
+        };
+        let recv = match ParenExpr::cast(base).and_then(|p| p.expr()) {
+            Some(inner) => inner,
+            None => base,
+        };
+        self.is_str_expr(recv.span)
+    }
+
     /// Is the expression at `span` typed `str` (s153)?
     fn is_str_expr(&self, span: Span) -> bool {
         self.expr_ty(span)
@@ -3767,9 +3822,15 @@ impl<'t> Lowerer<'t> {
         if has_surface || surface.c_call {
             self.push(Stmt::Call(surface));
         }
+        // s160 (wolf-lang#321): a `str`-producing builtin that
+        // materializes is an allocation in the ambient region, the
+        // same site `+` mints (s153, #310) — `ret_heap` never saw it,
+        // because `str` is `Copy`.
+        let str_site = self.is_materializing_str_call(e);
+        let ret_alloc = ret_heap || str_site;
         let mut out = Val::none();
-        if ret_heap || !mut_targets.is_empty() {
-            let ty = if ret_heap {
+        if ret_alloc || !mut_targets.is_empty() {
+            let ty = if ret_alloc {
                 self.rendered_expr_ty(e.span)
             } else {
                 format!("{callee}(..)")
@@ -3785,11 +3846,16 @@ impl<'t> Lowerer<'t> {
                 self.shared_site.insert(site);
                 self.rc_cells.push(site);
             }
-            if ret_heap {
+            if ret_alloc {
                 out = Val::site(site, e.span);
-                for s in carry {
-                    if let Err(i) = out.sites.binary_search(&s) {
-                        out.sites.insert(i, s);
+                // The operands' sites do NOT flow into a materialized
+                // `str`: their bytes were copied into the new
+                // allocation, never shared ([mem.region.escape]).
+                if ret_heap {
+                    for s in carry {
+                        if let Err(i) = out.sites.binary_search(&s) {
+                            out.sites.insert(i, s);
+                        }
                     }
                 }
             }
