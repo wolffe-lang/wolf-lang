@@ -777,6 +777,21 @@ found again). Key the map by one of the four — an `id: int` field, a
 `name: str` — or by a `str` built from the struct's fields.
 "#);
 
+code!(E0419, "an empty list literal has no element type here", r#"
+`[]` is a `List[T]` with nothing in it to say what `T` is, and wolf
+never decides a type from a later use (`[type.list.lit.empty]`):
+inference reads down from what is already known, so a binding whose
+only clue arrives three statements later is a binding whose type the
+reader cannot see either. Every other position already supplies the
+answer — a call argument takes the parameter's type, a field
+initializer the field's, a function tail the declared return's, an
+annotated `let` the annotation's — so this code means the literal is
+in the one position that supplies nothing: a bare `let`/`var` with no
+annotation. Write the annotation the message spells out
+(`let xs: List[int] = []`), or write the elements, which say the type
+by themselves (`let xs = [1, 2, 3]`).
+"#);
+
 // ------------------------------------------------------------------------
 // E05xx — traits, checked generics, and coherence (s14).
 // ------------------------------------------------------------------------
@@ -1071,6 +1086,19 @@ point — an outer wrapper whose `Fail` must stay distinguishable from
 the inner one — say so nominally: wrap one payload in its own type
 (`type FailWrapped = distinct str`) and carry `Fail(FailWrapped)`; a
 nominal wrapper is what layering honestly is.
+"#);
+
+code!(E0610, "error-set aliases form a cycle", r#"
+An error-set alias is a spelling for a set of tags
+(`[type.err.alias]`), so the set has to be writable without the alias:
+`error A = {B}` where `error B = {A}` names nothing, because neither
+expansion ever reaches a tag. The cycle is reported once, at the alias
+that closes it, and the loop is named in full so the link to break is
+visible — the sibling of E0503 for trait aliases and of E0513 for
+associated-type bindings. An alias may name an alias to any depth that
+terminates; only a loop is refused. Break it by spelling the tags in
+one of the members, or by giving the shared tags their own alias that
+both name.
 "#);
 
 // ------------------------------------------------------------------------
