@@ -74,10 +74,21 @@ pub(crate) fn item(p: &mut Parser<'_>, in_body: bool) {
 }
 
 fn item_inner(p: &mut Parser<'_>, in_body: bool) {
-    // An unambiguous *item* keyword ends any stray-line E0203 fold.
-    // `let`/`var`/`const` deliberately do not: a function body spilled
-    // to the top level (its `{` lost) interleaves bindings with
-    // expression statements — that is one wreck, not many.
+    // An unambiguous *item* keyword ends any stray-line E0203 fold —
+    // but only when its COLUMN says it is a sibling.
+    // `let`/`var`/`const` deliberately do not end the fold at all: a
+    // function body spilled to the top level (its `{` lost)
+    // interleaves bindings with expression statements — that is one
+    // wreck, not many.
+    //
+    // s157 (wolf-lang#285): a spilled body that contains a nested
+    // `fn` is one wreck too. The nested item is indented past the
+    // column real declarations sit in, so the fold LOOKS THROUGH it
+    // and the stray lines on either side stay one report — the same
+    // reading of indentation `item()`'s floor already gives recovery,
+    // and the #243 shape of the fix (one wreck, one report). A
+    // declaration at or left of that column is a genuine sibling: it
+    // ends the run and becomes the new floor.
     if matches!(
         p.current(),
         TokenKind::PoundBracket
@@ -96,7 +107,11 @@ fn item_inner(p: &mut Parser<'_>, in_body: bool) {
             )
     ) || (p.at_kw(Keyword::Fn) && p.nth(1) != TokenKind::Punct(Punct::LParen))
     {
-        p.toplevel_error_reported = false;
+        let col = p.line_indent(p.current_span().lo);
+        if p.decl_floor.is_none_or(|f| col <= f) {
+            p.decl_floor = Some(col);
+            p.toplevel_error_reported = false;
+        }
     }
     let m = p.start();
     let mut prefixed = false;
@@ -1244,6 +1259,10 @@ fn member_body(p: &mut Parser<'_>) {
     }
     let opener = p.current_span();
     p.bump();
+    // Members sit at their own column, deeper than the `trait`/`impl`
+    // that holds them: the stray-line fold's sibling floor is scoped
+    // to this body the way `item_floor` is scoped to one item (#285).
+    let saved_floor = p.decl_floor.take();
     loop {
         p.eat_terms();
         if p.at_punct(Punct::RBrace) {
@@ -1266,6 +1285,7 @@ fn member_body(p: &mut Parser<'_>) {
             break;
         }
     }
+    p.decl_floor = saved_floor;
 }
 
 // -------------------------------------------------------- use / import --

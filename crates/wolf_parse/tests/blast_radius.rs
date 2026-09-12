@@ -422,6 +422,70 @@ fn keyword_named_parameter_keeps_the_structural_bound() {
     );
 }
 
+/// The exact #285 counter-example, pinned deterministically: replacing
+/// the `{` of the spawned closure's `let v = ch.recv() else |_| {
+/// return }` in `corpus/typecheck/closure_return.lu` with `fn` — the
+/// nightly's `[replace token 168 at 1183..1184 with \`fn\`]` — drew
+/// SIX cascade diagnostics against the structural bound of five.
+///
+/// The wreck is one: `main`'s body spills to the top level. Five of
+/// the six read as the #243 tiers do (the `else` operand, the phantom
+/// `fn return`, its parameter list, the `s.spawn(` argument list it
+/// closed, and the stray-line fold). The sixth was the SAME fold
+/// reported twice, because the spilled body contains a nested
+/// `fn clamp(…)` between the two stray runs, and an unambiguous item
+/// keyword ended the fold on token identity alone.
+///
+/// Indentation already says which it is: `fn clamp` sits four columns
+/// past the column real declarations sit in, so it is nested inside
+/// the wreck, not a sibling of it. The fold looks through it now, and
+/// the two runs are one report — the #243 reading (one wreck, one
+/// report), applied to the fold instead of to a token. The bound does
+/// not move.
+#[test]
+fn nested_item_inside_a_spilled_body_is_one_stray_run() {
+    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/typecheck/closure_return.lu");
+    let src = std::fs::read(&f).expect("read closure_return.lu");
+    let probe = b"let v = ch.recv() else |_| {";
+    let at = src
+        .windows(probe.len())
+        .rposition(|w| w == probe)
+        .expect("closure_return.lu still spells the spawned closure's `else |_| {`")
+        + probe.len()
+        - 1;
+    assert_eq!(src[at], b'{');
+    let mut mutated = src.clone();
+    mutated.splice(at..at + 1, b"fn".iter().copied());
+
+    let mut sm = wolf_span::SourceMap::new();
+    let baseline = wolf_parse::parse_tokens(&wolf_lex::lex(sm.intern(&f), &src), &src);
+    let mfile = sm.intern(&f.with_extension("mut_fn"));
+    let parse = wolf_parse::parse_tokens(&wolf_lex::lex(mfile, &mutated), &mutated);
+    wolf_ast::verify(&parse.root, &mutated).expect("verifier clean");
+    let cascade = |ds: &[wolf_diag::Diagnostic]| {
+        ds.iter()
+            .filter(|d| d.code != wolf_parse::codes::UNCLOSED_DELIMITER)
+            .count()
+    };
+    let added = cascade(&parse.diagnostics).saturating_sub(cascade(&baseline.diagnostics));
+    assert!(
+        added <= 5,
+        "#285 regression: {added} added cascade diagnostics (max 5): {:?}",
+        parse.diagnostics
+    );
+    // And the reading above stays true: the spilled body is ONE
+    // stray-line run, however many nested items sit inside it.
+    assert_eq!(
+        parse
+            .diagnostics
+            .iter()
+            .filter(|d| d.code == wolf_parse::codes::UNEXPECTED_TOPLEVEL)
+            .count(),
+        1,
+        "a spilled body with a nested `fn` inside it is one report"
+    );
+}
+
 /// A damaged construct may announce its own extent — one E0202 per
 /// opener left unclosed, so the ceiling is how deep the delimiters nest
 /// at the damage, not how much damage there is.

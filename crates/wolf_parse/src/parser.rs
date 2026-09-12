@@ -90,6 +90,14 @@ pub(crate) struct Parser<'a> {
     /// A run of not-a-declaration lines reports once — cleared when a
     /// real declaration keyword is reached (D22 containment).
     pub(crate) toplevel_error_reported: bool,
+    /// The column real declarations sit in at this nesting: the indent
+    /// of the last declaration keyword accepted as a SIBLING. An item
+    /// keyword indented past it is nested inside whatever wreck is
+    /// open, so it does not clear [`Self::toplevel_error_reported`]
+    /// — a spilled function body that contains a nested `fn` is one
+    /// wreck, not two (s157, wolf-lang#285; the #243 precedent).
+    /// `None` until the first declaration of the file or body.
+    pub(crate) decl_floor: Option<u32>,
     /// Assignment-in-expression (E0208) reports once per line region —
     /// a chain (`a = b = c`) is one mistake. Cleared by any consumed
     /// terminator.
@@ -148,6 +156,7 @@ impl<'a> Parser<'a> {
             item_floor: None,
             arg_error_reported: false,
             toplevel_error_reported: false,
+            decl_floor: None,
             arm_error_reported: false,
             line_end_fold_once: false,
             assign_error_reported: false,

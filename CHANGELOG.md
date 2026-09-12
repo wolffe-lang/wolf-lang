@@ -48,6 +48,14 @@ THE PAPERCUTS III — the language's ten, each a witness plus a fix.
   `corpus/memory/read_param_take.lu`, beside the write file it pairs
   with. A plain move out of a `read` parameter (`let n = b`, `return
   b`) is a wider ruling and is NOT taken here.
+- **parse** (#285): a spilled function body that contains a nested
+  `fn` is ONE E0203 stray-line report, not two. An unambiguous item
+  keyword ended the fold on token identity alone; it now ends it only
+  when its COLUMN says it is a sibling — indentation already says
+  which it is, and it is the floor `item()` gives recovery. The
+  nightly's budget-300 blast-radius case
+  (`closure_return.lu [replace \`{\` at 1183 with \`fn\`]`, six cascade
+  against the bound of five) is five, and the bound does not move.
 
 ## 0.2.12 — 2026-09-11
 
