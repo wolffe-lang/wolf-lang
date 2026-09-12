@@ -253,6 +253,44 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   site; a slice and every `[mem.str.view]` product allocate nothing.
   The ambient region of a `spawn proc` entry's body is the proc's own,
   not its spawner's (`[mem.region.proc]`).
+  (Extended 2026-09-12 by s160 for wolf-lang#321, both halves one step
+  out from #310. **First**, the site list is not only the operators:
+  it is **every `str`-producing builtin that materializes** — `upper`,
+  `lower`, `repeat` and `replace` build fresh bytes in the ambient
+  region, and each is a site exactly as `+` is. The other side of
+  `[mem.str.view]` is unchanged and allocates nothing: `trim`,
+  `trim_start`, `trim_end`, `get`, `strip_prefix`, `strip_suffix`, the
+  byte view, and the pieces of `split`/`words`/`lines`. The mem tier
+  minted a call result only for a non-`Copy` return, and a `str` is
+  `Copy`, so `region scratch { let s = "re".repeat(2); s }` returned
+  `rere` from freed bytes with no diagnostic on either tier. **Second**,
+  a `str` read carries its place's sites through a **projection**, not
+  only out of a whole local: `d.title` out of a region-local `Doc` was
+  site-free because a `Copy` field read flows none — the rule that
+  rightly stops an `int` field from pinning its parent's region, and is
+  wrong for a `str` whose bytes live in that region. **The cost,
+  stated.** The rules themselves cost nothing at run time on either
+  tier: they are refusals, and the builtins they name were already
+  allocating — what changes is that the bytes are now attributed, so a
+  region holding only string work stops being called empty by W1001.
+  The repair costs, and the second half's costs more: hoisting the
+  build out of the block is free, but `copy` — the first rung of the
+  ladder — materializes the bytes into the ambient region, one
+  allocation and one copy of the value's length, where the view cost
+  nothing. The second half is also deliberately **conservative rather
+  than precise**: there is no per-field site tracking, so a field read
+  carries the parent's whole site set and a literal-initialized field
+  (`region scratch { let d = Doc { title: "static" }; d.title }`) is
+  refused too, though its bytes are static. Never unsound, sometimes
+  strict; per-field attribution is the debt that would make it exact.
+  Measured before it landed: over `corpus/`, wolf-std's 50 module
+  entries and lobo's whole source, the first half moved **zero** rows
+  and the second moved **one** — lobo's `acc.addr = pl.pt.authority`,
+  an E1004 cross-parameter-region field store, which
+  `[mem.region.edge]`'s field-store arm rules an error and whose repair
+  is the one-word `copy`. Witnesses
+  `corpus/memory/region_str_repeat_return.lu` and
+  `corpus/memory/region_str_field_return.lu`.)
   (Ruled 2026-09-11 by s153 for wolf-lang#310: `region scratch { let s
   = "re" + "gions"; s }` returned from a function printed `regions`
   from freed bytes on wolf 0.2.10 and lupin 0.1.31 alike, with a W1001
