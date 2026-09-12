@@ -1257,7 +1257,13 @@ impl<'t> Lowerer<'t> {
     /// immutability is deep, so projections count and so does lending
     /// the binding `mut` onward). The caller-side half of the mode
     /// rules always held; this is the callee's.
-    fn check_read_param_write(&mut self, place: PlaceId, span: Span, verb: &str) {
+    ///
+    /// s157 (#60) added the move-out sibling: spelling `take` on a
+    /// `read` parameter at a call site hands the caller's value away,
+    /// which is the same immutability the clause spells and a worse
+    /// outcome than a write — the value the caller kept is gone.
+    /// `label` names which of the two the site is.
+    fn check_read_param_write(&mut self, place: PlaceId, span: Span, verb: &str, label: &str) {
         let Base::Local(l) = self.places.get(place).base else {
             return;
         };
@@ -1273,7 +1279,7 @@ impl<'t> Lowerer<'t> {
                 span,
                 format!("`{shown}` is `read` for the whole call, so it cannot be {verb}"),
             )
-            .with_label("write through a `read` parameter")
+            .with_label(label)
             .with_secondary(
                 decl,
                 format!("`{name}` is declared without a mode — that spells `read`, immutable for the call"),
@@ -1287,6 +1293,21 @@ impl<'t> Lowerer<'t> {
             // #325: the parameter this refusal names, at the write it
             // found — W1002 for the same name stands down on it.
             .about(name, span),
+        );
+    }
+
+    /// `take` spelled on a `read` parameter at a call site — E1014's
+    /// move-out sibling (s157, wolf-lang#60). `[mem.tier0.mode.read]`
+    /// says a mode-less parameter is the caller's value, immutable
+    /// for the whole call and still the caller's after it; handing it
+    /// to a `take` callee ends that value where the caller cannot see
+    /// it. E1014 already refuses the write; this refuses the give-away.
+    fn check_read_param_take(&mut self, place: PlaceId, span: Span) {
+        self.check_read_param_write(
+            place,
+            span,
+            "taken from the caller",
+            "`take` moves the caller's value out of a `read` parameter",
         );
     }
 
@@ -1717,6 +1738,7 @@ impl<'t> Lowerer<'t> {
             } else {
                 "assigned"
             },
+            "write through a `read` parameter",
         );
         self.check_iter_claim(place, span, "assigned");
         self.push(Stmt::Init { place, span });
@@ -1725,7 +1747,7 @@ impl<'t> Lowerer<'t> {
     fn emit_mutate(&mut self, place: PlaceId, span: Span) {
         self.check_view(place, span);
         self.check_frozen_write(place, span, "modified");
-        self.check_read_param_write(place, span, "modified");
+        self.check_read_param_write(place, span, "modified", "write through a `read` parameter");
         self.check_iter_claim(place, span, "modified");
         self.push(Stmt::Mutate { place, span });
     }
@@ -3759,7 +3781,7 @@ impl<'t> Lowerer<'t> {
             Some(ParamMode::Mut) => match self.as_place(recv) {
                 Some((place, ty)) => {
                     self.check_frozen_write(place, recv_span, "passed as `mut`");
-                    self.check_read_param_write(place, recv_span, "lent `mut`");
+                    self.check_read_param_write(place, recv_span, "lent `mut`", "write through a `read` parameter");
                     self.check_iter_claim(place, recv_span, "lent `mut`");
                     self.check_region_lend(place, recv_span);
                     self.escape_to_callee(place, carry);
@@ -3793,6 +3815,7 @@ impl<'t> Lowerer<'t> {
             },
             Some(ParamMode::Take) => {
                 if let Some((place, _)) = self.as_place(recv) {
+                    self.check_read_param_take(place, recv_span);
                     self.escape_to_callee(place, carry);
                     self.emit_move(place, recv_span);
                     surface.take_args.push((place, recv_span));
@@ -3879,7 +3902,7 @@ impl<'t> Lowerer<'t> {
             Some(ParamMode::Mut) => match self.as_place(v) {
                 Some((place, _)) => {
                     self.check_frozen_write(place, v.span, "passed as `mut`");
-                    self.check_read_param_write(place, v.span, "lent `mut`");
+                    self.check_read_param_write(place, v.span, "lent `mut`", "write through a `read` parameter");
                     self.check_iter_claim(place, v.span, "lent `mut`");
                     self.check_region_lend(place, v.span);
                     self.escape_to_callee(place, carry);
@@ -3893,6 +3916,7 @@ impl<'t> Lowerer<'t> {
             },
             Some(ParamMode::Take) => {
                 if let Some((place, _)) = self.as_place(v) {
+                    self.check_read_param_take(place, v.span);
                     self.escape_to_callee(place, carry);
                     self.emit_move(place, v.span);
                     surface.take_args.push((place, v.span));

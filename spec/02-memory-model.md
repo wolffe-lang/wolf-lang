@@ -84,7 +84,14 @@ law: `.docs/refs/papers/swift-ownership-manifesto.md`.
 
 - `[mem.tier0.mode.read]` Default (unwritten) mode: the callee reads a
   value that is **immutable for the whole call**; the caller retains it.
-  No syntax exists to name this mode — absence is the syntax.
+  No syntax exists to name this mode — absence is the syntax. *The
+  caller retains it* is a rule, not a description: a `read` parameter
+  cannot be **given away** either, so spelling `take` on it at an inner
+  call site is refused with the same code as a write (E1014). Ruled
+  2026-09-11 (wolf-lang#60): move-out is the same immutability
+  question as mutation, and the worse answer — the value the caller
+  kept would be gone. `copy` the parameter and hand the duplicate on,
+  or declare the parameter `take` and let the call site say so.
 - `[mem.tier0.mode.mut]` `mut` parameters are **exclusive inout**: for the
   duration of the call no other access (read or write) to the argument
   place or any conflicting path may occur. Call sites must write `mut`

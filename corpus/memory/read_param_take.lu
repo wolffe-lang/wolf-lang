@@ -1,0 +1,25 @@
+//! check: fail(E1014)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.read
+//! s157 (wolf-lang#60) — the move-out sibling of `read_param_write.lu`.
+//! E1014 refused WRITES through a `read` parameter from s72; handing
+//! the same parameter to a `take` callee passed silently until this
+//! pin, and it is the worse outcome: the caller's value is not
+//! modified behind its back, it is GONE. `[mem.tier0.mode.read]`'s
+//! "the caller retains it" is now read as a rule in both directions.
+//! lupin runs this shape clean — the expected conservatism note, the
+//! same posture the write file records.
+
+fn eat(take xs: List[int]) -> int {
+    xs.len
+}
+
+fn hand_on(b: List[int]) -> int {
+    eat(take b)                    // ERROR E1014: `b` is `read`
+}
+
+fn main() -> !int {
+    var v = List[int]()
+    (mut v).push(1)
+    hand_on(v) - 1
+}

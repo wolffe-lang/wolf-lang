@@ -39,6 +39,15 @@ THE PAPERCUTS III — the language's ten, each a witness plus a fix.
   taken it (partner 0, resolved to the current proc or the root
   domain); only sema refused it, `E0402`. Witness
   `corpus/conc/proc_link_root.lu`.
+- **mem** (#60, ruled here): `take` spelled on a `read` parameter at
+  an inner call site is E1014, the code that already refuses writes
+  through one. `[mem.tier0.mode.read]` gains the sentence that makes
+  "the caller retains it" a rule in both directions — move-out is the
+  same immutability question as mutation and the worse answer, since
+  the value the caller kept would be gone. Witness
+  `corpus/memory/read_param_take.lu`, beside the write file it pairs
+  with. A plain move out of a `read` parameter (`let n = b`, `return
+  b`) is a wider ruling and is NOT taken here.
 
 ## 0.2.12 — 2026-09-11
 
