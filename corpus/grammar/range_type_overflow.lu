@@ -1,0 +1,24 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.range, mem.iter.range
+//!
+//! s158 (#24) — `end` is exclusive, so `a..=b` normalizes to `b + 1`
+//! AT CONSTRUCTION, under the checked arithmetic [mem.iter.range]
+//! already rules ([type.range.accessor]). `0..=int.MAX` therefore
+//! traps `overflow` where the range is built, not where it is read —
+//! the price of one exclusive `end`, paid once and visibly, so that
+//! `r.end - r.start` is the count for both spellings.
+//!
+//! The `for` HEADER form is unchanged and does not trap: it never
+//! materializes a range, and its loop is a do-while over the
+//! inclusive bound. Only a range VALUE normalizes.
+
+fn width(r: range[int]) -> int {
+    r.end - r.start
+}
+
+fn main() -> !int {
+    let big = 0..=9223372036854775807
+    print("{width(big)}")
+    0
+}

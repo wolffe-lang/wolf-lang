@@ -180,6 +180,7 @@ grammar/newline_trailing.lu: lowers
 grammar/range_bare.lu: not mem-clean (pre-wir rungs own it)
 grammar/range_type_char.lu: lowers
 grammar/range_type_inclusive.lu: lowers
+grammar/range_type_overflow.lu: lowers
 grammar/range_type_param.lu: lowers
 grammar/range_type_return.lu: lowers
 grammar/receiver_moded.lu: not mem-clean (pre-wir rungs own it)
