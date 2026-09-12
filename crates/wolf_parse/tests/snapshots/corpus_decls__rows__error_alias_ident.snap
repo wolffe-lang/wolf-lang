@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TypeDecl 433..474 name=Report def=StructDef
+FnDecl 475..512 name=error body=Block
+FnDecl 514..643 name=main body=Block

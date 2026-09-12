@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ErrorDecl 346..372 name=Loose tags={none}
+FnDecl 373..404 name=f body=Block
+FnDecl 406..459 name=main body=Block
+-- diagnostics --
+E0201 [Error] 368..370 an error-set alias cannot name an open row

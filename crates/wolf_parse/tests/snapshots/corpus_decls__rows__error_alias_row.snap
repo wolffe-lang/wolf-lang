@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ErrorDecl 557..588 name=IoErrors tags={none,parse}
+FnDecl 589..670 name=parse_it body=Block
+FnDecl 672..774 name=main body=Block

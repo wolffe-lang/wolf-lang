@@ -1,0 +1,106 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 281..391
+  FnDecl 281..390
+    FnKw 281..283 "fn"
+    Ident 284..288 "main"
+    ParamList 288..290
+      LParen 288..289 "("
+      RParen 289..290 ")"
+    RetType 291..298
+      Arrow 291..293 "->"
+      ErrorUnionType 294..298
+        Not 294..295 "!"
+        PathType 295..298
+          Path 295..298
+            Ident 295..298 "int"
+    Block 299..390
+      LBrace 299..300 "{"
+      LetDecl 305..333
+        LetKw 305..308 "let"
+        IdentPat 309..313
+          Ident 309..313 "grid"
+        Eq 314..315 "="
+        ListLit 316..332
+          LBracket 316..317 "["
+          ListLit 317..323
+            LBracket 317..318 "["
+            LiteralExpr 318..319
+              Int 318..319 "1"
+            Comma 319..320 ","
+            LiteralExpr 321..322
+              Int 321..322 "2"
+            RBracket 322..323 "]"
+          Comma 323..324 ","
+          ListLit 325..331
+            LBracket 325..326 "["
+            LiteralExpr 326..327
+              Int 326..327 "3"
+            Comma 327..328 ","
+            LiteralExpr 329..330
+              Int 329..330 "4"
+            RBracket 330..331 "]"
+          RBracket 331..332 "]"
+        Term 332..333 "\n"
+      ExprStmt 337..357
+        CallExpr 337..356
+          PathExpr 337..342
+            Ident 337..342 "print"
+          ArgList 342..356
+            LParen 342..343 "("
+            Arg 343..355
+              StringExpr 343..355
+                StrBegin 343..344 "\""
+                Interp 344..354
+                  InterpOpen 344..345 "{"
+                  MemberExpr 345..353
+                    PathExpr 345..349
+                      Ident 345..349 "grid"
+                    Dot 349..350 "."
+                    Ident 350..353 "len"
+                  InterpClose 353..354 "}"
+                StrEnd 354..355 "\""
+            RParen 355..356 ")"
+        Term 356..357 "\n"
+      ExprStmt 361..383
+        CallExpr 361..382
+          PathExpr 361..366
+            Ident 361..366 "print"
+          ArgList 366..382
+            LParen 366..367 "("
+            Arg 367..381
+              StringExpr 367..381
+                StrBegin 367..368 "\""
+                Interp 368..380
+                  InterpOpen 368..369 "{"
+                  BracketApply 369..379
+                    BracketApply 369..376
+                      PathExpr 369..373
+                        Ident 369..373 "grid"
+                      ArgList 373..376
+                        LBracket 373..374 "["
+                        Arg 374..375
+                          LiteralExpr 374..375
+                            Int 374..375 "1"
+                        RBracket 375..376 "]"
+                    ArgList 376..379
+                      LBracket 376..377 "["
+                      Arg 377..378
+                        LiteralExpr 377..378
+                          Int 377..378 "1"
+                      RBracket 378..379 "]"
+                  InterpClose 379..380 "}"
+                StrEnd 380..381 "\""
+            RParen 381..382 ")"
+        Term 382..383 "\n"
+      ExprStmt 387..389
+        LiteralExpr 387..388
+          Int 387..388 "0"
+        Term 388..389 "\n"
+      RBrace 389..390 "}"
+  Term 390..391 "\n"
+  Eof 391..391 ""
+== diagnostics ==

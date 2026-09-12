@@ -151,6 +151,14 @@ grammar/let_group.lu: lowers
 grammar/let_group_bare_tuple.lu: not mem-clean (pre-wir rungs own it)
 grammar/let_group_destructure.lu: lowers
 grammar/let_group_one_init.lu: not mem-clean (pre-wir rungs own it)
+grammar/list_lit_arg.lu: lowers
+grammar/list_lit_empty.lu: lowers
+grammar/list_lit_index.lu: lowers
+grammar/list_lit_let.lu: lowers
+grammar/list_lit_mixed.lu: not mem-clean (pre-wir rungs own it)
+grammar/list_lit_multiline.lu: lowers
+grammar/list_lit_nested.lu: lowers
+grammar/list_lit_untyped_empty.lu: not mem-clean (pre-wir rungs own it)
 grammar/match_arm_at_binding.lu: lowers
 grammar/match_arm_deep_tree.lu: refused — an enum or row test inside a product pattern (deep trees)
 grammar/match_arm_or_inside_product.lu: refused — or-patterns inside product patterns (join params)
@@ -170,6 +178,10 @@ grammar/multiline_short_margin.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_leading.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_trailing.lu: lowers
 grammar/range_bare.lu: not mem-clean (pre-wir rungs own it)
+grammar/range_type_char.lu: lowers
+grammar/range_type_inclusive.lu: lowers
+grammar/range_type_param.lu: lowers
+grammar/range_type_return.lu: lowers
 grammar/receiver_moded.lu: not mem-clean (pre-wir rungs own it)
 grammar/semicolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/shebang.lu: lowers
@@ -387,6 +399,10 @@ resolve/unused/main.lu: not mem-clean (pre-wir rungs own it)
 rows/coarsen.lu: lowers
 rows/cross_module_arms/main.lu: lowers
 rows/else_tag_payload.lu: lowers
+rows/error_alias_ident.lu: lowers
+rows/error_alias_row.lu: lowers
+rows/error_alias_transparent.lu: lowers
+rows/error_alias_union.lu: lowers
 rows/eu_main_err_exit.lu: lowers
 rows/handler_diverge_call.lu: lowers
 rows/handler_diverge_trap.lu: lowers
@@ -397,6 +413,8 @@ rows/iter_diverging_else_bound.lu: lowers
 rows/match_range_empty.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/dup_tags.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/errdefer_infallible.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/error_alias_cycle.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/error_alias_open.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/handler_uncovered.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/missing_tag.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/nested_row_conflict.lu: not mem-clean (pre-wir rungs own it)

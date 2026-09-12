@@ -1,0 +1,58 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 376..442
+  FnDecl 376..441
+    FnKw 376..378 "fn"
+    Ident 379..383 "main"
+    ParamList 383..385
+      LParen 383..384 "("
+      RParen 384..385 ")"
+    RetType 386..393
+      Arrow 386..388 "->"
+      ErrorUnionType 389..393
+        Not 389..390 "!"
+        PathType 390..393
+          Path 390..393
+            Ident 390..393 "int"
+    Block 394..441
+      LBrace 394..395 "{"
+      LetDecl 400..412
+        LetKw 400..403 "let"
+        IdentPat 404..406
+          Ident 404..406 "xs"
+        Eq 407..408 "="
+        ListLit 409..411
+          LBracket 409..410 "["
+          RBracket 410..411 "]"
+        Term 411..412 "\n"
+      ExprStmt 416..434
+        CallExpr 416..433
+          PathExpr 416..421
+            Ident 416..421 "print"
+          ArgList 421..433
+            LParen 421..422 "("
+            Arg 422..432
+              StringExpr 422..432
+                StrBegin 422..423 "\""
+                Interp 423..431
+                  InterpOpen 423..424 "{"
+                  MemberExpr 424..430
+                    PathExpr 424..426
+                      Ident 424..426 "xs"
+                    Dot 426..427 "."
+                    Ident 427..430 "len"
+                  InterpClose 430..431 "}"
+                StrEnd 431..432 "\""
+            RParen 432..433 ")"
+        Term 433..434 "\n"
+      ExprStmt 438..440
+        LiteralExpr 438..439
+          Int 438..439 "0"
+        Term 439..440 "\n"
+      RBrace 440..441 "}"
+  Term 441..442 "\n"
+  Eof 442..442 ""
+== diagnostics ==

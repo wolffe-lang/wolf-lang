@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 421..465 name=window body=Block
+FnDecl 467..648 name=main body=Block

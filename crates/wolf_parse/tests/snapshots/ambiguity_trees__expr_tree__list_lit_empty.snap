@@ -1,0 +1,108 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 316..457
+  FnDecl 316..456
+    FnKw 316..318 "fn"
+    Ident 319..323 "main"
+    ParamList 323..325
+      LParen 323..324 "("
+      RParen 324..325 ")"
+    RetType 326..333
+      Arrow 326..328 "->"
+      ErrorUnionType 329..333
+        Not 329..330 "!"
+        PathType 330..333
+          Path 330..333
+            Ident 330..333 "int"
+    Block 334..456
+      LBrace 334..335 "{"
+      VarDecl 340..366
+        VarKw 340..343 "var"
+        IdentPat 344..349
+          Ident 344..349 "names"
+        Colon 349..350 ":"
+        PathType 351..360
+          Path 351..355
+            Ident 351..355 "List"
+          TypeArgList 355..360
+            LBracket 355..356 "["
+            PathType 356..359
+              Path 356..359
+                Ident 356..359 "str"
+            RBracket 359..360 "]"
+        Eq 361..362 "="
+        ListLit 363..365
+          LBracket 363..364 "["
+          RBracket 364..365 "]"
+        Term 365..366 "\n"
+      ExprStmt 370..391
+        CallExpr 370..390
+          PathExpr 370..375
+            Ident 370..375 "print"
+          ArgList 375..390
+            LParen 375..376 "("
+            Arg 376..389
+              StringExpr 376..389
+                StrBegin 376..377 "\""
+                Interp 377..388
+                  InterpOpen 377..378 "{"
+                  MemberExpr 378..387
+                    PathExpr 378..383
+                      Ident 378..383 "names"
+                    Dot 383..384 "."
+                    Ident 384..387 "len"
+                  InterpClose 387..388 "}"
+                StrEnd 388..389 "\""
+            RParen 389..390 ")"
+        Term 390..391 "\n"
+      ExprStmt 395..424
+        CallExpr 395..423
+          MemberExpr 395..411
+            ParenExpr 395..406
+              LParen 395..396 "("
+              MutKw 396..399 "mut"
+              PathExpr 400..405
+                Ident 400..405 "names"
+              RParen 405..406 ")"
+            Dot 406..407 "."
+            Ident 407..411 "push"
+          ArgList 411..423
+            LParen 411..412 "("
+            Arg 412..422
+              StringExpr 412..422
+                StrBegin 412..413 "\""
+                StrFragment 413..421 "espresso"
+                StrEnd 421..422 "\""
+            RParen 422..423 ")"
+        Term 423..424 "\n"
+      ExprStmt 428..449
+        CallExpr 428..448
+          PathExpr 428..433
+            Ident 428..433 "print"
+          ArgList 433..448
+            LParen 433..434 "("
+            Arg 434..447
+              StringExpr 434..447
+                StrBegin 434..435 "\""
+                Interp 435..446
+                  InterpOpen 435..436 "{"
+                  MemberExpr 436..445
+                    PathExpr 436..441
+                      Ident 436..441 "names"
+                    Dot 441..442 "."
+                    Ident 442..445 "len"
+                  InterpClose 445..446 "}"
+                StrEnd 446..447 "\""
+            RParen 447..448 ")"
+        Term 448..449 "\n"
+      ExprStmt 453..455
+        LiteralExpr 453..454
+          Int 453..454 "0"
+        Term 454..455 "\n"
+      RBrace 455..456 "}"
+  Term 456..457 "\n"
+  Eof 457..457 ""
+== diagnostics ==

@@ -1,0 +1,114 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 486..619
+  FnDecl 486..618
+    FnKw 486..488 "fn"
+    Ident 489..493 "main"
+    ParamList 493..495
+      LParen 493..494 "("
+      RParen 494..495 ")"
+    RetType 496..503
+      Arrow 496..498 "->"
+      ErrorUnionType 499..503
+        Not 499..500 "!"
+        PathType 500..503
+          Path 500..503
+            Ident 500..503 "int"
+    Block 504..618
+      LBrace 504..505 "{"
+      LetDecl 510..538
+        LetKw 510..513 "let"
+        IdentPat 514..519
+          Ident 514..519 "cents"
+        Eq 520..521 "="
+        ListLit 522..537
+          LBracket 522..523 "["
+          LiteralExpr 523..526
+            Int 523..526 "340"
+          Comma 526..527 ","
+          LiteralExpr 528..531
+            Int 528..531 "275"
+          Comma 531..532 ","
+          LiteralExpr 533..536
+            Int 533..536 "100"
+          RBracket 536..537 "]"
+        Term 537..538 "\n"
+      ExprStmt 542..563
+        CallExpr 542..562
+          PathExpr 542..547
+            Ident 542..547 "print"
+          ArgList 547..562
+            LParen 547..548 "("
+            Arg 548..561
+              StringExpr 548..561
+                StrBegin 548..549 "\""
+                Interp 549..560
+                  InterpOpen 549..550 "{"
+                  MemberExpr 550..559
+                    PathExpr 550..555
+                      Ident 550..555 "cents"
+                    Dot 555..556 "."
+                    Ident 556..559 "len"
+                  InterpClose 559..560 "}"
+                StrEnd 560..561 "\""
+            RParen 561..562 ")"
+        Term 562..563 "\n"
+      ExprStmt 567..587
+        CallExpr 567..586
+          PathExpr 567..572
+            Ident 567..572 "print"
+          ArgList 572..586
+            LParen 572..573 "("
+            Arg 573..585
+              StringExpr 573..585
+                StrBegin 573..574 "\""
+                Interp 574..584
+                  InterpOpen 574..575 "{"
+                  BracketApply 575..583
+                    PathExpr 575..580
+                      Ident 575..580 "cents"
+                    ArgList 580..583
+                      LBracket 580..581 "["
+                      Arg 581..582
+                        LiteralExpr 581..582
+                          Int 581..582 "0"
+                      RBracket 582..583 "]"
+                  InterpClose 583..584 "}"
+                StrEnd 584..585 "\""
+            RParen 585..586 ")"
+        Term 586..587 "\n"
+      ExprStmt 591..611
+        CallExpr 591..610
+          PathExpr 591..596
+            Ident 591..596 "print"
+          ArgList 596..610
+            LParen 596..597 "("
+            Arg 597..609
+              StringExpr 597..609
+                StrBegin 597..598 "\""
+                Interp 598..608
+                  InterpOpen 598..599 "{"
+                  BracketApply 599..607
+                    PathExpr 599..604
+                      Ident 599..604 "cents"
+                    ArgList 604..607
+                      LBracket 604..605 "["
+                      Arg 605..606
+                        LiteralExpr 605..606
+                          Int 605..606 "2"
+                      RBracket 606..607 "]"
+                  InterpClose 607..608 "}"
+                StrEnd 608..609 "\""
+            RParen 609..610 ")"
+        Term 610..611 "\n"
+      ExprStmt 615..617
+        LiteralExpr 615..616
+          Int 615..616 "0"
+        Term 616..617 "\n"
+      RBrace 617..618 "}"
+  Term 618..619 "\n"
+  Eof 619..619 ""
+== diagnostics ==

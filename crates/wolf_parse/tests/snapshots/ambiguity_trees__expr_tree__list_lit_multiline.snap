@@ -1,0 +1,78 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 351..604
+  FnDecl 351..603
+    FnKw 351..353 "fn"
+    Ident 354..358 "main"
+    ParamList 358..360
+      LParen 358..359 "("
+      RParen 359..360 ")"
+    RetType 361..368
+      Arrow 361..363 "->"
+      ErrorUnionType 364..368
+        Not 364..365 "!"
+        PathType 365..368
+          Path 365..368
+            Ident 365..368 "int"
+    Block 369..603
+      LBrace 369..370 "{"
+      LetDecl 375..572
+        LetKw 375..378 "let"
+        IdentPat 379..383
+          Ident 379..383 "wide"
+        Eq 384..385 "="
+        ListLit 386..571
+          LBracket 386..387 "["
+          StringExpr 396..439
+            StrBegin 396..397 "\""
+            StrFragment 397..438 "an espresso machine with a h…"
+            StrEnd 438..439 "\""
+          Comma 439..440 ","
+          StringExpr 449..477
+            StrBegin 449..450 "\""
+            StrFragment 450..476 "a refrigerated pastry case"
+            StrEnd 476..477 "\""
+          Comma 477..478 ","
+          StringExpr 487..523
+            StrBegin 487..488 "\""
+            StrFragment 488..522 "a set of replacement grinder…"
+            StrEnd 522..523 "\""
+          Comma 523..524 ","
+          StringExpr 533..564
+            StrBegin 533..534 "\""
+            StrFragment 534..563 "a steam wand and milk frothe…"
+            StrEnd 563..564 "\""
+          Comma 564..565 ","
+          RBracket 570..571 "]"
+        Term 571..572 "\n"
+      ExprStmt 576..596
+        CallExpr 576..595
+          PathExpr 576..581
+            Ident 576..581 "print"
+          ArgList 581..595
+            LParen 581..582 "("
+            Arg 582..594
+              StringExpr 582..594
+                StrBegin 582..583 "\""
+                Interp 583..593
+                  InterpOpen 583..584 "{"
+                  MemberExpr 584..592
+                    PathExpr 584..588
+                      Ident 584..588 "wide"
+                    Dot 588..589 "."
+                    Ident 589..592 "len"
+                  InterpClose 592..593 "}"
+                StrEnd 593..594 "\""
+            RParen 594..595 ")"
+        Term 595..596 "\n"
+      ExprStmt 600..602
+        LiteralExpr 600..601
+          Int 600..601 "0"
+        Term 601..602 "\n"
+      RBrace 602..603 "}"
+  Term 603..604 "\n"
+  Eof 604..604 ""
+== diagnostics ==
