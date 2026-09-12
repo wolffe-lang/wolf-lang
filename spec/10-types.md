@@ -805,10 +805,16 @@ one type the compiler could build a value of and not name.)
 - `[type.range.name]` **`range[int]` and `range[char]` are types**,
   spelled like any other type application (`[gram.type]`), legal in
   every type position — parameter, `let`/`var` annotation, field,
-  return, element. `range` is an ordinary identifier the prelude
-  binds, not a keyword; `range` with no argument is E0405 (the
-  element type is not inferable from the name alone) and a `range[T]`
-  for any other `T` is E0401 — the family is closed at the two types
+  return, element. `range` is an ordinary identifier the prelude binds
+  **in type position only** — there is no `range(…)` constructor, a
+  range value being spelled `a..b` — so a declaration named `range`
+  shadows nothing a program can spell and is NOT the W0304 hazard
+  `List` is (`List[int]()` IS an expression, so a module declaring its
+  own `List` really is severed from the container; `var range = true`
+  severs nothing, and two of the corpus's own `os_random` witnesses
+  spell it — the word is too ordinary to tax). `range` with no
+  argument is E0405 (the element type is not inferable from the name
+  alone) and a `range[T]` for any other `T` is E0401 — the family is closed at the two types
   `..` iterates, exactly `[mem.iter.range]`'s closed builtin family.
   The type was already the one diagnostics printed (`range[int]` is
   how a mismatched `2..7` has always been rendered); this clause makes

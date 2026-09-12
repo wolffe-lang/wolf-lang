@@ -268,11 +268,26 @@ pub const PRELUDE_PROVISIONAL: &[&str] = &[
     "sleeper",
 ];
 
+/// Prelude names that exist ONLY in type position (s158): `range` is
+/// the type of `a..b` (`[type.range]`) and has no expression form at
+/// all — there is no `range(…)` constructor, the values are spelled
+/// `a..b`. A declaration named `range` therefore shadows nothing a
+/// program can spell, and W0304 exempts it.
+///
+/// This is the line between it and `List`: `List[int]()` IS an
+/// expression, so a module that declares its own `List` really does
+/// sever itself from the container, and the lint is right to say so.
+/// `var range = true` severs nothing, and two of the corpus's own
+/// `os_random` witnesses spell it (the word is too ordinary to tax).
+pub const PRELUDE_TYPE_ONLY: &[&str] = &["range"];
+
 /// Would declaring `name` silently shadow an ambient name worth
 /// keeping (W0304)? True for every prelude name except the
-/// provisional stand-ins, and for every built-in type name.
+/// provisional stand-ins and the type-position-only names, and for
+/// every built-in type name.
 pub fn shadow_hazard(name: &str) -> bool {
-    (in_prelude(name) && !PRELUDE_PROVISIONAL.contains(&name)) || is_builtin_type(name)
+    (in_prelude(name) && !PRELUDE_PROVISIONAL.contains(&name) && !PRELUDE_TYPE_ONLY.contains(&name))
+        || is_builtin_type(name)
 }
 
 /// Is `name` a built-in type name?
@@ -299,5 +314,20 @@ mod tests {
         assert!(is_builtin_type("i32"));
         assert!(is_builtin_type("wrapping"));
         assert!(!is_builtin_type("List")); // List is prelude, not builtin
+    }
+
+    /// s158 (`[type.range]`): `range` resolves as a type name, and
+    /// shadowing it is NOT a W0304 hazard — it has no expression form,
+    /// so a `var range = true` severs nothing. `List` is the contrast:
+    /// `List[int]()` is an expression, and shadowing it really does
+    /// cut the module off from the container.
+    #[test]
+    fn range_is_a_type_position_prelude_name() {
+        assert!(in_prelude("range"));
+        assert!(!is_builtin_type("range"));
+        assert!(!shadow_hazard("range"));
+        assert!(shadow_hazard("List"));
+        assert!(shadow_hazard("print"));
+        assert!(!shadow_hazard("worker")); // provisional stand-in
     }
 }
