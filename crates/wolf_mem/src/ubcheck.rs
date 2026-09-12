@@ -3223,7 +3223,17 @@ impl<'t> Machine<'t> {
                     _ => return self.refuse("non-integer ranges", e.span),
                 };
                 if d.is_inclusive() {
-                    en += 1;
+                    // `a..=b` normalizes to the exclusive `b + 1` HERE,
+                    // where the range is built (`[type.range.accessor]`,
+                    // s158) — under the checked arithmetic
+                    // `[mem.iter.range]` already rules, so `0..=int.MAX`
+                    // traps `overflow` at its construction. It was a
+                    // Rust `+= 1` until s158 made the value reachable
+                    // without a `for` header to defend it.
+                    match en.checked_add(1) {
+                        Some(v) => en = v,
+                        None => return self.trap("overflow", "mem.iter.range", e.span),
+                    }
                 }
                 Ok(Flow::Val(Value::Range {
                     start: s,
