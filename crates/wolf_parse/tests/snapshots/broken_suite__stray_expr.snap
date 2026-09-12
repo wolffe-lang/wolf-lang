@@ -33,4 +33,4 @@ SourceFile 0..27
   Eof 27..27 ""
 == diagnostics ==
 E0203 [Error] 0..1 expected a declaration here
-    note the top level of a file holds declarations only, each starting with its keyword: `fn`, `let`, `var`, `type`, `struct`, `enum`, `trait`, `impl`, `use`, `import`. If this line belongs inside a function, a `{` is probably missing above it.
+    note the top level of a file holds declarations only, each starting with its keyword: `fn`, `let`, `var`, `type`, `struct`, `enum`, `trait`, `impl`, `use`, `import`, `error`. If this line belongs inside a function, a `{` is probably missing above it.

@@ -18,7 +18,7 @@ Diagnostic {
     },
     secondary: [],
     notes: [
-        "the top level of a file holds declarations only, each starting with its keyword: `fn`, `let`, `var`, `type`, `struct`, `enum`, `trait`, `impl`, `use`, `import`. If this line belongs inside a function, a `{` is probably missing above it.",
+        "the top level of a file holds declarations only, each starting with its keyword: `fn`, `let`, `var`, `type`, `struct`, `enum`, `trait`, `impl`, `use`, `import`, `error`. If this line belongs inside a function, a `{` is probably missing above it.",
     ],
     suggestions: [],
 }

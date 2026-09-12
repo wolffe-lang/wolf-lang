@@ -204,7 +204,14 @@ fn corpus_parse_expectations() {
     // the note that names both spellings, `[gram.expr.if]`,
     // wolf-lang#307); plus s157's `${` witness (grammar/str_dollar_brace
     // — E0102, the `$`+`{` pair that opens an interpolation nobody
-    // asked for, wolf-lang#134); everything else must pass.
+    // asked for, wolf-lang#134); plus s158's one E0201 refusal of an
+    // OPEN error-set alias (rows/negative/error_alias_open — `error
+    // Loose = {none, ..}`: an alias is a spelling for the tags it
+    // lists, and "these tags and any others" is not a set a name can
+    // stand for, `[gram.item.error]`, wolf-lang#36); everything else
+    // must pass. s158's other two refusals are NOT syntax-tier —
+    // `E0419` (an empty list literal with no context) and `E0610` (an
+    // error-set alias cycle) are the checker's, and parse them clean.
     assert_eq!(fail, 27, "syntax-tier fail-file count drifted");
     assert_eq!(
         member_fail, 2,
