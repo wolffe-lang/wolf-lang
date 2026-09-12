@@ -571,3 +571,36 @@ fn recovery_stops_at_a_contextual_error_declaration() {
     let arrowed = "error A = {B, io =>\n\nerror B = {A, parse}\n\nfn f() -> int { 1 }\n";
     assert_eq!(decls(arrowed), 3, "a `=>` eats no neighbour either");
 }
+
+/// wolf-lang#157 (ch04) — a function VALUE with a return-type
+/// annotation is told the rule, not where the parse stopped.
+///
+/// `fn(c: int) -> int { … }` used to report `expected the closure
+/// body` with the caret on the `->`: true of the parse, useless to
+/// the reader, and it named neither the rule nor a spelling that
+/// works. One report now, spanning the whole stray annotation.
+#[test]
+fn a_function_value_takes_no_return_type() {
+    let src = "fn main() -> !int {\n    let f = fn(c: int) -> int { c + 1 }\n    0\n}\n";
+    let parse = util::parse(src);
+    let ds = &parse.diagnostics;
+    assert_eq!(ds.len(), 1, "exactly one report: {ds:?}");
+    assert_eq!(ds[0].code, codes::EXPECTED_TOKEN);
+    assert_eq!(ds[0].message, "a function value takes no return type");
+    // The caret covers `-> int`, not just the arrow.
+    let span = ds[0].primary.span;
+    assert_eq!(&src[span.lo as usize..span.hi as usize], "-> int");
+    // The note names spellings that actually work.
+    let notes = ds[0].notes.join(" ");
+    assert!(notes.contains("fn(c: int) { c + 1 }"), "{notes}");
+    assert!(notes.contains("fn(c) c + 1"), "{notes}");
+    // And all three of those spellings parse clean.
+    for body in ["fn(c: int) { c + 1 }", "fn(c) c + 1", "fn(c: int) c + 1"] {
+        let ok = format!("fn main() -> !int {{\n    let f = {body}\n    0\n}}\n");
+        assert!(
+            util::parse(&ok).diagnostics.is_empty(),
+            "{body}: {:?}",
+            util::parse(&ok).diagnostics
+        );
+    }
+}

@@ -1828,6 +1828,35 @@ fn closure(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
         p.missing();
         false
     };
+    // A function VALUE takes no return type: the grammar is
+    // `fn '(' params ')' (block | expr)` (`[gram.amb.closure]`) — the
+    // body's type is whatever the body evaluates to. Readers coming
+    // from the ITEM spelling write `fn(c: int) -> int { … }`, and the
+    // report they got was `expected the closure body` with the caret
+    // on the `->`: a description of where the parse stopped, not of
+    // the mistake (wolf-lang#157, ch04's row). Say the rule, consume
+    // the stray annotation so the body still parses, and report once.
+    if params_ok && p.at_punct(Punct::Arrow) {
+        let arrow = p.current_span();
+        let e = p.start();
+        p.bump(); // `->`
+        grammar::type_required(p);
+        e.complete(p, SyntaxKind::ErrorNode);
+        let through = p.prev_end().map_or(arrow, |end| {
+            wolf_span::Span::new(arrow.file, arrow.lo, end.hi)
+        });
+        p.push_diag(
+            wolf_diag::Diagnostic::error(
+                codes::EXPECTED_TOKEN,
+                through,
+                "a function value takes no return type",
+            )
+            .with_label("drop this — the body's type is the value's type")
+            .with_note(
+                "a function VALUE is `fn (params) body` [gram.amb.closure]: it takes                  parameters and a body, and what the body evaluates to is what it                  returns. `fn(c: int) { c + 1 }` and `fn(c) c + 1` both work, and so                  does an untyped parameter. Only a function ITEM — `fn name(…) -> T`                  — declares a return type, because a caller resolves it by name                  before its body is ever read.",
+            ),
+        );
+    }
     if p.at_punct(Punct::LBrace) {
         block(p);
     } else if expr_bp(p, 0, ctx).is_none() {
