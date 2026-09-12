@@ -1,0 +1,40 @@
+//! check: run(exit=0, stdout="green\nfirst\n")
+//! phase: run
+//! conforms: gram.pat.nullary, type.match.exhaust
+//!
+//! s157 (wolf-lang#162's last row) — `[gram.pat.nullary]`: a bare
+//! dotted path is a pattern. Until this pin the parser required the
+//! parens ("a dotted path in a pattern must carry a payload, like
+//! `io.Error(e)`"), so a `match` over a CLOSED SET OF NAMES — the
+//! thing a reader reaches for an enum to write, and what the book's
+//! §3.4 wanted to teach — could not be spelled at all, and
+//! exhaustiveness had nothing to be exhaustive over. Both tools
+//! refused it identically, so this was an absence, not a divergence.
+//! Arity is still the checker's question either way: `Shape.Rgb =>`
+//! on a three-value variant is E0808, and dropping `Color.Blue` here
+//! is E0801 naming `Blue`. Payload-less ROW tags take the same bare
+//! form, which is what `first` exercises.
+
+enum Color { Red, Green, Blue }
+
+fn name(c: Color) -> str {
+    match c {
+        Color.Red => "red",
+        Color.Green => "green",
+        Color.Blue => "blue",
+    }
+}
+
+fn pick(n: int) -> str ! {none, bad} {
+    if n > 0 { "hit" } else if n == 0 { none } else { bad }
+}
+
+fn main() -> !int {
+    print(name(Color.Green))
+    let a = pick(0) else |e| match e {
+        none => "first",
+        bad => "second",
+    }
+    print(a)
+    0
+}

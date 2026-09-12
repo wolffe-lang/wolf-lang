@@ -884,6 +884,7 @@ row_entry ::= path ('(' type (',' type)* ')')?
 ```ebnf
 pattern ::= closed_pattern ('|' closed_pattern)*
 closed_pattern ::= '_' | literal | IDENT
+          | path                               /* [gram.pat.nullary] */
           | path '(' pattern (',' pattern)* ','? ')'
           | path '{' field_pat (',' field_pat)* (',' '..'?)? '}'
           | '(' pattern (',' pattern)* ','? ')'
@@ -904,6 +905,17 @@ tightening, never before it. Files:
 `grammar/struct_pattern_rest_bare.lu`,
 `grammar/struct_pattern_no_separator.lu`,
 `grammar/tuple_pattern_no_separator.lu`.)
+
+A bare `path` matches a constructor that carries nothing
+`[gram.pat.nullary]`: `Color.Green => …` for a payload-less enum
+variant, `io.Eof => …` for a payload-less row tag. Arity is the
+checker's question and it asks it either way — a variant that carries
+values, written bare, is E0808 naming the shape it wants. (Appended
+2026-09-11, s157 for wolf-lang#162: the parser required the parens, so
+`match` over a **closed set of names** — the thing a reader reaches
+for enums to write — could not be spelled at all, and
+exhaustiveness had nothing to be exhaustive over. Both tools refused
+it identically, so there was no divergence to fix, only an absence.)
 
 Payload binding: `BadDigit(e) => …`; or-patterns `A | B`; guards are arm
 syntax (`[gram.expr.flow]`), not pattern syntax. `closed_pattern` is a

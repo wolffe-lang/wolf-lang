@@ -2033,14 +2033,15 @@ pub(crate) fn pattern_atom(p: &mut Parser<'_>) -> Option<crate::parser::Complete
                 // `[gram.pat.struct]` (s129, #179): `Point { x, y: p, .. }`.
                 struct_pat_fields(p);
                 return Some(m.complete(p, SyntaxKind::StructPat));
-            } else {
-                p.error(
-                    codes::EXPECTED_TOKEN,
-                    p.here(),
-                    "a dotted path in a pattern must carry a payload, like `io.Error(e)`",
-                );
-                p.missing();
             }
+            // s157 (wolf-lang#162): a payload-LESS dotted path is a
+            // pattern too — `Color.Green =>`, the nullary variant and
+            // the payload-less row tag. The parser used to require the
+            // parens, so a closed set of names could not be matched at
+            // all and `[gram.pat]`'s exhaustiveness had nothing to be
+            // exhaustive over; arity is the checker's question, and it
+            // already asks it (a payload-carrying variant written bare
+            // is E0808, naming the payload it wants).
             Some(m.complete(p, SyntaxKind::PathPat))
         }
         TokenKind::Ident => {

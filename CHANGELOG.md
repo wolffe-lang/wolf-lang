@@ -75,6 +75,15 @@ THE PAPERCUTS III — the language's ten, each a witness plus a fix.
   a reader hunting a delimiter bug. `--explain E0102` says it too.
   Witnesses `corpus/grammar/str_dollar_brace.lu` (the refusal) and
   `corpus/strings/dollar_brace_escape.lu` (the spelling that works).
+- **grammar** (#162's last row): a bare dotted path is a pattern —
+  `[gram.pat.nullary]`. `Color.Green => …` and a payload-less row tag
+  `none => …` parse; the parser required the parens, so a `match` over
+  a closed set of names could not be spelled at all and exhaustiveness
+  had nothing to be exhaustive over. Arity stays the checker's
+  question (`Shape.Rgb =>` on a three-value variant is E0808; a
+  missing arm is E0801 naming it). Witness
+  `corpus/grammar/match_nullary_variant.lu`, both compiler tiers —
+  lupin refuses it at the old rule and takes the clause as its mirror.
 
 ## 0.2.12 — 2026-09-11
 
