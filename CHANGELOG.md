@@ -3,11 +3,10 @@
 ## 0.2.13 — 2026-09-12
 
 THE LITERALS AND THE PAPERCUTS III. 0.2.13 is three surface additions
-the maintainer ruled on in one day and ten filed defects, and it is
-the first cut since the pairing began where **only the compiler
-moved**: no lupin release happened between v0.2.12 and this one, so
-the stamp stands where r17 left it and every count that moved is the
-compiler's, measured rather than argued.
+the maintainer ruled on in one day and ten filed defects, and the
+pairing moves with it to **lupin 0.1.35**, cut the same night. Every
+number below was predicted before it was measured, and where the
+prediction was wrong the entry says which way.
 
     let cents = [340, 275, 100]        // a list literal
     fn width(r: range[int]) -> int { r.end - r.start }
@@ -40,108 +39,123 @@ and no user-facing string carries a sprint, campaign or X id any more
 — 70 strings across 92 sites, with `cargo xtask print-gate` holding
 the line. No runtime symbol moved (`RT_SYMBOLS` 143).
 
-The pairing **stands** at **lupin 0.1.34** (`b83049a`, pin `c9237c1`
-— the v0.2.11 tag). is47, the interpreter's answer to these clauses,
-is cut on its branch and not yet tagged, so `crates/wolf_driver/PAIRING`
-is the one release file this cut does not touch — the first time in
-the ritual's life that it needed no edit. The interpreter still
-declares v0.2.11 while the compiler names 0.1.34, so **the gap widens
-to two releases, still on the compiler's side only**: v0.2.12 and
-v0.2.13 both go unanswered. The ledger names the price exactly —
-fifteen Verdict rows opened, every one a file spelling a clause lupin
-has not shipped, and every one of them closes at the interpreter's
-next tag.
+The pairing takes **lupin 0.1.35** (`4f6cb2e`, pin `a7f517e` — the
+v0.2.12 tag). After this cut the interpreter declares v0.2.12 and the
+compiler names 0.1.35: **the gap is one release, on the compiler's
+side only**, both halves named at tags for the second cut running. The
+bump is small and exactly measured — **one** ledger count per tier —
+and the fifteen Verdict rows s158's new surface opened stay open,
+because 0.1.35 mirrors v0.2.12 and has not met those clauses.
 
-### The pairing stands at lupin 0.1.34 (#87 ritual, #281 control)
+### The pairing takes lupin 0.1.35 (#87 ritual, #281 control)
 
-wolf is differentially tested against **lupin 0.1.34** (`b83049a`),
-which declares `c9237c1` — the v0.2.11 tag — as its conformance pin.
-PAIRING already named it at r17's cut and no lupin release has
-happened since, so the stamp does not move and the control is the
-same binary on both arms: 0.1.34 -> 0.1.34. That is not a degenerate
-run, it is the point of #281 — it is what licenses every number below
-being attributed to the compiler.
+wolf is now differentially tested against **lupin 0.1.35**
+(`4f6cb2e`), which declares `a7f517e` — the v0.2.12 tag — as its
+conformance pin. PAIRING named 0.1.34 (pin `c9237c1`, the v0.2.11
+tag), so this stamp moves 0.1.34 -> 0.1.35, one release. The darwin
+release archive was verified by sha256 against the release asset
+digest before it was used.
 
-**Predicted before the run** (scratch `r18-prediction.txt`, written
-before any differ ran): the control moves **zero** ledger counts and
-**zero** files below the ledger on both tiers, because B and the
-control are the same binary. **Measured: exactly that** — `THE
-INTERPRETER BUMP MOVED 0 LEDGER COUNT(S)`, zero below the ledger, and
-the differ printed no cell line at all, on both tiers. Over the full
-608-file corpus (573 entries), both tiers, against
-`target/release/wolf` built by `cargo xtask dist` at `c1e62fa`, with
-the control against the 0.1.34 release archive on the same tree.
-
-Since the control is flat, the release-over-release table below is the
-COMPILER's own movement — v0.2.12's ledger against this one, 580 files
-and 545 entries grown to 608 and 573:
+**Predicted before the archive was even fetched** (scratch
+`r18-prediction-0135.txt`), three calls: that the control arm would
+reproduce this tree's 0.1.34 ledger exactly; that the fifteen Verdict
+rows would **not** close; and that the bump would move nought to three
+counts, most likely one or two, with `interp_spec_on_union.lu` named
+as the likely mover. Over the full 608-file corpus (573 entries), both
+tiers, against `target/release/wolf` built by `cargo xtask dist` at
+`219a483`, with the control against the 0.1.34 release archive on the
+same tree:
 
                     checked                     native
-    agreements      315 -> 320  (+5)            342 -> 349  (+7)
-    completeness    143 -> 149  (+6)            143 -> 149  (+6)
+    agreements      320 -> 320   (0)            349 -> 349   (0)
+    completeness    149 -> 149   (0)            149 -> 149   (0)
     soundness         0 ->   0   (0)              0 ->   0   (0)
-    unsupported     114 -> 116  (+2)             87 ->  87   (0)
-    hard              8 ->  23 (+15)              8 ->  23 (+15)
-    coverage A      318 -> 338 (+20)            347 -> 369 (+22)
-    coverage B      412 -> 420  (+8)            412 -> 420  (+8)
-    coverage BOTH   300 -> 305  (+5)            327 -> 334  (+7)
+    unsupported     116 -> 115  (-1)             87 ->  86  (-1)
+    hard             23 ->  23   (0)             23 ->  23   (0)
+    coverage A      338 -> 338   (0)            369 -> 369   (0)
+    coverage B      420 -> 420   (0)            420 -> 420   (0)
+    coverage BOTH   305 -> 305   (0)            334 -> 334   (0)
 
-**The prediction's miss is worth its sentence.** The control half was
-exact; the absolute half was not. Predicted `hard` 8 per tier and
-`unsupported` 132 checked / 105 native; measured 23 and 116 / 87. The
-whole error is one wrong assumption, and it is the same assumption in
-sixteen places: s158's new surface was predicted to land in the
-CONSERVATISM ledger, lupin answering `unsupported`. It does not —
-lupin 0.1.34 answers a hard refusal, `E0201` at the parse rung for a
-leading `[` and for an `error` item, `E0301` for the unresolved type
-name `range`. A refusal by code is a Verdict divergence, not a
-conservatism note, so the files moved bucket rather than tier. Every
-one is named below.
+    corpus/typecheck/interp_spec_on_union.lu   unsupported+Completeness -> Completeness   (#323)
 
-**What stands at 0.1.34.** `checked 23 = 8 Diag + 15 Verdict`,
-`native 23 = 8 Diag + 15 Verdict` — the same fifteen files on both
-tiers. The eight Diag rows are v0.2.12's eight, unchanged and still
-warning parity (lupin emits no warnings): `binder_capitalized`,
-`discarded_result`, `else_arithmetic` (W0318), `float_zero_minus`,
-`region_never_allocates`, `byte_view_escape` and
+    below the ledger — none.
+
+**The control reproduced the earlier ledger byte for byte**, coverage
+included. That matters more than it looks: this lane had already
+measured the same corpus against 0.1.34 on the same tree before 0.1.35
+existed, so the control arm had an independently recorded baseline to
+agree with instead of being taken on faith, and it agreed in all
+sixteen cells. wolf-interp's `FILED_DIVERGENCES` going 4 -> 2 in this
+very release could not reach that arm, and the entry says why rather
+than hoping: the list lives in lupin's own differential harness, where
+it compares lupin against vendored counterparty records, and is never
+consulted when lupin EXECUTES a `.lu` file — which is all the
+wolf-side differ asks of it. Independently, neither retiring file has
+a row in either ledger: `wordcount.lu` is `unsupported` on the
+compiler at resolve and `grammar/structlit_paren.lu` is an agreement,
+so no behaviour change there could have moved a count here.
+
+**The one count.** `typecheck/interp_spec_on_union.lu` leaves the
+unsupported tally on both tiers: 0.1.35 answers `fail(E0413)` at a
+format spec on a `!T` hole (wolf-lang#323's mirror) where 0.1.34
+declined, so the file is now a plain completeness note with both sides
+naming the same code. That is the whole interpreter delta of this
+release.
+
+**The fifteen Verdict rows do not close, and that was predictable from
+0.1.35's own pin.** is47 predicted they would close on the bump; they
+did not, and nothing measured here is a surprise once the pin is read.
+0.1.35 declares `a7f517e`, which **predates** s157 and s158, and the
+whole of 0.1.34..0.1.35 is `then` joining the contextual table (#100),
+a free-name walk (#45), the declared-scalar check learning `char`
+(#61), two refusal texts (#158), #323's format spec, #325's
+bare-receiver write lint, two filed-divergence retirements and a
+re-vendor. Nothing in it implements list literals, `range[T]` as a
+type, or `error` set aliases. So all fifteen stand, the same fifteen
+on both tiers, and they close at the interpreter release that takes a
+pin at or past this one.
+
+**The miss.** Three to eight files were predicted to move BELOW the
+ledger; **none** did. #325's bare-receiver lint changes what lupin
+DIAGNOSES on `typecheck/receiver_bare_mut.lu` and
+`receiver_bare_mut_param.lu` without changing the verdict the differ
+reads, and a lint that does not alter a verdict is invisible to a
+harness that compares verdicts. The prediction confused a diagnostic
+change for an observable one.
+
+**What stands at 0.1.35.** `checked 23 = 8 Diag + 15 Verdict`,
+`native 23 = 8 Diag + 15 Verdict`. The eight Diag rows are v0.2.12's
+eight, unchanged and still warning parity (lupin emits no warnings):
+`binder_capitalized`, `discarded_result`, `else_arithmetic` (W0318),
+`float_zero_minus`, `region_never_allocates`, `byte_view_escape` and
 `unit_tail_value_discard`, plus `safety_comment_missing` on checked
 and `unit_context_discard` on native. Zero SOUNDNESS on both tiers, a
-second cut running. The fifteen Verdict rows are all new and all one
-thing — a clause this release shipped and the interpreter has not:
-
-    corpus/grammar/list_lit_arg.lu            Exit(0) vs Fail(E0201)
-    corpus/grammar/list_lit_empty.lu          Exit(0) vs Fail(E0201)
-    corpus/grammar/list_lit_index.lu          Exit(0) vs Fail(E0201)
-    corpus/grammar/list_lit_let.lu            Exit(0) vs Fail(E0201)
-    corpus/grammar/list_lit_multiline.lu      Exit(0) vs Fail(E0201)
-    corpus/grammar/list_lit_nested.lu         Exit(0) vs Fail(E0201)
-    corpus/grammar/range_type_char.lu         Exit(0) vs Fail(E0301)
-    corpus/grammar/range_type_inclusive.lu    Exit(0) vs Fail(E0301)
-    corpus/grammar/range_type_param.lu        Exit(0) vs Fail(E0301)
-    corpus/grammar/range_type_return.lu       Exit(0) vs Fail(E0301)
-    corpus/grammar/range_type_overflow.lu     Trap(overflow) vs Fail(E0301)
-    corpus/rows/error_alias_row.lu            Exit(0) vs Fail(E0201)
-    corpus/rows/error_alias_transparent.lu    Exit(0) vs Fail(E0201)
-    corpus/rows/error_alias_union.lu          Exit(0) vs Fail(E0201)
-    corpus/grammar/match_nullary_variant.lu   Exit(0) vs Fail(E0201)
-
-Fourteen are s158's; the fifteenth is s157's `[gram.pat.nullary]` row,
-which that sprint already filed as the pair's named divergence.
+second cut running. The fifteen Verdict rows are the six
+`grammar/list_lit_*`, the five `grammar/range_type_*`, the three
+`rows/error_alias_*` and `grammar/match_nullary_variant.lu` — fourteen
+of s158's clauses and one of s157's `[gram.pat.nullary]` row.
 `range_type_overflow.lu` is the one with two stories: wolf answers
 `trap(overflow)` where `0..=int.MAX` normalizes past the end, which is
 s158's own defect fix, and lupin never reaches the question because
 the type name does not resolve.
 
-**One predicted refusal that is not one.** s158 predicted
-`corpus/rows/error_alias_ident.lu` would refuse on 0.1.34 and it does
-not — `error` is contextual, so lupin parses the program and prints
-`3\n4\n`, and the file is an agreement here. It was re-measured for
-this entry rather than carried over, which is the whole reason the
-ritual re-runs the differ instead of quoting the last lane.
+**Two rows that are nobody's defect.** `rows/error_alias_ident.lu` is
+an agreement: s158 predicted it would refuse and it does not, because
+`error` is contextual, so lupin parses the program and prints `3\n4\n`
+— re-measured here rather than carried from the sprint that guessed
+wrong. And DIV-2026-019, `resolve/broken_sibling/entry.lu`, stays a
+completeness note where the corpus pins `fail(E0202)` and lupin stops
+at the first bad token with `fail(E0201)`: the spec assigns neither
+code to junk recovery, so it is a hole in the spec rather than a
+divergence either machine owns, and it is not written up as one.
 
-The CI sibling step needed zero edits for the seventh cut in a row —
-this time trivially, since it reads the version off PAIRING and
-PAIRING did not move.
+Read against v0.2.12's ledger rather than against the control, this
+cut reads `315 -> 320` agreements, `143 -> 149` completeness, `114 ->
+115` unsupported and `8 -> 23` hard on the checked tier. Every one of
+those moves is the COMPILER's except the single interpreter count
+named above — which is precisely what the flat control licenses anyone
+to say. The CI sibling step needed zero edits, the seventh re-stamp in
+a row.
 
 ### The papercuts III (s157 — #311, #164, #313, #153, #60, #285, #44, #134, #162, #39, #157)
 
