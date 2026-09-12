@@ -33,6 +33,12 @@ THE PAPERCUTS III — the language's ten, each a witness plus a fix.
   exercises 16-7 and 16-8 were this, not a missing `copy`. Witness
   `corpus/memory/list_elem_copy_loop.lu`; the move direction is
   untouched.
+- **conc** (#153's compiler row): `w.link()` compiles. The one-arg
+  spelling is `[conc.proc.link.pair]`'s own words — "`w.link()` is
+  `w.link(<the calling task's proc>)`" — and the runtime has always
+  taken it (partner 0, resolved to the current proc or the root
+  domain); only sema refused it, `E0402`. Witness
+  `corpus/conc/proc_link_root.lu`.
 
 ## 0.2.12 — 2026-09-11
 

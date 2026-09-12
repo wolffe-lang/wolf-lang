@@ -1,0 +1,32 @@
+//! check: run(exit=0, stdout="linked-to-root")
+//! phase: run
+//! conforms: conc.proc.link.pair, conc.proc.root
+//!
+//! s157 (wolf-lang#153's compiler row) — the ONE-ARG spelling.
+//! `[conc.proc.link.pair]`: "`w.link()` is `w.link(<the calling
+//! task's proc>)`", and `[conc.proc.root]` reads that for `main`:
+//! the root supervisor's domain is the process, so `w.link()` called
+//! from `main` couples `w` to it. `wolf_rt::task::proc::link` has
+//! always taken the form (partner id 0, resolved to `current_proc`
+//! or `ROOT_DOMAIN`) and its doc-comment named it; lupin ran it; only
+//! sema refused, `E0402: link takes 1 argument, but this call passes
+//! 0`. A partner that exits NORMALLY never fires the link, so the
+//! root survives and the monitor reads `normal` — the quiet half of
+//! the pair `proc_link.lu` pins the loud half of.
+
+fn quiet() -> !int {
+    7
+}
+
+fn main() -> !int {
+    let w = spawn proc quiet()
+    w.link()
+    let m = w.monitor()
+    select {
+        exit(reason) from m => {
+            if reason.is_normal() { print_raw("linked-to-root") } else { print_raw("wrong") }
+        },
+        timeout(1.s) => { print_raw("timeout") },
+    }
+    0
+}

@@ -6506,10 +6506,22 @@ impl<'a> Checker<'a> {
                 let u = self.lo.table.unit();
                 (vec![p("self", recv_ty)], u)
             }
+            // Two spellings, one clause: `a.link(b)` names the
+            // partner, and `w.link()` is `w.link(<the calling task's
+            // proc>)` — `[conc.proc.link.pair]`'s own words, which
+            // `[conc.proc.root]` then reads for `main` (the root
+            // domain). `wolf_rt::task::proc::link` has always taken
+            // the one-arg form (partner id 0); sema learns it here
+            // (#153, the book's ch15 row).
             (TyKind::Proc, "link") => {
                 let u = self.lo.table.unit();
-                let other = self.lo.table.intern(TyKind::Proc);
-                (vec![p("self", recv_ty), p("other", other)], u)
+                let n = args.into_iter().flat_map(|l| l.args()).count();
+                if n == 0 {
+                    (vec![p("self", recv_ty)], u)
+                } else {
+                    let other = self.lo.table.intern(TyKind::Proc);
+                    (vec![p("self", recv_ty), p("other", other)], u)
+                }
             }
             // `[conc.proc.exit]`'s closed set, observed as class
             // predicates on the reason value (D30: values, never

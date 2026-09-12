@@ -6195,17 +6195,24 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(Flow::Val(None))
             }
             "link" => {
-                let Some(arg) = d
+                // `w.link()` is `w.link(<the calling task's proc>)`
+                // ([conc.proc.link.pair]); the runtime spells that
+                // partner 0 and resolves it to `current_proc` or the
+                // root domain (#153).
+                let arg = d
                     .args()
                     .into_iter()
                     .flat_map(|l| l.args())
-                    .find_map(Arg::value)
-                else {
-                    return Err(refuse("a link without a partner", e.span));
-                };
-                let other = flow_val!(self.lower_expr(arg));
-                let Some(other) = other else {
-                    return Err(refuse("a link without a partner value", arg.span));
+                    .find_map(Arg::value);
+                let other = match arg {
+                    Some(arg) => {
+                        let v = flow_val!(self.lower_expr(arg));
+                        let Some(v) = v else {
+                            return Err(refuse("a link without a partner value", arg.span));
+                        };
+                        v
+                    }
+                    None => self.b.iconst(types::I64, 0),
                 };
                 self.rt_call("__wolf_rt_proc_link", &[id, other], None);
                 Ok(Flow::Val(None))
