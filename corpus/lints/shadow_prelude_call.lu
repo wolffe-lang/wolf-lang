@@ -1,0 +1,29 @@
+//! check: run(exit=0, stdout="shadowed\n")
+//! phase: run
+//! conforms: conf.resolve.ambient, diag.sev.warn
+//! warns: W0304
+//!
+//! s157 (wolf-lang#44, wolf-std F-0047) — `[conf.resolve.ambient]` at
+//! a CALL site. `shadow_prelude.lu` pins the lint; this pins the
+//! semantics the lint is advisory about, on the ambient name that
+//! found the bug. Until this pin the compiler answered two different
+//! questions about the same name: `resolve_name` took the declaration
+//! (that is what W0304 is warning about), while the call path
+//! re-derived dispatch from the spelled name and typed `read_line()`
+//! against the AMBIENT signature — `str ! {eof, io, utf8}` — so a
+//! shadowing declaration was both warned about and ignored, on both
+//! compiler tiers. lupin's half of F-0047 was the mirror image: it
+//! resolved to the ambient `read_line` and recursed forever. The
+//! declaration wins now, and the three lanes print one line.
+//!
+//! `assert` stays unshadowable — `[conf.trap.assert]`'s carve-out is
+//! the only one, and it is a primitive, not library surface.
+
+fn read_line() -> str {
+    "shadowed"
+}
+
+fn main() -> !int {
+    print(read_line())
+    0
+}

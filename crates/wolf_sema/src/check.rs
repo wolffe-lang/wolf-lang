@@ -6898,6 +6898,30 @@ impl<'a> Checker<'a> {
             if let Some(t) = t {
                 let name = self.text(t.span);
                 if self.lookup_local(&name).is_none() {
+                    // The comptime intrinsics allowlist (D29/D33).
+                    // These come FIRST and are the only ambient names
+                    // a declaration cannot shadow: `[conf.trap.assert]`
+                    // — "it is not a library function and is never
+                    // shadowed by one".
+                    if let Some(i) = crate::ctfe::intrinsics::intrinsic(&name) {
+                        return self.call_intrinsic(&name, i, e, d.args());
+                    }
+                    // Everything else ambient loses to a declaration
+                    // (`[conf.resolve.ambient]`, s157/wolf-lang#44):
+                    // an item import or a module-local item is what
+                    // the bare name means, and a call site reads the
+                    // name the same way every other reference does.
+                    // This order is the resolver's own
+                    // (`resolve::Resolver::resolve_name`); until this
+                    // pin the call path re-derived dispatch by string
+                    // match and typed a shadowed `read_line()` against
+                    // the AMBIENT signature while every non-call
+                    // reference to the same name resolved locally —
+                    // the silent-divergence class F-0047 named, inside
+                    // one implementation.
+                    if let Some((module, item)) = self.named_fn_target(&name) {
+                        return self.call_named(&item, module, callee.span, e, d.args());
+                    }
                     // print/print_raw builtin signature; the stderr
                     // writers type identically (s38 io v0).
                     if matches!(
@@ -6916,16 +6940,9 @@ impl<'a> Checker<'a> {
                     {
                         return self.call_host_stub(&name, e, d.args());
                     }
-                    // The comptime intrinsics allowlist (D29/D33).
-                    if let Some(i) = crate::ctfe::intrinsics::intrinsic(&name) {
-                        return self.call_intrinsic(&name, i, e, d.args());
-                    }
                     // `Mutex(v)` — the sync-cell ctor (spec 03, D14).
                     if name == "Mutex" {
                         return self.call_mutex_ctor(e, d.args());
-                    }
-                    if let Some((module, item)) = self.named_fn_target(&name) {
-                        return self.call_named(&item, module, callee.span, e, d.args());
                     }
                     if self.deferred_tag(callee, None).is_some() {
                         return Err(NotYet {

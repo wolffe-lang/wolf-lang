@@ -56,6 +56,17 @@ THE PAPERCUTS III — the language's ten, each a witness plus a fix.
   nightly's budget-300 blast-radius case
   (`closure_return.lu [replace \`{\` at 1183 with \`fn\`]`, six cascade
   against the bound of five) is five, and the bound does not move.
+- **resolve** (#44, wolf-std F-0047): **a declaration wins its own
+  name**, at a call site as everywhere else. `spec/05` §6's new
+  `[conf.resolve.ambient]` writes the order down — lexical binding,
+  file imports, module items, then the ambient prelude, with
+  `[conf.trap.assert]`'s intrinsics the one carve-out. The compiler
+  had been answering two different questions about one name: every
+  non-call reference took the declaration (which is what W0304 warns
+  about), while the call path re-derived dispatch from the spelled
+  name and typed a shadowing `read_line()` against the AMBIENT
+  signature, on both tiers. W0304 already names the shadow. Witness
+  `corpus/lints/shadow_prelude_call.lu`, three lanes.
 
 ## 0.2.12 — 2026-09-11
 

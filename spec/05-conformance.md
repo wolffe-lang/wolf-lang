@@ -323,3 +323,28 @@ exhausted` arrived — an OOM where an honest refusal was owed.)
   that they are not. Witnesses: `corpus/strings/bytes_view_walk.lu`
   and the driver's `checked_budget` test, which asserts the peak
   resident set of the reduction as a subprocess.)
+
+## §6 Bare-name resolution `[conf.resolve]`
+
+(Appended 2026-09-11 by s157 — wolf-lang#44, wolf-std F-0047. A std
+module defining a fn named after an ambient one behaved differently
+per implementation: the compiler's non-call references took the
+module-local item, lupin took the ambient one and `read_line`
+recursed forever. Silent divergence, the class `[conf]` exists to
+close — and the compiler diverged from ITSELF, because its call path
+re-derived dispatch from the spelled name instead of asking the
+resolver.)
+
+- `[conf.resolve.ambient]` **A declaration wins its own name.** A bare
+  name in a call position resolves in exactly the order every other
+  bare-name reference resolves in: the innermost lexical binding, then
+  the file's imports, then the module's own items, and only then the
+  ambient prelude. A module that declares `fn read_line()` calls its
+  own `read_line` — from any file of that module, at any tier, with
+  the ambient name unreachable from there by that spelling. The one
+  exception is `[conf.trap.assert]`'s: the comptime intrinsics
+  (`assert` and the `[D33]` allowlist) are primitives, not library
+  surface, and a declaration cannot shadow them. Shadowing an ambient
+  name is a WARNING and not an error (W0304 names the declaration and
+  the name it covers), because the program is unambiguous — a reader
+  is what is at risk, not the semantics.

@@ -7007,7 +7007,17 @@ impl<'t> Machine<'t> {
         }
         // Builtins without a signature (`print`, `print_raw`,
         // `assert`).
-        let callee_name = d.callee().map(|c| self.text(c.span)).unwrap_or_default();
+        //
+        // s157 (#44): a DECLARED item wins the bare name, so this
+        // table is read only where sema recorded no call surface —
+        // exactly where the name really is ambient
+        // (`[conf.resolve.ambient]`). The native tier reads it the
+        // same way.
+        let callee_name = if cs.is_some() {
+            String::new()
+        } else {
+            d.callee().map(|c| self.text(c.span)).unwrap_or_default()
+        };
         match callee_name.as_str() {
             "print" | "print_raw" | "eprint" | "eprint_raw" => {
                 let mut out = String::new();

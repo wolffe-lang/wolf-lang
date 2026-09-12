@@ -8368,7 +8368,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
         let cs: Option<&CallSig> = self.calls.get(&e.span).copied();
         // Builtins without a signature: assert / print.
-        let callee_text = d.callee().map(|c| self.text(c.span)).unwrap_or_default();
+        //
+        // s157 (#44): a DECLARED item wins the bare name, so the
+        // builtin name table below is read only where sema recorded
+        // no call surface — that is exactly where the name really is
+        // ambient (`[conf.resolve.ambient]`). A module that declares
+        // `fn read_line()` calls its own, on every lane.
+        let callee_text = if cs.is_some() {
+            String::new()
+        } else {
+            d.callee().map(|c| self.text(c.span)).unwrap_or_default()
+        };
         // The s38 io/fs builtin tier, natively (s40): rows ride the
         // s29 eu shape, text results materialize through the ambient
         // region (`wolf_rt::fs`).
