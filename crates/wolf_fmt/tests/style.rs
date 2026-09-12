@@ -649,3 +649,51 @@ fn then_is_an_identifier_everywhere_else() {
     let src = "fn f(then: bool, a: Ordering, b: Ordering) -> int {\n    if then { 1 } else if a.then(b) == a then 2 else 3\n}\n";
     check(src, src);
 }
+
+// --------------------------------------------------- [gram.fmt.list] ----
+
+/// s158 (`[gram.fmt.list]`, wolf-lang#154): a list literal breaks like
+/// an argument list — inline while it fits, one space after each comma,
+/// none inside the brackets, no trailing comma; one element per line
+/// with a trailing comma when it does not (`[gram.fmt.commas]`). A
+/// one-element list is `[1]`, never `[1,]`: the tuple's one-element
+/// rule is the tuple's alone, where the comma carries meaning.
+#[test]
+fn list_literals_break_like_argument_lists() {
+    check(
+        "fn f() -> int {\n    let xs = [ 1,2,3 ]\n    let e: List[int] = [  ]\n    let one = [ 7 ]\n    let t = [1, 2, 3,]\n    xs[0]\n}\n",
+        "fn f() -> int {\n    let xs = [1, 2, 3]\n    let e: List[int] = []\n    let one = [7]\n    let t = [1, 2, 3]\n    xs[0]\n}\n",
+    );
+    // Past the width: one per line, trailing comma, and a fixed point.
+    check(
+        "fn f() -> int {\n    let wide = [\"an espresso machine with a heat exchanger\", \"a refrigerated pastry case\", \"a set of replacement grinder burrs\"]\n    wide.len\n}\n",
+        "fn f() -> int {\n    let wide = [\n        \"an espresso machine with a heat exchanger\",\n        \"a refrigerated pastry case\",\n        \"a set of replacement grinder burrs\",\n    ]\n    wide.len\n}\n",
+    );
+    // The literal is a primary: no parentheses are added around it, and
+    // a `[…]` after it is the ordinary postfix ([gram.amb.brackets]).
+    check(
+        "fn f() -> int {\n    [10, 20, 30][1]\n}\n",
+        "fn f() -> int {\n    [10, 20, 30][1]\n}\n",
+    );
+}
+
+/// s158 (`[gram.item.error]`): the error-set alias is a header-only
+/// declaration — the row spaces as a row, and the formatter keeps
+/// whichever of `! IoErrors` / `! {IoErrors}` the author wrote (they
+/// are one type, and relaying either would rewrite a line that already
+/// says what it means).
+#[test]
+fn error_set_aliases_format_as_declarations() {
+    check(
+        "error IoErrors    =    {none,parse,io}\n",
+        "error IoErrors = {none, parse, io}\n",
+    );
+    check(
+        "fn f() -> int ! IoErrors {\n    0\n}\n",
+        "fn f() -> int ! IoErrors {\n    0\n}\n",
+    );
+    check(
+        "fn f() -> int ! {IoErrors} {\n    0\n}\n",
+        "fn f() -> int ! {IoErrors} {\n    0\n}\n",
+    );
+}

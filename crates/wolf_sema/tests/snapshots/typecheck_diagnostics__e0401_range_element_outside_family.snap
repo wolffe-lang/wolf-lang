@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0401]: `range[f64]` is not a range type
+ --> mem:///main.lu:1:18
+  |
+1 | fn span(r: range[f64]) -> int {
+  |                  ^^^ only `int` and `char` range
+  |
+  = note: a range is the closed builtin family `a..b` iterates ([mem.iter.range]), so its element
+    type is one of the two the language steps by one: `range[int]` or `range[char]`
+    ([type.range.name]).

@@ -137,3 +137,45 @@ fn e0608_else_on_infallible() {
         "fn seven() -> int {\n    7\n}\n\nfn main() -> !int {\n    seven() else 0\n}\n",
     );
 }
+
+// ---------------------------------------------------------- E0610 -----
+
+/// s158 (`[type.err.alias.cycle]`, wolf-lang#36): a cycle among
+/// error-set aliases is E0610, reported ONCE, at the alias that closes
+/// it, with the loop named in full — the sibling of E0503 for trait
+/// aliases and E0513 for associated-type bindings.
+#[test]
+fn e0610_error_set_alias_cycle() {
+    insta::assert_snapshot!(
+        "e0610_error_alias_cycle",
+        render_rows(
+            "error A = {B, io}\nerror B = {A, parse}\n\nfn f() -> int ! A {\n    0\n}\n\nfn main() -> !int {\n    f() else 0\n}\n"
+        )
+    );
+}
+
+/// An alias entry names tags; it does not declare one, so it carries no
+/// payload of its own (E0601, `[type.err.alias.union]`).
+#[test]
+fn e0601_error_set_alias_entry_takes_no_payload() {
+    insta::assert_snapshot!(
+        "e0601_error_alias_payload",
+        render_rows(
+            "error IoErrors = {none, parse}\n\nfn f() -> int ! {IoErrors(int)} {\n    0\n}\n\nfn main() -> !int {\n    f() else 0\n}\n"
+        )
+    );
+}
+
+/// Transparency, both directions and to any terminating depth
+/// ([type.err.alias.transparent]): the aliased signature and the
+/// spelled-out row are the same type, `?` crosses between them with no
+/// conversion, and a chain of aliases flattens to its tags.
+#[test]
+fn error_set_aliases_are_transparent_both_ways() {
+    assert_eq!(
+        render_rows(
+            "error Io = {none, parse}\nerror Config = {Io, closed}\n\nfn spelled(ok: bool) -> int ! {none, parse, closed} {\n    if ok { 1 } else { return closed }\n}\n\nfn aliased(ok: bool) -> int ! Config {\n    spelled(ok)?\n}\n\nfn back(ok: bool) -> int ! {none, parse, closed} {\n    aliased(ok)?\n}\n\nfn main() -> !int {\n    back(true) else 0\n}\n"
+        ),
+        ""
+    );
+}

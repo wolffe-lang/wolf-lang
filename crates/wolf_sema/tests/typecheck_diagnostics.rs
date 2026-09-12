@@ -672,3 +672,82 @@ fn map_admitted_keys_stay_clean() {
         ""
     );
 }
+
+// ---------------------------------------------------------- E0419 -----
+
+/// s158 (`[type.list.lit.empty]`, wolf-lang#154): a bare `let xs = []`
+/// is the one position nothing supplies an element type to, and the
+/// message spells the annotation for THIS binding rather than leaving
+/// the reader to compose it.
+#[test]
+fn e0419_empty_list_literal_without_a_context() {
+    snap_one(
+        "e0419_empty_list_no_context",
+        "fn main() -> !int {\n    let cents = []\n    cents.len\n}\n",
+    );
+}
+
+/// The counter: every other position already supplies the element type
+/// ([type.list.lit.expect]), so `[]` is written bare in all of them —
+/// an annotated binding, a call argument, a declared return — and the
+/// elements say it by themselves when there are any.
+#[test]
+fn empty_list_literals_take_the_context_they_are_in() {
+    assert_eq!(
+        render_types(&[(
+            &[],
+            "main.lu",
+            "fn count(xs: List[str]) -> int {\n    xs.len\n}\n\nfn none_yet() -> List[int] {\n    []\n}\n\nfn main() -> !int {\n    let a: List[int] = []\n    let b = [1, 2, 3]\n    let c = [[1], [2, 3]]\n    a.len + b.len + c.len + count([]) + none_yet().len\n}\n",
+        )]),
+        ""
+    );
+}
+
+/// The first element fixes the type and the FIRST element that does not
+/// fit is the error site, with the first element as its "because" —
+/// never the whole literal and never the last element
+/// ([type.list.lit.elem]).
+#[test]
+fn e0401_list_element_mismatch_blames_the_first_miss() {
+    snap_one(
+        "e0401_list_element_mismatch",
+        "fn main() -> !int {\n    let xs = [1, \"two\", 3]\n    xs.len\n}\n",
+    );
+}
+
+// ----------------------------------------------------- range[T] -------
+
+/// s158 (`[type.range]`, wolf-lang#24): `range[int]` and `range[char]`
+/// are nameable in every type position, `start`/`end` read the
+/// endpoints, and a range passes, returns and iterates. `for` is
+/// unchanged — a header range still never materializes a value.
+#[test]
+fn range_is_a_nameable_type_with_start_and_end() {
+    assert_eq!(
+        render_types(&[(
+            &[],
+            "main.lu",
+            "fn width(r: range[int]) -> int {\n    r.end - r.start\n}\n\nfn window(n: int) -> range[int] {\n    0..n\n}\n\nfn last(r: range[char]) -> char {\n    r.end\n}\n\nfn main() -> !int {\n    var total = 0\n    for i in window(3) {\n        total = total + i\n    }\n    let c = last('a'..'d')\n    total + width(2..=7) + width(window(4))\n}\n",
+        )]),
+        ""
+    );
+}
+
+/// The family is closed at the two element types `..` steps by one
+/// ([type.range.name]), so `range[f64]` is E0401 at the argument, and a
+/// member a range does not carry is E0403 with the two it does.
+#[test]
+fn e0401_range_outside_the_closed_family() {
+    snap_one(
+        "e0401_range_element_outside_family",
+        "fn span(r: range[f64]) -> int {\n    0\n}\n\nfn main() -> !int {\n    0\n}\n",
+    );
+}
+
+#[test]
+fn e0403_range_has_only_start_and_end() {
+    snap_one(
+        "e0403_range_unknown_member",
+        "fn main() -> !int {\n    let r = 2..7\n    r.lo\n}\n",
+    );
+}

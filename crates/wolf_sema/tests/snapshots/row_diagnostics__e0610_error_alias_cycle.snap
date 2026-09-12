@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/row_diagnostics.rs
+expression: "render_rows(\"error A = {B, io}\\nerror B = {A, parse}\\n\\nfn f() -> int ! A {\\n    0\\n}\\n\\nfn main() -> !int {\\n    f() else 0\\n}\\n\")"
+---
+error[E0610]: the error-set alias `A` names itself
+ --> mem:///main.lu:2:12
+  |
+2 | error B = {A, parse}
+  |            ^ this alias expands to itself
+  |
+  = note: the loop is A -> B -> A — an alias is a spelling for a set of tags, so the set has to be
+    writable without it ([type.err.alias.cycle]). Name tags, or a shorter alias.

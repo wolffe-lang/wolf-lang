@@ -782,3 +782,72 @@ fn total_on_nasty_inputs() {
         let _ = util::parse(src); // util asserts verify + lossless
     }
 }
+
+// -------------------------------------------------------- error sets --
+
+/// s158 (`[gram.item.error]`, wolf-lang#36): `error N = {…}` is an
+/// `ErrorDecl` whose row is the ordinary `ErrorRow` child — the same
+/// node a `! {…}` tail builds, which is what lets composition reuse
+/// `[gram.type.row.flatten]` with no production of its own.
+#[test]
+fn error_set_alias_is_an_item_with_a_row() {
+    let src = "error IoErrors = {none, parse, io}\npub error ConfigErrors = {IoErrors, closed}\n";
+    let root = clean(src);
+    let decls: Vec<wolf_ast::ErrorDecl<'_>> =
+        root.nodes().filter_map(wolf_ast::ErrorDecl::cast).collect();
+    assert_eq!(decls.len(), 2);
+    assert_eq!(text(src, decls[0].name().expect("name").span), "IoErrors");
+    let tags: Vec<&str> = decls[0]
+        .row()
+        .expect("row")
+        .entries()
+        .filter_map(|e| e.path())
+        .map(|p| text(src, p.syntax().span))
+        .collect();
+    assert_eq!(tags, ["none", "parse", "io"]);
+    assert!(!decls[0].row().expect("row").is_open());
+    assert_eq!(
+        text(src, decls[1].name().expect("name").span),
+        "ConfigErrors"
+    );
+    assert!(decls[1].visibility().is_some());
+}
+
+/// `error` is CONTEXTUAL, not reserved (`[gram.inv.ctx]`): two tokens
+/// of lookahead decide, so a function, a binding, a field and a call
+/// named `error` all still parse to what they always did, and
+/// `[gram.inv.kw]`'s fifty are unchanged.
+#[test]
+fn error_is_contextual_not_reserved() {
+    let src = "type Report = struct {\n    error: int,\n}\n\nfn error(n: int) -> int {\n    n + 1\n}\n\nfn main() -> !int {\n    let error = 3\n    let r = Report { error: error }\n    r.error\n}\n";
+    let root = clean(src);
+    assert_eq!(root.nodes().filter_map(wolf_ast::ErrorDecl::cast).count(), 0);
+    let fns: Vec<&str> = root
+        .nodes()
+        .filter_map(FnDecl::cast)
+        .filter_map(|f| f.name())
+        .map(|t| text(src, t.span))
+        .collect();
+    assert_eq!(fns, ["error", "main"]);
+}
+
+/// The bare spelling `-> T ! IoErrors` builds the same one-entry
+/// `ErrorRow` `! {IoErrors}` does, brace-less — one shape for
+/// everything downstream (`[gram.item.error]`).
+#[test]
+fn a_bare_alias_name_after_the_bang_is_a_row() {
+    let src = "error Io = {none}\n\nfn f() -> int ! Io {\n    0\n}\n\nfn g(x: int ! Io) -> int {\n    x else 0\n}\n";
+    let root = clean(src);
+    let mut rows = 0;
+    fn walk(n: &wolf_ast::GreenNode, rows: &mut usize) {
+        if n.kind == SyntaxKind::ErrorRow {
+            *rows += 1;
+        }
+        for c in n.nodes() {
+            walk(c, rows);
+        }
+    }
+    walk(&root, &mut rows);
+    // one for the item, one for the return tail, one for the parameter
+    assert_eq!(rows, 3);
+}

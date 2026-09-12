@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/row_diagnostics.rs
+expression: "render_rows(\"error IoErrors = {none, parse}\\n\\nfn f() -> int ! {IoErrors(int)} {\\n    0\\n}\\n\\nfn main() -> !int {\\n    f() else 0\\n}\\n\")"
+---
+error[E0601]: the error-set alias `IoErrors` cannot carry a payload
+ --> mem:///main.lu:3:18
+  |
+3 | fn f() -> int ! {IoErrors(int)} {
+  |                  ^^^^^^^^ an alias entry names tags, it does not declare one
+  |
+  = note: an alias is a spelling for the tags it lists, and each of those already declares what it
+    carries ([type.err.alias]). Drop the payload.
