@@ -195,11 +195,15 @@ fn call_and_index_args_take_x1_mode_markers() {
 #[test]
 fn line_initial_bracket_never_attaches() {
     // [gram.lex.newline]: the inserted terminator after `a` breaks the
-    // climb; the `[` starts a broken statement, `a` stays clean.
+    // climb, so the `[` never reaches the postfix arm and `a` stays
+    // clean. Since s158 the statement it starts is a list literal
+    // ([gram.expr.list]) rather than a parse error — the BINDING is
+    // what this test pins, and it is unchanged: still no
+    // `BracketApply`, still a clean `let`.
     let parse = util::parse("fn f() { let s = a\n    [1]\n}\n");
     assert_eq!(
         parse.diagnostics.iter().map(|d| d.code).collect::<Vec<_>>(),
-        ["E0201"]
+        Vec::<wolf_diag::Code>::new()
     );
     let lets: Vec<_> = {
         let mut v = Vec::new();
@@ -208,6 +212,45 @@ fn line_initial_bracket_never_attaches() {
     };
     assert_eq!(count(lets[0], SyntaxKind::ErrorNode), 0, "let stays clean");
     assert_eq!(count(&parse.root, SyntaxKind::BracketApply), 0);
+    assert_eq!(count(&parse.root, SyntaxKind::ListLit), 1);
+    assert_eq!(count(lets[0], SyntaxKind::ListLit), 0, "not in the `let`");
+}
+
+#[test]
+fn list_literals_are_primary_and_indexing_is_postfix() {
+    // [gram.expr.list] / [gram.amb.brackets] (s158, wolf-lang#154):
+    // position settles the clash — a `[` opening an operand is a
+    // literal, a `[` continuing one is the postfix form.
+    let root = clean_body("let xs = [1, 2, 3]\n    xs[1]");
+    assert_eq!(count(&root, SyntaxKind::ListLit), 1);
+    assert_eq!(count(&root, SyntaxKind::BracketApply), 1);
+
+    // Both in one expression: the literal is the primary, the `[1]`
+    // the postfix on it.
+    let root = clean_body("[10, 20, 30][1]");
+    assert_eq!(count(&root, SyntaxKind::ListLit), 1);
+    assert_eq!(count(&root, SyntaxKind::BracketApply), 1);
+
+    // Empty, trailing comma, nesting, and an element that is itself a
+    // negative literal (no E0209 subscript hint — list_lit has its own
+    // element loop).
+    for src in [
+        "let xs: List[int] = []",
+        "let xs = [1, 2, 3,]",
+        "let g = [[1, 2], [3, 4]]",
+        "let xs = [-1, -2]",
+        "let xs = [f(1), g(2)]",
+    ] {
+        let root = clean_body(src);
+        assert!(count(&root, SyntaxKind::ListLit) >= 1, "{src}");
+    }
+
+    let root = clean_body("let xs = []");
+    let lit = first(&root, SyntaxKind::ListLit);
+    assert_eq!(wolf_ast::ListLit::cast(lit).expect("cast").elems().count(), 0);
+    let root = clean_body("let xs = [1, 2, 3]");
+    let lit = first(&root, SyntaxKind::ListLit);
+    assert_eq!(wolf_ast::ListLit::cast(lit).expect("cast").elems().count(), 3);
 }
 
 // ------------------------------------------------------------- ranges --
