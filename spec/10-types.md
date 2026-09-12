@@ -817,10 +817,13 @@ one type the compiler could build a value of and not name.)
   the subscript and nothing resolves anywhere else. That surface is
   stated once here and cited, not restated, by `[mem.list.slice]` and
   the `str` slice clauses. Outside a subscript, `let r = 1..` is
-  refused by name at the site rather than typed. (This is not new: the
-  reference implementation has refused range values outside `for`
-  headers since D25; the clause writes the boundary down and moves the
-  supported side of it into the language.)
+  refused by name at the site rather than typed — a conservatism
+  refusal, not a diagnostic, so it is pinned in the checker's own
+  tests and not in the corpus (which records verdicts, and there is no
+  verdict for "the language does not spell this"). (The refusal is not
+  new: the reference implementation has refused range values outside
+  `for` headers since D25; the clause writes the boundary down and
+  moves the supported side of it into the language.)
 - `[type.range.accessor]` **`start` and `end` read the endpoints**,
   as properties, spelled without parentheses the way `xs.len` is —
   `r.start` and `r.end` are `T`. **`end` is exclusive, always**:
