@@ -791,7 +791,11 @@ substrate.)
   `push` per element produces, and the same value a slice produces
   (`[mem.list.slice]`). The literal is sugar with no new lifetime, no
   new ownership rule and no static storage: `[1, 2, 3]` written twice
-  is two lists.
+  is two lists. **Not at comptime this edition**: a list literal inside
+  a `comptime fn` is refused by name on both tiers, because CTFE stays
+  scalar until the mutable-container model lands (BACKLOG B26, ruled
+  2026-09-11, wolf-lang#101) — the literal is sugar for a container,
+  and the container is the thing the evaluator does not have.
 
 ## §13 The range type `[type.range]`
 
