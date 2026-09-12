@@ -1517,10 +1517,10 @@ in the caller's region, aim the allocation at a longer-lived region
 explicitly (`let r = region()` … `in r { … }`), or widen the region
 block so it covers every use. Note that `copy` inside the block does
 not help — a copy is a fresh allocation in the *current* ambient
-region, which is still the dying one. `freeze` (making the whole
-region immortal and immutable) and `shared` (counted escape) are
-coming in later tiers for the cases that genuinely need to outlive
-the region. A `str` built inside the block — by `+`, `+=`, or an
+region, which is still the dying one. For a value that genuinely must
+outlive the region, `freeze` makes the whole region immortal and
+immutable and `shared` gives a counted escape — both are spellings
+this compiler takes today. A `str` built inside the block — by `+`, `+=`, or an
 interpolation with a hole — is such a value too: the two-word view
 copies out freely, but the bytes it points at were allocated in the
 region ([mem.region.escape]).
@@ -1748,7 +1748,7 @@ The `--checked` execution machine (the miri-lite UB checker) ran this
 program against the operational memory model and reached a state the
 spec's closed UB enumeration names: every finding cites its `[mem.ub]`
 row (P1-P6, L1, L2, T1), the raw-tier operation responsible, and the
-licensed optimization the D2 pairing attaches to that row — the
+licensed optimization the spec pairs with that row — the
 transformation compiled code is entitled to make, which is exactly why
 the unchecked behavior is undefined rather than merely wrong. The
 static tier accepts this program by design: raw pointers carry no

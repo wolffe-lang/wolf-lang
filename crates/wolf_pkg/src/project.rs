@@ -379,8 +379,9 @@ fn resolve_dep(
                     ),
                 )
                 .with_note(
-                    "v0 sources are `path:` and `git:` + `tag:` (X7: the entry form is \
-                     stable now, the service later — only the fetch transport changes)."
+                    "sources are `path:` and `git:` + `tag:` — the entry form is \
+                     stable, and a hosted service would change only the fetch \
+                     transport."
                         .to_string(),
                 ),
             );

@@ -3545,12 +3545,121 @@ fn print_gate() -> ExitCode {
             }
         }
     }
+    // s157 (wolf-lang#39): the second half of the same discipline —
+    // what the phases DO say carries no schedule vocabulary. The
+    // conservatism ledger's refusal names and the diagnostics beside
+    // them are read by people who have never heard of a sprint, and
+    // for years they closed with `(c06)` / `(s39 std sync)` /
+    // `deferred from s26`. The registry has its own gate for
+    // `--explain` prose; this one covers every other string a phase
+    // hands a reader. Spec clause anchors (`[mem.ub.defined]`) and
+    // D-numbered decisions are public vocabulary and stay.
+    for krate in gated.iter().chain(["wolf_driver", "wolf_pkg", "wolf_query"].iter()) {
+        let src = Path::new("crates").join(krate).join("src");
+        let mut files = Vec::new();
+        collect_rs_files(&src, &mut files);
+        for f in files {
+            let body = std::fs::read_to_string(&f).unwrap_or_default();
+            for (i, line) in body.lines().enumerate() {
+                let t = line.trim_start();
+                if t.starts_with("//") {
+                    continue;
+                }
+                for lit in string_literals(line) {
+                    // Prose, not a name: a reader-facing message is a
+                    // sentence. `"c00"` is a cluster's object name and
+                    // `"s54"` a panic key; neither is what this gate
+                    // is about.
+                    if !lit.contains(' ') {
+                        continue;
+                    }
+                    if let Some(id) = schedule_id(&lit) {
+                        eprintln!(
+                            "print-gate: {}:{}: reader-facing string names `{id}` — \
+                             a sprint or campaign id is not the reader's vocabulary",
+                            f.display(),
+                            i + 1
+                        );
+                        bad += 1;
+                    }
+                }
+            }
+        }
+    }
     if bad > 0 {
         ExitCode::FAILURE
     } else {
-        eprintln!("print-gate: compiler phases are print-free");
+        eprintln!("print-gate: compiler phases are print-free and schedule-free");
         ExitCode::SUCCESS
     }
+}
+
+/// Every double-quoted literal on one source line, roughly: enough to
+/// tell a message from the code around it, without a Rust parser.
+fn string_literals(line: &str) -> Vec<String> {
+    let b = line.as_bytes();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'"' {
+            // A raw string's delimiter is not a message we can read
+            // by this rule; skip the line's remainder.
+            let mut j = i + 1;
+            let mut lit = String::new();
+            while j < b.len() {
+                if b[j] == b'\\' {
+                    j += 2;
+                    continue;
+                }
+                if b[j] == b'"' {
+                    break;
+                }
+                lit.push(b[j] as char);
+                j += 1;
+            }
+            out.push(lit);
+            i = j + 1;
+        } else {
+            i += 1;
+        }
+    }
+    out
+}
+
+/// A schedule identifier standing alone in reader-facing prose:
+/// `s39`, `c06`, `is04`, `X7`. The marker is a lowercase `s`/`c`, the
+/// pair `is`, or an uppercase `X`, followed by digits and closed by a
+/// non-word byte. Paths and identifiers are excluded by the boundary
+/// test; the caller only offers literals that read as sentences, so a
+/// bare name like a cluster's `c00` never reaches here.
+fn schedule_id(text: &str) -> Option<String> {
+    let b = text.as_bytes();
+    for i in 0..b.len() {
+        let mark = if b[i..].starts_with(b"is") {
+            2
+        } else if b[i] == b's' || b[i] == b'c' || b[i] == b'X' {
+            1
+        } else {
+            continue;
+        };
+        let digits = &b[i + mark..];
+        let boundary_ok = i == 0 || !(b[i - 1].is_ascii_alphanumeric() || b[i - 1] == b'_');
+        let n = digits.iter().take_while(|d| d.is_ascii_digit()).count();
+        if !boundary_ok || n == 0 {
+            continue;
+        }
+        // `X` ids are one digit; `s`/`c`/`is` ids are two or three.
+        let want = if b[i] == b'X' { 1..=1 } else { 2..=3 };
+        if !want.contains(&n) {
+            continue;
+        }
+        let after = digits.get(n);
+        if after.is_some_and(|c| c.is_ascii_alphanumeric() || *c == b'_') {
+            continue;
+        }
+        return Some(text[i..i + mark + n].to_string());
+    }
+    None
 }
 
 fn collect_rs_files(dir: &Path, out: &mut Vec<PathBuf>) {

@@ -94,6 +94,21 @@ THE PAPERCUTS III — the language's ten, each a witness plus a fix.
   two `str` hovers stopped citing s120/s136/D58. Witness: `wolf run`
   on a `Pool` program printed "Pool/shared constructor lowering
   (runtime shapes, c06)" and prints "(runtime shapes)".
+- **wording** (#157's compiler rows): `--explain E1010` stops calling
+  `freeze` and `shared` "coming in later tiers" — both ship; E0708's
+  note says WHY an aggregate has no size yet instead of "not yet";
+  E1101 stops suggesting `par`, which no implementation has; E1401's
+  explain drops its internal decision id; `wolf add` no longer says
+  the registry "arrives at c15 (X7)"; `wolf add` reports
+  `capabilities: none` rather than `capabilities []`; and the
+  one-operand `when` refusal points its caret at the OPERAND LIST it
+  talks about instead of at the block's `{`. `wolf audit`'s capability
+  findings are the verb's data and go to stdout with the tree, so
+  piping keeps them — `add` and `update` keep theirs on stderr, where
+  the rest of those verbs' progress lives. `cargo xtask print-gate`
+  gained the ratchet: a reader-facing string in a phase, the driver,
+  the package manager or the query layer that names a sprint,
+  campaign or X id fails CI.
 
 ## 0.2.12 — 2026-09-11
 

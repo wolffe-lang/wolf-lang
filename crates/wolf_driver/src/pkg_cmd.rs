@@ -115,24 +115,40 @@ fn require_manifest(dir: &Path, cmd: &str) -> String {
 /// Print the capability deltas of a resolution against the recorded
 /// ledger (I13: acquisition is surfaced BEFORE the lockfile changes).
 /// Returns true when any capability was *acquired*.
-fn report_cap_deltas(project: &Project, lock: &Lock) -> bool {
+/// The capability deltas against the lock, reported.
+///
+/// `to_stdout` decides the stream, and the rule is which verb's DATA
+/// this is (s157, wolf-lang#157): under `wolf audit` the deltas ARE
+/// the answer — the whole reason to run the verb — so they go to
+/// stdout with the tree, and `wolf audit | tee report.txt` keeps the
+/// finding. Under `add`/`update` they are a side note beside the
+/// verb's real work, so they stay on stderr where the rest of that
+/// verb's progress lives.
+fn report_cap_deltas(project: &Project, lock: &Lock, to_stdout: bool) -> bool {
     let deltas = wolf_pkg::audit::diff_against_lock(project, lock);
     let mut acquired = false;
+    let say = |line: String| {
+        if to_stdout {
+            println!("{line}");
+        } else {
+            eprintln!("{line}");
+        }
+    };
     for d in &deltas {
         for c in &d.added {
-            eprintln!(
+            say(format!(
                 "wolf audit: `{}` ACQUIRES capability `{}` (was not in wolf.sum)",
                 d.alias,
                 c.as_str()
-            );
+            ));
             acquired = true;
         }
         for c in &d.removed {
-            eprintln!(
+            say(format!(
                 "wolf audit: `{}` drops capability `{}`",
                 d.alias,
                 c.as_str()
-            );
+            ));
         }
     }
     acquired
@@ -343,8 +359,8 @@ pub fn add(args: &[String]) {
         }
         (None, None, None) => {
             eprintln!(
-                "wolf add: `{name}` looks like a registry dependency, and the hosted \
-                 registry arrives at c15 (X7) — give a v0 source: --path DIR, or --git URL --tag TAG"
+                "wolf add: `{name}` looks like a registry dependency, and no hosted \
+                 registry exists — give a source: --path DIR, or --git URL --tag TAG"
             );
             std::process::exit(2);
         }
@@ -435,17 +451,24 @@ pub fn add(args: &[String]) {
         );
         std::process::exit(1);
     }
-    report_cap_deltas(&project, &old_lock);
+    report_cap_deltas(&project, &old_lock, false);
     verify_log_or_die(&project, "add");
     write_lock(&dir, &project, "add");
     let added = project.pkgs.iter().find(|p| p.alias == alias);
     match added {
         Some(p) => {
             let caps: Vec<&str> = p.caps.iter().map(|c| c.as_str()).collect();
+            // "capabilities: none" reads as a fact about the package;
+            // "capabilities []" reads as a rendering accident of an
+            // empty list (s157, wolf-lang#157).
             eprintln!(
-                "wolf add: {alias} {} — capabilities [{}]{}",
+                "wolf add: {alias} {} — capabilities: {}{}",
                 p.version,
-                caps.join(", "),
+                if caps.is_empty() {
+                    "none".to_string()
+                } else {
+                    caps.join(", ")
+                },
                 p.hash
                     .as_deref()
                     .map(|h| format!(", pinned {}", &h[..16.min(h.len())]))
@@ -512,7 +535,7 @@ pub fn update(args: &[String]) {
         offline: false,
     };
     let project = resolve_or_die(&dir, &opts, "update");
-    report_cap_deltas(&project, &old_lock);
+    report_cap_deltas(&project, &old_lock, false);
     // Hash movements, named.
     let new_lock = project.to_lock();
     for (alias, e) in &new_lock.entries {
@@ -569,7 +592,7 @@ pub fn audit(args: &[String]) {
     let project = resolve_or_die(&dir, &opts, "audit");
     print!("{}", wolf_pkg::audit::render_tree(&project));
     let acquired = match &lock {
-        Some(lock) => report_cap_deltas(&project, lock),
+        Some(lock) => report_cap_deltas(&project, lock, true),
         None => {
             eprintln!(
                 "wolf audit: no wolf.sum yet — nothing to diff against (run a verb that writes it)"

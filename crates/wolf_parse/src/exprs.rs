@@ -2073,9 +2073,16 @@ fn when_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
     let mut broken = false;
     if p.at_punct(Punct::LParen) {
         let opener = p.current_span();
+        // The arity refusal talks about the OPERAND LIST, so it points
+        // at the operand list — from `(` to `)` — and not at whatever
+        // token happens to follow it (s157, wolf-lang#157: the caret
+        // landed on the block's `{` while the message named operands;
+        // lupin has always spanned the list).
+        let mut list_span = opener;
         p.bump();
         loop {
             if p.at_punct(Punct::RParen) {
+                list_span = opener.join(p.current_span());
                 p.bump();
                 break;
             }
@@ -2123,7 +2130,7 @@ fn when_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
         if count < 2 && !broken {
             p.error(
                 codes::EXPECTED_TOKEN,
-                p.here(),
+                list_span,
                 "`when` requires at least two operands — it acquires its \
                  whole set at once, so name every sync object the body \
                  touches in one `when` list",

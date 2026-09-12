@@ -3381,7 +3381,8 @@ impl<'a> Checker<'a> {
                  one binding is the data race the memory model forbids. Three ways \
                  out: send results over a `channel` and let one owner mutate; \
                  guard truly shared state with a `Mutex` acquired in a `when` \
-                 block; or, for loop-shaped work, use `par` with a reduction.",
+                 block; or give each task its own copy and combine the results \
+                 after the scope joins.",
             ),
         );
     }
@@ -9291,7 +9292,7 @@ impl<'a> Checker<'a> {
                     .with_label(format!("write the mode here: `({kw} …)`"))
                     .with_secondary(decl_span, format!("`{method}` declares `{kw} self` here"))
                     .with_note(
-                        "the receiver mirrors argument modes (X1): exclusive or \
+                        "the receiver mirrors argument modes: exclusive or \
                          consuming access is spelled where the reader can see it.",
                     )
                     .with_suggestion(Suggestion::new(

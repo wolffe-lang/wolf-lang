@@ -395,7 +395,7 @@ fn fault_to_diag(f: &Fault, _budget: Budget, fix_at: Span) -> Diagnostic {
         )
         .with_label("checked arithmetic, comptime included")
         .with_note(
-            "checked arithmetic has one semantics everywhere (X3): what would trap \
+            "checked arithmetic has one semantics everywhere: what would trap \
              at runtime is an error at comptime — intended wraparound is spelled \
              `wrapping[T]`, never a mode.",
         ),
@@ -407,8 +407,9 @@ fn fault_to_diag(f: &Fault, _budget: Budget, fix_at: Span) -> Diagnostic {
         .with_label("unresolved until codegen")
         .with_note(
             "layout (sizes, offsets) is decided by the code generator, not the \
-             type checker; comptime can answer for fixed-width primitives today, \
-             but not yet for aggregates.",
+             type checker; comptime answers for fixed-width primitives, whose \
+             widths the type alone settles, and cannot answer for an aggregate \
+             until the layout that decides its offsets exists.",
         ),
         FaultKind::AssertFailed { msg } => {
             let message = match msg {

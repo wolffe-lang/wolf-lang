@@ -250,8 +250,17 @@ fn audit_tree_and_ci_gate_on_capability_acquisition() {
     .expect("upgrade util");
     let out = run_wolf(&dir, &["audit", "--ci", "--dir", "app"], &[]);
     assert_eq!(out.status.code(), Some(1), "stderr:\n{}", stderr(&out));
-    let err = stderr(&out);
-    assert!(err.contains("ACQUIRES capability `exec`"), "{err}");
+    // The finding is the verb's DATA, so it rides stdout with the
+    // tree and survives a pipe (s157, wolf-lang#157: it used to go to
+    // stderr, so `wolf audit | tee report.txt` dropped the one line
+    // the report was for).
+    let found = stdout(&out);
+    assert!(found.contains("ACQUIRES capability `exec`"), "{found}");
+    assert!(
+        !stderr(&out).contains("ACQUIRES"),
+        "the finding belongs on stdout only:\n{}",
+        stderr(&out)
+    );
     // The ledger did not move.
     let sum = std::fs::read_to_string(app.join("wolf.sum")).expect("ledger");
     assert!(sum.contains("util 0.2.0"), "{sum}");
