@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+THE PAPERCUTS III — the language's ten, each a witness plus a fix.
+
+- **sema** (#311): a call through an unannotated closure parameter
+  records its call surface. `let call1 = fn(f) f(1)` types `f`
+  against an inference variable; the call shapes and SOLVES that
+  variable, and the site now joins the resolved surface the way the
+  annotated spelling always did, so lowering stops refusing the
+  program by the generic name. Every recorded call zonks at the
+  body's finish, so a surface recorded against variables lands
+  solved. Witness `corpus/typecheck/closure_param_call.lu` — the
+  book's exercise 4-1 `compose` included.
+
 ## 0.2.12 — 2026-09-11
 
 THE PAPERCUTS. 0.2.12 is twenty filed defects, nineteen of them

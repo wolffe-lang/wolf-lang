@@ -805,6 +805,20 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
                         )
                     })
                     .collect();
+                // A call surface recorded while its parameter
+                // slots were still inference variables (the
+                // `TyKind::Var` callee arm) carries them unsolved:
+                // zonk every recorded call the way the expression
+                // and local tables are zonked (#311).
+                let calls_zonked = {
+                    let mut cs = c.calls;
+                    for (_, sig) in &mut cs {
+                        for p in &mut sig.params {
+                            p.ty = zonk(&mut c.lo.table, &c.vars, p.ty);
+                        }
+                    }
+                    cs
+                };
                 let task_captures = {
                     let mut tc = c.task_captures;
                     for (_, caps) in &mut tc {
@@ -827,7 +841,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
                     casts,
                     coercions: c.coercions,
                     matches: c.match_facts,
-                    calls: c.calls,
+                    calls: calls_zonked,
                     member_refs: c.member_refs,
                     task_captures,
                     unit_discards: c.unit_discards,
@@ -8262,7 +8276,7 @@ impl<'a> Checker<'a> {
                     params.push(p);
                 }
                 let ret = self.fresh(NumKind::Any, e.span);
-                let fnty = self.lo.table.intern(TyKind::Fn(params, ret));
+                let fnty = self.lo.table.intern(TyKind::Fn(params.clone(), ret));
                 if let Err(err) = unify(&mut self.lo.table, &mut self.vars, callee_ty, fnty) {
                     let exp = Expect {
                         ty: fnty,
@@ -8272,6 +8286,36 @@ impl<'a> Checker<'a> {
                     self.report_unify_err(callee.span, callee_ty, &exp, err);
                     return Ok(self.error_ty());
                 }
+                // The unify above SOLVED the callee: the site is a
+                // call through a fn value whose type this expression
+                // just shaped, so it belongs to the resolved surface
+                // exactly as the `TyKind::Fn` arm's does (#311 — an
+                // unannotated closure parameter used to record none,
+                // and lowering refused it by the generic name). The
+                // parameter slots are inference variables here; the
+                // body's finish zonks every recorded call.
+                self.calls.push((
+                    e.span,
+                    CallSig {
+                        callee: self.text(callee.span),
+                        decl_span: None,
+                        has_self: false,
+                        ctor: false,
+                        // A `fn` type cannot declare modes: every
+                        // parameter is `read`, as above.
+                        params: params
+                            .iter()
+                            .map(|&ty| crate::sig::ParamSig {
+                                name: String::new(),
+                                ty,
+                                span: callee.span,
+                                mode: None,
+                                view: None,
+                            })
+                            .collect(),
+                        c_call: false,
+                    },
+                ));
                 Ok(ret)
             }
             TyKind::Error | TyKind::Never => {
