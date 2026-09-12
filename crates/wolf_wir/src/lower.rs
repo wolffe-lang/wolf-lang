@@ -1946,10 +1946,17 @@ fn wir_ty_frame(
         // reasons are plain words ([conc.proc.1], [conc.proc.exit]).
         TyKind::Chan(_) | TyKind::Mutex(_) | TyKind::TaskScope => Ok(Some(types::PTR)),
         TyKind::Proc | TyKind::ExitReason => Ok(Some(types::I64)),
-        TyKind::Range(_) => Err(refuse(
-            "range VALUES outside `for` headers (owned `Iter[int]` ranges)",
-            span,
-        )),
+        // s158 (`[type.range]`): a `range[T]` VALUE is the pair of its
+        // endpoints — the same two-field aggregate `(T, T)` lowers to,
+        // so no backend learns a new shape. `start` and `end` are
+        // fields 0 and 1, `end` exclusive.
+        TyKind::Range(t) => {
+            let t = *t;
+            let Some(f) = wir_ty_frame(it, table, sigs, t, span, depth + 1, frame)? else {
+                return Err(refuse("a unit-typed range endpoint", span));
+            };
+            Ok(Some(it.intern(types::TypeData::Agg(vec![f, f]))))
+        }
         // A `List[T]` VALUE is one pointer to its runtime header
         // (s40, `wolf_rt::list`); element shapes are checked at the
         // operation sites, so the handle lowers for any element.
@@ -4324,6 +4331,20 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     let unsigned = sema_unsigned(table, fty);
                     return Ok((idx, wrapping, unsigned));
                 }
+                // s158 (`[type.range.accessor]`): `r.start` / `r.end`
+                // are fields 0 and 1 of the endpoint pair. Sema has
+                // already refused every other member name, so the
+                // fallthrough here cannot be reached by a program.
+                TyKind::Range(t) => {
+                    let idx = match mname.as_str() {
+                        "start" => 0,
+                        "end" => 1,
+                        _ => return Err(refuse("a member a range does not carry", span)),
+                    };
+                    let t = *t;
+                    let unsigned = sema_unsigned(table, t);
+                    return Ok((idx, false, unsigned));
+                }
                 _ => return Err(refuse("member access on this type", span)),
             }
         }
@@ -4552,10 +4573,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             SyntaxKind::StringExpr => self.lower_string(e),
             SyntaxKind::StructLit => self.lower_struct_lit(e),
             SyntaxKind::TupleExpr => self.lower_tuple(e),
+            SyntaxKind::ListLit => self.lower_list_lit(e),
             SyntaxKind::MemberExpr => self.lower_member(e),
             SyntaxKind::BracketApply => self.lower_index(e),
-            SyntaxKind::RangeExpr | SyntaxKind::FromEndExpr => Err(refuse(
-                "range VALUES outside `for` headers (owned `Iter[int]` ranges)",
+            SyntaxKind::RangeExpr => self.lower_range_value(e),
+            SyntaxKind::FromEndExpr => Err(refuse(
+                "an end-relative endpoint outside a subscript (`^n` resolves \
+                 against a length — `[type.range.endpoints]`)",
                 e.span,
             )),
             SyntaxKind::RegionBlock => self.lower_region_block(e, want),
@@ -4729,6 +4753,126 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         Ok(Flow::Val(Some(
             self.b.ins(Opcode::AggMake, &parts, &[wty], Aux::None).one(),
+        )))
+    }
+
+    /// `[a, b, c]` — a list literal (`[type.list.lit.value]`, s158
+    /// wolf-lang#154).
+    ///
+    /// One `__wolf_rt_list_new` and one push per element: exactly what
+    /// the program the literal replaces compiled to, so no runtime
+    /// symbol moves for it (`RT_SYMBOLS` is unchanged) and the slice
+    /// path's shape is reused straight-line, the count being known.
+    /// Elements are lowered left to right BEFORE any of them is
+    /// stored — `[mem.model.order]`'s evaluation order, and the
+    /// reason a later element may itself allocate without disturbing
+    /// an earlier one's address.
+    fn lower_list_lit(&mut self, e: &'t GreenNode) -> R<Flow> {
+        let d = wolf_ast::ListLit::cast(e).expect("kind");
+        let Some(sema_ty) = self.expr_sema_ty(e.span) else {
+            return Err(refuse("a list literal without a recorded type", e.span));
+        };
+        let TyKind::List(elem) = self.table.kind(sema_ty).clone() else {
+            return Err(refuse("a list literal whose type is not a `List`", e.span));
+        };
+        self.refuse_region_elem(elem, e.span)?;
+        let Some(ewty) = wir_ty(
+            &mut self.b.module.types,
+            self.table,
+            self.sigs,
+            elem,
+            e.span,
+        )?
+        else {
+            return Err(refuse("unit-typed List elements", e.span));
+        };
+        let esize = self.list_stride(ewty, e.span)?;
+        let mut vals = Vec::new();
+        for item in d.elems() {
+            let Some(v) = flow_val!(self.lower_expr(item)) else {
+                return Err(refuse("unit-typed List elements", item.span));
+            };
+            vals.push((v, item.span));
+        }
+        let sz = self.b.iconst(types::I64, esize as i64);
+        let hdr = self
+            .rt_call_foreign("__wolf_rt_list_new", &[sz], None, Some(types::PTR))
+            .expect("hdr");
+        for (v, span) in vals {
+            let (region, slot) = self.rt_slot(esize);
+            self.store_flat(v, slot, region, span)?;
+            self.rt_call_foreign("__wolf_rt_list_push", &[hdr], Some((slot, region)), None);
+        }
+        Ok(Flow::Val(Some(hdr)))
+    }
+
+    /// `a..b` / `a..=b` as a VALUE (`[type.range]`, s158
+    /// wolf-lang#24). Two words in an aggregate, the same shape a
+    /// two-field struct or a pair has, so nothing new reaches either
+    /// backend.
+    ///
+    /// **`end` is exclusive, always**: `a..=b` normalizes here, at
+    /// construction, to `b + 1` under the checked arithmetic
+    /// `[mem.iter.range]` already rules — which is what the checked
+    /// machine has always done (`Value::Range` is built half-open
+    /// there), so the two tiers agree by construction. `for` never
+    /// reaches this function: `lower_for` reads the header
+    /// syntactically and materializes no range at all.
+    fn lower_range_value(&mut self, e: &'t GreenNode) -> R<Flow> {
+        let d = wolf_ast::RangeExpr::cast(e).expect("kind");
+        let endpoints: Vec<&GreenNode> = d.endpoints().collect();
+        if endpoints.len() != 2 || endpoints.iter().any(|n| n.kind == SyntaxKind::FromEndExpr) {
+            return Err(refuse(
+                "an open or end-relative range outside a subscript (both sides \
+                 resolve against a length — `[type.range.endpoints]`)",
+                e.span,
+            ));
+        }
+        let Some(sema_ty) = self.expr_sema_ty(e.span) else {
+            return Err(refuse("a range value without a recorded type", e.span));
+        };
+        let TyKind::Range(elem) = self.table.kind(sema_ty).clone() else {
+            return Err(refuse("a range value whose type is not a range", e.span));
+        };
+        let Some(ety) = wir_ty(
+            &mut self.b.module.types,
+            self.table,
+            self.sigs,
+            elem,
+            e.span,
+        )?
+        else {
+            return Err(refuse("a unit-typed range endpoint", e.span));
+        };
+        let Some(wty) = wir_ty(
+            &mut self.b.module.types,
+            self.table,
+            self.sigs,
+            sema_ty,
+            e.span,
+        )?
+        else {
+            return Err(refuse("a unit-typed range", e.span));
+        };
+        let Some(start) = flow_val!(self.lower_expr(endpoints[0])) else {
+            return Err(refuse("a valueless range endpoint", endpoints[0].span));
+        };
+        let Some(end) = flow_val!(self.lower_expr(endpoints[1])) else {
+            return Err(refuse("a valueless range endpoint", endpoints[1].span));
+        };
+        let end = if d.is_inclusive() {
+            let one = self.b.iconst(ety, 1);
+            match self.arith(SyntaxKind::Plus, end, one, false, false, ety, e.span)? {
+                Some(v) => v,
+                None => return Ok(Flow::Diverged),
+            }
+        } else {
+            end
+        };
+        Ok(Flow::Val(Some(
+            self.b
+                .ins(Opcode::AggMake, &[start, end], &[wty], Aux::None)
+                .one(),
         )))
     }
 
@@ -18174,6 +18318,54 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             {
                 let elem = *elem;
                 return self.lower_for_chan(d, iter, elem, e.span);
+            }
+            // s158: `for i in r` over a range VALUE — the owned range
+            // `[mem.iter.range]` has always said implements `Iter[int]`
+            // "with identical semantics", now that `[type.range]` lets
+            // a program hold one. Unpack the endpoint pair and run the
+            // very same counted loop the header form runs; `end` is
+            // already exclusive, normalized where the value was built.
+            if let Some(it) = self.expr_sema_ty(iter.span)
+                && let TyKind::Range(elem) = self.table.kind(self.strip_sema(it))
+            {
+                let elem = *elem;
+                let Some(wty) = wir_ty(
+                    &mut self.b.module.types,
+                    self.table,
+                    self.sigs,
+                    elem,
+                    iter.span,
+                )?
+                else {
+                    return Err(refuse("a unit-typed range endpoint", iter.span));
+                };
+                let Some(pair) = flow_val!(self.lower_expr(iter)) else {
+                    return Err(refuse("a valueless range", iter.span));
+                };
+                let lo = self
+                    .b
+                    .ins(Opcode::AggGet, &[pair], &[wty], Aux::Int(0))
+                    .one();
+                let hi = self
+                    .b
+                    .ins(Opcode::AggGet, &[pair], &[wty], Aux::Int(1))
+                    .one();
+                if !types_is_int(wty) {
+                    return Err(refuse("non-integer `for` ranges", iter.span));
+                }
+                let unsigned = sema_unsigned(self.table, elem);
+                let bind_name = match d.pattern() {
+                    None => None,
+                    Some(p) if p.kind == SyntaxKind::IdentPat => Some(self.text(p.span)),
+                    Some(p) if p.kind == SyntaxKind::WildcardPat => None,
+                    Some(p) => {
+                        return Err(refuse(
+                            "destructuring `for` patterns (tuple yields, c06/std)",
+                            p.span,
+                        ));
+                    }
+                };
+                return self.lower_for_exclusive(d, lo, hi, wty, unsigned, bind_name);
             }
             return Err(refuse(
                 "`for` over non-range iterables (the `Iter[T]` drive loop — Pool adopts \
