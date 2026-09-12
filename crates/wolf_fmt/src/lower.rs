@@ -310,6 +310,10 @@ fn paren_blacklisted(k: K) -> bool {
 fn tier(n: &GreenNode) -> u8 {
     match n.kind {
         K::PathExpr | K::LiteralExpr | K::StringExpr | K::TupleExpr | K::ParenExpr => 1,
+        // `[1, 2, 3]` is a PRIMARY, tier 1 (`[gram.expr.list]`, s158):
+        // no parentheses are ever needed around it, and a `[…]` after
+        // it is the ordinary tier-2 postfix.
+        K::ListLit => 1,
         K::CallExpr | K::BracketApply | K::MemberExpr | K::TryExpr => 2,
         K::PrefixExpr => 3,
         K::CastExpr => 4,
@@ -1457,7 +1461,8 @@ impl<'a> Fmt<'a> {
             | K::VarDecl
             | K::ConstDecl
             | K::UseDecl
-            | K::ImportCDecl => self.decl(n, out),
+            | K::ImportCDecl
+            | K::ErrorDecl => self.decl(n, out),
 
             K::Attribute | K::InnerAttribute => {
                 // `#[a, b]` / `#![a, b]` — tight to the brackets,
@@ -1655,6 +1660,33 @@ impl<'a> Fmt<'a> {
                     self.walk_children(n, out, ctx);
                 }
             }
+            // `[gram.fmt.list]` (s158): a list literal breaks exactly
+            // like an argument list — inline while it fits, with one
+            // space after each comma and none inside the brackets;
+            // one element per line with a trailing comma when it does
+            // not (`[gram.fmt.commas]`). `[]` is two tokens with
+            // nothing between them. A one-element list is `[1]`, never
+            // `[1,]` — the tuple's one-element rule is the tuple's
+            // alone, where the comma carries meaning.
+            K::ListLit => {
+                let (open, elems, commas, close) =
+                    self.split_list(n, K::LBracket, K::RBracket);
+                if let Some(open) = open {
+                    self.list(
+                        open,
+                        close,
+                        &elems,
+                        &commas,
+                        false,
+                        false,
+                        false,
+                        out,
+                        Ctx::Free,
+                    );
+                } else {
+                    self.walk_children(n, out, ctx);
+                }
+            }
             K::UseGroup | K::ViewSet => {
                 // `.{fs, net}` — tight, single line.
                 self.tight_brace_idents(n, out);
@@ -1679,6 +1711,16 @@ impl<'a> Fmt<'a> {
                         );
                     }
                 } else {
+                    // s158 — the brace-less alias spelling `! IoErrors`
+                    // (`[gram.item.error]`): one `RowEntry`, no braces.
+                    // `!` is tight on its right everywhere else (the
+                    // prefix `!x`), so the row supplies its own space,
+                    // the way the braced form gets one before its `{`.
+                    // The formatter keeps the author's spelling: `!
+                    // IoErrors` and `! {IoErrors}` are the same type and
+                    // rewriting either into the other would change a
+                    // line that already says what it means.
+                    out.push(Doc::text(" "));
                     self.walk_children(n, out, ctx);
                 }
             }
