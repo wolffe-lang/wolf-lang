@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="green\nfirst\n")
 //! phase: run
-//! conforms: gram.pat.nullary, type.match.exhaust
+//! conforms: gram.pat.nullary, gram.pat
 //!
 //! s157 (wolf-lang#162's last row) — `[gram.pat.nullary]`: a bare
 //! dotted path is a pattern. Until this pin the parser required the
