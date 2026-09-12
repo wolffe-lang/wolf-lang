@@ -178,6 +178,49 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
 - `[mem.region.create.4]` Region identity is a static type fact with
   **zero runtime representation**; the dynamic machine tracks it, compiled
   code need not.
+- `[mem.region.proc]` **A proc entry's ambient is the proc's own
+  region.** `[mem.region.create.3]`'s default names the *caller's*
+  current region; a function named by `spawn proc f(args)` has no such
+  caller. `spawn proc` starts a failure domain that owns its regions
+  (`[conc.proc.1]`) and outlives the frame that spawned it by design,
+  and `[conc.proc.kill]` step 3 bulk-frees those regions at the proc's
+  exit — before any exit reason is delivered. So the body of a proc
+  entry executes with a current region **frame-local to the proc**,
+  and every `[mem.model.alloc]` site in it — a built `str` above all
+  (`[mem.region.escape]`) — belongs to that region. Anything allocated
+  there that leaves the proc is E1010 exactly as a `region scratch {
+  }`-built value leaving its block is: sent on a channel
+  (`[conc.chan.payload]`, the shape that matters, because a `str`
+  payload crosses as its view and the bytes stay where they were
+  built), stored into module state, or handed out any other way. A
+  proc's PARAMETERS are untouched: their regions are the spawner's,
+  which outlive the proc, so building the bytes in the spawner and
+  handing them in is the fix — and the only fix, because a proc's
+  extent cannot be widened the way a block's can. A function spawned
+  in one place and called directly in another is checked under this
+  rule in both places (the conservative reading: a reader can see a
+  `spawn proc` naming the function without tracing every call site).
+  **The cost, stated:** zero, on both tiers, in both directions. The
+  rule is a static refusal — no instruction, no word, no allocation is
+  added to any accepted program, and region identity keeps
+  `[mem.region.create.4]`'s zero runtime representation. The refused
+  program's repair costs nothing either: the payload is built once and
+  copied once at the send whether the bytes were materialized in the
+  proc or in the spawner; only the arena they are charged to changes.
+  (Ruled 2026-09-12 by s160 for wolf-lang#355. `fn worker(n: int, out:
+  channel[str]) { out.send("built {n} here")? }` under `spawn proc`
+  printed `built 7 here` and exited 0 on wolf 0.2.12 and trapped
+  `region-fault` on lupin 0.1.34, which models the proc's region — a
+  two-machine disagreement the book's control run caught at bs44. The
+  compiler's side was the unsound one, and the reason it printed
+  rather than faulted is that the native tier realizes every ambient
+  region as one process-lifetime root arena (wolf-lang#191): the bytes
+  were leaked, not freed. When #191 lands and a proc's region becomes
+  an arena that actually frees, this refusal is what stands between
+  the program and a read of freed memory. Witnesses
+  `corpus/conc/chan_payload_escape_proc.lu` (`fail(E1010)`) and
+  `corpus/conc/chan_payload_proc_param.lu` (the accepted parameter
+  form, `run(exit=0)`).)
 
 ### Intra-region freedom `[mem.region.intra]`
 
@@ -208,6 +251,8 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   were built, so a `str` read from a binding carries that binding's
   sites out with it. A literal's bytes are static and a literal is no
   site; a slice and every `[mem.str.view]` product allocate nothing.
+  The ambient region of a `spawn proc` entry's body is the proc's own,
+  not its spawner's (`[mem.region.proc]`).
   (Ruled 2026-09-11 by s153 for wolf-lang#310: `region scratch { let s
   = "re" + "gions"; s }` returned from a function printed `regions`
   from freed bytes on wolf 0.2.10 and lupin 0.1.31 alike, with a W1001

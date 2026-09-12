@@ -298,6 +298,7 @@
     "mem.region.open.1": "02-memory-model.md",
     "mem.region.open.2": "02-memory-model.md",
     "mem.region.open.3": "02-memory-model.md",
+    "mem.region.proc": "02-memory-model.md",
     "mem.region.promote": "02-memory-model.md",
     "mem.region.promote.1": "02-memory-model.md",
     "mem.shared": "02-memory-model.md",

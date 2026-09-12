@@ -120,7 +120,12 @@ premise by construction.
 - `[conc.proc.1]` A proc is a failure domain owning its regions. At v1
   procs are in-process (03 Q1); every clause here is worded so an
   OS-process backend also satisfies it — nothing may assume shared
-  address-space visibility into a proc beyond its channels.
+  address-space visibility into a proc beyond its channels. "Owning
+  its regions" includes the **ambient** one the proc's body allocates
+  into: `[mem.region.proc]` (s160, wolf-lang#355) reads that here, so
+  a value built inside a proc and sent out of it is E1010, not a
+  payload — the shape below rules the send, and that clause rules
+  where the bytes live.
 - `[conc.proc.2]` `w.link()` couples fates symmetrically: either side's
   abnormal exit kills the other. `w.monitor()` delivers the exit reason
   asynchronously to the monitor's channel.
@@ -193,7 +198,9 @@ premise by construction.
   to the receiver, who owns it from then on. A payload leaves the
   sending frame, so it must outlive it exactly as a returned value
   must: a payload built in a frame-local region is E1010 at the send
-  (witness `corpus/conc/chan_payload_escape.lu`). A `str` payload is
+  (witness `corpus/conc/chan_payload_escape.lu`) — and a proc's own
+  ambient region is frame-local to the proc (`[mem.region.proc]`,
+  witness `corpus/conc/chan_payload_escape_proc.lu`). A `str` payload is
   its view: the bytes stay where they were built and cross by
   reference (`[conc.chan.imm]`). The cost, stated: a payload of
   one machine word or less (an `int`, a `bool`, a `char`, any integer
