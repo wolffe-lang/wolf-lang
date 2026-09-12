@@ -2299,6 +2299,31 @@ impl<'t> Lowerer<'t> {
                 Ok(val)
             }
             SyntaxKind::CallExpr => self.eval_call(e),
+            // `[a, b, c]` (s158, `[type.list.lit.value]`): the value is
+            // a FRESH `List[T]` allocated into the ambient region
+            // ([mem.region.create.3]) with the elements stored into
+            // it — exactly what `List[T]()` plus a `push` per element
+            // is, so the allocation story is the container ctor's and
+            // nothing new is ruled. Elements evaluate left to right,
+            // once each, before the list exists ([mem.model.order]).
+            SyntaxKind::ListLit => {
+                let d = wolf_ast::ListLit::cast(e).expect("kind");
+                let mut parts: Vec<(Val, Span)> = Vec::new();
+                for item in d.elems() {
+                    let v = self.eval_value(item)?;
+                    parts.push((v, item.span));
+                }
+                let ty = self.rendered_expr_ty(e.span);
+                let site = self.alloc_site(ty, SiteKind::Lit, e.span);
+                let region = self.sites[site.0 as usize].region;
+                let mut val = Val::site(site, e.span);
+                for (ev, sp) in parts {
+                    self.demand_store(&ev, region, Some(e.span), sp, false);
+                    val.merge(ev);
+                }
+                val.region = None;
+                Ok(val)
+            }
             SyntaxKind::StructLit => {
                 let d = StructLit::cast(e).expect("kind");
                 let mut parts: Vec<(Option<String>, Val, Span)> = Vec::new();

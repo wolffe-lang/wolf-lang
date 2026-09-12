@@ -377,6 +377,11 @@ enum Value {
     Range {
         start: i64,
         end: i64,
+        /// `range[char]` rather than `range[int]` (s158,
+        /// `[type.range.name]`): the endpoints are scalar values, and
+        /// this says to read them back as `char` — `r.start` on
+        /// `'a'..'d'` is `a`, not `97`.
+        chars: bool,
     },
     Struct {
         fields: Vec<(String, Value)>,
@@ -2468,6 +2473,19 @@ impl<'t> Machine<'t> {
                 let n = self.lists[id].len() as i64;
                 self.walk_read(Value::Int(n), rest, span)
             }
+            // s158 (`[type.range.accessor]`): a range's two endpoints.
+            // `end` is exclusive here because it is exclusive
+            // everywhere — this machine has normalized `a..=b` at
+            // construction since its first range arm, which is the
+            // clause's own argument for the rule.
+            (PStep::Field(f), Value::Range { start, end, chars }) if f == "start" || f == "end" => {
+                let v = if f == "start" { start } else { end };
+                let v = match (chars, u32::try_from(v).ok().and_then(char::from_u32)) {
+                    (true, Some(c)) => Value::Char(c),
+                    _ => Value::Int(v),
+                };
+                self.walk_read(v, rest, span)
+            }
             (PStep::Field(f), Value::Map(id)) if f == "len" => {
                 let n = self.maps[id].len() as i64;
                 self.walk_read(Value::Int(n), rest, span)
@@ -3168,6 +3186,19 @@ impl<'t> Machine<'t> {
                 }
                 Ok(Flow::Val(Value::Struct { fields }))
             }
+            // `[a, b, c]` (s158, `[type.list.lit.value]`): elements
+            // left to right, once each, then a fresh list minted into
+            // the ambient region and charged for — the same value
+            // `List[T]()` plus a `push` per element produces, and the
+            // same accounting.
+            SyntaxKind::ListLit => {
+                let mut items = Vec::new();
+                for item in wolf_ast::ListLit::cast(e).expect("kind").elems() {
+                    items.push(val!(self.eval(item)));
+                }
+                let id = self.mint_list(items, e.span)?;
+                Ok(Flow::Val(Value::List(id)))
+            }
             SyntaxKind::PrefixExpr => self.eval_prefix(e),
             SyntaxKind::BinExpr => self.eval_bin(e),
             SyntaxKind::CastExpr => self.eval_cast(e),
@@ -3182,13 +3213,23 @@ impl<'t> Machine<'t> {
                     Some(x) => val!(self.eval(x)),
                     None => Value::Int(0),
                 };
-                let (Value::Int(s), Value::Int(mut en)) = (start, end) else {
-                    return self.refuse("non-integer ranges", e.span);
+                // s158 (`[type.range.name]`): the closed family is
+                // `int` and `char`. A char range carries its endpoints
+                // as scalar values and remembers to read them back as
+                // chars.
+                let (s, mut en, chars) = match (start, end) {
+                    (Value::Int(a), Value::Int(b)) => (a, b, false),
+                    (Value::Char(a), Value::Char(b)) => (a as i64, b as i64, true),
+                    _ => return self.refuse("non-integer ranges", e.span),
                 };
                 if d.is_inclusive() {
                     en += 1;
                 }
-                Ok(Flow::Val(Value::Range { start: s, end: en }))
+                Ok(Flow::Val(Value::Range {
+                    start: s,
+                    end: en,
+                    chars,
+                }))
             }
             SyntaxKind::TryExpr => {
                 let d = wolf_ast::TryExpr::cast(e).expect("kind");
@@ -3798,7 +3839,12 @@ impl<'t> Machine<'t> {
         };
         let items: Vec<Value> = match (view_items, iter) {
             (Some(items), _) => items,
-            (None, Value::Range { start, end }) => (start..end).map(Value::Int).collect(),
+            (None, Value::Range { start, end, chars }) => (start..end)
+                .map(|v| match (chars, u32::try_from(v).ok().and_then(char::from_u32)) {
+                    (true, Some(c)) => Value::Char(c),
+                    _ => Value::Int(v),
+                })
+                .collect(),
             (None, Value::List(id)) => self.lists[id].clone(),
             (None, Value::Map(_)) => {
                 return self.refuse("iterating a `Map` directly (walk `m.pairs()`)", e.span);
@@ -6452,7 +6498,11 @@ impl<'t> Machine<'t> {
         if d.is_inclusive() && !(origin == 1 && plain_hi_spelled) {
             hi += 1;
         }
-        Ok(Flow::Val(Value::Range { start: lo, end: hi }))
+        Ok(Flow::Val(Value::Range {
+            start: lo,
+            end: hi,
+            chars: false,
+        }))
     }
 
     /// `cs[a..b]` (s128, #171): the List slice — the same endpoint
@@ -6482,7 +6532,7 @@ impl<'t> Machine<'t> {
         };
         let len = self.lists[id].len() as i64;
         let bounds = self.slice_bounds(rn, len, e.span)?;
-        let Flow::Val(Value::Range { start, end }) = bounds else {
+        let Flow::Val(Value::Range { start, end, .. }) = bounds else {
             return Ok(bounds);
         };
         let items: Vec<Value> = self.lists[id][start as usize..end as usize].to_vec();
@@ -6516,7 +6566,7 @@ impl<'t> Machine<'t> {
             return self.refuse("this str index shape in checked execution", e.span);
         };
         let bounds = self.slice_bounds(rn, s.len() as i64, e.span)?;
-        let Flow::Val(Value::Range { start, end }) = bounds else {
+        let Flow::Val(Value::Range { start, end, .. }) = bounds else {
             return Ok(bounds);
         };
         let (a, z) = (start as usize, end as usize);
@@ -7866,7 +7916,7 @@ impl<'t> Machine<'t> {
                     // recoverable slice — OOB *and* split-code-point
                     // offsets are the same honest miss.
                     "get" => {
-                        let Some(Value::Range { start, end }) = argv.first() else {
+                        let Some(Value::Range { start, end, .. }) = argv.first() else {
                             return self.refuse("str.get without a range", e.span);
                         };
                         let (a, z) = (*start, *end);
@@ -8470,7 +8520,7 @@ impl<'t> Machine<'t> {
             // `{b}` prints the NUMBER (D72), never a character.
             Value::Byte(b) => b.to_string(),
             Value::Unit => "()".to_string(),
-            Value::Range { start, end } => format!("{start}..{end}"),
+            Value::Range { start, end, .. } => format!("{start}..{end}"),
             Value::Struct { fields } => match kind {
                 Some(TyKind::Nominal { module, name, .. }) => {
                     let sig_table = &self.tc.sigs.table;
