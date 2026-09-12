@@ -23,6 +23,16 @@ THE PAPERCUTS III — the language's ten, each a witness plus a fix.
   checked machine resolves its endpoints against the receiver's
   length before asking the domain question. Witness
   `corpus/strings/end_relative_get.lu`.
+- **mem** (#313): an `int` element of a `List[int]` read after an
+  index WRITE to the same list is no longer reported moved. Every
+  container now reads its element type off the container, the way
+  `Map` already did; the old lookup went through the access's own
+  span, and an access in target position is a place with no recorded
+  type, so one write poisoned the memoized element place and every
+  later element read in the function became a move. The book's
+  exercises 16-7 and 16-8 were this, not a missing `copy`. Witness
+  `corpus/memory/list_elem_copy_loop.lu`; the move direction is
+  untouched.
 
 ## 0.2.12 — 2026-09-11
 

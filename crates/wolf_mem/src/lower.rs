@@ -1552,11 +1552,32 @@ impl<'t> Lowerer<'t> {
                 // when `V` does (an `int`-valued map is read twice
                 // without a move); the union wrapper is the row, not
                 // storage.
+                //
+                // s157 (#313): every container reads its element type
+                // off the CONTAINER, never off the access's own span.
+                // An access in TARGET position (`xs[i] = v`) is a
+                // place, not a typed expression, so sema records
+                // nothing under its span and `expr_ty` answers
+                // `None` — which used to read as "not copy". The
+                // element place is interned once and memoized by
+                // shape, so that one wrong bit outlived the access:
+                // every later read of any element of that list became
+                // a MOVE, and the collapsed `Opaque` projection
+                // spread it over the whole container. `visited[0] = 1`
+                // before a loop that reads `visited[c + 1]` was the
+                // thirteen-line witness.
                 let copy = match (&container, base_ty) {
                     (Some(TyKind::Map(_, v)), Some(bt)) => is_copy(
                         Ty {
                             table: bt.table,
                             id: *v,
+                        },
+                        0,
+                    ),
+                    (Some(TyKind::List(el) | TyKind::Pool(el)), Some(bt)) => is_copy(
+                        Ty {
+                            table: bt.table,
+                            id: *el,
                         },
                         0,
                     ),

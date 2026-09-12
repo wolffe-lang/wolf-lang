@@ -1,0 +1,39 @@
+//! check: run(exit=0, stdout="4 1\n")
+//! phase: run
+//! conforms: mem.tier0.move.1
+//!
+//! s157 (wolf-lang#313) — the E1001 false positive the book's
+//! exercises 16-7 and 16-8 were read as. An `int` element of a
+//! `List[int]` is a COPY: reading `visited[c + 1]` moves nothing.
+//! Until this pin the element place took its copy-ness from the
+//! access's own span, and an access in TARGET position (`visited[0]
+//! = 1`) is a place, not a typed expression, so sema records no type
+//! under it — the lookup answered "not copy", the place is interned
+//! once and memoized by shape, and every later read of ANY element
+//! of that list became a move. The collapsed element projection then
+//! spread it over the whole container, so even `visited.len` was
+//! reported moved. Remove any one of the four — the loop, the
+//! `else`, the index write, the `&&` — and the old binary compiled
+//! it, which is what made it read as a `copy` the book had missed.
+//! The element type now comes off the container, as `Map`'s already
+//! did. The move direction is untouched: a `List[List[int]]` element
+//! read twice is still E1001.
+
+fn main() -> !int {
+    var visited = List[int]()
+    for _ in 0..4 { (mut visited).push(0) }
+    var stack = List[int]()
+    (mut stack).push(0)
+    visited[0] = 1
+    var c = 0
+    while c < 3 {
+        if c < 3 && visited[c + 1] == 0 {
+            visited[c + 1] = 1
+            c += 1
+        } else {
+            c += 1
+        }
+    }
+    print("{visited.len} {stack.len}")
+    0
+}
