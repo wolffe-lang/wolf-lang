@@ -821,7 +821,10 @@ fn error_set_alias_is_an_item_with_a_row() {
 fn error_is_contextual_not_reserved() {
     let src = "type Report = struct {\n    error: int,\n}\n\nfn error(n: int) -> int {\n    n + 1\n}\n\nfn main() -> !int {\n    let error = 3\n    let r = Report { error: error }\n    r.error\n}\n";
     let root = clean(src);
-    assert_eq!(root.nodes().filter_map(wolf_ast::ErrorDecl::cast).count(), 0);
+    assert_eq!(
+        root.nodes().filter_map(wolf_ast::ErrorDecl::cast).count(),
+        0
+    );
     let fns: Vec<&str> = root
         .nodes()
         .filter_map(FnDecl::cast)

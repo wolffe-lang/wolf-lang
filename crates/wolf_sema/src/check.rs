@@ -11425,7 +11425,10 @@ impl<'a> Checker<'a> {
                 Diagnostic::error(
                     codes::E0401,
                     e.span,
-                    format!("this is a list literal, but {} `{shown}`", exp.reason.phrase()),
+                    format!(
+                        "this is a list literal, but {} `{shown}`",
+                        exp.reason.phrase()
+                    ),
                 )
                 .with_label("a `[…]` literal is always a `List[T]`"),
             );

@@ -3840,10 +3840,12 @@ impl<'t> Machine<'t> {
         let items: Vec<Value> = match (view_items, iter) {
             (Some(items), _) => items,
             (None, Value::Range { start, end, chars }) => (start..end)
-                .map(|v| match (chars, u32::try_from(v).ok().and_then(char::from_u32)) {
-                    (true, Some(c)) => Value::Char(c),
-                    _ => Value::Int(v),
-                })
+                .map(
+                    |v| match (chars, u32::try_from(v).ok().and_then(char::from_u32)) {
+                        (true, Some(c)) => Value::Char(c),
+                        _ => Value::Int(v),
+                    },
+                )
                 .collect(),
             (None, Value::List(id)) => self.lists[id].clone(),
             (None, Value::Map(_)) => {

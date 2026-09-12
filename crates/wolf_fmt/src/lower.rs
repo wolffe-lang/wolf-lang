@@ -1669,8 +1669,7 @@ impl<'a> Fmt<'a> {
             // `[1,]` — the tuple's one-element rule is the tuple's
             // alone, where the comma carries meaning.
             K::ListLit => {
-                let (open, elems, commas, close) =
-                    self.split_list(n, K::LBracket, K::RBracket);
+                let (open, elems, commas, close) = self.split_list(n, K::LBracket, K::RBracket);
                 if let Some(open) = open {
                     self.list(
                         open,

@@ -247,10 +247,16 @@ fn list_literals_are_primary_and_indexing_is_postfix() {
 
     let root = clean_body("let xs = []");
     let lit = first(&root, SyntaxKind::ListLit);
-    assert_eq!(wolf_ast::ListLit::cast(lit).expect("cast").elems().count(), 0);
+    assert_eq!(
+        wolf_ast::ListLit::cast(lit).expect("cast").elems().count(),
+        0
+    );
     let root = clean_body("let xs = [1, 2, 3]");
     let lit = first(&root, SyntaxKind::ListLit);
-    assert_eq!(wolf_ast::ListLit::cast(lit).expect("cast").elems().count(), 3);
+    assert_eq!(
+        wolf_ast::ListLit::cast(lit).expect("cast").elems().count(),
+        3
+    );
 }
 
 // ------------------------------------------------------------- ranges --

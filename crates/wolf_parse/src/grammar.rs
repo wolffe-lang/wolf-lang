@@ -1826,10 +1826,7 @@ fn type_general(p: &mut Parser<'_>, postfix_row: bool) -> bool {
     let mut cm = cm;
     while postfix_row
         && p.at_punct(Punct::Not)
-        && matches!(
-            p.nth(1),
-            TokenKind::Punct(Punct::LBrace) | TokenKind::Ident
-        )
+        && matches!(p.nth(1), TokenKind::Punct(Punct::LBrace) | TokenKind::Ident)
     {
         let m = cm.precede(p);
         p.bump(); // `!`

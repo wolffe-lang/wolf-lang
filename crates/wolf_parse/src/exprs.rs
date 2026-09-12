@@ -1026,7 +1026,10 @@ fn list_lit(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
         }
         let before = p.pos();
         if expr_bp(p, 0, inner).is_none() {
-            p.arg_list_error(p.current_span(), "expected an expression in the list literal");
+            p.arg_list_error(
+                p.current_span(),
+                "expected an expression in the list literal",
+            );
             p.recover_until(true, |k| {
                 matches!(k, TokenKind::Punct(Punct::Comma | Punct::RBracket))
                     || k == TokenKind::Term
