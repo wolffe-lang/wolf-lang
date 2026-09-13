@@ -5620,6 +5620,38 @@ impl<'t> Machine<'t> {
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
             }
+            // s160 (#299, `[os.net.writev.head]`): the gather with a
+            // `str` head — the head's bytes first, then every part, in
+            // one vectored write. `net_writev`'s rows exactly.
+            "net_writev_head" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this net call shape", span);
+                };
+                let Some(head) = str_arg(1) else {
+                    return self.refuse("this net call shape", span);
+                };
+                let Some(Value::List(outer)) = argv.get(2) else {
+                    return self.refuse("this net call shape", span);
+                };
+                let heads: Vec<Value> = self.lists[*outer].clone();
+                let mut parts: Vec<Vec<u8>> = Vec::with_capacity(heads.len() + 1);
+                if !head.is_empty() {
+                    parts.push(head.into_bytes());
+                }
+                for h in &heads {
+                    match self.bytes_of(Some(h)) {
+                        Some(Ok(b)) => parts.push(b),
+                        _ => return self.refuse("this net call shape", span),
+                    }
+                }
+                let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
+                    return Ok(tag("io"));
+                };
+                match s.write_all_vectored(&parts) {
+                    Err(e) => Ok(tag(&coarse(e.kind(), &["closed", "io"]))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
             // s141 (#254, `[os.net.nodelay]`): Nagle off or on for a
             // TCP stream; anything else is `io`, never a trap.
             "net_nodelay" => {
@@ -7147,7 +7179,7 @@ impl<'t> Machine<'t> {
             "net_listen" | "net_listen_unix" | "net_connect_unix" | "net_listen_with"
             | "net_adopt_listener" | "net_wait" | "net_port" | "net_accept" | "net_connect"
             | "net_read" | "net_write" | "net_read_bytes" | "net_write_bytes" | "net_close"
-            | "net_deadline" | "net_writev" | "net_nodelay" => {
+            | "net_deadline" | "net_writev" | "net_writev_head" | "net_nodelay" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {

@@ -1855,6 +1855,49 @@ pub unsafe extern "C" fn __wolf_rt_net_writev(fd: i64, hdr: i64) -> i64 {
     }
 }
 
+/// `net_writev_head(fd, head, parts) -> () ! {closed, io}` (s160, #299,
+/// `[os.net.writev.head]`): the gather with a `str` head. `head` is the
+/// two words a `str` already is, so its bytes enter the vector where
+/// they already sit — no list, no copy — and `parts` is
+/// [`__wolf_rt_net_writev`]'s `List[List[byte]]`, unchanged. An empty
+/// head contributes no segment; an empty gather is a completed write
+/// with no syscall, the family's rule.
+///
+/// # Safety
+///
+/// `hp`/`hl` must be a valid str pair; `hdr` must be a live
+/// `List[List[byte]]` header whose elements are live `List[byte]`
+/// headers.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_writev_head(fd: i64, hp: i64, hl: i64, hdr: i64) -> i64 {
+    let Some(heads) = (unsafe { crate::list::i64_elems(hdr) }) else {
+        return net_code::IO;
+    };
+    let mut parts: Vec<&[u8]> = Vec::with_capacity(heads.len() + 1);
+    if hl > 0 && hp != 0 {
+        // SAFETY: caller contract — a valid str pair addresses `hl`
+        // bytes that outlive the call (the gather drains inside it).
+        parts.push(unsafe { core::slice::from_raw_parts(hp as *const u8, hl as usize) });
+    }
+    for &h in heads {
+        if h == 0 {
+            return net_code::IO;
+        }
+        let Some(part) = (unsafe { crate::list::u8_elems(h) }) else {
+            return net_code::IO;
+        };
+        parts.push(part);
+    }
+    let spec = match tbl().park_spec(fd, true) {
+        Ok(spec) => spec,
+        Err(t) => return code_of_tag(t),
+    };
+    match drain_vectored(spec, &parts, |bufs| tbl().writev_ready(fd, bufs)) {
+        Ok(()) => net_code::OK,
+        Err(t) => code_of_tag(t),
+    }
+}
+
 /// `net_nodelay(fd, on) -> () ! {io}` (s141, #254, `[os.net.nodelay]`):
 /// Nagle off (`on != 0`, the default every stream is handed out with)
 /// or back on, for a TCP stream; anything else is `IO`.
