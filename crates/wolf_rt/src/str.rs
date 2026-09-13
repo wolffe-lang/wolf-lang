@@ -13,19 +13,29 @@
 //!   `get`, `strip_*`, `split` elements) stay subslices of their
 //!   receiver's bytes; only genuinely new byte sequences (interpolation,
 //!   `upper`/`lower`, `repeat`, `replace`, `fs_read_text`) allocate.
-//! - **The ambient region, realized for v0.** The checked lane tracks
-//!   an ambient-region stack and charges every materialization against
-//!   it. The native debug tier realizes the ambient region as the
-//!   PROCESS-LIFETIME root region: one bump arena, created lazily,
-//!   freed by process exit. `main`'s enclosing region is exactly the
-//!   process, so for everything the native lane can express today
-//!   (s26 `region` blocks own no str materializations yet — the
-//!   region-inference seam that places a materialization into a NAMED
-//!   region is c09's, with escape analysis) this is the semantically
-//!   correct region, not an approximation. The one observable
-//!   difference — bytes outliving an enclosing `region { }` block —
-//!   cannot be observed without raw-pointer reads that the checked
-//!   lane already rules UB.
+//! - **The ambient region, realized.** The checked lane tracks an
+//!   ambient-region stack and charges every materialization against
+//!   it. So does the native tier, since s160 (wolf-lang#191):
+//!   [`write_owned`] — the one function every materializing shim in
+//!   this file funnels through — routes through `list::alloc_in`, the
+//!   same dispatch `List` has used since s76/#81, so the bytes land in
+//!   whatever region `native::ambient_region()` names and fall back to
+//!   the process root only when no named region is open.
+//!
+//!   *History, because the reasoning here was wrong for four sprints.*
+//!   s40 realized the ambient region as the PROCESS-LIFETIME root
+//!   unconditionally, and argued it was "the semantically correct
+//!   region, not an approximation", because `region` blocks owned no
+//!   str materializations yet and `main`'s enclosing region is exactly
+//!   the process. The first half stopped being true at s76, when
+//!   containers learned to charge named regions; the note was not
+//!   revisited, so a `region scratch { }` reclaimed a `List`'s storage
+//!   and none of the string work beside it. The claim that the
+//!   difference "cannot be observed without raw-pointer reads" was
+//!   wrong too: it is observable through `region_bytes`, through
+//!   `live_region_bytes`, through a `[mem.region.cap]` budget, and —
+//!   most sharply — through RSS, at 481.8 MB against 2.5 MB on
+//!   wolf-lang#191's own 20k-iteration shape.
 //! - **Growth is arena-shaped.** A growable buffer (strbuf, List) that
 //!   outgrows its chunk copies into a fresh chunk and ABANDONS the old
 //!   bytes to the arena — regions reclaim wholesale, never per-object
@@ -189,9 +199,34 @@ pub(crate) fn ambient_alloc(size: usize) -> *mut u8 {
     unsafe { chunk.as_mut_ptr().cast::<u8>().add(used) }
 }
 
-/// Copy `bytes` into the ambient region, returning the stable pointer.
+/// Copy `bytes` into the process ROOT arena, returning the stable
+/// pointer. Callers that must charge the CURRENT region want
+/// [`region_copy`] instead; this one is the root-only path
+/// `list::alloc_in` falls back to when no named region is open.
 pub(crate) fn ambient_copy(bytes: &[u8]) -> *const u8 {
     let p = ambient_alloc(bytes.len());
+    if !bytes.is_empty() {
+        unsafe { core::ptr::copy_nonoverlapping(bytes.as_ptr(), p, bytes.len()) };
+    }
+    p
+}
+
+/// s160 (wolf-lang#191): copy `bytes` into the **current** region —
+/// the ambient one `[mem.region.create.3]` names, which is the process
+/// root only when no named region is open.
+///
+/// This is the seam the module header above owed to c09. `List` has
+/// charged the current region since s76/#81 (`list::new_list` reads
+/// `native::ambient_region()` and remembers it in the header); `str`
+/// did not, so a `region scratch { }` block reclaimed a list's storage
+/// and not one byte of the string work beside it. Every materializing
+/// shim in this file funnels through [`write_owned`], so routing that
+/// one function through `list::alloc_in` closes the seam for
+/// interpolation, `upper`/`lower`, `repeat`, `replace` and
+/// `from_utf8` at once — the same dispatch, the same two cases, one
+/// authority for where bytes go.
+pub(crate) fn region_copy(bytes: &[u8]) -> *const u8 {
+    let p = crate::list::alloc_in(crate::native::ambient_region(), bytes.len());
     if !bytes.is_empty() {
         unsafe { core::ptr::copy_nonoverlapping(bytes.as_ptr(), p, bytes.len()) };
     }
@@ -236,9 +271,11 @@ pub(crate) unsafe fn write_word(out: i64, v: i64) {
     unsafe { (out as *mut i64).write(v) };
 }
 
-/// Materialize `s` in the ambient region and write its pair.
+/// Materialize `s` in the ambient region and write its pair. Since
+/// s160 (wolf-lang#191) the ambient region is the one the program is
+/// actually in, not the process root.
 unsafe fn write_owned(out: i64, s: &str) {
-    let p = ambient_copy(s.as_bytes());
+    let p = region_copy(s.as_bytes());
     unsafe { write_pair(out, p as i64, s.len() as i64) };
 }
 

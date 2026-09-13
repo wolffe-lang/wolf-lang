@@ -163,12 +163,23 @@ pub(crate) fn push_int(hdr: *mut ListHdr, v: i64) {
     push_raw(hdr, cell.as_ptr().cast());
 }
 
-/// Copy `s` into the ambient region and push it as a `{ptr, len}`
+/// Copy `s` into the LIST's own region and push it as a `{ptr, len}`
 /// element of a 16-byte-element list — the `List[str]` builder every
 /// list-returning builtin shares (`env_args`, `env_vars`,
 /// `fs_read_dir`).
+///
+/// s160 (wolf-lang#191): the list's own region, for the reason
+/// `push_raw` gives — a region frees as a unit, so an element's bytes
+/// must not outlive, or be stranded by, the header that views them.
+/// Before this the header and buffer charged `scratch` while every
+/// element's BYTES charged the process root, which is the split that
+/// made a `List[str]` the sharpest instance of #191.
 pub(crate) fn push_str(hdr: *mut ListHdr, s: &str) {
-    let p = crate::str::ambient_copy(s.as_bytes());
+    let region = unsafe { (*hdr).region };
+    let p = alloc_in(region, s.len());
+    if !s.is_empty() {
+        unsafe { core::ptr::copy_nonoverlapping(s.as_bytes().as_ptr(), p, s.len()) };
+    }
     let pair = [p as i64, s.len() as i64];
     push_raw(hdr, pair.as_ptr().cast());
 }
