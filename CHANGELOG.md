@@ -1,5 +1,90 @@
 # Changelog
 
+## Unreleased
+
+### The string runtime (s160 — wolf-lang#355, #321, #191, #299; #298 stays open)
+
+Five issues that were one subject read from five directions: where a
+built `str`'s bytes live, and who is allowed to outlive them. The order
+mattered more than the fixes — **#355 and #321 had to land before
+#191**, because #191 is what turns the escapes they refuse from leaks
+into use-after-frees.
+
+    fn worker(n: int, out: channel[str]) -> !int {
+        out.send("built {n} here")?    // now E1010: proc:worker dies first
+    }
+    region scratch { let s = "re".repeat(2); s }   // now E1010
+    region scratch { let d = Doc { .. }; d.title } // now E1010
+    net_writev_head(sock, head, parts)?            // the head stays a str
+
+**A proc owns its ambient region** `[mem.region.proc]` (#355). A
+`spawn proc` entry has no caller whose region it can inherit:
+`[conc.proc.1]` makes the proc its own failure domain and
+`[conc.proc.kill]` step 3 bulk-frees its regions at exit. The checker
+had been giving proc bodies `[mem.region.create.3]`'s plain-function
+default, so a `str` a proc built and sent was accepted on both tiers
+while lupin 0.1.34 trapped `region-fault` on it — a two-machine
+disagreement the book caught at bs44, with the compiler on the unsound
+side. A proc's PARAMETERS are untouched, which is why building the
+bytes in the spawner and handing them in is the fix the diagnostic
+prescribes. Cost: zero, both tiers, both directions — a static refusal,
+and the repair copies the same bytes once either way.
+
+**Two more escapes** `[mem.region.escape]` (#321). The site list now
+includes every `str`-producing builtin that MATERIALIZES — `upper`,
+`lower`, `repeat`, `replace`, and the free producer `str_from_utf8`
+whose error row hid it — and a `str` read carries its place's sites
+through a **projection**, not only out of a whole local. `str` is
+`Copy`, which is why neither was ever seen: a `Copy` result never made
+a call-result site, and a `Copy` field read flowed none. The second
+half is conservative rather than exact (no per-field attribution, so a
+literal-initialized field is refused too — #375); the sweep it was
+gated on moved **0** rows in `corpus/`, **0** across wolf-std's 50
+module entries, and **1** in lobo, a true positive filed as lobo#21.
+`[mem.str.view]`'s other side is untouched and still allocates nothing.
+
+**A `str` joins its region** (#191). The c09 seam `wolf_rt/src/str.rs`
+had owed since s40, on a premise that stopped being true at s76:
+containers learned to charge named regions and strings did not, so
+`region scratch { }` reclaimed a list's storage and not one byte of the
+string work beside it. Every materializing shim funnels through one
+function, so one function moved — `write_owned` now dispatches through
+`list::alloc_in`, exactly as `List` has since #81 — and a `List[str]`'s
+element bytes charge the list's own region instead of splitting header
+from contents across two arenas. **Measured** (macOS/arm64, debug
+tier, standalone executables): 20,000 iterations building a ~1.2 KB
+`str` by interpolation inside `region pass { }`, **481.8 MB → 2.5 MB**
+max RSS, with the same loop without the region block unchanged at
+481.6 MB both ways as the control. Predicted ">10x"; measured 192x.
+Cost elsewhere: zero on the checked tier, and on the native tier a
+materialization inside a named region gets *cheaper* by one mutex
+acquisition. Two intended consequences: `[mem.region.cap]` budgets now
+bind string building, and bytes that used to leak are genuinely freed —
+which is what makes the two rules above load-bearing rather than
+tidy.
+
+**The head stays a `str`** `[os.net.writev.head]` (#299). A response
+head is a `str`, and `[mem.str.view.lend]` materializes a `List[byte]`
+for it in a `let` or a push — so entering the one-syscall gather cost a
+full copy of the head, per response, for bytes already sitting in the
+arena. `net_writev_head(fd, head: str, parts: List[List[byte]])` hands
+`writev` the two words a `str` already is. One more `iovec` entry, no
+extra syscall, no change to the drain or the rows; measured saving on
+lobo's head shape **288 bytes and one list per response**.
+`RT_SYMBOLS` 143 → 144.
+
+**#298 stays open, and says so.** Its three asks — the D24 in-place
+builder, `lower()`/`upper()` as views, `net_read` into the arena — are
+all untouched; the contract named it the measurement, not a change.
+Worse for the issue, #191 invalidated its instrument:
+`tools/lobo-strings` reads RSS growth ÷ requests and its header states
+the premise, "the ambient arena, which never frees (#191)". That
+identity is gone, so the tool now measures retention rather than
+materialization and its number is no longer comparable to 6,373. What
+IS newly measurable, because #191 landed: lobo's nine-interpolation
+response head charges **1,664 arena bytes for a 231-byte head — 7.2x
+its own length**, undiminished, because the builder ask is untouched.
+
 ## 0.2.13 — 2026-09-12
 
 THE LITERALS AND THE PAPERCUTS III. 0.2.13 is three surface additions
