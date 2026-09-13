@@ -369,6 +369,7 @@
     "os.net.unix": "11-os.md",
     "os.net.wait": "11-os.md",
     "os.net.writev": "11-os.md",
+    "os.net.writev.head": "11-os.md",
     "os.proc": "11-os.md",
     "os.proc.inherit": "11-os.md",
     "os.random": "11-os.md",
