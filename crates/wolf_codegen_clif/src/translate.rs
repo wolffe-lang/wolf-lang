@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 143] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 144] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -204,6 +204,7 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 143] = [
     // and the stream option (fd, on-as-i64) — `[os.net.writev]`,
     // `[os.net.nodelay]`.
     ("__wolf_rt_net_writev", 2, true),
+    ("__wolf_rt_net_writev_head", 4, true),
     ("__wolf_rt_net_nodelay", 2, true),
     ("__wolf_rt_net_close", 1, true),
     ("__wolf_rt_net_deadline", 2, true),

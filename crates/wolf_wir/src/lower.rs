@@ -8562,6 +8562,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // s141 (#254): the gathered write and the stream
                 // option — `[os.net.writev]`, `[os.net.nodelay]`.
                 | "net_writev"
+                | "net_writev_head"
                 | "net_nodelay"
         ) {
             return self.lower_net_builtin(&callee_text, d, e);
@@ -11674,7 +11675,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(Flow::Val(Some(out)))
             }
             "net_write" | "net_close" | "net_deadline" | "net_write_bytes" | "net_writev"
-            | "net_nodelay" => {
+            | "net_writev_head" | "net_nodelay" => {
                 let rc = match name {
                     "net_write" => {
                         let fd = arg(0)?;
@@ -11705,6 +11706,22 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         self.rt_call_foreign(
                             "__wolf_rt_net_writev",
                             &[fd, hdr],
+                            None,
+                            Some(types::I64),
+                        )
+                    }
+                    // s160 (#299): the head's own `{ptr, len}` — the two
+                    // words a `str` already IS — beside the parts
+                    // header, so the gather carries the head with no
+                    // copy and no list.
+                    "net_writev_head" => {
+                        let fd = arg(0)?;
+                        let h = arg(1)?;
+                        let (hp, hl) = self.str_parts(h);
+                        let hdr = arg(2)?;
+                        self.rt_call_foreign(
+                            "__wolf_rt_net_writev_head",
+                            &[fd, hp, hl, hdr],
                             None,
                             Some(types::I64),
                         )
