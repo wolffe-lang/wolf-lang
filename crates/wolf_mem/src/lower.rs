@@ -3205,12 +3205,23 @@ impl<'t> Lowerer<'t> {
     /// let s = "re".repeat(2); s }` printed `rere` from freed bytes
     /// with no diagnostic on either tier.
     fn is_materializing_str_call(&self, e: &'t GreenNode) -> bool {
-        if !self.is_str_expr(e.span) {
-            return false;
-        }
         let Some(callee) = CallExpr::cast(e).and_then(|d| d.callee()) else {
             return false;
         };
+        // s160 (wolf-lang#191's other half): the FREE producer.
+        // `str_from_utf8(b) -> str ! {utf8}` copies the accepted bytes
+        // into the ambient region — an ordinary owned `str`, borrowing
+        // nothing from its list — so it is a site like any other
+        // materialization, and the row is why `is_str_expr` alone
+        // cannot see it. Matched on the callee's bare text, the same
+        // way `wolf_wir::lower` decides to lower this builtin at all,
+        // so the two cannot disagree about what the name means.
+        if callee.kind == SyntaxKind::PathExpr && self.text(callee.span) == "str_from_utf8" {
+            return self.is_str_or_str_row(e.span);
+        }
+        if !self.is_str_expr(e.span) {
+            return false;
+        }
         let Some(m) = MemberExpr::cast(callee) else {
             return false;
         };
@@ -3234,6 +3245,22 @@ impl<'t> Lowerer<'t> {
             None => base,
         };
         self.is_str_expr(recv.span)
+    }
+
+    /// Is the expression at `span` typed `str`, or `str` behind an
+    /// error row (s160)? A raising producer's result is the same
+    /// materialization whether or not the row is still on it.
+    fn is_str_or_str_row(&self, span: Span) -> bool {
+        let Some(t) = self.expr_ty(span) else {
+            return false;
+        };
+        match t.kind() {
+            TyKind::Prim(Prim::Str) => true,
+            TyKind::ErrUnion(ok, _) => {
+                matches!(t.table.kind(*ok), TyKind::Prim(Prim::Str))
+            }
+            _ => false,
+        }
     }
 
     /// Is the expression at `span` typed `str` (s153)?
