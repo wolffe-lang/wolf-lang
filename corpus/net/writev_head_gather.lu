@@ -1,0 +1,102 @@
+//! check: run(exit=0, stdout="writev_head | in_order true | empty_head true | listener_is_io true | forged_is_io true")
+//! phase: run
+//! conforms: os.net.writev.head, mem.str.view.lend, err.union, err.propagate
+//!
+//! s160 (#299, `[os.net.writev.head]`) — the gather with a `str` head.
+//! `writev_gather.lu`'s shape with the head left as the `str` it is:
+//! a response head is built as a `str`, and `[mem.str.view.lend]`
+//! MATERIALIZES a `List[byte]` for it in a `let` or a push, so the
+//! one-syscall write cost a full copy of the head into a list before
+//! the vector could carry it. Here the head's own `{ptr, len}` — the
+//! two words a `str` already is — enters the gather directly, and the
+//! peer reads exactly the same wire.
+//!
+//!   in_order        head then parts, in order, byte for byte: the
+//!                   same bytes `writev_gather.lu` pins, reached
+//!                   without the copy.
+//!   empty_head      an empty head contributes no segment; the parts
+//!                   still go.
+//!   listener_is_io  a listener is `io`, `net_writev`'s rows exactly.
+//!   forged_is_io    a handle nobody minted is `io`.
+
+fn bytes_of(s: str) -> List[byte] {
+    var out = List[byte]()
+    for b in s.bytes() {
+        (mut out).push(b)
+    }
+    out
+}
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    let cli = net_connect("127.0.0.1:{port}")?
+    let conn = net_accept(srv)?
+
+    let n = 5
+    let head = "HTTP/1.1 200 OK\r\nContent-Length: {n}\r\n\r\n"
+    var parts = List[List[byte]]()
+    (mut parts).push(bytes_of("hello"))
+    net_writev_head(conn, head, parts)?
+
+    let want = bytes_of("HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello")
+    net_deadline(cli, 5000)?
+    var got = List[byte]()
+    while got.len < want.len {
+        let piece = net_read_bytes(cli, 64)?
+        for b in piece {
+            (mut got).push(b)
+        }
+    }
+    var in_order = got.len == want.len
+    var i = 0
+    for b in got {
+        if i < want.len && b != want[i] {
+            in_order = false
+        }
+        i = i + 1
+    }
+
+    var only = List[List[byte]]()
+    (mut only).push(bytes_of("tail"))
+    net_writev_head(conn, "", only)?
+    let want2 = bytes_of("tail")
+    var got2 = List[byte]()
+    while got2.len < want2.len {
+        let piece = net_read_bytes(cli, 16)?
+        for b in piece {
+            (mut got2).push(b)
+        }
+    }
+    var empty_head = got2.len == want2.len
+    var j = 0
+    for b in got2 {
+        if j < want2.len && b != want2[j] {
+            empty_head = false
+        }
+        j = j + 1
+    }
+
+    var listener_is_io = false
+    net_writev_head(srv, head, parts) else |e| match e {
+        io => {
+            listener_is_io = true
+        },
+        _ => {},
+    }
+    var forged_is_io = false
+    net_writev_head(99999, head, parts) else |e| match e {
+        io => {
+            forged_is_io = true
+        },
+        _ => {},
+    }
+
+    print(
+        "writev_head | in_order {in_order} | empty_head {empty_head} | listener_is_io {listener_is_io} | forged_is_io {forged_is_io}",
+    )
+    net_close(conn)?
+    net_close(cli)?
+    net_close(srv)?
+    0
+}
