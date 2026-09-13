@@ -1,0 +1,28 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.account.1, mem.region.intra.2
+//!
+//! s160 (wolf-lang#191, with #321) — the FREE producer. `str_from_utf8`
+//! copies the accepted bytes into the ambient region ("an ordinary
+//! owned `str`, borrowing nothing from the caller's list", as its
+//! runtime shim has always said), so it is an allocation site like
+//! `repeat` or `+`. The row on its type (`str ! {utf8}`) is why the
+//! mem tier could not see it by asking whether the result is `str`.
+//!
+//! This witness exists because #191 made it matter. While `str`
+//! materialization landed in the process root, the escape was a leak
+//! and printed fine; now that the bytes charge `scratch` and are freed
+//! wholesale with it, the same program would read freed memory. The
+//! refusal is what makes closing that seam safe.
+
+fn build() -> str {
+    region scratch {
+        let b = "hi".bytes()
+        str_from_utf8(b) else "?"   // ERROR E1010: built in scratch
+    }
+}
+
+fn main() -> !int {
+    print("{build()}\n")
+    0
+}

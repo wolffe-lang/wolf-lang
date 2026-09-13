@@ -1,0 +1,32 @@
+//! check: run(exit=0, stdout="charged true | reclaimed true")
+//! phase: run
+//! conforms: mem.region.account.1, mem.region.account.2, mem.region.create.3
+//!
+//! s160 (wolf-lang#191) — the #81 litmus, string edition, as a program
+//! rather than a runtime unit test. `[mem.region.create.3]` charges
+//! every materialization to the ambient region, and a built `str` is a
+//! materialization ([mem.region.escape]), so string work inside
+//! `region pass { }` must appear in that region's ledger and must
+//! vanish wholesale at its close.
+//!
+//! Until s160 the native tier realized the ambient region for `str` as
+//! the process root, so `charged` read 0 here while the same block
+//! holding a `List` read its full storage — one block, two answers.
+//! The booleans are the portable claim: `[mem.region.account.1]` makes
+//! the ledger's UNITS a per-tier measured fact and explicitly not
+//! comparison surface, so this file asserts that the number moved and
+//! came back, never what it was.
+
+fn main() -> !int {
+    let before = live_region_bytes()
+    var charged = 0
+    region pass {
+        var s = ""
+        for _ in 0..64 { s = "{s}0123456789abcdef" }
+        charged = region_bytes(pass)
+        if s.len != 1024 { return 1 }
+    }
+    let reclaimed = live_region_bytes() == before
+    print_raw("charged {charged > 0} | reclaimed {reclaimed}")
+    0
+}

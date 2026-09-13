@@ -325,9 +325,11 @@ memory/region_multiopen_ok.lu: lowers
 memory/region_multiopen_swap.lu: refused — Pool/shared constructor lowering (runtime shapes)
 memory/region_multiopen_values_ok.lu: lowers
 memory/region_open_ancestor.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_charged.lu: lowers
 memory/region_str_concat_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_concat_send.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_field_return.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_from_utf8_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_repeat_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_transfer_open.lu: not mem-clean (pre-wir rungs own it)
 memory/region_unit_tail_call.lu: lowers
