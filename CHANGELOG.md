@@ -1,6 +1,148 @@
 # Changelog
 
-## Unreleased
+## 0.2.14 — 2026-09-13
+
+THE STRING RUNTIME AND THE PAPERCUTS IV. 0.2.14 is one subject read
+from five directions — where a built `str`'s bytes live, and who is
+allowed to outlive them — beside five rows where the compiler was
+right about the program and wrong about the reader. It is also the
+cut where the pairing catches up with the interpreter: **lupin
+0.1.36**, the filesystem tier, was tagged while the stamp still said
+0.1.35 (wolf-lang#372), and this cut names it. Every number below was
+predicted before it was measured, and where the prediction was wrong
+the entry says which way.
+
+    fn worker(n: int, out: channel[str]) -> !int {
+        out.send("built {n} here")?    // E1010: proc:worker owns these bytes
+    }
+    region scratch { let s = "re".repeat(2); s }   // E1010, the repeat is a site
+    net_writev_head(sock, head, parts)?            // the head stays a str
+    if c then a else b                             // `then` is a keyword to the editor
+    fn(c: int) -> int { c }                        // one report, naming the rule
+
+**What a reader gets.** A `str` is a citizen of the region it is built
+in. Until this cut `region scratch { }` reclaimed a list's storage and
+not one byte of the string work beside it (#191, owed since s40), so
+string building was the one allocation `[mem.region.cap]` could not
+budget — and, less visibly, the leak that made two unsound programs
+look fine. Now a `str` built by interpolation charges its region
+(**481.8 MB → 2.5 MB** max RSS over 20,000 iterations, the same loop
+without the region block unchanged as the control), and two rules
+arrive with it because freeing the bytes is what makes them
+load-bearing: a spawned proc owns its ambient region
+(`[mem.region.proc]`, #355 — build the bytes in the spawner and hand
+them in as a parameter, which is the fix the diagnostic prescribes),
+and `upper`, `lower`, `repeat`, `replace`, `str_from_utf8` and a `str`
+read through a field are escape sites like any other
+(`[mem.region.escape]`, #321) — E1010 on both tiers, zero rows moved
+in `corpus/` and across wolf-std's 50 modules, one true positive in
+lobo. `net_writev_head` hands `writev` a `str` head without
+materializing a `List[byte]` for it (`[os.net.writev.head]`, #299 —
+288 bytes and one list per response on lobo's head shape);
+`RT_SYMBOLS` 143 → 144. Beside that, five papercuts: an editor
+colours `then` and `error` (#356 — one keyword addition had opened
+three holes across two subsystems, and `is_keyword` is a half-open
+range now with its boundary pinned); parser recovery stops at a
+contextual `error` declaration, which is why the nightly's own
+`MUTATE_BUDGET=300` was RED on trunk v0.2.13 and is green here; a
+type declaration with no `=` reports once, not three times (#360,
+cascade 4 → 2 against a bound that does not move); a function value's
+stray `-> int` gets the rule and three spellings that work instead of
+a caret on the arrow (#157's ch04 row); and the plain move-out of a
+`read` parameter was measured before it was ruled — it is **not**
+`take` by a quieter name, it is an undeclared alias, filed as #366
+(#359's premise was wrong). #298 stays open, and the entry says why.
+
+The pairing takes **lupin 0.1.36** (`6e94436`, pin `a7f517e` — the
+v0.2.12 tag), the release that gives the reference interpreter a
+filesystem. `crates/wolf_driver/PAIRING` said 0.1.35 while 0.1.36 was
+tagged — wolf-lang#372, filed by s160 when the pairing test went red
+against a real sibling — and this stamp closes it. After this cut the
+interpreter still declares v0.2.12 and the compiler names 0.1.36:
+**the gap is two releases, on the compiler's side** — v0.2.13 and
+v0.2.14 both go unanswered — and it is the first time the compiler has
+been two ahead at tags. That is the fs tier's doing, not a lapse:
+0.1.36 spent its release on an implementation the interpreter had
+declined since s38, and took no new pin to do it.
+
+### The papercuts IV (s159 — wolf-lang#356, #360, #359 ruled, #157's ch04 row; #366 filed)
+
+THE PAPERCUTS IV — five rows, three of them filed by s157 against
+itself, and one keyword addition that had opened three holes.
+
+- **lsp** (#356): the contextual `then` and `error` reach the
+  semantic-token stream. The walk's own keyword test carried a range
+  `AsKw..=WhileKw` with `SelfKw` bolted past the end; `ThenKw` (s151)
+  and `ErrorKw` (s158) were declared after it, matched neither that
+  test nor the `Ident` test under it, and `classify_token` answered
+  `None` — not a miscolouring, a hole, so an editor rendered `if c
+  then a else b` with `if` and `else` coloured and `then` as plain
+  text. `SyntaxKind::is_keyword` now owns the boundary, half-open at
+  the first punctuation kind and pinned (`LParen - AsKw == 53`, 50
+  reserved + 3 contextual), so a keyword declared in the block is a
+  keyword with no second edit anywhere. Measured on
+  `corpus/grammar/if_then_ident.lu`: 16 tokens → 17, the one added
+  being `11:20 4 keyword "then"` — the diff wolf-lsp#11 asked for,
+  against tl02's count of 16 at v0.2.12; the alias line of
+  `rows/error_alias_row.lu`, 1 → 2. Both witnesses pin the WHOLE
+  decoded stream, because every earlier assertion looked a token up by
+  position and an absent token is a count nobody took.
+- **parse** (#360): a type declaration with no `=` reports once. Past
+  the missing `=` the item parser pressed on — `expected \`=\` in the
+  type declaration`, then `expected a type`, then `expected a
+  declaration here` — three reports on one token, the #243/#285 shape
+  again. There is no alias body to parse without an `=`, so recovery
+  consumes the wreck once. Measured with the run the issue asked for,
+  `MUTATE_BUDGET=1000`: `comptime/assert_static.lu [swap tokens 6/7
+  at 316..321]` goes from 4 cascade diagnostics against the tight
+  bound of 3 to **2**, and the bound itself does not move. The witness
+  pins the diagnostic CODE LIST for the reduced shape and that the
+  declaration after the wreck still parses.
+- **parse** (found measuring #360): recovery stops at a contextual
+  `error` declaration. `error` lexes as an `Ident` and both of the
+  parser's "does a declaration start here?" tests matched
+  `TokenKind::Kw` only, so deleting the `}` of `error IoErrors =
+  {none, parse}` made the row swallow the whole `error ConfigErrors =
+  …` after it, and a `=>` in its place ran the sibling-floor skip with
+  no stop at all. `at_decl_keyword` now answers through
+  `at_error_item`, the parser's own reclassification test, so recovery
+  and the item parser agree on what starts a declaration. This is
+  #356's shape in a second subsystem — s158 added one keyword and
+  opened three holes — and it is why the nightly's own
+  `MUTATE_BUDGET=300` was RED on trunk v0.2.13 (reproduced with the
+  grammar reverted, so not a regression of the row above); it exits 0
+  now, 6 passed. #360's premise that 300 was clean was wrong.
+- **mem** (#359, ruled; #366 filed): the plain move-out of a `read`
+  parameter is not `take`. #359 asked for `fn f(b: List[int]) ->
+  List[int] { b }` to be ruled as s157 ruled `take`, on the premise
+  that it hands the caller's value away by a quieter spelling.
+  Measured at v0.2.13, it does not: `let ys = f(xs)` prints `3 3` —
+  the caller keeps its binding and its value — and what it got is a
+  SECOND live path, `(mut ys).push(99)` then reads `ys=4 xs=4`. That
+  is an undeclared alias, two writable paths with no `shared` spelling
+  anywhere, and the clause it breaks is `[mem.tier0.excl.1]`, not
+  `[mem.tier0.mode.read]`; folding it into E1014 would have named the
+  wrong rule. The wide reading — refuse every move out of a `read`
+  parameter at `emit_move` — was installed and measured before ruling:
+  ONE distinct site in the corpus (`match self` in
+  `typecheck/variant_value/paint/p.lu`, a false positive), 35 reports
+  in wolf-std of which 23 are `self` and the rest local rebinds, and
+  the three moves that actually leave an activation all in wolf-std
+  (`std/cmp/cmp.lu:54`, `std/list/list.lu:68`,
+  `std/option/option.lu:77`). Wrong on precision, not on cost.
+  `[mem.tier0.mode.read]` says so now, and the aliasing defect is
+  #366 — a cross-repo language change, not a papercut.
+- **parse** (#157's ch04 row): a function value takes no return type.
+  `fn(c: int) -> int { … }` reported `expected the closure body` with
+  the caret on the `->` — true about where the parse stopped and
+  useless to the reader, who wrote it because the ITEM spelling right
+  above declares one. Now one report spanning the whole stray `-> int`,
+  saying the rule — a function value's body type IS its type — and
+  naming the three spellings that work, all of which the witness parses
+  clean; the annotation is consumed into an `ErrorNode` so the body
+  still parses and nothing cascades. `cargo xtask diag-catalog`
+  regenerates with no diff, and 4456 reader-facing strings carry no
+  internal id.
 
 ### The string runtime (s160 — wolf-lang#355, #321, #191, #299; #298 stays open)
 
