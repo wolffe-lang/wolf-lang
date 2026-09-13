@@ -63,7 +63,105 @@ interpreter still declares v0.2.12 and the compiler names 0.1.36:
 v0.2.14 both go unanswered — and it is the first time the compiler has
 been two ahead at tags. That is the fs tier's doing, not a lapse:
 0.1.36 spent its release on an implementation the interpreter had
-declined since s38, and took no new pin to do it.
+declined since s38, and took no new pin to do it. The bump is
+**nine** ledger counts per tier — the nine files the fs tier unblocks,
+each leaving `unsupported` for an agreement, predicted exactly — and
+the fifteen Verdict rows s158's surface opened stay open, because the
+pin has not moved.
+
+### The pairing takes lupin 0.1.36 (#87 ritual, #281 control; closes wolf-lang#372)
+
+wolf is now differentially tested against **lupin 0.1.36**
+(`6e94436`), which declares `a7f517e` — the v0.2.12 tag — as its
+conformance pin, the same pin 0.1.35 declared. PAIRING named 0.1.35,
+so this stamp moves 0.1.35 -> 0.1.36, one release, and closes #372,
+which s160 filed when the sibling-pairing test went red against the
+real 0.1.36 archive. Both darwin archives were verified by sha256
+against their release asset digests before use (0.1.36 `41f21002…`,
+0.1.35 `0ea91a61…`), and the sibling-pairing test ran with its third
+layer comparing rather than skipping: `LUPIN=` the 0.1.36 binary with
+`WOLF_PAIRING_REQUIRE_SIBLING=1` is 10 passed, and the same command
+at the 0.1.35 binary is 1 failed with the mismatch named.
+
+**Predicted before either archive was fetched** (scratch
+`r19-prediction-0136.txt`), three calls: that the bump would move
+exactly the nine files is48 named, every one `unsupported ->
+agreement`, on both tiers; that the fifteen Verdict rows would not
+close; and that nothing would move below the ledger. Over the full
+615-file corpus (580 entries), both tiers, against
+`target/release/wolf` built by `cargo xtask dist` at `df00d26`, with
+the control against the 0.1.35 release archive on the same tree:
+
+                    checked                     native
+    agreements      323 -> 332  (+9)            353 -> 362  (+9)
+    completeness    151 -> 151   (0)            151 -> 151   (0)
+    soundness         0 ->   0   (0)              0 ->   0   (0)
+    unsupported     117 -> 108  (-9)             87 ->  78  (-9)
+    hard             23 ->  23   (0)             23 ->  23   (0)
+    coverage A      340 -> 340   (0)            372 -> 372   (0)
+    coverage B      426 -> 435  (+9)            426 -> 435  (+9)
+    coverage BOTH   306 -> 315  (+9)            336 -> 345  (+9)
+
+    corpus/fs/bytes_dirs.lu                  unsupported -> agreement
+    corpus/fs/error_row.lu                   unsupported -> agreement
+    corpus/fs/fstat.lu                       unsupported -> agreement
+    corpus/fs/open_nonblock.lu               unsupported -> agreement
+    corpus/fs/roundtrip.lu                   unsupported -> agreement
+    corpus/memory/byte_producers_ledger.lu   unsupported -> agreement
+    corpus/net/unix_echo.lu                  unsupported -> agreement
+    corpus/projects/count.lu                 unsupported -> agreement
+    corpus/projects/count_dir.lu             unsupported -> agreement
+
+    below the ledger — none.
+
+**The bump was predicted exactly.** `THE INTERPRETER BUMP MOVED 9
+LEDGER COUNT(S)` on each tier, the nine files named above and no
+other, each leaving the unsupported tally for an agreement, coverage B
+and BOTH up by nine, zero files below the ledger. The interpreter's
+own census had said which nine (is48: out of scope 62 -> 53, "for the
+next compiler release lane to predict against") and the compiler
+already ran all nine on both tiers, so the open question was whether
+lupin's live run under the differ would answer what its observed run
+had. It did — `memory/byte_producers_ledger.lu`, the one that pins a
+region-accounting relation rather than an fs one, and the
+socket-binding `net/unix_echo.lu` included. That is the whole
+interpreter delta of this release: the filesystem, and nothing but the
+filesystem.
+
+**The control arm, and where the prediction missed.** The control is
+this tree against 0.1.35, which r18 had measured at v0.2.13 over 608
+files; those 608 rows reproduce and s160's seven files are the whole
+difference. Coverage was predicted exactly in all six cells (A
+340/372, B 426, BOTH 306/336); the classes were not — predicted
+325/149/0/116/24 checked and 355/149/0/86/24 native, measured
+323/151/0/117/23 and 353/151/0/87/23. Three files, the same three on
+both tiers. `memory/region_str_repeat_return.lu` and
+`memory/region_str_from_utf8_return.lu` were called agreements —
+lupin trapping `region-fault` where the compiler says E1010 — and are
+completeness notes: lupin runs both clean, `exit(0)`, printing from
+bytes the region no longer owns, which is the alternative the
+prediction flagged and weighted at a third. `region_str_field_return.lu`
+and `chan_payload_escape_proc.lu` trapped as called and are
+agreements. And `net/writev_head_gather.lu` was called a Verdict row
+— `net_writev_head` does not exist at pin `a7f517e` — and is
+`unsupported` instead: lupin declines the name at resolve rather than
+answering a code. So hard stays **23 = 8 Diag + 15 Verdict** on both
+tiers, not 24.
+
+**The fifteen Verdict rows do not close, and were not expected to.**
+0.1.36 declares `a7f517e`, the pin 0.1.35 declared, and bs46 measured
+list literals as E0201 on it before this lane ran; wolf-interp#106 is
+the open mirror. The same fifteen — six `grammar/list_lit_*`, five
+`grammar/range_type_*`, three `rows/error_alias_*` and
+`grammar/match_nullary_variant.lu` — on both tiers; the eight Diag
+rows are v0.2.12's eight, still warning parity. Zero SOUNDNESS on both
+tiers, a third cut running. s160's own clauses have no lupin side at
+this pin either, and the rows say which kind of none: `[mem.region.proc]`
+is already an agreement by trap (lupin names `proc:worker` where the
+compiler says E1010), `[mem.region.escape]`'s two new producers are
+the two completeness notes above, and `[os.net.writev.head]` is the
+unsupported. Filed as wolf-interp#111 so the next interpreter pin has
+its rows.
 
 ### The papercuts IV (s159 — wolf-lang#356, #360, #359 ruled, #157's ch04 row; #366 filed)
 
