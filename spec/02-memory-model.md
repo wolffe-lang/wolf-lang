@@ -257,7 +257,9 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   out from #310. **First**, the site list is not only the operators:
   it is **every `str`-producing builtin that materializes** — `upper`,
   `lower`, `repeat` and `replace` build fresh bytes in the ambient
-  region, and each is a site exactly as `+` is. The other side of
+  region, and so does the free producer `str_from_utf8`, whose error
+  row is why asking "is the result `str`" did not find it; each is a
+  site exactly as `+` is. The other side of
   `[mem.str.view]` is unchanged and allocates nothing: `trim`,
   `trim_start`, `trim_end`, `get`, `strip_prefix`, `strip_suffix`, the
   byte view, and the pieces of `split`/`words`/`lines`. The mem tier
@@ -413,12 +415,37 @@ Edge legality (source stores a reference to target):
   Tier-3 address inspection, not a `[mem.region.promote.1]`
   observation: an allocation the implementation promotes or elides may
   charge nothing, and no program may read placement from the number.
-  Known per-tier gap, recorded: the native tier realizes `str`
-  materialization's ambient region as the process root (wolf-lang#191,
-  the c09 seam), so string bytes appear in **no** named region's
-  ledger there today; when that seam closes they charge the current
-  region — programs must not read this clause as "`str` never
-  charges". (Added 2026-09-01, s131 — wolf-lang#187, the wolf-web
+  The per-tier gap this clause used to record is CLOSED (s160,
+  wolf-lang#191): the native tier realized `str` materialization's
+  ambient region as the process root, so string bytes appeared in no
+  named region's ledger and a `region scratch { }` block reclaimed a
+  `List`'s storage — the s76/#81 contract — while reclaiming not one
+  byte of the string work beside it. `str` now charges the current
+  region on both tiers, exactly as `[mem.region.create.3]` always
+  said, and a `List[str]`'s ELEMENT bytes charge the list's own region
+  rather than splitting header from contents across two. **The cost,
+  stated, and it is a saving on one tier and nothing on the other.**
+  On the checked tier: zero — it charged the ambient region already.
+  On the native tier the materializing path swaps one process-global
+  `Mutex`-guarded bump for the current region's unsynchronized one, so
+  a materialization inside a named region gets *cheaper* by a lock
+  acquisition; outside any named region the path is unchanged, because
+  the root arena is still what "the current region" resolves to there.
+  What changes is memory, and by a lot: a 20,000-iteration loop
+  building a ~1.2 KB `str` by repeated interpolation inside `region
+  pass { }` measured **481.8 MB** max RSS before and **2.5 MB** after
+  (macOS/arm64, debug tier, standalone executables, the same loop
+  without the region block unchanged at 481.6 MB both ways — the
+  control that says the region is doing the work and not the
+  allocator). Two consequences a program can see, both intended: a
+  region's ledger and `live_region_bytes()` now count string bytes, so
+  `[mem.region.cap]` budgets bind string building as they always bound
+  container building; and bytes that used to leak are now genuinely
+  freed, which turns any `str` escape the checker fails to refuse from
+  a silent leak into a real use-after-free. That is why wolf-lang#355
+  (`[mem.region.proc]`) and wolf-lang#321 landed first: they are the
+  holes that closing this seam would otherwise have opened.
+  (Added 2026-09-01, s131 — wolf-lang#187, the wolf-web
   `memory_budget` customer; the query half. A creation-time cap and
   its fault semantics are #187's second half, not this clause.)
 - `[mem.region.account.2]` `live_region_bytes()` reads the
