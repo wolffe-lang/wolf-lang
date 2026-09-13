@@ -111,6 +111,7 @@ pub const PRELUDE: &[&str] = &[
     // `[os.net.writev]`; and the one socket option a stream takes
     // after acquisition, `[os.net.nodelay]`.
     "net_writev",
+    "net_writev_head",
     "net_nodelay",
     // s136 (#227): the unix-domain pair, `[os.net.unix]`.
     "net_listen_unix",

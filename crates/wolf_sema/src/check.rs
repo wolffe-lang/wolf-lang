@@ -7820,6 +7820,21 @@ impl<'a> Checker<'a> {
                 let parts = self.lo.table.intern(TyKind::List(list_byte));
                 (vec![int_, parts], rowed(self, unit, &["closed", "io"]))
             }
+            // s160 (#299, `[os.net.writev.head]`): the gather with a
+            // `str` head. A response head IS a `str`, and
+            // `[mem.str.view.lend]` materializes a `List[byte]` for it
+            // in a `let` or a push — so the one-syscall write cost a
+            // full copy of the head to enter the vector. The head's
+            // own `{ptr, len}` is what `writev` wants; this hands it
+            // over. Rows are `net_writev`'s exactly.
+            "net_writev_head" => {
+                let list_byte = self.byte_list_ty();
+                let parts = self.lo.table.intern(TyKind::List(list_byte));
+                (
+                    vec![int_, str_, parts],
+                    rowed(self, unit, &["closed", "io"]),
+                )
+            }
             // s141 (#254, `[os.net.nodelay]`): Nagle off (`true`, the
             // posture every stream is handed out with) or on for a
             // TCP stream; a listener, a unix stream or a forged
