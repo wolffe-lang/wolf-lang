@@ -92,6 +92,7 @@ pub fn derive_eq(
                 span: prov.call_site,
                 mode: None,
                 view: None,
+                store: false,
             },
             ParamSig {
                 name: "b".to_string(),
@@ -99,6 +100,7 @@ pub fn derive_eq(
                 span: prov.call_site,
                 mode: None,
                 view: None,
+                store: false,
             },
         ],
         ret: bool_,

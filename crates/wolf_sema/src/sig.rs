@@ -52,6 +52,14 @@ pub struct ParamSig {
     /// surface — `wolf interface` renders it and the interface hash
     /// covers it (via the rendered param list).
     pub view: Option<Vec<String>>,
+    /// wolf-lang#385: this parameter is a **builtin container store**
+    /// that keeps its argument inside the receiver (`push`'s value,
+    /// `Pool.init`'s value). The mode it declares is `read`, and a
+    /// plain argument is COPIED in (`[mem.region.edge.elem]`); unlike
+    /// every other `read` parameter the call site MAY spell `take`,
+    /// which moves the element instead. `false` everywhere else, where
+    /// a site mode must equal the declaration exactly (X1, E1007).
+    pub store: bool,
 }
 
 /// A resolved trait bound on a generic parameter (`T: Show` — module
@@ -699,6 +707,7 @@ impl<'a> Lower<'a> {
                             span: p.syntax().span,
                             mode: p.mode(),
                             view,
+                            store: false,
                         });
                     }
                     continue;
@@ -721,6 +730,7 @@ impl<'a> Lower<'a> {
                     span,
                     mode: p.mode(),
                     view: None,
+                    store: false,
                 });
             }
         }

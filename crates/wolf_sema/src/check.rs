@@ -6457,6 +6457,7 @@ impl<'a> Checker<'a> {
             span: member_span,
             mode: None,
             view: None,
+            store: false,
         };
         // `mut self` — the mutating receivers.
         let pm = |name: &str, ty: TyId| ParamSig {
@@ -6465,6 +6466,22 @@ impl<'a> Checker<'a> {
             span: member_span,
             mode: Some(wolf_ast::ParamMode::Mut),
             view: None,
+            store: false,
+        };
+        // wolf-lang#385, ruled option 3: a builtin container STORE
+        // keeps its argument inside the receiver. The parameter stays
+        // `read` — a plain element is COPIED in, so the caller keeps
+        // its value ([mem.region.edge.elem]) — and the call site may
+        // additionally spell `take` to move the element instead. The
+        // `store` flag is what makes that `take` legal rather than
+        // E1007; `copy` needs no flag, it is an ordinary read.
+        let ps = |name: &str, ty: TyId| ParamSig {
+            name: name.to_string(),
+            ty,
+            span: member_span,
+            mode: None,
+            view: None,
+            store: true,
         };
         let (params, ret) = match (self.kind_of(recv_ty), mname) {
             // `[mem.shared.rc.1]` clones share ownership — the dup site.
@@ -6488,7 +6505,7 @@ impl<'a> Checker<'a> {
             }
             (TyKind::List(t), "push") => {
                 let u = self.lo.table.unit();
-                (vec![pm("self", recv_ty), p("value", t)], u)
+                (vec![pm("self", recv_ty), ps("value", t)], u)
             }
             // s37 — List method depth: the recoverable element reads
             // (`{none}` rows, the D25 posture — absence is a row, not
@@ -6618,7 +6635,7 @@ impl<'a> Checker<'a> {
             (TyKind::Pool(t), "init") => {
                 let h = self.lo.table.intern(TyKind::Handle(t));
                 let u = self.lo.table.unit();
-                (vec![pm("self", recv_ty), p("handle", h), p("value", t)], u)
+                (vec![pm("self", recv_ty), p("handle", h), ps("value", t)], u)
             }
             (TyKind::Pool(t), "remove") => {
                 let h = self.lo.table.intern(TyKind::Handle(t));
@@ -6688,6 +6705,7 @@ impl<'a> Checker<'a> {
             span: member_span,
             mode: None,
             view: None,
+            store: false,
         };
         let (params, ret) = match (self.kind_of(recv_ty), mname) {
             // `[conc.mm.hb.chan]` — the k-th send pairs the k-th
@@ -6902,6 +6920,7 @@ impl<'a> Checker<'a> {
             span: member_span,
             mode: None,
             view: None,
+            store: false,
         };
         let str_ = self.lo.table.prim(Prim::Str);
         let int_ = self.lo.table.prim(Prim::Int);
@@ -7070,6 +7089,7 @@ impl<'a> Checker<'a> {
             span: member_span,
             mode: None,
             view: None,
+            store: false,
         };
         let uint_ = self.lo.table.prim(Prim::Uint);
         let bool_ = self.lo.table.prim(Prim::Bool);
@@ -7686,6 +7706,7 @@ impl<'a> Checker<'a> {
                 span: member_span,
                 mode: None,
                 view: None,
+                store: false,
             })
             .collect();
         self.calls.push((
@@ -8147,6 +8168,7 @@ impl<'a> Checker<'a> {
                                 span: callee.span,
                                 mode: None,
                                 view: None,
+                                store: false,
                             })
                             .collect(),
                         c_call: false,
@@ -8223,6 +8245,7 @@ impl<'a> Checker<'a> {
                                 span: callee.span,
                                 mode: None,
                                 view: None,
+                                store: false,
                             })
                             .collect(),
                         c_call: false,
@@ -8388,6 +8411,7 @@ impl<'a> Checker<'a> {
                                 span: v_span,
                                 mode: None,
                                 view: None,
+                                store: false,
                             })
                             .collect(),
                         c_call: false,
