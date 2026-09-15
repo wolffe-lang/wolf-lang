@@ -8,9 +8,11 @@
 //! three words (a `str` view and an `int`); each send copies it into a
 //! box the channel owns in flight, the `for` takes each box on
 //! receipt, and the drained-closed channel answers `closed` to the
-//! last `recv`. The checked lane declines channel methods (no
-//! resolvable bodies); this is a native witness, byte-identical under
-//! lupin.
+//! last `recv`. The checked lane declines `scope` and `spawn`
+//! (structured concurrency, C1 deferred), so this stays a native
+//! witness, byte-identical under lupin; the same payload sent and
+//! received from the root task runs on all three lanes in
+//! `chan_root_task.lu` (wolf-lang#342).
 
 struct Doc { title: str, words: int }
 

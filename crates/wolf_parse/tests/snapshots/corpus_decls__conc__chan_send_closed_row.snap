@@ -2,5 +2,5 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 643..711 name=relay body=Block
-FnDecl 713..1034 name=main body=Block
+FnDecl 661..729 name=relay body=Block
+FnDecl 731..1052 name=main body=Block
