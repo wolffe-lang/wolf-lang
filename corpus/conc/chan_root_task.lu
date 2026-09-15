@@ -1,0 +1,49 @@
+//! check: run(exit=0, stdout="drained 6\nregions 900\nmoves 640\nnothing left: closed\nlate: closed\nrelayed: closed\n")
+//! phase: run
+//! conforms: conc.chan.buf, conc.chan.close, conc.chan.payload
+//!
+//! wolf-lang#342 — the channel methods from the ROOT task, no `spawn`
+//! and no `scope`: `send` into a buffer with room, `close`, a `for`
+//! that drains to drained-close, a struct payload copied in and handed
+//! out by `recv`, `recv` on a drained-closed channel answering
+//! `closed`, and a send after close answering `closed` both handled and
+//! propagated with `?`. The checked machine used to refuse every one of
+//! these (`methods without resolvable bodies`), so chapter 12's
+//! channel programs had one tier on the compiler's side; all three
+//! lanes run this file.
+
+struct Doc { title: str, words: int }
+
+fn relay(ch: channel[int], v: int) -> !int {
+    ch.send(v)?
+    v
+}
+
+fn main() -> !int {
+    let ch = channel[int](4)
+    for i in 1..=3 { ch.send(i)? }
+    ch.close()
+    var sum = 0
+    for v in ch { sum += v }
+    print("drained {sum}")
+
+    let docs = channel[Doc](2)
+    docs.send(Doc { title: "regions", words: 900 })?
+    docs.send(Doc { title: "moves", words: 640 })?
+    docs.close()
+    let a = docs.recv()?
+    print("{a.title} {a.words}")
+    let b = docs.recv()?
+    print("{b.title} {b.words}")
+    let _c = docs.recv() else |err| {
+        print("nothing left: {err}")
+        Doc { title: "", words: 0 }
+    }
+
+    ch.send(4) else |err| { print("late: {err}") }
+    let r = relay(ch, 5) else |err| {
+        print("relayed: {err}")
+        0
+    }
+    if r == 0 { 0 } else { 1 }
+}

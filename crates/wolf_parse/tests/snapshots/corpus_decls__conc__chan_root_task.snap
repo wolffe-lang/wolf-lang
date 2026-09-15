@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 788..825 name=Doc fields=2
+FnDecl 827..895 name=relay body=Block
+FnDecl 897..1624 name=main body=Block
