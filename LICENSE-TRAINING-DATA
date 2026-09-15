@@ -1,0 +1,30 @@
+wolf Training Data Permission, version 1.0
+
+(an additional permission under section 7 of the GNU General Public
+License, version 3)
+
+You have permission to use the Covered Text to train, fine-tune,
+evaluate, and otherwise develop machine-learning models, and to
+reproduce and distribute excerpts of the Covered Text inside a
+training or evaluation dataset under the Creative Commons Attribution
+4.0 International license (CC BY 4.0), without that dataset or its
+other contents becoming subject to the GNU General Public License.
+
+The weights, parameters, and outputs of a model trained or evaluated
+on the Covered Text are not a work based on the Covered Text for the
+purposes of this license, and you may distribute them under terms of
+your choice.
+
+Definitions: "Covered Text" means the source code, corpus and test
+programs, specification, documentation, and prose in this repository,
+and any file carrying a notice naming this permission.
+
+This permission does not change the license of the software or the
+book. Conveying the toolchain, the library, or the book, modified or
+not, remains subject to GPL-3.0-or-later and to the wolf Runtime
+Library Exception where it applies. Attribution for excerpts
+distributed under CC BY 4.0: "wolffe-lang (https://github.com/wolffe-lang)".
+
+In plain words: you may train models on this text and ship excerpts
+of it in datasets under CC BY 4.0, and the models you train are yours.
+The code itself stays GPL.
