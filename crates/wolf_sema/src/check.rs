@@ -57,7 +57,7 @@ use wolf_diag::{Applicability, Diagnostic, Suggestion, codes};
 use wolf_span::Span;
 
 use crate::exhaust;
-use crate::graph::{BindTarget, Package};
+use crate::graph::{BindTarget, ItemKind, Package, Vis};
 use crate::prelude;
 use crate::sig::{FnSig, GenericSig, ItemSig, Lower, ParamSig, SigTables, StructSig, bindings_for};
 use crate::traits::{self, TraitMethod, TraitRef};
@@ -102,6 +102,11 @@ pub enum Dispatch {
         method: String,
         dyn_call: bool,
     },
+    /// `[type.method.resolve]` step (2) (s166): the `pub fn` `name` of
+    /// the receiver type's home module (`[type.method.home]`), called
+    /// as the free call with the receiver first — `xs.any(p)` IS
+    /// `list.any(xs, p)`, one instance, one lowering.
+    Home { module: usize, name: String },
 }
 
 /// The declared mode surface of one resolved call site (s18/c04):
@@ -6626,10 +6631,28 @@ impl<'a> Checker<'a> {
                 (vec![pm("self", recv_ty), p("handle", h)], u)
             }
             _ => {
-                return Err(NotYet {
-                    construct: "methods on generic std data (the std surface)",
-                    span: e.span,
-                });
+                // `[type.method.resolve]` step (2): the home module.
+                if let Some(r) = self.home_method_call(
+                    base,
+                    recv_ty,
+                    recv_mode,
+                    member_span,
+                    mname,
+                    e,
+                    args,
+                ) {
+                    return r;
+                }
+                if matches!(self.kind_of(recv_ty), TyKind::List(_) | TyKind::Map(..)) {
+                    return self.home_miss(recv_ty, member_span, mname, args);
+                }
+                // `Shared`/`Weak`/`Pool` have no home module: a method
+                // outside their builtin set is the unknown method it is.
+                self.report_unknown_method(recv_ty, member_span, mname);
+                if let Some(a) = args {
+                    self.synth_args_loosely(a)?;
+                }
+                return Ok(self.error_ty());
             }
         };
         self.dispatch.push((
@@ -7002,16 +7025,21 @@ impl<'a> Checker<'a> {
                 (vec![p("self", recv_ty)], ret)
             }
             _ => {
-                // Name the method (wolf-lang#263): the reader had to
-                // count bytes to learn which call a bare span refused.
-                // `construct` is `&'static str` by design (the ledger
-                // keys on it), so the text is leaked once per refusal
-                // — a path that ends the build, never a hot one.
-                let text = format!("this `str` method, `{mname}`, is outside the builtin set");
-                return Err(NotYet {
-                    construct: Box::leak(text.into_boxed_str()),
-                    span: e.span,
-                });
+                // `[type.method.resolve]` step (2): `std.str`. Before
+                // s166 this was a NotYet naming the method (#263); a
+                // method outside the builtin set is std's now.
+                if let Some(r) = self.home_method_call(
+                    base,
+                    recv_ty,
+                    recv_mode,
+                    member_span,
+                    mname,
+                    e,
+                    args,
+                ) {
+                    return r;
+                }
+                return self.home_miss(recv_ty, member_span, mname, args);
             }
         };
         self.dispatch.push((
@@ -8960,8 +8988,11 @@ impl<'a> Checker<'a> {
                 construct: "a method call on a value whose type is still being inferred",
                 span: e.span,
             }),
+            // An opaque type (`Buf[2 + 2]`, a spelling the table has no
+            // home for) carries no method surface the checker can read.
+            // Not std data — s166 moved that surface to the home modules.
             TyKind::Unsupported(_) => Err(NotYet {
-                construct: "methods on generic std data (the std surface)",
+                construct: "a method on a value whose type this checker cannot spell yet",
                 span: e.span,
             }),
             // The s21 Tier-2 builtins: shared/weak cells and the
@@ -9091,6 +9122,159 @@ impl<'a> Checker<'a> {
 
     /// Resolution step 2 for a concrete receiver.
     #[allow(clippy::too_many_arguments)]
+    /// `[type.method.resolve]` step (2) (s166, wolf-lang#390): a method
+    /// the builtin surface does not answer on a std data type resolves
+    /// to its home module's `pub fn` of that name (`[type.method.home]`),
+    /// and the call IS that free call — the receiver checked against the
+    /// first parameter with the function's generics fresh, the arguments
+    /// against the rest. `None`: the receiver has no home module, or the
+    /// module has no `pub fn` so named (the caller's next step decides).
+    #[allow(clippy::too_many_arguments)]
+    fn home_method_call(
+        &mut self,
+        base: &GreenNode,
+        recv_ty: TyId,
+        recv_mode: Option<wolf_ast::ParamMode>,
+        member_span: Span,
+        mname: &str,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> Option<R<TyId>> {
+        let home = home_of(&self.kind_of(recv_ty))?;
+        let pkg = self.pkg();
+        let module = pkg
+            .modules
+            .iter()
+            .position(|m| m.path.len() == 2 && m.path[0] == "std" && m.path[1] == home)?;
+        let item = pkg.tables[module].get(mname)?;
+        if item.kind != ItemKind::Fn || item.vis != Vis::Pub {
+            return None;
+        }
+        let Some(ItemSig::Fn(sig)) = self.sigs.get(module, mname).cloned() else {
+            return None;
+        };
+        // A candidate's first parameter is spelled with the receiver's
+        // type constructor; a `pub fn` over something else is not a
+        // method of this type at all.
+        let p0 = sig.params.first()?.ty;
+        if home_of(&self.kind_of(p0)) != Some(home) {
+            return None;
+        }
+        // Trial: does the receiver fit the first parameter? A name that
+        // exists and does not fit is E0403 naming what it takes.
+        let snap = self.vars.snapshot();
+        let mut map = BTreeMap::new();
+        for g in &sig.generics {
+            let v = self.vars.fresh(&mut self.lo.table, 0, NumKind::Any, e.span);
+            map.insert(g.name.clone(), v);
+        }
+        let want = subst(&mut self.lo.table, p0, &map);
+        let fits = unify(&mut self.lo.table, &mut self.vars, want, recv_ty).is_ok();
+        self.vars.rollback(snap);
+        if !fits {
+            let shown = self.show(recv_ty);
+            let takes = self.show(p0);
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E0403,
+                    member_span,
+                    format!("`{shown}` has no method named `{mname}`"),
+                )
+                .with_label("no method for this receiver")
+                .with_secondary(sig.name_span, format!("`std.{home}.{mname}` is declared here"))
+                .with_note(format!(
+                    "`std.{home}.{mname}` takes `{takes}` as its first parameter, and a \
+                     `{shown}` receiver does not fit it ([type.method.resolve])."
+                )),
+            );
+            if let Some(a) = args {
+                return Some(self.synth_args_loosely(a).map(|_| self.error_ty()));
+            }
+            return Some(Ok(self.error_ty()));
+        }
+        self.dispatch.push((
+            e.span,
+            Dispatch::Home {
+                module,
+                name: mname.to_string(),
+            },
+        ));
+        self.member_refs.push((member_span, sig.name_span));
+        Some(self.dispatch_method(
+            mname,
+            &sig,
+            BTreeMap::new(),
+            sig.name_span,
+            base,
+            recv_ty,
+            recv_mode,
+            e,
+            args,
+        ))
+    }
+
+    /// No step found `mname` on a std data type: E0301 when no std is
+    /// configured (`[type.method.root]` — the home module is where the
+    /// method would come from), E0403 otherwise, and `take` names the
+    /// slices (`[type.method.take]`).
+    fn home_miss(
+        &mut self,
+        recv_ty: TyId,
+        member_span: Span,
+        mname: &str,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        let shown = self.show(recv_ty);
+        let home = home_of(&self.kind_of(recv_ty)).unwrap_or("list");
+        if mname == "take" {
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E0403,
+                    member_span,
+                    format!("`{shown}` has no method named `take`"),
+                )
+                .with_label("`take` is the ownership verb, never a method")
+                .with_note(
+                    "the first `n` elements are the slice `xs[..n]`, which faults \
+                     `bounds` past the end, and `xs[..min(n, xs.len)]` stops at it; \
+                     the rest after them is `xs[n..]` ([type.method.take]).",
+                ),
+            );
+        } else if !self.pkg().has_std_root {
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E0301,
+                    member_span,
+                    format!("`{mname}` is not a builtin method of `{shown}`"),
+                )
+                .with_label(format!("a `{shown}` method outside the builtins comes from `std.{home}`"))
+                .with_note(format!(
+                    "no standard library is configured, so `std.{home}` cannot answer this \
+                     call ([type.method.root]). Point wolf at a wolf-std checkout with \
+                     `--std-root <dir>`, the `WOLF_STD` environment variable, or a `std` \
+                     path dependency in `wolf.pkg`."
+                )),
+            );
+        } else {
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E0403,
+                    member_span,
+                    format!("`{shown}` has no method named `{mname}`"),
+                )
+                .with_label("unknown method")
+                .with_note(format!(
+                    "neither the builtin methods of `{shown}` nor a `pub fn {mname}` of \
+                     `std.{home}` taking it first answer this call ([type.method.resolve])."
+                )),
+            );
+        }
+        if let Some(a) = args {
+            self.synth_args_loosely(a)?;
+        }
+        Ok(self.error_ty())
+    }
+
     fn concrete_method_call(
         &mut self,
         base: &GreenNode,
@@ -9139,6 +9323,13 @@ impl<'a> Checker<'a> {
                 e,
                 args,
             );
+        }
+        // s166 — a range's home module (`std.range`) answers before
+        // the traits, `[type.method.resolve]`'s order.
+        if let Some(r) =
+            self.home_method_call(base, recv_ty, recv_mode, member_span, mname, e, args)
+        {
+            return r;
         }
         // (2) Trait methods from impls whose trait the receiver's type
         // implements; scope decides visibility, coherence uniqueness.
@@ -9233,9 +9424,12 @@ impl<'a> Checker<'a> {
                         .unwrap_or(e);
                     return self.call_by_type(f.ty, m_node, e, args);
                 }
-                // Builtin receivers (str, int, ranges, …) grow their
-                // methods with the standard library — an honest
-                // refusal, not a typo report, until s05 lands.
+                if matches!(self.kind_of(recv_ty), TyKind::Range(_)) {
+                    return self.home_miss(recv_ty, member_span, mname, args);
+                }
+                // Builtin receivers (int, …) grow their methods with the
+                // standard library — an honest refusal, not a typo
+                // report, until s05 lands.
                 if !matches!(self.kind_of(recv_ty), TyKind::Nominal { .. }) {
                     return Err(NotYet {
                         construct: "methods on builtin types (the std surface)",
@@ -12434,5 +12628,17 @@ mod char_literal_tests {
         ] {
             assert_eq!(cook_char_literal(text), None, "{text}");
         }
+    }
+}
+
+/// `[type.method.home]` — the home module (`std.<name>`) of a std data
+/// type's constructor, or `None` for a type that has none.
+fn home_of(k: &TyKind) -> Option<&'static str> {
+    match k {
+        TyKind::List(_) => Some("list"),
+        TyKind::Map(..) => Some("map"),
+        TyKind::Prim(Prim::Str) => Some("str"),
+        TyKind::Range(_) => Some("range"),
+        _ => None,
     }
 }
