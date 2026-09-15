@@ -769,3 +769,86 @@ mod tests {
         }
     }
 }
+
+/// s166 — `__wolf_rt_par_map` driven through its C surface with a
+/// Rust shim standing in for the one lowering builds per call site.
+#[cfg(test)]
+mod par_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+
+    fn list_of(n: usize) -> i64 {
+        let (hdr, data) = crate::list::new_list_len(8, n);
+        for i in 0..n {
+            // SAFETY: `n` 8-byte slots were just allocated.
+            unsafe { data.add(i * 8).cast::<i64>().write_unaligned(i as i64) };
+        }
+        hdr as i64
+    }
+
+    fn read(hdr: i64, i: usize) -> i64 {
+        let (data, _, elem) = crate::list::raw_parts(hdr as *mut crate::list::ListHdr);
+        // SAFETY: `i` is in range at every call site below.
+        unsafe { data.add(i * elem).cast::<i64>().read_unaligned() }
+    }
+
+    unsafe extern "C" fn double(_rec: *mut c_void, inp: *const u8, out: *mut u8) -> i64 {
+        // SAFETY: 8-byte element and result slots.
+        unsafe {
+            let x = inp.cast::<i64>().read_unaligned();
+            out.cast::<i64>().write_unaligned(x * 2);
+        }
+        0
+    }
+
+    /// `[conc.task.par.order]`: every slot is `f(xs[i])`, across every
+    /// chunk boundary, and the `k == 1` and empty paths agree.
+    #[test]
+    fn par_results_are_in_input_order() {
+        for n in [0usize, 1, 7, 10_000] {
+            let src = list_of(n);
+            let mut out = 0i64;
+            // SAFETY: a live list, a shim for 8-byte slots, a writable out.
+            let tag = unsafe { __wolf_rt_par_map(src, double, std::ptr::null_mut(), 8, &mut out) };
+            assert_eq!(tag, 0);
+            let (_, len, _) = crate::list::raw_parts(out as *mut crate::list::ListHdr);
+            assert_eq!(len, n);
+            for i in 0..n {
+                assert_eq!(read(out, i), 2 * i as i64, "slot {i} of {n}");
+            }
+        }
+    }
+
+    static RAN: AtomicUsize = AtomicUsize::new(0);
+
+    unsafe extern "C" fn fail_first(_rec: *mut c_void, inp: *const u8, out: *mut u8) -> i64 {
+        // SAFETY: 8-byte element and result slots.
+        let x = unsafe { inp.cast::<i64>().read_unaligned() };
+        RAN.fetch_add(1, SeqCst);
+        if x == 0 {
+            return 7;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+        // SAFETY: as above.
+        unsafe { out.cast::<i64>().write_unaligned(x) };
+        0
+    }
+
+    /// `[conc.task.par.fail]`: element 0 fails at once and every other
+    /// element sleeps, so a sibling that ran to its end would take the
+    /// whole list's worth of milliseconds. The failure's tag re-raises,
+    /// and the siblings stop at their next poll — the count stays far
+    /// below the list.
+    #[test]
+    fn par_failure_cancels_siblings() {
+        let n = 4_000usize;
+        let src = list_of(n);
+        let mut out = 0i64;
+        RAN.store(0, SeqCst);
+        // SAFETY: as in the order test.
+        let tag = unsafe { __wolf_rt_par_map(src, fail_first, std::ptr::null_mut(), 8, &mut out) };
+        assert_eq!(tag, 7, "the first failure's tag re-raises");
+        let ran = RAN.load(SeqCst);
+        assert!(ran < n / 2, "siblings were not cancelled: {ran} of {n} elements ran");
+    }
+}
