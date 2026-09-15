@@ -2,7 +2,6 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 637..654 name=f body=Block
-FnDecl 656..683 name=main body=Block
+FnDecl 897..948 name=main body=Block
 -- diagnostics --
-E0206 [Error] 645..649 expected a type
+E0206 [Error] 931..935 expected a type

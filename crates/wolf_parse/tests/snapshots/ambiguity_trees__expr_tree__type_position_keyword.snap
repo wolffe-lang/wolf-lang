@@ -3,44 +3,43 @@ source: crates/wolf_parse/tests/ambiguity_trees.rs
 expression: out
 ---
 == tree ==
-SourceFile 637..684
-  FnDecl 637..654
-    FnKw 637..639 "fn"
-    Ident 640..641 "f"
-    ParamList 641..650
-      LParen 641..642 "("
-      Param 642..644
-        Ident 642..643 "p"
-        Colon 643..644 ":"
-        Missing 644..644 ""
-      ErrorNode 645..649
-        ProcKw 645..649 "proc"
-      RParen 649..650 ")"
-    Block 651..654
-      LBrace 651..652 "{"
-      RBrace 653..654 "}"
-  Term 654..655 "\n"
-  FnDecl 656..683
-    FnKw 656..658 "fn"
-    Ident 659..663 "main"
-    ParamList 663..665
-      LParen 663..664 "("
-      RParen 664..665 ")"
-    RetType 666..673
-      Arrow 666..668 "->"
-      ErrorUnionType 669..673
-        Not 669..670 "!"
-        PathType 670..673
-          Path 670..673
-            Ident 670..673 "int"
-    Block 674..683
-      LBrace 674..675 "{"
-      ExprStmt 680..682
-        LiteralExpr 680..681
-          Int 680..681 "0"
-        Term 681..682 "\n"
-      RBrace 682..683 "}"
-  Term 683..684 "\n"
-  Eof 684..684 ""
+SourceFile 897..949
+  FnDecl 897..948
+    FnKw 897..899 "fn"
+    Ident 900..904 "main"
+    ParamList 904..906
+      LParen 904..905 "("
+      RParen 905..906 ")"
+    RetType 907..914
+      Arrow 907..909 "->"
+      ErrorUnionType 910..914
+        Not 910..911 "!"
+        PathType 911..914
+          Path 911..914
+            Ident 911..914 "int"
+    Block 915..948
+      LBrace 915..916 "{"
+      LetDecl 921..941
+        LetKw 921..924 "let"
+        IdentPat 925..926
+          Ident 925..926 "g"
+        Colon 926..927 ":"
+        FnType 928..936
+          FnKw 928..930 "fn"
+          LParen 930..931 "("
+          ErrorNode 931..935
+            ProcKw 931..935 "proc"
+          RParen 935..936 ")"
+        Eq 937..938 "="
+        LiteralExpr 939..940
+          Int 939..940 "0"
+        Term 940..941 "\n"
+      ExprStmt 945..947
+        LiteralExpr 945..946
+          Int 945..946 "0"
+        Term 946..947 "\n"
+      RBrace 947..948 "}"
+  Term 948..949 "\n"
+  Eof 949..949 ""
 == diagnostics ==
-E0206 [Error] 645..649 expected a type
+E0206 [Error] 931..935 expected a type
