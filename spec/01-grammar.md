@@ -952,6 +952,21 @@ row_entry ::= path ('(' type (',' type)* ')')?
 - `!T` and `T ! {row}` per D30. In *expression* position `!` is unary not;
   in *type* position it is the error-union constructor. The positions are
   syntactically disjoint (`[gram.amb.bang]`).
+- `[gram.type.start]` **A type position holds a type or it is E0206.** A
+  token that cannot begin `type` — a keyword the production does not
+  name (`proc`), a literal (`p: 3`) — where a type must begin is
+  **E0206 at that token**, "expected a type", at `parse`: not E0201's
+  generic expect-miss, and not a resolution error, because the question
+  is settled before any name is looked up. The keywords the production
+  DOES name (`fn`, `dyn`, `type`, `region`, the `prefix_type_kw` set)
+  begin a type and are not refused. A keyword that begins a statement or
+  a declaration (`let`) also cuts the item short, and which report comes
+  first for it is recovery's, not this clause's. **The cost,
+  stated:** zero — a parse refusal. Witness:
+  `grammar/type_position_keyword.lu`. (Written 2026-09-15, s163 —
+  wolf-lang#320: `docs/diagnostics.md` has named E0206 since about bs12,
+  no clause or corpus file did, and lupin had spent the number on an
+  invention of its own before is45 followed the compiler.)
 - Postfix rows are first-class in **every** type position — parameter,
   `let`/`var` annotation, field, variant payload — not just `ret_type`,
   which stays as spelled in `[gram.item.fn]`. (Adopted 2026-08-10 from
