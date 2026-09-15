@@ -314,9 +314,9 @@
       "ratio": 0.912
     },
     "corpus/generics/hundred_shapes.lu": {
-      "midend": 308,
-      "naive": 218,
-      "ratio": 1.413
+      "midend": 408,
+      "naive": 228,
+      "ratio": 1.789
     },
     "corpus/generics/list_imported_elem/main.lu": {
       "midend": 94,
