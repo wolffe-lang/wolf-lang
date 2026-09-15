@@ -6471,6 +6471,12 @@ impl<'a> Checker<'a> {
             mode: Some(wolf_ast::ParamMode::Mut),
             view: None,
         };
+        // s166 — `[conc.task.par]`: the one builtin combinator.
+        if mname == "par"
+            && let TyKind::List(elem) = self.kind_of(recv_ty)
+        {
+            return self.list_par_call(base, recv_ty, elem, recv_mode, member_span, e, args);
+        }
         let (params, ret) = match (self.kind_of(recv_ty), mname) {
             // `[mem.shared.rc.1]` clones share ownership — the dup site.
             (TyKind::Shared(t), "clone") => {
@@ -6684,6 +6690,82 @@ impl<'a> Checker<'a> {
             e,
             args,
         )
+    }
+
+    /// `xs.par(f)` (s166, `[conc.task.par]`): `f` is `fn(T) -> U` checked
+    /// as a spawned closure's body — the spawn context is open while it
+    /// checks, so a write to captured enclosing state is E1101 with the
+    /// `par` as the spawn site (`[conc.task.par.capture]`). The value is
+    /// `List[U]`, or `List[U] ! E` when `f` raises: the failure re-raises
+    /// at the `par` as a row the caller handles (`[conc.task.par.fail]`),
+    /// never into the enclosing function's row behind its back.
+    #[allow(clippy::too_many_arguments)]
+    fn list_par_call(
+        &mut self,
+        base: &GreenNode,
+        recv_ty: TyId,
+        elem: TyId,
+        recv_mode: Option<wolf_ast::ParamMode>,
+        member_span: Span,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        let u = self.fresh(NumKind::Any, e.span);
+        let fty = self.lo.table.intern(TyKind::Fn(vec![elem], u));
+        let ret = self.lo.table.intern(TyKind::List(u));
+        let param = |name: &str, ty: TyId| ParamSig {
+            name: name.to_string(),
+            ty,
+            span: member_span,
+            mode: None,
+            view: None,
+        };
+        let sig = FnSig {
+            params: vec![param("self", recv_ty), param("f", fty)],
+            ret,
+            name_span: member_span,
+            ret_span: None,
+            row_span: None,
+            generics: Vec::new(),
+            comptime: false,
+            trusted: None,
+            consttime: None,
+        };
+        self.dispatch.push((
+            e.span,
+            Dispatch::Inherent {
+                ty: self.show(recv_ty),
+                method: "par".to_string(),
+            },
+        ));
+        let saved = self.spawn_ctx;
+        self.spawn_ctx = Some((self.scopes.len(), e.span));
+        self.last_closure_row.clear();
+        let out = self.dispatch_method(
+            "par",
+            &sig,
+            BTreeMap::new(),
+            member_span,
+            base,
+            recv_ty,
+            recv_mode,
+            e,
+            args,
+        );
+        self.spawn_ctx = saved;
+        let raised = std::mem::take(&mut self.last_closure_row);
+        out?;
+        let got = self.normalize(u);
+        let (ok, row) = match self.kind_of(got) {
+            TyKind::ErrUnion(ok, row) => (ok, Some(row)),
+            _ if !raised.is_empty() => (got, Some(self.lo.table.row(raised, None))),
+            _ => (got, None),
+        };
+        let list = self.lo.table.intern(TyKind::List(ok));
+        Ok(match row {
+            Some(r) => self.lo.table.intern(TyKind::ErrUnion(list, r)),
+            None => list,
+        })
     }
 
     /// Methods on the conc builtins (spec 03): the channel operations
