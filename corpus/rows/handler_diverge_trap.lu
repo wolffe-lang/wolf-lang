@@ -6,15 +6,13 @@
 //! path actually TAKES the diverging fallback — the generic handler
 //! prints its message and `assert(false)` ends the process with the
 //! `assert` trap kind, the D30 divergence-is-ordinary-control-flow
-//! story. The compiled tiers agree on the trap; the checked executor
-//! refuses the raising call in argument position by name ("control
-//! flow in an argument" — a pre-existing, honest refusal, so this
-//! file pins the two lanes that run). Found en route and left
-//! visible: HOISTING the raise (`let p = pick(0)`, then
-//! `expect(p, …)`) makes the checked executor answer `error: none` +
-//! exit 1 — it propagates the raw row value at `let` instead of
-//! binding it — a one-sided divergence that belongs to the checked
-//! lane's row-value tier, not to #35's typing fix.
+//! story. All three lanes agree on the trap. The checked executor
+//! used to refuse the raising call in argument position by name
+//! ("control flow in an argument") on exactly this path, the one that
+//! raises; since wolf-lang#201 the raw row binds to the parameter the
+//! way it binds at `let`, and the checked lane runs this file. The
+//! hoisted spelling (`let p = pick(0)`, then `expect(p, …)`) answers
+//! the same trap on the checked lane since #122.
 //!
 //! s165 (#366): the tail is `copy hit`, as in `handler_diverge_call.lu`.
 
