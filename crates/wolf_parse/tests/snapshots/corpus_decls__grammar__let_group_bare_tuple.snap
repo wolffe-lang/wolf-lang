@@ -2,6 +2,6 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 335..403 name=main body=Block
+FnDecl 482..550 name=main body=Block
 -- diagnostics --
-E0201 [Error] 374..375 this value has no name — `let a, b = 1, 2` (the bare tuple) is not wolf
+E0201 [Error] 511..512 this name has no value — `let a, b = 1, 2` (the bare tuple) is not wolf

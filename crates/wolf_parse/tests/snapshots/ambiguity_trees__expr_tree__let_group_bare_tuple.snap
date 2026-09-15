@@ -3,71 +3,72 @@ source: crates/wolf_parse/tests/ambiguity_trees.rs
 expression: out
 ---
 == tree ==
-SourceFile 335..404
-  FnDecl 335..403
-    FnKw 335..337 "fn"
-    Ident 338..342 "main"
-    ParamList 342..344
-      LParen 342..343 "("
-      RParen 343..344 ")"
-    RetType 345..352
-      Arrow 345..347 "->"
-      ErrorUnionType 348..352
-        Not 348..349 "!"
-        PathType 349..352
-          Path 349..352
-            Ident 349..352 "int"
-    Block 353..403
-      LBrace 353..354 "{"
-      LetDecl 359..375
-        LetKw 359..362 "let"
-        Binder 363..364
-          IdentPat 363..364
-            Ident 363..364 "a"
-          Missing 364..364 ""
-        Comma 364..365 ","
-        Binder 366..371
-          IdentPat 366..367
-            Ident 366..367 "b"
-          Eq 368..369 "="
-          LiteralExpr 370..371
-            Int 370..371 "1"
-        Comma 371..372 ","
-        Binder 373..374
-          LiteralPat 373..374
-            Int 373..374 "2"
-          Missing 374..374 ""
-        Term 374..375 "\n"
-      ExprStmt 379..396
-        CallExpr 379..395
-          PathExpr 379..384
-            Ident 379..384 "print"
-          ArgList 384..395
-            LParen 384..385 "("
-            Arg 385..394
-              StringExpr 385..394
-                StrBegin 385..386 "\""
-                Interp 386..389
-                  InterpOpen 386..387 "{"
-                  PathExpr 387..388
-                    Ident 387..388 "a"
-                  InterpClose 388..389 "}"
-                StrFragment 389..390 " "
-                Interp 390..393
-                  InterpOpen 390..391 "{"
-                  PathExpr 391..392
-                    Ident 391..392 "b"
-                  InterpClose 392..393 "}"
-                StrEnd 393..394 "\""
-            RParen 394..395 ")"
-        Term 395..396 "\n"
-      ExprStmt 400..402
-        LiteralExpr 400..401
-          Int 400..401 "0"
-        Term 401..402 "\n"
-      RBrace 402..403 "}"
-  Term 403..404 "\n"
-  Eof 404..404 ""
+SourceFile 482..551
+  FnDecl 482..550
+    FnKw 482..484 "fn"
+    Ident 485..489 "main"
+    ParamList 489..491
+      LParen 489..490 "("
+      RParen 490..491 ")"
+    RetType 492..499
+      Arrow 492..494 "->"
+      ErrorUnionType 495..499
+        Not 495..496 "!"
+        PathType 496..499
+          Path 496..499
+            Ident 496..499 "int"
+    Block 500..550
+      LBrace 500..501 "{"
+      LetDecl 506..522
+        LetKw 506..509 "let"
+        Binder 510..511
+          IdentPat 510..511
+            Ident 510..511 "a"
+          Missing 511..511 ""
+        Comma 511..512 ","
+        Binder 513..518
+          IdentPat 513..514
+            Ident 513..514 "b"
+          Eq 515..516 "="
+          LiteralExpr 517..518
+            Int 517..518 "1"
+        Comma 518..519 ","
+        Binder 520..521
+          LiteralPat 520..521
+            Int 520..521 "2"
+          Missing 521..521 ""
+        Term 521..522 "\n"
+      ExprStmt 526..543
+        CallExpr 526..542
+          PathExpr 526..531
+            Ident 526..531 "print"
+          ArgList 531..542
+            LParen 531..532 "("
+            Arg 532..541
+              StringExpr 532..541
+                StrBegin 532..533 "\""
+                Interp 533..536
+                  InterpOpen 533..534 "{"
+                  PathExpr 534..535
+                    Ident 534..535 "a"
+                  InterpClose 535..536 "}"
+                StrFragment 536..537 " "
+                Interp 537..540
+                  InterpOpen 537..538 "{"
+                  PathExpr 538..539
+                    Ident 538..539 "b"
+                  InterpClose 539..540 "}"
+                StrEnd 540..541 "\""
+            RParen 541..542 ")"
+        Term 542..543 "\n"
+      ExprStmt 547..549
+        LiteralExpr 547..548
+          Int 547..548 "0"
+        Term 548..549 "\n"
+      RBrace 549..550 "}"
+  Term 550..551 "\n"
+  Eof 551..551 ""
 == diagnostics ==
-E0201 [Error] 374..375 this value has no name — `let a, b = 1, 2` (the bare tuple) is not wolf
+E0201 [Error] 511..512 this name has no value — `let a, b = 1, 2` (the bare tuple) is not wolf
+    label its `=` and value belong before this comma
     note a comma groups complete bindings, each with its own `=`: `let a = 1, b = 2`. To unpack one value into several names, destructure with parens on both sides: `let (a, b) = (1, 2)`.
