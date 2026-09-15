@@ -1,0 +1,11 @@
+//! member: true
+//!
+//! A FIXTURE std root for the corpus's method-surface witnesses
+//! (s166, `[type.method.root]`): the spec's reference bodies for
+//! `[type.comb.set]`, written out so `[type.method.resolve]` has a home
+//! module to resolve to. Not wolf-std — wolf-std's modules (sc50) carry
+//! the real ones, and nothing here is shipped.
+
+pub fn is_blank(s: str) -> bool {
+    s.trim().is_empty()
+}

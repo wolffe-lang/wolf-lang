@@ -1,0 +1,119 @@
+//! member: true
+//!
+//! A FIXTURE std root for the corpus's method-surface witnesses
+//! (s166, `[type.method.root]`): the spec's reference bodies for
+//! `[type.comb.set]`, written out so `[type.method.resolve]` has a home
+//! module to resolve to. Not wolf-std — wolf-std's modules (sc50) carry
+//! the real ones, and nothing here is shipped. `enumerate` and `zip`
+//! build through an annotated `[]`: the constructor spelling
+//! `List[(int, T)]()` is a conservatism refusal at this revision.
+
+use std.cmp
+
+pub fn any[T](xs: List[T], pred: fn(T) -> bool) -> bool {
+    for x in xs {
+        if pred(x) { return true }
+    }
+    false
+}
+
+pub fn map[T, U](xs: List[T], f: fn(T) -> U) -> List[U] {
+    var out = List[U]()
+    for x in xs { (mut out).push(f(x)) }
+    out
+}
+
+pub fn filter[T](xs: List[T], keep: fn(T) -> bool) -> List[T] {
+    var out = List[T]()
+    for x in xs {
+        if keep(x) { (mut out).push(x) }
+    }
+    out
+}
+
+pub fn fold[T, A](xs: List[T], init: A, step: fn(A, T) -> A) -> A {
+    var acc = init
+    for x in xs { acc = step(acc, x) }
+    acc
+}
+
+pub fn sum(xs: List[int]) -> int {
+    var total = 0
+    for x in xs { total = total + x }
+    total
+}
+
+pub fn sort_by[T](mut xs: List[T], less: fn(T, T) -> bool) {
+    var out = List[T]()
+    for x in xs {
+        var placed = false
+        var next = List[T]()
+        for y in out {
+            if !placed && less(x, y) {
+                (mut next).push(x)
+                placed = true
+            }
+            (mut next).push(y)
+        }
+        if !placed { (mut next).push(x) }
+        out = next
+    }
+    xs = out
+}
+
+pub fn sorted_by[T](xs: List[T], less: fn(T, T) -> bool) -> List[T] {
+    var out = List[T]()
+    for x in xs { (mut out).push(x) }
+    sort_by(mut out, less)
+    out
+}
+
+// `<` on the bound directly, not through `sorted_by`: a closure whose
+// body calls `Ord.cmp` on a type parameter is refused in lowering at
+// this revision ("a `Ord.cmp` call whose `Self` argument is not
+// nominal"), so the reference body is its own stable insertion sort.
+pub fn sorted[T: cmp.Ord](xs: List[T]) -> List[T] {
+    var out: List[T] = []
+    for x in xs {
+        var placed = false
+        var next: List[T] = []
+        for y in out {
+            if !placed && x < y {
+                (mut next).push(copy x)
+                placed = true
+            }
+            (mut next).push(y)
+        }
+        if !placed { (mut next).push(x) }
+        out = next
+    }
+    out
+}
+
+pub fn enumerate[T](xs: List[T]) -> List[(int, T)] {
+    var out: List[(int, T)] = []
+    var i = 0
+    for x in xs {
+        (mut out).push((i, x))
+        i = i + 1
+    }
+    out
+}
+
+// Pairs by walking both lists rather than indexing them: an indexed
+// read of a generic `T` is a move at this revision (E1001), so this
+// reference body is quadratic where wolf-std's need not be — the cost
+// the spec states is `[type.comb.set]`'s, not this fixture's.
+pub fn zip[T, U](xs: List[T], ys: List[U]) -> List[(T, U)] {
+    var out: List[(T, U)] = []
+    var i = 0
+    for x in xs {
+        var j = 0
+        for y in ys {
+            if j == i { (mut out).push((copy x, y)) }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    out
+}
