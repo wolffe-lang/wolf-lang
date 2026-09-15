@@ -7747,7 +7747,7 @@ impl<'t> Machine<'t> {
                 let Value::Map(id) = recv_val else {
                     return self.refuse("Map method on a non-map", e.span);
                 };
-                if method == "clear" && recv_place.is_none() {
+                if matches!(method, "clear" | "remove") && recv_place.is_none() {
                     return self.refuse("mutating a temporary Map", e.span);
                 }
                 match method {
@@ -7771,6 +7771,29 @@ impl<'t> Machine<'t> {
                     "clear" => {
                         self.maps[id].clear();
                         Ok(Flow::Val(Value::Unit))
+                    }
+                    // s165 (#344): the key erase — the erased value, or
+                    // the `none` row with the map unchanged; the
+                    // survivors keep their insertion order.
+                    "remove" => {
+                        let kx = args.into_iter().flat_map(|l| l.args()).find_map(Arg::value);
+                        let Some(kx) = kx else {
+                            return self.refuse("Map.remove without a key", e.span);
+                        };
+                        let kv = val!(self.eval(kx));
+                        let Some(key) = MapKey::of(&kv) else {
+                            return self.refuse("Map.remove with a key outside the four", kx.span);
+                        };
+                        match self.maps[id].iter().position(|(k, _)| *k == key) {
+                            Some(pos) => {
+                                let (_, v) = self.maps[id].remove(pos);
+                                Ok(Flow::Val(v))
+                            }
+                            None => Ok(raise(Value::ErrTag {
+                                tag: "none".to_string(),
+                                payload: Vec::new(),
+                            })),
+                        }
                     }
                     _ => self.refuse("this Map method", e.span),
                 }
