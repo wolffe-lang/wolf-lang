@@ -1,5 +1,63 @@
 # Changelog
 
+## Unreleased
+
+### The mid-end (s162 — wolf-lang#146; #93 pinned; #99 and #102 measured, not taken)
+
+**The release mid-end builds `std.x.crypto.curve25519` again** (#146).
+Loop versioning's overlap guard, the runtime check that lets a
+list-copying loop run under a `noalias` fact, built each buffer's
+extent from the first `len` load of its header in layout order. Two
+picks were wrong. A load inside an earlier loop's in-place `push`
+branch does not dominate the guard, so the verifier refused the module
+(`[dominance]`, the ICE lobo's release step has dodged with
+`WOLF_MIDEND=0` since wsm02). A load above an in-place grow dominates
+and is stale: the extent comes out short, and an empty extent passes
+the guard over storage it overlaps. That second pick is a wrong
+answer the verifier cannot see. It is reachable from source on the
+native tiers while `copy` of a `List` still shares storage (#384).
+`shape(copy c, c)` printed `sum 64 64` under `--release` and `sum 72
+72` under `--native`. The extent is now built from a `len` load that
+dominates the guard and has no header-moving operation between it
+and the loop.
+
+Past that ICE, `sc_muladd` hit a second one. Its guarded loop is
+nested, and licm hoisted the guard's `noalias` subjects out of the
+guarded region; GVN then folded a second loop's subject onto the
+first's (`[fact-just]`). A guard-justified subject no longer moves.
+lobo's `src/main.lu` (wolf-std 2d10219) now builds `--release` with
+the mid-end on. Cost: none at runtime on either tier. A guard the old
+pick would have minted from a load that is not current is not minted.
+On kasumi, 400 Ed25519 sign-and-verify rounds plus X25519 run 0.553 s
+with the mid-end on against 0.544 s with `WOLF_MIDEND=0`: the flag
+bought no measurable time on this host. lobo's ~3.6 s handshake is
+re-measured on lobo's own rig at its pin.
+
+Witnesses: `corpus/memory/push_grow_guarded_index.lu` (#146's
+reproducer), `corpus/memory/push_grow_nested_guarded_index.lu`
+(`sc_muladd` without std), `exec_parity`'s
+`stale_len_guard_takes_the_slow_loop_release` (WIR; trunk exited 64
+where 72 is correct at -O2), and `release_overlap_guard` (source,
+release against native).
+
+**#93's accidents are pinned by code.** `let b = a` then a read of `a`
+is E1001, and one `List` passed `mut` and `read` to one call is E1002.
+The accident's `copy` half does not hold on the native tiers (#384).
+
+**Measured and not taken.** #99: over 364 corpus entries, 13 bench
+kernels and lobo's release build, every region the ambient gate
+refuses contains a real container allocation (`__wolf_rt_list_new`).
+Zero refusals come from a call that allocates nothing, so a per-callee
+`allocates?` summary would unblock nothing. #102: on `word_count`,
+PGO saves 10.60% of instructions (344,233,166 → 307,729,190), and
+`inline_hot_bonus=64` erases all of it (344,232,982): the
+self-invalidation is real. But an oracle that keeps the weights
+through the knob's inline recovers exactly the knob-off count
+(307,728,998), so fixing the keying buys nothing on this bench. The
+kernel's wall time moves 53% with its source path's length alone
+(identical IR, identical profile, #395), which is why that number was
+not used.
+
 ## 0.2.14 — 2026-09-13
 
 THE STRING RUNTIME AND THE PAPERCUTS IV. 0.2.14 is one subject read
