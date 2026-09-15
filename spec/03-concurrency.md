@@ -113,9 +113,116 @@ premise by construction.
 - `[conc.task.name]` Tasks and procs carry names (spawn-site default,
   user-overridable) surfaced in the structured dump — the dump's
   *contents* are implementation-specified; its *existence* is contract.
-- `[conc.task.par]` `xs.par(f)` and the parallel iterator family are
-  defined by desugaring to `scope { … spawn … }` — they add no
-  semantics, only shape.
+- `[conc.task.par]` `xs.par(f)` is defined by desugaring to `scope { …
+  spawn … }` — it adds no semantics, only shape — and it is the whole
+  parallel iterator family this edition (a parallel `filter` or `fold`
+  is not ruled). `xs` is a `List[T]` read, never moved; `f` is a fn
+  value of type `fn(T) -> U` or `fn(T) -> U ! E`; the value is
+  `List[U]`, or `List[U] ! E` when `f` carries a row. It is a builtin
+  method (`[type.comb.builtin]`). The desugar, with `n = xs.len`, `k`
+  the chunk count of `[conc.task.par.chunk]`, and chunk `c` the index
+  range `lo(c)..hi(c)`:
+
+  ```text
+  var out = <n slots of U>
+  scope par {
+      for c in 0..k {
+          par.spawn(fn() {
+              for i in lo(c)..hi(c) { out[i] = f(xs[i])? }
+          })
+      }
+  }
+  out
+  ```
+
+  The two things this text does that a program cannot spell — every
+  task reads the one `xs`, and every task writes `out` — are what the
+  desugar is licensed to do: the reads share a read claim held for the
+  whole expression (`[mem.iter.excl]`), the writes go to pairwise
+  disjoint slots, and no slot is read before the scope joins, so no
+  execution of the desugar has a data race (`[conc.mm.drf]`).
+  (Completed 2026-09-15 by s166, wolf-lang#390 option 1. The clause was
+  one sentence from s05 to this date; neither machine implemented it,
+  and E1101's note stopped recommending it at 0.2.13 because nothing
+  did.)
+- `[conc.task.par.order]` **Results are in input order, whatever the
+  schedule.** `out[i]` is `f(xs[i])` for every `i`, so `xs.par(f)`
+  and `xs.map(f)` are the same `List` for every total `f` that
+  performs no recorded event (`[conc.task.par.det]`) — the schedule decides when
+  each slot is filled and never which. Cost: none beyond the desugar;
+  order is a property of the slots, not a sort.
+- `[conc.task.par.fail]` **Failure is `[conc.task.fail]`'s.** A chunk
+  stops at its own first failure — an error value `f` raises, or a
+  fault — and that failure cancels the sibling chunks
+  (`[conc.cancel]`: each observes it at its next blocking point, or
+  runs to its end) and re-raises at the `par`, after the join. Of
+  several failures the first in schedule order surfaces and the rest
+  attach as context. The partially filled `out` is never observable: a
+  failed `par` has no value. So which later elements `f` ran on before
+  the cancellation reached them is schedule-dependent, and is
+  observable only through what `f` did besides return — a send, a
+  `sync` write, output — each of which is a recorded event already. A
+  fault in a root-domain `par` is process death, as the same fault in a
+  serial loop is (`[conc.proc.root]`). Cost: nothing on the success
+  path; a failure costs the cancellation `[conc.cancel]` already
+  prices.
+- `[conc.task.par.capture]` **`f` is checked as a spawned closure's
+  body** (`[conc.task.spawn]`, D14): `Copy` captures copy, `imm` and
+  `sync` captures share, a captured `List` or other value is read
+  through the shared loan every spawned closure's captures take, and a
+  write to captured enclosing state is **E1101**, reported at the
+  write with the `par` as the spawn site. A named function or a
+  capture-free closure captures nothing. A region value captured by
+  `f` is refused, because one value cannot move into `k` tasks. The
+  check is spawn's, applied once to `f` and valid for every chunk,
+  because nothing spawn accepts for one task depends on how many tasks
+  run the same body. Cost: none at run time — it is a refusal.
+- `[conc.task.par.chunk]` **Chunking is contiguous, bounded by the
+  workers, and unobservable.** The runtime splits `0..n` into `k =
+  min(n, W)` contiguous chunks whose lengths differ by at most one,
+  in index order, where `W ≥ 1` is the number of workers the runtime
+  schedules tasks onto (implementation-specified; the native tier's
+  pool starts one per logical core). A task per element is not a
+  conforming desugar: a spawn costs a record and a queue operation,
+  most `f` cost less, and `k ≤ W` bounds the overhead by the machine
+  rather than by the list. `n == 0` spawns nothing and answers `[]`;
+  an implementation may run a single chunk (`k == 1`) on the calling
+  task with no spawn at all. `k` is **unobservable except through
+  `[conc.det]`'s recorded events**: results are in input order
+  (`[conc.task.par.order]`), `f`'s captures cannot carry a write
+  between chunks (`[conc.task.par.capture]`), and the only trace `k`
+  leaves is the number of `spawn` events under the `par`'s scope — and
+  the chunks' own events, if `f` performs any. No clause lets a
+  program ask for `k`, and a program whose printed bytes change with
+  `W` observes it through a `sync` object or a channel, each of which
+  records.
+- `[conc.task.par.det]` **Determinism.** Under record/replay
+  (`[conc.det.modes]`) `k` is part of the stream — its `spawn` events —
+  so a replay reproduces the same chunks; the schedule explorer
+  (`--schedules=N`) runs with a worker count fixed by its configuration
+  and recorded with the seed, so one seed is one `k`, and enumerates the chunk tasks' interleavings as
+  it enumerates any spawned task's. When `f` performs no recorded
+  event (its captures are `Copy`, `imm` or fn values and it neither
+  sends, acquires nor does I/O), every schedule and every `k` produce
+  the identical `List` — the chunks' actions touch disjoint slots and
+  so commute — and a DPOR reduction may identify them all
+  (`[conc.det.dpor]`). The **checked** execution (`wolf conform-run
+  --checked`) refuses `scope` and closures today, and so refuses `par`
+  by the same name, unsupported rather than wrong; the native tiers
+  run it. Cost: the recording costs the `spawn` events and nothing
+  per element.
+- `[conc.task.par.cost]` **The cost, stated.** One allocation of `n`
+  slots in the ambient region of the `par` expression — exactly `map`'s
+  (`[type.comb.set]`) — and no copy of `xs`. `k` task spawns, each
+  `[conc.task.spawn]`'s price (a capture record in the scope's region
+  and a pool enqueue), and one join. Per element, nothing beyond the
+  call of `f`. What `f` allocates lands where a task's allocations land:
+  tasks run with the process root as their ambient region, and the
+  native root arena serializes allocation behind one lock, so an `f`
+  that allocates on every call contends there and scales worse than
+  one that computes. Speedup is not promised: a list shorter than `W`,
+  or an `f` cheaper than a spawn, can make `xs.par(f)` slower than
+  `xs.map(f)`, and both are conforming.
 - `[conc.task.root]` The process runs under a root supervisor scope of
   process lifetime; `spawn proc` targets it (or a nested supervisor).
   Daemon-shaped work is therefore named, supervised, and enumerable —
