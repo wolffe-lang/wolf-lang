@@ -1207,7 +1207,7 @@ has promised `totals.pairs().sorted_by(…)` since bs00, and
   | `sorted` | `sorted[T: cmp.Ord](xs: List[T]) -> List[T]` | none | `sorted_by` with `<` (`[type.trait.op]`; the builtin `<` on the primitives) |
   | `enumerate` | `enumerate[T](xs: List[T]) -> List[(int, T)]` | none | one fresh `List` of pairs; indices from 0 |
   | `zip` | `zip[T, U](xs: List[T], ys: List[U]) -> List[(T, U)]` | none | one fresh `List` of `min(xs.len, ys.len)` pairs |
-  | `collect` | `collect(r: range[int]) -> List[int]`, and `range[char]` | none; traps as the range's `for` does | one fresh `List` of the range's length |
+  | `collect` | `collect[T](r: range[T]) -> List[T]` (`T` is `int` or `char`, `[type.range.name]`) | none; traps as the range's `for` does | one fresh `List` of the range's length |
   | `par` | `xs.par(f)`, `f: fn(T) -> U` or `fn(T) -> U ! E` | `E`, when `f` has one | `[conc.task.par]` |
 
   The functions `std.list` already ships over fn values — `any`, `all`,
