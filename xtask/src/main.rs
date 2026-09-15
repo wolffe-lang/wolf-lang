@@ -391,6 +391,9 @@ fn corpus_cmd() -> ExitCode {
             let mut cmd =
                 Command::new(format!("target/debug/wolf{}", std::env::consts::EXE_SUFFIX));
             cmd.arg("conform-run").arg(f).arg("--json");
+            if let Some(root) = corpus::fixture_std_root(f) {
+                cmd.arg("--std-root").arg(root);
+            }
             if native {
                 cmd.env("WOLF_NATIVE", "1");
             }
@@ -658,12 +661,12 @@ fn peel_cmd(args: &[String]) -> ExitCode {
         if corpus::parse_directives(&src).is_ok_and(|d| d.is_member()) {
             continue;
         }
-        let out = Command::new("target/debug/wolf")
-            .arg("conform-run")
-            .arg(f)
-            .arg("--json")
-            .arg("--dump=peel")
-            .output();
+        let mut cmd = Command::new("target/debug/wolf");
+        cmd.arg("conform-run").arg(f).arg("--json").arg("--dump=peel");
+        if let Some(root) = corpus::fixture_std_root(f) {
+            cmd.arg("--std-root").arg(root);
+        }
+        let out = cmd.output();
         let Ok(out) = out else { continue };
         let stderr = String::from_utf8_lossy(&out.stderr);
         if !out.status.success() {
@@ -1554,6 +1557,9 @@ enum LaneStop {
 fn lane_observe(wolf: &Path, file: &Path, flag: &str) -> Result<LaneObs, LaneStop> {
     let mut cmd = Command::new(wolf);
     cmd.arg("conform-run").arg(file).arg("--json");
+    if let Some(root) = corpus::fixture_std_root(file) {
+        cmd.arg("--std-root").arg(root);
+    }
     if !flag.is_empty() {
         cmd.arg(flag);
     }
@@ -2447,11 +2453,12 @@ fn bench_compile(runs: u32, commit: &str) -> Option<Vec<serde_json::Value>> {
         for _ in 0..runs {
             let t = Instant::now();
             for f in &sweep_files {
-                let _ = Command::new("target/debug/wolf")
-                    .arg("conform-run")
-                    .arg(f)
-                    .arg("--json")
-                    .output();
+                let mut cmd = Command::new("target/debug/wolf");
+                cmd.arg("conform-run").arg(f).arg("--json");
+                if let Some(root) = corpus::fixture_std_root(f) {
+                    cmd.arg("--std-root").arg(root);
+                }
+                let _ = cmd.output();
             }
             records.push(record(
                 "corpus",

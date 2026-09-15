@@ -20,9 +20,19 @@ use wolf_sema::{AliasTable, DiskLoader, Resolution, resolve_package_with, typech
 
 /// Mirrors `lower_corpus.rs` (integration tests cannot share a
 /// harness module).
+/// s166: a corpus entry whose directory holds a `std/` tree resolves
+/// against it as the std root (`[type.method.root]`) — the fixture the
+/// method-surface witnesses under `corpus/methods/` ship with, the same
+/// rule `cargo xtask corpus` applies with `--std-root`.
+fn fixture_std_root(entry: &Path) -> Option<PathBuf> {
+    entry.parent().map(|d| d.join("std")).filter(|d| d.is_dir())
+}
+
 fn resolve(entry: &Path) -> Resolution {
     let mut sm = wolf_span::SourceMap::new();
-    let mut loader = DiskLoader::from_entry(entry, &mut sm).expect("entry loads");
+    let mut loader = DiskLoader::from_entry(entry, &mut sm)
+        .expect("entry loads")
+        .with_std_root(fixture_std_root(entry));
     let res = resolve_package_with(&mut loader, &AliasTable::default(), true).expect("resolves");
     assert!(
         !res.diagnostics

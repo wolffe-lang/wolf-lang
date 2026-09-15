@@ -59,13 +59,14 @@ fn is_run_entry(src: &str) -> bool {
 /// One conform-run lane: (verdict, stdout sha). `None` only for
 /// environment exit-2 (no cc / no clang / no rt staticlib) — loudly.
 fn lane(file: &Path, flag: &str) -> Option<(String, String)> {
-    let out = Command::new(wolf())
-        .arg("conform-run")
-        .arg(file)
-        .arg(flag)
-        .arg("--json")
-        .output()
-        .expect("wolf runs");
+    let mut cmd = Command::new(wolf());
+    cmd.arg("conform-run").arg(file).arg(flag).arg("--json");
+    // s166: the method-surface witnesses carry a fixture std root
+    // (`corpus/methods/std`), the rule `cargo xtask corpus` applies.
+    if let Some(root) = file.parent().map(|d| d.join("std")).filter(|d| d.is_dir()) {
+        cmd.arg("--std-root").arg(root);
+    }
+    let out = cmd.output().expect("wolf runs");
     if out.status.code() == Some(2) {
         eprintln!(
             "SKIP: environment cannot run {flag} on {}: {}",

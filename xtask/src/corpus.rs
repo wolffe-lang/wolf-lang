@@ -32,6 +32,7 @@
 //! that has landed. `cargo xtask diag-catalog --check` reads it too:
 //! it is the only way a corpus file may pin a code the catalog has
 //! never heard of.
+use std::path::{Path, PathBuf};
 
 use std::collections::BTreeSet;
 
@@ -690,4 +691,13 @@ mod tests {
         let err = parse_directives("//! phase: run\n//! check: rn(exit=0)\n").unwrap_err();
         assert!(err.contains("line 2"), "names the line: {err}");
     }
+}
+
+/// s166 (`[type.method.root]`): a corpus entry whose directory holds a
+/// `std/` tree runs against it as the std root — the fixture the
+/// method-surface witnesses under `corpus/methods/` carry. Every
+/// `conform-run` the corpus tooling issues passes it as `--std-root`,
+/// so a hand run reproduces the verdict with the same flag.
+pub fn fixture_std_root(entry: &Path) -> Option<PathBuf> {
+    entry.parent().map(|d| d.join("std")).filter(|d| d.is_dir())
 }
