@@ -1,0 +1,75 @@
+//! check: run(exit=0, stdout="list: xs=1 xs0=1 ys=2\nstruct: b=0 c=1 n=1 2\nmap: m=1 m2=2\nnested: 1 2\ntuple: 1 2\ngeneric: 1 2\nparam: 1 2\nstr: 1 2\n")
+//! phase: run
+//! conforms: mem.tier0.move.3, type.map
+//! s165 (wolf-lang#384) — `copy x` is an INDEPENDENT value
+//! (`[mem.tier0.move.3]`). Native `copy` lowered as `x` itself until
+//! this pin, so every heap-backed copy was the same storage: at v0.2.14
+//! `wolf run` and `--release` printed `list: xs=2 xs0=9 ys=2`,
+//! `struct: b=1 …` and `map: m=2 m2=2` for the first three lines, while
+//! the checked machine and lupin 0.1.36 printed the ones pinned here.
+//! It mattered beyond `copy` itself: every fix ladder in the memory
+//! checker (E1001's `copy` edit, E1004/E1010's first rung, #366's
+//! E1002) prescribes `copy`, and on native following the edit changed
+//! nothing. A `List` copies its buffer, element by element when the
+//! elements reach the heap; a `Map` its entries; a struct or tuple its
+//! fields; a `str`'s bytes are immutable and stay shared.
+
+struct Bag {
+    items: List[int],
+    n: int,
+}
+
+struct Pair[T] {
+    a: T,
+    b: int,
+}
+
+fn dup[T](x: T) -> T {
+    copy x
+}
+
+fn fresh(b: List[int]) -> List[int] {
+    copy b
+}
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    var ys = copy xs
+    (mut ys).push(2)
+    ys[0] = 9
+    print("list: xs={xs.len} xs0={xs[0]} ys={ys.len}")
+    var b = Bag { items: List[int](), n: 1 }
+    var c = copy b
+    (mut c.items).push(3)
+    c.n = 2
+    print("struct: b={b.items.len} c={c.items.len} n={b.n} {c.n}")
+    var m = Map[str, int]()
+    m["a"] = 1
+    var m2 = copy m
+    m2["b"] = 2
+    print("map: m={m.len} m2={m2.len}")
+    var outer = List[List[int]]()
+    (mut outer).push(copy xs)
+    var o2 = copy outer
+    (mut o2[0]).push(2)
+    print("nested: {outer[0].len} {o2[0].len}")
+    var tl = List[(str, List[int])]()
+    (mut tl).push(("a", copy xs))
+    var tl2 = copy tl
+    (mut tl2[0].1).push(5)
+    print("tuple: {tl[0].1.len} {tl2[0].1.len}")
+    var p: Pair[List[int]] = Pair { a: copy xs, b: 0 }
+    var q = dup(p)
+    (mut q.a).push(4)
+    print("generic: {p.a.len} {q.a.len}")
+    var r = fresh(xs)
+    (mut r).push(6)
+    print("param: {xs.len} {r.len}")
+    var s = List[str]()
+    (mut s).push("x")
+    var s2 = copy s
+    (mut s2).push("y")
+    print("str: {s.len} {s2.len}")
+    0
+}

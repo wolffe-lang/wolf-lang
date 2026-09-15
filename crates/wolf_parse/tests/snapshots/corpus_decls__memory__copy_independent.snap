@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 1035..1083 name=Bag fields=2
+StructDecl 1085..1125 name=Pair fields=2
+FnDecl 1127..1162 name=dup body=Block
+FnDecl 1164..1214 name=fresh body=Block
+FnDecl 1216..2359 name=main body=Block
