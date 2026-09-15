@@ -454,6 +454,7 @@ rows/nested_row_return.lu: lowers
 rows/open_row_growth.lu: lowers
 rows/propagate/main.lu: lowers
 rows/qmark_defer.lu: lowers
+rows/raised_call_arg_position.lu: lowers
 rows/tag_arg_position.lu: lowers
 rows/tag_let_position.lu: lowers
 rows/tag_shadow_local.lu: lowers
