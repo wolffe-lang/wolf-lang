@@ -1096,6 +1096,21 @@ has promised `totals.pairs().sorted_by(…)` since bs00, and
   | `collect` | `collect[T](r: range[T]) -> List[T]` (`T` is `int` or `char`, `[type.range.name]`) | none; traps as the range's `for` does | one fresh `List` of the range's length |
   | `par` | `xs.par(f)`, `f: fn(T) -> U` or `fn(T) -> U ! E` | `E`, when `f` has one | `[conc.task.par]` |
 
+  **What a combinator copies** (stated 2026-09-15 with s165's
+  `[mem.tier0.move.3]` and `[mem.tier0.mode.read]`, wolf-lang#384/#366).
+  The receiver is `read`, so a combinator may not hand the caller's own
+  value on past the call: `fold`'s accumulator starts as the lent seed
+  and outlives the activation, so the seed **copies** (`copy init`), and
+  that is the one copy the set forces today. The elements `filter`,
+  `sorted_by`, `sorted`, `enumerate` and `zip` keep are `push`ed into a
+  fresh `List`, which `[mem.tier0.mode.read]` deliberately does not
+  reach (wolf-lang#385 holds that question open), so they cost no copy
+  at this revision and will cost one the day it is ruled the other way.
+  **Where a copy does happen it is deep**: one allocation and a buffer
+  copy for every `List` or `Map` reached, so a `fold` over a `List[List
+  [int]]` pays per container and not per element, while a `str` shares
+  its bytes. `map`'s results are `f`'s own values and copy nothing.
+
   The functions `std.list` already ships over fn values — `any`, `all`,
   `count_where`, `index_where`, `find_where`, `min_by`, `max_by` — are
   method candidates by the same rule and need no row here.
