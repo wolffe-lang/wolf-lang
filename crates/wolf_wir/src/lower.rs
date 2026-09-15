@@ -12845,9 +12845,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         mname: &str,
         e: &'t GreenNode,
     ) -> R<Flow> {
-        let _ = d;
-        let _lay = self.map_layout(k, v, e.span)?;
-        if mname == "clear" {
+        let lay = self.map_layout(k, v, e.span)?;
+        if matches!(mname, "clear" | "remove") {
             self.check_capture_write(recv_place, "mutating")?;
         }
         let Some(hdr) = flow_val!(self.lower_expr(recv_place)) else {
@@ -12873,6 +12872,44 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "clear" => {
                 self.rt_call_foreign("__wolf_rt_map_clear", &[hdr], None, None);
                 Ok(Flow::Val(None))
+            }
+            // s165 (#344): `m.remove(k)` is `m[k]`'s read shape with the
+            // erase folded into the scan — the key into an entry slot,
+            // `map_remove` answers the hit flag with the erased value in
+            // the slot, and the flag joins the eu exactly as the read's.
+            "remove" => {
+                let kx = d
+                    .args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .filter_map(Arg::value)
+                    .next()
+                    .ok_or_else(|| refuse("a Map remove without a key", e.span))?;
+                let Some(kval) = flow_val!(self.lower_expr(kx)) else {
+                    return Err(refuse("a valueless Map key", kx.span));
+                };
+                let (region, slot) = self.rt_slot(lay.stride);
+                self.store_flat(kval, slot, region, kx.span)?;
+                let hit = self
+                    .rt_call_foreign(
+                        "__wolf_rt_map_remove",
+                        &[hdr],
+                        Some((slot, region)),
+                        Some(types::I64),
+                    )
+                    .expect("hit flag");
+                let hit = self.nonzero(hit);
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| {
+                        let vp = z.field_addr(slot, lay.val_off);
+                        Ok(Some(z.load_flat(lay.vwty, vp, region, e.span)?))
+                    },
+                    |z| Ok(z.none_tag()),
+                )?;
+                Ok(Flow::Val(Some(out)))
             }
             _ => Err(refuse("this Map method", e.span)),
         }
