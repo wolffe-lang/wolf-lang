@@ -1680,14 +1680,34 @@ struct OverlapPair {
 ///   That invariant is the mint's semantic ground (custody: the
 ///   verifier audits shape; hand-written WIR owns its claims exactly
 ///   as it already does for theorem tags).
+/// - the len VALUE the extent is built from is one of those loads that
+///   holds the len CURRENT at the loop entry (#146): its block
+///   dominates the preheader `ph` (the guard chain is spliced after
+///   `ph`, so anything else is a dominance break the verifier refuses),
+///   and no path from the load to the end of `ph` crosses an
+///   instruction that could move a header field — a store under any
+///   role but Buffer, a call, or any other token-consuming op
+///   ([`header_kill`]). Trunk before s162 took the FIRST such load in
+///   layout order. A load inside an earlier loop's branch (#146's
+///   in-place `push`) broke dominance and ICE'd; a load ABOVE an
+///   in-place grow dominates, reads the stale len, and an extent built
+///   from a stale 0 passes the overlap guard on a totally aliased pair.
+///   Only the field OFFSET is chosen across every load; the value is
+///   chosen among the current ones, so a current load of a different
+///   field never stands in for a stale len. No current load: no plan.
 fn overlap_pairs(
     f: &Function,
     view: &ModView,
     l: &analysis::NaturalLoop,
+    ph: Block,
 ) -> Option<Vec<OverlapPair>> {
     use super::memopt::{foreign_roles, token_role};
     use crate::ops::ForeignRole;
     let foreign = foreign_roles(f, view);
+    // The CURRENT graph (version_one's rule, #142): an earlier version
+    // in this round may have minted blocks the caller's snapshot lacks.
+    let cur = analysis::cfg(f);
+    let cdoms = analysis::dominators(&cur);
     let defined_in_loop = |v: Value| -> bool {
         match f.values[v].def {
             ValueDef::Param(b, _) => l.blocks.contains(&b),
@@ -1769,7 +1789,10 @@ fn overlap_pairs(
         if defined_in_loop(hdr) || defined_in_loop(base) {
             return None;
         }
-        let mut best: Option<(i64, Value)> = None;
+        // (k, the load, its block) for every len-shaped load outside
+        // the loop; the offset is fixed across all of them, the value
+        // only among the current ones (#146).
+        let mut lens: Vec<(i64, Inst, Value, Block)> = Vec::new();
         for &lb in &f.layout {
             if l.blocks.contains(&lb) {
                 continue;
@@ -1813,12 +1836,15 @@ fn overlap_pairs(
                 if k <= 0 {
                     continue;
                 }
-                if best.is_none_or(|(bk, _)| k < bk) {
-                    best = Some((k, lres));
-                }
+                lens.push((k, li, lres, lb));
             }
         }
-        best.map(|(_, v)| v)
+        let kmin = lens.iter().map(|&(k, ..)| k).min()?;
+        lens.iter()
+            .find(|&&(k, li, _, lb)| {
+                k == kmin && len_is_current(f, view, &foreign, &cur, &cdoms, li, lb, ph)
+            })
+            .map(|&(_, _, v, _)| v)
     };
     let coherent = |accs: &[(Value, u64)], base: Value| -> Option<u64> {
         let mut found: Option<u64> = None;
@@ -1865,6 +1891,100 @@ fn overlap_pairs(
         });
     }
     Some(pairs)
+}
+
+/// Could `inst` move a container header field? Fail-closed: a store
+/// under any role but Buffer, any call, and any other op that consumes
+/// an effect token (allocation, rc, region and sync traffic) all count.
+/// Loads never do.
+fn header_kill(
+    f: &Function,
+    view: &ModView,
+    foreign: &HashMap<u32, crate::ops::ForeignRole>,
+    inst: Inst,
+) -> bool {
+    use super::memopt::token_role;
+    use crate::ops::ForeignRole;
+    let data = f.insts[inst];
+    match data.op {
+        Opcode::Load => false,
+        Opcode::Store => {
+            let tok = f.vpool.get(data.args).get(2).copied();
+            !tok.is_some_and(|t| {
+                matches!(token_role(f, view, foreign, t), Some(ForeignRole::Buffer))
+            })
+        }
+        op if op.is_call() => true,
+        _ => f
+            .vpool
+            .get(data.args)
+            .into_iter()
+            .any(|v| view.types.is_token(f.value_ty(v))),
+    }
+}
+
+/// #146: does the load `li` in block `lb` hold the value CURRENT at the
+/// end of the preheader `ph`? It must dominate `ph`, and no instruction
+/// on any path from just after it to the end of `ph` may be a
+/// [`header_kill`]. The path set is every block reachable from `lb`'s
+/// successors without re-entering `lb` that also reaches `ph` without
+/// passing `lb` — re-entering `lb` re-executes the load, which is then
+/// a fresh read, not this one.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one predicate over the pass's shared context"
+)]
+fn len_is_current(
+    f: &Function,
+    view: &ModView,
+    foreign: &HashMap<u32, crate::ops::ForeignRole>,
+    cur: &analysis::Cfg,
+    cdoms: &Doms,
+    li: Inst,
+    lb: Block,
+    ph: Block,
+) -> bool {
+    use std::collections::HashSet;
+    if !cur.reachable.contains(&lb) || !cdoms.dominates(lb, ph) {
+        return false;
+    }
+    let insts = &f.blocks[lb].insts;
+    let Some(pos) = insts.iter().position(|&i| i == li) else {
+        return false;
+    };
+    if insts[pos + 1..]
+        .iter()
+        .any(|&i| header_kill(f, view, foreign, i))
+    {
+        return false;
+    }
+    if lb == ph {
+        return true;
+    }
+    let mut fwd: HashSet<Block> = HashSet::new();
+    let mut work: Vec<Block> = crate::print::successors(f, lb);
+    while let Some(b) = work.pop() {
+        if b == lb || !fwd.insert(b) {
+            continue;
+        }
+        work.extend(crate::print::successors(f, b));
+    }
+    let mut back: HashSet<Block> = HashSet::new();
+    let mut work: Vec<Block> = vec![ph];
+    while let Some(b) = work.pop() {
+        if b == lb || !back.insert(b) {
+            continue;
+        }
+        if let Some(ps) = cur.preds.get(&b) {
+            work.extend(ps.iter().copied());
+        }
+    }
+    fwd.intersection(&back).all(|&b| {
+        !f.blocks[b]
+            .insts
+            .iter()
+            .any(|&i| header_kill(f, view, foreign, i))
+    })
 }
 
 /// Version one loop; `None` when a structural precondition fails.
@@ -2116,7 +2236,7 @@ fn version_one(
     // s104: the overlap plan RIDES a loop the check plans already
     // version — it never versions alone. Detected against the
     // pre-version CFG; the guard blocks join the chain below.
-    let overlap = overlap_pairs(f, view, l).unwrap_or_default();
+    let overlap = overlap_pairs(f, view, l, ph).unwrap_or_default();
     // The fast preheader exists BEFORE the clone so the noalias
     // subjects — identity `ptr.off` copies of the two bases, defined
     // only on the guarded path — can seed the clone's value map:
