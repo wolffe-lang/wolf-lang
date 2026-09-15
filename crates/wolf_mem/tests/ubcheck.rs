@@ -1103,3 +1103,82 @@ fn recursion_to_the_depth_budget_answers_on_any_callers_stack() {
         .expect("the machine answered instead of overflowing");
     assert_eq!(got, "call depth budget exhausted");
 }
+
+// ------------------------- a raised call in argument position (#201) --
+
+const NARROW: &str = "fn narrow(n: int) -> int ! {none} {\n    \
+                          if n > 5 { return none }\n    \
+                          n\n\
+                      }\n\
+                      fn built(bound: int) -> int {\n    \
+                          var k = 0\n    \
+                          var i = 0\n    \
+                          while i < bound { k = k + 1\n        i = i + 1 }\n    \
+                          k\n\
+                      }\n";
+
+/// wolf-lang#201: the refusal was a property of the EXECUTION — the
+/// same program ran when the argument did not raise and was
+/// `unsupported` when it did (wolf-std sc35's f18/f19). Both paths
+/// run now, and the TAKEN one reaches the callee's handler.
+#[test]
+fn a_raw_row_in_argument_position_binds_on_the_path_that_raises() {
+    for (bound, want) in [(10, "0\n"), (2, "2\n")] {
+        let (v, out) = run_out(&format!(
+            "{NARROW}fn pick(v: int ! {{none}}, fallback: int) -> int {{\n    v else fallback\n}}\n\
+             fn main() -> !int {{\n    print(\"{{pick(narrow(built({bound})), 0)}}\")\n    0\n}}\n"
+        ));
+        assert!(matches!(v, Verdict::Exit(0)), "bound {bound}: {v:?}");
+        assert_eq!(out, want, "bound {bound}");
+    }
+}
+
+/// The callee need not read the parameter at all (sc35's f21).
+#[test]
+fn a_raw_row_argument_binds_when_the_callee_ignores_it() {
+    let (v, out) = run_out(&format!(
+        "{NARROW}fn ignore(v: int ! {{none}}) -> int {{\n    let _u = v else 0\n    1\n}}\n\
+         fn main() -> !int {{\n    print(\"{{ignore(narrow(built(9)))}}\")\n    0\n}}\n"
+    ));
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "1\n");
+}
+
+/// `?` in an argument is PROPAGATION, not a binding: the call never
+/// happens and the row reaches the caller's caller.
+#[test]
+fn qmark_in_argument_position_propagates_past_the_call() {
+    let (v, out) = run_out(&format!(
+        "{NARROW}fn take_int(n: int) -> int {{\n    n + 1\n}}\n\
+         fn go(k: int) -> int ! {{none}} {{\n    take_int(narrow(k)?)\n}}\n\
+         fn main() -> !int {{\n    let a = go(1) else 0 - 1\n    let b = go(9) else 0 - 1\n    \
+         print(\"{{a}} {{b}}\")\n    0\n}}\n"
+    ));
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "2 -1\n");
+}
+
+/// A handler's `return` inside an argument returns from the CALLER.
+#[test]
+fn a_handler_return_in_argument_position_returns_from_the_caller() {
+    let (v, out) = run_out(&format!(
+        "{NARROW}fn take_int(n: int) -> int {{\n    n + 1\n}}\n\
+         fn go(k: int) -> int {{\n    take_int(narrow(k) else {{ return 0 - 7 }})\n}}\n\
+         fn main() -> !int {{\n    print(\"{{go(1)}} {{go(9)}}\")\n    0\n}}\n"
+    ));
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "2 -7\n");
+}
+
+/// The method-call argument path takes the same rule.
+#[test]
+fn a_raw_row_binds_through_a_method_argument() {
+    let (v, out) = run_out(&format!(
+        "{NARROW}struct Box {{ d: int }}\n\
+         impl Box {{\n    fn pick(self, v: int ! {{none}}) -> int {{\n        v else self.d\n    }}\n}}\n\
+         fn main() -> !int {{\n    let b = Box {{ d: 40 }}\n    \
+         print(\"{{b.pick(narrow(built(8)))}} {{b.pick(narrow(built(3)))}}\")\n    0\n}}\n"
+    ));
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "40 3\n");
+}
