@@ -409,6 +409,10 @@ enum Value {
     /// the four `[type.map.key]` admits. Moves, like a `List`.
     Map(usize),
     Pool(usize),
+    /// A `channel[T]` (#342, `[conc.chan]`): an index into the
+    /// machine's channel arena. A handle — copying it names the same
+    /// channel, as the native tier's pointer does.
+    Chan(usize),
     Handle {
         index: usize,
         generation: i64,
@@ -443,6 +447,7 @@ impl Value {
                 | Value::Handle { .. }
                 | Value::Ptr(_)
                 | Value::Fn(_)
+                | Value::Chan(_)
         )
     }
 }
@@ -521,6 +526,15 @@ enum Stop {
     /// `os.exit` contract: immediate termination; native calls the
     /// runtime exit with the same rule).
     Exit(u8),
+}
+
+/// One channel (#342, `[conc.chan.buf]`/`[conc.chan.close]`): its
+/// buffered payloads, oldest first, its capacity (0 is rendezvous), and
+/// whether it is closed.
+struct ChanState {
+    buf: std::collections::VecDeque<Value>,
+    cap: usize,
+    closed: bool,
 }
 
 /// Control flow out of an expression.
@@ -1125,6 +1139,9 @@ struct Machine<'t> {
     maps: Vec<Vec<(MapKey, Value)>>,
     map_region: Vec<usize>,
     pools: Vec<Vec<PoolSlot>>,
+    /// The channel arena (#342): every channel the run made, in the
+    /// order it made them.
+    chans: Vec<ChanState>,
     cells: Vec<RcCell>,
     frames: Vec<Frame<'t>>,
     /// The dynamic ambient-region stack; `[0]` is the run's root
@@ -1879,6 +1896,50 @@ pub fn run_checked_fn(
     stdin: &str,
     entry: &str,
 ) -> Result<RunOutcome, NotYet> {
+    // #382: the machine runs on a thread whose stack it sizes itself,
+    // never on its caller's. The call-depth budget is a depth the
+    // machine ALLOWS, so reaching it must answer `unsupported` on every
+    // host; on the caller's stack it answered on a unix main thread
+    // (8 MiB) and overflowed a windows one (1 MiB), where three
+    // wolf-std json rows reach `CALL_DEPTH_BUDGET` with ~1.2 MiB of
+    // host frames.
+    std::thread::scope(|scope| {
+        let worker = std::thread::Builder::new()
+            .name("wolf-checked".into())
+            .stack_size(CHECKED_STACK_BYTES)
+            .spawn_scoped(scope, || run_checked_fn_here(pkg, tc, budget, stdin, entry));
+        match worker {
+            Ok(handle) => match handle.join() {
+                Ok(out) => out,
+                Err(panic) => std::panic::resume_unwind(panic),
+            },
+            // No thread to be had (a host at its thread limit): run
+            // where we stand, which is exactly the old behavior.
+            Err(_) => run_checked_fn_here(pkg, tc, budget, stdin, entry),
+        }
+    })
+}
+
+/// The deepest call chain the machine executes (`[exec.checked.budget]`):
+/// a call past it is `unsupported — call depth budget exhausted`.
+pub const CALL_DEPTH_BUDGET: usize = 128;
+
+/// The checked machine's own stack (#382, `[exec.checked.budget]`), the
+/// same on EVERY host, so the call-depth budget answers before the host
+/// stack runs out. Measured at 0.2.14 (x86-64 linux): the deepest
+/// wolf-std rows need ~1.23 MiB at `CALL_DEPTH_BUDGET` in a release
+/// build, and a 128-deep recursion needs more than 8 MiB (and no more
+/// than 16) in a debug one. Reserved address space; resident memory is
+/// only the frames a program reaches.
+pub const CHECKED_STACK_BYTES: usize = 64 << 20;
+
+fn run_checked_fn_here(
+    pkg: &Package,
+    tc: &Typecheck,
+    budget: Budget,
+    stdin: &str,
+    entry: &str,
+) -> Result<RunOutcome, NotYet> {
     let root_span = pkg.files[0].parse.root.span;
     let mut m = Machine::new(pkg, tc);
     m.budget = budget;
@@ -2011,6 +2072,7 @@ impl<'t> Machine<'t> {
             maps: Vec::new(),
             map_region: Vec::new(),
             pools: Vec::new(),
+            chans: Vec::new(),
             cells: Vec::new(),
             frames: Vec::new(),
             ambient: Vec::new(),
@@ -2169,7 +2231,7 @@ impl<'t> Machine<'t> {
     /// Call a body with already-bound argument values (parameters in
     /// declaration order).
     fn call_body(&mut self, body: usize, args: Vec<Value>) -> E<Value> {
-        if self.frames.len() > 128 {
+        if self.frames.len() > CALL_DEPTH_BUDGET {
             return Err(Stop::Budget("call depth budget exhausted"));
         }
         let ctx = self.ctxs[body].as_ref().expect("callable body has ctx");
@@ -3202,45 +3264,7 @@ impl<'t> Machine<'t> {
             SyntaxKind::PrefixExpr => self.eval_prefix(e),
             SyntaxKind::BinExpr => self.eval_bin(e),
             SyntaxKind::CastExpr => self.eval_cast(e),
-            SyntaxKind::RangeExpr => {
-                let d = RangeExpr::cast(e).expect("kind");
-                let mut ends = d.endpoints();
-                let start = match ends.next() {
-                    Some(x) => val!(self.eval(x)),
-                    None => Value::Int(0),
-                };
-                let end = match ends.next() {
-                    Some(x) => val!(self.eval(x)),
-                    None => Value::Int(0),
-                };
-                // s158 (`[type.range.name]`): the closed family is
-                // `int` and `char`. A char range carries its endpoints
-                // as scalar values and remembers to read them back as
-                // chars.
-                let (s, mut en, chars) = match (start, end) {
-                    (Value::Int(a), Value::Int(b)) => (a, b, false),
-                    (Value::Char(a), Value::Char(b)) => (a as i64, b as i64, true),
-                    _ => return self.refuse("non-integer ranges", e.span),
-                };
-                if d.is_inclusive() {
-                    // `a..=b` normalizes to the exclusive `b + 1` HERE,
-                    // where the range is built (`[type.range.accessor]`,
-                    // s158) — under the checked arithmetic
-                    // `[mem.iter.range]` already rules, so `0..=int.MAX`
-                    // traps `overflow` at its construction. It was a
-                    // Rust `+= 1` until s158 made the value reachable
-                    // without a `for` header to defend it.
-                    match en.checked_add(1) {
-                        Some(v) => en = v,
-                        None => return self.trap("overflow", "mem.iter.range", e.span),
-                    }
-                }
-                Ok(Flow::Val(Value::Range {
-                    start: s,
-                    end: en,
-                    chars,
-                }))
-            }
+            SyntaxKind::RangeExpr => self.eval_range(e, true),
             SyntaxKind::TryExpr => {
                 let d = wolf_ast::TryExpr::cast(e).expect("kind");
                 let inner = match d.expr() {
@@ -3819,10 +3843,66 @@ impl<'t> Machine<'t> {
         Ok(Flow::Val(Value::Unit))
     }
 
+    /// Build a range from its expression. `normalize` is the VALUE
+    /// form (`[type.range.accessor]`): `a..=b` becomes the exclusive
+    /// `b + 1` under checked arithmetic, and `0..=int.MAX` traps where
+    /// it is built. A `for` HEADER passes `false` (#381): the header
+    /// never materializes a range (`[type.range.value]`), so its
+    /// inclusive end rides back un-normalized and the loop walks
+    /// `a..=b` itself, the native rung's do-while over the inclusive
+    /// bound.
+    fn eval_range(&mut self, e: &'t GreenNode, normalize: bool) -> E<Flow> {
+        let d = RangeExpr::cast(e).expect("kind");
+        let mut ends = d.endpoints();
+        let start = match ends.next() {
+            Some(x) => val!(self.eval(x)),
+            None => Value::Int(0),
+        };
+        let end = match ends.next() {
+            Some(x) => val!(self.eval(x)),
+            None => Value::Int(0),
+        };
+        // s158 (`[type.range.name]`): the closed family is
+        // `int` and `char`. A char range carries its endpoints
+        // as scalar values and remembers to read them back as
+        // chars.
+        let (s, mut en, chars) = match (start, end) {
+            (Value::Int(a), Value::Int(b)) => (a, b, false),
+            (Value::Char(a), Value::Char(b)) => (a as i64, b as i64, true),
+            _ => return self.refuse("non-integer ranges", e.span),
+        };
+        if normalize && d.is_inclusive() {
+            // `a..=b` normalizes to the exclusive `b + 1` HERE,
+            // where the range is built (`[type.range.accessor]`,
+            // s158) — under the checked arithmetic
+            // `[mem.iter.range]` already rules, so `0..=int.MAX`
+            // traps `overflow` at its construction. It was a
+            // Rust `+= 1` until s158 made the value reachable
+            // without a `for` header to defend it.
+            match en.checked_add(1) {
+                Some(v) => en = v,
+                None => return self.trap("overflow", "mem.iter.range", e.span),
+            }
+        }
+        Ok(Flow::Val(Value::Range {
+            start: s,
+            end: en,
+            chars,
+        }))
+    }
+
     fn eval_for(&mut self, e: &'t GreenNode) -> E<Flow> {
         let d = ForExpr::cast(e).expect("kind");
         let mut view_items: Option<Vec<Value>> = None;
+        // A `for` over a range header (#381): endpoints evaluated once,
+        // left to right, and never normalized — `a..=b` is walked as
+        // itself, so `0..=int.MAX` in a header does not trap.
+        let mut header_inclusive = false;
         let iter = match d.iterable() {
+            Some(it) if it.kind == SyntaxKind::RangeExpr => {
+                header_inclusive = RangeExpr::cast(it).expect("kind").is_inclusive();
+                val!(self.eval_range(it, false))
+            }
             // s72, D40 ([mem.iter.excl]): iterating a place is a
             // READ, never a move — the container stays live behind
             // the walk and after it, exactly as the static tier now
@@ -3847,23 +3927,51 @@ impl<'t> Machine<'t> {
             },
             None => Value::Unit,
         };
-        let items: Vec<Value> = match (view_items, iter) {
-            (Some(items), _) => items,
-            (None, Value::Range { start, end, chars }) => (start..end)
-                .map(
-                    |v| match (chars, u32::try_from(v).ok().and_then(char::from_u32)) {
-                        (true, Some(c)) => Value::Char(c),
-                        _ => Value::Int(v),
-                    },
-                )
-                .collect(),
-            (None, Value::List(id)) => self.lists[id].clone(),
+        // A range is walked, never collected (#381): the items come
+        // off the endpoints one step at a time, so a range as wide as
+        // the integer line costs one `Value` at a time, and a loop
+        // that does not leave early runs into the step budget
+        // (`[exec.checked.budget]`) — `unsupported`, never a host
+        // allocation the byte ledger did not charge.
+        let scalar = move |chars: bool, v: i64| match (
+            chars,
+            u32::try_from(v).ok().and_then(char::from_u32),
+        ) {
+            (true, Some(c)) => Value::Char(c),
+            _ => Value::Int(v),
+        };
+        // `for v in ch` (#342, `[conc.chan.close]`): one receive per
+        // step, ending at drained-close.
+        let mut chan: Option<usize> = None;
+        let mut items: Box<dyn Iterator<Item = Value>> = match (view_items, iter) {
+            (Some(items), _) => Box::new(items.into_iter()),
+            (None, Value::Chan(id)) => {
+                chan = Some(id);
+                Box::new(std::iter::empty())
+            }
+            (None, Value::Range { start, end, chars }) if header_inclusive => {
+                Box::new((start..=end).map(move |v| scalar(chars, v)))
+            }
+            (None, Value::Range { start, end, chars }) => {
+                Box::new((start..end).map(move |v| scalar(chars, v)))
+            }
+            (None, Value::List(id)) => Box::new(self.lists[id].clone().into_iter()),
             (None, Value::Map(_)) => {
                 return self.refuse("iterating a `Map` directly (walk `m.pairs()`)", e.span);
             }
             _ => return self.refuse("iteration outside ranges and List", e.span),
         };
-        for item in items {
+        loop {
+            let item = match chan {
+                Some(id) => match self.chan_recv(id, e.span)? {
+                    Flow::Val(v) => v,
+                    _ => break,
+                },
+                None => match items.next() {
+                    Some(v) => v,
+                    None => break,
+                },
+            };
             self.tick()?;
             self.push_scope();
             if let Some(pat) = d.pattern() {
@@ -3969,7 +4077,7 @@ impl<'t> Machine<'t> {
                     ..
                 }) = self.ctx().dispatch.get(&e.span).cloned()
                 {
-                    let v = self.eval_arg(operand, None)?;
+                    let v = val!(self.eval_arg(operand, None));
                     return self.op_dispatch_call(
                         operand,
                         v,
@@ -4104,8 +4212,8 @@ impl<'t> Machine<'t> {
         }) = self.ctx().dispatch.get(&e.span).cloned()
             && let (Some(le), Some(re), Some(op)) = (d.lhs(), d.rhs(), op)
         {
-            let l = self.eval_arg(le, None)?;
-            let r = self.eval_arg(re, None)?;
+            let l = val!(self.eval_arg(le, None));
+            let r = val!(self.eval_arg(re, None));
             let out = self.op_dispatch_call(le, l, vec![r], *module, name, method, e.span)?;
             let Flow::Val(out) = out else {
                 return Ok(out);
@@ -7081,6 +7189,33 @@ impl<'t> Machine<'t> {
                 let id = self.mint_map(e.span)?;
                 return Ok(Flow::Val(Value::Map(id)));
             }
+            // `channel[T](n)` / `channel[T]()` (#342): no capacity is
+            // rendezvous (`[conc.chan.default]`).
+            Some(TyKind::Chan(_)) if is_container_ctor(d.callee()) => {
+                let cap = match d
+                    .args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .find_map(Arg::value)
+                {
+                    Some(v) => match val!(self.eval(v)) {
+                        Value::Int(n) => match usize::try_from(n) {
+                            Ok(n) => n,
+                            Err(_) => return self.refuse("a negative channel capacity", v.span),
+                        },
+                        _ => return self.refuse("a channel capacity that is not an int", v.span),
+                    },
+                    None => 0,
+                };
+                self.charge_mem(16)?;
+                let id = self.chans.len();
+                self.chans.push(ChanState {
+                    buf: std::collections::VecDeque::new(),
+                    cap,
+                    closed: false,
+                });
+                return Ok(Flow::Val(Value::Chan(id)));
+            }
             _ => {}
         }
         // Method calls (has_self): builtins on container/cell/pointer
@@ -7309,7 +7444,7 @@ impl<'t> Machine<'t> {
                 return self.refuse("a qualified dispatch without a receiver", e.span);
             };
             let self_mode = sig.params.first().and_then(|p| p.mode);
-            let mut self_val = self.eval_arg(recv_expr, self_mode)?;
+            let mut self_val = val!(self.eval_arg(recv_expr, self_mode));
             let (body, subject) = match q {
                 Q::I(ty_name) => {
                     let Some(&body) = self.methods.get(&(ty_name.clone(), mname.clone())) else {
@@ -7331,7 +7466,7 @@ impl<'t> Machine<'t> {
             for (i, a) in arg_exprs.enumerate() {
                 let Some(v) = Arg::value(a) else { continue };
                 let mode = sig.params.get(i + 1).and_then(|p| p.mode);
-                call_args.push(self.eval_arg(v, mode)?);
+                call_args.push(val!(self.eval_arg(v, mode)));
             }
             self.pending_self_ty = Some(subject);
             let out = self.call_body(body, call_args)?;
@@ -7431,7 +7566,7 @@ impl<'t> Machine<'t> {
         for (i, a) in d.args().into_iter().flat_map(|l| l.args()).enumerate() {
             let Some(v) = Arg::value(a) else { continue };
             let mode = sig.params.get(i).and_then(|p| p.mode);
-            args.push(self.eval_arg(v, mode)?);
+            args.push(val!(self.eval_arg(v, mode)));
         }
         let out = self.call_body(body, args)?;
         // A raised row tag crosses the call as the error flow — the
@@ -7445,7 +7580,7 @@ impl<'t> Machine<'t> {
     /// Evaluate one argument under its declared mode: `mut` lends the
     /// place (call-by-reference-result), `take` moves, `read` copies
     /// scalars and shares containers.
-    fn eval_arg(&mut self, v: &'t GreenNode, mode: Option<wolf_ast::ParamMode>) -> E<Value> {
+    fn eval_arg(&mut self, v: &'t GreenNode, mode: Option<wolf_ast::ParamMode>) -> E<Flow> {
         // The call-site mode spelling wraps the value expression.
         let inner = match v.kind {
             SyntaxKind::PrefixExpr => {
@@ -7467,18 +7602,15 @@ impl<'t> Machine<'t> {
                 let cur = self.read_place(&place, inner.span)?;
                 if let Value::Ptr(p) = cur {
                     let child = self.retag(p, TagState::Active, inner.span)?;
-                    return Ok(Value::Ptr(child));
+                    return Ok(Flow::Val(Value::Ptr(child)));
                 }
-                Ok(Value::Ref(place))
+                Ok(Flow::Val(Value::Ref(place)))
             }
             Some(wolf_ast::ParamMode::Take) => {
                 if let Some(place) = self.place_of(inner)? {
-                    self.take_value(&place, inner.span)
+                    self.take_value(&place, inner.span).map(Flow::Val)
                 } else {
-                    match self.eval(inner)? {
-                        Flow::Val(x) => Ok(x),
-                        _ => self.refuse("control flow in an argument", v.span),
-                    }
+                    self.eval_arg_value(inner)
                 }
             }
             _ => {
@@ -7489,16 +7621,30 @@ impl<'t> Machine<'t> {
                         // the call ([mem.prov.tag]); writes through it
                         // inside the callee are P2.
                         let child = self.retag(p, TagState::Frozen, inner.span)?;
-                        return Ok(Value::Ptr(child));
+                        return Ok(Flow::Val(Value::Ptr(child)));
                     }
-                    return Ok(cur);
+                    return Ok(Flow::Val(cur));
                 }
-                match self.eval(inner)? {
-                    Flow::Val(x) => Ok(x),
-                    _ => self.refuse("control flow in an argument", v.span),
-                }
+                self.eval_arg_value(inner)
             }
         }
+    }
+
+    /// An argument that is not a place (#201). A RAW row value binds
+    /// to the parameter exactly as it binds at `let`/`var` and at
+    /// assignment (#122, D52's declared-row-first reading): the
+    /// callee receives the row and discriminates it, which is what
+    /// native and lupin do. Every other flow — a `?`-propagated
+    /// error, a `return` or `break` out of a handler — leaves the
+    /// call before the callee runs, the caller's own flow. The
+    /// refusal this replaces answered `unsupported` only on the path
+    /// where the row was taken, so the same source was one word or
+    /// another by input.
+    fn eval_arg_value(&mut self, inner: &'t GreenNode) -> E<Flow> {
+        Ok(match self.eval(inner)? {
+            Flow::Err(v, false) => Flow::Val(v),
+            other => other,
+        })
     }
 
     fn retag(&mut self, p: PtrVal, state: TagState, span: Span) -> E<PtrVal> {
@@ -7514,6 +7660,78 @@ impl<'t> Machine<'t> {
             origin: span,
         });
         Ok(PtrVal { tag: child, ..p })
+    }
+
+    /// `send`, `recv` and `close` (#342, `[conc.chan]`). This machine
+    /// runs one task: `spawn`, `scope`, `select` and `when` are refused
+    /// by name before they run, so the root task is the only live task
+    /// there is. A send on a full channel (or any rendezvous send) and a
+    /// receive on an empty open one therefore block a task that nothing
+    /// can ever wake — every live task blocked, `[conc.deadlock.def]`
+    /// exactly — and the answer is `[conc.deadlock.trap]`'s
+    /// `trap(deadlock)`, the verdict this deterministic machine is
+    /// REQUIRED to detect. Nothing here is a guess about a schedule:
+    /// with one task there is one.
+    fn eval_chan_method(
+        &mut self,
+        method: &str,
+        recv: &'t GreenNode,
+        e: &'t GreenNode,
+        args: Option<wolf_ast::ArgList<'t>>,
+    ) -> E<Flow> {
+        let ch = match self.place_of(recv)? {
+            Some(place) => self.read_place(&place, recv.span)?,
+            None => val!(self.eval(recv)),
+        };
+        let Value::Chan(id) = ch else {
+            return self.refuse("a channel method on a non-channel", e.span);
+        };
+        let closed = || {
+            Ok(raise(Value::ErrTag {
+                tag: "closed".to_string(),
+                payload: Vec::new(),
+            }))
+        };
+        match method {
+            "send" => {
+                let Some(v) = args.into_iter().flat_map(|l| l.args()).find_map(Arg::value) else {
+                    return self.refuse("a send without a value", e.span);
+                };
+                let x = val!(self.eval_arg(v, None));
+                let st = &self.chans[id];
+                if st.closed {
+                    return closed();
+                }
+                if st.buf.len() >= st.cap {
+                    return self.trap("deadlock", "conc.deadlock.trap", e.span);
+                }
+                // The channel owns the copy in flight
+                // (`[conc.chan.payload]`), charged when it is made.
+                self.charge_mem(slot_bytes(&x))?;
+                self.chans[id].buf.push_back(x);
+                Ok(Flow::Val(Value::Unit))
+            }
+            "recv" => self.chan_recv(id, e.span),
+            "close" => {
+                self.chans[id].closed = true;
+                Ok(Flow::Val(Value::Unit))
+            }
+            _ => self.refuse("this channel method", e.span),
+        }
+    }
+
+    /// One receive (#342): the oldest payload, else `closed` on a
+    /// drained-closed channel, else the root task blocks alone —
+    /// `trap(deadlock)` (see [`Self::eval_chan_method`]).
+    fn chan_recv(&mut self, id: usize, span: Span) -> E<Flow> {
+        match self.chans[id].buf.pop_front() {
+            Some(v) => Ok(Flow::Val(v)),
+            None if self.chans[id].closed => Ok(raise(Value::ErrTag {
+                tag: "closed".to_string(),
+                payload: Vec::new(),
+            })),
+            None => self.trap("deadlock", "conc.deadlock.trap", span),
+        }
     }
 
     fn eval_method(
@@ -7580,6 +7798,10 @@ impl<'t> Machine<'t> {
                 }
                 _ => self.refuse("this pointer method", e.span),
             };
+        }
+        // Channel methods from the root task (#342).
+        if matches!(recv_ty, Some(TyKind::Chan(_))) {
+            return self.eval_chan_method(method, recv, e, args);
         }
         // Container/cell builtins by receiver type.
         match recv_ty {
@@ -7673,7 +7895,7 @@ impl<'t> Machine<'t> {
                     "push" => {
                         for a in args.into_iter().flat_map(|l| l.args()) {
                             if let Some(v) = Arg::value(a) {
-                                let x = self.eval_arg(v, None)?;
+                                let x = val!(self.eval_arg(v, None));
                                 let slot = slot_bytes(&x);
                                 self.charge_mem(slot)?;
                                 // The ledger charges the BIRTH region
@@ -8179,7 +8401,7 @@ impl<'t> Machine<'t> {
                     None => return self.refuse("this method call shape", e.span),
                 };
                 let self_mode = sig.params.first().and_then(|p| p.mode);
-                let mut self_val = self.eval_arg(recv, self_mode)?;
+                let mut self_val = val!(self.eval_arg(recv, self_mode));
                 let (body, subject) = match target {
                     Target::Inherent(ty_name) => {
                         let Some(&body) = self.methods.get(&(ty_name.clone(), sig.callee.clone()))
@@ -8210,7 +8432,7 @@ impl<'t> Machine<'t> {
                 for (i, a) in args.into_iter().flat_map(|l| l.args()).enumerate() {
                     let Some(v) = Arg::value(a) else { continue };
                     let mode = sig.params.get(i + 1).and_then(|p| p.mode);
-                    call_args.push(self.eval_arg(v, mode)?);
+                    call_args.push(val!(self.eval_arg(v, mode)));
                 }
                 let out = self.call_body(body, call_args)?;
                 if let Value::ErrTag { .. } = out {

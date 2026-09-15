@@ -1,0 +1,162 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 554..857
+  FnDecl 554..643
+    FnKw 554..556 "fn"
+    Ident 557..562 "first"
+    ParamList 562..564
+      LParen 562..563 "("
+      RParen 563..564 ")"
+    RetType 565..571
+      Arrow 565..567 "->"
+      PathType 568..571
+        Path 568..571
+          Ident 568..571 "int"
+    Block 572..643
+      LBrace 572..573 "{"
+      ExprStmt 578..636
+        ForExpr 578..635
+          ForKw 578..581 "for"
+          IdentPat 582..583
+            Ident 582..583 "x"
+          InKw 584..586 "in"
+          RangeExpr 587..610
+            LiteralExpr 587..588
+              Int 587..588 "0"
+            DotDotEq 588..591 "..="
+            LiteralExpr 591..610
+              Int 591..610 "9223372036854775807"
+          Block 611..635
+            LBrace 611..612 "{"
+            ExprStmt 621..630
+              ReturnExpr 621..629
+                ReturnKw 621..627 "return"
+                PathExpr 628..629
+                  Ident 628..629 "x"
+              Term 629..630 "\n"
+            RBrace 634..635 "}"
+        Term 635..636 "\n"
+      ExprStmt 640..642
+        LiteralExpr 640..641
+          Int 640..641 "0"
+        Term 641..642 "\n"
+      RBrace 642..643 "}"
+  Term 643..644 "\n"
+  FnDecl 645..856
+    FnKw 645..647 "fn"
+    Ident 648..652 "main"
+    ParamList 652..654
+      LParen 652..653 "("
+      RParen 653..654 ")"
+    RetType 655..662
+      Arrow 655..657 "->"
+      ErrorUnionType 658..662
+        Not 658..659 "!"
+        PathType 659..662
+          Path 659..662
+            Ident 659..662 "int"
+    Block 663..856
+      LBrace 663..664 "{"
+      ExprStmt 669..694
+        CallExpr 669..693
+          PathExpr 669..674
+            Ident 669..674 "print"
+          ArgList 674..693
+            LParen 674..675 "("
+            Arg 675..692
+              StringExpr 675..692
+                StrBegin 675..676 "\""
+                StrFragment 676..682 "first "
+                Interp 682..691
+                  InterpOpen 682..683 "{"
+                  CallExpr 683..690
+                    PathExpr 683..688
+                      Ident 683..688 "first"
+                    ArgList 688..690
+                      LParen 688..689 "("
+                      RParen 689..690 ")"
+                  InterpClose 690..691 "}"
+                StrEnd 691..692 "\""
+            RParen 692..693 ")"
+        Term 693..694 "\n"
+      VarDecl 698..713
+        VarKw 698..701 "var"
+        IdentPat 702..703
+          Ident 702..703 "n"
+        Colon 703..704 ":"
+        PathType 705..708
+          Path 705..708
+            Ident 705..708 "int"
+        Eq 709..710 "="
+        LiteralExpr 711..712
+          Int 711..712 "0"
+        Term 712..713 "\n"
+      ExprStmt 717..827
+        ForExpr 717..826
+          ForKw 717..720 "for"
+          IdentPat 721..722
+            Ident 721..722 "x"
+          InKw 723..725 "in"
+          RangeExpr 726..767
+            LiteralExpr 726..745
+              Int 726..745 "9223372036854775805"
+            DotDotEq 745..748 "..="
+            LiteralExpr 748..767
+              Int 748..767 "9223372036854775807"
+          Block 768..826
+            LBrace 768..769 "{"
+            ExprStmt 778..821
+              IfExpr 778..820
+                IfKw 778..780 "if"
+                BinExpr 781..786
+                  PathExpr 781..782
+                    Ident 781..782 "x"
+                  Gt 783..784 ">"
+                  PathExpr 785..786
+                    Ident 785..786 "n"
+                Block 787..820
+                  LBrace 787..788 "{"
+                  AssignStmt 801..811
+                    PathExpr 801..802
+                      Ident 801..802 "n"
+                    Eq 803..804 "="
+                    BinExpr 805..810
+                      PathExpr 805..806
+                        Ident 805..806 "n"
+                      Plus 807..808 "+"
+                      LiteralExpr 809..810
+                        Int 809..810 "1"
+                    Term 810..811 "\n"
+                  RBrace 819..820 "}"
+              Term 820..821 "\n"
+            RBrace 825..826 "}"
+        Term 826..827 "\n"
+      ExprStmt 831..849
+        CallExpr 831..848
+          PathExpr 831..836
+            Ident 831..836 "print"
+          ArgList 836..848
+            LParen 836..837 "("
+            Arg 837..847
+              StringExpr 837..847
+                StrBegin 837..838 "\""
+                StrFragment 838..843 "tail "
+                Interp 843..846
+                  InterpOpen 843..844 "{"
+                  PathExpr 844..845
+                    Ident 844..845 "n"
+                  InterpClose 845..846 "}"
+                StrEnd 846..847 "\""
+            RParen 847..848 ")"
+        Term 848..849 "\n"
+      ExprStmt 853..855
+        LiteralExpr 853..854
+          Int 853..854 "0"
+        Term 854..855 "\n"
+      RBrace 855..856 "}"
+  Term 856..857 "\n"
+  Eof 857..857 ""
+== diagnostics ==

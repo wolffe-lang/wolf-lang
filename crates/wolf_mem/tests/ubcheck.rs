@@ -968,3 +968,296 @@ fn a_float_that_fits_no_integer_traps() {
         }
     }
 }
+
+// ---------------------------------- a range is walked, not built (#381) --
+
+/// wolf-lang#381: a range VALUE as wide as the integer line. The machine
+/// used to collect `end - start` items before the first step and died in
+/// the host allocator (`capacity overflow`, no record); the native rung
+/// answered `first 0`.
+#[test]
+fn a_wide_range_value_iterates_without_materializing() {
+    let (v, out) = run_out(
+        "fn first(r: range[int]) -> int {\n    for x in r { return x }\n    0\n}\n\
+         fn main() -> !int {\n    let wide = 0..9223372036854775807\n    \
+         let lo: int = 0 - 9223372036854775807 - 1\n    \
+         print(\"{first(wide)} {first(lo..9223372036854775807)}\")\n    0\n}\n",
+    );
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "0 -9223372036854775808\n");
+}
+
+/// The header form took the same collect.
+#[test]
+fn a_wide_range_header_iterates_without_materializing() {
+    let (v, out) = run_out(
+        "fn first() -> int {\n    for x in 0..9223372036854775807 { return x }\n    0\n}\n\
+         fn main() -> !int {\n    print(\"{first()}\")\n    0\n}\n",
+    );
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "0\n");
+}
+
+/// A HEADER never materializes a range ([type.range.value]), so
+/// `a..=int.MAX` walks to `int.MAX` and stops without computing `b + 1`.
+/// The machine used to build the header as a value and trap `overflow`.
+#[test]
+fn an_inclusive_header_at_int_max_walks_to_the_end_without_trapping() {
+    let (v, out) = run_out(
+        "fn main() -> !int {\n    var n: int = 0\n    var last: int = 0\n    \
+         for x in 9223372036854775805..=9223372036854775807 { n = n + 1\n        last = x }\n    \
+         for x in 0..=9223372036854775807 { if x > n { n = n + 100 }\n        break }\n    \
+         print(\"{n} {last}\")\n    0\n}\n",
+    );
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "3 9223372036854775807\n");
+}
+
+/// The VALUE form still normalizes, and still pays for it where it is
+/// built (`grammar/range_type_overflow.lu`'s price is unchanged).
+#[test]
+fn an_inclusive_value_at_int_max_still_traps_where_it_is_built() {
+    let (v, _) = run_out(
+        "fn main() -> !int {\n    let r = 0..=9223372036854775807\n    r.end - r.start\n}\n",
+    );
+    match v {
+        Verdict::Trap(t) => assert_eq!(t.kind, "overflow"),
+        other => panic!("expected trap(overflow): {other:?}"),
+    }
+}
+
+/// An exclusive value at the top of the line yields exactly its items.
+#[test]
+fn an_exclusive_value_at_int_max_yields_its_items() {
+    let (v, out) = run_out(
+        "fn main() -> !int {\n    var n: int = 0\n    var last: int = 0\n    \
+         let r = 9223372036854775805..9223372036854775807\n    \
+         for x in r { n = n + 1\n        last = x }\n    \
+         print(\"{n} {last}\")\n    0\n}\n",
+    );
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "2 9223372036854775806\n");
+}
+
+/// A wide loop that never leaves runs into the STEP budget — an honest
+/// `unsupported` ([exec.checked.budget]) — rather than any host
+/// allocation: a small budget answers at once.
+#[test]
+fn a_wide_range_that_never_exits_is_the_step_budget() {
+    let mut ml = MemoryLoader::new("ub");
+    ml.add_file(
+        &[],
+        "main.lu",
+        "fn main() -> !int {\n    var n: int = 0\n    \
+         for x in 0..9223372036854775807 { n = x }\n    n\n}\n",
+    );
+    let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    let tc = typecheck_package_with(&res.package, true);
+    assert!(!tc.has_errors(), "{:?}", tc.diagnostics);
+    let budget = Budget {
+        steps: 10_000,
+        ..Budget::default()
+    };
+    match ubcheck::run_checked(&res.package, &tc, budget) {
+        Err(n) => assert_eq!(n.construct, "step budget exhausted"),
+        Ok(out) => panic!("expected the step budget, got {:?}", out.verdict),
+    }
+}
+
+// ------------------------------- the machine sizes its own stack (#382) --
+
+/// wolf-lang#382: recursion to the call-depth budget is a depth the
+/// machine ALLOWS, so it must answer on every host — `unsupported`, by
+/// name — rather than overflow whatever stack the caller happens to run
+/// on (a windows main thread is 1 MiB; a unix one 8 MiB; a cargo test
+/// thread 2 MiB). The program is the shape wolf-std's json rows reach:
+/// nested calls with live locals in every frame.
+#[test]
+fn recursion_to_the_depth_budget_answers_on_any_callers_stack() {
+    let src = "fn dive(n: int, acc: str) -> int {\n    \
+                   if n == 0 { return 0 }\n    \
+                   let here = acc + \"x\"\n    \
+                   let a = n * 2\n    \
+                   let b = a - n\n    \
+                   dive(b - 1, here) + 1\n\
+               }\n\
+               fn main() -> !int {\n    print(\"{dive(100000, \"\")}\")\n    0\n}\n";
+    // Run from a thread with less stack than any host's main thread, so
+    // the answer cannot be a property of where the caller stands.
+    let got = std::thread::Builder::new()
+        .stack_size(256 << 10)
+        .spawn(move || {
+            let mut ml = MemoryLoader::new("ub");
+            ml.add_file(&[], "main.lu", src);
+            let res =
+                resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+            let tc = typecheck_package_with(&res.package, true);
+            assert!(!tc.has_errors(), "{:?}", tc.diagnostics);
+            match ubcheck::run_checked(&res.package, &tc, Budget::default()) {
+                Err(n) => n.construct.to_string(),
+                Ok(out) => format!("{:?}", out.verdict),
+            }
+        })
+        .expect("spawn")
+        .join()
+        .expect("the machine answered instead of overflowing");
+    assert_eq!(got, "call depth budget exhausted");
+}
+
+// ------------------------- a raised call in argument position (#201) --
+
+const NARROW: &str = "fn narrow(n: int) -> int ! {none} {\n    \
+                          if n > 5 { return none }\n    \
+                          n\n\
+                      }\n\
+                      fn built(bound: int) -> int {\n    \
+                          var k = 0\n    \
+                          var i = 0\n    \
+                          while i < bound { k = k + 1\n        i = i + 1 }\n    \
+                          k\n\
+                      }\n";
+
+/// wolf-lang#201: the refusal was a property of the EXECUTION — the
+/// same program ran when the argument did not raise and was
+/// `unsupported` when it did (wolf-std sc35's f18/f19). Both paths
+/// run now, and the TAKEN one reaches the callee's handler.
+#[test]
+fn a_raw_row_in_argument_position_binds_on_the_path_that_raises() {
+    for (bound, want) in [(10, "0\n"), (2, "2\n")] {
+        let (v, out) = run_out(&format!(
+            "{NARROW}fn pick(v: int ! {{none}}, fallback: int) -> int {{\n    v else fallback\n}}\n\
+             fn main() -> !int {{\n    print(\"{{pick(narrow(built({bound})), 0)}}\")\n    0\n}}\n"
+        ));
+        assert!(matches!(v, Verdict::Exit(0)), "bound {bound}: {v:?}");
+        assert_eq!(out, want, "bound {bound}");
+    }
+}
+
+/// The callee need not read the parameter at all (sc35's f21).
+#[test]
+fn a_raw_row_argument_binds_when_the_callee_ignores_it() {
+    let (v, out) = run_out(&format!(
+        "{NARROW}fn ignore(v: int ! {{none}}) -> int {{\n    let _u = v else 0\n    1\n}}\n\
+         fn main() -> !int {{\n    print(\"{{ignore(narrow(built(9)))}}\")\n    0\n}}\n"
+    ));
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "1\n");
+}
+
+/// `?` in an argument is PROPAGATION, not a binding: the call never
+/// happens and the row reaches the caller's caller.
+#[test]
+fn qmark_in_argument_position_propagates_past_the_call() {
+    let (v, out) = run_out(&format!(
+        "{NARROW}fn take_int(n: int) -> int {{\n    n + 1\n}}\n\
+         fn go(k: int) -> int ! {{none}} {{\n    take_int(narrow(k)?)\n}}\n\
+         fn main() -> !int {{\n    let a = go(1) else 0 - 1\n    let b = go(9) else 0 - 1\n    \
+         print(\"{{a}} {{b}}\")\n    0\n}}\n"
+    ));
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "2 -1\n");
+}
+
+/// A handler's `return` inside an argument returns from the CALLER.
+#[test]
+fn a_handler_return_in_argument_position_returns_from_the_caller() {
+    let (v, out) = run_out(&format!(
+        "{NARROW}fn take_int(n: int) -> int {{\n    n + 1\n}}\n\
+         fn go(k: int) -> int {{\n    take_int(narrow(k) else {{ return 0 - 7 }})\n}}\n\
+         fn main() -> !int {{\n    print(\"{{go(1)}} {{go(9)}}\")\n    0\n}}\n"
+    ));
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "2 -7\n");
+}
+
+/// The method-call argument path takes the same rule.
+#[test]
+fn a_raw_row_binds_through_a_method_argument() {
+    let (v, out) = run_out(&format!(
+        "{NARROW}struct Box {{ d: int }}\n\
+         impl Box {{\n    fn pick(self, v: int ! {{none}}) -> int {{\n        v else self.d\n    }}\n}}\n\
+         fn main() -> !int {{\n    let b = Box {{ d: 40 }}\n    \
+         print(\"{{b.pick(narrow(built(8)))}} {{b.pick(narrow(built(3)))}}\")\n    0\n}}\n"
+    ));
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "40 3\n");
+}
+
+// ------------------------------- channels from the root task (#342) --
+
+/// wolf-lang#342: `send`, `close`, the draining `for` and `recv` from
+/// `main`, no `spawn` — the machine refused every one of them.
+#[test]
+fn root_task_channels_send_drain_and_answer_closed() {
+    let (v, out) = run_out(
+        "struct Doc { title: str, words: int }\n\
+         fn main() -> !int {\n    \
+             let ch = channel[int](4)\n    \
+             for i in 1..=3 { ch.send(i)? }\n    \
+             ch.close()\n    \
+             var sum = 0\n    \
+             for v in ch { sum += v }\n    \
+             let docs = channel[Doc](1)\n    \
+             docs.send(Doc { title: \"moves\", words: 640 })?\n    \
+             let d = docs.recv()?\n    \
+             docs.close()\n    \
+             let miss = docs.recv() else |err| { print(\"recv {err}\")\n        Doc { title: \"\", words: 0 } }\n    \
+             ch.send(9) else |err| { print(\"send {err}\") }\n    \
+             print(\"{sum} {d.title} {d.words} {miss.words}\")\n    0\n\
+         }\n",
+    );
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "recv closed\nsend closed\n6 moves 640 0\n");
+}
+
+/// A channel handle passed to a fn names the same channel.
+#[test]
+fn a_channel_passed_to_a_fn_is_the_same_channel() {
+    let (v, out) = run_out(
+        "fn fill(ch: channel[int], n: int) -> !int {\n    \
+             for i in 0..n { ch.send(i)? }\n    \
+             n\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let ch = channel[int](8)\n    \
+             let n = fill(ch, 5)?\n    \
+             ch.close()\n    \
+             var sum = 0\n    \
+             for v in ch { sum += v }\n    \
+             print(\"{n} {sum}\")\n    0\n\
+         }\n",
+    );
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "5 10\n");
+}
+
+/// This machine runs one task, so a channel operation that blocks is
+/// every live task blocked — `[conc.deadlock.def]` — and the answer is
+/// `trap(deadlock)` (lupin 0.1.36 answers the same four).
+#[test]
+fn a_blocking_channel_operation_on_the_only_task_is_deadlock() {
+    for (what, body) in [
+        (
+            "full",
+            "let ch = channel[int](1)\n    ch.send(1)?\n    print(\"one\")\n    ch.send(2)?",
+        ),
+        (
+            "empty",
+            "let ch = channel[int](1)\n    let v = ch.recv()?\n    print(\"{v}\")",
+        ),
+        ("rendezvous", "let ch = channel[int]()\n    ch.send(1)?"),
+        (
+            "open for",
+            "let ch = channel[int](2)\n    ch.send(1)?\n    for v in ch { print(\"{v}\") }",
+        ),
+    ] {
+        let (v, _) = run_out(&format!("fn main() -> !int {{\n    {body}\n    0\n}}\n"));
+        match v {
+            Verdict::Trap(t) => {
+                assert_eq!(t.kind, "deadlock", "{what}");
+                assert_eq!(t.clause, "conc.deadlock.trap", "{what}");
+            }
+            other => panic!("{what}: expected trap(deadlock), got {other:?}"),
+        }
+    }
+}

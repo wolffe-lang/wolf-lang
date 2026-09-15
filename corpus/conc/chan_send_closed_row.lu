@@ -7,8 +7,9 @@
 //! `() ! {closed, cancelled}`, the receive row over a unit payload —
 //! handled with `else`, propagated with `?` into the caller's row, and
 //! `{err}` renders the tag by its name (`[type.interp.row]`). The
-//! receive side is `chan_closed_row.lu`. The checked lane declines
-//! channel methods (no resolvable bodies); this is a native witness.
+//! receive side is `chan_closed_row.lu`. The checked lane serves
+//! channel methods from the root task since wolf-lang#342, so it runs
+//! this file too.
 
 fn relay(ch: channel[int], v: int) -> !int {
     ch.send(v)?

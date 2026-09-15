@@ -36,6 +36,7 @@ conc/chan_param_for.lu: lowers
 conc/chan_payload_escape.lu: not mem-clean (pre-wir rungs own it)
 conc/chan_payload_escape_proc.lu: not mem-clean (pre-wir rungs own it)
 conc/chan_payload_proc_param.lu: lowers
+conc/chan_root_task.lu: lowers
 conc/chan_send_closed_row.lu: lowers
 conc/chan_struct_payload.lu: lowers
 conc/chan_unsendable.lu: not mem-clean (pre-wir rungs own it)
@@ -180,11 +181,13 @@ grammar/multiline_short_margin.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_leading.lu: not mem-clean (pre-wir rungs own it)
 grammar/newline_trailing.lu: lowers
 grammar/range_bare.lu: not mem-clean (pre-wir rungs own it)
+grammar/range_header_inclusive_max.lu: lowers
 grammar/range_type_char.lu: lowers
 grammar/range_type_inclusive.lu: lowers
 grammar/range_type_overflow.lu: lowers
 grammar/range_type_param.lu: lowers
 grammar/range_type_return.lu: lowers
+grammar/range_value_wide_iter.lu: lowers
 grammar/receiver_moded.lu: not mem-clean (pre-wir rungs own it)
 grammar/semicolon.lu: not mem-clean (pre-wir rungs own it)
 grammar/shebang.lu: lowers
@@ -452,6 +455,7 @@ rows/nested_row_return.lu: lowers
 rows/open_row_growth.lu: lowers
 rows/propagate/main.lu: lowers
 rows/qmark_defer.lu: lowers
+rows/raised_call_arg_position.lu: lowers
 rows/tag_arg_position.lu: lowers
 rows/tag_let_position.lu: lowers
 rows/tag_shadow_local.lu: lowers

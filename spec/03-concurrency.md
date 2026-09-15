@@ -357,7 +357,22 @@ schedule deadlocks"; `unsupported` was honest and insufficient.)
   `[conc.task.name]`'s discipline). Detection is **required** in
   deterministic test modes (record/replay, the is07 explorer) and
   permitted elsewhere. `trap(deadlock)` is the verdict spelling
-  is07 reports per schedule.
+  is07 reports per schedule. The checked tier (`[exec.checked]`) is
+  one of the deterministic modes, and it runs exactly one task: it
+  refuses `spawn`, `scope`, `select` and `when` by name before they
+  run. So a channel operation that would block there — a send on a
+  full or rendezvous channel, a receive or a `for` on an empty open
+  one — blocks every live task, and the tier answers `trap(deadlock)`
+  at that operation. It costs nothing to detect: with one task the
+  check is the block itself. The native tier is permitted not to
+  detect it and, at 0.2.14, waits. (s161, wolf-lang#342: the checked
+  tier served no channel method at all before; lupin 0.1.36 answers
+  the same `trap(deadlock)` on the same four shapes. Witnesses:
+  `corpus/conc/chan_root_task.lu` for the operations that complete,
+  and `ubcheck`'s
+  `a_blocking_channel_operation_on_the_only_task_is_deadlock` for the
+  four that block, which the corpus cannot carry because the native
+  tier would wait on them.)
 - `[conc.deadlock.self]` Acquiring a sync object the acquiring task
   already holds can never complete: the same defined outcome,
   detected immediately — `trap(deadlock)`. (The lexical case is
