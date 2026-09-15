@@ -6391,6 +6391,23 @@ impl<'a> Checker<'a> {
                 _ => None,
             };
         }
+        // A tuple element (`List[(str, int)]()`, wolf-lang#349): brackets
+        // hold expressions (D29), so the element type `(str, int)` parses
+        // as a tuple EXPRESSION of type heads. Each element reads as a
+        // bracket argument in its own right; a parenthesized single head
+        // is that head.
+        if node.kind == SyntaxKind::ParenExpr {
+            let inner = ParenExpr::cast(node)?.expr()?;
+            return self.type_from_bracket_arg(inner);
+        }
+        if node.kind == SyntaxKind::TupleExpr {
+            let elems: Vec<&GreenNode> = TupleExpr::cast(node)?.elems().collect();
+            let mut tys = Vec::with_capacity(elems.len());
+            for el in elems {
+                tys.push(self.type_from_bracket_arg(el)?);
+            }
+            return Some(self.lo.table.intern(TyKind::Tuple(tys)));
+        }
         if node.kind != SyntaxKind::PathExpr {
             return None;
         }

@@ -803,3 +803,14 @@ fn literal_default_follows_the_bound() {
         "trait Neg {\n    fn neg(self) -> Self\n}\n\nimpl Neg for int {\n    fn neg(self) -> Self { -self }\n}\n\nfn refund[T: Neg](charged: T) -> T { -charged }\n\nfn main() -> !int {\n    let cents = 340\n    let r = refund(cents) + refund(12)\n    r + 352\n}\n",
     );
 }
+
+/// wolf-lang#349 ([gram.amb.brackets]): a tuple type argument spells as a
+/// tuple of type heads in bracket position, and types clean — in a
+/// constructor, a nested constructor, a `Map` value, and a signature.
+#[test]
+fn tuple_type_in_bracket_position() {
+    snap_one(
+        "clean_tuple_type_in_bracket_position",
+        "fn first(xs: List[(str, int)]) -> int { xs[0].1 }\n\nfn main() -> !int {\n    var out = List[(str, int)]()\n    (mut out).push((\"ada\", 91))\n    let m = Map[str, (int, bool)]()\n    let one = List[(int)]()\n    var nested = List[List[(int, int)]]()\n    first(out) - 91 + m.len + one.len + nested.len\n}\n",
+    );
+}
