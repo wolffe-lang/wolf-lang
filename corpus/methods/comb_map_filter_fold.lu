@@ -1,0 +1,19 @@
+//! check: run(exit=0, stdout="40 20 2 10 10\n")
+//! phase: run
+//! conforms: type.method.resolve, type.comb.set, type.comb.eager
+//!
+//! s166 — `map`, `filter`, `fold` and `sum` as methods on a `List[int]`,
+//! each resolved to its home module's `pub fn` (`[type.method.resolve]`
+//! step 2) against this directory's fixture std root. A capturing
+//! closure, a capture-free one and an annotated one: all three are the
+//! `fn` value the parameter names (`[type.fn.value]`).
+
+fn main() -> !int {
+    let xs = [4, 1, 3, 2]
+    let k = 10
+    let tens = xs.map(fn(x) x * k)
+    let even = xs.filter(fn(x: int) { x % 2 == 0 })
+    let total = xs.fold(0, fn(a: int, x: int) { a + x })
+    print("{tens[0]} {tens[3]} {even.len} {total} {xs.sum()}")
+    0
+}
