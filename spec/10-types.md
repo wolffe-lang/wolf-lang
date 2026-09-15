@@ -867,10 +867,19 @@ one type the compiler could build a value of and not name.)
   read. One exclusive `end` is what makes `len` and `contains`
   writable at all (`end - start`, `start <= x && x < end`), which is
   the gap wolf-std F-0030 filed; two accessors whose meaning depended
-  on a spelling the type does not carry would not close it. The
-  reference interpreter has normalized inclusive ranges at
-  construction since its first range arm, so the two machines agree
-  by construction and not by a new rule.
+  on a spelling the type does not carry would not close it. **The
+  cost, stated:** one checked add where an inclusive range VALUE is
+  built, and nothing anywhere else — `start`, `end` and every loop
+  over a value read two words, and a `for` over a range header never
+  builds a value at all (`[type.range.value]`), so its bound is the
+  loop's own arithmetic, unchanged. (Corrected 2026-09-15 by s163,
+  wolf-lang#383: this clause said the reference interpreter had
+  normalized at construction since its first range arm. It had not —
+  measured at lupin 0.1.36 (`6e94436`) by wolf-interp is49, `..=` was
+  carried as a flag to the `for` loop and the bound computed there on
+  unchecked `i128`, so `0..=int.MAX` as a value neither trapped nor
+  normalized. The machines agree because is49 mirrored this clause,
+  not by construction.)
 - `[type.range.value]` A range passes as a parameter, returns, binds,
   and iterates; `for` is **unchanged** in every way
   (`[mem.iter.for]`/`[mem.iter.range]` still describe the loop, and a
