@@ -204,6 +204,7 @@ grammar/structlit_cond.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_paren.lu: lowers
 grammar/tuple_pattern_match_arm.lu: lowers
 grammar/tuple_pattern_no_separator.lu: not mem-clean (pre-wir rungs own it)
+grammar/type_position_keyword.lu: not mem-clean (pre-wir rungs own it)
 grammar/when_reserved.lu: not mem-clean (pre-wir rungs own it)
 hello.lu: lowers
 io/eprint.lu: lowers

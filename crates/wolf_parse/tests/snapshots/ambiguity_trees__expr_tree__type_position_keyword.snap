@@ -1,0 +1,46 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 637..684
+  FnDecl 637..654
+    FnKw 637..639 "fn"
+    Ident 640..641 "f"
+    ParamList 641..650
+      LParen 641..642 "("
+      Param 642..644
+        Ident 642..643 "p"
+        Colon 643..644 ":"
+        Missing 644..644 ""
+      ErrorNode 645..649
+        ProcKw 645..649 "proc"
+      RParen 649..650 ")"
+    Block 651..654
+      LBrace 651..652 "{"
+      RBrace 653..654 "}"
+  Term 654..655 "\n"
+  FnDecl 656..683
+    FnKw 656..658 "fn"
+    Ident 659..663 "main"
+    ParamList 663..665
+      LParen 663..664 "("
+      RParen 664..665 ")"
+    RetType 666..673
+      Arrow 666..668 "->"
+      ErrorUnionType 669..673
+        Not 669..670 "!"
+        PathType 670..673
+          Path 670..673
+            Ident 670..673 "int"
+    Block 674..683
+      LBrace 674..675 "{"
+      ExprStmt 680..682
+        LiteralExpr 680..681
+          Int 680..681 "0"
+        Term 681..682 "\n"
+      RBrace 682..683 "}"
+  Term 683..684 "\n"
+  Eof 684..684 ""
+== diagnostics ==
+E0206 [Error] 645..649 expected a type
