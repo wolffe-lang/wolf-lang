@@ -4,8 +4,8 @@
 //! `[conc.chan.close]` spells its tag (wolf-lang#273): a receive on a
 //! drained-closed channel answers the payload-free row `closed`, and
 //! `{err}` renders it by its tag's name (`[type.interp.row]`). The
-//! checked lane declines channel methods (no resolvable bodies); this
-//! is a native witness. lupin 0.1.28 mints `Closed`; the mirror is the
+//! checked lane serves channel methods from the root task since
+//! wolf-lang#342, so it runs this file too. lupin 0.1.28 mints `Closed`; the mirror is the
 //! same wave's, so the two machines part on this file until it lands.
 
 fn main() -> !int {
