@@ -9650,6 +9650,65 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         Ok(out)
     }
 
+    /// [`bind_method_generics`] for a home-module call (s166): no impl
+    /// scope — the function's own generics bind from the receiver's
+    /// site type against the first parameter, the arguments against the
+    /// rest, and the call's recorded type through the return.
+    fn bind_home_generics(
+        &self,
+        fsig: &FnSig,
+        d: CallExpr<'t>,
+        e: &'t GreenNode,
+    ) -> R<Vec<(String, Bound)>> {
+        let mut map: std::collections::BTreeMap<String, Bound> = std::collections::BTreeMap::new();
+        if let Some(base) = d
+            .callee()
+            .and_then(wolf_ast::MemberExpr::cast)
+            .and_then(|m| m.base())
+            && let Some(p0) = fsig.params.first()
+        {
+            let place = if base.kind == SyntaxKind::ParenExpr {
+                ParenExpr::cast(base).and_then(|p| p.expr()).unwrap_or(base)
+            } else {
+                base
+            };
+            if let Some(site) = self
+                .expr_sema_ty(place.span)
+                .or_else(|| self.expr_sema_ty(base.span))
+            {
+                self.match_binding(p0.ty, site, &mut map, e.span)?;
+            }
+        }
+        let args: Vec<_> = d.args().into_iter().flat_map(|l| l.args()).collect();
+        for (i, p) in fsig.params.iter().skip(1).enumerate() {
+            let Some(a) = args.get(i) else { break };
+            let Some(vexpr) = Arg::value(*a) else {
+                continue;
+            };
+            let Some(site) = self.expr_sema_ty(vexpr.span) else {
+                continue;
+            };
+            self.match_binding(p.ty, site, &mut map, e.span)?;
+        }
+        if let Some(site_ret) = self.expr_sema_ty(e.span) {
+            self.match_binding(fsig.ret, site_ret, &mut map, e.span)?;
+        }
+        let mut out = Vec::with_capacity(fsig.generics.len());
+        for g in &fsig.generics {
+            let Some(b) = map.remove(&g.name) else {
+                return Err(refuse_named(
+                    format!(
+                        "an instantiation with an unbound parameter (`{}` is not fixed by this call)",
+                        g.name
+                    ),
+                    e.span,
+                ));
+            };
+            out.push((g.name.clone(), b));
+        }
+        Ok(out)
+    }
+
     /// One structural step of [`bind_generics`]: `decl` in the
     /// signature table against `site` in this body's table.
     fn match_binding(
@@ -16287,8 +16346,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             base
         };
         // s40: the builtin receivers — `str` (the s37 method set) and
-        // `List` dispatch to the runtime tier, never to an impl.
-        if let Some(recv_sema) = self.expr_sema_ty(recv_place.span) {
+        // `List` dispatch to the runtime tier, never to an impl. s166:
+        // unless the checker routed the call to the type's home module
+        // (`[type.method.resolve]` step 2) — that is a free call.
+        let home = matches!(disp, Dispatch::Home { .. });
+        if !home && let Some(recv_sema) = self.expr_sema_ty(recv_place.span) {
             let mname = m.member().map(|t| self.text(t.span)).unwrap_or_default();
             match self.table.kind(self.strip_sema(recv_sema)) {
                 TyKind::Prim(Prim::Str) => {
@@ -16388,6 +16450,21 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     ));
                 };
                 self.route_trait_static(*module, name, method, &head, d, e)?
+            }
+            // s166 — `xs.any(p)` IS `list.any(xs, p)`: the home module's
+            // function under its module-qualified name, the receiver as
+            // its first argument, generics bound from the site types
+            // exactly as the free call binds them.
+            Dispatch::Home { module, name } => {
+                let Some(ItemSig::Fn(fsig)) = self.sigs.get(*module, name) else {
+                    return Err(refuse("a home-module call without a signature", e.span));
+                };
+                let bindings = if fsig.generics.is_empty() {
+                    Vec::new()
+                } else {
+                    self.bind_home_generics(fsig, d, e)?
+                };
+                (qualify(self.sigs, *module, name), fsig, bindings)
             }
         };
         if msig.comptime {

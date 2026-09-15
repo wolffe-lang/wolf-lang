@@ -7438,6 +7438,9 @@ impl<'t> Machine<'t> {
                     method,
                     dyn_call,
                 } => (Q::T(*module, name.clone(), *dyn_call), method.clone()),
+                Dispatch::Home { .. } => {
+                    return self.refuse("home-module method calls in checked execution", e.span);
+                }
             };
             let mut arg_exprs = d.args().into_iter().flat_map(|l| l.args());
             let Some(recv_expr) = arg_exprs.next().and_then(Arg::value) else {
@@ -7742,6 +7745,13 @@ impl<'t> Machine<'t> {
         args: Option<wolf_ast::ArgList<'t>>,
     ) -> E<Flow> {
         let method = sig.callee.as_str();
+        // s166 — a home-module method (`[type.method.resolve]` step 2)
+        // is the free call with the receiver first; the checked
+        // machine's generic binding reads positional arguments only,
+        // so it refuses the method spelling by name rather than guess.
+        if matches!(self.ctx().dispatch.get(&e.span), Some(Dispatch::Home { .. })) {
+            return self.refuse("home-module method calls in checked execution", e.span);
+        }
         let recv_ty = self.expr_ty(recv.span).cloned();
         // Raw-pointer provenance ops.
         if matches!(recv_ty, Some(TyKind::Ptr(_))) {
@@ -8413,6 +8423,10 @@ impl<'t> Machine<'t> {
                         name: name.clone(),
                         dyn_call: *dyn_call,
                     },
+                    Some(Dispatch::Home { .. }) => {
+                        return self
+                            .refuse("home-module method calls in checked execution", e.span);
+                    }
                     None => return self.refuse("this method call shape", e.span),
                 };
                 let self_mode = sig.params.first().and_then(|p| p.mode);
