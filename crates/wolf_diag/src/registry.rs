@@ -2402,28 +2402,38 @@ real by transforming the value before it leaves.
 // W11xx — concurrency-adjacent warnings (mirror of the E11xx family).
 // ------------------------------------------------------------------------
 
-code!(W1004, "a byte view lent here is kept by the callee, so the bytes are copied instead", r#"
+code!(W1004, "RETIRED — a byte-view lend the callee keeps now copies silently", r#"
+This code is retired and the compiler no longer emits it; the number is
+kept so a reader who meets `W1004` in an old log or an old lesson finds
+this page and not a hole. A retired number is never reused.
+
 `s.bytes()` in an argument position offers the string's own bytes as a
-LEND: the callee reads `{ptr, len}` pointing straight at the caller's
-storage, and the call costs nothing at all rather than one heap copy
-per byte ([mem.str.view.lend]). A lend lasts exactly the call. This
-callee keeps the parameter past the call — returns it, stores it, or
-hands it on to somewhere the bytes cannot be followed back from — so a
-lend would be a dangling pointer, and the compiler did what every call
-did before views crossed calls: it materialized the bytes into a
-`List[int]` at the call site and passed that. The program means what
-it meant; it paid one copy the lend was meant to save.
+LEND ([mem.str.view.lend]), and a lend lasts exactly the call. When the
+callee kept that parameter past the call — returned it, stored it,
+handed it on — the lend degraded to the copy every call made before
+views crossed calls, and this warning said so once, naming the escaping
+use and the one-word fix. It was E1015, a refusal, until #107/#108
+ruled that refusing a program with a safe compilation is not this
+language's style.
 
-If the copy is what you wanted, say so and silence the warning: `let bs
-= s.bytes()` binds a materialized list the callee may own, and passing
-`bs` costs exactly what this call already costs. If the copy is NOT
-what you wanted, the callee is the thing to change — a callee that only
-reads its parameter lends for free. The one shape that is never on
-offer is a kept lend: there is no way to spell "keep these bytes and do
-not copy them", because that spelling has no meaning that is not a
-dangling `{ptr, len}`.
+It retired under wolf-lang#387, for two reasons that arrived together.
+wolf-lang#366 made every escape the analysis can PROVE — a return, a
+`take` or `mut` hand-on, a store past the call — a refusal in the
+CALLEE, E1002 or E1014, which names the problem where it can actually
+be fixed; so this warning fired beside an error for one root cause,
+which VOICE rule 5 forbids. And on the one shape #366 leaves legal — a
+local that dies with the call — its claim that the callee "keeps them
+past the call" was simply false, because the escape scan reads any
+assignment's right side as escaping. A warning that is either redundant
+or untrue is a bug in the catalog, and the catalog answers by retiring
+the number.
 
-Formerly E1015, retired when the refusal became this warning.
+The copy itself is unchanged and silent again: a callee this analysis
+cannot prove reads-only materializes, exactly as it always did. What a
+callee can now do is ask for its own copy in one word — `copy bs` is a
+read position (#387), so the call still lends for free and the copy
+happens once, inside the callee, where the program spells it. See
+[mem.str.view.lend] and E1015.
 "#);
 
 code!(W1101, "this write stays inside the task", r#"
