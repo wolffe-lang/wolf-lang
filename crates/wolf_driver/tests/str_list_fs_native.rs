@@ -752,16 +752,17 @@ fn to_int_row_escapes_main_on_both_lanes() {
     );
 }
 
-/// wolf-lang#263's first half: a `str` method outside the builtin set
-/// is refused BY NAME — the record's `x-unsupported-construct` and the
-/// stderr line both say which method, so nobody counts bytes to learn
-/// it. The refusal is sema's (before either lane), so the checked rung
-/// shows it without a toolchain.
+/// s166 (`[type.method.root]`) retired wolf-lang#263's not-yet here: a
+/// `str` method the builtins do not answer is `std.str`'s
+/// (`[type.method.home]`), so with no std root configured the call is
+/// E0301 naming the home module and the three ways to point at one.
+/// The record carries the code, not an unsupported construct, and
+/// `wolf build` says the same thing in its own voice.
 #[test]
-fn a_str_method_outside_the_set_is_refused_by_name() {
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("s142_refusal_names");
+fn a_str_method_outside_the_set_comes_from_std_str() {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("s166_str_home");
     std::fs::create_dir_all(&dir).expect("mkdir");
-    let entry = dir.join("s142_refusal_names.lu");
+    let entry = dir.join("s166_str_home.lu");
     std::fs::write(
         &entry,
         "fn main() -> !int {\n    let x = \"3.5\".to_float() else 0.0\n    print(\"{x}\")\n    0\n}\n",
@@ -779,20 +780,25 @@ fn a_str_method_outside_the_set_is_refused_by_name() {
         String::from_utf8_lossy(&out.stderr)
     );
     let rec: serde_json::Value = serde_json::from_slice(&out.stdout).expect("a record");
-    assert_eq!(rec["verdict"], "unsupported");
-    let construct = rec["x-unsupported-construct"]
-        .as_str()
-        .expect("the record names the refused construct");
-    assert_eq!(
-        construct, "this `str` method, `to_float`, is outside the builtin set",
-        "the refusal names the method"
+    assert_eq!(rec["verdict"], "fail(E0301)");
+    assert_eq!(rec["phase_reached"], "typecheck");
+    let codes: Vec<&str> = rec["diagnostics"]
+        .as_array()
+        .expect("diagnostics")
+        .iter()
+        .filter_map(|d| d["code"].as_str())
+        .collect();
+    assert_eq!(codes, ["E0301"], "the record carries the code");
+    assert!(
+        rec["x-unsupported-construct"].is_null(),
+        "nothing is unsupported: {rec}"
     );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stderr.contains("unsupported — this `str` method, `to_float`, is outside the builtin set"),
-        "stderr names it too: {stderr}"
+        stderr.contains("error[E0301]: `to_float` is not a builtin method of `str`"),
+        "stderr names the method: {stderr}"
     );
-    // And `wolf build`'s own voice — the line the maintainer read.
+    // And `wolf build`'s own voice — the line the maintainer reads.
     let out = Command::new(wolf())
         .arg("build")
         .arg(&entry)
@@ -803,10 +809,11 @@ fn a_str_method_outside_the_set_is_refused_by_name() {
     assert_eq!(out.status.code(), Some(1));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stderr.contains(
-            "wolf build: cannot compile this yet — this `str` method, `to_float`, is outside the builtin set @"
-        ),
-        "build names the method: {stderr}"
+        stderr.contains("error[E0301]: `to_float` is not a builtin method of `str`")
+            && stderr.contains(
+                "no standard library is configured, so `std.str` cannot answer this call"
+            ),
+        "build names the method and the std root: {stderr}"
     );
 }
 

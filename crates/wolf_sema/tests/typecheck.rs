@@ -252,9 +252,11 @@ fn str_methods_type_since_s37() {
         tc.diagnostics,
         tc.not_yet
     );
-    // Outside the s37 set stays an honest refusal.
+    // Outside the s37 set the method is `std.str`'s (s166,
+    // `[type.method.root]`): with no std root configured that is
+    // E0301 naming the home module, where it used to be a not-yet.
     let tc = check_one("fn main() -> !int {\n    let s = \"abc\".frobnicate()\n    0\n}\n");
-    assert!(is_nyc(&tc, "main"));
+    assert!(codes(&tc).contains(&"E0301"), "{:?}", tc.diagnostics);
 }
 
 #[test]

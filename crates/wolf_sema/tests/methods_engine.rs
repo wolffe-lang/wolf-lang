@@ -280,7 +280,11 @@ fn to_int_is_in_the_builtin_set() {
 /// serve either (`to_float`, `to_bool`) are exactly the shape a
 /// reader meets next.
 #[test]
-fn a_str_method_outside_the_set_is_refused_by_name() {
+fn a_str_method_outside_the_set_is_std_str_s() {
+    // s166 (`[type.method.root]`) retired #263's not-yet here: a `str`
+    // method the builtins do not answer is `std.str`'s, so with no std
+    // root configured the call is E0301 naming the home module — an
+    // error about the build, not a construct the checker cannot read.
     for (m, src) in [
         (
             "to_float",
@@ -292,16 +296,25 @@ fn a_str_method_outside_the_set_is_refused_by_name() {
         ),
     ] {
         let tc = check_one(src);
-        assert_eq!(tc.not_yet.len(), 1, "{m}: {:?}", tc.not_yet);
-        assert_eq!(
-            tc.not_yet[0].construct,
-            format!("this `str` method, `{m}`, is outside the builtin set"),
-        );
-        let refused = &src[tc.not_yet[0].span.lo as usize..tc.not_yet[0].span.hi as usize];
+        assert!(tc.not_yet.is_empty(), "{m}: {:?}", tc.not_yet);
         assert!(
-            refused.ends_with(&format!(".{m}()")),
-            "the span is the call: {refused}"
+            tc.diagnostics.iter().any(|d| d.code == "E0301"),
+            "{m}: {:?}",
+            tc.diagnostics
         );
+        let d = tc
+            .diagnostics
+            .iter()
+            .find(|d| d.code == "E0301")
+            .expect("checked above");
+        assert_eq!(
+            d.message,
+            format!("`{m}` is not a builtin method of `str`"),
+            "the refusal names the method"
+        );
+        let span = d.span();
+        let named = &src[span.lo as usize..span.hi as usize];
+        assert_eq!(named, m, "the span is the method name: {named}");
     }
 }
 
