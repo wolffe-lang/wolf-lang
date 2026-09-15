@@ -15,13 +15,15 @@
 //! exit 1 — it propagates the raw row value at `let` instead of
 //! binding it — a one-sided divergence that belongs to the checked
 //! lane's row-value tier, not to #35's typing fix.
+//!
+//! s165 (#366): the tail is `copy hit`, as in `handler_diverge_call.lu`.
 
 fn expect[T](v: T ! {none}, msg: str) -> T {
     let hit = v else |_| {
         print("FAILED: {msg}")
         assert(false)
     }
-    hit
+    copy hit
 }
 
 fn pick(x: int) -> int ! {none} {

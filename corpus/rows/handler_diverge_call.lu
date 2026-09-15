@@ -12,13 +12,16 @@
 //! type exists; `testing.fail`-shaped calls are the surface question
 //! that stays open on #35. This is the hit path: the handler never
 //! runs, on any lane. Its trap twin is `handler_diverge_trap.lu`.
+//!
+//! s165 (#366): the tail is `copy hit` — `hit` holds `v`, a `read` parameter
+//! of type `T`, and handing it back as itself is E1002.
 
 fn expect[T](v: T ! {none}, msg: str) -> T {
     let hit = v else |_| {
         print("FAILED: {msg}")
         assert(false)
     }
-    hit
+    copy hit
 }
 
 fn pick(x: int) -> int ! {none} {

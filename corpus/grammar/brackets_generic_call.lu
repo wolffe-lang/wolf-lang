@@ -6,8 +6,11 @@
 //! types seed the same instantiation the arguments would have
 //! solved, on every lane, beside the indexing this production
 //! shares its grammar with.
+//!
+//! s165 (#366): `first` hands back `copy xs[0]` — an element moved out of a
+//! `read` parameter is still the caller's value (E1002 without the `copy`).
 
-fn first[T](xs: List[T]) -> T { xs[0] }
+fn first[T](xs: List[T]) -> T { copy xs[0] }
 
 fn main() -> !int {
     var xs = List[int]()

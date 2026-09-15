@@ -10,6 +10,9 @@
 //! `map[U]` is a generic METHOD on a non-generic impl — the same key
 //! with an empty impl part — and two call sites make two instances
 //! (`int`, `str`). Trait impls stay c06's: this file has none.
+//!
+//! s165 (#366): `first` and `map` hand back `copy` — `K` and `U` may be a
+//! `List`, and a `read` parameter returned as itself is E1002.
 
 struct Pair[K, V] {
     a: K,
@@ -18,7 +21,7 @@ struct Pair[K, V] {
 
 impl[K, V] Pair[K, V] {
     fn first(self) -> K {
-        self.a
+        copy self.a
     }
 }
 
@@ -28,7 +31,7 @@ struct P {
 
 impl P {
     fn map[U](self, u: U) -> U {
-        u
+        copy u
     }
 }
 

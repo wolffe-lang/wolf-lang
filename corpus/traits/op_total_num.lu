@@ -10,6 +10,9 @@
 //! std.ops's and std.cmp's shape word for word (wolf-std sc44), so
 //! `total` instantiated at `int` is the machine add and at `f64` the
 //! IEEE one. Both tiers print the same two lines.
+//!
+//! s165 (#366): `acc` starts as `copy zero` — on an empty list the tail hands
+//! back what `acc` began as, and a `read` parameter returned as itself is E1002.
 
 trait Add {
     fn add(self, other: Self) -> Self
@@ -118,7 +121,7 @@ impl Ord for f64 {
 }
 
 fn total[T: Num](xs: List[T], zero: T) -> T {
-    var acc = zero
+    var acc = copy zero
     for x in xs {
         acc = acc + x
     }

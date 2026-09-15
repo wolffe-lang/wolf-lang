@@ -13,6 +13,9 @@
 //! pinned by `wolf_wir/tests/dedup_instances.rs` over exactly this
 //! file (the per-file ledger says `lowers`; the unique count is a
 //! whole-module fact a per-file line cannot carry).
+//!
+//! s165 (#366): `keep` hands back `copy xs` — a `read` parameter returned as
+//! itself is E1002.
 
 struct W0 { v: int }
 
@@ -35,7 +38,7 @@ struct W8 { v: int }
 struct W9 { v: int }
 
 fn keep[T](xs: List[T]) -> List[T] {
-    xs
+    copy xs
 }
 
 fn main() -> !int {

@@ -2,6 +2,6 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 989..1129 name=expect body=Block
-FnDecl 1131..1201 name=pick body=Block
-FnDecl 1203..1311 name=main body=Block
+FnDecl 1067..1212 name=expect body=Block
+FnDecl 1214..1284 name=pick body=Block
+FnDecl 1286..1394 name=main body=Block

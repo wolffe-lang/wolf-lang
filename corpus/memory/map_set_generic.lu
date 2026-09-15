@@ -14,8 +14,13 @@
 //! neighbour does not need went in. A store through a container
 //! index lends now (`[mem.region.edge.elem]`); a FIELD store keeps the
 //! refusal, in `region_conflict_params.lu`.
+//!
+//! s165 (#366): `v` is `take` — a store consumes the value it stores. A `read`
+//! `v` stored into the caller's `m` is E1002 (the caller would still hold it),
+//! so the map's `set` says so in its signature. The regions still merge at
+//! the index store, which is the clause this file pins.
 
-fn set_g[K, V](mut m: Map[K, V], k: K, v: V) {
+fn set_g[K, V](mut m: Map[K, V], k: K, take v: V) {
     m[k] = v
 }
 
@@ -25,7 +30,7 @@ fn push_g[T](mut xs: List[T], v: T) {
 
 fn main() -> !int {
     var m = Map[str, int]()
-    set_g(mut m, "a", 1)
+    set_g(mut m, "a", take 1)
     var xs = List[int]()
     push_g(mut xs, 7)
     push_g(mut xs, 8)

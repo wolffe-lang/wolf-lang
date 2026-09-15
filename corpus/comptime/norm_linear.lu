@@ -7,21 +7,24 @@
 //! and `1 + N` are the same type — Rust's RFC-2000 "same AST node or
 //! nothing" wart, dead at a defined line. Closed expressions compare
 //! by value: `Buf[4]` is `Buf[2 + 2]`.
+//!
+//! s165 (#366): each body hands back `copy b` — a `read` parameter returned
+//! as itself is E1002, a second live path to the caller's value.
 
 struct Buf[N: type] {
     len: int,
 }
 
 fn shuffle[N: type](b: Buf[N + 1]) -> Buf[1 + N] {
-    b
+    copy b
 }
 
 fn widen[N: type](b: Buf[N + 2 - 1]) -> Buf[1 + N] {
-    b
+    copy b
 }
 
 fn closed(b: Buf[2 + 2]) -> Buf[4] {
-    b
+    copy b
 }
 
 fn main() -> !int {

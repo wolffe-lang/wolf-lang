@@ -10,9 +10,12 @@
 //! (`instantiations_seen` is 3 here and `instantiations_lowered` is 2:
 //! the health metric's first non-trivial reading, and NOT yet a dedup
 //! ratio — s94 owns that.)
+//!
+//! s165 (#366): `pick` hands back `copy` — `T` may be a `List`, and a `read`
+//! parameter returned as itself is E1002.
 
 fn pick[T](a: T, b: T, first: bool) -> T {
-    if first { a } else { b }
+    if first { copy a } else { copy b }
 }
 
 fn main() -> !int {
