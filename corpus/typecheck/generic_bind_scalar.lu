@@ -1,0 +1,20 @@
+//! check: fail(E0401)
+//! phase: resolve
+//! conforms: type.generic.bind, gram.item.fn
+//!
+//! s163 (#319) — the scalar half of [type.generic.bind]: the `1`
+//! binds `T` to `int`, so the `"x"` is E0401 at the `"x"`, the later
+//! argument. lupin 0.1.36 runs this program (exit 0): its is45 fix
+//! reads declarations back for a struct-typed argument only, so the
+//! row parts in the pairing table until the interpreter mirrors the
+//! clause.
+
+fn pick[T](a: T, b: T) -> T {
+    a
+}
+
+fn main() -> !int {
+    let s = pick(1, "x")
+    print("{s}")
+    0
+}

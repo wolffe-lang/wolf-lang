@@ -545,6 +545,8 @@ typecheck/fn_value_captured_int.lu: lowers
 typecheck/fn_value_captured_var_write.lu: not mem-clean (pre-wir rungs own it)
 typecheck/fn_value_capturing.lu: lowers
 typecheck/fn_value_import/main.lu: lowers
+typecheck/generic_bind_once.lu: not mem-clean (pre-wir rungs own it)
+typecheck/generic_bind_scalar.lu: not mem-clean (pre-wir rungs own it)
 typecheck/if_branch.lu: not mem-clean (pre-wir rungs own it)
 typecheck/interp_spec_on_union.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_compound_assign.lu: not mem-clean (pre-wir rungs own it)
