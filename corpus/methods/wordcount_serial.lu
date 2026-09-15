@@ -1,0 +1,36 @@
+//! check: run(exit=0, stdout="the                 7  #######\nwolf                4  ####\nmoon                4  ####\nand                 3  ###\n")
+//! phase: run
+//! conforms: type.comb.set, mem.map.absent
+//!
+//! s166 — the word counter, serial: `pieces.map(count)`. Its twin
+//! `wordcount_par.lu` differs in that one call — `pieces.par(count)` —
+//! and prints the same bytes (`[conc.task.par.order]`).
+
+fn count(text: str) -> Map[str, int] {
+    var tally = Map[str, int]()
+    for word in text.words() {
+        let w = word.lower()
+        if w.is_empty() { continue }
+        tally[w] = (tally[w] else 0) + 1
+    }
+    tally
+}
+
+fn main() -> !int {
+    let pieces = [
+        "The wolf runs and the moon watches over the wolf",
+        "The pack answers and the moon does not",
+        "A wolf is a wolf and the moon is the moon",
+    ]
+    let counts = pieces.map(count)
+    var total = Map[str, int]()
+    for c in counts {
+        for (w, n) in c.pairs() { total[w] = (total[w] else 0) + n }
+    }
+    let ranked = total.pairs().sorted_by(fn(a: (str, int), b: (str, int)) { a.1 > b.1 })
+    let shown = if ranked.len < 4 { ranked.len } else { 4 }
+    for (w, n) in ranked[..shown] {
+        print("{w:<14}{n:>7}  {"#".repeat(n)}")
+    }
+    0
+}
