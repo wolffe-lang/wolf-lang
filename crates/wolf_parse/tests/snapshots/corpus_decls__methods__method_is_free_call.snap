@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 229..242 path=std.list
+FnDecl 243..280 name=odd body=Block
+FnDecl 282..432 name=main body=Block
