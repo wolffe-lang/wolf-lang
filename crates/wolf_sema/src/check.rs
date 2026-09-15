@@ -6562,8 +6562,9 @@ impl<'a> Checker<'a> {
             // every entry as a `(K, V)` tuple in the map's iteration
             // order (insertion order on both machines, unspecified by
             // the clause), the one door std's key functions walk
-            // through. `has`/`get`/`get_or`/`remove`/`tally` are
-            // std.map's, written over `pairs()` and the index.
+            // through. `has`/`get`/`get_or`/`tally` are std.map's,
+            // written over `pairs()` and the index; `remove` is a
+            // builtin since s165 (#344).
             (TyKind::Map(..), "len" | "count") => {
                 let int_ = self.lo.table.prim(Prim::Int);
                 (vec![p("self", recv_ty)], int_)
@@ -6575,6 +6576,17 @@ impl<'a> Checker<'a> {
             (TyKind::Map(..), "clear") => {
                 let u = self.lo.table.unit();
                 (vec![pm("self", recv_ty)], u)
+            }
+            // s165 (#344, D50): the key erase — `V ! {none}`, the shape
+            // `[mem.map.absent]` gives the read: the erased value, or the
+            // row when the key was absent (the map unchanged).
+            (TyKind::Map(k, v), "remove") => {
+                let row = self
+                    .lo
+                    .table
+                    .row(vec![("none".to_string(), Vec::new())], None);
+                let r = self.lo.table.intern(TyKind::ErrUnion(v, row));
+                (vec![pm("self", recv_ty), p("key", k)], r)
             }
             (TyKind::Map(k, v), "pairs") => {
                 let pair = self.lo.table.intern(TyKind::Tuple(vec![k, v]));
