@@ -242,13 +242,14 @@ pub enum SyntaxKind {
 
 impl SyntaxKind {
     /// Is this a token kind (leaf)? `Tombstone` is neither.
-    pub fn is_token(self) -> bool {
-        self > SyntaxKind::Tombstone && self <= SyntaxKind::Missing
+    pub const fn is_token(self) -> bool {
+        (self as u16) > (SyntaxKind::Tombstone as u16)
+            && (self as u16) <= (SyntaxKind::Missing as u16)
     }
 
     /// Is this a node kind (interior)?
-    pub fn is_node(self) -> bool {
-        self >= SyntaxKind::SourceFile
+    pub const fn is_node(self) -> bool {
+        (self as u16) >= (SyntaxKind::SourceFile as u16)
     }
 
     /// Is this a keyword token — one of the 50 reserved keywords
@@ -266,10 +267,11 @@ impl SyntaxKind {
     /// after it — `ThenKw` (s151) and `ErrorKw` (s158) — fell through
     /// both that test and the `Ident` test below it, so the walk
     /// emitted *nothing* for either. A hole in a stream is what a
-    /// count misses; the boundary test below is what keeps this one
-    /// shut.
-    pub fn is_keyword(self) -> bool {
-        (SyntaxKind::AsKw..SyntaxKind::LParen).contains(&self)
+    /// count misses; the build-time boundary assertions after this
+    /// `impl` are what keep this one shut (wolf-lang#370: a `const fn`
+    /// over the discriminants, so they can be `const` assertions).
+    pub const fn is_keyword(self) -> bool {
+        (self as u16) >= (SyntaxKind::AsKw as u16) && (self as u16) < (SyntaxKind::LParen as u16)
     }
 
     /// Is this one of the item (declaration) node kinds?
@@ -292,6 +294,41 @@ impl SyntaxKind {
     }
 }
 
+/// The keyword block is a contiguous run, and its ends are pinned —
+/// at BUILD time (wolf-lang#370, the follow-up to #356). s159 pinned
+/// these in a `#[test]`; a reordering of `SyntaxKind` is now a compile
+/// error of the lowest crate in the stack, before any test runs. A new
+/// contextual keyword belongs *inside* `AsKw..LParen`, where
+/// [`SyntaxKind::is_keyword`] picks it up with no second edit. What
+/// these cannot see is an ADDITION outside the run without bumping the
+/// count; for the 50 reserved keywords `wolf_parse` closes that too
+/// (every lexer keyword must map inside the run, asserted at build
+/// time beside `keyword_kind`), so the residual is a contextual keyword
+/// declared outside the block — the exhaustive-match option #370 left
+/// for a ruling.
+const _: () = {
+    // 50 reserved `[gram.inv.kw]` + 3 contextual (`self`, `then`,
+    // `error`). Raise this number only together with the keyword you
+    // added — and only if it is a keyword.
+    assert!(SyntaxKind::LParen as u16 - SyntaxKind::AsKw as u16 == 53);
+    // Both ends, and every contextual kind between them.
+    assert!(SyntaxKind::AsKw.is_keyword());
+    assert!(SyntaxKind::WhileKw.is_keyword());
+    assert!(SyntaxKind::SelfKw.is_keyword());
+    assert!(SyntaxKind::ThenKw.is_keyword());
+    assert!(SyntaxKind::ErrorKw.is_keyword());
+    // And nothing on either side of the run.
+    assert!(!SyntaxKind::Ident.is_keyword());
+    assert!(!SyntaxKind::Char.is_keyword());
+    assert!(!SyntaxKind::LParen.is_keyword());
+    assert!(!SyntaxKind::Term.is_keyword());
+    assert!(!SyntaxKind::Eof.is_keyword());
+    assert!(!SyntaxKind::SourceFile.is_keyword());
+    // Every keyword is a token kind.
+    assert!(SyntaxKind::AsKw.is_token());
+    assert!(SyntaxKind::ErrorKw.is_token());
+};
+
 #[cfg(test)]
 mod tests {
     use super::SyntaxKind;
@@ -309,34 +346,5 @@ mod tests {
         assert!(SyntaxKind::Block.is_node());
         assert!(SyntaxKind::FnDecl.is_item());
         assert!(!SyntaxKind::Attribute.is_item());
-    }
-
-    /// The keyword block is a contiguous run, and its ends are pinned
-    /// (wolf-lang#356). A new contextual keyword belongs *inside*
-    /// `AsKw..LParen`, where [`SyntaxKind::is_keyword`] picks it up
-    /// with no second edit; declaring one outside that run, or
-    /// slipping a non-keyword inside it, trips this test rather than
-    /// silently opening another hole in the semantic-token stream.
-    #[test]
-    fn the_keyword_block_is_contiguous_and_its_ends_are_pinned() {
-        // 50 reserved `[gram.inv.kw]` + 3 contextual (`self`, `then`,
-        // `error`). Raise this number only together with the keyword
-        // you added — and only if it is a keyword.
-        assert_eq!(SyntaxKind::LParen as u16 - SyntaxKind::AsKw as u16, 53);
-        // Both ends, and every contextual kind between them.
-        assert!(SyntaxKind::AsKw.is_keyword());
-        assert!(SyntaxKind::WhileKw.is_keyword());
-        assert!(SyntaxKind::SelfKw.is_keyword());
-        assert!(SyntaxKind::ThenKw.is_keyword());
-        assert!(SyntaxKind::ErrorKw.is_keyword());
-        // And nothing on either side of the run.
-        assert!(!SyntaxKind::Ident.is_keyword());
-        assert!(!SyntaxKind::Char.is_keyword());
-        assert!(!SyntaxKind::LParen.is_keyword());
-        assert!(!SyntaxKind::Term.is_keyword());
-        assert!(!SyntaxKind::Eof.is_keyword());
-        assert!(!SyntaxKind::SourceFile.is_keyword());
-        // Every keyword is a token kind.
-        assert!(SyntaxKind::ErrorKw.is_token());
     }
 }
