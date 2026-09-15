@@ -670,8 +670,11 @@ impl Wave<'_> {
                                 .to_string(),
                         )
                         .with_suggestion(Suggestion::new(
-                            "drop the `take` (call sites drop theirs and keep their \
-                             binding; owned payloads may then need a real transform)",
+                            format!(
+                                "drop the `take` and hand back `copy {name}` (call sites \
+                                 drop theirs and keep their binding; a `read` parameter \
+                                 returned without the `copy` is E1002, #366)"
+                            ),
                             vec![drop_decl],
                             Applicability::Maybe,
                         )),
