@@ -578,12 +578,16 @@ carrying a rule about operators. The rule is written here, beside
   *could* have been in the family had it been the other type, which it
   could not; and a code that depends on which side the row sits on is
   a rule about position, of which the language has no other instance
-  (`[type.unit.discard]` retired one at #276). Status at s148: the
-  compiler answers E0409 with the row on the left and E0401 with it on
-  the right; lupin 0.1.31 answers E0409 for arithmetic and E0401 for a
-  comparison, on either side — the two follow-ups are filed against
-  this clause. Witnesses: `rows/negative/row_operand_add.lu`,
-  `rows/negative/row_operand_compare.lu`.
+  (`[type.unit.discard]` retired one at #276). **The cost, stated:**
+  zero — a static refusal, with no instruction added to any accepted
+  program. Status at 0.2.14 (re-measured by s163): both machines
+  answer E0409 on either side and for both operator families, at the
+  same span on all three witnesses (wolf `--checked` and lupin 0.1.36);
+  the s148 split — the compiler's E0401 with the row on the right,
+  lupin 0.1.31's E0401 for a comparison — is closed on both sides.
+  Witnesses: `rows/negative/row_operand_add.lu`,
+  `rows/negative/row_operand_compare.lu`,
+  `rows/negative/row_operand_rhs.lu`.
 
 This chapter deliberately does **not** write the full numeric tower
 (mixed integer-width arithmetic, a complete `Add`/`Mul` trait hierarchy
