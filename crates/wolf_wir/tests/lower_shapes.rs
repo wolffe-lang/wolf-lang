@@ -984,8 +984,16 @@ fn a_mut_list_argument_reloads_its_header_after_the_call() {
 /// s78 note describes is real; what keeps it out of a single frame is
 /// the move checker, not anything about tokens.
 ///
-/// Pinned as: reading the moved-from binding is a hard error. Land a
+/// Pinned as: reading the moved-from binding is E1001, by code. Land a
 /// sharing container (or make `let b = a` an alias) and this fails.
+///
+/// s162: #93 filed this accident as "`let b = a` moves and `copy a`
+/// deep-copies". The `copy` half does NOT hold on the native tiers —
+/// `copy` of a List is the operand itself there (#384), so
+/// `shape(copy c, c)` hands one frame two live Lists over one buffer,
+/// and #146's stale overlap guard was reachable from source through it
+/// (`wolf_driver/tests/release_overlap_guard.rs`). That half is #384's
+/// to restore; this pin covers only the two refusals that do hold.
 #[test]
 fn two_live_lists_cannot_share_a_buffer() {
     let codes = mem_error_codes(
@@ -999,11 +1007,37 @@ fn two_live_lists_cannot_share_a_buffer() {
          }\n",
     );
     assert!(
-        !codes.is_empty(),
+        codes.iter().any(|c| c == "E1001"),
         "wolf-lang#93 accident 2 is gone: `let b = a` no longer keeps two \
          readable paths to one `List` buffer out of a single frame, so \
          #83's original shape may be reachable from source. Read the \
-         issue before touching this."
+         issue before touching this. (codes: {codes:?})"
+    );
+}
+
+/// Accident 2's call-site twin (#93, s162): one `List` passed `mut` and
+/// `read` to the same call is E1002, the c04 exclusivity refusal — the
+/// other way a single callee frame could hold two live paths to one
+/// buffer. Pinned by code for the same reason as the move above.
+#[test]
+fn one_list_lent_and_mut_in_one_call_is_refused() {
+    let codes = mem_error_codes(
+        "fn f(mut a: List[int], b: List[int]) -> int {\n\
+         \x20   (mut a).push(b[0])\n\
+         \x20   a.len\n\
+         }\n\
+         fn main() -> int {\n\
+         \x20   var x = List[int]()\n\
+         \x20   (mut x).push(5)\n\
+         \x20   f(mut x, x)\n\
+         }\n",
+    );
+    assert!(
+        codes.iter().any(|c| c == "E1002"),
+        "wolf-lang#93 accident 2's call-site twin is gone: one `List` \
+         reaches a callee as `mut` and `read` at once, so the callee holds \
+         two live paths to one buffer. Read the issue before touching \
+         this. (codes: {codes:?})"
     );
 }
 
