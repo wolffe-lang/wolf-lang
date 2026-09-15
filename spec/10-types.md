@@ -1046,3 +1046,202 @@ precedent, `[type.trait.op.alias]`. The item grammar is
   `rows/error_alias_ident.lu`; refused:
   `rows/negative/error_alias_cycle.lu`,
   `rows/negative/error_alias_open.lu`.
+
+## §15 Methods on std data `[type.method]`
+
+(s166, wolf-lang#390 — ruled by the maintainer 2026-09-15, option 1:
+`par` stays, and the combinators come first because `par` is one.
+Until this section both machines refused every method on `List`,
+`Map` or `str` that was not a builtin: the compiler with "cannot
+compile this yet — methods on generic std data (the std surface)" at
+two sites in the checker, lupin with "`List` has no method … in this
+machine's std subset". std had the operations the whole time, as free
+functions over the container — `list.any(xs, p)` executed on every
+lane at wolf-std `073aa19` — and no rule said how the method spelling
+reaches them. wolf-lang#154 is the book's filing of the same gap.)
+
+- `[type.method.home]` **Each std data type has one home module.**
+
+  | receiver type | home module |
+  |---|---|
+  | `List[T]` | `std.list` |
+  | `Map[K, V]` | `std.map` |
+  | `str` | `std.str` |
+  | `range[int]`, `range[char]` | `std.range` |
+
+  The table is closed: `Pool`, the conc handles, `Shared`/`Weak`, the
+  raw pointer, the other primitives and every user type have no home
+  module, and a method on them is exactly what it was — builtin,
+  inherent (`impl`) or trait. A home module's **method candidates** are
+  its `pub fn` items whose first parameter's type, with the function's
+  own generics as unknowns, is spelled with the receiver's type
+  constructor — `fn any[T](xs: List[T], …)` and `fn sum(xs: List[int])`
+  are `List` candidates; the private `at` and a `pub fn` whose first
+  parameter is an `int` are not. The home module is part of the type's
+  surface, not an import: a method call reaches it **with no `use`**,
+  and binds no name — `xs.any(p)` in a file that never wrote `use
+  std.list` compiles, and `list` is still not in scope there.
+
+- `[type.method.resolve]` **`recv.name(args)` IS `home.name(recv,
+  args)`.** Resolution of a method call on a receiver with a home
+  module, in order, stopping at the first step that finds `name`:
+  (1) the language's builtin methods on the type (`push`, `pop`,
+  `get`, `first`, `last`, `is_empty`, `count`, `clear` on `List`;
+  `pairs`, `is_empty`, `clear` on `Map`; the `[mem.str]` family on
+  `str`; `par`, `[conc.task.par]`); (2) the home module's method
+  candidates named `name`; (3) trait methods from traits in scope,
+  D27's second step, unchanged. At step (2) the call is **the free
+  call**: the receiver is the first argument, checked against the first
+  parameter with the candidate's generics fresh, then `args` against the
+  rest — the same instantiation, the same dispatch record, the same
+  instance and the same code as `list.any(xs, p)` written out, so the
+  two spellings are one call and no program can tell them apart. The
+  receiver's mode is spelled, as on every method (X1): a candidate whose
+  first parameter is `mut` is called `(mut xs).sort_by(less)`, and a
+  receiver whose written mode disagrees with the first parameter's is
+  E0804. A candidate whose first parameter does not unify with the
+  receiver — `std.list`'s `sum(xs: List[int])` on a `List[str]` — is
+  not a match: the call is **E0403**, the "no method" refusal every
+  receiver already gets, and its note names the candidate it found and
+  the first parameter that did not fit. A name found at step (1) never reaches
+  step (2): std's container rule forbids a home-module function that
+  shadows a working builtin (wolf-std API-CONVENTIONS §8), and where one
+  exists anyway (`std.list`'s `push` and `get`, written before the
+  builtins had methods) the builtin answers the method spelling and
+  the std function answers the qualified one, and the two agree —
+  std's obligation, not the resolver's. Wrong arity at step (2) is
+  E0402 counted against the written arguments, the receiver excluded.
+  A method on a receiver with no home module that no step finds is the
+  refusal it was.
+
+  Why receiver-typed resolution and not an inherent-method table. (a)
+  **One body.** A table in the compiler and another in the interpreter
+  would be the third and fourth copies of an operation std already
+  ships and tests on every lane; `[mem.str.empty]` is the record of
+  what two agreeing copies of an unwritten rule do on the next input.
+  Resolution to the function makes `xs.any(p)` and `list.any(xs, p)`
+  the same call by construction, not by review. (b) **It is where the
+  types are going.** D50 makes `List` and `Map` std-DEFINED once
+  generic data can carry them, and a std-defined type's methods live in
+  its own module — so the home module is already the place the method
+  set will be, and this clause moves no function when D50 lands. (c)
+  **Coherence.** Only the home module is searched. Weighed and
+  rejected: uniform call syntax over every module in scope (D-style
+  UFCS), under which `xs.frob()` would mean different functions in two
+  files that import differently — the method set of `List[int]` would
+  be a property of the importer, which is what D27's fixed order and
+  its "no fallback chains" exist to prevent. Here the set is a function
+  of the std revision alone, which is also what lets lupin mirror it
+  and the book print it. A program that wants its own method on a
+  `List` writes a trait and `impl`s it, and step (3) finds it.
+
+- `[type.method.root]` **The home module comes from the std root.** It
+  is loaded from the configured std (`--std-root`, `WOLF_STD`, or a
+  `std` path dependency in `wolf.pkg`), the same tree `use std.list`
+  reads. With no std configured, a call that reaches step (2) is
+  **E0301** naming the home module and the three ways to configure a
+  root — never a silent fall-through, and never a builtin stand-in.
+  Step (1) needs no std, so every builtin method, `par` included, runs
+  on a bare `wolf run`. **The cost, stated.** At run time, nothing: a
+  method call through a home module is the free call, one instance per
+  distinct instantiation exactly as the written-out call would make.
+  At compile time, the home module is loaded, parsed and checked once
+  per build when some call in the program names one of its candidates,
+  and not at all otherwise; its own imports come with it
+  (`std.map`'s `std.cmp`), as they would for `use std.map`.
+
+- `[type.method.take]` **`take` is the ownership verb, and is never a
+  method name** (wolf-lang#154's naming window, closed here). `take` is
+  a reserved word (E0008 at every name position: no std function can
+  be called `take`, which wolf-std measured on both machines at sc44),
+  and the combinator it would have named is already the language's:
+  the first `n` elements are the slice `xs[..n]` (`[mem.list.slice]`),
+  which faults `bounds` when `n > xs.len`, and the clamped prefix is
+  `xs[..min(n, xs.len)]`. The same holds for the suffix a `skip` or
+  `drop` would name: `xs[n..]`. So no prefix or suffix combinator is
+  added under any name — a second spelling of a working builtin is the
+  one thing std's §8 forbids. `xs.take(n)` parses (member position is
+  keyword-transparent) and is refused as a method no step finds, with a
+  note naming both slices. Weighed and rejected: renaming the verb
+  (`take` is spelled at every consuming call site in the corpus and the
+  book, and it reads as what it does) and a contextual keyword (a word
+  that is a verb in one position and a method in another is the
+  ambiguity the reserved-word rule exists to prevent). Cost: none — it
+  is a naming rule, and the slice's cost is `[mem.list.slice]`'s.
+
+## §16 The combinators `[type.comb]`
+
+(s166, wolf-lang#390 and #154's combinator row. The book's chapter 5
+has promised `totals.pairs().sorted_by(…)` since bs00, and
+`corpus/wordcount.lu` — the canonical program — has spelled
+`sorted_by`, `take`, `merge` and `par` since reports/05, refused at
+`resolve` for as long as it has existed.)
+
+- `[type.comb.eager]` **The combinators are eager.** Each takes a
+  `List` (a `range` for `collect`) and answers a finished value — a
+  fresh `List`, a scalar, or a row — never a lazy adapter. A chain
+  `xs.filter(p).map(f)` builds one intermediate `List` per stage.
+  Weighed and rejected this edition: lazy adapters in the Rust shape.
+  Each adapter is a generic struct holding a closure, and a capturing
+  closure inside a struct is refused by name (`[type.fn.value]`)
+  until its borrow story is written; the chain needs `Iter[T]` dispatch
+  on every adapter; and the ambient-region cost of an eager stage is
+  stated and bounded where the adapter's is neither. Fusing a chain's
+  stages into one loop is a permitted optimization — it changes an
+  allocation count and no printed byte — and is not promised.
+
+- `[type.comb.set]` **The set.** Every row is a `std.list` function
+  (a `std.range` one for `collect`) called by `[type.method.resolve]`
+  step (2) — sc50 (wolf-std) writes them — except `par`, which is the
+  language's. `f`, `keep`, `step`, `less` are fn values
+  (`[type.fn.value]`): a named function, or a closure, capturing or not.
+
+  | method | signature (first parameter is the receiver) | row | cost |
+  |---|---|---|---|
+  | `map` | `map[T, U](xs: List[T], f: fn(T) -> U) -> List[U]` | none | one fresh `List[U]` of `xs.len` in the ambient region; `xs.len` calls of `f` |
+  | `filter` | `filter[T](xs: List[T], keep: fn(T) -> bool) -> List[T]` | none | one fresh `List[T]`, at most `xs.len`; `xs.len` calls |
+  | `fold` | `fold[T, A](xs: List[T], init: A, step: fn(A, T) -> A) -> A` | none | no allocation of its own; `xs.len` calls, left to right |
+  | `sum` | `sum(xs: List[int]) -> int` | none; traps `overflow` | none; checked addition left to right (X3) |
+  | `sort_by` | `sort_by[T](mut xs: List[T], less: fn(T, T) -> bool)` | none | stable; O(n log n) calls of `less`, O(n) scratch in the ambient region |
+  | `sorted_by` | `sorted_by[T](xs: List[T], less: fn(T, T) -> bool) -> List[T]` | none | `sort_by` over a fresh copy; `xs` untouched |
+  | `sorted` | `sorted[T: cmp.Ord](xs: List[T]) -> List[T]` | none | `sorted_by` with `<` (`[type.trait.op]`; the builtin `<` on the primitives) |
+  | `enumerate` | `enumerate[T](xs: List[T]) -> List[(int, T)]` | none | one fresh `List` of pairs; indices from 0 |
+  | `zip` | `zip[T, U](xs: List[T], ys: List[U]) -> List[(T, U)]` | none | one fresh `List` of `min(xs.len, ys.len)` pairs |
+  | `collect` | `collect(r: range[int]) -> List[int]`, and `range[char]` | none; traps as the range's `for` does | one fresh `List` of the range's length |
+  | `par` | `xs.par(f)`, `f: fn(T) -> U` or `fn(T) -> U ! E` | `E`, when `f` has one | `[conc.task.par]` |
+
+  The functions `std.list` already ships over fn values — `any`, `all`,
+  `count_where`, `index_where`, `find_where`, `min_by`, `max_by` — are
+  method candidates by the same rule and need no row here.
+  **The relation is `bool`-shaped.** `sort_by` takes `less(a, b)`, read
+  "`a` goes before `b`", and a stable sort keeps equal elements in
+  input order: `std.list`'s callable tier has been bool-shaped since
+  sc13, `[type.trait.op]` reads `<` as exactly that question, and
+  measured at this revision on both native tiers neither `a <=> b` on
+  `int` ("this operator in WIR lowering") nor a merge that tests an
+  `Ordering` (`std.sort.sorted_by`: "an enum or row test inside a
+  product pattern") lowers — so an `Ordering` comparator would be a
+  signature no compiled program could call. `std.sort`'s
+  `Ordering`-taking pair keeps its qualified spelling; the method is
+  `std.list`'s. **`zip` stops at the shorter list** rather than
+  trapping: a length mismatch is not an access out of range, and every
+  pair it yields is one both lists hold. **`sum` is `List[int]`'s this
+  edition**: a generic `sum[T: Add]` needs a zero, and no `Zero` trait
+  is ruled; `xs.fold(0.0, fn(a, x) a + x)` is the `f64` spelling.
+  **A fallible `f`** — a closure whose body uses `?` — is `par`'s
+  alone: `map`'s `U` is a value type, and the serial spelling of a
+  fallible map is the `for` loop with `?`, or `par`, whose failure rule
+  is `[conc.task.fail]`'s.
+
+- `[type.comb.builtin]` **`par` is the only builtin, and why.** Every
+  other row is writable in wolf over `for`, `push` and a fn value, and
+  so it is std's (sc50), with lupin free to run std's body or its own
+  equivalent. `par` is not writable in wolf, for three reasons that are
+  each sufficient: its chunk count is the runtime's scheduling decision,
+  which `[conc.det.flow]` forbids std to make; its tasks read one
+  `List` from several tasks at once and write disjoint slots of one
+  result, which safe wolf can spell only through a `sync` wrapper or a
+  channel, each costing a lock or a box per element that the desugar
+  does not pay; and its capture check is spawn's applied to a closure
+  that runs in several tasks. So `par` is a builtin method on `List[T]`,
+  found at `[type.method.resolve]` step (1), and needs no std root.
