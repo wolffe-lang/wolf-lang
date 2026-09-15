@@ -222,6 +222,31 @@ pub const BUILTIN_TYPES: &[&str] = &[
     "u64", "f32", "f64", "wrapping",
 ];
 
+/// `[type.method.home]` (s166, wolf-lang#390) — the home module of each
+/// std data type, as `std.<name>`, beside the builtin method names
+/// `[type.method.resolve]` step (1) answers on that type. The loader's
+/// pre-scan ([`crate::graph`]) loads a home module only when a method
+/// call names one of its `pub fn`s that is NOT in this list, so a
+/// program whose method calls are all builtins never loads std for them.
+pub const HOME_MODULES: &[(&str, &[&str])] = &[
+    (
+        "list",
+        &[
+            "push", "pop", "get", "first", "last", "is_empty", "count", "clear", "par",
+        ],
+    ),
+    ("map", &["count", "is_empty", "clear", "pairs"]),
+    (
+        "str",
+        &[
+            "is_empty", "get", "bytes", "chars", "starts_with", "ends_with", "contains", "find",
+            "rfind", "count", "split", "words", "lines", "trim", "trim_start", "trim_end",
+            "lower", "upper", "strip_prefix", "strip_suffix", "repeat", "replace", "to_int",
+        ],
+    ),
+    ("range", &[]),
+];
+
 /// One stub std module: its dotted path and its item names.
 #[derive(Clone, Copy, Debug)]
 pub struct StdModule {
