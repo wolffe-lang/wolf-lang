@@ -1,0 +1,12 @@
+//! check: fail(E0403)
+//! phase: typecheck
+//! conforms: type.method.resolve, type.comb.set
+//!
+//! s166 — `sum` exists and takes a `List[int]`; a `List[str]` receiver
+//! does not fit its first parameter, so the call is no method.
+
+fn main() -> !int {
+    let names = ["a", "b"]
+    let n = names.sum()
+    0
+}

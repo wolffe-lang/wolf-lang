@@ -1,0 +1,12 @@
+//! check: fail(E0403)
+//! phase: typecheck
+//! conforms: type.method.take
+//!
+//! s166 — `take` is the ownership verb and never a method; the note
+//! names the slices.
+
+fn main() -> !int {
+    let xs = [1, 2, 3]
+    let two = xs.take(2)
+    0
+}

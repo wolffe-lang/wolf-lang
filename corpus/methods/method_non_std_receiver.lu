@@ -1,0 +1,13 @@
+//! check: fail(E0403)
+//! phase: typecheck
+//! conforms: type.method.home
+//!
+//! s166 — `Pool` has no home module (`[type.method.home]`'s table is
+//! closed): a method outside its builtins is unknown, and `std.list`'s
+//! `any` is not consulted.
+
+fn main() -> !int {
+    var p = Pool[int]()
+    let b = p.any(fn(x: int) { x > 0 })
+    0
+}

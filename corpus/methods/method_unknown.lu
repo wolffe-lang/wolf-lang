@@ -1,0 +1,11 @@
+//! check: fail(E0403)
+//! phase: typecheck
+//! conforms: type.method.resolve
+//!
+//! s166 — no builtin and no `pub fn frob` of `std.list`: E0403.
+
+fn main() -> !int {
+    let xs = [1, 2, 3]
+    let n = xs.frob(1)
+    0
+}
