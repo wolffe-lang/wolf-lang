@@ -496,6 +496,10 @@ can apply it unattended. Imports are file-scoped, so a name used only
 in a *sibling* file must be imported there, not here. There is no
 `import _` escape at v1; if you need an import purely for its side
 effects, comptime registration (D29) is the sanctioned pattern.
+
+An operator counts as a mention of its trait: `a == b` is `Eq.eq(a, b)`
+([type.trait.op]), so `use cmp.Eq` in a file that spells `==` or `!=`
+is used, and one that spells neither is not.
 "#);
 
 code!(E0306, "an import that collides with another binding", r#"

@@ -708,7 +708,12 @@ substrate.)
   undispatchable: every user type any library publishes had operators
   that worked inside its own module and nowhere else). Two imported
   modules declaring one operator trait is no answer and keeps the
-  E0301. Nothing by that name reachable is **E0301** naming the trait
+  E0301. An import binding an operator trait by name (`use cmp.Eq`) is
+  **used**, for the unused-import rule (E0305), by any operator of that
+  trait the file spells: unused imports are reported before the checker
+  chooses any operator's trait, so the spelling is what counts (`-`
+  counts for both `Sub` and `Neg`), and a file that spells none still
+  hears E0305 (wolf-lang#352, `traits/op_eq_item_import/`). Nothing by that name reachable is **E0301** naming the trait
   and the three places looked in, and a type without an impl is
   **E0502** naming the trait and the operator, discharged with the
   body's other obligations. `!`, `&&`, `||` and the bitwise

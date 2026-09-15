@@ -452,6 +452,10 @@ in a *sibling* file must be imported there, not here. There is no
 `import _` escape at v1; if you need an import purely for its side
 effects, comptime registration (D29) is the sanctioned pattern.
 
+An operator counts as a mention of its trait: `a == b` is `Eq.eq(a, b)`
+([type.trait.op]), so `use cmp.Eq` in a file that spells `==` or `!=`
+is used, and one that spells neither is not.
+
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__unused__main.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_group_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0305_unused.snap
 
 ## E0306 — an import that collides with another binding
@@ -822,7 +826,7 @@ the trait is foreign, the sanctioned escape is an adapter: declare
 `type Local = distinct Foreign` and implement the trait for the
 adapter — same layout, free casts, its own impl set.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__call_unmet_bound.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__op_missing_impl.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0502_operator_no_impl.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0502_unmet_bound.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__bound_literal_default.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__call_unmet_bound.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__op_missing_impl.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0502_operator_no_impl.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0502_unmet_bound.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0502_literal_default_no_candidate.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0502_literal_default_two_candidates.snap
 
 ## E0503 — this bound is not a trait
 
