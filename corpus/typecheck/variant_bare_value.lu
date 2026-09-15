@@ -1,0 +1,42 @@
+//! check: fail(E0301)
+//! phase: resolve
+//! conforms: gram.expr.variant, gram.expr.tagident
+//! s165 (wolf-lang#348) — bs43's `Ord` block, as the book first wrote
+//! it. A variant value is spelled with its enum (`Ordering.Less`); the
+//! bare capitalized name is an error-row tag's spelling (D30), so at
+//! v0.2.14 this declined at typing as "an error-row tag outside `!T`
+//! context … not a bug in your program" and named no fix. It is E0301
+//! now, pointing at the variant's declaration, with `Ordering.` as the
+//! machine-applicable edit. A `match` arm keeps the bare name
+//! (`[gram.pat.nullary]`): the scrutinee's type says which enum, and
+//! `corpus/traits/op_ord_struct.lu` is that half. lupin 0.1.33 through
+//! 0.1.36 runs the bare spelling (the mirror is filed with the clause).
+
+enum Ordering {
+    Less,
+    Equal,
+    Greater,
+}
+
+trait Ord {
+    fn cmp(self, other: Self) -> Ordering
+}
+
+impl Ord for int {
+    fn cmp(self, other: Self) -> Ordering {
+        if self < other {
+            Less                   // ERROR E0301: write `Ordering.Less`
+        } else if self == other {
+            Ordering.Equal
+        } else {
+            Ordering.Greater
+        }
+    }
+}
+
+fn main() -> !int {
+    let a: int = 3
+    let b: int = 2
+    print("{a > b}")
+    0
+}

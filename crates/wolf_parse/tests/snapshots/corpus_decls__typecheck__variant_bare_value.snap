@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+EnumDecl 803..854 name=Ordering variants=3
+TraitDecl 856..911 name=Ord
+  FnDecl 872..910 name=cmp
+ImplDecl 913..1199 path=Ord for=int
+  FnDecl 936..1197 name=cmp body=Block
+FnDecl 1201..1287 name=main body=Block
