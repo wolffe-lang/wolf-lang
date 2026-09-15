@@ -3202,45 +3202,7 @@ impl<'t> Machine<'t> {
             SyntaxKind::PrefixExpr => self.eval_prefix(e),
             SyntaxKind::BinExpr => self.eval_bin(e),
             SyntaxKind::CastExpr => self.eval_cast(e),
-            SyntaxKind::RangeExpr => {
-                let d = RangeExpr::cast(e).expect("kind");
-                let mut ends = d.endpoints();
-                let start = match ends.next() {
-                    Some(x) => val!(self.eval(x)),
-                    None => Value::Int(0),
-                };
-                let end = match ends.next() {
-                    Some(x) => val!(self.eval(x)),
-                    None => Value::Int(0),
-                };
-                // s158 (`[type.range.name]`): the closed family is
-                // `int` and `char`. A char range carries its endpoints
-                // as scalar values and remembers to read them back as
-                // chars.
-                let (s, mut en, chars) = match (start, end) {
-                    (Value::Int(a), Value::Int(b)) => (a, b, false),
-                    (Value::Char(a), Value::Char(b)) => (a as i64, b as i64, true),
-                    _ => return self.refuse("non-integer ranges", e.span),
-                };
-                if d.is_inclusive() {
-                    // `a..=b` normalizes to the exclusive `b + 1` HERE,
-                    // where the range is built (`[type.range.accessor]`,
-                    // s158) — under the checked arithmetic
-                    // `[mem.iter.range]` already rules, so `0..=int.MAX`
-                    // traps `overflow` at its construction. It was a
-                    // Rust `+= 1` until s158 made the value reachable
-                    // without a `for` header to defend it.
-                    match en.checked_add(1) {
-                        Some(v) => en = v,
-                        None => return self.trap("overflow", "mem.iter.range", e.span),
-                    }
-                }
-                Ok(Flow::Val(Value::Range {
-                    start: s,
-                    end: en,
-                    chars,
-                }))
-            }
+            SyntaxKind::RangeExpr => self.eval_range(e, true),
             SyntaxKind::TryExpr => {
                 let d = wolf_ast::TryExpr::cast(e).expect("kind");
                 let inner = match d.expr() {
@@ -3819,10 +3781,66 @@ impl<'t> Machine<'t> {
         Ok(Flow::Val(Value::Unit))
     }
 
+    /// Build a range from its expression. `normalize` is the VALUE
+    /// form (`[type.range.accessor]`): `a..=b` becomes the exclusive
+    /// `b + 1` under checked arithmetic, and `0..=int.MAX` traps where
+    /// it is built. A `for` HEADER passes `false` (#381): the header
+    /// never materializes a range (`[type.range.value]`), so its
+    /// inclusive end rides back un-normalized and the loop walks
+    /// `a..=b` itself, the native rung's do-while over the inclusive
+    /// bound.
+    fn eval_range(&mut self, e: &'t GreenNode, normalize: bool) -> E<Flow> {
+        let d = RangeExpr::cast(e).expect("kind");
+        let mut ends = d.endpoints();
+        let start = match ends.next() {
+            Some(x) => val!(self.eval(x)),
+            None => Value::Int(0),
+        };
+        let end = match ends.next() {
+            Some(x) => val!(self.eval(x)),
+            None => Value::Int(0),
+        };
+        // s158 (`[type.range.name]`): the closed family is
+        // `int` and `char`. A char range carries its endpoints
+        // as scalar values and remembers to read them back as
+        // chars.
+        let (s, mut en, chars) = match (start, end) {
+            (Value::Int(a), Value::Int(b)) => (a, b, false),
+            (Value::Char(a), Value::Char(b)) => (a as i64, b as i64, true),
+            _ => return self.refuse("non-integer ranges", e.span),
+        };
+        if normalize && d.is_inclusive() {
+            // `a..=b` normalizes to the exclusive `b + 1` HERE,
+            // where the range is built (`[type.range.accessor]`,
+            // s158) — under the checked arithmetic
+            // `[mem.iter.range]` already rules, so `0..=int.MAX`
+            // traps `overflow` at its construction. It was a
+            // Rust `+= 1` until s158 made the value reachable
+            // without a `for` header to defend it.
+            match en.checked_add(1) {
+                Some(v) => en = v,
+                None => return self.trap("overflow", "mem.iter.range", e.span),
+            }
+        }
+        Ok(Flow::Val(Value::Range {
+            start: s,
+            end: en,
+            chars,
+        }))
+    }
+
     fn eval_for(&mut self, e: &'t GreenNode) -> E<Flow> {
         let d = ForExpr::cast(e).expect("kind");
         let mut view_items: Option<Vec<Value>> = None;
+        // A `for` over a range header (#381): endpoints evaluated once,
+        // left to right, and never normalized — `a..=b` is walked as
+        // itself, so `0..=int.MAX` in a header does not trap.
+        let mut header_inclusive = false;
         let iter = match d.iterable() {
+            Some(it) if it.kind == SyntaxKind::RangeExpr => {
+                header_inclusive = RangeExpr::cast(it).expect("kind").is_inclusive();
+                val!(self.eval_range(it, false))
+            }
             // s72, D40 ([mem.iter.excl]): iterating a place is a
             // READ, never a move — the container stays live behind
             // the walk and after it, exactly as the static tier now
@@ -3847,17 +3865,28 @@ impl<'t> Machine<'t> {
             },
             None => Value::Unit,
         };
-        let items: Vec<Value> = match (view_items, iter) {
-            (Some(items), _) => items,
-            (None, Value::Range { start, end, chars }) => (start..end)
-                .map(
-                    |v| match (chars, u32::try_from(v).ok().and_then(char::from_u32)) {
-                        (true, Some(c)) => Value::Char(c),
-                        _ => Value::Int(v),
-                    },
-                )
-                .collect(),
-            (None, Value::List(id)) => self.lists[id].clone(),
+        // A range is walked, never collected (#381): the items come
+        // off the endpoints one step at a time, so a range as wide as
+        // the integer line costs one `Value` at a time, and a loop
+        // that does not leave early runs into the step budget
+        // (`[exec.checked.budget]`) — `unsupported`, never a host
+        // allocation the byte ledger did not charge.
+        let scalar = move |chars: bool, v: i64| match (
+            chars,
+            u32::try_from(v).ok().and_then(char::from_u32),
+        ) {
+            (true, Some(c)) => Value::Char(c),
+            _ => Value::Int(v),
+        };
+        let items: Box<dyn Iterator<Item = Value>> = match (view_items, iter) {
+            (Some(items), _) => Box::new(items.into_iter()),
+            (None, Value::Range { start, end, chars }) if header_inclusive => {
+                Box::new((start..=end).map(move |v| scalar(chars, v)))
+            }
+            (None, Value::Range { start, end, chars }) => {
+                Box::new((start..end).map(move |v| scalar(chars, v)))
+            }
+            (None, Value::List(id)) => Box::new(self.lists[id].clone().into_iter()),
             (None, Value::Map(_)) => {
                 return self.refuse("iterating a `Map` directly (walk `m.pairs()`)", e.span);
             }
