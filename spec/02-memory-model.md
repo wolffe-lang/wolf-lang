@@ -141,8 +141,11 @@ law: `.docs/refs/papers/swift-ownership-manifesto.md`.
   or `take` in the signature. **Cost:** none at runtime — the rule is
   static, and a program pays only for the `copy` it then spells
   (`[mem.tier0.move.3]`). The builtin store that keeps a `read`
-  argument inside its receiver (`push`, `[mem.region.edge.elem]`) is a
-  separate question (wolf-lang#385) and this rule does not reach it.
+  argument inside its receiver (`push`, `[mem.region.edge.elem]`) is
+  answered there, and the answer PRESERVES this rule rather than
+  bending it: the element is copied into the container, so the caller
+  keeps its value and nothing the caller still holds lands inside the
+  receiver.
   Witnesses `corpus/memory/read_param_return.lu`, `read_param_escape_*`,
   `read_param_rebind_*` and `read_param_move_legal.lu`.
 - `[mem.tier0.mode.mut]` `mut` parameters are **exclusive inout**: for the
@@ -380,6 +383,47 @@ Edge legality (source stores a reference to target):
   signature surface for declaring that two parameters share a region,
   which E1004's own note has named as planned since s19 and which would
   let both forms say what they mean instead of one of them guessing.
+
+  **The builtin container stores that KEEP their argument** — `push`'s
+  value parameter and `Pool.init`'s — read one way, ruled 2026-09-15
+  (wolf-lang#385, option 3). A non-`Copy` element passed **plainly** is
+  **COPIED into the container**: the stored element and the caller's
+  binding are independent values. That is what `[mem.tier0.excl.1]`
+  always required and what the implementation did not do — measured at
+  v0.2.14, `(mut outs).push(xs)` followed by `(mut xs).push(4)` grew
+  BOTH, on the native tiers and on the checked machine alike
+  (`outs0=2 xs=2`): two writable paths to one value, no `shared`
+  spelled anywhere and no diagnostic, while lupin 0.1.36 copied. Both
+  wolf-lang tiers agreed with each other and disagreed with lupin, so
+  the differ could not see it either. **`push(take x)` MOVES** the
+  element instead: `x` is dead after the call and a later use is E1001,
+  with the ladder's usual `copy x` fix-it. This is the one place a
+  `read` parameter's call site may spell a mode at all — X1 otherwise
+  demands the site's spelling equal the declaration (E1007) — and
+  `take` is admitted here because a store is the one read position that
+  KEEPS what it was lent. The default is the safe one and the fast path
+  is the visible one: handing a value over plainly never destroys it,
+  so a newcomer meets no use-after-move where plain code is supposed to
+  be safe. **`Copy` elements are unaffected** and stay free — a value
+  that reaches no heap storage IS its own copy — and so is a `str`,
+  whose bytes are immutable and shared by the copy. **Cost:** exactly
+  what `[mem.tier0.move.3]` states for `copy`, paid once per plain push
+  of an element that reaches heap storage — one allocation for each
+  list or map reached and a byte copy of its buffer, in the ambient
+  region — and nothing at all for a scalar, a `str`, or a struct of
+  them. A program that wants the old zero-cost handover spells `take`
+  and says so. Witnesses `corpus/memory/push_copies_element.lu` and
+  `corpus/memory/push_take_moves.lu`.
+
+  The **index store is not yet aligned with this reading.** `m[k] = v`
+  and `xs[i] = v` still MOVE their right-hand side — a later use of `v`
+  is E1001 — and `m[k] = take v` does not parse at all, because the
+  assignment grammar has no mode slot on its right (`[gram.expr.assign]`).
+  So the two surfaces this clause otherwise treats as one operation
+  disagree about what a plain store does, in the opposite direction
+  from the defect above. That divergence is open under wolf-lang#385
+  and deliberately unresolved here: this clause states only what is
+  implemented.
 - `[mem.region.edge.raw]` Cross-region raw edges exist only in Tier 3 and
   carry §7 obligations.
 
