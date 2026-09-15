@@ -7895,7 +7895,22 @@ impl<'t> Machine<'t> {
                     "push" => {
                         for a in args.into_iter().flat_map(|l| l.args()) {
                             if let Some(v) = Arg::value(a) {
-                                let x = val!(self.eval_arg(v, None));
+                                // wolf-lang#385, ruled option 3: a
+                                // plain element is COPIED into the
+                                // list, so the caller keeps an
+                                // independent value; `push(take x)`
+                                // moves it. `deep_copy` hands scalars,
+                                // `str` and every other non-heap value
+                                // straight back, so `Copy` elements
+                                // stay free ([mem.tier0.move.3]).
+                                // `eval_arg` answers a Flow since s161,
+                                // so each arm unwraps through `val!`.
+                                let x = if a.mode() == Some(wolf_ast::ParamMode::Take) {
+                                    val!(self.eval_arg(v, Some(wolf_ast::ParamMode::Take)))
+                                } else {
+                                    let x = val!(self.eval_arg(v, None));
+                                    self.deep_copy(x, v.span)?
+                                };
                                 let slot = slot_bytes(&x);
                                 self.charge_mem(slot)?;
                                 // The ledger charges the BIRTH region
