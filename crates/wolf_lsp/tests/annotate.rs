@@ -499,3 +499,56 @@ fn the_contextual_error_keyword_is_a_keyword_too() {
     );
     client.shutdown();
 }
+
+/// wolf-lang#379 — the alias NAME was a `type` where it was declared and
+/// nothing where it was used: the resolver records no reference for an
+/// error row's entries (they are structural), so the walk had nothing
+/// to classify at `{IoErrors, closed}` or at `-> int ! ConfigErrors`,
+/// while `bool` and `int` on the same line were `type`. An entry that
+/// names an error-set alias is bound now, to the same item its
+/// declaration is; the TAGS beside it (`closed`) still carry no token.
+/// wolf-lsp's `transcripts/annotate/semanticTokens-error.lsps` sees
+/// exactly these two new tokens at its next pin.
+#[test]
+fn an_error_set_alias_is_a_type_where_it_is_used_too() {
+    let (mut client, _) = Client::start(&["utf-8"]);
+    let path = support::corpus("rows/error_alias_union.lu");
+    let text = std::fs::read_to_string(&path).unwrap();
+    let uri = client.open_from_disk(&path);
+    client.wait_publish(&uri);
+    let id = client.request(
+        "textDocument/semanticTokens/full",
+        json!({ "textDocument": { "uri": uri.as_str() } }),
+    );
+    let toks = decode(&client.wait_response(id).unwrap()["data"]);
+    let rendered = render(&text, &toks);
+    let line = |n: &str| -> Vec<String> {
+        rendered
+            .iter()
+            .filter(|r| r.starts_with(n))
+            .cloned()
+            .collect()
+    };
+    assert_eq!(
+        line("13:"),
+        [
+            "13:0 5 keyword \"error\"",
+            "13:6 12 type+declaration \"ConfigErrors\"",
+            "13:22 8 type \"IoErrors\"",
+        ],
+        "whole stream: {rendered:?}"
+    );
+    assert_eq!(
+        line("15:"),
+        [
+            "15:0 2 keyword \"fn\"",
+            "15:3 4 function+declaration \"load\"",
+            "15:8 2 parameter+declaration \"ok\"",
+            "15:12 4 type \"bool\"",
+            "15:21 3 type \"int\"",
+            "15:27 12 type \"ConfigErrors\"",
+        ],
+        "whole stream: {rendered:?}"
+    );
+    client.shutdown();
+}
