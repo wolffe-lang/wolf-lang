@@ -119,6 +119,96 @@ handle on both compiler lanes (#385, a ruling). W1004 is subsumed by
 the #366 refusal (#387). lupin mirrors: wolf-interp#115 (#366) and
 wolf-interp#118 (#348, #344, #352).
 
+### The spec debts (s163 — wolf-lang#364/#383, #365, #371, #319, #403, and the spec-debts stub: #181, #320, #256, #28, #302, #216, #228, #155, #309, #185)
+
+Clauses two implementations already agreed on and no text stated, and
+the few places the text said something false. No clause here moves a
+behaviour it does not name; the two that do are said below, and every
+amended clause states its runtime cost in the clause.
+
+    let g: fn(proc) = 0          // E0206 at `proc` — [gram.type.start]
+    sum_areas(rect, square)      // E0401 at `square` — [type.generic.bind]
+    let a, b = 1, 2              // E0201 at the comma after `a` — [gram.item.let]
+    //! check: run(exit=nonzero) // the class, not the number — [conf.directive.check]
+
+**The stale code.** `[type.err.alias.cycle]` said E0515; the registry,
+sema, the catalog and the witness all say E0610, and the spec was the
+only outlier (#364, #383 — one bug filed twice). A sweep of all 98
+codes the spec names found no second wrong number; it found
+`[type.row.operand]`'s s148 status note stale (both machines answer
+E0409 on either side now) and three registry explanations silent on
+the alias case their code covers (E0503, E0507, E0601), all corrected.
+`[type.range.accessor]` and the 0.2.14 entry below said the
+interpreter had always normalized inclusive ranges; it had not
+(#383's second half), and both now say so. `[type.numlit.value]` said
+`let n = 0` fixes `n` as `int` while citing the rule that makes it
+`i32` (#403, filed by s165): the binding is fixed where it is written,
+at `i32` when nothing in the body decides it and at whatever a later
+use pins — `let big = 5000000000` alone is E0415 on both tiers and
+`trap(overflow)` on lupin; `take_int(big)` after it runs.
+
+**New clauses.** `[type.generic.bind]`: a type parameter binds once
+per call, left to right, E0401 at the disagreeing argument (#319).
+`[os.fs.path]` and `[os.fs.remove]` (#365): a path is handed to the
+host verbatim and resolves against the working directory, confinement
+is never a row, and `fs_remove` on a directory is refused with the
+host's row — `io` on linux, `denied` on macOS and windows, pinned per
+host by a `wolf_rt` crate test. The path DOMAIN is where the machines
+disagree (wolf reaches every path; lupin 0.1.36 admits only relative
+paths with no `..`), so it is filed as #386 rather than chosen.
+`[os.proc.spawn]` writes s111's posture down (#256): stdin null-wired,
+stdout and stderr inherited — not three inherited streams, as the stub
+had it, and not three null ones, as `std.process` says — and
+`[os.proc.exe]` says an interpreter's `os_exe` is the interpreter.
+`[gram.type.start]` names E0206 (#320). `[type.interp.spec]` is #28's
+§7.4 at last, one clause: s38's executable semantics made normative,
+18 specs byte-identical on `--checked`, `--native` and lupin 0.1.36,
+`Show` recorded as superseded. `[os.host.sigs]` is the prelude annex
+(#181): all 75 host builtins with their rows, rendered from the
+checker's own table (`host_builtin_sig`, lifted out of
+`call_host_stub` with no signature changed) and pinned to it both ways
+by a test seen red on a planted retag.
+
+**Ruled and written.** `[conc.chan.default]` is rendezvous by
+specification (B24, #155), with a witness whose line order is causal.
+`[proto.cmp.phase]` compares a trap's stdout digest when both records
+carry it (B25, #216) — and `xtask differ` does, which added no row.
+`[gram.item.let]`'s bare-tuple refusal points at the comma after the
+first valueless binding (B25, #228): **wolfc moves**, from the
+initializer list's end to lupin's locus, closing the one Diag row this
+subject had. `[conc.task.order]` carries the ~196 `futex`/s a parked
+wait costs the host (#302 item 2). CONTRIBUTING says a subject-line
+count is advisory (#309); `chars_walk.lu`'s header is two-machine
+evidence (#185).
+
+**The corpus runner grows `run(exit=nonzero)`** (#371): any status but
+0, never a trap, and never a package that did not compile — the guard
+is scoped to the new word, because two `faults/` witnesses pin a
+trap's dynamic meaning under a static refusal on purpose. The grammar
+grew rather than `[conc.proc.root]` naming a number, since a number
+would move one machine to fix a spelling. `conc/proc_link_root_death.lu`
+is the witness: 121 here, 1 on lupin.
+
+**The pairing, measured** (`xtask differ` against lupin 0.1.36, base
+trunk `4b56441` vs this branch, debug builds; re-measured at each
+rebase — at `8e73ac4` the base reproduced r19's ledger exactly, and the
+deltas below were the same at all three bases). Plain comparison,
+native: **107 -> 108** divergences on 633 -> 639 files. One closes:
+`grammar/let_group_bare_tuple.lu`'s Diag row (`[374,375]` vs
+`[364,365]`). Two open, both named in their clauses and both the
+interpreter's to mirror or the number's to stay:
+`typecheck/generic_bind_scalar.lu` (`fail(E0401)` vs `exit(0)`, lupin
+checks the binding for struct arguments only — wolf-interp#103 row 2)
+and `conc/proc_link_root_death.lu` (`exit(121)` vs `exit(1)`, the
+status `[conc.proc.root]` leaves to each implementation). Triage,
+native 369/161/0/79/22 -> 371/164/0/79/23 and checked
+338/161/0/110/22 -> 339/164/0/112/22 (agreement / completeness /
+soundness / unsupported / hard); predicted +5/0 and +4/0 on the first
+two columns, wrong by three each way because triage files every wolf
+`fail(..)` as completeness whatever the oracle answers, so the three
+static agreements (`generic_bind_once`, `type_position_keyword`, and
+the let-group row) land there. Unsupported and hard were exact.
+
 ## 0.2.14 — 2026-09-13
 
 THE STRING RUNTIME AND THE PAPERCUTS IV. 0.2.14 is one subject read
