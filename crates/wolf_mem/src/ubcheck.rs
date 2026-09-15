@@ -1879,6 +1879,50 @@ pub fn run_checked_fn(
     stdin: &str,
     entry: &str,
 ) -> Result<RunOutcome, NotYet> {
+    // #382: the machine runs on a thread whose stack it sizes itself,
+    // never on its caller's. The call-depth budget is a depth the
+    // machine ALLOWS, so reaching it must answer `unsupported` on every
+    // host; on the caller's stack it answered on a unix main thread
+    // (8 MiB) and overflowed a windows one (1 MiB), where three
+    // wolf-std json rows reach `CALL_DEPTH_BUDGET` with ~1.2 MiB of
+    // host frames.
+    std::thread::scope(|scope| {
+        let worker = std::thread::Builder::new()
+            .name("wolf-checked".into())
+            .stack_size(CHECKED_STACK_BYTES)
+            .spawn_scoped(scope, || run_checked_fn_here(pkg, tc, budget, stdin, entry));
+        match worker {
+            Ok(handle) => match handle.join() {
+                Ok(out) => out,
+                Err(panic) => std::panic::resume_unwind(panic),
+            },
+            // No thread to be had (a host at its thread limit): run
+            // where we stand, which is exactly the old behavior.
+            Err(_) => run_checked_fn_here(pkg, tc, budget, stdin, entry),
+        }
+    })
+}
+
+/// The deepest call chain the machine executes (`[exec.checked.budget]`):
+/// a call past it is `unsupported — call depth budget exhausted`.
+pub const CALL_DEPTH_BUDGET: usize = 128;
+
+/// The checked machine's own stack (#382, `[exec.checked.budget]`), the
+/// same on EVERY host, so the call-depth budget answers before the host
+/// stack runs out. Measured at 0.2.14 (x86-64 linux): the deepest
+/// wolf-std rows need ~1.23 MiB at `CALL_DEPTH_BUDGET` in a release
+/// build, and a 128-deep recursion needs more than 8 MiB (and no more
+/// than 16) in a debug one. Reserved address space; resident memory is
+/// only the frames a program reaches.
+pub const CHECKED_STACK_BYTES: usize = 64 << 20;
+
+fn run_checked_fn_here(
+    pkg: &Package,
+    tc: &Typecheck,
+    budget: Budget,
+    stdin: &str,
+    entry: &str,
+) -> Result<RunOutcome, NotYet> {
     let root_span = pkg.files[0].parse.root.span;
     let mut m = Machine::new(pkg, tc);
     m.budget = budget;
@@ -2169,7 +2213,7 @@ impl<'t> Machine<'t> {
     /// Call a body with already-bound argument values (parameters in
     /// declaration order).
     fn call_body(&mut self, body: usize, args: Vec<Value>) -> E<Value> {
-        if self.frames.len() > 128 {
+        if self.frames.len() > CALL_DEPTH_BUDGET {
             return Err(Stop::Budget("call depth budget exhausted"));
         }
         let ctx = self.ctxs[body].as_ref().expect("callable body has ctx");
