@@ -1,5 +1,5 @@
 //! check: fail(E0403)
-//! phase: typecheck
+//! phase: resolve
 //! conforms: type.method.take
 //!
 //! s166 — `take` is the ownership verb and never a method; the note

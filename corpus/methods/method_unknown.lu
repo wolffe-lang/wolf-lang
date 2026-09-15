@@ -1,5 +1,5 @@
 //! check: fail(E0403)
-//! phase: typecheck
+//! phase: resolve
 //! conforms: type.method.resolve
 //!
 //! s166 — no builtin and no `pub fn frob` of `std.list`: E0403.

@@ -1,5 +1,5 @@
 //! check: fail(E0402)
-//! phase: typecheck
+//! phase: resolve
 //! conforms: type.method.resolve
 //!
 //! s166 — arity counts the written arguments, the receiver excluded.
