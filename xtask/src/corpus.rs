@@ -3,7 +3,7 @@
 //! A corpus file's leading `//!` block carries at most four directive keys:
 //!
 //! ```text
-//! //! check: pass | fail(E0312) | run(exit=0) | run(exit=trap)
+//! //! check: pass | fail(E0312) | run(exit=0) | run(exit=nonzero) | run(exit=trap)
 //! //! phase: none|lex|parse|resolve|typecheck|mem|wir|run
 //! //! conforms: mem.region.freeze, err.row.union
 //! //! warns: E0802, W1301
@@ -61,7 +61,8 @@ pub enum Check {
 /// Expected run outcome for `check: run(...)`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RunExpect {
-    /// `exit=N` or `exit=trap` (deterministic fault per the s06 vocabulary).
+    /// `exit=N`, `exit=nonzero`, or `exit=trap` (deterministic fault per
+    /// the s06 vocabulary).
     pub exit: ExitExpect,
     /// Optional `stdout="..."` exact match.
     pub stdout: Option<String>,
@@ -70,11 +71,36 @@ pub struct RunExpect {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExitExpect {
     Code(i32),
+    /// `exit=nonzero` (s163, wolf-lang#371): the program was built, ran,
+    /// and exited with a status other than 0 — the outcome CLASS, never
+    /// the number, for the places the spec leaves the number
+    /// implementation-specified (`[conc.proc.root]`). Matches an
+    /// `exit(N)` verdict with N != 0 only: a trap is its own outcome
+    /// class with its own spelling, and a program that did not compile
+    /// is credited no run claim at all (`[conf.directive.check]`).
+    Nonzero,
     /// `exit=trap` (any kind) or `exit=trap(kind)` with a kind from the
     /// closed s06 vocabulary (overflow, div-zero, bounds, use-after-move,
     /// exclusivity, region-fault, stale-handle, alloc-contract, assert,
     /// race, ub, deadlock).
     Trap(Option<String>),
+}
+
+impl ExitExpect {
+    /// Does an observation record's `verdict` satisfy this expectation?
+    /// A `fail(..)` or `unsupported` verdict satisfies none of them.
+    pub fn matches(&self, verdict: &str) -> bool {
+        match self {
+            ExitExpect::Code(n) => verdict == format!("exit({n})"),
+            ExitExpect::Nonzero => verdict
+                .strip_prefix("exit(")
+                .and_then(|v| v.strip_suffix(')'))
+                .and_then(|v| v.parse::<i64>().ok())
+                .is_some_and(|n| n != 0),
+            ExitExpect::Trap(None) => verdict.starts_with("trap("),
+            ExitExpect::Trap(Some(kind)) => verdict == format!("trap({kind})"),
+        }
+    }
 }
 
 /// The closed trap-kind vocabulary (s06; spec 02 §7 assigns them;
@@ -279,6 +305,8 @@ fn parse_run(args: &str) -> Result<RunExpect, String> {
         if let Some(v) = part.strip_prefix("exit=") {
             exit = Some(if v == "trap" {
                 ExitExpect::Trap(None)
+            } else if v == "nonzero" {
+                ExitExpect::Nonzero
             } else if let Some(kind) = v.strip_prefix("trap(").and_then(|s| s.strip_suffix(')')) {
                 let kind = kind.trim();
                 if !TRAP_KINDS.contains(&kind) {
@@ -439,6 +467,56 @@ mod tests {
         );
         let d = parse_directives("//! check: fail(E0312)\n").unwrap();
         assert_eq!(d.check, Some(Check::Fail("E0312".into())));
+    }
+
+    #[test]
+    fn nonzero_form() {
+        let d = parse_directives("//! check: run(exit=nonzero)\n").unwrap();
+        assert_eq!(
+            d.check,
+            Some(Check::Run(RunExpect {
+                exit: ExitExpect::Nonzero,
+                stdout: None
+            }))
+        );
+        let d = parse_directives("//! check: run(exit=nonzero, stdout=\"a\")\n").unwrap();
+        assert_eq!(
+            d.check,
+            Some(Check::Run(RunExpect {
+                exit: ExitExpect::Nonzero,
+                stdout: Some("a".into())
+            }))
+        );
+        // The word is exact: no sign, no case folding, no near-miss.
+        for bad in ["Nonzero", "non-zero", "nonzero(1)", "!0"] {
+            assert!(
+                parse_directives(&format!("//! check: run(exit={bad})\n")).is_err(),
+                "`exit={bad}` must not parse"
+            );
+        }
+    }
+
+    #[test]
+    fn exit_matches_verdict() {
+        use ExitExpect::*;
+        let cases: &[(ExitExpect, &str, bool)] = &[
+            (Code(0), "exit(0)", true),
+            (Code(0), "exit(1)", false),
+            (Nonzero, "exit(1)", true),
+            (Nonzero, "exit(121)", true),
+            (Nonzero, "exit(-1)", true),
+            (Nonzero, "exit(0)", false),
+            (Nonzero, "trap(assert)", false),
+            (Nonzero, "fail(E0401)", false),
+            (Nonzero, "unsupported", false),
+            (Trap(None), "trap(overflow)", true),
+            (Trap(None), "exit(134)", false),
+            (Trap(Some("bounds".into())), "trap(bounds)", true),
+            (Trap(Some("bounds".into())), "trap(overflow)", false),
+        ];
+        for (exp, verdict, want) in cases {
+            assert_eq!(exp.matches(verdict), *want, "{exp:?} vs {verdict}");
+        }
     }
 
     #[test]
