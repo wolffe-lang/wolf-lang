@@ -31,6 +31,7 @@ conc/capture_mut_arg.lu: not mem-clean (pre-wir rungs own it)
 conc/capture_mut_lend.lu: not mem-clean (pre-wir rungs own it)
 conc/capture_write_assign.lu: not mem-clean (pre-wir rungs own it)
 conc/chan_closed_row.lu: lowers
+conc/chan_default_rendezvous.lu: lowers
 conc/chan_drain_after_inclusive_loop.lu: lowers
 conc/chan_param_for.lu: lowers
 conc/chan_payload_escape.lu: not mem-clean (pre-wir rungs own it)
