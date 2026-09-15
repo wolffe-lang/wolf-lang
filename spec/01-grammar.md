@@ -95,7 +95,10 @@ STR_TEXT   ::= (SCALAR - ('"' | '\' | '{' | '}' | NL))+
 STR_ESC    ::= '\' ('n' | 't' | 'r' | '0' | '\' | '"') | '\x' HEX_DIGIT HEX_DIGIT | UNI_ESC
 UNI_ESC    ::= '\u{' HEX_DIGIT HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? '}'
 INTERP     ::= '{' expr FORMAT_SPEC? '}'
-FORMAT_SPEC ::= ':' /* fill/align/sign/width/precision/type, spec §7.4 */
+FORMAT_SPEC ::= ':' ((FMT_FILL? FMT_ALIGN)? '+'? '0'? DIGIT* ('.' DIGIT+)? FMT_TYPE?)  /* [type.interp.spec] */
+FMT_FILL   ::= SCALAR            /* one byte wide: a multi-byte fill is E0412 */
+FMT_ALIGN  ::= '<' | '^' | '>'
+FMT_TYPE   ::= 'b' | 'o' | 'x' | 'X' | 'e' | 'E' | 'f'
 ```
 
 - `{{` and `}}` are literal braces `[gram.lex.str.escape]`. `$` is an
