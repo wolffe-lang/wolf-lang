@@ -573,6 +573,10 @@ struct Checker<'a> {
     /// wolf-lang#348: the enum a checked position expects, while its
     /// expression is synthesized — the bare-variant fix-it leads with it.
     expect_enum: Option<String>,
+    /// wolf-lang#347: `{integer}` var roots that defaulted to `i32`
+    /// although a bound on them rejects `i32` — with the integer types
+    /// that DO satisfy every bound (none, or more than one).
+    literal_default_miss: HashMap<u32, Vec<Prim>>,
     /// Lexically enclosing `when` blocks, outermost first
     /// ([conc.when.nonest]): a non-empty stack makes another `when`
     /// E1103. The stack survives into closures deliberately — the
@@ -765,6 +769,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         member_refs: Vec::new(),
         row_tags: BTreeSet::new(),
         expect_enum: None,
+        literal_default_miss: HashMap::new(),
         when_stack: Vec::new(),
         spawn_ctx: None,
         proc_entries: Vec::new(),
@@ -941,6 +946,7 @@ pub(crate) fn collect_body_rows(
         member_refs: Vec::new(),
         row_tags: BTreeSet::new(),
         expect_enum: None,
+        literal_default_miss: HashMap::new(),
         when_stack: Vec::new(),
         spawn_ctx: None,
         proc_entries: Vec::new(),
@@ -2686,6 +2692,10 @@ impl<'a> Checker<'a> {
     fn discharge_obligations(&mut self) {
         let obls = std::mem::take(&mut self.obligations);
         for o in obls {
+            let defaulted = match self.lo.table.kind(o.ty) {
+                TyKind::Var(r) => self.literal_default_miss.get(&self.vars.root(*r)).cloned(),
+                _ => None,
+            };
             let t = zonk(&mut self.lo.table, &self.vars, o.ty);
             match self.lo.table.kind(t).clone() {
                 // Unsolved: either defaulting already reported E0405,
@@ -2740,6 +2750,35 @@ impl<'a> Checker<'a> {
                             .with_label(format!("this is `{shown}`"));
                         if let Some(bs) = o.bound_span {
                             d = d.with_secondary(bs, "the bound is declared here");
+                        }
+                        if let Some(hits) = &defaulted {
+                            let shown_hits: Vec<String> =
+                                hits.iter().map(|p| format!("`{}`", p.name())).collect();
+                            d = d.with_note(match shown_hits.as_slice() {
+                                [] => format!(
+                                    "this is an integer literal with nothing to pin its type but `{}`, so \
+                                     it takes the literal default, `i32` ([type.numlit.default]) — and \
+                                     no integer type implements `{}`.",
+                                    match &o.origin {
+                                        OblOrigin::Instantiation { param, .. } => param.clone(),
+                                        _ => "the bound".to_string(),
+                                    },
+                                    o.tr.name
+                                ),
+                                many => {
+                                    let (last, rest) = many.split_last().expect("two or more");
+                                    let list = format!("{} and {last}", rest.join(", "));
+                                    let quant = if many.len() == 2 { "both" } else { "all" };
+                                    format!(
+                                        "this is an integer literal with nothing to pin its type but the \
+                                         bound, and {list} {quant} implement `{}` — so it takes the \
+                                         literal default, `i32` ([type.numlit.default]). Say which one: \
+                                         `let n: {} = …`, or a spelled cast.",
+                                        o.tr.name,
+                                        hits[0].name()
+                                    )
+                                }
+                            });
                         }
                         if let OblOrigin::Operator { op } = &o.origin {
                             d = d.with_note(format!(
@@ -12028,8 +12067,9 @@ impl<'a> Checker<'a> {
             let var_ty = self.lo.table.intern(TyKind::Var(v));
             match kind {
                 NumKind::Integer | NumKind::IntFrozen | NumKind::Num => {
-                    let i32_ = self.lo.table.prim(Prim::I32);
-                    let _ = unify(&mut self.lo.table, &mut self.vars, var_ty, i32_);
+                    let chosen = self.bound_directed_integer(v);
+                    let t = self.lo.table.prim(chosen);
+                    let _ = unify(&mut self.lo.table, &mut self.vars, var_ty, t);
                 }
                 NumKind::Float => {
                     let f64_ = self.lo.table.prim(Prim::F64);
@@ -12053,6 +12093,59 @@ impl<'a> Checker<'a> {
                         ),
                     );
                 }
+            }
+        }
+    }
+
+    /// wolf-lang#347 (`[type.numlit.default]`): the integer type an
+    /// unpinned `{integer}` var defaults to. `i32` is the rule — but a
+    /// var whose only context is a type parameter under a BOUND is not
+    /// "no context": the bound is one. When `i32` does not satisfy
+    /// every trait recorded against the var, `int` is tried next (the
+    /// language's integer type, the one every `impl … for int` names),
+    /// then the one other integer type that does; with none, or more
+    /// than one, the rule's `i32` stands and E0502 names the miss.
+    fn bound_directed_integer(&mut self, v: u32) -> Prim {
+        let bounds: Vec<TraitRef> = self
+            .obligations
+            .iter()
+            .filter_map(|o| {
+                let t = zonk(&mut self.lo.table, &self.vars, o.ty);
+                match self.lo.table.kind(t) {
+                    TyKind::Var(r) if self.vars.root(*r) == v => Some(o.tr.clone()),
+                    _ => None,
+                }
+            })
+            .collect();
+        if bounds.is_empty() {
+            return Prim::I32;
+        }
+        let fits = |c: &mut Self, p: Prim| {
+            let t = c.lo.table.prim(p);
+            bounds.iter().all(|tr| c.trait_satisfied(t, tr))
+        };
+        if fits(self, Prim::I32) {
+            return Prim::I32;
+        }
+        if fits(self, Prim::Int) {
+            return Prim::Int;
+        }
+        let others = [
+            Prim::I64,
+            Prim::Uint,
+            Prim::I8,
+            Prim::I16,
+            Prim::U8,
+            Prim::U16,
+            Prim::U32,
+            Prim::U64,
+        ];
+        let hits: Vec<Prim> = others.into_iter().filter(|&p| fits(self, p)).collect();
+        match hits.as_slice() {
+            [one] => *one,
+            _ => {
+                self.literal_default_miss.insert(v, hits);
+                Prim::I32
             }
         }
     }

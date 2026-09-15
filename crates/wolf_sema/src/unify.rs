@@ -163,6 +163,12 @@ impl VarStore {
     /// The root of `v`'s equivalence class (no path compression — the
     /// log stays small and rollback stays trivial; chains are shallow
     /// in practice because roots are chosen by level).
+    /// The union-find root of a variable (s165, #347: an obligation
+    /// recorded on a var that later unified is matched by root).
+    pub fn root(&self, v: u32) -> u32 {
+        self.find(v)
+    }
+
     fn find(&self, mut v: u32) -> u32 {
         while self.vars[v as usize].parent != v {
             v = self.vars[v as usize].parent;

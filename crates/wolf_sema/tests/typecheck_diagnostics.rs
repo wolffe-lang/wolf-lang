@@ -773,3 +773,33 @@ fn e0301_bare_variant_two_homes() {
         "enum Light {\n    Red,\n    Green,\n}\n\nenum Card {\n    Red,\n    Black,\n}\n\nfn pick() -> Light {\n    Red\n}\n\nfn main() -> !int {\n    0\n}\n",
     );
 }
+
+/// wolf-lang#347 ([type.numlit.default]): a bare literal whose only
+/// context is a bounded `T` defaults by the bound — and when two integer
+/// types satisfy it, `i32` stands and E0502 says why it names `i32`.
+#[test]
+fn e0502_literal_default_two_candidates() {
+    snap_one(
+        "e0502_literal_default_two_candidates",
+        "trait Tag {\n    fn tag(self) -> str\n}\n\nimpl Tag for i64 {\n    fn tag(self) -> str { \"i64\" }\n}\n\nimpl Tag for u8 {\n    fn tag(self) -> str { \"u8\" }\n}\n\nfn name[T: Tag](x: T) -> str { x.tag() }\n\nfn main() -> !int {\n    print(name(3))\n    0\n}\n",
+    );
+}
+
+/// No integer type implements the bound: the literal's default is named,
+/// and the bound is the miss.
+#[test]
+fn e0502_literal_default_no_candidate() {
+    snap_one(
+        "e0502_literal_default_no_candidate",
+        "trait Tag {\n    fn tag(self) -> str\n}\n\nfn name[T: Tag](x: T) -> str { x.tag() }\n\nfn main() -> !int {\n    print(name(3))\n    0\n}\n",
+    );
+}
+
+/// `int` alone satisfies the bound: the literal takes `int`, clean.
+#[test]
+fn literal_default_follows_the_bound() {
+    snap_one(
+        "clean_literal_default_follows_the_bound",
+        "trait Neg {\n    fn neg(self) -> Self\n}\n\nimpl Neg for int {\n    fn neg(self) -> Self { -self }\n}\n\nfn refund[T: Neg](charged: T) -> T { -charged }\n\nfn main() -> !int {\n    let cents = 340\n    let r = refund(cents) + refund(12)\n    r + 352\n}\n",
+    );
+}
