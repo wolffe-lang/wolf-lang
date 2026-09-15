@@ -968,3 +968,98 @@ fn a_float_that_fits_no_integer_traps() {
         }
     }
 }
+
+// ---------------------------------- a range is walked, not built (#381) --
+
+/// wolf-lang#381: a range VALUE as wide as the integer line. The machine
+/// used to collect `end - start` items before the first step and died in
+/// the host allocator (`capacity overflow`, no record); the native rung
+/// answered `first 0`.
+#[test]
+fn a_wide_range_value_iterates_without_materializing() {
+    let (v, out) = run_out(
+        "fn first(r: range[int]) -> int {\n    for x in r { return x }\n    0\n}\n\
+         fn main() -> !int {\n    let wide = 0..9223372036854775807\n    \
+         let lo: int = 0 - 9223372036854775807 - 1\n    \
+         print(\"{first(wide)} {first(lo..9223372036854775807)}\")\n    0\n}\n",
+    );
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "0 -9223372036854775808\n");
+}
+
+/// The header form took the same collect.
+#[test]
+fn a_wide_range_header_iterates_without_materializing() {
+    let (v, out) = run_out(
+        "fn first() -> int {\n    for x in 0..9223372036854775807 { return x }\n    0\n}\n\
+         fn main() -> !int {\n    print(\"{first()}\")\n    0\n}\n",
+    );
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "0\n");
+}
+
+/// A HEADER never materializes a range ([type.range.value]), so
+/// `a..=int.MAX` walks to `int.MAX` and stops without computing `b + 1`.
+/// The machine used to build the header as a value and trap `overflow`.
+#[test]
+fn an_inclusive_header_at_int_max_walks_to_the_end_without_trapping() {
+    let (v, out) = run_out(
+        "fn main() -> !int {\n    var n: int = 0\n    var last: int = 0\n    \
+         for x in 9223372036854775805..=9223372036854775807 { n = n + 1\n        last = x }\n    \
+         for x in 0..=9223372036854775807 { if x > n { n = n + 100 }\n        break }\n    \
+         print(\"{n} {last}\")\n    0\n}\n",
+    );
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "3 9223372036854775807\n");
+}
+
+/// The VALUE form still normalizes, and still pays for it where it is
+/// built (`grammar/range_type_overflow.lu`'s price is unchanged).
+#[test]
+fn an_inclusive_value_at_int_max_still_traps_where_it_is_built() {
+    let (v, _) = run_out(
+        "fn main() -> !int {\n    let r = 0..=9223372036854775807\n    r.end - r.start\n}\n",
+    );
+    match v {
+        Verdict::Trap(t) => assert_eq!(t.kind, "overflow"),
+        other => panic!("expected trap(overflow): {other:?}"),
+    }
+}
+
+/// An exclusive value at the top of the line yields exactly its items.
+#[test]
+fn an_exclusive_value_at_int_max_yields_its_items() {
+    let (v, out) = run_out(
+        "fn main() -> !int {\n    var n: int = 0\n    var last: int = 0\n    \
+         let r = 9223372036854775805..9223372036854775807\n    \
+         for x in r { n = n + 1\n        last = x }\n    \
+         print(\"{n} {last}\")\n    0\n}\n",
+    );
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "2 9223372036854775806\n");
+}
+
+/// A wide loop that never leaves runs into the STEP budget — an honest
+/// `unsupported` ([exec.checked.budget]) — rather than any host
+/// allocation: a small budget answers at once.
+#[test]
+fn a_wide_range_that_never_exits_is_the_step_budget() {
+    let mut ml = MemoryLoader::new("ub");
+    ml.add_file(
+        &[],
+        "main.lu",
+        "fn main() -> !int {\n    var n: int = 0\n    \
+         for x in 0..9223372036854775807 { n = x }\n    n\n}\n",
+    );
+    let res = resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+    let tc = typecheck_package_with(&res.package, true);
+    assert!(!tc.has_errors(), "{:?}", tc.diagnostics);
+    let budget = Budget {
+        steps: 10_000,
+        ..Budget::default()
+    };
+    match ubcheck::run_checked(&res.package, &tc, budget) {
+        Err(n) => assert_eq!(n.construct, "step budget exhausted"),
+        Ok(out) => panic!("expected the step budget, got {:?}", out.verdict),
+    }
+}
