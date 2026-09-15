@@ -365,6 +365,8 @@
     "os.fs.open": "11-os.md",
     "os.fs.path": "11-os.md",
     "os.fs.remove": "11-os.md",
+    "os.host": "11-os.md",
+    "os.host.sigs": "11-os.md",
     "os.net": "11-os.md",
     "os.net.accept": "11-os.md",
     "os.net.io": "11-os.md",
