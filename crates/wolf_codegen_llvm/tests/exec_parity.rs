@@ -152,3 +152,44 @@ fn aliased_stencil_slow_loop_release() {
         assert_eq!(code, 24, "aliasing semantics at {opt} (stderr: {stderr})");
     }
 }
+
+/// s162 witness (#146, the stale half), release tier: the overlap
+/// guard's extent must be built from the len CURRENT at the loop entry.
+/// `noalias_guard_stale_len`'s `@shape` is wolf's own lowering of a
+/// push-then-index function; its first len load dominates the indexed
+/// loop and is stale by eight in-place grows. `@main` hands it two
+/// headers over one buffer (the s104 posture). The aliased answer is 72
+/// on every tier and opt level; a build that trusts a noalias fact the
+/// guard proved from the stale len says 64.
+#[test]
+fn stale_len_guard_takes_the_slow_loop_release() {
+    for opt in ["-O0", "-O2"] {
+        let Some((raw, stderr)) = run_fixture("noalias_guard_stale_len", opt) else {
+            return;
+        };
+        assert_eq!(
+            raw, 72,
+            "never-versioned aliasing semantics at {opt}: {stderr}"
+        );
+    }
+    let mut m = fixture("noalias_guard_stale_len");
+    let homes = wolf_wir::midend::summary::Homes::single();
+    let wp = wolf_wir::midend::optimize_whole_program(
+        &mut m,
+        &homes,
+        &wolf_wir::midend::Options::default(),
+    )
+    .expect("midend");
+    assert!(
+        wp.stats.opt.noalias_guards >= 1,
+        "the versioner must still mint the overlap guard, from the current len"
+    );
+    let shim = add_plain_entry_shim(&mut m);
+    let Some(ir) = module_ir(&m, Some(shim), EmitOptions::default()) else {
+        return;
+    };
+    for opt in ["-O0", "-O2"] {
+        let (code, _, stderr) = run_ir(&format!("noalias_stale_{}", &opt[1..]), &ir, opt);
+        assert_eq!(code, 72, "aliasing semantics at {opt} (stderr: {stderr})");
+    }
+}

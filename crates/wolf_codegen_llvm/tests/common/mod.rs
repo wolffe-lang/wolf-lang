@@ -61,6 +61,13 @@ void *__wolf_rt_region_alloc(void *h, long long size) {
     return p;
 }
 void __wolf_rt_region_free(void *h) { free(h); }
+/* s162: a push fixture links the runtime's grow path; the witness keeps
+   every push in place, so reaching this is a fixture bug, loudly. */
+void __wolf_rt_list_push(void *hdr, void *slot) {
+    (void)hdr; (void)slot;
+    fprintf(stderr, "stub __wolf_rt_list_push reached\n");
+    abort();
+}
 void __wolf_rt_region_freeze(void *h) { (void)h; }
 "#;
 

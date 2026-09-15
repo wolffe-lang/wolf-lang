@@ -1,0 +1,200 @@
+; s162 witness (#146, the stale half). The overlap guard's extent
+; must be built from the len CURRENT at the loop entry. @shape is
+; `wolf build --emit=wir` of this source, verbatim (trunk 30731a6):
+;
+;   fn shape(x0: List[int], c: List[int]) -> List[int] {
+;       var x = x0
+;       (mut x).push(0)
+;       var i: int = 1
+;       while i < 8 { (mut x).push(i)  i = i + 1 }
+;       i = 0
+;       while i < 8 { x[i] = c[i] + 1  x[i] = x[i] + c[i]  i = i + 1 }
+;       x
+;   }
+;
+; The single push's len load (b0's %7) DOMINATES the second loop and
+; is stale by the eight in-place grows below it. Trunk's overlap_pairs
+; built x's extent from it (the first len load in layout order), so
+; the guard read x as EMPTY. No verifier sees that: the dominating
+; twin is well-formed, only its value is old. #146's ICE is the
+; non-dominating twin of the same pick.
+;
+; @main is hand-built (the s104 posture: surface wolf refuses two
+; live Lists over one buffer, E1001/E1002 — #93's second accident is
+; the only thing keeping this off the source path). x and c share one
+; 8-slot buffer; x starts at len 0, cap 8, so every push is in place
+; and never reaches the runtime (the stub aborts if it does). x's data
+; pointer is laundered through __wolf_rt_test_opaque so LLVM cannot
+; prove the two headers' buffers equal and must consult the scopes.
+;
+; Aliased (correct) semantics: pushes write buf[k] = k; then per slot
+; x[i] = c[i] + 1 = k+1 and x[i] = x[i] + c[i] reads the k+1 just
+; written: 2k+2, sum 72. The fast loop loads c[i], stores x[i], loads
+; c[i] again; under a noalias fact between the two chains LLVM forwards
+; the first load across the store (the way s80's witness cashed a false
+; claim): 2k+1, sum 64.
+;
+; Measured at s162 on kasumi (clang 22.1.8), trunk 30731a6's versioner:
+; the guard's write extent is `ptr.off %49, %7, 8` with %7 the b0 load,
+; the guard passes, and the release build exits 64 at -O2 (72 at -O0,
+; 72 never-versioned). With the extent built from the current len: 72
+; on all four, the guard still minted.
+decl @__wolf_rt_list_push(ptr, ptr, mem.r0, mem.r1, mem.r2)
+decl @__wolf_rt_test_opaque(i64) -> i64
+decl @shape(ptr, ptr) -> ptr
+
+fn @shape(ptr, ptr) -> ptr {
+  fact deref %18 8 : op
+  fact deref %41 8 : op
+  fact region %18 r2 : op
+  fact region %41 r3 : op
+b0(%0: ptr, %1: ptr):
+  %2: mem.r1 = region.foreign 1
+  %3: mem.r0 = region.foreign 0
+  %4 = iconst.i64 0
+  %5 = iconst.i64 8
+  %6 = ptr.off %0, %5, 1
+  %7 = load.i64 %6, %3
+  %8 = iconst.i64 16
+  %9 = ptr.off %0, %8, 1
+  %10 = load.i64 %9, %3
+  %11 = icmp.ult %7, %10
+  br %11, b1, b2
+b1:
+  %12 = load.ptr %0, %3
+  %13 = ptr.off %12, %7, 8
+  %14 = store.i64 %4, %13, %2
+  %15 = iconst.i64 1
+  %16 = iadd.wrap %7, %15
+  %17 = store.i64 %16, %6, %3
+  jmp b3(%17, %14)
+b2:
+  %18: ptr, %19: mem.r2 = stack.alloc %5
+  %20 = store.i64 %4, %18, %19
+  %21, %22, %23 = call @__wolf_rt_list_push(%0, %18, %20, %3, %2)
+  jmp b3(%22, %23)
+b3(%24: mem.r0, %25: mem.r1):
+  %26 = iconst.i64 1
+  jmp b4(%26, %24, %25)
+b4(%27: i64, %28: mem.r0, %29: mem.r1):
+  %30 = icmp.slt %27, %5
+  br %30, b5, b9
+b5:
+  %31 = ptr.off %0, %5, 1
+  %32 = load.i64 %31, %28
+  %33 = ptr.off %0, %8, 1
+  %34 = load.i64 %33, %28
+  %35 = icmp.ult %32, %34
+  br %35, b6, b7
+b6:
+  %36 = load.ptr %0, %28
+  %37 = ptr.off %36, %32, 8
+  %38 = store.i64 %27, %37, %29
+  %39 = iadd.wrap %32, %26
+  %40 = store.i64 %39, %31, %28
+  jmp b8(%40, %38)
+b7:
+  %41: ptr, %42: mem.r3 = stack.alloc %5
+  %43 = store.i64 %27, %41, %42
+  %44, %45, %46 = call @__wolf_rt_list_push(%0, %41, %43, %28, %29)
+  jmp b8(%45, %46)
+b8(%47: mem.r0, %48: mem.r1):
+  %49 = iadd.chk %27, %26
+  jmp b4(%49, %47, %48)
+b9:
+  jmp b10(%4, %29)
+b10(%50: i64, %51: mem.r1):
+  %52 = icmp.slt %50, %5
+  br %52, b11, b22
+b11:
+  %53 = ptr.off %1, %5, 1
+  %54 = load.i64 %53, %28
+  %55 = icmp.ult %50, %54
+  br %55, b12, b21
+b12:
+  %56 = load.ptr %1, %28
+  %57 = ptr.off %56, %50, 8
+  %58 = load.i64 %57, %51
+  %59 = iadd.chk %58, %26
+  %60 = ptr.off %0, %5, 1
+  %61 = load.i64 %60, %28
+  %62 = icmp.ult %50, %61
+  br %62, b13, b20
+b13:
+  %63 = load.ptr %0, %28
+  %64 = ptr.off %63, %50, 8
+  %65 = store.i64 %59, %64, %51
+  br %62, b14, b19
+b14:
+  br %55, b15, b18
+b15:
+  %66 = load.i64 %57, %65
+  %67 = iadd.chk %59, %66
+  br %62, b16, b17
+b16:
+  %68 = store.i64 %67, %64, %65
+  %69 = iadd.chk %50, %26
+  jmp b10(%69, %68)
+b17:
+  trap.bounds
+b18:
+  trap.bounds
+b19:
+  trap.bounds
+b20:
+  trap.bounds
+b21:
+  trap.bounds
+b22:
+  ret %0
+}
+
+fn @main() -> i64 {
+b0:
+  %0: ptr, %1: mem.r0 = region.new
+  %2 = iconst.i64 64
+  %3: ptr, %4: mem.r0 = region.alloc %0, %2, %1
+  %5 = iconst.i64 24
+  %6: ptr, %7: mem.r0 = region.alloc %0, %5, %4
+  %8: ptr, %9: mem.r0 = region.alloc %0, %5, %7
+  %10 = iconst.i64 0
+  %11 = iconst.i64 8
+  %12 = iconst.i64 16
+  %13 = store.ptr %3, %6, %9
+  %14 = ptr.off %6, %11, 1
+  %15 = store.i64 %11, %14, %13
+  %16 = ptr.off %6, %12, 1
+  %17 = store.i64 %11, %16, %15
+  %18 = call @__wolf_rt_test_opaque(%10)
+  %19 = ptr.off %3, %18, 1
+  %20 = store.ptr %19, %8, %17
+  %21 = ptr.off %8, %11, 1
+  %22 = store.i64 %10, %21, %20
+  %23 = ptr.off %8, %12, 1
+  %24 = store.i64 %11, %23, %22
+  %25 = iconst.i64 1
+  jmp b1(%10, %24)
+b1(%26: i64, %27: mem.r0):
+  %28 = icmp.slt %26, %11
+  br %28, b2, b3
+b2:
+  %29 = ptr.off %3, %26, 8
+  %30 = store.i64 %26, %29, %27
+  %31 = iadd.wrap %26, %25
+  jmp b1(%31, %30)
+b3:
+  %32 = call @shape(%8, %6)
+  %33 = load.ptr %32, %27
+  jmp b4(%10, %10)
+b4(%34: i64, %35: i64):
+  %36 = icmp.slt %34, %11
+  br %36, b5, b6
+b5:
+  %37 = ptr.off %33, %34, 8
+  %38 = load.i64 %37, %27
+  %39 = iadd.wrap %35, %38
+  %40 = iadd.wrap %34, %25
+  jmp b4(%40, %39)
+b6:
+  ret %35
+}
