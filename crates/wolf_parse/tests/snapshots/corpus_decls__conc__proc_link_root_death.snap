@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 865..899 name=shard body=Block
+FnDecl 901..1144 name=main body=Block

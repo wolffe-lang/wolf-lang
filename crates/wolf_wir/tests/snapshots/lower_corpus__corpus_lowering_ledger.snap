@@ -47,6 +47,7 @@ conc/proc_cross_module/main.lu: lowers
 conc/proc_kill_defers.lu: lowers
 conc/proc_link.lu: lowers
 conc/proc_link_root.lu: lowers
+conc/proc_link_root_death.lu: lowers
 conc/proc_spawn_loop.lu: lowers
 conc/reason_interp.lu: lowers
 conc/select_seeded.lu: lowers
