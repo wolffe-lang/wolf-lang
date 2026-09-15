@@ -37,6 +37,7 @@ conc/chan_param_for.lu: lowers
 conc/chan_payload_escape.lu: not mem-clean (pre-wir rungs own it)
 conc/chan_payload_escape_proc.lu: not mem-clean (pre-wir rungs own it)
 conc/chan_payload_proc_param.lu: lowers
+conc/chan_root_task.lu: lowers
 conc/chan_send_closed_row.lu: lowers
 conc/chan_struct_payload.lu: lowers
 conc/chan_unsendable.lu: not mem-clean (pre-wir rungs own it)
