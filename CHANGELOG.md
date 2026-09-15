@@ -116,8 +116,8 @@ tokens at its next pin, `IoErrors` at 0-based line 13 column 22 and
 
 **Filed, not taken:** `push` of a non-`Copy` value keeps the caller's
 handle on both compiler lanes (#385, a ruling). W1004 is subsumed by
-the #366 refusal (#387). lupin mirrors are wolf-interp#115 (#366) and
-the batch named in that issue's thread.
+the #366 refusal (#387). lupin mirrors: wolf-interp#115 (#366) and
+wolf-interp#118 (#348, #344, #352).
 
 ## 0.2.14 — 2026-09-13
 
