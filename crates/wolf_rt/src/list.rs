@@ -157,6 +157,36 @@ pub(crate) fn list_from_bytes(elem: usize, bytes: &[u8]) -> *mut ListHdr {
     hdr
 }
 
+/// The element buffer, length and element size of a list — the
+/// `par` seam's read of its source (s166, `task::__wolf_rt_par_map`).
+pub(crate) fn raw_parts(hdr: *mut ListHdr) -> (*mut u8, usize, usize) {
+    // SAFETY: the caller holds a live header from lowering.
+    unsafe {
+        let h = &*hdr;
+        (h.data, h.len as usize, h.elem as usize)
+    }
+}
+
+/// A list of `n` `elem`-byte slots at exact capacity, in the ambient
+/// region — `par`'s result (`[conc.task.par.cost]`: one allocation of
+/// `n` slots). The slots are NOT zeroed: every one is written before
+/// the list is observable, and a failed `par` has no value.
+pub(crate) fn new_list_len(elem: usize, n: usize) -> (*mut ListHdr, *mut u8) {
+    let hdr = new_list(elem);
+    if n == 0 {
+        return (hdr, core::ptr::null_mut());
+    }
+    // SAFETY: `hdr` was just minted above.
+    unsafe {
+        let h = &mut *hdr;
+        let data = alloc_in(h.region, elem * n);
+        h.data = data;
+        h.len = n as i64;
+        h.cap = n as i64;
+        (hdr, data)
+    }
+}
+
 /// Push one `int` element onto an 8-byte-element list.
 pub(crate) fn push_int(hdr: *mut ListHdr, v: i64) {
     let cell = [v];
