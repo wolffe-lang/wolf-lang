@@ -1,0 +1,19 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1002]: `b` is the caller's value, and it is returned here while the caller still holds it
+ --> mem:///main.lu:1:35
+  |
+1 | fn f(b: List[int]) -> List[int] { b }
+  |      - `b` is declared without a mode — that spells `read`: lent for the call, and still the caller's after it
+  |                                   ^ this would be a second live path to the value `b` was lent
+  |
+  = note: a `read` parameter is lent, never given [mem.tier0.mode.read]. Handing it on past the
+    call would leave two places able to write one value, with no `shared` spelled anywhere
+    [mem.tier0.excl.1]. Hand on an independent value with `copy`, or declare the parameter
+    `take` so the caller gives it up (call sites then spell `take`).
+help: to hand on an independent value, copy it at the move
+  |
+1 | fn f(b: List[int]) -> List[int] { copy b }
+  |

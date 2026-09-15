@@ -1,0 +1,80 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1014]: `c` holds `b`'s value, and `b` is `read` for the whole call, so it cannot be lent `mut`
+ --> mem:///main.lu:4:5
+  |
+2 | fn write(b: List[int]) -> int {
+  |          - `b` is declared without a mode — that spells `read`, immutable for the call
+3 |     var c = b
+  |             - `b` is moved here, but the caller still holds it — `c` is a second name for the caller's value
+4 |     (mut c).push(9)
+  |     ^^^^^^^ a write to `b`'s value, through `c`
+  |
+  = note: moving a `read` parameter into another binding does not make it this function's own: the
+    caller kept it [mem.tier0.mode.read]. Write `copy` at the move to get an independent
+    value, or declare the parameter `mut` (to change the caller's value, spelled at call
+    sites) or `take` (to consume it).
+help: to get a value of this function's own, copy it at the move
+  |
+3 |     var c = copy b
+  |
+
+error[E1014]: `c` holds `b`'s value, and `b` is `read` for the whole call, so it cannot be taken from the caller
+ --> mem:///main.lu:9:14
+  |
+7 | fn give(b: List[int]) -> int {
+  |         - `b` is declared without a mode — that spells `read`, immutable for the call
+8 |     let c = b
+  |             - `b` is moved here, but the caller still holds it — `c` is a second name for the caller's value
+9 |     eat(take c)
+  |              ^ `take` gives away `b`'s value, through `c`
+  |
+  = note: moving a `read` parameter into another binding does not make it this function's own: the
+    caller kept it [mem.tier0.mode.read]. Write `copy` at the move to get an independent
+    value, or declare the parameter `mut` (to change the caller's value, spelled at call
+    sites) or `take` (to consume it).
+help: to get a value of this function's own, copy it at the move
+  |
+8 |     let c = copy b
+  |
+
+error[E1014]: `r.b[_]` reaches `bs`'s value through `r`, and `bs` is `read` for the whole call, so it cannot be assigned through
+  --> mem:///main.lu:15:5
+   |
+13 | fn poke(bs: List[int]) -> int {
+   |         -- `bs` is declared without a mode — that spells `read`, immutable for the call
+14 |     var r = Rd { b: bs, pos: 0 }
+   |                     -- `bs` is moved here, but the caller still holds it — `r` is a second name for the caller's value
+15 |     r.b[0] = 5
+   |     ^^^^^^ a write to `bs`'s value, through `r`
+   |
+   = note: moving a `read` parameter into another binding does not make it this function's own: the
+     caller kept it [mem.tier0.mode.read]. Write `copy` at the move to get an independent
+     value, or declare the parameter `mut` (to change the caller's value, spelled at call
+     sites) or `take` (to consume it).
+help: to get a value of this function's own, copy it at the move
+   |
+14 |     var r = Rd { b: copy bs, pos: 0 }
+   |
+
+error[E1014]: `r` holds `bs`'s value, and `bs` is `read` for the whole call, so it cannot be lent `mut`
+  --> mem:///main.lu:16:14
+   |
+13 | fn poke(bs: List[int]) -> int {
+   |         -- `bs` is declared without a mode — that spells `read`, immutable for the call
+14 |     var r = Rd { b: bs, pos: 0 }
+   |                     -- `bs` is moved here, but the caller still holds it — `r` is a second name for the caller's value
+15 |     r.b[0] = 5
+16 |     bump(mut r)
+   |              ^ a write to `bs`'s value, through `r`
+   |
+   = note: moving a `read` parameter into another binding does not make it this function's own: the
+     caller kept it [mem.tier0.mode.read]. Write `copy` at the move to get an independent
+     value, or declare the parameter `mut` (to change the caller's value, spelled at call
+     sites) or `take` (to consume it).
+help: to get a value of this function's own, copy it at the move
+   |
+14 |     var r = Rd { b: copy bs, pos: 0 }
+   |

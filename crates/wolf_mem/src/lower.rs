@@ -67,6 +67,12 @@ pub(crate) struct Val {
     /// lands — a binding grows shared loans, a call argument joins
     /// the read surface, anything else refuses by name at body end.
     borrowed: Vec<PlaceId>,
+    /// s165 (wolf-lang#366, `[mem.tier0.mode.read]`): this value IS a
+    /// `read` parameter's value, reached by a move rather than a copy —
+    /// `(parameter local, the move's span)`, one entry per parameter.
+    /// The caller still holds it, so it is a second live path to the
+    /// caller's value; where it may go is [`Lower::refuse_lent_escape`].
+    lent: Vec<(u32, Span)>,
 }
 
 impl Val {
@@ -81,10 +87,16 @@ impl Val {
             origin: Some(span),
             region_fields: Vec::new(),
             borrowed: Vec::new(),
+            lent: Vec::new(),
         }
     }
 
     fn merge(&mut self, other: Val) {
+        for (p, sp) in other.lent {
+            if !self.lent.iter().any(|&(q, _)| q == p) {
+                self.lent.push((p, sp));
+            }
+        }
         for s in other.sites {
             if let Err(i) = self.sites.binary_search(&s) {
                 self.sites.insert(i, s);
@@ -317,6 +329,17 @@ pub(crate) struct Lowerer<'t> {
     /// May-hold: root local -> the sites its value may contain, each
     /// with the span where it flowed in (diagnostic anchor).
     holds: BTreeMap<u32, BTreeMap<SiteId, Span>>,
+    /// s165 (#366): the non-`Copy` `read` parameters — the values this
+    /// frame was lent and the caller kept.
+    lent_params: BTreeSet<u32>,
+    /// s165 (#366): may-hold for lent values — root local -> the `read`
+    /// parameters whose value it may hold, each with the move's span.
+    /// Monotone like `holds`: a whole reassignment does not clear it,
+    /// so a rebinding that is later replaced and then escapes is a
+    /// conservative refusal (`copy` at the move is the fix either way).
+    lent_holds: BTreeMap<u32, BTreeMap<u32, Span>>,
+    /// s165 (#366): `(parameter, escape span)` pairs already reported.
+    lent_escapes: std::collections::HashSet<(u32, Span)>,
     /// Region-typed locals with statically-known identity (`None`:
     /// bound on conflicting paths — `in` on it refuses).
     region_local: HashMap<u32, Option<RegionId>>,
@@ -589,6 +612,7 @@ impl<'t> Lowerer<'t> {
             origin: Some(span),
             region_fields: Vec::new(),
             borrowed: Vec::new(),
+            lent: Vec::new(),
         }
     }
 
@@ -607,6 +631,13 @@ impl<'t> Lowerer<'t> {
     }
 
     fn hold(&mut self, local: u32, val: &Val, span: Span) {
+        // A `Copy` local holds a copy, never the lent value itself.
+        if !val.lent.is_empty() && !self.locals[local as usize].is_copy {
+            let entry = self.lent_holds.entry(local).or_default();
+            for &(p, sp) in &val.lent {
+                entry.entry(p).or_insert(sp);
+            }
+        }
         if val.sites.is_empty() {
             return;
         }
@@ -862,6 +893,7 @@ impl<'t> Lowerer<'t> {
     }
 
     fn demand_outlives_frame_how(&mut self, val: &Val, span: Span, how: &'static str) {
+        self.refuse_lent_escape(val, span, how);
         self.claim_closure_leaving(val, span);
         let reader = if how == "sent" { "receiver" } else { "caller" };
         for &s in &val.sites {
@@ -954,6 +986,7 @@ impl<'t> Lowerer<'t> {
 
     /// A store into module state: the target is `ρ_static`.
     fn demand_static(&mut self, val: &Val, span: Span) {
+        self.refuse_lent_escape(val, span, "stored into module state");
         for &s in &val.sites {
             // Frozen data may live anywhere, forever
             // ([mem.region.edge.imm]).
@@ -1320,6 +1353,7 @@ impl<'t> Lowerer<'t> {
             return;
         };
         if self.locals[l as usize].param_mode != Some(None) {
+            self.check_lent_holder_write(l, place, span, verb, label);
             return;
         }
         let name = self.locals[l as usize].name.clone();
@@ -1346,6 +1380,269 @@ impl<'t> Lowerer<'t> {
             // found — W1002 for the same name stands down on it.
             .about(name, span),
         );
+    }
+
+    /// s165 (wolf-lang#366): the `read` parameters whose value this
+    /// place carries when it is used in value position — the parameter
+    /// itself, or a binding a lent value was moved into. A `Copy` place
+    /// carries none: its use is a copy, an independent value.
+    fn lent_of_place(&self, place: PlaceId, span: Span) -> Vec<(u32, Span)> {
+        if self.places.is_copy(place) {
+            return Vec::new();
+        }
+        // Only a value that can reach shared storage is an alias when
+        // two paths hold it. A struct of scalars, or `int ! {none}`,
+        // is inline words on every tier: its "second path" is a copy.
+        if let Some(t) = self.expr_ty(span)
+            && !self.may_share(t, 0)
+        {
+            return Vec::new();
+        }
+        let Base::Local(l) = self.places.get(place).base else {
+            return Vec::new();
+        };
+        if self.lent_params.contains(&l) {
+            return vec![(l, span)];
+        }
+        self.lent_holds
+            .get(&l)
+            .map(|m| m.iter().map(|(&p, &sp)| (p, sp)).collect())
+            .unwrap_or_default()
+    }
+
+    /// s165 (wolf-lang#366): can a value of this type reach storage a
+    /// second path would share — a `List`, `Map` or `Pool`, directly or
+    /// through a field, payload, tuple element or row? An unknown type
+    /// (a type parameter, a projection, anything this view cannot
+    /// read) answers yes: a generic body is checked once for every
+    /// instantiation, and `List[int]` is one of them. `shared`/`weak`
+    /// cells are the sanctioned alias and answer no, as do the `Copy`
+    /// kinds and `str` (an immutable view: two paths cannot write it).
+    fn may_share(&self, t: Ty<'t>, depth: u32) -> bool {
+        if depth > 16 {
+            return true;
+        }
+        let sub = |id: TyId| Ty { table: t.table, id };
+        match t.kind() {
+            TyKind::List(_) | TyKind::Pool(_) | TyKind::Map(..) => true,
+            TyKind::Error
+            | TyKind::Never
+            | TyKind::Unit
+            | TyKind::Prim(_)
+            | TyKind::Fn(..)
+            | TyKind::Range(_)
+            | TyKind::Handle(_)
+            | TyKind::Ptr(_)
+            | TyKind::TypeTy
+            | TyKind::Chan(_)
+            | TyKind::Mutex(_)
+            | TyKind::TaskScope
+            | TyKind::Proc
+            | TyKind::ExitReason
+            | TyKind::Shared(_)
+            | TyKind::Weak(_)
+            | TyKind::RegionTy
+            | TyKind::OpenTail => false,
+            TyKind::Wrapping(i) | TyKind::Distinct(i) => self.may_share(sub(*i), depth + 1),
+            TyKind::Tuple(es) => es.iter().any(|e| self.may_share(sub(*e), depth + 1)),
+            TyKind::ErrUnion(ok, row) => {
+                self.may_share(sub(*ok), depth + 1) || self.may_share(sub(*row), depth + 1)
+            }
+            TyKind::Row { tags, tail } => {
+                tags.iter()
+                    .flat_map(|(_, ps)| ps.iter())
+                    .any(|p| self.may_share(sub(*p), depth + 1))
+                    || tail.is_some_and(|tl| self.may_share(sub(tl), depth + 1))
+            }
+            TyKind::Nominal { module, name, args } => match self.sigs.get(*module as usize, name) {
+                Some(ItemSig::Struct(_)) => match self.fields_of(t) {
+                    Some(fs) => fs.into_iter().any(|(_, ft)| self.may_share(ft, depth + 1)),
+                    None => true,
+                },
+                Some(ItemSig::Enum {
+                    generics, variants, ..
+                }) => variants.iter().flat_map(|v| v.payload.iter()).any(|&p| {
+                    match self.sigs.table.kind(p) {
+                        TyKind::Rigid(r) => match generics.iter().position(|g| g == r) {
+                            Some(i) if i < args.len() => self.may_share(sub(args[i]), depth + 1),
+                            _ => true,
+                        },
+                        _ if mentions_rigid(&self.sigs.table, p) => true,
+                        _ => self.may_share(
+                            Ty {
+                                table: &self.sigs.table,
+                                id: p,
+                            },
+                            depth + 1,
+                        ),
+                    }
+                }),
+                Some(ItemSig::Distinct { base, .. }) => self.may_share(
+                    Ty {
+                        table: &self.sigs.table,
+                        id: *base,
+                    },
+                    depth + 1,
+                ),
+                _ => true,
+            },
+            _ => true,
+        }
+    }
+
+    /// s165 (wolf-lang#366): E1014 through a rebinding. `var c = b` on
+    /// a `read` parameter `b` moves nothing the caller gave up — `c` is
+    /// the caller's value under a second name — so a write or a `take`
+    /// through `c` is the write or the give-away E1014 already refuses
+    /// on `b`. A whole reassignment of `c` replaces the binding and
+    /// writes nothing of the caller's, so it stays legal (wolf-std's
+    /// `var key0 = key` … `key0 = sum256(key0)` is that shape).
+    fn check_lent_holder_write(
+        &mut self,
+        l: u32,
+        place: PlaceId,
+        span: Span,
+        verb: &str,
+        label: &str,
+    ) {
+        let whole = self.places.get(place).proj.is_empty();
+        if whole && verb == "assigned" {
+            return;
+        }
+        // A holder is this frame's own aggregate around the lent handle:
+        // its fields are inline words on every tier. A write that
+        // reaches its target through FIELD steps only replaces those
+        // words — `r.pos = n`, `r.b = other` — and writes nothing of
+        // the caller's; so does a `mut` lend of a `Copy` field. What
+        // reaches the caller's storage is a step THROUGH a container
+        // (`r.b[0] = …`), or a `mut`/`take` of anything that can still
+        // reach the handle.
+        let field_path = self
+            .places
+            .get(place)
+            .proj
+            .iter()
+            .all(|p| matches!(p, Proj::Field(_)));
+        if !whole
+            && field_path
+            && (matches!(verb, "assigned through" | "modified") || self.places.is_copy(place))
+        {
+            return;
+        }
+        if self.locals[l as usize].is_copy {
+            return;
+        }
+        // A `mut` parameter that received a lent value was already
+        // refused at the store (E1002): one root cause, one report.
+        if self.locals[l as usize].param_mode == Some(Some(wolf_ast::ParamMode::Mut)) {
+            return;
+        }
+        let Some((&p, &moved)) = self.lent_holds.get(&l).and_then(|m| m.iter().next()) else {
+            return;
+        };
+        let holder = self.locals[l as usize].name.clone();
+        let pname = self.locals[p as usize].name.clone();
+        let decl = self.locals[p as usize].span;
+        let shown = self.show_place_now(place);
+        let label = if label == "write through a `read` parameter" {
+            format!("a write to `{pname}`'s value, through `{holder}`")
+        } else {
+            format!("`take` gives away `{pname}`'s value, through `{holder}`")
+        };
+        self.diags.push(
+            Diagnostic::error(
+                codes::E1014,
+                span,
+                if whole {
+                    format!(
+                        "`{shown}` holds `{pname}`'s value, and `{pname}` is `read` for the whole \
+                         call, so it cannot be {verb}"
+                    )
+                } else {
+                    format!(
+                        "`{shown}` reaches `{pname}`'s value through `{holder}`, and `{pname}` is \
+                         `read` for the whole call, so it cannot be {verb}"
+                    )
+                },
+            )
+            .with_label(label)
+            .with_secondary(
+                moved,
+                format!("`{pname}` is moved here, but the caller still holds it — `{holder}` is a second name for the caller's value"),
+            )
+            .with_secondary(
+                decl,
+                format!("`{pname}` is declared without a mode — that spells `read`, immutable for the call"),
+            )
+            .with_note(
+                "moving a `read` parameter into another binding does not make it this \
+                 function's own: the caller kept it [mem.tier0.mode.read]. Write `copy` at \
+                 the move to get an independent value, or declare the parameter \
+                 `mut` (to change the caller's value, spelled at call sites) or `take` (to \
+                 consume it).",
+            )
+            .with_suggestion(Suggestion::new(
+                "to get a value of this function's own, copy it at the move".to_string(),
+                vec![(Span::new(moved.file, moved.lo, moved.lo), "copy ".to_string())],
+                Applicability::Maybe,
+            )),
+        );
+    }
+
+    /// s165 (wolf-lang#366, `[mem.tier0.mode.read]`,
+    /// `[mem.tier0.excl.1]`): a lent value leaving the activation —
+    /// returned, sent, stored into module state or into a `mut`
+    /// parameter, or handed to a `take` callee as part of a
+    /// temporary. The caller still holds the value, so wherever it
+    /// lands becomes a second live, writable path to it: E1002. Static
+    /// only — no runtime cost; the fix (`copy`) is the one allocation
+    /// the program then spells.
+    fn refuse_lent_escape(&mut self, val: &Val, span: Span, how: &str) {
+        for &(p, moved) in &val.lent {
+            if !self.lent_escapes.insert((p, span)) {
+                continue;
+            }
+            let pname = self.locals[p as usize].name.clone();
+            let decl = self.locals[p as usize].span;
+            let mut d = Diagnostic::error(
+                codes::E1002,
+                span,
+                format!(
+                    "`{pname}` is the caller's value, and it is {how} here while the caller \
+                     still holds it"
+                ),
+            )
+            .with_label(format!(
+                "this would be a second live path to the value `{pname}` was lent"
+            ));
+            if moved != span {
+                d = d.with_secondary(moved, format!("`{pname}`'s value is moved out here"));
+            }
+            d = d
+                .with_secondary(
+                    decl,
+                    format!(
+                        "`{pname}` is declared without a mode — that spells `read`: lent for \
+                         the call, and still the caller's after it"
+                    ),
+                )
+                .with_note(
+                    "a `read` parameter is lent, never given [mem.tier0.mode.read]. Handing it \
+                     on past the call would leave two places able to write one value, with no \
+                     `shared` spelled anywhere [mem.tier0.excl.1]. Hand on an independent value \
+                     with `copy`, or declare the parameter `take` so the caller gives it up \
+                     (call sites then spell `take`).",
+                )
+                .with_suggestion(Suggestion::new(
+                    "to hand on an independent value, copy it at the move".to_string(),
+                    vec![(
+                        Span::new(moved.file, moved.lo, moved.lo),
+                        "copy ".to_string(),
+                    )],
+                    Applicability::Maybe,
+                ));
+            self.diags.push(d);
+        }
     }
 
     /// `take` spelled on a `read` parameter at a call site — E1014's
@@ -2174,11 +2471,12 @@ impl<'t> Lowerer<'t> {
                     // "static" }`) is flagged too — conservative,
                     // never unsound, and `copy` is the first rung.
                     let str_view = self.is_str_expr(e.span);
-                    let val = if self.places.is_copy(place) && !str_view {
+                    let mut val = if self.places.is_copy(place) && !str_view {
                         Val::none()
                     } else {
                         self.val_of_place(place, e.span)
                     };
+                    val.lent = self.lent_of_place(place, e.span);
                     self.use_value(place, e.span);
                     return Ok(val);
                 }
@@ -2545,6 +2843,7 @@ impl<'t> Lowerer<'t> {
             origin: Some(e.span),
             region_fields: Vec::new(),
             borrowed: Vec::new(),
+            lent: Vec::new(),
         })
     }
 
@@ -2747,6 +3046,7 @@ impl<'t> Lowerer<'t> {
             origin: Some(e.span),
             region_fields: Vec::new(),
             borrowed: Vec::new(),
+            lent: Vec::new(),
         })
     }
 
@@ -2844,11 +3144,12 @@ impl<'t> Lowerer<'t> {
             }
             Some(SyntaxKind::MoveKw) => {
                 if let Some((place, _)) = self.as_place(operand) {
-                    let val = if self.places.is_copy(place) {
+                    let mut val = if self.places.is_copy(place) {
                         Val::none()
                     } else {
                         self.val_of_place(place, operand.span)
                     };
+                    val.lent = self.lent_of_place(place, operand.span);
                     self.use_value(place, operand.span);
                     Ok(val)
                 } else {
@@ -3015,6 +3316,7 @@ impl<'t> Lowerer<'t> {
             origin: Some(e.span),
             region_fields: Vec::new(),
             borrowed,
+            lent: Vec::new(),
         })
     }
 
@@ -3373,7 +3675,14 @@ impl<'t> Lowerer<'t> {
             },
             None => None,
         };
-        let scrut_val = scrut_place.map(|(p, sp)| self.val_of_place(p, sp));
+        let scrut_val = scrut_place.map(|(p, sp)| {
+            let mut v = self.val_of_place(p, sp);
+            // s165 (#366): a non-`Copy` binding moves its piece out
+            // of the scrutinee below — out of the caller's value, when
+            // the scrutinee is a `read` parameter.
+            v.lent = self.lent_of_place(p, sp);
+            v
+        });
         let fan = self.cur;
         let join = self.new_block();
         let mut out = Val::none();
@@ -3996,6 +4305,7 @@ impl<'t> Lowerer<'t> {
                     surface.take_args.push((place, recv_span));
                 } else {
                     let val = self.eval_value(recv)?;
+                    self.refuse_lent_escape(&val, recv_span, "given to a `take` receiver");
                     self.mark_val_escape(&val, "passed to a call");
                     carry.extend(val.sites);
                 }
@@ -4033,7 +4343,8 @@ impl<'t> Lowerer<'t> {
                     self.emit_read(place, v.span);
                     self.mark_region_lent(place);
                     if sent {
-                        let pv = self.val_of_place(place, v.span);
+                        let mut pv = self.val_of_place(place, v.span);
+                        pv.lent = self.lent_of_place(place, v.span);
                         self.demand_sent_outlives_frame(&pv, v.span);
                     }
                     if !self.places.is_copy(place) {
@@ -4102,8 +4413,11 @@ impl<'t> Lowerer<'t> {
                     surface.take_args.push((place, v.span));
                 } else {
                     // Consuming a temporary is fine — it never had
-                    // another owner.
+                    // another owner — unless it carries a lent value
+                    // (s165, #366): then the callee would own the
+                    // caller's value.
                     let val = self.eval_value(v)?;
+                    self.refuse_lent_escape(&val, v.span, "given to a `take` parameter");
                     self.mark_val_escape(&val, "passed to a call");
                     carry.extend(val.sites);
                 }
@@ -4728,6 +5042,18 @@ impl<'t> Lowerer<'t> {
     /// `=` and, since s153 (#310), by `+=` on a `str`, whose fresh
     /// allocation lands exactly as an assigned one would.
     fn flow_store(&mut self, place: PlaceId, place_expr: &'t GreenNode, val: &Val) {
+        // s165 (#366): a `mut` parameter is the caller's place — a lent
+        // value stored anywhere in it outlives the call.
+        if let Base::Local(l) = self.places.get(place).base
+            && self.locals[l as usize].param_mode == Some(Some(wolf_ast::ParamMode::Mut))
+        {
+            let pname = self.locals[l as usize].name.clone();
+            self.refuse_lent_escape(
+                val,
+                place_expr.span,
+                &format!("stored into the `mut` parameter `{pname}`"),
+            );
+        }
         // ------------------------------- region flow (s19) ------
         match self.places.get(place).base.clone() {
             Base::Local(l) => {
@@ -4877,6 +5203,9 @@ impl<'t> Lowerer<'t> {
             sites: Vec::new(),
             site_escape: Vec::new(),
             holds: BTreeMap::new(),
+            lent_params: BTreeSet::new(),
+            lent_holds: BTreeMap::new(),
+            lent_escapes: std::collections::HashSet::new(),
             region_local: HashMap::new(),
             moved_region: Vec::new(),
             tainted_region: Vec::new(),
@@ -4958,6 +5287,14 @@ impl<'t> Lowerer<'t> {
                     self.region_local.insert(local.0, Some(rid));
                 }
                 _ if !is_copy(ty, 0) => {
+                    // s165 (#366): a non-`Copy` `read` parameter is a
+                    // lent value. `shared`/`weak` cells are the
+                    // sanctioned alias (RC-owned, [mem.shared]) and
+                    // are not.
+                    if p.mode.is_none() && !matches!(ty.kind(), TyKind::Shared(_) | TyKind::Weak(_))
+                    {
+                        self.lent_params.insert(local.0);
+                    }
                     let rid = self.new_region(&p.name, RegionKind::Param, Strategy::Arena, p.span);
                     let rendered = render(ty.table, ty.id, &|_| Err("_"));
                     let sid = SiteId(self.sites.len() as u32);

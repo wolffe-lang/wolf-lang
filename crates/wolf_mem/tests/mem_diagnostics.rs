@@ -1132,7 +1132,11 @@ fn w1004_lent_view_returned() {
     // own storage, and a callee that returns the parameter keeps it
     // past the call the lend is scoped to. s92: the bytes are copied
     // and the program compiles; the diagnostic says the copy happened
-    // and where the escape is (E1015 refused this through s91).
+    // and where the escape is (E1015 refused this through s91). s165
+    // (#366): the callee returning its `read` parameter is E1002 in its
+    // own right now, so the snapshot carries both — the refusal in
+    // `keep`, and W1004's true statement about the call (#387 asks
+    // whether W1004 retires).
     snap(
         "w1004_lent_view_returned",
         "fn keep(bs: List[byte]) -> List[byte] { bs }\n\
@@ -1148,7 +1152,9 @@ fn w1004_lent_view_returned() {
 fn w1004_lent_view_relent_into_an_escape() {
     // The escape is transitive: `relay` only passes the view on, and
     // the function it passes it to is the one that keeps it. The
-    // diagnostic names the call site that lent, not the hop.
+    // diagnostic names the call site that lent, not the hop. s165
+    // (#366): `keep` is E1002; `relay` hands back `keep`'s RESULT, a
+    // fresh value, and is not.
     snap(
         "w1004_lent_view_relent",
         "fn keep(bs: List[byte]) -> List[byte] { bs }\n\
@@ -1157,6 +1163,109 @@ fn w1004_lent_view_relent_into_an_escape() {
              let s = \"wolf\"\n    \
              relay(s.bytes()).len - 4\n\
          }\n",
+    );
+}
+
+#[test]
+fn e1002_read_param_returned() {
+    // s165 (#366): the plain move-out. The caller keeps `b`, so the
+    // returned value would be a second live path to it.
+    snap(
+        "e1002_read_param_returned",
+        "fn f(b: List[int]) -> List[int] { b }\n\
+         fn main() -> !int {\n    \
+             var xs = List[int]()\n    \
+             let ys = f(xs)\n    \
+             ys.len + xs.len\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1002_read_param_carried_out() {
+    // s165 (#366): the value escapes wherever it is carried — a struct
+    // literal, a rebinding, an element of a generic list — and the
+    // report names the move where the `copy` belongs.
+    snap(
+        "e1002_read_param_carried_out",
+        "struct Box { items: List[int] }\n\
+         fn wrap(b: List[int]) -> Box { Box { items: b } }\n\
+         fn rebind(b: List[int]) -> List[int] {\n    \
+             let c = b\n    \
+             c\n\
+         }\n\
+         fn first[T](xs: List[T]) -> T { xs[0] }\n\
+         fn replace(mut out: List[int], b: List[int]) { out = b }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
+
+#[test]
+fn e1014_read_param_through_a_rebinding() {
+    // s165 (#366): a write or a `take` through a binding that holds the
+    // `read` parameter's value is the write or give-away through the
+    // parameter.
+    snap(
+        "e1014_read_param_through_a_rebinding",
+        "fn eat(take v: List[int]) -> int { v.len }\n\
+         fn write(b: List[int]) -> int {\n    \
+             var c = b\n    \
+             (mut c).push(9)\n    \
+             c.len\n\
+         }\n\
+         fn give(b: List[int]) -> int {\n    \
+             let c = b\n    \
+             eat(take c)\n\
+         }\n\
+         struct Rd { b: List[int], pos: int }\n\
+         fn bump(mut r: Rd) { r.pos = r.pos + 1 }\n\
+         fn poke(bs: List[int]) -> int {\n    \
+             var r = Rd { b: bs, pos: 0 }\n    \
+             r.b[0] = 5\n    \
+             bump(mut r)\n    \
+             r.pos\n\
+         }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
+
+#[test]
+fn read_param_moves_that_stay_legal() {
+    // s165 (#366): no alias, or no escape — a struct of scalars, a
+    // `str`, an `int ! {none}` fallback, a scrutinee piece read in
+    // place, a rebinding replaced whole, a `take` parameter, a `copy`,
+    // and a cursor around the lent handle written through FIELD steps.
+    snap(
+        "clean_read_param_moves",
+        "struct Point { x: int, y: int }\n\
+         struct Named { name: str, items: List[int] }\n\
+         fn same(p: Point) -> Point { p }\n\
+         fn label(n: Named) -> str { n.name }\n\
+         fn or(v: int ! {none}, d: int) -> int { v else d }\n\
+         fn count(n: Named) -> int {\n    \
+             match n {\n        \
+                 Named { name, items } => items.len,\n    \
+             }\n\
+         }\n\
+         fn widest(key: List[int]) -> int {\n    \
+             var key0 = key\n    \
+             if key0.len > 2 { key0 = List[int]() }\n    \
+             key0.len\n\
+         }\n\
+         fn keep(take b: List[int]) -> List[int] {\n    \
+             var c = b\n    \
+             (mut c).push(3)\n    \
+             c\n\
+         }\n\
+         fn fresh(b: List[int]) -> List[int] { copy b }\n\
+         struct Rd { b: List[int], pos: int }\n\
+         fn scan(bs: List[int]) -> int {\n    \
+             var r = Rd { b: bs, pos: 0 }\n    \
+             r.pos = 1\n    \
+             r.pos += r.b.len\n    \
+             r.pos\n\
+         }\n\
+         fn main() -> !int { 0 }\n",
     );
 }
 
@@ -1182,9 +1291,11 @@ fn a_read_only_lend_stays_silent() {
 fn a_bound_bytes_list_is_not_a_lend() {
     // The fix ladder: `let` materializes, so the same callee that
     // W1004 reports a copy for takes the bound list without a word.
+    // s165 (#366): `keep` hands back `copy bs` — returning the `read`
+    // parameter itself is E1002.
     snap(
         "clean_bound_bytes_list",
-        "fn keep(bs: List[byte]) -> List[byte] { bs }\n\
+        "fn keep(bs: List[byte]) -> List[byte] { copy bs }\n\
          fn main() -> !int {\n    \
              let s = \"wolf\"\n    \
              let bs = s.bytes()\n    \

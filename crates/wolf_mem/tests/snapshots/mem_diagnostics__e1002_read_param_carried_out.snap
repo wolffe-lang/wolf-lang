@@ -1,0 +1,72 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1002]: `b` is the caller's value, and it is returned here while the caller still holds it
+ --> mem:///main.lu:2:32
+  |
+2 | fn wrap(b: List[int]) -> Box { Box { items: b } }
+  |         - `b` is declared without a mode — that spells `read`: lent for the call, and still the caller's after it
+  |                                ^^^^^^^^^^^^^^^^ this would be a second live path to the value `b` was lent
+  |                                             - `b`'s value is moved out here
+  |
+  = note: a `read` parameter is lent, never given [mem.tier0.mode.read]. Handing it on past the
+    call would leave two places able to write one value, with no `shared` spelled anywhere
+    [mem.tier0.excl.1]. Hand on an independent value with `copy`, or declare the parameter
+    `take` so the caller gives it up (call sites then spell `take`).
+help: to hand on an independent value, copy it at the move
+  |
+2 | fn wrap(b: List[int]) -> Box { Box { items: copy b } }
+  |
+
+error[E1002]: `b` is the caller's value, and it is returned here while the caller still holds it
+ --> mem:///main.lu:5:5
+  |
+3 | fn rebind(b: List[int]) -> List[int] {
+  |           - `b` is declared without a mode — that spells `read`: lent for the call, and still the caller's after it
+4 |     let c = b
+  |             - `b`'s value is moved out here
+5 |     c
+  |     ^ this would be a second live path to the value `b` was lent
+  |
+  = note: a `read` parameter is lent, never given [mem.tier0.mode.read]. Handing it on past the
+    call would leave two places able to write one value, with no `shared` spelled anywhere
+    [mem.tier0.excl.1]. Hand on an independent value with `copy`, or declare the parameter
+    `take` so the caller gives it up (call sites then spell `take`).
+help: to hand on an independent value, copy it at the move
+  |
+4 |     let c = copy b
+  |
+
+error[E1002]: `xs` is the caller's value, and it is returned here while the caller still holds it
+ --> mem:///main.lu:7:33
+  |
+7 | fn first[T](xs: List[T]) -> T { xs[0] }
+  |             -- `xs` is declared without a mode — that spells `read`: lent for the call, and still the caller's after it
+  |                                 ^^^^^ this would be a second live path to the value `xs` was lent
+  |
+  = note: a `read` parameter is lent, never given [mem.tier0.mode.read]. Handing it on past the
+    call would leave two places able to write one value, with no `shared` spelled anywhere
+    [mem.tier0.excl.1]. Hand on an independent value with `copy`, or declare the parameter
+    `take` so the caller gives it up (call sites then spell `take`).
+help: to hand on an independent value, copy it at the move
+  |
+7 | fn first[T](xs: List[T]) -> T { copy xs[0] }
+  |
+
+error[E1002]: `b` is the caller's value, and it is stored into the `mut` parameter `out` here while the caller still holds it
+ --> mem:///main.lu:8:48
+  |
+8 | fn replace(mut out: List[int], b: List[int]) { out = b }
+  |                                - `b` is declared without a mode — that spells `read`: lent for the call, and still the caller's after it
+  |                                                ^^^ this would be a second live path to the value `b` was lent
+  |                                                      - `b`'s value is moved out here
+  |
+  = note: a `read` parameter is lent, never given [mem.tier0.mode.read]. Handing it on past the
+    call would leave two places able to write one value, with no `shared` spelled anywhere
+    [mem.tier0.excl.1]. Hand on an independent value with `copy`, or declare the parameter
+    `take` so the caller gives it up (call sites then spell `take`).
+help: to hand on an independent value, copy it at the move
+  |
+8 | fn replace(mut out: List[int], b: List[int]) { out = copy b }
+  |
