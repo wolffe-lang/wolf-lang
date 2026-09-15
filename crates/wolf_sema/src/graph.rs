@@ -985,18 +985,16 @@ impl LoadState<'_> {
                 }
                 names_of.resize(self.modules.len(), None);
                 let mut callers: Vec<(usize, BTreeSet<String>)> = Vec::new();
-                for m in 0..self.modules.len() {
-                    if names_of[m].is_none() {
+                for (m, slot) in names_of.iter_mut().enumerate() {
+                    let names = slot.get_or_insert_with(|| {
                         let mut set = BTreeSet::new();
                         for &fi in &self.modules[m].files {
                             let unit = &self.files[fi];
                             method_call_names(&unit.parse.root, &unit.raw.src, &mut set);
                         }
-                        names_of[m] = Some(set);
-                    }
-                    let set: BTreeSet<String> = names_of[m]
-                        .as_ref()
-                        .expect("filled above")
+                        set
+                    });
+                    let set: BTreeSet<String> = names
                         .iter()
                         .filter(|n| !builtins.contains(&n.as_str()))
                         .cloned()
