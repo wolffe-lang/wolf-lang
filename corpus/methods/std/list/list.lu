@@ -32,7 +32,9 @@ pub fn filter[T](xs: List[T], keep: fn(T) -> bool) -> List[T] {
 }
 
 pub fn fold[T, A](xs: List[T], init: A, step: fn(A, T) -> A) -> A {
-    var acc = init
+    // `copy` at the move: `init` is lent by its `read` mode and `acc`
+    // outlives the activation (`[mem.tier0.mode.read]`, wolf-lang#366).
+    var acc = copy init
     for x in xs { acc = step(acc, x) }
     acc
 }
