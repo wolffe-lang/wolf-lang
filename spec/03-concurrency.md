@@ -216,7 +216,10 @@ premise by construction.
   (`[type.comb.set]`) — and no copy of `xs`. `k` task spawns, each
   `[conc.task.spawn]`'s price (a capture record in the scope's region
   and a pool enqueue), and one join. Per element, nothing beyond the
-  call of `f`. What `f` allocates lands where a task's allocations land:
+  call of `f`. A `copy` inside `f` is deep (`[mem.tier0.move.3]`): one
+  allocation and a buffer copy for every `List` or `Map` it reaches,
+  charged where the task allocates, so a `par` whose `f` copies a
+  container pays that per element and not per list. What `f` allocates lands where a task's allocations land:
   tasks run with the process root as their ambient region, and the
   native root arena serializes allocation behind one lock, so an `f`
   that allocates on every call contends there and scales worse than
