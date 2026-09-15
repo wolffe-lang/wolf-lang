@@ -1063,3 +1063,43 @@ fn a_wide_range_that_never_exits_is_the_step_budget() {
         Ok(out) => panic!("expected the step budget, got {:?}", out.verdict),
     }
 }
+
+// ------------------------------- the machine sizes its own stack (#382) --
+
+/// wolf-lang#382: recursion to the call-depth budget is a depth the
+/// machine ALLOWS, so it must answer on every host — `unsupported`, by
+/// name — rather than overflow whatever stack the caller happens to run
+/// on (a windows main thread is 1 MiB; a unix one 8 MiB; a cargo test
+/// thread 2 MiB). The program is the shape wolf-std's json rows reach:
+/// nested calls with live locals in every frame.
+#[test]
+fn recursion_to_the_depth_budget_answers_on_any_callers_stack() {
+    let src = "fn dive(n: int, acc: str) -> int {\n    \
+                   if n == 0 { return 0 }\n    \
+                   let here = acc + \"x\"\n    \
+                   let a = n * 2\n    \
+                   let b = a - n\n    \
+                   dive(b - 1, here) + 1\n\
+               }\n\
+               fn main() -> !int {\n    print(\"{dive(100000, \"\")}\")\n    0\n}\n";
+    // Run from a thread with less stack than any host's main thread, so
+    // the answer cannot be a property of where the caller stands.
+    let got = std::thread::Builder::new()
+        .stack_size(256 << 10)
+        .spawn(move || {
+            let mut ml = MemoryLoader::new("ub");
+            ml.add_file(&[], "main.lu", src);
+            let res =
+                resolve_package_with(&mut ml, &AliasTable::default(), true).expect("root loads");
+            let tc = typecheck_package_with(&res.package, true);
+            assert!(!tc.has_errors(), "{:?}", tc.diagnostics);
+            match ubcheck::run_checked(&res.package, &tc, Budget::default()) {
+                Err(n) => n.construct.to_string(),
+                Ok(out) => format!("{:?}", out.verdict),
+            }
+        })
+        .expect("spawn")
+        .join()
+        .expect("the machine answered instead of overflowing");
+    assert_eq!(got, "call depth budget exhausted");
+}
