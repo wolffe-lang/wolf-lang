@@ -216,6 +216,42 @@ pub unsafe extern "C" fn __wolf_rt_map_pairs(hdr: i64) -> i64 {
     }
 }
 
+/// `m.remove(k)` — erase the key's entry (wolf-lang#344, D50): 1 with
+/// the erased value written into the slot's value half, 0 on a miss
+/// (the map unchanged). The entries after it shift down one stride, so
+/// insertion order survives the erase — `pairs()` still reports the
+/// order the remaining keys were first bound in. O(n) in the entries
+/// after the erased one; nothing is freed (the buffer's capacity and
+/// its birth region are the map's, as for a list's `pop`).
+///
+/// # Safety
+///
+/// `hdr` from [`__wolf_rt_map_new`]; `kv` must address one entry's
+/// worth of readable-and-writable bytes laid out as the map's entries.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_map_remove(hdr: i64, kv: i64) -> i64 {
+    unsafe {
+        let h = &mut *(hdr as *mut MapHdr);
+        let kv = kv as *mut u8;
+        let Some(i) = find(h, kv) else {
+            return 0;
+        };
+        let stride = h.elem as usize;
+        let entry = h.data.add(i as usize * stride);
+        core::ptr::copy_nonoverlapping(
+            entry.add(h.val_off as usize),
+            kv.add(h.val_off as usize),
+            h.val_size as usize,
+        );
+        let after = (h.len - i - 1) as usize * stride;
+        if after > 0 {
+            core::ptr::copy(entry.add(stride), entry, after);
+        }
+        h.len -= 1;
+        1
+    }
+}
+
 /// `clear` — drop every entry (capacity kept).
 ///
 /// # Safety
@@ -232,6 +268,41 @@ pub unsafe extern "C" fn __wolf_rt_map_clear(hdr: i64) {
 mod tests {
     use super::*;
     use crate::list::ListHdr;
+
+    /// `remove` (#344): the hit writes the erased value back, a second
+    /// remove misses, and the survivors keep their insertion order.
+    #[test]
+    fn remove_erases_and_keeps_insertion_order() {
+        let m = __wolf_rt_map_new(KEY_BYTES, 8, 8, 8, 16);
+        let entry = |k: i64, v: i64| {
+            let mut b = [0u8; 16];
+            b[..8].copy_from_slice(&k.to_ne_bytes());
+            b[8..].copy_from_slice(&v.to_ne_bytes());
+            b
+        };
+        unsafe {
+            for (k, v) in [(1, 10), (2, 20), (3, 30)] {
+                let mut e = entry(k, v);
+                __wolf_rt_map_set(m, e.as_mut_ptr() as i64);
+            }
+            let mut probe = entry(2, 0);
+            assert_eq!(__wolf_rt_map_remove(m, probe.as_mut_ptr() as i64), 1);
+            assert_eq!(i64::from_ne_bytes(probe[8..].try_into().unwrap()), 20);
+            let mut again = entry(2, 0);
+            assert_eq!(__wolf_rt_map_remove(m, again.as_mut_ptr() as i64), 0);
+            let h = &*(m as *const MapHdr);
+            assert_eq!(h.len, 2);
+            let keys: Vec<i64> = (0..h.len)
+                .map(|i| (h.data.add(i as usize * 16) as *const i64).read_unaligned())
+                .collect();
+            assert_eq!(keys, [1, 3], "the survivors keep their insertion order");
+            let mut last = entry(3, 0);
+            assert_eq!(__wolf_rt_map_remove(m, last.as_mut_ptr() as i64), 1);
+            let mut first = entry(1, 0);
+            assert_eq!(__wolf_rt_map_remove(m, first.as_mut_ptr() as i64), 1);
+            assert_eq!((*(m as *const MapHdr)).len, 0);
+        }
+    }
 
     /// One `(int, int)` map: insert, replace, miss, pairs, clear —
     /// the entry layout is two 8-byte words.
