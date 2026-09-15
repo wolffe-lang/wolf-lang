@@ -1,0 +1,47 @@
+//! check: run(exit=0, stdout="90 3 ada,lin 1 miss 2 kept 7 0\n")
+//! phase: run
+//! conforms: type.map, mem.map.absent
+//! s165 (wolf-lang#344, D50) — the key erase `map_std_keys.lu`'s
+//! `remove` had to fake: std.map's rebuilt the map without the key
+//! through a `pairs()` walk, O(n) per erase on both tiers, because no
+//! builtin erased one (#11's sentence: a `Map` that cannot erase is not
+//! a `Map`). `m.remove(k)` is `V ! {none}`, the read's shape — the
+//! erased value, or the row with the map unchanged — through a `mut`
+//! receiver. The survivors keep their insertion order, so `pairs()`
+//! after an erase reports the order the remaining keys were first bound
+//! in: `ada` then `lin` here, with `grace` gone from between them. The
+//! last entry erases, the first entry erases, a `List` value comes back
+//! whole, and a second remove of one key misses.
+
+fn names(m: Map[str, int]) -> str {
+    var out = ""
+    for pair in m.pairs() {
+        if out.len > 0 {
+            out = out + ","
+        }
+        out = out + pair.0
+    }
+    out
+}
+
+fn main() -> !int {
+    var grades = Map[str, int]()
+    grades["ada"] = 91
+    grades["grace"] = 90
+    grades["lin"] = 77
+    let g = (mut grades).remove("grace") else 0
+    let n0 = grades.len + 1
+    let order = names(grades)
+    let _ = (mut grades).remove("lin") else 0
+    let _ = (mut grades).remove("ada") else 0
+    var ids = Map[int, List[int]]()
+    var xs = List[int]()
+    (mut xs).push(7)
+    ids[4] = xs
+    let missing = (mut grades).remove("ada") else -1
+    let tag = if missing == -1 { "miss" } else { "hit" }
+    let back = (mut ids).remove(4) else List[int]()
+    let kept = if back.len == 1 { "kept" } else { "lost" }
+    print("{g} {n0} {order} {grades.len + 1} {tag} {n0 - 1} {kept} {back[0]} {ids.len}")
+    0
+}

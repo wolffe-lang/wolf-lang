@@ -289,6 +289,7 @@ memory/map_absent_else.lu: lowers
 memory/map_char_bool_keys.lu: lowers
 memory/map_count.lu: lowers
 memory/map_int_keys.lu: lowers
+memory/map_remove.lu: lowers
 memory/map_set_generic.lu: lowers
 memory/map_std_keys.lu: lowers
 memory/match_arm_whole_move.lu: not mem-clean (pre-wir rungs own it)
