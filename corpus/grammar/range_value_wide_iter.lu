@@ -1,0 +1,26 @@
+//! check: run(exit=0, stdout="first 0\nfirst -9223372036854775808\n")
+//! phase: run
+//! conforms: type.range, mem.iter.range
+//!
+//! wolf-lang#381 — a range VALUE as wide as the integer line iterates
+//! the way its header does ([type.range.value]: a range "passes as a
+//! parameter ... and iterates", and `for` is unchanged). The checked
+//! machine used to collect `end - start` items before the first step,
+//! so both calls below died in the host allocator (`capacity
+//! overflow`, no record) where the native rung answered. It walks the
+//! endpoints now, one step at a time, on both tiers.
+
+fn first(r: range[int]) -> int {
+    for x in r {
+        return x
+    }
+    0
+}
+
+fn main() -> !int {
+    let wide = 0..9223372036854775807
+    print("first {first(wide)}")
+    let lo: int = 0 - 9223372036854775807 - 1
+    print("first {first(lo..9223372036854775807)}")
+    0
+}

@@ -1,0 +1,30 @@
+//! check: run(exit=0, stdout="first 0\ntail 3\n")
+//! phase: run
+//! conforms: mem.iter.range, type.range.value
+//!
+//! wolf-lang#381 — a `for` HEADER never materializes a range
+//! ([type.range.value]), so `a..=int.MAX` in a header walks to
+//! `int.MAX` and stops: no `b + 1` is ever computed and nothing traps.
+//! Only a range VALUE normalizes to an exclusive end, and pays
+//! `trap(overflow)` where it is built (`range_type_overflow.lu`). The
+//! checked machine used to build the header as a value and trap here
+//! where the native rung ran.
+
+fn first() -> int {
+    for x in 0..=9223372036854775807 {
+        return x
+    }
+    0
+}
+
+fn main() -> !int {
+    print("first {first()}")
+    var n: int = 0
+    for x in 9223372036854775805..=9223372036854775807 {
+        if x > n {
+            n = n + 1
+        }
+    }
+    print("tail {n}")
+    0
+}
