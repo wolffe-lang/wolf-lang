@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 147] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 148] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -284,6 +284,9 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 147] = [
     ("__wolf_rt_scope_new", 2, true),
     ("__wolf_rt_scope_spawn", 5, false),
     ("__wolf_rt_scope_join_free", 1, true),
+    // s166: `xs.par(f)` — `[conc.task.par]`'s chunked map (list, shim,
+    // record, result element size, out slot) -> failure tag.
+    ("__wolf_rt_par_map", 5, true),
     ("__wolf_rt_task_killed", 0, true),
     // s143 (#268): a proc body's `int` result, stashed by its entry
     // shim for `[conc.proc.exit]`'s `normal(value)`.
