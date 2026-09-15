@@ -914,7 +914,7 @@ precedent, `[type.trait.op.alias]`. The item grammar is
   more layer, and layers flatten. An alias entry carries no payload
   (`{IoErrors(int)}` is E0601): the alias already names what its tags
   carry.
-- `[type.err.alias.cycle]` **A cycle is E0515**, reported once, at the
+- `[type.err.alias.cycle]` **A cycle is E0610**, reported once, at the
   alias — the sibling of E0503 for trait aliases and of E0513 for
   associated-type bindings. `error A = {B}` with `error B = {A}` is
   one diagnostic naming the loop, not a hang and not a report per
