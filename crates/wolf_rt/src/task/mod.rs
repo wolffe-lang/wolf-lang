@@ -371,9 +371,15 @@ pub unsafe extern "C" fn __wolf_rt_par_map(
             "par",
             Body::Rust(Box::new(move |ctx| {
                 let (s, o, r) = (s, o, r);
-                let t = chunk(shim, r.0.cast(), (s.0, selem), (o.0, oelem), lo, hi, &|| {
-                    ctx.is_cancelled()
-                });
+                let t = chunk(
+                    shim,
+                    r.0.cast(),
+                    (s.0, selem),
+                    (o.0, oelem),
+                    lo,
+                    hi,
+                    &|| ctx.is_cancelled(),
+                );
                 if t == 0 {
                     scope::ExitReason::Normal
                 } else {
@@ -849,6 +855,9 @@ mod par_tests {
         let tag = unsafe { __wolf_rt_par_map(src, fail_first, std::ptr::null_mut(), 8, &mut out) };
         assert_eq!(tag, 7, "the first failure's tag re-raises");
         let ran = RAN.load(SeqCst);
-        assert!(ran < n / 2, "siblings were not cancelled: {ran} of {n} elements ran");
+        assert!(
+            ran < n / 2,
+            "siblings were not cancelled: {ran} of {n} elements ran"
+        );
     }
 }

@@ -7749,7 +7749,10 @@ impl<'t> Machine<'t> {
         // is the free call with the receiver first; the checked
         // machine's generic binding reads positional arguments only,
         // so it refuses the method spelling by name rather than guess.
-        if matches!(self.ctx().dispatch.get(&e.span), Some(Dispatch::Home { .. })) {
+        if matches!(
+            self.ctx().dispatch.get(&e.span),
+            Some(Dispatch::Home { .. })
+        ) {
             return self.refuse("home-module method calls in checked execution", e.span);
         }
         let recv_ty = self.expr_ty(recv.span).cloned();

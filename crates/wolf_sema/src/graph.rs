@@ -1050,7 +1050,10 @@ impl LoadState<'_> {
         };
         if let Some(&i) = self.index.get(path) {
             return Some(pub_fns(
-                &mut self.tables[i].items.iter().map(|it| (it.name.clone(), it.kind, it.vis)),
+                &mut self.tables[i]
+                    .items
+                    .iter()
+                    .map(|it| (it.name.clone(), it.kind, it.vis)),
             ));
         }
         if self.misses.contains_key(path) {
