@@ -1,0 +1,54 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0301]: `Box` is a variant of `Shape`, and a variant value is spelled with its enum
+ --> mem:///main.lu:7:16
+  |
+3 |     Box(int),
+  |     --- `Box` is declared here, in `Shape`
+...
+7 |     if n > 0 { Box(n) } else { Dot }
+  |                ^^^ write `Shape.Box`
+  |
+  = note: a variant belongs to its enum, so a value names both: `Shape.Box`. A bare capitalized
+    name is how an error-row tag is spelled, which is why this one did not resolve. In a
+    `match` arm the bare name is fine: the scrutinee's type already says which enum.
+help: write `Shape.Box`
+  |
+7 |     if n > 0 { Shape.Box(n) } else { Dot }
+  |
+
+error[E0301]: `Dot` is a variant of `Shape`, and a variant value is spelled with its enum
+ --> mem:///main.lu:7:32
+  |
+2 |     Dot,
+  |     --- `Dot` is declared here, in `Shape`
+...
+7 |     if n > 0 { Box(n) } else { Dot }
+  |                                ^^^ write `Shape.Dot`
+  |
+  = note: a variant belongs to its enum, so a value names both: `Shape.Dot`. A bare capitalized
+    name is how an error-row tag is spelled, which is why this one did not resolve. In a
+    `match` arm the bare name is fine: the scrutinee's type already says which enum.
+help: write `Shape.Dot`
+  |
+7 |     if n > 0 { Box(n) } else { Shape.Dot }
+  |
+
+error[E0301]: `Dot` is a variant of `Shape`, and a variant value is spelled with its enum
+  --> mem:///main.lu:11:5
+   |
+ 2 |     Dot,
+   |     --- `Dot` is declared here, in `Shape`
+...
+11 |     Dot
+   |     ^^^ write `Shape.Dot`
+   |
+   = note: a variant belongs to its enum, so a value names both: `Shape.Dot`. A bare capitalized
+     name is how an error-row tag is spelled, which is why this one did not resolve. In a
+     `match` arm the bare name is fine: the scrutinee's type already says which enum.
+help: write `Shape.Dot`
+   |
+11 |     Shape.Dot
+   |

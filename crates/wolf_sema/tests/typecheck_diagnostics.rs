@@ -751,3 +751,25 @@ fn e0403_range_has_only_start_and_end() {
         "fn main() -> !int {\n    let r = 2..7\n    r.lo\n}\n",
     );
 }
+
+/// wolf-lang#348 ([gram.expr.variant]): a bare variant in value position
+/// — in a tail, as a payload constructor call, and against a `!T` row
+/// that does not declare it — is E0301 naming the qualified spelling,
+/// where it used to decline as an out-of-context row tag.
+#[test]
+fn e0301_bare_variant_value() {
+    snap_one(
+        "e0301_bare_variant_value",
+        "enum Shape {\n    Dot,\n    Box(int),\n}\n\nfn make(n: int) -> Shape {\n    if n > 0 { Box(n) } else { Dot }\n}\n\nfn fallible(n: int) -> !Shape {\n    Dot\n}\n\nfn name(s: Shape) -> str {\n    match s {\n        Dot => \"dot\",\n        Box(_) => \"box\",\n    }\n}\n\nfn main() -> !int {\n    0\n}\n",
+    );
+}
+
+/// Two enums in scope declare the name: the one the position expects
+/// (`-> Light`) leads and decides the edit; the note names the other.
+#[test]
+fn e0301_bare_variant_two_homes() {
+    snap_one(
+        "e0301_bare_variant_two_homes",
+        "enum Light {\n    Red,\n    Green,\n}\n\nenum Card {\n    Red,\n    Black,\n}\n\nfn pick() -> Light {\n    Red\n}\n\nfn main() -> !int {\n    0\n}\n",
+    );
+}

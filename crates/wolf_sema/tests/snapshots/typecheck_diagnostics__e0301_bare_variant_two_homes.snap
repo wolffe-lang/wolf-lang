@@ -1,0 +1,21 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0301]: `Red` is a variant of `Light`, and a variant value is spelled with its enum
+  --> mem:///main.lu:12:5
+   |
+ 2 |     Red,
+   |     --- `Red` is declared here, in `Light`
+...
+12 |     Red
+   |     ^^^ write `Light.Red`
+   |
+   = note: a variant belongs to its enum, so a value names both: `Light.Red`. A bare capitalized
+     name is how an error-row tag is spelled, which is why this one did not resolve. In a
+     `match` arm the bare name is fine: the scrutinee's type already says which enum.
+   = note: `Red` is also a variant of `Card` here; qualify it with the enum you mean.
+help: write `Light.Red`
+   |
+12 |     Light.Red
+   |

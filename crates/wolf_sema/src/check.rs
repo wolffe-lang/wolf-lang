@@ -570,6 +570,9 @@ struct Checker<'a> {
     /// lowercase name it deferred is refused honestly instead of
     /// silently ([`crate::resolve::lexical_row_tags`], #4).
     row_tags: BTreeSet<String>,
+    /// wolf-lang#348: the enum a checked position expects, while its
+    /// expression is synthesized — the bare-variant fix-it leads with it.
+    expect_enum: Option<String>,
     /// Lexically enclosing `when` blocks, outermost first
     /// ([conc.when.nonest]): a non-empty stack makes another `when`
     /// E1103. The stack survives into closures deliberately — the
@@ -761,6 +764,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         slice_pos_ranges: HashSet::new(),
         member_refs: Vec::new(),
         row_tags: BTreeSet::new(),
+        expect_enum: None,
         when_stack: Vec::new(),
         spawn_ctx: None,
         proc_entries: Vec::new(),
@@ -936,6 +940,7 @@ pub(crate) fn collect_body_rows(
         slice_pos_ranges: HashSet::new(),
         member_refs: Vec::new(),
         row_tags: BTreeSet::new(),
+        expect_enum: None,
         when_stack: Vec::new(),
         spawn_ctx: None,
         proc_entries: Vec::new(),
@@ -4321,9 +4326,25 @@ impl<'a> Checker<'a> {
                 // (capitalized, unresolved) name checks against the
                 // expected row by membership — payloads pointwise,
                 // missing tags named exactly (E0602).
-                if let TyKind::ErrUnion(_, row) = self.kind_of(exp.ty) {
+                if let TyKind::ErrUnion(ok, row) = self.kind_of(exp.ty) {
                     if let Some(span) = self.deferred_tag(e, Some(row)) {
                         let name = self.text(span);
+                        // #348: a name the row does not declare but an
+                        // enum in scope does is that enum's variant,
+                        // spelled bare — say so instead of a missing tag.
+                        let hint = match self.kind_of(ok) {
+                            TyKind::Nominal { name, .. } => Some(name),
+                            _ => None,
+                        };
+                        let prev = std::mem::replace(&mut self.expect_enum, hint);
+                        let reported =
+                            !self.row_declares(row, &name) && self.bare_variant_value(span, &name);
+                        self.expect_enum = prev;
+                        if reported {
+                            let err = self.error_ty();
+                            self.record(span, err);
+                            return Ok(());
+                        }
                         self.inject_tag(span, &name, &[], row, exp.because)?;
                         self.record(span, exp.ty);
                         return Ok(());
@@ -4351,7 +4372,18 @@ impl<'a> Checker<'a> {
                     // never silent.
                     self.warn_shadowed_tag(e, row);
                 }
-                let t = self.synth_expr(e)?;
+                let hint = match self.kind_of(exp.ty) {
+                    TyKind::Nominal { name, .. } => Some(name),
+                    TyKind::ErrUnion(ok, _) => match self.kind_of(ok) {
+                        TyKind::Nominal { name, .. } => Some(name),
+                        _ => None,
+                    },
+                    _ => None,
+                };
+                let prev = std::mem::replace(&mut self.expect_enum, hint);
+                let t = self.synth_expr(e);
+                self.expect_enum = prev;
+                let t = t?;
                 if self.unit_discard(e.span, t, exp) {
                     return Ok(());
                 }
@@ -4749,6 +4781,92 @@ impl<'a> Checker<'a> {
         }
     }
 
+    /// wolf-lang#348: the enums this file names directly that declare a
+    /// variant `name` — `(the enum's spelling here, the variant's
+    /// declaration)`: module-local enums, then item imports.
+    fn variant_homes(&self, name: &str) -> Vec<(String, Span)> {
+        let mut out: Vec<(String, Span)> = Vec::new();
+        if let Some(items) = self.sigs.modules.get(self.module) {
+            for (ename, sig) in items {
+                if let ItemSig::Enum { variants, .. } = sig
+                    && let Some(v) = variants.iter().find(|v| v.name == name)
+                {
+                    out.push((ename.clone(), v.span));
+                }
+            }
+        }
+        for b in bindings_for(self.pkg(), self.module, self.file) {
+            if let BindTarget::Item {
+                module,
+                name: iname,
+            } = &b.target
+                && let Some(ItemSig::Enum { variants, .. }) = self.sigs.get(*module, iname)
+                && let Some(v) = variants.iter().find(|v| v.name == name)
+                && !out.iter().any(|(sp, _)| *sp == b.name)
+            {
+                out.push((b.name.clone(), v.span));
+            }
+        }
+        out
+    }
+
+    /// wolf-lang#348 (`[gram.expr.variant]`): a bare capitalized name
+    /// in value position that resolves to nothing, but that an enum in
+    /// scope declares as a variant. A variant value is spelled with its
+    /// enum; the bare spelling is an error-row tag's (D30), which is why
+    /// it did not resolve. E0301 with the qualified spelling as the fix,
+    /// instead of a decline that told the reader nothing. Returns
+    /// whether it reported.
+    fn bare_variant_value(&mut self, span: Span, name: &str) -> bool {
+        let mut homes = self.variant_homes(name);
+        // The enum the position expects leads, and decides the edit.
+        let expected = self
+            .expect_enum
+            .as_ref()
+            .and_then(|want| homes.iter().position(|(e, _)| e == want));
+        if let Some(i) = expected {
+            let h = homes.remove(i);
+            homes.insert(0, h);
+        }
+        let Some((enum_name, decl)) = homes.first().cloned() else {
+            return false;
+        };
+        let mut d = Diagnostic::error(
+            codes::E0301,
+            span,
+            format!("`{name}` is a variant of `{enum_name}`, and a variant value is spelled with its enum"),
+        )
+        .with_label(format!("write `{enum_name}.{name}`"))
+        .with_secondary(decl, format!("`{name}` is declared here, in `{enum_name}`"))
+        .with_note(format!(
+            "a variant belongs to its enum, so a value names both: `{enum_name}.{name}`. A bare \
+             capitalized name is how an error-row tag is spelled, which is why this one did \
+             not resolve. In a `match` arm the bare name is fine: the scrutinee's type \
+             already says which enum."
+        ));
+        if homes.len() > 1 {
+            let others: Vec<String> = homes[1..].iter().map(|(e, _)| format!("`{e}`")).collect();
+            d = d.with_note(format!(
+                "`{name}` is also a variant of {} here; qualify it with the enum you mean.",
+                others.join(", ")
+            ));
+        }
+        d = d.with_suggestion(Suggestion::new(
+            format!("write `{enum_name}.{name}`"),
+            vec![(
+                Span::new(span.file, span.lo, span.lo),
+                format!("{enum_name}."),
+            )],
+            if homes.len() == 1 || expected.is_some() {
+                Applicability::MachineApplicable
+            } else {
+                Applicability::Maybe
+            },
+        ));
+        self.diags.push(d);
+        true
+    }
+
     fn synth_path(&mut self, e: &GreenNode) -> R<TyId> {
         let Some(t) = PathExpr::cast(e).and_then(|p| p.ident()) else {
             return Ok(self.error_ty());
@@ -4814,6 +4932,9 @@ impl<'a> Checker<'a> {
             return Ok(self.lo.table.intern(TyKind::TypeTy));
         }
         if self.deferred_tag(e, None).is_some() {
+            if self.bare_variant_value(t.span, &name) {
+                return Ok(self.error_ty());
+            }
             return Err(NotYet {
                 construct: "an error-row tag outside `!T` context",
                 span: e.span,
@@ -7005,6 +7126,14 @@ impl<'a> Checker<'a> {
                         return self.call_mutex_ctor(e, d.args());
                     }
                     if self.deferred_tag(callee, None).is_some() {
+                        if self.bare_variant_value(t.span, &name) {
+                            for a in d.args().into_iter().flat_map(|a| a.args()) {
+                                if let Some(v) = Arg::value(a) {
+                                    self.synth_expr(v)?;
+                                }
+                            }
+                            return Ok(self.error_ty());
+                        }
                         return Err(NotYet {
                             construct: "an error-row tag outside `!T` context",
                             span: callee.span,
