@@ -287,6 +287,109 @@ pub unsafe extern "C" fn __wolf_rt_scope_spawn(
     );
 }
 
+/// A raw pointer a `par` chunk task carries across the spawn: the
+/// source buffer (read-only for the whole `par`), the result buffer
+/// (each chunk writes its own disjoint slots), the fn value's record.
+struct ParPtr(*mut u8);
+// SAFETY: `[conc.task.par]` — the reads share a claim held for the whole
+// expression, the writes go to pairwise disjoint slots, and the owner
+// joins before either buffer is observed again.
+unsafe impl Send for ParPtr {}
+
+/// The compiled per-element shim `par` calls: `(record, &xs[i],
+/// &out[i]) -> tag`, 0 on success (lowering builds one per call site).
+type ParShim = unsafe extern "C" fn(*mut c_void, *const u8, *mut u8) -> i64;
+
+/// `xs.par(f)` — `[conc.task.par]` (s166, wolf-lang#390). Allocates
+/// the `n`-slot result in the CALLER's ambient region, splits `0..n`
+/// into `k = min(n, W)` contiguous chunks whose lengths differ by at
+/// most one (`[conc.task.par.chunk]`), runs each chunk as one task of
+/// a fresh scope — or on the calling task when `k == 1` — and joins.
+/// A chunk stops at its first failure and fails the scope, which
+/// cancels its siblings (`[conc.task.fail]`); a sibling observes the
+/// cancellation between elements. Writes the result header to
+/// `out_hdr` and returns 0, or the first failure's tag.
+///
+/// # Safety
+///
+/// `hdr` must be a live list header; `shim` must be callable with
+/// `rec` and element/result slots of the list's element size and
+/// `out_elem` bytes; `out_hdr` must address a writable `i64`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_par_map(
+    hdr: i64,
+    shim: ParShim,
+    rec: *mut c_void,
+    out_elem: i64,
+    out_hdr: *mut i64,
+) -> i64 {
+    let (sdata, n, selem) = crate::list::raw_parts(hdr as *mut crate::list::ListHdr);
+    let oelem = out_elem.max(1) as usize;
+    let (out, odata) = crate::list::new_list_len(oelem, n);
+    // SAFETY: the caller's slot.
+    unsafe { *out_hdr = out as i64 };
+    if n == 0 {
+        return 0;
+    }
+    // One chunk's loop. `cancelled` is polled every 64 elements: the
+    // poll is unobservable (results are in slot order either way) and
+    // a per-element poll would cost more than most `f`.
+    fn chunk(
+        shim: ParShim,
+        rec: *mut c_void,
+        (sdata, selem): (*mut u8, usize),
+        (odata, oelem): (*mut u8, usize),
+        lo: usize,
+        hi: usize,
+        cancelled: &dyn Fn() -> bool,
+    ) -> i64 {
+        for i in lo..hi {
+            if (i - lo) % 64 == 63 && cancelled() {
+                return 0;
+            }
+            // SAFETY: `i < n`; the slots are the element sizes lowering
+            // built the shim for.
+            let t = unsafe { shim(rec, sdata.add(i * selem), odata.add(i * oelem)) };
+            if t != 0 {
+                return t;
+            }
+        }
+        0
+    }
+    let k = n.min(pool::worker_target()).max(1);
+    if k == 1 {
+        return chunk(shim, rec, (sdata, selem), (odata, oelem), 0, n, &|| false);
+    }
+    let inner = ScopeInner::new("par", current_scope().as_ref());
+    let (base, extra) = (n / k, n % k);
+    let mut lo = 0;
+    for c in 0..k {
+        let hi = lo + base + usize::from(c < extra);
+        let (s, o, r) = (ParPtr(sdata), ParPtr(odata), ParPtr(rec.cast()));
+        pool::spawn_task(
+            &inner,
+            "par",
+            Body::Rust(Box::new(move |ctx| {
+                let (s, o, r) = (s, o, r);
+                let t = chunk(shim, r.0.cast(), (s.0, selem), (o.0, oelem), lo, hi, &|| {
+                    ctx.is_cancelled()
+                });
+                if t == 0 {
+                    scope::ExitReason::Normal
+                } else {
+                    scope::ExitReason::Error { tag: t }
+                }
+            })),
+        );
+        lo = hi;
+    }
+    match inner.join() {
+        None => 0,
+        Some(scope::ExitReason::Error { tag }) => tag,
+        Some(_) => -1,
+    }
+}
+
 /// Scope exit: join all children (`[conc.task.join]`), free the
 /// handle, return 0 on success or the first failure's error tag —
 /// the `[conc.task.fail]` re-raise (a Rust-side panic reason reports

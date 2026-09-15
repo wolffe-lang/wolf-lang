@@ -273,6 +273,13 @@ fn pool() -> &'static Pool {
 
 /// Spawn a task under `scope` (the ONLY spawn — D16; every caller
 /// holds a scope). Sub-microsecond path: id + queue push + wake.
+/// The pool's target parallelism — `[conc.task.par.chunk]`'s `W`,
+/// the worker count `par` bounds its chunk count by (s166). One per
+/// logical core, at least two.
+pub fn worker_target() -> usize {
+    pool().target
+}
+
 pub fn spawn_task(scope: &Arc<ScopeInner>, name: &str, body: Body) {
     let p = pool();
     ensure_workers(p);
