@@ -2532,6 +2532,35 @@ struct ScopeFrame<'t> {
     loops_at_open: usize,
 }
 
+/// wolf-lang#384: does a signature-table type spell a generic parameter
+/// anywhere below its head? (A bare `T` field is substituted by the
+/// caller; a `List[T]` field needs a substitution this walk cannot do.)
+fn sig_mentions_rigid(table: &TypeTable, ty: TyId, depth: u32) -> bool {
+    if depth > 16 {
+        return true;
+    }
+    let go = |t: &TyId| sig_mentions_rigid(table, *t, depth + 1);
+    match table.kind(ty) {
+        TyKind::Rigid(_) => true,
+        TyKind::List(t)
+        | TyKind::Pool(t)
+        | TyKind::Shared(t)
+        | TyKind::Weak(t)
+        | TyKind::Handle(t)
+        | TyKind::Chan(t)
+        | TyKind::Distinct(t)
+        | TyKind::Wrapping(t)
+        | TyKind::Range(t) => go(t),
+        TyKind::Map(k, v) | TyKind::ErrUnion(k, v) => go(k) || go(v),
+        TyKind::Tuple(es) => es.iter().any(go),
+        TyKind::Nominal { args, .. } => args.iter().any(go),
+        TyKind::Row { tags, tail } => {
+            tags.iter().flat_map(|(_, ps)| ps.iter()).any(go) || tail.as_ref().is_some_and(go)
+        }
+        _ => false,
+    }
+}
+
 /// Strip a `move`/`copy` prefix off an argument expression.
 fn strip_move(e: &GreenNode) -> &GreenNode {
     if e.kind == SyntaxKind::PrefixExpr
@@ -7196,7 +7225,27 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 self.b.switch_to_block(merge);
                 Ok(Flow::Val(Some(out)))
             }
-            Some(SyntaxKind::CopyKw) | Some(SyntaxKind::MoveKw) => self.lower_expr(operand),
+            // wolf-lang#384 (`[mem.tier0.move.3]`): `copy x` is an
+            // INDEPENDENT value. It lowered as `x` itself until s165, so a
+            // `List`, a `Map`, or a struct holding one came back as a
+            // second handle to the same storage and a write through the
+            // "copy" landed in the original (the checked machine and
+            // lupin always copied). `move` is still the operand.
+            Some(SyntaxKind::CopyKw) => {
+                let v = match self.lower_expr(operand)? {
+                    Flow::Val(Some(v)) => v,
+                    other => return Ok(other),
+                };
+                let Some(ty) = self
+                    .expr_sema_ty(e.span)
+                    .or_else(|| self.expr_sema_ty(operand.span))
+                else {
+                    return Err(refuse("`copy` of a value without a recorded type", e.span));
+                };
+                let table = self.table;
+                Ok(Flow::Val(Some(self.deep_copy_in(v, table, ty, e.span, 0)?)))
+            }
+            Some(SyntaxKind::MoveKw) => self.lower_expr(operand),
             Some(SyntaxKind::SharedKw) => Err(refuse(
                 "shared-cell surface lowering (rc.* receivers)",
                 e.span,
@@ -12830,6 +12879,221 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.store_flat(vval, vp, region, vx.span)?;
         self.rt_call_foreign("__wolf_rt_map_set", &[hdr], Some((slot, region)), None);
         Ok(Flow::Val(None))
+    }
+
+    /// wolf-lang#384: does a value of this type reach storage a second
+    /// handle would share — a `List`, `Map` or `Pool`, directly or through
+    /// a field, a tuple element, an enum or row payload? `str` does not
+    /// (its bytes are immutable and a shared view is the copy), and
+    /// neither does any `Copy` kind. `shared`/`weak` answer yes so the
+    /// copy names them rather than silently sharing a count it did not
+    /// take.
+    fn copy_reaches_heap(&self, table: &TypeTable, ty: TyId, depth: u32) -> bool {
+        if depth > 16 {
+            return true;
+        }
+        let ty = strip_sema_in(table, ty);
+        let sigs = self.sigs;
+        let field = |generics: &[String], args: &[TyId], fty: TyId| -> bool {
+            match sigs.table.kind(fty) {
+                TyKind::Rigid(r) => match generics.iter().position(|g| g == r) {
+                    Some(k) if k < args.len() => self.copy_reaches_heap(table, args[k], depth + 1),
+                    _ => true,
+                },
+                _ if sig_mentions_rigid(&sigs.table, fty, 0) => true,
+                _ => self.copy_reaches_heap(&sigs.table, fty, depth + 1),
+            }
+        };
+        match table.kind(ty) {
+            TyKind::List(_)
+            | TyKind::Map(..)
+            | TyKind::Pool(_)
+            | TyKind::Shared(_)
+            | TyKind::Weak(_) => true,
+            TyKind::Tuple(es) => es
+                .iter()
+                .any(|e| self.copy_reaches_heap(table, *e, depth + 1)),
+            TyKind::ErrUnion(ok, row) => {
+                self.copy_reaches_heap(table, *ok, depth + 1)
+                    || self.copy_reaches_heap(table, *row, depth + 1)
+            }
+            TyKind::Row { tags, .. } => tags
+                .iter()
+                .flat_map(|(_, ps)| ps.iter())
+                .any(|p| self.copy_reaches_heap(table, *p, depth + 1)),
+            TyKind::Nominal { module, name, args } => match sigs.get(*module as usize, name) {
+                Some(ItemSig::Struct(ss)) => {
+                    ss.fields.iter().any(|f| field(&ss.generics, args, f.ty))
+                }
+                Some(ItemSig::Enum {
+                    generics, variants, ..
+                }) => variants
+                    .iter()
+                    .flat_map(|v| v.payload.iter())
+                    .any(|&p| field(generics, args, p)),
+                Some(ItemSig::Distinct { base, .. }) => {
+                    self.copy_reaches_heap(&sigs.table, *base, depth + 1)
+                }
+                _ => false,
+            },
+            TyKind::Rigid(_) | TyKind::Var(_) | TyKind::Proj(..) => true,
+            _ => false,
+        }
+    }
+
+    /// wolf-lang#384 (`[mem.tier0.move.3]`): the independent duplicate
+    /// of `v`, a value of `ty` (ids in `table`), matching the checked
+    /// machine's `deep_copy`. A value that reaches no heap storage IS
+    /// its copy (inline words). A `List` is a fresh header and buffer
+    /// (`__wolf_rt_list_copy`, the ambient region), then — for an
+    /// element type that reaches heap storage — each element replaced
+    /// by its own copy; a `Map` is a fresh header and entry buffer
+    /// (`__wolf_rt_map_copy`); a struct or tuple is rebuilt field by
+    /// field. The shapes this does not model yet refuse by name rather
+    /// than share: a `Map` whose values reach the heap, an enum or row
+    /// payload that does, a `Pool`, a `shared` cell.
+    fn deep_copy_in(
+        &mut self,
+        v: Value,
+        table: &'t TypeTable,
+        ty: TyId,
+        span: Span,
+        depth: u32,
+    ) -> R<Value> {
+        if !self.copy_reaches_heap(table, ty, 0) {
+            return Ok(v);
+        }
+        if depth > 16 {
+            return Err(refuse("`copy` of a value nested this deep", span));
+        }
+        let sigs = self.sigs;
+        let ty = strip_sema_in(table, ty);
+        match table.kind(ty).clone() {
+            TyKind::List(elem) => {
+                let out = self
+                    .rt_call_foreign("__wolf_rt_list_copy", &[v], None, Some(types::PTR))
+                    .expect("hdr");
+                if self.copy_reaches_heap(table, elem, 0) {
+                    let Some(ewty) = self.wir_ty_in(table, elem, span)? else {
+                        return Ok(out);
+                    };
+                    let n = self.list_len_of(out);
+                    self.count_loop(n, |z, i| {
+                        let x = z.list_load_at(out, i, ewty, span)?;
+                        let c = z.deep_copy_in(x, table, elem, span, depth + 1)?;
+                        z.list_store_at(out, i, c, span)
+                    })?;
+                }
+                Ok(out)
+            }
+            TyKind::Map(_, val) => {
+                if self.copy_reaches_heap(table, val, 0) {
+                    return Err(refuse(
+                        "`copy` of a Map whose values reach heap storage",
+                        span,
+                    ));
+                }
+                Ok(self
+                    .rt_call_foreign("__wolf_rt_map_copy", &[v], None, Some(types::PTR))
+                    .expect("hdr"))
+            }
+            TyKind::Tuple(es) => {
+                let wty = self.b.func.value_ty(v);
+                let mut parts = Vec::with_capacity(es.len());
+                for (i, e) in es.iter().enumerate() {
+                    let Some(ewt) = self.wir_ty_in(table, *e, span)? else {
+                        return Err(refuse("`copy` of a tuple with a unit element", span));
+                    };
+                    let x = self
+                        .b
+                        .ins(Opcode::AggGet, &[v], &[ewt], Aux::Int(i as i64))
+                        .one();
+                    parts.push(self.deep_copy_in(x, table, *e, span, depth + 1)?);
+                }
+                Ok(self.b.ins(Opcode::AggMake, &parts, &[wty], Aux::None).one())
+            }
+            TyKind::Nominal { module, name, args } => match sigs.get(module as usize, &name) {
+                Some(ItemSig::Struct(ss)) => {
+                    let wty = self.b.func.value_ty(v);
+                    let mut parts = Vec::with_capacity(ss.fields.len());
+                    for (i, f) in ss.fields.iter().enumerate() {
+                        let (ftab, fty): (&'t TypeTable, TyId) = match sigs.table.kind(f.ty) {
+                            TyKind::Rigid(r) => match ss.generics.iter().position(|g| g == r) {
+                                Some(k) if k < args.len() => (table, args[k]),
+                                _ => return Err(refuse("`copy` of this generic struct", span)),
+                            },
+                            _ if sig_mentions_rigid(&sigs.table, f.ty, 0) => {
+                                return Err(refuse(
+                                    "`copy` of a generic struct whose field spells its parameter inside another type",
+                                    span,
+                                ));
+                            }
+                            _ => (&sigs.table, f.ty),
+                        };
+                        let Some(fwt) = self.wir_ty_in(ftab, fty, span)? else {
+                            return Err(refuse("unit-typed struct fields", span));
+                        };
+                        let x = self
+                            .b
+                            .ins(Opcode::AggGet, &[v], &[fwt], Aux::Int(i as i64))
+                            .one();
+                        parts.push(self.deep_copy_in(x, ftab, fty, span, depth + 1)?);
+                    }
+                    Ok(self.b.ins(Opcode::AggMake, &parts, &[wty], Aux::None).one())
+                }
+                Some(ItemSig::Distinct { base, .. }) => {
+                    let base = *base;
+                    self.deep_copy_in(v, &sigs.table, base, span, depth + 1)
+                }
+                _ => Err(refuse(
+                    "`copy` of an enum whose payload reaches heap storage",
+                    span,
+                )),
+            },
+            _ => Err(refuse(
+                "`copy` of this shape of heap value (a row payload, a Pool, a shared cell)",
+                span,
+            )),
+        }
+    }
+
+    /// `for i in 0..n { body(i) }` over an `i64` count that dominates the
+    /// loop — the list-slice loop's block, GVN-scope and seal discipline.
+    fn count_loop(&mut self, n: Value, mut body: impl FnMut(&mut Self, Value) -> R<()>) -> R<()> {
+        let zero = self.b.iconst(types::I64, 0);
+        let header = self.b.create_block();
+        let iparam = self.b.add_block_param(header, types::I64);
+        self.b.ins_jmp(header, &[zero]);
+        self.b.switch_to_block(header);
+        self.b.gvn_push_scope();
+        let cond = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[iparam, n],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Slt),
+            )
+            .one();
+        let body_bb = self.b.create_block();
+        let exit = self.b.create_block();
+        self.b.ins_br(cond, body_bb, &[], exit, &[]);
+        self.b.seal_block(body_bb);
+        self.b.seal_block(exit);
+        self.b.switch_to_block(body_bb);
+        self.b.gvn_push_scope();
+        body(self, iparam)?;
+        let one = self.b.iconst(types::I64, 1);
+        let inext = self
+            .b
+            .ins(Opcode::IaddWrap, &[iparam, one], &[types::I64], Aux::None)
+            .one();
+        self.b.ins_jmp(header, &[inext]);
+        self.b.gvn_pop_scope();
+        self.b.seal_block(header);
+        self.b.switch_to_block(exit);
+        self.b.gvn_pop_scope();
+        Ok(())
     }
 
     /// The `Map` method depth, natively (s152, `[type.map]`): the
