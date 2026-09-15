@@ -1,0 +1,23 @@
+//! member: true
+//!
+//! `op_eq_imported/cmp/c.lu`, verbatim below this header: the trait's
+//! home module, and the type's.
+
+/// A three-way comparison result, `std.cmp.Ordering`'s shape.
+pub struct Ordering {
+    v: int,
+}
+
+/// Equality, the operator trait `==` dispatches through.
+pub trait Eq {
+    fn eq(self, other: Self) -> bool
+}
+
+impl Eq for Ordering {
+    fn eq(self, other: Self) -> bool { self.v == other.v }
+}
+
+/// The total order over two floats, by the sign of their difference.
+pub fn total_cmp(a: f64, b: f64) -> Ordering {
+    if a < b { Ordering { v: -1 } } else if a > b { Ordering { v: 1 } } else { Ordering { v: 0 } }
+}

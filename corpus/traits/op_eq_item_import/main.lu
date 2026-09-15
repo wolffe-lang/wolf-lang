@@ -1,0 +1,22 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: type.trait.op, mod.use.unused
+//!
+//! s165 (wolf-lang#352) — `op_eq_imported.lu` written belt-and-braces:
+//! the module AND the trait by name. At v0.2.14 `use cmp.Eq` was E0305,
+//! "the import `Eq` is never used", three lines above the `==` that
+//! `[type.trait.op]` says IS `Eq.eq` — the resolver reports unused
+//! imports before the checker has chosen any operator's trait, and the
+//! machine-applicable fix deleted the line. An imported operator trait
+//! is used by an operator the file spells now; a file that spells none
+//! still hears that it is unused.
+
+use cmp
+use cmp.Eq
+
+fn main() -> !int {
+    let less = cmp.total_cmp(1.0, 2.0)
+    let greater = cmp.total_cmp(2.0, 1.0)
+    if less == greater { return 1 }
+    0
+}
