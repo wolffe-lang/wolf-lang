@@ -1,0 +1,48 @@
+//! check: run(exit=240)
+//! phase: run
+//! conforms: arith.checked
+//!
+//! The #146 shape (s162): a list grown by in-place `push` in one loop,
+//! then read and written by index in the next against a second list.
+//! The indexed loop versions with an overlap guard, and at trunk
+//! 30731a6 the guard's extent was built from the FIRST len load of the
+//! header in layout order: the push fast path's own load, inside the
+//! first loop's branch, which does not dominate the guard. The release
+//! mid-end ICE'd (`[dominance]`, `ptr.off %63, %45, 8`); lobo's release
+//! step has carried `WOLF_MIDEND=0` for it since wsm02, through
+//! `std.x.crypto.curve25519.sc_muladd`. The extent is now built from a
+//! len load that dominates the guard and is current there. The
+//! dominating-but-stale twin of the same pick is a wrong answer only
+//! over two headers sharing a buffer, which surface wolf refuses; its
+//! witness is WIR (`noalias_guard_stale_len`, the codegen tests).
+
+fn shape(c: List[int]) -> List[int] {
+    var x = List[int]()
+    var i: int = 0
+    while i < 64 {
+        (mut x).push(0)
+        i = i + 1
+    }
+    i = 0
+    while i < 32 {
+        let cur = x[i]
+        x[i] = cur + c[i]
+        i = i + 1
+    }
+    x
+}
+
+fn main() -> int {
+    var c = List[int]()
+    var i: int = 0
+    while i < 32 {
+        (mut c).push(i)
+        i = i + 1
+    }
+    let out = shape(c)
+    var sum: int = 0
+    for v in out {
+        sum = sum + v
+    }
+    sum % 256
+}
