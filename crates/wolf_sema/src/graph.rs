@@ -756,6 +756,9 @@ pub struct Package {
     /// Pass-A diagnostics: duplicate definitions, import-path errors,
     /// cycles, import collisions.
     pub diagnostics: Vec<Diagnostic>,
+    /// A std root was configured (`[type.method.root]`): a method call
+    /// that reaches a home module with none is E0301, not a stand-in.
+    pub has_std_root: bool,
 }
 
 /// Load a package from its root module outward (pass A). Errors with a
@@ -775,9 +778,14 @@ pub fn load_package(
         chain: Vec::new(),
         diags: Vec::new(),
         misses: BTreeMap::new(),
+        peeked: BTreeMap::new(),
     };
     if st.load(&[]).is_none() {
         return Err("the package root has no wolf source files".to_string());
+    }
+    let has_std_root = st.loader.has_std_root();
+    if has_std_root {
+        st.load_home_modules();
     }
     // Dependency-first deterministic order (deps ascend by index).
     let mut topo = Vec::new();
@@ -803,6 +811,7 @@ pub fn load_package(
         tables: st.tables,
         topo,
         diagnostics: st.diags,
+        has_std_root,
     })
 }
 
@@ -848,6 +857,10 @@ struct LoadState<'a> {
     /// Probed paths that formed no module, with the reason (so the
     /// loader is asked at most once per path either way).
     misses: BTreeMap<Vec<String>, MissReason>,
+    /// Modules the home-module pre-scan read to learn their `pub fn`
+    /// names but has not (yet) loaded — handed to [`LoadState::load`]
+    /// so the loader is asked once per path either way.
+    peeked: BTreeMap<Vec<String>, LoadedModule>,
 }
 
 impl LoadState<'_> {
@@ -860,9 +873,15 @@ impl LoadState<'_> {
         if self.misses.contains_key(path) {
             return None;
         }
-        let Some(loaded) = self.loader.load_module(path) else {
-            self.misses.insert(path.to_vec(), MissReason::NoDirectory);
-            return None;
+        let loaded = match self.peeked.remove(path) {
+            Some(l) => l,
+            None => match self.loader.load_module(path) {
+                Some(l) => l,
+                None => {
+                    self.misses.insert(path.to_vec(), MissReason::NoDirectory);
+                    return None;
+                }
+            },
         };
         if loaded.files.is_empty() {
             let reason = if loaded.excluded.is_empty() {
@@ -946,6 +965,110 @@ impl LoadState<'_> {
         }
         self.loading[idx] = false;
         Some(idx)
+    }
+
+    /// `[type.method.home]` / `[type.method.root]` (s166): load the
+    /// home module of a std data type when some method call in the
+    /// package names one of its `pub fn`s that no builtin answers
+    /// ([`prelude::HOME_MODULES`]). The module binds no name; the
+    /// calling module takes a dependency edge on it so it checks
+    /// first. Runs to a fixpoint: a home module's own method calls may
+    /// reach another home module.
+    fn load_home_modules(&mut self) {
+        let mut names_of: Vec<Option<BTreeSet<String>>> = Vec::new();
+        let mut done: BTreeSet<&'static str> = BTreeSet::new();
+        loop {
+            let mut progressed = false;
+            for &(home, builtins) in prelude::HOME_MODULES {
+                if done.contains(home) {
+                    continue;
+                }
+                names_of.resize(self.modules.len(), None);
+                let mut callers: Vec<(usize, BTreeSet<String>)> = Vec::new();
+                for m in 0..self.modules.len() {
+                    if names_of[m].is_none() {
+                        let mut set = BTreeSet::new();
+                        for &fi in &self.modules[m].files {
+                            let unit = &self.files[fi];
+                            method_call_names(&unit.parse.root, &unit.raw.src, &mut set);
+                        }
+                        names_of[m] = Some(set);
+                    }
+                    let set: BTreeSet<String> = names_of[m]
+                        .as_ref()
+                        .expect("filled above")
+                        .iter()
+                        .filter(|n| !builtins.contains(&n.as_str()))
+                        .cloned()
+                        .collect();
+                    if !set.is_empty() {
+                        callers.push((m, set));
+                    }
+                }
+                if callers.is_empty() {
+                    continue;
+                }
+                let path = vec!["std".to_string(), home.to_string()];
+                let Some(pub_fns) = self.peek_pub_fns(&path) else {
+                    done.insert(home);
+                    continue;
+                };
+                let hitting: Vec<usize> = callers
+                    .iter()
+                    .filter(|(_, set)| set.iter().any(|n| pub_fns.contains(n)))
+                    .map(|(m, _)| *m)
+                    .collect();
+                if hitting.is_empty() {
+                    continue;
+                }
+                done.insert(home);
+                let Some(idx) = self.load(&path) else {
+                    continue;
+                };
+                for m in hitting {
+                    if m != idx {
+                        self.modules[m].deps.insert(idx);
+                    }
+                }
+                progressed = true;
+            }
+            if !progressed {
+                break;
+            }
+        }
+    }
+
+    /// The `pub fn` names of the module at `path`, reading it without
+    /// registering it when it is not loaded yet (the read is kept in
+    /// `peeked` for [`LoadState::load`]).
+    fn peek_pub_fns(&mut self, path: &[String]) -> Option<BTreeSet<String>> {
+        let pub_fns = |items: &mut dyn Iterator<Item = (String, ItemKind, Vis)>| {
+            items
+                .filter(|(_, k, v)| *k == ItemKind::Fn && *v == Vis::Pub)
+                .map(|(n, ..)| n)
+                .collect::<BTreeSet<String>>()
+        };
+        if let Some(&i) = self.index.get(path) {
+            return Some(pub_fns(
+                &mut self.tables[i].items.iter().map(|it| (it.name.clone(), it.kind, it.vis)),
+            ));
+        }
+        if self.misses.contains_key(path) {
+            return None;
+        }
+        if !self.peeked.contains_key(path) {
+            let loaded = self.loader.load_module(path)?;
+            self.peeked.insert(path.to_vec(), loaded);
+        }
+        let loaded = &self.peeked[path];
+        let mut all = Vec::new();
+        for r in &loaded.files {
+            let parse = wolf_parse::parse_file(r.file, &r.src);
+            for (n, k, v, ..) in collect_items(&parse.root, &r.src) {
+                all.push((n, k, v));
+            }
+        }
+        Some(pub_fns(&mut all.into_iter()))
     }
 
     /// Add `b` to a file's binding list, reporting E0306 collisions
@@ -1588,6 +1711,22 @@ pub(crate) fn pattern_names(node: &GreenNode, src: &[u8]) -> Vec<(String, Span)>
 
 /// Collect the top-level items of one file: (name, kind, vis, name
 /// span, decl index among item nodes).
+/// Every method name a call spells in `node`'s subtree: the member of
+/// each `recv.name(…)` (the home-module pre-scan's input).
+fn method_call_names(node: &GreenNode, src: &[u8], out: &mut BTreeSet<String>) {
+    if node.kind == SyntaxKind::CallExpr
+        && let Some(m) = wolf_ast::CallExpr::cast(node)
+            .and_then(|c| c.callee())
+            .and_then(wolf_ast::MemberExpr::cast)
+        && let Some(t) = m.member()
+    {
+        out.insert(text(src, t.span));
+    }
+    for child in node.nodes() {
+        method_call_names(child, src, out);
+    }
+}
+
 fn collect_items(root: &GreenNode, src: &[u8]) -> Vec<(String, ItemKind, Vis, Span, usize)> {
     use wolf_ast::{ConstDecl, EnumDecl, ErrorDecl, FnDecl, StructDecl, TraitDecl, TypeDecl};
     let mut out = Vec::new();
