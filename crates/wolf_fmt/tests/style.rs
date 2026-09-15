@@ -650,6 +650,31 @@ fn then_is_an_identifier_everywhere_else() {
     check(src, src);
 }
 
+// ------------------------------------------ [gram.fmt.commas], rest ----
+
+/// wolf-lang#351 (`[gram.fmt.commas]`): a struct pattern carrying a `..`
+/// rest breaks exactly like one without — one member per line — and the
+/// `..` is the last member with no comma after it, because the grammar
+/// closes the list there. Before, the broken form minted `..,`, the
+/// reparse guard refused it, and a 183-column line was a fixed point.
+#[test]
+fn struct_pattern_with_rest_breaks_and_ends_at_the_rest() {
+    check(
+        "fn main() -> !int {\n    let hs.HandshakeResult { cipher_suite, server_handshake_secret, client_application_secret, resumption_master_secret, .. } = hs.handshake_result(4865, chs, shs, cap, sap, exp, res)\n    0\n}\n",
+        "fn main() -> !int {\n    let hs.HandshakeResult {\n        cipher_suite,\n        server_handshake_secret,\n        client_application_secret,\n        resumption_master_secret,\n        ..\n    } = hs.handshake_result(4865, chs, shs, cap, sap, exp, res)\n    0\n}\n",
+    );
+    // Inline while it fits, and a match arm's pattern takes the same rule.
+    check(
+        "fn f(p: Point) -> int {\n    match p {\n        Point { x, .. } => x,\n    }\n}\n",
+        "fn f(p: Point) -> int {\n    match p {\n        Point { x, .. } => x,\n    }\n}\n",
+    );
+    // Without a rest, the broken form keeps its trailing comma.
+    check(
+        "fn main() -> !int {\n    let HandshakeResult { cipher_suite, server_handshake_secret, client_application_secret, server_application_secret, exporter_master_secret } = make()\n    cipher_suite\n}\n",
+        "fn main() -> !int {\n    let HandshakeResult {\n        cipher_suite,\n        server_handshake_secret,\n        client_application_secret,\n        server_application_secret,\n        exporter_master_secret,\n    } = make()\n    cipher_suite\n}\n",
+    );
+}
+
 // --------------------------------------------------- [gram.fmt.list] ----
 
 /// s158 (`[gram.fmt.list]`, wolf-lang#154): a list literal breaks like

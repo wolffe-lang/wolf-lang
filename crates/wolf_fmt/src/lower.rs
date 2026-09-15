@@ -1254,9 +1254,16 @@ impl<'a> Fmt<'a> {
             }
             self.expr(e, &mut inner, elem_ctx);
         }
+        // wolf-lang#351 (`[gram.fmt.commas]`): a struct pattern's `..`
+        // rest closes its list in the grammar (`[gram.pat.struct]`), so
+        // nothing follows it — not even the broken layout's trailing
+        // comma. Minting one made the broken form unparseable, the
+        // reparse guard kept the one-line original, and the pattern was
+        // a 183-column fixed point that `--check` accepted.
+        let rest_last = elems.last().is_some_and(|e| e.kind == K::RestPat);
         if one_tuple && elems.len() == 1 {
             inner.push(Doc::text(","));
-        } else {
+        } else if !rest_last {
             inner.push(Doc::IfBreak {
                 broken: b",".to_vec(),
                 flat: Vec::new(),
