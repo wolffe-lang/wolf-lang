@@ -1,0 +1,90 @@
+//! check: run(exit=0, stdout="taken 0\nnot taken 2\nnamed alpha beta ok\nqmark 2 -1\nhandler 2 -7\n")
+//! phase: run
+//! conforms: err.union, err.rows, err.else
+//!
+//! wolf-lang#201 — an unhandled raising call in ARGUMENT position binds
+//! its raw row to a row-typed parameter exactly as it binds at `let`
+//! (D52's declared-row-first reading, #122), and the callee
+//! discriminates it. The checked machine refused this as `control flow
+//! in an argument` only on the path where the call RAISED, so `pick`
+//! below ran for a bound of 2 and was refused for 10 — one source, two
+//! words, by input (wolf-std sc35's f18/f19). The loop builds the
+//! argument so no probe can pass a value that never raises; the
+//! `taken 0` line is the proof the row was taken.
+//!
+//! The other flows out of an argument leave the call before the callee
+//! runs: `?` propagates to the caller's caller, and a handler's
+//! `return` returns from the caller.
+
+fn narrow(n: int) -> int ! {none} {
+    if n > 5 {
+        return none
+    }
+    n
+}
+
+fn pick(v: int ! {none}, fallback: int) -> int {
+    v else fallback
+}
+
+fn built(bound: int) -> int {
+    var k = 0
+    var i = 0
+    while i < bound {
+        k = k + 1
+        i = i + 1
+    }
+    k
+}
+
+fn classify(n: int) -> int ! {alpha, beta} {
+    if n == 1 {
+        return alpha
+    }
+    if n == 2 {
+        return beta
+    }
+    n
+}
+
+fn row_name[T](v: T ! {alpha, beta, gamma}) -> str {
+    let _hit = v else |e| match e {
+        alpha => {
+            return "alpha"
+        },
+        beta => {
+            return "beta"
+        },
+        gamma => {
+            return "gamma"
+        },
+    }
+    "ok"
+}
+
+fn take_int(n: int) -> int {
+    n + 1
+}
+
+fn via_qmark(k: int) -> int ! {none} {
+    take_int(narrow(k)?)
+}
+
+fn via_handler(k: int) -> int {
+    take_int(
+        narrow(k) else {
+            return 0 - 7
+        },
+    )
+}
+
+fn main() -> !int {
+    print("taken {pick(narrow(built(10)), 0)}")
+    print("not taken {pick(narrow(built(2)), 0)}")
+    print("named {row_name(classify(1))} {row_name(classify(2))} {row_name(classify(3))}")
+    let q = via_qmark(1) else 0 - 1
+    let r = via_qmark(9) else 0 - 1
+    print("qmark {q} {r}")
+    print("handler {via_handler(1)} {via_handler(9)}")
+    0
+}

@@ -1,0 +1,13 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 951..1035 name=narrow body=Block
+FnDecl 1037..1107 name=pick body=Block
+FnDecl 1109..1238 name=built body=Block
+FnDecl 1240..1377 name=classify body=Block
+FnDecl 1379..1653 name=row_name body=Block
+FnDecl 1655..1695 name=take_int body=Block
+FnDecl 1697..1762 name=via_qmark body=Block
+FnDecl 1764..1878 name=via_handler body=Block
+FnDecl 1880..2251 name=main body=Block
