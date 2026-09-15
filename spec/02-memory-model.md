@@ -104,6 +104,29 @@ law: `.docs/refs/papers/swift-ownership-manifesto.md`.
   an **undeclared alias**, with both paths writable and no `shared`
   spelling anywhere. The rule that breaks is `[mem.tier0.excl.1]`,
   not this one, and it carries that clause's code rather than E1014.
+  **Enforced 2026-09-15 (wolf-lang#366).** A value reached by a move
+  out of a `read` parameter — the parameter itself, a piece of it (an
+  element, a field, a match binding), or a binding it was moved into —
+  is **lent**, and a lent value whose type can reach shared storage (a
+  `List`, `Map` or `Pool`, directly or through a field, payload, tuple
+  element or row — and a type parameter always can, because a generic
+  body is checked once for every instantiation) may not outlive the
+  activation: returned, sent, stored into module state or into a `mut`
+  parameter, or carried inside a temporary into a `take` argument is
+  E1002. A write, a `mut` lend or a `take` through a binding that holds
+  it is the write or the give-away through the parameter, E1014. Not
+  refused: a use that stays inside the activation (a match that moves a
+  piece out and reads it; a rebinding that is read, or replaced whole);
+  a value that cannot reach shared storage (a struct of scalars, an
+  `int ! {none}`, a `str`, whose view is immutable); and every `take`
+  parameter, which is the callee's own. The fix is `copy` at the move,
+  or `take` in the signature. **Cost:** none at runtime — the rule is
+  static, and a program pays only for the `copy` it then spells
+  (`[mem.tier0.move.3]`). The builtin store that keeps a `read`
+  argument inside its receiver (`push`, `[mem.region.edge.elem]`) is a
+  separate question (wolf-lang#385) and this rule does not reach it.
+  Witnesses `corpus/memory/read_param_return.lu`, `read_param_escape_*`,
+  `read_param_rebind_*` and `read_param_move_legal.lu`.
 - `[mem.tier0.mode.mut]` `mut` parameters are **exclusive inout**: for the
   duration of the call no other access (read or write) to the argument
   place or any conflicting path may occur. Call sites must write `mut`
@@ -326,7 +349,12 @@ Edge legality (source stores a reference to target):
   different source for the same generic signature, and only one of them
   with a diagnostic explaining itself. The permissive reading is the one
   the whole container surface is already written against, so the index
-  store joins it rather than `push` being tightened to meet it. A FIELD
+  store joins it rather than `push` being tightened to meet it. Since
+  wolf-lang#366 the stored `v` must be the function's own — `take v: V`
+  (the store consumes it) or `copy v` — because a `read` `v` stored into
+  the caller's `m` would still be the caller's too (E1002,
+  `[mem.tier0.mode.read]`); the regions merge at the index store exactly
+  as before. A FIELD
   store (`holder.item = item`) keeps its E1004 — that is the one
   annotation Cyclone's measurement says exists — and so does a value
   provably outliving its region (`region tmp { xs[i] = … }`), which is

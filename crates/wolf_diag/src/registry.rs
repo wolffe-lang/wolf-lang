@@ -1452,6 +1452,18 @@ contains it ([mem.tier0.excl]). Distinct fields are distinct places —
 the other, pass disjoint fields instead of the whole value, or let
 the callee say what it really touches with a view set
 (`mut self.{x, y}`), which frees the caller to use the rest.
+
+The same code refuses a second path created across a signature
+([mem.tier0.mode.read], wolf-lang#366). A parameter with no mode word is
+LENT: the caller still holds its value after the call. Moving that value
+somewhere that outlives the call — returning it (bare, inside a struct,
+or as an element), storing it into module state or into a `mut`
+parameter — would leave the caller and the receiver both able to write
+one value with no `shared` spelled anywhere. Hand on an independent
+value with `copy` at the move, or declare the parameter `take` so the
+caller gives the value up (call sites then spell `take`). Values that
+cannot reach shared storage — a struct of scalars, a `str` — are not
+refused: their second path is a copy.
 "#);
 
 code!(E1004, "this value is placed in one region, but needed in another", r#"
@@ -1607,7 +1619,9 @@ is to change the caller's value — call sites then spell `f(mut x)`,
 so readers see the mutation. Declare it `take` if the function
 consumes the value and the caller is done with it. Or keep it `read`
 and work on this function's own duplicate: `var local = copy p` gives
-a value it owns outright.
+a value it owns outright. The `copy` matters: `var local = p` without it
+is the caller's value under a second name, so a write or a `take`
+through `local` is refused exactly as one through `p` is (wolf-lang#366).
 "#);
 
 code!(E1015, "RETIRED — an escaping byte-view lend now copies and warns W1004", r#"

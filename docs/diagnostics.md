@@ -1508,7 +1508,19 @@ the other, pass disjoint fields instead of the whole value, or let
 the callee say what it really touches with a view set
 (`mut self.{x, y}`), which frees the caller to use the rest.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__closure_borrow_write.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__excl_overlap.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__mut_read_overlap.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__fn_value_captured_var_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_copy_read_after_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_prefix_mut_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_read_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_write_under_a_dyn_pair.snap
+The same code refuses a second path created across a signature
+([mem.tier0.mode.read], wolf-lang#366). A parameter with no mode word is
+LENT: the caller still holds its value after the call. Moving that value
+somewhere that outlives the call — returning it (bare, inside a struct,
+or as an element), storing it into module state or into a `mut`
+parameter — would leave the caller and the receiver both able to write
+one value with no `shared` spelled anywhere. Hand on an independent
+value with `copy` at the move, or declare the parameter `take` so the
+caller gives the value up (call sites then spell `take`). Values that
+cannot reach shared storage — a struct of scalars, a `str` — are not
+refused: their second path is a copy.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__norm_linear.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__generics__hundred_shapes.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__byte_view_escape.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__closure_borrow_write.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__excl_overlap.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__mut_read_overlap.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_escape_field.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_escape_generic.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_escape_local.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_escape_mut.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_escape_static.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__fn_value_captured_var_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_copy_read_after_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_prefix_mut_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_read_param_carried_out.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_read_param_returned.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_read_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_write_under_a_dyn_pair.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__w1004_lent_view_relent.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__w1004_lent_view_returned.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1003_take_returned.snap
 
 ## E1004 — this value is placed in one region, but needed in another
 
@@ -1684,9 +1696,11 @@ is to change the caller's value — call sites then spell `f(mut x)`,
 so readers see the mutation. Declare it `take` if the function
 consumes the value and the caller is done with it. Or keep it `read`
 and work on this function's own duplicate: `var local = copy p` gives
-a value it owns outright.
+a value it owns outright. The `copy` matters: `var local = p` without it
+is the caller's value under a second name, so a write or a `take`
+through `local` is refused exactly as one through `p` is (wolf-lang#366).
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__closure_kill_list.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_take.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_write.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__receiver_bare_mut_param.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_mut_lend.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_projected_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_read_self_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_whole_and_compound.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__closure_kill_list.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_rebind_take.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_rebind_write.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_take.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_write.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__receiver_bare_mut_param.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_mut_lend.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_projected_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_read_param_through_a_rebinding.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_read_self_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_whole_and_compound.snap
 
 ## E1015 — RETIRED — an escaping byte-view lend now copies and warns W1004
 
