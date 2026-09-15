@@ -551,6 +551,39 @@ is about it.)
   its frame and c05/#117 deferred closures as values; the chapter that
   teaches functions as values was the one the maintainer met it in.)
 
+## §8b Generic parameters `[type.generic]`
+
+(Appended 2026-09-15, s163 — wolf-lang#319, wolf-interp#84, wollf's
+sealed heldout wh-001. `[gram.item.fn]` gives `generic_param` its
+production and stops there: nothing said how many types one `T` may
+stand for in one call, and both machines answered E0401 for a `Rect`
+and a `Square` passed as two `T`s on a rule written nowhere.)
+
+- `[type.generic.bind]` **A type parameter binds once per call.** At a
+  call of a generic function, each type parameter stands for exactly
+  ONE type for the whole call, found by unification across every
+  position of the signature that names it — a parameter typed `T`,
+  and `T` nested inside a parameter's type (`xs: List[T]`). Argument
+  positions are unified left to right: the first argument whose type
+  fixes `T` binds it, and a later argument whose type disagrees with
+  that binding is **E0401 at that argument** — the primary span is the
+  disagreeing argument, never the call and never the argument that
+  bound. There is no widening to a common type, no implicit `dyn`, and
+  no second instantiation inside one call: `sum_areas[T: Area](a: T,
+  b: T)` called with a `Rect` and a `Square` is refused at the
+  `Square`, and a program that wants both declares two parameters
+  (`[T: Area, U: Area](a: T, b: U)`). The bound is checked against the
+  one bound type (E0502). What the diagnostic's secondary label names
+  as the origin — the parameter's declaration, or the argument that
+  bound — is diagnostic quality and not comparison surface
+  (`[proto.cmp.phase]` compares the code and the primary span).
+  **The cost, stated:** zero at run time. Binding is a static fact; a
+  call compiles to a direct call of the one monomorphic instance its
+  binding names, so a second agreeing call reuses that instance and a
+  disagreeing call is not a program. Witnesses:
+  `typecheck/generic_bind_once.lu` (wh-001, verbatim),
+  `typecheck/generic_bind_scalar.lu`.
+
 ## §9 The error row as a value `[type.row]`
 
 (Appended 2026-09-10, s148 — wolf-lang#284, wolf-interp#81. A bare

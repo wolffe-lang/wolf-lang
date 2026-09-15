@@ -457,6 +457,8 @@
     "type.fn": "10-types.md",
     "type.fn.ret": "10-types.md",
     "type.fn.value": "10-types.md",
+    "type.generic": "10-types.md",
+    "type.generic.bind": "10-types.md",
     "type.interp": "10-types.md",
     "type.interp.agg": "10-types.md",
     "type.interp.none": "10-types.md",
