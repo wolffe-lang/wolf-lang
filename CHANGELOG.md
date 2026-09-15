@@ -58,6 +58,67 @@ kernel's wall time moves 53% with its source path's length alone
 (identical IR, identical profile, #395), which is why that number was
 not used.
 
+### Papercuts V (s165 — wolf-lang#366, #384; #348, #347, #352, #349; #351, #344, #370, #379)
+
+**A move out of a `read` parameter is lent, and it may not outlive the
+call** (#366, `[mem.tier0.mode.read]`). `fn f(b: List[int]) -> List[int]
+{ b }` handed the caller back a second live path to its own list: at
+v0.2.14 `ys=4 xs=4` on both compiler lanes, where lupin 0.1.36 prints
+`ys=4 xs=3`. The measurement found three more ways in: `var c = b; (mut
+c).push(9)` and `let c = b; eat(take c)` grew the caller's list from
+inside the callee, and `out = b` into a `mut` parameter aliased it.
+The value is lent now. Returned, sent, stored into module state or a
+`mut` parameter, or carried into a `take` temporary, it is **E1002**.
+Lent `mut`, taken, or written through a container step via a binding
+that holds it, it is **E1014**. Refusal is limited to values that can
+reach shared storage (a `List`, `Map`, `Pool`, or a type parameter). A
+struct of scalars, a `str`, an `int ! {none}` fallback, a scrutinee
+piece used in place, a rebinding that is read or replaced whole, a
+cursor's own field writes, and every `take` parameter stay legal. The
+rule is static and costs nothing at runtime. Ten corpus entries now
+hand back `copy` (or `take v`); `byte_view_escape.lu` is `fail(E1002)`
+and W1004's future is #387. **wolf-std meets 70 sites at its 0.2.15
+pin** (wolf-std#39): 20 E1002 returns and 50 E1014 reader cursors in
+`tls`.
+
+**`copy` copies on the native tiers** (#384, `[mem.tier0.move.3]`).
+Native `copy x` lowered as `x` for every heap value, so `var ys = copy
+xs; (mut ys).push(2); ys[0] = 9` left `xs=2 xs0=9` under `wolf run`
+and `--release` while the checked machine and lupin printed `xs=1
+xs0=1`. The same was true of a `Map` and of a struct holding a `List`.
+Every memory-checker fix-it that says `copy` was inert on native. A
+`List`, `Map`, struct or tuple is now copied deep. Cost: one allocation
+and a buffer copy per list or map reached. Shapes not modelled yet
+refuse by name (a `Map` whose values reach the heap, a heap-carrying
+enum payload, a `Pool`, a `shared` cell). `RT_SYMBOLS` 144 → 147 across
+this entry (`map_remove`, `list_copy`, `map_copy`).
+
+**The first hour.** A bare `Less` under `enum Ordering` in value
+position is E0301 naming `Ordering.Less`, with the edit
+(`[gram.expr.variant]`, #348), where it used to decline as an
+out-of-context row tag. `refund(340)` under `[T: Neg]` with only `impl
+Neg for int` compiles: a bound is context, so the literal takes `int`
+when `i32` does not satisfy the bound (`[type.numlit.default]`, #347).
+E0502 says why it names `i32` when two other integer types would. `use
+cmp.Eq` above an `==` is no longer E0305 (#352). `List[(str, int)]()`
+compiles on every lane (#349).
+
+**Tooling.** `wolf fmt` breaks a struct pattern that carries a `..`
+rest, ending at the rest; wolf-std's three over-width lines re-lay at
+the pin (#351). `m.remove(k) -> V ! {none}` erases a key on every lane,
+and the survivors keep their order (#344, D50). A `SyntaxKind`
+reordering, or a lexer keyword mapped outside the keyword run, is a
+compile error of `wolf_ast`/`wolf_parse` (#370; both planted breaks
+went red). `wolf lsp` paints an error-set alias as `type` where it is
+used: wolf-lsp's `semanticTokens-error` transcript gains exactly two
+tokens at its next pin, `IoErrors` at 0-based line 13 column 22 and
+`ConfigErrors` at line 15 column 27 (#379).
+
+**Filed, not taken:** `push` of a non-`Copy` value keeps the caller's
+handle on both compiler lanes (#385, a ruling). W1004 is subsumed by
+the #366 refusal (#387). lupin mirrors are wolf-interp#115 (#366) and
+the batch named in that issue's thread.
+
 ## 0.2.14 — 2026-09-13
 
 THE STRING RUNTIME AND THE PAPERCUTS IV. 0.2.14 is one subject read
