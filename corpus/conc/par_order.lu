@@ -1,0 +1,19 @@
+//! check: run(exit=0, stdout="100000 1 299998 0 0\n")
+//! phase: run
+//! conforms: conc.task.par, conc.task.par.order, conc.task.par.chunk
+//!
+//! s166 — `out[i]` is `f(xs[i])` for every `i`, whatever the schedule:
+//! 100 000 elements cross every chunk boundary the pool can draw, and
+//! the empty list spawns nothing and answers `[]`.
+
+fn main() -> !int {
+    var xs = List[int]()
+    for i in 0..100000 { (mut xs).push(i) }
+    let k = 3
+    let ys = xs.par(fn(x) x * k + 1)
+    var bad = 0
+    for i in 0..100000 { if ys[i] != i * 3 + 1 { bad += 1 } }
+    let none = List[int]().par(fn(x: int) { x })
+    print("{ys.len} {ys[0]} {ys[99999]} {bad} {none.len}")
+    if bad == 0 { 0 } else { 1 }
+}
