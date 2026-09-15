@@ -100,13 +100,29 @@ system.
 ## §2 Values are spelled `[type.numlit.value]`
 
 A concrete numeric **value** never implicitly changes its type. `let n =
-0` fixes `n` as `int` (by §`[type.numlit.default]`); `let x: f64 = n` is
-**refused** (E0401) — the `.0` of adoption is a literal's privilege, not
-a value's. This is the X3 safety posture and the closed-coercion-set
+0` fixes `n`'s type **at the binding**, and which type that is belongs
+to §`[type.numlit.default]`: `i32` when nothing in the body decides it,
+`int` (or any other type) where a later use in the same body does —
+`take_int(n)` pins it, because defaulting is applied once at the end of
+the enclosing body and a reachable expectation gets there first. Either
+way the VALUE is then fixed: `let x: f64 = n` is **refused** (E0401) —
+the `.0` of adoption is a literal's privilege, not a value's. This is the X3 safety posture and the closed-coercion-set
 discipline of the memory model (`[mem.dyn.unsize]`'s "the coercion table
 grows by addition, never by a new implicit mechanism"): C's
 usual-arithmetic-conversions and Swift's exponential-search overloading
 are both declined. A value's conversion is the spelled `as` cast.
+**The cost, stated:** zero — binding and defaulting are static, and a
+refusal adds no instruction to any accepted program. (Corrected
+2026-09-15 by s163 for wolf-lang#403, filed by s165: this section said
+`let n = 0` fixes `n` as `int` "by `[type.numlit.default]`", and that
+rule says `i32`; the two could not both be right, and the
+implementation follows `i32`. Measured at trunk `4b56441`: an unused
+`let big = 5000000000` is E0415 on both wolf tiers, "the literal does
+not fit `i32`", and `trap(overflow)` on lupin 0.1.36; add
+`take_int(big)` and wolf runs it, the later use having pinned `int`
+before the rule fires. The section's own point — a value never
+implicitly changes its type — was never at issue. Witnesses:
+`typecheck/numlit_fit.lu`, `typecheck/numlit_value_refused.lu`.)
 
 ## §3 The numeric cast `[type.numlit.cast]`
 
