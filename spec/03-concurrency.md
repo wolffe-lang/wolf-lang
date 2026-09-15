@@ -176,9 +176,13 @@ premise by construction.
   killed-proc sequence (`[conc.proc.kill]`) for every live proc and
   terminates the process with a nonzero, implementation-specified
   status (`[conf.trap.exit]` discipline: conforming tools compare the
-  outcome class, never the number). (Appended 2026-08-10, finding
-  S-7's second half: the machine reported the root kill
-  `unsupported`; it is now specified.)
+  outcome class, never the number). A corpus witness spells that
+  class `run(exit=nonzero)` (`[conf.directive.check]`; witness
+  `conc/proc_link_root_death.lu`, where wolf's native tier exits 121
+  and lupin 0.1.36 exits 1). (Appended 2026-08-10, finding S-7's
+  second half: the machine reported the root kill `unsupported`; it is
+  now specified. The spelling sentence, 2026-09-15, s163 —
+  wolf-lang#371.)
 
 ### Channels `[conc.chan]`
 
