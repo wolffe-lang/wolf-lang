@@ -1209,6 +1209,9 @@ fn build_dyn_shim(module: &mut Module, shim: &DynShim) -> R<()> {
     if module.funcs.iter().any(|(_, f)| f.name == shim.name) {
         return Ok(());
     }
+    if let Some(par) = shim.par {
+        return build_par_shim(module, shim, par);
+    }
     let mut b = FuncBuilder::new(module, shim.name.clone(), shim.erased_sig);
     b.func.src_file = None; // synthetic: no line table
     let entry = b.current_block();
@@ -1407,6 +1410,84 @@ fn load_flat_raw(
         parts.push(load_flat_raw(b, fty, addr, region, span)?);
     }
     Ok(b.ins(Opcode::AggMake, &parts, &[ty], Aux::None).one())
+}
+
+/// s166 — `par`'s per-element shim (`[conc.task.par]`): `(rec, in, out)
+/// -> tag`. Loads `xs[i]` through the foreign buffer region, calls the
+/// fn value through its record (`[abi.native.closure]`: the entry is
+/// the record's first word, the record leads the arguments), and stores
+/// the result — the ok half of a fallible one — into the result slot;
+/// a raised tag returns to `__wolf_rt_par_map`, which fails the scope.
+fn build_par_shim(module: &mut Module, shim: &DynShim, par: ParShim) -> R<()> {
+    if module.funcs.iter().any(|(_, f)| f.name == shim.name) {
+        return Ok(());
+    }
+    let mut b = FuncBuilder::new(module, shim.name.clone(), shim.erased_sig);
+    b.func.src_file = None; // synthetic: no line table
+    let entry = b.current_block();
+    let params = b.block_params(entry);
+    let (rec, inp, outp) = (params[0], params[1], params[2]);
+    let hdrs = b.ins_region_foreign(ForeignRole::Header);
+    let bufs = b.ins_region_foreign(ForeignRole::Buffer);
+    let in_ty = shim.recv_ty.expect("a par shim names its element type");
+    let arg = load_flat_raw(&mut b, in_ty, inp, bufs, shim.span)?;
+    let fentry = b.ins_load(types::PTR, rec, hdrs);
+    let Some(r) = b.ins_call_ind(fentry, shim.target_sig, &[rec, arg]) else {
+        return Err(refuse("unit-typed `par` results", shim.span));
+    };
+    if par.fallible {
+        let is_err = b.ins_eu_is_err(r);
+        let err_bb = b.create_block();
+        let ok_bb = b.create_block();
+        b.ins_br(is_err, err_bb, &[], ok_bb, &[]);
+        b.seal_block(err_bb);
+        b.seal_block(ok_bb);
+        b.switch_to_block(err_bb);
+        let t = b.ins_eu_err_tag(r);
+        b.ins_ret(&[t]);
+        b.switch_to_block(ok_bb);
+        let okv = b.ins_eu_ok(r);
+        store_flat_raw(&mut b, okv, outp, bufs, shim.span)?;
+    } else {
+        store_flat_raw(&mut b, r, outp, bufs, shim.span)?;
+    }
+    let z = b.iconst(types::I64, 0);
+    b.ins_ret(&[z]);
+    let func = b.finish();
+    module.add_func(func);
+    Ok(())
+}
+
+/// [`load_flat_raw`]'s write twin: a flat value stored field by field.
+fn store_flat_raw(
+    b: &mut FuncBuilder<'_>,
+    val: Value,
+    ptr: Value,
+    region: RegionId,
+    span: Span,
+) -> R<()> {
+    let ty = b.func.value_ty(val);
+    if scalar_size(ty).is_some() {
+        b.ins_store(val, ptr, region);
+        return Ok(());
+    }
+    let types::TypeData::Agg(fields) = b.module.types.get(ty).clone() else {
+        return Err(refuse("`par` results without a flat layout", span));
+    };
+    let Some(offs) = flat_offsets(&b.module.types, &fields) else {
+        return Err(refuse("`par` results without a flat layout", span));
+    };
+    for (k, &fty) in fields.iter().enumerate() {
+        let part = b.ins(Opcode::AggGet, &[val], &[fty], Aux::Int(k as i64)).one();
+        let addr = if offs[k] == 0 {
+            ptr
+        } else {
+            let i = b.iconst(types::I64, offs[k] as i64);
+            b.ins_ptr_off(ptr, i, 1)
+        };
+        store_flat_raw(b, part, addr, region, span)?;
+    }
+    Ok(())
 }
 
 /// Borrow-friendly type peek while a `FuncBuilder` holds the module.
@@ -2869,8 +2950,21 @@ struct DynShim {
     erased_sig: SigId,
     /// The receiver's WIR layout (what flat-loads from the data ptr);
     /// `None` for a fn-value shim, whose leading pointer is ignored.
+    /// For a `par` shim, the source element's layout.
     recv_ty: Option<TypeId>,
     span: Span,
+    /// s166 — a `par` element shim (`[conc.task.par]`) rather than a
+    /// dyn/fn-value shim: `(record, &elem, &slot) -> tag`, calling the
+    /// fn value through its record with `target_sig`.
+    par: Option<ParShim>,
+}
+
+/// What a `par` element shim needs beyond [`DynShim`]'s fields.
+#[derive(Clone, Copy)]
+struct ParShim {
+    /// `f` raises: the call's result is an eu whose tag the shim
+    /// returns and whose ok half it stores.
+    fallible: bool,
 }
 
 /// What a queued body IS (s105): a spawn task (the s73/s86 shape —
@@ -5728,6 +5822,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             params.extend(sd.params.iter().cloned());
             let erased_sig = self.b.module.make_sig(params, sd.results.clone());
             self.pending_dyn_shims.push(DynShim {
+                par: None,
                 name: shim.clone(),
                 target: qname.to_string(),
                 target_sig,
@@ -8142,6 +8237,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let erased_sig = self.b.module.make_sig(params, results);
             let shim = format!("{target}.dynshim");
             self.pending_dyn_shims.push(DynShim {
+                par: None,
                 name: shim.clone(),
                 target,
                 target_sig,
@@ -11057,6 +11153,96 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// through the foreign region, and only allocation and growth
     /// remain `wolf_rt::list` calls. Recoverable reads
     /// (`pop`/`get`/`first`/`last`) are `{none}` rows.
+    /// `xs.par(f)` (s166, `[conc.task.par]`): queue the per-element shim
+    /// for this site, call `__wolf_rt_par_map` with the list, the shim,
+    /// `f`'s record and the result element size, and read the result
+    /// header from the out slot. A fallible `f` makes the value
+    /// `List[U] ! E`: a nonzero tag is the first failure's.
+    fn lower_list_par(
+        &mut self,
+        hdr: Value,
+        ewty: TypeId,
+        arg_exprs: &[&'t GreenNode],
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        let Some(fx) = arg_exprs.first().copied() else {
+            return Err(refuse("`par` without a function", e.span));
+        };
+        let Some(fty) = self.expr_sema_ty(fx.span) else {
+            return Err(refuse("a `par` function without a recorded type", fx.span));
+        };
+        let TyKind::Fn(_, fret) = self.table.kind(self.strip_sema(fty)).clone() else {
+            return Err(refuse("a `par` function that is not fn-typed", fx.span));
+        };
+        let Some(call_ret) = wir_ty(&mut self.b.module.types, self.table, self.sigs, fret, fx.span)?
+        else {
+            return Err(refuse("unit-typed `par` results", fx.span));
+        };
+        let (out_wty, fallible) = match self.b.module.types.get(call_ret).clone() {
+            types::TypeData::Eu { ok, slots, .. } => {
+                if !slots.is_empty() {
+                    return Err(refuse("`par` error payloads (typed error rows)", fx.span));
+                }
+                let Some(ok) = ok else {
+                    return Err(refuse("unit-typed `par` results", fx.span));
+                };
+                (ok, true)
+            }
+            _ => (call_ret, false),
+        };
+        let osize = self.list_stride(out_wty, fx.span)?;
+        let Some(rec) = flow_val!(self.lower_expr(fx)) else {
+            return Err(refuse("a valueless `par` function", fx.span));
+        };
+        let call_sig = self
+            .b
+            .module
+            .make_sig(vec![Param::val(types::PTR), Param::val(ewty)], vec![call_ret]);
+        let shim_sig = self.b.module.make_sig(
+            vec![
+                Param::val(types::PTR),
+                Param::val(types::PTR),
+                Param::val(types::PTR),
+            ],
+            vec![types::I64],
+        );
+        let name = format!("{}.par{}", self.b.func.name, e.span.lo);
+        if !self.pending_dyn_shims.iter().any(|s| s.name == name) {
+            self.pending_dyn_shims.push(DynShim {
+                name: name.clone(),
+                target: String::new(),
+                target_sig: call_sig,
+                erased_sig: shim_sig,
+                recv_ty: Some(ewty),
+                span: e.span,
+                par: Some(ParShim { fallible }),
+            });
+        }
+        let ext = self.rt_like_import(&name, shim_sig);
+        let entry = self.b.ins_func_addr(ext);
+        let osz = self.b.iconst(types::I64, osize as i64);
+        let (region, slot) = self.rt_slot(8);
+        let tag = self
+            .rt_call_foreign(
+                "__wolf_rt_par_map",
+                &[hdr, entry, rec, osz],
+                Some((slot, region)),
+                Some(types::I64),
+            )
+            .expect("par tag");
+        let out = self.b.ins_load(types::PTR, slot, region);
+        let Some(eu) = self.eu_ty_of_span(e.span)? else {
+            return Ok(Flow::Val(Some(out)));
+        };
+        let z = self.b.iconst(types::I64, 0);
+        let clean = self
+            .b
+            .ins(Opcode::Icmp, &[tag, z], &[types::BOOL], Aux::IntCc(IntCc::Eq))
+            .one();
+        let v = self.eu_join(eu, clean, |_| Ok(Some(out)), |_| Ok(tag))?;
+        Ok(Flow::Val(Some(v)))
+    }
+
     fn lower_list_method(
         &mut self,
         d: CallExpr<'t>,
@@ -11097,6 +11283,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .filter_map(Arg::value)
             .collect();
         match mname {
+            // s166 — `[conc.task.par]`: the chunked parallel map.
+            "par" => self.lower_list_par(hdr, ewty, &arg_exprs, e),
             // Growth is the one thing the runtime still owns: a push
             // may reallocate, and the arena discipline lives there.
             // The COMMON case is not growth (#113: sixteen out-of-line
