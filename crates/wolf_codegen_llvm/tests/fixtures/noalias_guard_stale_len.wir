@@ -20,8 +20,10 @@
 ; non-dominating twin of the same pick.
 ;
 ; @main is hand-built (the s104 posture: surface wolf refuses two
-; live Lists over one buffer, E1001/E1002 — #93's second accident is
-; the only thing keeping this off the source path). x and c share one
+; live Lists over one buffer, E1001/E1002). #93 counted that as what
+; keeps this off the source path; on the native tiers `copy` of a List
+; is the operand itself (#384), so `shape(copy c, c)` reaches it from
+; source — the driver's `release_overlap_guard` is that witness. x and c share one
 ; 8-slot buffer; x starts at len 0, cap 8, so every push is in place
 ; and never reaches the runtime (the stub aborts if it does). x's data
 ; pointer is laundered through __wolf_rt_test_opaque so LLVM cannot
