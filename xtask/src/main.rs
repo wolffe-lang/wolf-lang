@@ -662,7 +662,10 @@ fn peel_cmd(args: &[String]) -> ExitCode {
             continue;
         }
         let mut cmd = Command::new("target/debug/wolf");
-        cmd.arg("conform-run").arg(f).arg("--json").arg("--dump=peel");
+        cmd.arg("conform-run")
+            .arg(f)
+            .arg("--json")
+            .arg("--dump=peel");
         if let Some(root) = corpus::fixture_std_root(f) {
             cmd.arg("--std-root").arg(root);
         }
