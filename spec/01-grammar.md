@@ -383,6 +383,20 @@ a binder without an initializer (`var i, c` — bindings always
 initialize); Python's bare tuple (`let a, b = 1, 2` — E0201 by name:
 it needs unparenthesized tuple expressions on both sides, which wolf
 does not have; the tuple pattern with two parens covers the use).
+**The bare tuple's refusal is one report, and it points at the comma
+after the group's first binding that has no value** — where that
+binding's `=` should have stood, the first byte at which the input
+stops being a legal `let`: `let a, b = 1, 2` is E0201 at the `,` after
+`a`, `let a, b, c = 1, 2, 3` at the `,` after `a`, and
+`let a = 1, b, c = 2, 3` at the `,` after `b`. It is never the end of
+the initializer list, although that is where the count mismatch
+becomes knowable: the comma is what the user typed and what has to
+change. **The cost, stated:** zero — a parse refusal, no program runs.
+(Ruled 2026-09-11, BACKLOG B25 — wolf-lang#228, is35's DIV-2026-021:
+lupin 0.1.24 pointed at the comma and wolfc at the initializer list's
+end, ten bytes apart on `grammar/let_group_bare_tuple.lu`, a
+divergence the corpus directive could not see because it pins codes
+and not spans. The loser moved: wolfc takes the comma at s163.)
 
 ### 2.5 Types `[gram.item.type]`
 
