@@ -4042,7 +4042,7 @@ impl<'t> Machine<'t> {
                     ..
                 }) = self.ctx().dispatch.get(&e.span).cloned()
                 {
-                    let v = self.eval_arg(operand, None)?;
+                    let v = val!(self.eval_arg(operand, None));
                     return self.op_dispatch_call(
                         operand,
                         v,
@@ -4177,8 +4177,8 @@ impl<'t> Machine<'t> {
         }) = self.ctx().dispatch.get(&e.span).cloned()
             && let (Some(le), Some(re), Some(op)) = (d.lhs(), d.rhs(), op)
         {
-            let l = self.eval_arg(le, None)?;
-            let r = self.eval_arg(re, None)?;
+            let l = val!(self.eval_arg(le, None));
+            let r = val!(self.eval_arg(re, None));
             let out = self.op_dispatch_call(le, l, vec![r], *module, name, method, e.span)?;
             let Flow::Val(out) = out else {
                 return Ok(out);
@@ -7382,7 +7382,7 @@ impl<'t> Machine<'t> {
                 return self.refuse("a qualified dispatch without a receiver", e.span);
             };
             let self_mode = sig.params.first().and_then(|p| p.mode);
-            let mut self_val = self.eval_arg(recv_expr, self_mode)?;
+            let mut self_val = val!(self.eval_arg(recv_expr, self_mode));
             let (body, subject) = match q {
                 Q::I(ty_name) => {
                     let Some(&body) = self.methods.get(&(ty_name.clone(), mname.clone())) else {
@@ -7404,7 +7404,7 @@ impl<'t> Machine<'t> {
             for (i, a) in arg_exprs.enumerate() {
                 let Some(v) = Arg::value(a) else { continue };
                 let mode = sig.params.get(i + 1).and_then(|p| p.mode);
-                call_args.push(self.eval_arg(v, mode)?);
+                call_args.push(val!(self.eval_arg(v, mode)));
             }
             self.pending_self_ty = Some(subject);
             let out = self.call_body(body, call_args)?;
@@ -7504,7 +7504,7 @@ impl<'t> Machine<'t> {
         for (i, a) in d.args().into_iter().flat_map(|l| l.args()).enumerate() {
             let Some(v) = Arg::value(a) else { continue };
             let mode = sig.params.get(i).and_then(|p| p.mode);
-            args.push(self.eval_arg(v, mode)?);
+            args.push(val!(self.eval_arg(v, mode)));
         }
         let out = self.call_body(body, args)?;
         // A raised row tag crosses the call as the error flow — the
@@ -7518,7 +7518,7 @@ impl<'t> Machine<'t> {
     /// Evaluate one argument under its declared mode: `mut` lends the
     /// place (call-by-reference-result), `take` moves, `read` copies
     /// scalars and shares containers.
-    fn eval_arg(&mut self, v: &'t GreenNode, mode: Option<wolf_ast::ParamMode>) -> E<Value> {
+    fn eval_arg(&mut self, v: &'t GreenNode, mode: Option<wolf_ast::ParamMode>) -> E<Flow> {
         // The call-site mode spelling wraps the value expression.
         let inner = match v.kind {
             SyntaxKind::PrefixExpr => {
@@ -7540,18 +7540,15 @@ impl<'t> Machine<'t> {
                 let cur = self.read_place(&place, inner.span)?;
                 if let Value::Ptr(p) = cur {
                     let child = self.retag(p, TagState::Active, inner.span)?;
-                    return Ok(Value::Ptr(child));
+                    return Ok(Flow::Val(Value::Ptr(child)));
                 }
-                Ok(Value::Ref(place))
+                Ok(Flow::Val(Value::Ref(place)))
             }
             Some(wolf_ast::ParamMode::Take) => {
                 if let Some(place) = self.place_of(inner)? {
-                    self.take_value(&place, inner.span)
+                    self.take_value(&place, inner.span).map(Flow::Val)
                 } else {
-                    match self.eval(inner)? {
-                        Flow::Val(x) => Ok(x),
-                        _ => self.refuse("control flow in an argument", v.span),
-                    }
+                    self.eval_arg_value(inner)
                 }
             }
             _ => {
@@ -7562,16 +7559,30 @@ impl<'t> Machine<'t> {
                         // the call ([mem.prov.tag]); writes through it
                         // inside the callee are P2.
                         let child = self.retag(p, TagState::Frozen, inner.span)?;
-                        return Ok(Value::Ptr(child));
+                        return Ok(Flow::Val(Value::Ptr(child)));
                     }
-                    return Ok(cur);
+                    return Ok(Flow::Val(cur));
                 }
-                match self.eval(inner)? {
-                    Flow::Val(x) => Ok(x),
-                    _ => self.refuse("control flow in an argument", v.span),
-                }
+                self.eval_arg_value(inner)
             }
         }
+    }
+
+    /// An argument that is not a place (#201). A RAW row value binds
+    /// to the parameter exactly as it binds at `let`/`var` and at
+    /// assignment (#122, D52's declared-row-first reading): the
+    /// callee receives the row and discriminates it, which is what
+    /// native and lupin do. Every other flow — a `?`-propagated
+    /// error, a `return` or `break` out of a handler — leaves the
+    /// call before the callee runs, the caller's own flow. The
+    /// refusal this replaces answered `unsupported` only on the path
+    /// where the row was taken, so the same source was one word or
+    /// another by input.
+    fn eval_arg_value(&mut self, inner: &'t GreenNode) -> E<Flow> {
+        Ok(match self.eval(inner)? {
+            Flow::Err(v, false) => Flow::Val(v),
+            other => other,
+        })
     }
 
     fn retag(&mut self, p: PtrVal, state: TagState, span: Span) -> E<PtrVal> {
@@ -7746,7 +7757,7 @@ impl<'t> Machine<'t> {
                     "push" => {
                         for a in args.into_iter().flat_map(|l| l.args()) {
                             if let Some(v) = Arg::value(a) {
-                                let x = self.eval_arg(v, None)?;
+                                let x = val!(self.eval_arg(v, None));
                                 let slot = slot_bytes(&x);
                                 self.charge_mem(slot)?;
                                 // The ledger charges the BIRTH region
@@ -8252,7 +8263,7 @@ impl<'t> Machine<'t> {
                     None => return self.refuse("this method call shape", e.span),
                 };
                 let self_mode = sig.params.first().and_then(|p| p.mode);
-                let mut self_val = self.eval_arg(recv, self_mode)?;
+                let mut self_val = val!(self.eval_arg(recv, self_mode));
                 let (body, subject) = match target {
                     Target::Inherent(ty_name) => {
                         let Some(&body) = self.methods.get(&(ty_name.clone(), sig.callee.clone()))
@@ -8283,7 +8294,7 @@ impl<'t> Machine<'t> {
                 for (i, a) in args.into_iter().flat_map(|l| l.args()).enumerate() {
                     let Some(v) = Arg::value(a) else { continue };
                     let mode = sig.params.get(i + 1).and_then(|p| p.mode);
-                    call_args.push(self.eval_arg(v, mode)?);
+                    call_args.push(val!(self.eval_arg(v, mode)));
                 }
                 let out = self.call_body(body, call_args)?;
                 if let Value::ErrTag { .. } = out {
