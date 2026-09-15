@@ -32,7 +32,23 @@ pub(crate) fn syntax_kind(kind: TokenKind) -> SyntaxKind {
     }
 }
 
-fn keyword_kind(k: Keyword) -> SyntaxKind {
+/// wolf-lang#370: every reserved keyword the lexer knows maps INTO the
+/// keyword run `SyntaxKind::is_keyword` reads, and the run holds exactly
+/// the lexer's 50 plus the three contextual kinds — asserted when this
+/// crate builds, so a keyword added to `wolf_lex::KEYWORDS` and mapped
+/// anywhere but the block is a compile error, not a hole in the
+/// semantic-token stream (#356's mode: two additions outside a range).
+const _: () = {
+    let kws = wolf_lex::KEYWORDS;
+    assert!(kws.len() + 3 == (SyntaxKind::LParen as usize - SyntaxKind::AsKw as usize));
+    let mut i = 0;
+    while i < kws.len() {
+        assert!(keyword_kind(kws[i].1).is_keyword());
+        i += 1;
+    }
+};
+
+const fn keyword_kind(k: Keyword) -> SyntaxKind {
     match k {
         Keyword::As => SyntaxKind::AsKw,
         Keyword::Asm => SyntaxKind::AsmKw,
