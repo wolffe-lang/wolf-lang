@@ -692,6 +692,20 @@ when there is none. Files: `grammar/list_lit_let.lu`,
   (Ruled 2026-08-26, D52 / issue #38.) Files: `rows/tag_arg_position.lu`,
   `rows/tag_let_position.lu`, `rows/tag_shadow_local.lu`,
   `rows/negative/tag_undeclared_arg.lu` (counter).
+- **A variant value is spelled with its enum** `[gram.expr.variant]`:
+  `Ordering.Less`, `Shape.Box(3)` — the variant belongs to its enum,
+  and the value names both. A bare capitalized name in value position
+  is an error-row tag's spelling (D30, `[gram.expr.tagident]`), so a
+  bare `Less` that no local, item, import or declared row resolves is
+  **E0301**, and when an enum this file names directly (a module-local
+  enum, or one imported by name) declares a variant of that name, the
+  diagnostic names the enum and offers `Ordering.` as the edit —
+  machine-applicable when exactly one such enum exists. A `match` arm
+  is the other position and keeps the bare name (`[gram.pat.nullary]`):
+  there the scrutinee's type already says which enum. (Ruled
+  2026-09-15, wolf-lang#348: until then the bare value declined at
+  typing as an out-of-context row tag and named no fix. No runtime
+  cost; a static rule.) File: `typecheck/variant_bare_value.lu`.
 
 ### 3.3b The subscript origin `[gram.expr.index.origin]`
 

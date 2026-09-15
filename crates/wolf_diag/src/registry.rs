@@ -441,7 +441,12 @@ whenever the stub was the one that answered.
 
 Names never resolve through types here — a capitalized name used as an
 error-row tag (D30) is deferred to the type checker rather than
-reported by this pass.
+reported by this pass. The type checker reports it with this same code
+when the name is an enum's VARIANT used as a bare value: `Less` under
+`enum Ordering { Less, … }` is spelled `Ordering.Less` in value position
+([gram.expr.variant]), and the message offers that edit. In a `match`
+arm the bare variant name is fine — the scrutinee's type says which
+enum.
 "#);
 
 code!(E0302, "the same name is defined twice in one module", r#"

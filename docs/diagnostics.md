@@ -388,9 +388,14 @@ whenever the stub was the one that answered.
 
 Names never resolve through types here — a capitalized name used as an
 error-row tag (D30) is deferred to the type checker rather than
-reported by this pass.
+reported by this pass. The type checker reports it with this same code
+when the name is an enum's VARIANT used as a bare value: `Less` under
+`enum Ordering { Less, … }` is spelled `Ordering.Less` in value position
+([gram.expr.variant]), and the message offers that edit. In a `match`
+arm the bare variant name is fine — the scrutinee's type says which
+enum.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__tag_undeclared_arg.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__op_eq_no_trait.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_all_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_item_in_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_member.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_no_module.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_standalone_sibling.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_group_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_item_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_typo.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0301_operator_no_trait.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__tag_undeclared_arg.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__op_eq_no_trait.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__variant_bare_value.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_all_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_item_in_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_member.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_no_module.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_standalone_sibling.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_group_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_item_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_typo.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0301_operator_no_trait.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0301_bare_variant_two_homes.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0301_bare_variant_value.snap
 
 ## E0302 — the same name is defined twice in one module
 
