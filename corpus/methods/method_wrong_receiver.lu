@@ -1,5 +1,5 @@
 //! check: fail(E0403)
-//! phase: typecheck
+//! phase: resolve
 //! conforms: type.method.resolve, type.comb.set
 //!
 //! s166 — `sum` exists and takes a `List[int]`; a `List[str]` receiver

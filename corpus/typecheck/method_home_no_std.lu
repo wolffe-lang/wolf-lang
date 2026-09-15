@@ -1,5 +1,5 @@
 //! check: fail(E0301)
-//! phase: typecheck
+//! phase: resolve
 //! conforms: type.method.root
 //!
 //! s166 — `any` is not a builtin method of `List`, so it comes from

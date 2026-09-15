@@ -1,5 +1,5 @@
 //! check: fail(E1101)
-//! phase: typecheck
+//! phase: resolve
 //! conforms: conc.task.par.capture, conc.task.spawn
 //!
 //! s166 — `f` is checked as a spawned closure's body: a write to state

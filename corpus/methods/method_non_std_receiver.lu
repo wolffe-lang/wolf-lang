@@ -1,5 +1,5 @@
 //! check: fail(E0403)
-//! phase: typecheck
+//! phase: resolve
 //! conforms: type.method.home
 //!
 //! s166 — `Pool` has no home module (`[type.method.home]`'s table is
