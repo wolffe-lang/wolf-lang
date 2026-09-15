@@ -12,9 +12,11 @@
 //! step has carried `WOLF_MIDEND=0` for it since wsm02, through
 //! `std.x.crypto.curve25519.sc_muladd`. The extent is now built from a
 //! len load that dominates the guard and is current there. The
-//! dominating-but-stale twin of the same pick is a wrong answer only
-//! over two headers sharing a buffer, which surface wolf refuses; its
-//! witness is WIR (`noalias_guard_stale_len`, the codegen tests).
+//! dominating-but-stale twin of the same pick is a wrong answer over
+//! two lists sharing storage, which #93 counted on surface wolf to
+//! refuse and which `copy` hands out on the native tiers while #384
+//! stands; its witnesses are `noalias_guard_stale_len` (codegen, WIR)
+//! and `release_overlap_guard` (driver, source).
 
 fn shape(c: List[int]) -> List[int] {
     var x = List[int]()
