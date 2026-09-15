@@ -2,4 +2,4 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 365..429 name=main body=Block
+FnDecl 383..447 name=main body=Block

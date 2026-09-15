@@ -1,6 +1,6 @@
 //! check: fail(E0412)
 //! phase: resolve
-//! conforms: str.interp
+//! conforms: str.interp, type.interp.spec
 //!
 //! A malformed format spec is a COMPILE error at the literal (s38,
 //! #28): every spec is comptime-known, so nothing malformed survives
