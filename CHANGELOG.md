@@ -739,8 +739,10 @@ like an argument list (`[gram.fmt.list]`).
 **A nameable range** `[type.range]`. `range[int]` and `range[char]`
 are types now, in every type position, with `start` and `end` as
 properties. **`end` is exclusive, always**: `a..=b` normalizes at
-construction to `b + 1`, which is what the reference interpreter has
-always done and what makes `r.end - r.start` the count — three of
+construction to `b + 1`, which is what makes `r.end - r.start` the
+count (corrected by s163, wolf-lang#383: this entry said the
+reference interpreter had always done so; lupin 0.1.36 carried `..=`
+as a flag to the loop, and agrees only since wolf-interp is49) — three of
 `std.range`'s four functions were unwritable without it (wolf-std
 F-0030). A range passes, returns, binds and iterates; `for` is
 unchanged. The end-relative and open-sided spellings (`^n`, `a..`,
