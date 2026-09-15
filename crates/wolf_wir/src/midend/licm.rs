@@ -70,6 +70,7 @@
 
 use std::collections::HashSet;
 
+use crate::facts::{FactKind, Just};
 use crate::ir::{Aux, Block, FuncId, Inst, Module, Value, ValueDef};
 use crate::ops::{ForeignRole, Opcode};
 use crate::verify::VerifyError;
@@ -90,6 +91,26 @@ pub(crate) fn run(
         let cfg = analysis::cfg(f);
         let doms = analysis::dominators(&cfg);
         let loops = analysis::loops(f, &cfg, &doms);
+        // s162 (#146's second half): the subjects of a guard-justified
+        // noalias fact are the versioner's identity `ptr.off` copies,
+        // defined in the fast preheader so the claim is confined to
+        // the path the guard proved. They are pure and their operands
+        // are invariant, so an enclosing loop would hoist them out of
+        // the guarded region — past the guard's taken edge, where the
+        // verifier refuses them (`[fact-just]`) and where simplify's
+        // GVN then folds a SECOND versioned loop's copy onto them,
+        // carrying one guard's claim onto another guard's path
+        // (`sc_muladd`: a nested versioned loop, then a sequential
+        // one). A subject never moves; everything else may.
+        let guard_subjects: HashSet<Value> = f
+            .facts
+            .values()
+            .filter_map(|fd| match (fd.kind, fd.just) {
+                (FactKind::Noalias(a, b), Just::Guard(_)) => Some([a, b]),
+                _ => None,
+            })
+            .flatten()
+            .collect();
         let mut changed = false;
         // Outermost-first (larger loops first) so hoisted code can
         // cascade outward across the fixpoint iterations of the
@@ -160,6 +181,13 @@ pub(crate) fn run(
                         _ => analysis::is_removable(op) && op != Opcode::Load,
                     };
                     if !invariant_ok || op.is_terminator() {
+                        continue;
+                    }
+                    if f.vpool
+                        .get(f.insts[inst].results)
+                        .iter()
+                        .any(|r| guard_subjects.contains(r))
+                    {
                         continue;
                     }
                     let args = f.vpool.get(f.insts[inst].args);
