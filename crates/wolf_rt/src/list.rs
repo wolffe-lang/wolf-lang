@@ -201,6 +201,30 @@ pub unsafe extern "C" fn __wolf_rt_list_push(hdr: i64, elem_ptr: i64) {
     push_raw(hdr as *mut ListHdr, elem_ptr as *const u8);
 }
 
+/// `copy xs` (wolf-lang#384, `[mem.tier0.move.3]`): a fresh list in
+/// the AMBIENT region holding a byte copy of every live element, at
+/// exact capacity. This is the whole copy for an element type that
+/// reaches no heap storage; for one that does, compiled code then
+/// replaces each element with its own copy, so no handle is shared
+/// between the two lists.
+///
+/// # Safety
+///
+/// `hdr` from [`__wolf_rt_list_new`] (or any live list header).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_list_copy(hdr: i64) -> i64 {
+    unsafe {
+        let h = &*(hdr as *const ListHdr);
+        let n = (h.len * h.elem) as usize;
+        let bytes: &[u8] = if n == 0 {
+            &[]
+        } else {
+            core::slice::from_raw_parts(h.data, n)
+        };
+        list_from_bytes(h.elem as usize, bytes) as i64
+    }
+}
+
 /// `pop` — 1 with the last element through `out`, or 0 when empty.
 ///
 /// # Safety
@@ -414,6 +438,31 @@ mod tests {
         // unchanged, which is the whole point of appending.
         assert_eq!(core::mem::size_of::<ListHdr>(), 40);
         assert_eq!(core::mem::align_of::<ListHdr>(), 8);
+    }
+
+    /// `copy` (#384): a fresh header and buffer, the same elements, and
+    /// a push to either list leaves the other's length and bytes alone.
+    #[test]
+    fn copy_is_independent() {
+        unsafe {
+            let a = __wolf_rt_list_new(8);
+            let empty = __wolf_rt_list_copy(a);
+            assert_eq!(__wolf_rt_list_len(empty), 0);
+            for v in [7i64, 8] {
+                __wolf_rt_list_push(a, (&raw const v) as i64);
+            }
+            let b = __wolf_rt_list_copy(a);
+            assert_ne!(a, b);
+            let nine = 9i64;
+            __wolf_rt_list_push(b, (&raw const nine) as i64);
+            assert_eq!(__wolf_rt_list_len(a), 2);
+            assert_eq!(__wolf_rt_list_len(b), 3);
+            let ten = 10i64;
+            __wolf_rt_list_write(b, 0, (&raw const ten) as i64);
+            let mut out = 0i64;
+            __wolf_rt_list_read(a, 0, (&raw mut out) as i64);
+            assert_eq!(out, 7);
+        }
     }
 
     // ------------------------------- s76: where a List allocates ----

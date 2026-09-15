@@ -252,6 +252,34 @@ pub unsafe extern "C" fn __wolf_rt_map_remove(hdr: i64, kv: i64) -> i64 {
     }
 }
 
+/// `copy m` (wolf-lang#384, `[mem.tier0.move.3]`): a fresh map in the
+/// AMBIENT region with the same key protocol and a byte copy of every
+/// entry, in the same order. Keys are `str`/`int`/`char`/`bool`
+/// (`[type.map.key]`), so a key's bytes are the whole key (a `str` key's
+/// bytes are immutable and shared, as every `str` copy's are); a value
+/// that reaches heap storage is compiled code's to replace.
+///
+/// # Safety
+///
+/// `hdr` from [`__wolf_rt_map_new`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_map_copy(hdr: i64) -> i64 {
+    unsafe {
+        let h = &*(hdr as *const MapHdr);
+        let out = __wolf_rt_map_new(h.key_kind, h.key_size, h.val_off, h.val_size, h.elem);
+        if h.len > 0 {
+            let o = &mut *(out as *mut MapHdr);
+            let n = (h.len * h.elem) as usize;
+            let data = alloc_in(o.region, n);
+            core::ptr::copy_nonoverlapping(h.data, data, n);
+            o.data = data;
+            o.len = h.len;
+            o.cap = h.len;
+        }
+        out
+    }
+}
+
 /// `clear` — drop every entry (capacity kept).
 ///
 /// # Safety
@@ -268,6 +296,37 @@ pub unsafe extern "C" fn __wolf_rt_map_clear(hdr: i64) {
 mod tests {
     use super::*;
     use crate::list::ListHdr;
+
+    /// `copy` (#384): an independent map — same entries, same order,
+    /// and a write to either leaves the other alone.
+    #[test]
+    fn copy_is_independent() {
+        let m = __wolf_rt_map_new(KEY_BYTES, 8, 8, 8, 16);
+        let entry = |k: i64, v: i64| {
+            let mut b = [0u8; 16];
+            b[..8].copy_from_slice(&k.to_ne_bytes());
+            b[8..].copy_from_slice(&v.to_ne_bytes());
+            b
+        };
+        unsafe {
+            let empty = __wolf_rt_map_copy(m);
+            assert_eq!((*(empty as *const MapHdr)).len, 0);
+            for (k, v) in [(1, 10), (2, 20)] {
+                let mut e = entry(k, v);
+                __wolf_rt_map_set(m, e.as_mut_ptr() as i64);
+            }
+            let c = __wolf_rt_map_copy(m);
+            let mut e = entry(3, 30);
+            __wolf_rt_map_set(c, e.as_mut_ptr() as i64);
+            let mut e = entry(1, 11);
+            __wolf_rt_map_set(c, e.as_mut_ptr() as i64);
+            assert_eq!((*(m as *const MapHdr)).len, 2);
+            assert_eq!((*(c as *const MapHdr)).len, 3);
+            let mut probe = entry(1, 0);
+            assert_eq!(__wolf_rt_map_get(m, probe.as_mut_ptr() as i64), 1);
+            assert_eq!(i64::from_ne_bytes(probe[8..].try_into().unwrap()), 10);
+        }
+    }
 
     /// `remove` (#344): the hit writes the erased value back, a second
     /// remove misses, and the survivors keep their insertion order.
