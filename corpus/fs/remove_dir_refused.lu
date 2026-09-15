@@ -1,0 +1,23 @@
+//! check: run(exit=0, stdout="refused\nstill-dir=true\ngone=false")
+//! phase: run
+//! conforms: os.fs.remove
+//!
+//! s163 (wolf-lang#365) — `fs_remove` on a DIRECTORY is refused with a
+//! row and removes nothing ([os.fs.remove]). WHICH row is the host's —
+//! linux `io` (EISDIR), macOS `denied` (EPERM) — so this witness pins
+//! the refusal and the directory's survival, never the tag; the tag per
+//! host is `wolf_rt::fs`'s crate test. The portable removal is
+//! `fs_remove_dir_all`. Measured on linux: wolf `--checked`, `--native`
+//! and lupin 0.1.36 all answer this stdout.
+
+fn main() -> !int {
+    let d = "target/fs_remove_dir_refused"
+    fs_create_dir_all(d)?
+    fs_remove(d) else |_| {
+        print("refused")
+    }
+    print("still-dir={fs_is_dir(d)}")
+    fs_remove_dir_all(d)?
+    print("gone={fs_exists(d)}")
+    0
+}
