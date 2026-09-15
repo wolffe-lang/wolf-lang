@@ -1,0 +1,14 @@
+//! check: run(exit=0, stdout="4 2 5 true 1\n")
+//! phase: run
+//! conforms: type.method.home, type.comb.set
+//!
+//! s166 — the other three rows of the home table: `range[int]` to
+//! `std.range` (`collect`), `str` to `std.str`, `Map` to `std.map`.
+
+fn main() -> !int {
+    let r = (2..6).collect()
+    var m = Map[str, int]()
+    m["x"] = 1
+    print("{r.len} {r[0]} {r[3]} {"  ".is_blank()} {m.keys().len}")
+    0
+}

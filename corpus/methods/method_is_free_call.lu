@@ -1,0 +1,18 @@
+//! check: run(exit=0, stdout="true true\n")
+//! phase: run
+//! conforms: type.method.resolve
+//!
+//! s166 — `xs.any(p)` IS `list.any(xs, p)`: the same function, the same
+//! instance, one answer, with and without the import.
+
+use std.list
+
+fn odd(v: int) -> bool { v % 2 == 1 }
+
+fn main() -> !int {
+    let xs = [2, 4, 5]
+    let a = xs.any(odd)
+    let b = list.any(xs, odd)
+    print("{a} {b}")
+    if a == b { 0 } else { 1 }
+}

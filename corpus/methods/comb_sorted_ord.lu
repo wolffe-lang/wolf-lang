@@ -1,0 +1,13 @@
+//! check: run(exit=0, stdout="1 2 3\n")
+//! phase: run
+//! conforms: type.comb.set, type.trait.op
+//!
+//! s166 — `sorted[T: cmp.Ord]` instantiated at `int`: its `<` reaches
+//! the fixture's `impl Ord for int`, whose body is the builtin compare.
+
+fn main() -> !int {
+    let xs: List[int] = [3, 1, 2]
+    let s = xs.sorted()
+    print("{s[0]} {s[1]} {s[2]}")
+    0
+}
