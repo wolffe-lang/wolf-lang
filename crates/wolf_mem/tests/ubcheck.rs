@@ -1182,3 +1182,82 @@ fn a_raw_row_binds_through_a_method_argument() {
     assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
     assert_eq!(out, "40 3\n");
 }
+
+// ------------------------------- channels from the root task (#342) --
+
+/// wolf-lang#342: `send`, `close`, the draining `for` and `recv` from
+/// `main`, no `spawn` — the machine refused every one of them.
+#[test]
+fn root_task_channels_send_drain_and_answer_closed() {
+    let (v, out) = run_out(
+        "struct Doc { title: str, words: int }\n\
+         fn main() -> !int {\n    \
+             let ch = channel[int](4)\n    \
+             for i in 1..=3 { ch.send(i)? }\n    \
+             ch.close()\n    \
+             var sum = 0\n    \
+             for v in ch { sum += v }\n    \
+             let docs = channel[Doc](1)\n    \
+             docs.send(Doc { title: \"moves\", words: 640 })?\n    \
+             let d = docs.recv()?\n    \
+             docs.close()\n    \
+             let miss = docs.recv() else |err| { print(\"recv {err}\")\n        Doc { title: \"\", words: 0 } }\n    \
+             ch.send(9) else |err| { print(\"send {err}\") }\n    \
+             print(\"{sum} {d.title} {d.words} {miss.words}\")\n    0\n\
+         }\n",
+    );
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "recv closed\nsend closed\n6 moves 640 0\n");
+}
+
+/// A channel handle passed to a fn names the same channel.
+#[test]
+fn a_channel_passed_to_a_fn_is_the_same_channel() {
+    let (v, out) = run_out(
+        "fn fill(ch: channel[int], n: int) -> !int {\n    \
+             for i in 0..n { ch.send(i)? }\n    \
+             n\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let ch = channel[int](8)\n    \
+             let n = fill(ch, 5)?\n    \
+             ch.close()\n    \
+             var sum = 0\n    \
+             for v in ch { sum += v }\n    \
+             print(\"{n} {sum}\")\n    0\n\
+         }\n",
+    );
+    assert!(matches!(v, Verdict::Exit(0)), "{v:?}");
+    assert_eq!(out, "5 10\n");
+}
+
+/// This machine runs one task, so a channel operation that blocks is
+/// every live task blocked — `[conc.deadlock.def]` — and the answer is
+/// `trap(deadlock)` (lupin 0.1.36 answers the same four).
+#[test]
+fn a_blocking_channel_operation_on_the_only_task_is_deadlock() {
+    for (what, body) in [
+        (
+            "full",
+            "let ch = channel[int](1)\n    ch.send(1)?\n    print(\"one\")\n    ch.send(2)?",
+        ),
+        (
+            "empty",
+            "let ch = channel[int](1)\n    let v = ch.recv()?\n    print(\"{v}\")",
+        ),
+        ("rendezvous", "let ch = channel[int]()\n    ch.send(1)?"),
+        (
+            "open for",
+            "let ch = channel[int](2)\n    ch.send(1)?\n    for v in ch { print(\"{v}\") }",
+        ),
+    ] {
+        let (v, _) = run_out(&format!("fn main() -> !int {{\n    {body}\n    0\n}}\n"));
+        match v {
+            Verdict::Trap(t) => {
+                assert_eq!(t.kind, "deadlock", "{what}");
+                assert_eq!(t.clause, "conc.deadlock.trap", "{what}");
+            }
+            other => panic!("{what}: expected trap(deadlock), got {other:?}"),
+        }
+    }
+}
