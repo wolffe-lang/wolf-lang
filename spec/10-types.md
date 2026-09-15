@@ -644,7 +644,13 @@ filing left open, not the home).)
   a local `Eq`). **The surface** the language types, beside the index
   of `[mem.map.absent]`: `Map[K, V]()` constructs; `m.len` counts
   entries (`count()` is the same number); `m.is_empty()` probes;
-  `m.clear()` drains (a `mut` receiver); `m.pairs()` answers a fresh
+  `m.clear()` drains (a `mut` receiver); `m.remove(k)` erases a key
+  through a `mut` receiver and answers `V ! {none}` — the erased value,
+  or the `none` row with the map unchanged, the read's shape
+  (`[mem.map.absent]`) — and the remaining entries keep their order
+  (ruled by D50 on #11, landed 2026-09-15 as wolf-lang#344; **cost**:
+  one scan to the key and a shift of the entries after it, nothing
+  freed, on both tiers — `corpus/memory/map_remove.lu`); `m.pairs()` answers a fresh
   `List[(K, V)]` of every entry, which `for (k, v) in m.pairs()`
   destructures. **Iteration order is unspecified and consistent**:
   `pairs()` reports one order for an unmodified map and promises
