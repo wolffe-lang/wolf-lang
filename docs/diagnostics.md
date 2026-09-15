@@ -651,7 +651,7 @@ Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__char_index_
 
 A format spec (`"{x:spec}"`, D26) is a closed mini-language —
 `[[fill]align][+][0][width][.precision][type]` with alignment `<`/`^`/`>`
-and type one of `b o x X e E f` (spec §7.4 candidate, #28) — and every
+and type one of `b o x X e E f` (`[type.interp.spec]`, #28) — and every
 spec is known at compile time, so a spec the grammar cannot read is an
 error here, at the literal, never a surprise at run time. The common
 shapes: a stray character the grammar has no place for; `.` with no
