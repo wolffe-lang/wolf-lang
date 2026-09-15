@@ -363,6 +363,7 @@ impl Resolver<'_> {
         for node in root.nodes().filter(|n| n.kind.is_item()) {
             self.resolve_item(node);
         }
+        self.record_row_aliases(root);
         self.report_unused_imports(root);
     }
 
@@ -1363,6 +1364,50 @@ impl Resolver<'_> {
         }
         // The explicit error row is structural (D30): its tags are
         // declared by use, so the row resolves nothing here.
+    }
+
+    /// wolf-lang#379 (`[type.err.alias.union]`): an error row is
+    /// structural and resolves no TAG — but an entry that names an
+    /// error-set alias is a name, the same item its declaration is, and
+    /// the binding table records it as one: `IoErrors` in
+    /// `{IoErrors, closed}` and `ConfigErrors` in `-> int ! ConfigErrors`
+    /// (the brace-less tail is one `RowEntry`). Before this, the
+    /// declaration was a reference and every use was not, so an editor
+    /// coloured the alias where it was declared and nowhere it was
+    /// used, and definition/references/rename could not reach a use.
+    /// Aliases resolve in their own module (`error_alias_row`), so
+    /// the lookup is module-local; a span something else already
+    /// claimed (a generic tail) keeps its binding.
+    fn record_row_aliases(&mut self, node: &GreenNode) {
+        if node.kind == SyntaxKind::ErrorRow
+            && let Some(row) = ErrorRow::cast(node)
+        {
+            for entry in row.entries() {
+                let Some(path) = entry.path() else { continue };
+                let segs: Vec<_> = path.segments().collect();
+                let [one] = segs.as_slice() else { continue };
+                let name = String::from_utf8_lossy(
+                    &self.pkg.files[self.file].raw.src[one.span.lo as usize..one.span.hi as usize],
+                )
+                .into_owned();
+                let is_alias = self.pkg.tables[self.module]
+                    .get(&name)
+                    .is_some_and(|it| it.kind == crate::graph::ItemKind::Error);
+                if !is_alias || self.refs.iter().any(|r| r.span == one.span) {
+                    continue;
+                }
+                self.record(
+                    one.span,
+                    RefTarget::Item {
+                        module: self.module,
+                        name,
+                    },
+                );
+            }
+        }
+        for child in node.nodes() {
+            self.record_row_aliases(child);
+        }
     }
 
     // ---------------------------------------------- unused imports -----
