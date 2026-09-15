@@ -784,6 +784,42 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// `[os.fs.remove]` (s163, wolf-lang#365): `fs_remove` on a
+    /// DIRECTORY is refused with a row and removes nothing, and WHICH
+    /// row is the host's error kind through `code_of` — pinned here per
+    /// host, because the corpus witness (`fs/remove_dir_refused.lu`)
+    /// can only pin the refusal. A host that stops delegating to its
+    /// `unlink`/`DeleteFileW` answer reds here by name.
+    #[test]
+    fn remove_on_a_directory_is_the_hosts_row() {
+        let dir = std::env::temp_dir().join(format!("wolf-rt-fs-rmdir-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let dir_s = dir.display().to_string();
+        let (pp, pl) = pair_of(&dir_s);
+        let row = unsafe { __wolf_rt_fs_remove(pp, pl) };
+        assert!(dir.is_dir(), "fs_remove must not remove a directory");
+        #[cfg(target_os = "linux")]
+        assert_eq!(
+            row,
+            fs_code::IO,
+            "linux: unlink(2) on a directory is EISDIR -> io"
+        );
+        #[cfg(target_os = "macos")]
+        assert_eq!(
+            row,
+            fs_code::DENIED,
+            "macOS: unlink(2) on a directory is EPERM -> denied"
+        );
+        #[cfg(windows)]
+        assert_eq!(
+            row,
+            fs_code::DENIED,
+            "windows: DeleteFileW on a directory is access-denied -> denied"
+        );
+        assert_ne!(row, fs_code::OK);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
     #[test]
     fn fd_table_matches_the_checked_shape() {
         let dir = std::env::temp_dir().join(format!("wolf-rt-fd-{}", std::process::id()));

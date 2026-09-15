@@ -31,6 +31,7 @@ conc/capture_mut_arg.lu: not mem-clean (pre-wir rungs own it)
 conc/capture_mut_lend.lu: not mem-clean (pre-wir rungs own it)
 conc/capture_write_assign.lu: not mem-clean (pre-wir rungs own it)
 conc/chan_closed_row.lu: lowers
+conc/chan_default_rendezvous.lu: lowers
 conc/chan_drain_after_inclusive_loop.lu: lowers
 conc/chan_param_for.lu: lowers
 conc/chan_payload_escape.lu: not mem-clean (pre-wir rungs own it)
@@ -47,6 +48,7 @@ conc/proc_cross_module/main.lu: lowers
 conc/proc_kill_defers.lu: lowers
 conc/proc_link.lu: lowers
 conc/proc_link_root.lu: lowers
+conc/proc_link_root_death.lu: lowers
 conc/proc_spawn_loop.lu: lowers
 conc/reason_interp.lu: lowers
 conc/select_seeded.lu: lowers
@@ -103,6 +105,7 @@ fs/bytes_dirs.lu: lowers
 fs/error_row.lu: lowers
 fs/fstat.lu: lowers
 fs/open_nonblock.lu: lowers
+fs/remove_dir_refused.lu: lowers
 fs/roundtrip.lu: lowers
 generics/box_method.lu: lowers
 generics/explicit_apply.lu: lowers
@@ -201,6 +204,7 @@ grammar/structlit_cond.lu: not mem-clean (pre-wir rungs own it)
 grammar/structlit_paren.lu: lowers
 grammar/tuple_pattern_match_arm.lu: lowers
 grammar/tuple_pattern_no_separator.lu: not mem-clean (pre-wir rungs own it)
+grammar/type_position_keyword.lu: not mem-clean (pre-wir rungs own it)
 grammar/when_reserved.lu: not mem-clean (pre-wir rungs own it)
 hello.lu: lowers
 io/eprint.lu: lowers
@@ -545,6 +549,8 @@ typecheck/fn_value_captured_int.lu: lowers
 typecheck/fn_value_captured_var_write.lu: not mem-clean (pre-wir rungs own it)
 typecheck/fn_value_capturing.lu: lowers
 typecheck/fn_value_import/main.lu: lowers
+typecheck/generic_bind_once.lu: not mem-clean (pre-wir rungs own it)
+typecheck/generic_bind_scalar.lu: not mem-clean (pre-wir rungs own it)
 typecheck/if_branch.lu: not mem-clean (pre-wir rungs own it)
 typecheck/interp_spec_on_union.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_compound_assign.lu: not mem-clean (pre-wir rungs own it)

@@ -95,7 +95,10 @@ STR_TEXT   ::= (SCALAR - ('"' | '\' | '{' | '}' | NL))+
 STR_ESC    ::= '\' ('n' | 't' | 'r' | '0' | '\' | '"') | '\x' HEX_DIGIT HEX_DIGIT | UNI_ESC
 UNI_ESC    ::= '\u{' HEX_DIGIT HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? HEX_DIGIT? '}'
 INTERP     ::= '{' expr FORMAT_SPEC? '}'
-FORMAT_SPEC ::= ':' /* fill/align/sign/width/precision/type, spec §7.4 */
+FORMAT_SPEC ::= ':' ((FMT_FILL? FMT_ALIGN)? '+'? '0'? DIGIT* ('.' DIGIT+)? FMT_TYPE?)  /* [type.interp.spec] */
+FMT_FILL   ::= SCALAR            /* one byte wide: a multi-byte fill is E0412 */
+FMT_ALIGN  ::= '<' | '^' | '>'
+FMT_TYPE   ::= 'b' | 'o' | 'x' | 'X' | 'e' | 'E' | 'f'
 ```
 
 - `{{` and `}}` are literal braces `[gram.lex.str.escape]`. `$` is an
@@ -383,6 +386,20 @@ a binder without an initializer (`var i, c` — bindings always
 initialize); Python's bare tuple (`let a, b = 1, 2` — E0201 by name:
 it needs unparenthesized tuple expressions on both sides, which wolf
 does not have; the tuple pattern with two parens covers the use).
+**The bare tuple's refusal is one report, and it points at the comma
+after the group's first binding that has no value** — where that
+binding's `=` should have stood, the first byte at which the input
+stops being a legal `let`: `let a, b = 1, 2` is E0201 at the `,` after
+`a`, `let a, b, c = 1, 2, 3` at the `,` after `a`, and
+`let a = 1, b, c = 2, 3` at the `,` after `b`. It is never the end of
+the initializer list, although that is where the count mismatch
+becomes knowable: the comma is what the user typed and what has to
+change. **The cost, stated:** zero — a parse refusal, no program runs.
+(Ruled 2026-09-11, BACKLOG B25 — wolf-lang#228, is35's DIV-2026-021:
+lupin 0.1.24 pointed at the comma and wolfc at the initializer list's
+end, ten bytes apart on `grammar/let_group_bare_tuple.lu`, a
+divergence the corpus directive could not see because it pins codes
+and not spans. The loser moved: wolfc takes the comma at s163.)
 
 ### 2.5 Types `[gram.item.type]`
 
@@ -938,6 +955,21 @@ row_entry ::= path ('(' type (',' type)* ')')?
 - `!T` and `T ! {row}` per D30. In *expression* position `!` is unary not;
   in *type* position it is the error-union constructor. The positions are
   syntactically disjoint (`[gram.amb.bang]`).
+- `[gram.type.start]` **A type position holds a type or it is E0206.** A
+  token that cannot begin `type` — a keyword the production does not
+  name (`p: proc`, `fn(proc)`), a literal (`p: 3`) — where a type must begin is
+  **E0206 at that token**, "expected a type", at `parse`: not E0201's
+  generic expect-miss, and not a resolution error, because the question
+  is settled before any name is looked up. The keywords the production
+  DOES name (`fn`, `dyn`, `type`, `region`, the `prefix_type_kw` set)
+  begin a type and are not refused. A keyword that begins a statement or
+  a declaration (`let`) also cuts the item short, and which report comes
+  first for it is recovery's, not this clause's. **The cost,
+  stated:** zero — a parse refusal. Witness:
+  `grammar/type_position_keyword.lu`. (Written 2026-09-15, s163 —
+  wolf-lang#320: `docs/diagnostics.md` has named E0206 since about bs12,
+  no clause or corpus file did, and lupin had spent the number on an
+  invention of its own before is45 followed the compiler.)
 - Postfix rows are first-class in **every** type position — parameter,
   `let`/`var` annotation, field, variant payload — not just `ret_type`,
   which stays as spelled in `[gram.item.fn]`. (Adopted 2026-08-10 from

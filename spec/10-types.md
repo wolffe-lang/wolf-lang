@@ -100,13 +100,29 @@ system.
 ## §2 Values are spelled `[type.numlit.value]`
 
 A concrete numeric **value** never implicitly changes its type. `let n =
-0` fixes `n` as `int` (by §`[type.numlit.default]`); `let x: f64 = n` is
-**refused** (E0401) — the `.0` of adoption is a literal's privilege, not
-a value's. This is the X3 safety posture and the closed-coercion-set
+0` fixes `n`'s type **at the binding**, and which type that is belongs
+to §`[type.numlit.default]`: `i32` when nothing in the body decides it,
+`int` (or any other type) where a later use in the same body does —
+`take_int(n)` pins it, because defaulting is applied once at the end of
+the enclosing body and a reachable expectation gets there first. Either
+way the VALUE is then fixed: `let x: f64 = n` is **refused** (E0401) —
+the `.0` of adoption is a literal's privilege, not a value's. This is the X3 safety posture and the closed-coercion-set
 discipline of the memory model (`[mem.dyn.unsize]`'s "the coercion table
 grows by addition, never by a new implicit mechanism"): C's
 usual-arithmetic-conversions and Swift's exponential-search overloading
 are both declined. A value's conversion is the spelled `as` cast.
+**The cost, stated:** zero — binding and defaulting are static, and a
+refusal adds no instruction to any accepted program. (Corrected
+2026-09-15 by s163 for wolf-lang#403, filed by s165: this section said
+`let n = 0` fixes `n` as `int` "by `[type.numlit.default]`", and that
+rule says `i32`; the two could not both be right, and the
+implementation follows `i32`. Measured at trunk `4b56441`: an unused
+`let big = 5000000000` is E0415 on both wolf tiers, "the literal does
+not fit `i32`", and `trap(overflow)` on lupin 0.1.36; add
+`take_int(big)` and wolf runs it, the later use having pinned `int`
+before the rule fires. The section's own point — a value never
+implicitly changes its type — was never at issue. Witnesses:
+`typecheck/numlit_fit.lu`, `typecheck/numlit_value_refused.lu`.)
 
 ## §3 The numeric cast `[type.numlit.cast]`
 
@@ -311,6 +327,58 @@ values that have none.)
   (`[type.char.interp]`'s `str` surface, the integer surface, the
   float surface) and on nothing composite: a spec on a composite is a
   refusal, never silently ignored (wolf-lang#10's rule).
+- `[type.interp.spec]` **The format spec, one clause** (wolf-lang#28's
+  §7.4, which was never written under that number; the grammar's
+  `FORMAT_SPEC` production cites this clause). A hole may carry a spec
+  after its first top-level `:` (`[gram.amb.fmtcolon]`):
+  `[[fill] align] ['+'] ['0'] [width] ['.' precision] [type]`, where
+  `fill` is any single BYTE, `align` is `<` `^` `>`, `width` and
+  `precision` are decimal digits capped at 65535, and `type` is one of
+  `b o x X e E f`. Every spec is comptime-known — the grammar admits no
+  computed spec — so a spec the grammar cannot read is **E0412** at the
+  spec and a field applied to a type it cannot describe is **E0413**,
+  never a silently ignored field and never a run-time failure.
+  **Meaning.** `width` is a minimum in bytes (D25) and never truncates;
+  `fill` defaults to a space; alignment defaults to LEFT for `str`,
+  `char` and `bool` and RIGHT for numbers; `^` puts the odd fill byte on
+  the right. `0` zero-pads a number AFTER its sign — `{n:08}` of 42 is
+  `00000042`, `{n:06}` of -42 is `-00042`, `{n:+08}` is `+0000042` —
+  and combining `0` with an explicit fill or alignment is E0412, the
+  spec must pick one. `+` marks a non-negative number (zero takes it)
+  and never hides a negative float's sign (`-0.0` stays `-0`); it is
+  E0413 off a number. `precision` is digits after the point on an
+  `f64` (fixed-point when no `type` is given) and a maximum length in
+  bytes on a `str` that never splits a code point (`{"é":.1}` is
+  empty); on an integer or a `bool` it is E0413. `b` `o` `x` `X` render
+  an integer sign-magnitude with no prefix (`-255` in `x` is `-ff`), and
+  are E0413 on a float, a `str` or a `bool`; `e` `E` render a float in
+  `%e` style with a signed exponent of at least two digits, `f`
+  fixed-point, each with precision 6 when none is given. With no
+  `type` and no precision an `f64` renders as the shortest decimal that
+  reads back as the same bits. A `char` takes the `str` surface and a
+  `byte` the integer surface (`[type.char.interp]`,
+  `[type.byte.interp]`). A spec on a composite hole is refused
+  (`[type.interp.value]`) and on a `!T` hole is E0413
+  (`[type.interp.union]`). **`Show` is superseded:** #28's proposed
+  user-type trait, `fmt(self, spec: str) -> str`, is not the
+  language's; a user type's bare hole renders by `[type.interp.agg]`,
+  and a spec on it is the composite refusal. **The cost, stated:** zero
+  parsing at run time on every tier — sema parses and validates each
+  spec once, the checked machine renders from the parsed form, and the
+  native tiers pass the packed spec to the runtime's formatter as an
+  immediate; the rendering itself is one pass over the value's digits
+  plus the padding bytes. Measured on linux at wolf 0.2.14 on
+  `--checked` and `--native` and lupin 0.1.36, eighteen specs render
+  byte-identically on all three and the E0412/E0413 refusals agree in
+  code and span. Witnesses: `strings/format_spec_full.lu`,
+  `strings/format_spec_width.lu`, `strings/float_format.lu`,
+  `strings/format_spec_malformed.lu` (`fail(E0412)`),
+  `strings/format_spec_mismatch.lu` (`fail(E0413)`). (Written
+  2026-09-15, s163 — wolf-lang#28. The semantics are s38's, executable
+  since in `wolf_sema::fmtspec` and member-by-member wolf-std sc05's
+  reference functions; the clause writes down what both machines have
+  converged on, and #28's item 3 — `{n:08}` absorbed into the width —
+  is fixed on both.)
 - `[type.interp.agg]` **`()` renders `()`**; a tuple `(a, b)` — the
   elements in order, `, `-separated, in parentheses; a struct
   `Name { f: v, g: w }` — the type's name, a space, `{`, then each
@@ -551,6 +619,39 @@ is about it.)
   its frame and c05/#117 deferred closures as values; the chapter that
   teaches functions as values was the one the maintainer met it in.)
 
+## §8b Generic parameters `[type.generic]`
+
+(Appended 2026-09-15, s163 — wolf-lang#319, wolf-interp#84, wollf's
+sealed heldout wh-001. `[gram.item.fn]` gives `generic_param` its
+production and stops there: nothing said how many types one `T` may
+stand for in one call, and both machines answered E0401 for a `Rect`
+and a `Square` passed as two `T`s on a rule written nowhere.)
+
+- `[type.generic.bind]` **A type parameter binds once per call.** At a
+  call of a generic function, each type parameter stands for exactly
+  ONE type for the whole call, found by unification across every
+  position of the signature that names it — a parameter typed `T`,
+  and `T` nested inside a parameter's type (`xs: List[T]`). Argument
+  positions are unified left to right: the first argument whose type
+  fixes `T` binds it, and a later argument whose type disagrees with
+  that binding is **E0401 at that argument** — the primary span is the
+  disagreeing argument, never the call and never the argument that
+  bound. There is no widening to a common type, no implicit `dyn`, and
+  no second instantiation inside one call: `sum_areas[T: Area](a: T,
+  b: T)` called with a `Rect` and a `Square` is refused at the
+  `Square`, and a program that wants both declares two parameters
+  (`[T: Area, U: Area](a: T, b: U)`). The bound is checked against the
+  one bound type (E0502). What the diagnostic's secondary label names
+  as the origin — the parameter's declaration, or the argument that
+  bound — is diagnostic quality and not comparison surface
+  (`[proto.cmp.phase]` compares the code and the primary span).
+  **The cost, stated:** zero at run time. Binding is a static fact; a
+  call compiles to a direct call of the one monomorphic instance its
+  binding names, so a second agreeing call reuses that instance and a
+  disagreeing call is not a program. Witnesses:
+  `typecheck/generic_bind_once.lu` (wh-001, verbatim),
+  `typecheck/generic_bind_scalar.lu`.
+
 ## §9 The error row as a value `[type.row]`
 
 (Appended 2026-09-10, s148 — wolf-lang#284, wolf-interp#81. A bare
@@ -578,12 +679,16 @@ carrying a rule about operators. The rule is written here, beside
   *could* have been in the family had it been the other type, which it
   could not; and a code that depends on which side the row sits on is
   a rule about position, of which the language has no other instance
-  (`[type.unit.discard]` retired one at #276). Status at s148: the
-  compiler answers E0409 with the row on the left and E0401 with it on
-  the right; lupin 0.1.31 answers E0409 for arithmetic and E0401 for a
-  comparison, on either side — the two follow-ups are filed against
-  this clause. Witnesses: `rows/negative/row_operand_add.lu`,
-  `rows/negative/row_operand_compare.lu`.
+  (`[type.unit.discard]` retired one at #276). **The cost, stated:**
+  zero — a static refusal, with no instruction added to any accepted
+  program. Status at 0.2.14 (re-measured by s163): both machines
+  answer E0409 on either side and for both operator families, at the
+  same span on all three witnesses (wolf `--checked` and lupin 0.1.36);
+  the s148 split — the compiler's E0401 with the row on the right,
+  lupin 0.1.31's E0401 for a comparison — is closed on both sides.
+  Witnesses: `rows/negative/row_operand_add.lu`,
+  `rows/negative/row_operand_compare.lu`,
+  `rows/negative/row_operand_rhs.lu`.
 
 This chapter deliberately does **not** write the full numeric tower
 (mixed integer-width arithmetic, a complete `Add`/`Mul` trait hierarchy
@@ -867,10 +972,19 @@ one type the compiler could build a value of and not name.)
   read. One exclusive `end` is what makes `len` and `contains`
   writable at all (`end - start`, `start <= x && x < end`), which is
   the gap wolf-std F-0030 filed; two accessors whose meaning depended
-  on a spelling the type does not carry would not close it. The
-  reference interpreter has normalized inclusive ranges at
-  construction since its first range arm, so the two machines agree
-  by construction and not by a new rule.
+  on a spelling the type does not carry would not close it. **The
+  cost, stated:** one checked add where an inclusive range VALUE is
+  built, and nothing anywhere else — `start`, `end` and every loop
+  over a value read two words, and a `for` over a range header never
+  builds a value at all (`[type.range.value]`), so its bound is the
+  loop's own arithmetic, unchanged. (Corrected 2026-09-15 by s163,
+  wolf-lang#383: this clause said the reference interpreter had
+  normalized at construction since its first range arm. It had not —
+  measured at lupin 0.1.36 (`6e94436`) by wolf-interp is49, `..=` was
+  carried as a flag to the `for` loop and the bound computed there on
+  unchecked `i128`, so `0..=int.MAX` as a value neither trapped nor
+  normalized. The machines agree because is49 mirrored this clause,
+  not by construction.)
 - `[type.range.value]` A range passes as a parameter, returns, binds,
   and iterates; `for` is **unchanged** in every way
   (`[mem.iter.for]`/`[mem.iter.range]` still describe the loop, and a
@@ -914,7 +1028,7 @@ precedent, `[type.trait.op.alias]`. The item grammar is
   more layer, and layers flatten. An alias entry carries no payload
   (`{IoErrors(int)}` is E0601): the alias already names what its tags
   carry.
-- `[type.err.alias.cycle]` **A cycle is E0515**, reported once, at the
+- `[type.err.alias.cycle]` **A cycle is E0610**, reported once, at the
   alias — the sibling of E0503 for trait aliases and of E0513 for
   associated-type bindings. `error A = {B}` with `error B = {A}` is
   one diagnostic naming the loop, not a hang and not a report per

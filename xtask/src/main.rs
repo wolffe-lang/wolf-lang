@@ -525,14 +525,29 @@ fn corpus_cmd() -> ExitCode {
             // directive says, and its stdout must match with the
             // trailing newline ignored (`print` appends one;
             // [conf.directive.check]).
+            // `exit=nonzero` is credited only to a program that was
+            // BUILT (s163, wolf-lang#371): `wolf run` exits 1 on a
+            // compile failure, which is exactly the class the weak claim
+            // would otherwise score, so a `fail(..)` verdict under it is
+            // red here by name, not only through the phase ledger below.
+            // Scoped to `nonzero` on purpose: a `run(exit=trap(kind))`
+            // fault witness may pin the DYNAMIC meaning of a rule this
+            // compiler also refuses statically (faults/ carries two).
+            if let Some(corpus::Check::Run(exp)) = &d.check
+                && exp.exit == corpus::ExitExpect::Nonzero
+                && verdict.starts_with("fail(")
+            {
+                eprintln!(
+                    "corpus: {}: expects run(exit=nonzero) but the program does not compile \
+                     ({verdict}) — a nonzero exit is never credited to a package that was not built",
+                    f.display(),
+                );
+                bad += 1;
+            }
             if let Some(corpus::Check::Run(exp)) = &d.check
                 && (verdict.starts_with("exit(") || verdict.starts_with("trap("))
             {
-                let exit_ok = match &exp.exit {
-                    corpus::ExitExpect::Code(n) => verdict == format!("exit({n})"),
-                    corpus::ExitExpect::Trap(None) => verdict.starts_with("trap("),
-                    corpus::ExitExpect::Trap(Some(kind)) => verdict == format!("trap({kind})"),
-                };
+                let exit_ok = exp.exit.matches(verdict);
                 if !exit_ok {
                     eprintln!(
                         "corpus: {}: expected run({:?}) but the program's verdict is {verdict}",

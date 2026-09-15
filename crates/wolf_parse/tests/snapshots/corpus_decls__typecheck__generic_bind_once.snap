@@ -1,0 +1,14 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TraitDecl 444..483 name=Area
+  FnDecl 461..482 name=area
+StructDecl 485..524 name=Rect fields=2
+StructDecl 526..558 name=Square fields=1
+ImplDecl 560..639 path=Area for=Rect
+  FnDecl 585..637 name=area body=Block
+ImplDecl 641..728 path=Area for=Square
+  FnDecl 668..726 name=area body=Block
+FnDecl 730..806 name=sum_areas body=Block
+FnDecl 808..912 name=main body=Block

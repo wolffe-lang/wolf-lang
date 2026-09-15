@@ -1,0 +1,45 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 897..949
+  FnDecl 897..948
+    FnKw 897..899 "fn"
+    Ident 900..904 "main"
+    ParamList 904..906
+      LParen 904..905 "("
+      RParen 905..906 ")"
+    RetType 907..914
+      Arrow 907..909 "->"
+      ErrorUnionType 910..914
+        Not 910..911 "!"
+        PathType 911..914
+          Path 911..914
+            Ident 911..914 "int"
+    Block 915..948
+      LBrace 915..916 "{"
+      LetDecl 921..941
+        LetKw 921..924 "let"
+        IdentPat 925..926
+          Ident 925..926 "g"
+        Colon 926..927 ":"
+        FnType 928..936
+          FnKw 928..930 "fn"
+          LParen 930..931 "("
+          ErrorNode 931..935
+            ProcKw 931..935 "proc"
+          RParen 935..936 ")"
+        Eq 937..938 "="
+        LiteralExpr 939..940
+          Int 939..940 "0"
+        Term 940..941 "\n"
+      ExprStmt 945..947
+        LiteralExpr 945..946
+          Int 945..946 "0"
+        Term 946..947 "\n"
+      RBrace 947..948 "}"
+  Term 948..949 "\n"
+  Eof 949..949 ""
+== diagnostics ==
+E0206 [Error] 931..935 expected a type

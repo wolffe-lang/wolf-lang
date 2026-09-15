@@ -1,0 +1,45 @@
+//! check: fail(E0401)
+//! phase: resolve
+//! conforms: type.generic.bind, gram.item.fn
+//!
+//! s163 (#319) — one type parameter binds ONE type per call
+//! ([type.generic.bind]). `a` binds `T` to `Rect`, so `s`, a `Square`,
+//! is E0401 at `s`: no common type, no implicit `dyn`, no second
+//! instance. wollf's sealed heldout wh-001, verbatim minus the
+//! directive. Both machines answer E0401 at the `s` (wolf 0.2.14,
+//! lupin 0.1.36).
+
+trait Area {
+    fn area(self) -> int
+}
+
+struct Rect {
+    w: int,
+    h: int,
+}
+
+struct Square {
+    side: int,
+}
+
+impl Area for Rect {
+    fn area(self) -> int {
+        self.w * self.h
+    }
+}
+
+impl Area for Square {
+    fn area(self) -> int {
+        self.side * self.side
+    }
+}
+
+fn sum_areas[T: Area](a: T, b: T) -> int {
+    Area.area(a) + Area.area(b)
+}
+
+fn main() -> !int {
+    let r = Rect { w: 6, h: 7 }
+    let s = Square { side: 4 }
+    sum_areas(r, s)
+}

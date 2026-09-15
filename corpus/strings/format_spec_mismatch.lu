@@ -1,6 +1,6 @@
 //! check: fail(E0413)
 //! phase: resolve
-//! conforms: str.interp
+//! conforms: str.interp, type.interp.spec
 //!
 //! A well-formed spec that does not fit the hole's type is a COMPILE
 //! error at the literal (s38, #28): `.2` means digits-after-the-point

@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="[    3.14]\n[3.14][3.14e+00][3.14E+00]\n[3.14159][0.5][2][inf]\n[+0.00][-0001.50]")
 //! phase: run
-//! conforms: str.interp
+//! conforms: str.interp, type.interp.spec
 //!
 //! The wolf-lang#10 headline made real: `{x:>8.2}` evaluates. Bare
 //! `.N` means fixed-point; `e`/`E` carry a signed two-digit exponent

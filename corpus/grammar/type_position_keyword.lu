@@ -1,0 +1,21 @@
+//! check: fail(E0206)
+//! phase: lex
+//! conforms: gram.type.start, gram.type
+//!
+//! s163 (wolf-lang#320) — a keyword where a type must begin is E0206,
+//! "expected a type", at the keyword ([gram.type.start]). `proc` is a
+//! keyword (it spells `spawn proc`), not a type, so the parameter
+//! position of this `fn` type holds a token that cannot begin one. The
+//! compiler has answered E0206 since about bs12 and no corpus file
+//! pinned it, so an implementation reading only the spec and the corpus
+//! had nothing to transcribe (lupin once spent the number on an
+//! invention of its own). Both machines answer E0206 at the `proc`
+//! since lupin 0.1.32's is45. #320's own spelling, `fn f(p: proc)`, is
+//! refused the same way; it is not the witness because the formatter
+//! cannot fully format a signature refusal under a `//!` header
+//! (wolf-lang#396), and every corpus file must.
+
+fn main() -> !int {
+    let g: fn(proc) = 0
+    0
+}

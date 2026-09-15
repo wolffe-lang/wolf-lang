@@ -5,7 +5,9 @@
 //! D63 refusal, by name: Python's bare tuple `let a, b = 1, 2` is not
 //! adopted — it needs unparenthesized tuple expressions on both
 //! sides. The note points at the two-paren destructuring spelling
-//! `let (a, b) = (1, 2)` and at one initializer per name.
+//! `let (a, b) = (1, 2)` and at one initializer per name. The report
+//! points at the comma after `a` ([gram.item.let], B25/#228 — both
+//! machines since s163; wolfc pointed at the line's end before).
 
 fn main() -> !int {
     let a, b = 1, 2

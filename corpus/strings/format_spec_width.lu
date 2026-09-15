@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="[hi      ]\n[      42]\n[******42]")
 //! phase: run
-//! conforms: str.interp
+//! conforms: str.interp, type.interp.spec
 //!
 //! The fill/align/width core of the format-spec grammar (wolf-lang#28's
 //! candidate §7.4): width in bytes, numbers default right, strings

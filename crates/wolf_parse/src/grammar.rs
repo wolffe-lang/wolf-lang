@@ -817,16 +817,21 @@ fn group_report(p: &mut Parser<'_>, kw: Keyword, shapes: &[BinderShape]) {
         }
         return;
     };
-    if let Some(&after) = deferred.iter().find(|&&i| i > first_init) {
+    if deferred.iter().any(|&i| i > first_init) {
         // `let a, b = 1, 2` — the bare tuple, refused by name. One
         // report covers the whole shape; its note carries both fixes,
-        // so the leading valueless binders stay unreported.
+        // so the leading valueless binders stay unreported. It POINTS at
+        // the comma after the group's first valueless binding — where
+        // that binding's `=` should have been, the first byte at which
+        // the input stops being a legal `let` ([gram.item.let], ruled
+        // B25 for wolf-lang#228; lupin's reading, which wolfc takes).
         p.push_diag(
             wolf_diag::Diagnostic::error(
                 codes::EXPECTED_TOKEN,
-                shapes[after].eq_site,
-                format!("this value has no name — `{kw} a, b = 1, 2` (the bare tuple) is not wolf"),
+                shapes[deferred[0]].eq_site,
+                format!("this name has no value — `{kw} a, b = 1, 2` (the bare tuple) is not wolf"),
             )
+            .with_label("its `=` and value belong before this comma")
             .with_note(format!(
                 "a comma groups complete bindings, each with its own `=`: \
                  `{kw} a = 1, b = 2`. To unpack one value into several names, \

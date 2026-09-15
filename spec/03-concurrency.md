@@ -93,7 +93,23 @@ premise by construction.
 - `[conc.task.order]` Spawn confers no ordering beyond
   `[conc.mm.hb.spawn]`; tasks may run in any interleaving consistent
   with happens-before. Implementations schedule on OS threads; a blocked
-  task holds its thread; pool compensation is unobservable.
+  task holds its thread; pool compensation is unobservable **to the
+  program** — no value, ordering or exit depends on it — **and
+  observable to the host.** **The cost, stated** (measured, not
+  derived): on wolf's native tier on linux, compensation is a timed
+  wait that re-arms, armed once per parked blocking wait, so each task
+  parked in a kernel wait with no deadline — `os_signal_wait`, an
+  unbudgeted `net_accept` — costs **~196 `futex` calls a second, every
+  one an error return**, for as long as it stays parked, and a process
+  with two such waits pays two clocks. Four measurements by lobo on
+  ubuntu-latest (4 vcpus) under `strace -c -f`, 8 s idle windows:
+  ws30 (wolf 0.2.9 and `fc07cc5`, runs 34553773533, 34554207566),
+  ws31 (0.2.11, run 34598620069), ws32 (0.2.11, run 34603180650,
+  6,273 calls over four hands, and run 34603229602 for the per-wait
+  increment). It is under 0.1% of a serving hand's CPU, and it is a
+  count a server choosing between a poll and a park is owed. (The
+  number written 2026-09-15 by s163 — wolf-lang#302 item 2; whether a
+  deadline-less park can cost nothing is item 1, still open.)
 - `[conc.task.name]` Tasks and procs carry names (spawn-site default,
   user-overridable) surfaced in the structured dump — the dump's
   *contents* are implementation-specified; its *existence* is contract.
@@ -176,9 +192,13 @@ premise by construction.
   killed-proc sequence (`[conc.proc.kill]`) for every live proc and
   terminates the process with a nonzero, implementation-specified
   status (`[conf.trap.exit]` discipline: conforming tools compare the
-  outcome class, never the number). (Appended 2026-08-10, finding
-  S-7's second half: the machine reported the root kill
-  `unsupported`; it is now specified.)
+  outcome class, never the number). A corpus witness spells that
+  class `run(exit=nonzero)` (`[conf.directive.check]`; witness
+  `conc/proc_link_root_death.lu`, where wolf's native tier exits 121
+  and lupin 0.1.36 exits 1). (Appended 2026-08-10, finding S-7's
+  second half: the machine reported the root kill `unsupported`; it is
+  now specified. The spelling sentence, 2026-09-15, s163 —
+  wolf-lang#371.)
 
 ### Channels `[conc.chan]`
 
@@ -217,8 +237,19 @@ premise by construction.
   Sends on a full channel and receives on an empty one block (they are
   cancellation points and recorded events).
 - `[conc.chan.default]` `channel[T]()` — no capacity argument — is the
-  rendezvous channel: the default is `n = 0` (`[conc.chan.buf]`).
-  (Appended 2026-08-11 — DRAFT, the bs06 ledger's spec-gap row: the
+  rendezvous channel: the default is `n = 0` (`[conc.chan.buf]`), by
+  specification and not by omission. `channel[T]()` and
+  `channel[T](0)` are the same channel: a send blocks until a receiver
+  meets it. **The cost, stated:** a rendezvous channel reserves no
+  buffer — its record is the channel's lock and its two waiter queues —
+  and every send is one handoff through that lock, parking the sender
+  until a receiver arrives; a capacity is spelled when a program wants
+  the other trade. Witness: `conc/chan_default_rendezvous.lu`, whose
+  receiver announces itself before it receives, so its line precedes
+  the sender's on both machines, and `channel[int](1)` reverses the
+  two. (Ruled 2026-09-11, BACKLOG B24 — wolf-lang#155's ch12 row: the
+  default is specified as rendezvous; written by s163. Appended
+  2026-08-11 as a draft from the bs06 ledger's spec-gap row: the
   reference machine defaulted to rendezvous with no clause behind it;
   this clause adopts that behavior as normative rather than repairing
   it. Rationale: rendezvous is the synchronization-first default —

@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="[+42][+0][-42]\n[00000042][-00042][+00042]\n[2a][2A][101010][52][-2a]\n[      2a][wo][a  e][  a  ]")
 //! phase: run
-//! conforms: str.interp
+//! conforms: str.interp, type.interp.spec
 //!
 //! The full §7.4 candidate grammar (s38, wolf-lang#28):
 //! `[[fill]align][+][0][width][.precision][type]`. `+` marks

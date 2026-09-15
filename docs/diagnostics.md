@@ -94,7 +94,7 @@ regex or a Windows path ended up in the wrong kind of string. For a
 literal backslash write `\\`; for text that should not be escaped at
 all, use a raw string `r"…"`, which has no escapes.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__char_uni_seven_digits.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__multiline_bad_escape.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__str_uni_seven_digits.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__chars_walk.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_hex.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_unicode.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_unknown.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__char_uni_seven_digits.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__multiline_bad_escape.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__str_uni_seven_digits.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__char_uni_seven_digits.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__multiline_bad_escape.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__str_uni_seven_digits.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__char_uni_seven_digits.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__multiline_bad_escape.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__str_uni_seven_digits.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_hex.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_unicode.snap, crates/wolf_lex/tests/snapshots/diagnostics__e0101_unknown.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__char_uni_seven_digits.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__multiline_bad_escape.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__str_uni_seven_digits.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__char_uni_seven_digits.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__multiline_bad_escape.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__str_uni_seven_digits.snap
 
 ## E0102 — unterminated string literal or interpolation
 
@@ -292,7 +292,7 @@ possibly applied (`List[int]`), or one of the prefixed forms `*T`,
 those. If you deleted a type mid-edit, the `:` or `->` in front of it
 is now dangling — remove it or complete the type.
 
-Fixtures: crates/wolf_parse/tests/snapshots/diagnostics__e0206_missing_type.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__type_position_keyword.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__type_position_keyword.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__type_position_keyword.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0206_missing_type.snap
 
 ## E0207 — expected a pattern
 
@@ -493,7 +493,7 @@ return type, the ok half of a fallible one (spec/10
 a `while` or a `print` is reported here, at the tail, with the
 declaration named as the origin.
 
-Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__width_truncation_two_annotations.snap, crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__list_lit_mixed.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__row_operand_compare.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_vs_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__byte_elem_arith_fail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__byte_narrow_fail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__coerce_no_widening.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__if_branch.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_ambiguity_named.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_float_to_int_refused.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_value_refused.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tail_declared_str.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tail_declared_union.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0401_to_int_row.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0401_range_mixed_endpoints.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_arg_vs_return.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_narrowing.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_widening.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_closure_return_vs_tail.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_computed_assert_fallback.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_deep_diff.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_if_branches.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_int_vs_float.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_let_annotation.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_list_element_mismatch.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_match_arms.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_range_element_outside_family.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_return_provenance.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_truthiness.snap
+Fixtures: crates/wolf_diag/tests/snapshots/render_snapshots__width_truncation_two_annotations.snap, crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__list_lit_mixed.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__row_operand_compare.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_vs_return.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__byte_elem_arith_fail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__byte_narrow_fail.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__coerce_no_widening.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__generic_bind_once.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__generic_bind_scalar.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__if_branch.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_ambiguity_named.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_float_to_int_refused.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_value_refused.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tail_declared_str.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__tail_declared_union.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0401_to_int_row.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0401_range_mixed_endpoints.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_arg_vs_return.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_narrowing.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_byte_widening.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_closure_return_vs_tail.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_computed_assert_fallback.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_deep_diff.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_if_branches.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_int_vs_float.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_let_annotation.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_list_element_mismatch.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_match_arms.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_range_element_outside_family.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_return_provenance.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0401_truthiness.snap
 
 ## E0402 — wrong number of arguments in a call
 
@@ -651,7 +651,7 @@ Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__char_index_
 
 A format spec (`"{x:spec}"`, D26) is a closed mini-language —
 `[[fill]align][+][0][width][.precision][type]` with alignment `<`/`^`/`>`
-and type one of `b o x X e E f` (spec §7.4 candidate, #28) — and every
+and type one of `b o x X e E f` (`[type.interp.spec]`, #28) — and every
 spec is known at compile time, so a spec the grammar cannot read is an
 error here, at the literal, never a surprise at run time. The common
 shapes: a stray character the grammar has no place for; `.` with no
@@ -840,7 +840,10 @@ also fires when a bound or `dyn` names a trait that declares its own
 input parameters: applying trait arguments inside a bound has no
 surface syntax yet, so such traits cannot be used as bounds today —
 use a trait without input parameters, or dispatch through qualified
-calls instead.
+calls instead. It fires, too, at a trait alias whose expansion reaches
+itself (`trait A = B` with `trait B = A`, `[type.trait.op.alias]`):
+the cycle is reported once, at the alias that closes it — name traits
+with members instead.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__error_alias_cycle.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0503_alias_cycle.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0503_not_a_trait.snap
 
@@ -899,6 +902,10 @@ defines a member the trait never declared — extra members do not
 become part of the trait, because callers dispatch through the trait's
 declaration, not through any particular impl. The message names the
 member and shows the trait's declaration; make the impl agree with it.
+An `impl` of a trait ALIAS is this error too (`impl Num for P` over
+`trait Num = Add + Sub`, `[type.trait.op.alias]`): an alias lists the
+traits a bound means and is never implemented itself — implement each
+trait it lists, and the type satisfies the alias.
 
 Fixtures: crates/wolf_sema/tests/snapshots/ctfe_diagnostics__staged_provenance_chain.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0507_alias_impl.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0507_mismatch.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0513_cycle.snap
 
@@ -1012,7 +1019,10 @@ its payload. The same rule keeps a row to at most one row variable (the
 entry naming a generic parameter, the row's polymorphic tail): a row
 extends exactly one tail. Delete the duplicate entry, or if the two
 entries really are different failures, give them different tag names —
-tags are structural, so any name you have not used yet is free.
+tags are structural, so any name you have not used yet is free. An
+error-set alias named in a row carries no payload (`{IoErrors(int)}`,
+`[type.err.alias.union]`): the alias already names what its tags
+carry, so name the tag with the payload instead.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__dup_tags.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0601_duplicate_tag.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0601_error_alias_payload.snap
 

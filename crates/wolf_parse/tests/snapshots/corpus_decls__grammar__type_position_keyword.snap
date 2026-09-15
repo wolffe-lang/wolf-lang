@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 897..948 name=main body=Block
+-- diagnostics --
+E0206 [Error] 931..935 expected a type

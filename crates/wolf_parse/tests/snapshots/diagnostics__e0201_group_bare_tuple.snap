@@ -5,16 +5,16 @@ expression: "format!(\"{d:#?}\")"
 Diagnostic {
     code: E0201,
     severity: Error,
-    message: "this value has no name — `let a, b = 1, 2` (the bare tuple) is not wolf",
+    message: "this name has no value — `let a, b = 1, 2` (the bare tuple) is not wolf",
     primary: LabeledSpan {
         span: Span {
             file: FileId(
                 0,
             ),
-            lo: 15,
-            hi: 16,
+            lo: 5,
+            hi: 6,
         },
-        label: "",
+        label: "its `=` and value belong before this comma",
     },
     secondary: [],
     notes: [

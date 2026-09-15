@@ -7746,429 +7746,9 @@ impl<'a> Checker<'a> {
     /// wolf-std's taxonomy reserved for the io tier.) Payload-carrying
     /// forms (`NotFound{path}`) are the recorded stdc02 retrofit.
     fn call_host_stub(&mut self, name: &str, e: &GreenNode, args: Option<ArgList<'_>>) -> R<TyId> {
-        let str_ = self.lo.table.prim(Prim::Str);
-        let int_ = self.lo.table.prim(Prim::Int);
-        let bool_ = self.lo.table.prim(Prim::Bool);
-        let unit = self.lo.table.unit();
-        let rowed = |zelf: &mut Self, ok: TyId, tags: &[&str]| {
-            let row = zelf.lo.table.row(
-                tags.iter().map(|t| (t.to_string(), Vec::new())).collect(),
-                None,
-            );
-            zelf.lo.table.intern(TyKind::ErrUnion(ok, row))
-        };
-        let (params, ret): (Vec<TyId>, TyId) = match name {
-            "read_text" | "net_fetch" | "env_var" => (vec![str_], str_),
-            "clock_ms" | "random_seed" => (Vec::new(), int_),
-            "read_line" => (Vec::new(), rowed(self, str_, &["eof", "io", "utf8"])),
-            "fs_read_text" => (
-                vec![str_],
-                rowed(self, str_, &["not_found", "denied", "io", "utf8"]),
-            ),
-            "fs_write_text" => (
-                vec![str_, str_],
-                rowed(self, unit, &["not_found", "denied", "io"]),
-            ),
-            "fs_open" => (
-                vec![str_],
-                rowed(self, int_, &["not_found", "denied", "io"]),
-            ),
-            "fs_create" => (vec![str_], rowed(self, int_, &["denied", "io"])),
-            "fs_read" => (vec![int_, int_], rowed(self, str_, &["eof", "io", "utf8"])),
-            "fs_write" => (vec![int_, str_], rowed(self, unit, &["io"])),
-            "fs_close" => (vec![int_], rowed(self, unit, &["io"])),
-            "fs_remove" => (
-                vec![str_],
-                rowed(self, unit, &["not_found", "denied", "io"]),
-            ),
-            "fs_exists" => (vec![str_], bool_),
-            // The s90 fs surface (wolf-lang#51/#52). Four themes, one
-            // rule: anything a tier-1 platform cannot promise is a
-            // declared ROW, never a doc comment and never a `#[cfg]`.
-            //
-            // MODES. `fs_open_mode(path, mode)` is the moded open the
-            // family never had — 0 read, 1 write (create+truncate),
-            // 2 append (create), 3 read-write (create, no truncate),
-            // 4 create-new (exclusive), and since s149 (#289,
-            // `[os.fs.open]`) 5 read-non-blocking — mode 0 with
-            // `O_NONBLOCK` on the hosts that have it, so an open
-            // cannot park on a fifo nobody writes and a server can
-            // drop the path stat it was paying to find that out. A
-            // mode outside that set is `invalid`, decided before the
-            // filesystem is touched; mode 4 losing the race is
-            // `exists`. `fs_open`/
-            // `fs_create` remain the 1-argument spellings of modes 0
-            // and 1, so every #40 call site is untouched — and
-            // `std.fs.append_text` stops reading the file it appends
-            // to (#52's whole complaint).
-            "fs_open_mode" => (
-                vec![str_, int_],
-                rowed(
-                    self,
-                    int_,
-                    &["not_found", "denied", "exists", "invalid", "io"],
-                ),
-            ),
-            // BYTES. `List[byte]` is the byte carrier (s136,
-            // wolf-lang#231): the octet type D72 ruled, one ledger byte
-            // per payload byte on every tier — before s136 these were
-            // `List[int]`, the carrier s77's `bytes()` and s81's
-            // `str_from_utf8` had established, and a 64 KiB read
-            // charged 16x its payload. No `utf8` row anywhere here: a
-            // file holding a lone `0x80` is data, and refusing to carry
-            // it was exactly what made `copy_file`/`move_file` text
-            // operations. `invalid` stays declared on the writes (the
-            // row vocabulary is stable; a `byte` element is in range by
-            // construction, so the row is unreachable from typed code
-            // and remains the FFI-caller answer).
-            "fs_read_bytes" => {
-                let list_byte = self.byte_list_ty();
-                (
-                    vec![str_],
-                    rowed(self, list_byte, &["not_found", "denied", "io"]),
-                )
-            }
-            "fs_write_bytes" => {
-                let list_byte = self.byte_list_ty();
-                (
-                    vec![str_, list_byte],
-                    rowed(self, unit, &["not_found", "denied", "invalid", "io"]),
-                )
-            }
-            "fs_read_chunk" => {
-                let list_byte = self.byte_list_ty();
-                (vec![int_, int_], rowed(self, list_byte, &["eof", "io"]))
-            }
-            "fs_write_chunk" => {
-                let list_byte = self.byte_list_ty();
-                (vec![int_, list_byte], rowed(self, unit, &["invalid", "io"]))
-            }
-            // DIRECTORIES. `fs_read_dir` hands back entry NAMES,
-            // SORTED — the decision is `wolf_rt::fs`'s doc and the
-            // reason is that filesystem order differs per filesystem,
-            // so an unsorted listing makes every test written against
-            // it machine-dependent. `utf8` is a name this `str` tier
-            // cannot represent: failing the listing beats silently
-            // dropping the entry, because a dropped entry makes
-            // `read_dir` lie.
-            "fs_read_dir" => {
-                let list_str = self.lo.table.intern(TyKind::List(str_));
-                (
-                    vec![str_],
-                    rowed(self, list_str, &["not_found", "denied", "utf8", "io"]),
-                )
-            }
-            "fs_create_dir" => (
-                vec![str_],
-                rowed(self, unit, &["exists", "not_found", "denied", "io"]),
-            ),
-            // The recursive form is idempotent (an existing directory
-            // is not an error), which is why it carries no `exists`.
-            "fs_create_dir_all" => (vec![str_], rowed(self, unit, &["denied", "io"])),
-            // A non-empty directory is `io`: the platforms spell the
-            // errno differently and the caller's response is the same
-            // either way (taxonomy rule 3).
-            "fs_remove_dir" | "fs_remove_dir_all" => (
-                vec![str_],
-                rowed(self, unit, &["not_found", "denied", "io"]),
-            ),
-            // RENAME. Named `fs_rename` and NOT `fs_rename_atomic`,
-            // deliberately: POSIX replaces a destination atomically
-            // and windows does not promise to, so the atomic spelling
-            // would be a promise broken on a tier-1 target. What this
-            // one claims is the effect — the entry moves, without its
-            // bytes being read. `cross_device` is the universal
-            // divergence (EXDEV / ERROR_NOT_SAME_DEVICE) and is a row
-            // so `std.fs.move_file` can fall back to
-            // `read_bytes`+`write_bytes`+`remove`. The atomicity the
-            // language DOES promise everywhere is `fs_open_mode`'s
-            // mode 4.
-            "fs_rename" => (
-                vec![str_, str_],
-                rowed(
-                    self,
-                    unit,
-                    &["not_found", "denied", "cross_device", "exists", "io"],
-                ),
-            ),
-            // METADATA. The predicates are TOTAL like `fs_exists` (a
-            // missing path is not a file and not a directory), so
-            // `exists` can finally say WHAT exists. `fs_modified_ms`
-            // is the `time_unix_ms` unit — milliseconds from the epoch,
-            // negative before it — so the two compare without a
-            // conversion. A host that cannot report a time is `io`;
-            // there is no `unsupported` tag because there is no
-            // different response to it.
-            "fs_is_file" | "fs_is_dir" => (vec![str_], bool_),
-            "fs_size" | "fs_modified_ms" => (
-                vec![str_],
-                rowed(self, int_, &["not_found", "denied", "io"]),
-            ),
-            // s142 (#261, `[os.fs.fstat]`): the stat on an OPEN handle
-            // — kind, size and mtime from one `metadata()` on the file
-            // the program is about to read anyway (nginx's `fstat`),
-            // as `[kind, size, modified_ms]` (kind 0 file, 1 directory,
-            // 2 other). The row set is `fs_size`'s; a closed or forged
-            // handle is `io`, the family's rule.
-            "fs_fstat" => {
-                let list_int = self.lo.table.intern(TyKind::List(int_));
-                (
-                    vec![int_],
-                    rowed(self, list_int, &["not_found", "denied", "io"]),
-                )
-            }
-            // The s39 net builtin tier (blocking TCP v0): the row
-            // vocabulary is {refused, timeout, closed, io} — `closed`
-            // is the peer's finish (the socket `eof`), `timeout` is
-            // declared now so the vocabulary is stable when s35/s40
-            // deadlines make it routinely reachable. A forged or
-            // wrong-kind fd is `io`, never a trap.
-            "net_listen" => (vec![str_], rowed(self, int_, &["io"])),
-            // s136 (#227, `[os.net.unix]`): the unix-domain family, in
-            // the TCP pair's shape. The rows distinguish "this host
-            // does not serve the family" (`unsupported` — windows at
-            // this pin, by name) from "the path failed" (`exists` for
-            // a stale socket file at bind, `not_found` for a missing
-            // directory or socket file, `denied` for a permission the
-            // caller lacks, `refused` for a file nobody listens on);
-            // the accepted/dialed stream is an ordinary net fd.
-            "net_listen_unix" => (
-                vec![str_],
-                rowed(
-                    self,
-                    int_,
-                    &["unsupported", "exists", "not_found", "denied", "io"],
-                ),
-            ),
-            "net_connect_unix" => (
-                vec![str_],
-                rowed(
-                    self,
-                    int_,
-                    &["unsupported", "refused", "not_found", "denied", "io"],
-                ),
-            ),
-            // s137 (#234, `[os.net.listen.opts]`): `net_listen` with
-            // the two listener options a prefork server needs —
-            // `reuse_port` (`SO_REUSEPORT` before the bind: N hands
-            // share one port; what the kernel does with the group is
-            // the host's, named in the clause) and the `listen(2)`
-            // backlog hint (`<= 0`: the runtime's default). The rows
-            // tell the host from the address: `unsupported` is the host
-            // (windows, by name), `exists` an address another socket
-            // holds — the "in use" row #234 asked for, in the
-            // vocabulary s136 gave the family — `denied` a privileged
-            // port. `(addr, false, 0)` is `net_listen(addr)`.
-            "net_listen_with" => (
-                vec![str_, bool_, int_],
-                rowed(self, int_, &["unsupported", "exists", "denied", "io"]),
-            ),
-            // s137 (#235, `[os.proc.inherit]`): take an OS descriptor
-            // this process was HANDED (`os_spawn_with`'s inherit set
-            // arrives as 3, 4, … in the child) as a listener. Not a
-            // socket, not listening, a foreign family, or a number
-            // already adopted: `io`; the host (windows) `unsupported`,
-            // by name.
-            "net_adopt_listener" => (vec![int_], rowed(self, int_, &["unsupported", "io"])),
-            // s137 (#127, `[os.net.wait]`): readiness over a SET —
-            // which of these handles can be read without blocking.
-            // The answer is the subset, in the caller's order; an
-            // EMPTY answer is the deadline expiring with nothing
-            // ready, which is an answer and not a row. `io` is a
-            // forged handle, or a wait that could never end.
-            "net_wait" => {
-                let list_int = self.lo.table.intern(TyKind::List(int_));
-                (vec![list_int, int_], rowed(self, list_int, &["io"]))
-            }
-            "net_port" => (vec![int_], rowed(self, int_, &["io"])),
-            "net_accept" => (vec![int_], rowed(self, int_, &["timeout", "io"])),
-            "net_connect" => (vec![str_], rowed(self, int_, &["refused", "timeout", "io"])),
-            "net_read" => (
-                vec![int_, int_],
-                rowed(self, str_, &["closed", "timeout", "utf8", "io"]),
-            ),
-            "net_write" => (vec![int_, str_], rowed(self, unit, &["closed", "io"])),
-            // s115 (#137): the byte twins. `List[byte]` in/out (s136,
-            // #231 — `List[int]` before), no `utf8` row (bytes are
-            // bytes — the `fs_read_bytes` posture over the socket); the
-            // write keeps `invalid` declared exactly as `fs_write_bytes`
-            // does.
-            "net_read_bytes" => {
-                let list_byte = self.byte_list_ty();
-                (
-                    vec![int_, int_],
-                    rowed(self, list_byte, &["closed", "timeout", "io"]),
-                )
-            }
-            "net_write_bytes" => {
-                let list_byte = self.byte_list_ty();
-                (
-                    vec![int_, list_byte],
-                    rowed(self, unit, &["closed", "invalid", "io"]),
-                )
-            }
-            // s141 (#254, `[os.net.writev]`): the gathered write — a
-            // `List[List[byte]]`, every part in order in one syscall,
-            // with `net_write`'s rows exactly: `invalid` is
-            // `net_write_bytes`'s FFI-shaped refusal, and a typed
-            // nested list has no such row to declare.
-            "net_writev" => {
-                let list_byte = self.byte_list_ty();
-                let parts = self.lo.table.intern(TyKind::List(list_byte));
-                (vec![int_, parts], rowed(self, unit, &["closed", "io"]))
-            }
-            // s160 (#299, `[os.net.writev.head]`): the gather with a
-            // `str` head. A response head IS a `str`, and
-            // `[mem.str.view.lend]` materializes a `List[byte]` for it
-            // in a `let` or a push — so the one-syscall write cost a
-            // full copy of the head to enter the vector. The head's
-            // own `{ptr, len}` is what `writev` wants; this hands it
-            // over. Rows are `net_writev`'s exactly.
-            "net_writev_head" => {
-                let list_byte = self.byte_list_ty();
-                let parts = self.lo.table.intern(TyKind::List(list_byte));
-                (
-                    vec![int_, str_, parts],
-                    rowed(self, unit, &["closed", "io"]),
-                )
-            }
-            // s141 (#254, `[os.net.nodelay]`): Nagle off (`true`, the
-            // posture every stream is handed out with) or on for a
-            // TCP stream; a listener, a unix stream or a forged
-            // handle is `io`.
-            "net_nodelay" => (vec![int_, bool_], rowed(self, unit, &["io"])),
-            "net_close" => (vec![int_], rowed(self, unit, &["io"])),
-            // s106 (#45's builtin half): arm (`ms > 0`) or clear
-            // (`ms <= 0`) a per-socket deadline budget — every
-            // subsequent parking call on that socket (`accept`,
-            // `read`, `write`) resolves as its row's `timeout` tag
-            // when the budget fires first. Arming itself fails only on
-            // a forged/closed fd (or a host that cannot hold a
-            // deadline): `io`.
-            "net_deadline" => (vec![int_, int_], rowed(self, unit, &["io"])),
-            // The s40 os/env builtin tier. `env_get`'s absent variable
-            // is the `missing` row (an outcome, never a sentinel);
-            // `utf8` covers a value the host holds in a non-UTF-8
-            // encoding. `env_set` rejects names the platform cannot
-            // hold (`=`/NUL, empty) as `invalid`. `env_args`/`env_vars`
-            // are `List[str]` — args in order, vars as sorted `K=V`
-            // lines (determinism; the std facade owns richer shapes).
-            "env_args" | "env_vars" => {
-                let list_str = self.lo.table.intern(TyKind::List(str_));
-                (Vec::new(), list_str)
-            }
-            "env_get" => (vec![str_], rowed(self, str_, &["missing", "utf8"])),
-            "env_set" => (vec![str_, str_], rowed(self, unit, &["invalid"])),
-            // `os_exe` (s90, #69) is `os_cwd`'s shape: a process-context
-            // read whose one failure — no path, or one this str tier
-            // cannot hold — is `io`. It exists so std.process's rig can
-            // spawn ITSELF and finally witness a child's exit code.
-            "os_cwd" | "os_exe" => (Vec::new(), rowed(self, str_, &["io"])),
-            // s137 (#233, `[os.cpus]`): the count of schedulable
-            // cores, `os_cwd`'s shape without the string. Always
-            // `>= 1` when it answers; a host that cannot is `io`, so
-            // `worker_processes auto` can say it did not learn the
-            // number rather than quietly running one worker.
-            "os_cpus" => (Vec::new(), rowed(self, int_, &["io"])),
-            // `os_exit` types unit and never returns (the checked
-            // machine stops with the code; native calls the runtime
-            // exit) — a `never` result is the std facade's refinement.
-            "os_exit" => (vec![int_], unit),
-            // The process trio (I13 `exec`): argv-array only — there
-            // is deliberately NO shell-string spawn anywhere. v0 stdio
-            // is null-wired (pipes arrive with the std facade over the
-            // s38 io traits); `signal` is a child that died without an
-            // exit code.
-            "os_spawn" => {
-                let list_str = self.lo.table.intern(TyKind::List(str_));
-                (
-                    vec![list_str],
-                    rowed(self, int_, &["not_found", "denied", "io"]),
-                )
-            }
-            // s137 (#235, `[os.proc.inherit]`): `os_spawn` with the
-            // program named apart from its arguments and an INHERIT
-            // set — this process's net handles, which the child
-            // receives as descriptors 3, 4, … in the order given (the
-            // number is the contract: the parent never learns a
-            // descriptor number, the child adopts by position). The
-            // spawn rows plus `unsupported` for a host that hands
-            // nothing across (windows, by name); the checked machine
-            // refuses a non-empty set by name.
-            "os_spawn_with" => {
-                let list_str = self.lo.table.intern(TyKind::List(str_));
-                let list_int = self.lo.table.intern(TyKind::List(int_));
-                (
-                    vec![str_, list_str, list_int],
-                    rowed(self, int_, &["unsupported", "not_found", "denied", "io"]),
-                )
-            }
-            "os_wait" => (vec![int_], rowed(self, int_, &["signal", "io"])),
-            "os_kill" => (vec![int_], rowed(self, unit, &["io"])),
-            // signal RECEPTION (s114, #126): the abstraction is by
-            // MEANING — the set is a bitmask (reload=1, terminate=2,
-            // quit=4, upgrade=8). `listen` registers interest, `wait`
-            // parks the task until one of the set arrives and returns
-            // which one, `raise` self-delivers (the loopback). The one
-            // row is `io` (a bad set, an install failure) — delivery
-            // itself is a value, never a trap.
-            "os_signal_listen" | "os_signal_raise" => (vec![int_], rowed(self, unit, &["io"])),
-            "os_signal_wait" => (vec![int_], rowed(self, int_, &["io"])),
-            // the OS random source (s118, #143): exactly n OS-provided
-            // entropy bytes as a `List[int]` (s115's byte carrier).
-            // Deliberately NO error row — the one os-tier surface
-            // whose failure TRAPS ([os.random.trap]): a row would
-            // invite the `else`-arm fallback to predictable bytes this
-            // surface exists to make impossible. `n < 0` is the
-            // [mem.str.repeat] caller-contract trap; `n == 0` is the
-            // empty list.
-            "os_random" => {
-                let list_int = self.lo.table.intern(TyKind::List(int_));
-                (vec![int_], list_int)
-            }
-            // The s40 time builtin tier (X12): ms integers — monotonic
-            // from an arbitrary process-local anchor, wall ms since
-            // the Unix epoch, and a blocking sleep.
-            "time_now_ms" | "time_unix_ms" => (Vec::new(), int_),
-            "time_sleep_ms" => (vec![int_], unit),
-            // The s40 json builtin tier (pure; std.x.json's query
-            // kernels). `parse` is any RFC 8259 violation, `missing`
-            // a path that addresses nothing, `kind` a node of the
-            // wrong kind for the operation. Paths are dotted
-            // key/index segments ("users.0.name"; "" is the root).
-            "json_valid" => (vec![str_], bool_),
-            "json_get" | "json_type" => {
-                (vec![str_, str_], rowed(self, str_, &["parse", "missing"]))
-            }
-            "json_len" => (
-                vec![str_, str_],
-                rowed(self, int_, &["parse", "missing", "kind"]),
-            ),
-            // The s81 str-construction border (#58): `List[byte] -> str
-            // ! {utf8}` (s136, #231 — `List[int]` before), pure like the
-            // json family. The row is the whole point — s77 refused an
-            // unchecked bytes-to-str path because that is the forging
-            // hole, and this closes the gap the honest way: the
-            // primitive VALIDATES (stray continuations, truncations,
-            // overlong forms, surrogates, scalars past U+10FFFF), and a
-            // rejection is a recoverable `utf8` VALUE, not a trap.
-            // wolf-std's `bytes.to_str` is this call plus a name.
-            "str_from_utf8" => {
-                let list_byte = self.byte_list_ty();
-                (vec![list_byte], rowed(self, str_, &["utf8"]))
-            }
-            // The region accounting queries (s131, wolf-lang#187):
-            // pure reads of the ledger `[mem.region.account]` names.
-            // No row — the query cannot fail: the argument is a live
-            // region binding by construction (the affine value's
-            // static discipline), and the process-wide read has no
-            // failure mode.
-            "region_bytes" => {
-                let region_ = self.lo.table.intern(TyKind::RegionTy);
-                (vec![region_], int_)
-            }
-            "live_region_bytes" => (Vec::new(), int_),
-            _ => (Vec::new(), self.error_ty()),
+        let (params, ret) = match host_builtin_sig(&mut self.lo.table, name) {
+            Some(sig) => sig,
+            None => (Vec::new(), self.error_ty()),
         };
         self.call_fixed(name, &params, ret, e, args)
     }
@@ -8177,11 +7757,6 @@ impl<'a> Checker<'a> {
     /// byte consumer takes (s136, wolf-lang#231): `str.bytes()`,
     /// `str_from_utf8`, the four `fs_*` byte calls and the two `net_*`
     /// byte calls. One spelling, so the eight signatures cannot drift.
-    fn byte_list_ty(&mut self) -> TyId {
-        let byte_ = self.lo.table.prim(Prim::Byte);
-        self.lo.table.intern(TyKind::List(byte_))
-    }
-
     /// A comptime intrinsic call (the D33 allowlist): `typeinfo` /
     /// `reflect`, `typebuild`, `implements`, `size_of`, `assert`.
     fn call_intrinsic(
@@ -12385,6 +11960,448 @@ fn chain_is_bare(n: &GreenNode) -> bool {
         Some(m) if m.kind == SyntaxKind::IfExpr => chain_is_bare(m),
         Some(_) => false,
     }
+}
+
+/// The host builtin table (`[os.host]`, s163 — wolf-lang#181): every
+/// prelude function the checker types through `call_host_stub`, as its
+/// parameter types and its result, the row included. `None` for any
+/// other name. Pure over the type table, so the spec annex's pin test
+/// (`tests/host_table_spec.rs`) reads the same table the checker does —
+/// the annex cannot describe a signature this function does not return.
+pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>, TyId)> {
+    let str_ = table.prim(Prim::Str);
+    let int_ = table.prim(Prim::Int);
+    let bool_ = table.prim(Prim::Bool);
+    let unit = table.unit();
+    let rowed = |t: &mut TypeTable, ok: TyId, tags: &[&str]| {
+        let row = t.row(
+            tags.iter().map(|g| (g.to_string(), Vec::new())).collect(),
+            None,
+        );
+        t.intern(TyKind::ErrUnion(ok, row))
+    };
+    let byte_list = |t: &mut TypeTable| {
+        let byte_ = t.prim(Prim::Byte);
+        t.intern(TyKind::List(byte_))
+    };
+    let sig: (Vec<TyId>, TyId) = match name {
+        "read_text" | "net_fetch" | "env_var" => (vec![str_], str_),
+        "clock_ms" | "random_seed" => (Vec::new(), int_),
+        "read_line" => (Vec::new(), rowed(table, str_, &["eof", "io", "utf8"])),
+        "fs_read_text" => (
+            vec![str_],
+            rowed(table, str_, &["not_found", "denied", "io", "utf8"]),
+        ),
+        "fs_write_text" => (
+            vec![str_, str_],
+            rowed(table, unit, &["not_found", "denied", "io"]),
+        ),
+        "fs_open" => (
+            vec![str_],
+            rowed(table, int_, &["not_found", "denied", "io"]),
+        ),
+        "fs_create" => (vec![str_], rowed(table, int_, &["denied", "io"])),
+        "fs_read" => (vec![int_, int_], rowed(table, str_, &["eof", "io", "utf8"])),
+        "fs_write" => (vec![int_, str_], rowed(table, unit, &["io"])),
+        "fs_close" => (vec![int_], rowed(table, unit, &["io"])),
+        "fs_remove" => (
+            vec![str_],
+            rowed(table, unit, &["not_found", "denied", "io"]),
+        ),
+        "fs_exists" => (vec![str_], bool_),
+        // The s90 fs surface (wolf-lang#51/#52). Four themes, one
+        // rule: anything a tier-1 platform cannot promise is a
+        // declared ROW, never a doc comment and never a `#[cfg]`.
+        //
+        // MODES. `fs_open_mode(path, mode)` is the moded open the
+        // family never had — 0 read, 1 write (create+truncate),
+        // 2 append (create), 3 read-write (create, no truncate),
+        // 4 create-new (exclusive), and since s149 (#289,
+        // `[os.fs.open]`) 5 read-non-blocking — mode 0 with
+        // `O_NONBLOCK` on the hosts that have it, so an open
+        // cannot park on a fifo nobody writes and a server can
+        // drop the path stat it was paying to find that out. A
+        // mode outside that set is `invalid`, decided before the
+        // filesystem is touched; mode 4 losing the race is
+        // `exists`. `fs_open`/
+        // `fs_create` remain the 1-argument spellings of modes 0
+        // and 1, so every #40 call site is untouched — and
+        // `std.fs.append_text` stops reading the file it appends
+        // to (#52's whole complaint).
+        "fs_open_mode" => (
+            vec![str_, int_],
+            rowed(
+                table,
+                int_,
+                &["not_found", "denied", "exists", "invalid", "io"],
+            ),
+        ),
+        // BYTES. `List[byte]` is the byte carrier (s136,
+        // wolf-lang#231): the octet type D72 ruled, one ledger byte
+        // per payload byte on every tier — before s136 these were
+        // `List[int]`, the carrier s77's `bytes()` and s81's
+        // `str_from_utf8` had established, and a 64 KiB read
+        // charged 16x its payload. No `utf8` row anywhere here: a
+        // file holding a lone `0x80` is data, and refusing to carry
+        // it was exactly what made `copy_file`/`move_file` text
+        // operations. `invalid` stays declared on the writes (the
+        // row vocabulary is stable; a `byte` element is in range by
+        // construction, so the row is unreachable from typed code
+        // and remains the FFI-caller answer).
+        "fs_read_bytes" => {
+            let list_byte = byte_list(table);
+            (
+                vec![str_],
+                rowed(table, list_byte, &["not_found", "denied", "io"]),
+            )
+        }
+        "fs_write_bytes" => {
+            let list_byte = byte_list(table);
+            (
+                vec![str_, list_byte],
+                rowed(table, unit, &["not_found", "denied", "invalid", "io"]),
+            )
+        }
+        "fs_read_chunk" => {
+            let list_byte = byte_list(table);
+            (vec![int_, int_], rowed(table, list_byte, &["eof", "io"]))
+        }
+        "fs_write_chunk" => {
+            let list_byte = byte_list(table);
+            (
+                vec![int_, list_byte],
+                rowed(table, unit, &["invalid", "io"]),
+            )
+        }
+        // DIRECTORIES. `fs_read_dir` hands back entry NAMES,
+        // SORTED — the decision is `wolf_rt::fs`'s doc and the
+        // reason is that filesystem order differs per filesystem,
+        // so an unsorted listing makes every test written against
+        // it machine-dependent. `utf8` is a name this `str` tier
+        // cannot represent: failing the listing beats silently
+        // dropping the entry, because a dropped entry makes
+        // `read_dir` lie.
+        "fs_read_dir" => {
+            let list_str = table.intern(TyKind::List(str_));
+            (
+                vec![str_],
+                rowed(table, list_str, &["not_found", "denied", "utf8", "io"]),
+            )
+        }
+        "fs_create_dir" => (
+            vec![str_],
+            rowed(table, unit, &["exists", "not_found", "denied", "io"]),
+        ),
+        // The recursive form is idempotent (an existing directory
+        // is not an error), which is why it carries no `exists`.
+        "fs_create_dir_all" => (vec![str_], rowed(table, unit, &["denied", "io"])),
+        // A non-empty directory is `io`: the platforms spell the
+        // errno differently and the caller's response is the same
+        // either way (taxonomy rule 3).
+        "fs_remove_dir" | "fs_remove_dir_all" => (
+            vec![str_],
+            rowed(table, unit, &["not_found", "denied", "io"]),
+        ),
+        // RENAME. Named `fs_rename` and NOT `fs_rename_atomic`,
+        // deliberately: POSIX replaces a destination atomically
+        // and windows does not promise to, so the atomic spelling
+        // would be a promise broken on a tier-1 target. What this
+        // one claims is the effect — the entry moves, without its
+        // bytes being read. `cross_device` is the universal
+        // divergence (EXDEV / ERROR_NOT_SAME_DEVICE) and is a row
+        // so `std.fs.move_file` can fall back to
+        // `read_bytes`+`write_bytes`+`remove`. The atomicity the
+        // language DOES promise everywhere is `fs_open_mode`'s
+        // mode 4.
+        "fs_rename" => (
+            vec![str_, str_],
+            rowed(
+                table,
+                unit,
+                &["not_found", "denied", "cross_device", "exists", "io"],
+            ),
+        ),
+        // METADATA. The predicates are TOTAL like `fs_exists` (a
+        // missing path is not a file and not a directory), so
+        // `exists` can finally say WHAT exists. `fs_modified_ms`
+        // is the `time_unix_ms` unit — milliseconds from the epoch,
+        // negative before it — so the two compare without a
+        // conversion. A host that cannot report a time is `io`;
+        // there is no `unsupported` tag because there is no
+        // different response to it.
+        "fs_is_file" | "fs_is_dir" => (vec![str_], bool_),
+        "fs_size" | "fs_modified_ms" => (
+            vec![str_],
+            rowed(table, int_, &["not_found", "denied", "io"]),
+        ),
+        // s142 (#261, `[os.fs.fstat]`): the stat on an OPEN handle
+        // — kind, size and mtime from one `metadata()` on the file
+        // the program is about to read anyway (nginx's `fstat`),
+        // as `[kind, size, modified_ms]` (kind 0 file, 1 directory,
+        // 2 other). The row set is `fs_size`'s; a closed or forged
+        // handle is `io`, the family's rule.
+        "fs_fstat" => {
+            let list_int = table.intern(TyKind::List(int_));
+            (
+                vec![int_],
+                rowed(table, list_int, &["not_found", "denied", "io"]),
+            )
+        }
+        // The s39 net builtin tier (blocking TCP v0): the row
+        // vocabulary is {refused, timeout, closed, io} — `closed`
+        // is the peer's finish (the socket `eof`), `timeout` is
+        // declared now so the vocabulary is stable when s35/s40
+        // deadlines make it routinely reachable. A forged or
+        // wrong-kind fd is `io`, never a trap.
+        "net_listen" => (vec![str_], rowed(table, int_, &["io"])),
+        // s136 (#227, `[os.net.unix]`): the unix-domain family, in
+        // the TCP pair's shape. The rows distinguish "this host
+        // does not serve the family" (`unsupported` — windows at
+        // this pin, by name) from "the path failed" (`exists` for
+        // a stale socket file at bind, `not_found` for a missing
+        // directory or socket file, `denied` for a permission the
+        // caller lacks, `refused` for a file nobody listens on);
+        // the accepted/dialed stream is an ordinary net fd.
+        "net_listen_unix" => (
+            vec![str_],
+            rowed(
+                table,
+                int_,
+                &["unsupported", "exists", "not_found", "denied", "io"],
+            ),
+        ),
+        "net_connect_unix" => (
+            vec![str_],
+            rowed(
+                table,
+                int_,
+                &["unsupported", "refused", "not_found", "denied", "io"],
+            ),
+        ),
+        // s137 (#234, `[os.net.listen.opts]`): `net_listen` with
+        // the two listener options a prefork server needs —
+        // `reuse_port` (`SO_REUSEPORT` before the bind: N hands
+        // share one port; what the kernel does with the group is
+        // the host's, named in the clause) and the `listen(2)`
+        // backlog hint (`<= 0`: the runtime's default). The rows
+        // tell the host from the address: `unsupported` is the host
+        // (windows, by name), `exists` an address another socket
+        // holds — the "in use" row #234 asked for, in the
+        // vocabulary s136 gave the family — `denied` a privileged
+        // port. `(addr, false, 0)` is `net_listen(addr)`.
+        "net_listen_with" => (
+            vec![str_, bool_, int_],
+            rowed(table, int_, &["unsupported", "exists", "denied", "io"]),
+        ),
+        // s137 (#235, `[os.proc.inherit]`): take an OS descriptor
+        // this process was HANDED (`os_spawn_with`'s inherit set
+        // arrives as 3, 4, … in the child) as a listener. Not a
+        // socket, not listening, a foreign family, or a number
+        // already adopted: `io`; the host (windows) `unsupported`,
+        // by name.
+        "net_adopt_listener" => (vec![int_], rowed(table, int_, &["unsupported", "io"])),
+        // s137 (#127, `[os.net.wait]`): readiness over a SET —
+        // which of these handles can be read without blocking.
+        // The answer is the subset, in the caller's order; an
+        // EMPTY answer is the deadline expiring with nothing
+        // ready, which is an answer and not a row. `io` is a
+        // forged handle, or a wait that could never end.
+        "net_wait" => {
+            let list_int = table.intern(TyKind::List(int_));
+            (vec![list_int, int_], rowed(table, list_int, &["io"]))
+        }
+        "net_port" => (vec![int_], rowed(table, int_, &["io"])),
+        "net_accept" => (vec![int_], rowed(table, int_, &["timeout", "io"])),
+        "net_connect" => (
+            vec![str_],
+            rowed(table, int_, &["refused", "timeout", "io"]),
+        ),
+        "net_read" => (
+            vec![int_, int_],
+            rowed(table, str_, &["closed", "timeout", "utf8", "io"]),
+        ),
+        "net_write" => (vec![int_, str_], rowed(table, unit, &["closed", "io"])),
+        // s115 (#137): the byte twins. `List[byte]` in/out (s136,
+        // #231 — `List[int]` before), no `utf8` row (bytes are
+        // bytes — the `fs_read_bytes` posture over the socket); the
+        // write keeps `invalid` declared exactly as `fs_write_bytes`
+        // does.
+        "net_read_bytes" => {
+            let list_byte = byte_list(table);
+            (
+                vec![int_, int_],
+                rowed(table, list_byte, &["closed", "timeout", "io"]),
+            )
+        }
+        "net_write_bytes" => {
+            let list_byte = byte_list(table);
+            (
+                vec![int_, list_byte],
+                rowed(table, unit, &["closed", "invalid", "io"]),
+            )
+        }
+        // s141 (#254, `[os.net.writev]`): the gathered write — a
+        // `List[List[byte]]`, every part in order in one syscall,
+        // with `net_write`'s rows exactly: `invalid` is
+        // `net_write_bytes`'s FFI-shaped refusal, and a typed
+        // nested list has no such row to declare.
+        "net_writev" => {
+            let list_byte = byte_list(table);
+            let parts = table.intern(TyKind::List(list_byte));
+            (vec![int_, parts], rowed(table, unit, &["closed", "io"]))
+        }
+        // s160 (#299, `[os.net.writev.head]`): the gather with a
+        // `str` head. A response head IS a `str`, and
+        // `[mem.str.view.lend]` materializes a `List[byte]` for it
+        // in a `let` or a push — so the one-syscall write cost a
+        // full copy of the head to enter the vector. The head's
+        // own `{ptr, len}` is what `writev` wants; this hands it
+        // over. Rows are `net_writev`'s exactly.
+        "net_writev_head" => {
+            let list_byte = byte_list(table);
+            let parts = table.intern(TyKind::List(list_byte));
+            (
+                vec![int_, str_, parts],
+                rowed(table, unit, &["closed", "io"]),
+            )
+        }
+        // s141 (#254, `[os.net.nodelay]`): Nagle off (`true`, the
+        // posture every stream is handed out with) or on for a
+        // TCP stream; a listener, a unix stream or a forged
+        // handle is `io`.
+        "net_nodelay" => (vec![int_, bool_], rowed(table, unit, &["io"])),
+        "net_close" => (vec![int_], rowed(table, unit, &["io"])),
+        // s106 (#45's builtin half): arm (`ms > 0`) or clear
+        // (`ms <= 0`) a per-socket deadline budget — every
+        // subsequent parking call on that socket (`accept`,
+        // `read`, `write`) resolves as its row's `timeout` tag
+        // when the budget fires first. Arming itself fails only on
+        // a forged/closed fd (or a host that cannot hold a
+        // deadline): `io`.
+        "net_deadline" => (vec![int_, int_], rowed(table, unit, &["io"])),
+        // The s40 os/env builtin tier. `env_get`'s absent variable
+        // is the `missing` row (an outcome, never a sentinel);
+        // `utf8` covers a value the host holds in a non-UTF-8
+        // encoding. `env_set` rejects names the platform cannot
+        // hold (`=`/NUL, empty) as `invalid`. `env_args`/`env_vars`
+        // are `List[str]` — args in order, vars as sorted `K=V`
+        // lines (determinism; the std facade owns richer shapes).
+        "env_args" | "env_vars" => {
+            let list_str = table.intern(TyKind::List(str_));
+            (Vec::new(), list_str)
+        }
+        "env_get" => (vec![str_], rowed(table, str_, &["missing", "utf8"])),
+        "env_set" => (vec![str_, str_], rowed(table, unit, &["invalid"])),
+        // `os_exe` (s90, #69) is `os_cwd`'s shape: a process-context
+        // read whose one failure — no path, or one this str tier
+        // cannot hold — is `io`. It exists so std.process's rig can
+        // spawn ITSELF and finally witness a child's exit code.
+        "os_cwd" | "os_exe" => (Vec::new(), rowed(table, str_, &["io"])),
+        // s137 (#233, `[os.cpus]`): the count of schedulable
+        // cores, `os_cwd`'s shape without the string. Always
+        // `>= 1` when it answers; a host that cannot is `io`, so
+        // `worker_processes auto` can say it did not learn the
+        // number rather than quietly running one worker.
+        "os_cpus" => (Vec::new(), rowed(table, int_, &["io"])),
+        // `os_exit` types unit and never returns (the checked
+        // machine stops with the code; native calls the runtime
+        // exit) — a `never` result is the std facade's refinement.
+        "os_exit" => (vec![int_], unit),
+        // The process trio (I13 `exec`): argv-array only — there
+        // is deliberately NO shell-string spawn anywhere. v0 stdio
+        // is null-wired (pipes arrive with the std facade over the
+        // s38 io traits); `signal` is a child that died without an
+        // exit code.
+        "os_spawn" => {
+            let list_str = table.intern(TyKind::List(str_));
+            (
+                vec![list_str],
+                rowed(table, int_, &["not_found", "denied", "io"]),
+            )
+        }
+        // s137 (#235, `[os.proc.inherit]`): `os_spawn` with the
+        // program named apart from its arguments and an INHERIT
+        // set — this process's net handles, which the child
+        // receives as descriptors 3, 4, … in the order given (the
+        // number is the contract: the parent never learns a
+        // descriptor number, the child adopts by position). The
+        // spawn rows plus `unsupported` for a host that hands
+        // nothing across (windows, by name); the checked machine
+        // refuses a non-empty set by name.
+        "os_spawn_with" => {
+            let list_str = table.intern(TyKind::List(str_));
+            let list_int = table.intern(TyKind::List(int_));
+            (
+                vec![str_, list_str, list_int],
+                rowed(table, int_, &["unsupported", "not_found", "denied", "io"]),
+            )
+        }
+        "os_wait" => (vec![int_], rowed(table, int_, &["signal", "io"])),
+        "os_kill" => (vec![int_], rowed(table, unit, &["io"])),
+        // signal RECEPTION (s114, #126): the abstraction is by
+        // MEANING — the set is a bitmask (reload=1, terminate=2,
+        // quit=4, upgrade=8). `listen` registers interest, `wait`
+        // parks the task until one of the set arrives and returns
+        // which one, `raise` self-delivers (the loopback). The one
+        // row is `io` (a bad set, an install failure) — delivery
+        // itself is a value, never a trap.
+        "os_signal_listen" | "os_signal_raise" => (vec![int_], rowed(table, unit, &["io"])),
+        "os_signal_wait" => (vec![int_], rowed(table, int_, &["io"])),
+        // the OS random source (s118, #143): exactly n OS-provided
+        // entropy bytes as a `List[int]` (s115's byte carrier).
+        // Deliberately NO error row — the one os-tier surface
+        // whose failure TRAPS ([os.random.trap]): a row would
+        // invite the `else`-arm fallback to predictable bytes this
+        // surface exists to make impossible. `n < 0` is the
+        // [mem.str.repeat] caller-contract trap; `n == 0` is the
+        // empty list.
+        "os_random" => {
+            let list_int = table.intern(TyKind::List(int_));
+            (vec![int_], list_int)
+        }
+        // The s40 time builtin tier (X12): ms integers — monotonic
+        // from an arbitrary process-local anchor, wall ms since
+        // the Unix epoch, and a blocking sleep.
+        "time_now_ms" | "time_unix_ms" => (Vec::new(), int_),
+        "time_sleep_ms" => (vec![int_], unit),
+        // The s40 json builtin tier (pure; std.x.json's query
+        // kernels). `parse` is any RFC 8259 violation, `missing`
+        // a path that addresses nothing, `kind` a node of the
+        // wrong kind for the operation. Paths are dotted
+        // key/index segments ("users.0.name"; "" is the root).
+        "json_valid" => (vec![str_], bool_),
+        "json_get" | "json_type" => (vec![str_, str_], rowed(table, str_, &["parse", "missing"])),
+        "json_len" => (
+            vec![str_, str_],
+            rowed(table, int_, &["parse", "missing", "kind"]),
+        ),
+        // The s81 str-construction border (#58): `List[byte] -> str
+        // ! {utf8}` (s136, #231 — `List[int]` before), pure like the
+        // json family. The row is the whole point — s77 refused an
+        // unchecked bytes-to-str path because that is the forging
+        // hole, and this closes the gap the honest way: the
+        // primitive VALIDATES (stray continuations, truncations,
+        // overlong forms, surrogates, scalars past U+10FFFF), and a
+        // rejection is a recoverable `utf8` VALUE, not a trap.
+        // wolf-std's `bytes.to_str` is this call plus a name.
+        "str_from_utf8" => {
+            let list_byte = byte_list(table);
+            (vec![list_byte], rowed(table, str_, &["utf8"]))
+        }
+        // The region accounting queries (s131, wolf-lang#187):
+        // pure reads of the ledger `[mem.region.account]` names.
+        // No row — the query cannot fail: the argument is a live
+        // region binding by construction (the affine value's
+        // static discipline), and the process-wide read has no
+        // failure mode.
+        "region_bytes" => {
+            let region_ = table.intern(TyKind::RegionTy);
+            (vec![region_], int_)
+        }
+        "live_region_bytes" => (Vec::new(), int_),
+        _ => return None,
+    };
+    Some(sig)
 }
 
 #[cfg(test)]

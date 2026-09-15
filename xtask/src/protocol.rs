@@ -204,11 +204,22 @@ pub fn compare(
             return Some((Class::Diag, format!("{:?} vs {:?}", first(a), first(b))));
         }
     }
-    if matches!(va, Verdict::Exit(_)) && !structural_only {
-        let sha = |r: &serde_json::Value| r["stdout_sha256"].as_str().map(str::to_string);
-        if sha(a) != sha(b) {
-            return Some((Class::Stdout, "stdout hash mismatch".into()));
-        }
+    let sha = |r: &serde_json::Value| r["stdout_sha256"].as_str().map(str::to_string);
+    if matches!(va, Verdict::Exit(_)) && !structural_only && sha(a) != sha(b) {
+        return Some((Class::Stdout, "stdout hash mismatch".into()));
+    }
+    // A trap's output is compared when BOTH records carry it
+    // ([proto.cmp.phase], s163 — wolf-lang#216, ruled B25): what a
+    // program wrote before its fault is an observation exactly as an
+    // exiting program's is. An absent digest on either side is the
+    // honest-absent of [proto.record.fields], never a divergence; `ub`
+    // output is never compared.
+    if matches!(va, Verdict::Trap(_))
+        && !structural_only
+        && let (Some(x), Some(y)) = (sha(a), sha(b))
+        && x != y
+    {
+        return Some((Class::Stdout, "trap stdout hash mismatch".into()));
     }
     // Warning parity ([proto.record.warn], s67): compared only when
     // BOTH records carry the array (the additive-key rule of
@@ -394,6 +405,66 @@ mod tests {
         let mut r = record("pass");
         r["protocol"] = json!(2);
         assert!(validate_record(&r).is_err());
+    }
+
+    /// [proto.cmp.phase] (s163, wolf-lang#216): a trap compares kind AND
+    /// the stdout digest when both records carry one; one side's absent
+    /// digest is not a divergence; `ub` bytes are never compared.
+    #[test]
+    fn a_trap_compares_its_stdout_when_both_carry_it() {
+        let with = |v: &str, sha: Option<&str>| {
+            let mut r = record(v);
+            r["stdout_sha256"] = sha.map_or(json!(null), |s| json!(s));
+            r
+        };
+        let same = compare(
+            &with("trap(assert)", Some("aa")),
+            &with("trap(assert)", Some("aa")),
+            false,
+        );
+        assert!(same.is_none());
+        let (class, detail) = compare(
+            &with("trap(assert)", Some("aa")),
+            &with("trap(assert)", Some("bb")),
+            false,
+        )
+        .unwrap();
+        assert_eq!(class, Class::Stdout, "{detail}");
+        assert!(
+            compare(
+                &with("trap(assert)", Some("aa")),
+                &with("trap(assert)", None),
+                false
+            )
+            .is_none(),
+            "an absent digest is honest-absent, not a divergence"
+        );
+        assert!(
+            compare(
+                &with("trap(assert)", Some("aa")),
+                &with("trap(assert)", Some("bb")),
+                true
+            )
+            .is_none(),
+            "structural comparison never reads bytes"
+        );
+        assert!(
+            compare(
+                &with("ub(mem.ub)", Some("aa")),
+                &with("ub(mem.ub)", Some("bb")),
+                false
+            )
+            .is_none(),
+            "ub output is never compared"
+        );
+        // The kind still decides first.
+        let (class, _) = compare(
+            &with("trap(assert)", Some("aa")),
+            &with("trap(bounds)", Some("aa")),
+            false,
+        )
+        .unwrap();
+        assert_eq!(class, Class::Verdict);
     }
 
     #[test]

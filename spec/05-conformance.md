@@ -125,9 +125,27 @@ parser contract):
   non-directive `//!` lines are prose. Keys, each at most once
   (duplicates are errors): `check:`, `phase:`, `conforms:`, `member:`.
 - `[conf.directive.check]` `check: pass | fail(CODE) | run(exit=N |
-  exit=trap | exit=trap(kind) [, stdout="…"])` — kinds from
-  `[conf.trap.set]`; unknown kinds/phases are errors. A `fail(CODE)`
-  expectation matches the failing code exactly. A `stdout="…"`
+  exit=nonzero | exit=trap | exit=trap(kind) [, stdout="…"])` — kinds
+  from `[conf.trap.set]`; unknown kinds/phases are errors. A
+  `fail(CODE)` expectation matches the failing code exactly.
+  `exit=nonzero` matches an `exit(N)` verdict whose N is not 0 and
+  nothing else: not a trap (a trap is its own outcome class, spelled
+  `exit=trap`), and never a program that did not compile — a
+  `fail(CODE)` verdict under `exit=nonzero` is an error by name,
+  because a build failure also ends `wolf run` nonzero and the weak
+  claim must not score it. It is the spelling for the outcomes whose
+  status the spec leaves implementation-specified and whose class it
+  fixes (`[conc.proc.root]`), so a witness claims only what the
+  language promises. **The cost, stated:** none at run time — a
+  directive is read by the corpus runner, never by a program — and the
+  runner's cost is one integer comparison per file. (Appended
+  2026-09-15, s163 — wolf-lang#371: wolf-book's bs46 minted the
+  spelling for ch15, where `wolf` exits 121 and lupin 1 on the same
+  root-domain death, and this runner could not parse it, so ch15's
+  exercise directory stopped travelling to this corpus. The grammar
+  grew rather than `[conc.proc.root]` naming a number: a number would
+  move one machine's behaviour to fix a spelling. Witness:
+  `conc/proc_link_root_death.lu`.) A `stdout="…"`
   expectation matches the program's stdout byte-exactly EXCEPT that one
   trailing newline in the observed output is ignored (`print` appends
   one; directives stay single-line). Cross-implementation stdout
@@ -161,7 +179,8 @@ parser contract):
 ## §3 Trap & exit vocabulary `[conf.trap]`
 
 - `[conf.trap.set]` `run(exit=…)` values are plain integer exit codes,
-  `trap` (kind unspecified), or `trap(kind)` with kind from the closed
+  `nonzero` (any status but 0, `[conf.directive.check]`), `trap`
+  (kind unspecified), or `trap(kind)` with kind from the closed
   set: `overflow`, `div-zero`, `bounds`, `use-after-move`, `exclusivity`,
   `region-fault`, `stale-handle`, `alloc-contract`, `assert`, `race`,
   `ub`, `deadlock`. The set is closed; extension requires revising this

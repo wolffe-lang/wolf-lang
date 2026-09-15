@@ -1,0 +1,31 @@
+//! check: run(exit=nonzero)
+//! phase: run
+//! conforms: conc.proc.root, conc.proc.link.pair, conf.directive.check
+//!
+//! s163 (wolf-lang#371) — the LOUD half of `proc_link_root.lu`.
+//! `index.link()` from `main` couples the shard to the root
+//! supervisor's domain, the shard fails, and `[conc.proc.root]` ends
+//! the process "with a nonzero, implementation-specified status". The
+//! `else |err|` handler on the blocked `recv` never runs: a link ends
+//! the linked proc, it delivers no error. The NUMBER is the tool's —
+//! wolf's native tier exits 121 and prints the root kill on stderr,
+//! lupin 0.1.36 exits 1 and prints nothing — so the directive claims
+//! the outcome class, `run(exit=nonzero)`, and never a status. This
+//! is wolf-book ch15's program, the sample whose spelling five other
+//! ch15 files were held back from this corpus for.
+
+fn shard() -> !int {
+    Corrupt
+}
+
+fn main() -> !int {
+    let index = spawn proc shard()
+    index.link()
+    let idle = channel[int](0)
+    let v = idle.recv() else |err| {
+        print("the shelf noticed: {err}")
+        return 7
+    }
+    print("still serving {v}")
+    0
+}

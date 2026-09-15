@@ -1,0 +1,30 @@
+//! check: run(exit=0, stdout="receiver-arrives\nsend-returned\ndone")
+//! phase: run
+//! conforms: conc.chan.default, conc.chan.buf
+//!
+//! s163 (wolf-lang#155, BACKLOG B24) — `channel[T]()` with no capacity
+//! is rendezvous by specification ([conc.chan.default]). The receiver
+//! sleeps, announces itself, and only then receives; `main`'s send
+//! cannot return before a receiver meets it, so `receiver-arrives`
+//! precedes `send-returned` on every schedule. That order is a causal
+//! chain, not a timing bet: the 200 ms only makes the WRONG default
+//! fail loudly, because a buffered channel would let the send return
+//! while the receiver sleeps. Measured with `channel[int](1)` in its
+//! place: `send-returned` first, on wolf's native tier and on lupin
+//! 0.1.36 alike; with `channel[int]()`, this stdout on both.
+
+fn main() -> !int {
+    let ch = channel[int]()
+    scope s {
+        s.spawn(fn() {
+            time_sleep_ms(200)
+            print("receiver-arrives")
+            let v = ch.recv() else |_| { return }
+            if v != 7 { print("wrong value") }
+        })
+        ch.send(7)?
+        print("send-returned")
+    }
+    print("done")
+    0
+}
