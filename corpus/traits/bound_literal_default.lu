@@ -1,0 +1,34 @@
+//! check: run(exit=0, stdout="-340\n-340\n-12\n")
+//! phase: run
+//! conforms: type.numlit.default, type.trait.op
+//! s165 (wolf-lang#347) — bs43's `refund`, with a bare literal. At
+//! v0.2.14 `refund(340)` and `let cents = 340; refund(cents)` were
+//! E0502 "`i32` does not implement `Neg`": the literal's only context
+//! was `T`, and the default rule landed on `i32` while the program's
+//! only impl is for `int`. A bound is context
+//! (`[type.numlit.default]`): `i32` still wins when it satisfies the
+//! bound, and `int` wins when only `int` does. lupin 0.1.36 prints the
+//! same three lines.
+
+trait Neg {
+    fn neg(self) -> Self
+}
+
+impl Neg for int {
+    fn neg(self) -> Self {
+        -self
+    }
+}
+
+fn refund[T: Neg](charged: T) -> T {
+    -charged
+}
+
+fn main() -> !int {
+    print("{refund(340)}")
+    let cents = 340
+    print("{refund(cents)}")
+    let tip: int = 12
+    print("{refund(tip)}")
+    0
+}

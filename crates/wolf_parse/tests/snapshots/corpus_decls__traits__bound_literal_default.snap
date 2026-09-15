@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TraitDecl 606..644 name=Neg
+  FnDecl 622..643 name=neg
+ImplDecl 646..713 path=Neg for=int
+  FnDecl 669..711 name=neg body=Block
+FnDecl 715..766 name=refund body=Block
+FnDecl 768..920 name=main body=Block

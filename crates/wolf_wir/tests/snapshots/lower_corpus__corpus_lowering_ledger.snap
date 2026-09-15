@@ -497,6 +497,7 @@ test/conc_schedules_test.lu: lowers
 time/monotonic.lu: lowers
 traits/adapter_distinct/main.lu: lowers
 traits/assoc_rewrite.lu: lowers
+traits/bound_literal_default.lu: lowers
 traits/call_unmet_bound.lu: not mem-clean (pre-wir rungs own it)
 traits/coherence_orphan/main.lu: not mem-clean (pre-wir rungs own it)
 traits/coherence_overlap.lu: not mem-clean (pre-wir rungs own it)
