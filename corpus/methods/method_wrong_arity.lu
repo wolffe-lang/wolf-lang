@@ -1,0 +1,11 @@
+//! check: fail(E0402)
+//! phase: typecheck
+//! conforms: type.method.resolve
+//!
+//! s166 — arity counts the written arguments, the receiver excluded.
+
+fn main() -> !int {
+    let xs = [1, 2, 3]
+    let b = xs.any()
+    0
+}
