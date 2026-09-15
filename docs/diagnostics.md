@@ -840,7 +840,10 @@ also fires when a bound or `dyn` names a trait that declares its own
 input parameters: applying trait arguments inside a bound has no
 surface syntax yet, so such traits cannot be used as bounds today —
 use a trait without input parameters, or dispatch through qualified
-calls instead.
+calls instead. It fires, too, at a trait alias whose expansion reaches
+itself (`trait A = B` with `trait B = A`, `[type.trait.op.alias]`):
+the cycle is reported once, at the alias that closes it — name traits
+with members instead.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__error_alias_cycle.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0503_alias_cycle.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0503_not_a_trait.snap
 
@@ -899,6 +902,10 @@ defines a member the trait never declared — extra members do not
 become part of the trait, because callers dispatch through the trait's
 declaration, not through any particular impl. The message names the
 member and shows the trait's declaration; make the impl agree with it.
+An `impl` of a trait ALIAS is this error too (`impl Num for P` over
+`trait Num = Add + Sub`, `[type.trait.op.alias]`): an alias lists the
+traits a bound means and is never implemented itself — implement each
+trait it lists, and the type satisfies the alias.
 
 Fixtures: crates/wolf_sema/tests/snapshots/ctfe_diagnostics__staged_provenance_chain.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0507_alias_impl.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0507_mismatch.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0513_cycle.snap
 
@@ -1012,7 +1019,10 @@ its payload. The same rule keeps a row to at most one row variable (the
 entry naming a generic parameter, the row's polymorphic tail): a row
 extends exactly one tail. Delete the duplicate entry, or if the two
 entries really are different failures, give them different tag names —
-tags are structural, so any name you have not used yet is free.
+tags are structural, so any name you have not used yet is free. An
+error-set alias named in a row carries no payload (`{IoErrors(int)}`,
+`[type.err.alias.union]`): the alias already names what its tags
+carry, so name the tag with the payload instead.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__dup_tags.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0601_duplicate_tag.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0601_error_alias_payload.snap
 
