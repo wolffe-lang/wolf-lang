@@ -237,8 +237,19 @@ premise by construction.
   Sends on a full channel and receives on an empty one block (they are
   cancellation points and recorded events).
 - `[conc.chan.default]` `channel[T]()` — no capacity argument — is the
-  rendezvous channel: the default is `n = 0` (`[conc.chan.buf]`).
-  (Appended 2026-08-11 — DRAFT, the bs06 ledger's spec-gap row: the
+  rendezvous channel: the default is `n = 0` (`[conc.chan.buf]`), by
+  specification and not by omission. `channel[T]()` and
+  `channel[T](0)` are the same channel: a send blocks until a receiver
+  meets it. **The cost, stated:** a rendezvous channel reserves no
+  buffer — its record is the channel's lock and its two waiter queues —
+  and every send is one handoff through that lock, parking the sender
+  until a receiver arrives; a capacity is spelled when a program wants
+  the other trade. Witness: `conc/chan_default_rendezvous.lu`, whose
+  receiver announces itself before it receives, so its line precedes
+  the sender's on both machines, and `channel[int](1)` reverses the
+  two. (Ruled 2026-09-11, BACKLOG B24 — wolf-lang#155's ch12 row: the
+  default is specified as rendezvous; written by s163. Appended
+  2026-08-11 as a draft from the bs06 ledger's spec-gap row: the
   reference machine defaulted to rendezvous with no clause behind it;
   this clause adopts that behavior as normative rather than repairing
   it. Rationale: rendezvous is the synchronization-first default —
