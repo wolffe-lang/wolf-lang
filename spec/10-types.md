@@ -1211,19 +1211,21 @@ has promised `totals.pairs().sorted_by(…)` since bs00, and
   | `par` | `xs.par(f)`, `f: fn(T) -> U` or `fn(T) -> U ! E` | `E`, when `f` has one | `[conc.task.par]` |
 
   **What a combinator copies** (stated 2026-09-15 with s165's
-  `[mem.tier0.move.3]` and `[mem.tier0.mode.read]`, wolf-lang#384/#366).
-  The receiver is `read`, so a combinator may not hand the caller's own
-  value on past the call: `fold`'s accumulator starts as the lent seed
-  and outlives the activation, so the seed **copies** (`copy init`), and
-  that is the one copy the set forces today. The elements `filter`,
-  `sorted_by`, `sorted`, `enumerate` and `zip` keep are `push`ed into a
-  fresh `List`, which `[mem.tier0.mode.read]` deliberately does not
-  reach (wolf-lang#385 holds that question open), so they cost no copy
-  at this revision and will cost one the day it is ruled the other way.
-  **Where a copy does happen it is deep**: one allocation and a buffer
-  copy for every `List` or `Map` reached, so a `fold` over a `List[List
-  [int]]` pays per container and not per element, while a `str` shares
-  its bytes. `map`'s results are `f`'s own values and copy nothing.
+  `[mem.tier0.move.3]` and `[mem.tier0.mode.read]`, and wolf-lang#384,
+  #366 and #385's ruling). The receiver is `read`, so a combinator never
+  hands the caller's own value on: `fold`'s accumulator starts as the
+  lent seed and outlives the activation, so the seed **copies** (`copy
+  init`). The elements `filter`, `sorted_by`, `sorted`, `enumerate` and
+  `zip` keep are `push`ed into a fresh `List`, and **`push` copies a
+  non-`Copy` element** (wolf-lang#385, ruled 2026-09-15; `push(take x)`
+  is the move, and s167 implements both) — so each of those combinators
+  pays one copy per element it keeps, and `map`, whose pushed value is
+  `f`'s own temporary, spells `take` and pays nothing, as does
+  `enumerate` for the pair it builds. **Every such copy is deep**: one
+  allocation and a buffer copy for every `List` or `Map` reached, so a
+  combinator over a `List[List[int]]` pays per container and not per
+  element, while a `str` element shares its bytes. A caller who wants
+  the elements moved rather than copied has `take` at its own call.
 
   The functions `std.list` already ships over fn values — `any`, `all`,
   `count_where`, `index_where`, `find_where`, `min_by`, `max_by` — are
