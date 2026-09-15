@@ -43,6 +43,9 @@ conc/chan_struct_payload.lu: lowers
 conc/chan_unsendable.lu: not mem-clean (pre-wir rungs own it)
 conc/freeze_publish.lu: lowers
 conc/message_passing.lu: lowers
+conc/par_capture_write.lu: not mem-clean (pre-wir rungs own it)
+conc/par_fail_reraises.lu: lowers
+conc/par_order.lu: lowers
 conc/proc_cancel_defers.lu: lowers
 conc/proc_cap_fault_join.lu: lowers
 conc/proc_cross_module/main.lu: lowers
@@ -376,6 +379,18 @@ memory/unsafe_trusted.lu: refused — index writes outside List (raw-pointer wri
 memory/unsafe_ub_uaf.lu: refused — index writes outside List (raw-pointer writes; Pool and Map)
 memory/view_set_norm.lu: lowers
 memory/view_set_violation.lu: not mem-clean (pre-wir rungs own it)
+methods/comb_map_filter_fold.lu: lowers
+methods/comb_sort_enumerate_zip.lu: lowers
+methods/comb_sorted_ord.lu: lowers
+methods/home_range_str_map.lu: lowers
+methods/method_is_free_call.lu: lowers
+methods/method_non_std_receiver.lu: not mem-clean (pre-wir rungs own it)
+methods/method_take.lu: not mem-clean (pre-wir rungs own it)
+methods/method_unknown.lu: not mem-clean (pre-wir rungs own it)
+methods/method_wrong_arity.lu: not mem-clean (pre-wir rungs own it)
+methods/method_wrong_receiver.lu: not mem-clean (pre-wir rungs own it)
+methods/wordcount_par.lu: lowers
+methods/wordcount_serial.lu: lowers
 net/accept_posture.lu: lowers
 net/accept_race.lu: lowers
 net/byte_roundtrip.lu: lowers
@@ -578,6 +593,7 @@ typecheck/match_narrow_scrutinee.lu: lowers
 typecheck/match_str_nonexhaustive.lu: not mem-clean (pre-wir rungs own it)
 typecheck/match_unreachable.lu: lowers
 typecheck/method_ambiguous.lu: not mem-clean (pre-wir rungs own it)
+typecheck/method_home_no_std.lu: not mem-clean (pre-wir rungs own it)
 typecheck/method_inherent.lu: lowers
 typecheck/method_scope/main.lu: not mem-clean (pre-wir rungs own it)
 typecheck/nested_fn_capture.lu: not mem-clean (pre-wir rungs own it)

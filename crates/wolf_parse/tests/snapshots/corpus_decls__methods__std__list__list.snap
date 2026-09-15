@@ -1,0 +1,15 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 500..512 path=std.cmp
+FnDecl 513..641 name=any pub body=Block
+FnDecl 643..775 name=map pub body=Block
+FnDecl 777..939 name=filter pub body=Block
+FnDecl 941..1076 name=fold pub body=Block
+FnDecl 1078..1180 name=sum pub body=Block
+FnDecl 1182..1604 name=sort_by pub body=Block
+FnDecl 1606..1774 name=sorted_by pub body=Block
+FnDecl 2052..2464 name=sorted pub body=Block
+FnDecl 2466..2648 name=enumerate pub body=Block
+FnDecl 2924..3207 name=zip pub body=Block
