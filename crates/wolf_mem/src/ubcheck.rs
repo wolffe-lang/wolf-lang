@@ -409,6 +409,10 @@ enum Value {
     /// the four `[type.map.key]` admits. Moves, like a `List`.
     Map(usize),
     Pool(usize),
+    /// A `channel[T]` (#342, `[conc.chan]`): an index into the
+    /// machine's channel arena. A handle — copying it names the same
+    /// channel, as the native tier's pointer does.
+    Chan(usize),
     Handle {
         index: usize,
         generation: i64,
@@ -443,6 +447,7 @@ impl Value {
                 | Value::Handle { .. }
                 | Value::Ptr(_)
                 | Value::Fn(_)
+                | Value::Chan(_)
         )
     }
 }
@@ -521,6 +526,15 @@ enum Stop {
     /// `os.exit` contract: immediate termination; native calls the
     /// runtime exit with the same rule).
     Exit(u8),
+}
+
+/// One channel (#342, `[conc.chan.buf]`/`[conc.chan.close]`): its
+/// buffered payloads, oldest first, its capacity (0 is rendezvous), and
+/// whether it is closed.
+struct ChanState {
+    buf: std::collections::VecDeque<Value>,
+    cap: usize,
+    closed: bool,
 }
 
 /// Control flow out of an expression.
@@ -1125,6 +1139,9 @@ struct Machine<'t> {
     maps: Vec<Vec<(MapKey, Value)>>,
     map_region: Vec<usize>,
     pools: Vec<Vec<PoolSlot>>,
+    /// The channel arena (#342): every channel the run made, in the
+    /// order it made them.
+    chans: Vec<ChanState>,
     cells: Vec<RcCell>,
     frames: Vec<Frame<'t>>,
     /// The dynamic ambient-region stack; `[0]` is the run's root
@@ -2055,6 +2072,7 @@ impl<'t> Machine<'t> {
             maps: Vec::new(),
             map_region: Vec::new(),
             pools: Vec::new(),
+            chans: Vec::new(),
             cells: Vec::new(),
             frames: Vec::new(),
             ambient: Vec::new(),
@@ -3922,8 +3940,15 @@ impl<'t> Machine<'t> {
             (true, Some(c)) => Value::Char(c),
             _ => Value::Int(v),
         };
-        let items: Box<dyn Iterator<Item = Value>> = match (view_items, iter) {
+        // `for v in ch` (#342, `[conc.chan.close]`): one receive per
+        // step, ending at drained-close.
+        let mut chan: Option<usize> = None;
+        let mut items: Box<dyn Iterator<Item = Value>> = match (view_items, iter) {
             (Some(items), _) => Box::new(items.into_iter()),
+            (None, Value::Chan(id)) => {
+                chan = Some(id);
+                Box::new(std::iter::empty())
+            }
             (None, Value::Range { start, end, chars }) if header_inclusive => {
                 Box::new((start..=end).map(move |v| scalar(chars, v)))
             }
@@ -3936,7 +3961,17 @@ impl<'t> Machine<'t> {
             }
             _ => return self.refuse("iteration outside ranges and List", e.span),
         };
-        for item in items {
+        loop {
+            let item = match chan {
+                Some(id) => match self.chan_recv(id, e.span)? {
+                    Flow::Val(v) => v,
+                    _ => break,
+                },
+                None => match items.next() {
+                    Some(v) => v,
+                    None => break,
+                },
+            };
             self.tick()?;
             self.push_scope();
             if let Some(pat) = d.pattern() {
@@ -7154,6 +7189,33 @@ impl<'t> Machine<'t> {
                 let id = self.mint_map(e.span)?;
                 return Ok(Flow::Val(Value::Map(id)));
             }
+            // `channel[T](n)` / `channel[T]()` (#342): no capacity is
+            // rendezvous (`[conc.chan.default]`).
+            Some(TyKind::Chan(_)) if is_container_ctor(d.callee()) => {
+                let cap = match d
+                    .args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .find_map(Arg::value)
+                {
+                    Some(v) => match val!(self.eval(v)) {
+                        Value::Int(n) => match usize::try_from(n) {
+                            Ok(n) => n,
+                            Err(_) => return self.refuse("a negative channel capacity", v.span),
+                        },
+                        _ => return self.refuse("a channel capacity that is not an int", v.span),
+                    },
+                    None => 0,
+                };
+                self.charge_mem(16)?;
+                let id = self.chans.len();
+                self.chans.push(ChanState {
+                    buf: std::collections::VecDeque::new(),
+                    cap,
+                    closed: false,
+                });
+                return Ok(Flow::Val(Value::Chan(id)));
+            }
             _ => {}
         }
         // Method calls (has_self): builtins on container/cell/pointer
@@ -7600,6 +7662,78 @@ impl<'t> Machine<'t> {
         Ok(PtrVal { tag: child, ..p })
     }
 
+    /// `send`, `recv` and `close` (#342, `[conc.chan]`). This machine
+    /// runs one task: `spawn`, `scope`, `select` and `when` are refused
+    /// by name before they run, so the root task is the only live task
+    /// there is. A send on a full channel (or any rendezvous send) and a
+    /// receive on an empty open one therefore block a task that nothing
+    /// can ever wake — every live task blocked, `[conc.deadlock.def]`
+    /// exactly — and the answer is `[conc.deadlock.trap]`'s
+    /// `trap(deadlock)`, the verdict this deterministic machine is
+    /// REQUIRED to detect. Nothing here is a guess about a schedule:
+    /// with one task there is one.
+    fn eval_chan_method(
+        &mut self,
+        method: &str,
+        recv: &'t GreenNode,
+        e: &'t GreenNode,
+        args: Option<wolf_ast::ArgList<'t>>,
+    ) -> E<Flow> {
+        let ch = match self.place_of(recv)? {
+            Some(place) => self.read_place(&place, recv.span)?,
+            None => val!(self.eval(recv)),
+        };
+        let Value::Chan(id) = ch else {
+            return self.refuse("a channel method on a non-channel", e.span);
+        };
+        let closed = || {
+            Ok(raise(Value::ErrTag {
+                tag: "closed".to_string(),
+                payload: Vec::new(),
+            }))
+        };
+        match method {
+            "send" => {
+                let Some(v) = args.into_iter().flat_map(|l| l.args()).find_map(Arg::value) else {
+                    return self.refuse("a send without a value", e.span);
+                };
+                let x = val!(self.eval_arg(v, None));
+                let st = &self.chans[id];
+                if st.closed {
+                    return closed();
+                }
+                if st.buf.len() >= st.cap {
+                    return self.trap("deadlock", "conc.deadlock.trap", e.span);
+                }
+                // The channel owns the copy in flight
+                // (`[conc.chan.payload]`), charged when it is made.
+                self.charge_mem(slot_bytes(&x))?;
+                self.chans[id].buf.push_back(x);
+                Ok(Flow::Val(Value::Unit))
+            }
+            "recv" => self.chan_recv(id, e.span),
+            "close" => {
+                self.chans[id].closed = true;
+                Ok(Flow::Val(Value::Unit))
+            }
+            _ => self.refuse("this channel method", e.span),
+        }
+    }
+
+    /// One receive (#342): the oldest payload, else `closed` on a
+    /// drained-closed channel, else the root task blocks alone —
+    /// `trap(deadlock)` (see [`Self::eval_chan_method`]).
+    fn chan_recv(&mut self, id: usize, span: Span) -> E<Flow> {
+        match self.chans[id].buf.pop_front() {
+            Some(v) => Ok(Flow::Val(v)),
+            None if self.chans[id].closed => Ok(raise(Value::ErrTag {
+                tag: "closed".to_string(),
+                payload: Vec::new(),
+            })),
+            None => self.trap("deadlock", "conc.deadlock.trap", span),
+        }
+    }
+
     fn eval_method(
         &mut self,
         sig: &'t CallSig,
@@ -7664,6 +7798,10 @@ impl<'t> Machine<'t> {
                 }
                 _ => self.refuse("this pointer method", e.span),
             };
+        }
+        // Channel methods from the root task (#342).
+        if matches!(recv_ty, Some(TyKind::Chan(_))) {
+            return self.eval_chan_method(method, recv, e, args);
         }
         // Container/cell builtins by receiver type.
         match recv_ty {
