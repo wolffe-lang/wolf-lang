@@ -8790,7 +8790,6 @@ impl<'a> Checker<'a> {
     }
 
     /// Resolution step 2 for a concrete receiver.
-    #[allow(clippy::too_many_arguments)]
     /// `[type.method.resolve]` step (2) (s166, wolf-lang#390): a method
     /// the builtin surface does not answer on a std data type resolves
     /// to its home module's `pub fn` of that name (`[type.method.home]`),
@@ -8949,6 +8948,7 @@ impl<'a> Checker<'a> {
         Ok(self.error_ty())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn concrete_method_call(
         &mut self,
         base: &GreenNode,
@@ -12697,6 +12697,18 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
     Some(sig)
 }
 
+/// `[type.method.home]` — the home module (`std.<name>`) of a std data
+/// type's constructor, or `None` for a type that has none.
+fn home_of(k: &TyKind) -> Option<&'static str> {
+    match k {
+        TyKind::List(_) => Some("list"),
+        TyKind::Map(..) => Some("map"),
+        TyKind::Prim(Prim::Str) => Some("str"),
+        TyKind::Range(_) => Some("range"),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod char_literal_tests {
     use super::cook_char_literal;
@@ -12744,17 +12756,5 @@ mod char_literal_tests {
         ] {
             assert_eq!(cook_char_literal(text), None, "{text}");
         }
-    }
-}
-
-/// `[type.method.home]` — the home module (`std.<name>`) of a std data
-/// type's constructor, or `None` for a type that has none.
-fn home_of(k: &TyKind) -> Option<&'static str> {
-    match k {
-        TyKind::List(_) => Some("list"),
-        TyKind::Map(..) => Some("map"),
-        TyKind::Prim(Prim::Str) => Some("str"),
-        TyKind::Range(_) => Some("range"),
-        _ => None,
     }
 }
