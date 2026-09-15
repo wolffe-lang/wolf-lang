@@ -80,3 +80,75 @@ jobs:
           fi
           gh release edit "${GITHUB_REF_NAME}" --draft=false
           echo "publish: ${GITHUB_REF_NAME} is public with $count archives"
+
+  # tree-sitter-wolf#13: the grammar mirror hears about a release. That repo
+  # gates this repository's `corpus/` at zero ERROR nodes (its #9), and its
+  # `ci.yml` has listened for `repository_dispatch: {types: [wolf-lang-corpus]}`
+  # since then with nothing sending it, so a surface change reached the
+  # mirror only on its next daily schedule, which itself sleeps after 60
+  # quiet days (tree-sitter-wolf#12).
+  #
+  # Sent at release time, and only when this tag moved what the mirror
+  # parses: `spec/grammar.ebnf`, `spec/01-grammar.md` or `corpus/` since the
+  # previous tag. The receiver checks out this repository's DEFAULT BRANCH,
+  # not the tag, which at release time carries the tag's commit.
+  #
+  # The default token cannot dispatch to another repository. The job needs
+  # `TREE_SITTER_WOLF_DISPATCH_TOKEN`: a fine-grained token scoped to
+  # wolffe-lang/tree-sitter-wolf alone, Contents read and write (for the
+  # dispatches endpoint; a classic token would need the whole `repo` scope)
+  # plus Actions read (so the log can name the run it started). Without the secret the job SKIPS loudly and stays green,
+  # the lobo/wolf-book grain for WOLF_CI_TOKEN. With it, a refused dispatch
+  # is red.
+  #
+  # No `needs:`, and nothing needs it. The mirror's answer is not a
+  # condition of this release, so a red here never holds a draft back and a
+  # red matrix never silences the mirror.
+  grammar-mirror:
+    name: dispatch tree-sitter-wolf's corpus gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          filter: blob:none
+      - name: send wolf-lang-corpus
+        env:
+          GH_TOKEN: ${{ secrets.TREE_SITTER_WOLF_DISPATCH_TOKEN }}
+          TARGET: wolffe-lang/tree-sitter-wolf
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::warning::TREE_SITTER_WOLF_DISPATCH_TOKEN absent — tree-sitter-wolf's corpus gate not dispatched for ${GITHUB_REF_NAME}; its daily schedule remains the only trigger (tree-sitter-wolf#13)"
+            exit 0
+          fi
+          prev=$(git describe --tags --abbrev=0 --match 'v*' "${GITHUB_SHA}^" 2>/dev/null || true)
+          if [ -n "$prev" ]; then
+            moved=$(git diff --name-only "$prev" "$GITHUB_SHA" -- spec/grammar.ebnf spec/01-grammar.md corpus | wc -l)
+            echo "since $prev: $moved file(s) moved under spec/grammar.ebnf, spec/01-grammar.md, corpus/"
+            if [ "$moved" -eq 0 ]; then
+              echo "::notice::${GITHUB_REF_NAME} moves nothing the grammar mirror parses; no dispatch"
+              exit 0
+            fi
+          else
+            echo "no previous v* tag; dispatching unconditionally"
+          fi
+          since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          gh api --method POST "repos/$TARGET/dispatches" \
+            -f event_type=wolf-lang-corpus \
+            -f "client_payload[tag]=${GITHUB_REF_NAME}" \
+            -f "client_payload[sha]=${GITHUB_SHA}"
+          echo "dispatched wolf-lang-corpus to $TARGET for ${GITHUB_REF_NAME} (${GITHUB_SHA})"
+          # The 204 says GitHub accepted the event; the run is the receiver's
+          # answer. Name it in the log, and say so plainly if it cannot be seen.
+          for _ in $(seq 1 12); do
+            url=$(gh run list --repo "$TARGET" --event repository_dispatch --limit 5 \
+              --json url,createdAt --jq "[.[] | select(.createdAt >= \"$since\")][0].url // empty" 2>/dev/null || true)
+            if [ -n "$url" ]; then echo "receiver run: $url"; exit 0; fi
+            sleep 10
+          done
+          echo "::warning::dispatch accepted, but no repository_dispatch run on $TARGET was visible within 120s (token without Actions read, or a queue delay)"
