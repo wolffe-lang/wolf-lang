@@ -1,7 +1,6 @@
 //! check: fail(E1002)
 //! phase: typecheck
-//! conforms: mem.str.view.lend, diag.sev.warn
-//! warns: W1004
+//! conforms: mem.str.view.lend
 //!
 //! s89's soundness guard (wolf-lang#86), turned around by s92 (#107).
 //! `s.bytes()` in an argument position offers the string's own storage
@@ -15,12 +14,8 @@
 //! crossed calls, and exactly what it already does for a callee whose
 //! use it cannot classify. Refusing a program with a safe compilation
 //! is not this language's style (#108: E1015 was the only rule in the
-//! static-conservatism class doing so), so now the bytes are copied and
-//! the compiler says so once, as W1004: it lands on the LEND, names the
-//! use that outlives it, and prescribes the one-word fix — bind first
-//! (`let bs = s.bytes()`) — for anyone who wanted the copy said out
-//! loud, and names the callee as the thing to change for anyone who
-//! wanted the lend.
+//! static-conservatism class doing so), so the bytes are copied and the
+//! program runs.
 //!
 //! This is a better witness than the refusal was: it proves the
 //! fallback WORKS (the program runs and prints `4`) rather than that
@@ -31,11 +26,15 @@
 //! `keep` returning its `read` parameter is now E1002 in its own right:
 //! the caller still holds what `keep` hands back, so the value would
 //! have two live paths whether it arrived as a lend or as a copy. Every
-//! escape W1004's analysis can PROVE — a return, a `take` or `mut`
-//! hand-on, a store past the call — is now that refusal or E1014, so
-//! the file pins both: the error in the callee, and W1004 at the lend,
-//! which still says truthfully that this call would have copied. Whether
-//! W1004 retires is wolf-lang#387's question.
+//! escape the lend analysis can PROVE — a return, a `take` or `mut`
+//! hand-on, a store past the call — is now that refusal or E1014.
+//!
+//! s167 (wolf-lang#387) retired W1004 on the strength of that: it fired
+//! beside an error for one root cause (VOICE rule 5), and on the one
+//! shape #366 leaves legal it claimed something untrue. So this file
+//! pins the refusal alone, and the copy the lend degrades to is silent
+//! again — which is what it was before s89 and what it always compiled
+//! to.
 //!
 //! Its sibling `corpus/strings/byte_view_lend.lu` is the free half: the
 //! same call shape, with callees that only read, and no warning.
