@@ -183,7 +183,6 @@ pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
         let BodyResult::Checked(tb) = &outcome.result else {
             continue;
         };
-        byteview::check_body(&lender, pkg, tb, &outcome.body, &mut out.diagnostics);
         match lower_body(
             pkg,
             &tc.sigs,
