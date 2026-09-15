@@ -77,6 +77,20 @@ law: `.docs/refs/papers/swift-ownership-manifesto.md`.
 - `[mem.tier0.move.3]` `copy x` produces an independent value from any
   type; types opting into `Copy` copy implicitly on what would otherwise
   move. POD-shaped types only (no destructor, no Tier-2 members).
+  **Independent means deep** (stated 2026-09-15, wolf-lang#384): a
+  `List` copies its elements, a `Map` its entries, a struct or tuple its
+  fields, each by this same rule, so no storage reachable from the copy
+  is reachable from the original; a `str`'s bytes are immutable and the
+  copy shares them. **Cost:** one allocation for each list or map
+  reached, and a byte copy of its buffer, in the ambient region
+  (`[mem.region.create.3]`); nothing for a value that reaches no heap
+  storage, which is its own copy. Until this sentence the native tiers
+  lowered `copy x` as `x` for heap values, the checked machine and the
+  reference interpreter copied, and no program said so; witness
+  `corpus/memory/copy_independent.lu`. Shapes the native tiers do not
+  model yet refuse by name rather than share: a `Map` whose values
+  reach the heap, an enum or row payload that does, a `Pool`, a
+  `shared` cell.
 - `[mem.tier0.move.4]` A moved-from place may be re-initialized by
   assignment; it is then live again.
 
