@@ -957,7 +957,7 @@ row_entry ::= path ('(' type (',' type)* ')')?
   syntactically disjoint (`[gram.amb.bang]`).
 - `[gram.type.start]` **A type position holds a type or it is E0206.** A
   token that cannot begin `type` — a keyword the production does not
-  name (`proc`), a literal (`p: 3`) — where a type must begin is
+  name (`p: proc`, `fn(proc)`), a literal (`p: 3`) — where a type must begin is
   **E0206 at that token**, "expected a type", at `parse`: not E0201's
   generic expect-miss, and not a resolution error, because the question
   is settled before any name is looked up. The keywords the production
