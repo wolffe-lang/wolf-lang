@@ -4327,10 +4327,23 @@ impl<'t> Lowerer<'t> {
         arg_muts: &mut Vec<(PlaceId, Span)>,
         sent: bool,
     ) -> R<()> {
-        if site_mode != param.mode {
+        // wolf-lang#385, ruled option 3: a builtin container STORE
+        // keeps its argument inside the receiver, so its `read` value
+        // parameter is the one place a call site may ALSO spell
+        // `take` — plain COPIES the element in and the caller keeps
+        // its value, `take` moves it ([mem.region.edge.elem]).
+        // Everywhere else a site mode must equal the declaration
+        // exactly (X1, E1007).
+        let store_take = param.store && site_mode == Some(ParamMode::Take);
+        if site_mode != param.mode && !store_take {
             self.mode_mismatch(cs, param, arg, v, site_mode, param.mode);
         }
-        match param.mode {
+        let effective = if store_take {
+            Some(ParamMode::Take)
+        } else {
+            param.mode
+        };
+        match effective {
             None => {
                 if let Some(mode) = site_mode
                     && mode == ParamMode::Take
