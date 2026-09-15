@@ -672,6 +672,8 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_map_set",
         "__wolf_rt_map_pairs",
         "__wolf_rt_map_clear",
+        // s165 (#344): the key erase.
+        "__wolf_rt_map_remove",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -682,7 +684,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        144,
+        145,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
