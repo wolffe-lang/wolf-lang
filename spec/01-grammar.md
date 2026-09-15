@@ -1126,6 +1126,9 @@ no `goto`, no *required* semicolons (terminators are inserted;
   operators and after `.` (trailing style — required by
   `[gram.lex.newline]`); continuations indent one level.
 - `[gram.fmt.commas]` Trailing comma in every multiline list; none inline.
+  The one list that ends without one is a struct pattern's `..` rest: the
+  grammar closes the member list at the `..` (`[gram.pat.struct]`), so a
+  broken pattern's last line is `..` alone (wolf-lang#351).
 - `[gram.fmt.list]` A **list literal breaks like an argument list**
   (s158, wolf-lang#154): inline while it fits — `[1, 2, 3]`, one space
   after each comma, none inside the brackets, and no trailing comma —
