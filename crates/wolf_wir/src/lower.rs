@@ -11063,6 +11063,27 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     Flow::Val(None) => return Err(refuse("unit-typed List elements", vx.span)),
                     Flow::Diverged => return Ok(Flow::Diverged),
                 };
+                // wolf-lang#385, ruled option 3: a PLAIN element is
+                // COPIED into the container — the caller keeps an
+                // independent value, which is what `[mem.tier0.excl.1]`
+                // always said and the lowering never did — and
+                // `push(take x)` moves it instead. `deep_copy_in`
+                // returns the value untouched when it reaches no heap
+                // storage, so `Copy` elements and `str` stay free
+                // ([mem.tier0.move.3]).
+                let moves_in = d
+                    .args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .next()
+                    .and_then(Arg::mode)
+                    == Some(wolf_ast::ParamMode::Take);
+                let v = if moves_in {
+                    v
+                } else {
+                    let table = self.table;
+                    self.deep_copy_in(v, table, elem_sema, vx.span, 0)?
+                };
                 let len = self.list_len_of(hdr);
                 let cap = self.list_cap_of(hdr);
                 let room = self.list_in_bounds(len, cap);
