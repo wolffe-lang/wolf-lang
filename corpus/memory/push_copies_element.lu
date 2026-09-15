@@ -1,0 +1,80 @@
+//! check: run(exit=0, stdout="issue: outs0=1 xs=2\nput: outs0=1 b=2\ncopy: outs0=1 ys=2\ntake: outs0=1\nscalar: len=2 x1=7 n=9\nstr: len=1 x0=wolf s=wolf\nstruct: bag0=1 bag=2\n")
+//! phase: run
+//! conforms: mem.region.edge.elem, mem.tier0.move.3
+//!
+//! s167 (wolf-lang#385, ruled option 3) — a builtin container store
+//! that KEEPS its argument COPIES a non-`Copy` element in, and
+//! `push(take x)` moves it instead.
+//!
+//! Measured at v0.2.14, the first four lines of `main` printed
+//! `outs0=2 xs=2` on `wolf run`, on `--release`, and on the checked
+//! machine: `push`'s value parameter is a `read`, a read is a lend,
+//! and the builtin kept the lent handle inside the receiver past the
+//! call. So `outs[0]` and `xs` were one value with two writable paths,
+//! no `shared` spelled anywhere and no diagnostic — `[mem.tier0.excl.1]`
+//! violated by a builtin callee. lupin 0.1.36 copied and printed what
+//! is pinned here, so the two implementations disagreed and the differ
+//! could not see it (both wolf-lang tiers agreed with each other).
+//!
+//! The `put` line is the same store one call deeper, through a user
+//! `read` parameter into a `mut` one — the shape #366's refusal does
+//! not cover, because the checker never modelled `push`'s element
+//! landing in the receiver.
+//!
+//! `copy` still means what it meant (#384 made it a real copy on
+//! native), and the last three lines are the cases that stay free: a
+//! `Copy` element, a `str` whose bytes are immutable and shared by the
+//! copy, and — for contrast — a struct whose `List` field the copy
+//! does reach.
+
+struct Bag {
+    items: List[int],
+    n: int,
+}
+
+fn put(mut out: List[List[int]], b: List[int]) {
+    (mut out).push(b)
+}
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    var outs = List[List[int]]()
+    (mut outs).push(xs)
+    (mut xs).push(4)
+    print("issue: outs0={outs[0].len} xs={xs.len}")
+    var b = List[int]()
+    (mut b).push(1)
+    var outs2 = List[List[int]]()
+    put(mut outs2, b)
+    (mut b).push(4)
+    print("put: outs0={outs2[0].len} b={b.len}")
+    var ys = List[int]()
+    (mut ys).push(1)
+    var outs3 = List[List[int]]()
+    (mut outs3).push(copy ys)
+    (mut ys).push(4)
+    print("copy: outs0={outs3[0].len} ys={ys.len}")
+    var zs = List[int]()
+    (mut zs).push(1)
+    var outs4 = List[List[int]]()
+    (mut outs4).push(take zs)
+    print("take: outs0={outs4[0].len}")
+    var ns = List[int]()
+    (mut ns).push(1)
+    var n = 7
+    (mut ns).push(n)
+    n = 9
+    print("scalar: len={ns.len} x1={ns[1]} n={n}")
+    var ss = List[str]()
+    var s = "wolf"
+    (mut ss).push(s)
+    print("str: len={ss.len} x0={ss[0]} s={s}")
+    var bag = Bag { items: List[int](), n: 1 }
+    (mut bag.items).push(1)
+    var bags = List[Bag]()
+    (mut bags).push(bag)
+    (mut bag.items).push(4)
+    print("struct: bag0={bags[0].items.len} bag={bag.items.len}")
+    0
+}

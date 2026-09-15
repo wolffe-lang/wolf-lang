@@ -1,0 +1,31 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.region.edge.elem, mem.tier0.move.2
+//!
+//! s167 (wolf-lang#385, ruled option 3) — the fast path, spelled.
+//! A plain `push` COPIES its element (`push_copies_element.lu`), so
+//! the caller keeps its value; `push(take x)` hands the element over
+//! for good and `x` is dead after the call.
+//!
+//! This is the half of the ruling that keeps the cheap path available
+//! without making it the silent default: option 2 (a silent take)
+//! would have made `push` the one place in the language where handing
+//! a value over plainly destroys it, which hands a newcomer a
+//! use-after-move exactly where plain code is supposed to be safe.
+//! Spelled, it is an ordinary move and the ordinary diagnostic —
+//! E1001 with the move site named, and `copy x` the fix the ladder
+//! already prescribes.
+//!
+//! `take` is admitted here at all because a store is the one `read`
+//! position that KEEPS what it was lent; every other `read` parameter
+//! refuses a call-site mode outright (X1, E1007).
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    var outs = List[List[int]]()
+    (mut outs).push(take xs)
+    (mut xs).push(4)                 // ERROR E1001: moved into `outs`
+    print("outs0={outs[0].len} xs={xs.len}")
+    0
+}
