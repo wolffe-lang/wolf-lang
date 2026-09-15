@@ -113,10 +113,14 @@ law: `.docs/refs/papers/swift-ownership-manifesto.md`.
   body is checked once for every instantiation) may not outlive the
   activation: returned, sent, stored into module state or into a `mut`
   parameter, or carried inside a temporary into a `take` argument is
-  E1002. A write, a `mut` lend or a `take` through a binding that holds
-  it is the write or the give-away through the parameter, E1014. Not
-  refused: a use that stays inside the activation (a match that moves a
-  piece out and reads it; a rebinding that is read, or replaced whole);
+  E1002. A `mut` lend or a `take` of a binding that holds it, or a write
+  that reaches the caller's storage through it (a step through a
+  container: `c[0] = x`, `r.items[i] = x`), is the write or the
+  give-away through the parameter, E1014. Not refused: a use that stays
+  inside the activation (a match that moves a piece out and reads it; a
+  rebinding that is read, or replaced whole; a write to a holder's own
+  field, `r.pos = n`, which replaces inline words of this frame's
+  aggregate and nothing of the caller's);
   a value that cannot reach shared storage (a struct of scalars, an
   `int ! {none}`, a `str`, whose view is immutable); and every `take`
   parameter, which is the callee's own. The fix is `copy` at the move,
