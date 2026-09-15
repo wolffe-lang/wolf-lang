@@ -77,6 +77,18 @@ system.
   (an `f64` from one side and an `i32` from another) is the ordinary
   type mismatch (E0401, `[type.numlit.ambig]`) — the checker names the
   conflict and the spelled `as` fix, it never picks one side.
+  **A bound is context** (wolf-lang#347, 2026-09-15). An `{integer}`
+  literal whose only context is a type parameter under a trait bound —
+  `refund(340)` under `fn refund[T: Neg](charged: T) -> T` — is not a
+  literal with no context: the bound constrains it. It still takes
+  `i32` when `i32` satisfies every bound recorded against it; when
+  `i32` does not, it takes `int` if `int` does (the language's integer
+  type, the one every `impl … for int` names), else the one other
+  integer type that does. With none, or with two or more other
+  candidates, the rule's `i32` stands and the unmet bound is E0502,
+  whose note says the literal defaulted and names the candidates. No
+  runtime cost; a static rule, and a `{float}` literal is unchanged.
+  Witness `corpus/traits/bound_literal_default.lu`.
 
 - `[type.numlit.ambig]` Ambiguity is a **named error, never a guess.**
   If a single literal is required to be two incompatible concrete types
