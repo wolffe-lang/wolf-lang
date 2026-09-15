@@ -1478,7 +1478,9 @@ fn store_flat_raw(
         return Err(refuse("`par` results without a flat layout", span));
     };
     for (k, &fty) in fields.iter().enumerate() {
-        let part = b.ins(Opcode::AggGet, &[val], &[fty], Aux::Int(k as i64)).one();
+        let part = b
+            .ins(Opcode::AggGet, &[val], &[fty], Aux::Int(k as i64))
+            .one();
         let addr = if offs[k] == 0 {
             ptr
         } else {
@@ -11174,7 +11176,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let TyKind::Fn(_, fret) = self.table.kind(self.strip_sema(fty)).clone() else {
             return Err(refuse("a `par` function that is not fn-typed", fx.span));
         };
-        let Some(call_ret) = wir_ty(&mut self.b.module.types, self.table, self.sigs, fret, fx.span)?
+        let Some(call_ret) = wir_ty(
+            &mut self.b.module.types,
+            self.table,
+            self.sigs,
+            fret,
+            fx.span,
+        )?
         else {
             return Err(refuse("unit-typed `par` results", fx.span));
         };
@@ -11194,10 +11202,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(rec) = flow_val!(self.lower_expr(fx)) else {
             return Err(refuse("a valueless `par` function", fx.span));
         };
-        let call_sig = self
-            .b
-            .module
-            .make_sig(vec![Param::val(types::PTR), Param::val(ewty)], vec![call_ret]);
+        let call_sig = self.b.module.make_sig(
+            vec![Param::val(types::PTR), Param::val(ewty)],
+            vec![call_ret],
+        );
         let shim_sig = self.b.module.make_sig(
             vec![
                 Param::val(types::PTR),
@@ -11237,7 +11245,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let z = self.b.iconst(types::I64, 0);
         let clean = self
             .b
-            .ins(Opcode::Icmp, &[tag, z], &[types::BOOL], Aux::IntCc(IntCc::Eq))
+            .ins(
+                Opcode::Icmp,
+                &[tag, z],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Eq),
+            )
             .one();
         let v = self.eu_join(eu, clean, |_| Ok(Some(out)), |_| Ok(tag))?;
         Ok(Flow::Val(Some(v)))

@@ -6638,15 +6638,9 @@ impl<'a> Checker<'a> {
             }
             _ => {
                 // `[type.method.resolve]` step (2): the home module.
-                if let Some(r) = self.home_method_call(
-                    base,
-                    recv_ty,
-                    recv_mode,
-                    member_span,
-                    mname,
-                    e,
-                    args,
-                ) {
+                if let Some(r) =
+                    self.home_method_call(base, recv_ty, recv_mode, member_span, mname, e, args)
+                {
                     return r;
                 }
                 if matches!(self.kind_of(recv_ty), TyKind::List(_) | TyKind::Map(..)) {
@@ -7110,15 +7104,9 @@ impl<'a> Checker<'a> {
                 // `[type.method.resolve]` step (2): `std.str`. Before
                 // s166 this was a NotYet naming the method (#263); a
                 // method outside the builtin set is std's now.
-                if let Some(r) = self.home_method_call(
-                    base,
-                    recv_ty,
-                    recv_mode,
-                    member_span,
-                    mname,
-                    e,
-                    args,
-                ) {
+                if let Some(r) =
+                    self.home_method_call(base, recv_ty, recv_mode, member_span, mname, e, args)
+                {
                     return r;
                 }
                 return self.home_miss(recv_ty, member_span, mname, args);
@@ -9263,7 +9251,10 @@ impl<'a> Checker<'a> {
                     format!("`{shown}` has no method named `{mname}`"),
                 )
                 .with_label("no method for this receiver")
-                .with_secondary(sig.name_span, format!("`std.{home}.{mname}` is declared here"))
+                .with_secondary(
+                    sig.name_span,
+                    format!("`std.{home}.{mname}` is declared here"),
+                )
                 .with_note(format!(
                     "`std.{home}.{mname}` takes `{takes}` as its first parameter, and a \
                      `{shown}` receiver does not fit it ([type.method.resolve])."
@@ -9329,7 +9320,9 @@ impl<'a> Checker<'a> {
                     member_span,
                     format!("`{mname}` is not a builtin method of `{shown}`"),
                 )
-                .with_label(format!("a `{shown}` method outside the builtins comes from `std.{home}`"))
+                .with_label(format!(
+                    "a `{shown}` method outside the builtins comes from `std.{home}`"
+                ))
                 .with_note(format!(
                     "no standard library is configured, so `std.{home}` cannot answer this \
                      call ([type.method.root]). Point wolf at a wolf-std checkout with \
