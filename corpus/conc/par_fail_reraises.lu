@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="failed: parse\n")
+//! phase: run
+//! conforms: conc.task.par.fail, conc.task.fail
+//!
+//! s166 — `f` raises, so `xs.par(f)` is `List[int] ! {parse}`: the
+//! first failure re-raises at the `par` as its row, after the join, and
+//! a failed `par` has no value. Element 70 000 fails; which other
+//! elements `f` ran on first is the schedule's, and nothing here reads
+//! it. That the failure cancels the sibling chunks is witnessed where
+//! the schedule can be held still — `wolf_rt`'s
+//! `par_failure_cancels_siblings`, whose siblings sleep per element.
+
+fn check(x: int) -> int ! {parse} {
+    if x == 70000 { return parse }
+    x
+}
+
+fn main() -> !int {
+    var xs = List[int]()
+    for i in 0..100000 { (mut xs).push(i) }
+    let ys = xs.par(fn(x) { check(x)? }) else |e| {
+        print("failed: {e}")
+        return 0
+    }
+    print("ran to the end: {ys.len}")
+    1
+}

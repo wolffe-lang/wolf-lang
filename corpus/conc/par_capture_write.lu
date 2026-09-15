@@ -1,0 +1,15 @@
+//! check: fail(E1101)
+//! phase: typecheck
+//! conforms: conc.task.par.capture, conc.task.spawn
+//!
+//! s166 — `f` is checked as a spawned closure's body: a write to state
+//! it captures from the enclosing function is E1101 at the write, with
+//! the `par` as the spawn site.
+
+fn main() -> !int {
+    let xs = [1, 2, 3]
+    var total = 0
+    let ys = xs.par(fn(x) { total += x; x })
+    print("{total} {ys.len}")
+    0
+}
