@@ -3,6 +3,10 @@
 ## Commits
 - Commit often, in chunks: one logical change per commit. Never `git add -A`.
 - Messages: terse, imperative, under 250 characters.
+- A count in a subject line (`anchors 452 -> 453`) is advisory; the
+  registry is the count. Predict against `spec/anchors.json` (and the
+  corpus, the catalog) read at the commit, never against a message
+  (F-0100's rule — wolf-lang#309 has an instance in each direction).
 - Tests land in the same commit as the code they test. Benchmarks land with
   the perf claims they prove.
 
