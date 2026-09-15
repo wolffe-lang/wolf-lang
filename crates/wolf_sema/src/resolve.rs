@@ -1368,6 +1368,23 @@ impl Resolver<'_> {
     // ---------------------------------------------- unused imports -----
 
     fn report_unused_imports(&mut self, root: &GreenNode) {
+        // wolf-lang#352 (`[type.trait.op]`): `a == b` IS `Eq.eq(a, b)`,
+        // so an imported operator trait is used by an operator this file
+        // spells — even though which trait an operator wants is the
+        // checker's question, a rung after this report. A file that
+        // spells no `==`/`!=` still hears that `Eq` is unused. Marked
+        // before the report so a `use m.{Eq, Other}` group reads it.
+        let spelled = operator_traits_spelled(root);
+        for (i, b) in self.bindings.iter().enumerate() {
+            if let BindTarget::Item { module, name } = &b.target
+                && spelled.contains(name.as_str())
+                && self.pkg.tables[*module]
+                    .get(name)
+                    .is_some_and(|it| it.kind == crate::graph::ItemKind::Trait)
+            {
+                self.used[i] = true;
+            }
+        }
         // Group members share a decl; when the whole declaration is
         // dead the fix removes the line, otherwise just the name.
         for (i, b) in self.bindings.iter().enumerate() {
@@ -1411,6 +1428,52 @@ impl Resolver<'_> {
             self.sink.push(d);
         }
     }
+}
+
+/// wolf-lang#352: the operator traits (`[type.trait.op]`'s table) whose
+/// operators appear anywhere in a file. `-` spells both `Sub` and `Neg`:
+/// the parse tree knows the difference, but a lint that must never
+/// delete a used import errs toward "used".
+fn operator_traits_spelled(root: &GreenNode) -> BTreeSet<&'static str> {
+    fn walk(n: &GreenNode, out: &mut BTreeSet<&'static str>) {
+        for t in n.tokens() {
+            match t.kind {
+                SyntaxKind::Plus => {
+                    out.insert("Add");
+                }
+                SyntaxKind::Minus => {
+                    out.insert("Sub");
+                    out.insert("Neg");
+                }
+                SyntaxKind::Star => {
+                    out.insert("Mul");
+                }
+                SyntaxKind::Slash => {
+                    out.insert("Div");
+                }
+                SyntaxKind::Percent => {
+                    out.insert("Rem");
+                }
+                SyntaxKind::EqEq | SyntaxKind::NotEq => {
+                    out.insert("Eq");
+                }
+                SyntaxKind::Lt
+                | SyntaxKind::Gt
+                | SyntaxKind::LtEq
+                | SyntaxKind::GtEq
+                | SyntaxKind::Spaceship => {
+                    out.insert("Ord");
+                }
+                _ => {}
+            }
+        }
+        for c in n.nodes() {
+            walk(c, out);
+        }
+    }
+    let mut out = BTreeSet::new();
+    walk(root, &mut out);
+    out
 }
 
 /// The byte edit that removes one name (and its separator comma) from a
@@ -1621,6 +1684,42 @@ mod tests {
             (&[], "b.lu", "fn later() -> !int { 0 }\n"),
         ]);
         assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+    }
+
+    /// wolf-lang#352: `use cmp.Eq` is used by a `==` the file spells —
+    /// `[type.trait.op]` says the operator IS `Eq.eq` — and stays E0305
+    /// in a file that spells no `==`/`!=`, or when the item is not a
+    /// trait.
+    #[test]
+    fn operator_trait_import_is_used_by_its_operator() {
+        let cmp = (
+            &["cmp"][..],
+            "c.lu",
+            "/// A value.\npub struct Ordering { v: int }\n/// Equality.\npub trait Eq {\n    fn eq(self, other: Self) -> bool\n}\n/// Not a trait.\npub fn Add(a: int) -> int { a }\n",
+        );
+        let used = resolve(&[
+            (
+                &[],
+                "main.lu",
+                "use cmp.Eq\nfn main() -> !int {\n    if 1 != 2 { return 1 }\n    0\n}\n",
+            ),
+            cmp,
+        ]);
+        assert!(
+            !codes_of(&used).contains(&"E0305"),
+            "{:?}",
+            used.diagnostics
+        );
+        let unused = resolve(&[
+            (&[], "main.lu", "use cmp.Eq\nfn main() -> !int { 0 }\n"),
+            cmp,
+        ]);
+        assert_eq!(codes_of(&unused), ["E0305"]);
+        let not_a_trait = resolve(&[
+            (&[], "main.lu", "use cmp.Add\nfn main() -> !int { 1 + 1 }\n"),
+            cmp,
+        ]);
+        assert_eq!(codes_of(&not_a_trait), ["E0305"]);
     }
 
     #[test]
