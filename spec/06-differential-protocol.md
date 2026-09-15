@@ -92,7 +92,21 @@ One JSON object on stdout. Schema (`"protocol": 1`):
   diagnostics are a compiler-quality concern, never compared).
   At `resolve|typecheck|mem`: same, plus `fail` codes drawn from the
   E1xxx+ families. At `run`: compare `verdict`; for `exit`, compare
-  status and `stdout_sha256`; for `trap`, compare kind only.
+  status and `stdout_sha256`; for `trap`, compare kind, **and compare
+  `stdout_sha256` when both records carry it** — the output a program
+  wrote before its fault is a program observation exactly as an
+  exiting program's is. Absence of the field on either side is
+  `[proto.record.fields]`'s honest-absent and is never a divergence, as
+  `[proto.cmp.warn]` treats a missing `warnings` array. For `ub`,
+  compare the finding; output bytes are not compared on a program with
+  undefined behaviour. (The trap sentence ruled 2026-09-11, BACKLOG
+  B25, as is35 drafted it on wolf-lang#216, and written by s163. At
+  its writing every tier that runs a writing trap returned one digest:
+  63 trap records in lupin 0.1.24's bundle, 61 writing nothing and
+  both writers byte-identical on `--checked`, `--native`, `--release`
+  and lupin. **The cost, stated:** none to any program — the digest is
+  already in both records — and one string comparison per trap record
+  to the comparator.)
 - `[proto.cmp.rung]` Rejection-rung tolerance (s70, the DIV-011
   family's ruling): when both records reject with `fail(CODE)` and the
   **first** diagnostic's code and span agree, the records AGREE even
