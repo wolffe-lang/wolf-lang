@@ -5,8 +5,9 @@
 //! [`Lend::Lendable`] is what makes `wolf_wir::lower` hand a callee the
 //! caller's `{ptr, len}` instead of a copy, so its whitelist is the
 //! thing that must never grow by accident. `Opaque` is the pre-s89
-//! behaviour (materialize) and is always safe; `Escapes` materializes
-//! too and is W1004 (s92 — E1015 refused it through s91), so it only
+//! behaviour (materialize) and is always safe. A PROVABLE escape
+//! materialized too and was W1004 until wolf-lang#387 retired both the
+//! verdict and the warning (s92 — E1015 refused it through s91); it only
 //! ever improves a diagnostic. These tests pin the boundary from
 //! both sides: the seven read positions of s77's lowering comment on
 //! one side, and the shapes that must NOT be lendable on the other.
@@ -49,13 +50,6 @@ fn lendable(src: &str, name: &str, ix: usize) {
 
 fn opaque(src: &str, name: &str, ix: usize) {
     assert_eq!(lend(src, name, ix), Lend::Opaque, "expected a materialize");
-}
-
-fn escapes(src: &str, name: &str, ix: usize) {
-    assert!(
-        matches!(lend(src, name, ix), Lend::Escapes(_)),
-        "expected a provable escape"
-    );
 }
 
 // ------------------------------- the seven read positions (lendable) ----
@@ -160,7 +154,7 @@ fn a_mutually_recursive_walk_is_lendable() {
 fn a_recursive_walk_that_escapes_still_escapes() {
     // The cycle assumption is about the LOOP, not about the body: a
     // use that outlives the call is still found.
-    escapes(
+    opaque(
         "fn walk(bs: List[byte], i: int) -> List[byte] {\n    \
              if i >= bs.len { return bs }\n    \
              walk(bs, i + 1)\n\
@@ -179,16 +173,16 @@ fn two_parameters_lend_independently() {
     opaque(src, "f", 2);
 }
 
-// --------------------------------------------- provable escapes (W1004) ----
+// ------------------- provable escapes (materialize; W1004 retired, #387) ----
 
 #[test]
 fn returning_the_parameter_escapes() {
-    escapes("fn f(bs: List[byte]) -> List[byte] { bs }\n", "f", 0);
+    opaque("fn f(bs: List[byte]) -> List[byte] { bs }\n", "f", 0);
 }
 
 #[test]
 fn an_explicit_return_escapes() {
-    escapes(
+    opaque(
         "fn f(bs: List[byte], n: int) -> List[byte] {\n    \
              if n > 0 { return bs }\n    \
              bs\n\
@@ -200,7 +194,7 @@ fn an_explicit_return_escapes() {
 
 #[test]
 fn a_branch_tail_escapes() {
-    escapes(
+    opaque(
         "fn f(bs: List[byte], n: int) -> List[byte] {\n    \
              if n > 0 { bs } else { bs }\n\
          }\n",
@@ -211,7 +205,7 @@ fn a_branch_tail_escapes() {
 
 #[test]
 fn a_transitive_escape_is_an_escape() {
-    escapes(
+    opaque(
         "fn keep(bs: List[byte]) -> List[byte] { bs }\n\
          fn f(bs: List[byte]) -> List[byte] { keep(bs) }\n",
         "f",
@@ -221,7 +215,7 @@ fn a_transitive_escape_is_an_escape() {
 
 #[test]
 fn an_assignment_away_escapes() {
-    escapes(
+    opaque(
         "fn f(bs: List[byte]) -> int {\n    \
              var out = List[byte]()\n    \
              out = bs\n    \
@@ -352,7 +346,6 @@ fn eight_of_nine_std_bytes_functions_lend() {
         match lend(src, name, 0) {
             Lend::Lendable => lent.push(name),
             Lend::Opaque => copied.push(name),
-            Lend::Escapes(_) => panic!("{name}: no std.bytes function keeps its parameter"),
         }
     }
     assert_eq!(lent.len(), 8, "eight lend: {lent:?}, copied: {copied:?}");
