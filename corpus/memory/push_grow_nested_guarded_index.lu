@@ -1,0 +1,62 @@
+//! check: run(exit=0, stdout="h 474454 x0 0 x31 288 x62 6")
+//! phase: run
+//! conforms: arith.checked
+//!
+//! `std.x.crypto.curve25519.sc_muladd` without std (s162, #146's
+//! second half): a push-grown list, a NESTED index-write loop, then a
+//! sequential one. Both inner loops version with an overlap guard.
+//! Past #146's dominance ICE (the guard's len, fixed in the same lane)
+//! the release mid-end broke the module a second way: the first guard
+//! chain sits inside the outer loop, so licm hoisted it to the outer
+//! preheader, noalias subjects included (`[fact-just]`: guarded
+//! subjects must be defined under the guard's taken edge), and GVN
+//! then folded the second loop's subject onto the first's. A subject
+//! now never moves. The stdout is the checked lane's answer.
+
+fn muladd(a: List[int], b: List[int], c: List[int]) -> List[int] {
+    var x = List[int]()
+    var i: int = 0
+    while i < 64 {
+        (mut x).push(0)
+        i = i + 1
+    }
+    i = 0
+    while i < 32 {
+        let ai = a[i]
+        var j: int = 0
+        while j < 32 {
+            let idx = i + j
+            let cur = x[idx]
+            x[idx] = cur + ai * b[j]
+            j = j + 1
+        }
+        i = i + 1
+    }
+    i = 0
+    while i < 32 {
+        let cur = x[i]
+        x[i] = cur + c[i]
+        i = i + 1
+    }
+    x
+}
+
+fn main() -> int {
+    var a = List[int]()
+    var b = List[int]()
+    var c = List[int]()
+    var i: int = 0
+    while i < 32 {
+        (mut a).push(i % 7)
+        (mut b).push(i % 5 + 1)
+        (mut c).push(i)
+        i = i + 1
+    }
+    let x = muladd(a, b, c)
+    var h: int = 0
+    for v in x {
+        h = (h * 31 + v) % 1000003
+    }
+    print("h {h} x0 {x[0]} x31 {x[31]} x62 {x[62]}")
+    0
+}

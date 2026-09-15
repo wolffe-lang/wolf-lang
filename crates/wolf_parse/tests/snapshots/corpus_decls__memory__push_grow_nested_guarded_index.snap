@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 792..1325 name=muladd body=Block
+FnDecl 1327..1729 name=main body=Block
