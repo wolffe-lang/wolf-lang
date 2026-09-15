@@ -111,4 +111,7 @@ has the gates and the commit conventions.
 The runtime library (`wolf_rt`) carries the
 [wolf Runtime Library Exception](https://github.com/wolffe-lang/wolf-lang/blob/trunk/crates/wolf_rt/LICENSE-EXCEPTION),
 so programs you compile with wolf are yours, under any license you
-choose.
+choose. The
+[wolf Training Data Permission](https://github.com/wolffe-lang/wolf-lang/blob/trunk/LICENSE-TRAINING-DATA)
+lets you train models on this repository's text and ship excerpts of it
+in datasets under CC BY 4.0.
