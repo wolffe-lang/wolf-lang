@@ -1,0 +1,30 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.read, mem.tier0.excl.1
+//! s165 (wolf-lang#366) — the plain move-out. `[mem.tier0.mode.read]`
+//! ruled at #359 that `fn f(b: T) -> T { b }` gives nothing away: the
+//! caller's binding survives the call, so what comes back is a SECOND
+//! live path to the caller's value. Measured at v0.2.14 before this
+//! pin, on the native and the checked lane alike: `ys=4 xs=4` — one
+//! value under two `var` bindings, both written through, no `shared`
+//! spelled and no diagnostic. The rule that breaks is
+//! `[mem.tier0.excl.1]`, and this is its code. lupin runs this shape
+//! clean (it copies at the crossing and prints `ys=4 xs=3`) — the
+//! expected conservatism note, the posture `read_param_take.lu` records.
+//! The fix is `copy b` (an independent value) or `take b: …` (the
+//! caller gives it up).
+
+fn f(b: List[int]) -> List[int] {
+    b                              // ERROR E1002: `b` is the caller's value
+}
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    (mut xs).push(2)
+    (mut xs).push(3)
+    var ys = f(xs)
+    (mut ys).push(99)
+    print("ys={ys.len} xs={xs.len}")
+    0
+}

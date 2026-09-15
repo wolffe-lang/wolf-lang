@@ -1,0 +1,25 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.read, mem.tier0.excl.1
+//! s165 (wolf-lang#366) — a generic body is checked once, for every
+//! instantiation, and `List[int]` is one of them: `first` over a
+//! `List[List[int]]` handed back the caller's inner list at v0.2.14
+//! (`e=3 outer0=3`, native and checked). An element moved out of a
+//! `read` parameter is still the caller's value. `copy xs[0]` is the
+//! fix; for an `int` element it costs nothing.
+
+fn first[T](xs: List[T]) -> T {
+    xs[0]                          // ERROR E1002: the caller's element
+}
+
+fn main() -> !int {
+    var inner = List[int]()
+    (mut inner).push(1)
+    (mut inner).push(2)
+    var outer = List[List[int]]()
+    (mut outer).push(copy inner)
+    var e = first(outer)
+    (mut e).push(3)
+    print("e={e.len} outer0={outer[0].len}")
+    0
+}

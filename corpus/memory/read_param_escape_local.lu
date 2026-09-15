@@ -1,0 +1,23 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.read, mem.tier0.excl.1
+//! s165 (wolf-lang#366) — a rebinding does not launder the value. `c`
+//! is `b` under a second name, so returning `c` is returning `b`. The
+//! diagnostic points at the return and names the move into `c`, where
+//! the `copy` belongs.
+
+fn f(b: List[int]) -> List[int] {
+    let c = b
+    c                              // ERROR E1002: `c` holds `b`'s value
+}
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    (mut xs).push(2)
+    (mut xs).push(3)
+    var ys = f(xs)
+    (mut ys).push(99)
+    print("ys={ys.len} xs={xs.len}")
+    0
+}

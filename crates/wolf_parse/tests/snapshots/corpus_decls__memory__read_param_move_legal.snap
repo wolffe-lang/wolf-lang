@@ -1,0 +1,14 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 877..917 name=Point fields=2
+StructDecl 919..972 name=Named fields=2
+FnDecl 974..1010 name=same body=Block
+FnDecl 1012..1052 name=label body=Block
+FnDecl 1054..1108 name=or body=Block
+FnDecl 1110..1203 name=count body=Block
+FnDecl 1205..1328 name=widest body=Block
+FnDecl 1330..1413 name=keep body=Block
+FnDecl 1415..1479 name=fresh body=Block
+FnDecl 1481..1863 name=main body=Block

@@ -1,0 +1,28 @@
+//! check: fail(E1014)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.read
+//! s165 (wolf-lang#366) — `read_param_take.lu`'s give-away through a
+//! rebinding: `let c = b` then `eat(take c)` handed the caller's list
+//! to a consumer that grew it (`n=4 xs=4` at v0.2.14, native and
+//! checked). Taking `c` is taking `b`.
+
+fn eat(take v: List[int]) -> int {
+    var w = v
+    (mut w).push(5)
+    w.len
+}
+
+fn f(b: List[int]) -> int {
+    let c = b
+    eat(take c)                    // ERROR E1014: gives away `b`'s value
+}
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    (mut xs).push(2)
+    (mut xs).push(3)
+    let n = f(xs)
+    print("n={n} xs={xs.len}")
+    0
+}

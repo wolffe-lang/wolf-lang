@@ -1,0 +1,18 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.read, mem.tier0.excl.1
+//! s165 (wolf-lang#366) — module state outlives every call, so a
+//! `read` parameter's value stored there would be a second path to the
+//! caller's value for the rest of the program.
+
+var keep: List[int] = List[int]()
+
+fn stash(b: List[int]) {
+    keep = b                       // ERROR E1002: into module state
+}
+
+fn main() -> !int {
+    var xs = List[int]()
+    stash(xs)
+    keep.len
+}

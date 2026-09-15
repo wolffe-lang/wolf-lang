@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+VarDecl 285..319 pat=keep init=CallExpr
+FnDecl 320..415 name=stash body=Block
+FnDecl 417..490 name=main body=Block

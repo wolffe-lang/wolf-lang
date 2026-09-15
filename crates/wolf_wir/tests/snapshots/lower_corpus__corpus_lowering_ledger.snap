@@ -252,7 +252,7 @@ lints/take_returned.lu: lowers
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/byte_list_ledger.lu: lowers
 memory/byte_producers_ledger.lu: lowers
-memory/byte_view_escape.lu: lowers
+memory/byte_view_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/carried_quotient_nested.lu: lowers
 memory/carried_quotient_pair.lu: lowers
 memory/checked_unsigned.lu: lowers
@@ -304,6 +304,15 @@ memory/prov_holy_grail.lu: lowers
 memory/prov_two_phase.lu: lowers
 memory/push_grow_guarded_index.lu: lowers
 memory/push_grow_nested_guarded_index.lu: lowers
+memory/read_param_escape_field.lu: not mem-clean (pre-wir rungs own it)
+memory/read_param_escape_generic.lu: not mem-clean (pre-wir rungs own it)
+memory/read_param_escape_local.lu: not mem-clean (pre-wir rungs own it)
+memory/read_param_escape_mut.lu: not mem-clean (pre-wir rungs own it)
+memory/read_param_escape_static.lu: not mem-clean (pre-wir rungs own it)
+memory/read_param_move_legal.lu: lowers
+memory/read_param_rebind_take.lu: not mem-clean (pre-wir rungs own it)
+memory/read_param_rebind_write.lu: not mem-clean (pre-wir rungs own it)
+memory/read_param_return.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_take.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_write.lu: not mem-clean (pre-wir rungs own it)
 memory/region_ambient_ok.lu: lowers

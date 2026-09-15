@@ -1,0 +1,28 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.read, mem.tier0.excl.1
+//! s165 (wolf-lang#366) — the move-out through a field. `wrap` builds a
+//! `Box` around its `read` parameter and returns the box, so
+//! `bx.items` and the caller's `xs` were one list at v0.2.14
+//! (`bx=4 xs=4`, native and checked). The escape is the value, wherever
+//! it is carried: a struct literal, a tuple or a list literal holding
+//! the parameter leaves the call exactly as the bare name does.
+
+struct Box {
+    items: List[int],
+}
+
+fn wrap(b: List[int]) -> Box {
+    Box { items: b }               // ERROR E1002: `b` leaves inside the box
+}
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    (mut xs).push(2)
+    (mut xs).push(3)
+    var bx = wrap(xs)
+    (mut bx.items).push(9)
+    print("bx={bx.items.len} xs={xs.len}")
+    0
+}

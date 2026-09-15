@@ -1,0 +1,18 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.read, mem.tier0.mode.mut, mem.tier0.excl.1
+//! s165 (wolf-lang#366) — a `mut` parameter is the caller's place, so a
+//! `read` parameter's value stored anywhere in it outlives the call:
+//! after `replace(mut ys, xs)` the caller would hold one list as both
+//! `ys` and `xs`.
+
+fn replace(mut out: List[int], b: List[int]) {
+    out = b                        // ERROR E1002: into the caller's `ys`
+}
+
+fn main() -> !int {
+    var xs = List[int]()
+    var ys = List[int]()
+    replace(mut ys, xs)
+    ys.len
+}

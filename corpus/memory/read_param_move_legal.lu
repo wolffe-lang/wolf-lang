@@ -1,0 +1,78 @@
+//! check: run(exit=0, stdout="2 wolf 4 0 1 1 1\n2\n")
+//! phase: run
+//! conforms: mem.tier0.mode.read, mem.tier0.excl.1, mem.tier0.move.3
+//! s165 (wolf-lang#366) — what the refusal leaves alone, on every lane.
+//! Only a move-out that can reach shared storage AND outlives the call
+//! (or is written through) is refused:
+//! - `same`: a struct of scalars is inline words; the "second path" is
+//!   a copy on every tier.
+//! - `label`: a `str` is an immutable view; two paths cannot write it.
+//! - `or`: `v else d` on `int ! {none}` yields an `int`.
+//! - `count`: a match moving a piece out of the scrutinee, used inside.
+//! - `widest`: wolf-std's `var key0 = key` shape — a rebinding read,
+//!   and replaced whole; nothing of the caller's is written.
+//! - `keep`: a `take` parameter IS this function's own.
+//! - `fresh`: `copy` hands back an independent value.
+
+struct Point {
+    x: int,
+    y: int,
+}
+
+struct Named {
+    name: str,
+    items: List[int],
+}
+
+fn same(p: Point) -> Point {
+    p
+}
+
+fn label(n: Named) -> str {
+    n.name
+}
+
+fn or(v: int ! {none}, d: int) -> int {
+    v else d
+}
+
+fn count(n: Named) -> int {
+    match n {
+        Named { name, items } => items.len,
+    }
+}
+
+fn widest(key: List[int]) -> int {
+    var key0 = key
+    if key0.len > 2 {
+        key0 = List[int]()
+    }
+    key0.len
+}
+
+fn keep(take b: List[int]) -> List[int] {
+    var c = b
+    (mut c).push(3)
+    c
+}
+
+fn fresh(b: List[int]) -> List[int] {
+    let c = copy b
+    c
+}
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    let q = same(Point { x: 1, y: 2 })
+    let nm = Named { name: "wolf", items: List[int]() }
+    let fl = fresh(xs)
+    let o = or(none, 4)
+    let l = label(nm)
+    let c = count(nm)
+    let w = widest(xs)
+    print("{q.y} {l} {o} {c} {w} {fl.len} {xs.len}")
+    let k = keep(take xs)
+    print("{k.len}")
+    0
+}
