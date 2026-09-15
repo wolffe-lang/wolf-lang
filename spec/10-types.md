@@ -311,6 +311,58 @@ values that have none.)
   (`[type.char.interp]`'s `str` surface, the integer surface, the
   float surface) and on nothing composite: a spec on a composite is a
   refusal, never silently ignored (wolf-lang#10's rule).
+- `[type.interp.spec]` **The format spec, one clause** (wolf-lang#28's
+  §7.4, which was never written under that number; the grammar's
+  `FORMAT_SPEC` production cites this clause). A hole may carry a spec
+  after its first top-level `:` (`[gram.amb.fmtcolon]`):
+  `[[fill] align] ['+'] ['0'] [width] ['.' precision] [type]`, where
+  `fill` is any single BYTE, `align` is `<` `^` `>`, `width` and
+  `precision` are decimal digits capped at 65535, and `type` is one of
+  `b o x X e E f`. Every spec is comptime-known — the grammar admits no
+  computed spec — so a spec the grammar cannot read is **E0412** at the
+  spec and a field applied to a type it cannot describe is **E0413**,
+  never a silently ignored field and never a run-time failure.
+  **Meaning.** `width` is a minimum in bytes (D25) and never truncates;
+  `fill` defaults to a space; alignment defaults to LEFT for `str`,
+  `char` and `bool` and RIGHT for numbers; `^` puts the odd fill byte on
+  the right. `0` zero-pads a number AFTER its sign — `{n:08}` of 42 is
+  `00000042`, `{n:06}` of -42 is `-00042`, `{n:+08}` is `+0000042` —
+  and combining `0` with an explicit fill or alignment is E0412, the
+  spec must pick one. `+` marks a non-negative number (zero takes it)
+  and never hides a negative float's sign (`-0.0` stays `-0`); it is
+  E0413 off a number. `precision` is digits after the point on an
+  `f64` (fixed-point when no `type` is given) and a maximum length in
+  bytes on a `str` that never splits a code point (`{"é":.1}` is
+  empty); on an integer or a `bool` it is E0413. `b` `o` `x` `X` render
+  an integer sign-magnitude with no prefix (`-255` in `x` is `-ff`), and
+  are E0413 on a float, a `str` or a `bool`; `e` `E` render a float in
+  `%e` style with a signed exponent of at least two digits, `f`
+  fixed-point, each with precision 6 when none is given. With no
+  `type` and no precision an `f64` renders as the shortest decimal that
+  reads back as the same bits. A `char` takes the `str` surface and a
+  `byte` the integer surface (`[type.char.interp]`,
+  `[type.byte.interp]`). A spec on a composite hole is refused
+  (`[type.interp.value]`) and on a `!T` hole is E0413
+  (`[type.interp.union]`). **`Show` is superseded:** #28's proposed
+  user-type trait, `fmt(self, spec: str) -> str`, is not the
+  language's; a user type's bare hole renders by `[type.interp.agg]`,
+  and a spec on it is the composite refusal. **The cost, stated:** zero
+  parsing at run time on every tier — sema parses and validates each
+  spec once, the checked machine renders from the parsed form, and the
+  native tiers pass the packed spec to the runtime's formatter as an
+  immediate; the rendering itself is one pass over the value's digits
+  plus the padding bytes. Measured on linux at wolf 0.2.14 on
+  `--checked` and `--native` and lupin 0.1.36, eighteen specs render
+  byte-identically on all three and the E0412/E0413 refusals agree in
+  code and span. Witnesses: `strings/format_spec_full.lu`,
+  `strings/format_spec_width.lu`, `strings/float_format.lu`,
+  `strings/format_spec_malformed.lu` (`fail(E0412)`),
+  `strings/format_spec_mismatch.lu` (`fail(E0413)`). (Written
+  2026-09-15, s163 — wolf-lang#28. The semantics are s38's, executable
+  since in `wolf_sema::fmtspec` and member-by-member wolf-std sc05's
+  reference functions; the clause writes down what both machines have
+  converged on, and #28's item 3 — `{n:08}` absorbed into the width —
+  is fixed on both.)
 - `[type.interp.agg]` **`()` renders `()`**; a tuple `(a, b)` — the
   elements in order, `, `-separated, in parentheses; a struct
   `Name { f: v, g: w }` — the type's name, a space, `{`, then each

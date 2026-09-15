@@ -469,6 +469,7 @@
     "type.interp.none": "10-types.md",
     "type.interp.reason": "10-types.md",
     "type.interp.row": "10-types.md",
+    "type.interp.spec": "10-types.md",
     "type.interp.union": "10-types.md",
     "type.interp.value": "10-types.md",
     "type.list.lit": "10-types.md",
