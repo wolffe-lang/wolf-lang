@@ -1643,7 +1643,7 @@ is the caller's value under a second name, so a write or a `take`
 through `local` is refused exactly as one through `p` is (wolf-lang#366).
 "#);
 
-code!(E1015, "RETIRED — an escaping byte-view lend now copies and warns W1004", r#"
+code!(E1015, "RETIRED — an escaping byte-view lend now copies silently", r#"
 This code is retired and the compiler no longer emits it; the number is
 kept so a reader who meets `E1015` in an old log or an old lesson finds
 this page and not a hole. A retired number is never reused.
@@ -1658,11 +1658,15 @@ at the call, bit-for-bit what every call did before views crossed
 calls), and this was the only refusal in the language standing between
 a program and a meaning it already had.
 
-Now the same shape compiles by copying and says so once, as W1004: the
-lend degrades to a copy, the fix is unchanged (`let bs = s.bytes()`
-first, if the copy was not what you meant), and the only thing the
-program loses is the zero-cost lend it could not have kept anyway. See
-W1004 and [mem.str.view.lend].
+Now the same shape compiles by copying. It said so once, as W1004,
+until wolf-lang#387 retired that warning too — wolf-lang#366 had made
+every provable escape a refusal in the CALLEE (E1002/E1014), which
+names the problem where it can actually be fixed, so the warning was
+either redundant beside that error or, on the one shape #366 leaves
+legal, untrue. The fix is unchanged (`let bs = s.bytes()` first if the
+copy was not what you meant, or `copy bs` in the callee, which lends
+for free), and the only thing the program loses is the zero-cost lend
+it could not have kept anyway. See W1004 and [mem.str.view.lend].
 "#);
 
 // ------------------------------------------------------------------------
