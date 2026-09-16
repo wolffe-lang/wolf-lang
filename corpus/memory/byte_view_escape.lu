@@ -45,7 +45,7 @@ fn keep(bs: List[byte]) -> List[byte] {
 
 fn main() -> !int {
     let s = "wolf"
-    let held = keep(s.bytes())     // WARNING W1004: kept past the call, so copied
+    let held = keep(s.bytes())     // the lend degrades to a copy, silently
     print("{held.len}")
     0
 }
