@@ -19,7 +19,9 @@ pub fn any[T](xs: List[T], pred: fn(T) -> bool) -> bool {
 
 pub fn map[T, U](xs: List[T], f: fn(T) -> U) -> List[U] {
     var out = List[U]()
-    for x in xs { (mut out).push(f(x)) }
+    // `take` on the store parameter (wolf-lang#385): `f(x)` is this
+    // function's own temporary, so it MOVES in and no element copies.
+    for x in xs { (mut out).push(take f(x)) }
     out
 }
 
@@ -96,7 +98,10 @@ pub fn enumerate[T](xs: List[T]) -> List[(int, T)] {
     var out: List[(int, T)] = []
     var i = 0
     for x in xs {
-        (mut out).push((i, x))
+        // The pair is ours and moves in; `x` is the caller's and is
+        // copied into it (`[mem.tier0.mode.read]`).
+        let pair = (i, copy x)
+        (mut out).push(take pair)
         i = i + 1
     }
     out
@@ -112,7 +117,10 @@ pub fn zip[T, U](xs: List[T], ys: List[U]) -> List[(T, U)] {
     for x in xs {
         var j = 0
         for y in ys {
-            if j == i { (mut out).push((copy x, y)) }
+            if j == i {
+                let pair = (copy x, y)
+                (mut out).push(take pair)
+            }
             j = j + 1
         }
         i = i + 1
