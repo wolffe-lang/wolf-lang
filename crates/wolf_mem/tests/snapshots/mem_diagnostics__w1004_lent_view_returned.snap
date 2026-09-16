@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_mem/tests/mem_diagnostics.rs
+assertion_line: 56
 expression: render_mem(src)
 ---
 error[E1002]: `bs` is the caller's value, and it is returned here while the caller still holds it
@@ -17,20 +18,3 @@ help: to hand on an independent value, copy it at the move
   |
 1 | fn keep(bs: List[byte]) -> List[byte] { copy bs }
   |
-
-warning[W1004]: these bytes were offered to `keep` as a LEND, but `keep` keeps them past the call — so they were copied instead
- --> mem:///main.lu:4:21
-  |
-1 | fn keep(bs: List[byte]) -> List[byte] { bs }
-  |         -- `bs` is declared here
-  |                                         -- `bs` outlives the call here
-...
-4 |     let held = keep(s.bytes())
-  |                     ^^^^^^^^^ a byte view of the string's own storage; materialized to a `List[byte]` here
-  |
-  = note: the program means what it meant; it paid one copy the lend was meant to save. If the
-    copy is what you wanted, bind the bytes first — `let bs = s.bytes()` — and pass `bs`;
-    that costs exactly what this call costs and says so. If it is not, the callee is the
-    thing to change: a callee that only reads its parameter lends for free. A LENT view
-    costs nothing and lasts only for the call. (This shape was refused as E1015 before the
-    copy became the answer; that code is retired.)

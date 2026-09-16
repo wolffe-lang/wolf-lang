@@ -1124,7 +1124,7 @@ fn iterate_then_mutate_stays_silent() {
     );
 }
 
-// ------------------------------------------------------------ W1004 ----
+// -------------------- the byte-view lend, after W1004 retired (#387) ----
 
 #[test]
 fn w1004_lent_view_returned() {
@@ -1133,10 +1133,10 @@ fn w1004_lent_view_returned() {
     // past the call the lend is scoped to. s92: the bytes are copied
     // and the program compiles; the diagnostic says the copy happened
     // and where the escape is (E1015 refused this through s91). s165
-    // (#366): the callee returning its `read` parameter is E1002 in its
-    // own right now, so the snapshot carries both — the refusal in
-    // `keep`, and W1004's true statement about the call (#387 asks
-    // whether W1004 retires).
+    // (#366): the callee returning its `read` parameter is E1002 in
+    // its own right now. s167 (#387) retired W1004, so the snapshot
+    // carries the refusal alone and the degraded lend is a silent copy
+    // again — which is what it compiled to all along.
     snap(
         "w1004_lent_view_returned",
         "fn keep(bs: List[byte]) -> List[byte] { bs }\n\
@@ -1289,8 +1289,9 @@ fn a_read_only_lend_stays_silent() {
 
 #[test]
 fn a_bound_bytes_list_is_not_a_lend() {
-    // The fix ladder: `let` materializes, so the same callee that
-    // W1004 reports a copy for takes the bound list without a word.
+    // The fix ladder: `let` materializes, so the callee that would
+    // otherwise force a copy at the lend takes the bound list without
+    // a word.
     // s165 (#366): `keep` hands back `copy bs` — returning the `read`
     // parameter itself is E1002.
     snap(

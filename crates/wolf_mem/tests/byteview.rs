@@ -365,3 +365,38 @@ fn eight_of_nine_std_bytes_functions_lend() {
         );
     }
 }
+
+// ----------------------- `copy v` is a read position (#387) ----
+
+/// wolf-lang#387's second half. A callee that wants its own copy
+/// spells `copy bs`, and that is a READ of the view: the callee
+/// materializes a fresh `List[byte]` right there, and what leaves
+/// afterwards is the copy, never the lend. So the parameter stays
+/// `Lendable` and the call still costs nothing.
+///
+/// Sound only since wolf-lang#384 made native `copy` a real copy —
+/// before it, `copy` lowered as the operand itself, so the "copy"
+/// handed back a list aliasing the string's own immutable bytes, and
+/// doing this would have been unsound rather than merely pessimistic.
+/// Through s165 this body was `Opaque`: the bare `bs` under the `copy`
+/// read as an unmodelled use, so the caller materialized at the call.
+#[test]
+fn a_copy_of_the_parameter_is_lendable() {
+    lendable(
+        "fn keep(bs: List[byte]) -> List[byte] { copy bs }\n",
+        "keep",
+        0,
+    );
+}
+
+/// The same one hop on: `copy` in an ARGUMENT position is a read of
+/// the view too, so a re-lend chain is not broken by it.
+#[test]
+fn a_copy_handed_to_a_reader_is_lendable() {
+    lendable(
+        "fn count(xs: List[byte]) -> int { xs.len }\n\
+         fn relay(bs: List[byte]) -> int { count(copy bs) }\n",
+        "relay",
+        0,
+    );
+}
