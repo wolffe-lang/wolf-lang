@@ -2,6 +2,90 @@
 
 ## Unreleased
 
+### The element edge (s167 — wolf-lang#385 ruled option 3, #387 ruled both)
+
+**A builtin container store COPIES its element now, and `push(take x)`
+moves it** (#385). `push`'s value parameter is a `read`, and a read is
+a lend — so the builtin kept the lent handle inside the receiver past
+the call, and the container's element and the caller's binding were one
+value. Measured at v0.2.14, `(mut outs).push(xs)` then
+`(mut xs).push(4)` printed `outs0=2 xs=2` on `wolf run`, on `--release`
+and on the checked machine, while lupin 0.1.36 printed `outs0=1 xs=2`:
+two writable paths to one value, no `shared` spelled anywhere and no
+diagnostic — `[mem.tier0.excl.1]` violated with a builtin as the
+callee. Both wolf-lang tiers agreed with each other and disagreed with
+lupin, so the differ could not see it either.
+
+Ruled option 3: the default is safe and the fast path is visible. A
+plain element is copied in, at exactly `[mem.tier0.move.3]`'s cost for
+`copy`; `push(take x)` moves it and `x` is dead after the call (E1001,
+with the ladder's `copy x` fix-it). This is the one place a `read`
+parameter's call site may spell a mode at all — X1 otherwise demands
+the site's spelling equal the declaration (E1007) — and `take` is
+admitted because a store is the one read position that KEEPS what it
+was lent. A silent take (option 2) was refused for the reason the
+ruling records: it would have made `push` the one place in the language
+where handing a value over plainly destroys it.
+
+**`Copy` elements and `str` are unaffected and stay free.** A value
+that reaches no heap storage is its own copy, and a `str`'s bytes are
+immutable and shared by the copy. The cost lands only on a plain push
+of an element that reaches the heap. Measured on kasumi, same binary,
+plain against `take` over 160,000 pushes of a struct holding eight
+`List[str]` (lobo's `GenRow`/`Conf` shape): 0.26 s and 136 MB peak RSS
+against 0.06 s and 94 MB — **4.3x wall, +42 MB, about 1.25 us of copy
+per plain push**. A program that wants the old zero-cost handover
+spells `take` and says so.
+
+The spelling needed no grammar work: `call_arg ::= ('mut' | 'take')?
+expr` was already in `[gram.expr]` and in the parser, and
+`(mut outs).push(take xs)` parsed and typechecked at v0.2.14 — it was
+refused at `mem` by E1007, the X1 mode-agreement rule, because
+`push`'s value parameter declares no mode. A `ParamSig` now carries
+`store`, sema declares it on `List.push`'s and `Pool.init`'s value,
+and the memory checker admits a site `take` there and nowhere else.
+
+**The index store is NOT aligned, deliberately.** `m[k] = v` and
+`xs[i] = v` still MOVE their right-hand side (a later use is E1001 —
+the opposite of `push`'s defect), and `m[k] = take v` does not parse at
+all: the assignment grammar has no mode slot on its right (E0201, at
+the parse phase, on both tiers). Aligning it would change what every
+existing index store means, so the ruling on that half is open and
+`[mem.region.edge.elem]` states only what is implemented.
+
+**W1004 retires, and `copy bs` is a read position** (#387). s165's
+#366 made every escape the lend analysis can PROVE a refusal in the
+CALLEE (E1002/E1014), naming the problem where it can be fixed — so
+W1004 either fired beside an error for one root cause (VOICE rule 5)
+or, on the one shape #366 leaves legal, claimed something untrue.
+`Lend::Escapes` folds into `Lend::Opaque`; the degraded lend is a
+silent copy again, which is what it always compiled to. Separately,
+`copy bs` is now a read position in the analysis, so
+`fn keep(bs: List[byte]) -> List[byte] { copy bs }` is `Lendable` and
+the call lends for free — sound only because #384 made native `copy` a
+real copy. `corpus/memory/byte_view_escape.lu` drops its
+`warns: W1004` header and pins the E1002 refusal alone; it stays a
+static refusal, so the lane-coverage row s165's #366 moved out of the
+run lanes is not restored by this change and the floors stand.
+
+**The blast radius, measured and filed.** Across wolf-std, lobo,
+wolf-book and the corpus there are roughly 3,100 plain `push` sites,
+exactly two spelled `copy` and none spelled `take`; the great majority
+push scalars or `str` and cost nothing. The regression set is 28
+in-loop pushes of a container or heap-shaped struct (26 unique):
+wolf-std#44 (json's `parse_array`, plus the generic-`T` rebuilds in
+`sort`, `list`, `map` and `list_eq` that become copies at a heap
+instantiation), wolf-book#57 (the wordtree family and two DP tables),
+and twelve sites in lobo's `src/main.lu` generation table, four of
+them per-request. wolf-interp#119 is the pairing row: **lupin 0.1.36
+already agrees with both halves** — including the `take` half, which
+was expected to diverge and does not.
+
+Witnesses: `corpus/memory/push_copies_element.lu` (the issue's own
+program, the `put(mut out, b)` shape one call deeper, `copy`, `take`,
+and the `Copy`/`str`/struct cases) and `corpus/memory/push_take_moves.lu`
+(`fail(E1001)`).
+
 ### The mid-end (s162 — wolf-lang#146; #93 pinned; #99 and #102 measured, not taken)
 
 **The release mid-end builds `std.x.crypto.curve25519` again** (#146).
