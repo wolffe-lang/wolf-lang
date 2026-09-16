@@ -1513,7 +1513,7 @@ where the move happens — `copy a` produces an independent value of
 any type — or give the name a new value first: assigning to a
 moved-from place makes it live again.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__copy_independent.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__destructure_partial_move.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__list_elem_copy_loop.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__match_arm_whole_move.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__move_use_after.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__struct_destructure_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_branchy_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_defer_capture.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_reinit_residue.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_tuple_destructure.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_whole_value.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__copy_independent.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__destructure_partial_move.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__list_elem_copy_loop.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__match_arm_whole_move.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__move_use_after.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__push_take_moves.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__struct_destructure_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_branchy_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_defer_capture.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_move.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_partial_reinit_residue.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_tuple_destructure.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1001_whole_value.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1002_take_while_mut.snap
 
 ## E1002 — this needs exclusive access, but the value is in use here
 
@@ -1721,7 +1721,7 @@ through `local` is refused exactly as one through `p` is (wolf-lang#366).
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__closure_kill_list.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_rebind_take.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_rebind_write.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_take.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__read_param_write.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__receiver_bare_mut_param.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_mut_lend.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_projected_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_read_param_through_a_rebinding.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_read_self_write.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1014_whole_and_compound.snap
 
-## E1015 — RETIRED — an escaping byte-view lend now copies and warns W1004
+## E1015 — RETIRED — an escaping byte-view lend now copies silently
 
 This code is retired and the compiler no longer emits it; the number is
 kept so a reader who meets `E1015` in an old log or an old lesson finds
@@ -1737,13 +1737,17 @@ at the call, bit-for-bit what every call did before views crossed
 calls), and this was the only refusal in the language standing between
 a program and a meaning it already had.
 
-Now the same shape compiles by copying and says so once, as W1004: the
-lend degrades to a copy, the fix is unchanged (`let bs = s.bytes()`
-first, if the copy was not what you meant), and the only thing the
-program loses is the zero-cost lend it could not have kept anyway. See
-W1004 and [mem.str.view.lend].
+Now the same shape compiles by copying. It said so once, as W1004,
+until wolf-lang#387 retired that warning too — wolf-lang#366 had made
+every provable escape a refusal in the CALLEE (E1002/E1014), which
+names the problem where it can actually be fixed, so the warning was
+either redundant beside that error or, on the one shape #366 leaves
+legal, untrue. The fix is unchanged (`let bs = s.bytes()` first if the
+copy was not what you meant, or `copy bs` in the callee, which lends
+for free), and the only thing the program loses is the zero-cost lend
+it could not have kept anyway. See W1004 and [mem.str.view.lend].
 
-Fixtures: crates/wolf_mem/tests/snapshots/mem_diagnostics__w1004_lent_view_relent.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__w1004_lent_view_returned.snap
+Fixtures: NONE (retired — the compiler no longer emits this code)
 
 ## E1101 — a task may not mutate state it captured from the enclosing function
 
@@ -2515,31 +2519,41 @@ real by transforming the value before it leaves.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__lints__take_returned.snap, crates/wolf_sema/tests/snapshots/wave_diagnostics__w1003_take_returned.snap
 
-## W1004 — a byte view lent here is kept by the callee, so the bytes are copied instead
+## W1004 — RETIRED — a byte-view lend the callee keeps now copies silently
+
+This code is retired and the compiler no longer emits it; the number is
+kept so a reader who meets `W1004` in an old log or an old lesson finds
+this page and not a hole. A retired number is never reused.
 
 `s.bytes()` in an argument position offers the string's own bytes as a
-LEND: the callee reads `{ptr, len}` pointing straight at the caller's
-storage, and the call costs nothing at all rather than one heap copy
-per byte ([mem.str.view.lend]). A lend lasts exactly the call. This
-callee keeps the parameter past the call — returns it, stores it, or
-hands it on to somewhere the bytes cannot be followed back from — so a
-lend would be a dangling pointer, and the compiler did what every call
-did before views crossed calls: it materialized the bytes into a
-`List[int]` at the call site and passed that. The program means what
-it meant; it paid one copy the lend was meant to save.
+LEND ([mem.str.view.lend]), and a lend lasts exactly the call. When the
+callee kept that parameter past the call — returned it, stored it,
+handed it on — the lend degraded to the copy every call made before
+views crossed calls, and this warning said so once, naming the escaping
+use and the one-word fix. It was E1015, a refusal, until #107/#108
+ruled that refusing a program with a safe compilation is not this
+language's style.
 
-If the copy is what you wanted, say so and silence the warning: `let bs
-= s.bytes()` binds a materialized list the callee may own, and passing
-`bs` costs exactly what this call already costs. If the copy is NOT
-what you wanted, the callee is the thing to change — a callee that only
-reads its parameter lends for free. The one shape that is never on
-offer is a kept lend: there is no way to spell "keep these bytes and do
-not copy them", because that spelling has no meaning that is not a
-dangling `{ptr, len}`.
+It retired under wolf-lang#387, for two reasons that arrived together.
+wolf-lang#366 made every escape the analysis can PROVE — a return, a
+`take` or `mut` hand-on, a store past the call — a refusal in the
+CALLEE, E1002 or E1014, which names the problem where it can actually
+be fixed; so this warning fired beside an error for one root cause,
+which VOICE rule 5 forbids. And on the one shape #366 leaves legal — a
+local that dies with the call — its claim that the callee "keeps them
+past the call" was simply false, because the escape scan reads any
+assignment's right side as escaping. A warning that is either redundant
+or untrue is a bug in the catalog, and the catalog answers by retiring
+the number.
 
-Formerly E1015, retired when the refusal became this warning.
+The copy itself is unchanged and silent again: a callee this analysis
+cannot prove reads-only materializes, exactly as it always did. What a
+callee can now do is ask for its own copy in one word — `copy bs` is a
+read position (#387), so the call still lends for free and the copy
+happens once, inside the callee, where the program spells it. See
+[mem.str.view.lend] and E1015.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__byte_view_escape.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__w1004_lent_view_relent.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__w1004_lent_view_returned.snap
+Fixtures: NONE (retired — the compiler no longer emits this code)
 
 ## W1101 — this write stays inside the task
 
