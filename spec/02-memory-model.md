@@ -1054,12 +1054,20 @@ the inputs that would have decided it either way.)
   materializes for it, exactly as every caller did before views crossed
   calls. (3) A callee that provably KEEPS the parameter past the call —
   returns it, stores it, hands it on — is not lent either, for the same
-  reason a region may not outlive its scope: the caller materializes,
-  and the compiler says so once (W1004), naming the escaping use and the
-  one-word fix (binding first, `let bs = s.bytes()`, if the copy was
-  the intent; changing the callee, if the lend was). Cases (2) and (3)
-  compile to the same thing — a copy — and differ only in what the
-  compiler can prove and therefore say. **The copy is observable only
+  reason a region may not outlive its scope: the caller materializes.
+  The compiler said so once, as W1004, until **wolf-lang#387 retired
+  that warning (2026-09-15)**: wolf-lang#366 had already made every
+  escape the analysis can PROVE a refusal in the CALLEE — E1002 or
+  E1014, which names the problem where it can actually be fixed — so
+  the warning either fired beside an error for one root cause (VOICE
+  rule 5) or, on the one shape #366 leaves legal (a local that dies
+  with the call), claimed something untrue. Cases (2) and (3) are now
+  one verdict as well as one compilation: a copy, silently, exactly as
+  every call did before views crossed calls. A callee that wants its
+  own copy spells `copy bs`, which is a READ position (#387, sound
+  only since #384 made native `copy` a real copy), so the call still
+  lends for free and the copy happens once, inside the callee, where
+  the program spells it. **The copy is observable only
   in cost**: in every case the program means what it meant when views
   materialized everywhere, and no program has a meaning under a lend
   that it lacks under the copy. There is deliberately no way to spell
