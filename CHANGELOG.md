@@ -75,6 +75,75 @@ the release tier's `noalias` guard read a stale `len` and returned 64
 where 72 was correct — so lobo can drop `WOLF_MIDEND=0` at its next pin
 (s162). And sixteen spec debts close, anchors 499 → 524 (s163, s166).
 
+### The pairing — lupin 0.1.37, and the combinator set is TEN
+
+`crates/wolf_driver/PAIRING` moves to **0.1.37**, which declares
+`41695e7`. The interpreter took **two** pin moves inside one release
+(`a7f517e` → `30731a6` → `41695e7`), so three interpreter lanes land
+behind one tag and this is the largest interpreter bump any cut has
+measured.
+
+Measured with `xtask differ --triage`, control (#281) against the
+0.1.36 release archive, both arms over 666 files, columns
+agreement / completeness / soundness / unsupported / hard:
+
+|  | checked | native |
+|---|---|---|
+| control (0.1.36) | 348/180/0/110/24 | 374/180/0/83/25 |
+| main (0.1.37) | 367/177/0/113/**9** | 395/177/0/84/**10** |
+
+**The interpreter bump moved 26 ledger counts on checked and 28 on
+native** — and that asymmetry is the cut's one surprise. Every bump
+since r13 has moved the two tiers together, and it was predicted to
+again. It did not, by exactly two files, and the cause is on *wolf's*
+side rather than the interpreter's: the checked tier declines s166's
+whole method surface, so two entries that become agreements on native
+stay `unsupported` on checked (unsupported +3 checked against +1
+native, the same two files). A six-release regularity retires because
+the language grew a surface one of its own tiers refuses.
+
+**The set is ten, and the tenth is `sorted`.** `[type.comb.set]` names
+`map`, `filter`, `fold`, `sum`, `sort_by`, `sorted_by`, **`sorted`**,
+`enumerate`, `zip` and `collect` — ten std wolf functions — with `par`
+an eleventh row that is the language's own builtin. `sorted` is worth
+naming because it is easy to miss: it was written early, withheld while
+`use std.cmp` in `std.list` darkened every importer on the native rung,
+and carried in on a rebase once that cleared, so wolf-std's own
+changelog headline still reads "nine functions … and `sorted` named
+where it is missing" while its body records that `sorted` shipped. A
+nine-row table drops it silently. Derived for ten, each probed with a
+list built by `push` rather than a literal so that 0.1.36's refusal is
+the method surface and not is49's list-literal clause:
+
+| # | combinator | predicted | lupin 0.1.36 | lupin 0.1.37 | wolf native | wolf `--release` | checked |
+|---|---|---|---|---|---|---|---|
+| 1 | `map` | pairs | unsupported | `8 2 6 4` | `8 2 6 4` | `8 2 6 4` | unsupported |
+| 2 | `filter` | pairs | unsupported | `2 4 2` | `2 4 2` | `2 4 2` | unsupported |
+| 3 | `fold` | pairs | unsupported | `10` | `10` | `10` | unsupported |
+| 4 | `sum` | pairs | unsupported | `10` | `10` | `10` | unsupported |
+| 5 | `sort_by` | pairs | unsupported | `1 2 3` | `1 2 3` | `1 2 3` | unsupported |
+| 6 | `sorted_by` | pairs | unsupported | `1 2 3 3` | `1 2 3 3` | `1 2 3 3` | unsupported |
+| 7 | **`sorted`** | pairs | unsupported | `1 2 3` | `1 2 3` | `1 2 3` | unsupported |
+| 8 | `enumerate` | pairs | unsupported | `2` | `2` | `2` | unsupported |
+| 9 | `zip` | pairs | unsupported | `2` | `2` | `2` | unsupported |
+| 10 | `collect` | pairs | unsupported | `4 2 5` | `4 2 5` | `4 2 5` | unsupported |
+
+**Ten of ten predicted, ten of ten measured.** All ten were
+`unsupported` on lupin 0.1.36 and all ten run at 0.1.37 with output
+identical to both of wolf's native tiers; all ten are `unsupported` on
+the checked tier, which declines the method surface by name — that is
+`[conc.task.par.det]`'s posture for `par` applied to the whole set, and
+it is `unsupported` rather than wrong.
+
+**Three files break the corpus run on both arms**, cancel in the delta,
+and are named here rather than compensated for. They are this release's
+own new entries, unmirrored on the interpreter side and wolf-interp's
+to take: `grammar/range_value_wide_iter.lu` and
+`range_header_inclusive_max.lu`, where lupin materializes the range that
+s161's #381 taught the checked machine to walk, and
+`conc/proc_link_root_death.lu`, whose `run(exit=nonzero)` directive
+(s163's #371) lupin's corpus runner does not know.
+
 ### The element edge (s167 — wolf-lang#385 ruled option 3, #387 ruled both)
 
 **A builtin container store COPIES its element now, and `push(take x)`
