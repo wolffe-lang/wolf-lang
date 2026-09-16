@@ -174,11 +174,11 @@ pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
     // ([mem.shared.rc.2], E1006) — checked over the signature tables
     // before any body runs.
     shared::check(&tc.sigs, &mut out.diagnostics, &mut out.not_yet);
-    // s89: the byte-view lend verdicts, computed once over the package's
-    // signatures and bodies. `wolf_wir::lower` reads the same table to
-    // decide which call sites may pass a view instead of a copy — one
-    // authority, so the diagnostic and the lowering cannot disagree.
-    let lender = byteview::Lender::new(pkg, &tc.sigs);
+    // s89: the byte-view lend verdicts live in `byteview`, and
+    // `wolf_wir::lower` computes them to decide which call sites may
+    // pass a view instead of a copy. Since wolf-lang#387 retired W1004
+    // that lowering is their ONLY consumer — this pass no longer needs
+    // the table for a diagnostic of its own.
     for outcome in &tc.bodies {
         let BodyResult::Checked(tb) = &outcome.result else {
             continue;
