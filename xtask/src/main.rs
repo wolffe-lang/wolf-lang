@@ -2996,7 +2996,18 @@ fn diag_catalog(check: bool) -> ExitCode {
             .filter(|(_, s)| s.contains(code.as_str()))
             .map(|(p, _)| p.display().to_string())
             .collect();
-        if fixtures.is_empty() {
+        // A RETIRED code is one the compiler no longer emits, so it
+        // CANNOT carry a fixture and the rule above cannot apply to it
+        // (s167, wolf-lang#387). Until this exemption a retired number
+        // stayed green only while some snapshot happened to quote it in
+        // prose: E1015 rode on a corpus file's doc comment, and the
+        // lexer snapshot TRUNCATES long comments, so rewording an
+        // unrelated paragraph could turn this gate red with nothing
+        // about any diagnostic having changed. A retired number is kept
+        // forever and never reused, so it is published with its
+        // explanation and no fixture.
+        let retired = summary.starts_with("RETIRED");
+        if fixtures.is_empty() && !retired {
             eprintln!(
                 "diag-catalog: {code}: no snapshot fixture — every diagnostic is a reviewed artifact"
             );
@@ -3005,7 +3016,11 @@ fn diag_catalog(check: bool) -> ExitCode {
         body.push_str(&format!(
             "\n## {code} — {summary}\n\n{explanation}\n\nFixtures: {}\n",
             if fixtures.is_empty() {
-                "NONE".to_string()
+                if retired {
+                    "NONE (retired — the compiler no longer emits this code)".to_string()
+                } else {
+                    "NONE".to_string()
+                }
             } else {
                 fixtures.join(", ")
             }
