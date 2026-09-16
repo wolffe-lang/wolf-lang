@@ -311,8 +311,10 @@ memory/mut_read_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/oob_bounds.lu: lowers
 memory/prov_holy_grail.lu: lowers
 memory/prov_two_phase.lu: lowers
+memory/push_copies_element.lu: lowers
 memory/push_grow_guarded_index.lu: lowers
 memory/push_grow_nested_guarded_index.lu: lowers
+memory/push_take_moves.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_field.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_generic.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_local.lu: not mem-clean (pre-wir rungs own it)
