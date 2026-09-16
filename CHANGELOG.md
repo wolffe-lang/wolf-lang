@@ -203,6 +203,184 @@ handle on both compiler lanes (#385, a ruling). W1004 is subsumed by
 the #366 refusal (#387). lupin mirrors: wolf-interp#115 (#366) and
 wolf-interp#118 (#348, #344, #352).
 
+### Methods on std data, and `par` (s166 — wolf-lang#390 ruled option 1, #154 settled)
+
+**`xs.map(f)` IS `list.map(xs, f)`** (`[type.method]`). A method call on
+std data resolves, after the type's own builtins, to the home module's
+`pub fn` whose first parameter carries the receiver's type constructor —
+and it is called as that free call, same instance, same code, so the two
+spellings are one call by construction rather than by agreement. The
+homes are a closed table: `List[T]` → `std.list`, `Map[K, V]` →
+`std.map`, `str` → `std.str`, `range[int]` and `range[char]` →
+`std.range`. A home module needs no `use` and binds no name; it loads
+when a method call in the program names one of its `pub fn`s, under a key
+no source can spell. **Both `methods on generic std data` refusals are
+gone** — the two `NotYet` sites are deleted, not widened.
+
+The refusals are the counterparty's existing codes, by name: **E0301**
+where no std root is configured, naming the home module it could not
+reach; **E0403** for no candidate or a first parameter the receiver does
+not fit; **E0402** for arity, counted against the written arguments with
+the receiver excluded; and **E0804** where a spelled receiver mode
+disagrees with the candidate's first parameter, so a `mut` candidate is
+`(mut xs).sort_by(less)` and the bare spelling traps `exclusivity`,
+exactly as it does on a builtin. `clear` joins the builtin step on `List`
+and `Map`.
+
+**`take` is the ownership verb and never a method name**
+(`[type.method.take]`, closing #154). `xs.take(n)` is E0403 with a note
+naming the two slices that mean it — `xs[..n]`, or
+`xs[..min(n, xs.len)]` when a short list must not trap — and `xs[n..]`
+for the suffix. The word is reserved at every name position, so this is
+a refusal the reader meets once and never again.
+
+**The combinator set is ten functions plus one builtin**
+(`[type.comb.set]`). `map`, `filter`, `fold`, `sum`, `sort_by`,
+`sorted_by`, `sorted`, `enumerate`, `zip` and `collect` are **std wolf
+code**, written by wolf-std (sc50), each with its row and its cost stated
+in the clause; `par` is the language's own and the only builtin among
+them (`[type.comb.builtin]`). The combinators are eager
+(`[type.comb.eager]`). `collect` is one generic function over `range[T]`
+rather than one per element type, because wolf has no overloading.
+
+**What a combinator copies is now stated**, with s165's and s167's
+rulings underneath it: the receiver is `read`, so a combinator never
+hands the caller's own value on; `fold`'s accumulator starts as the lent
+seed and outlives the activation, so the seed copies; and the elements
+`filter`, `sorted_by`, `sorted`, `enumerate` and `zip` keep are `push`ed
+into a fresh `List`, which under #385 copies a non-`Copy` element unless
+the site spells `take`.
+
+**`par`.** `xs.par(f)` opens a scope, splits `0..n` into
+`k = min(n, W)` contiguous chunks whose lengths differ by at most one,
+spawns a task per chunk, joins, and reads the slots back in index order,
+so `out[i]` is `f(xs[i])` whatever the schedule — `xs.par(f)` and
+`xs.map(f)` are the same `List` for every total `f` that records no
+event. `W` is the worker count the runtime schedules onto, one per
+logical core on the native pool. `k == 1` may run on the calling task
+with no spawn and `n == 0` spawns nothing. A chunk stops at its own first
+failure, the scheduler cancels its siblings, and the first failure in
+schedule order becomes the `par`'s row: **a failed `par` has no value**,
+so a partially filled `out` is never observable. `f` is checked as a
+spawned closure's body, and a write to captured enclosing state is
+**E1101** at the write with the `par` as the spawn site. Cancellation is
+polled every 64 elements, because a per-element poll would cost more than
+most `f`. `RT_SYMBOLS` gains `__wolf_rt_par_map`.
+
+**The cost clause does not promise a speedup**, and says so
+(`[conc.task.par.cost]`): one allocation of `n` slots — exactly `map`'s —
+no copy of `xs`, `k` spawns and one join, and nothing per element beyond
+the call of `f`. Because tasks run with the process root as their ambient
+region and the native root arena serializes allocation behind one lock,
+an `f` that allocates on every call contends there and scales worse than
+one that computes; a list shorter than `W`, or an `f` cheaper than a
+spawn, can make `xs.par(f)` slower than `xs.map(f)`, and both are
+conforming.
+
+**Measured at the cut**, because the lane landed no bench and the clause
+promises no speedup: on kasumi (16 logical cores), a CPU-bound map over
+**2,000,000** elements, compile excluded, `par` against the same program
+written as a serial loop — **1.91 s serial against 0.17 s, 11.2x**, the
+same on `wolf build` and on `wolf build --release`, with both tiers
+printing output byte-identical to the serial version. That is one shape
+on one host, not a promise: `[conc.task.par.cost]`'s sentence still
+governs.
+
+**The checked tier declines the whole surface.** Home-module method calls
+are refused by name in checked execution, and `[conc.task.par.det]` says
+the same of `par`: the tier refuses `scope` and closures today, so it
+refuses `par` — `unsupported`, not wrong. **Every "both tiers" in this
+entry means the two native tiers**, never three lanes.
+
+Sixteen anchors are new and none is renumbered: `[type.method]` with
+`home`, `resolve`, `root` and `take`; `[type.comb]` with `eager`,
+`set` and `builtin`; and `[conc.task.par]` completed with `order`,
+`fail`, `capture`, `chunk`, `det` and `cost`. Two new sections join
+`spec/10-types.md` — §15 methods on std data and §16 the combinators.
+
+Witnesses: `corpus/conc/par_order.lu` (100,000 elements),
+`par_fail_reraises.lu` (element 70,000 fails, the row re-raises after the
+join), `par_capture_write.lu` (`fail(E1101)`), the combinator and
+home-module witnesses under `corpus/methods/`, the six method-surface
+refusals, and `corpus/methods/wordcount_serial.lu` against
+`wordcount_par.lu` — the same program with `pieces.map(count)` changed to
+`pieces.par(count)`, carrying a byte-identical `check:` line. The std
+bodies those fixtures resolve against are **the spec's reference
+bodies, not wolf-std**: wolf-std's own modules carry the real ones, and
+nothing under `corpus/methods/std/` ships.
+
+### The checked tier (s161 — wolf-lang#381, #382; #201, #342)
+
+**The checked machine runs on a stack it sizes itself** (#382,
+`[exec.checked.budget]`). The call-depth bound was a bare `128` in the
+machine's own loop; it has a name now, `CALL_DEPTH_BUDGET`, and the
+machine runs its program on a thread of its own sized
+`CHECKED_STACK_BYTES` — 64 MiB, the same on every host — instead of on
+whatever stack its caller happened to bring. On the caller's stack it
+answered on a unix main thread (8 MiB) and overflowed a windows one
+(1 MiB), where three wolf-std json rows reach `CALL_DEPTH_BUDGET` with
+about 1.2 MiB of host frames: one program, conforming on one host and a
+crash on another, with nothing in the tier's own text deciding which.
+Measured at v0.2.14 on x86-64 linux, the deepest wolf-std rows need
+~1.23 MiB at the budget in a release build, and a 128-deep recursion
+needs more than 8 MiB — and no more than 16 — in a debug one. A call
+past 128 frames is `unsupported` (`call depth budget exhausted`), as it
+was. Cost: one thread per run and 64 MiB of **reserved address space**;
+resident memory is only the frames the program actually reaches. Two
+alternatives are weighed and rejected in the clause: keeping the 8 MiB
+unix default, which a debug build overflows at the bound, and deriving
+the budget from the host's stack, which would make `unsupported` a
+property of the machine rather than of the tier. A host at its thread
+limit falls back to the caller's stack rather than failing the run.
+Witness: `ubcheck`'s
+`recursion_to_the_depth_budget_answers_on_any_callers_stack`, which
+runs the machine from a 256 KiB thread.
+
+**A wide range is walked, not collected** (#381). The checked machine
+built a range's items before iterating them, so `0..int.MAX` was an
+allocation the size of the range rather than a loop, and a `for` header
+was normalized before it was walked. A range is walked now — the item
+sequence is an iterator, never a materialized list — and a `for` header
+is never normalized. An inclusive header at `int.MAX` walks to its end
+where it used to die; an inclusive range **value** at `int.MAX` still
+traps where it is built, which is where the overflow is. A range that
+never exits is the step budget's business, not memory's. Witnesses:
+`corpus/grammar/range_value_wide_iter.lu` and
+`corpus/grammar/range_header_inclusive_max.lu`, both on both tiers.
+
+**A raw row binds in argument position** (#201). A call that raises,
+used directly as an argument, bound its row like a `let` on the path
+that raises and left every other flow to leave the call — the checked
+machine did not agree. It does now, for the row taken and not taken, an
+ignored row, `?`, a handler return, and a row through a method
+argument. `corpus/rows/raised_call_arg_position.lu` is the witness, one
+word per lane whether the row is taken or not, and
+`corpus/rows/handler_diverge_trap.lu` stops saying the checked lane
+refuses it: three lanes `trap(assert)`.
+
+**Channels without a spawn** (#342, `[conc.deadlock.trap]`). The checked
+tier serves `send`, `recv`, `close` and the draining `for` from the root
+task, so a channel program that never spawns runs on all three lanes
+instead of being declined by name. And because the tier is one of the
+deterministic modes and runs exactly one task, a blocking channel
+operation on that only task cannot ever be answered: the tier reports
+`trap(deadlock)` at that operation. It costs nothing to detect — with
+one task the check is the block itself. The native tier is permitted not
+to detect it and, at 0.2.14, waits. **lupin 0.1.36 answers the same
+`trap(deadlock)` on the same four shapes.** Witnesses:
+`corpus/conc/chan_root_task.lu` and `ubcheck`'s
+`a_blocking_channel_operation_on_the_only_task_is_deadlock`; three
+existing channel witnesses stop saying the checked lane declines channel
+methods. `chan_struct_payload.lu` stays native-only, because the checked
+tier still declines `scope` and `spawn`.
+
+This entry mints no anchor and no diagnostic: every clause it touches
+(`[exec.checked.budget]`, `[conc.deadlock.trap]`) already existed and is
+amended in place. `RT_SYMBOLS` is unchanged by it.
+
+**Filed, not taken here:** the checked tier's two float-cast soundness
+rows (#168) and X3 on `List[int]` elements (#152), both still open.
+
 ### The spec debts (s163 — wolf-lang#364/#383, #365, #371, #319, #403, and the spec-debts stub: #181, #320, #256, #28, #302, #216, #228, #155, #309, #185)
 
 Clauses two implementations already agreed on and no text stated, and
