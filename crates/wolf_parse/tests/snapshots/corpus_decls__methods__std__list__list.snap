@@ -4,12 +4,12 @@ expression: dump
 ---
 UseDecl 500..512 path=std.cmp
 FnDecl 513..641 name=any pub body=Block
-FnDecl 643..775 name=map pub body=Block
-FnDecl 777..939 name=filter pub body=Block
-FnDecl 941..1225 name=fold pub body=Block
-FnDecl 1227..1329 name=sum pub body=Block
-FnDecl 1331..1753 name=sort_by pub body=Block
-FnDecl 1755..1923 name=sorted_by pub body=Block
-FnDecl 2201..2613 name=sorted pub body=Block
-FnDecl 2615..2797 name=enumerate pub body=Block
-FnDecl 3073..3356 name=zip pub body=Block
+FnDecl 643..920 name=map pub body=Block
+FnDecl 922..1084 name=filter pub body=Block
+FnDecl 1086..1370 name=fold pub body=Block
+FnDecl 1372..1474 name=sum pub body=Block
+FnDecl 1476..1898 name=sort_by pub body=Block
+FnDecl 1900..2068 name=sorted_by pub body=Block
+FnDecl 2346..2758 name=sorted pub body=Block
+FnDecl 2760..3098 name=enumerate pub body=Block
+FnDecl 3374..3722 name=zip pub body=Block
