@@ -6730,6 +6730,9 @@ impl<'a> Checker<'a> {
             span: member_span,
             mode: None,
             view: None,
+            // Neither the receiver nor `f` is stored into a container
+            // (s167's store flag): `par` reads both.
+            store: false,
         };
         let sig = FnSig {
             params: vec![param("self", recv_ty), param("f", fty)],
