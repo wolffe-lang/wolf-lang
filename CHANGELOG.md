@@ -1,5 +1,51 @@
 # Changelog
 
+## Unreleased
+
+### The checked machine answered a question wrongly, and said nothing
+
+**A call through a fn-typed parameter reached a top-level fn of the
+same name** (#400). On the checked lane only, and silently: the program
+compiled, ran, and printed the wrong answer with no diagnostic anywhere,
+while native and lupin were both right — so the differential could not
+see it either. `fn apply(le: fn(int, int) -> bool, …) { le(x, y) }`
+called the module's own `fn le` instead of its parameter, across module
+boundaries too, which is how sc50 met it through `std.list.sort_by`.
+A caller cannot defend against this, because the library picks the
+parameter's name.
+
+`[conf.resolve.ambient]` already ruled it — a bare name in call position
+resolves at the innermost lexical binding first — and this was the same
+mistake that clause was written to close, a call path deriving dispatch
+from the spelled name instead of asking the resolver, one scope further
+in. **No wolf-lang corpus program was affected**: all 624 entries give
+byte-identical verdicts, stdout hashes and diagnostics before and after.
+wolf-std's `list.sort_by` was affected, and is what found it.
+
+### Two ledgers the checked tier was not keeping
+
+**The five `str` producers charge the ambient region** (#391).
+`[mem.region.escape]` makes `upper`, `lower`, `repeat`, `replace` and
+`str_from_utf8` allocation sites "exactly as `+` is", and
+`[mem.region.account.1]` charges every materialization. Native and lupin
+did; the checked tier charged `+` and interpolation and none of the five.
+The visible half: a `region idle(cap: 0)` block RAN all five where the
+other lanes trapped `alloc-contract`. The checked tier was the wrong one.
+
+**A `[mem.str.view]` product carries its receiver's sites** (#392) — a
+clause question, ruled rather than a divergence fixed, because all three
+lanes agreed on the unsound reading. A view of a region-built `str`
+escaped its region clean, returning a view into freed bytes, while the
+`str` itself leaving was already E1010: the same bytes, one word
+narrower. Allocating nothing and pointing nowhere are different
+properties — "allocates nothing" governs the account, and a view still
+charges zero, so `#[noalloc]` is untouched. That shape is now E1010.
+Only the receiver's sites flow, and `bytes()` is excluded because
+`[mem.str.view.lend]` materializes a real copy in the very positions
+that would escape. Measured before it landed across corpus, wolf-std,
+lobo and boreutils — 23,722 files — **zero rows moved**. lupin 0.1.37
+does not follow yet; the wolf-interp mirror is filed.
+
 ## 0.2.15 — 2026-09-16
 
 Six lanes, and one of them changes what a program you already wrote
