@@ -355,6 +355,7 @@ memory/region_str_concat_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_concat_send.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_field_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_from_utf8_return.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_producers_charged.lu: lowers
 memory/region_str_repeat_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_transfer_open.lu: not mem-clean (pre-wir rungs own it)
 memory/region_unit_tail_call.lu: lowers
