@@ -1,5 +1,5 @@
 //! check: fail(E1010)
-//! phase: mem
+//! phase: typecheck
 //! conforms: mem.region.escape, mem.str.view
 //!
 //! s171 (wolf-lang#392) — a `[mem.str.view]` product carries its
