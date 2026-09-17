@@ -83,6 +83,27 @@ where 72 was correct — so lobo can drop `WOLF_MIDEND=0` at its next pin
 behind one tag and this is the largest interpreter bump any cut has
 measured.
 
+**The pin is preserved by a tag, and that is new.** `41695e7` is an s166
+branch head; the rebase-merge that landed s166 on trunk left it reachable
+from no branch and no tag, so a clone could not resolve the sha this file
+names and `lupin --version` prints. It is now
+**`refs/tags/lupin-0.1.37-conformance-pin`** in this repository — a tag
+rather than a branch, deliberately, because it is a fixed point and not a
+line of development. A later release lane that meets a PAIRING pin it
+cannot check out should look for a tag of that shape before concluding
+the commit is lost.
+
+Re-pinning to a trunk sha instead was tried at this cut and **reverted**,
+and the reason is a finding about the interpreter's mirrors rather than
+about the pin: vendored at `12ca8acc`, lupin OOMs on
+`grammar/range_value_wide_iter.lu` and `range_header_inclusive_max.lu` —
+it materializes the range that s161's #381 taught the checked machine to
+walk, a single 5 GB allocation reaching 28 GB RSS before the kernel
+stepped in — and its corpus runner rejects s163's `run(exit=nonzero)` in
+`conc/proc_link_root_death.lu` by name. Both are wolf-interp#115/#118
+territory (is52), and until they are mirrored no trunk sha is a
+shippable pin.
+
 Measured with `xtask differ --triage`, control (#281) against the
 0.1.36 release archive, both arms over 666 files, columns
 agreement / completeness / soundness / unsupported / hard:
