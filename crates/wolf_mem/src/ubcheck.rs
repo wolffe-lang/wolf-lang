@@ -7481,44 +7481,58 @@ impl<'t> Machine<'t> {
         let module = self.tc.bodies[self.frames.last().expect("frame").body]
             .body
             .module;
-        // Resolution order (F-0048): the checker's declaration locus
-        // names the body exactly (cross-module calls included), the
+        // Resolution order (F-0048, corrected by #400): the checker's
+        // declaration locus names the body exactly (cross-module calls
+        // included) and is authoritative wherever it exists.
+        //
+        // Where the checker recorded NO locus, the callee is not a
+        // declared item at all — `CallSig::decl_span` is `None`
+        // exactly for fn-typed VALUES — so the call goes through a
+        // place holding `Value::Fn` (a param, a binding, a field).
+        // That place is the INNERMOST binding of the name, and it wins
+        // over any top-level fn that happens to share it (#400): a
+        // library picks its own parameter names, so a caller cannot
+        // defend against the collision. Consulting the value BEFORE
+        // the name-only nets is what makes `fn apply(le: fn(int, int)
+        // -> bool, …) { le(x, y) }` call its parameter rather than a
+        // top-level `fn le`, which is what native and lupin do.
+        //
+        // Only when neither answers do the name-only nets run: the
         // caller's own module answers same-module calls, and the
-        // name-only net picks the SMALLEST body index — a stable,
+        // last net picks the SMALLEST body index — a stable,
         // deterministic choice, never a hash order's.
-        let by_name = sig
+        let by_decl = sig
             .decl_span
             .and_then(|ds| self.fns_by_decl.get(&ds))
-            .or_else(|| self.fns.get(&(module, sig.callee.clone())))
-            .or_else(|| {
-                self.fns
-                    .iter()
-                    .filter(|((_, n), _)| *n == sig.callee)
-                    .map(|(_, b)| b)
-                    .min()
-            })
             .copied();
-        let body = match by_name {
-            Some(b) => b,
-            None => {
-                // A call through a fn VALUE (s95/s97's fn values, the
-                // checked twin): the callee is a place holding
-                // `Value::Fn` — a param, a binding, a field.
-                let through_value = match d.callee() {
-                    Some(callee) => match self.place_of(callee)? {
-                        Some(place) => match self.read_place(&place, callee.span)? {
-                            Value::Fn(b) => Some(b),
-                            _ => None,
-                        },
-                        None => None,
+        let through_value = match by_decl {
+            Some(_) => None,
+            None => match d.callee() {
+                Some(callee) => match self.place_of(callee)? {
+                    Some(place) => match self.read_place(&place, callee.span)? {
+                        Value::Fn(b) => Some(b),
+                        _ => None,
                     },
                     None => None,
-                };
-                match through_value {
-                    Some(b) => b,
-                    None => return self.refuse("calls into unresolvable bodies", e.span),
-                }
-            }
+                },
+                None => None,
+            },
+        };
+        let by_name = by_decl.or(through_value).or_else(|| {
+            self.fns
+                .get(&(module, sig.callee.clone()))
+                .or_else(|| {
+                    self.fns
+                        .iter()
+                        .filter(|((_, n), _)| *n == sig.callee)
+                        .map(|(_, b)| b)
+                        .min()
+                })
+                .copied()
+        });
+        let body = match by_name {
+            Some(b) => b,
+            None => return self.refuse("calls into unresolvable bodies", e.span),
         };
         // Generic bindings for the callee (#12): a declared param type
         // that NAMES one of the callee's own generic params binds it
