@@ -3549,6 +3549,57 @@ impl<'t> Lowerer<'t> {
         self.is_str_expr(recv.span)
     }
 
+    /// s171 (wolf-lang#392, `[mem.str.view]`): does this call answer a
+    /// VIEW of a `str` receiver — a subslice of the receiver's own
+    /// storage — rather than build fresh bytes?
+    ///
+    /// The view family of `[mem.region.escape]`: `trim`/`trim_start`/
+    /// `trim_end`, `get`, `strip_prefix`/`strip_suffix`, and
+    /// `split`/`words`/`lines`, whose LIST is an allocation but whose
+    /// pieces are subslices of the receiver ("the LIST is, never the
+    /// strings inside it").
+    ///
+    /// `bytes()` is deliberately NOT here. It is governed by
+    /// `[mem.str.view.lend]`, which materializes a real `List[byte]`
+    /// copy in exactly the positions that would escape — a `let`
+    /// binding or a return — so pinning the receiver's region on it
+    /// would refuse programs that copy and are safe.
+    fn is_str_view_call(&self, e: &'t GreenNode) -> bool {
+        let Some(callee) = CallExpr::cast(e).and_then(|d| d.callee()) else {
+            return false;
+        };
+        let Some(m) = MemberExpr::cast(callee) else {
+            return false;
+        };
+        let Some(name) = m.member() else {
+            return false;
+        };
+        if !matches!(
+            self.text(name.span).as_str(),
+            "trim"
+                | "trim_start"
+                | "trim_end"
+                | "get"
+                | "strip_prefix"
+                | "strip_suffix"
+                | "split"
+                | "words"
+                | "lines"
+        ) {
+            return false;
+        }
+        // The receiver must be a `str`: a user type with a method by
+        // one of these names is somebody else's.
+        let Some(base) = m.base() else {
+            return false;
+        };
+        let recv = match ParenExpr::cast(base).and_then(|p| p.expr()) {
+            Some(inner) => inner,
+            None => base,
+        };
+        self.is_str_expr(recv.span)
+    }
+
     /// Is the expression at `span` typed `str`, or `str` behind an
     /// error row (s160)? A raising producer's result is the same
     /// materialization whether or not the row is still on it.
@@ -3932,6 +3983,11 @@ impl<'t> Lowerer<'t> {
         // Sites whose data the callee receives by `take`/`mut`: it
         // may embed them in the result (the conservative carry).
         let mut carry: Vec<SiteId> = Vec::new();
+        // s171 (#392): the receiver's own sites, kept apart from
+        // `carry` because a `[mem.str.view]` product subslices the
+        // RECEIVER and never an argument — `s.strip_prefix(p)` views
+        // `s`, so `p`'s sites must not attach to the result.
+        let mut recv_sites: Vec<SiteId> = Vec::new();
         // The receiver, when the resolved callee takes `self` and the
         // call site spells `recv.method(…)`.
         let mut receiver_done = false;
@@ -3957,7 +4013,14 @@ impl<'t> Lowerer<'t> {
                     Some(TyKind::Chan(_))
                 );
             if let Some(selfp) = selfp {
-                self.lower_receiver(recv_expr, base.span, &selfp, &mut surface, &mut carry)?;
+                self.lower_receiver(
+                    recv_expr,
+                    base.span,
+                    &selfp,
+                    &mut surface,
+                    &mut carry,
+                    &mut recv_sites,
+                )?;
             }
             // s21: `clone()` on a `shared` receiver is the recorded
             // dup — Perceus inserts RC ops at genuine fan-out only,
@@ -4202,6 +4265,29 @@ impl<'t> Lowerer<'t> {
                 }
             }
         }
+        // s171 (wolf-lang#392, `[mem.region.escape]`): a
+        // `[mem.str.view]` product is a subslice of the receiver's own
+        // storage, so its bytes live exactly where the receiver's do
+        // and it carries the RECEIVER's sites. Allocating nothing and
+        // pointing nowhere are different properties: "allocates
+        // nothing" governs the ACCOUNT (a view still charges zero, and
+        // `#[noalloc]` is unaffected), never WHERE the bytes are.
+        //
+        // Until this pin a view was site-free, so `region scratch {
+        // let s = a + b; s.trim() }` returned a view into bytes the
+        // region had already freed — while `s` itself leaving was
+        // E1010. The same bytes, one word narrower, and only one of
+        // those two answers can be right.
+        if self.is_str_view_call(e) {
+            for s in recv_sites {
+                if let Err(i) = out.sites.binary_search(&s) {
+                    out.sites.insert(i, s);
+                }
+            }
+            if out.origin.is_none() && !out.sites.is_empty() {
+                out.origin = Some(e.span);
+            }
+        }
         if ret_region {
             // A call returning a region value (s20, the
             // scheme-carrying interface's shape): the callee hands
@@ -4235,6 +4321,7 @@ impl<'t> Lowerer<'t> {
         selfp: &ParamSig,
         surface: &mut CallSurface,
         carry: &mut Vec<SiteId>,
+        recv_sites: &mut Vec<SiteId>,
     ) -> R<()> {
         match selfp.mode {
             None => {
@@ -4242,11 +4329,21 @@ impl<'t> Lowerer<'t> {
                 if let Some((place, _)) = self.as_place(recv) {
                     self.emit_read(place, recv_span);
                     self.mark_region_lent(place);
+                    // s171 (#392): the receiver's OWN sites, recorded
+                    // for a `[mem.str.view]` product that subslices
+                    // its storage. Deliberately not `escape_to_callee`
+                    // — taking a view of a value does not make it
+                    // escape, and marking it so would cost every
+                    // `trim` its stack promotion.
+                    recv_sites.extend(self.sites_of_place(place).into_iter().map(|(s, _)| s));
                     if !self.places.is_copy(place) {
                         surface.read_args.push((place, recv_span));
                     }
                 } else {
                     let rv = self.eval_value(recv)?;
+                    // A temporary receiver — `("a" + "b").trim()` —
+                    // carries the sites of the value it was built from.
+                    recv_sites.extend(rv.sites.iter().copied());
                     // s98: `(p as dyn T).m()` — the receiver pair's
                     // borrow is call-extent, same as an argument.
                     if !rv.borrowed.is_empty() {
