@@ -1,0 +1,39 @@
+//! check: fail(E1010)
+//! phase: mem
+//! conforms: mem.region.escape, mem.str.view
+//!
+//! s171 (wolf-lang#392) — a `[mem.str.view]` product carries its
+//! receiver's sites, so a view of a region-built `str` cannot outlive
+//! the region whose bytes it names.
+//!
+//! The clause said "a slice and every `[mem.str.view]` product
+//! allocate nothing" and that every yielded `str` "is a subslice of
+//! the receiver's own storage", and left unstated whether a view
+//! carries the receiver's SITES. Read as "allocates nothing, so no
+//! site", this file returned a view into bytes `scratch` had already
+//! freed — `exit(0)`, printing `regions`, on all three lanes, and it
+//! printed correctly only because the arena had not been reused.
+//!
+//! What decides it is the asymmetry: `s` itself leaving `scratch` was
+//! already E1010 (`region_str_concat_return.lu`), while `s.trim()` —
+//! the same bytes, one word narrower — left clean. Allocating nothing
+//! and pointing nowhere are different properties: "allocates nothing"
+//! governs the ACCOUNT, and a view still charges zero, so `#[noalloc]`
+//! is untouched.
+//!
+//! The legal companions are `region_str_view_inside.lu` (the view used
+//! within the region that owns it) and a view of a LITERAL, whose
+//! bytes are static and which is no site at all.
+
+fn build() -> str {
+    region scratch {
+        let s = "  re" + "gions  "
+        let t = s.trim()
+        t
+    }
+}
+
+fn main() -> !int {
+    print("{build()}")
+    0
+}

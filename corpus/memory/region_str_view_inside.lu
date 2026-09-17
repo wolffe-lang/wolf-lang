@@ -1,0 +1,28 @@
+//! check: run(exit=0, stdout="regions\nhello\n3\n")
+//! phase: run
+//! conforms: mem.region.escape, mem.str.view
+//!
+//! s171 (wolf-lang#392), the legal side of the same rule — the half
+//! that keeps the refusal honest.
+//!
+//! A `[mem.str.view]` product carries its receiver's sites, so it may
+//! not outlive the region those bytes live in. It may do everything
+//! else: be taken and used INSIDE that region, and be taken of a
+//! LITERAL, whose bytes are static and which is no site at all, then
+//! escape freely. If this file ever starts refusing, the rule has
+//! become "a view is radioactive" rather than "a view lives where its
+//! receiver's bytes live".
+
+fn main() -> !int {
+    region scratch {
+        let s = "  re" + "gions  "
+        let t = s.trim()
+        print(t)
+    }
+    let lit = "  hello  ".trim()
+    print(lit)
+    var n = 0
+    for w in "a b c".words() { n = n + 1 }
+    print("{n}")
+    0
+}
