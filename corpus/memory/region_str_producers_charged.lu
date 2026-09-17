@@ -1,0 +1,55 @@
+//! check: run(exit=0, stdout="all five charged true")
+//! phase: run
+//! conforms: mem.region.account.1, mem.region.escape
+//!
+//! s171 (wolf-lang#391) — the s160 producers each charge the ambient
+//! region, not just `+` and interpolation.
+//!
+//! `[mem.region.escape]` says `upper`, `lower`, `repeat` and `replace`
+//! build fresh bytes in the ambient region "and so does the free
+//! producer `str_from_utf8` … each is a site exactly as `+` is", and
+//! `[mem.region.account.1]` charges every materialization to that
+//! region. The native tier did and lupin did; the CHECKED tier charged
+//! `+` and interpolation and none of the five, so `region_bytes` read
+//! 0 and a `cap: 0` region ran them where the other two lanes trapped
+//! `alloc-contract`. The checked tier was the wrong one and this file
+//! is the witness the issue asked for — `region_str_charged.lu` covers
+//! interpolation only.
+//!
+//! The booleans are the portable claim: `[mem.region.account.1]` puts
+//! the ledger's UNITS out of comparison, so this file asserts that each
+//! number moved, never what it was.
+
+fn main() -> !int {
+    let base = "0123456789abcdef"
+    var ok = true
+
+    region a {
+        let s = base.upper()
+        if region_bytes(a) == 0 { ok = false }
+        if s.len == 0 { return 1 }
+    }
+    region b {
+        let s = base.lower()
+        if region_bytes(b) == 0 { ok = false }
+        if s.len == 0 { return 1 }
+    }
+    region c {
+        let s = base.repeat(4)
+        if region_bytes(c) == 0 { ok = false }
+        if s.len == 0 { return 1 }
+    }
+    region d {
+        let s = base.replace("0", "1")
+        if region_bytes(d) == 0 { ok = false }
+        if s.len == 0 { return 1 }
+    }
+    region e {
+        let s = str_from_utf8(base.bytes()) else "?"
+        if region_bytes(e) == 0 { ok = false }
+        if s.len == 0 { return 1 }
+    }
+
+    print_raw("all five charged {ok}")
+    0
+}
