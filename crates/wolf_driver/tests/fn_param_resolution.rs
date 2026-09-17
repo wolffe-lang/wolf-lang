@@ -75,7 +75,8 @@ fn case_dir(case: &str) -> PathBuf {
 fn both_lanes_say(entry: &Path, want: &str) {
     let checked = lane(entry, "--checked").expect("the checked lane always runs");
     assert_eq!(
-        checked.verdict, "exit(0)",
+        checked.verdict,
+        "exit(0)",
         "checked verdict on {}",
         entry.display()
     );
@@ -90,12 +91,14 @@ fn both_lanes_say(entry: &Path, want: &str) {
     };
     assert_eq!(native.verdict, "exit(0)", "native verdict");
     assert_eq!(
-        native.stdout, want,
+        native.stdout,
+        want,
         "the native lane disagrees with the expectation on {}",
         entry.display()
     );
     assert_eq!(
-        checked.stdout, native.stdout,
+        checked.stdout,
+        native.stdout,
         "the lanes disagree on {}",
         entry.display()
     );
