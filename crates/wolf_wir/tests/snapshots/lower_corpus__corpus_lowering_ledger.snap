@@ -566,6 +566,8 @@ typecheck/coerce_no_widening.lu: not mem-clean (pre-wir rungs own it)
 typecheck/field_typo.lu: not mem-clean (pre-wir rungs own it)
 typecheck/float_nan_cmp.lu: lowers
 typecheck/float_rem.lu: lowers
+typecheck/fn_param_shadows_import/main.lu: lowers
+typecheck/fn_param_shadows_item.lu: lowers
 typecheck/fn_value_captured_int.lu: lowers
 typecheck/fn_value_captured_var_write.lu: not mem-clean (pre-wir rungs own it)
 typecheck/fn_value_capturing.lu: lowers

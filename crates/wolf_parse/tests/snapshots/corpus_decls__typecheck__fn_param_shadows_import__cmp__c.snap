@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 250..329 name=apply pub body=Block
+FnDecl 397..484 name=apply_swapped pub body=Block

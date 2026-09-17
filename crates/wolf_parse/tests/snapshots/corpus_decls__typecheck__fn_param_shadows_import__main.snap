@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 935..943 path=cmp
+FnDecl 944..984 name=le body=Block
+FnDecl 986..1026 name=ge body=Block
+FnDecl 1028..1133 name=main body=Block
