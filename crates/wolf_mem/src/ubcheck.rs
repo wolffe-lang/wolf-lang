@@ -6390,8 +6390,11 @@ impl<'t> Machine<'t> {
         }
         match String::from_utf8(bytes) {
             Ok(s) => {
-                self.charge_mem(s.len() as u64)?;
-                Ok(Flow::Val(Value::Str(s)))
+                // s171 (#391): the free producer is a site too — it
+                // builds fresh bytes in the ambient region, so it
+                // charges that region's ledger, not the byte budget
+                // alone.
+                Ok(Flow::Val(self.mint_str(s, span)?))
             }
             Err(_) => utf8(),
         }
@@ -8355,8 +8358,16 @@ impl<'t> Machine<'t> {
                     "trim" => Ok(Flow::Val(Value::Str(s.trim().to_string()))),
                     "trim_start" => Ok(Flow::Val(Value::Str(s.trim_start().to_string()))),
                     "trim_end" => Ok(Flow::Val(Value::Str(s.trim_end().to_string()))),
-                    "lower" => Ok(Flow::Val(Value::Str(s.to_lowercase()))),
-                    "upper" => Ok(Flow::Val(Value::Str(s.to_uppercase()))),
+                    // s171 (#391): `lower`/`upper` build FRESH bytes,
+                    // so each is a site exactly as `+` is
+                    // (`[mem.region.escape]`) and charges the ambient
+                    // region's ledger (`[mem.region.account.1]`).
+                    // Until this pin they charged neither the byte
+                    // budget nor the region, so `region_bytes` read 0
+                    // and a `cap: 0` region ran them where native and
+                    // lupin trapped `alloc-contract`.
+                    "lower" => Ok(Flow::Val(self.mint_str(s.to_lowercase(), e.span)?)),
+                    "upper" => Ok(Flow::Val(self.mint_str(s.to_uppercase(), e.span)?)),
                     // s142 (wolf-lang#263): `to_int() -> int !
                     // {parse}`, ruled by `[mem.str.to_int]` (s143,
                     // #265; the mark was `NotAnInt` until then). Surrounding `[mem.str.ws]` is ignored
@@ -8398,7 +8409,12 @@ impl<'t> Machine<'t> {
                             // #57).
                             return self.trap("assert", "mem.str.repeat", e.span);
                         }
-                        self.charge_mem(s.len() as u64 * *n as u64 + 16)?;
+                        // s171 (#391): the ambient region's ledger too,
+                        // not the byte budget alone — charged BEFORE the
+                        // bytes exist, as `+` does, so a build the cap
+                        // will not admit is refused before the host
+                        // allocates it.
+                        self.charge_str(s.len() as u64 * *n as u64 + 16, e.span)?;
                         Ok(Flow::Val(Value::Str(s.repeat(*n as usize))))
                     }
                     "replace" => {
@@ -8410,7 +8426,8 @@ impl<'t> Machine<'t> {
                             // matches nothing — replace is identity.
                             return Ok(Flow::Val(Value::Str(s.clone())));
                         }
-                        self.charge_mem(s.len() as u64 + 16)?;
+                        // s171 (#391): the ambient region's ledger too.
+                        self.charge_str(s.len() as u64 + 16, e.span)?;
                         Ok(Flow::Val(Value::Str(s.replace(&from, &to))))
                     }
                     _ => self.refuse("this `str` method in checked execution", e.span),
