@@ -1,0 +1,36 @@
+//! check: run(exit=0, stdout="false\ntrue\n")
+//! phase: run
+//! conforms: conf.resolve.ambient, type.fn.value
+//!
+//! wolf-lang#400 (s171) — a call through a fn-typed PARAMETER whose
+//! name is also a top-level fn of the same module.
+//! `[conf.resolve.ambient]` resolves a bare name in call position in
+//! the order every other bare-name reference resolves in, innermost
+//! lexical binding FIRST, so `le(x, y)` inside `apply` is the
+//! parameter and never the module's own `fn le`.
+//!
+//! The checked machine re-derived the callee body from the spelled
+//! name — the same mistake `[conf.resolve.ambient]` was written to
+//! close, one scope further in — and reached `fn le` instead. The
+//! program compiled, ran and printed the WRONG answer with no
+//! diagnostic on any lane, and the differ could not see it because
+//! native and lupin were both right. A caller cannot defend against
+//! it: the library picks the parameter's name.
+//!
+//! The second line is the other half of the rule: the module's own
+//! `le` is still perfectly reachable as a VALUE, so the fix must not
+//! be "a parameter name hides the item everywhere".
+
+fn le(a: int, b: int) -> bool { a <= b }
+
+fn ge(a: int, b: int) -> bool { a >= b }
+
+fn apply(le: fn(int, int) -> bool, x: int, y: int) -> bool {
+    le(x, y)
+}
+
+fn main() -> !int {
+    print("{apply(ge, 1, 2)}")
+    print("{apply(le, 1, 2)}")
+    0
+}

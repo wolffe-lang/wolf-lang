@@ -1,0 +1,29 @@
+//! check: run(exit=0, stdout="false\ntrue\n")
+//! phase: run
+//! conforms: conf.resolve.ambient, type.fn.value
+//!
+//! wolf-lang#400 (s171), the cross-module half — the shape sc50 hit
+//! through `std.list.sort_by`, and the reason a caller cannot defend
+//! against the bug: the LIBRARY picks the parameter's name, and the
+//! entry module happens to declare a top-level fn with that name.
+//!
+//! `cmp.apply` calls its own `le` parameter. The checked machine's
+//! name-only net searched every module for a body called `le` and
+//! took the smallest body index, which is this file's `fn le` — so
+//! the library called the CALLER's unrelated function. Renaming
+//! either side made the divergence vanish, which is what kept it
+//! hidden. Correct is `ge(1, 2)` then `ge(2, 1)` — `false`, `true`;
+//! the buggy machine printed this file's `le` instead, `true` then
+//! `false`, so BOTH lines flip and neither is a coincidence.
+
+use cmp
+
+fn le(a: int, b: int) -> bool { a <= b }
+
+fn ge(a: int, b: int) -> bool { a >= b }
+
+fn main() -> !int {
+    print("{cmp.apply(ge, 1, 2)}")
+    print("{cmp.apply_swapped(ge, 1, 2)}")
+    0
+}

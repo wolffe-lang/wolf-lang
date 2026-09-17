@@ -1,0 +1,15 @@
+//! member: true
+//!
+//! The library half: it names its own predicate parameter `le`,
+//! knowing nothing about the importer's top-level names. Two items,
+//! so the module is a module and not W0314 ceremony.
+
+/// Apply a caller-supplied comparison.
+pub fn apply(le: fn(int, int) -> bool, x: int, y: int) -> bool {
+    le(x, y)
+}
+
+/// Apply a caller-supplied comparison with the operands swapped.
+pub fn apply_swapped(le: fn(int, int) -> bool, x: int, y: int) -> bool {
+    le(y, x)
+}
