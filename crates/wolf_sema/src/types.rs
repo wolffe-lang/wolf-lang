@@ -269,8 +269,14 @@ pub enum TyKind {
     TaskScope,
     /// A proc handle — `spawn proc f(args)`'s value ([conc.proc.1]:
     /// an unforgeable generational id; no memory handle crosses the
-    /// proc API). Methods: `monitor`/`kill`/`cancel`/`link` (s73).
-    Proc,
+    /// proc API). Methods: `monitor`/`kill`/`cancel`/`link` (s73) and
+    /// `join` (s170). The payload is the COMPLETION type the join
+    /// collects — `[conc.proc.exit]`'s `normal(value)` read as a
+    /// value rather than as a class — which is what BACKLOG B21 ruled
+    /// for wolf-lang#110 and what makes the surface spelling
+    /// `Proc[T]` rather than a bare `Proc`. A proc whose callee
+    /// returns nothing is `Proc[()]`.
+    Proc(TyId),
     /// A proc exit reason ([conc.proc.exit]'s closed set as a value,
     /// D30) — what a monitor channel delivers; `is_normal`/
     /// `is_error`/`is_killed`/`is_cancelled` observe the class.
@@ -569,8 +575,12 @@ pub fn render(
         ),
         TyKind::Chan(t) => format!("channel[{}]", render(table, *t, resolve)),
         TyKind::Mutex(t) => format!("Mutex[{}]", render(table, *t, resolve)),
-        TyKind::TaskScope => "scope".to_string(),
-        TyKind::Proc => "proc".to_string(),
+        // s170 (wolf-lang#316): the rendered name is now the name a
+        // program can WRITE. It was the lowercase keyword, which no
+        // type position ever accepted — a diagnostic that named a
+        // spelling the parser refuses.
+        TyKind::TaskScope => "Scope".to_string(),
+        TyKind::Proc(t) => format!("Proc[{}]", render(table, *t, resolve)),
         TyKind::ExitReason => "ExitReason".to_string(),
         TyKind::Dyn { name, .. } => format!("dyn {name}"),
         TyKind::Proj(base, name) => format!("{}.{name}", render(table, *base, resolve)),

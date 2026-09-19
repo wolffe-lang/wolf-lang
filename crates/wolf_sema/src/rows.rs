@@ -288,7 +288,10 @@ fn transfer(src: &TypeTable, dst: &mut TypeTable, ty: TyId) -> TyId {
             dst.intern(TyKind::Mutex(s))
         }
         TyKind::TaskScope => dst.intern(TyKind::TaskScope),
-        TyKind::Proc => dst.intern(TyKind::Proc),
+        TyKind::Proc(t) => {
+            let s = transfer(src, dst, t);
+            dst.intern(TyKind::Proc(s))
+        }
         TyKind::ExitReason => dst.intern(TyKind::ExitReason),
         TyKind::Proj(base, name) => {
             let s = transfer(src, dst, base);

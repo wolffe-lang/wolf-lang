@@ -483,8 +483,11 @@ pub fn unify(
         (TyKind::RegionTy, TyKind::RegionTy)
         | (TyKind::TypeTy, TyKind::TypeTy)
         | (TyKind::TaskScope, TyKind::TaskScope)
-        | (TyKind::Proc, TyKind::Proc)
         | (TyKind::ExitReason, TyKind::ExitReason) => Ok(()),
+        // s170: two proc handles unify when their completion types do
+        // — `Proc[int]` is not `Proc[str]`, the whole point of
+        // wolf-lang#110's ruled shape.
+        (TyKind::Proc(a), TyKind::Proc(b)) => unify(table, store, a, b),
         (TyKind::ErrUnion(x, rx), TyKind::ErrUnion(y, ry)) => {
             unify(table, store, x, y)?;
             unify(table, store, rx, ry)
