@@ -77,7 +77,7 @@
 use std::path::PathBuf;
 
 use wolf_diag::lint::{Level, LintLevels};
-use wolf_diag::{Diagnostic, HumanReporter, RenderOptions, Reporter, Sources};
+use wolf_diag::{Diagnostic, RenderOptions, Sources};
 use wolf_mem::ubcheck::{self, Budget, Verdict};
 
 /// One test's outcome.
@@ -85,6 +85,12 @@ use wolf_mem::ubcheck::{self, Budget, Verdict};
 enum Status {
     Pass,
     Fail,
+    /// The compiler rejected the file — it never ran (#157, s169).
+    /// Distinct from `Fail`, which means a test RAN and found
+    /// something. A DOCTEST that does not compile is still `Fail`, and
+    /// the difference is not an inconsistency: compiling is what a
+    /// doctest asserts, and it is only a precondition for a test file.
+    Rejected,
     /// The checked machine refused (conservatism ledger) — counted
     /// against a green run, reported with the construct named.
     Unsupported,
@@ -95,6 +101,7 @@ impl Status {
         match self {
             Status::Pass => "pass",
             Status::Fail => "fail",
+            Status::Rejected => "rejected",
             Status::Unsupported => "unsupported",
         }
     }
@@ -103,6 +110,16 @@ impl Status {
 struct Tally {
     passed: usize,
     failed: usize,
+    /// Files the compiler REJECTED — they never ran (#157, s169).
+    ///
+    /// "your test found a bug" and "your module does not build" are
+    /// different facts and `wolf test` spelled both `FAILED (does not
+    /// compile)` in one column, so a reader scanning the summary line
+    /// could not tell a red suite from a broken one. wolf-book's ch18
+    /// ledger carried the row through three pins. This is the same
+    /// distinction `[conf.exit]` rules at the process level, made at
+    /// the report level.
+    rejected: usize,
     unsupported: usize,
     filtered_out: usize,
 }
@@ -130,6 +147,11 @@ pub fn test_cmd(args: &[String]) {
     let mut schedules: Option<u32> = None;
     let mut replay: Option<String> = None;
     let mut lints = LintLevels::new();
+    // #75, s169: `wolf test` honours `--error-limit`. `build` and `run`
+    // have capped their reports since s63 and this surface did not, so
+    // one wrecked test module could scroll the cap off the terminal
+    // that `--error-limit` exists to protect.
+    let mut error_limit = crate::DEFAULT_ERROR_LIMIT;
     let mut paths: Vec<String> = Vec::new();
     let mut i = 0;
     while i < args.len() {
@@ -154,6 +176,11 @@ pub fn test_cmd(args: &[String]) {
             only_doc = true;
         } else if a == "--deny-warnings" {
             lints.deny_warnings();
+        } else if let Some(v) = a.strip_prefix("--error-limit=") {
+            match v.parse::<usize>() {
+                Ok(n) => error_limit = n,
+                Err(_) => fail("--error-limit needs a count (0 for no limit)"),
+            }
         } else if let Some((flag, level)) = match a.as_str() {
             "--allow" => Some(("--allow", Level::Allow)),
             "--warn" => Some(("--warn", Level::Warn)),
@@ -289,6 +316,7 @@ pub fn test_cmd(args: &[String]) {
     let mut tally = Tally {
         passed: 0,
         failed: 0,
+        rejected: 0,
         unsupported: 0,
         filtered_out: 0,
     };
@@ -316,11 +344,10 @@ pub fn test_cmd(args: &[String]) {
             Err(e) => fail(&e),
         };
         let render = |sources: &Sources, diags: &[Diagnostic]| {
-            let mut reporter = HumanReporter::new(sources, RenderOptions::default());
-            for d in diags {
-                reporter.report(d);
-            }
-            eprint!("{}", reporter.take_output());
+            eprint!(
+                "{}",
+                crate::report_capped(sources, diags, error_limit, RenderOptions::default())
+            );
         };
         let has_errors =
             |ds: &[Diagnostic]| ds.iter().any(|d| d.severity == wolf_diag::Severity::Error);
@@ -337,21 +364,25 @@ pub fn test_cmd(args: &[String]) {
                     false
                 }
             };
-        let file_fail = |tally: &mut Tally, detail: &str| {
-            tally.failed += 1;
+        // A file the compiler rejected is REJECTED, never FAILED
+        // (#157, s169): it never ran, so it found nothing, so it is not
+        // a failing test. The diagnostics above the line already said
+        // so unambiguously; this is the summary line catching up.
+        let file_rejected = |tally: &mut Tally, detail: &str| {
+            tally.rejected += 1;
             if json {
                 emit(serde_json::json!({
                     "schema": "wolf-test/0", "event": "test", "file": display,
-                    "name": "<file>", "status": "fail", "detail": detail,
+                    "name": "<file>", "status": "rejected", "detail": detail,
                 }));
             } else {
-                println!("test {display} ... FAILED ({detail})");
+                println!("test {display} ... REJECTED ({detail})");
             }
         };
         let mut resolve_diags = res.diagnostics.clone();
         resolve_diags.extend(scan.diagnostics.iter().cloned());
         if gate(&mut pending, &sources, resolve_diags) {
-            file_fail(&mut tally, "does not compile");
+            file_rejected(&mut tally, "does not compile");
             if fail_fast {
                 stopped_early = true;
                 break 'files;
@@ -364,7 +395,7 @@ pub fn test_cmd(args: &[String]) {
             continue;
         }
         if gate(&mut pending, &sources, tc.diagnostics.clone()) {
-            file_fail(&mut tally, "does not compile");
+            file_rejected(&mut tally, "does not compile");
             if fail_fast {
                 stopped_early = true;
                 break 'files;
@@ -377,7 +408,7 @@ pub fn test_cmd(args: &[String]) {
             continue;
         }
         if gate(&mut pending, &sources, mem.diagnostics.clone()) {
-            file_fail(&mut tally, "does not compile");
+            file_rejected(&mut tally, "does not compile");
             if fail_fast {
                 stopped_early = true;
                 break 'files;
@@ -592,6 +623,7 @@ pub fn test_cmd(args: &[String]) {
             match status {
                 Status::Pass => tally.passed += 1,
                 Status::Fail => tally.failed += 1,
+                Status::Rejected => tally.rejected += 1,
                 Status::Unsupported => tally.unsupported += 1,
             }
             if json {
@@ -610,6 +642,7 @@ pub fn test_cmd(args: &[String]) {
                 match status {
                     Status::Pass => println!("test {qualified} ... ok"),
                     Status::Fail => println!("test {qualified} ... FAILED ({detail})"),
+                    Status::Rejected => println!("test {qualified} ... REJECTED ({detail})"),
                     Status::Unsupported => {
                         println!("test {qualified} ... unsupported ({detail})")
                     }
@@ -654,19 +687,25 @@ pub fn test_cmd(args: &[String]) {
     if list {
         std::process::exit(0);
     }
-    let ok = tally.failed == 0 && tally.unsupported == 0;
+    // A rejected file is not green, exactly as a failed or refused one
+    // is not — the exit status is unchanged by the new column
+    // ([conf.exit.test]: a test runner that produced a report with a
+    // non-passing row exits 1).
+    let ok = tally.failed == 0 && tally.rejected == 0 && tally.unsupported == 0;
     if json {
         emit(serde_json::json!({
             "schema": "wolf-test/0", "event": "summary",
             "passed": tally.passed, "failed": tally.failed,
+            "rejected": tally.rejected,
             "unsupported": tally.unsupported, "filtered_out": tally.filtered_out,
             "stopped_early": stopped_early,
         }));
     } else {
         println!(
-            "wolf test: {} passed; {} failed; {} unsupported; {} filtered out{}",
+            "wolf test: {} passed; {} failed; {} rejected; {} unsupported; {} filtered out{}",
             tally.passed,
             tally.failed,
+            tally.rejected,
             tally.unsupported,
             tally.filtered_out,
             if stopped_early {
@@ -750,6 +789,7 @@ fn run_doctests(
             match outcome.status() {
                 "pass" => tally.passed += 1,
                 "unsupported" => tally.unsupported += 1,
+                "rejected" => tally.rejected += 1,
                 _ => tally.failed += 1,
             }
             if json {
@@ -762,6 +802,7 @@ fn run_doctests(
                 let word = match outcome.status() {
                     "pass" => "ok",
                     "unsupported" => "unsupported",
+                    "rejected" => "REJECTED",
                     _ => "FAILED",
                 };
                 println!("doctest {qualified} ... {word} ({})", outcome.detail());
@@ -924,7 +965,9 @@ fn native_schedule_runs(
             Ok(runs)
         }
         Err(crate::BuildStop::Refused { reason, .. }) => Err((Status::Unsupported, reason)),
-        Err(crate::BuildStop::Errors(_)) => Err((Status::Fail, "does not compile".to_string())),
+        Err(crate::BuildStop::Errors(_)) => {
+            Err((Status::Rejected, "does not compile".to_string()))
+        }
         Err(crate::BuildStop::Environment(msg)) => Err((Status::Fail, msg)),
     };
     let _ = std::fs::remove_dir_all(&dir);
