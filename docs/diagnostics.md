@@ -292,6 +292,13 @@ possibly applied (`List[int]`), or one of the prefixed forms `*T`,
 those. If you deleted a type mid-edit, the `:` or `->` in front of it
 is now dangling — remove it or complete the type.
 
+The concurrency keywords are the common near-miss: `proc` and `scope`
+start a `spawn proc f(…)` expression and a `scope name { … }` block,
+and neither is a type name. The handles they produce ARE types, with
+capitalised spellings — `Proc[T]` for a proc handle (T is the value
+its `join` collects) and `Scope` for a scope handle — so
+`fn watch(p: proc)` is written `fn watch(p: Proc[int])`.
+
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__type_position_keyword.snap, crates/wolf_parse/tests/snapshots/ambiguity_trees__expr_tree__type_position_keyword.snap, crates/wolf_parse/tests/snapshots/corpus_decls__grammar__type_position_keyword.snap, crates/wolf_parse/tests/snapshots/diagnostics__e0206_missing_type.snap
 
 ## E0207 — expected a pattern
