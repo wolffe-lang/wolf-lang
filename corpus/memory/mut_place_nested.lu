@@ -1,0 +1,89 @@
+//! check: run(exit=0, stdout="42 2 9\n1 22 30 4\n3 7 3 9 1")
+//! phase: run
+//! conforms: mem.tier0.mode.mut, mem.model.place, gram.expr.assign
+//!
+//! s168 — the write half of the same place model, and the shape that
+//! motivated it. Two c06 residue rows retire here.
+//!
+//! "assignment through nested places" (#268, ch07): `a.b.c = v` is a
+//! path two fields deep, and `xs[i].f = v` is a field of a container
+//! element. Both were refused by name on the native pipe; the checked
+//! machine has written through them all along.
+//!
+//! "`mut` arguments beyond local places" in its recursive form: the
+//! wordtree's insert, `add(mut n.kids[i], w)` — a FIELD of a `mut`
+//! parameter, then an INDEX into it, lent onward to a recursive call.
+//! That is one address computed out of the caller's slot, and it is
+//! the reason the lend has to be an address rather than a copy: a
+//! spilled copy would write back over the recursion's own work.
+//!
+//! The exclusivity that makes this sound is `[mem.model.place]`'s:
+//! every element of a container is ONE opaque place, so a second
+//! access path through the same base inside the call is E1002. The
+//! two fault twins beside this file (`mut_elem_excl`,
+//! `mut_elem_nested_call`) are that rule, seen red.
+
+struct Inner {
+    n: int,
+}
+
+struct Outer {
+    a: Inner,
+    b: int,
+}
+
+struct Cell {
+    n: int,
+    m: int,
+}
+
+struct Word {
+    key: int,
+    count: int,
+}
+
+struct Bucket {
+    tag: int,
+    words: List[Word],
+}
+
+fn bump(mut w: Word) {
+    w.count = w.count + 1
+}
+
+fn insert(mut b: Bucket, k: int) {
+    var i = 0
+    while i < b.words.len {
+        if b.words[i].key == k {
+            // The residue's own spelling: a field of a `mut`
+            // parameter, indexed, lent onward.
+            bump(mut b.words[i])
+            return
+        }
+        i = i + 1
+    }
+    (mut b.words).push(Word { key: k, count: 1 })
+}
+
+fn main() -> !int {
+    // `a.b.c = v` — two fields deep, and its compound form.
+    var o = Outer { a: Inner { n: 1 }, b: 2 }
+    o.a.n = 41
+    o.a.n += 1
+    print("{o.a.n} {o.b} {o.a.n - 33}")
+
+    // `xs[i].f = v` — a field of a container element.
+    var cs = [Cell { n: 1, m: 2 }, Cell { n: 3, m: 4 }]
+    cs[1].n = 30
+    cs[0].m += 20
+    print("{cs[0].n} {cs[0].m} {cs[1].n} {cs[1].m}")
+
+    // The recursive insert.
+    var b = Bucket { tag: 3, words: [] }
+    insert(mut b, 7)
+    insert(mut b, 7)
+    insert(mut b, 9)
+    insert(mut b, 7)
+    print("{b.tag} {b.words[0].key} {b.words[0].count} {b.words[1].key} {b.words[1].count}")
+    0
+}

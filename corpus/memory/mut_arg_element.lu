@@ -1,0 +1,64 @@
+//! check: run(exit=0, stdout="1 12 3\n6 30 7 3\n4\n2 20 9 1\n40 2")
+//! phase: run
+//! conforms: mem.tier0.mode.mut, mem.model.place, mem.list.index
+//!
+//! s168 (#268 ×6, #156 ch28) — `f(mut xs[i])`, the c06 residue
+//! "`mut` arguments beyond local places". A container ELEMENT is a
+//! place, so lending one is an ADDRESS into the container's own
+//! buffer: no spill, no writeback, and the callee's writes land where
+//! the element already lives. The checked machine has run this shape
+//! since it had places at all; until this sprint the native pipe
+//! refused it by name, which is what #268 counted six times.
+//!
+//! Four shapes, each one line: a scalar element, a struct element
+//! whose FIELD is the lend, an element reached through a field of a
+//! local, and an element of an element (`grid[i][j]`). The index is
+//! bounds-checked exactly once per lend, at the same origin the read
+//! spelling uses (D61).
+
+struct Cell {
+    n: int,
+    m: int,
+}
+
+struct Grid {
+    rows: List[int],
+    tag: int,
+}
+
+fn bump(mut n: int, by: int) {
+    n = n + by
+}
+
+fn advance(mut c: Cell, k: int) {
+    c.n = c.n + k
+    c.m = c.m + 1
+}
+
+fn main() -> !int {
+    // A scalar element of a plain list.
+    var xs = [1, 2, 3]
+    bump(mut xs[1], 10)
+    print("{xs[0]} {xs[1]} {xs[2]}")
+
+    // A struct element, lent whole: the callee writes both fields in
+    // place and the sibling element never moves.
+    var cs = [Cell { n: 5, m: 29 }, Cell { n: 7, m: 3 }]
+    advance(mut cs[0], 1)
+    print("{cs[0].n} {cs[0].m} {cs[1].n} {cs[1].m}")
+
+    // A FIELD of a struct element — an index step, then a field step.
+    bump(mut cs[1].m, 1)
+    print("{cs[1].m}")
+
+    // An element reached through a field of a by-value local.
+    var g = Grid { rows: [2, 10, 9], tag: 1 }
+    bump(mut g.rows[1], 10)
+    print("{g.rows[0]} {g.rows[1]} {g.rows[2]} {g.tag}")
+
+    // An element of an element.
+    var grid = [[1, 2], [3, 4]]
+    bump(mut grid[1][0], 37)
+    print("{grid[1][0]} {grid[0][1]}")
+    0
+}
