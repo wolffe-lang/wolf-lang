@@ -524,6 +524,40 @@ Edge legality (source stores a reference to target):
   implementation defect to repair, not a spec ambiguity — this
   clause exists so the next machine cannot make the same choice.)
 
+- `[mem.region.root]` **A region carries no root.** A transferred
+  region hands the receiver a placement domain, not a container: there
+  is no distinguished entry point inside it, and there is not going to
+  be one. Two clauses already decide this. `[mem.region.intra.1]` makes
+  every object in a region equally reachable from every other, so no
+  object in it is privileged; and `[mem.region.create.4]` gives region
+  identity **zero runtime representation**, so a root would be the one
+  typed field in an object whose whole design is to have none — and it
+  would make a region's type depend on what was allocated in it. The
+  entry point travels **beside** the region, as a `handle T` into a
+  `Pool[T]` the region owns (`[mem.shared.handle]`): a handle is plain
+  data — an index and a generation — so carrying one across a `move r`
+  is not a cross-region edge and `[mem.region.edge]` has nothing to say
+  about it. The receiver opens the region and resolves the handle. The
+  book's "side channel" is not a workaround for a missing feature; it
+  is the mechanism. (Ruled 2026-09-18, s168, answering wolf-lang#155's
+  ch16 row. The `Pool[T]`/`handle T` runtime shape this prescribes is
+  stub 67's second lane; the clause is the answer, not the lowering.)
+- `[mem.region.imm.ret]` **`imm` is not a type qualifier, in return
+  position or anywhere else** — `-> imm List[Doc]` stays E0204. `imm`
+  is not a property of a type; it is the state of a **region's
+  contents** after `freeze` (`[mem.region.freeze.1]` promotes the
+  entire graph, deep and in place), and `[mem.region.edge.imm]` is what
+  makes that state referable from anywhere. A value-level `imm`
+  qualifier would be a second immutability lattice beside the region
+  one — two mechanisms for one property, and the duplicated one is the
+  one the checker actually enforces. What the qualifier was wanted for
+  already works: return the value out of the frozen region. Frozen
+  sites are exempt from co-location, outlive every frame, and are
+  shareable across threads, so "frozen data crosses by reference"
+  is the behaviour today, with no copy and no annotation. (Ruled
+  2026-09-18, s168, answering wolf-lang#155's ch12 row. A stated no is
+  a result; silence was not.)
+
 ### Unobservable placement `[mem.region.promote]`
 
 - `[mem.region.promote.1]` Stack promotion / escape analysis must not
