@@ -17425,14 +17425,29 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
 
     /// What one scrutinee type's discriminant ranges over.
     fn match_domain(&mut self, scrut_sema: TyId, span: Span) -> R<MatchDomain> {
+        let tbl = self.table;
+        self.match_domain_in(tbl, scrut_sema, span)
+    }
+
+    /// The same question against an ARBITRARY type table (s168): a
+    /// nested product field's type may live in the signature table
+    /// rather than the body's — `payload_sema_tys` returns the pair
+    /// for exactly that reason — and the deep-tree test needs the
+    /// field's own domain.
+    fn match_domain_in(
+        &mut self,
+        tbl: &'t TypeTable,
+        scrut_sema: TyId,
+        span: Span,
+    ) -> R<MatchDomain> {
         let mut ty = scrut_sema;
         for _ in 0..32 {
-            match self.table.kind(ty) {
+            match tbl.kind(ty) {
                 TyKind::Distinct(inner) => ty = *inner,
                 _ => break,
             }
         }
-        match self.table.kind(ty) {
+        match tbl.kind(ty) {
             TyKind::Nominal { module, name, .. } => match self.sigs.get(*module as usize, name) {
                 Some(ItemSig::Enum { variants, .. }) => Ok(MatchDomain::Enum(
                     variants
@@ -17775,10 +17790,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // bare name spelling one of its cases is a test, and a
                 // nested case test is the deep-tree residue.
                 if self.names_sema_case(tbl, sema_ty, &name) {
-                    return Err(refuse(
-                        "an enum or row test inside a product pattern (deep trees)",
-                        sub.span,
-                    ));
+                    // s168 — the deep tree: a payload-free case named
+                    // inside a product is a tag test on the FIELD's
+                    // own discriminant.
+                    return self
+                        .product_nested_case(sub, &name, v, tbl, sema_ty, &[], conds, binds, dead);
                 }
                 self.product_bind_named(name, sub.span, v, tbl, sema_ty, binds)
             }
@@ -17907,16 +17923,178 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 Ok(())
             }
-            SyntaxKind::PathPat => Err(refuse(
-                "an enum or row test inside a product pattern (deep trees)",
-                sub.span,
-            )),
-            SyntaxKind::OrPat => Err(refuse(
-                "or-patterns inside product patterns (join params)",
-                sub.span,
-            )),
+            // s168 — `Some(Leaf(3))`, `Ok(Color.Red)`: an enum or row
+            // test nested INSIDE a product, with its own payload
+            // sub-patterns. The c06 residue #179 left named.
+            SyntaxKind::PathPat => {
+                let end = sub
+                    .nodes()
+                    .find(|n| wolf_ast::is_pattern_kind(n.kind))
+                    .map(|n| n.span.lo)
+                    .unwrap_or(sub.span.hi);
+                let raw = String::from_utf8_lossy(&self.src[sub.span.lo as usize..end as usize])
+                    .into_owned();
+                let name: String = raw.trim_end().trim_end_matches('(').trim_end().to_string();
+                let payload: Vec<&'t GreenNode> = sub
+                    .nodes()
+                    .filter(|n| wolf_ast::is_pattern_kind(n.kind))
+                    .collect();
+                self.product_nested_case(
+                    sub, &name, v, tbl, sema_ty, &payload, conds, binds, dead,
+                )
+            }
+            // s168 (#196) — an or-pattern in one payload SLOT
+            // (`Pair(1 | 2, b)`). The product walk is a conjunction of
+            // pure tests, so an alternation in a slot is a DISJUNCTION
+            // of that slot's tests and needs no join at all: each
+            // alternative's conjunction is folded to one BOOL and the
+            // alternatives are `bor`'d together. Build-time verdicts
+            // ride through — a decided-true alternative makes the slot
+            // free, and a slot whose every alternative decided false
+            // kills the arm.
+            //
+            // What genuinely needs join params is an alternative that
+            // BINDS: the same name would arrive from different slots
+            // on different edges, which is a block parameter, not an
+            // expression. That stays refused, now under its own name.
+            SyntaxKind::OrPat => {
+                let alts: Vec<&'t GreenNode> = sub
+                    .nodes()
+                    .filter(|n| wolf_ast::is_pattern_kind(n.kind))
+                    .collect();
+                if alts.is_empty() {
+                    return Err(refuse("an or-pattern without alternatives", sub.span));
+                }
+                let mut alt_conds: Vec<Value> = Vec::new();
+                for a in &alts {
+                    let mut acs: Vec<Value> = Vec::new();
+                    let mut abs: Vec<(String, LocalBind)> = Vec::new();
+                    let mut adead = false;
+                    self.product_sub(a, v, tbl, sema_ty, &mut acs, &mut abs, &mut adead)?;
+                    if !abs.is_empty() {
+                        return Err(refuse(
+                            "a binding inside an or-pattern alternative (join params)",
+                            a.span,
+                        ));
+                    }
+                    if adead {
+                        continue; // decided false: emits nothing
+                    }
+                    let Some(first) = acs.first().copied() else {
+                        // Decided true (or irrefutable): the whole
+                        // alternation is satisfied.
+                        return Ok(());
+                    };
+                    let mut cond = first;
+                    for &c in &acs[1..] {
+                        cond = self
+                            .b
+                            .ins(Opcode::Band, &[cond, c], &[types::BOOL], Aux::None)
+                            .one();
+                    }
+                    alt_conds.push(cond);
+                }
+                let Some(first) = alt_conds.first().copied() else {
+                    *dead = true;
+                    return Ok(());
+                };
+                let mut cond = first;
+                for &c in &alt_conds[1..] {
+                    cond = self
+                        .b
+                        .ins(Opcode::Bor, &[cond, c], &[types::BOOL], Aux::None)
+                        .one();
+                }
+                conds.push(cond);
+                Ok(())
+            }
             _ => Err(refuse("this pattern shape in match lowering", sub.span)),
         }
+    }
+
+    /// s168 — one enum/row test INSIDE a product (the "deep trees"
+    /// residue #179 left, which the checked lane's value-wise matcher
+    /// has always walked). A payload-carrying case value is an
+    /// aggregate whose slot 0 is the tag, exactly as at the top level,
+    /// so the test is `product_tag_test` against a domain built from
+    /// the FIELD's own sema type — and the payload slots recurse
+    /// straight back into `product_sub`, which is what makes the tree
+    /// deep rather than one level.
+    #[allow(clippy::too_many_arguments)]
+    fn product_nested_case(
+        &mut self,
+        sub: &'t GreenNode,
+        name: &str,
+        v: Value,
+        tbl: &'t TypeTable,
+        sema_ty: TyId,
+        payload: &[&'t GreenNode],
+        conds: &mut Vec<Value>,
+        binds: &mut Vec<(String, LocalBind)>,
+        dead: &mut bool,
+    ) -> R<()> {
+        let domain = self.match_domain_in(tbl, sema_ty, sub.span)?;
+        let Some((c, arity)) = self.domain_test(&domain, name) else {
+            return Err(refuse(
+                "a pattern tag the product field does not carry",
+                sub.span,
+            ));
+        };
+        if !payload.is_empty() && payload.len() != arity {
+            return Err(refuse(
+                "payload arity in a nested pattern (checker contract)",
+                sub.span,
+            ));
+        }
+        let vty = self.b.func.value_ty(v);
+        let agg = match self.b.module.types.get(vty).clone() {
+            types::TypeData::Agg(fields) => Some(fields),
+            _ => None,
+        };
+        let disc = match &agg {
+            Some(fields) => self
+                .b
+                .ins(Opcode::AggGet, &[v], &[fields[0]], Aux::Int(0))
+                .one(),
+            None => v,
+        };
+        self.product_tag_test(disc, c, conds, dead);
+        if *dead || payload.is_empty() {
+            return Ok(());
+        }
+        let Some(fields) = agg else {
+            return Err(refuse(
+                "payload patterns on a payload-free product field",
+                sub.span,
+            ));
+        };
+        let payload_tys = self.payload_sema_tys_in(tbl, sema_ty, &domain, c, name, sub.span)?;
+        for (j, s) in payload.iter().enumerate() {
+            if s.kind == SyntaxKind::WildcardPat {
+                continue;
+            }
+            let Some(&fty) = fields.get(j + 1) else {
+                return Err(refuse(
+                    "a payload slot the product field does not carry",
+                    s.span,
+                ));
+            };
+            let Some(&(ptbl, pid)) = payload_tys.get(j) else {
+                return Err(refuse(
+                    "a payload slot the product field does not carry",
+                    s.span,
+                ));
+            };
+            let pv = self
+                .b
+                .ins(Opcode::AggGet, &[v], &[fty], Aux::Int((j + 1) as i64))
+                .one();
+            self.product_sub(s, pv, ptbl, pid, conds, binds, dead)?;
+            if *dead {
+                return Ok(());
+            }
+        }
+        Ok(())
     }
 
     /// Stage one product bind: extract-value `v` def'd under a fresh
@@ -17960,11 +18138,42 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         conds: &mut Vec<Value>,
         dead: &mut bool,
     ) -> R<()> {
-        if sub
-            .nodes()
-            .any(|n| matches!(n.kind, SyntaxKind::StringLit | SyntaxKind::StringExpr))
-        {
-            return Err(refuse("a str literal inside a product pattern", sub.span));
+        // s168 (#179's residue) — a str literal INSIDE a product. The
+        // product walk is a conjunction of PURE tests, and an inline
+        // str equality is one: the same `str_eq_inline` the top-level
+        // #54 dispatch chain uses, which builds its own diamond and
+        // hands back a BOOL at the merge. The literal's length is a
+        // constant here, so the length guard folds and the scan gets a
+        // constant trip count — a short literal unrolls, exactly as at
+        // the top level.
+        if let Some(lit) = sub.nodes().find(|n| n.kind == SyntaxKind::StringLit) {
+            if lit.tokens().any(|t| t.kind == SyntaxKind::InterpOpen) {
+                return Err(refuse("an interpolated string as a pattern", sub.span));
+            }
+            let bytes = self.cooked_str_lit(lit);
+            let (sp, sl) = self.str_parts(v);
+            let (cp, cl) = self.str_literal_parts(&bytes);
+            match self.str_eq_const(sp, sl, cp, cl) {
+                // Decided at build time: an equal verdict emits
+                // nothing, an unequal one kills the arm — the
+                // constant-discriminant posture the walk already has.
+                Some(true) => self.b.stats.fold += 1,
+                Some(false) => {
+                    self.b.stats.fold += 1;
+                    *dead = true;
+                }
+                None => {
+                    let t = self.str_eq_inline(sp, sl, cp, cl, true);
+                    conds.push(t);
+                }
+            }
+            return Ok(());
+        }
+        if sub.nodes().any(|n| n.kind == SyntaxKind::StringExpr) {
+            return Err(refuse(
+                "an interpolated string inside a product pattern",
+                sub.span,
+            ));
         }
         let text = self.text(sub.span);
         if text == "true" || text == "false" {
@@ -18194,10 +18403,25 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         name: &str,
         span: Span,
     ) -> R<Vec<(&'t TypeTable, TyId)>> {
-        let mut ty = strip_sema_in(self.table, scrut_sema);
+        let tbl = self.table;
+        self.payload_sema_tys_in(tbl, scrut_sema, domain, c, name, span)
+    }
+
+    /// The same, against an arbitrary table (s168 — the deep tree).
+    #[allow(clippy::too_many_arguments)]
+    fn payload_sema_tys_in(
+        &mut self,
+        tbl: &'t TypeTable,
+        scrut_sema: TyId,
+        domain: &MatchDomain,
+        c: i64,
+        name: &str,
+        span: Span,
+    ) -> R<Vec<(&'t TypeTable, TyId)>> {
+        let mut ty = strip_sema_in(tbl, scrut_sema);
         for _ in 0..32 {
-            match self.table.kind(ty) {
-                TyKind::Distinct(inner) => ty = strip_sema_in(self.table, *inner),
+            match tbl.kind(ty) {
+                TyKind::Distinct(inner) => ty = strip_sema_in(tbl, *inner),
                 _ => break,
             }
         }
@@ -18207,7 +18431,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     module,
                     name: tname,
                     args,
-                } = self.table.kind(ty).clone()
+                } = tbl.kind(ty).clone()
                 else {
                     return Err(refuse("an enum payload outside its nominal type", span));
                 };
@@ -18237,7 +18461,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                                     span,
                                 ));
                             };
-                            (self.table, aid)
+                            (tbl, aid)
                         }
                         _ if ty_mentions_rigid(self.sig_table, *pid) => {
                             return Err(refuse(
@@ -18252,14 +18476,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(out)
             }
             MatchDomain::Row(_) => {
-                let TyKind::Row { tags, .. } = self.table.kind(ty).clone() else {
+                let TyKind::Row { tags, .. } = tbl.kind(ty).clone() else {
                     return Err(refuse("a row payload outside a row type", span));
                 };
                 let last = name.rsplit('.').next().unwrap_or(name);
                 let Some((_, payload)) = tags.iter().find(|(n, _)| n == name || n == last) else {
                     return Err(refuse("a tag the row does not carry", span));
                 };
-                Ok(payload.iter().map(|&pid| (self.table, pid)).collect())
+                Ok(payload.iter().map(|&pid| (tbl, pid)).collect())
             }
             _ => Err(refuse("a payload pattern outside an enum or row", span)),
         }
