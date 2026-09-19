@@ -308,13 +308,20 @@ beside `wolf` itself); the compiler never links a C frontend.",
             "conform-run <file.lu> [--phase=<p>] [--seed=N] [--json]",
             "[--error-format=human|json] [--dump=regions|cfg|wir] [--zstats]",
             "[--checked] [--native] [--release] [--std-root <dir>]",
+            "[--deny-warnings]",
         ],
         about: "\
 The differential-testing entry point: stdout carries one observation
 record in the specification's format, stderr the diagnostics. This is
 how the compiler and the reference interpreter are compared against
 each other on the same program. Not a verb you need in order to write
-wolf.",
+wolf.
+
+`--deny-warnings` promotes every warning to an error, so a program
+that warns is `fail(CODE)` in the record — the gate a consumer coupled
+to this surface alone could not otherwise reach. No other lint flag is
+read here, and the manifest's `lints.*` rules are not read either: a
+record has to be reproducible from the file and the command line.",
     },
     Cmd {
         name: "lsp",
