@@ -87,6 +87,19 @@ impl Sources {
     fn get(&self, file: FileId) -> Option<&Entry> {
         self.files.get(&file)
     }
+
+    /// 1-based `(line, col)` of a byte offset in an interned file —
+    /// the span spelling a PERSON reads, next to the byte offsets a
+    /// machine compares (`[conf.trap.render]`: one span spelling per
+    /// tool, and `[proto.record.ext]`'s trap keys are a tool's).
+    ///
+    /// `None` when the file was never interned, which is the honest
+    /// answer and never a guessed `(1, 1)`.
+    pub fn line_col(&self, file: FileId, offset: u32) -> Option<(u32, u32)> {
+        let e = self.get(file)?;
+        let lc = e.index.line_col(offset);
+        Some((lc.line + 1, lc.col + 1))
+    }
 }
 
 // ------------------------------------------------------------- palette --
