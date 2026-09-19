@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="1 12 3\n6 30 7 3\n4\n2 20 9 1\n40 2")
 //! phase: run
-//! conforms: mem.tier0.mode.mut, mem.model.place, mem.list.index
+//! conforms: mem.tier0.mode.mut, mem.model.place, gram.expr.index.origin
 //!
 //! s168 (#268 ×6, #156 ch28) — `f(mut xs[i])`, the c06 residue
 //! "`mut` arguments beyond local places". A container ELEMENT is a
