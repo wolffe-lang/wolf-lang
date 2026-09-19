@@ -1,8 +1,0 @@
----
-source: crates/wolf_parse/tests/corpus_decls.rs
-expression: dump
----
-FnDecl 601..639 name=square body=Block
-FnDecl 641..690 name=collect body=Block
-FnDecl 692..767 name=fan_out body=Block
-FnDecl 769..1051 name=main body=Block

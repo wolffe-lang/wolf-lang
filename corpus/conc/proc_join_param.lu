@@ -1,0 +1,26 @@
+//! check: run(exit=0, stdout="9")
+//! phase: run
+//! conforms: conc.proc.handle, conc.proc.join
+//!
+//! s170 (wolf-lang#316/#110) — the PROC half of the handle spelling,
+//! on its own. `Proc[int]` crosses a function boundary as a parameter
+//! and the callee joins it for the value.
+//!
+//! Split out of `proc_join_handle_param.lu` so that the proc handle
+//! and the scope handle are separate witnesses: the combined file hung
+//! the windows native lane and one file could not say which half.
+
+fn square(n: int) -> int {
+    n * n
+}
+
+fn collect(p: Proc[int]) -> !int {
+    p.join()
+}
+
+fn main() -> !int {
+    let p = spawn proc square(3)
+    let v = collect(p) else |_| { return 1 }
+    print("{v}")
+    0
+}

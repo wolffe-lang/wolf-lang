@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="1")
+//! phase: run
+//! conforms: conc.proc.handle, conc.task.scope, conc.task.spawn
+//!
+//! s170 (wolf-lang#316) — the SCOPE half of the handle spelling, on
+//! its own. `[conc.task.scope]`'s normative sentence, finally written
+//! as a program: "a function that spawns into its caller's scope takes
+//! the handle as a parameter — lifetime extension is visible at every
+//! call site."
+//!
+//! Split out of `proc_join_handle_param.lu` for the same reason its
+//! proc twin was: the combined file hung the windows native lane and
+//! one file could not say which half.
+
+fn fan_out(s: Scope, ch: channel[int]) {
+    s.spawn(fn() { ch.send(1) })
+}
+
+fn main() -> !int {
+    let ch = channel[int](2)
+    scope work {
+        fan_out(work, ch)
+    }
+    let seen = ch.recv() else |_| { return 1 }
+    print("{seen}")
+    0
+}
