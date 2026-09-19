@@ -1,0 +1,31 @@
+//! check: run(exit=0, stdout="42 7")
+//! phase: run
+//! conforms: conc.proc.join, conc.proc.exit, conc.proc.handle
+//!
+//! s170 (wolf-lang#110, BACKLOG B21's ruling) — a proc TALKS BACK.
+//! Before this the only things a proc could report to its spawner
+//! were its exit class and its stdout, which is why `corpus/procs.lu`
+//! spawned every proc arg-less. `p.join()` blocks until the proc
+//! exits and hands back `[conc.proc.exit]`'s `normal(value)` as a
+//! typed value, with the four abnormal classes as row tags.
+//!
+//! The second join proves the handle type is not decoration: `twice`
+//! and `plus_one` are different procs with different arguments, and
+//! each join collects its own proc's value.
+
+fn twice(n: int) -> int {
+    n * 2
+}
+
+fn plus_one(n: int) -> int {
+    n + 1
+}
+
+fn main() -> !int {
+    let a = spawn proc twice(21)
+    let b = spawn proc plus_one(6)
+    let x = a.join() else |_| { return 1 }
+    let y = b.join() else |_| { return 1 }
+    print("{x} {y}")
+    0
+}

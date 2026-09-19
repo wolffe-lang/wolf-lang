@@ -233,3 +233,56 @@ fn e1103_clean_sequential_whens() {
          when (a, b) { total = a + b }\n    when (b, a) { total = total + a + b }\n    total\n}\n",
     );
 }
+
+// --------------------------------- the handle types (s170) -----------
+
+/// wolf-lang#316, ruled by B21: `Scope` and `Proc[T]` are prelude type
+/// names with a signature elaboration, so `[conc.task.scope]`'s
+/// handle-as-parameter is writable at last. The clean twin — both
+/// spellings in a parameter list, the proc handle joined for its
+/// typed value ([conc.proc.join], wolf-lang#110).
+#[test]
+fn conc_handles_clean_in_signature() {
+    snap_one(
+        "conc_handles_clean_in_signature",
+        "fn fan_out(s: Scope, ch: channel[int]) {\n    s.spawn(fn() { ch.send(1) })\n}\n\n\
+         fn collect(p: Proc[int]) -> !int {\n    p.join()\n}\n\n\
+         fn square(n: int) -> int {\n    n * n\n}\n\n\
+         fn main() -> !int {\n    let ch = channel[int](2)\n    scope work {\n        \
+         fan_out(work, ch)\n    }\n    let p = spawn proc square(3)\n    collect(p)\n}\n",
+    );
+}
+
+/// A bare `Proc` is an INCOMPLETE type, not a second one: the handle
+/// carries the value its join collects, so the argument is the
+/// difference between a handle you can join and a word you cannot.
+#[test]
+fn conc_handle_bare_proc_arity() {
+    snap_one(
+        "conc_handle_bare_proc_arity",
+        "fn watch(p: Proc) -> int {\n    0\n}\n\n\
+         fn main() -> !int {\n    0\n}\n",
+    );
+}
+
+/// The other direction: `Scope` names one thing and takes no argument.
+#[test]
+fn conc_handle_applied_scope_arity() {
+    snap_one(
+        "conc_handle_applied_scope_arity",
+        "fn fan_out(s: Scope[int]) -> int {\n    0\n}\n\n\
+         fn main() -> !int {\n    0\n}\n",
+    );
+}
+
+/// The completion type is load-bearing: a `Proc[int]` does not unify
+/// with a `Proc[str]`, which is the whole point of B21's ruling.
+#[test]
+fn conc_handle_completion_type_mismatch() {
+    snap_one(
+        "conc_handle_completion_type_mismatch",
+        "fn square(n: int) -> int {\n    n * n\n}\n\n\
+         fn take_str(p: Proc[str]) -> int {\n    0\n}\n\n\
+         fn main() -> !int {\n    let p = spawn proc square(3)\n    take_str(p)\n}\n",
+    );
+}

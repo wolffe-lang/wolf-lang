@@ -1,0 +1,37 @@
+//! check: run(exit=0, stdout="9")
+//! phase: run
+//! conforms: conc.proc.handle, conc.proc.join, conc.task.scope
+//!
+//! s170 (wolf-lang#316, BACKLOG B21's ruling) — the handle types have
+//! names, so `[conc.task.scope]`'s "a function that spawns into its
+//! caller's scope takes the handle as a parameter" is finally
+//! WRITABLE, and so is its proc twin. `Scope` takes no argument;
+//! `Proc[T]` carries the value its join collects.
+//!
+//! Both spellings were unspellable at 0.2.15: `Scope`/`Proc` were
+//! E0301 (no such name) and `scope`/`proc` were E0206 (a keyword in
+//! type position).
+
+fn square(n: int) -> int {
+    n * n
+}
+
+fn collect(p: Proc[int]) -> !int {
+    p.join()
+}
+
+fn fan_out(s: Scope, ch: channel[int]) {
+    s.spawn(fn() { ch.send(1) })
+}
+
+fn main() -> !int {
+    let ch = channel[int](2)
+    scope work {
+        fan_out(work, ch)
+    }
+    let seen = ch.recv() else |_| { return 1 }
+    let p = spawn proc square(3)
+    let v = collect(p) else |_| { return 1 }
+    if seen == 1 { print("{v}") } else { return 1 }
+    0
+}

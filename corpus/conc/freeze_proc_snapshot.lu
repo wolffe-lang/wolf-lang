@@ -1,0 +1,36 @@
+//! check: run(exit=0, stdout="2 2")
+//! phase: run
+//! conforms: conc.proc.arg, mem.region.freeze.1, conc.chan.imm
+//!
+//! s170 (wolf-lang#312) — wolf-book ch16 §16.4's snapshot block, as
+//! the chapter prints it. Two procs read ONE frozen list.
+//!
+//! At 0.2.15 the second `spawn proc` was `E1001: store is used here
+//! after its value moved away`: the mem tier evaluated a spawn
+//! argument as a bare value, which moves out of a place whatever the
+//! callee's parameter mode is — while the same two calls written as
+//! PLAIN calls compiled and printed `2 2`, because a `read`
+//! parameter's place is read, not moved. `[mem.region.freeze.1]` and
+//! `[conc.chan.imm]` both say frozen data is shared; the spawn
+//! surface now agrees with them.
+
+fn count(store: List[int], out: channel[int]) -> !int {
+    out.send(store.len)?
+    0
+}
+
+fn main() -> !int {
+    let out = channel[int](2)
+    let store = freeze region {
+        var xs = List[int]()
+        (mut xs).push(1)
+        (mut xs).push(2)
+        xs
+    }
+    let a = spawn proc count(store, out)
+    let b = spawn proc count(store, out)
+    let x = out.recv() else |_| { return 1 }
+    let y = out.recv() else |_| { return 1 }
+    print("{x} {y}")
+    0
+}
