@@ -224,8 +224,8 @@ fn schedules_explores_and_prints_root_seed() {
         "exploration prints its root seed:\n{err}"
     );
     assert!(
-        out.contains("[3 schedule(s)]"),
-        "the test detail names the exploration:\n{out}"
+        out.contains("[3 run(s), seed-blind: the checked machine]"),
+        "the test detail says what actually ran:\n{out}"
     );
 }
 
@@ -270,22 +270,39 @@ fn schedules_json_summary_carries_the_exploration_counts() {
         .find(|v| v["event"] == "summary")
         .expect("a summary event");
     assert_eq!(
-        summary["unexplored"], 1,
-        "the checked machine's seed-blind repetition is not exploration:\n{out}"
+        summary["unexplored"], 2,
+        "both of the fixture's tests ran seed-blind on the checked machine, \
+         and seed-blind repetition is not exploration:\n{out}"
     );
     assert_eq!(summary["explored"], 0, "{out}");
+    assert!(
+        !out.contains("schedule(s)"),
+        "a seed-blind repetition is not called a schedule:\n{out}"
+    );
 }
 
-/// A failure under exploration prints the seed and the copy-pasteable
-/// replay line — the X12 contract's front half.
+/// s170 (wolf-lang#159's X12 row), the half this test used to assert
+/// backwards: a `test_*` fn that FAILS under `--schedules=N` gets no
+/// replay seed, because nothing about it was seeded.
+///
+/// It used to get one — `replay: wolf test --replay=<derived seed>` —
+/// and running that command re-ran the same serial checked execution
+/// the seed had no part in. The X12 contract's "every finding carries
+/// its replay line" is a claim about findings the schedule explorer
+/// made; the native lane's replay line is pinned by
+/// `decimal_replay_states_its_native_scope` and by `conc_native.rs`.
 #[test]
-fn schedules_failure_prints_replay_line() {
+fn schedules_failure_on_the_checked_machine_offers_no_seed() {
     let dir = fixture("x12-fail", &[("f_test.lu", FAILING)]);
     let (code, out, _err) = run_test(&dir, &["--schedules=2"]);
-    assert_eq!(code, 1);
+    assert_eq!(code, 1, "the failing test still fails:\n{out}");
     assert!(
-        out.contains("replay: wolf test --replay="),
-        "every finding carries its replay command:\n{out}"
+        out.contains("test_breaks"),
+        "the failure is still reported by name:\n{out}"
+    );
+    assert!(
+        !out.contains("--replay="),
+        "a seed-blind run offers no reproduction seed:\n{out}"
     );
 }
 

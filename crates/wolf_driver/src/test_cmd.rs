@@ -578,41 +578,41 @@ pub fn test_cmd(args: &[String]) {
                     }
                 }
             } else if let Some(n) = schedules {
-                // Exploration (spec/07 [sched.flags]): N runs under
-                // derived seeds; the CI-checkable property is verdict
-                // stability. A varying verdict is a finding, and every
-                // finding carries its replay line.
-                let mut runs: Vec<(u64, Status, String, Option<_>)> = Vec::new();
-                for k in 0..u64::from(n) {
-                    let seed = derive_seed(root_seed, &qualified, k);
+                // s170 (wolf-lang#159's X12 row): repetition on the
+                // CHECKED machine, which is serial and seed-blind —
+                // the derived seed never reaches a scheduler, because
+                // there is no scheduler here ([sched.seed]). N runs
+                // are one run N times. Verdict stability across them
+                // is still worth asserting (a nondeterministic checked
+                // verdict is a bug in the checked machine), so the
+                // loop stays; what goes is the word "schedule" and
+                // the `--replay=` line, both of which promised a
+                // reproduction of something that was never varied.
+                let mut runs: Vec<(Status, String, Option<_>)> = Vec::new();
+                for _ in 0..u64::from(n) {
                     let (s, d, o) = run_once();
-                    runs.push((seed, s, d, o));
+                    runs.push((s, d, o));
                 }
-                let (seed0, s0, d0) = (runs[0].0, runs[0].1, runs[0].2.clone());
+                let (s0, d0) = (runs[0].0, runs[0].1.clone());
                 let divergence = runs
                     .iter()
-                    .find(|(_, s, d, _)| *s != s0 || *d != d0)
-                    .map(|(seed, _, d, _)| (*seed, d.clone()));
+                    .find(|(s, d, _)| *s != s0 || *d != d0)
+                    .map(|(_, d, _)| d.clone());
                 match divergence {
-                    Some((seed_div, d_div)) => (
+                    Some(d_div) => (
                         Status::Fail,
                         format!(
-                            "schedule divergence: seed {seed0} → {d0}, seed {seed_div} → \
-                             {d_div} — replay: wolf test --replay={seed_div} {display}"
+                            "verdict varies across identical runs: {d0} then {d_div} \
+                             — the checked machine is serial and seed-blind, so this \
+                             is nondeterminism in the checker, not a schedule"
                         ),
-                        runs.pop().and_then(|(_, _, _, o)| o),
+                        runs.pop().and_then(|(_, _, o)| o),
                     ),
-                    None => {
-                        let detail = if s0 == Status::Pass {
-                            format!("{d0} [{n} schedule(s)]")
-                        } else {
-                            format!(
-                                "{d0} [{n} schedule(s); replay: wolf test \
-                                 --replay={seed0} {display}]"
-                            )
-                        };
-                        (s0, detail, runs.swap_remove(0).3)
-                    }
+                    None => (
+                        s0,
+                        format!("{d0} [{n} run(s), seed-blind: the checked machine]"),
+                        runs.swap_remove(0).2,
+                    ),
                 }
             } else {
                 // s73: a main-shaped test the checked machine refuses
