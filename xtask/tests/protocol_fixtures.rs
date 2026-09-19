@@ -30,6 +30,51 @@ fn warnings_fixture_accepts_and_absence_never_diverges() {
     assert!(xtask::protocol::compare(&w, &plain, false).is_none());
 }
 
+/// `[proto.record.pass]` (s169): a full-ladder `pass` — the ladder
+/// completed clean and the lane executed nothing — validates, is not a
+/// divergence against a lane that DID execute, and is not coverage.
+#[test]
+fn a_clean_stop_validates_and_compares_against_a_run_as_nothing() {
+    let p = fixture("clean-stop.json");
+    assert!(xtask::protocol::validate_record(&p).is_ok());
+    assert!(!xtask::protocol::covered_at_run(&p), "`pass` is never coverage");
+    let mut ran = p.clone();
+    ran["phase_reached"] = serde_json::json!("run");
+    ran["verdict"] = serde_json::json!("exit(0)");
+    assert!(
+        xtask::protocol::compare(&p, &ran, false).is_none(),
+        "the passing side did not execute ([proto.cmp.pass])"
+    );
+    // But a REJECTION on the other side is a divergence, and that is
+    // the pair the amendment exists to expose.
+    let mut rejected = p.clone();
+    rejected["phase_reached"] = serde_json::json!("typecheck");
+    rejected["verdict"] = serde_json::json!("fail(E0401)");
+    rejected["diagnostics"] =
+        serde_json::json!([{"code": "E0401", "span": [0, 1], "severity": "error"}]);
+    assert!(
+        xtask::protocol::compare(&p, &rejected, false).is_some(),
+        "one side accepted the program and the other rejected it"
+    );
+}
+
+/// `[proto.record.trap]` (s169): additive, honest-absent, never
+/// compared.
+#[test]
+fn a_trap_message_validates_and_never_diverges() {
+    let m = fixture("with-trap-message.json");
+    assert!(xtask::protocol::validate_record(&m).is_ok());
+    let mut silent = m.clone();
+    silent.as_object_mut().unwrap().remove("trap_message");
+    assert!(xtask::protocol::compare(&m, &silent, false).is_none());
+    let mut other = m.clone();
+    other["trap_message"] = serde_json::json!("some other wording entirely");
+    assert!(
+        xtask::protocol::compare(&m, &other, false).is_none(),
+        "wording is not comparison surface"
+    );
+}
+
 #[test]
 fn wrong_version_rejects() {
     assert!(xtask::protocol::validate_record(&fixture("wrong-version.json")).is_err());
