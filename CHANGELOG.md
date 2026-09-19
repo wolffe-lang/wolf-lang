@@ -2,6 +2,125 @@
 
 ## Unreleased
 
+### The record could not say a program was fine
+
+**`conform-run`'s default lane answered `unsupported` for every clean
+program** (#150, #343, and #32 closed into the first). The word means
+one thing in the protocol — `[proto.record.unsupported]`, "a construct
+in this program is outside my scope", the conservatism ledger — and the
+default lane used it for something else entirely: the static ladder
+completed, the lowering was clean, and this lane has no execution
+engine. Four repos read that record as the compiler's answer about a
+program, and the misreading was already load-bearing: wolf-book's
+sample runner carries the workaround in its own source ("the bare
+verdict is useless here — `unsupported` is also what a perfectly good
+program reports"), and wolf-lang#343 filed six clean slice lowerings as
+a lowering gap on the strength of it.
+
+**Three facts, three verdicts, from s169.** `fail(CODE)` is the
+language declining a program; `unsupported` is this implementation's
+coverage not reaching a construct, named in `x-unsupported-construct`;
+and `pass` (`[proto.record.pass]`, new) is the ladder's clean stop —
+the compiler has no complaint and this lane executed nothing.
+
+**#343 was answered by measuring, not by lowering slices.** All five
+`List` slice forms and the `str` slice lower CLEAN at 0.2.15 — no
+refusal keys, empty stderr — and reach `exit(0)` on the checked and
+native lanes. The verdict they drew was the verdict `print("hello")`
+drew. The issue's two options (lower slices, or distinguish the two
+facts) were both wrong, because the fact the witness actually hit was a
+third one nobody had named.
+
+**The comparison rule is exactly one verdict wide** (`[proto.cmp.pass]`).
+`pass` against `exit`/`trap`/`ub` on a full-ladder run is not a
+divergence — the passing side did not execute. `pass` against
+`fail(CODE)` **is**, and that pair was invisible before: `unsupported`
+on either side is excused, so a lane that accepted a program while the
+counterparty rejected it compared as agreement. The amendment opens a
+hole rather than widening one. `xtask lane-coverage` gates the
+invariant over the whole corpus: no default-lane record may spell a
+clean lowering `unsupported` at `wir` again.
+
+### A trap's own words, and where it happened
+
+**`trap_message`** (`[proto.record.trap]`, additive within protocol 1).
+`[conf.trap.assert]` has always evaluated `assert(cond, msg)`'s second
+argument on the failing path; the checked machine evaluated it and
+dropped it, so the only channel a runner had for a program's own words
+about its fault was `stdout_inline` — the field that carries the
+program's OUTPUT. It is never compared: wording is a per-implementation
+quality concern (`[proto.record.diag]`'s rule), and an implementation
+the clause permits to drop the message must not become a divergence for
+doing so. Beside it, `x-trap-pos` gives the trap site as `line:col`
+next to `x-trap-span`'s bytes — the native tier has printed `at
+<file>:<line>:<col>` since s125 and a record reader had offsets and no
+source to resolve them against.
+
+### The exit status, ruled
+
+**`[conf.exit]`** (#32, re-opened inside #150 and closed into it). s125
+ruled the TRAP status and left every other class to habit, so `wolf`
+and `lupin` disagreed on the class a reader meets first. Now: a
+rejection is **2** and a refusal **4** on every implementation; the
+trap keeps `[conf.trap.exit]`'s per-implementation numbers, because
+134 is forced by a platform convention and 2 and 4 are forced by
+nothing.
+
+wolf spelled both **1**, and 1 is what a program that RAN and returned
+an error out of `main` exits with. The cost was measured, not
+hypothetical: wolf-book's sample runner carried `run(exit=1)` fences
+green across **four pin bumps** for two programs the compiler never
+built (`book/ch15/s5`, `ch15/ex15-2`), and had to add a check that
+greps this driver's closing prose to tell the two apart. wolf also
+spelled "your program is illegal" and "I cannot compile this yet" the
+same number; lupin already answered 2 and 4 and does not move. The
+status is not injective — a program may `return 2` — and the clause
+says so: the guarantee is that a rejection or refusal never exits 0 or
+1, and a harness that needs the question answered exactly reads the
+record, which is what the record is for.
+
+### The warning gate reaches the repo that wanted it
+
+**`--deny-warnings` on `conform-run`** (#49). The flag was on `build`,
+`test` and `doc`, and wolf-std consumes the toolchain through
+`conform-run` and the record ALONE — so the gate existed and the one
+repo asking for it could not reach it. A promoted warning is a
+`severity: "error"` diagnostic and the verdict is `fail(CODE)` **at the
+rung whose analysis warned**, not a note appended to a `pass`. The
+manifest's `lints.*` rules stay unread here, deliberately: a record has
+to be reproducible from the file and the command line, because that is
+all the counterparty is given. The source `#[allow]` attribute is a
+different thing and still wins — it is part of the program.
+
+**#49's second half is a different defect than it was filed as, and
+the correction is recorded rather than the ask.** The `warnings` array
+is NOT entry-file-only: measured at 0.2.15, a `0.0 - x` in a sibling
+module lands in the entry's record as `W0402` with the sibling's span.
+Why std's own forty sites never warn is `wolf_sema::wave`'s deliberate
+exemption — `check_file` and `check_typed_body` both return early for
+any module under `std`, with the stated reason that a user cannot act
+on a warning inside a library file. That reason is right for a
+consumer and exactly wrong for the library's author, which is the real
+shape of the ask; it is filed with the mechanism named, because a fix
+aimed at "collect from every module" would have changed nothing.
+
+### `wolf test` tells a red suite from a broken one
+
+**`REJECTED (does not compile)`** (#157). A file the compiler rejected
+never ran, so it found nothing, so it is not a failing test — and
+`wolf test` spelled both `FAILED (does not compile)` in one column
+through three pins of wolf-book's ch18 ledger. The report and the
+`wolf-test/0` JSON now carry a fourth status and a fourth counter; the
+exit status is unchanged, since a non-passing row was always red
+(`[conf.exit.test]`). A DOCTEST that does not compile stays `FAILED`,
+and that is not an inconsistency: compiling is what a doctest asserts
+and only a precondition for a test file.
+
+**`wolf test` honours `--error-limit`** (#75). `build` and `run` have
+capped their reports since s63; this surface printed every diagnostic a
+wrecked module could produce, which is the terminal-scrolling the cap
+exists to prevent.
+
 ### The checked machine answered a question wrongly, and said nothing
 
 **A call through a fn-typed parameter reached a top-level fn of the
