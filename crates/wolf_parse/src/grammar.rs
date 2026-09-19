@@ -1863,10 +1863,69 @@ fn type_general(p: &mut Parser<'_>, postfix_row: bool) -> bool {
     true
 }
 
+/// E0206 at `span`, with the one help line the concurrency keywords
+/// earn (s170, wolf-lang#316).
+///
+/// `proc` and `scope` are keywords, so `fn watch(p: proc)` has always
+/// died in the PARSER with "expected a type" and no further advice —
+/// and until s170 there was no advice to give, because the two handle
+/// kinds had no type name at all. They do now, so the refusal names
+/// them. The note is deliberately not "did you mean `Proc`": a proc
+/// handle's type carries the value its `join` collects
+/// (wolf-lang#110), so the spelling a reader needs is `Proc[int]`,
+/// not `Proc` — which is why the book's ch14 row (#157) asked for a
+/// help line that would have been wrong as written.
+fn expected_type_here(p: &mut Parser<'_>, span: Span) {
+    let handle = match p.current() {
+        TokenKind::Kw(Keyword::Proc) => Some((
+            "proc",
+            "Proc[T]",
+            "a proc handle is `Proc[T]`, T being the value its `join` collects \
+             ([conc.proc.exit]'s `normal(value)`): `fn watch(p: Proc[int])`. The \
+             lowercase `proc` is the spawn keyword — `spawn proc f(…)` — and is \
+             not a type name.",
+        )),
+        TokenKind::Kw(Keyword::Scope) => Some((
+            "scope",
+            "Scope",
+            "a scope handle is `Scope`: `fn fan_out(s: Scope)`. Scope handles are \
+             ordinary values (D16, [conc.task.scope]), so a function that spawns \
+             into its caller's scope takes one as a parameter. The lowercase \
+             `scope` is the block keyword — `scope name { … }` — and is not a \
+             type name.",
+        )),
+        _ => None,
+    };
+    match handle {
+        Some((kw, spelled, note)) => {
+            let applicability = if spelled.contains('[') {
+                // `Proc[T]` leaves T for the reader — the completion
+                // type is a fact about the callee, not a rewrite the
+                // parser can perform.
+                wolf_diag::Applicability::HasPlaceholders
+            } else {
+                wolf_diag::Applicability::MachineApplicable
+            };
+            p.push_diag(
+                wolf_diag::Diagnostic::error(codes::EXPECTED_TYPE, span, "expected a type")
+                    .with_label(format!("`{kw}` is a keyword, not a type name"))
+                    .with_note(note.to_string())
+                    .with_suggestion(wolf_diag::Suggestion::new(
+                        format!("write the handle type `{spelled}`"),
+                        vec![(span, spelled.to_string())],
+                        applicability,
+                    )),
+            );
+        }
+        None => p.error(codes::EXPECTED_TYPE, span, "expected a type"),
+    }
+}
+
 /// [`type_`], diagnosing E0206 + Missing when no type can start here.
 pub(crate) fn type_required(p: &mut Parser<'_>) {
     if !type_(p) {
-        p.error(codes::EXPECTED_TYPE, p.here(), "expected a type");
+        let here = p.here();
+        expected_type_here(p, here);
         p.missing();
     }
 }
@@ -1875,7 +1934,8 @@ pub(crate) fn type_required(p: &mut Parser<'_>) {
 /// [`ret_type`] parses the `! {row}` tail itself.
 fn type_required_no_row(p: &mut Parser<'_>) {
     if !type_general(p, false) {
-        p.error(codes::EXPECTED_TYPE, p.here(), "expected a type");
+        let here = p.here();
+        expected_type_here(p, here);
         p.missing();
     }
 }
@@ -1902,7 +1962,8 @@ fn paren_type_list(p: &mut Parser<'_>) {
         }
         let before = p.pos();
         if !type_(p) {
-            p.error(codes::EXPECTED_TYPE, p.current_span(), "expected a type");
+            let at = p.current_span();
+            expected_type_here(p, at);
             p.recover_until(true, |k| {
                 matches!(k, TokenKind::Punct(Punct::Comma | Punct::RParen))
             });

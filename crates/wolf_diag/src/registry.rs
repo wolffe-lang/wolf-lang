@@ -352,6 +352,13 @@ possibly applied (`List[int]`), or one of the prefixed forms `*T`,
 `fn(…) -> T` ([gram.type]). The token found here cannot begin any of
 those. If you deleted a type mid-edit, the `:` or `->` in front of it
 is now dangling — remove it or complete the type.
+
+The concurrency keywords are the common near-miss: `proc` and `scope`
+start a `spawn proc f(…)` expression and a `scope name { … }` block,
+and neither is a type name. The handles they produce ARE types, with
+capitalised spellings — `Proc[T]` for a proc handle (T is the value
+its `join` collects) and `Scope` for a scope handle — so
+`fn watch(p: proc)` is written `fn watch(p: Proc[int])`.
 "#);
 
 code!(E0207, "expected a pattern", r#"

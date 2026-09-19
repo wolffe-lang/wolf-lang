@@ -43,3 +43,7 @@ SourceFile 897..949
   Eof 949..949 ""
 == diagnostics ==
 E0206 [Error] 931..935 expected a type
+    label `proc` is a keyword, not a type name
+    note a proc handle is `Proc[T]`, T being the value its `join` collects ([conc.proc.exit]'s `normal(value)`): `fn watch(p: Proc[int])`. The lowercase `proc` is the spawn keyword — `spawn proc f(…)` — and is not a type name.
+    help [HasPlaceholders] write the handle type `Proc[T]`
+        edit 931..935 -> "Proc[T]"
