@@ -2471,6 +2471,36 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
     }
 }
 
+/// `[conf.exit]` (s169, wolf-lang#32 closed into #150): the front
+/// door's process status names the OUTCOME CLASS of the command.
+///
+/// - a **rejection** — the program is illegal — is `EXIT_REJECTED`,
+/// - a **refusal** — the compiler cannot lower it yet — is
+///   `EXIT_REFUSED`,
+/// - a **tool error** — no file, bad flag, no linker — is
+///   `EXIT_TOOL_ERROR`.
+///
+/// Until s169 wolf spelled all of the first two `1`, and `1` is what a
+/// program that RAN and returned an error out of `main` exits with.
+/// The cost was measured, not hypothetical: wolf-book's sample runner
+/// carried `run(exit=1)` fences green across four pin bumps for two
+/// programs the compiler never built (bs46, `book/ch15/s5` and
+/// `ch15/ex15-2`), and had to add a check that greps this very
+/// function's closing prose to tell a compile failure from a run.
+///
+/// The reference interpreter already answered 2 and 4; these are the
+/// same numbers, which is the point of a clause rather than a habit.
+const EXIT_REJECTED: i32 = 2;
+/// `[conf.exit.refused]` — the conservatism ledger's status. "Your
+/// program is illegal" and "I cannot compile this yet" are different
+/// facts with different owners and wolf spelled both `1`.
+const EXIT_REFUSED: i32 = 4;
+/// `[conf.exit.class]` — the tool could not do the job at all. Shares
+/// its number with a rejection deliberately, exactly as the reference
+/// interpreter's does: both mean "the program did not get to run", and
+/// stderr says which.
+const EXIT_TOOL_ERROR: i32 = 2;
+
 fn report_build_stop(cmd: &str, stop: BuildStop) -> ! {
     match stop {
         BuildStop::Errors(first) => {
@@ -2488,18 +2518,18 @@ fn report_build_stop(cmd: &str, stop: BuildStop) -> ! {
                 None => "`wolf --explain E####` explains any code by name".to_string(),
             };
             eprintln!("wolf {cmd}: the package does not compile; fix the errors above ({explain})");
-            std::process::exit(1);
+            std::process::exit(EXIT_REJECTED);
         }
         BuildStop::Refused { phase, reason } => {
             eprintln!(
                 "wolf {cmd}: cannot compile this yet — {reason} (pipeline is honest \
                  through `{phase}`; the conservatism ledger, not a bug in your program)"
             );
-            std::process::exit(1);
+            std::process::exit(EXIT_REFUSED);
         }
         BuildStop::Environment(msg) => {
             eprintln!("wolf {cmd}: {msg}");
-            std::process::exit(2);
+            std::process::exit(EXIT_TOOL_ERROR);
         }
     }
 }
