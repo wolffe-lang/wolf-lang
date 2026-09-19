@@ -1705,6 +1705,14 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
     // the loud SKIP, never a silent green — and never a floor failure
     // blamed on a lane that could not run.
     let mut dark: BTreeSet<&str> = BTreeSet::new();
+    // s169's invariant ([proto.record.pass]). The default lane's clean
+    // stop is `pass`; `wir`/`unsupported` is the spelling that said
+    // "a construct in this program is outside my scope" about every
+    // clean program in the corpus, and nothing may bring it back. It
+    // is checked here and not in a unit test because the corpus is the
+    // only place the claim is worth anything: a unit test asserts one
+    // program, this asserts every one we have.
+    let mut clean_called_unsupported: Vec<String> = Vec::new();
     for f in &files {
         let key = f.display().to_string();
         for (lane, flag) in RUN_LANES {
@@ -1727,6 +1735,9 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
                         "phase_reached": obs.phase, "verdict": obs.verdict,
                     });
                     cov.observe(lane, &key, &rec);
+                    if *lane == "default" && obs.phase == "wir" && obs.verdict == "unsupported" {
+                        clean_called_unsupported.push(key.clone());
+                    }
                     per_file.entry(key.clone()).or_default().insert(lane, obs);
                 }
                 Err(LaneStop::Environment(e)) => {
@@ -1855,6 +1866,18 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
 
     // The ratchet. Coverage may rise and may not fall.
     let mut fell = false;
+    if !clean_called_unsupported.is_empty() {
+        eprintln!(
+            "lane-coverage: {} default-lane record(s) spell a CLEAN LOWERING `unsupported` at \
+             `wir` — [proto.record.pass] says `pass`; `unsupported` is a claim about the \
+             PROGRAM and there is nothing wrong with these:",
+            clean_called_unsupported.len()
+        );
+        for f in &clean_called_unsupported {
+            eprintln!("lane-coverage:   {f}");
+        }
+        fell = true;
+    }
     for (lane, floor) in LANE_FLOORS {
         let n = cov.lane(lane);
         if below_floor(n, *floor) {
