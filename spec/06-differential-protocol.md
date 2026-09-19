@@ -52,9 +52,43 @@ One JSON object on stdout. Schema (`"protocol": 1`):
   `exit(0-255)` and the program wrote output; `stdout_inline` is
   included up to 4096 bytes, the hash always.
 - `[proto.record.verdict]` `verdict` is one of:
-  `pass` (stopped at requested phase, clean), `fail(CODE)` (rejected;
+  `pass` (the ladder stopped clean and nothing executed —
+  `[proto.record.pass]`), `fail(CODE)` (rejected;
   first diagnostic's code), `exit(N)`, `trap(kind)` (kind per
   `[conf.trap.set]`), `ub(anchor)`, `unsupported`.
+- `[proto.record.pass]` `pass` is the ladder's CLEAN STOP: every rung
+  through `phase_reached` completed and found nothing to report, and
+  nothing was executed. It arises two ways and they are one fact —
+  the run stopped at an explicit `--phase=<p>`, or the run named no
+  phase and reached the deepest rung THIS LANE implements. An
+  implementation (or a lane of one) whose deepest rung is static
+  answers `pass` there. (Amended 2026-09-18, s169 — wolf-lang#150 and
+  #343.)
+
+  **`pass` is not `unsupported`, and that distinction is the clause's
+  whole content.** `unsupported` is a statement about the PROGRAM:
+  this implementation's coverage does not reach a construct in it, and
+  `[proto.record.unsupported]` files it in the conservatism ledger.
+  `pass` is a statement about the RUN: the implementation has no
+  complaint about the program, and this lane executes nothing. A third
+  fact, `fail(CODE)`, is the language declining the program. Three
+  facts, three verdicts.
+
+  Before s169 wolfgang's default lane spelled the first and the second
+  the same way — `unsupported` at `wir` — so no reader could tell a
+  scope gap from a clean program, and wolf-book's sample runner had
+  written the workaround into its own source ("the bare verdict is
+  useless here — `unsupported` is also what a perfectly good program
+  reports"). The witness that forced the amendment is wolf-lang#343,
+  filed as five `List` slice forms and a `str` slice the reference
+  lowering supposedly did not cover: measured at 0.2.15 all six lower
+  CLEAN (no `x-unsupported-construct`, empty stderr) and run to
+  `exit(0)` on the checked and native lanes. The verdict was never
+  about slices.
+
+  `pass` carries no program outcome. It is never coverage
+  (`[proto.cmp.coverage]`), never carries `stdout_sha256`, and a lane
+  that answers `pass` has compared nothing dynamically.
 - `[proto.record.diag]` Diagnostics carry `{code, span, severity}` —
   byte-offset half-open spans (s07's byte-exact contract). **Messages
   are never part of the protocol** (D22: wording is a per-implementation
@@ -67,7 +101,34 @@ One JSON object on stdout. Schema (`"protocol": 1`):
 - `[proto.record.unsupported]` `unsupported` is a legal verdict: the
   feature is outside this implementation's current scope. Excluded from
   divergence counting; reported in the **conservatism ledger** so scope
-  gaps stay visible, never silent.
+  gaps stay visible, never silent. It is a claim about the program's
+  CONSTRUCTS and never about the lane's engines: a lane that completed
+  its ladder clean and simply does not execute answers `pass`
+  (`[proto.record.pass]`), never `unsupported`. An implementation that
+  can name the refused construct SHOULD, as `x-unsupported-construct`
+  (`[proto.record.ext]`) — a bare `unsupported` costs its reader a
+  bisect.
+- `[proto.record.trap]` `trap_message` (added s169, additive within
+  `"protocol": 1` — validators accept records with or without it) is
+  the human text the PROGRAM supplied for its own fault: today exactly
+  the second argument of `assert(cond, msg)` (`[conf.trap.assert]`),
+  evaluated only on the failing path. Present only on a `trap(kind)`
+  verdict and only where the implementation holds the text;
+  honest-absent otherwise.
+
+  **It is never compared.** `[proto.record.diag]` rules that wording is
+  a per-implementation quality concern and the same rule governs here,
+  with one difference worth stating: this wording is the *program's*,
+  not the implementation's, so two conforming implementations will
+  usually agree — and the protocol still declines to require it,
+  because an implementation that drops the message
+  (`[conf.trap.assert]` permits that until formatting lands) must not
+  become a divergence for it.
+
+  It exists because `stdout_inline` was the only channel a runner had
+  for a trap's message, which is the program's OUTPUT field — so a
+  runner either read a program's own words out of its output stream or
+  went without (wolf-lang#150, wolf-book ch21/ch27).
 - `[proto.record.warn]` `warnings` (added s67, additive within
   `"protocol": 1` — validators accept records with or without it) is
   the warning observations as `{code, span}` entries: every
@@ -133,7 +194,32 @@ One JSON object on stdout. Schema (`"protocol": 1`):
   and `seeded` is false on either side; unspecified layout observations
   (Tier-3 address inspection); diagnostic count beyond the first;
   `x-` keys absent on one side; the `warnings` array absent on one side;
+  `trap_message` on either side (`[proto.record.trap]`);
   `unsupported` on either side.
+- `[proto.cmp.pass]` `pass` on a FULL-LADDER run (added s169). On a run
+  that named no `--phase`, a side reporting `pass`
+  (`[proto.record.pass]`) against a DYNAMIC verdict — `exit`, `trap`,
+  `ub` — is **never a divergence**: the passing side stopped without
+  executing, so the two records are not two answers to one question.
+  Everything else `pass` can meet on a full-ladder run **is** compared,
+  and the carve-out is exactly one verdict class wide:
+
+  - `pass` against `fail(CODE)` **is a divergence** (verdict-mismatch
+    class). One implementation completed the static ladder clean and
+    the other rejected the program statically; that is a disagreement
+    about the language, and it is the disagreement the protocol most
+    wants to see. Note what this buys: before s169 wolfgang answered
+    `unsupported` here, which the clause above excuses on either side,
+    so this pair was invisible. The amendment does not only rename a
+    verdict — it **opens a hole the old spelling kept shut**.
+  - `pass` against `pass` agrees, at whatever rungs the two lanes
+    stopped (`[proto.cmp.rung]`'s reasoning: where a lane runs out of
+    engine is an architecture fact).
+  - `pass` against `unsupported` is not a divergence, by the clause
+    above.
+
+  At an explicit `--phase=<p>` nothing changes: `[proto.cmp.rung]`'s
+  last sentence already rules `pass` there, and it still rules it.
 - `[proto.cmp.coverage]` Coverage, the conservatism ledger's sibling
   (s82, wolf-lang#90). A report states, per lane and as their **union**,
   how many corpus entries the lane *executed*: `phase_reached` is `run`
