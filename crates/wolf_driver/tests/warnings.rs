@@ -144,6 +144,70 @@ fn conform_run_record_carries_the_warnings_array() {
     assert_eq!(rec["diagnostics"].as_array().map(Vec::len), Some(0));
 }
 
+/// s169 (#49, wolf-std F-0046/F-0053). `--deny-warnings` is on
+/// `build`, `test` and `doc`, and wolf-std consumes the toolchain
+/// through `conform-run` and the record ALONE — so the gate existed
+/// and the one repo that wanted it could not reach it.
+///
+/// The promotion is a REJECTION, and it lands at the rung whose
+/// analysis produced the warning: `fail(CODE)` at `typecheck` for a
+/// typed-wave lint, not a note bolted onto a `pass` at the end.
+#[test]
+fn conform_run_honours_deny_warnings_and_rejects_at_the_warning_rung() {
+    let dir = fixture("warn-deny-record", WARNY);
+    let record = |extra: &[&str]| -> serde_json::Value {
+        let out = Command::new(wolf())
+            .arg("conform-run")
+            .arg(dir.join("main.lu"))
+            .arg("--json")
+            .args(extra)
+            .output()
+            .expect("run conform-run");
+        assert!(
+            out.status.success(),
+            "[proto.invoke.exit]: a record means exit 0, stderr:\n{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        serde_json::from_slice(&out.stdout).expect("observation record parses")
+    };
+
+    // Unflagged: a warning, and the program is otherwise fine.
+    let plain = record(&[]);
+    assert_eq!(plain["verdict"], "pass", "{plain}");
+    assert_eq!(plain["warnings"].as_array().map(Vec::len), Some(1), "{plain}");
+
+    // Denied: the same observation is now an error, the verdict is a
+    // rejection, and it reports the rung that found it.
+    let denied = record(&["--deny-warnings"]);
+    assert_eq!(denied["verdict"], "fail(E0802)", "{denied}");
+    assert_eq!(denied["phase_reached"], "typecheck", "{denied}");
+    assert_eq!(
+        denied["diagnostics"][0]["severity"], "error",
+        "the promotion is visible in the record, not only in the verdict: {denied}"
+    );
+    assert_eq!(
+        denied["warnings"].as_array().map(Vec::len),
+        Some(0),
+        "a promoted warning is no longer a warning observation ([proto.record.warn]): {denied}"
+    );
+
+    // The source attribute still wins: it is part of the program, and
+    // the flag is a consumer's configuration.
+    let allowed = fixture("warn-deny-allowed", ALLOWED);
+    let out = Command::new(wolf())
+        .arg("conform-run")
+        .arg(allowed.join("main.lu"))
+        .arg("--json")
+        .arg("--deny-warnings")
+        .output()
+        .expect("run conform-run");
+    let rec: serde_json::Value = serde_json::from_slice(&out.stdout).expect("record parses");
+    assert_eq!(
+        rec["verdict"], "pass",
+        "`#[allow]` is the program's own and survives --deny-warnings: {rec}"
+    );
+}
+
 #[test]
 fn fix_applies_machine_applicable_edits_idempotently() {
     let dir = fixture(
