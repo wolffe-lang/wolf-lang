@@ -107,14 +107,20 @@ argv. The exit code is the program's.",
         name: "test",
         group: Group::Code,
         summary: "discover and run `*_test.lu` files",
-        usage: &["test [<dir>|<file.lu>]… [--std-root <dir>] [--deny-warnings]"],
+        usage: &[
+            "test [<dir>|<file.lu>]… [--std-root <dir>] [--deny-warnings]",
+            "[--error-limit=N]",
+        ],
         about: "\
 No registration and no life-before-main: a file whose name ends
 `_test.lu` is a test file, and each of its top-level zero-parameter
 `fn test_*` is one test, run in declaration order in a fresh machine. A
 test file with no `test_*` but a `main` runs black-box as one test.
-Exit codes: 0 every test passed, 1 any failed or was refused, 2 a usage
-or environment error.",
+
+A row is `ok`, `FAILED` (it ran and found something), `REJECTED` (the
+compiler rejected the file, so it never ran) or `unsupported` (the
+checked machine refused a construct). Exit codes: 0 every test passed,
+1 any row was not `ok`, 2 a usage or environment error.",
     },
     Cmd {
         name: "fmt",
