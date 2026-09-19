@@ -278,6 +278,80 @@ read-mode write barrier, D39), `region-fault`
   message. (Appended 2026-08-10, wolf-std F-0009 / issue #9, contract
   F4.)
 
+## §3a Front-door exit status `[conf.exit]`
+
+(Added 2026-09-18, s169 — wolf-lang#32, re-opened inside #150 and
+closed into it. `[conf.trap.exit]` ruled the TRAP status in s125 and
+left every other class unruled, so the book's exit-code table had to be
+scoped to one implementation and `wolf` and `lupin` disagreed on the
+one class a reader meets first.)
+
+A **front door** is a command that takes a program and does something
+with it for a person: `wolf build`, `wolf run`, `wolf test`, `lupin
+<file>`, `lupin run`, `lupin check`, `lupin eval`. `conform-run` is
+NOT a front door — there the outcome is the record's and the tool
+still exits 0 (`[proto.invoke.exit]`), which is the escape hatch every
+clause below points at.
+
+- `[conf.exit.class]` A front door's process status names the OUTCOME
+  CLASS of the command, and the classes are:
+
+  | class | status | why |
+  |---|---|---|
+  | the program ran and exited `N` | `N` | the program's own answer, passed through |
+  | the program ran and trapped, or the oracle found UB | `[conf.trap.exit]` | already ruled per implementation: native **134**, reference interpreter **3** |
+  | the program was **rejected** — `fail(CODE)`, a static diagnostic | **2** | it never ran |
+  | the program was **refused** — `unsupported`, outside this implementation's scope | **4** | it never ran, and it is not the program's fault |
+  | the tool could not do the job — no such file, bad flag, no linker | **2** | it never ran |
+  | a `--phase` stop with nothing to report (`pass`) | **0** | |
+
+  **2 and 4 are normative and the same on every implementation.** They
+  are the two classes that are purely a driver's choice — no platform
+  convention forces either number, unlike the trap's 134 — so there is
+  no honest reason for two implementations to disagree about them, and
+  `[conf.trap.exit]`'s "documented fact, not comparison surface" is
+  not a licence to leave them divergent.
+
+- `[conf.exit.static]` **A rejection is 2, never 1.** At the ruling
+  `lupin` already exited 2 (`EXIT_STATIC`, documented "this program did
+  not get to run") and `wolf build`/`wolf run` exited **1**, which is
+  the status a program that RAN and returned an error out of `main`
+  exits with. The two were indistinguishable at the process level, and
+  the cost is measured, not hypothetical: wolf-book's sample runner
+  carried `run(exit=1)` fences green across **four pin bumps** for
+  programs the compiler never built (`book/ch15/s5`, `ch15/ex15-2`,
+  bs46), and had to add a check that greps the driver's own closing
+  prose to tell the two apart. wolf moves to 2; lupin does not move.
+
+- `[conf.exit.refused]` **A refusal is 4, never a rejection's number.**
+  "Your program is illegal" and "I cannot compile this yet" are
+  different facts with different owners — the second is the
+  conservatism ledger (`[proto.record.unsupported]`) and names a gap in
+  the implementation. `wolf` spelled both `1` at the ruling; the
+  reference interpreter already spelled them 2 and 4.
+
+- `[conf.exit.collide]` **The status is not injective and no clause
+  pretends otherwise.** A program is free to `return 2` or `return 4`,
+  and then a status alone cannot say whether it ran. The guarantee is
+  one-directional and it is the useful direction: **a rejection or a
+  refusal NEVER exits 0 or 1**, so the statuses a passing or
+  error-returning program produces are clear of them, and the two
+  cases that cost the book its false greens cannot recur. A harness
+  that must decide the question exactly reads `conform-run`'s record,
+  where the verdict is data and not a number
+  (`[proto.invoke.exit]`, `[proto.record.verdict]`) — that is what the
+  record is for, and a harness distinguishing outcomes by grepping a
+  driver's prose is a harness owed this clause.
+
+- `[conf.exit.test]` `wolf test` and `lupin`'s test surfaces are the
+  one exception, and it is not an exception to the rule but an
+  application of it: their job is to RUN a report, and a report that
+  ran and contains failures is the command succeeding at its job with
+  a failing result — status **1**. A test file that does not compile
+  is one failing row (`FAILED (does not compile)`), not a rejection of
+  the command. A test runner exits 2 only when it could not produce a
+  report at all.
+
 ## §4 Coverage `[conf.cover]`
 
 - `[conf.cover.report]` `cargo xtask conformance` reports: anchors with
