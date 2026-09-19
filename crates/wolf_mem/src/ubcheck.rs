@@ -182,6 +182,16 @@ pub struct TrapInfo {
     pub kind: &'static str,
     pub clause: &'static str,
     pub span: Span,
+    /// The PROGRAM's own words for this fault, when it wrote any:
+    /// today exactly `assert(cond, msg)`'s second argument, evaluated
+    /// on the failing path and only there (`[conf.trap.assert]`).
+    ///
+    /// s169 ([proto.record.trap], wolf-lang#150). The machine already
+    /// evaluated this string — it has to, the clause says the message
+    /// is evaluated on the failing path — and then dropped it on the
+    /// floor, so every runner reading a record saw `trap(assert)` and
+    /// nothing else. `None` is honest-absent, never an empty string.
+    pub message: Option<String>,
 }
 
 /// The outcome of one checked execution.
@@ -1216,7 +1226,29 @@ impl<'t> Machine<'t> {
     }
 
     fn trap<T>(&self, kind: &'static str, clause: &'static str, span: Span) -> E<T> {
-        Err(Stop::Trap(TrapInfo { kind, clause, span }))
+        Err(Stop::Trap(TrapInfo {
+            kind,
+            clause,
+            span,
+            message: None,
+        }))
+    }
+
+    /// [`Machine::trap`] carrying the program's own message for the
+    /// fault (s169, `[proto.record.trap]`).
+    fn trap_with<T>(
+        &self,
+        kind: &'static str,
+        clause: &'static str,
+        span: Span,
+        message: Option<String>,
+    ) -> E<T> {
+        Err(Stop::Trap(TrapInfo {
+            kind,
+            clause,
+            span,
+            message,
+        }))
     }
 
     /// The origin governing a subscript spelled at `site` (D61,
@@ -7389,12 +7421,24 @@ impl<'t> Machine<'t> {
                 {
                     let x = val!(self.eval(v));
                     if !matches!(x, Value::Bool(true)) {
+                        // s169: the message was ALREADY evaluated here
+                        // and then discarded. Keeping it is the whole
+                        // of `trap_message` ([proto.record.trap]) —
+                        // the evaluation order is untouched, so a
+                        // message with an effect still has it exactly
+                        // once and only on the failing path.
+                        let mut message = None;
                         for a in rest {
                             if let Some(m) = Arg::value(a) {
-                                val!(self.eval(m));
+                                let v = val!(self.eval(m));
+                                if message.is_none()
+                                    && let Value::Str(s) = v
+                                {
+                                    message = Some(s);
+                                }
                             }
                         }
-                        return self.trap("assert", "mem.ub.defined", e.span);
+                        return self.trap_with("assert", "mem.ub.defined", e.span, message);
                     }
                 }
                 return Ok(Flow::Val(Value::Unit));
