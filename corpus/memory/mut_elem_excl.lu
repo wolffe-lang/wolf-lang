@@ -1,0 +1,24 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.1, mem.model.place, mem.model.path.disjoint
+//!
+//! s168 — the first leg of the exclusivity story an element lend
+//! rests on. `[mem.model.place]` collapses EVERY element of a
+//! container to one opaque projection, so `xs[0]` and `xs[1]` are the
+//! same place as far as the model is concerned and the second claim
+//! is E1002 on both lanes. Element-granular disjointness is a
+//! non-target (s18), and lending addresses into a buffer is exactly
+//! the reason it should stay one: a callee that could reach two
+//! elements could reach the header between them.
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 1
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    add2(mut xs[0], mut xs[1])     // ERROR E1002: one opaque element place
+    print("{xs[0]}")
+    0
+}

@@ -1,0 +1,37 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.1, mem.model.order, mem.model.place
+//!
+//! s168 — the second leg, and the one that was actually missing. A
+//! `mut` argument is exclusive for the WHOLE call, and the arguments
+//! spelled after it are evaluated INSIDE that claim
+//! ([mem.model.order]). D39's rule already caught a bare read there
+//! (`f(mut a, a.x)`); a nested CALL claiming the same place was not
+//! checked at all.
+//!
+//! Measured before the check existed, with the element lend landed:
+//! the native lane minted the element's address for argument one, the
+//! nested call grew the list and freed the buffer under it, and the
+//! program printed `1` where the checked machine printed `6`. No
+//! diagnostic on either lane. The lend is only sound because this is
+//! rejected.
+
+fn grow(mut xs: List[int]) -> int {
+    var i = 0
+    while i < 64 {
+        (mut xs).push(90 + i)
+        i = i + 1
+    }
+    5
+}
+
+fn take2(mut a: int, b: int) {
+    a = a + b
+}
+
+fn main() -> !int {
+    var xs = [1, 2]
+    take2(mut xs[0], grow(mut xs))  // ERROR E1002: xs claimed inside xs[_]'s extent
+    print("{xs[0]} {xs.len}")
+    0
+}
