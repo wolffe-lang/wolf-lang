@@ -16310,7 +16310,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         let TyKind::List(elem) = self.table.kind(self.strip_sema(recv_sema)) else {
             return Err(refuse(
-                "index places outside List (Pool and Map runtime shapes, c06/std)",
+                "index places outside List (a pool element is reached through its handle; a map read answers a row, not storage)",
                 span,
             ));
         };
