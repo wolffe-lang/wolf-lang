@@ -169,11 +169,11 @@ grammar/list_lit_multiline.lu: lowers
 grammar/list_lit_nested.lu: lowers
 grammar/list_lit_untyped_empty.lu: not mem-clean (pre-wir rungs own it)
 grammar/match_arm_at_binding.lu: lowers
-grammar/match_arm_deep_tree.lu: refused — an enum or row test inside a product pattern (deep trees)
-grammar/match_arm_or_inside_product.lu: refused — or-patterns inside product patterns (join params)
+grammar/match_arm_deep_tree.lu: lowers
+grammar/match_arm_or_inside_product.lu: lowers
 grammar/match_arm_or_over_product.lu: refused — or-patterns over product patterns (join params)
 grammar/match_arm_product_nested.lu: lowers
-grammar/match_arm_str_in_product.lu: refused — a str literal inside a product pattern
+grammar/match_arm_str_in_product.lu: lowers
 grammar/match_nullary_variant.lu: lowers
 grammar/match_range.lu: lowers
 grammar/match_range_char.lu: lowers
@@ -307,9 +307,13 @@ memory/match_arm_whole_move.lu: not mem-clean (pre-wir rungs own it)
 memory/mode_missing_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/move_ok.lu: lowers
 memory/move_use_after.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_arg_element.lu: lowers
 memory/mut_arg_temporary.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_elem_excl.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_elem_nested_call.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_param_aggregate_store.lu: lowers
 memory/mut_param_field_lend.lu: lowers
+memory/mut_place_nested.lu: lowers
 memory/mut_read_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/oob_bounds.lu: lowers
 memory/prov_holy_grail.lu: lowers
