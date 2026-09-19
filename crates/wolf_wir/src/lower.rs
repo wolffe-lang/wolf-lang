@@ -2791,13 +2791,48 @@ enum MutArg {
     Relend { ptr: Value, region: RegionId },
 }
 
-/// The base a `mut` member chain resolves against (s111, #133).
-enum ChainBase {
-    /// A by-value local: SSA aggregate, spill + writeback.
-    Val { var: Var },
-    /// A `mut` parameter: pointer-shaped (s26) — the chain becomes a
-    /// static byte offset into the caller's slot.
-    MutRef { ptr: Value, region: RegionId },
+/// Where a resolved place LIVES (s168, the place model — s111/#133's
+/// `ChainBase` widened so a container element can be one).
+enum PlaceLoc {
+    /// A by-value local: SSA aggregate, reached by an `agg.get` path.
+    /// A `mut` lend spills and writes back; a write rebuilds.
+    Val { var: Var, path: Vec<usize> },
+    /// A real ADDRESS: a `mut` parameter's slot (s26 — the chain is a
+    /// static byte offset into the caller's slot). A `mut` lend hands
+    /// the pointer straight over; a write stores through it. There is
+    /// no writeback to get stale, because there is no copy.
+    Addr { ptr: Value, region: RegionId },
+    /// A container ELEMENT (s168): the header, the already-checked
+    /// index, the element stride and a byte offset for the field path
+    /// above it. The address is deliberately NOT materialized here —
+    /// the data pointer lives INSIDE the header, and anything that
+    /// grows the list between the index and the access moves it. So
+    /// the walk keeps the recipe and `elem_addr` mints the pointer at
+    /// the last moment, which is the posture `lower_index_assign` has
+    /// carried since s40.
+    Elem {
+        hdr: Value,
+        idx: Value,
+        stride: u64,
+        off: u64,
+    },
+}
+
+/// One place, resolved: where it lives, its WIR type, and the leaf's
+/// arithmetic classification (compound assignment needs both bits).
+struct ResolvedPlace {
+    loc: PlaceLoc,
+    wty: TypeId,
+    wrapping: bool,
+    unsigned: bool,
+}
+
+/// One step of a place chain, innermost first once reversed.
+enum PlaceStep<'t> {
+    Field(wolf_ast::MemberExpr<'t>),
+    /// The bracket-apply plus its own node — the node's span is what
+    /// `[gram.attr.index]`'s origin is read against.
+    Index(BracketApply<'t>, &'t GreenNode),
 }
 
 /// What to restore from a spill slot after the call.
@@ -4259,9 +4294,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
     }
 
-    /// `x.f = v` / `x.f += v` where `x` is a local by-value aggregate:
-    /// rebuild the aggregate with the field replaced (registers, not
-    /// memory — the promotion story; deeper paths are s27).
+    /// `x.f = v` / `x.f += v` (s168 — one walk for every member
+    /// target). `x` is whatever the place model can reach: a by-value
+    /// local aggregate rebuilds in registers (the s27 promotion
+    /// story), a `mut` receiver stores at the field's packed offset,
+    /// and a nested path or a container element stores at the address
+    /// the walk produced — `a.b.c = v` and `xs[i].f = v`, which is the
+    /// c06 residue "assignment through nested places" named.
     fn lower_member_assign(
         &mut self,
         d: AssignStmt<'t>,
@@ -4269,38 +4308,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         span: Span,
     ) -> R<Flow> {
         let m = wolf_ast::MemberExpr::cast(place).expect("kind");
-        let Some(base) = m.base() else {
+        if m.base().is_none() {
             return Ok(Flow::Val(None));
-        };
-        if base.kind != SyntaxKind::PathExpr {
-            return Err(refuse("assignment through nested places", place.span));
         }
-        let name = self.text(base.span);
-        // `self.x = v` through a `mut` receiver: a store at the
-        // field's packed offset (s27 methods).
-        if let Some(LocalBind::MutRef {
-            ptr, region, elem, ..
-        }) = self.lookup(&name)
-        {
-            return self.lower_mut_member_assign(d, m, base, ptr, region, elem, span);
-        }
-        let Some(LocalBind::Val {
-            var,
-            wir_ty: agg_ty,
-            ..
-        }) = self.lookup(&name)
-        else {
-            return Err(refuse("assignment through nested places", place.span));
-        };
-        let Some(base_sema) = self.expr_sema_ty(base.span) else {
-            return Err(refuse("a member write without a recorded type", place.span));
-        };
-        let (index, wrapping, unsigned) = self.member_index(base_sema, m, place.span)?;
-        let types::TypeData::Agg(fields) = self.b.module.types.get(agg_ty).clone() else {
-            return Err(refuse("member writes on non-aggregates", place.span));
-        };
-        let Some(&fty) = fields.get(index) else {
-            return Err(refuse("a member the aggregate does not carry", place.span));
+        let Some(p) = self.resolve_place(place)? else {
+            return Ok(Flow::Diverged);
         };
         let Some(value_expr) = d.value() else {
             return Ok(Flow::Val(None));
@@ -4312,95 +4324,20 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 value_expr.span,
             ));
         };
-        let cur_agg = self.b.use_var(var);
-        let op = d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq);
-        let newfield = if op == SyntaxKind::Eq {
-            rhs
-        } else {
-            let cur = self
-                .b
-                .ins(Opcode::AggGet, &[cur_agg], &[fty], Aux::Int(index as i64))
-                .one();
-            let Some(bin) = Self::compound_bin(op) else {
-                return Err(refuse("this compound assignment operator", span));
-            };
-            match self.arith(bin, cur, rhs, wrapping, unsigned, fty, span)? {
-                Some(v) => v,
-                None => return Ok(Flow::Diverged),
-            }
-        };
-        let mut parts = Vec::with_capacity(fields.len());
-        for (k, &kt) in fields.iter().enumerate() {
-            if k == index {
-                parts.push(newfield);
-            } else {
-                parts.push(
-                    self.b
-                        .ins(Opcode::AggGet, &[cur_agg], &[kt], Aux::Int(k as i64))
-                        .one(),
-                );
-            }
-        }
-        let rebuilt = self
-            .b
-            .ins(Opcode::AggMake, &parts, &[agg_ty], Aux::None)
-            .one();
-        self.b.def_var(var, rebuilt);
-        Ok(Flow::Val(None))
-    }
-
-    /// `self.f = v` / `self.f += v` where `self` is a pointer-shaped
-    /// `mut` receiver: a store at the field's packed offset, through
-    /// the slot region's token chain.
-    #[allow(clippy::too_many_arguments)]
-    fn lower_mut_member_assign(
-        &mut self,
-        d: AssignStmt<'t>,
-        m: wolf_ast::MemberExpr<'t>,
-        base: &'t GreenNode,
-        ptr: Value,
-        region: RegionId,
-        elem: TypeId,
-        span: Span,
-    ) -> R<Flow> {
-        let Some(base_sema) = self.expr_sema_ty(base.span) else {
-            return Err(refuse("a member write without a recorded type", span));
-        };
-        let (index, wrapping, unsigned) = self.member_index(base_sema, m, span)?;
-        let types::TypeData::Agg(fields) = self.b.module.types.get(elem).clone() else {
-            return Err(refuse("member writes on non-aggregate receivers", span));
-        };
-        let Some(offs) = flat_offsets(&self.b.module.types, &fields) else {
-            return Err(refuse("member writes on non-flat receivers", span));
-        };
-        let Some(&fty) = fields.get(index) else {
-            return Err(refuse("a member the receiver does not carry", span));
-        };
-        let Some(value_expr) = d.value() else {
-            return Ok(Flow::Val(None));
-        };
-        let rhs = flow_val!(self.lower_expr(value_expr));
-        let Some(rhs) = rhs else {
-            return Err(refuse(
-                "assignment of a valueless expression",
-                value_expr.span,
-            ));
-        };
-        let addr = self.field_addr(ptr, offs[index]);
         let op = d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq);
         let newval = if op == SyntaxKind::Eq {
             rhs
         } else {
-            let cur = self.load_flat(fty, addr, region, span)?;
+            let cur = self.place_load(&p, span)?;
             let Some(bin) = Self::compound_bin(op) else {
                 return Err(refuse("this compound assignment operator", span));
             };
-            match self.arith(bin, cur, rhs, wrapping, unsigned, fty, span)? {
+            match self.arith(bin, cur, rhs, p.wrapping, p.unsigned, p.wty, span)? {
                 Some(v) => v,
                 None => return Ok(Flow::Diverged),
             }
         };
-        self.store_flat(newval, addr, region, span)?;
+        self.place_store(&p, newval, span)?;
         Ok(Flow::Val(None))
     }
 
@@ -8964,7 +8901,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             if mode == Some(ParamMode::Mut) {
                 let formal = next_formal;
                 next_formal += 1;
-                match self.lower_mut_arg(vexpr)? {
+                let Some(marg) = self.lower_mut_arg(vexpr)? else {
+                    return Ok(Flow::Diverged);
+                };
+                match marg {
                     MutArg::Spill {
                         cur,
                         size,
@@ -16182,144 +16122,393 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.ins(Opcode::AggMake, &parts, &[aty], Aux::None).one()
     }
 
-    /// Resolve a (possibly nested) member chain over a local place:
-    /// the chain base (a by-value local, or a `mut` parameter's
-    /// pointer — #133), the field index path (outer to inner), the
-    /// leaf's flat BYTE offset inside the base's layout, and the
-    /// leaf's WIR type.
-    fn resolve_member_chain(
-        &mut self,
-        e: &'t GreenNode,
-    ) -> R<(ChainBase, Vec<usize>, u64, TypeId)> {
-        let mut members: Vec<wolf_ast::MemberExpr<'t>> = Vec::new();
+    /// Split a place expression into its base name and the chain of
+    /// steps above it, innermost first. `xs[i].f` is `xs` + [index,
+    /// field]; `n.left[0]` is `n` + [field, index].
+    fn place_steps(e: &'t GreenNode) -> Option<(&'t GreenNode, Vec<PlaceStep<'t>>)> {
+        let mut steps = Vec::new();
         let mut cur = e;
-        while cur.kind == SyntaxKind::MemberExpr {
-            let m = wolf_ast::MemberExpr::cast(cur).expect("kind");
-            let Some(base) = m.base() else {
-                return Err(refuse("a member chain without a base", e.span));
-            };
-            members.push(m);
-            cur = base;
-        }
-        if cur.kind != SyntaxKind::PathExpr {
-            return Err(refuse("`mut` places beyond local paths", e.span));
-        }
-        let name = self.text(cur.span);
-        let (base, mut wt) = match self.lookup(&name) {
-            Some(LocalBind::Val { var, wir_ty, .. }) => (ChainBase::Val { var }, wir_ty),
-            // #133: the base is a `mut` PARAMETER. The mem tier's
-            // field-granular exclusivity (X1, s18 family) already
-            // licensed the projection; the offset walk below realizes
-            // it against the flat spill layout.
-            Some(LocalBind::MutRef {
-                ptr, region, elem, ..
-            }) => (ChainBase::MutRef { ptr, region }, elem),
-            _ => {
-                return Err(refuse(
-                    "`mut` places beyond local by-value bindings",
-                    e.span,
-                ));
+        loop {
+            match cur.kind {
+                SyntaxKind::MemberExpr => {
+                    let m = wolf_ast::MemberExpr::cast(cur)?;
+                    let base = m.base()?;
+                    steps.push(PlaceStep::Field(m));
+                    cur = base;
+                }
+                SyntaxKind::BracketApply => {
+                    let b = BracketApply::cast(cur)?;
+                    let recv = b.callee()?;
+                    steps.push(PlaceStep::Index(b, cur));
+                    cur = recv;
+                }
+                _ => break,
             }
-        };
-        members.reverse(); // innermost (closest to the base) first
-        let mut path = Vec::with_capacity(members.len());
-        let mut off = 0u64;
-        for m in members {
-            let base = m.base().expect("checked above");
-            let Some(base_sema) = self.expr_sema_ty(base.span) else {
-                return Err(refuse("a member place without a recorded type", e.span));
-            };
-            let (index, ..) = self.member_index(base_sema, m, e.span)?;
-            let types::TypeData::Agg(fields) = self.b.module.types.get(wt).clone() else {
-                return Err(refuse("member places over non-aggregates", e.span));
-            };
-            let Some(&fty) = fields.get(index) else {
-                return Err(refuse("a member the aggregate does not carry", e.span));
-            };
-            // Field offsets under the v0 flat layout (fields packed
-            // in declaration order — the spill convention `mut`
-            // arguments already use, s27).
-            let Some(offs) = flat_offsets(&self.b.module.types, &fields) else {
-                return Err(refuse("`mut` paths over non-flat fields", e.span));
-            };
-            off += offs[index];
-            path.push(index);
-            wt = fty;
         }
-        Ok((base, path, off, wt))
+        steps.reverse();
+        Some((cur, steps))
     }
 
-    /// Classify one `mut` argument: a whole flat local or a flat field
-    /// path of a by-value aggregate local spills; a re-lent `mut`
-    /// parameter passes through.
-    fn lower_mut_arg(&mut self, vexpr: &'t GreenNode) -> R<MutArg> {
-        self.check_capture_write(vexpr, "lending `mut`")?;
-        match vexpr.kind {
-            SyntaxKind::PathExpr => {
-                let name = self.text(vexpr.span);
-                match self.lookup(&name) {
-                    Some(LocalBind::Val {
-                        var, wir_ty: wty, ..
-                    }) => {
-                        let Some(size) = flat_size(&self.b.module.types, wty) else {
-                            return Err(refuse(
-                                "`mut` arguments of non-flat types (spill layout)",
-                                vexpr.span,
-                            ));
-                        };
-                        let cur = self.b.use_var(var);
-                        Ok(MutArg::Spill {
-                            cur,
-                            size,
-                            writeback: WriteBackShape::Var { var, ty: wty },
-                        })
-                    }
-                    Some(LocalBind::MutRef { ptr, region, .. }) => {
-                        Ok(MutArg::Relend { ptr, region })
-                    }
-                    _ => Err(refuse("`mut` arguments beyond local places", vexpr.span)),
-                }
+    /// Resolve a place expression to somewhere a value can be lent or
+    /// stored (s168 — the place model). `None` means the walk PROVED a
+    /// trap (a bounds check that decided, an origin shift that folded)
+    /// and the current block is filled: the caller diverged.
+    ///
+    /// The walk has exactly two states. A by-value local stays in
+    /// registers as long as every step is a field — that is s27's
+    /// promotion story, unchanged. The first INDEX step turns it into
+    /// an address, because a container's elements live in the
+    /// container's own buffer and there is nowhere else for them to
+    /// be; from there on a field step is a byte offset. A `mut`
+    /// parameter starts in the address state (#133).
+    fn resolve_place(&mut self, e: &'t GreenNode) -> R<Option<ResolvedPlace>> {
+        let Some((base_node, steps)) = Self::place_steps(e) else {
+            return Err(refuse("a place chain without a base", e.span));
+        };
+        if base_node.kind != SyntaxKind::PathExpr {
+            return Err(refuse("places beyond local paths", e.span));
+        }
+        let name = self.text(base_node.span);
+        let mut cur = match self.lookup(&name) {
+            Some(LocalBind::Val {
+                var,
+                wir_ty,
+                wrapping,
+                unsigned,
+            }) => ResolvedPlace {
+                loc: PlaceLoc::Val {
+                    var,
+                    path: Vec::new(),
+                },
+                wty: wir_ty,
+                wrapping,
+                unsigned,
+            },
+            // #133: the base is a `mut` PARAMETER. The mem tier's
+            // field-granular exclusivity (X1, s18 family) already
+            // licensed the projection; the walk below realizes it
+            // against the flat spill layout.
+            Some(LocalBind::MutRef {
+                ptr,
+                region,
+                elem,
+                wrapping,
+                unsigned,
+            }) => ResolvedPlace {
+                loc: PlaceLoc::Addr { ptr, region },
+                wty: elem,
+                wrapping,
+                unsigned,
+            },
+            _ => {
+                return Err(refuse("places beyond local by-value bindings", e.span));
             }
-            SyntaxKind::MemberExpr => {
-                let (base, path, off, fty) = self.resolve_member_chain(vexpr)?;
-                let Some(size) = flat_size(&self.b.module.types, fty) else {
-                    return Err(refuse(
-                        "`mut` arguments of non-flat types (spill layout)",
-                        vexpr.span,
-                    ));
+        };
+        for step in steps {
+            cur = match step {
+                PlaceStep::Field(m) => self.place_field(cur, m, e.span)?,
+                PlaceStep::Index(b, node) => match self.place_index(cur, b, node, e.span)? {
+                    Some(next) => next,
+                    None => return Ok(None),
+                },
+            };
+        }
+        Ok(Some(cur))
+    }
+
+    /// One field step of a place chain.
+    fn place_field(
+        &mut self,
+        cur: ResolvedPlace,
+        m: wolf_ast::MemberExpr<'t>,
+        span: Span,
+    ) -> R<ResolvedPlace> {
+        let Some(base) = m.base() else {
+            return Err(refuse("a member chain without a base", span));
+        };
+        let Some(base_sema) = self.expr_sema_ty(base.span) else {
+            return Err(refuse("a member place without a recorded type", span));
+        };
+        let (index, wrapping, unsigned) = self.member_index(base_sema, m, span)?;
+        let types::TypeData::Agg(fields) = self.b.module.types.get(cur.wty).clone() else {
+            return Err(refuse("member places over non-aggregates", span));
+        };
+        let Some(&fty) = fields.get(index) else {
+            return Err(refuse("a member the aggregate does not carry", span));
+        };
+        let loc = match cur.loc {
+            PlaceLoc::Val { var, mut path } => {
+                path.push(index);
+                PlaceLoc::Val { var, path }
+            }
+            // Field offsets under the v0 flat layout (fields packed in
+            // declaration order — the spill convention `mut` arguments
+            // have used since s27, and the same one a List element's
+            // interior carries, which is what lets one walk serve both;
+            // only the STRIDE is padded, s119).
+            PlaceLoc::Addr { ptr, region } => {
+                let Some(offs) = flat_offsets(&self.b.module.types, &fields) else {
+                    return Err(refuse("place paths over non-flat fields", span));
                 };
-                match base {
-                    ChainBase::Val { var } => {
-                        let mut cur = self.b.use_var(var);
-                        for &idx in &path {
-                            let aty = self.b.func.value_ty(cur);
-                            let types::TypeData::Agg(fields) = self.b.module.types.get(aty).clone()
-                            else {
-                                return Err(refuse("`mut` fields of non-aggregates", vexpr.span));
-                            };
-                            cur = self
-                                .b
-                                .ins(Opcode::AggGet, &[cur], &[fields[idx]], Aux::Int(idx as i64))
-                                .one();
-                        }
-                        Ok(MutArg::Spill {
-                            cur,
-                            size,
-                            writeback: WriteBackShape::Field { var, path, fty },
-                        })
-                    }
-                    // #133: a field path off a `mut` parameter
-                    // re-lends a pointer INTO the caller's slot — the
-                    // flat layout makes the offset static, the callee
-                    // writes land directly, and no writeback exists
-                    // to get stale.
-                    ChainBase::MutRef { ptr, region } => {
-                        let fp = self.field_addr(ptr, off);
-                        Ok(MutArg::Relend { ptr: fp, region })
-                    }
+                let ptr = self.field_addr(ptr, offs[index]);
+                PlaceLoc::Addr { ptr, region }
+            }
+            PlaceLoc::Elem {
+                hdr,
+                idx,
+                stride,
+                off,
+            } => {
+                let Some(offs) = flat_offsets(&self.b.module.types, &fields) else {
+                    return Err(refuse("place paths over non-flat fields", span));
+                };
+                PlaceLoc::Elem {
+                    hdr,
+                    idx,
+                    stride,
+                    off: off + offs[index],
                 }
             }
-            _ => Err(refuse("`mut` arguments beyond local places", vexpr.span)),
+        };
+        Ok(ResolvedPlace {
+            loc,
+            wty: fty,
+            wrapping,
+            unsigned,
+        })
+    }
+
+    /// One index step of a place chain: the element's ADDRESS inside
+    /// the container's buffer, bounds-checked exactly once, at the
+    /// same origin the read spelling uses (D61).
+    ///
+    /// `Pool[T]` and `Map[K, V]` stay refused BY NAME here: a pool
+    /// element is reached through a generational handle whose runtime
+    /// shape is the second half of this stub, and a map read answers
+    /// `V ! {none}` — a row, not storage, so there is no element
+    /// address to hand out.
+    fn place_index(
+        &mut self,
+        cur: ResolvedPlace,
+        b: BracketApply<'t>,
+        node: &'t GreenNode,
+        span: Span,
+    ) -> R<Option<ResolvedPlace>> {
+        let Some(recv) = b.callee() else {
+            return Err(refuse("an index without a receiver", span));
+        };
+        // s77: a byte view has NO write path — the same refusal
+        // `lower_index_assign` carries, for the same reason.
+        if self.view_src(recv).is_some() {
+            return Err(refuse(
+                "writing through a `bytes()` view (a byte view is read-only)",
+                span,
+            ));
+        }
+        let Some(recv_sema) = self.expr_sema_ty(recv.span) else {
+            return Err(refuse("an index place without a recorded type", span));
+        };
+        let TyKind::List(elem) = self.table.kind(self.strip_sema(recv_sema)) else {
+            return Err(refuse(
+                "index places outside List (Pool and Map runtime shapes, c06/std)",
+                span,
+            ));
+        };
+        let elem = *elem;
+        self.refuse_region_elem(elem, span)?;
+        let Some(ewty) = wir_ty(&mut self.b.module.types, self.table, self.sigs, elem, span)? else {
+            return Err(refuse("unit-typed List elements", span));
+        };
+        if flat_size(&self.b.module.types, ewty).is_none() {
+            return Err(refuse("List elements without a flat layout", span));
+        }
+        let stride = self.list_stride(ewty, span)?;
+        // The container's header, read where the chain has reached —
+        // BEFORE the index is evaluated, because the receiver is
+        // spelled to its left ([gram.eval.order]).
+        let hdr = self.place_load(&cur, span)?;
+        let ix = b
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .filter_map(Arg::value)
+            .next()
+            .ok_or_else(|| refuse("an index without an operand", span))?;
+        let idx = match self.lower_expr(ix)? {
+            Flow::Val(Some(v)) => v,
+            Flow::Val(None) => return Err(refuse("a valueless List index", ix.span)),
+            Flow::Diverged => return Ok(None),
+        };
+        let idx = if self.origin_at(node.span) == 1 {
+            match self.shift_origin(idx) {
+                Some(v) => v,
+                None => return Ok(None),
+            }
+        } else {
+            idx
+        };
+        let n = self.list_len_of(hdr);
+        if self.list_bounds_trap(idx, n) {
+            return Ok(None);
+        }
+        Ok(Some(ResolvedPlace {
+            loc: PlaceLoc::Elem {
+                hdr,
+                idx,
+                stride,
+                off: 0,
+            },
+            wty: ewty,
+            wrapping: matches!(self.table.kind(elem), TyKind::Wrapping(_)),
+            unsigned: sema_unsigned(self.table, elem),
+        }))
+    }
+
+    /// Read a resolved place's current value.
+    fn place_load(&mut self, p: &ResolvedPlace, span: Span) -> R<Value> {
+        match &p.loc {
+            PlaceLoc::Val { var, path } => {
+                let mut v = self.b.use_var(*var);
+                for &i in path {
+                    let aty = self.b.func.value_ty(v);
+                    let types::TypeData::Agg(fields) = self.b.module.types.get(aty).clone() else {
+                        return Err(refuse("a field path over a non-aggregate", span));
+                    };
+                    let Some(&fty) = fields.get(i) else {
+                        return Err(refuse("a member the aggregate does not carry", span));
+                    };
+                    v = self
+                        .b
+                        .ins(Opcode::AggGet, &[v], &[fty], Aux::Int(i as i64))
+                        .one();
+                }
+                Ok(v)
+            }
+            PlaceLoc::Addr { ptr, region } => self.load_flat(p.wty, *ptr, *region, span),
+            PlaceLoc::Elem { .. } => {
+                let (ptr, region) = self.elem_addr(&p.loc);
+                self.load_flat(p.wty, ptr, region, span)
+            }
+        }
+    }
+
+    /// Mint a container element's address from the recipe the walk
+    /// kept: the data pointer is loaded HERE, at the last moment
+    /// before the access, so a reallocation between the index and the
+    /// access cannot leave it stale.
+    fn elem_addr(&mut self, loc: &PlaceLoc) -> (Value, RegionId) {
+        let PlaceLoc::Elem {
+            hdr,
+            idx,
+            stride,
+            off,
+        } = *loc
+        else {
+            unreachable!("elem_addr on a non-element place");
+        };
+        let data = self.list_data(hdr);
+        let p = self.list_elem_addr(data, idx, stride);
+        let p = self.field_addr(p, off);
+        (p, self.foreign_buf_region())
+    }
+
+    /// Write a value to a resolved place: rebuild the aggregate around
+    /// the leaf when it lives in registers, store through the pointer
+    /// when it lives in memory.
+    fn place_store(&mut self, p: &ResolvedPlace, val: Value, span: Span) -> R<()> {
+        match &p.loc {
+            PlaceLoc::Val { var, path } => {
+                let cur_agg = self.b.use_var(*var);
+                let rebuilt = self.rebuild_at(cur_agg, path, val);
+                self.b.def_var(*var, rebuilt);
+                Ok(())
+            }
+            PlaceLoc::Addr { ptr, region } => self.store_flat(val, *ptr, *region, span),
+            PlaceLoc::Elem { .. } => {
+                let (ptr, region) = self.elem_addr(&p.loc);
+                self.store_flat(val, ptr, region, span)
+            }
+        }
+    }
+
+    /// Classify one `mut` argument (s168). A whole flat local, or a
+    /// flat field path of a by-value aggregate local, spills to a slot
+    /// and reloads on return. Everything that already HAS an address —
+    /// a re-lent `mut` parameter, a field path off one (#133), a
+    /// container element (s168) — passes its pointer straight through,
+    /// and there is no writeback to get stale because there is no
+    /// copy. `None` means the place walk proved a trap.
+    ///
+    /// The exclusivity that makes an element lend sound is the mem
+    /// tier's, not this one's: `[mem.model.place]` collapses every
+    /// element of a container to ONE opaque place, so any second
+    /// access path through the same base inside this call surface is
+    /// already E1002. See `crates/wolf_mem/src/place.rs`.
+    fn lower_mut_arg(&mut self, vexpr: &'t GreenNode) -> R<Option<MutArg>> {
+        self.check_capture_write(vexpr, "lending `mut`")?;
+        if vexpr.kind == SyntaxKind::PathExpr {
+            let name = self.text(vexpr.span);
+            return match self.lookup(&name) {
+                Some(LocalBind::Val {
+                    var, wir_ty: wty, ..
+                }) => {
+                    let Some(size) = flat_size(&self.b.module.types, wty) else {
+                        return Err(refuse(
+                            "`mut` arguments of non-flat types (spill layout)",
+                            vexpr.span,
+                        ));
+                    };
+                    let cur = self.b.use_var(var);
+                    Ok(Some(MutArg::Spill {
+                        cur,
+                        size,
+                        writeback: WriteBackShape::Var { var, ty: wty },
+                    }))
+                }
+                Some(LocalBind::MutRef { ptr, region, .. }) => {
+                    Ok(Some(MutArg::Relend { ptr, region }))
+                }
+                _ => Err(refuse("`mut` arguments beyond local places", vexpr.span)),
+            };
+        }
+        if !matches!(
+            vexpr.kind,
+            SyntaxKind::MemberExpr | SyntaxKind::BracketApply
+        ) {
+            return Err(refuse("`mut` arguments beyond local places", vexpr.span));
+        }
+        let Some(p) = self.resolve_place(vexpr)? else {
+            return Ok(None);
+        };
+        let Some(size) = flat_size(&self.b.module.types, p.wty) else {
+            return Err(refuse(
+                "`mut` arguments of non-flat types (spill layout)",
+                vexpr.span,
+            ));
+        };
+        match p.loc {
+            PlaceLoc::Val { var, ref path } => {
+                let cur = self.place_load(&p, vexpr.span)?;
+                Ok(Some(MutArg::Spill {
+                    cur,
+                    size,
+                    writeback: WriteBackShape::Field {
+                        var,
+                        path: path.clone(),
+                        fty: p.wty,
+                    },
+                }))
+            }
+            PlaceLoc::Addr { ptr, region } => Ok(Some(MutArg::Relend { ptr, region })),
+            // The element address is minted at the lend, which IS the
+            // last moment: the callee holds it for the whole call, and
+            // nothing else may reach the container while it does —
+            // that is the exclusivity the mem tier proved, not an
+            // assumption made here.
+            PlaceLoc::Elem { .. } => {
+                let (ptr, region) = self.elem_addr(&p.loc);
+                Ok(Some(MutArg::Relend { ptr, region }))
+            }
         }
     }
 
@@ -16688,7 +16877,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             Some(ParamMode::Mut) => {
                 let formal = next_formal;
                 next_formal += 1;
-                match self.lower_mut_arg(recv_place)? {
+                let Some(marg) = self.lower_mut_arg(recv_place)? else {
+                    return Ok(Flow::Diverged);
+                };
+                match marg {
                     MutArg::Spill {
                         cur,
                         size,
@@ -16737,7 +16929,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             if mode == Some(ParamMode::Mut) {
                 let formal = next_formal;
                 next_formal += 1;
-                match self.lower_mut_arg(vexpr)? {
+                let Some(marg) = self.lower_mut_arg(vexpr)? else {
+                    return Ok(Flow::Diverged);
+                };
+                match marg {
                     MutArg::Spill {
                         cur,
                         size,
