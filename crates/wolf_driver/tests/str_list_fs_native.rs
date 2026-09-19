@@ -12,6 +12,11 @@
 //!
 //! Hosts the native tier refuses skip loudly at runtime (the s59
 //! pattern: these tests start passing the moment a gate lifts).
+//!
+//! Exit statuses here follow `[conf.exit]` (s169): a static
+//! rejection is **2**, not 1 — 1 is what a program that RAN and
+//! returned an error out of `main` exits with, and the two were
+//! indistinguishable at the process level until the clause ruled.
 
 use std::path::Path;
 use std::process::Command;
@@ -806,7 +811,7 @@ fn a_str_method_outside_the_set_comes_from_std_str() {
         .arg(dir.join("never-linked"))
         .output()
         .expect("wolf runs");
-    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(out.status.code(), Some(2));
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
         stderr.contains("error[E0301]: `to_float` is not a builtin method of `str`")

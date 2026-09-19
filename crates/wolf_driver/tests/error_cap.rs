@@ -2,6 +2,11 @@
 //! scrolling wall. One root cause should be reachable from the top of
 //! the terminal, so the report caps and then says how many it held back
 //! and how to see them (`--error-limit`).
+//!
+//! Exit statuses here follow `[conf.exit]` (s169): a static
+//! rejection is **2**, not 1 — 1 is what a program that RAN and
+//! returned an error out of `main` exits with, and the two were
+//! indistinguishable at the process level until the clause ruled.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -59,7 +64,7 @@ fn count_reports(stderr: &str) -> usize {
 fn a_wrecked_file_reports_at_most_the_cap_and_says_how_many_it_held_back() {
     let dir = fixture("error-cap-default", &wreckage(200));
     let (code, err) = build(&dir, &[]);
-    assert_eq!(code, 1, "the file must not compile:\n{err}");
+    assert_eq!(code, 2, "the file must not compile:\n{err}");
     let shown = count_reports(&err);
     assert!(
         shown > 0 && shown <= 25,
@@ -80,7 +85,7 @@ fn error_limit_zero_prints_everything() {
     let dir = fixture("error-cap-unlimited", &wreckage(200));
     let (_, capped) = build(&dir, &[]);
     let (code, all) = build(&dir, &["--error-limit=0"]);
-    assert_eq!(code, 1);
+    assert_eq!(code, 2);
     assert!(
         count_reports(&all) > count_reports(&capped),
         "--error-limit=0 must lift the cap ({} vs {})",
@@ -97,7 +102,7 @@ fn error_limit_zero_prints_everything() {
 fn a_small_error_list_arrives_whole_with_no_summary_line() {
     let dir = fixture("error-cap-small", &wreckage(2));
     let (code, err) = build(&dir, &[]);
-    assert_eq!(code, 1);
+    assert_eq!(code, 2);
     assert!(
         !err.contains("not shown"),
         "a report under the cap must not mention a cap:\n{err}"

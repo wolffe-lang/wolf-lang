@@ -11,6 +11,11 @@
 //! tests run on every host; the run-for-real halves live in
 //! `corpus/resolve/` (bare_sibling, dup_bare, broken_sibling,
 //! plain_subdir, standalone_pair).
+//!
+//! Exit statuses here follow `[conf.exit]` (s169): a static
+//! rejection is **2**, not 1 — 1 is what a program that RAN and
+//! returned an error out of `main` exits with, and the two were
+//! indistinguishable at the process level until the clause ruled.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -76,7 +81,7 @@ fn duplicate_across_siblings_is_e0302() {
         ],
     );
     let (code, err) = build(&dir, "a.lu");
-    assert_eq!(code, 1, "duplicates fail:\n{err}");
+    assert_eq!(code, 2, "duplicates fail:\n{err}");
     assert!(err.contains("E0302"), "{err}");
     assert!(
         err.contains("a.lu") && err.contains("b.lu"),
@@ -96,7 +101,7 @@ fn unparseable_sibling_fails_loudly() {
         ],
     );
     let (code, err) = build(&dir, "a.lu");
-    assert_eq!(code, 1, "a broken member is a build error:\n{err}");
+    assert_eq!(code, 2, "a broken member is a build error:\n{err}");
     assert!(err.contains("b.lu"), "the sibling is named:\n{err}");
 }
 
@@ -115,7 +120,7 @@ fn standalone_sibling_note_names_the_marker() {
         ],
     );
     let (code, err) = build(&dir, "a.lu");
-    assert_eq!(code, 1);
+    assert_eq!(code, 2);
     assert!(err.contains("E0301"), "{err}");
     // The note wraps at a width the scratch path's length decides, so
     // compare with whitespace normalized (the wrap once split
@@ -147,7 +152,7 @@ fn all_standalone_directory_note() {
         ],
     );
     let (code, err) = build(&dir, "main.lu");
-    assert_eq!(code, 1);
+    assert_eq!(code, 2);
     assert!(err.contains("E0301"), "{err}");
     // The note wraps at a width the scratch path's length decides, so
     // compare with whitespace normalized (the wrap once split
@@ -214,6 +219,6 @@ fn plain_main_beside_a_standalone_one_is_e0302() {
         ],
     );
     let (code, err) = build(&dir, "scratch.lu");
-    assert_eq!(code, 1, "the plain main joins and collides:\n{err}");
+    assert_eq!(code, 2, "the plain main joins and collides:\n{err}");
     assert!(err.contains("E0302"), "{err}");
 }

@@ -6,6 +6,11 @@
 //!
 //! Everything here stops before codegen (`--emit=wir`), so the tests
 //! run on every host — no `cc`, no `libwolf_rt.a`.
+//!
+//! Exit statuses here follow `[conf.exit]` (s169): a static
+//! rejection is **2**, not 1 — 1 is what a program that RAN and
+//! returned an error out of `main` exits with, and the two were
+//! indistinguishable at the process level until the clause ruled.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -57,7 +62,7 @@ fn warnings_report_but_do_not_fail_the_build() {
 fn deny_warnings_promotes_and_fails() {
     let dir = fixture("warn-deny", WARNY);
     let (code, err) = build_wir(&dir, &["--deny-warnings"]);
-    assert_eq!(code, 1, "denied warning fails the build:\n{err}");
+    assert_eq!(code, 2, "denied warning fails the build:\n{err}");
     assert!(err.contains("error[E0802]"), "promoted to error:\n{err}");
     assert!(
         err.contains("promoted by the lint configuration"),
@@ -244,7 +249,7 @@ fn mode_error_retires_the_mut_parameter_lint() {
          take_last(mut xs) else 0\n}\n",
     );
     let (code, err) = build_wir(&dir, &[]);
-    assert_eq!(code, 1, "the mode error still stops the build:\n{err}");
+    assert_eq!(code, 2, "the mode error still stops the build:\n{err}");
     assert!(
         err.contains("error[E0804]"),
         "the mode error renders:\n{err}"

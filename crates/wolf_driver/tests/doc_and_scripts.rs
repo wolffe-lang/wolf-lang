@@ -658,7 +658,10 @@ fn the_prompt_is_script_modes_alone() {
     );
     std::fs::remove_file(proj.join("app/wolf.pkg")).expect("drop the manifest");
     let out = run_wolf(&proj, &cache, &["run", "app/main.lu"]);
-    assert_eq!(out.status.code(), Some(1), "stderr:\n{}", stderr(&out));
+    // A static rejection is 2 ([conf.exit.static], s169) — it was 1
+    // until the clause ruled, and 1 is what a program that RAN and
+    // returned an error exits with.
+    assert_eq!(out.status.code(), Some(2), "stderr:\n{}", stderr(&out));
     let err = stderr(&out);
     assert!(
         !err.contains("frontmatter"),

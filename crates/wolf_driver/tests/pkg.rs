@@ -17,6 +17,11 @@
 //! Native codegen is linux/x86-64 in c06; off-target the file
 //! compiles away (the refusal tests would run anywhere, but one
 //! honest gate beats two).
+//!
+//! Exit statuses here follow `[conf.exit]` (s169): a static
+//! rejection is **2**, not 1 — 1 is what a program that RAN and
+//! returned an error out of `main` exits with, and the two were
+//! indistinguishable at the process level until the clause ruled.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -110,7 +115,7 @@ fn dogfood_dep_diagnostics_use_pkg_scheme() {
     )
     .expect("break util");
     let out = run_wolf(&dir, &["build", "app/main.lu"], &[]);
-    assert_eq!(out.status.code(), Some(1), "stderr:\n{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(2), "stderr:\n{}", stderr(&out));
     let err = stderr(&out);
     assert!(err.contains("pkg://util/util.lu"), "{err}");
     assert!(
@@ -125,7 +130,7 @@ fn dogfood_dep_diagnostics_use_pkg_scheme() {
 fn hostile_build_script_dep_is_refused_e1503() {
     let dir = stage("pkg_hostile", "hostile");
     let out = run_wolf(&dir, &["build", "app/main.lu"], &[]);
-    assert_eq!(out.status.code(), Some(1), "stderr:\n{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(2), "stderr:\n{}", stderr(&out));
     let err = stderr(&out);
     assert!(err.contains("E1503"), "{err}");
     assert!(err.contains("no build scripts, ever"), "{err}");
@@ -139,7 +144,7 @@ fn hostile_build_script_dep_is_refused_e1503() {
 fn undeclared_capability_fails_e1504() {
     let dir = stage("pkg_caps_bad", "caps");
     let out = run_wolf(&dir, &["build", "app/main.lu"], &[]);
-    assert_eq!(out.status.code(), Some(1), "stderr:\n{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(2), "stderr:\n{}", stderr(&out));
     let err = stderr(&out);
     assert!(err.contains("E1504"), "{err}");
     assert!(err.contains("`net` capability"), "{err}");
@@ -372,7 +377,7 @@ fn git_dep_pins_and_tamper_fails_e1506() {
     code = code.replace("2 * x + 1", "0 * x");
     std::fs::write(&victim, code).expect("tamper");
     let out = run_wolf(&dir, &["build", "app/main.lu"], store_env);
-    assert_eq!(out.status.code(), Some(1), "stderr:\n{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(2), "stderr:\n{}", stderr(&out));
     assert!(stderr(&out).contains("E1506"), "{}", stderr(&out));
 }
 
@@ -472,7 +477,7 @@ fn vendor_builds_offline_and_vendor_tamper_fails_e1506() {
     code = code.replace("2 * x + 1", "0 * x");
     std::fs::write(&victim, code).expect("tamper");
     let out = run_wolf(&dir, &["build", "app/main.lu"], store_env);
-    assert_eq!(out.status.code(), Some(1), "stderr:\n{}", stderr(&out));
+    assert_eq!(out.status.code(), Some(2), "stderr:\n{}", stderr(&out));
     assert!(stderr(&out).contains("E1506"), "{}", stderr(&out));
 }
 
