@@ -1,6 +1,0 @@
----
-source: crates/wolf_parse/tests/corpus_decls.rs
-expression: dump
----
-FnDecl 605..680 name=fan_out body=Block
-FnDecl 682..854 name=main body=Block

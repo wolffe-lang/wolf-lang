@@ -38,6 +38,33 @@ been wrong as written. The E0206 on `fn watch(p: proc)` now names
 placeholder, because the completion type is a fact about the callee
 and not a rewrite the parser can perform.
 
+**And the first program to exercise D16's handle-as-parameter
+deadlocks on windows** (#431). `fn fan_out(s: Scope, ch)` calling
+`s.spawn(…)` runs to `1` on linux x86-64 and macOS aarch64 and
+produces no verdict at all on windows — a clause that has been
+normative since D16 and unreachable since D16, because the parameter
+had no spelling until now. s170 did not break it; s170 made it
+writable, and the first thing written with it found the hole. The
+program is carried in #431 rather than in the corpus: there is no
+corpus posture that is true on all three hosts at once — `phase:` is
+compared for EXACT equality against the deepest passing phase, and
+`member: true` compiles the file into its directory's module, where
+its `main` collides with every sibling (E0302, measured). The typing
+half stays covered and green everywhere by `wolf_sema`'s
+`conc_handles_clean_in_signature` snapshot, which checks this exact
+signature pair.
+
+**A hanging corpus entry is now a named red, not a cancelled job.**
+Finding #431 took two CI cycles because the first one was *cancelled*
+at the workflow's 30-minute cap with nothing in the log but a gap:
+`cargo xtask lane-coverage` ran each entry with no timeout, so one
+program that never returned consumed the whole budget anonymously.
+It now kills an observation that exceeds 60 s, names the file and the
+lane, **keeps sweeping**, and lists every hung entry at the end — one
+name is a symptom, the list is the diagnosis. The red path was
+exercised deliberately, with a planted non-terminating entry, before
+the gate was trusted.
+
 ### A frozen value handed to two procs is one value
 
 **`spawn proc` shares frozen data instead of moving it** (#312;

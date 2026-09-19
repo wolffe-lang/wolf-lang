@@ -58,7 +58,6 @@ conc/proc_link_root.lu: lowers
 conc/proc_link_root_death.lu: lowers
 conc/proc_spawn_loop.lu: lowers
 conc/reason_interp.lu: lowers
-conc/scope_handle_param.lu: lowers
 conc/select_seeded.lu: lowers
 conc/select_single_arm_loop.lu: lowers
 conc/select_two_timeouts.lu: lowers
