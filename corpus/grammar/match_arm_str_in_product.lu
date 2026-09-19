@@ -1,16 +1,19 @@
 //! check: run(exit=0)
-//! phase: mem
+//! phase: run
 //! conforms: gram.pat
 //!
-//! s130 (#179) — the second named c06 residue: a str literal inside a
-//! product pattern refuses on the native pipe ("a str literal inside
-//! a product pattern (c06)"). Top-level str arms dispatch by inline
-//! equality (#54); at product depth that chain would have to nest
-//! inside the arm's conjunction, and s130 kept the conjunction to
-//! scalar tests. The checked executor RUNS this file (its literal
-//! matcher cooks and compares bytes at any depth) — the honest
-//! non-nesting this pin records. Advances to `run` in the commit that
-//! nests the str chain.
+//! s130 (#179) pinned this at `mem` as the second named c06 residue: a
+//! str literal inside a product pattern refused on the native pipe,
+//! because top-level str arms dispatch by inline equality (#54) and
+//! s130 kept the product conjunction to scalar tests. The pin promised
+//! it would advance "in the commit that nests the str chain".
+//!
+//! s168 nests it. The product walk is a conjunction of PURE tests and
+//! an inline str equality is one: `str_eq_inline` builds its own
+//! diamond and hands back a BOOL at the merge, so it drops into the
+//! conjunction unchanged. The literal's length is a constant here, so
+//! the length guard folds and the scan gets a constant trip count —
+//! a short literal unrolls, exactly as at the top level.
 
 fn probe(p: (str, int)) -> int {
     match p {

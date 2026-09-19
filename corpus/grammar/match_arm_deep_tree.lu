@@ -1,18 +1,19 @@
 //! check: run(exit=0)
-//! phase: mem
+//! phase: run
 //! conforms: gram.pat
 //!
-//! s130 (#179) — the c06 RESIDUE after the product domain landed,
-//! pinned loud: an enum (or row) test INSIDE a product pattern — the
-//! deep-tree class — still refuses by name on the native pipe
-//! ("an enum or row test inside a product pattern (deep trees,
-//! c06)"). The product compiler tests fields and payload slots
-//! against literals and products; a refutable TAG at product depth
-//! needs a nested discriminant read the decision chain does not emit
-//! yet. The checked executor already RUNS this file (its value-wise
-//! matcher recurses through any depth), so the lanes stay honestly
-//! non-nested — this pin measures the native half only. The day deep
-//! trees land, `phase:` advances to `run` in the same commit.
+//! s130 (#179) pinned this at `mem` as the c06 RESIDUE after the
+//! product domain landed: an enum (or row) test INSIDE a product
+//! pattern — the deep-tree class — refused by name on the native pipe,
+//! while the checked executor ran it, and the pin promised "the day
+//! deep trees land, `phase:` advances to `run` in the same commit".
+//!
+//! s168 is that day. A payload-carrying case value is an aggregate
+//! whose slot 0 is the tag, exactly as at the top level, so the nested
+//! test is the same `icmp` against a domain built from the FIELD's own
+//! sema type — and the payload slots recurse straight back into the
+//! product walk, which is what makes the tree deep rather than one
+//! level. Every lane runs this file now.
 
 enum Pairs {
     Empty,

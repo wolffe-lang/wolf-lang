@@ -1,17 +1,22 @@
 //! check: run(exit=0)
-//! phase: mem
+//! phase: run
 //! conforms: gram.pat
 //!
-//! s131 (#196) — the c06 residue's other or-pattern half: an
-//! or-pattern INSIDE a product pattern (`Pair(1 | 2, b)` — an
-//! alternation in one payload slot) refuses by name on the native
-//! pipe ("or-patterns inside product patterns (join params)").
-//! The checked executor RUNS this file (its value-wise matcher takes
-//! the alternation slot-wise), so the lanes stay honestly non-nested
-//! — the pin measures the native half, the deep-tree posture exactly.
-//! lupin 0.1.20 runs it too (is31); until the join-params lowering
-//! lands with the c06-residue sprint, this file is the measurement
-//! that keeps the divergence visible instead of latent.
+//! s131 (#196) pinned this at `mem` as the c06 residue's or-pattern
+//! half: an or-pattern INSIDE a product pattern (`Pair(1 | 2, b)` — an
+//! alternation in one payload slot) refused by name on the native pipe
+//! ("or-patterns inside product patterns (join params)"), while the
+//! checked executor and lupin 0.1.20 both ran it.
+//!
+//! s168 lands it, and the pin's own name turns out to have been too
+//! pessimistic. The product walk is a CONJUNCTION of pure tests, so an
+//! alternation in a slot is a DISJUNCTION of that slot's tests and
+//! needs no join at all — each alternative's conjunction folds to one
+//! BOOL and the alternatives are `bor`'d together. Join params are
+//! needed only when an alternative BINDS, because then the same name
+//! arrives from different slots on different edges; that shape stays
+//! refused, now under its own name, and its witness is the sibling
+//! `match_arm_or_over_product`.
 
 enum Shape {
     Empty,
