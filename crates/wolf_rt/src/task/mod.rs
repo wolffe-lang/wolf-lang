@@ -114,11 +114,11 @@ pub(crate) use hooks::test_hook;
 pub(crate) use pool::kill_teardown_check;
 pub use pool::{Body, SendPtr, TaskCtx, blocking, counters, current_scope, initialized};
 pub use proc::{
-    __wolf_rt_proc_cancel, __wolf_rt_proc_kill, __wolf_rt_proc_link, __wolf_rt_proc_monitor,
-    __wolf_rt_proc_self, __wolf_rt_proc_spawn, __wolf_rt_region_adopt, ProcErr, ProcExit,
-    ProcOutcome, ROOT_DEATH_EXIT, ROOT_DOMAIN, RestartPolicy, Supervised, TRAP_ERROR_TAG, cancel,
-    current_proc, kill, ledger_live, link, monitor, proc_ledger, set_trap_exit, spawn_proc,
-    supervise, with_handler,
+    __wolf_rt_proc_cancel, __wolf_rt_proc_join, __wolf_rt_proc_kill, __wolf_rt_proc_link,
+    __wolf_rt_proc_monitor, __wolf_rt_proc_self, __wolf_rt_proc_spawn, __wolf_rt_region_adopt,
+    ProcErr, ProcExit, ProcOutcome, ROOT_DEATH_EXIT, ROOT_DOMAIN, RestartPolicy, Supervised,
+    TRAP_ERROR_TAG, cancel, current_proc, join, kill, ledger_live, link, monitor, proc_ledger,
+    set_trap_exit, spawn_proc, supervise, with_handler,
 };
 pub use scope::{ExitReason, ScopeInner, TaskState, dump};
 pub use when::{

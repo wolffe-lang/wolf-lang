@@ -762,6 +762,32 @@ pub fn monitor(proc: u64) -> Result<Arc<Chan>, ProcErr> {
     }
 }
 
+/// Join `proc`: block the calling task until it exits and answer the
+/// reason (s170, wolf-lang#110 — BACKLOG B21 ruled the talk-back
+/// shape to be a typed result the supervisor collects at the join).
+///
+/// It is [`monitor`] plus one receive, deliberately: the monitor
+/// channel already carries `[conc.proc.exit]`'s reason for a proc
+/// that is live AND for one that has already exited (the tombstone
+/// path), so a join after the exit is not a lost wakeup. The receive
+/// is a blocking point like any other, so cancellation of the JOINING
+/// task surfaces there under `[conc.cancel.points]` — the recv error
+/// is mapped to `cancelled` by the caller, which is why this returns
+/// the reason rather than a value.
+///
+/// A stale id is the caller's fault and reaches the C shim as a trap,
+/// exactly as `monitor`'s does.
+pub fn join(proc: u64) -> Result<ProcExit, ProcErr> {
+    let ch = monitor(proc)?;
+    match ch.recv() {
+        Ok(word) => Ok(ProcExit::decode(word)),
+        // A monitor channel is never closed by anyone but its own
+        // delivery, so a failed receive is the JOINER being torn
+        // down, not the observed proc vanishing.
+        Err(_) => Ok(ProcExit::Cancelled),
+    }
+}
+
 /// Link `a` and `b` symmetrically and idempotently per pair
 /// (`[conc.proc.link.pair]`; `w.link()`'s one-arg spelling passes the
 /// calling task's domain — [`current_proc`] or [`ROOT_DOMAIN`]).
@@ -1122,6 +1148,18 @@ pub extern "C" fn __wolf_rt_proc_self() -> u64 {
 pub extern "C" fn __wolf_rt_proc_monitor(proc: u64) -> *mut c_void {
     match monitor(proc) {
         Ok(ch) => Arc::into_raw(ch).cast_mut().cast(),
+        Err(ProcErr::Stale) => native::__wolf_rt_trap(native::trap_code::STALE_HANDLE),
+    }
+}
+
+/// Join `proc`: blocks until it exits and returns the encoded exit
+/// reason word ([`ProcExit::encode`] — the same word a monitor
+/// channel delivers, so one decoder serves both readers). Stale ids
+/// trap (stale-handle), like `monitor`'s.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_proc_join(proc: u64) -> u64 {
+    match join(proc) {
+        Ok(r) => r.encode(),
         Err(ProcErr::Stale) => native::__wolf_rt_trap(native::trap_code::STALE_HANDLE),
     }
 }
@@ -1829,5 +1867,39 @@ mod tests {
         let m = monitor(w).unwrap();
         assert_eq!(recv_reason(&m), ProcExit::Normal { value: 0 });
         assert_eq!(*seen.lock().unwrap(), (Some(w), Some(w)));
+    }
+
+    /// s170 (`[conc.proc.join]`, wolf-lang#110): the blocking join
+    /// answers the SAME reason a monitor would, and it answers it for
+    /// every class — the ok half is `normal`'s value, everything else
+    /// is an abnormal class the lowering turns into a row tag.
+    #[test]
+    fn join_answers_every_exit_class() {
+        let v = spawn_proc("joined-value", |_| ProcOutcome::Value(42));
+        assert_eq!(join(v).expect("live proc"), ProcExit::Normal { value: 42 });
+        let e = spawn_proc("joined-error", |_| ProcOutcome::Fail { tag: 7 });
+        assert_eq!(join(e).expect("live proc"), ProcExit::Error { tag: 7 });
+        let c = spawn_proc("joined-cancel", |_| ProcOutcome::Cancelled);
+        assert_eq!(join(c).expect("live proc"), ProcExit::Cancelled);
+    }
+
+    /// A join AFTER the proc has already exited is not a lost wakeup:
+    /// `monitor` serves the tombstone, so the join returns at once
+    /// with the recorded reason. This is the property that lets a
+    /// program spawn, do other work, and join last.
+    #[test]
+    fn join_after_exit_reads_the_tombstone() {
+        let w = spawn_proc("already-gone", |_| ProcOutcome::Value(5));
+        let m = monitor(w).unwrap();
+        assert_eq!(recv_reason(&m), ProcExit::Normal { value: 5 });
+        // The proc is provably exited before the join is issued.
+        assert_eq!(join(w).expect("tombstone"), ProcExit::Normal { value: 5 });
+    }
+
+    /// A stale id is the caller's fault, exactly as `monitor`'s is —
+    /// the C shim turns this into `trap(stale-handle)`.
+    #[test]
+    fn join_of_a_stale_id_is_stale() {
+        assert_eq!(join(u64::MAX), Err(ProcErr::Stale));
     }
 }
