@@ -2,6 +2,83 @@
 
 ## Unreleased
 
+### A container element is a place
+
+**`f(mut xs[i])` compiles** (#268 ×6, #156 ch28). The c06 residue's
+largest row: the native pipe refused `mut` arguments beyond a local
+name or a field path of one BY NAME, while the checked machine had run
+them since it had places at all. Lending an element is an ADDRESS into
+the container's own buffer — no spill, no writeback, and the callee's
+writes land where the element already lives. The same walk serves the
+write side, so `a.b.c = v` and `xs[i].f = v` compile too ("assignment
+through nested places", #268's ch07 row), and the shape that motivated
+all of it — the wordtree's `add(mut n.kids[i], w)`, a field of a `mut`
+parameter, indexed, lent onward to a recursive call — is one line
+again. `Pool[T]` and `Map[K, V]` elements stay refused by name: a pool
+element is reached through a generational handle whose runtime shape is
+stub 67's second lane, and a map read answers `V ! {none}`, a row
+rather than storage, so there is no element address to hand out.
+
+**And the exclusivity rule that makes it sound was one leg short**
+(E1002). A `mut` argument is exclusive for the whole call, and the
+arguments spelled AFTER it are evaluated inside that claim. D39 already
+caught a bare read there (`f(mut a, a.x)`); a nested CALL claiming the
+same place was not checked at all. With element lends landed that is
+not a nicety: `take2(mut xs[0], grow(mut xs))` had the native lane mint
+the element's address, the nested call grow the list and free the
+buffer under it, and the program print `1` where the checked machine
+printed `6` — a silent wrong answer on both lanes' watch. The same
+shape over a spilled field, `take2(mut r.a, wipe(mut r))`, is a
+**pre-existing** divergence on 0.2.15: checked prints `1007 2000`,
+native prints `8 2000`, both exit 0, no diagnostic. Both are E1002 now,
+on both lanes, and `crates/wolf_driver/tests/mut_element_place.rs` is
+the cross-lane gate — nine cases, each asserting the lanes agree AND
+agree on the right answer; eight of the nine go red against 0.2.15.
+
+### Three product-pattern refusals retired
+
+The #179/#196 residue the native pipe carried while the checked lane
+ran it. Each had a corpus pin promising to advance `mem -> run` on the
+day it landed, and all three advance in the commit that lands them:
+
+- **an enum or row test inside a product** (`Box { p: Pair(a, _), .. }`,
+  the deep-tree class) — a payload-carrying case value is an aggregate
+  whose slot 0 is the tag, so the nested test is the same `icmp`
+  against a domain built from the FIELD's own sema type, and the
+  payload slots recurse back into the product walk;
+- **a str literal inside a product** (`("go", n)`) — the product walk is
+  a conjunction of pure tests and an inline str equality is one, the
+  same `str_eq_inline` the top-level #54 chain uses;
+- **an or-pattern inside a product** (`Pair(1 | 2, b)`) — and the pin's
+  own name for it, "join params", turns out to have been too
+  pessimistic: an alternation in a slot is a DISJUNCTION of that slot's
+  tests, so each alternative's conjunction folds to one BOOL and the
+  alternatives are `bor`'d. Join params are needed only when an
+  alternative BINDS, which stays refused under its own name.
+
+`grammar/match_arm_or_over_product` is still refused on BOTH lanes (the
+checked machine refuses or-patterns with bindings), so it stays the
+honest pin it was.
+
+### Two design questions answered, both with a no
+
+**`[mem.region.root]` — a region carries no root** (#155's ch16 row).
+`[mem.region.intra.1]` makes every object in a region equally reachable
+from every other, so none is privileged, and `[mem.region.create.4]`
+gives region identity zero runtime representation, so a root would be
+the one typed field in an object designed to have none. The entry point
+travels beside the region as a `handle T`, which is plain data and
+therefore not a cross-region edge.
+
+**`[mem.region.imm.ret]` — `imm` is not a type qualifier** (#155's ch12
+row); `-> imm List[Doc]` stays E0204. `imm` is the state of a region's
+contents after `freeze`, not a property of a type, and a value-level
+qualifier would be a second immutability lattice beside the one the
+checker actually enforces. Returning the value out of the frozen region
+already crosses by reference with no copy.
+
+A stated no is a result; silence was not.
+
 ### The record could not say a program was fine
 
 **`conform-run`'s default lane answered `unsupported` for every clean
@@ -120,6 +197,7 @@ and only a precondition for a test file.
 capped their reports since s63; this surface printed every diagnostic a
 wrecked module could produce, which is the terminal-scrolling the cap
 exists to prevent.
+
 
 ### The checked machine answered a question wrongly, and said nothing
 
