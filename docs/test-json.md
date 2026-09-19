@@ -35,10 +35,23 @@ rejects unknown *events*.
 - `name` (string): the `test_*` fn. `"main"` for a black-box file;
   `"<file>"` for a file-level outcome (compile failure, ladder
   refusal).
-- `status` (string): `pass`, `fail`, or `unsupported`. `unsupported` is
-  the conservatism ledger: the checked machine refused the construct.
-  It fails the run, since a green run means every discovered test
-  ran.
+- `status` (string): `pass`, `fail`, `rejected`, or `unsupported`.
+  Three ways not to pass, and they are three different facts:
+  - `fail` — the test RAN and found something.
+  - `rejected` — the compiler rejected the file, so it never ran
+    (added s169, wolf-lang#157: `wolf test` spelled this `fail` too,
+    and "your test found a bug" and "your module does not build" were
+    one column). A DOCTEST that does not compile stays `fail`:
+    compiling is what a doctest asserts, and only a precondition for a
+    test file.
+  - `unsupported` — the conservatism ledger: the checked machine
+    refused the construct.
+
+  All three fail the run, since a green run means every discovered
+  test ran and passed. A consumer that does not know `rejected` sees a
+  status it cannot classify, never a silent pass — the value is new,
+  the schema version is not, and every non-`pass` status has always
+  been a red row.
 - `detail` (string): the verdict. `exit(N)`, `trap(kind)`,
   `ub(mem.ub)`, a refusal construct, or `does not compile`.
 - `stdout`, `stderr` (strings): present when `status != "pass"`, and
@@ -48,7 +61,7 @@ rejects unknown *events*.
 
 ```json
 {"schema":"wolf-test/0","event":"summary","passed":3,"failed":1,
- "unsupported":0,"filtered_out":0,"stopped_early":false}
+ "rejected":0,"unsupported":0,"filtered_out":0,"stopped_early":false}
 ```
 
 - Counters are integers; `stopped_early` is true under `--fail-fast`.
@@ -56,7 +69,10 @@ rejects unknown *events*.
 ## Exit codes
 
 - `0`: every discovered, unfiltered test passed. Zero tests counts.
-- `1`: any failure, unsupported test, or compile error. A schedule
+- `1`: any failure, rejected file, unsupported test, or compile error
+  ([conf.exit.test]: a runner that PRODUCED a report with a
+  non-passing row exits 1; it exits 2 only when it could not produce
+  a report at all). A schedule
   divergence under `--schedules=N` lands here too, and the finding's
   `detail` carries the diverging seeds and the `--replay=` line
   (spec/07 `[sched.flags]`).
