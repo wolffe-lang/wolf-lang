@@ -174,7 +174,11 @@ fn conform_run_honours_deny_warnings_and_rejects_at_the_warning_rung() {
     // Unflagged: a warning, and the program is otherwise fine.
     let plain = record(&[]);
     assert_eq!(plain["verdict"], "pass", "{plain}");
-    assert_eq!(plain["warnings"].as_array().map(Vec::len), Some(1), "{plain}");
+    assert_eq!(
+        plain["warnings"].as_array().map(Vec::len),
+        Some(1),
+        "{plain}"
+    );
 
     // Denied: the same observation is now an error, the verdict is a
     // rejection, and it reports the rung that found it.

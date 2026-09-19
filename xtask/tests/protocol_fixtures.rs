@@ -37,7 +37,10 @@ fn warnings_fixture_accepts_and_absence_never_diverges() {
 fn a_clean_stop_validates_and_compares_against_a_run_as_nothing() {
     let p = fixture("clean-stop.json");
     assert!(xtask::protocol::validate_record(&p).is_ok());
-    assert!(!xtask::protocol::covered_at_run(&p), "`pass` is never coverage");
+    assert!(
+        !xtask::protocol::covered_at_run(&p),
+        "`pass` is never coverage"
+    );
     let mut ran = p.clone();
     ran["phase_reached"] = serde_json::json!("run");
     ran["verdict"] = serde_json::json!("exit(0)");

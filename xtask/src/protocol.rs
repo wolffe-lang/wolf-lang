@@ -564,10 +564,7 @@ mod tests {
             Some(Class::Verdict),
             "pass vs fail is a disagreement about the language"
         );
-        assert_eq!(
-            compare(&f, &p, false).map(|(c, _)| c),
-            Some(Class::Verdict)
-        );
+        assert_eq!(compare(&f, &p, false).map(|(c, _)| c), Some(Class::Verdict));
         // And `pass` vs `pass` agrees whatever rung each stopped at.
         let mut a = record("pass");
         a["phase_reached"] = json!("wir");

@@ -36,13 +36,13 @@ const FINE: &str = "fn main() -> !int {\n    print(\"hello\")\n    0\n}\n";
 /// wolf-lang#343's own witness, verbatim. Filed as "the default lane
 /// refuses every slice form", it is in fact a clean lowering — which
 /// is the finding, not the fix.
-const SLICE: &str = "fn main() -> !int {\n    let s = \"espresso\"\n    print(\"{s[..2]}\")\n    0\n}\n";
+const SLICE: &str =
+    "fn main() -> !int {\n    let s = \"espresso\"\n    print(\"{s[..2]}\")\n    0\n}\n";
 
 /// A construct the reference lowering genuinely does not cover:
 /// const-generic values do not elaborate (the `corpus/comptime/
 /// norm_linear.lu` refusal, reduced).
-const REFUSED: &str =
-    "struct Buf[N: type] {\n    len: int,\n}\n\nfn closed(b: Buf[2 + 2]) -> Buf[4] {\n    copy b\n}\n\nfn main() -> !int {\n    0\n}\n";
+const REFUSED: &str = "struct Buf[N: type] {\n    len: int,\n}\n\nfn closed(b: Buf[2 + 2]) -> Buf[4] {\n    copy b\n}\n\nfn main() -> !int {\n    0\n}\n";
 
 /// A program the language declines.
 const ILLEGAL: &str = "fn main() -> !int {\n    let x: int = \"nope\"\n    0\n}\n";
@@ -54,8 +54,7 @@ const ERRS: &str = "fn main() -> !int {\n    return NoComma\n}\n";
 /// A failing two-argument `assert`: the message is the program's own
 /// words for its fault, and `[conf.trap.assert]` evaluates it only on
 /// the failing path.
-const ASSERTS: &str =
-    "fn main() -> !int {\n    assert(1 == 2, \"one is not two\")\n    0\n}\n";
+const ASSERTS: &str = "fn main() -> !int {\n    assert(1 == 2, \"one is not two\")\n    0\n}\n";
 
 fn fixture(case: &str, src: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("s169-{case}"));
@@ -76,8 +75,9 @@ fn observe(dir: &Path, extra: &[&str]) -> (i32, serde_json::Value, String) {
         .expect("run wolf conform-run");
     let stdout = String::from_utf8_lossy(&out.stdout).into_owned();
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
-    let rec: serde_json::Value = serde_json::from_str(stdout.trim())
-        .unwrap_or_else(|e| panic!("record is not JSON ({e}):\nstdout: {stdout}\nstderr: {stderr}"));
+    let rec: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap_or_else(|e| {
+        panic!("record is not JSON ({e}):\nstdout: {stdout}\nstderr: {stderr}")
+    });
     (out.status.code().unwrap_or(-1), rec, stderr)
 }
 
@@ -99,7 +99,11 @@ fn a_fine_program_passes_on_the_default_lane() {
     // A clean stop carries no refusal keys and no diagnostics, and it
     // says nothing on stderr — there is nothing to say.
     assert!(rec.get("x-unsupported-construct").is_none(), "{rec}");
-    assert_eq!(rec["diagnostics"].as_array().map(Vec::len), Some(0), "{rec}");
+    assert_eq!(
+        rec["diagnostics"].as_array().map(Vec::len),
+        Some(0),
+        "{rec}"
+    );
     assert!(err.is_empty(), "a clean program prints nothing:\n{err}");
     // `pass` carries no program outcome ([proto.record.pass]).
     assert!(rec["stdout_sha256"].is_null(), "{rec}");

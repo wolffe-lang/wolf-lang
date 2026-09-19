@@ -3603,7 +3603,8 @@ fn conform_run(args: &[String]) {
                                 all.extend(tc.diagnostics.iter().cloned());
                                 wolf_diag::suppress_mode_shadowed(&mut all);
                                 wolf_diag::sort_diagnostics(&mut all);
-                                if let Some(code) = first_error_linted(&lints, &allow_regions, &all) {
+                                if let Some(code) = first_error_linted(&lints, &allow_regions, &all)
+                                {
                                     ("typecheck", format!("fail({code})"), all)
                                 } else if phase.as_deref() == Some("typecheck") {
                                     ("typecheck", "pass".to_string(), all)
@@ -3625,7 +3626,9 @@ fn conform_run(args: &[String]) {
                                         let mut all = all;
                                         all.extend(mem.diagnostics.iter().cloned());
                                         wolf_diag::sort_diagnostics(&mut all);
-                                        if let Some(code) = first_error_linted(&lints, &allow_regions, &all) {
+                                        if let Some(code) =
+                                            first_error_linted(&lints, &allow_regions, &all)
+                                        {
                                             ("mem", format!("fail({code})"), all)
                                         } else if phase.as_deref() == Some("mem") {
                                             ("mem", "pass".to_string(), all)
