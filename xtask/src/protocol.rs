@@ -92,11 +92,24 @@ pub fn validate_record(v: &serde_json::Value) -> Result<Verdict, String> {
             }
         }
     }
+    // `trap_message` ([proto.record.trap], s169): optional and additive
+    // — the program's own words for its fault, honest-absent when the
+    // implementation does not hold them — but well-shaped when present,
+    // and only on a trap. It is NEVER compared (see `compare`).
+    if let Some(m) = obj.get("trap_message")
+        && !m.is_string()
+    {
+        return Err("`trap_message` must be a string when present".into());
+    }
     let verdict = obj
         .get("verdict")
         .and_then(|x| x.as_str())
         .ok_or("missing/invalid required field `verdict`")?;
-    parse_verdict(verdict)
+    let verdict = parse_verdict(verdict)?;
+    if obj.contains_key("trap_message") && !matches!(verdict, Verdict::Trap(_)) {
+        return Err("`trap_message` belongs only on a `trap(kind)` verdict".into());
+    }
+    Ok(verdict)
 }
 
 /// Divergence classes per `[proto.cmp.severity]`, descending.
@@ -131,6 +144,19 @@ pub fn compare(
     let vb = validate_record(b).ok()?;
     if va == Verdict::Unsupported || vb == Verdict::Unsupported {
         return None; // conservatism ledger, not divergence
+    }
+    // [proto.cmp.pass] (s169): a `pass` side stopped WITHOUT EXECUTING,
+    // so against a dynamic verdict the two records are not two answers
+    // to one question — there is nothing to compare. The carve-out is
+    // exactly this wide: `pass` vs `fail(CODE)` falls through to the
+    // verdict comparison below and IS a divergence, because there both
+    // sides answered the static question and answered it differently.
+    // That pair was INVISIBLE before s169 (wolfgang spelled its clean
+    // stop `unsupported`, which the clause above excuses), so the
+    // amendment opens a hole rather than widening one.
+    let dynamic = |v: &Verdict| matches!(v, Verdict::Exit(_) | Verdict::Trap(_) | Verdict::Ub(_));
+    if (va == Verdict::Pass && dynamic(&vb)) || (vb == Verdict::Pass && dynamic(&va)) {
+        return None;
     }
     match (&va, &vb) {
         (Verdict::Ub(x), Verdict::Ub(y)) => {
@@ -269,8 +295,14 @@ pub fn compare(
 ///   compared, at that rung, under `[proto.cmp.rung]` — but it is not
 ///   run-rung coverage, and folding it in here would let a lane that
 ///   stopped executing programs hide behind one that still rejects them.
-/// - `pass` answers an explicit `--phase` request; there is no program
-///   outcome in it.
+/// - `pass` is the ladder's clean stop (`[proto.record.pass]`): an
+///   explicit `--phase` request, or a full-ladder run that reached the
+///   deepest rung its lane implements. Either way nothing executed, so
+///   there is no program outcome in it. s169 made wolfgang's default
+///   lane spell its clean stop `pass` instead of `unsupported`, which
+///   moves entries between two EXCLUDED classes and cannot move this
+///   number — the `default` lane's count stays 0, which is exactly the
+///   evidence `RUN_LANES` carries it for.
 pub fn covered_at_run(record: &serde_json::Value) -> bool {
     if record.get("phase_reached").and_then(|p| p.as_str()) != Some("run") {
         return false;
@@ -504,6 +536,69 @@ mod tests {
     fn unsupported_is_not_divergence() {
         let (a, b) = (record("unsupported"), record("exit(0)"));
         assert!(compare(&a, &b, false).is_none());
+    }
+
+    /// `[proto.cmp.pass]`, in both directions and at both edges. The
+    /// second half is the one that matters: a `pass` against a
+    /// REJECTION must still be a divergence, or the amendment would
+    /// have bought a wider excuse than the one it replaced.
+    #[test]
+    fn pass_against_a_run_is_not_divergence_but_against_a_rejection_it_is() {
+        for dynamic in ["exit(0)", "exit(7)", "trap(overflow)", "ub(mem.ub)"] {
+            let (p, d) = (record("pass"), record(dynamic));
+            assert!(
+                compare(&p, &d, false).is_none(),
+                "pass vs {dynamic} compares nothing — the passing side did not execute"
+            );
+            assert!(
+                compare(&d, &p, false).is_none(),
+                "{dynamic} vs pass, the other way round"
+            );
+        }
+        // The hole the amendment OPENS: one side completed the static
+        // ladder clean, the other rejected the program. Two answers to
+        // one question, and they differ.
+        let (p, f) = (record("pass"), record("fail(E0401)"));
+        assert_eq!(
+            compare(&p, &f, false).map(|(c, _)| c),
+            Some(Class::Verdict),
+            "pass vs fail is a disagreement about the language"
+        );
+        assert_eq!(
+            compare(&f, &p, false).map(|(c, _)| c),
+            Some(Class::Verdict)
+        );
+        // And `pass` vs `pass` agrees whatever rung each stopped at.
+        let mut a = record("pass");
+        a["phase_reached"] = json!("wir");
+        let mut b = record("pass");
+        b["phase_reached"] = json!("mem");
+        assert!(compare(&a, &b, false).is_none());
+    }
+
+    /// `[proto.record.trap]`: additive, shape-checked, trap-only, and
+    /// never compared.
+    #[test]
+    fn trap_message_is_additive_shaped_and_never_compared() {
+        let mut a = record("trap(assert)");
+        a["trap_message"] = json!("one is not two");
+        let b = record("trap(assert)");
+        assert!(validate_record(&a).is_ok());
+        // Absent on one side, different on the other: neither diverges.
+        assert!(compare(&a, &b, false).is_none());
+        let mut b2 = record("trap(assert)");
+        b2["trap_message"] = json!("ein ist nicht zwei");
+        assert!(
+            compare(&a, &b2, false).is_none(),
+            "wording is never comparison surface ([proto.record.diag]'s rule)"
+        );
+        // Shape: a string, and only on a trap.
+        let mut bad = record("trap(assert)");
+        bad["trap_message"] = json!(["not", "a", "string"]);
+        assert!(validate_record(&bad).is_err());
+        let mut misplaced = record("exit(0)");
+        misplaced["trap_message"] = json!("a program that exited has no fault to explain");
+        assert!(validate_record(&misplaced).is_err());
     }
 
     #[test]
