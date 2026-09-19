@@ -1,0 +1,18 @@
+{
+  "protocol": 1,
+  "impl": "example",
+  "impl_version": "0.0.1",
+  "commit": "abc1234",
+  "file": "corpus/faults/assert_message.lu",
+  "phase_reached": "run",
+  "seeded": false,
+  "diagnostics": [],
+  "warnings": [],
+  "verdict": "trap(assert)",
+  "trap_message": "one is not two",
+  "stdout_sha256": null,
+  "stdout_inline": null,
+  "x-trap-clause": "mem.ub.defined",
+  "x-trap-span": [24, 56],
+  "x-trap-pos": [2, 5]
+}
