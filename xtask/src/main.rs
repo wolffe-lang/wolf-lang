@@ -1590,6 +1590,65 @@ enum LaneStop {
 }
 
 /// Run `conform-run` on one file in one lane.
+/// How long one `conform-run` observation may take before the entry is
+/// declared hung (s170). Entries run in well under a second; the
+/// margin is for a cold runner compiling natively, not for a program
+/// that blocks. The point is that the number exists at all: without
+/// one, a single hanging entry takes the job's whole budget and the
+/// log names nothing.
+const LANE_OBSERVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// Run `cmd` to completion, or `Ok(None)` if it outlives `limit` (the
+/// child is killed and reaped). `std::process` has no waitable
+/// timeout, so the output is drained on a thread and the wait is the
+/// join.
+fn run_with_deadline(
+    mut cmd: Command,
+    limit: std::time::Duration,
+) -> std::io::Result<Option<std::process::Output>> {
+    cmd.stdin(std::process::Stdio::null());
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+    let mut child = cmd.spawn()?;
+    // The pipes are drained by threads, never by the waiter: a chatty
+    // child that fills a pipe buffer blocks, and that would look
+    // exactly like the hang this function exists to catch.
+    let mut out = child.stdout.take().expect("piped");
+    let mut err = child.stderr.take().expect("piped");
+    let oh = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = std::io::Read::read_to_end(&mut out, &mut b);
+        b
+    });
+    let eh = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = std::io::Read::read_to_end(&mut err, &mut b);
+        b
+    });
+    let deadline = std::time::Instant::now() + limit;
+    let status = loop {
+        match child.try_wait()? {
+            Some(st) => break st,
+            None => {
+                if std::time::Instant::now() >= deadline {
+                    // Kill and REAP: an abandoned child would keep the
+                    // pipes open, the drain threads parked, and on
+                    // windows the job itself alive.
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Ok(None);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+        }
+    };
+    Ok(Some(std::process::Output {
+        status,
+        stdout: oh.join().unwrap_or_default(),
+        stderr: eh.join().unwrap_or_default(),
+    }))
+}
+
 fn lane_observe(wolf: &Path, file: &Path, flag: &str) -> Result<LaneObs, LaneStop> {
     let mut cmd = Command::new(wolf);
     cmd.arg("conform-run").arg(file).arg("--json");
@@ -1599,9 +1658,23 @@ fn lane_observe(wolf: &Path, file: &Path, flag: &str) -> Result<LaneObs, LaneSto
     if !flag.is_empty() {
         cmd.arg(flag);
     }
-    let out = cmd
-        .output()
-        .map_err(|e| LaneStop::Broken(format!("spawn wolf: {e}")))?;
+    let out = run_with_deadline(cmd, LANE_OBSERVE_TIMEOUT)
+        .map_err(|e| LaneStop::Broken(format!("spawn wolf: {e}")))?
+        .ok_or_else(|| {
+            // s170: a corpus entry that never returns used to consume
+            // the whole job's timeout and be CANCELLED — no verdict, no
+            // file name, nothing in the log but a gap. One hanging
+            // program is a regression like any other and must read as
+            // one, so it is named here and the run goes red.
+            LaneStop::Broken(format!(
+                "conform-run {flag} HUNG on {} — no verdict after {}s. A corpus entry \
+                 that does not return is a regression: find the blocking op it never \
+                 leaves (a `join`, a `recv`, a `when`) and give it a witness that \
+                 cannot wait forever.",
+                file.display(),
+                LANE_OBSERVE_TIMEOUT.as_secs()
+            ))
+        })?;
     if out.status.code() == Some(2) {
         return Err(LaneStop::Environment(format!(
             "environment cannot drive `{flag}`: {}",
