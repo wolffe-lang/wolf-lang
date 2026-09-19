@@ -1587,6 +1587,11 @@ enum LaneStop {
     /// else means "ran and broke", and a ported host must never be
     /// silently green through the wrong branch.
     Broken(String),
+    /// s170: the entry never returned. A regression like `Broken`, but
+    /// the sweep CONTINUES past it and reports every hung entry at the
+    /// end — one name is a symptom, the list is the diagnosis, and a
+    /// port bring-up cannot afford one CI cycle per hanging program.
+    Hung(String),
 }
 
 /// Run `conform-run` on one file in one lane.
@@ -1596,7 +1601,7 @@ enum LaneStop {
 /// that blocks. The point is that the number exists at all: without
 /// one, a single hanging entry takes the job's whole budget and the
 /// log names nothing.
-const LANE_OBSERVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+const LANE_OBSERVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
 /// Run `cmd` to completion, or `Ok(None)` if it outlives `limit` (the
 /// child is killed and reaped). `std::process` has no waitable
@@ -1665,12 +1670,12 @@ fn lane_observe(wolf: &Path, file: &Path, flag: &str) -> Result<LaneObs, LaneSto
             // the whole job's timeout and be CANCELLED — no verdict, no
             // file name, nothing in the log but a gap. One hanging
             // program is a regression like any other and must read as
-            // one, so it is named here and the run goes red.
-            LaneStop::Broken(format!(
-                "conform-run {flag} HUNG on {} — no verdict after {}s. A corpus entry \
-                 that does not return is a regression: find the blocking op it never \
-                 leaves (a `join`, a `recv`, a `when`) and give it a witness that \
-                 cannot wait forever.",
+            // one, so it is named here and the run goes red. It is its
+            // OWN stop class, not `Broken`, because the sweep keeps
+            // going: stopping at the first hang reports one file when
+            // the answer a port needs is all of them.
+            LaneStop::Hung(format!(
+                "conform-run {flag} HUNG on {} — no verdict after {}s",
                 file.display(),
                 LANE_OBSERVE_TIMEOUT.as_secs()
             ))
@@ -1819,6 +1824,9 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
     // only place the claim is worth anything: a unit test asserts one
     // program, this asserts every one we have.
     let mut clean_called_unsupported: Vec<String> = Vec::new();
+    // s170: every entry that never returned, collected rather than
+    // fatal-on-first (see [`LaneStop::Hung`]).
+    let mut hung: Vec<String> = Vec::new();
     for f in &files {
         let key = f.display().to_string();
         for (lane, flag) in RUN_LANES {
@@ -1866,6 +1874,10 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
                     // skip (the s59 exit-code asymmetry).
                     eprintln!("lane-coverage: {e}");
                     return ExitCode::FAILURE;
+                }
+                Err(LaneStop::Hung(e)) => {
+                    eprintln!("lane-coverage: {e}");
+                    hung.push(e);
                 }
             }
         }
@@ -1972,6 +1984,18 @@ fn lane_coverage_cmd(args: &[String]) -> ExitCode {
 
     // The ratchet. Coverage may rise and may not fall.
     let mut fell = false;
+    if !hung.is_empty() {
+        eprintln!(
+            "lane-coverage: {} entry/lane observation(s) NEVER RETURNED — a corpus program \
+             that does not terminate is a regression, and the list is the diagnosis (find \
+             the blocking op each one never leaves: a `join`, a `recv`, a `when`):",
+            hung.len()
+        );
+        for h in &hung {
+            eprintln!("lane-coverage:   {h}");
+        }
+        fell = true;
+    }
     if !clean_called_unsupported.is_empty() {
         eprintln!(
             "lane-coverage: {} default-lane record(s) spell a CLEAN LOWERING `unsupported` at \
