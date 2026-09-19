@@ -27,6 +27,15 @@ pub const PRELUDE: &[&str] = &[
     "Pool",
     "Mutex",
     "channel",
+    // the concurrency handle types (s170, wolf-lang#316; BACKLOG B21
+    // rules the spelling): `Scope` is `scope name { … }`'s handle and
+    // `Proc[T]` is `spawn proc f(…)`'s, T being the completion value
+    // the join collects (wolf-lang#110). Named here — not admitted as
+    // the lowercase keywords in type position the way `region` is —
+    // so `[conc.task.scope]`'s handle-as-parameter is writable:
+    // `fn f(s: Scope)`, `fn g(p: Proc[int])`. `sig.rs` types them.
+    "Scope",
+    "Proc",
     // s158 (`[type.range]`, wolf-lang#24): `range[int]` / `range[char]`
     // — the type of `a..b`. A prelude NAME, like `List`, not a
     // `BUILTIN_TYPES` prim: it takes an argument.
@@ -360,6 +369,20 @@ mod tests {
         assert!(is_builtin_type("i32"));
         assert!(is_builtin_type("wrapping"));
         assert!(!is_builtin_type("List")); // List is prelude, not builtin
+    }
+
+    /// s170 (wolf-lang#316, B21): the two conc handle types are
+    /// PRELUDE names, not builtin scalars — resolvable with no import
+    /// and elaborated by `sig.rs`, exactly as `channel`/`List` are.
+    /// Shadowing one is a hazard (they are not provisional stand-ins).
+    #[test]
+    fn conc_handle_types_are_prelude_names() {
+        assert!(in_prelude("Scope"));
+        assert!(in_prelude("Proc"));
+        assert!(!is_builtin_type("Scope"));
+        assert!(!is_builtin_type("Proc"));
+        assert!(shadow_hazard("Scope"));
+        assert!(shadow_hazard("Proc"));
     }
 
     /// s158 (`[type.range]`): `range` resolves as a type name, and
