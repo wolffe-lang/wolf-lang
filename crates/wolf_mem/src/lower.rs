@@ -1739,6 +1739,83 @@ impl<'t> Lowerer<'t> {
         );
     }
 
+    /// s168 — the other half of D39's order rule, and the half that
+    /// decides whether lending a container ELEMENT is sound.
+    ///
+    /// A `mut` argument is exclusive for the WHOLE call, and the rest
+    /// of the argument list is evaluated inside that claim.
+    /// [`Self::check_copy_read_after_mut`] catches a bare read spelled
+    /// there (`f(mut a, a.x)`); this catches a nested CALL that claims
+    /// the same place — `f(mut xs[0], grow(mut xs))`.
+    ///
+    /// It is not a nicety. Measured before the check existed: the
+    /// lowerer minted the element's address for the first argument,
+    /// the nested call grew the list and freed the buffer under it,
+    /// and the native lane wrote through the stale pointer and printed
+    /// `1` where the checked machine printed `6` — a silent wrong
+    /// answer with no diagnostic on either lane. The same shape over a
+    /// spilled field (`f(mut r.a, g(mut r))`) loses the callee's write
+    /// to the writeback instead, which is wrong more quietly still.
+    fn check_nested_claims_after_mut(
+        &mut self,
+        from: (usize, usize),
+        arg_muts: &[(PlaceId, Span)],
+    ) {
+        if arg_muts.is_empty() {
+            return;
+        }
+        let (from_block, from_stmt) = from;
+        let mut hits: Vec<(PlaceId, Span, PlaceId, Span, &'static str)> = Vec::new();
+        for (bi, block) in self.blocks.iter().enumerate() {
+            let start = if bi == from_block {
+                from_stmt
+            } else if bi > from_block {
+                0
+            } else {
+                continue;
+            };
+            for st in block.stmts.iter().skip(start) {
+                let Stmt::Call(c) = st else { continue };
+                let claims = c
+                    .mut_args
+                    .iter()
+                    .map(|&(p, s)| (p, s, "goes `mut`"))
+                    .chain(c.take_args.iter().map(|&(p, s)| (p, s, "moves away")));
+                for (p, s, word) in claims {
+                    if let Some(&(m, mspan)) =
+                        arg_muts.iter().find(|&&(m, _)| self.places.overlap(m, p))
+                    {
+                        hits.push((m, mspan, p, s, word));
+                    }
+                }
+            }
+        }
+        for (m, mspan, p, s, word) in hits {
+            let (a, b) = (self.show_place_now(m), self.show_place_now(p));
+            let relation = if self.places.covers(m, p) || self.places.covers(p, m) {
+                format!(
+                    "`{a}` and `{b}` are a path and its prefix [mem.model.path.disjoint]."
+                )
+            } else {
+                format!("`{a}` and `{b}` can reach the same memory.")
+            };
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E1002,
+                    s,
+                    format!("`{b}` {word} in a call evaluated while `{a}` is lent `mut`"),
+                )
+                .with_label("a second claim inside the outer call's extent")
+                .with_secondary(mspan, format!("`{a}` is passed `mut` here"))
+                .with_note(format!(
+                    "{relation} A `mut` argument is exclusive for the whole call, and the \
+                     arguments after it are evaluated inside that claim [mem.tier0.excl]. \
+                     Evaluate the inner call into a local BEFORE the outer one."
+                )),
+            );
+        }
+    }
+
     // ---------------------------------------------------- places ----
 
     /// Struct field types of a place type, for sibling interning and
@@ -4435,6 +4512,17 @@ impl<'t> Lowerer<'t> {
         if site_mode != param.mode && !store_take {
             self.mode_mismatch(cs, param, arg, v, site_mode, param.mode);
         }
+        // s168: everything this argument emits happens inside any
+        // `mut` claim an EARLIER argument of the same call already
+        // spelled, so mark the statement stream here and check what
+        // lands after it.
+        let mark = (
+            self.cur.0 as usize,
+            self.blocks[self.cur.0 as usize].stmts.len(),
+        );
+        // Only claims spelled by EARLIER arguments: an argument is
+        // never checked against its own.
+        let prior_muts: Vec<(PlaceId, Span)> = arg_muts.clone();
         let effective = if store_take {
             Some(ParamMode::Take)
         } else {
@@ -4533,6 +4621,7 @@ impl<'t> Lowerer<'t> {
                 }
             }
         }
+        self.check_nested_claims_after_mut(mark, &prior_muts);
         Ok(())
     }
 
