@@ -1034,6 +1034,100 @@ fn e1002_copy_read_after_mut_arg() {
 }
 
 #[test]
+fn e1002_nested_call_claims_inside_a_mut_arg() {
+    // s168 — D39's rule taken one step further than a bare read. The
+    // arguments after a `mut` one are evaluated INSIDE its claim, so a
+    // nested CALL that claims the same place conflicts exactly as a
+    // read does. Untested before element lends existed; with them it
+    // is the difference between a diagnostic and a dangling write.
+    snap(
+        "e1002_nested_call_after_mut",
+        "fn grow(mut xs: List[int]) -> int {\n    \
+             (mut xs).push(9)\n    \
+             5\n\
+         }\n\
+         fn take2(mut a: int, b: int) {\n    \
+             a = a + b\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var xs = [1, 2]\n    \
+             take2(mut xs[0], grow(mut xs))\n    \
+             xs[0] - 6\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1002_nested_call_claims_a_spilled_bases_prefix() {
+    // The same rule over a SPILLED field rather than a container
+    // element. This shape predates s168 and was wrong the other way:
+    // both lanes accepted it, the writeback restored the stale copy
+    // over the nested call's write, and the two lanes printed
+    // different numbers with no diagnostic anywhere.
+    snap(
+        "e1002_nested_call_over_spill",
+        "struct R { a: int, b: int }\n\
+         fn wipe(mut r: R) -> int {\n    \
+             r.a = 1000\n    \
+             r.b = 2000\n    \
+             7\n\
+         }\n\
+         fn take2(mut a: int, b: int) {\n    \
+             a = a + b\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var r = R { a: 1, b: 2 }\n    \
+             take2(mut r.a, wipe(mut r))\n    \
+             r.a - 8\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1002_two_element_lends_in_one_call() {
+    // s168's first leg: `[mem.model.place]` collapses every element of
+    // a container to ONE opaque projection, so a second element claim
+    // in the same call is the prefix conflict. Element-granular
+    // disjointness is a non-target, and lending addresses into a
+    // buffer is the reason it should stay one.
+    snap(
+        "e1002_two_element_lends",
+        "fn add2(mut a: int, mut b: int) {\n    \
+             a = a + 1\n    \
+             b = b + 1\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var xs = [1, 2, 3]\n    \
+             add2(mut xs[0], mut xs[1])\n    \
+             xs[0] - 2\n\
+         }\n",
+    );
+}
+
+#[test]
+fn nested_call_on_a_disjoint_place_stays_silent() {
+    // The guard on the s168 rule: disjoint bases and disjoint FIELDS
+    // still pass. A rule that rejected these would be a new way to
+    // refuse correct programs.
+    snap(
+        "clean_nested_call_disjoint",
+        "struct R { a: int, b: int }\n\
+         fn add(mut n: int, k: int) {\n    \
+             n = n + k\n\
+         }\n\
+         fn side(mut m: int) -> int {\n    \
+             m = m + 1\n    \
+             5\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var r = R { a: 1, b: 2 }\n    \
+             add(mut r.a, side(mut r.b))\n    \
+             r.a - 6\n\
+         }\n",
+    );
+}
+
+#[test]
 fn copy_read_before_mut_stays_silent() {
     // Left-to-right order is the rule's clock: a `Copy` read finished
     // before the `mut` claim began never conflicts.

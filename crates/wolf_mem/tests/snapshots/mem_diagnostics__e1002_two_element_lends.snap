@@ -1,0 +1,12 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1002]: `xs[_]` cannot go `mut` here: it overlaps `xs[_]`, already passed `mut` in this call
+ --> mem:///main.lu:7:25
+  |
+7 |     add2(mut xs[0], mut xs[1])
+  |              ----- `xs[_]` is passed `mut` here
+  |                         ^^^^^ second exclusive claim on the same place
+  |
+  = note: the same place twice is never disjoint.

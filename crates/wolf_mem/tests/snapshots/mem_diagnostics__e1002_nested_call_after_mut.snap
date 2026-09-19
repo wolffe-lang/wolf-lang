@@ -1,0 +1,14 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1002]: `xs` goes `mut` in a call evaluated while `xs[_]` is lent `mut`
+  --> mem:///main.lu:10:31
+   |
+10 |     take2(mut xs[0], grow(mut xs))
+   |               ----- `xs[_]` is passed `mut` here
+   |                               ^^ a second claim inside the outer call's extent
+   |
+   = note: `xs[_]` and `xs` are a path and its prefix [mem.model.path.disjoint]. A `mut` argument
+     is exclusive for the whole call, and the arguments after it are evaluated inside that
+     claim [mem.tier0.excl]. Evaluate the inner call into a local BEFORE the outer one.
