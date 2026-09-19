@@ -2029,7 +2029,7 @@ fn wir_ty_frame(
         // (channels, sync cells, task scopes); proc ids and exit
         // reasons are plain words ([conc.proc.1], [conc.proc.exit]).
         TyKind::Chan(_) | TyKind::Mutex(_) | TyKind::TaskScope => Ok(Some(types::PTR)),
-        TyKind::Proc | TyKind::ExitReason => Ok(Some(types::I64)),
+        TyKind::Proc(_) | TyKind::ExitReason => Ok(Some(types::I64)),
         // s158 (`[type.range]`): a `range[T]` VALUE is the pair of its
         // endpoints — the same two-field aggregate `(T, T)` lowers to,
         // so no backend learns a new shape. `start` and `end` are
@@ -6356,6 +6356,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         &mut self,
         d: CallExpr<'t>,
         recv: &'t GreenNode,
+        val: TyId,
         mname: &str,
         e: &'t GreenNode,
     ) -> R<Flow> {
@@ -6364,6 +6365,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Err(refuse("a proc op without a handle", recv.span));
         };
         match mname {
+            "join" => self.lower_proc_join(id, val, e),
             "monitor" => Ok(Flow::Val(Some(
                 self.rt_call("__wolf_rt_proc_monitor", &[id], Some(types::PTR))
                     .expect("monitor channel"),
@@ -6401,6 +6403,117 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             _ => Err(refuse("this proc method", e.span)),
         }
+    }
+
+    /// `p.join()` — block until the proc exits, then split
+    /// `[conc.proc.exit]`'s reason word into `T ! {error, killed,
+    /// cancelled, fault}` (s170, wolf-lang#110).
+    ///
+    /// The word is the SAME encoding a monitor channel delivers
+    /// (`wolf_rt::task::ProcExit::encode`: class in the low byte,
+    /// payload arithmetic-shifted into the upper 56 bits), so the two
+    /// readers cannot drift — this decodes it inline rather than
+    /// through a second runtime entry, exactly as
+    /// [`Self::lower_reason_method`] reads the class byte inline.
+    /// `normal` is the only ok class; the other four become row tags,
+    /// payload-free at v0.
+    fn lower_proc_join(&mut self, id: Value, val: TyId, e: &'t GreenNode) -> R<Flow> {
+        let word = self
+            .rt_call("__wolf_rt_proc_join", &[id], Some(types::I64))
+            .expect("join reason word");
+        let eu = self.eu_ty_of(e.span)?;
+        let mask = self.b.iconst(types::I64, 0xFF);
+        let class = self
+            .b
+            .ins(Opcode::Band, &[word, mask], &[types::I64], Aux::None)
+            .one();
+        let merge = self.b.create_block();
+        let out = self.b.add_block_param(merge, eu);
+        // normal(value) — the ok half. The payload is sign-restoring:
+        // `ashr 8`, the decode side of the runtime's packing.
+        let normal_bb = self.b.create_block();
+        let rest = self.b.create_block();
+        let zero = self.b.iconst(types::I64, 0);
+        let is_normal = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[class, zero],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Eq),
+            )
+            .one();
+        self.b.ins_br(is_normal, normal_bb, &[], rest, &[]);
+        self.b.seal_block(normal_bb);
+        self.b.seal_block(rest);
+        self.b.switch_to_block(normal_bb);
+        self.b.gvn_push_scope();
+        let types::TypeData::Eu { ok, .. } = self.b.module.types.get(eu).clone() else {
+            unreachable!("join eu");
+        };
+        let okv = match ok {
+            Some(okt) => {
+                let eight = self.b.iconst(types::I64, 8);
+                let payload = self
+                    .b
+                    .ins(Opcode::Ashr, &[word, eight], &[types::I64], Aux::None)
+                    .one();
+                Some(self.narrow_from_wire(payload, okt, e.span)?)
+            }
+            // `Proc[()]`: the proc completed and there is nothing to
+            // carry, which is still a different answer from every
+            // abnormal class.
+            None => None,
+        };
+        let _ = val;
+        let ov = self.b.ins_eu_make_ok(eu, okv);
+        self.b.ins_jmp(merge, &[ov]);
+        self.b.gvn_pop_scope();
+        // The four abnormal classes, in the runtime's own code order
+        // (1 error, 2 killed, 3 cancelled, 4 fault). The last is the
+        // fallthrough: a forged word decodes as `error` in the
+        // runtime and must not fall off the end here either, so the
+        // chain ends on a tag rather than on an unreachable.
+        self.b.switch_to_block(rest);
+        let mut cur = rest;
+        for (code, tag) in [(1i64, "error"), (2, "killed"), (3, "cancelled")] {
+            let hit = self.b.create_block();
+            let next = self.b.create_block();
+            self.b.switch_to_block(cur);
+            self.b.gvn_push_scope();
+            let k = self.b.iconst(types::I64, code);
+            let is = self
+                .b
+                .ins(
+                    Opcode::Icmp,
+                    &[class, k],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
+                .one();
+            self.b.ins_br(is, hit, &[], next, &[]);
+            self.b.gvn_pop_scope();
+            self.b.seal_block(hit);
+            self.b.seal_block(next);
+            self.b.switch_to_block(hit);
+            self.b.gvn_push_scope();
+            let tid = self.b.module.tag_id(tag);
+            let tv = self.b.iconst(types::I64, tid);
+            let ev = self.b.ins_eu_make_err(eu, tv, &[]);
+            self.b.ins_jmp(merge, &[ev]);
+            self.b.gvn_pop_scope();
+            cur = next;
+        }
+        self.b.switch_to_block(cur);
+        self.b.gvn_push_scope();
+        let fid = self.b.module.tag_id("fault");
+        let fv = self.b.iconst(types::I64, fid);
+        let ev = self.b.ins_eu_make_err(eu, fv, &[]);
+        self.b.ins_jmp(merge, &[ev]);
+        self.b.gvn_pop_scope();
+        self.b.seal_block(merge);
+        self.b.switch_to_block(merge);
+        Ok(Flow::Val(Some(out)))
     }
 
     /// Exit-reason class predicates ([conc.proc.exit]): the wire word
@@ -16773,8 +16886,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 TyKind::TaskScope if mname == "spawn" => {
                     return self.lower_scope_spawn(d, recv_place, e);
                 }
-                TyKind::Proc => {
-                    return self.lower_proc_method(d, recv_place, &mname, e);
+                TyKind::Proc(val) => {
+                    let val = *val;
+                    return self.lower_proc_method(d, recv_place, val, &mname, e);
                 }
                 TyKind::ExitReason => {
                     return self.lower_reason_method(recv_place, &mname, e);

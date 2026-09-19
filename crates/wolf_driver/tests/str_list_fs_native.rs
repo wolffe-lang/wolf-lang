@@ -682,6 +682,9 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         // s165 (#384): `copy` of a List and of a Map.
         "__wolf_rt_list_copy",
         "__wolf_rt_map_copy",
+        // s170 (#110): the blocking join that collects a proc's typed
+        // completion value.
+        "__wolf_rt_proc_join",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -692,7 +695,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        148,
+        149,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
