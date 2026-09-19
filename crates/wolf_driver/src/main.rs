@@ -3207,10 +3207,14 @@ fn ct_gate(
 /// `mem`/`unsupported` (the conservatism ledger). A lowered module
 /// that fails the verifier or the print→parse→print fixpoint is a
 /// compiler bug — a deterministic ICE (exit 2), never a verdict.
+///
+/// A CLEAN lowering is `wir`/`pass` — s169's amendment
+/// ([proto.record.pass]). This is the default lane's deepest rung and
+/// it executes nothing, so `pass` is the whole of what the record can
+/// honestly say: the ladder completed and found nothing to report.
 fn wir_rung(
     pkg: &wolf_sema::Package,
     tc: &wolf_sema::Typecheck,
-    phase: Option<&str>,
     zstats: bool,
     all: Vec<Diagnostic>,
     x_ext: &mut Vec<(&'static str, serde_json::Value)>,
@@ -3253,11 +3257,23 @@ fn wir_rung(
             s.vtables_unique
         );
     }
-    if phase == Some("wir") {
-        ("wir", "pass".to_string(), all)
-    } else {
-        ("wir", "unsupported".to_string(), all)
-    }
+    // s169 ([proto.record.pass], wolf-lang#150/#343): the lowering is
+    // clean, so the compiler HAS NO COMPLAINT about this program —
+    // and the default lane runs nothing, because there is no WIR
+    // interpreter. Both of those are `pass`: an explicit `--phase=wir`
+    // stop and a full-ladder run that reached this lane's deepest rung
+    // are the same fact, and the record spells it the same way.
+    //
+    // Until s169 the second one was `unsupported`, which is a claim
+    // about the PROGRAM — the conservatism ledger, a construct outside
+    // scope. It was not true of a single clean program, and every
+    // downstream reader had to route around it: wolf-book's runner
+    // says so in its own source ("the bare verdict is useless here"),
+    // and wolf-lang#343 filed six clean slice lowerings as a lowering
+    // gap on the strength of it. The refusal branch above is the one
+    // that means `unsupported`, and it still says so, with the
+    // construct named.
+    ("wir", "pass".to_string(), all)
 }
 
 /// SHA-256 (FIPS 180-4) for the observation record's `stdout_sha256`
@@ -3591,7 +3607,6 @@ fn conform_run(args: &[String]) {
                                                         wir_rung(
                                                             &res.package,
                                                             &tc,
-                                                            phase.as_deref(),
                                                             zstats,
                                                             all,
                                                             &mut x_ext,
