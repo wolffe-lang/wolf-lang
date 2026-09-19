@@ -3082,6 +3082,7 @@ fn checked_run(
     pkg: &wolf_sema::Package,
     tc: &wolf_sema::Typecheck,
     mem: &wolf_mem::MemCheck,
+    sources: &Sources,
     mut all: Vec<Diagnostic>,
     run_stdout: &mut Option<String>,
     x_ext: &mut Vec<(&'static str, serde_json::Value)>,
@@ -3109,6 +3110,21 @@ fn checked_run(
                 Verdict::Trap(t) => {
                     x_ext.push(("x-trap-clause", serde_json::json!(t.clause)));
                     x_ext.push(("x-trap-span", serde_json::json!([t.span.lo, t.span.hi])));
+                    // s169: the same site in the spelling a person
+                    // reads, beside the bytes a machine compares. The
+                    // native tier already prints `at <file>:<line>:<col>`
+                    // ([conf.trap.report]); a record reader had only
+                    // offsets and no source to resolve them against.
+                    if let Some((line, col)) = sources.line_col(t.span.file, t.span.lo) {
+                        x_ext.push(("x-trap-pos", serde_json::json!([line, col])));
+                    }
+                    // The program's own words for its fault
+                    // ([proto.record.trap], #150). Honest-absent: a
+                    // one-argument `assert` writes no message and the
+                    // record invents none.
+                    if let Some(msg) = t.message {
+                        x_ext.push(("trap_message", serde_json::json!(msg)));
+                    }
                     ("run", format!("trap({})", t.kind), all)
                 }
                 Verdict::Ub(f) => {
@@ -3580,6 +3596,7 @@ fn conform_run(args: &[String]) {
                                                             &res.package,
                                                             &tc,
                                                             &mem,
+                                                            &sources,
                                                             all,
                                                             &mut run_stdout,
                                                             &mut x_ext,
