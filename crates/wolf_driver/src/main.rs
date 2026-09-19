@@ -3385,6 +3385,20 @@ fn conform_run(args: &[String]) {
     // `--zstats` (s25): peephole hit-rate counters from the wir rung's
     // builder, dumped on stderr — the Click claim, measured.
     let mut zstats = false;
+    // s169 (#49, wolf-std F-0046/F-0053): `--deny-warnings` reaches
+    // `conform-run`. The flag is already on `build`, `test` and `doc`,
+    // and wolf-std consumes the toolchain through `conform-run` and
+    // the record protocol ALONE (its coupling doctrine) — so until now
+    // the warning gate existed and the one repo that wanted it could
+    // not reach it.
+    //
+    // The manifest's `lints.*` rules are deliberately NOT read here,
+    // as they are not read by the unflagged run either: a record has
+    // to be reproducible from the file and the flags on the command
+    // line, because that is all the counterparty is given. The source
+    // `#[allow]` attribute is a different thing and is honored — it is
+    // part of the program (spec/01 §9.3).
+    let mut lints = LintLevels::new();
     // s73: `--seed=N` reaches the native runtime (`WOLF_SCHED_SEED`
     // drives the s32/s36 scheduler PRNG) — `[proto.seed.flag]` made
     // real for the native rung; the record reports `seeded` honestly.
@@ -3425,6 +3439,10 @@ fn conform_run(args: &[String]) {
         }
         if a == "--zstats" {
             zstats = true;
+            continue;
+        }
+        if a == "--deny-warnings" {
+            lints.deny_warnings();
             continue;
         }
         if let Some(d) = a.strip_prefix("--dump=") {
@@ -3501,6 +3519,22 @@ fn conform_run(args: &[String]) {
                 .find(|d| d.severity == wolf_diag::Severity::Error)
                 .map(|d| d.code)
         };
+        // The same question asked through the lint configuration
+        // (s169, #49). `--deny-warnings` must reject at the rung whose
+        // analysis produced the warning, not at the end — the verdict
+        // is `fail(CODE)` and `[proto.record.phase]` wants the phase
+        // that failed. Used from the resolve rung down, which is where
+        // the `#[allow]` regions are known; before that the plain
+        // question stands, so no attribute can be missed.
+        let first_error_linted = |lints: &LintLevels, allows: &[AllowRegion], ds: &[Diagnostic]| {
+            if lints.is_empty() {
+                return first_error(ds);
+            }
+            wolf_diag::lint::apply(lints, allows, ds.to_vec())
+                .iter()
+                .find(|d| d.severity == wolf_diag::Severity::Error)
+                .map(|d| d.code)
+        };
         // Phase ladder, deepest implemented: mem (s18). Each rung either
         // stops with fail(code) at that rung, passes at the requested rung,
         // or falls through deeper; past the last rung the verdict is
@@ -3545,7 +3579,7 @@ fn conform_run(args: &[String]) {
                         let mut all = res.diagnostics.clone();
                         all.extend(scan.diagnostics);
                         wolf_diag::sort_diagnostics(&mut all);
-                        if let Some(code) = first_error(&all) {
+                        if let Some(code) = first_error_linted(&lints, &allow_regions, &all) {
                             ("resolve", format!("fail({code})"), all)
                         } else if phase.as_deref() == Some("resolve") {
                             ("resolve", "pass".to_string(), all)
@@ -3569,7 +3603,7 @@ fn conform_run(args: &[String]) {
                                 all.extend(tc.diagnostics.iter().cloned());
                                 wolf_diag::suppress_mode_shadowed(&mut all);
                                 wolf_diag::sort_diagnostics(&mut all);
-                                if let Some(code) = first_error(&all) {
+                                if let Some(code) = first_error_linted(&lints, &allow_regions, &all) {
                                     ("typecheck", format!("fail({code})"), all)
                                 } else if phase.as_deref() == Some("typecheck") {
                                     ("typecheck", "pass".to_string(), all)
@@ -3591,7 +3625,7 @@ fn conform_run(args: &[String]) {
                                         let mut all = all;
                                         all.extend(mem.diagnostics.iter().cloned());
                                         wolf_diag::sort_diagnostics(&mut all);
-                                        if let Some(code) = first_error(&all) {
+                                        if let Some(code) = first_error_linted(&lints, &allow_regions, &all) {
                                             ("mem", format!("fail({code})"), all)
                                         } else if phase.as_deref() == Some("mem") {
                                             ("mem", "pass".to_string(), all)
@@ -3742,10 +3776,16 @@ fn conform_run(args: &[String]) {
     }
 
     // Source-level `#[allow]` suppression (s67): warnings inside an
-    // allowed region drop before reporting and before the record —
-    // levels stay default (conform-run takes no lint flags; the
-    // attribute is the program's own, so every consumer honors it).
-    let diagnostics = wolf_diag::lint::apply(&LintLevels::new(), &allow_regions, diagnostics);
+    // allowed region drop before reporting and before the record — the
+    // attribute is the program's own, so every consumer honors it.
+    //
+    // s169 (#49): and the ONE flag the surface takes, `--deny-warnings`,
+    // layers over it. A promoted warning becomes a `severity: "error"`
+    // diagnostic, which is what makes the verdict `fail(CODE)` at the
+    // rung above and drops it out of the `warnings` array — the record
+    // says the program was rejected, which under this configuration is
+    // what happened.
+    let diagnostics = wolf_diag::lint::apply(&lints, &allow_regions, diagnostics);
 
     // The rich diagnostic stream (s10) — stderr only, stdout is the
     // protocol's.
