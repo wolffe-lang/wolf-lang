@@ -192,7 +192,7 @@ fn is_copy(t: Ty<'_>, depth: u32) -> bool {
         TyKind::Chan(_)
         | TyKind::Mutex(_)
         | TyKind::TaskScope
-        | TyKind::Proc
+        | TyKind::Proc(_)
         | TyKind::ExitReason => true,
         TyKind::Distinct(inner) => is_copy(
             Ty {
@@ -1437,7 +1437,7 @@ impl<'t> Lowerer<'t> {
             | TyKind::Chan(_)
             | TyKind::Mutex(_)
             | TyKind::TaskScope
-            | TyKind::Proc
+            | TyKind::Proc(_)
             | TyKind::ExitReason
             | TyKind::Shared(_)
             | TyKind::Weak(_)
@@ -3484,14 +3484,40 @@ impl<'t> Lowerer<'t> {
         Ok(out)
     }
 
-    /// `spawn proc f(args)` — args evaluate as call arguments (moves
-    /// out of places, D14); the handle value is a plain word.
+    /// `spawn proc f(args)` — the handle value is a plain word; the
+    /// arguments cross into a failure domain that OUTLIVES this
+    /// frame, so they are not lent for a call's extent the way
+    /// `f(args)`'s are.
+    ///
+    /// s170 (wolf-lang#312): but a FROZEN argument is shared, not
+    /// moved. `[mem.region.freeze.1]` makes frozen data immutable
+    /// forever and shareable across threads, and `[conc.chan.imm]`
+    /// says `imm` data crosses by reference with no move — so the
+    /// one reason to move a spawn argument (the spawner might still
+    /// write it, or free it) cannot arise. Before this, every
+    /// argument here went through [`Self::eval_value`], which moves
+    /// out of a place whatever the callee's parameter mode is, so
+    /// handing one frozen snapshot to two procs was E1001 on the
+    /// second `spawn` — while the same two calls written as plain
+    /// calls compiled, because [`Self::lower_arg`] reads a `read`
+    /// parameter's place instead of moving it. That divergence is
+    /// what held ch16 §16.4's snapshot block to one machine.
+    ///
+    /// Everything else still moves. A proc outlives its spawner, so
+    /// a mutable local's bytes cannot be lent to it, and the move is
+    /// what makes `[abi.native.procenv]`'s per-proc copy honest.
     fn eval_spawn(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = wolf_ast::SpawnExpr::cast(e).expect("kind");
         if let Some(args) = d.args() {
             for a in args.args() {
-                if let Some(v) = a.value() {
-                    self.eval_value(v)?;
+                let Some(v) = a.value() else { continue };
+                match self.as_place(v) {
+                    Some((place, _)) if self.frozen_at(place).is_some() => {
+                        self.emit_read(place, v.span);
+                    }
+                    _ => {
+                        self.eval_value(v)?;
+                    }
                 }
             }
         }
