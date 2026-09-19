@@ -78,6 +78,17 @@ premise by construction.
   into its caller's scope takes the handle as a parameter — lifetime
   extension is visible at every call site. No detached spawn exists in
   the language or standard library.
+- `[conc.proc.handle]` The two handles have **type names**, in the
+  prelude: a scope handle is `Scope`, and a proc handle is `Proc[T]`
+  where `T` is the completion value its join collects
+  (`[conc.proc.join]`). `fn fan_out(s: Scope)` is how
+  `[conc.task.scope]`'s "takes the handle as a parameter" is written,
+  and `fn watch(p: Proc[int])` its proc twin. The lowercase `scope`
+  and `proc` are the block and spawn KEYWORDS and are not admitted in
+  type position; a program that writes one there is E0206, whose help
+  names the capitalised spelling. (Added 2026-09-18, s170 — BACKLOG
+  B21's ruling on wolf-lang#316: prelude names with a signature
+  elaboration, not keywords in type position the way `region` is.)
 - `[conc.task.spawn]` `s.spawn(closure)` schedules a task. The closure's
   captures obey D14: `Copy` values copy; `imm` shares; everything else
   must `move` (a captured region transfers). Capturing a `mut` borrow of
@@ -273,6 +284,31 @@ premise by construction.
   wolf-lang#187: the budget breach lobo's per-request 503 matches
   on). In the root domain a trap remains process death
   (`[conc.proc.root]`, `[conf.trap.exit]`).
+- `[conc.proc.join]` `p.join()` blocks the calling task until `p`
+  exits and yields its result: `T ! {error, killed, cancelled, fault}`,
+  where the ok half is `[conc.proc.exit]`'s `normal(value)` read as a
+  VALUE and each row tag is one abnormal class read as a tag. This is
+  the proc's talk-back channel: before it, a proc could report only
+  its exit class and its stdout. The join is a blocking point, so
+  cancellation of the JOINING task surfaces at it
+  (`[conc.cancel.points]`); it is not a second delivery of the exit
+  reason, but the same one `w.monitor()` carries, read
+  synchronously — a join after the proc has already exited answers
+  immediately and never blocks. The row is payload-free at v1: an
+  `error(tag)`'s tag rides the monitor channel, and a caller that
+  needs it reads the reason there. (Added 2026-09-18, s170 — BACKLOG
+  B21's ruling on wolf-lang#110: a typed result the supervisor
+  collects at the join, NOT a channel handle as a proc parameter.)
+- `[conc.proc.arg]` A `spawn proc` argument crosses into a domain
+  that outlives the spawner, so it is **moved** — with one exception:
+  FROZEN data is **shared, not moved**. `[mem.region.freeze.1]` makes
+  frozen data immutable forever and shareable across threads and
+  `[conc.chan.imm]` crosses `imm` by reference with no move, so
+  neither reason to move an argument — a later write by the spawner,
+  a free before the proc reads — can arise. One frozen snapshot may
+  therefore be handed to any number of procs. (Added 2026-09-18,
+  s170, wolf-lang#312: the mem tier moved it, so the same two calls
+  compiled as plain calls and refused as spawns.)
 - `[conc.proc.kill]` **Killed-proc sequence, in order** (the decided
   rule): (1) the proc's task tree is cancelled *without running any
   further user code* — pending `defer`/`errdefer` in the killed proc
