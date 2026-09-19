@@ -1,0 +1,12 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 1266..1294 name=Inner fields=1
+StructDecl 1296..1338 name=Outer fields=2
+StructDecl 1340..1379 name=Cell fields=2
+StructDecl 1381..1426 name=Word fields=2
+StructDecl 1428..1482 name=Bucket fields=2
+FnDecl 1484..1534 name=bump body=Block
+FnDecl 1536..1893 name=insert body=Block
+FnDecl 1895..2551 name=main body=Block

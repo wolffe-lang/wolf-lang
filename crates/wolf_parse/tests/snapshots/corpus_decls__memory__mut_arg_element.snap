@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 928..967 name=Cell fields=2
+StructDecl 969..1019 name=Grid fields=2
+FnDecl 1021..1068 name=bump body=Block
+FnDecl 1070..1141 name=advance body=Block
+FnDecl 1143..2003 name=main body=Block

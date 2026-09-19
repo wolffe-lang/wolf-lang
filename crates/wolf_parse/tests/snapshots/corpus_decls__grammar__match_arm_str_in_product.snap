@@ -2,5 +2,5 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 641..744 name=probe body=Block
-FnDecl 746..859 name=main body=Block
+FnDecl 821..924 name=probe body=Block
+FnDecl 926..1039 name=main body=Block
