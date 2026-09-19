@@ -122,6 +122,13 @@ struct Tally {
     rejected: usize,
     unsupported: usize,
     filtered_out: usize,
+    /// s170 (wolf-lang#159's X12 row): tests that actually ran more
+    /// than one seeded schedule, and tests that did not. Under
+    /// `--schedules=N` the second number is the one the reader needs:
+    /// a test that never explored has no schedule to replay, and the
+    /// tool used to promise one anyway.
+    explored: usize,
+    unexplored: usize,
 }
 
 pub fn test_cmd(args: &[String]) {
@@ -265,10 +272,13 @@ pub fn test_cmd(args: &[String]) {
                 .unwrap_or(0x5EED)
         });
     if let Some(n) = schedules {
-        eprintln!(
-            "wolf test: exploring {n} schedule(s) per test (root seed {root_seed}; \
-             reproduce any run with --replay=SEED)"
-        );
+        // s170 (wolf-lang#159, the X12 row): this line used to close
+        // with "reproduce any run with --replay=SEED" — a promise made
+        // before a single schedule had been explored, and false for
+        // every test the checked machine refuses. The replay line now
+        // appears only on runs that WERE explored, where it is
+        // measured, and the summary says how many were not.
+        eprintln!("wolf test: exploring {n} schedule(s) per test (root seed {root_seed})");
     }
     if let Some(spec) = &replay {
         eprintln!("wolf test: replaying schedule `{spec}`");
@@ -319,6 +329,8 @@ pub fn test_cmd(args: &[String]) {
         rejected: 0,
         unsupported: 0,
         filtered_out: 0,
+        explored: 0,
+        unexplored: 0,
     };
     let emit = |v: serde_json::Value| {
         println!("{v}");
@@ -480,6 +492,13 @@ pub fn test_cmd(args: &[String]) {
                     }
                     Err(nyc) => (Status::Unsupported, nyc.construct.to_string(), None),
                 };
+            // s170 (wolf-lang#159's X12 row): how many DISTINCT SEEDED
+            // schedules this test actually ran. Only the native lane
+            // feeds a seed to the runtime's scheduler PRNG
+            // ([sched.seed]); repeating a body on the checked machine
+            // is serial and seed-blind, so it is repetition, not
+            // exploration, and must not earn a replay line.
+            let mut seeded_runs: usize = 0;
             let (status, detail, out) = if *arity != 0 {
                 (
                     Status::Unsupported,
@@ -511,6 +530,7 @@ pub fn test_cmd(args: &[String]) {
                 match native_schedule_runs(file, std_root.as_deref(), &seeds) {
                     Err((s, d)) => (s, d, None),
                     Ok(runs) => {
+                        seeded_runs = runs.iter().filter(|r| r.0.is_some()).count();
                         let (seed0, s0, d0) =
                             (runs[0].0.unwrap_or(0), runs[0].1, runs[0].2.clone());
                         let divergence = runs
@@ -626,6 +646,13 @@ pub fn test_cmd(args: &[String]) {
                 Status::Rejected => tally.rejected += 1,
                 Status::Unsupported => tally.unsupported += 1,
             }
+            if schedules.is_some() {
+                if seeded_runs > 1 {
+                    tally.explored += 1;
+                } else {
+                    tally.unexplored += 1;
+                }
+            }
             if json {
                 let mut ev = serde_json::json!({
                     "schema": "wolf-test/0", "event": "test", "file": display,
@@ -693,13 +720,18 @@ pub fn test_cmd(args: &[String]) {
     // non-passing row exits 1).
     let ok = tally.failed == 0 && tally.rejected == 0 && tally.unsupported == 0;
     if json {
-        emit(serde_json::json!({
+        let mut summary = serde_json::json!({
             "schema": "wolf-test/0", "event": "summary",
             "passed": tally.passed, "failed": tally.failed,
             "rejected": tally.rejected,
             "unsupported": tally.unsupported, "filtered_out": tally.filtered_out,
             "stopped_early": stopped_early,
-        }));
+        });
+        if schedules.is_some() {
+            summary["explored"] = tally.explored.into();
+            summary["unexplored"] = tally.unexplored.into();
+        }
+        emit(summary);
     } else {
         println!(
             "wolf test: {} passed; {} failed; {} rejected; {} unsupported; {} filtered out{}",
@@ -713,6 +745,23 @@ pub fn test_cmd(args: &[String]) {
             } else {
                 ""
             }
+        );
+    }
+    // s170 (wolf-lang#159's X12 row): "a tool should not print a
+    // reproduction command for a run it cannot reproduce." It no
+    // longer does — and the count is the other half, because silence
+    // about the tests that never explored would read as though they
+    // had. Only the seeded native lane counts as exploration
+    // ([sched.seed]); a body the checked machine runs serially N
+    // times ran once, N times.
+    if schedules.is_some() && tally.unexplored > 0 && !json {
+        eprintln!(
+            "wolf test: {} of {} test(s) explored under derived seeds; {} ran without one \
+             and carry no replay line — a seed reaches the scheduler only on the native \
+             lane ([sched.seed]), so there is nothing to reproduce for those",
+            tally.explored,
+            tally.explored + tally.unexplored,
+            tally.unexplored
         );
     }
     std::process::exit(if ok { 0 } else { 1 });

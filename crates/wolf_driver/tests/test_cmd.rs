@@ -229,6 +229,53 @@ fn schedules_explores_and_prints_root_seed() {
     );
 }
 
+/// s170 (wolf-lang#159's X12 row): "a tool should not print a
+/// reproduction command for a run it cannot reproduce."
+///
+/// `--schedules=N` used to open with "reproduce any run with
+/// --replay=SEED" before a single schedule had been explored — and a
+/// `test_*` fn runs on the checked machine, serially and seed-blind
+/// ([sched.seed]), so for the bodies the book cares about the promise
+/// was simply false. The banner no longer makes it, and the summary
+/// says how many tests ran without a seed.
+#[test]
+fn schedules_promises_no_replay_it_cannot_honour() {
+    let dir = fixture("x12-honesty", &[("d_test.lu", PASSING)]);
+    let (code, out, err) = run_test(&dir, &["--schedules=3"]);
+    assert_eq!(code, 0, "a verdict-stable suite is green:\n{out}\n{err}");
+    assert!(
+        err.contains("root seed"),
+        "exploration still prints its root seed:\n{err}"
+    );
+    assert!(
+        !err.contains("reproduce any run with --replay=SEED"),
+        "the blanket promise is gone from the banner:\n{err}"
+    );
+    assert!(
+        err.contains("ran without one and carry no replay line"),
+        "the summary names the tests that never explored:\n{err}"
+    );
+}
+
+/// The machine surface carries the same two counts, so a CI job can
+/// assert on them rather than on prose.
+#[test]
+fn schedules_json_summary_carries_the_exploration_counts() {
+    let dir = fixture("x12-counts", &[("d_test.lu", PASSING)]);
+    let (code, out, err) = run_test(&dir, &["--schedules=3", "--json"]);
+    assert_eq!(code, 0, "{out}\n{err}");
+    let summary = out
+        .lines()
+        .filter_map(|l| serde_json::from_str::<serde_json::Value>(l).ok())
+        .find(|v| v["event"] == "summary")
+        .expect("a summary event");
+    assert_eq!(
+        summary["unexplored"], 1,
+        "the checked machine's seed-blind repetition is not exploration:\n{out}"
+    );
+    assert_eq!(summary["explored"], 0, "{out}");
+}
+
 /// A failure under exploration prints the seed and the copy-pasteable
 /// replay line — the X12 contract's front half.
 #[test]
