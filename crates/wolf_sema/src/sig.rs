@@ -1688,7 +1688,7 @@ impl<'a> Lower<'a> {
                 } else if segs.len() == 1
                     && matches!(
                         first.as_str(),
-                        "List" | "Pool" | "channel" | "Map" | "range"
+                        "List" | "Pool" | "channel" | "Map" | "range" | "Scope" | "Proc"
                     )
                 {
                     // The two prelude containers the Tier-2 corpus
@@ -1768,6 +1768,29 @@ impl<'a> Lower<'a> {
                                 self.diags.push(d);
                             }
                             self.table.intern(TyKind::Map(k, v))
+                        }
+                        // s170 (wolf-lang#316, ruled by B21): the two
+                        // concurrency handle types in signature
+                        // position. `Scope` takes no argument — a
+                        // scope handle is one thing, and D16's
+                        // "scope handles are ordinary values, so a
+                        // function that spawns into its caller's
+                        // scope takes the handle as a parameter"
+                        // ([conc.task.scope]) had no spelling at all
+                        // before this. `Proc[T]` carries the
+                        // completion value its `join` collects
+                        // (wolf-lang#110's ruled shape), so the
+                        // argument is not decoration: it is what
+                        // makes the handle useful.
+                        ("Scope", &[]) => self.table.intern(TyKind::TaskScope),
+                        ("Proc", &[val]) => self.table.intern(TyKind::Proc(val)),
+                        ("Scope" | "Proc", _) => {
+                            self.diags.push(conc_handle_arity_refusal(
+                                &first,
+                                arg_tys.len(),
+                                node.span,
+                            ));
+                            self.table.error()
                         }
                         _ => self.opaque(file, node),
                     }
@@ -1958,6 +1981,43 @@ pub(crate) fn map_key_refusal(shown: &str, nominal: bool, span: Span) -> Diagnos
     } else {
         d.with_note("key the map by one of the four — an `int` id, a `str` name.".to_string())
     }
+}
+
+/// E0401 — a concurrency handle type written with the wrong number of
+/// arguments (s170, wolf-lang#316). The two spellings are fixed and
+/// they are not symmetric: `Scope` names one thing, `Proc[T]` names a
+/// handle *and* the completion value its `join` collects
+/// ([conc.proc.exit]'s `normal(value)`), so a bare `Proc` is an
+/// incomplete type rather than a second one. Sibling of
+/// [`map_key_refusal`]: one builder, so every site says it the same
+/// way.
+pub(crate) fn conc_handle_arity_refusal(name: &str, found: usize, span: Span) -> Diagnostic {
+    let (headline, want, why) = if name == "Scope" {
+        (
+            "`Scope` does not take type arguments".to_string(),
+            "Scope",
+            "a scope handle is one thing — the block's name, bound as an ordinary value \
+             (D16, [conc.task.scope]) — so there is nothing for an argument to say.",
+        )
+    } else if found == 0 {
+        (
+            "`Proc` needs the type its `join` collects".to_string(),
+            "Proc[T]",
+            "a proc that completes exits `normal(value)` ([conc.proc.exit]) and \
+             `p.join()` hands that value back ([conc.proc.join]), so the handle names \
+             its type: `Proc[int]` for a proc whose callee returns an `int`.",
+        )
+    } else {
+        (
+            format!("`Proc` takes one type argument, not {found}"),
+            "Proc[T]",
+            "a proc handle names exactly one completion type — the value `p.join()` \
+             collects ([conc.proc.join]).",
+        )
+    };
+    Diagnostic::error(codes::E0401, span, headline)
+        .with_label(format!("write `{want}`"))
+        .with_note(why.to_string())
 }
 
 pub(crate) enum TypeHead {
