@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/conc_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0401]: `Proc` needs the type its `join` collects
+ --> mem:///main.lu:1:13
+  |
+1 | fn watch(p: Proc) -> int {
+  |             ^^^^ write `Proc[T]`
+  |
+  = note: a proc that completes exits `normal(value)` ([conc.proc.exit]) and `p.join()` hands that
+    value back ([conc.proc.join]), so the handle names its type: `Proc[int]` for a proc
+    whose callee returns an `int`.

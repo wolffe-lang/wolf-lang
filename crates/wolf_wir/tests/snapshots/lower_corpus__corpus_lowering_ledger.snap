@@ -41,6 +41,7 @@ conc/chan_root_task.lu: lowers
 conc/chan_send_closed_row.lu: lowers
 conc/chan_struct_payload.lu: lowers
 conc/chan_unsendable.lu: not mem-clean (pre-wir rungs own it)
+conc/freeze_proc_snapshot.lu: lowers
 conc/freeze_publish.lu: lowers
 conc/message_passing.lu: lowers
 conc/par_capture_write.lu: not mem-clean (pre-wir rungs own it)
@@ -49,6 +50,8 @@ conc/par_order.lu: lowers
 conc/proc_cancel_defers.lu: lowers
 conc/proc_cap_fault_join.lu: lowers
 conc/proc_cross_module/main.lu: lowers
+conc/proc_join_handle_param.lu: lowers
+conc/proc_join_value.lu: lowers
 conc/proc_kill_defers.lu: lowers
 conc/proc_link.lu: lowers
 conc/proc_link_root.lu: lowers

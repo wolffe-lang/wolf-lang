@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/conc_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0401]: this is `Proc[int]`, but `take_str` needs its 1st argument to be `Proc[str]`
+  --> mem:///main.lu:11:14
+   |
+ 5 | fn take_str(p: Proc[str]) -> int {
+   |             - the parameter is declared here
+...
+11 |     take_str(p)
+   |              ^ found `Proc[int]` here
+   |
+   = note: expected `Proc[str]`, found `Proc[int]`
