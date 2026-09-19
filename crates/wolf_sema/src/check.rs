@@ -3051,7 +3051,25 @@ impl<'a> Checker<'a> {
                 span: e.span,
             });
         }
-        Ok(self.lo.table.intern(TyKind::Proc))
+        // s170 (wolf-lang#110, ruled by B21): the handle carries the
+        // completion type, so `p.join()` can hand it back. A callee
+        // that returns nothing joins as `Proc[()]` — the join still
+        // reports the exit CLASS, which is the part that was never
+        // missing. An inference variable is pinned to `int` here
+        // rather than carried: the wire slot is one i64
+        // ([conc.proc.exit]'s `normal(value)`), and a handle whose
+        // completion type is still open would let two joins of the
+        // same proc disagree.
+        let value_ty = match self.kind_of(ok_half) {
+            TyKind::Unit | TyKind::Error | TyKind::Never => ok_half,
+            TyKind::Var(_) => {
+                let int_ = self.lo.table.prim(Prim::Int);
+                let _ = unify(&mut self.lo.table, &mut self.vars, ok_half, int_);
+                int_
+            }
+            _ => ok_half,
+        };
+        Ok(self.lo.table.intern(TyKind::Proc(value_ty)))
     }
 
     /// `select { pat from ch => body, timeout(d) => body, … }` —
@@ -3251,7 +3269,7 @@ impl<'a> Checker<'a> {
             // s73: exit reasons are values delivered over monitor
             // channels ([conc.proc.exit]); proc handles are opaque
             // ids ([conc.proc.1]) — both cross freely.
-            TyKind::ExitReason | TyKind::Proc => true,
+            TyKind::ExitReason | TyKind::Proc(_) => true,
             TyKind::Nominal { module, name, args } => {
                 let (generics, fields): (Vec<String>, Vec<TyId>) =
                     match self.sigs.get(module as usize, &name).cloned() {
@@ -6866,14 +6884,42 @@ impl<'a> Checker<'a> {
             // ([conc.proc.2]); `kill`/`cancel` are the two teardown
             // verbs (D14's signature distinction); `link` couples
             // fates per pair ([conc.proc.link.pair]).
-            (TyKind::Proc, "monitor") => {
+            (TyKind::Proc(_), "monitor") => {
                 let reason = self.lo.table.intern(TyKind::ExitReason);
                 let ch = self.lo.table.intern(TyKind::Chan(reason));
                 (vec![p("self", recv_ty)], ch)
             }
-            (TyKind::Proc, "kill" | "cancel") => {
+            (TyKind::Proc(_), "kill" | "cancel") => {
                 let u = self.lo.table.unit();
                 (vec![p("self", recv_ty)], u)
+            }
+            // s170, wolf-lang#110 as BACKLOG B21 ruled it: the proc
+            // TALKS BACK by a typed result the supervisor collects at
+            // the join. `p.join()` blocks until the proc exits and
+            // answers `T ! {error, killed, cancelled, fault}` — the ok
+            // half is `[conc.proc.exit]`'s `normal(value)` read as a
+            // value, the row is the four abnormal classes read as
+            // tags. Before this a proc could report only its exit
+            // CLASS and its stdout, which is why `corpus/procs.lu`
+            // spawned every proc arg-less.
+            //
+            // The row is payload-free at v0, exactly as `recv`'s is:
+            // `error(tag)`'s tag rides the monitor channel's reason
+            // word, and a row payload here would be the only place in
+            // the conc surface that carries one (s39's work). A
+            // caller that needs the tag still has `monitor`.
+            (TyKind::Proc(val), "join") => {
+                let row = self.lo.table.row(
+                    vec![
+                        ("error".to_string(), Vec::new()),
+                        ("killed".to_string(), Vec::new()),
+                        ("cancelled".to_string(), Vec::new()),
+                        ("fault".to_string(), Vec::new()),
+                    ],
+                    None,
+                );
+                let r = self.lo.table.intern(TyKind::ErrUnion(val, row));
+                (vec![p("self", recv_ty)], r)
             }
             // Two spellings, one clause: `a.link(b)` names the
             // partner, and `w.link()` is `w.link(<the calling task's
@@ -6882,13 +6928,19 @@ impl<'a> Checker<'a> {
             // domain). `wolf_rt::task::proc::link` has always taken
             // the one-arg form (partner id 0); sema learns it here
             // (#153, the book's ch15 row).
-            (TyKind::Proc, "link") => {
+            (TyKind::Proc(_), "link") => {
                 let u = self.lo.table.unit();
                 let n = args.into_iter().flat_map(|l| l.args()).count();
                 if n == 0 {
                     (vec![p("self", recv_ty)], u)
                 } else {
-                    let other = self.lo.table.intern(TyKind::Proc);
+                    // A link couples FATES, not results: the partner
+                    // may complete any type, so the parameter is
+                    // `Proc[_]` over a fresh variable rather than a
+                    // second `Proc[T]` that would force both procs to
+                    // agree on a completion type they never share.
+                    let any = self.fresh(NumKind::Any, e.span);
+                    let other = self.lo.table.intern(TyKind::Proc(any));
                     (vec![p("self", recv_ty), p("other", other)], u)
                 }
             }
@@ -8683,7 +8735,7 @@ impl<'a> Checker<'a> {
             TyKind::Chan(_)
             | TyKind::TaskScope
             | TyKind::Mutex(_)
-            | TyKind::Proc
+            | TyKind::Proc(_)
             | TyKind::ExitReason => {
                 self.conc_method_call(base, recv_ty, recv_mode, member.span, &mname, e, args)
             }
