@@ -2,6 +2,74 @@
 
 ## Unreleased
 
+### The concurrency handles have names, and a proc talks back
+
+**`Scope` and `Proc[T]` are prelude type names** (#316, BACKLOG B21's
+ruling). `[conc.task.scope]` has said since D16 that "a function that
+spawns into its caller's scope takes the handle as a parameter", and
+there was no way to write that parameter: `Scope`/`Proc` were E0301
+(nothing named that is in scope) and `scope`/`proc` were E0206 (a
+keyword in type position), while the generic escape — `fn f[S](s: S)`
+— is E0501 by D28 and always will be. Both handles now elaborate in
+signature position the way `channel[T]` does, so `fn fan_out(s:
+Scope)` and `fn watch(p: Proc[int])` are programs. The lowercase
+keywords are *not* admitted in type position the way `region` is; that
+was the other candidate and B21 decided against it.
+
+**A proc talks back with a typed result its supervisor collects at the
+join** (#110, B21's ruling; `[conc.proc.join]`). `p.join()` blocks
+until the proc exits and answers `T ! {error, killed, cancelled,
+fault}` — `[conc.proc.exit]`'s `normal(value)` read as a value, the
+four abnormal classes read as tags. Before it, a proc could report
+only its exit class and its stdout, which is why `corpus/procs.lu`
+spawned every proc arg-less and why s87 had to prove its per-proc
+argument copy in a `wolf_rt` test instead of a corpus program. The
+join is `monitor` plus one receive in the runtime, so the two readers
+decode one word and cannot drift, and a join issued after the proc has
+already exited reads the tombstone and returns at once. The other
+candidate shape — a channel handle as a proc parameter — is decided
+against.
+
+The two rulings are one surface: **the handle carries the completion
+type** (`Proc[int]`, not a bare `Proc`), which is why #157's ch14 row
+— asking for ``help: proc handles have type `Proc` `` — would have
+been wrong as written. The E0206 on `fn watch(p: proc)` now names
+`Proc[T]` and `Scope`, with the suggestion marked as carrying a
+placeholder, because the completion type is a fact about the callee
+and not a rewrite the parser can perform.
+
+### A frozen value handed to two procs is one value
+
+**`spawn proc` shares frozen data instead of moving it** (#312;
+`[conc.proc.arg]`). The mem tier evaluated a spawn argument as a bare
+value, which moves out of a place whatever the callee's parameter mode
+is — so handing one frozen snapshot to two procs was E1001 on the
+second `spawn`, while **the same two calls written as plain calls
+compiled and ran**, because a `read` parameter's place is read, not
+moved. `[mem.region.freeze.1]` (immutable forever, shareable across
+threads) and `[conc.chan.imm]` (`imm` crosses by reference, no move)
+both said the spawn surface was the wrong one. Everything that is not
+frozen still moves: a proc outlives its spawner, and the move is what
+makes `[abi.native.procenv]`'s per-proc copy honest. wolf-book ch16
+§16.4's snapshot block prints `2 2` on the native lane now, as
+`corpus/conc/freeze_proc_snapshot.lu`.
+
+### A tool that no longer promises a reproduction it cannot make
+
+**`wolf test --schedules=N` stopped printing "reproduce any run with
+`--replay=SEED`"** (#159's X12 row). It printed that before a single
+schedule had been explored, and a seed reaches the runtime scheduler's
+PRNG only on the native lane (`[sched.seed]`): a `test_*` fn runs on
+the checked machine, serially and seed-blind, so N runs there are one
+run N times and there is nothing to replay. The banner now states only
+the root seed; the copy-pasteable replay line appears where it already
+was measured, on runs that genuinely explored; and the summary counts
+how many tests explored under a derived seed and how many did not
+(`explored`/`unexplored` in `--json`). The flag SPELLING needed no
+change: spec/07 `[sched.flags]` decided `--schedules`/`--replay`/
+`--chaos` in s36, `--chaos` is a kept name with a parked engine and an
+owner, and the divergence #159 reports is lupin's `--seed`/
+`--schedule`/`--explore`, filed there.
 ### A container element is a place
 
 **`f(mut xs[i])` compiles** (#268 ×6, #156 ch28). The c06 residue's
