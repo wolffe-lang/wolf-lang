@@ -1793,9 +1793,7 @@ impl<'t> Lowerer<'t> {
         for (m, mspan, p, s, word) in hits {
             let (a, b) = (self.show_place_now(m), self.show_place_now(p));
             let relation = if self.places.covers(m, p) || self.places.covers(p, m) {
-                format!(
-                    "`{a}` and `{b}` are a path and its prefix [mem.model.path.disjoint]."
-                )
+                format!("`{a}` and `{b}` are a path and its prefix [mem.model.path.disjoint].")
             } else {
                 format!("`{a}` and `{b}` can reach the same memory.")
             };

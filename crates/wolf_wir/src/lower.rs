@@ -16316,7 +16316,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         let elem = *elem;
         self.refuse_region_elem(elem, span)?;
-        let Some(ewty) = wir_ty(&mut self.b.module.types, self.table, self.sigs, elem, span)? else {
+        let Some(ewty) = wir_ty(&mut self.b.module.types, self.table, self.sigs, elem, span)?
+        else {
             return Err(refuse("unit-typed List elements", span));
         };
         if flat_size(&self.b.module.types, ewty).is_none() {
@@ -17793,8 +17794,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     // s168 — the deep tree: a payload-free case named
                     // inside a product is a tag test on the FIELD's
                     // own discriminant.
-                    return self
-                        .product_nested_case(sub, &name, v, tbl, sema_ty, &[], conds, binds, dead);
+                    return self.product_nested_case(
+                        sub,
+                        &name,
+                        v,
+                        tbl,
+                        sema_ty,
+                        &[],
+                        conds,
+                        binds,
+                        dead,
+                    );
                 }
                 self.product_bind_named(name, sub.span, v, tbl, sema_ty, binds)
             }
@@ -17939,9 +17949,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     .nodes()
                     .filter(|n| wolf_ast::is_pattern_kind(n.kind))
                     .collect();
-                self.product_nested_case(
-                    sub, &name, v, tbl, sema_ty, &payload, conds, binds, dead,
-                )
+                self.product_nested_case(sub, &name, v, tbl, sema_ty, &payload, conds, binds, dead)
             }
             // s168 (#196) — an or-pattern in one payload SLOT
             // (`Pair(1 | 2, b)`). The product walk is a conjunction of

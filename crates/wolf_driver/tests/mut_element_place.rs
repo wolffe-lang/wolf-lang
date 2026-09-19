@@ -106,7 +106,9 @@ fn both_lanes_say(entry: &Path, want: &str) {
 /// Both lanes REFUSE it, with the same diagnostic code.
 fn both_lanes_reject(entry: &Path, code: &str) {
     for flag in ["--checked", "--native"] {
-        let Some(obs) = lane(entry, flag) else { continue };
+        let Some(obs) = lane(entry, flag) else {
+            continue;
+        };
         assert_eq!(
             obs.verdict,
             format!("fail({code})"),
