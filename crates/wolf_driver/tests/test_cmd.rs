@@ -104,7 +104,7 @@ fn filter_selects_by_substring() {
     let dir = fixture("filter", &[("f_test.lu", FAILING)]);
     let (code, out, _err) = run_test(&dir, &["--filter=holds"]);
     assert_eq!(code, 0, "the failing test is filtered out:\n{out}");
-    assert!(out.contains("1 passed; 0 failed; 0 unsupported; 1 filtered out"));
+    assert!(out.contains("1 passed; 0 failed; 0 rejected; 0 unsupported; 1 filtered out"));
 }
 
 #[test]
@@ -127,11 +127,53 @@ fn compile_error_fails_the_run() {
     );
     let (code, out, err) = run_test(&dir, &[]);
     assert_eq!(code, 1, "a test file that does not compile fails the run");
-    assert!(out.contains("FAILED (does not compile)"));
+    // #157, s169: REJECTED, not FAILED. The file never ran, so it
+    // found nothing — "your test found a bug" and "your module does
+    // not build" get different words and different columns.
+    assert!(out.contains("REJECTED (does not compile)"), "{out}");
+    assert!(!out.contains("FAILED"), "and not the old word:\n{out}");
+    assert!(out.contains("0 failed; 1 rejected"), "{out}");
     assert!(
         err.contains("error["),
         "the diagnostic renders on stderr:\n{err}"
     );
+}
+
+/// #75, s169: `wolf test` honours `--error-limit`. `build` and `run`
+/// have capped their reports since s63; this surface printed every
+/// diagnostic a wrecked test module could produce, which is exactly
+/// the terminal-scrolling the cap exists to prevent.
+#[test]
+fn test_reports_are_capped_by_error_limit() {
+    // Forty unresolved names: one file, forty errors.
+    let mut src = String::from("fn test_wreck() {\n");
+    for i in 0..40 {
+        src.push_str(&format!("    frobnicate{i}()\n"));
+    }
+    src.push_str("}\n");
+    let dir = fixture("error-limit", &[("e_test.lu", &src)]);
+
+    let (code, _out, capped) = run_test(&dir, &[]);
+    assert_eq!(code, 1, "the file does not compile");
+    assert!(
+        capped.contains("more diagnostic"),
+        "the default cap holds back the tail and says so:\n{capped}"
+    );
+    let shown = capped.matches("error[").count();
+    assert!(shown < 40, "capped at {shown} of 40:\n{capped}");
+
+    // `--error-limit=0` prints everything, exactly as on `build`.
+    let (_, _out, all) = run_test(&dir, &["--error-limit=0"]);
+    assert!(
+        !all.contains("more diagnostic"),
+        "nothing is held back at limit 0:\n{all}"
+    );
+    assert!(all.matches("error[").count() > shown, "more than the cap");
+
+    // And a malformed value is a usage error, as everywhere else.
+    let (code, _, err) = run_test(&dir, &["--error-limit=lots"]);
+    assert_eq!(code, 2, "{err}");
+    assert!(err.contains("--error-limit needs a count"), "{err}");
 }
 
 #[test]
@@ -161,7 +203,7 @@ fn deny_warnings_promotes_and_fails_the_run() {
     let dir = fixture("warny-deny", &[("w_test.lu", WARNY)]);
     let (code, out, err) = run_test(&dir, &["--deny-warnings"]);
     assert_eq!(code, 1, "a denied warning fails the run:\n{out}");
-    assert!(out.contains("FAILED (does not compile)"));
+    assert!(out.contains("REJECTED (does not compile)"), "{out}");
     assert!(
         err.contains("error[E0802]"),
         "the promotion renders as an error:\n{err}"
