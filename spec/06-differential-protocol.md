@@ -129,6 +129,20 @@ One JSON object on stdout. Schema (`"protocol": 1`):
   for a trap's message, which is the program's OUTPUT field — so a
   runner either read a program's own words out of its output stream or
   went without (wolf-lang#150, wolf-book ch21/ch27).
+
+  **What "additive" costs, stated once here for every future field.**
+  `[proto.record.ext]` requires a non-`x-` key to be one this spec
+  names, so a conforming STRICT validator rejects a record carrying a
+  bare field it has not been taught — which is the correct behaviour
+  and makes every new bare field a change the counterparty must land
+  before the two are run head to head. s169 measured it rather than
+  assuming it: lupin's `schema::validate` keeps a closed
+  `OPTIONAL_FIELDS` list, so `trap_message` reads to it as "unknown
+  field; implementation extensions must begin with `x-`" until that
+  list grows, exactly as it had to grow for `warnings` at s67. Additive
+  means **no consumer's existing behaviour changes on records that do
+  not carry the field**; it has never meant a strict validator may
+  meet an unannounced one.
 - `[proto.record.warn]` `warnings` (added s67, additive within
   `"protocol": 1` — validators accept records with or without it) is
   the warning observations as `{code, span}` entries: every
