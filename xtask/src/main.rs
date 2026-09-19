@@ -1204,6 +1204,39 @@ const COMPARED_LANES: &[&str] = &["checked", "native", "release"];
 // crash/literal witnesses; four module-formation witnesses), so the
 // deltas compound. Counts measured by this gate on the merged tree,
 // not predicted.
+// s168 measurement, linux/x86-64 (kasumi), over 634 entries — the c06
+// residue's place model and three product-pattern refusals. BEFORE, on
+// this branch's base: checked 362, native 400, release 399, union 417,
+// all-three 345. AFTER: checked 364, native 405, release 404, union
+// 419, all-three 350. The deltas decompose exactly, which is the point
+// of reading them: FOUR new entries (`memory/mut_arg_element` and
+// `memory/mut_place_nested` run on all three lanes; `memory/
+// mut_elem_excl` and `memory/mut_elem_nested_call` are static
+// rejections and by design move no lane count, which is why `rejected`
+// goes 199 -> 201), and THREE pre-existing files that MOVED LANES —
+// `grammar/match_arm_deep_tree`, `grammar/match_arm_str_in_product`
+// and `grammar/match_arm_or_inside_product`, each of which the checked
+// lane already ran and the native pipe refused BY NAME. So checked
+// moves +2 (the two new run witnesses only), native and release move
+// +5 (two new, three movers), all-three moves +5, and the union moves
+// only +2 because the three movers were already in it through checked.
+// The "other lanes reach and it does not" column reads the same fact
+// from the other side: native 17 -> 14 and release 18 -> 15, exactly
+// the three movers; checked stays at 55. Counts measured by this gate
+// on this host, not predicted.
+//
+// The linux floors below are NOT raised by this lane, and that is a
+// deliberate refusal with a reason. They sit at 221/242/242/256/207
+// against a measurement of 364/405/404/419/350 — **143 entries of
+// slack on the union**, which is the s149 defect (a gate a lane could
+// lose coverage under and stay green) on the linux line rather than
+// the macOS one. Raising it here would set a floor four entries above
+// what any SIBLING wave-45 branch can measure, since those branches do
+// not carry this lane's corpus files, and break every one of them on
+// merge — the hazard this file's own note about branch-local floor
+// raises describes. The re-measure belongs to whoever closes the wave,
+// on the merged tree, in one commit. Recorded here so the hole is a
+// written number rather than an absence.
 // Floors are PER-PLATFORM and MEASURED, never inherited (s59): the
 // linux numbers are linux measurements and stay untouched; each newly
 // ported host ratchets from its own first measurement.
