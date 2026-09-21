@@ -670,3 +670,67 @@ fn a_malformed_generic_parameter_list_reports_once() {
         assert!(all(good).is_empty(), "{good}: {:?}", all(good));
     }
 }
+
+/// wolf-lang#420, the second witness — the same one-report-per-list
+/// rule for `paren_type_list`, which the property found only once the
+/// generic list above stopped failing first.
+///
+/// A `)` that turns into anything else hands the rest of the enclosing
+/// header to the inner list: deleting the inner `)` of
+/// `fn apply(le: fn(int, int) -> bool, x: int, y: int)` made the
+/// fn-type's parameter list swallow `x: int, y: int` and report a pair
+/// (`expected `,` or `)` after this type` + `expected a type`) for
+/// each one — 2n + 1, so seven reports for three parameters and eleven
+/// for five. Caught by the blast-radius property at
+/// `MUTATE_BUDGET=300` as 6 added cascade against the structural bound
+/// of 5 on `corpus/typecheck/fn_param_shadows_import/cmp/c.lu
+/// [replace token 11 at 278..279 with `1`]`.
+///
+/// The E0202 boundary diagnostic stays: it is the parser saying where
+/// the wreck ends, it is budgeted separately by the property, and it
+/// is the thing that stops the list eating the file.
+#[test]
+fn a_malformed_paren_type_list_reports_once() {
+    let all = |src: &str| {
+        util::parse(src)
+            .diagnostics
+            .iter()
+            .map(|d| format!("{}", d.code))
+            .collect::<Vec<_>>()
+    };
+    let expected = format!("{}", codes::EXPECTED_TOKEN);
+    let unclosed = format!("{}", codes::UNCLOSED_DELIMITER);
+    let ty = format!("{}", codes::EXPECTED_TYPE);
+
+    // The mutation's shape: the inner `)` is gone, so every parameter
+    // after it falls inside the fn-type's list.
+    let swallows = |n: usize| {
+        let tail = (0..n)
+            .map(|i| format!("p{i}: int"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("fn apply(le: fn(int, int1, {tail}) -> bool {{\n    le(x, y)\n}}\n")
+    };
+    for n in [1, 3, 5, 9] {
+        assert_eq!(
+            all(&swallows(n)),
+            [unclosed.clone(), expected.clone()],
+            "{n} swallowed parameters is still one wreck and one boundary"
+        );
+    }
+
+    // The two reports the list can make, each once.
+    assert_eq!(all("fn f(g: fn(int int)) -> int { 1 }\n"), [expected.clone()]);
+    assert_eq!(all("fn f(g: fn(1, 2, 3)) -> int { 1 }\n"), [ty.clone()]);
+    // Per list, not per file: two broken fn-types report twice.
+    assert_eq!(
+        all("fn f(g: fn(1, 2), h: fn(3, 4)) -> int { 1 }\n"),
+        [ty.clone(), ty.clone()]
+    );
+    // And a healthy fn-type is still silent.
+    assert!(
+        all("fn f(g: fn(int, int) -> bool) -> int { 1 }\n").is_empty(),
+        "{:?}",
+        all("fn f(g: fn(int, int) -> bool) -> int { 1 }\n")
+    );
+}
