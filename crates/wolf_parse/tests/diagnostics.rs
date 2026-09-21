@@ -604,3 +604,69 @@ fn a_function_value_takes_no_return_type() {
         );
     }
 }
+
+/// wolf-lang#420 — a malformed generic parameter list is ONE wreck,
+/// however many elements the parser finds inside it.
+///
+/// `[]` is the generics bracket, so a declaration keyword landing in
+/// front of an array literal re-reads that literal as a generic
+/// parameter list — and `generic_param_list` reported once per
+/// element, so the cascade grew with the source rather than with the
+/// damage. The nightly's blast-radius property caught it at
+/// `MUTATE_BUDGET=300` as 6 added cascade against the structural bound
+/// of 5 on `corpus/methods/comb_sort_enumerate_zip.lu
+/// [replace token 10 at 363..364 with `fn`]`, where the `=` of
+/// `var xs = [4, 1, 3, 2]` becomes `fn`.
+///
+/// The whole code list is pinned, not a count of one code: what makes
+/// this a parser defect rather than a deep corpus file meeting a
+/// blanket number is that the old shape was unbounded IN THE SOURCE —
+/// a six-element array drew eight.
+#[test]
+fn a_malformed_generic_parameter_list_reports_once() {
+    let all = |src: &str| {
+        util::parse(src)
+            .diagnostics
+            .iter()
+            .map(|d| format!("{}", d.code))
+            .collect::<Vec<_>>()
+    };
+    let expected = format!("{}", codes::EXPECTED_TOKEN);
+    let generics = format!("{}", codes::MALFORMED_GENERICS);
+
+    // The mutation, reduced to its shape: the binding loses its `=`
+    // and gains a `fn`, so `[4, 1, 3, 2]` is read as generics.
+    let four = "fn main() -> !int {\n    var xs fn [4, 1, 3, 2]\n    0\n}\n";
+    assert_eq!(
+        all(four),
+        [expected.clone(), expected.clone(), generics.clone()],
+        "the binding and the missing function name report once each, \
+         and the whole bad list reports once"
+    );
+    // Two more elements used to buy two more reports. The list is one
+    // wreck at any length.
+    let six = "fn main() -> !int {\n    var xs fn [4, 1, 3, 2, 5, 6]\n    0\n}\n";
+    assert_eq!(all(six), all(four), "the cascade does not grow with the array");
+    let one = "fn main() -> !int {\n    var xs fn [4]\n    0\n}\n";
+    assert_eq!(all(one), all(four), "nor shrink with it");
+
+    // The cap is per list, not per file: a second broken header still
+    // gets its own report.
+    assert_eq!(all("fn f[1]() -> int { 1 }\n"), [generics.clone()]);
+    assert_eq!(
+        all("fn f[1]() -> int { 1 }\nfn g[2]() -> int { 2 }\n"),
+        [generics.clone(), generics.clone()]
+    );
+    // A bound that never arrives is the same list's wreck, counted in
+    // the same cap.
+    assert_eq!(all("fn f[A:, B:]() -> int { 1 }\n"), [generics.clone()]);
+
+    // And a healthy list is still silent.
+    for good in [
+        "fn f[T]() -> int { 1 }\n",
+        "fn f[T, N: type]() -> int { 1 }\n",
+        "fn f[T: Ord + Eq]() -> int { 1 }\n",
+    ] {
+        assert!(all(good).is_empty(), "{good}: {:?}", all(good));
+    }
+}
