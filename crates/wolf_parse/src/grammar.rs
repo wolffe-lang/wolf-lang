@@ -1964,6 +1964,14 @@ fn type_required_no_row(p: &mut Parser<'_>) {
 fn paren_type_list(p: &mut Parser<'_>) {
     let opener = p.current_span();
     p.bump(); // `(`
+    // One report per list, the same latch the generic parameter list
+    // carries (wolf-lang#420). A `)` that turns into anything else
+    // hands the rest of the enclosing header to this list — deleting
+    // the inner `)` of `fn(le: fn(int, int) -> bool, x: int, y: int)`
+    // drew a pair of reports for every parameter it then swallowed,
+    // three pairs for three parameters and more for more. The wreck is
+    // the list, and the boundary diagnostic below says where it ends.
+    let mut reported = false;
     loop {
         if p.at_punct(Punct::RParen) {
             p.bump();
@@ -1981,17 +1989,21 @@ fn paren_type_list(p: &mut Parser<'_>) {
         }
         let before = p.pos();
         if !type_(p) {
-            let at = p.current_span();
-            expected_type_here(p, at);
+            if !reported {
+                reported = true;
+                let at = p.current_span();
+                expected_type_here(p, at);
+            }
             p.recover_until(true, |k| {
                 matches!(k, TokenKind::Punct(Punct::Comma | Punct::RParen))
             });
         }
         if p.at_punct(Punct::Comma) {
             p.bump();
-        } else if !p.at_punct(Punct::RParen) && p.pos() != before {
+        } else if !p.at_punct(Punct::RParen) && p.pos() != before && !reported {
             // the grammar requires the separator: `(int, int, int)`, never
             // `(int int int)` — leniency here was DIV-001
+            reported = true;
             p.error(
                 codes::EXPECTED_TOKEN,
                 p.current_span(),
