@@ -499,6 +499,16 @@ fn generic_param_list(p: &mut Parser<'_>) {
     let m = p.start();
     let opener = p.current_span();
     p.bump(); // `[`
+    // One MALFORMED_GENERICS report per list (wolf-lang#420). The
+    // list is one wreck: saying so once per element makes the cascade
+    // grow with the SOURCE rather than with the damage, which is the
+    // blast radius the D22 property bounds. `[]` is the generics
+    // bracket, so a stray declaration keyword in front of an array
+    // literal re-reads `[4, 1, 3, 2]` as a parameter list — four
+    // reports on trunk, and `[0, 1, …, 9]` ten. Recovery still runs
+    // per element, so the tree and the stop points do not move; only
+    // the second and later reports are withheld.
+    let mut reported = false;
     loop {
         if p.at_punct(Punct::RBracket) {
             p.bump();
@@ -516,14 +526,17 @@ fn generic_param_list(p: &mut Parser<'_>) {
         }
         let before = p.pos();
         match p.current() {
-            TokenKind::Ident => generic_param(p),
-            TokenKind::Kw(k) if !is_decl_keyword(k) => generic_param(p),
+            TokenKind::Ident => generic_param(p, &mut reported),
+            TokenKind::Kw(k) if !is_decl_keyword(k) => generic_param(p, &mut reported),
             _ => {
-                p.error(
-                    codes::MALFORMED_GENERICS,
-                    p.current_span(),
-                    "expected a generic parameter name here, like `T` or `N: type`",
-                );
+                if !reported {
+                    reported = true;
+                    p.error(
+                        codes::MALFORMED_GENERICS,
+                        p.current_span(),
+                        "expected a generic parameter name here, like `T` or `N: type`",
+                    );
+                }
                 p.recover_until(true, |k| {
                     matches!(k, TokenKind::Punct(Punct::Comma | Punct::RBracket))
                 });
@@ -540,7 +553,10 @@ fn generic_param_list(p: &mut Parser<'_>) {
     m.complete(p, SyntaxKind::GenericParamList);
 }
 
-fn generic_param(p: &mut Parser<'_>) {
+/// One parameter. `reported` is the enclosing list's single-report
+/// latch (wolf-lang#420): a missing bound is the same list's wreck as
+/// a missing name, so the two share the one report.
+fn generic_param(p: &mut Parser<'_>, reported: &mut bool) {
     let m = p.start();
     name_token(p, "generic parameter");
     if p.at_punct(Punct::Colon) {
@@ -560,11 +576,14 @@ fn generic_param(p: &mut Parser<'_>) {
             }
             b.complete(p, SyntaxKind::TypeBound);
         } else {
-            p.error(
-                codes::MALFORMED_GENERICS,
-                p.here(),
-                "expected a trait bound or `type` after the `:`",
-            );
+            if !*reported {
+                *reported = true;
+                p.error(
+                    codes::MALFORMED_GENERICS,
+                    p.here(),
+                    "expected a trait bound or `type` after the `:`",
+                );
+            }
             p.missing();
         }
     }
