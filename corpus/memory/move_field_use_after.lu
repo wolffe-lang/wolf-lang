@@ -19,6 +19,7 @@
 //! example, which reads only the siblings and must keep running.
 
 struct Meta { author: str, words: int }
+
 struct Doc { title: str, meta: Meta }
 
 fn main() -> !int {

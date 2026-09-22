@@ -13,6 +13,7 @@
 //! together and neither is meaningful alone.
 
 struct Meta { author: str, words: int }
+
 struct Doc { title: str, meta: Meta }
 
 fn main() -> !int {
