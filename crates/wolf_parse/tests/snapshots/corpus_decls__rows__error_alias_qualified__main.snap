@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 855..864 path=disk
+UseDecl 864..882 path=disk.IoErrors
+FnDecl 883..962 name=qualified body=Block
+FnDecl 964..1037 name=imported body=Block
+FnDecl 1039..1116 name=spelled_out body=Block
+FnDecl 1118..1431 name=main body=Block

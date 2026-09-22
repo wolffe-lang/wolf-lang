@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 436..445 path=disk
+FnDecl 446..521 name=probe body=Block
+FnDecl 523..585 name=main body=Block

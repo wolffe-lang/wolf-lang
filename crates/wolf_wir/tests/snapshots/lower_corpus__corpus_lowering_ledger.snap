@@ -457,6 +457,7 @@ rows/coarsen.lu: lowers
 rows/cross_module_arms/main.lu: lowers
 rows/else_tag_payload.lu: lowers
 rows/error_alias_ident.lu: lowers
+rows/error_alias_qualified/main.lu: lowers
 rows/error_alias_row.lu: lowers
 rows/error_alias_transparent.lu: lowers
 rows/error_alias_union.lu: lowers
@@ -472,6 +473,7 @@ rows/negative/dup_tags.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/errdefer_infallible.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/error_alias_cycle.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/error_alias_open.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/error_alias_private/main.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/handler_uncovered.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/missing_tag.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/nested_row_conflict.lu: not mem-clean (pre-wir rungs own it)
@@ -530,6 +532,7 @@ strings/slice_oob_trap.lu: lowers
 strings/split_clause.lu: lowers
 strings/str_uni_leading_zeros.lu: lowers
 strings/to_int.lu: lowers
+strings/trim_cutset_refused.lu: not mem-clean (pre-wir rungs own it)
 strings.lu: not mem-clean (pre-wir rungs own it)
 test/assert_test.lu: lowers
 test/conc_schedules_test.lu: lowers
@@ -592,6 +595,8 @@ typecheck/let_compound_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_field_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_reassign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_shadow_var_ok.lu: lowers
+typecheck/list_lit_elem_i32.lu: lowers
+typecheck/list_lit_elem_unfit.lu: not mem-clean (pre-wir rungs own it)
 typecheck/list_tuple_elem.lu: lowers
 typecheck/main_returns_str.lu: not mem-clean (pre-wir rungs own it)
 typecheck/main_unit_row.lu: lowers

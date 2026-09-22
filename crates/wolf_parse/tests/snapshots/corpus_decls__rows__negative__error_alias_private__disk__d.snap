@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ErrorDecl 166..199 name=IoErrors tags={not_found,io}
+FnDecl 263..357 name=size pub body=Block
