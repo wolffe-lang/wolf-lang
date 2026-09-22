@@ -3225,7 +3225,29 @@ impl<'t> Lowerer<'t> {
                         self.val_of_place(place, operand.span)
                     };
                     val.lent = self.lent_of_place(place, operand.span);
-                    self.use_value(place, operand.span);
+                    // `move x` EMPTIES the place, whatever `x`'s type
+                    // is (wolf-lang#444). Not `use_value`: that is the
+                    // rule for a place in value position, where
+                    // `[mem.tier0.move.3]`'s implicit copy applies
+                    // because the program said nothing — a `Copy`
+                    // place read there stays live. Here the program
+                    // said `move`, and the interpreter's dynamic
+                    // judgement is the same on every type: `move s`
+                    // for `s: str` then reading `s` is
+                    // `trap(use-after-move)` at the read
+                    // (`[mem.tier0.move.2]`).
+                    //
+                    // The leaf the maintainer moved in wolf-book ch07
+                    // §7.2 is a `str`, and `str` is `Copy`
+                    // (`is_copy`, above), so `use_value` lowered the
+                    // whole expression as a read: no `Stmt::Move` was
+                    // pushed, no move site existed, and every lane
+                    // printed the moved value with no diagnostic. The
+                    // field path was never the problem — the move was
+                    // not recorded at all. Siblings stay live either
+                    // way: `[mem.model.path.disjoint]` decides that,
+                    // and it decides it over the place this records.
+                    self.emit_move(place, operand.span);
                     Ok(val)
                 } else {
                     self.eval_value(operand)
