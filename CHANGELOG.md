@@ -2,6 +2,69 @@
 
 ## Unreleased
 
+### The pool has a runtime, the handle is a word, and the unsafe tier lowers
+
+**`Pool[T]` and `handle T` compile** (#268, #31, #11). A pool is one
+pointer to a generational slot arena in `wolf_rt::pool`; a handle is
+ONE 64-bit word — slot index low, generation high — and deliberately
+not a pointer, which is the property the type exists for. `reserve`,
+`init`, `remove`, `len`, `is_empty` and `alive` lower to runtime
+seams, `pool[h]` reads through a generation compare, and a stale
+handle is `trap(stale-handle)` on **every** lane, release included:
+`[mem.shared.handle.2]` says defined behaviour in every profile, and
+that is now a WIR trap kind rather than a checked-build artifact.
+
+**`pool[h].next = k` is one store** (#31, the book's exercise 8-7,
+pending since bs04). A pool slot is a place, so the field write goes
+through `resolve_place` — s168's walk — and not through a
+read-modify-write of the whole node. `pool[h] = v` is a place too:
+sema typed that as "assignment through this place" conservatism until
+now, and `[mem.shared.handle.3]` has said the pool is the place base
+since it was written.
+
+**The slot address is re-minted at the access, and that is not a
+detail.** The first shape of this work minted it once, at the place
+step, on the argument that `[mem.model.place]`'s opacity would make a
+second path to the pool E1002 before it could run. It does not: the
+exclusivity rule s168 landed covers a nested call under a `mut`
+ARGUMENT, not an assignment's right-hand side, and the sibling shape
+on a `List` — `xs[0].n = grow(mut xs)` — is accepted by every lane
+today and answers correctly only because `elem_addr` re-mints. Under
+mint-once the pool witness printed `1` natively where checked printed
+`7`, with no diagnostic on either lane. The driver test carries that
+red verbatim.
+
+**D50's `has` and `clear` land; `capacity` and iteration do not.** A
+readable `capacity` is a promise about a growth policy that both lanes
+would have to agree on, and pinning one belongs in a clause rather
+than in two implementations that happen to match. The runtime seam
+exists; the surface spelling is proposed, not taken.
+
+**The unsafe tier lowers** (#268, #156's ch09/ch32/appx rows, s26's
+deferral). Raw casts between pointer types are the identity, `p[i]`
+and `p[i] = v` are one `ptr.off` and one access with no bound —
+`[mem.unsafe.raw.1]` — and `assume noalias` is accepted and emits
+nothing: the license is real and lowering declines to take it, because
+a backend acting on an unproven `noalias` turns a wrong assertion into
+a miscompile instead of the defined UB the clause already licenses.
+
+Closing that required closing a deferral `lower_c_call` had recorded
+in its own comment: the five `c.` membrane calls threaded **no** memory
+token, on the ground that "the raw loads/stores an io spine would have
+to order against do not lower yet". They do now, so a load through `p`
+could have floated across the `c.free` that killed it. Raw C memory
+rides the existing `Buffer` foreign role rather than a role of its
+own — a new role would assert a disjointness nothing here can prove.
+
+**The quarantine allocator is no longer `unimplemented!`** (D21). A
+granule store over `std::alloc`, a deterministic tag stream, and the
+FIFO quarantine the budget bounds: a freed granule is retagged and
+poisoned, `check` answers `UseAfterFree` / `DoubleFree` /
+`RegionFreed` / `OutOfBounds`, and the oldest granules are released
+only under budget pressure. Nothing calls it yet — the `--checked`
+profile wiring and the alloc/free backtraces are separate work, and
+the module says so rather than reading as a shipped feature.
+
 ### The concurrency handles have names, and a proc talks back
 
 **`Scope` and `Proc[T]` are prelude type names** (#316, BACKLOG B21's
