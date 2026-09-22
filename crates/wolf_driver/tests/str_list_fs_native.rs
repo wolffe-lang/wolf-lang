@@ -607,9 +607,8 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         // The s73 conc families (scope/chan/select/sync/proc).
         "scope_", "chan_", "sync_", "when_", "proc_",
         // The s106 net family (#118's first crossing).
-        "net_", // The s107 json family (#118's last crossing).
-        "json_",
-        // The s173 pool family (#31/#268).
+        "net_",  // The s107 json family (#118's last crossing).
+        "json_", // The s173 pool family (#31/#268).
         "pool_",
     ] {
         let n = wolf_codegen_clif::RT_SYMBOLS
