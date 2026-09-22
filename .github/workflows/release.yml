@@ -1,5 +1,23 @@
 # Release artifacts on tag (s02 stub — proves the matrix mechanics; c13/s66
 # add real cross-compilation, signing, and packaging).
+#
+# ONE release per tag (#226, r21). Through v0.2.15 every dist job ran
+# `gh release create --draft … || echo "release already exists"`, and
+# GitHub lets any number of DRAFTS carry the same tag name — a draft binds
+# no ref — so four matrix jobs made four drafts, the by-tag upload landed
+# on whichever one the API listed first, `publish` un-drafted that one,
+# and three empty drafts survived on every tag from v0.2.3 to v0.2.15:
+# 39 in all, three per tag (v0.2.15: 390641561, 390641914, 390644190
+# beside the real 390641220). The `|| echo` was written for the loser of
+# the race; the race had no loser, because every create succeeded.
+#
+# Now the draft is created ONCE, in its own job, before the matrix runs,
+# and is idempotent (a re-run or a hand-opened release is reused, never
+# duplicated; two or more releases on the tag is a refusal, by id). The
+# dist jobs upload BY RELEASE ID, never by tag. `publish` refuses unless
+# exactly one release carries the tag, and asserts the #226 shape after
+# the flag moves: one release, public, zero drafts.
+
 name: release
 
 on:
@@ -10,13 +28,75 @@ permissions:
   contents: write
 
 jobs:
+  create:
+    name: create the draft (once)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      release_id: ${{ steps.create.outputs.release_id }}
+      prerelease: ${{ steps.create.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # The release body is the CHANGELOG's entry for this tag (#214): v0.2.1
+      # and v0.2.2 both answered the releases API with a `body` of length 0,
+      # because the release was created with `--title` and nothing else. A
+      # tag with no CHANGELOG entry fails the job here, by name. A
+      # pre-release tag (`v0.2.16-rc.1`) reads the entry of the release it
+      # rehearses.
+      - name: release notes from the CHANGELOG
+        shell: bash
+        run: cargo xtask release-notes "${GITHUB_REF_NAME}" --out target/release-notes.md
+      - name: create the draft release, exactly once
+        id: create
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          prerelease=false
+          case "$tag" in *-*) prerelease=true ;; esac
+          # Every release carrying this tag, DRAFTS INCLUDED: the
+          # `releases/tags/<tag>` endpoint cannot see a draft, and drafts
+          # are the whole defect.
+          gh api --paginate "repos/${GH_REPO}/releases" \
+            --jq ".[] | select(.tag_name == \"${tag}\") | \"\(.id)\t\(.draft)\t\(.assets | length)\"" \
+            > existing.tsv
+          n=$(grep -c . existing.tsv || true)
+          if [ "$n" -eq 0 ]; then
+            id=$(gh api --method POST "repos/${GH_REPO}/releases" \
+                   -f tag_name="$tag" -f name="$tag" \
+                   -F draft=true -F prerelease="$prerelease" \
+                   -F body=@target/release-notes.md --jq .id)
+            echo "created draft release $id for $tag (prerelease=$prerelease)"
+          elif [ "$n" -eq 1 ]; then
+            id=$(cut -f1 existing.tsv)
+            gh api --method PATCH "repos/${GH_REPO}/releases/${id}" \
+              -F body=@target/release-notes.md --jq .id > /dev/null
+            echo "reusing release $id for $tag (draft=$(cut -f2 existing.tsv), assets=$(cut -f3 existing.tsv)); body refreshed from the CHANGELOG"
+          else
+            echo "::error::$n releases already carry $tag — #226's shape. Delete the strays by id (gh api --method DELETE repos/${GH_REPO}/releases/<id>) and re-run:"
+            cat existing.tsv
+            exit 1
+          fi
+          echo "release_id=$id" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$prerelease" >> "$GITHUB_OUTPUT"
+
   dist:
     name: dist (${{ matrix.os }})
+    needs: create
     strategy:
       fail-fast: false
       matrix:
-        # tier-1 hosts: linux x86-64, linux aarch64, macOS aarch64, windows x86-64
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+        # tier-1 hosts: linux x86-64, linux aarch64, macOS aarch64, windows
+        # x86-64. The two linux archives build on 22.04 — the oldest image
+        # GitHub offers — so their glibc floor is 2.35 (#447): 0.2.15's,
+        # built on 24.04, needed GLIBC_2.39 and did not start on Ubuntu
+        # 22.04 LTS at all. The `run-gate` job below measures the floor.
+        os: [ubuntu-22.04, ubuntu-22.04-arm, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
@@ -24,62 +104,153 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: build archive
         run: cargo xtask dist
-      # The release body is the CHANGELOG's entry for this tag (#214): v0.2.1
-      # and v0.2.2 both answered the releases API with a `body` of length 0,
-      # because the step below created the release with `--title` and nothing
-      # else. A tag with no CHANGELOG entry fails the job here, by name — an
-      # empty body is exactly what this closes.
-      - name: release notes from the CHANGELOG
-        shell: bash
-        run: cargo xtask release-notes "${GITHUB_REF_NAME}" --out target/release-notes.md
-      # Every matrix job writes the same notes and passes them twice: on the
-      # create, so whichever job wins the race sets the body, and on an edit,
-      # so the body is right even for a release someone opened by hand.
-      - name: upload to release
+      # By release id, never by tag (#226). `--clobber` by hand: a same-named
+      # asset from a re-run is deleted first, and the deletion is named.
+      - name: upload to release ${{ needs.create.outputs.release_id }}
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_ID: ${{ needs.create.outputs.release_id }}
         shell: bash
         run: |
-          notes=target/release-notes.md
-          gh release create "${GITHUB_REF_NAME}" --draft --title "${GITHUB_REF_NAME}" --notes-file "$notes" || echo "release already exists"
-          gh release edit "${GITHUB_REF_NAME}" --notes-file "$notes"
-          gh release upload "${GITHUB_REF_NAME}" target/dist/*.tar.gz --clobber
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(target/dist/*.tar.gz)
+          test "${#archives[@]}" -ge 1 || { echo "::error::cargo xtask dist left no archive under target/dist"; exit 1; }
+          for f in "${archives[@]}"; do
+            name=$(basename "$f")
+            for aid in $(gh api --paginate "repos/${GH_REPO}/releases/${RELEASE_ID}/assets" \
+                           --jq ".[] | select(.name == \"${name}\") | .id"); do
+              gh api --method DELETE "repos/${GH_REPO}/releases/assets/${aid}"
+              echo "replaced existing asset ${name} (${aid})"
+            done
+            gh api --method POST -H "Content-Type: application/gzip" \
+              "https://uploads.github.com/repos/${GH_REPO}/releases/${RELEASE_ID}/assets?name=${name}" \
+              --input "$f" --jq '"uploaded \(.name): \(.size) bytes, \(.state)"'
+          done
+      # The linux archives go to the run gate as workflow artifacts, so the
+      # gate runs the bytes this job built without touching the release API.
+      - name: keep the archive for the run gate
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: actions/upload-artifact@v4
+        with:
+          name: archive-${{ matrix.os }}
+          path: target/dist/*.tar.gz
+          if-no-files-found: error
 
-  # The last hand step, retired (#226). `gh release create --draft` above is
-  # deliberate: a half-uploaded release page must never be public, and at
-  # v0.2.0/v0.2.1 (#200) and again at v0.2.3 the draft outlived the matrix
-  # because a human had to run `gh release edit --draft=false`. This job is
-  # the other half of the pair. `needs: dist` is the whole matrix — with
-  # `fail-fast: false` every host still runs, but this job runs ONLY if all
-  # four succeeded, and is skipped the moment one is red. So a fully-green
-  # matrix publishes itself and a red one stays a draft, which is the rule
-  # the hand step was enforcing by memory.
+  # #447: a green release means the artifact RUNS, not that it uploaded.
+  # 0.2.15's x86-64 archive printed `--version` and then the native tier
+  # answered exit 2 on every program under a 24.04 loader, and did not start
+  # at all under 22.04's. So: the archive a user downloads, unpacked on a
+  # 22.04 host (glibc 2.35, the floor), one program on each of the three
+  # tiers, and the highest GLIBC symbol version the binary needs, printed and
+  # held at the floor. The host gets only what a user would install to
+  # compile: the native tier's linker (`lld`) and the release tier's clang
+  # (>= 15; 22.04's default is 14).
+  run-gate:
+    name: run gate (${{ matrix.os }}, glibc 2.35)
+    needs: [create, dist]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-22.04-arm]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: archive-${{ matrix.os }}
+          path: archive
+      - name: the native linker and the release tier's clang, nothing else
+        run: sudo apt-get update && sudo apt-get install -y lld clang-15
+      - name: one program per tier, from the unpacked archive
+        env:
+          PRERELEASE: ${{ needs.create.outputs.prerelease }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "host: $(ldd --version | head -1)"
+          archives=(archive/*.tar.gz)
+          test "${#archives[@]}" -eq 1 || { echo "::error::expected one archive, found ${#archives[@]}"; exit 1; }
+          mkdir unpacked && tar -xzf "${archives[0]}" -C unpacked
+          dir=$(ls -d unpacked/wolf-*)
+          wolf="$dir/wolf"
+          test -x "$wolf" && test -f "$dir/libwolf_rt.a" && test -x "$dir/wolf-cimport-worker"
+          # The floor, measured on the shipped binary rather than assumed
+          # from the runner: the highest GLIBC symbol version it imports.
+          need=$(objdump -T "$wolf" | grep -o 'GLIBC_[0-9.]*' | sort -uV | tail -1)
+          echo "highest GLIBC symbol version needed: ${need:-none}"
+          minor=${need#GLIBC_2.}; minor=${minor%%.*}
+          if [ -n "$need" ] && [ "$minor" -gt 35 ]; then
+            echo "::error::${need} is above the 2.35 floor (#447) — this archive will not start on Ubuntu 22.04"
+            exit 1
+          fi
+          # The D57 stamp: bare at a release tag; an rc rehearses on a +dev build.
+          v=$("$wolf" --version | head -1)
+          echo "$v"
+          if [ "$PRERELEASE" = "false" ]; then
+            case "$v" in *+dev*) echo "::error::the release build carries the dev suffix: $v"; exit 1 ;; esac
+          fi
+          printf 'fn main() -> !int {\n    print("hello, wolf")\n    0\n}\n' > hello.lu
+          # native tier (the default, `wolf run`)
+          out=$("$wolf" run hello.lu)
+          test "$out" = "hello, wolf" || { echo "::error::native tier: $out"; exit 1; }
+          echo "native tier: $out"
+          # release tier (LLVM, through clang-15)
+          out=$(WOLF_CLANG=clang-15 "$wolf" run --release hello.lu)
+          test "$out" = "hello, wolf" || { echo "::error::release tier: $out"; exit 1; }
+          echo "release tier: $out"
+          # checked tier — it answers only through conform-run --checked
+          rec=$("$wolf" conform-run hello.lu --checked --json)
+          echo "$rec" | jq -e '.verdict == "exit(0)" and .stdout_inline == "hello, wolf\n"' > /dev/null \
+            || { echo "::error::checked tier: $rec"; exit 1; }
+          echo "checked tier: $(echo "$rec" | jq -r .verdict), $(echo "$rec" | jq -r .stdout_inline | head -1)"
+
+  # The last hand step, retired (#226): a fully-green matrix publishes
+  # itself and a red one stays a draft. `needs:` is the whole matrix plus
+  # the run gate — with `fail-fast: false` every host still runs, and this
+  # job runs ONLY if all of them succeeded.
   publish:
     name: publish (un-draft)
-    needs: dist
+    needs: [create, dist, run-gate]
     runs-on: ubuntu-latest
     steps:
       - name: publish the release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          RELEASE_ID: ${{ needs.create.outputs.release_id }}
         shell: bash
         run: |
           set -euo pipefail
-          # The evidence, in the log, before the flag moves: one archive per
-          # matrix host. A green leg implies its upload (the glob would have
-          # failed the step), so this is a tripwire on the glob rather than a
-          # second gate on the hosts — and if it ever fires, the release stays
-          # a draft, which is the safe side.
-          gh release view "${GITHUB_REF_NAME}" --json assets \
-            --jq ".assets[].name" | sort | tee assets.txt
-          count=$(grep -c "\.tar\.gz$" assets.txt || true)
-          if [ "$count" -lt 4 ]; then
-            echo "publish: ${GITHUB_REF_NAME} carries $count archives, wanted 4 — leaving it a draft" >&2
+          tag="${GITHUB_REF_NAME}"
+          gh api --paginate "repos/${GH_REPO}/releases" \
+            --jq ".[] | select(.tag_name == \"${tag}\") | \"\(.id)\t\(.draft)\t\(.assets | length)\"" \
+            | tee releases.tsv
+          n=$(grep -c . releases.tsv || true)
+          if [ "$n" -ne 1 ]; then
+            echo "::error::$n releases carry $tag, wanted exactly one (#226) — leaving it a draft" >&2
             exit 1
           fi
-          gh release edit "${GITHUB_REF_NAME}" --draft=false
-          echo "publish: ${GITHUB_REF_NAME} is public with $count archives"
+          test "$(cut -f1 releases.tsv)" = "$RELEASE_ID" \
+            || { echo "::error::the one release on $tag is $(cut -f1 releases.tsv), not the $RELEASE_ID this run created"; exit 1; }
+          # The evidence, in the log, before the flag moves: one archive per
+          # matrix host. A green leg implies its upload, so this is a
+          # tripwire on the glob rather than a second gate on the hosts.
+          gh api --paginate "repos/${GH_REPO}/releases/${RELEASE_ID}/assets" --jq '.[].name' | sort | tee assets.txt
+          count=$(grep -c '\.tar\.gz$' assets.txt || true)
+          if [ "$count" -lt 4 ]; then
+            echo "::error::publish: $tag carries $count archives, wanted 4 — leaving it a draft" >&2
+            exit 1
+          fi
+          gh api --method PATCH "repos/${GH_REPO}/releases/${RELEASE_ID}" -F draft=false \
+            --jq '"published \(.html_url) (draft=\(.draft), prerelease=\(.prerelease))"'
+          # The #226 shape, asserted after the fact rather than remembered.
+          shape=$(gh api --paginate "repos/${GH_REPO}/releases" \
+            --jq "[.[] | select(.tag_name == \"${tag}\")] | \"releases=\(length) drafts=\([.[] | select(.draft)] | length) assets=\(.[0].assets | length)\"")
+          echo "publish: $tag → $shape"
+          test "$shape" = "releases=1 drafts=0 assets=$count" \
+            || { echo "::error::publish: the release page does not carry the one-release, zero-draft shape: $shape"; exit 1; }
 
   # tree-sitter-wolf#13: the grammar mirror hears about a release. That repo
   # gates this repository's `corpus/` at zero ERROR nodes (its #9), and its
@@ -91,7 +262,8 @@ jobs:
   # Sent at release time, and only when this tag moved what the mirror
   # parses: `spec/grammar.ebnf`, `spec/01-grammar.md` or `corpus/` since the
   # previous tag. The receiver checks out this repository's DEFAULT BRANCH,
-  # not the tag, which at release time carries the tag's commit.
+  # not the tag, which at release time carries the tag's commit. A
+  # pre-release tag rehearses the release page, not the mirror: no dispatch.
   #
   # The default token cannot dispatch to another repository. The job needs
   # `TREE_SITTER_WOLF_DISPATCH_TOKEN`: a fine-grained token scoped to
@@ -106,6 +278,7 @@ jobs:
   # red matrix never silences the mirror.
   grammar-mirror:
     name: dispatch tree-sitter-wolf's corpus gate
+    if: ${{ !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
