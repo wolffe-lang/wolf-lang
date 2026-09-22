@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+### `move` empties the place, whatever the type
+
+**Reading a place after `move` is E1001 again — and it never was, for
+any `Copy` type** (#444, found by the maintainer working through
+wolf-book ch07 §7.2). The book moves one leaf out of a value tree and
+says the source path is empty afterwards: nothing to free, nothing to
+read. Add the line that reads it and wolf 0.2.14, the published
+0.2.15 and trunk all compiled the program, ran it, and printed the
+moved value — on the checked lane, the native lane and the release
+lane alike, with no diagnostic. lupin traps it:
+`trap(use-after-move): `d.meta.author` was moved out and is
+uninitialized here [mem.tier0.move.2]`.
+
+The mem tier lowered the `move` OPERATOR through the rule for a place
+in value position, where `[mem.tier0.move.3]`'s implicit copy applies
+because the program said nothing — and `str` is `Copy`. So the move
+site was never recorded, and no analysis downstream could miss what
+was never written down. The field path was never the problem: the
+same program with a plain `var s = "ada"; let t = move s` and a read
+of `s` was equally accepted, and so was the `int` twin. `move` now
+records the move for every type; `[mem.model.path.disjoint]` still
+decides the rest, so the book's own example — moving `d.meta.author`
+and reading `d.title` and `d.meta.words` — keeps running, pinned as
+`corpus/memory/move_field_siblings_ok.lu` beside the refusal witness
+`corpus/memory/move_field_use_after.lu`.
+
+**This is the third silent wrong answer found in the published
+0.2.15** (after #400 and #391/#392) and the first that was wrong on
+the native lane too. The corpus could not have caught it alone —
+`cargo xtask corpus` runs `phase: run` entries on the native lane and
+`lane-coverage` counts what the checked lane executes, not what it
+answers — so the witnesses are joined by
+`crates/wolf_driver/tests/move_expression_lanes.rs`, which asserts the
+checked lane, the native lane and lupin agree AND agree on the right
+verdict. All five of its cases were red at trunk 75e2aa8d.
+
 ### The pool has a runtime, the handle is a word, and the unsafe tier lowers
 
 **`Pool[T]` and `handle T` compile** (#268, #31, #11). A pool is one
