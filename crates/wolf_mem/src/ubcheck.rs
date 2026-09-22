@@ -8184,7 +8184,9 @@ impl<'t> Machine<'t> {
                             Ok(Flow::Val(Value::Bool(live == 0)))
                         }
                     }
-                    "alive" => {
+                    // s173 (D50): `has` is `alive` under the name the
+                    // other containers use for the same question.
+                    "alive" | "has" => {
                         let h = args.into_iter().flat_map(|l| l.args()).find_map(Arg::value);
                         let Some(v) = h else {
                             return self.refuse("pool.alive without a handle", e.span);
@@ -8196,6 +8198,21 @@ impl<'t> Machine<'t> {
                             && self.pools[id][index].generation == generation
                             && self.pools[id][index].live;
                         Ok(Flow::Val(Value::Bool(live)))
+                    }
+                    // s173 (D50): every live slot removed, every
+                    // generation bumped — so every handle the pool
+                    // ever issued is stale afterwards, by exactly the
+                    // rule `remove` uses one slot at a time (X5).
+                    "clear" => {
+                        for slot in &mut self.pools[id] {
+                            if !slot.live {
+                                continue;
+                            }
+                            slot.live = false;
+                            slot.generation += 1;
+                            slot.value = Value::Uninit;
+                        }
+                        Ok(Flow::Val(Value::Unit))
                     }
                     _ => self.refuse("this Pool method", e.span),
                 }
