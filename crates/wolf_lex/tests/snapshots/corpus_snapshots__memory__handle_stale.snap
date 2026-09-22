@@ -1,11 +1,10 @@
 ---
 source: crates/wolf_lex/tests/corpus_snapshots.rs
-assertion_line: 41
 expression: lexed.dump(&bytes)
 ---
     lead  InnerDocComment 0..39 "//! check: run(exit=trap(stale-handl…"
     lead  Whitespace 39..40 "\n"
-    lead  InnerDocComment 40..54 "//! phase: mem"
+    lead  InnerDocComment 40..54 "//! phase: run"
     lead  Whitespace 54..55 "\n"
     lead  InnerDocComment 55..88 "//! conforms: mem.shared.handle.2"
     lead  Whitespace 88..89 "\n"
