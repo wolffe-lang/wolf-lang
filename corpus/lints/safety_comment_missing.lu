@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: mem
+//! phase: run
 //! conforms: mem.boundary.doc
 //! warns: W1301
 //!

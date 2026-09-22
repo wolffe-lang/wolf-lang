@@ -3545,8 +3545,22 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 Ok(Flow::Val(None))
             }
+            // s173 (`[mem.unsafe.raw.2]`): `assume noalias p, q` is an
+            // OPTIMIZATION LICENSE, and lowering declines to take it.
+            // The statement is accepted and emits nothing. That is a
+            // real answer, not a stub: the assertion's truth is a
+            // dynamic obligation nothing here can discharge, and a
+            // backend that acted on an unproven `noalias` would turn a
+            // wrong assertion into a miscompile instead of the defined
+            // UB `[mem.unsafe.raw.1]` already licenses. The operands
+            // are still LOWERED, so their effects happen and W1302
+            // (the checker's reassignment lint) keeps its subject.
             SyntaxKind::AssumeStmt => {
-                Err(refuse("assume noalias (unsafe-tier WIR ops)", stmt.span))
+                let a = wolf_ast::AssumeStmt::cast(stmt).expect("kind");
+                for operand in a.exprs() {
+                    let _ = flow_val!(self.lower_expr(operand));
+                }
+                Ok(Flow::Val(None))
             }
             // #116b: a nested named fn — a capture-free fn value with
             // a name. The entry lifts through s105's closure queue
@@ -8001,7 +8015,26 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     }
                 }
             }
-            CastKind::Raw => Err(refuse("raw-pointer casts (unsafe-tier WIR ops)", e.span)),
+            // s173 (`[mem.unsafe.raw.1]`): a raw cast between two
+            // pointer types is the IDENTITY at WIR — provenance is the
+            // checker's machinery and the value is one word either
+            // way. A cast that changes the WIR shape (an integer to a
+            // pointer, the `expose`/`with_exposed` pair) is not this
+            // and keeps its own refusal.
+            CastKind::Raw => {
+                let Some(v) = v else {
+                    return Err(refuse("a raw cast of a valueless expression", e.span));
+                };
+                let from_w = self.wir_value_ty(from, e.span)?;
+                let to_w = self.wir_value_ty(to, e.span)?;
+                if from_w == Some(types::PTR) && to_w == Some(types::PTR) {
+                    return Ok(Flow::Val(Some(v)));
+                }
+                Err(refuse(
+                    "raw casts that change the machine shape (integer/pointer round trips)",
+                    e.span,
+                ))
+            }
             CastKind::Unsize => self.lower_dyn_cast(e, v, from, to),
             // s121 (D58): `char as int` is TOTAL — the 32-bit scalar
             // zero-extends (the representation invariant keeps the
@@ -10009,12 +10042,21 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// fixed here, mirroring sema's typing (`uint`/`int` → `i64`,
     /// `*u8` → `ptr`).
     ///
-    /// v0 threads NO io token through these calls: WIR never reorders
-    /// calls (block instruction order is program order at every
-    /// backend), and the raw loads/stores an io spine would have to
-    /// order against do not lower yet (s26 deferral). The token
-    /// threading joins when `print`/raw-deref lowering lands (c06 —
-    /// recorded in the campaign closeout).
+    /// s173 closes the deferral this comment used to record. It said
+    /// v0 threads NO memory token through these calls, because "the
+    /// raw loads/stores an io spine would have to order against do not
+    /// lower yet". They do now — `p[0] = 1` after `c.malloc` is an
+    /// ordinary store — so the five membrane calls thread the FOREIGN
+    /// region tokens, exactly as the container shims do. Without that
+    /// the chain would let a load through `p` float across the
+    /// `c.free` that killed it.
+    ///
+    /// Raw C memory rides the `Buffer` role rather than a role of its
+    /// own. A new role would assert that raw memory is disjoint from
+    /// container buffers, and nothing here can prove that; sharing the
+    /// role asserts only that it may alias them, which costs
+    /// precision and claims nothing. The one claim in play —
+    /// header/buffer disjointness — is D46's and predates this.
     fn lower_c_call(&mut self, d: CallExpr<'t>, cs: &CallSig, e: &'t GreenNode) -> R<Flow> {
         use crate::ir::Param;
         let (param_tys, ret): (Vec<TypeId>, Option<TypeId>) = match cs.callee.as_str() {
@@ -10046,14 +10088,29 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let ext = match self.callees.get(&cs.callee) {
             Some(&ext) => ext,
             None => {
-                let params = param_tys.iter().map(|&ty| Param::val(ty)).collect();
+                let mut params: Vec<Param> = param_tys.iter().map(|&ty| Param::val(ty)).collect();
+                // Two trailing formal tokens, bound at the call to the
+                // foreign header and buffer regions — the shape every
+                // runtime shim that touches foreign storage already
+                // uses (`rt_call_foreign`).
+                for formal in 0..2u32 {
+                    let tok = self.b.module.types.mem(RegionId::new(formal));
+                    params.push(Param {
+                        ty: tok,
+                        mode: Mode::Val,
+                    });
+                }
                 let sig = self.b.module.make_sig(params, ret.into_iter().collect());
                 let ext = self.b.func.import_func(cs.callee.clone(), sig);
                 self.callees.insert(cs.callee.clone(), ext);
                 ext
             }
         };
-        let results = self.b.ins_call(ext, &args);
+        let (hdrs, bufs) = self.foreign_regions();
+        let mut formal_regions = HashMap::new();
+        formal_regions.insert(0u32, hdrs);
+        formal_regions.insert(1u32, bufs);
+        let results = self.b.ins_call_regions(ext, &args, &formal_regions);
         Ok(Flow::Val(results.first().copied()))
     }
 
@@ -13165,8 +13222,40 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let region = self.foreign_buf_region();
                 Ok(Flow::Val(Some(self.load_flat(ewty, addr, region, e.span)?)))
             }
+            // s173 (`[mem.unsafe.raw.1]`): `p[i]` through a raw
+            // pointer. One `ptr.off` and one load, no bound — the
+            // unsafe tier's whole bargain.
+            TyKind::Ptr(elem) => {
+                let elem = *elem;
+                let (ewty, size) = self.raw_pointee(elem, e.span)?;
+                let Some(base) = flow_val!(self.lower_expr(recv)) else {
+                    return Err(refuse("a valueless raw pointer", recv.span));
+                };
+                let ix = d
+                    .args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .filter_map(Arg::value)
+                    .next()
+                    .ok_or_else(|| refuse("a raw index without an operand", e.span))?;
+                let Some(idx) = flow_val!(self.lower_expr(ix)) else {
+                    return Err(refuse("a valueless raw index", ix.span));
+                };
+                let idx = if origin == 1 {
+                    match self.shift_origin(idx) {
+                        Some(v) => v,
+                        None => return Ok(Flow::Diverged),
+                    }
+                } else {
+                    idx
+                };
+                let p = self.raw_elem_addr(base, idx, size);
+                let region = self.foreign_buf_region();
+                Ok(Flow::Val(Some(self.load_flat(ewty, p, region, e.span)?)))
+            }
             _ => Err(refuse(
-                "indexing outside str/List/Pool (a map read answers a row, not storage)",
+                "indexing outside str/List/Pool and raw pointers (a map read answers a row, \
+                 not storage)",
                 e.span,
             )),
         }
@@ -13555,6 +13644,30 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
     }
 
+    /// The payload type and stride of a raw pointer's pointee — the
+    /// pair `p[i]` needs. `*u8` is one byte per step, `*i64` eight;
+    /// the arithmetic is the C one and the bound is the programmer's,
+    /// which is what `unsafe` means here.
+    fn raw_pointee(&mut self, elem: TyId, span: Span) -> R<(TypeId, u64)> {
+        let Some(ewty) = wir_ty(&mut self.b.module.types, self.table, self.sigs, elem, span)?
+        else {
+            return Err(refuse("raw pointers to unit types", span));
+        };
+        let Some(size) = flat_size(&self.b.module.types, ewty) else {
+            return Err(refuse("raw pointers to types without a flat layout", span));
+        };
+        Ok((ewty, size))
+    }
+
+    /// `p + i * size` — the address one raw index step reaches. NO
+    /// bounds check exists and none is possible: a raw pointer
+    /// carries no length, and `[mem.unsafe.raw.1]` says so. An index
+    /// outside the allocation is UNDEFINED, which is the whole
+    /// difference between this and `l[i]`.
+    fn raw_elem_addr(&mut self, base: Value, idx: Value, size: u64) -> Value {
+        self.b.ins_ptr_off(base, idx, size)
+    }
+
     /// The payload's WIR type and stride — the pair every pool seam
     /// needs, and the one place the `Pool[T]` element layout is
     /// decided.
@@ -13839,9 +13952,47 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let elem = *elem;
             return self.lower_pool_index_assign(d, b, recv, elem, span);
         }
+        // s173: `p[i] = v` through a raw pointer — one `ptr.off` and
+        // one store, no bound (`[mem.unsafe.raw.1]`).
+        if let TyKind::Ptr(elem) = self.table.kind(self.strip_sema(base_sema)) {
+            let elem = *elem;
+            let (_, size) = self.raw_pointee(elem, span)?;
+            let Some(base) = flow_val!(self.lower_expr(recv)) else {
+                return Err(refuse("a valueless raw pointer", recv.span));
+            };
+            let ix = b
+                .args()
+                .into_iter()
+                .flat_map(|l| l.args())
+                .filter_map(Arg::value)
+                .next()
+                .ok_or_else(|| refuse("a raw index without an operand", span))?;
+            let Some(idx) = flow_val!(self.lower_expr(ix)) else {
+                return Err(refuse("a valueless raw index", ix.span));
+            };
+            let idx = if self.origin_at(place.span) == 1 {
+                match self.shift_origin(idx) {
+                    Some(v) => v,
+                    None => return Ok(Flow::Diverged),
+                }
+            } else {
+                idx
+            };
+            let Some(vexpr) = d.value() else {
+                return Err(refuse("an index write without a value", span));
+            };
+            let Some(val) = flow_val!(self.lower_expr(vexpr)) else {
+                return Err(refuse("a unit-typed raw payload", vexpr.span));
+            };
+            let p = self.raw_elem_addr(base, idx, size);
+            let region = self.foreign_buf_region();
+            self.store_flat(val, p, region, vexpr.span)?;
+            return Ok(Flow::Val(None));
+        }
         let TyKind::List(elem) = self.table.kind(self.strip_sema(base_sema)) else {
             return Err(refuse(
-                "index writes outside List and Pool (raw-pointer writes; a map write is a key insert)",
+                "index writes outside List and Pool (a raw write needs a pointer; a map write \
+                 is a key insert)",
                 span,
             ));
         };

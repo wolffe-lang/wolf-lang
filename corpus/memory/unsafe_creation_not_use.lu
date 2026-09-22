@@ -1,5 +1,5 @@
 //! check: run(exit=0)
-//! phase: mem
+//! phase: run
 //! conforms: mem.prov.tag, mem.prov.state, mem.unsafe.raw.1
 //! Creation is not a use — the Stacked Borrows mistake Tree Borrows
 //! repairs (most SB libstd violations were creation-as-use false
