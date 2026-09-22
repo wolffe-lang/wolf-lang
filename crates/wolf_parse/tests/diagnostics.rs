@@ -656,14 +656,14 @@ fn a_malformed_generic_parameter_list_reports_once() {
 
     // The cap is per list, not per file: a second broken header still
     // gets its own report.
-    assert_eq!(all("fn f[1]() -> int { 1 }\n"), [generics.clone()]);
+    assert_eq!(all("fn f[1]() -> int { 1 }\n"), vec![generics.clone()]);
     assert_eq!(
         all("fn f[1]() -> int { 1 }\nfn g[2]() -> int { 2 }\n"),
         [generics.clone(), generics.clone()]
     );
     // A bound that never arrives is the same list's wreck, counted in
     // the same cap.
-    assert_eq!(all("fn f[A:, B:]() -> int { 1 }\n"), [generics.clone()]);
+    assert_eq!(all("fn f[A:, B:]() -> int { 1 }\n"), vec![generics.clone()]);
 
     // And a healthy list is still silent.
     for good in [
@@ -726,9 +726,9 @@ fn a_malformed_paren_type_list_reports_once() {
     // The two reports the list can make, each once.
     assert_eq!(
         all("fn f(g: fn(int int)) -> int { 1 }\n"),
-        [expected.clone()]
+        vec![expected.clone()]
     );
-    assert_eq!(all("fn f(g: fn(1, 2, 3)) -> int { 1 }\n"), [ty.clone()]);
+    assert_eq!(all("fn f(g: fn(1, 2, 3)) -> int { 1 }\n"), vec![ty.clone()]);
     // Per list, not per file: two broken fn-types report twice.
     assert_eq!(
         all("fn f(g: fn(1, 2), h: fn(3, 4)) -> int { 1 }\n"),
