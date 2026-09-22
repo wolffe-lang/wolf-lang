@@ -308,6 +308,8 @@ memory/map_set_generic.lu: lowers
 memory/map_std_keys.lu: lowers
 memory/match_arm_whole_move.lu: not mem-clean (pre-wir rungs own it)
 memory/mode_missing_mut.lu: not mem-clean (pre-wir rungs own it)
+memory/move_field_siblings_ok.lu: lowers
+memory/move_field_use_after.lu: not mem-clean (pre-wir rungs own it)
 memory/move_ok.lu: lowers
 memory/move_use_after.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_arg_element.lu: lowers
