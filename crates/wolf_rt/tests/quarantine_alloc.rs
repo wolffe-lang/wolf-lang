@@ -14,7 +14,9 @@
 //! type through its public trait, which is what makes them a gate on
 //! it rather than a description of it.
 
-use wolf_rt::quarantine::{FaultKind, QuarantineAllocator, QuarantineBudget, QuarantineHooks, RegionId, Tag};
+use wolf_rt::quarantine::{
+    FaultKind, QuarantineAllocator, QuarantineBudget, QuarantineHooks, RegionId, Tag,
+};
 
 fn alloc() -> QuarantineAllocator {
     QuarantineAllocator::new(QuarantineBudget::default())
@@ -73,9 +75,15 @@ fn a_free_retags_so_a_stale_tag_never_matches_again() {
     let mut a = alloc();
     let (addr, tag) = a.alloc(8);
     a.free(addr);
-    let fresh = a.tag_at(addr).expect("the granule is quarantined, not gone");
+    let fresh = a
+        .tag_at(addr)
+        .expect("the granule is quarantined, not gone");
     assert_ne!(fresh, tag, "a free rotates the granule's tag");
-    assert_ne!(fresh, Tag::UNTAGGED, "and the fresh tag is not the reserved one");
+    assert_ne!(
+        fresh,
+        Tag::UNTAGGED,
+        "and the fresh tag is not the reserved one"
+    );
 }
 
 #[test]
@@ -115,7 +123,10 @@ fn running_off_a_live_object_into_a_poisoned_span_is_out_of_bounds() {
 fn an_address_in_no_granule_at_all_is_out_of_bounds() {
     let mut a = alloc();
     let (addr, tag) = a.alloc(8);
-    assert_eq!(a.check(addr.wrapping_add(1 << 40), tag), Err(FaultKind::OutOfBounds));
+    assert_eq!(
+        a.check(addr.wrapping_add(1 << 40), tag),
+        Err(FaultKind::OutOfBounds)
+    );
 }
 
 #[test]
