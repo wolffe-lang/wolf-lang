@@ -1,6 +1,10 @@
 //! check: pass
-//! phase: mem
+//! phase: wir
 //! conforms: mem.boundary.trusted, mem.unsafe.scope
+//! s173: the phase advances mem -> wir, not mem -> run. The raw
+//! tier lowers now, so the body reaches WIR; the header stays short
+//! of `run` because `check: pass` is what this file asserts — the
+//! ring inventory, not an execution.
 //! D11 ring 2: `#[trusted]` declares an unsafe-encapsulating contract
 //! the checker cannot see. The fn rosters in the module's `wolfi`
 //! interface (both hash partitions), `corpus/memory/wolf.pkg` declares

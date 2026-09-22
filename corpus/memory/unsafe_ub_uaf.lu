@@ -1,18 +1,19 @@
 //! check: run(exit=trap(ub))
-//! phase: mem
+//! phase: wir
 //! conforms: mem.ub, mem.prov.region
 //! §7/P1: use-after-free through a raw pointer. Compiled behavior is
 //! UNDEFINED (licenses O1); the is04 oracle and the D21 quarantine
 //! allocator both flag it — `trap(ub)` is the checked-build outcome.
-//! NATIVE (s173): this entry stays `phase: mem` while its siblings
-//! advance. Raw casts and raw indexing lower now, so the program
+//! NATIVE (s173): this entry advances only to `wir`, while its
+//! siblings reach `run`. Raw casts and raw indexing lower now, so the program
 //! COMPILES and RUNS on the native lane — and what it does there is
 //! undefined, which is the point of the file. Measured twice on
 //! kasumi at this branch it exited 44 and then 132: a read of freed
 //! heap, so whatever the allocator left behind. `trap(ub)` is the
 //! CHECKED build's answer (the D21 quarantine allocator's, once it is
 //! wired), never the release tier's, and a `phase: run` header here
-//! would assert a verdict the native lane cannot promise.
+//! would assert a verdict the native lane cannot promise. `wir` is the
+//! true deepest passing phase and the gate measures it.
 //! STATIC (s22): the tier ACCEPTS this file — UB is dynamic by design
 //! ([mem.unsafe.raw.1]: no static approximation of P1 exists), and the
 //! static tier only gates the surface (the ring, the operand shapes).
