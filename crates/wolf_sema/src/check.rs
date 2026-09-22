@@ -6671,6 +6671,27 @@ impl<'a> Checker<'a> {
                 let u = self.lo.table.unit();
                 (vec![pm("self", recv_ty), p("handle", h)], u)
             }
+            // s173 (D50's accessor set on wolf-lang#11): `has` is
+            // `alive` under the name every other container uses for
+            // the same question, and `clear` empties the pool —
+            // bumping every generation, so every handle it ever
+            // issued is stale afterwards.
+            //
+            // D50's `capacity` and its iteration are NOT here. A
+            // `capacity` a program can read is a promise about a
+            // growth policy, and the two lanes would have to agree on
+            // one; the report carries that as a proposal rather than
+            // a silent coupling between the interpreter and the
+            // runtime.
+            (TyKind::Pool(t), "has") => {
+                let h = self.lo.table.intern(TyKind::Handle(t));
+                let b = self.lo.table.prim(Prim::Bool);
+                (vec![p("self", recv_ty), p("handle", h)], b)
+            }
+            (TyKind::Pool(_), "clear") => {
+                let u = self.lo.table.unit();
+                (vec![pm("self", recv_ty)], u)
+            }
             _ => {
                 // `[type.method.resolve]` step (2): the home module.
                 if let Some(r) =
