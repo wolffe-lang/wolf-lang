@@ -646,7 +646,11 @@ fn a_malformed_generic_parameter_list_reports_once() {
     // Two more elements used to buy two more reports. The list is one
     // wreck at any length.
     let six = "fn main() -> !int {\n    var xs fn [4, 1, 3, 2, 5, 6]\n    0\n}\n";
-    assert_eq!(all(six), all(four), "the cascade does not grow with the array");
+    assert_eq!(
+        all(six),
+        all(four),
+        "the cascade does not grow with the array"
+    );
     let one = "fn main() -> !int {\n    var xs fn [4]\n    0\n}\n";
     assert_eq!(all(one), all(four), "nor shrink with it");
 
@@ -720,7 +724,10 @@ fn a_malformed_paren_type_list_reports_once() {
     }
 
     // The two reports the list can make, each once.
-    assert_eq!(all("fn f(g: fn(int int)) -> int { 1 }\n"), [expected.clone()]);
+    assert_eq!(
+        all("fn f(g: fn(int int)) -> int { 1 }\n"),
+        [expected.clone()]
+    );
     assert_eq!(all("fn f(g: fn(1, 2, 3)) -> int { 1 }\n"), [ty.clone()]);
     // Per list, not per file: two broken fn-types report twice.
     assert_eq!(
