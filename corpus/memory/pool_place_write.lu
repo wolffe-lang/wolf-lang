@@ -1,0 +1,60 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.shared.handle.1, mem.shared.handle.2, mem.shared.handle.3
+//! s173 (wolf-lang#31, the book's exercise 8-7): `pool[h].next = k` —
+//! a write THROUGH a handle to one field of a slot, which is the
+//! whole LRU centrepiece. It is one store into the slot's payload,
+//! not a read-modify-write of the node, and `[mem.shared.handle.3]`
+//! is what makes the pool the place base.
+//!
+//! The list below is re-linked twice: built head-to-tail, then the
+//! middle node is promoted to the front by rewriting two `next`
+//! fields in place. Every edge is a `handle Node`, so the cycle-free
+//! chain never carries a pointer and nothing here can dangle.
+
+struct Node {
+    value: int,
+    next: handle Node,
+}
+
+fn main() -> !int {
+    region r: pool(Node) {
+        var pool = Pool[Node]()
+        let a = (mut pool).reserve()
+        let b = (mut pool).reserve()
+        let c = (mut pool).reserve()
+        // Two-phase: the handles exist before the nodes do, so `a`
+        // can name `b` as its successor while `b` is still empty.
+        (mut pool).init(a, Node { value: 1, next: b })
+        (mut pool).init(b, Node { value: 2, next: c })
+        (mut pool).init(c, Node { value: 3, next: c })
+
+        // a -> b -> c -> c. Walk it: 1 + 2 + 3.
+        var sum = 0
+        var cur = a
+        for _ in 0..3 {
+            sum += pool[cur].value
+            cur = pool[cur].next
+        }
+
+        // Promote c to the front by rewriting `next` IN PLACE —
+        // wolf-lang#31's line, twice.
+        pool[c].next = a
+        pool[b].next = b
+
+        // c -> a -> b -> b. Walk it: 3 + 1 + 2.
+        var second = 0
+        var walk = c
+        for _ in 0..3 {
+            second += pool[walk].value
+            walk = pool[walk].next
+        }
+
+        // A nested place too: the field of a slot reached through a
+        // handle, written and read back.
+        pool[a].value = 10
+        let bumped = pool[a].value
+
+        if sum == 6 && second == 6 && bumped == 10 { 0 } else { 1 }
+    }
+}
