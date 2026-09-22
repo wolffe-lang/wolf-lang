@@ -151,14 +151,21 @@ pub enum TrapKind {
     DivZero,
     /// A bounds check failed (reserved: `bounds.br`, c06).
     Bounds,
+    /// A `handle T` named a pool slot that is no longer the slot it
+    /// named — removed, or reused at a later generation
+    /// (`[mem.shared.handle.2]`, X5). A DEFINED outcome in every
+    /// profile, which is why it is a WIR trap kind and not a checked-
+    /// build artifact: the release tier faults here too.
+    StaleHandle,
 }
 
 impl TrapKind {
-    pub const ALL: [TrapKind; 4] = [
+    pub const ALL: [TrapKind; 5] = [
         TrapKind::Assert,
         TrapKind::Overflow,
         TrapKind::DivZero,
         TrapKind::Bounds,
+        TrapKind::StaleHandle,
     ];
 
     /// Textual-format suffix (`trap.overflow`); `Assert` prints bare.
@@ -168,6 +175,7 @@ impl TrapKind {
             TrapKind::Overflow => "overflow",
             TrapKind::DivZero => "div_zero",
             TrapKind::Bounds => "bounds",
+            TrapKind::StaleHandle => "stale_handle",
         }
     }
 
@@ -179,6 +187,7 @@ impl TrapKind {
             TrapKind::Overflow => "overflow",
             TrapKind::DivZero => "div-zero",
             TrapKind::Bounds => "bounds",
+            TrapKind::StaleHandle => "stale-handle",
         }
     }
 }
