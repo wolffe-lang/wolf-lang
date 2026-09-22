@@ -446,7 +446,7 @@ package); the message names the visibility the access would need.
 If the item is deliberately private, the module means to hide it —
 look for the `pub` function it exposes instead.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__private__main.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0304_private.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__private__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__error_alias_private__disk__d.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__error_alias_private__main.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0304_private.snap
 
 ## E0305 — this import is never used
 
@@ -514,7 +514,7 @@ was meant for a different call; passing too few often means a value
 was dropped while refactoring. Check the order too: a swapped argument
 pair usually surfaces as a type mismatch on the *next* argument.
 
-Fixtures: crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__proc_link_root.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__methods__method_wrong_arity.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_count.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0402_arg_count.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0402_assert_arity.snap
+Fixtures: crates/wolf_doc/tests/snapshots/generator__index_json_schema.snap, crates/wolf_doc/tests/snapshots/generator__module_page.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__proc_link_root.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__methods__method_wrong_arity.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__strings__trim_cutset_refused.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__arg_count.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0402_arg_count.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0402_assert_arity.snap
 
 ## E0403 — no such field
 
@@ -731,7 +731,7 @@ unfitting constant sailed into lowering and died as a verifier ICE
 (`[const-range]`, wolf-lang#151) — an abort where a diagnostic was
 owed.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_fit.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_annotated_narrow.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_default_i32_overflow.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_negative_and_unsigned.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_wrapping_literal.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__list_lit_elem_unfit.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_fit.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_annotated_narrow.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_default_i32_overflow.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_negative_and_unsigned.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_wrapping_literal.snap
 
 ## E0416 — a `str` cannot be assigned through an index or slice
 
