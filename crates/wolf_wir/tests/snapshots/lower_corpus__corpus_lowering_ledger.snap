@@ -235,7 +235,7 @@ lints/allow_nothing.lu: lowers
 lints/allow_unknown_code.lu: lowers
 lints/ancestor_import/main.lu: lowers
 lints/as_view_consuming.lu: lowers
-lints/assume_reassigned.lu: refused — assume noalias (unsafe-tier WIR ops)
+lints/assume_reassigned.lu: lowers
 lints/binder_capitalized.lu: lowers
 lints/discarded_result.lu: lowers
 lints/else_arithmetic.lu: lowers
@@ -256,7 +256,7 @@ lints/pub_undocumented.lu: lowers
 lints/raw_interp_braces.lu: lowers
 lints/region_call_allocates.lu: lowers
 lints/region_never_allocates.lu: lowers
-lints/safety_comment_missing.lu: refused — index writes outside List (raw-pointer writes; Pool and Map)
+lints/safety_comment_missing.lu: lowers
 lints/shadow_prelude.lu: lowers
 lints/shadow_prelude_call.lu: lowers
 lints/tag_case_payload.lu: lowers
@@ -288,7 +288,7 @@ memory/excl_disjoint_ok.lu: lowers
 memory/excl_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/exclusivity.lu: lowers
 memory/foreign_root_aliasing.lu: lowers
-memory/handle_stale.lu: refused — Pool/shared constructor lowering (runtime shapes)
+memory/handle_stale.lu: lowers
 memory/list_elem_assign.lu: lowers
 memory/list_elem_copy_loop.lu: lowers
 memory/list_mixed_width_struct.lu: lowers
@@ -319,6 +319,8 @@ memory/mut_param_field_lend.lu: lowers
 memory/mut_place_nested.lu: lowers
 memory/mut_read_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/oob_bounds.lu: lowers
+memory/pool_accessors.lu: lowers
+memory/pool_place_write.lu: lowers
 memory/prov_holy_grail.lu: lowers
 memory/prov_two_phase.lu: lowers
 memory/push_copies_element.lu: lowers
@@ -354,7 +356,7 @@ memory/region_infer_tree_transform.lu: lowers
 memory/region_iso_edge_ok.lu: not mem-clean (pre-wir rungs own it)
 memory/region_move_while_open.lu: not mem-clean (pre-wir rungs own it)
 memory/region_multiopen_ok.lu: lowers
-memory/region_multiopen_swap.lu: refused — Pool/shared constructor lowering (runtime shapes)
+memory/region_multiopen_swap.lu: lowers
 memory/region_multiopen_values_ok.lu: lowers
 memory/region_open_ancestor.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_charged.lu: lowers
@@ -379,14 +381,14 @@ memory/struct_destructure_partial_move.lu: not mem-clean (pre-wir rungs own it)
 memory/struct_pattern_binder.lu: lowers
 memory/unsafe_assume_malformed.lu: not mem-clean (pre-wir rungs own it)
 memory/unsafe_c_alloc_native.lu: lowers
-memory/unsafe_creation_not_use.lu: refused — index writes outside List (raw-pointer writes; Pool and Map)
-memory/unsafe_door_borrow.lu: refused — raw-pointer casts (unsafe-tier WIR ops)
+memory/unsafe_creation_not_use.lu: lowers
+memory/unsafe_door_borrow.lu: refused — unsafe-tier WIR ops
 memory/unsafe_door_misuse.lu: not mem-clean (pre-wir rungs own it)
-memory/unsafe_noalias.lu: refused — assume noalias (unsafe-tier WIR ops)
+memory/unsafe_noalias.lu: lowers
 memory/unsafe_raw_outside.lu: not mem-clean (pre-wir rungs own it)
 memory/unsafe_sig.lu: not mem-clean (pre-wir rungs own it)
-memory/unsafe_trusted.lu: refused — index writes outside List (raw-pointer writes; Pool and Map)
-memory/unsafe_ub_uaf.lu: refused — index writes outside List (raw-pointer writes; Pool and Map)
+memory/unsafe_trusted.lu: lowers
+memory/unsafe_ub_uaf.lu: lowers
 memory/view_set_norm.lu: lowers
 memory/view_set_violation.lu: not mem-clean (pre-wir rungs own it)
 methods/comb_map_filter_fold.lu: lowers
@@ -435,7 +437,7 @@ projects/count.lu: lowers
 projects/count_dir.lu: lowers
 projects/rpn.lu: lowers
 projects/wordtree.lu: lowers
-regions.lu: refused — Pool/shared constructor lowering (runtime shapes)
+regions.lu: lowers
 resolve/bare_sibling/pair.lu: lowers
 resolve/broken_sibling/entry.lu: not mem-clean (pre-wir rungs own it)
 resolve/cycle/main.lu: not mem-clean (pre-wir rungs own it)
