@@ -24,6 +24,9 @@ pub mod os;
 // only by `--profile-gen` builds — `--gc-sections` drops them from
 // every other binary, so the never-required posture costs nothing.
 pub mod prof;
+// The native `Pool[T]` (s173): a generational slot arena and the
+// `handle T` word that names a slot without addressing it.
+pub mod pool;
 pub mod quarantine;
 // The OS random source (s118, #143): OS-provided entropy or a TRAP —
 // no userspace generator, no seeding, no fallback. NOT linux-gated:
