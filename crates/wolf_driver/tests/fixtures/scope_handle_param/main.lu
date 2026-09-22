@@ -1,0 +1,30 @@
+// wolf-lang#431 — `[conc.task.scope]`'s normative sentence, written as
+// a program: "a function that spawns into its caller's scope takes the
+// handle as a parameter — lifetime extension is visible at every call
+// site." (D16.)
+//
+// This is `corpus/conc/scope_handle_param.lu` as trunk `2f8deb7f`
+// removed it, minus the corpus headers. It is a DRIVER-TEST fixture
+// and not a corpus entry because no `phase:` header is true on all
+// three hosts: the file reaches `run` on linux and macOS and hangs the
+// native lane there and on windows, and `xtask corpus` compares the
+// declared phase for exact equality against the deepest passing phase.
+// A header that is false on any host is worse than no header, so the
+// gate is `tests/scope_handle_param.rs` instead.
+//
+// The pinned answer is the one the removed header carried:
+// `run(exit=0, stdout="1")`.
+
+fn fan_out(s: Scope, ch: channel[int]) {
+    s.spawn(fn() { ch.send(1) })
+}
+
+fn main() -> !int {
+    let ch = channel[int](2)
+    scope work {
+        fan_out(work, ch)
+    }
+    let seen = ch.recv() else |_| { return 1 }
+    print("{seen}")
+    0
+}

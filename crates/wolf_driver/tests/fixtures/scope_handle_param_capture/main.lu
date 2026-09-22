@@ -1,0 +1,26 @@
+// wolf-lang#431, the same defect without the deadlock.
+//
+// The witness beside this one hangs, which costs 60 s to observe and
+// says only "something never finished". This one answers in
+// milliseconds and says WHAT: the task's capture record is read after
+// the frame that holds it is gone.
+//
+// `fan_out` does not open the scope — it receives the handle — so the
+// capture record `s174` found lands in `fan_out`'s own frame slot
+// (`pack_task_env`'s `arena: None` arm, `crates/wolf_wir/src/lower.rs`),
+// and `fan_out` returns before the queued task reads it. On the
+// Cranelift tier the task therefore prints an address instead of `7`,
+// a different one every run. On the LLVM tier it prints `7` — which is
+// luck about frame reuse, not soundness, and is why this file asserts
+// the VALUE on both tiers rather than asserting the two tiers agree.
+
+fn fan_out(s: Scope, n: int) {
+    s.spawn(fn() { print("task-{n}") })
+}
+
+fn main() -> !int {
+    scope work {
+        fan_out(work, 7)
+    }
+    0
+}
