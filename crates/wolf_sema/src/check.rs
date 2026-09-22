@@ -1199,7 +1199,7 @@ impl<'a> Checker<'a> {
 
     fn run(&mut self, node: &GreenNode, body: &BodyRef) -> R<()> {
         self.row_tags =
-            crate::resolve::lexical_row_tags(node, self.src(), self.lo.pkg, self.module);
+            crate::resolve::lexical_row_tags(node, self.src(), self.lo.pkg, self.module, self.file);
         match node.kind {
             SyntaxKind::FnDecl => self.run_fn(node, body),
             SyntaxKind::ConstDecl | SyntaxKind::LetDecl | SyntaxKind::VarDecl => {
@@ -1257,7 +1257,7 @@ impl<'a> Checker<'a> {
     /// the archetype facts are the impl's bounds plus the method's.
     fn run_impl_member(&mut self, node: &GreenNode, body: &BodyRef, member: usize) -> R<()> {
         self.row_tags =
-            crate::resolve::lexical_row_tags(node, self.src(), self.lo.pkg, self.module);
+            crate::resolve::lexical_row_tags(node, self.src(), self.lo.pkg, self.module, self.file);
         let Some(imp) = self
             .sigs
             .impls
@@ -1345,7 +1345,7 @@ impl<'a> Checker<'a> {
         _member: usize,
     ) -> R<()> {
         self.row_tags =
-            crate::resolve::lexical_row_tags(node, self.src(), self.lo.pkg, self.module);
+            crate::resolve::lexical_row_tags(node, self.src(), self.lo.pkg, self.module, self.file);
         let Some(tname_tok) = wolf_ast::TraitDecl::cast(outer).and_then(|d| d.name()) else {
             return Err(NotYet {
                 construct: "a trait member without a named trait",

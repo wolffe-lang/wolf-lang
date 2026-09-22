@@ -1017,12 +1017,57 @@ impl<'a> Lower<'a> {
                 continue;
             }
             // s158 — an error-set alias entry
-            // (`[type.err.alias.union]`): a single-segment path naming
-            // an `error` item in this module contributes that alias's
-            // tags, not a tag of its own. Resolution decides, in one
-            // step: everything else here is a tag.
-            if segs.len() == 1
-                && let Some((afile, arow)) = self.error_alias_row(module, &name)
+            // (`[type.err.alias.union]`): a path naming an `error` item
+            // contributes that alias's tags, not a tag of its own.
+            // Resolution decides, in one step: everything else here is
+            // a tag. The path resolves exactly as a type path does —
+            // this module's items, a `use m.Alias` binding, or
+            // `m.Alias` through a module binding (s175, wolf-lang#434,
+            // `[type.err.alias.qualified]`): until then only the first
+            // form was looked up, so `fs.IoErrors` was accepted as a
+            // spelling and contributed no tags at all.
+            let alias_target: Option<(usize, String)> = if segs.len() == 1
+                && self.error_alias_row(module, &name).is_some()
+            {
+                Some((module, name.clone()))
+            } else {
+                let segs_sp: Vec<(String, Span)> =
+                    path.segments().map(|t| (self.text(file, t.span), t.span)).collect();
+                match self.resolve_type_head(module, file, &segs_sp) {
+                    TypeHead::Item { module: am, name: an }
+                        if self.error_alias_row(am, &an).is_some() =>
+                    {
+                        Some((am, an))
+                    }
+                    _ => None,
+                }
+            };
+            if let Some((amod, aname)) = &alias_target
+                && *amod != module
+                && let Some(item) = self.pkg.tables[*amod].get(aname)
+                && item.vis == crate::graph::Vis::Private
+            {
+                // The resolver's E0304, in the one position it does not
+                // walk (row entries defer to typing as candidate tags).
+                let mod_name = self.pkg.modules[*amod].display_name();
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0304,
+                        span,
+                        format!("`{aname}` exists in {mod_name}, but it is private"),
+                    )
+                    .with_label("not visible from here")
+                    .with_secondary(item.name_span, "defined here, without `pub`")
+                    .with_note(
+                        "mark the error alias `pub` to export it from the module, or \
+                         `pub(pkg)` to share it within this package — `pub(pkg)` \
+                         is enough for this use.",
+                    ),
+                );
+                continue;
+            }
+            if let Some((amod, aname)) = alias_target
+                && let Some((afile, arow)) = self.error_alias_row(amod, &aname)
             {
                 if !payload.is_empty() {
                     self.diags.push(
@@ -1040,7 +1085,7 @@ impl<'a> Lower<'a> {
                     );
                     continue;
                 }
-                let key = (module, name.clone());
+                let key = (amod, aname.clone());
                 if self.err_alias_stack.contains(&key) {
                     let loop_text: Vec<String> = self
                         .err_alias_stack
@@ -1067,7 +1112,7 @@ impl<'a> Lower<'a> {
                     continue;
                 }
                 self.err_alias_stack.push(key);
-                let (inner, inner_tail) = self.lower_row_parts(module, afile, generics, arow);
+                let (inner, inner_tail) = self.lower_row_parts(amod, afile, generics, arow);
                 self.err_alias_stack.pop();
                 if inner_tail.is_some() && tail.is_none() {
                     tail = inner_tail;

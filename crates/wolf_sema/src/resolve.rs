@@ -47,13 +47,15 @@ pub(crate) fn lexical_row_tags(
     src: &[u8],
     pkg: &Package,
     module: usize,
+    file: usize,
 ) -> BTreeSet<String> {
     fn walk(
         node: &GreenNode,
         src: &[u8],
         pkg: &Package,
         module: usize,
-        seen: &mut Vec<String>,
+        file: usize,
+        seen: &mut Vec<(usize, String)>,
         out: &mut BTreeSet<String>,
     ) {
         if node.kind == SyntaxKind::ErrorRow
@@ -61,27 +63,34 @@ pub(crate) fn lexical_row_tags(
         {
             for entry in row.entries() {
                 if let Some(path) = entry.path() {
-                    let name = path
+                    let segs: Vec<String> = path
                         .segments()
                         .map(|t| {
                             String::from_utf8_lossy(&src[t.span.lo as usize..t.span.hi as usize])
                                 .into_owned()
                         })
-                        .collect::<Vec<_>>()
-                        .join(".");
+                        .collect();
+                    let name = segs.join(".");
                     // s158 — an entry naming an error-set alias
                     // contributes that alias's TAGS, not its own name
                     // (`[type.err.alias.union]`): the deferral set is
                     // what `[gram.expr.tagident]` reads, so a raise of
                     // `parse` under `! IoErrors` has to find `parse`
                     // here, exactly as it would under `{none, parse}`.
-                    // A cycle among aliases is E0610 at signature
-                    // elaboration; this scan is not the place to
-                    // report it, only the place not to hang on it.
-                    if let Some((asrc, arow)) = error_alias_row(pkg, module, &name) {
-                        if !seen.contains(&name) {
-                            seen.push(name.clone());
-                            walk(arow, asrc, pkg, module, seen, out);
+                    // The alias may sit in another module, named
+                    // qualified or through a `use` (s175,
+                    // wolf-lang#434) — the lookup mirrors
+                    // `Lower::resolve_type_head`. A cycle among
+                    // aliases is E0610 at signature elaboration; this
+                    // scan is not the place to report it, only the
+                    // place not to hang on it.
+                    if let Some((amod, aname)) = alias_target(pkg, module, file, &segs)
+                        && let Some((afile, asrc, arow)) = error_alias_row(pkg, amod, &aname)
+                    {
+                        let key = (amod, aname);
+                        if !seen.contains(&key) {
+                            seen.push(key);
+                            walk(arow, asrc, pkg, amod, afile, seen, out);
                             seen.pop();
                         }
                         continue;
@@ -91,19 +100,59 @@ pub(crate) fn lexical_row_tags(
             }
         }
         for child in node.nodes() {
-            walk(child, src, pkg, module, seen, out);
+            walk(child, src, pkg, module, file, seen, out);
         }
     }
     let mut out = BTreeSet::new();
-    walk(node, src, pkg, module, &mut Vec::new(), &mut out);
+    walk(node, src, pkg, module, file, &mut Vec::new(), &mut out);
     out
 }
 
+/// Which `error` item, if any, a row entry's path names: this module's
+/// own alias by a bare name, an alias bound into this file by
+/// `use m.Alias`, or `m.Alias` through a module binding — the same
+/// three forms a type path resolves through (`Lower::resolve_type_head`),
+/// so the qualified spelling of an alias is the alias
+/// (`[type.err.alias.qualified]`, wolf-lang#434). Visibility is not
+/// judged here: a private alias named from outside is E0304 at
+/// signature elaboration, and this scan only decides what may be a tag.
+fn alias_target(
+    pkg: &Package,
+    module: usize,
+    file: usize,
+    segs: &[String],
+) -> Option<(usize, String)> {
+    let is_alias = |m: usize, n: &str| {
+        pkg.tables
+            .get(m)
+            .and_then(|t| t.get(n))
+            .is_some_and(|item| item.kind == crate::graph::ItemKind::Error)
+    };
+    let first = segs.first()?;
+    if segs.len() == 1 && is_alias(module, first) {
+        return Some((module, first.clone()));
+    }
+    for b in crate::sig::bindings_for(pkg, module, file) {
+        if b.name == *first {
+            return match &b.target {
+                BindTarget::PkgModule(m) if segs.len() == 2 && is_alias(*m, &segs[1]) => {
+                    Some((*m, segs[1].clone()))
+                }
+                BindTarget::Item { module: m, name } if segs.len() == 1 && is_alias(*m, name) => {
+                    Some((*m, name.clone()))
+                }
+                _ => None,
+            };
+        }
+    }
+    None
+}
+
 /// The `ErrorRow` syntax of the error-set alias `name` in `module`,
-/// with the source it belongs to (s158, `[type.err.alias]`). `None`
-/// when nothing of that name is an `error` item — which is how the
-/// resolution rule reads: an alias name expands, everything else is a
-/// tag.
+/// with the file it belongs to and that file's source (s158,
+/// `[type.err.alias]`). `None` when nothing of that name is an `error`
+/// item — which is how the resolution rule reads: an alias name
+/// expands, everything else is a tag.
 ///
 /// Returning syntax rather than an elaborated set is deliberate and
 /// matches `Lower::error_alias_row`: these scans run BEFORE signature
@@ -113,7 +162,7 @@ fn error_alias_row<'p>(
     pkg: &'p Package,
     module: usize,
     name: &str,
-) -> Option<(&'p [u8], &'p GreenNode)> {
+) -> Option<(usize, &'p [u8], &'p GreenNode)> {
     let item = pkg.tables.get(module)?.get(name)?;
     if item.kind != crate::graph::ItemKind::Error {
         return None;
@@ -126,7 +175,7 @@ fn error_alias_row<'p>(
         .filter(|n| n.kind.is_item())
         .nth(item.decl)?;
     let row = node.nodes().find(|n| n.kind == SyntaxKind::ErrorRow)?;
-    Some((&file.raw.src, row))
+    Some((item.file, &file.raw.src, row))
 }
 
 /// Every SINGLE-SEGMENT tag name spelled in an `ErrorRow` under `node`
@@ -578,8 +627,13 @@ impl Resolver<'_> {
 
     fn resolve_fn(&mut self, node: &GreenNode) {
         let Some(d) = FnDecl::cast(node) else { return };
-        self.row_tags
-            .push(lexical_row_tags(node, self.src(), self.pkg, self.module));
+        self.row_tags.push(lexical_row_tags(
+            node,
+            self.src(),
+            self.pkg,
+            self.module,
+            self.file,
+        ));
         self.push_scope();
         self.bind_generics(d.generics());
         if let Some(params) = d.params() {
