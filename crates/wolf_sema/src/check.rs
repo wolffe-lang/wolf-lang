@@ -4254,8 +4254,8 @@ impl<'a> Checker<'a> {
     /// `str` never changes and a slice is a view, not a place — s148,
     /// #293). What stays conservatism is the receiver whose bracket
     /// READ is itself not served yet — generic application, the std
-    /// containers beyond `List`, a `Pool` cell (c06's write) — and a
-    /// tuple index.
+    /// containers beyond `List` — and a tuple index. A `Pool` cell is a
+    /// place since s173 (`[mem.shared.handle.3]`).
     fn bracket_place_type(&mut self, place: &GreenNode) -> R<TyId> {
         let Some(d) = BracketApply::cast(place) else {
             return Ok(self.error_ty());
@@ -4273,6 +4273,16 @@ impl<'a> Checker<'a> {
             TyKind::Ptr(elem) => {
                 let int_ = self.lo.table.prim(Prim::Int);
                 self.check_index_arg(d.args(), int_, "raw pointer index")?;
+                Ok(elem)
+            }
+            // s173 (`[mem.shared.handle.3]`): `pool[h] = v` — the pool
+            // is the place base and the handle is the index, so the
+            // place types as the payload exactly as the read does.
+            // The index argument is a `handle T`, never an `int`: a
+            // handle is not a position and the type says so.
+            TyKind::Pool(elem) => {
+                let h = self.lo.table.intern(TyKind::Handle(elem));
+                self.check_index_arg(d.args(), h, "pool handle")?;
                 Ok(elem)
             }
             // s152 (`[mem.map.absent]`): `m[k] = v` inserts when `k` is
