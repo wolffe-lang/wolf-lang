@@ -333,8 +333,13 @@ fn bounded(wolf: &Path, args: &[&str]) -> Bounded {
     let elapsed = t0.elapsed();
     if hung {
         kill_tree(&mut child);
-        let _ = child.wait();
     }
+    // Reaped on every path. A `try_wait` that saw the exit has already
+    // collected it; `wait` after the kill is what turns the killed
+    // child from a zombie into nothing, which matters here more than
+    // most because the thing being killed is a deadlocked program
+    // (`clippy::zombie_processes` asks for exactly this).
+    let _ = child.wait();
     Bounded {
         hung,
         elapsed,
