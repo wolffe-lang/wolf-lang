@@ -1,5 +1,5 @@
 //! check: fail(E0402)
-//! phase: typecheck
+//! phase: resolve
 //! conforms: mem.str.ws
 //!
 //! s175 (wolf-interp#125) — `trim` takes no argument: the separator

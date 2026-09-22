@@ -1,5 +1,5 @@
 //! check: fail(E0415)
-//! phase: typecheck
+//! phase: resolve
 //! conforms: type.list.lit.elem, type.numlit.default
 //!
 //! s175 (wolf-lang#347, the third clause) — the other half of

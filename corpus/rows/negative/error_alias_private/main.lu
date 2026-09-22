@@ -1,5 +1,5 @@
 //! check: fail(E0304)
-//! phase: typecheck
+//! phase: resolve
 //! conforms: type.err.alias.qualified
 //!
 //! s175 (wolf-lang#434) — a private alias named qualified from
