@@ -4575,7 +4575,12 @@ fn git_tags_at_head() -> Vec<String> {
 /// `[docs/platforms.md](docs/platforms.md)` link, which a GitHub release
 /// page is the one place that resolves correctly.
 fn release_notes(changelog: &str, tag: &str) -> Result<String, String> {
+    // A pre-release tag (`v0.2.16-rc.1`, r21's #226 rehearsal) carries the
+    // entry of the release it rehearses: the rc exists to prove the
+    // release page's mechanics on the real notes, and a `## 0.2.16-rc.1`
+    // heading would be a second entry nobody curates.
     let version = tag.strip_prefix('v').unwrap_or(tag);
+    let version = version.split_once('-').map_or(version, |(v, _)| v);
     let mut body: Vec<&str> = Vec::new();
     let mut collecting = false;
     let mut fenced = false;
@@ -5317,6 +5322,18 @@ THE LETTER AND THE ARCHIVE.
     fn the_version_is_matched_whole() {
         assert!(release_notes(DOC, "0.2.1").is_ok());
         let err = release_notes(DOC, "v0.2.20").expect_err("no such entry");
+        assert!(err.contains("0.2.20"), "{err}");
+    }
+
+    /// A pre-release tag reads the entry of the release it rehearses
+    /// (r21: `v0.2.16-rc.1` proved #226's fix on the real 0.2.16 notes).
+    /// Everything after the first `-` is the rehearsal's name, not a
+    /// version.
+    #[test]
+    fn a_pre_release_tag_reads_the_release_entry() {
+        let notes = release_notes(DOC, "v0.2.2-rc.1").expect("0.2.2 has an entry");
+        assert!(notes.starts_with("THE LEARNERS' RELEASE."), "{notes}");
+        let err = release_notes(DOC, "v0.2.20-rc.1").expect_err("no such entry");
         assert!(err.contains("0.2.20"), "{err}");
     }
 
