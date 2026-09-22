@@ -162,8 +162,7 @@ fn every_lane_refuses(entry: &Path, printed: &str) {
             entry.display()
         );
         assert_eq!(
-            lupin.stdout,
-            printed,
+            lupin.stdout, printed,
             "lupin trapped at a different point in the program than expected"
         );
     }
@@ -180,7 +179,12 @@ fn every_lane_runs(entry: &Path, want: &str) {
         "the CHECKED lane refuses a legal program on {}",
         entry.display()
     );
-    assert_eq!(checked.stdout, want, "checked stdout on {}", entry.display());
+    assert_eq!(
+        checked.stdout,
+        want,
+        "checked stdout on {}",
+        entry.display()
+    );
     if let Some(native) = lane(entry, "--native") {
         assert_eq!(
             native.verdict,
