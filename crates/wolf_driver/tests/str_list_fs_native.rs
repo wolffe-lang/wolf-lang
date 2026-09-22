@@ -609,6 +609,8 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         // The s106 net family (#118's first crossing).
         "net_", // The s107 json family (#118's last crossing).
         "json_",
+        // The s173 pool family (#31/#268).
+        "pool_",
     ] {
         let n = wolf_codegen_clif::RT_SYMBOLS
             .iter()
@@ -685,6 +687,20 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         // s170 (#110): the blocking join that collects a proc's typed
         // completion value.
         "__wolf_rt_proc_join",
+        // s173 (#31/#268): the generational slot arena behind
+        // `Pool[T]` and `handle T` — the eleven seams, of which
+        // `addr` is the one a place write goes through.
+        "__wolf_rt_pool_new",
+        "__wolf_rt_pool_reserve",
+        "__wolf_rt_pool_addr",
+        "__wolf_rt_pool_read",
+        "__wolf_rt_pool_write",
+        "__wolf_rt_pool_remove",
+        "__wolf_rt_pool_alive",
+        "__wolf_rt_pool_len",
+        "__wolf_rt_pool_capacity",
+        "__wolf_rt_pool_clear",
+        "__wolf_rt_pool_next",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -695,7 +711,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        149,
+        160,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
