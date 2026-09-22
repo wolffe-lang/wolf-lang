@@ -146,7 +146,8 @@ jobs:
   # tiers, and the highest GLIBC symbol version the binary needs, printed and
   # held at the floor. The host gets only what a user would install to
   # compile: the native tier's linker (`lld`) and the release tier's clang
-  # (>= 15; 22.04's default is 14).
+  # (>= 15; 22.04's default is 14). On aarch64 linux the compiled tiers
+  # refuse by name and the checked tier is the one that runs.
   run-gate:
     name: run gate (${{ matrix.os }}, glibc 2.35)
     needs: [create, dist]
@@ -192,14 +193,33 @@ jobs:
             case "$v" in *+dev*) echo "::error::the release build carries the dev suffix: $v"; exit 1 ;; esac
           fi
           printf 'fn main() -> !int {\n    print("hello, wolf")\n    0\n}\n' > hello.lu
-          # native tier (the default, `wolf run`)
-          out=$("$wolf" run hello.lu)
-          test "$out" = "hello, wolf" || { echo "::error::native tier: $out"; exit 1; }
-          echo "native tier: $out"
-          # release tier (LLVM, through clang-15)
-          out=$(WOLF_CLANG=clang-15 "$wolf" run --release hello.lu)
-          test "$out" = "hello, wolf" || { echo "::error::release tier: $out"; exit 1; }
-          echo "release tier: $out"
+          if [ "$(uname -m)" = "aarch64" ]; then
+            # linux aarch64 is served by NEITHER compiled tier yet (D35's
+            # matrix: native is s28/s59/s60a, release is s41/s127, the rest
+            # is c13). What the archive owes this host is a refusal BY NAME
+            # with exit 2 — exit 2 with nothing said is #447's second
+            # defect exactly — and a checked tier that still runs the
+            # program. rc.1 (run 35716056293) asked this host for a native
+            # run and went red on the refusal; the gate was wrong, not the
+            # archive.
+            set +e; out=$("$wolf" run hello.lu 2>&1); rc=$?; set -e
+            grep -q "this host cannot run the native tier" <<< "$out" && [ "$rc" -eq 2 ] \
+              || { echo "::error::native tier on aarch64 linux: exit $rc: $out"; exit 1; }
+            echo "native tier: refuses by name, exit $rc"
+            set +e; out=$(WOLF_CLANG=clang-15 "$wolf" run --release hello.lu 2>&1); rc=$?; set -e
+            grep -q "this host cannot run the release tier" <<< "$out" && [ "$rc" -ne 0 ] \
+              || { echo "::error::release tier on aarch64 linux: exit $rc: $out"; exit 1; }
+            echo "release tier: refuses by name, exit $rc"
+          else
+            # native tier (the default, `wolf run`)
+            out=$("$wolf" run hello.lu)
+            test "$out" = "hello, wolf" || { echo "::error::native tier: $out"; exit 1; }
+            echo "native tier: $out"
+            # release tier (LLVM, through clang-15)
+            out=$(WOLF_CLANG=clang-15 "$wolf" run --release hello.lu)
+            test "$out" = "hello, wolf" || { echo "::error::release tier: $out"; exit 1; }
+            echo "release tier: $out"
+          fi
           # checked tier — it answers only through conform-run --checked
           rec=$("$wolf" conform-run hello.lu --checked --json)
           echo "$rec" | jq -e '.verdict == "exit(0)" and .stdout_inline == "hello, wolf\n"' > /dev/null \
