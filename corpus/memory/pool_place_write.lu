@@ -55,6 +55,12 @@ fn main() -> !int {
         pool[a].value = 10
         let bumped = pool[a].value
 
-        if sum == 6 && second == 6 && bumped == 10 { 0 } else { 1 }
+        // And the WHOLE slot through the same place base
+        // (`[mem.shared.handle.3]`) — the pool is the base, the
+        // handle is the index.
+        pool[b] = Node { value: 7, next: a }
+        let replaced = pool[b].value + pool[pool[b].next].value
+
+        if sum == 6 && second == 6 && bumped == 10 && replaced == 17 { 0 } else { 1 }
     }
 }
