@@ -351,6 +351,32 @@ fn main() -> !int {
 /// So the pool keeps a recipe too, and the liveness check rides the
 /// re-mint. Both halves are exercised here: growth moving the buffer
 /// under a pending place, and a `remove` staling the slot under one.
+///
+/// # Seen red against the mint-once design
+///
+/// The shipping `lower.rs` was reverted to mint-once (the `Slot`
+/// recipe replaced by a `PlaceLoc::Addr` minted at the place step)
+/// and this file re-run on kasumi, linux x86-64:
+///
+/// ```text
+/// $ cargo test -p wolf_driver --test pool_native --no-fail-fast
+/// test a_place_write_survives_the_pool_moving_under_it ... FAILED
+/// assertion `left == right` failed: the --native lane's answer
+///   left: "1 65\n"
+///  right: "7 65\n"
+/// test result: FAILED. 8 passed; 1 failed
+/// ```
+///
+/// Not a refusal and not a crash: a **silent cross-lane wrong
+/// answer**. The store landed in the buffer the pool had already
+/// abandoned to the arena, so checked said 7 and native said 1 with
+/// no diagnostic on either.
+///
+/// The `remove`-under-place case below passed under BOTH designs —
+/// mint-once trapped early at the place step — so it is not a gate on
+/// the re-mint and is not claimed as one. One of these two tests is
+/// the gate; saying which is the difference between a gate and a
+/// description.
 #[test]
 fn a_place_write_survives_the_pool_moving_under_it() {
     let entry = case(
