@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="ada wrote it\nregions, 900 words\n")
+//! phase: run
+//! conforms: mem.tier0.move.1, mem.model.path.disjoint
+//!
+//! wolf-book ch07 §7.2's own example, pinned (wolf-lang#444): moving
+//! one leaf out of a value tree empties THAT leaf and nothing else.
+//! `d.meta.author` is gone; `d.title` and `d.meta.words` are disjoint
+//! places and stay live ([mem.model.path.disjoint]).
+//!
+//! This is the over-refusal guard for its twin
+//! `move_field_use_after.lu`: a fix that makes the moved leaf E1001
+//! must not make the book's program an error. Both files land
+//! together and neither is meaningful alone.
+
+struct Meta { author: str, words: int }
+struct Doc { title: str, meta: Meta }
+
+fn main() -> !int {
+    var d = Doc { title: "regions", meta: Meta { author: "ada", words: 900 } }
+    let who = move d.meta.author
+    print("{who} wrote it")
+    print("{d.title}, {d.meta.words} words")
+    0
+}

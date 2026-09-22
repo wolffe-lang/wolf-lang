@@ -1,0 +1,31 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.tier0.move.2
+//!
+//! The maintainer's witness for wolf-lang#444, found reading wolf-book
+//! ch07 §7.2: `move` on a field path empties that field, so reading it
+//! afterwards is use-after-move — E1001 statically, lupin's
+//! `trap(use-after-move)` dynamically ([conf.trap.map]).
+//!
+//! The leaf moved here is a `str`, which is `Copy`. That is the whole
+//! reason nothing caught this: an implicit move of a `Copy` place IS a
+//! copy ([mem.tier0.move.3]), and the lowering ran the explicit `move`
+//! operator through the same rule, so the move site was never recorded
+//! and the compiler printed the moved value on every lane. `move` is
+//! the programmer saying the place is emptied; the Copy rule decides
+//! what happens where nothing is said.
+//!
+//! Its positive twin is `move_field_siblings_ok.lu` — the book's own
+//! example, which reads only the siblings and must keep running.
+
+struct Meta { author: str, words: int }
+struct Doc { title: str, meta: Meta }
+
+fn main() -> !int {
+    var d = Doc { title: "regions", meta: Meta { author: "ada", words: 900 } }
+    let who = move d.meta.author
+    print("{who} wrote it")
+    print("{d.title}, {d.meta.words} words")
+    print("{d.meta.author} wrote it")   // ERROR E1001: d.meta.author moved
+    0
+}
