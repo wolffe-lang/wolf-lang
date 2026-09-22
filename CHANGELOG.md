@@ -614,6 +614,45 @@ budget of 3 and never generated the mutation, which is why a merged lane's
 green could not see it; the property's bound stays where it was. Gates:
 `crates/wolf_parse/tests/diagnostics.rs`, both witnesses.
 
+### The pairing — lupin 0.1.38, and the pin is the released tag
+
+`crates/wolf_driver/PAIRING` moves to **0.1.38**, which declares
+**`2e4ca76`** — v0.2.15's own commit. For the first time the pin a
+downstream reads off `lupin --version` is a commit on this repository's
+released line: 0.1.37 declared `41695e7`, an s166 branch head kept alive
+only by `refs/tags/lupin-0.1.37-conformance-pin`, and
+`git merge-base --is-ancestor 41695e7 v0.2.15` answered no
+(wolf-interp#127). 0.1.38 exists to make that sentence true, and it does.
+
+Measured with `xtask differ --triage`, control (#281) against the
+0.1.37 release archive, both arms over 690 files (646 entries), columns
+agreement / completeness / soundness / unsupported / hard:
+
+|  | checked | native |
+|---|---|---|
+| control (0.1.37) | 377/182/0/118/10 | 416/182/1/75/14 |
+| main (0.1.38) | 380/182/0/117/8 | 419/182/1/74/12 |
+
+**The interpreter bump moved 4 ledger counts on each tier, and the two
+tiers moved together again.** Predicted (2–8, together): r20's
+asymmetry came from the s166 method surface the checked tier declines,
+and nothing in is52 or is53 touches it. The movers, all four named by the
+control: `grammar/range_header_inclusive_max.lu` and
+`grammar/range_value_wide_iter.lu`, which 0.1.37 could not run at all
+(it materialized the range — the 28 GB RSS r20 recorded) and which are
+agreements now; `memory/map_remove.lu`, unsupported → agreement (#118's
+mirror); and one the prediction did not name —
+`rows/error_alias_qualified/main.lu` went from a diagnostic note to a
+**verdict divergence**, because wolf runs it (s175,
+`[type.err.alias.qualified]`) and lupin 0.1.38 answers `fail(E0305)`:
+its new item-import rule judges a `use m.Alias` whose only use is an
+error row as unused. That is the interpreter's side of #434, filed as
+wolf-interp#134. One file moved *below* the ledger, where no count can
+see it: `typecheck/variant_bare_value.lu`, which lupin now refuses at
+resolve (`exit(0)` → `fail(E0301)`) under a `fail`-pinned header, so its
+class did not move. The one native soundness finding is in both arms and
+predates the bump.
+
 ### The training-data permission
 
 `LICENSE-TRAINING-DATA` — the wolf Training Data Permission, version
