@@ -1,0 +1,18 @@
+// The control for wolf-lang#431's gate, and the reason the gate is not
+// simply "no task env is ever a frame slot".
+//
+// Here `main` both OPENS the scope and spawns into it, so the frame
+// that packs the capture record is the frame that joins — which is the
+// premise `pack_task_env`'s frame-slot arm is written on, and it holds.
+// This program runs correctly on every tier and every profile.
+//
+// It is in the tree so the gate beside it can be seen GREEN as well as
+// red: a checker that flagged this too would be red for a reason that
+// is not the bug.
+
+fn main() -> !int {
+    scope work {
+        work.spawn(fn() { print("task-7") })
+    }
+    0
+}
