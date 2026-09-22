@@ -6,6 +6,13 @@ what refuses. D35 sets the matrix; this page is the state of it. Floors
 linux, macOS, and windows lines in `xtask/src/main.rs` are three
 separate measurements.
 
+The published linux archives (both x86-64 and aarch64) are built on
+Ubuntu 22.04 and need **glibc 2.35 or later** — the release workflow's
+`run-gate` job unpacks each on a 22.04 host, runs one program on each
+tier, and prints the highest `GLIBC_` symbol version the binary imports
+(#447: 0.2.15's archives were built on 24.04, imported `GLIBC_2.39`, and
+did not start on 22.04).
+
 | host | native tier (`wolf build` / `wolf run`) | release tier (`--release`) | task layer, procs, channels, `when` | io reactor (`net` deadlines, async fs) | `os.signal` | debugger |
 |---|---|---|---|---|---|---|
 | linux x86-64 | yes (s28) | yes (s41) | yes (s32) | epoll (s35) | yes (s114) | gdb transcripts |

@@ -20,7 +20,10 @@ yay -S wolf-lang-bin                              # Arch, prebuilt (wolf-lang bu
 
 Archives for linux x86-64, linux aarch64, macOS aarch64 and windows
 x86-64 are on the [releases](https://github.com/wolffe-lang/wolf-lang/releases)
-page. [`docs/platforms.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/platforms.md)
+page. The linux archives need **glibc 2.35 or later** (Ubuntu 22.04,
+Debian 12, Fedora 36 and later); each is built on Ubuntu 22.04 and run,
+one program per tier, on a 22.04 host before the release is published
+(#447). [`docs/platforms.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/platforms.md)
 says which compiler tiers run on which host.
 
 ```sh
