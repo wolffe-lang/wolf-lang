@@ -136,13 +136,18 @@ fn survey_is_a_superset_and_changes_nothing_on_refusing_corpus_files() {
     // lambda-lifts to a fn value), s107 moved `json/rows.lu` (the
     // json family crossed — c26's last arm), and s150 moved
     // `memory/closure_escape_refused.lu` (a capturing closure is a fn
-    // value, #300) — each replaced by a file still refusing for other
-    // reasons, per this assertion's own note.
+    // value, #300), and s173 moved `memory/handle_stale.lu` (the pool
+    // lowers, so a stale handle is a native `trap(stale-handle)`
+    // rather than a refusal) — each replaced by a file still refusing
+    // for other reasons, per this assertion's own note.
+    // `memory/unsafe_door_borrow.lu` takes the pool's place: `borrow
+    // r from p` is the re-entry door and is still `unsafe-tier WIR
+    // ops`.
     for name in [
         "memory/shared_ok.lu",
         "memory/region_value_container.lu",
         "memory/closure_region_capture.lu",
-        "memory/handle_stale.lu",
+        "memory/unsafe_door_borrow.lu",
         "comptime/norm_linear.lu",
     ] {
         let (build, _) = both(&corpus_root().join(name));
