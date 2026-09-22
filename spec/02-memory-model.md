@@ -1038,7 +1038,16 @@ the inputs that would have decided it either way.)
   ```
 
   This is the one set `words`, `trim`, `trim_start` and `trim_end` test
-  against. A position in a `str` is a separator when the scalar
+  against — and the only one: **the family takes no argument.** A
+  cutset is not a parameter of `trim` (`s.trim(".,!?")` is E0402, the
+  arity mismatch, on every implementation); a program that wants
+  punctuation stripped spells the loop, and an implementation that
+  accepted a cutset had grown a surface no clause describes, which is
+  what `[proto.*]` exists to catch. Ruled 2026-09-21 (s175,
+  wolf-interp#125): lupin 0.1.37 ran `word.trim(".,;!?")` and wolf
+  0.2.15 refused it, and the differ could not see the split because
+  the program never compiled on the compiler's arm. Witness
+  `strings/trim_cutset_refused.lu`. A position in a `str` is a separator when the scalar
   **encoded** there is in the set — never when a byte of a longer
   encoding happens to resemble one. A UTF-8 continuation byte is
   therefore never a separator, so every boundary these operations
