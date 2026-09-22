@@ -1,0 +1,16 @@
+//! member: true
+//!
+//! `error_alias_qualified/disk/d.lu`: the alias's home module. The
+//! entry names it two ways — `disk.IoErrors` and, after `use
+//! disk.IoErrors`, bare — and both must be the row it spells.
+
+/// The failure set every `disk` call raises from.
+pub error IoErrors = {not_found, denied, io}
+
+/// The byte count behind `p`, or the tag the path stands for.
+pub fn size(p: str) -> int ! IoErrors {
+    if p == "missing" { return not_found }
+    if p == "locked" { return denied }
+    if p == "broken" { return io }
+    p.len
+}

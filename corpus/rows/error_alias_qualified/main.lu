@@ -1,0 +1,40 @@
+//! check: run(exit=0, stdout="tag: not_found\ntag: denied\ntag: io\n4\n3\n")
+//! phase: run
+//! conforms: type.err.alias, type.err.alias.qualified, type.err.alias.transparent
+//!
+//! s175 (wolf-lang#434, wolf-std F-0138) — the qualified spelling of
+//! an alias IS the alias ([type.err.alias.qualified]). At 0.2.15
+//! `-> int ! disk.IoErrors` was accepted as a spelling and contributed
+//! no tags, so the `?` under it was E0602 naming exactly the three
+//! tags the alias is defined as; the same signature with the row
+//! spelled out ran. Both spellings a foreign alias has — `disk.IoErrors`
+//! through the module binding and bare `IoErrors` after
+//! `use disk.IoErrors` — expand to `{not_found, denied, io}` here, and
+//! the row propagates back into a spelled-out row exactly as
+//! [type.err.alias.transparent] promises inside one module.
+
+use disk
+use disk.IoErrors
+
+fn qualified(p: str) -> int ! disk.IoErrors {
+    let n = disk.size(p)?
+    n
+}
+
+fn imported(p: str) -> int ! IoErrors {
+    let n = disk.size(p)?
+    n
+}
+
+fn spelled_out(p: str) -> int ! {not_found, denied, io} {
+    qualified(p)?
+}
+
+fn main() -> !int {
+    let a = qualified("missing") else |e| { print("tag: {e}"); 0 }
+    let b = imported("locked") else |e| { print("tag: {e}"); 0 }
+    let c = spelled_out("broken") else |e| { print("tag: {e}"); 0 }
+    print("{qualified("four") else 0}")
+    print("{imported("abc") else 0}")
+    a + b + c
+}

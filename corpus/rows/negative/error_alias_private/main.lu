@@ -1,0 +1,21 @@
+//! check: fail(E0304)
+//! phase: typecheck
+//! conforms: type.err.alias.qualified
+//!
+//! s175 (wolf-lang#434) — a private alias named qualified from
+//! another module is refused by name ([type.err.alias.qualified]):
+//! `disk.IoErrors` exists and is not `pub`, so the entry is E0304 —
+//! the resolver's own refusal for a private member — and not a row
+//! with no tags, which is what 0.2.15 answered for every foreign alias.
+
+use disk
+
+fn probe(p: str) -> int ! disk.IoErrors {
+    let n = disk.size(p)?
+    n
+}
+
+fn main() -> !int {
+    print("{probe("abc") else 0}")
+    0
+}

@@ -1,0 +1,13 @@
+//! member: true
+//!
+//! The alias is NOT `pub`: naming it from the entry is the resolver's
+//! E0304, never an empty row.
+
+/// The failure set, kept to this module.
+error IoErrors = {not_found, io}
+
+/// The byte count behind `p`, or the tag the path stands for.
+pub fn size(p: str) -> int ! IoErrors {
+    if p == "missing" { return not_found }
+    p.len
+}
