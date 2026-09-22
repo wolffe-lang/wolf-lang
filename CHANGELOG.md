@@ -2,6 +2,108 @@
 
 ## Unreleased
 
+## 0.2.16 — 2026-09-22
+
+THE POINT RELEASE. The published 0.2.15 ships three silent wrong
+answers on the checked machine — one of them wrong on the native lane
+too — and its two machines disagree with each other on a fourth program
+(#433, ruled a point release). All four are fixed here, with their
+witnesses quoted so a downstream can test its own pin. Eight lanes and
+140 commits land beside them; the defects go first, then the change that
+alters what an existing command exits with, then the one defect this
+release still ships.
+
+### Read this before you bump the pin
+
+**Four programs 0.2.15 gets wrong.** Each was reproduced on the
+published linux x86-64 archive (`wolf` sha256 `0ede3f66…`) through
+`wolf conform-run <file> --checked --json` against `--native --json`.
+That command matters: `wolf run --checked` runs the native build, and
+the checked machine answers only through `conform-run`, which is how one
+of these was once withdrawn on a wrong reading (#432).
+
+1. **#400 — a call through a fn-typed parameter went to a top-level fn
+   of the same name**, on the checked machine, silently.
+   `fn apply(le: fn(int, int) -> bool, x: int, y: int) -> bool { le(x, y) }`
+   called as `apply(ge, 1, 2)`: checked printed **`true`**, native and
+   lupin `false`, exit 0, no diagnostic. It crossed module boundaries —
+   wolf-std's `list.sort_by` is what found it, because the library
+   picks the parameter's name and a caller cannot defend against it.
+   Fixed by s171; the resolver decides now, one scope further in.
+2. **#391 — the checked tier's five `str` producers charged nothing to
+   the ambient region.** `let s = base.repeat(64)` inside
+   `region pass { … charged = region_bytes(pass) }`: checked
+   `charged false 0`, native `charged true 4096`. Under
+   `region idle(cap: 0)`, `base.upper()` ran to `exit(0)` on checked
+   where native answered `trap(alloc-contract)`. Fixed by s171, and
+   #392's `[mem.str.view]` ruling lands beside it.
+3. **#432 — the two machines disagree on a program neither should have
+   accepted.** `take2(mut r.a, wipe(mut r))` over
+   `var r = R { a: 1, b: 2 }`: checked printed **`1007 2000`**, native
+   **`8 2000`**, both `exit(0)`, no diagnostic on either. It is E1002
+   on both lanes now (s168), and the divergence stands in the record as
+   s168 first reported it.
+4. **#444 — `move` of a `Copy`-typed place recorded no move, on every
+   lane.** Found by the maintainer in wolf-book ch07 §7.2:
+   `let who = move d.meta.author` followed by
+   `print("{d.meta.author} wrote it")` compiled, ran and printed
+   `ada wrote it` a third time — on 0.2.14, on the published 0.2.15 and
+   on trunk `75e2aa8d`, checked and native alike. lupin 0.1.37 answers
+   `trap(use-after-move): `d.meta.author` was moved out and is
+   uninitialized here [mem.tier0.move.2]`. E1001 now, whatever the
+   type (s177). This is the one that is wrong on the tiers people ship.
+
+**A rejected program exits 2 now, and a refusal 4 — not 1**
+(`[conf.exit]`, s169). wolf spelled both 1, and 1 is what a program that
+RAN and returned an error out of `main` exits with; wolf-book's sample
+runner carried `run(exit=1)` fences green across four pin bumps for two
+programs the compiler never built. **This is the second pin bump in this
+project's history that alters what an existing program observably
+does**, after #385's `push` at 0.2.15 — that one changed what a program
+printed; this one changes what the toolchain exits with. A harness that
+reads `exit 1` as "did not compile" reads 2 and 4 now, and a program's
+own `return 1` still exits 1, which is the point. lupin already answered
+2 and 4 and does not move.
+
+**One defect this release ships, by name: #431.** A function that takes
+a `Scope` handle as a parameter and spawns into it —
+`fn fan_out(s: Scope, ch: channel[int]) { s.spawn(fn() { ch.send(1) }) }`
+called from `scope work { fan_out(work, ch) }` — never returns on the
+Cranelift native tier: linux x86-64 in the shipping build (`cargo xtask
+dist`, killed at 60 s, 3/3, s174 on kasumi at trunk `2f8deb7f`) and
+windows. The LLVM tier (`--release`) prints `1`. The debug build of the
+compiler does not show it, which is why every gauntlet was green (a
+dangling stack slot; whether the dead frame is overwritten before the
+task reads it depends on the profile `libwolf_rt.a` was built in). The
+witness is back under a gate in PR #441, red on purpose; the fix waits on
+a ruling. At 0.2.15 the program was `fail(E0301)` because `Scope` had no
+spelling in a signature — 0.2.16 is the first release in which it can be
+written, and it hangs. Until it is fixed: `--release`, or spawn from the
+scope's own block.
+
+**The linux archives run on glibc 2.35 and later** (#447). 0.2.15's two
+linux archives were built on Ubuntu 24.04 and imported `GLIBC_2.39`, so
+they did not start on 22.04 LTS at all — the most common LTS on a rented
+box — and under a 24.04 loader with `libwolf_rt.a` not beside the
+binary, the native tier answered exit 2 on every program behind a
+correct `--version`. Both linux archives are built on 22.04 now, and the
+release workflow unpacks each one on a 22.04 host and runs one program on
+each tier — native, release, checked — before the release is published,
+printing the highest GLIBC symbol version the binary imports. **The
+floor is glibc 2.35** (Ubuntu 22.04, Debian 12, Fedora 36 and later).
+lupin 0.1.38's linux archive still imports 2.39; that half of #447 is the
+interpreter's.
+
+**The release page carries one release per tag** (#226). Through 0.2.15
+every dist job created the draft and tolerated "already exists", and
+GitHub lets any number of drafts carry one tag name, so every tag since
+v0.2.3 left three empty drafts beside the real release — 39 in all,
+deleted by id at this cut. The draft is created once now, in its own
+job; the archives upload to it by id; and publishing refuses unless
+exactly one release carries the tag, then asserts the shape after the
+flag moves. Proved on a throwaway `v0.2.16-rc.1` before this tag was
+cut.
+
 ### `move` empties the place, whatever the type
 
 **Reading a place after `move` is E1001 again — and it never was, for
@@ -490,6 +592,33 @@ Only the receiver's sites flow, and `bytes()` is excluded because
 that would escape. Measured before it landed across corpus, wolf-std,
 lobo and boreutils — 23,722 files — **zero rows moved**. lupin 0.1.37
 does not follow yet; the wolf-interp mirror is filed.
+
+### The parser reports one wreck once (s172, #420)
+
+**A malformed generic parameter list is one report, not one per
+element — and so is a malformed paren type list.** `[]` is the generics
+bracket, so a declaration keyword landing in front of an array literal
+re-reads `[4, 1, 3, 2]` as a generic parameter list, and the parser said
+"expected a generic parameter name" once per element: four reports for
+four elements, ten for ten, a cascade that grew with the source rather
+than with the damage. The nightly's blast-radius property found it at
+`MUTATE_BUDGET=300` on `corpus/methods/comb_sort_enumerate_zip.lu` (six
+added cascade against a structural bound of five; run 35580391507), and
+once that list was capped the same property found the second shape:
+deleting the inner `)` of `fn apply(le: fn(int, int) -> bool, x: int,
+y: int)` made the fn-type's parameter list swallow the remaining
+parameters and report a pair for each, 2n + 1. Both lists carry a
+single-report latch now; recovery still runs per element, so the tree and
+the stop points do not move. The per-PR gauntlet runs the property at a
+budget of 3 and never generated the mutation, which is why a merged lane's
+green could not see it; the property's bound stays where it was. Gates:
+`crates/wolf_parse/tests/diagnostics.rs`, both witnesses.
+
+### The training-data permission
+
+`LICENSE-TRAINING-DATA` — the wolf Training Data Permission, version
+1.0, an additional permission under GPL-3.0 section 7 — joins `LICENSE`
+at the root, and the README's license section points at it.
 
 ## 0.2.15 — 2026-09-16
 
