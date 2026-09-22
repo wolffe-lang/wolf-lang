@@ -2049,8 +2049,21 @@ fn wir_ty_frame(
         // header (`wolf_rt::map`, a `ListHdr` prefix); the entry
         // layout is checked at the operation sites.
         TyKind::Map(..) => Ok(Some(types::PTR)),
-        TyKind::Shared(_) | TyKind::Weak(_) | TyKind::Handle(_) | TyKind::Pool(_) => Err(refuse(
-            "shared-tier surface lowering (rc receivers + runtime cells)",
+        // s173: a `Pool[T]` VALUE is one pointer to its runtime header
+        // (`wolf_rt::pool`), exactly as a `List` is; the payload shape
+        // is checked at the operation sites.
+        TyKind::Pool(_) => Ok(Some(types::PTR)),
+        // s173: a `handle T` VALUE is ONE 64-bit word — slot index in
+        // the low half, generation in the high. It is deliberately not
+        // a pointer: that is the property the type exists for, and it
+        // is why a handle survives the byte it names and says so.
+        TyKind::Handle(_) => Ok(Some(types::I64)),
+        // The rc half of the shared tier stays refused BY NAME. A pool
+        // slot's liveness is a generation compare; a cell's is a
+        // refcount, and a refcount needs a drop protocol the native
+        // pipe does not have yet.
+        TyKind::Shared(_) | TyKind::Weak(_) => Err(refuse(
+            "shared-cell surface lowering (rc receivers + runtime cells)",
             span,
         )),
         // Raw pointers are opaque `ptr` VALUES (s29 — the C membrane
@@ -13126,8 +13139,34 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
+            // s173: `pool[h]` — the handle resolves to a live slot
+            // address or traps `stale-handle`, then the payload loads
+            // flat out of it. No bounds check: a handle is not an
+            // index, and the generation compare IS the check.
+            TyKind::Pool(elem) => {
+                let elem = *elem;
+                let (ewty, _) = self.pool_payload(elem, e.span)?;
+                let Some(hdr) = flow_val!(self.lower_expr(recv)) else {
+                    return Err(refuse("a valueless Pool receiver", recv.span));
+                };
+                let hx = d
+                    .args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .filter_map(Arg::value)
+                    .next()
+                    .ok_or_else(|| refuse("a pool index without a handle", e.span))?;
+                let Some(handle) = flow_val!(self.lower_expr(hx)) else {
+                    return Err(refuse("a valueless pool handle", hx.span));
+                };
+                let Some(addr) = self.pool_slot_addr(hdr, handle)? else {
+                    return Ok(Flow::Diverged);
+                };
+                let region = self.foreign_buf_region();
+                Ok(Flow::Val(Some(self.load_flat(ewty, addr, region, e.span)?)))
+            }
             _ => Err(refuse(
-                "indexing outside str/List (Pool/Map runtime shapes)",
+                "indexing outside str/List/Pool (a map read answers a row, not storage)",
                 e.span,
             )),
         }
@@ -13516,6 +13555,254 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
     }
 
+    /// The payload's WIR type and stride — the pair every pool seam
+    /// needs, and the one place the `Pool[T]` element layout is
+    /// decided.
+    fn pool_payload(&mut self, elem: TyId, span: Span) -> R<(TypeId, u64)> {
+        self.refuse_region_elem(elem, span)?;
+        let Some(ewty) = wir_ty(&mut self.b.module.types, self.table, self.sigs, elem, span)?
+        else {
+            return Err(refuse("unit-typed Pool payloads", span));
+        };
+        let stride = self.list_stride(ewty, span)?;
+        Ok((ewty, stride))
+    }
+
+    /// Trap `stale-handle` unless the runtime answered a hit. Every
+    /// pool seam that can be handed a dead handle funnels through
+    /// here, so the trap identity `[mem.shared.handle.2]` promises has
+    /// exactly one site.
+    fn pool_hit_or_trap(&mut self, hit: Value) -> bool {
+        let live = self.nonzero(hit);
+        self.trap_unless(live, TrapKind::StaleHandle)
+    }
+
+    /// The ADDRESS of the live slot a handle names, with the stale
+    /// case already trapped — the value `pool[h]` reads through and
+    /// `pool[h].f = v` writes through (wolf-lang#31).
+    fn pool_slot_addr(&mut self, hdr: Value, handle: Value) -> R<Option<Value>> {
+        // The liveness probe FIRST, then the address. `pool_addr`
+        // already answers 0 for a stale handle and one call would be
+        // enough — except that WIR has no integer/pointer conversion
+        // and no null constant, so there is nothing to compare a
+        // `ptr` result against. The probe IS that comparison, and it
+        // cannot disagree with the address: nothing runs between them.
+        let live = self
+            .rt_call_foreign(
+                "__wolf_rt_pool_alive",
+                &[hdr, handle],
+                None,
+                Some(types::I64),
+            )
+            .expect("liveness");
+        if self.pool_hit_or_trap(live) {
+            return Ok(None);
+        }
+        let addr = self
+            .rt_call_foreign(
+                "__wolf_rt_pool_addr",
+                &[hdr, handle],
+                None,
+                Some(types::PTR),
+            )
+            .expect("slot address");
+        Ok(Some(addr))
+    }
+
+    /// The `Pool` method depth, natively (s173, `[mem.shared.handle.1]`
+    /// / `[mem.shared.handle.2]`): the two-phase `reserve`/`init`, the
+    /// generation-bumping `remove`, and s37's observability trio
+    /// (`len`, `is_empty`, `alive`) plus D50's `capacity`, `has` and
+    /// `clear`.
+    fn lower_pool_method(
+        &mut self,
+        d: CallExpr<'t>,
+        recv_place: &'t GreenNode,
+        elem: TyId,
+        mname: &str,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        if matches!(mname, "reserve" | "init" | "remove" | "clear") {
+            self.check_capture_write(recv_place, "mutating")?;
+        }
+        let (ewty, stride) = self.pool_payload(elem, e.span)?;
+        let Some(hdr) = flow_val!(self.lower_expr(recv_place)) else {
+            return Err(refuse("a valueless Pool receiver", recv_place.span));
+        };
+        let mut args = d
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .filter_map(Arg::value);
+        match mname {
+            "reserve" => {
+                let h = self
+                    .rt_call_foreign("__wolf_rt_pool_reserve", &[hdr], None, Some(types::I64))
+                    .expect("handle");
+                Ok(Flow::Val(Some(h)))
+            }
+            // Two-phase creation: `reserve` made the slot live,
+            // `init` fills it. A stale handle traps here exactly as a
+            // read through one does — the write is an access.
+            "init" => {
+                let hx = args
+                    .next()
+                    .ok_or_else(|| refuse("a pool init without a handle", e.span))?;
+                let vx = args
+                    .next()
+                    .ok_or_else(|| refuse("a pool init without a value", e.span))?;
+                let Some(handle) = flow_val!(self.lower_expr(hx)) else {
+                    return Err(refuse("a valueless pool handle", hx.span));
+                };
+                let Some(val) = flow_val!(self.lower_expr(vx)) else {
+                    return Err(refuse("a unit-typed pool payload", vx.span));
+                };
+                let (region, slot) = self.rt_slot(stride);
+                self.store_flat(val, slot, region, vx.span)?;
+                let hit = self
+                    .rt_call_foreign(
+                        "__wolf_rt_pool_write",
+                        &[hdr, handle],
+                        Some((slot, region)),
+                        Some(types::I64),
+                    )
+                    .expect("hit flag");
+                if self.pool_hit_or_trap(hit) {
+                    return Ok(Flow::Diverged);
+                }
+                Ok(Flow::Val(None))
+            }
+            // X5: the slot's generation bumps, so every extant handle
+            // to it goes stale at once.
+            "remove" => {
+                let hx = args
+                    .next()
+                    .ok_or_else(|| refuse("a pool remove without a handle", e.span))?;
+                let Some(handle) = flow_val!(self.lower_expr(hx)) else {
+                    return Err(refuse("a valueless pool handle", hx.span));
+                };
+                let hit = self
+                    .rt_call_foreign(
+                        "__wolf_rt_pool_remove",
+                        &[hdr, handle],
+                        None,
+                        Some(types::I64),
+                    )
+                    .expect("hit flag");
+                if self.pool_hit_or_trap(hit) {
+                    return Ok(Flow::Diverged);
+                }
+                Ok(Flow::Val(None))
+            }
+            // s37 (wolf-lang#11): the LIVE count, not the high-water
+            // mark — a pool that reserved a thousand slots and removed
+            // them all is empty.
+            "len" => {
+                let n = self
+                    .rt_call_foreign("__wolf_rt_pool_len", &[hdr], None, Some(types::I64))
+                    .expect("len");
+                Ok(Flow::Val(Some(n)))
+            }
+            "is_empty" => {
+                let n = self
+                    .rt_call_foreign("__wolf_rt_pool_len", &[hdr], None, Some(types::I64))
+                    .expect("len");
+                let z = self.b.iconst(types::I64, 0);
+                let empty = self
+                    .b
+                    .ins(Opcode::Icmp, &[n, z], &[types::BOOL], Aux::IntCc(IntCc::Eq))
+                    .one();
+                Ok(Flow::Val(Some(empty)))
+            }
+            // The NON-trapping probe: the one seam a stale handle
+            // reaches without faulting, which is what makes it
+            // useful.
+            "alive" | "has" => {
+                let hx = args
+                    .next()
+                    .ok_or_else(|| refuse("a pool liveness probe without a handle", e.span))?;
+                let Some(handle) = flow_val!(self.lower_expr(hx)) else {
+                    return Err(refuse("a valueless pool handle", hx.span));
+                };
+                let live = self
+                    .rt_call_foreign(
+                        "__wolf_rt_pool_alive",
+                        &[hdr, handle],
+                        None,
+                        Some(types::I64),
+                    )
+                    .expect("liveness");
+                let b = self.nonzero(live);
+                Ok(Flow::Val(Some(b)))
+            }
+            // D50: slots the pool holds before it grows again.
+            "capacity" => {
+                let n = self
+                    .rt_call_foreign("__wolf_rt_pool_capacity", &[hdr], None, Some(types::I64))
+                    .expect("capacity");
+                Ok(Flow::Val(Some(n)))
+            }
+            // D50: every live slot removed, every generation bumped —
+            // so every handle the pool ever issued is stale after it.
+            "clear" => {
+                self.rt_call_foreign("__wolf_rt_pool_clear", &[hdr], None, None);
+                Ok(Flow::Val(None))
+            }
+            _ => {
+                let _ = ewty;
+                Err(refuse("this Pool method", e.span))
+            }
+        }
+    }
+
+    /// `pool[h] = v` (s173): the whole-payload write through a
+    /// handle. A stale handle traps; there is no bounds check,
+    /// because the generation compare is the check.
+    fn lower_pool_index_assign(
+        &mut self,
+        d: AssignStmt<'t>,
+        b: BracketApply<'t>,
+        recv: &'t GreenNode,
+        elem: TyId,
+        span: Span,
+    ) -> R<Flow> {
+        self.check_capture_write(recv, "mutating")?;
+        let (_, stride) = self.pool_payload(elem, span)?;
+        let Some(hdr) = flow_val!(self.lower_expr(recv)) else {
+            return Err(refuse("a valueless Pool receiver", recv.span));
+        };
+        let hx = b
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .filter_map(Arg::value)
+            .next()
+            .ok_or_else(|| refuse("a pool index without a handle", span))?;
+        let Some(handle) = flow_val!(self.lower_expr(hx)) else {
+            return Err(refuse("a valueless pool handle", hx.span));
+        };
+        let Some(vexpr) = d.value() else {
+            return Err(refuse("an index write without a value", span));
+        };
+        let Some(val) = flow_val!(self.lower_expr(vexpr)) else {
+            return Err(refuse("a unit-typed pool payload", vexpr.span));
+        };
+        let (region, slot) = self.rt_slot(stride);
+        self.store_flat(val, slot, region, vexpr.span)?;
+        let hit = self
+            .rt_call_foreign(
+                "__wolf_rt_pool_write",
+                &[hdr, handle],
+                Some((slot, region)),
+                Some(types::I64),
+            )
+            .expect("hit flag");
+        if self.pool_hit_or_trap(hit) {
+            return Ok(Flow::Diverged);
+        }
+        Ok(Flow::Val(None))
+    }
+
     /// `l[i] = v` (s40): the bounds-trapping element write.
     fn lower_index_assign(
         &mut self,
@@ -13544,9 +13831,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let (k, v) = (*k, *v);
             return self.lower_map_index_assign(d, b, recv, k, v, span);
         }
+        // s173: `pool[h] = v` — the whole-payload write through a
+        // handle. The nested form `pool[h].f = v` (wolf-lang#31) does
+        // NOT come here; it is a place chain and goes through
+        // `resolve_place`, which is the point of s168's walk.
+        if let TyKind::Pool(elem) = self.table.kind(self.strip_sema(base_sema)) {
+            let elem = *elem;
+            return self.lower_pool_index_assign(d, b, recv, elem, span);
+        }
         let TyKind::List(elem) = self.table.kind(self.strip_sema(base_sema)) else {
             return Err(refuse(
-                "index writes outside List (raw-pointer writes; Pool and Map)",
+                "index writes outside List and Pool (raw-pointer writes; a map write is a key insert)",
                 span,
             ));
         };
@@ -16395,10 +16690,24 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// the container's buffer, bounds-checked exactly once, at the
     /// same origin the read spelling uses (D61).
     ///
-    /// `Pool[T]` and `Map[K, V]` stay refused BY NAME here: a pool
-    /// element is reached through a generational handle whose runtime
-    /// shape is the second half of this stub, and a map read answers
-    /// `V ! {none}` — a row, not storage, so there is no element
+    /// `pool[h]` is a place too (s173, wolf-lang#31): the handle
+    /// resolves to the live slot's address or traps `stale-handle`,
+    /// and the field steps above it are byte offsets into that
+    /// address — which is what makes `pool[h].next = k` one store
+    /// rather than a read-modify-write of the whole node.
+    ///
+    /// Unlike a `List` element, the pool slot's address is minted
+    /// HERE and not re-minted at the access. It can only move when
+    /// the pool grows, growth only happens in `reserve`, `reserve`
+    /// takes `mut self`, and `[mem.model.place]` collapses the whole
+    /// pool to ONE opaque place — so a second path to the pool inside
+    /// this assignment's surface is already E1002. That is the mem
+    /// tier's guarantee, not an assumption made here, and
+    /// `crates/wolf_driver/tests/pool_native.rs` drives the witness
+    /// that would break if it ever stopped holding.
+    ///
+    /// `Map[K, V]` stays refused BY NAME: a map read answers
+    /// `V ! {none}` — a row, not storage — so there is no element
     /// address to hand out.
     fn place_index(
         &mut self,
@@ -16421,9 +16730,36 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(recv_sema) = self.expr_sema_ty(recv.span) else {
             return Err(refuse("an index place without a recorded type", span));
         };
+        if let TyKind::Pool(elem) = self.table.kind(self.strip_sema(recv_sema)) {
+            let elem = *elem;
+            let (ewty, _) = self.pool_payload(elem, span)?;
+            let hdr = self.place_load(&cur, span)?;
+            let hx = b
+                .args()
+                .into_iter()
+                .flat_map(|l| l.args())
+                .filter_map(Arg::value)
+                .next()
+                .ok_or_else(|| refuse("a pool index without a handle", span))?;
+            let handle = match self.lower_expr(hx)? {
+                Flow::Val(Some(v)) => v,
+                Flow::Val(None) => return Err(refuse("a valueless pool handle", hx.span)),
+                Flow::Diverged => return Ok(None),
+            };
+            let Some(ptr) = self.pool_slot_addr(hdr, handle)? else {
+                return Ok(None);
+            };
+            let region = self.foreign_buf_region();
+            return Ok(Some(ResolvedPlace {
+                loc: PlaceLoc::Addr { ptr, region },
+                wty: ewty,
+                wrapping: matches!(self.table.kind(elem), TyKind::Wrapping(_)),
+                unsigned: sema_unsigned(self.table, elem),
+            }));
+        }
         let TyKind::List(elem) = self.table.kind(self.strip_sema(recv_sema)) else {
             return Err(refuse(
-                "index places outside List (a pool element is reached through its handle; a map read answers a row, not storage)",
+                "index places outside List and Pool (a map read answers a row, not storage)",
                 span,
             ));
         };
@@ -16738,9 +17074,31 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 .expect("sync handle");
             return Ok(Flow::Val(Some(h)));
         }
-        if matches!(self.table.kind(ty), TyKind::Pool(_) | TyKind::Shared(_)) {
+        // s173: `Pool[T]()` — the runtime header, sized by the
+        // payload's flat layout, exactly as `List[T]()` is.
+        if let TyKind::Pool(elem) = self.table.kind(ty) {
+            let elem = *elem;
+            self.refuse_region_elem(elem, e.span)?;
+            let Some(ewty) = wir_ty(
+                &mut self.b.module.types,
+                self.table,
+                self.sigs,
+                elem,
+                e.span,
+            )?
+            else {
+                return Err(refuse("unit-typed Pool payloads", e.span));
+            };
+            let esize = self.list_stride(ewty, e.span)?;
+            let sz = self.b.iconst(types::I64, esize as i64);
+            let hdr = self
+                .rt_call_foreign("__wolf_rt_pool_new", &[sz], None, Some(types::PTR))
+                .expect("hdr");
+            return Ok(Flow::Val(Some(hdr)));
+        }
+        if matches!(self.table.kind(ty), TyKind::Shared(_)) {
             return Err(refuse(
-                "Pool/shared constructor lowering (runtime shapes)",
+                "shared-cell constructor lowering (the rc runtime shape)",
                 e.span,
             ));
         }
@@ -16876,6 +17234,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 TyKind::Map(k, v) => {
                     let (k, v) = (*k, *v);
                     return self.lower_map_method(d, recv_place, k, v, &mname, e);
+                }
+                // s173: and the `Pool` receiver. `Pool` has no home
+                // module (`[type.method.home]`'s table is closed), so
+                // there is no impl this could be routed to instead.
+                TyKind::Pool(elem) => {
+                    let elem = *elem;
+                    return self.lower_pool_method(d, recv_place, elem, &mname, e);
                 }
                 // s73: the conc receivers dispatch to the runtime
                 // seams, never to an impl.
