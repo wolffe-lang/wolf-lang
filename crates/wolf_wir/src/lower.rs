@@ -2829,6 +2829,18 @@ enum PlaceLoc {
         stride: u64,
         off: u64,
     },
+    /// A pool SLOT reached through a handle (s173, wolf-lang#31): the
+    /// pool header, the handle word, and a byte offset for the field
+    /// path above it. Kept as a recipe for the same reason `Elem` is,
+    /// and the reason is not hypothetical — `xs[0].n = grow(mut xs)`
+    /// is accepted by both lanes today and answers correctly ONLY
+    /// because `elem_addr` re-mints. A pool has the same shape twice
+    /// over: `reserve` can move the payload buffer, and `remove` can
+    /// make the slot stale between the place step and the store. So
+    /// the liveness check rides the re-mint, which is also where the
+    /// checked machine does it (`walk_read`/`write_place` validate
+    /// the generation at the access, not at `place_of`).
+    Slot { hdr: Value, handle: Value, off: u64 },
 }
 
 /// One place, resolved: where it lives, its WIR type, and the leaf's
@@ -16828,6 +16840,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     off: off + offs[index],
                 }
             }
+            PlaceLoc::Slot { hdr, handle, off } => {
+                let Some(offs) = flat_offsets(&self.b.module.types, &fields) else {
+                    return Err(refuse("place paths over non-flat fields", span));
+                };
+                PlaceLoc::Slot {
+                    hdr,
+                    handle,
+                    off: off + offs[index],
+                }
+            }
         };
         Ok(ResolvedPlace {
             loc,
@@ -16897,12 +16919,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Flow::Val(None) => return Err(refuse("a valueless pool handle", hx.span)),
                 Flow::Diverged => return Ok(None),
             };
-            let Some(ptr) = self.pool_slot_addr(hdr, handle)? else {
-                return Ok(None);
-            };
-            let region = self.foreign_buf_region();
             return Ok(Some(ResolvedPlace {
-                loc: PlaceLoc::Addr { ptr, region },
+                loc: PlaceLoc::Slot {
+                    hdr,
+                    handle,
+                    off: 0,
+                },
                 wty: ewty,
                 wrapping: matches!(self.table.kind(elem), TyKind::Wrapping(_)),
                 unsigned: sema_unsigned(self.table, elem),
@@ -16986,7 +17008,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(v)
             }
             PlaceLoc::Addr { ptr, region } => self.load_flat(p.wty, *ptr, *region, span),
-            PlaceLoc::Elem { .. } => {
+            PlaceLoc::Elem { .. } | PlaceLoc::Slot { .. } => {
                 let (ptr, region) = self.elem_addr(&p.loc);
                 self.load_flat(p.wty, ptr, region, span)
             }
@@ -16998,6 +17020,39 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// before the access, so a reallocation between the index and the
     /// access cannot leave it stale.
     fn elem_addr(&mut self, loc: &PlaceLoc) -> (Value, RegionId) {
+        // s173: a pool slot re-mints through the runtime, and the
+        // liveness check rides HERE rather than at the place step —
+        // `remove` between the two is exactly the case the checked
+        // machine faults on, so the native lane has to fault in the
+        // same place. `trap_unless` only reports "proven" for a
+        // constant condition, and a runtime call's result is never
+        // one, so this cannot diverge and needs no `Option`.
+        if let PlaceLoc::Slot { hdr, handle, off } = *loc {
+            let live = self
+                .rt_call_foreign(
+                    "__wolf_rt_pool_alive",
+                    &[hdr, handle],
+                    None,
+                    Some(types::I64),
+                )
+                .expect("liveness");
+            let live = self.nonzero(live);
+            debug_assert!(
+                !self.b.as_bool_const(live).is_some_and(|b| !b),
+                "a pool liveness call folded to a constant false"
+            );
+            let _ = self.trap_unless(live, TrapKind::StaleHandle);
+            let addr = self
+                .rt_call_foreign(
+                    "__wolf_rt_pool_addr",
+                    &[hdr, handle],
+                    None,
+                    Some(types::PTR),
+                )
+                .expect("slot address");
+            let p = self.field_addr(addr, off);
+            return (p, self.foreign_buf_region());
+        }
         let PlaceLoc::Elem {
             hdr,
             idx,
@@ -17025,7 +17080,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(())
             }
             PlaceLoc::Addr { ptr, region } => self.store_flat(val, *ptr, *region, span),
-            PlaceLoc::Elem { .. } => {
+            PlaceLoc::Elem { .. } | PlaceLoc::Slot { .. } => {
                 let (ptr, region) = self.elem_addr(&p.loc);
                 self.store_flat(val, ptr, region, span)
             }
@@ -17106,7 +17161,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // nothing else may reach the container while it does —
             // that is the exclusivity the mem tier proved, not an
             // assumption made here.
-            PlaceLoc::Elem { .. } => {
+            PlaceLoc::Elem { .. } | PlaceLoc::Slot { .. } => {
                 let (ptr, region) = self.elem_addr(&p.loc);
                 Ok(Some(MutArg::Relend { ptr, region }))
             }
