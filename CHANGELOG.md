@@ -65,6 +65,60 @@ only under budget pressure. Nothing calls it yet — the `--checked`
 profile wiring and the alloc/free backtraces are separate work, and
 the module says so rather than reading as a shipped feature.
 
+### The rulings (s175 — wolf-lang#434, #347's third clause, wolf-interp#125, #431's thread, #370's residual)
+
+**A qualified error-set alias is the alias** (#434, wolf-std F-0138;
+`[type.err.alias.qualified]`). Since s158 an alias was transparent
+inside its module and **opaque from outside**: `-> int ! fs.IoErrors`
+was accepted as a spelling and contributed no tags, so a `?` under it
+was E0602 listing exactly the three tags the alias is defined as, and
+wolf-std kept a local copy of std's alias rather than name it. The row
+lowering only ever looked up a single-segment path in the current
+module; it now resolves an entry the way a type path resolves — this
+module's item, a `use m.Alias` binding, or `m.Alias` through the module
+binding — and the deferral pre-scan, the resolver's reference table and
+the W0305/W0603 tag lints see the same three forms, so `use m.Alias`
+whose only use is a row is no longer E0305. A private alias named from
+another module is E0304 (and still expands, so the one cause reports
+once). Witnesses `corpus/rows/error_alias_qualified/` (qualified and
+`use`-bound, propagating back into a spelled-out row) and
+`corpus/rows/negative/error_alias_private/`; both were red on the trunk
+binary at `2f8deb7f` (`fail(E0305)`, `fail(E0602)`) before the change.
+lupin 0.1.37 has no typecheck tier and already ran the witness.
+
+**`[type.list.lit.elem]` says `List[i32]`** (#347's third clause). The
+sentence read "`[1, 2, 3]` is `List[int]`" while `[type.numlit.default]`
+and both compiler tiers say `i32` — the spec disagreeing with itself,
+found by bs49 and left standing when #347 closed. Measured, not chosen:
+`let n: i32 = xs[0]` runs and `[5000000000]` is E0415 on both tiers at
+trunk and at 0.2.15 (`typecheck/list_lit_elem_i32.lu`,
+`list_lit_elem_unfit.lu`). No compiler change.
+
+**`trim` takes no argument** (wolf-interp#125; `[mem.str.ws]`). lupin
+0.1.37 ran `word.trim(".,;!?")` and wolf 0.2.15 refused it E0402; the
+spec named one separator set and no cutset, and now says so in words.
+Ruled for the spec: the extension goes from lupin, wolf changes nothing
+(`strings/trim_cutset_refused.lu`). The book's ch06 capstone, which
+spells the cutset, is a book lane's.
+
+**One truth per corpus file** (#431's thread; `corpus/README.md`). No
+per-platform posture exists and none is planned: a host-divergent
+answer is a defect, and a header that pinned it per host would make the
+gate that found it certify it.
+
+**The keyword run is closed by name** (#370's residual;
+`crates/wolf_ast/tests/keyword_block.rs`). The exhaustive ~200-arm
+`match` is declined; a test over `kind.rs`'s own text asserts every
+`*Kw` variant sits inside `AsKw..LParen` and nothing else does, which
+is the addition mode #356 actually met and the `const` assertions
+cannot see. Seen red with a planted variant on each side before it was
+trusted.
+
+Routed to the maintainer, not landed: the index-store half of #385
+(wolf-lang#438) and a file index on record spans (wolf-lang#437).
+Filed: the checked machine's closure refusal (#435) and its
+interpolation-slice refusal (#436).
+
 ### The concurrency handles have names, and a proc talks back
 
 **`Scope` and `Proc[T]` are prelude type names** (#316, BACKLOG B21's
