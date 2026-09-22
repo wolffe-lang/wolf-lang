@@ -1,0 +1,16 @@
+//! check: fail(E0415)
+//! phase: typecheck
+//! conforms: type.list.lit.elem, type.numlit.default
+//!
+//! s175 (wolf-lang#347, the third clause) — the other half of
+//! `list_lit_elem_i32.lu`: with nothing in the body deciding
+//! otherwise, `[5000000000]` defaults its element to `i32` and the
+//! constant does not fit, E0415 by name — which is only possible if
+//! the literal's element type is `i32`. Under the sentence the spec
+//! used to carry (`List[int]`) this program would have run.
+
+fn main() -> !int {
+    let ys = [5000000000]
+    print("{ys.len}")
+    0
+}

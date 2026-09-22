@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="1 3\n7\n")
+//! phase: run
+//! conforms: type.list.lit.elem, type.numlit.default
+//!
+//! s175 (wolf-lang#347, the third clause) — a list literal of bare
+//! integer literals is `List[i32]`, not `List[int]`: the elements
+//! default exactly as any other bare literal does
+//! ([type.numlit.default]). `let n: i32 = xs[0]` is the proof — a
+//! VALUE never converts ([type.numlit.value]), so this binding is
+//! only legal because the element already IS `i32`. The second list
+//! shows a reachable expectation winning before the rule fires:
+//! `take_int(ys[0])` pins `ys` as `List[int]`, and the same literal
+//! text is 64-bit there.
+
+fn take_int(v: int) -> int { v + 2 }
+
+fn main() -> !int {
+    let xs = [1, 2, 3]
+    let n: i32 = xs[0]
+    print("{n} {xs.len}")
+    let ys = [5, 6]
+    print("{take_int(ys[0])}")
+    0
+}

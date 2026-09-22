@@ -883,8 +883,17 @@ substrate.)
 `[gram.expr.list]`; this is the typing half.)
 
 - `[type.list.lit.elem]` **The element type unifies across the
-  elements, left to right.** `[1, 2, 3]` is `List[int]`; `["a", "b"]`
-  is `List[str]`; `[[1], [2, 3]]` is `List[List[int]]`. The first
+  elements, left to right.** `[1, 2, 3]` is `List[i32]` — its
+  elements are bare `{integer}` literals and default exactly as
+  `[type.numlit.default]` says, `i32` when nothing in the body decides
+  otherwise (corrected 2026-09-21 by s175 for wolf-lang#347's third
+  clause: this sentence said `List[int]` while the defaulting rule
+  and both compiler tiers say `i32`; measured at trunk `2f8deb7f` and
+  at 0.2.15, `let xs = [1, 2, 3]` then `let n: i32 = xs[0]` runs on
+  both tiers and `let ys = [5000000000]` is E0415, "does not fit
+  `i32`", on both — witnesses `typecheck/list_lit_elem_i32.lu`,
+  `typecheck/list_lit_elem_unfit.lu`); `["a", "b"]`
+  is `List[str]`; `[[1], [2, 3]]` is `List[List[i32]]`. The first
   element fixes the type the rest are checked against, so the **first
   element that does not fit is the error site** — E0401 at that
   element, with the first element's span as the "because", never at
