@@ -1026,22 +1026,8 @@ impl<'a> Lower<'a> {
             // `[type.err.alias.qualified]`): until then only the first
             // form was looked up, so `fs.IoErrors` was accepted as a
             // spelling and contributed no tags at all.
-            let alias_target: Option<(usize, String)> = if segs.len() == 1
-                && self.error_alias_row(module, &name).is_some()
-            {
-                Some((module, name.clone()))
-            } else {
-                let segs_sp: Vec<(String, Span)> =
-                    path.segments().map(|t| (self.text(file, t.span), t.span)).collect();
-                match self.resolve_type_head(module, file, &segs_sp) {
-                    TypeHead::Item { module: am, name: an }
-                        if self.error_alias_row(am, &an).is_some() =>
-                    {
-                        Some((am, an))
-                    }
-                    _ => None,
-                }
-            };
+            let alias_target: Option<(usize, String)> =
+                crate::resolve::alias_target(self.pkg, module, file, &segs);
             if let Some((amod, aname)) = &alias_target
                 && *amod != module
                 && let Some(item) = self.pkg.tables[*amod].get(aname)
@@ -1064,7 +1050,10 @@ impl<'a> Lower<'a> {
                          is enough for this use.",
                     ),
                 );
-                continue;
+                // Refused, and still expanded: the row keeps the tags
+                // the alias spells so the one root cause reports once
+                // (VOICE rule 5), not as E0304 plus an E0602 for every
+                // `?` under an empty row.
             }
             if let Some((amod, aname)) = alias_target
                 && let Some((afile, arow)) = self.error_alias_row(amod, &aname)

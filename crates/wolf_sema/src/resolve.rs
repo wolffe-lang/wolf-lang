@@ -116,7 +116,7 @@ pub(crate) fn lexical_row_tags(
 /// (`[type.err.alias.qualified]`, wolf-lang#434). Visibility is not
 /// judged here: a private alias named from outside is E0304 at
 /// signature elaboration, and this scan only decides what may be a tag.
-fn alias_target(
+pub(crate) fn alias_target(
     pkg: &Package,
     module: usize,
     file: usize,
@@ -1438,23 +1438,40 @@ impl Resolver<'_> {
         {
             for entry in row.entries() {
                 let Some(path) = entry.path() else { continue };
-                let segs: Vec<_> = path.segments().collect();
-                let [one] = segs.as_slice() else { continue };
-                let name = String::from_utf8_lossy(
-                    &self.pkg.files[self.file].raw.src[one.span.lo as usize..one.span.hi as usize],
-                )
-                .into_owned();
-                let is_alias = self.pkg.tables[self.module]
-                    .get(&name)
-                    .is_some_and(|it| it.kind == crate::graph::ItemKind::Error);
-                if !is_alias || self.refs.iter().any(|r| r.span == one.span) {
+                let toks: Vec<_> = path.segments().collect();
+                let segs: Vec<String> = toks
+                    .iter()
+                    .map(|t| {
+                        String::from_utf8_lossy(
+                            &self.pkg.files[self.file].raw.src
+                                [t.span.lo as usize..t.span.hi as usize],
+                        )
+                        .into_owned()
+                    })
+                    .collect();
+                // s175 (wolf-lang#434): the alias may be this module's,
+                // bound by `use m.Alias`, or named `m.Alias` — the
+                // three forms `alias_target` resolves. A binding the
+                // entry reaches through is USED by it, which is what
+                // keeps `use m.Alias` off E0305 when its only use is a
+                // row (rows defer to typing, so nothing else here
+                // records it).
+                let Some((amod, aname)) = alias_target(self.pkg, self.module, self.file, &segs)
+                else {
+                    continue;
+                };
+                if let Some(i) = self.bindings.iter().position(|b| b.name == segs[0]) {
+                    self.used[i] = true;
+                }
+                let last = toks.last().expect("a path has a segment");
+                if self.refs.iter().any(|r| r.span == last.span) {
                     continue;
                 }
                 self.record(
-                    one.span,
+                    last.span,
                     RefTarget::Item {
-                        module: self.module,
-                        name,
+                        module: amod,
+                        name: aname,
                     },
                 );
             }

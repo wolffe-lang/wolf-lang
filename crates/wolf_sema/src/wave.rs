@@ -313,12 +313,27 @@ impl Wave<'_> {
         // (`[type.err.alias]`). Judging `IoErrors` as a mark would ask
         // an alias to be lowercase and then collide it with the item
         // it is deliberately named after.
+        // The alias may also be bound into this module by `use m.Alias`
+        // (s175, wolf-lang#434, `[type.err.alias.qualified]`): the
+        // binding's target is the alias item, and the entry is that
+        // alias, not a mark spelled CapCase.
+        let (pkg, module) = (self.pkg, self.module);
+        let is_alias_entry = move |tag: &str| {
+            let is_err = |m: usize, n: &str| {
+                pkg.tables[m]
+                    .get(n)
+                    .is_some_and(|it| it.kind == crate::graph::ItemKind::Error)
+            };
+            is_err(module, tag)
+                || pkg.modules[module].bindings.iter().flatten().any(|b| {
+                    b.name == tag
+                        && matches!(&b.target, crate::graph::BindTarget::Item { module, name } if is_err(*module, name))
+                })
+        };
         for (tag, span, payload) in &entries {
             if generics.contains(tag)
                 || (tag.len() == 1 && tag.chars().next().is_some_and(|c| c.is_ascii_uppercase()))
-                || self.pkg.tables[self.module]
-                    .get(tag)
-                    .is_some_and(|it| it.kind == crate::graph::ItemKind::Error)
+                || is_alias_entry(tag)
             {
                 continue;
             }
@@ -363,10 +378,7 @@ impl Wave<'_> {
             // is the point (`[type.err.alias]`). The alias and the
             // entry are the SAME declaration, not two meanings of one
             // word, which is what this lint is about.
-            if self.pkg.tables[self.module]
-                .get(&tag)
-                .is_some_and(|it| it.kind == crate::graph::ItemKind::Error)
-            {
+            if is_alias_entry(&tag) {
                 continue;
             }
             let clash = if self.pkg.tables[self.module]
