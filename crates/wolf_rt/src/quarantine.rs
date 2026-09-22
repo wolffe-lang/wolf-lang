@@ -131,23 +131,43 @@ pub trait QuarantineHooks {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RegionId(pub u32);
 
-/// The unimplemented stub every hook resolves to until s54. Present so
-/// the `--checked` link path has a symbol to bind and so the contract
-/// compiles and is documented from here on.
+/// The quarantine allocator. This commit is the RENAME ALONE — every
+/// body below is still the `unimplemented!` the contract shipped, so
+/// `crates/wolf_rt/tests/quarantine_alloc.rs` is seen red against it
+/// before anything is trusted. The bodies land in the next commit.
 #[derive(Debug, Default)]
-pub struct StubAllocator {
+pub struct QuarantineAllocator {
     pub budget_bytes: usize,
 }
 
-impl StubAllocator {
+impl QuarantineAllocator {
     pub fn new(budget: QuarantineBudget) -> Self {
-        StubAllocator {
+        QuarantineAllocator {
             budget_bytes: budget.bytes,
         }
     }
+
+    /// The shadow tag currently stamped on the granule containing
+    /// `addr`, live or quarantined; `None` once the span is released.
+    pub fn tag_at(&self, _addr: usize) -> Option<Tag> {
+        unimplemented!("wolf_rt quarantine allocator is s54")
+    }
+
+    /// Bytes held in quarantine — freed, retagged and not yet reused.
+    pub fn quarantined_bytes(&self) -> usize {
+        unimplemented!("wolf_rt quarantine allocator is s54")
+    }
+
+    /// Which region subsequent allocations belong to. The trait's
+    /// `alloc` is the frozen interface and takes no region, so the
+    /// owner is ambient state the region machinery sets as it opens
+    /// and closes scopes.
+    pub fn set_region(&mut self, _region: RegionId) {
+        unimplemented!("wolf_rt quarantine allocator is s54")
+    }
 }
 
-impl QuarantineHooks for StubAllocator {
+impl QuarantineHooks for QuarantineAllocator {
     fn alloc(&mut self, _size: usize) -> (usize, Tag) {
         unimplemented!(
             "wolf_rt quarantine allocator is s54; the s23 checker-side twin is wolf_mem::ubcheck"
@@ -173,7 +193,7 @@ mod tests {
         // The interface is a compile-time contract this sprint; the
         // bodies are s54. This test pins that the shapes are the ones
         // the checker-side twin (wolf_mem::ubcheck) mirrors.
-        let a = StubAllocator::new(QuarantineBudget::default());
+        let a = QuarantineAllocator::new(QuarantineBudget::default());
         assert_eq!(a.budget_bytes, 64 << 20);
         assert_eq!(Tag::UNTAGGED, Tag(0));
         // The four planted-defect fault identities the D21 acceptance
@@ -190,7 +210,7 @@ mod tests {
     #[test]
     #[should_panic(expected = "s54")]
     fn hooks_are_stubbed_until_s54() {
-        let mut a = StubAllocator::new(QuarantineBudget::default());
+        let mut a = QuarantineAllocator::new(QuarantineBudget::default());
         let _ = a.alloc(8);
     }
 }
