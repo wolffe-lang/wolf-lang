@@ -482,6 +482,7 @@
     "type.err.alias": "10-types.md",
     "type.err.alias.cycle": "10-types.md",
     "type.err.alias.diag": "10-types.md",
+    "type.err.alias.qualified": "10-types.md",
     "type.err.alias.transparent": "10-types.md",
     "type.err.alias.union": "10-types.md",
     "type.float.rem": "10-types.md",
