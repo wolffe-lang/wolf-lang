@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 149] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 160] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -162,6 +162,23 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 149] = [
     // buffer in the ambient region.
     ("__wolf_rt_list_copy", 1, true),
     ("__wolf_rt_map_copy", 1, true),
+    // s173 (#31/#268, `wolf_rt::pool`): the generational slot arena.
+    // `new` takes the payload size; every other entry takes the
+    // header and a packed handle word. `addr` is the odd one out and
+    // the reason wolf-lang#31 lowers at all: it hands back the live
+    // slot's ADDRESS so a place write stores through it, and 0 for a
+    // stale handle, which lowering turns into trap(stale-handle).
+    ("__wolf_rt_pool_new", 1, true),
+    ("__wolf_rt_pool_reserve", 1, true),
+    ("__wolf_rt_pool_addr", 2, true),
+    ("__wolf_rt_pool_read", 3, true),
+    ("__wolf_rt_pool_write", 3, true),
+    ("__wolf_rt_pool_remove", 2, true),
+    ("__wolf_rt_pool_alive", 2, true),
+    ("__wolf_rt_pool_len", 1, true),
+    ("__wolf_rt_pool_capacity", 1, true),
+    ("__wolf_rt_pool_clear", 1, false),
+    ("__wolf_rt_pool_next", 2, true),
     ("__wolf_rt_fs_read_text", 3, true),
     ("__wolf_rt_fs_write_text", 4, true),
     ("__wolf_rt_fs_open", 3, true),
@@ -2429,6 +2446,7 @@ fn trap_code(kind: TrapKind) -> i32 {
         TrapKind::Overflow => tc::OVERFLOW,
         TrapKind::DivZero => tc::DIV_ZERO,
         TrapKind::Bounds => tc::BOUNDS,
+        TrapKind::StaleHandle => tc::STALE_HANDLE,
     }
 }
 
