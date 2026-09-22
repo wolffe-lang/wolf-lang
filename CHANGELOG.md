@@ -39,9 +39,11 @@ placeholder, because the completion type is a fact about the callee
 and not a rewrite the parser can perform.
 
 **And the first program to exercise D16's handle-as-parameter
-deadlocks on windows** (#431). `fn fan_out(s: Scope, ch)` calling
-`s.spawn(…)` runs to `1` on linux x86-64 and macOS aarch64 and
-produces no verdict at all on windows — a clause that has been
+deadlocks** (#431). `fn fan_out(s: Scope, ch)` calling `s.spawn(…)`
+produced no verdict at all on windows, and read as `1` on linux
+x86-64 and macOS aarch64 — the linux row was measured on a
+debug-profile build, and **the section below corrects it: the shipping
+build deadlocks on linux too** — a clause that has been
 normative since D16 and unreachable since D16, because the parameter
 had no spelling until now. s170 did not break it; s170 made it
 writable, and the first thing written with it found the hole. The
@@ -64,6 +66,75 @@ lane, **keeps sweeping**, and lists every hung entry at the end — one
 name is a symptom, the list is the diagnosis. The red path was
 exercised deliberately, with a planted non-terminating entry, before
 the gate was trusted.
+
+### The linux native lane deadlocks too, and no `cargo test` could see it
+
+**#431 is not windows-only** (s174). The same program — a `Scope`
+handle passed as a parameter — deadlocks the **Cranelift native tier
+on linux x86-64**, measured on kasumi against trunk `2f8deb7f` under
+`cargo xtask dist`, the build that ships: rc 124 at 60 s, 3/3, on both
+`conform-run --native --json` and `wolf run`. The LLVM release tier
+answers `exit(0)` / `1` from the same binary, and the checked lane is
+an honest `unsupported` (C1 deferred).
+
+**Why every gate we had was green on it.** The defect is a dangling
+stack slot, so whether it is *observable* depends on whether anything
+has overwritten the dead frame before the task reads it — and that
+changes with the profile `libwolf_rt.a` was built in. One host, one
+commit, three builds:
+
+| build of `wolf` | `conform-run --native` |
+| --- | --- |
+| `target/debug` — what every `cargo test` uses | `exit(0)`, stdout `1` — 3/3 |
+| `target/release` | rc 124 at 30 s — 3/3 |
+| `cargo xtask dist` — the archive that ships | rc 124 at 30 s — 3/3 |
+
+`cargo xtask lane-coverage` runs `target/debug/wolf`, so the corpus
+entry trunk removed **could not have gated this on linux either**: it
+would have been green there while the shipping compiler deadlocked.
+A green whose colour is decided by the build profile of the tool under
+test is another shape of a green that cannot fail, and it is why the
+gate that landed is structural rather than behavioural.
+
+**Where the wait is, and why.** `main` parks in
+`wolf_rt::task::scope::ScopeInner::join`
+(`crates/wolf_rt/src/task/scope.rs:272`), reached from
+`__wolf_rt_scope_join_free`, with all sixteen workers idle — the scope
+is waiting on a child that never reports done. The cause is four lines
+of `--emit=wir`:
+
+```text
+fn @fan_out(ptr, i64) {
+  %3: ptr, %4: mem.r0 = stack.alloc %2
+  %5 = store.i64 %1, %3, %4
+  %9 = call @__wolf_rt_scope_spawn(%0, %6, %3, %7, %8, %5)
+  ret
+}
+```
+
+The task's capture record is a frame slot of `fan_out` —
+`pack_task_env`'s straight-line arm, written at s86 on the premise
+that "the scope joins before the frame dies". That premise is exactly
+false for D16's handle-as-parameter: the scope joins in `main`, and
+`fan_out` has already returned. With an `int` capture the task prints
+an address instead of `7`, a different one every run; with a
+`channel[int]` capture the same garbage is read as a channel and the
+child never completes.
+
+**The witness is back under a gate, and the fix is not in this
+entry.** `crates/wolf_driver/tests/scope_handle_param.rs` asserts the
+invariant on the compiler's own WIR — a function that hands
+`__wolf_rt_scope_spawn` a `stack.alloc` env must be a function that
+also joins that scope — beside two behavioural witnesses that refuse
+to run without a release-profile `wolf`, because a debug-profile green
+is not evidence about this program. A third fixture, spawning from the
+frame that opened the scope, is the control: it proves the checker is
+reading the defect and not merely reading `stack.alloc`. The fix needs
+the record to live in the scope's arena, reached through the handle at
+runtime, and the frozen five-parameter `__wolf_rt_scope_spawn` carries
+no env size — it is s87's `__wolf_rt_proc_spawn_outcome` copy applied
+to tasks, an ABI change, not a short one. The gate lands alone and
+red, deliberately: a gated hang is worth more than a half-fix.
 
 ### A frozen value handed to two procs is one value
 
