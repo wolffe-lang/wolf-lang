@@ -185,6 +185,9 @@ pub(crate) fn trap_code(kind: TrapKind) -> i32 {
         TrapKind::DivZero => 2,
         TrapKind::Bounds => 3,
         TrapKind::Assert => 4,
+        // s173: `[mem.shared.handle.2]` — a stale `handle T`, defined
+        // in every profile.
+        TrapKind::StaleHandle => 8,
     }
 }
 
@@ -3231,6 +3234,7 @@ mod tests {
         assert_eq!(trap_code(TrapKind::DivZero), tc::DIV_ZERO);
         assert_eq!(trap_code(TrapKind::Bounds), tc::BOUNDS);
         assert_eq!(trap_code(TrapKind::Assert), tc::ASSERT);
+        assert_eq!(trap_code(TrapKind::StaleHandle), tc::STALE_HANDLE);
     }
 
     #[test]
