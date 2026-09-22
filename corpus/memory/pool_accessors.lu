@@ -1,0 +1,69 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.shared.handle.1, mem.shared.handle.2
+//! s173 (D50's accessor set on wolf-lang#11): `len`, `is_empty`,
+//! `alive`, `has` and `clear`, on both lanes and in agreement.
+//!
+//! `len` counts LIVE slots, not slots ever reserved — a pool that
+//! reserved three and removed all three is empty. `alive`/`has` is
+//! the one seam a stale handle reaches without faulting, which is
+//! what makes it useful: everything else traps. `clear` bumps every
+//! live slot's generation, so every handle the pool ever issued is
+//! stale afterwards, by exactly the rule `remove` applies one slot at
+//! a time.
+//!
+//! D50's `capacity` and its iteration are deliberately NOT exercised
+//! here: neither has a surface spelling yet, and inventing one in a
+//! corpus entry would pin a language decision from the wrong end.
+
+fn main() -> !int {
+    region r: pool(int) {
+        var pool = Pool[int]()
+        if !pool.is_empty() { return 1 }
+        if pool.len() != 0 { return 2 }
+
+        let a = (mut pool).reserve()
+        let b = (mut pool).reserve()
+        let c = (mut pool).reserve()
+        (mut pool).init(a, 10)
+        (mut pool).init(b, 20)
+        (mut pool).init(c, 30)
+        if pool.len() != 3 { return 3 }
+        if pool.is_empty() { return 4 }
+        if !pool.alive(a) { return 5 }
+        if !pool.has(b) { return 6 }
+
+        // A removed slot is dead, its neighbours are not, and the
+        // count follows the live set.
+        (mut pool).remove(b)
+        if pool.alive(b) { return 7 }
+        if pool.has(b) { return 8 }
+        if !pool.alive(a) { return 9 }
+        if !pool.alive(c) { return 10 }
+        if pool.len() != 2 { return 11 }
+
+        // A slot reused after a remove answers the NEW handle and not
+        // the old one — the generation is the whole point (X5).
+        let d = (mut pool).reserve()
+        (mut pool).init(d, 40)
+        if pool.alive(b) { return 12 }
+        if !pool.alive(d) { return 13 }
+        if pool[d] != 40 { return 14 }
+        if pool.len() != 3 { return 15 }
+
+        // `clear` stales everything at once.
+        (mut pool).clear()
+        if pool.len() != 0 { return 16 }
+        if !pool.is_empty() { return 17 }
+        if pool.alive(a) { return 18 }
+        if pool.alive(c) { return 19 }
+        if pool.alive(d) { return 20 }
+
+        // And the pool still works afterwards.
+        let e = (mut pool).reserve()
+        (mut pool).init(e, 50)
+        if pool.len() != 1 { return 21 }
+        if pool[e] != 50 { return 22 }
+        0
+    }
+}
