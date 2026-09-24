@@ -70,7 +70,20 @@ pub fn file_index(
 /// lexical relation is the real one; `canonicalize` would add a
 /// platform's spelling to one side only (windows' `\\?\` verbatim
 /// prefix on a file that exists, none on one that does not).
+///
+/// On windows the spelling is folded first: the loader joins with `/`,
+/// and under a verbatim `\\?\` prefix `/` is not a separator, so
+/// `\\?\D:\pkg/geometry/shapes.lu` would be one component too few.
+/// The prefix is dropped and every `\` becomes `/`.
 fn key(p: &Path) -> PathBuf {
+    let folded;
+    let p = if cfg!(windows) {
+        let s = p.to_string_lossy().replace('\\', "/");
+        folded = PathBuf::from(s.strip_prefix("//?/").unwrap_or(&s));
+        folded.as_path()
+    } else {
+        p
+    };
     let abs = if p.is_absolute() {
         p.to_path_buf()
     } else {
@@ -166,6 +179,16 @@ mod tests {
         let got = file_index(Path::new("pkg/main.lu"), &loaded, &[0, 1], None).unwrap();
         assert_eq!(got.files, s(&["main.lu", "geometry/shapes.lu"]));
         assert_eq!(got.per_diag, vec![0, 1]);
+    }
+
+    /// windows CI run 36038427868: a verbatim entry, siblings joined
+    /// with `/` under it.
+    #[cfg(windows)]
+    #[test]
+    fn a_verbatim_entry_and_slash_joined_siblings_agree() {
+        let loaded = s(&[r"\\?\D:\w\pkg\main.lu", r"\\?\D:\w\pkg/geometry/shapes.lu"]);
+        let got = file_index(Path::new(r"\\?\D:\w\pkg\main.lu"), &loaded, &[1], None).unwrap();
+        assert_eq!(got.files, s(&["main.lu", "geometry/shapes.lu"]));
     }
 
     #[test]
