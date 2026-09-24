@@ -78,6 +78,52 @@ fn a_trap_message_validates_and_never_diverges() {
     );
 }
 
+/// `[proto.record.diag]`'s file index (s181, #437): additive, and
+/// all-or-nothing; the comparator reads the file a diagnostic names,
+/// not the raw index.
+#[test]
+fn a_file_index_validates_and_is_compared_by_path() {
+    let r = fixture("with-file-index.json");
+    assert!(xtask::protocol::validate_record(&r).is_ok());
+
+    // A record without the keys says every span is in the entry: the
+    // same code and span in the ENTRY is a different observation.
+    let mut entry_only = r.clone();
+    entry_only.as_object_mut().unwrap().remove("files");
+    entry_only["diagnostics"][0].as_object_mut().unwrap().remove("file");
+    assert!(xtask::protocol::validate_record(&entry_only).is_ok());
+    assert!(
+        xtask::protocol::compare(&r, &entry_only, false).is_some(),
+        "same bytes, different file: a divergence"
+    );
+
+    // The index is resolved: another machine may list the files in
+    // another order and still agree.
+    let mut reordered = r.clone();
+    reordered["files"] = serde_json::json!(["main.lu", "other.lu", "geometry/shapes.lu"]);
+    reordered["diagnostics"][0]["file"] = serde_json::json!(2);
+    assert!(xtask::protocol::compare(&r, &reordered, false).is_none());
+
+    // `file: 0` and no `file` both name the entry.
+    let mut zero = r.clone();
+    zero["diagnostics"][0]["file"] = serde_json::json!(0);
+    assert!(xtask::protocol::compare(&zero, &entry_only, false).is_none());
+
+    // All-or-nothing.
+    let mut orphan = entry_only.clone();
+    orphan["diagnostics"][0]["file"] = serde_json::json!(1);
+    assert!(xtask::protocol::validate_record(&orphan).is_err(), "`file` without `files`");
+    let mut missing = r.clone();
+    missing["diagnostics"][0].as_object_mut().unwrap().remove("file");
+    assert!(xtask::protocol::validate_record(&missing).is_err(), "`files` without `file`");
+    let mut past = r.clone();
+    past["diagnostics"][0]["file"] = serde_json::json!(2);
+    assert!(xtask::protocol::validate_record(&past).is_err(), "index past `files`");
+    let mut empty = r.clone();
+    empty["files"] = serde_json::json!([]);
+    assert!(xtask::protocol::validate_record(&empty).is_err(), "empty `files`");
+}
+
 #[test]
 fn wrong_version_rejects() {
     assert!(xtask::protocol::validate_record(&fixture("wrong-version.json")).is_err());

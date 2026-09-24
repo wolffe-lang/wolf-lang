@@ -1,0 +1,17 @@
+{
+  "protocol": 1,
+  "impl": "example",
+  "impl_version": "0.0.1",
+  "commit": "abc1234",
+  "file": "corpus/resolve/sibling_diag/main.lu",
+  "phase_reached": "resolve",
+  "seeded": false,
+  "files": ["main.lu", "geometry/shapes.lu"],
+  "diagnostics": [
+    { "code": "E0302", "span": [245, 249], "severity": "error", "file": 1 }
+  ],
+  "warnings": [],
+  "verdict": "fail(E0302)",
+  "stdout_sha256": null,
+  "stdout_inline": null
+}
