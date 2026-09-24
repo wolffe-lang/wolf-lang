@@ -65,9 +65,17 @@ pub fn file_index(
 }
 
 /// A comparison key for "is this the same file": canonical when the
-/// file exists, lexical otherwise.
+/// file exists, otherwise absolute and lexically normalized — always
+/// absolute, so a canonical root and a lexical file still compare.
 fn key(p: &Path) -> PathBuf {
-    std::fs::canonicalize(p).unwrap_or_else(|_| normalize(p))
+    std::fs::canonicalize(p).unwrap_or_else(|_| {
+        let abs = if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            std::env::current_dir().unwrap_or_default().join(p)
+        };
+        normalize(&abs)
+    })
 }
 
 /// Lexical normalization: drops `.` components, folds `x/..`.
