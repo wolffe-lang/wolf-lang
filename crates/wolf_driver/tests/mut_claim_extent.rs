@@ -336,11 +336,16 @@ fn main() -> !int {
     every_lane_runs(&entry, "2\n");
 }
 
-/// The loop's join is allocated the same way (`eval_while`: head,
-/// body, exit), so a claim inside a loop body must not leak into the
-/// code after it either. Not a shape either downstream reported — it
-/// is here because the mechanism predicts it, and a mechanism that
-/// predicts nothing new has not been understood.
+/// A claim inside a loop body, and the correction to this lane's own
+/// prediction. I wrote this case expecting the mechanism to predict a
+/// third leak; it does not, and the test passed at trunk with the bug
+/// in place. `eval_while` mints `head`, then `body`, then `exit`, and
+/// the code after the loop lowers in `exit` — the HIGHEST of the
+/// three — so the body never outranked the cursor and the bad walk
+/// could not reach it. The pin stays because it is the one loop-shaped
+/// neighbour of #449 and it is now asserted rather than assumed, but
+/// it is a non-regression pin, not a find: it was green before the
+/// fix and is green after.
 #[test]
 fn a_claim_inside_a_loop_body_does_not_outlive_the_loop() {
     let entry = program(

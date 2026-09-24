@@ -444,6 +444,21 @@ pub(crate) struct Lowerer<'t> {
     unclaimed_pairs: Vec<(Span, bool)>,
 }
 
+/// Where the statement stream stood before one call argument lowered
+/// — the bound on that argument's claim extent (s168, s178/#449).
+///
+/// `block`/`stmt` is the cursor itself; `blocks` is how many blocks
+/// existed, which is the only way to tell a block the argument minted
+/// from one that merely sorts above the cursor. Block ids are handed
+/// out in allocation order, not program order, and an `if`'s else arm
+/// and every `match` arm are allocated AFTER the join they flow into.
+#[derive(Clone, Copy)]
+struct Mark {
+    block: usize,
+    stmt: usize,
+    blocks: usize,
+}
+
 impl<'t> Lowerer<'t> {
     fn text(&self, span: Span) -> String {
         String::from_utf8_lossy(&self.src[span.lo as usize..span.hi as usize]).into_owned()
@@ -1744,6 +1759,21 @@ impl<'t> Lowerer<'t> {
     ///
     /// A `mut` argument is exclusive for the WHOLE call, and the rest
     /// of the argument list is evaluated inside that claim.
+    ///
+    /// s178 (#449) — and the extent is the argument evaluation and
+    /// NOTHING ELSE. `[mem.tier0.excl.1]` reads "at every program
+    /// point", so a claim an `if` or `match` arm made is not live at
+    /// the join and a call after the join does not conflict with it.
+    /// The first version of this walk took block INDEX order for
+    /// program order: it admitted every block numbered above the
+    /// call's. But [`Self::eval_if`] mints `then_block`, then `join`,
+    /// and only then `else_block`, and [`Self::eval_match`] mints
+    /// `join` before every arm — so the arms outrank the join they
+    /// flow into, and the walk read backwards into arms that had
+    /// already finished. It refused a program every release through
+    /// 0.2.14 and lupin 0.1.38 run, at 12 sites in boreutils and 16 in
+    /// lobo. The bound below is the fix: the mark carries the block
+    /// COUNT, and only blocks minted since it are new.
     /// [`Self::check_copy_read_after_mut`] catches a bare read spelled
     /// there (`f(mut a, a.x)`); this catches a nested CALL that claims
     /// the same place — `f(mut xs[0], grow(mut xs))`.
@@ -1756,20 +1786,21 @@ impl<'t> Lowerer<'t> {
     /// answer with no diagnostic on either lane. The same shape over a
     /// spilled field (`f(mut r.a, g(mut r))`) loses the callee's write
     /// to the writeback instead, which is wrong more quietly still.
-    fn check_nested_claims_after_mut(
-        &mut self,
-        from: (usize, usize),
-        arg_muts: &[(PlaceId, Span)],
-    ) {
+    fn check_nested_claims_after_mut(&mut self, from: Mark, arg_muts: &[(PlaceId, Span)]) {
         if arg_muts.is_empty() {
             return;
         }
-        let (from_block, from_stmt) = from;
         let mut hits: Vec<(PlaceId, Span, PlaceId, Span, &'static str)> = Vec::new();
         for (bi, block) in self.blocks.iter().enumerate() {
-            let start = if bi == from_block {
-                from_stmt
-            } else if bi > from_block {
+            // s178 (#449): the extent is what THIS argument emitted,
+            // and nothing else. A block that already existed when the
+            // mark was taken cannot hold a statement this argument
+            // emitted — except the mark's own block, from the mark's
+            // statement on. Everything the argument lowered lives
+            // either there or in a block minted since.
+            let start = if bi == from.block {
+                from.stmt
+            } else if bi >= from.blocks {
                 0
             } else {
                 continue;
@@ -4562,10 +4593,11 @@ impl<'t> Lowerer<'t> {
         // `mut` claim an EARLIER argument of the same call already
         // spelled, so mark the statement stream here and check what
         // lands after it.
-        let mark = (
-            self.cur.0 as usize,
-            self.blocks[self.cur.0 as usize].stmts.len(),
-        );
+        let mark = Mark {
+            block: self.cur.0 as usize,
+            stmt: self.blocks[self.cur.0 as usize].stmts.len(),
+            blocks: self.blocks.len(),
+        };
         // Only claims spelled by EARLIER arguments: an argument is
         // never checked against its own.
         let prior_muts: Vec<(PlaceId, Span)> = arg_muts.clone();
