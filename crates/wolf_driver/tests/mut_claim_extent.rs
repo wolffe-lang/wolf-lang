@@ -150,7 +150,12 @@ fn every_lane_runs(entry: &Path, want: &str) {
         "the CHECKED lane refuses a legal program on {} (#449)",
         entry.display()
     );
-    assert_eq!(checked.stdout, want, "checked stdout on {}", entry.display());
+    assert_eq!(
+        checked.stdout,
+        want,
+        "checked stdout on {}",
+        entry.display()
+    );
     if let Some(native) = lane(entry, "--native") {
         assert_eq!(
             native.verdict,
