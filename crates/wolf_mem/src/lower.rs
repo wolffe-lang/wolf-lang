@@ -5247,7 +5247,14 @@ impl<'t> Lowerer<'t> {
 
     fn lower_assign(&mut self, stmt: &'t GreenNode) -> R<()> {
         let d = AssignStmt::cast(stmt).expect("kind");
+        // wolf-lang#438 (`[mem.region.edge.elem]`): a plain `=` through
+        // a container index is `push`'s twin, not a move.
+        let elem_store = d.op().map(|t| t.kind) == Some(SyntaxKind::Eq)
+            && d.place().is_some_and(|p| {
+                p.kind == SyntaxKind::BracketApply && !self.is_raw_index(p)
+            });
         let val = match d.value() {
+            Some(v) if elem_store => self.eval_elem_stored(v, d.takes())?,
             Some(v) => self.eval_value(v)?,
             None => Val::none(),
         };
@@ -5311,6 +5318,45 @@ impl<'t> Lowerer<'t> {
             self.flow_store(place, place_expr, &val);
         }
         Ok(())
+    }
+
+    /// The right-hand side of a store through a container index
+    /// (wolf-lang#438, ruled "align" 2026-09-24: the index store follows
+    /// `push`, `[mem.region.edge.elem]`). A PLAIN store of a non-`Copy`
+    /// place COPIES it in — exactly `xs[i] = copy v`: `v` is read, never
+    /// moved, stays live after the statement, and what lands in the
+    /// container is a fresh allocation in the ambient region, the
+    /// function's own, so a `read` `v` stored plainly is no longer the
+    /// caller's value escaping (#366's E1002 does not apply — a copy is
+    /// not a lend). `xs[i] = take v` MOVES it, as `push(take v)` does,
+    /// including its E1014 on a `read` `v`. A `Copy` place (and `str`,
+    /// whose view is `Copy`) is its own copy and evaluates exactly as
+    /// before; so does a temporary — it has no other owner, and copying
+    /// it again would buy nothing — and a region value, whose identity
+    /// the iso edge tracks (`[mem.region.edge.iso]`).
+    fn eval_elem_stored(&mut self, v: &'t GreenNode, takes: bool) -> R<Val> {
+        let Some((place, ty)) = self.as_place(v) else {
+            return self.eval_value(v);
+        };
+        if takes {
+            self.check_read_param_take(place, v.span);
+            let val = if self.places.is_copy(place) {
+                Val::none()
+            } else {
+                self.val_of_place(place, v.span)
+            };
+            self.emit_move(place, v.span);
+            return Ok(val);
+        }
+        if self.places.is_copy(place) || self.val_of_place(place, v.span).region.is_some() {
+            return self.eval_value(v);
+        }
+        self.emit_read(place, v.span);
+        let rendered = ty
+            .map(|t| render(t.table, t.id, &|_| Err("_")))
+            .unwrap_or_else(|| "?".to_string());
+        let site = self.alloc_site(rendered, SiteKind::Lit, v.span);
+        Ok(Val::site(site, v.span))
     }
 
     /// The region flow of a store (s19): the value's sites land in the
