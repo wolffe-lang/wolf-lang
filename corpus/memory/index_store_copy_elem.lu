@@ -1,0 +1,35 @@
+//! check: run(exit=0, stdout="7 9 wolf wolf 3 4\n")
+//! phase: run
+//! conforms: mem.region.edge.elem, mem.tier0.move.3
+//!
+//! s182 (wolf-lang#438, ruled "align" 2026-09-24) — the half of the
+//! index-store rule that holds on every machine today: a `Copy`
+//! element stored through an index is its own copy, so the binding it
+//! came from is live, independent and free to change afterwards — an
+//! `int` into a `List`, a `str` (immutable bytes, shared by the copy)
+//! into a `List`, an `int` into a `Map`. Same on the checked lane, the
+//! native lane and lupin 0.1.38 (kasumi, trunk a565d4b9).
+//!
+//! The non-`Copy` half — a plain store COPIES, `xs[i] = take v`
+//! MOVES — is ruled and not yet built; its witnesses are parked under
+//! `wolf/sprints/compiler/88-the-rulings-prose/witnesses/` with the
+//! verdict per machine until s180 (wolfgang) and is55 (lupin) land
+//! them here as `index_store_*.lu`.
+
+fn main() -> !int {
+    var ns = List[int]()
+    (mut ns).push(1)
+    var n = 7
+    ns[0] = n
+    n = 9
+    var ss = List[str]()
+    (mut ss).push("a")
+    var s = "wolf"
+    ss[0] = s
+    var m = Map[str, int]()
+    var k = 3
+    m["k"] = k
+    k = 4
+    print("{ns[0]} {n} {ss[0]} {s} {m["k"] else 0} {k}")
+    0
+}

@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="7 65\n")
+//! phase: run
+//! conforms: mem.model.place.rhs, type.map
+//!
+//! s182 (B123, ruled B 2026-09-24) — the `Map` half of
+//! `[mem.model.place.rhs]`: the right-hand side inserts 64 keys into
+//! the map the place indexes, which rehashes it; the store still
+//! lands on `"a"` in the grown map. `7 65` on all three machines
+//! (kasumi, trunk a565d4b9, lupin 0.1.38).
+
+fn grow(mut m: Map[str, int]) -> int {
+    for i in 0..64 {
+        m["k{i}"] = i
+    }
+    7
+}
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["a"] = 1
+    m["a"] = grow(mut m)
+    print("{m["a"] else 0} {m.len}")
+    0
+}

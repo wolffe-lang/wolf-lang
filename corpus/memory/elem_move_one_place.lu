@@ -1,0 +1,29 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.tier0.move.2, mem.model.place
+//!
+//! s182 (wolf-lang#446, option A kept: "element moves are one place
+//! on the compiler and per-element on lupin") — `move xs[0]` on a
+//! `List[int]` and then a read of `xs[1]`. `Proj::Opaque` collapses
+//! every element of a container to ONE place — element granularity is
+//! a declared non-target (s18) — so the move of `xs[0]` empties `xs[_]`
+//! and the read of `xs[1]` is E1001 on both wolfgang lanes. 0.2.14
+//! already refused the same program for a non-`Copy` element type;
+//! s177's #444 fix (record the move whatever the type) widened it to
+//! `Copy` elements, which is where this row pins it.
+//!
+//! lupin 0.1.38 models elements individually and RUNS this (`1 2`,
+//! `exit(0)`): a documented conservatism divergence, the same class as
+//! `[mem.tier0.mode.read]`'s rows in the interpreter's divergence log —
+//! the compiler refuses a program the language does not forbid, and
+//! says so here rather than leaving the next reader to find it. The
+//! driver test `element_move_conservatism_lanes.rs` asserts both sides.
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    (mut xs).push(2)
+    let a = move xs[0]
+    print("{a} {xs[1]}")           // ERROR E1001: `xs[_]` is one place; `xs[0]` was moved
+    0
+}

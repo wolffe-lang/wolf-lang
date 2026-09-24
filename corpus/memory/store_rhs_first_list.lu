@@ -1,0 +1,47 @@
+//! check: run(exit=0, stdout="7 65\n5 65\n")
+//! phase: run
+//! conforms: mem.model.place.rhs
+//!
+//! s182 (B123, s173's proposal 1, ruled B 2026-09-24) — a store
+//! evaluates its right-hand side FIRST, then mints its place
+//! (`[mem.model.place.rhs]`). Both right-hand sides here push 64
+//! elements into the very list the place indexes, which moves its
+//! buffer; an element address minted before the call would be
+//! dangling by the time the store lands. `elem_addr` re-mints at
+//! the access, so the store lands in the grown list and the answer
+//! is `7 65` / `5 65` on the checked lane, the native lane and
+//! lupin 0.1.38 alike (measured on kasumi at trunk a565d4b9).
+//!
+//! Not an exclusivity case: s168's E1002 reaches a nested call under
+//! a `mut` ARGUMENT (`mut_elem_nested_call.lu`), and the right-hand
+//! side's claim on `xs` ends before the place is minted. The pool
+//! twin (`store_rhs_first_pool.lu`) is the one that was seen wrong
+//! under mint-once (wolf-lang#442 §4).
+
+struct Cell { n: int }
+
+fn grow(mut xs: List[int]) -> int {
+    for i in 0..64 {
+        (mut xs).push(i)
+    }
+    7
+}
+
+fn grow_cells(mut cs: List[Cell]) -> int {
+    for i in 0..64 {
+        (mut cs).push(Cell { n: i })
+    }
+    5
+}
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    xs[0] = grow(mut xs)
+    print("{xs[0]} {xs.len}")
+    var cs = List[Cell]()
+    (mut cs).push(Cell { n: 1 })
+    cs[0].n = grow_cells(mut cs)
+    print("{cs[0].n} {cs.len}")
+    0
+}

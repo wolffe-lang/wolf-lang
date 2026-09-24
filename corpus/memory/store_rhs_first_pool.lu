@@ -1,0 +1,35 @@
+//! check: run(exit=0, stdout="7 65\n")
+//! phase: run
+//! conforms: mem.model.place.rhs, mem.shared.handle.1
+//!
+//! s182 (B123, ruled B 2026-09-24) — s173's own witness for the
+//! re-mint, promoted from `pool_native.rs`
+//! (`a_place_write_survives_the_pool_moving_under_it`) to a corpus
+//! row now that `[mem.model.place.rhs]` is a sentence. The right-hand
+//! side reserves 64 slots, which moves the payload buffer; under
+//! mint-once the native lane printed `1 65` against checked's `7 65`
+//! with no diagnostic on either (wolf-lang#442 §4). `7 65` on both
+//! wolfgang lanes; lupin 0.1.38 declines `Pool` by name
+//! (`unsupported` at resolve: "handle is not a `Map` key") — a
+//! conservatism row, not a divergence.
+
+struct Node { value: int, next: handle Node }
+
+fn grow(mut p: Pool[Node]) -> int {
+    for i in 0..64 {
+        let h = (mut p).reserve()
+        (mut p).init(h, Node { value: i, next: h })
+    }
+    7
+}
+
+fn main() -> !int {
+    region r: pool(Node) {
+        var p = Pool[Node]()
+        let a = (mut p).reserve()
+        (mut p).init(a, Node { value: 1, next: a })
+        p[a].value = grow(mut p)
+        print("{p[a].value} {p.len()}")
+        0
+    }
+}
