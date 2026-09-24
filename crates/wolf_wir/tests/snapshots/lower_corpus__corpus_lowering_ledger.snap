@@ -314,6 +314,10 @@ memory/move_ok.lu: lowers
 memory/move_use_after.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_arg_element.lu: lowers
 memory/mut_arg_temporary.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_claim_cond_write.lu: lowers
+memory/mut_claim_if_else.lu: lowers
+memory/mut_claim_if_no_else.lu: lowers
+memory/mut_claim_match_arms.lu: lowers
 memory/mut_elem_excl.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_elem_nested_call.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_param_aggregate_store.lu: lowers
