@@ -1,0 +1,41 @@
+//! check: run(exit=0, stdout="2\n")
+//! phase: run
+//! conforms: mem.tier0.excl.1
+//!
+//! s178 (wolf-lang#449) — a `mut` claim dies with the arm that made
+//! it. `[mem.tier0.excl.1]` is stated **at every program point**: at
+//! line 24 the claims both arms made are long over, and the only live
+//! access path to `lg` is the one the call spells. Every release
+//! through 0.2.14 and lupin 0.1.38 run this; 0.2.16 refused it
+//! E1002 on BOTH wolfgang lanes, in the mem tier, ahead of lowering.
+//!
+//! ws37 narrowed it to this shape moving lobo's pin (16 sites), after
+//! bu07 hit it at 12 sites in 7 of 15 boreutils utilities. The
+//! decisive control is next door in `mut_claim_if_no_else.lu`: drop
+//! the `else` and 0.2.16 compiles it — because the extent check
+//! walked BLOCK INDEX order as if it were program order, and
+//! `eval_if` allocates the join block before the else block.
+//!
+//! This is a `run` entry on purpose: the regression's cost is that
+//! the program does not run at all, so the pin has to be the answer,
+//! not the acceptance.
+
+struct Log {
+    lines: List[str],
+}
+
+fn note(mut l: Log, m: str) {
+    (mut l.lines).push(m)
+}
+
+fn main() -> !int {
+    var lg = Log { lines: List[str]() }
+    if true {
+        note(mut lg, "a")
+    } else {
+        note(mut lg, "b")
+    }
+    note(mut lg, "c")
+    print("{lg.lines.len}")
+    0
+}

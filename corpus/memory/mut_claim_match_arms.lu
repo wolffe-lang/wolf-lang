@@ -1,0 +1,45 @@
+//! check: run(exit=0, stdout="4\n")
+//! phase: run
+//! conforms: mem.tier0.excl.1
+//!
+//! s178 (wolf-lang#449) — the same regression through `match`, which
+//! is ws37's second witness and the one that shows the cause is not
+//! special to `if`.
+//!
+//! Every arm claims `ev` `mut` and none of those claims is live at
+//! the join, so `note(mut ev, "done")` is the only live access path
+//! at its own program point (`[mem.tier0.excl.1]`). 0.2.16 refused
+//! it, naming the **first** arm as "a second claim inside the outer
+//! call's extent" — first, not last, which is the tell: `eval_match`
+//! allocates the join block and then every arm block after it, so in
+//! block-index order every arm outranks the join and the whole fan
+//! looked like it came after the call.
+//!
+//! lupin 0.1.38 and wolf 0.2.14 both print `4` (2 from the taken arm
+//! and the later call, plus the arm's own code 2).
+
+enum Kind { A, B, C }
+
+struct Ev {
+    tags: List[str],
+}
+
+fn note(mut e: Ev, m: str) {
+    (mut e.tags).push(m)
+}
+
+fn run(k: Kind) -> int {
+    var ev = Ev { tags: List[str]() }
+    let code = match k {
+        Kind.A => { note(mut ev, "a"); 1 },
+        Kind.B => { note(mut ev, "b"); 2 },
+        Kind.C => { note(mut ev, "c"); 3 },
+    }
+    note(mut ev, "done")
+    code + ev.tags.len
+}
+
+fn main() -> !int {
+    print("{run(Kind.B)}")
+    0
+}

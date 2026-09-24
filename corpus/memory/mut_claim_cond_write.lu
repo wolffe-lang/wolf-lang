@@ -1,0 +1,38 @@
+//! check: run(exit=0, stdout="2\n")
+//! phase: run
+//! conforms: mem.tier0.excl.1
+//!
+//! s178 (wolf-lang#449) — bu07's shape, kept in the corpus under its
+//! own name because it is the one the exit convention prescribes and
+//! therefore the one that will be written again: build output under a
+//! condition, then hand it to the shared writer.
+//!
+//! boreutils hit exactly this at 12 sites in 7 of its 15 utilities
+//! trying to move its pin 0.2.14 → 0.2.16 (`src/bore/bore.lu` ×8,
+//! `src/echo.lu` ×4, `src/true.lu`, `src/false.lu`, `src/uniq.lu`,
+//! `src/wc.lu` ×2, `src/tr.lu` ×2), and worked around every one of
+//! them under this issue's number. The refusal named line 30 — two
+//! lines BEFORE the call it claimed the statement was nested inside,
+//! with the literal `64` as the only argument spelled after `mut
+//! out`. The note's stated reason could not hold, and that is what
+//! made this a regression report rather than a new rule.
+
+fn push_one(mut out: List[byte], n: int) {
+    (mut out).push(n as byte)
+}
+
+fn quoted(s: str) -> int {
+    var out = List[byte]()
+    if s.len > 0 {
+        push_one(mut out, 120)
+    } else {
+        (mut out).push(64 as byte)
+    }
+    push_one(mut out, 64)
+    out.len
+}
+
+fn main() -> !int {
+    print("{quoted("ab")}")
+    0
+}

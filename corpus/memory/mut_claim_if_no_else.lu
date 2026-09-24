@@ -1,0 +1,37 @@
+//! check: run(exit=0, stdout="2\n")
+//! phase: run
+//! conforms: mem.tier0.excl.1
+//!
+//! s178 (wolf-lang#449) — the control that pins WHY
+//! `mut_claim_if_else.lu` regressed, rather than only that it did.
+//!
+//! This is that file one edit away: the `else` arm is gone and
+//! nothing else changed. 0.2.16 compiles this and refused its
+//! sibling, which is the whole diagnosis — an `if` with no `else`
+//! allocates `then_block` then `join`, so the only other block sorts
+//! BELOW the join and the bad walk (which admitted every block with a
+//! higher index than the call's) could not reach it. Add the `else`
+//! and `eval_if` allocates it after the join, above it in index
+//! order, and the walk reached backwards into an arm that had already
+//! finished.
+//!
+//! Keep both files or keep neither: a witness whose control is not in
+//! the tree can go green for the wrong reason.
+
+struct Log {
+    lines: List[str],
+}
+
+fn note(mut l: Log, m: str) {
+    (mut l.lines).push(m)
+}
+
+fn main() -> !int {
+    var lg = Log { lines: List[str]() }
+    if true {
+        note(mut lg, "a")
+    }
+    note(mut lg, "c")
+    print("{lg.lines.len}")
+    0
+}
