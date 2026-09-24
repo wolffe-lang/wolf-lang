@@ -86,6 +86,28 @@ verdict today.
   `corpus/memory/elem_move_one_place.lu` and asserted on both sides by
   `element_move_conservatism_lanes.rs`.
 
+**A `Scope` handle passed as a parameter no longer deadlocks the native
+lane (#431, path A).** `fn fan_out(s: Scope, ch: channel[int]) {
+s.spawn(fn() { ch.send(1) }) }`, called from `scope work { fan_out(work,
+ch) }`, hung the Cranelift tier on every platform in the shipping build
+— the published 0.2.16 linux archive (sha256 `84e30c05…`) included —
+because the task's capture record lived in `fan_out`'s frame and
+`fan_out` returns before the scope joins in `main`. The runtime now
+copies that record into the scope at the spawn seam: one additive
+symbol, `__wolf_rt_scope_env_copy(scope, env, len) -> env`, whose copy
+the scope frees after its join. Lowering calls it only for a spawn
+through a handle the spawning function did not open; a spawn into a
+scope the function opened keeps its frame slot, a spawn under a loop
+keeps s86's arena, and the frozen five-parameter
+`__wolf_rt_scope_spawn` does not move. No lowering snapshot in the
+corpus moved. On kasumi, release profile: the witness answers `1` in
+under a second on `wolf run`, `conform-run --native` and `--native
+--release`, where the same tree without the fix is killed at the cap;
+s174's gate (`crates/wolf_driver/tests/scope_handle_param.rs`) is green
+unedited. `[conc.task.scope]` is implemented as written; the spec does
+not move. A task spawned **in a loop** through a handle the function
+did not open is still refused by name at lowering.
+
 ## 0.2.16 — 2026-09-22
 
 THE POINT RELEASE. The published 0.2.15 ships three silent wrong
