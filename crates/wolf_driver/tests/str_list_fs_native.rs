@@ -700,6 +700,9 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_pool_capacity",
         "__wolf_rt_pool_clear",
         "__wolf_rt_pool_next",
+        // s179 (#431): a task env copied into a scope the spawning
+        // frame did not open.
+        "__wolf_rt_scope_env_copy",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -710,7 +713,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        160,
+        161,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

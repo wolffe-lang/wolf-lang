@@ -111,6 +111,7 @@ fn no_spawn_binary_has_no_scheduler_symbols() {
         // of them.
         "__wolf_rt_task_killed",
         "__wolf_rt_proc_spawn_outcome",
+        "__wolf_rt_scope_env_copy",
         "__wolf_rt_chan_new",
         "__wolf_rt_chan_send",
         "__wolf_rt_chan_recv",
