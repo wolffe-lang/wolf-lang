@@ -22,6 +22,7 @@ mod doctest_cmd;
 mod help;
 mod pkg_cmd;
 mod profile_cmd;
+mod record_files;
 mod script_cmd;
 mod test_cmd;
 
@@ -3796,7 +3797,7 @@ fn conform_run(args: &[String]) {
         // Every line carries the run's index→path table, so span file
         // indices are resolvable by consumers (the wolf-lsp harness's
         // secondary-file-table request; additive within schema v1).
-        Box::new(JsonReporter::with_files(files_table))
+        Box::new(JsonReporter::with_files(files_table.clone()))
     } else {
         Box::new(HumanReporter::new(&sources, RenderOptions::default()))
     };
@@ -3809,14 +3810,25 @@ fn conform_run(args: &[String]) {
     }
 
     // The observation record — spec/06-minimal diagnostics, never more.
+    // `[proto.record.diag]`'s file index (s181, #437): present exactly
+    // when some span lies outside the entry file, so a single-file
+    // record is unchanged.
+    let diag_files: Vec<usize> = diagnostics.iter().map(|d| d.span().file.index()).collect();
+    let file_index =
+        record_files::file_index(Path::new(&file), &files_table, &diag_files, std_root.as_deref());
     let minimal: Vec<serde_json::Value> = diagnostics
         .iter()
-        .map(|d| {
-            serde_json::json!({
+        .enumerate()
+        .map(|(i, d)| {
+            let mut m = serde_json::json!({
                 "code": d.code.as_str(),
                 "span": [d.span().lo, d.span().hi],
                 "severity": d.severity.as_str(),
-            })
+            });
+            if let Some(ix) = &file_index {
+                m["file"] = serde_json::json!(ix.per_diag[i]);
+            }
+            m
         })
         .collect();
     // `--checked` run observations: stdout hash/inline (required for
@@ -3866,6 +3878,9 @@ fn conform_run(args: &[String]) {
         "stdout_sha256": stdout_sha,
         "stdout_inline": stdout_inline,
     });
+    if let Some(ix) = file_index {
+        record["files"] = serde_json::json!(ix.files);
+    }
     for (k, v) in x_ext {
         record[k] = v;
     }
