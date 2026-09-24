@@ -2,6 +2,47 @@
 
 ## Unreleased
 
+**0.2.16's new exclusivity leg refused programs 0.2.14 and lupin run
+(#449).** The `mut`-claim extent check that landed with "a container
+element is a place" reported a claim that is **not in the call's
+argument list** — it named a statement *preceding* the call as "inside
+the outer call's extent" — and it refused a shape the exit convention
+prescribes. boreutils hit it at **12 sites in 7 of its 15 utilities**
+and lobo at **16 sites in 4 files** moving their pins from 0.2.14; both
+shipped workarounds under this number rather than stay off 0.2.16.
+
+The witness, `exit(0)` printing `2` on 0.2.14 and on lupin 0.1.38,
+`fail(E1002)` at `phase_reached: mem` on 0.2.16 (both wolfgang lanes —
+it is ahead of lowering), reproduced on the published linux x86-64
+archives by digest:
+
+```wolf
+fn note(mut l: Log, m: str) { (mut l.lines).push(m) }
+// ...
+if true { note(mut lg, "a") } else { note(mut lg, "b") }
+note(mut lg, "c")                       // E1002 at 0.2.16, naming the `else` arm
+```
+
+**The cause was not the rule, it was the walk.** The check bounded the
+extent by BLOCK INDEX order, admitting every block numbered above the
+call's — but block ids are handed out in allocation order, and
+`eval_if` mints the join block *before* the else arm while `eval_match`
+mints it before every arm. So the arms outrank the join they flow into,
+and the walk read backwards into arms that had already finished. That
+is why dropping the `else` compiled, why the `match` report named the
+**first** arm, and why moving the `mut` argument last made the
+diagnostic vanish. `[mem.tier0.excl.1]` says "at every program point",
+and an arm's claim is not live at the join; the clause was right and the
+check was wrong, so no spec text moves.
+
+The extent is now the call's argument evaluation and nothing else: the
+mark carries the block count, and only blocks minted since it count as
+new. **s168's refusals are unweakened** — `take2(mut r.a, wipe(mut r))`
+and `take2(mut xs[0], grow(mut xs))` are still E1002 on both lanes, as
+is a branch spelled *inside* the argument list whose arms claim the
+place, whose blocks really are minted after the mark. Both downstreams'
+workarounds can be reverted under #449.
+
 ## 0.2.16 — 2026-09-22
 
 THE POINT RELEASE. The published 0.2.15 ships three silent wrong
