@@ -440,6 +440,44 @@ fn assignment_and_compound_assignment_statements() {
     assert_eq!(compound.value().expect("value").kind, SyntaxKind::CastExpr);
 }
 
+/// wolf-lang#438 (`[gram.expr.assign]`): a plain `=` whose place is a
+/// container element may spell `take` on its right-hand side — the one
+/// moded store. The mode is a token of the statement, not an
+/// expression: the value is the bare operand.
+#[test]
+fn an_index_store_admits_take() {
+    let src = "fn f() { xs[0] = take v\n    m[\"k\"] = take v\n    a.b[i] = take (v)\n    xs[0] = v\n}\n";
+    let root = clean(src);
+    let mut assigns = Vec::new();
+    find(&root, SyntaxKind::AssignStmt, &mut assigns);
+    assert_eq!(assigns.len(), 4);
+    let takes: Vec<bool> = assigns
+        .iter()
+        .map(|a| AssignStmt::cast(a).expect("assign").takes())
+        .collect();
+    assert_eq!(takes, [true, true, true, false]);
+    let first_assign = AssignStmt::cast(assigns[0]).expect("assign");
+    assert_eq!(first_assign.place().expect("place").kind, SyntaxKind::BracketApply);
+    assert_eq!(first_assign.value().expect("value").kind, SyntaxKind::PathExpr);
+    assert_eq!(text(src, first_assign.value().expect("value").span), "v");
+}
+
+/// Everywhere else in an assignment `take` is still no expression, and
+/// fails to parse exactly as before (E0201): a whole binding, a field,
+/// a compound operator, a field of an element.
+#[test]
+fn take_outside_an_index_store_is_e0201() {
+    for stmt in [
+        "x = take v",
+        "s.f = take v",
+        "xs[0] += take v",
+        "xs[0].f = take v",
+    ] {
+        let codes = util::codes(&format!("fn f() {{\n    {stmt}\n}}\n"));
+        assert_eq!(codes, ["E0201"], "{stmt}");
+    }
+}
+
 #[test]
 fn assignment_in_expression_position_is_e0208() {
     let codes = util::codes("fn f() { let x = (y = 2)\n}\n");

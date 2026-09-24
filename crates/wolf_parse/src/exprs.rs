@@ -436,7 +436,7 @@ fn expr_stmt(p: &mut Parser<'_>, m: Marker, prefixed: bool) {
         stmt_head: true,
         ..Ctx::default()
     };
-    if expr_bp(p, 0, ctx).is_none() {
+    let Some(head) = expr_bp(p, 0, ctx) else {
         let msg = if prefixed {
             "expected a statement after the attributes"
         } else {
@@ -453,9 +453,22 @@ fn expr_stmt(p: &mut Parser<'_>, m: Marker, prefixed: bool) {
         }
         m.complete(p, SyntaxKind::ErrorNode);
         return;
-    }
+    };
     if is_assign_op(p.current()) {
+        let plain = p.at_punct(Punct::Eq);
         p.bump(); // the assignment operator
+        // wolf-lang#438 (`[gram.expr.assign]`): the one moded store.
+        // A plain `=` whose place is a container element may spell
+        // `take` on its right-hand side — `xs[i] = take v` moves, the
+        // unspelled store copies. Everywhere else in an assignment
+        // `take` is still no expression and fails exactly as before
+        // (E0201); sema decides whether the bracket is a container.
+        if plain
+            && head.kind() == SyntaxKind::BracketApply
+            && matches!(p.current(), TokenKind::Kw(Keyword::Take))
+        {
+            p.bump();
+        }
         expr_required_ctx(p, Ctx::default());
         stmt_terminator(p);
         m.complete(p, SyntaxKind::AssignStmt);
