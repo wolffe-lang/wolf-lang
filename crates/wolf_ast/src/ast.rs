@@ -966,7 +966,8 @@ impl<'a> ExprStmt<'a> {
 }
 
 ast_node!(
-    /// `place assign_op expr TERM` `[gram.expr.assign]`.
+    /// `place assign_op expr TERM`, or `index_place '=' 'take' expr
+    /// TERM` `[gram.expr.assign]`.
     AssignStmt
 );
 
@@ -998,6 +999,15 @@ impl<'a> AssignStmt<'a> {
 
     pub fn value(self) -> Option<&'a GreenNode> {
         nth_expr(self.0, 1)
+    }
+
+    /// `xs[i] = take v` — the one moded store (wolf-lang#438,
+    /// `[gram.expr.assign]`): the parser admits `take` only after a
+    /// plain `=` whose place is a bracket, so this is `true` for
+    /// nothing else. Unspelled, the store COPIES a non-`Copy` value
+    /// (`[mem.region.edge.elem]`); spelled, it moves it.
+    pub fn takes(self) -> bool {
+        self.0.child_token(SyntaxKind::TakeKw).is_some()
     }
 }
 
