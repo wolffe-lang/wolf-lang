@@ -90,7 +90,10 @@ fn a_file_index_validates_and_is_compared_by_path() {
     // same code and span in the ENTRY is a different observation.
     let mut entry_only = r.clone();
     entry_only.as_object_mut().unwrap().remove("files");
-    entry_only["diagnostics"][0].as_object_mut().unwrap().remove("file");
+    entry_only["diagnostics"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("file");
     assert!(xtask::protocol::validate_record(&entry_only).is_ok());
     assert!(
         xtask::protocol::compare(&r, &entry_only, false).is_some(),
@@ -112,16 +115,31 @@ fn a_file_index_validates_and_is_compared_by_path() {
     // All-or-nothing.
     let mut orphan = entry_only.clone();
     orphan["diagnostics"][0]["file"] = serde_json::json!(1);
-    assert!(xtask::protocol::validate_record(&orphan).is_err(), "`file` without `files`");
+    assert!(
+        xtask::protocol::validate_record(&orphan).is_err(),
+        "`file` without `files`"
+    );
     let mut missing = r.clone();
-    missing["diagnostics"][0].as_object_mut().unwrap().remove("file");
-    assert!(xtask::protocol::validate_record(&missing).is_err(), "`files` without `file`");
+    missing["diagnostics"][0]
+        .as_object_mut()
+        .unwrap()
+        .remove("file");
+    assert!(
+        xtask::protocol::validate_record(&missing).is_err(),
+        "`files` without `file`"
+    );
     let mut past = r.clone();
     past["diagnostics"][0]["file"] = serde_json::json!(2);
-    assert!(xtask::protocol::validate_record(&past).is_err(), "index past `files`");
+    assert!(
+        xtask::protocol::validate_record(&past).is_err(),
+        "index past `files`"
+    );
     let mut empty = r.clone();
     empty["files"] = serde_json::json!([]);
-    assert!(xtask::protocol::validate_record(&empty).is_err(), "empty `files`");
+    assert!(
+        xtask::protocol::validate_record(&empty).is_err(),
+        "empty `files`"
+    );
 }
 
 #[test]

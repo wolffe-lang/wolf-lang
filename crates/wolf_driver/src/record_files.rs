@@ -133,7 +133,10 @@ mod tests {
     #[test]
     fn every_span_in_the_entry_means_no_index() {
         let loaded = s(&["./main.lu", "./geometry/shapes.lu"]);
-        assert_eq!(file_index(Path::new("./main.lu"), &loaded, &[0, 0], None), None);
+        assert_eq!(
+            file_index(Path::new("./main.lu"), &loaded, &[0, 0], None),
+            None
+        );
         assert_eq!(file_index(Path::new("./main.lu"), &loaded, &[], None), None);
     }
 
@@ -141,7 +144,10 @@ mod tests {
     fn a_sibling_span_indexes_package_relative_paths() {
         let loaded = s(&["./main.lu", "./geometry/shapes.lu", "./other/o.lu"]);
         let got = file_index(Path::new("./main.lu"), &loaded, &[2, 0, 1, 2], None).unwrap();
-        assert_eq!(got.files, s(&["main.lu", "other/o.lu", "geometry/shapes.lu"]));
+        assert_eq!(
+            got.files,
+            s(&["main.lu", "other/o.lu", "geometry/shapes.lu"])
+        );
         assert_eq!(got.per_diag, vec![1, 0, 2, 1]);
     }
 

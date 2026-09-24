@@ -91,10 +91,15 @@ pub fn validate_record(v: &serde_json::Value) -> Result<Verdict, String> {
                 .ok_or("`files` must be a non-empty array of paths when present")?;
             for d in diags {
                 let Some(i) = d.get("file").and_then(|i| i.as_u64()) else {
-                    return Err("with `files` present, every diagnostic carries an integer `file`".into());
+                    return Err(
+                        "with `files` present, every diagnostic carries an integer `file`".into(),
+                    );
                 };
                 if i as usize >= fs.len() {
-                    return Err(format!("diagnostic `file` {i} is past `files` ({})", fs.len()));
+                    return Err(format!(
+                        "diagnostic `file` {i} is past `files` ({})",
+                        fs.len()
+                    ));
                 }
             }
         }

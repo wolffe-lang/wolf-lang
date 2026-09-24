@@ -3814,8 +3814,12 @@ fn conform_run(args: &[String]) {
     // when some span lies outside the entry file, so a single-file
     // record is unchanged.
     let diag_files: Vec<usize> = diagnostics.iter().map(|d| d.span().file.index()).collect();
-    let file_index =
-        record_files::file_index(Path::new(&file), &files_table, &diag_files, std_root.as_deref());
+    let file_index = record_files::file_index(
+        Path::new(&file),
+        &files_table,
+        &diag_files,
+        std_root.as_deref(),
+    );
     let minimal: Vec<serde_json::Value> = diagnostics
         .iter()
         .enumerate()

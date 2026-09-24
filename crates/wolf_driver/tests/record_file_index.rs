@@ -264,7 +264,11 @@ fn a_single_file_record_carries_neither_key() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let entry = dir.join("main.lu");
-    std::fs::write(&entry, "fn main() -> !int {\n    let s: str = 1\n    0\n}\n").unwrap();
+    std::fs::write(
+        &entry,
+        "fn main() -> !int {\n    let s: str = 1\n    0\n}\n",
+    )
+    .unwrap();
     let rec = record(&entry, "--checked").unwrap();
     assert!(
         rec["verdict"].as_str().unwrap_or("").starts_with("fail("),
@@ -298,11 +302,15 @@ fn a_multi_file_package_with_every_span_in_the_entry_carries_neither_key() {
 #[test]
 fn every_diagnostic_carries_file_once_the_keys_are_present() {
     let rec = record(&corpus("resolve/cycle/main.lu"), "--checked").unwrap();
-    let files = rec["files"].as_array().expect("cycle's spans leave the entry");
+    let files = rec["files"]
+        .as_array()
+        .expect("cycle's spans leave the entry");
     assert_eq!(files[0], "main.lu", "{rec}");
     let mut seen = vec![0u64];
     for d in rec["diagnostics"].as_array().unwrap() {
-        let i = d["file"].as_u64().unwrap_or_else(|| panic!("no `file` on {d} in {rec}"));
+        let i = d["file"]
+            .as_u64()
+            .unwrap_or_else(|| panic!("no `file` on {d} in {rec}"));
         if !seen.contains(&i) {
             assert_eq!(i, seen.len() as u64, "indices appear in order: {rec}");
             seen.push(i);
