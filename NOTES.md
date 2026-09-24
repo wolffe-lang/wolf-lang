@@ -117,3 +117,105 @@ block after `from_stmt` and is still caught.
 - The change touches **one** function's scan bound and the `mark` tuple
   it reads. If the fix needs a second function, the mechanism above is
   wrong.
+
+## §4 — evidence index
+
+Every row cites a run id or a committed path. Kasumi paths are under
+`~/lanes/s178/` and the logs are `evidence/red-at-trunk.log` and
+`evidence/green-at-head.log`.
+
+### The red at trunk, per witness
+
+Run: `cargo test --test mut_claim_extent` at `39a9fdf4` — trunk
+`93a5fe50` plus the witnesses, `crates/wolf_mem/src/lower.rs`
+**untouched** — on kasumi, debug profile, `LUPIN` set to the published
+0.1.38 and `WOLF_PAIRING_REQUIRE_SIBLING=1`. Log:
+`~/lanes/s178/evidence/red-at-trunk.log`. Result: **3 failed, 5 passed.**
+
+| witness | at trunk `39a9fdf4` | at head |
+|---|---|---|
+| `both_arms_of_an_if_else_may_claim_the_same_place` | **FAILED** — checked `fail(E1002)`, wanted `exit(0)` | ok |
+| `every_arm_of_a_match_may_claim_the_same_place` | **FAILED** — checked `fail(E1002)`, wanted `exit(0)` | ok |
+| `a_conditional_write_then_the_shared_writer_runs` | **FAILED** — checked `fail(E1002)`, wanted `exit(0)` | ok |
+| `the_same_if_without_an_else_still_runs` (control) | ok | ok |
+| `a_claim_inside_a_loop_body_does_not_outlive_the_loop` | ok | ok |
+| the three s168 guards | ok | ok |
+
+The corpus gate at the same tree named the same three and not the
+control: `corpus/memory/mut_claim_{cond_write,if_else,match_arms}.lu:
+header claims phase 'run' but deepest passing phase is 'typecheck'`.
+`mut_claim_if_no_else.lu` is absent from that list.
+
+### The function named in §3, and whether the prediction held
+
+Named before the edit, in `6b77f4e0`:
+`check_nested_claims_after_mut`, `crates/wolf_mem/src/lower.rs:1759`,
+the scan bound at lines 1766–1772.
+
+**Held, on the mechanism and on the guard.** The contract's two offered
+hypotheses — a claim set not popped at the join, or keyed on the place
+rather than the call — were both wrong, as predicted: there is no
+stored claim set. The cause is block-index order standing in for
+program order. The fix is the one function and the `Mark` the mark
+tuple became; 3 of 3 witnesses went red-to-green; s168's nine cases
+stayed 9/9 with both refusals refusing.
+
+**Wrong in one place, published rather than quietly dropped.** I added
+a fifth case expecting the mechanism to predict a leak out of a loop
+body. It does not: `eval_while` mints `head`, `body`, `exit` and the
+code after the loop lowers in `exit`, the highest of the three, so the
+body never outranked the cursor. `a_claim_inside_a_loop_body_does_not_
+outlive_the_loop` **passed at trunk with the bug in place** and is kept
+as a non-regression pin, with its comment corrected to say so.
+
+### The green at head
+
+`~/lanes/s178/evidence/green-at-head.log`, kasumi, both profiles, with
+`libwolf_rt.a` built in each:
+
+| | debug | release |
+|---|---|---|
+| `cargo test --workspace` | exit 0, **2400 passed, 0 failing binaries** | exit 0, **2398 passed, 0 failing binaries** |
+| `mut_claim_extent` (this lane's gate) | 8/8 | 8/8 |
+| `mut_element_place` (s168's gate) | **9/9** | **9/9** |
+
+`cargo xtask corpus`: **694 files, 0 bad**. `cargo xtask lane-coverage`:
+floors held.
+
+One failure on the way was not this change: `conc_native::wolf_test_
+schedules_explores_a_native_body` failed under `--release` because
+`target/release/libwolf_rt.a` had never been built in this lane
+directory (`libwolf_rt.a not found next to the wolf binary`). After
+`cargo build --release -p wolf_rt`, 18/18. It is an artifact of running
+the release suite in a fresh tree, not of #449.
+
+### Coverage, before and after
+
+`cargo xtask lane-coverage`, trunk `93a5fe50` against head:
+
+| | trunk | head | Δ |
+|---|---|---|---|
+| non-member corpus entries | 646 | 650 | +4 |
+| checked executes at run | 369 | 373 | +4 |
+| native executes at run | 422 | 426 | +4 |
+| release executes at run | 421 | 425 | +4 |
+| UNION | 427 of 646 | 431 of 650 | +4 |
+| all three lanes | 364 | 368 | +4 |
+| residue `rejected` | 205 | 205 | **0** |
+| residue `refused@mem` | 5 | 5 | **0** |
+| residue `refused@resolve` | 7 | 7 | **0** |
+| residue `refused@wir` | 1 | 1 | **0** |
+| residue `forward` | 1 | 1 | **0** |
+
+**Every moved entry, named:** `corpus/memory/mut_claim_if_else.lu`,
+`mut_claim_if_no_else.lu`, `mut_claim_match_arms.lu` and
+`mut_claim_cond_write.lu`. Each is new and each moves +1 on checked,
+native, release, union and all-three. **No pre-existing entry changed
+bucket** — nothing left `rejected`, nothing left a residue. That is the
+statement that matters for a fix whose risk is widening an acceptance:
+the fix accepted exactly the four programs it was written to accept and
+nothing else in 646 files.
+
+The `wolf_wir` lowering ledger records the same independently: its
+snapshot gained exactly four lines, all `lowers`
+(`crates/wolf_wir/tests/snapshots/lower_corpus__corpus_lowering_ledger.snap`).
