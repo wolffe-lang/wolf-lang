@@ -43,6 +43,38 @@ is a branch spelled *inside* the argument list whose arms claim the
 place, whose blocks really are minted after the mark. Both downstreams'
 workarounds can be reverted under #449.
 
+### The index store follows `push` (s180, #438)
+
+**`xs[i] = v` and `m[k] = v` copy a non-`Copy` value now, and
+`xs[i] = take v` moves it** — `[mem.region.edge.elem]` and
+`[gram.expr.assign]` as s182 wrote them, on the checked, native and
+release lanes. A plain store through a `List`, `Map` or `Pool` index
+whose right-hand side is a place (a binding, a field, an element)
+leaves that place live: the static tier reads it as `xs[i] = copy v`,
+the checked machine and the native lowering deep-copy it exactly as a
+plain `push` does. A temporary is stored as it is — it has no other
+owner. `Copy` values and `str` are free, as before.
+
+- **Accepted now:** a use of `v` after a plain store (was E1001 on both
+  wolfgang lanes) and a `read` parameter stored plainly (was E1002
+  under #366 — a copy is the function's own value, not a lend).
+  `corpus/memory/index_store_copies_{list,map}.lu`,
+  `index_store_read_param.lu`.
+- **Spelled:** `xs[i] = take v` / `m[k] = take v` parse (were E0201)
+  and move; a later use is E1001 with the `copy v` fix-it.
+  `m[k] = take v` on a `read` `v` is E1014, `push(take v)`'s answer.
+  `take` anywhere else in an assignment is E0201 exactly as before.
+  `corpus/memory/index_store_take_{list,map,read_param}.lu`.
+- **No printed byte of a program accepted before changes**; no corpus
+  row changes verdict. The cost is one deep copy per plain store of a
+  place that reaches the heap — `take` is the old handover, spelled.
+  A raw-pointer index store is unchanged. The operand order of an
+  index store (#452) is untouched on every lane.
+- `index_store_lanes.rs` asserts every case on checked, native, release
+  and lupin. lupin 0.1.38 predates the mirror (is55): the gate pins
+  its measured 0.1.38 answers and demands the ruled ones from any other
+  version.
+
 ### The rulings' prose (s182)
 
 Four clauses landed for rulings the maintainer took on 2026-09-24. The
