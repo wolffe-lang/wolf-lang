@@ -43,6 +43,49 @@ is a branch spelled *inside* the argument list whose arms claim the
 place, whose blocks really are minted after the mark. Both downstreams'
 workarounds can be reverted under #449.
 
+### The rulings' prose (s182)
+
+Four clauses landed for rulings the maintainer took on 2026-09-24. The
+machines follow in this wave, and none of the four moves a corpus row's
+verdict today.
+
+- **`[gram.expr.assign]` and `[mem.region.edge.elem]` — the index store
+  follows `push` (#438).** `xs[i] = v` and `m[k] = v` COPY a non-`Copy`
+  value in and leave `v` live; `xs[i] = take v` MOVES it, the one store
+  position an assignment admits a mode in. Accepts programs refused
+  today (a use of `v` after a plain store; a `read` parameter stored
+  plainly), changes no printed byte, and costs one deep copy per plain
+  store of a value that reaches the heap. Not yet built: the ruled
+  witnesses are parked in the planning repo
+  (`sprints/compiler/88-the-rulings-prose/witnesses/`) for s180 on the
+  wolfgang lanes and is55 on lupin; `corpus/memory/index_store_copy_elem.lu`
+  pins the `Copy` half, which holds on every machine already.
+- **`[mem.model.place.rhs]` — a store evaluates its right-hand side
+  first, then mints its place** (B123, s173's proposal 1, path B). Pins
+  what all three machines already do:
+  `corpus/memory/store_rhs_first_{list,map,pool}.lu`, asserted across
+  the lanes by `store_rhs_first_lanes.rs`. The order of the place's
+  own operands against the right-hand side is NOT ruled by it, and the
+  machines differ there (#452: for `xs[idx()] = val()` the checked
+  machine prints `val idx`, native, release and lupin `idx val`).
+- **`[os.fs.path.domain]` — every path the host allows** (#386, s175's
+  draft as written). Confinement is a scope decline by name, resolved
+  not lexical, never a row. wolf serves the whole domain on both tiers
+  already; lupin 0.1.38's lexical refusal of `sub/../x` and its
+  `not_found` row through any symlinked directory are is55's. The four
+  ruled witnesses and the symlink control are parked beside #438's,
+  because a corpus witness names a relative path with no `..`.
+- **`move xs[0]` on a `List[int]` refuses a later read of `xs[1]`
+  (#446, kept as it is — option A).** A consequence of #444's fix in
+  0.2.16: `move` records the move for every type now, and a container's
+  elements are ONE place on the compiler (`Proj::Opaque`; element
+  granularity is a declared non-target), so the refusal 0.2.14 already
+  gave a non-`Copy` element reaches `Copy` ones. lupin models elements
+  one by one and runs the program: a documented conservatism
+  divergence, the class of `[mem.tier0.mode.read]`'s rows, pinned by
+  `corpus/memory/elem_move_one_place.lu` and asserted on both sides by
+  `element_move_conservatism_lanes.rs`.
+
 ## 0.2.16 — 2026-09-22
 
 THE POINT RELEASE. The published 0.2.15 ships three silent wrong
