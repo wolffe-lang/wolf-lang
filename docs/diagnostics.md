@@ -419,7 +419,7 @@ sharing a directory (scratch work, exercises), mark each with
 `//! member: false`: a standalone entry is its own compilation root
 and never merges with its siblings (D59).
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dup_bare__clash.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dup_bare__other.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dupdef__main.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0302_duplicate.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dup_bare__clash.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dup_bare__other.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__dupdef__main.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__resolve__sibling_diag__main.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0302_duplicate.snap
 
 ## E0303 — modules import each other in a cycle
 
