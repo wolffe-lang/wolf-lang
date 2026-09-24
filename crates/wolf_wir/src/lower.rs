@@ -3030,6 +3030,18 @@ struct ParShim {
     fallible: bool,
 }
 
+/// Where a spawn's capture record lives — `task_env_arena`'s answer.
+#[derive(Clone, Copy)]
+enum TaskEnvHome {
+    /// A slot in the spawning frame, which joins the scope.
+    Frame,
+    /// The task scope's arena (a spawn under a loop, s86).
+    Arena((RegionId, Value)),
+    /// A slot, copied into the scope at the seam by
+    /// `__wolf_rt_scope_env_copy` (s179, wolf-lang#431).
+    Scope,
+}
+
 /// What a queued body IS (s105): a spawn task (the s73/s86 shape —
 /// body fn + runtime entry shim), or a closure VALUE's entry fn (one
 /// function: `(env?, params…) -> ret`, captures loaded from the env
@@ -5572,8 +5584,38 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .get(&e.span)
             .map(|cs| cs.iter().map(|c| (c.name.clone(), c.ty)).collect())
             .unwrap_or_default();
-        let arena = self.task_env_arena(recv, e.span)?;
+        let home = self.task_env_arena(recv, e.span)?;
+        let arena = match home {
+            TaskEnvHome::Arena(a) => Some(a),
+            TaskEnvHome::Frame | TaskEnvHome::Scope => None,
+        };
         let (env, env_region, layout) = self.pack_task_env(&caps, arena, e.span, false)?;
+        // s179 (#431): a record packed in a frame that does not join
+        // the scope is copied INTO the scope at the seam, and the copy
+        // is what the task reads — the frame may die before the join.
+        let env = match home {
+            TaskEnvHome::Scope => {
+                // The packed size, as `pack_task_env` summed it: the
+                // last field's offset plus its 8-rounded flat size.
+                let size = match (layout.0.last(), layout.1.last()) {
+                    (Some(&t), Some(&off)) => {
+                        off + flat_size(&self.b.module.types, t)
+                            .unwrap_or(0)
+                            .next_multiple_of(8)
+                    }
+                    _ => 0,
+                };
+                let n = self.b.iconst(types::I64, size.max(8) as i64);
+                self.call_with_slot_token(
+                    "__wolf_rt_scope_env_copy",
+                    &[scope_h, env, n],
+                    env_region,
+                    Some(types::PTR),
+                )
+                .expect("the env copy")
+            }
+            TaskEnvHome::Frame | TaskEnvHome::Arena(_) => env,
+        };
         let task_no = self.pending_tasks.len();
         let base = self.b.func.name.clone();
         let body_name = format!("{base}.task{task_no}");
@@ -5982,17 +6024,20 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         Ok(Flow::Val(self.b.ins_call_ind(entry, sig, &cargs)))
     }
 
-    /// Where THIS spawn's capture record must live (s86).
+    /// Where THIS spawn's capture record must live (s86, s179).
     ///
-    /// `Ok(None)` — a frame slot is sound: the spawn site is reached at
-    /// most once before the scope joins, and the join dominates the
-    /// frame's death. `Ok(Some(arena))` — the site sits under a loop
-    /// opened after its scope, so every reach needs its own record.
+    /// `Frame` — a frame slot is sound: this function opened the scope,
+    /// the spawn site is reached at most once before the scope joins,
+    /// and the join dominates the frame's death. `Arena` — the site
+    /// sits under a loop opened after its scope, so every reach needs
+    /// its own record. `Scope` — the handle was not opened here (a
+    /// parameter, a capture), so nothing says this frame outlives the
+    /// join: packed in a slot, copied into the scope by the runtime.
     /// `Err` — it sits under such a loop and the owning scope has no
     /// arena, which happens only when the receiver is not the scope
     /// frame we are standing in (a spawn into an ENCLOSING scope from
     /// inside a nested one). Refused by name; never guessed.
-    fn task_env_arena(&self, recv: &'t GreenNode, span: Span) -> R<Option<(RegionId, Value)>> {
+    fn task_env_arena(&self, recv: &'t GreenNode, span: Span) -> R<TaskEnvHome> {
         // By NAME, not by handle value: inside a loop the handle reads
         // back as a block parameter, so `Value` identity is not the
         // scope's identity — the binding is.
@@ -6007,10 +6052,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         let Some(owner) = owner else {
             // The handle came from somewhere other than a named scope
-            // frame in this function (a scope value passed in, say).
-            // Sound only outside a loop.
+            // frame in this function (a scope value passed in, say —
+            // D16's handle-as-parameter). This frame need not outlive
+            // the join, so the record cannot stay in it: the runtime
+            // copies it into the scope at the seam (s179, #431).
             return if self.loops.is_empty() {
-                Ok(None)
+                Ok(TaskEnvHome::Scope)
             } else {
                 Err(refuse(
                     "a task spawned in a loop through a scope handle this function did not open",
@@ -6019,10 +6066,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             };
         };
         if self.loops.len() <= owner.loops_at_open {
-            return Ok(None);
+            return Ok(TaskEnvHome::Frame);
         }
         match owner.task_env {
-            Some(a) => Ok(Some(a)),
+            Some(a) => Ok(TaskEnvHome::Arena(a)),
             None => Err(refuse(
                 "a task spawned in a loop into an enclosing scope (its arena is not in scope)",
                 span,
