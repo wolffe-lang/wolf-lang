@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 160] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 161] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -300,6 +300,9 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 160] = [
     // token params erase — counts are machine params.
     ("__wolf_rt_scope_new", 2, true),
     ("__wolf_rt_scope_spawn", 5, false),
+    // s179 (#431): a task env copied into its scope when the spawning
+    // frame did not open the scope (scope, env, len) -> the copy.
+    ("__wolf_rt_scope_env_copy", 3, true),
     ("__wolf_rt_scope_join_free", 1, true),
     // s166: `xs.par(f)` — `[conc.task.par]`'s chunked map (list, shim,
     // record, result element size, out slot) -> failure tag.
