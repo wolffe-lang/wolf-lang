@@ -108,6 +108,16 @@ unedited. `[conc.task.scope]` is implemented as written; the spec does
 not move. A task spawned **in a loop** through a handle the function
 did not open is still refused by name at lowering.
 
+*Carried from s174 (written for the 0.2.16 cycle, landing here because 0.2.16 shipped without it):*
+
+**#431 is not windows-only** (s174). The same program — a `Scope`
+handle passed as a parameter — deadlocks the **Cranelift native tier
+on linux x86-64**, measured on kasumi against trunk `2f8deb7f` under
+`cargo xtask dist`, the build that ships: rc 124 at 60 s, 3/3, on both
+`conform-run --native --json` and `wolf run`. The LLVM release tier
+answers `exit(0)` / `1` from the same binary, and the checked lane is
+an honest `unsupported` (C1 deferred).
+
 ## 0.2.16 — 2026-09-22
 
 THE POINT RELEASE. The published 0.2.15 ships three silent wrong
@@ -429,14 +439,6 @@ exercised deliberately, with a planted non-terminating entry, before
 the gate was trusted.
 
 ### The linux native lane deadlocks too, and no `cargo test` could see it
-
-**#431 is not windows-only** (s174). The same program — a `Scope`
-handle passed as a parameter — deadlocks the **Cranelift native tier
-on linux x86-64**, measured on kasumi against trunk `2f8deb7f` under
-`cargo xtask dist`, the build that ships: rc 124 at 60 s, 3/3, on both
-`conform-run --native --json` and `wolf run`. The LLVM release tier
-answers `exit(0)` / `1` from the same binary, and the checked lane is
-an honest `unsupported` (C1 deferred).
 
 **Why every gate we had was green on it.** The defect is a dangling
 stack slot, so whether it is *observable* depends on whether anything
