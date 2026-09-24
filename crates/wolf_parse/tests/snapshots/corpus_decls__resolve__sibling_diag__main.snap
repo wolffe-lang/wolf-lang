@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 499..512 path=geometry
+FnDecl 513..580 name=main body=Block

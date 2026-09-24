@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 41..90 name=area pub body=Block
+FnDecl 120..171 name=perimeter pub body=Block
+FnDecl 238..280 name=area pub body=Block
