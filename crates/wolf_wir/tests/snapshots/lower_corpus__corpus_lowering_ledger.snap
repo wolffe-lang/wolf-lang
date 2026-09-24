@@ -284,11 +284,13 @@ memory/destructure_bind.lu: lowers
 memory/destructure_partial_live.lu: lowers
 memory/destructure_partial_move.lu: not mem-clean (pre-wir rungs own it)
 memory/div_zero.lu: lowers
+memory/elem_move_one_place.lu: not mem-clean (pre-wir rungs own it)
 memory/excl_disjoint_ok.lu: lowers
 memory/excl_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/exclusivity.lu: lowers
 memory/foreign_root_aliasing.lu: lowers
 memory/handle_stale.lu: lowers
+memory/index_store_copy_elem.lu: lowers
 memory/list_elem_assign.lu: lowers
 memory/list_elem_copy_loop.lu: lowers
 memory/list_mixed_width_struct.lu: lowers
@@ -382,6 +384,9 @@ memory/region_value_pass.lu: lowers
 memory/region_value_return.lu: lowers
 memory/shared_cycle.lu: not mem-clean (pre-wir rungs own it)
 memory/shared_ok.lu: refused — shared-cell surface lowering (rc.* receivers)
+memory/store_rhs_first_list.lu: lowers
+memory/store_rhs_first_map.lu: lowers
+memory/store_rhs_first_pool.lu: lowers
 memory/struct_destructure_partial_live.lu: lowers
 memory/struct_destructure_partial_move.lu: not mem-clean (pre-wir rungs own it)
 memory/struct_pattern_binder.lu: lowers

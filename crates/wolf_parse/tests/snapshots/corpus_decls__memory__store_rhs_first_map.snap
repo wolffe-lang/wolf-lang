@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 408..503 name=grow body=Block
+FnDecl 505..637 name=main body=Block
