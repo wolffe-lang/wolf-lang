@@ -100,8 +100,8 @@ pub use chan::{
     Chan, ChanErr, Selected, WolfSelectArm, select, select_verdict, select_with,
 };
 pub use conc_abi::{
-    __wolf_rt_proc_spawn_outcome, __wolf_rt_sync_get, __wolf_rt_sync_set, __wolf_rt_task_killed,
-    CANCEL_TAG,
+    __wolf_rt_proc_spawn_outcome, __wolf_rt_scope_env_copy, __wolf_rt_sync_get, __wolf_rt_sync_set,
+    __wolf_rt_task_killed, CANCEL_TAG,
 };
 pub use hooks::{ChanPhase, SchedEvent, SchedRng, kind_code, seed_spec};
 // The reactor (crate::reactor, s35) and signal (s114) compose with

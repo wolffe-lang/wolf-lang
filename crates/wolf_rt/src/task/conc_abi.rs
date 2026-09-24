@@ -154,6 +154,46 @@ pub unsafe extern "C" fn __wolf_rt_proc_spawn_outcome(
     })
 }
 
+/// Copy a task's capture record into storage its `scope` owns, and
+/// answer the copy (s179, wolf-lang#431, `[conc.task.scope]`).
+///
+/// A task's record is charged to its scope, and s86 kept it in the
+/// spawning frame on the premise that the scope joins before that
+/// frame dies. A handle passed as a PARAMETER (D16) breaks the
+/// premise: the scope joins in the caller, after the callee's frame is
+/// gone, and the task read a dead slot — an address for an `int`, a
+/// deadlock for a channel. Lowering calls this for exactly that spawn
+/// and hands the answer to the frozen `__wolf_rt_scope_spawn` as its
+/// env; the copy is read here, before this returns, so the caller's
+/// slot may die the instant it has the pointer back. It lives until
+/// the scope's last reference drops — after join, since every child
+/// holds one — which is s87's `[abi.native.procenv]` answer for procs
+/// with the scope, not the task, as the owner. `env_len == 0` still
+/// answers a live (8-byte) block, so the entry never sees null.
+///
+/// # Safety
+///
+/// `scope` must be a live handle from `__wolf_rt_scope_new`; `env`
+/// must address `env_len` readable bytes when `env_len > 0`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_scope_env_copy(
+    scope: *mut c_void,
+    env: *const c_void,
+    env_len: i64,
+) -> *mut c_void {
+    // SAFETY: borrow the caller's handle without consuming it.
+    let inner = unsafe {
+        std::mem::ManuallyDrop::new(std::sync::Arc::from_raw(scope.cast::<super::ScopeInner>()))
+    };
+    let bytes: &[u8] = if env_len > 0 && !env.is_null() {
+        // SAFETY: caller contract — `env` addresses `env_len` bytes.
+        unsafe { std::slice::from_raw_parts(env.cast::<u8>(), env_len as usize) }
+    } else {
+        &[]
+    };
+    inner.keep_env(bytes).cast()
+}
+
 /// Read the guarded payload word of a sync cell. Valid only while the
 /// calling task holds the cell's set (`[conc.when.body]` — the same
 /// contract as `__wolf_rt_sync_payload`, as a call so lowered code
@@ -286,6 +326,67 @@ mod tests {
                 "the proc read the slot's LATER value — the env was not copied"
             );
         }
+    }
+
+    /// s179 (wolf-lang#431): a task env copied at the seam is read
+    /// from the scope's copy, not from the slot it was packed in. The
+    /// shape of a handle passed as a parameter: three spawns through
+    /// ONE slot, the slot clobbered before any task reads, as a callee
+    /// frame is dead before the caller's scope joins. A pass-through
+    /// (the pre-s179 frame slot) sums -3; the copy sums 66.
+    #[test]
+    fn task_env_is_copied_into_the_scope() {
+        static GATE: AtomicUsize = AtomicUsize::new(0);
+        static SUM: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
+        unsafe extern "C" fn body(env: *mut c_void) -> i64 {
+            while GATE.load(SeqCst) == 0 {
+                std::thread::yield_now();
+            }
+            // SAFETY: env addresses one i64 (the scope's copy).
+            SUM.fetch_add(unsafe { *env.cast::<i64>() }, SeqCst);
+            0
+        }
+        let mut slot: i64 = 0;
+        let slot_p: *mut i64 = &mut slot;
+        let mut kept = 0;
+        let r = scope("env-copy", |s| {
+            let inner = s.inner().clone();
+            let raw = std::sync::Arc::into_raw(inner.clone());
+            for want in [11i64, 22, 33] {
+                // SAFETY: slot_p addresses a live i64 for the whole test;
+                // raw is a live handle; the env is one readable i64.
+                unsafe {
+                    std::ptr::write_volatile(slot_p, want);
+                    let env = __wolf_rt_scope_env_copy(raw.cast_mut().cast(), slot_p.cast(), 8);
+                    assert_ne!(env.cast::<i64>(), slot_p, "the env was not copied");
+                    super::super::__wolf_rt_scope_spawn(
+                        raw.cast_mut().cast(),
+                        body,
+                        env,
+                        b"e".as_ptr(),
+                        1,
+                    );
+                }
+            }
+            // SAFETY: as above.
+            unsafe { std::ptr::write_volatile(slot_p, -1) };
+            kept = inner.kept_envs();
+            // An argument-less body still gets a live block.
+            // SAFETY: raw is live; a zero length reads nothing.
+            let empty =
+                unsafe { __wolf_rt_scope_env_copy(raw.cast_mut().cast(), std::ptr::null(), 0) };
+            assert!(!empty.is_null());
+            // SAFETY: rebalance the clone above; scope_env_copy borrows.
+            drop(unsafe { std::sync::Arc::from_raw(raw) });
+            GATE.store(1, SeqCst);
+        });
+        assert_eq!(r, Ok(()));
+        assert_eq!(kept, 3, "one kept record per spawn");
+        assert_eq!(
+            SUM.load(SeqCst),
+            66,
+            "a task read the slot's LATER value — the env was not copied"
+        );
     }
 
     /// A compiled task returning [`CANCEL_TAG`] records `Cancelled`,

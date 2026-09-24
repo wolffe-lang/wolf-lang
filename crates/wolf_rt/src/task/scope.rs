@@ -128,6 +128,13 @@ pub struct ScopeInner {
     killed: AtomicBool,
     state: Mutex<ScopeState>,
     cv: Condvar,
+    /// Task capture records the runtime copied at the spawn seam
+    /// (s179, wolf-lang#431): a spawn through a handle the spawning
+    /// frame did not open cannot keep its record in that frame, so
+    /// [`super::conc_abi::__wolf_rt_scope_env_copy`] parks a copy here.
+    /// Freed when the last `Arc` drops — every child holds one until
+    /// it finishes, so no task outlives the record it reads.
+    envs: Mutex<Vec<Box<[u64]>>>,
 }
 
 static NEXT_SCOPE: AtomicU64 = AtomicU64::new(1);
@@ -153,12 +160,36 @@ impl ScopeInner {
                 tasks: IdMap::default(),
             }),
             cv: Condvar::new(),
+            envs: Mutex::new(Vec::new()),
         });
         let reg = REGISTRY.get_or_init(|| Mutex::new(Vec::new()));
         let mut reg = reg.lock().unwrap();
         reg.retain(|w| w.strong_count() > 0);
         reg.push(Arc::downgrade(&scope));
         scope
+    }
+
+    /// Keep `bytes` alive as long as this scope, and answer where they
+    /// live (s179). The words are 8-aligned, which every flat capture
+    /// layout is (`pack_task_env` rounds each field to 8).
+    pub(crate) fn keep_env(&self, bytes: &[u8]) -> *mut u8 {
+        let mut words = vec![0u64; bytes.len().div_ceil(8).max(1)].into_boxed_slice();
+        // SAFETY: `words` holds at least `bytes.len()` bytes and the
+        // two buffers are distinct allocations.
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), words.as_mut_ptr().cast(), bytes.len());
+        }
+        let p = words.as_mut_ptr().cast::<u8>();
+        // Moving the Box into the Vec moves the pointer, not the heap
+        // block it names, so `p` stays valid until the scope drops.
+        self.envs.lock().unwrap().push(words);
+        p
+    }
+
+    /// How many copied records this scope holds (tests).
+    #[cfg(test)]
+    pub(crate) fn kept_envs(&self) -> usize {
+        self.envs.lock().unwrap().len()
     }
 
     /// Stable scope id (dump + hook payloads).
