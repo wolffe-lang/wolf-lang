@@ -13397,6 +13397,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(vval) = flow_val!(self.lower_expr(vx)) else {
             return Err(refuse("assignment of a valueless expression", vx.span));
         };
+        let vval = self.elem_store_copy(d, vx, vval, v)?;
         let (region, slot) = self.rt_slot(lay.stride);
         self.store_flat(kval, slot, region, kx.span)?;
         let vp = self.field_addr(slot, lay.val_off);
@@ -13959,6 +13960,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(val) = flow_val!(self.lower_expr(vexpr)) else {
             return Err(refuse("a unit-typed pool payload", vexpr.span));
         };
+        let val = self.elem_store_copy(d, vexpr, val, elem)?;
         let (region, slot) = self.rt_slot(stride);
         self.store_flat(val, slot, region, vexpr.span)?;
         let hit = self
@@ -13973,6 +13975,47 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Ok(Flow::Diverged);
         }
         Ok(Flow::Val(None))
+    }
+
+    /// wolf-lang#438 (ruled "align" 2026-09-24, `[mem.region.edge.elem]`):
+    /// the value a plain `=` stores through a `List`, `Map` or `Pool`
+    /// index. A PLACE on the right-hand side — a binding, a field, an
+    /// element — is COPIED into the container, as a plain `push`'s
+    /// element is, so the container and the binding hold independent
+    /// values; `xs[i] = take v` hands the value over as before. A
+    /// temporary is its own and is stored as it is. `deep_copy_in`
+    /// returns the value untouched when it reaches no heap storage, so
+    /// `Copy` elements and `str` stay free (`[mem.tier0.move.3]`), and
+    /// the shapes it does not model yet decline by name rather than
+    /// share. The mem tier reads this exact store as `xs[i] = copy v`
+    /// (it keeps `v` live), so this predicate is at least as wide as
+    /// that tier's place test: copying a value no one reads again costs
+    /// time, never an answer, and sharing one someone does read would.
+    fn elem_store_copy(
+        &mut self,
+        d: AssignStmt<'t>,
+        vx: &'t GreenNode,
+        v: Value,
+        elem_sema: TyId,
+    ) -> R<Value> {
+        if d.takes() {
+            return Ok(v);
+        }
+        let mut inner = vx;
+        while inner.kind == SyntaxKind::ParenExpr {
+            match ParenExpr::cast(inner).and_then(|p| p.expr()) {
+                Some(x) => inner = x,
+                None => return Ok(v),
+            }
+        }
+        if !matches!(
+            inner.kind,
+            SyntaxKind::PathExpr | SyntaxKind::MemberExpr | SyntaxKind::BracketApply
+        ) {
+            return Ok(v);
+        }
+        let table = self.table;
+        self.deep_copy_in(v, table, elem_sema, vx.span, 0)
     }
 
     /// `l[i] = v` (s40): the bounds-trapping element write.
@@ -14106,7 +14149,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // `l[i] op= v` (#55): read-modify-write in place, X3-checked
         // at the element's sema type.
         let v = if op == SyntaxKind::Eq {
-            rhs
+            self.elem_store_copy(d, vx, rhs, elem)?
         } else {
             let Some(bin) = Self::compound_bin(op) else {
                 return Err(refuse("this compound assignment operator", span));
