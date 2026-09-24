@@ -28,6 +28,33 @@ vocabulary.
   `xs[i]`). Paths are field-granular: `a.x` and `a.y` are disjoint places.
   `[mem.model.path.disjoint]` Two paths conflict iff one is a prefix of
   the other (after identical projections); otherwise they are disjoint.
+  `[mem.model.place.rhs]` **A store evaluates its right-hand side
+  first, then mints its place.** In `place = expr` the storage location
+  of `place` is computed AFTER `expr` has run to a value, so a
+  right-hand side that grows, rehashes or otherwise moves the container
+  under the place — `xs[0].n = grow(mut xs)`, `m["a"] = grow(mut m)`,
+  `p[a].value = grow(mut p)` — stores into the container as it is after
+  the call; an address minted before it would be dangling by the time
+  the store lands. Every container's place lowering owes the re-mint.
+  Ruled 2026-09-24 (s173's proposal 1, B123, path B): it pins what all
+  three machines already do, and what makes the accepted program sound
+  — under mint-once s173's pool witness printed `1 65` on native
+  against `7 65` on checked with no diagnostic on either (wolf-lang#442
+  §4). This is an evaluation-order sentence, not an exclusivity one:
+  the right-hand side's claim on the container ends before the place
+  is minted, so there are never two live paths and `[mem.tier0.excl.1]`
+  is not engaged — s168's E1002 reaches a nested call under a `mut`
+  ARGUMENT (`take2(mut xs[0], grow(mut xs))`), not a store's right-hand
+  side. **What it does not say:** the order of the place's own operands
+  against the right-hand side. For `xs[idx()] = val()` the checked
+  machine prints `val idx` and native, release and lupin 0.1.38 print
+  `idx val` (trunk `a565d4b9` and the published 0.2.16 alike), which is
+  a ruling still owed — wolf-lang#452 — and this sentence pins only the
+  address. **Cost:** zero — the address computation moves after the
+  right-hand side; it does not multiply. Witnesses
+  `corpus/memory/store_rhs_first_list.lu`, `store_rhs_first_map.lu`,
+  `store_rhs_first_pool.lu` (the pool one is `unsupported` on lupin,
+  which declines `Pool` by name).
 - `[mem.model.granule]` A **granule** is the unit of ownership reasoning:
   a value (Tier 0), a region (Tier 1), or a shared/handle cell (Tier 2).
 - `[mem.model.machine]` The abstract machine state comprises:
