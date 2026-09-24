@@ -290,7 +290,13 @@ memory/excl_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/exclusivity.lu: lowers
 memory/foreign_root_aliasing.lu: lowers
 memory/handle_stale.lu: lowers
+memory/index_store_copies_list.lu: lowers
+memory/index_store_copies_map.lu: lowers
 memory/index_store_copy_elem.lu: lowers
+memory/index_store_read_param.lu: lowers
+memory/index_store_take_list.lu: not mem-clean (pre-wir rungs own it)
+memory/index_store_take_map.lu: not mem-clean (pre-wir rungs own it)
+memory/index_store_take_read_param.lu: not mem-clean (pre-wir rungs own it)
 memory/list_elem_assign.lu: lowers
 memory/list_elem_copy_loop.lu: lowers
 memory/list_mixed_width_struct.lu: lowers
