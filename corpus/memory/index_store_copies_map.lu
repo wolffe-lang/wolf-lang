@@ -1,0 +1,20 @@
+//! check: run(exit=0, stdout="m0=1 xs=2\n")
+//! phase: run
+//! conforms: mem.region.edge.elem, mem.tier0.move.3, type.map
+//!
+//! wolf-lang#438 (ruled "align" 2026-09-24; parked by s182, landed by
+//! s180) — the `Map` twin of `index_store_copies_list.lu`:
+//! `m["k"] = xs` copies, `xs` stays live and grows alone. Before s180:
+//! `fail(E1001)` on both wolfgang lanes, `trap(use-after-move)` on
+//! lupin 0.1.38 (is55 mirrors the ruling).
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    var m = Map[str, List[int]]()
+    m["k"] = xs
+    (mut xs).push(4)
+    let got = m["k"] else List[int]()
+    print("m0={got.len} xs={xs.len}")
+    0
+}

@@ -1,0 +1,21 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.region.edge.elem, mem.tier0.move.2, gram.expr.assign
+//!
+//! wolf-lang#438 (ruled "align" 2026-09-24; parked by s182, landed by
+//! s180) — `outs[0] = take xs` MOVES, the one store position
+//! `[gram.expr.assign]` admits a mode in; the later push to `xs` is
+//! E1001 with `copy xs` as the fix-it, and lupin traps
+//! `use-after-move` once is55 lands. Before s180 the line did not
+//! parse: `fail(E0201)` on all three machines.
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    var outs = List[List[int]]()
+    (mut outs).push(List[int]())
+    outs[0] = take xs
+    (mut xs).push(4)                 // ERROR E1001: moved into `outs`
+    print("outs0={outs[0].len} xs={xs.len}")
+    0
+}

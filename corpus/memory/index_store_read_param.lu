@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="m0=1 xs=2\n")
+//! phase: run
+//! conforms: mem.region.edge.elem, mem.tier0.mode.read
+//!
+//! wolf-lang#438 (ruled "align" 2026-09-24; parked by s182, landed by
+//! s180) — a `read` parameter stored PLAINLY through an index: the twin
+//! of `push_copies_element.lu`'s `put` line. The store copies, so
+//! nothing of the caller's is lent past the call and #366's E1002 does
+//! not apply; `m[k] = take v` on this `v` would be E1014. Before s180:
+//! `fail(E1002)` on both wolfgang lanes; lupin 0.1.38 already ran it
+//! and printed this answer. The lend rule's own rows
+//! (`read_param_escape_*.lu`) keep refusing a real lend.
+
+fn set_g[K, V](mut m: Map[K, V], k: K, v: V) {
+    m[k] = v
+}
+
+fn main() -> !int {
+    var m = Map[str, List[int]]()
+    var xs = List[int]()
+    (mut xs).push(1)
+    set_g(mut m, "l", xs)
+    (mut xs).push(4)
+    let got = m["l"] else List[int]()
+    print("m0={got.len} xs={xs.len}")
+    0
+}

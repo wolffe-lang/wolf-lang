@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="outs0=1 xs=2\n")
+//! phase: run
+//! conforms: mem.region.edge.elem, mem.tier0.move.3
+//!
+//! wolf-lang#438 (ruled "align" 2026-09-24; parked by s182, landed by
+//! s180) — a plain index store of a non-`Copy` value COPIES it in, as
+//! `push` does: `outs[0]` and `xs` are independent after the store, so
+//! the later push to `xs` is legal and grows only `xs`. Before s180:
+//! `fail(E1001)` on both wolfgang lanes (the store moved `xs`), and
+//! `trap(use-after-move)` on lupin 0.1.38 (is55 mirrors the ruling).
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    var outs = List[List[int]]()
+    (mut outs).push(List[int]())
+    outs[0] = xs
+    (mut xs).push(4)
+    print("outs0={outs[0].len} xs={xs.len}")
+    0
+}
