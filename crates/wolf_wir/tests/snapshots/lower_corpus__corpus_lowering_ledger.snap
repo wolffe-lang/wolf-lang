@@ -466,6 +466,7 @@ resolve/pkgvis/main.lu: lowers
 resolve/plain_subdir/main.lu: lowers
 resolve/private/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/same_name/main.lu: lowers
+resolve/sibling_diag/main.lu: not mem-clean (pre-wir rungs own it)
 resolve/standalone_pair/left.lu: lowers
 resolve/standalone_pair/right.lu: lowers
 resolve/two_mod/main.lu: lowers
