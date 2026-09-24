@@ -1,0 +1,25 @@
+//! check: fail(E1014)
+//! phase: typecheck
+//! conforms: mem.region.edge.elem, mem.tier0.mode.read, gram.expr.assign
+//!
+//! wolf-lang#438 (s180) — the sentence of `[mem.region.edge.elem]` the
+//! five parked witnesses do not carry: `m[k] = take v` on a `read` `v`
+//! is E1014, `push(take v)`'s answer (`read_param_take.lu`). A plain
+//! store of the same `v` copies and runs (`index_store_read_param.lu`);
+//! spelling `take` asks to give away a value the caller still holds.
+//! This row is what keeps the lend rule (#366) from being weakened by
+//! the store's new position: before s180 the line did not parse
+//! (`fail(E0201)` on all three machines).
+
+fn set_t[K, V](mut m: Map[K, V], k: K, v: V) {
+    m[k] = take v                    // ERROR E1014: `v` is `read`
+}
+
+fn main() -> !int {
+    var m = Map[str, List[int]]()
+    var xs = List[int]()
+    (mut xs).push(1)
+    set_t(mut m, "l", xs)
+    print("m={m.len} xs={xs.len}")
+    0
+}
