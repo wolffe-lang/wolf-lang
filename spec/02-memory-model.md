@@ -415,12 +415,15 @@ Edge legality (source stores a reference to target):
   different source for the same generic signature, and only one of them
   with a diagnostic explaining itself. The permissive reading is the one
   the whole container surface is already written against, so the index
-  store joins it rather than `push` being tightened to meet it. Since
-  wolf-lang#366 the stored `v` must be the function's own — `take v: V`
-  (the store consumes it) or `copy v` — because a `read` `v` stored into
-  the caller's `m` would still be the caller's too (E1002,
-  `[mem.tier0.mode.read]`); the regions merge at the index store exactly
-  as before. A FIELD
+  store joins it rather than `push` being tightened to meet it. Between
+  wolf-lang#366 and #438 the stored `v` had to be the function's own —
+  `take v: V` or `copy v` — because a plain store MOVED, so a `read` `v`
+  stored into the caller's `m` would still be the caller's too (E1002,
+  `[mem.tier0.mode.read]`). A plain store COPIES now (below), the copy
+  is the function's own, and a `read` `v` is stored plainly — exactly
+  as `push_copies_element.lu`'s `put` line already stores one through
+  `push`; `m[k] = take v` on a `read` `v` is E1014, `push(take v)`'s
+  answer. The regions merge at the index store exactly as before. A FIELD
   store (`holder.item = item`) keeps its E1004 — that is the one
   annotation Cyclone's measurement says exists — and so does a value
   provably outliving its region (`region tmp { xs[i] = … }`), which is
@@ -460,15 +463,38 @@ Edge legality (source stores a reference to target):
   and says so. Witnesses `corpus/memory/push_copies_element.lu` and
   `corpus/memory/push_take_moves.lu`.
 
-  The **index store is not yet aligned with this reading.** `m[k] = v`
-  and `xs[i] = v` still MOVE their right-hand side — a later use of `v`
-  is E1001 — and `m[k] = take v` does not parse at all, because the
-  assignment grammar has no mode slot on its right (`[gram.expr.assign]`).
-  So the two surfaces this clause otherwise treats as one operation
-  disagree about what a plain store does, in the opposite direction
-  from the defect above. That divergence is open under wolf-lang#385
-  and deliberately unresolved here: this clause states only what is
-  implemented.
+  **The index store reads the same way** — ruled 2026-09-24
+  (wolf-lang#438: "align … follows `push`"), closing the half of #385's
+  option 3 that said "`m[k] = v` and `xs[i] = v` read the same way" and
+  shipped only for `push`. A non-`Copy` value stored PLAINLY through a
+  container index is **COPIED into the container** by
+  `[mem.tier0.move.3]`'s rule — the stored element and the binding it
+  came from are independent, and the binding is live after the
+  statement. `xs[i] = take v` and `m[k] = take v` **MOVE** it instead:
+  `v` is dead after the statement and a later use is E1001 with the
+  ladder's `copy v` fix-it; `[gram.expr.assign]` admits `take` in
+  exactly this position and nowhere else in an assignment. **`Copy`
+  elements and `str` are unaffected** and stay free, as for `push`.
+  **Cost:** `[mem.tier0.move.3]`'s, paid once per plain store of a
+  value that reaches heap storage, and nothing for a scalar, a `str`,
+  or a struct of them; a program that wants the old zero-cost handover
+  spells `take` and says so. **What moves at the boundary:** a program
+  refused because it used `v` after a plain store (E1001 on the
+  wolfgang lanes, `trap(use-after-move)` on lupin — s175's table on
+  #438, trunk `2f8deb7f`, 0.2.15 and lupin 0.1.37) is accepted, and a
+  `read` parameter stored plainly (E1002 under #366) is accepted; no
+  printed byte of any program accepted before changes, and no corpus
+  row changes verdict (s182: none of the corpus's `fail(E1001)` or
+  `fail(E1002)` rows contains an index store). Until the three
+  machines land it (wave 47: s180 on the wolfgang lanes, is55 on
+  lupin) the ruled witnesses live under
+  `wolf/sprints/compiler/88-the-rulings-prose/witnesses/` in the
+  planning repo — `index_store_copies_list`, `index_store_copies_map`,
+  `index_store_take_list`, `index_store_take_map`,
+  `index_store_read_param` — each with its verdict per machine; they
+  become `corpus/memory/index_store_*.lu` with the implementation. The
+  `Copy` half holds on every machine today:
+  `corpus/memory/index_store_copy_elem.lu`.
 - `[mem.region.edge.raw]` Cross-region raw edges exist only in Tier 3 and
   carry §7 obligations.
 
