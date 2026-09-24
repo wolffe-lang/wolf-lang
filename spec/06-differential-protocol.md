@@ -93,6 +93,25 @@ One JSON object on stdout. Schema (`"protocol": 1`):
   byte-offset half-open spans (s07's byte-exact contract). **Messages
   are never part of the protocol** (D22: wording is a per-implementation
   quality concern).
+
+  **The file index** (added s181, wolf-lang#437; additive within
+  `"protocol": 1` — validators accept records with or without it). A
+  span is a byte range in ONE file, and a package is a directory of
+  files. When any diagnostic's span lies outside the entry file, the
+  record carries a top-level `files` array and every diagnostic
+  carries an integer `file` indexing it. `files` holds package-relative
+  paths — relative to the package root (the entry file's directory),
+  `/`-separated, no leading `./` — with the entry file at index 0 and
+  after it each other file a diagnostic's span lies in, once, in order
+  of first appearance in `diagnostics`; a file outside the package
+  root (a `std` module) is `std/` followed by its path under the std
+  root. Otherwise both keys are absent — always, for a single-file
+  package — and a record without them is unchanged from before this
+  paragraph: every span is in the entry file. A `file` with no `files`,
+  or out of its range, is malformed. Comparison resolves the index:
+  two diagnostics agree when `code`, `span` and the file they name
+  agree, a diagnostic without `file` naming the entry. `warnings`
+  entries carry no `file` (`[proto.record.warn]` is unchanged).
 - `[proto.record.ub]` `ub(anchor)` cites the s04 §7 row (e.g.,
   `ub(mem.ub)` with the row id in `x-ub-row`, or the specific clause).
   It **participates in comparison**: one side reporting `ub(…)` where
