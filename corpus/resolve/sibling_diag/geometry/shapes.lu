@@ -1,0 +1,16 @@
+//! member: true
+
+/// The square's area.
+pub fn area(side: int) -> int {
+    side * side
+}
+
+/// The square's perimeter.
+pub fn perimeter(side: int) -> int {
+    4 * side
+}
+
+/// The square's area, defined a second time in the same module.
+pub fn area(side: int) -> int {
+    side
+}

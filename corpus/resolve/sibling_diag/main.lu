@@ -1,0 +1,16 @@
+//! check: fail(E0302)
+//! phase: parse
+//! conforms: mod.dup, proto.record.diag
+//!
+//! wolf-lang#437, the file index: the duplicate `area` is in the
+//! sibling module `geometry`, so the diagnostic's span is a byte range
+//! in `geometry/shapes.lu`, not in this file. The record names that
+//! file (`files`, and `file` on the diagnostic), since the offsets
+//! alone read as a range in the entry. Every machine agrees on the
+//! code and the span, so the file is the only thing the record adds.
+
+use geometry
+
+fn main() -> !int {
+    if geometry.area(3) == 9 { 0 } else { 1 }
+}
