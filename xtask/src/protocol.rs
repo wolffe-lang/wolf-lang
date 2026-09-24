@@ -74,6 +74,31 @@ pub fn validate_record(v: &serde_json::Value) -> Result<Verdict, String> {
             return Err("diagnostic entries need {code, span[2], severity}".into());
         }
     }
+    // The file index ([proto.record.diag], s181 — #437): optional and
+    // additive, but all-or-nothing. With `files` present every
+    // diagnostic carries an in-range integer `file`; without it none
+    // does. `files[0]` is the entry, so the array is never empty.
+    match obj.get("files") {
+        None => {
+            if diags.iter().any(|d| d.get("file").is_some()) {
+                return Err("a diagnostic carries `file` but the record has no `files`".into());
+            }
+        }
+        Some(f) => {
+            let fs = f
+                .as_array()
+                .filter(|fs| !fs.is_empty() && fs.iter().all(|x| x.is_string()))
+                .ok_or("`files` must be a non-empty array of paths when present")?;
+            for d in diags {
+                let Some(i) = d.get("file").and_then(|i| i.as_u64()) else {
+                    return Err("with `files` present, every diagnostic carries an integer `file`".into());
+                };
+                if i as usize >= fs.len() {
+                    return Err(format!("diagnostic `file` {i} is past `files` ({})", fs.len()));
+                }
+            }
+        }
+    }
     // `warnings` ([proto.record.warn], s67): optional and additive —
     // honest-absent when the implementation runs no warning analyses —
     // but well-shaped when present: `{code, span[2]}` entries.
@@ -192,15 +217,23 @@ pub fn compare(
         return Some((Class::Verdict, format!("{va:?} vs {vb:?}")));
     }
     if let Verdict::Fail(_) = va {
-        // first diagnostic's code+span must agree [proto.cmp.phase]
+        // first diagnostic's code+span must agree [proto.cmp.phase],
+        // and the file it names ([proto.record.diag]'s file index,
+        // s181): the index resolves to its path, and a diagnostic
+        // without `file` (or `file: 0`) names the entry.
         let first = |r: &serde_json::Value| {
             r["diagnostics"]
                 .as_array()
                 .and_then(|d| d.first())
                 .map(|d| {
+                    let file = match d.get("file").and_then(|i| i.as_u64()) {
+                        None | Some(0) => "<entry>".to_string(),
+                        Some(i) => r["files"][i as usize].as_str().unwrap_or("").to_string(),
+                    };
                     (
                         d["code"].as_str().unwrap_or("").to_string(),
                         d["span"].to_string(),
+                        file,
                     )
                 })
         };
@@ -216,8 +249,9 @@ pub fn compare(
                     .and_then(|s| s.first())
                     .and_then(|v| v.as_u64())
             };
-            let code = |r: &serde_json::Value| first(r).map(|(c, _)| c);
-            if code(a) == code(b) && lo(a).is_some() && lo(a) == lo(b) {
+            let code = |r: &serde_json::Value| first(r).map(|(c, _, _)| c);
+            let file = |r: &serde_json::Value| first(r).map(|(_, _, f)| f);
+            if code(a) == code(b) && file(a) == file(b) && lo(a).is_some() && lo(a) == lo(b) {
                 return Some((
                     Class::SpanWidth,
                     format!(
