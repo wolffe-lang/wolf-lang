@@ -446,7 +446,8 @@ fn assignment_and_compound_assignment_statements() {
 /// expression: the value is the bare operand.
 #[test]
 fn an_index_store_admits_take() {
-    let src = "fn f() { xs[0] = take v\n    m[\"k\"] = take v\n    a.b[i] = take (v)\n    xs[0] = v\n}\n";
+    let src =
+        "fn f() { xs[0] = take v\n    m[\"k\"] = take v\n    a.b[i] = take (v)\n    xs[0] = v\n}\n";
     let root = clean(src);
     let mut assigns = Vec::new();
     find(&root, SyntaxKind::AssignStmt, &mut assigns);
@@ -457,8 +458,14 @@ fn an_index_store_admits_take() {
         .collect();
     assert_eq!(takes, [true, true, true, false]);
     let first_assign = AssignStmt::cast(assigns[0]).expect("assign");
-    assert_eq!(first_assign.place().expect("place").kind, SyntaxKind::BracketApply);
-    assert_eq!(first_assign.value().expect("value").kind, SyntaxKind::PathExpr);
+    assert_eq!(
+        first_assign.place().expect("place").kind,
+        SyntaxKind::BracketApply
+    );
+    assert_eq!(
+        first_assign.value().expect("value").kind,
+        SyntaxKind::PathExpr
+    );
     assert_eq!(text(src, first_assign.value().expect("value").span), "v");
 }
 

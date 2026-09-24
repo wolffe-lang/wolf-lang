@@ -5250,9 +5250,8 @@ impl<'t> Lowerer<'t> {
         // wolf-lang#438 (`[mem.region.edge.elem]`): a plain `=` through
         // a container index is `push`'s twin, not a move.
         let elem_store = d.op().map(|t| t.kind) == Some(SyntaxKind::Eq)
-            && d.place().is_some_and(|p| {
-                p.kind == SyntaxKind::BracketApply && !self.is_raw_index(p)
-            });
+            && d.place()
+                .is_some_and(|p| p.kind == SyntaxKind::BracketApply && !self.is_raw_index(p));
         let val = match d.value() {
             Some(v) if elem_store => self.eval_elem_stored(v, d.takes())?,
             Some(v) => self.eval_value(v)?,
