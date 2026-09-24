@@ -92,7 +92,9 @@ stmt  ::= attribute* stmt_base
 stmt_base ::= let_item | var_item | const_item | assign_stmt | defer_stmt
         | expr_stmt | item
 assign_stmt ::= place assign_op expr TERM
+              | index_place '=' 'take' expr TERM   /* the one moded store: [gram.expr.assign] */
 assign_op   ::= '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>='
+index_place ::= expr '[' expr ']'   /* a container element; sema checks the container */
 defer_stmt  ::= ('defer' | 'errdefer') expr TERM
 expr_stmt   ::= expr TERM
 place ::= expr  /* must be a place-expression; checked in sema, not grammar */
