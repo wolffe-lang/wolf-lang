@@ -3094,8 +3094,21 @@ impl<'t> Machine<'t> {
             };
             return self.raw_index_write(place_expr, v, compound, stmt.span);
         }
-        let v = match d.value() {
-            Some(e) => match self.eval(e)? {
+        // wolf-lang#438 (`[mem.region.edge.elem]`): a plain `=` through
+        // a container index COPIES a place's value in, as a plain
+        // `push` does (the static tier treats it as `xs[i] = copy v`);
+        // `xs[i] = take v` moves it. The right-hand side still runs
+        // before the place is minted, and before the index operand
+        // (wolf-lang#452 names that order; it is not ruled here).
+        let elem_store = !compound && place_expr.kind == SyntaxKind::BracketApply;
+        let copied = match d.value() {
+            Some(e) if elem_store && !d.takes() => self.eval_elem_copy(e)?,
+            _ => None,
+        };
+        let v = match (copied, d.value()) {
+            (Some(Flow::Val(v)), _) => v,
+            (Some(other), _) => return Ok(other),
+            (None, Some(e)) => match self.eval(e)? {
                 Flow::Val(v) => v,
                 // #122's assignment sibling, measured in the same
                 // sweep: a RAW row value assigned to a row-typed
@@ -3106,7 +3119,7 @@ impl<'t> Machine<'t> {
                 Flow::Err(v, false) if !compound => v,
                 other => return Ok(other),
             },
-            None => Value::Unit,
+            (None, None) => Value::Unit,
         };
         let Some(place) = self.place_of(place_expr)? else {
             return self.refuse("assignment through this place shape", place_expr.span);
@@ -3124,6 +3137,53 @@ impl<'t> Machine<'t> {
             self.write_place(&place, v, place_expr.span)?;
         }
         Ok(Flow::Val(Value::Unit))
+    }
+
+    /// The copied right-hand side of a plain container-index store
+    /// (wolf-lang#438): a PLACE is read — never moved — and deep-copied,
+    /// exactly as a plain `push` element is, so the stored element and
+    /// the binding it came from are independent; `deep_copy` hands a
+    /// scalar, a `str` and every other non-heap value straight back, so
+    /// `Copy` elements stay free (`[mem.tier0.move.3]`). `None` is a
+    /// temporary — or a bracket read that is not a `List` element (a
+    /// `Map` row, a slice), which builds a value of its own — evaluated
+    /// by the caller exactly as before: it has no other owner.
+    fn eval_elem_copy(&mut self, e: &'t GreenNode) -> E<Option<Flow>> {
+        let mut inner = e;
+        while inner.kind == SyntaxKind::ParenExpr {
+            match ParenExpr::cast(inner).and_then(|p| p.expr()) {
+                Some(x) => inner = x,
+                None => return Ok(None),
+            }
+        }
+        let list_elem = inner.kind == SyntaxKind::BracketApply
+            && BracketApply::cast(inner).is_some_and(|b| {
+                b.callee()
+                    .is_some_and(|r| matches!(self.expr_ty(r.span), Some(TyKind::List(_))))
+                    && !b
+                        .args()
+                        .into_iter()
+                        .flat_map(|l| l.args())
+                        .filter_map(Arg::value)
+                        .any(|v| v.kind == SyntaxKind::RangeExpr)
+            });
+        let v = match inner.kind {
+            SyntaxKind::PathExpr | SyntaxKind::MemberExpr => match self.place_of(inner)? {
+                Some(place) => self.read_place(&place, inner.span)?,
+                // A module item or a member of a temporary: read by
+                // `eval` (neither is move-tracked), then copied.
+                None => match self.eval(inner)? {
+                    Flow::Val(v) => v,
+                    other => return Ok(Some(other)),
+                },
+            },
+            SyntaxKind::BracketApply if list_elem => match self.place_of(inner)? {
+                Some(place) => self.read_place(&place, inner.span)?,
+                None => return Ok(None),
+            },
+            _ => return Ok(None),
+        };
+        Ok(Some(Flow::Val(self.deep_copy(v, inner.span)?)))
     }
 
     fn eval(&mut self, e: &'t GreenNode) -> E<Flow> {
