@@ -113,18 +113,19 @@ fn moving_one_element_empties_the_whole_list_on_wolfgang_and_not_on_lupin() {
     let entry = corpus("elem_move_one_place.lu");
     let checked = lane(&entry, "--checked").expect("the checked lane always runs");
     assert_eq!(
-        checked.verdict,
-        "fail(E1001)",
+        checked.verdict, "fail(E1001)",
         "the CHECKED lane runs `move xs[0]` then `xs[1]` — element granularity has \
          changed (#446 option C?) and this row's header is stale"
     );
     if let Some(native) = lane(&entry, "--native") {
-        assert_eq!(native.verdict, "fail(E1001)", "the NATIVE lane disagrees with checked");
+        assert_eq!(
+            native.verdict, "fail(E1001)",
+            "the NATIVE lane disagrees with checked"
+        );
     }
     if let Some(lupin) = lupin_says(&entry) {
         assert_eq!(
-            lupin.verdict,
-            "exit(0)",
+            lupin.verdict, "exit(0)",
             "lupin no longer runs the one-place element move — the conservatism row \
              is gone and `[mem.tier0.mode.read]`'s class lost a member; update the row"
         );

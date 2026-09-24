@@ -124,14 +124,34 @@ fn corpus(name: &str) -> PathBuf {
 /// either does the same or (for `lupin_declines`) says `unsupported`.
 fn every_lane_says(entry: &Path, want: &str, lupin_declines: bool) {
     let checked = lane(entry, "--checked").expect("the checked lane always runs");
-    assert_eq!(checked.verdict, "exit(0)", "checked verdict on {}", entry.display());
-    assert_eq!(checked.stdout, want, "the CHECKED lane's answer on {}", entry.display());
+    assert_eq!(
+        checked.verdict,
+        "exit(0)",
+        "checked verdict on {}",
+        entry.display()
+    );
+    assert_eq!(
+        checked.stdout,
+        want,
+        "the CHECKED lane's answer on {}",
+        entry.display()
+    );
     for flag in ["--native", "--release"] {
         let Some(obs) = lane(entry, flag) else {
             continue;
         };
-        assert_eq!(obs.verdict, "exit(0)", "{flag} verdict on {}", entry.display());
-        assert_eq!(obs.stdout, want, "the {flag} lane's answer on {}", entry.display());
+        assert_eq!(
+            obs.verdict,
+            "exit(0)",
+            "{flag} verdict on {}",
+            entry.display()
+        );
+        assert_eq!(
+            obs.stdout,
+            want,
+            "the {flag} lane's answer on {}",
+            entry.display()
+        );
     }
     if let Some(lupin) = lupin_says(entry) {
         if lupin_declines {
@@ -143,7 +163,12 @@ fn every_lane_says(entry: &Path, want: &str, lupin_declines: bool) {
                 entry.display()
             );
         } else {
-            assert_eq!(lupin.verdict, "exit(0)", "lupin verdict on {}", entry.display());
+            assert_eq!(
+                lupin.verdict,
+                "exit(0)",
+                "lupin verdict on {}",
+                entry.display()
+            );
             assert_eq!(lupin.stdout, want, "lupin's answer on {}", entry.display());
         }
     }
