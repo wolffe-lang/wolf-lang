@@ -64,18 +64,19 @@ pub fn file_index(
     Some(FileIndex { files, per_diag })
 }
 
-/// A comparison key for "is this the same file": canonical when the
-/// file exists, otherwise absolute and lexically normalized — always
-/// absolute, so a canonical root and a lexical file still compare.
+/// A comparison key for "is this the same file": absolute and
+/// lexically normalized, never canonicalized. The loader builds every
+/// path it interns by joining onto the entry's own spelling, so the
+/// lexical relation is the real one; `canonicalize` would add a
+/// platform's spelling to one side only (windows' `\\?\` verbatim
+/// prefix on a file that exists, none on one that does not).
 fn key(p: &Path) -> PathBuf {
-    std::fs::canonicalize(p).unwrap_or_else(|_| {
-        let abs = if p.is_absolute() {
-            p.to_path_buf()
-        } else {
-            std::env::current_dir().unwrap_or_default().join(p)
-        };
-        normalize(&abs)
-    })
+    let abs = if p.is_absolute() {
+        p.to_path_buf()
+    } else {
+        std::env::current_dir().unwrap_or_default().join(p)
+    };
+    normalize(&abs)
 }
 
 /// Lexical normalization: drops `.` components, folds `x/..`.
