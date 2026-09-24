@@ -722,3 +722,16 @@ fn error_set_aliases_format_as_declarations() {
         "fn f() -> int ! {IoErrors} {\n    0\n}\n",
     );
 }
+
+// ------------------------------------------------ [gram.expr.assign] ----
+
+/// wolf-lang#438: `xs[i] = take v` is the one moded store; the mode
+/// is a token of the statement and prints between `=` and the value.
+/// A formatter that dropped it would turn a move into a copy.
+#[test]
+fn an_index_store_keeps_its_take() {
+    check(
+        "fn main() {\n    xs[0]  =   take  v\n    m[\"k\"] = take v\n    xs[1] = v\n}\n",
+        "fn main() {\n    xs[0] = take v\n    m[\"k\"] = take v\n    xs[1] = v\n}\n",
+    );
+}

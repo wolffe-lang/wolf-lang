@@ -976,9 +976,17 @@ impl<'a> Fmt<'a> {
                 if let Some(p) = place {
                     self.expr(p, out, Ctx::Postfix);
                 }
-                if let Some(op) = n.tokens().find(|t| !matches!(t.kind, K::Term | K::Missing)) {
+                if let Some(op) = n
+                    .tokens()
+                    .find(|t| !matches!(t.kind, K::Term | K::Missing | K::TakeKw))
+                {
                     out.push(Doc::text(" "));
                     self.tok(op, out);
+                    out.push(Doc::text(" "));
+                }
+                // wolf-lang#438: `xs[i] = take v`, the one moded store.
+                if let Some(t) = n.tokens().find(|t| t.kind == K::TakeKw) {
+                    self.tok(t, out);
                     out.push(Doc::text(" "));
                 }
                 if let Some(r) = rhs {
