@@ -550,6 +550,22 @@ attribute name:
 
 Wolf is expression-oriented: blocks evaluate to their final expression.
 Assignment is a **statement**, not an expression (`[gram.expr.assign]`).
+**One store position carries a mode** (ruled 2026-09-24,
+wolf-lang#438 — the index store follows `push`): the right-hand side of
+a plain `=` whose place is a container element — `xs[i] = take v`,
+`m[k] = take v` — may be spelled `take`, and nowhere else in an
+assignment may a mode appear. `take` is a call-site mode, not an
+expression, so `x = take v`, `s.f = take v` and every compound
+operator's right-hand side fail to parse exactly as before (E0201).
+The form is `push(take x)`'s twin — a store is the one `read` position
+that KEEPS what it was lent (`[mem.region.edge.elem]`) — and it means
+what that spelling means there: the stored value MOVES and `v` is dead
+after the statement. The plain store COPIES; 02 has the rule and its
+cost. Witnesses (ruled, parked until the machines land them in wave
+47): `index_store_take_list`, `index_store_take_map` under
+`wolf/sprints/compiler/88-the-rulings-prose/witnesses/`, each
+`fail(E1001)` on the wolfgang lanes and `trap(use-after-move)` on lupin
+once landed, `fail(E0201)` on all three today.
 
 ### 3.1 Blocks & statements `[gram.expr.block]`
 
@@ -559,7 +575,9 @@ stmt  ::= attribute* stmt_base
 stmt_base ::= let_item | var_item | const_item | assign_stmt | defer_stmt
         | expr_stmt | item
 assign_stmt ::= place assign_op expr TERM
+              | index_place '=' 'take' expr TERM   /* the one moded store: [gram.expr.assign] */
 assign_op   ::= '=' | '+=' | '-=' | '*=' | '/=' | '%=' | '&=' | '|=' | '^=' | '<<=' | '>>='
+index_place ::= expr '[' expr ']'   /* a container element; sema checks the container */
 defer_stmt  ::= ('defer' | 'errdefer') expr TERM
 expr_stmt   ::= expr TERM
 place ::= expr  /* must be a place-expression; checked in sema, not grammar */
