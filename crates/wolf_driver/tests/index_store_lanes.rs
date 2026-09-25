@@ -29,8 +29,11 @@ fn wolf() -> &'static str {
     env!("CARGO_BIN_EXE_wolf")
 }
 
-/// The lupin release that predates the #438 mirror (is55).
-const PRE_MIRROR_LUPIN: &str = "0.1.38";
+/// The lupin releases that predate the #438 mirror (is55). lupin 0.1.39
+/// shipped before is55's mirror (wolf-interp#139), so it answers as
+/// 0.1.38 does; the first release carrying the mirror leaves this set
+/// and must give the RULED answer below.
+const PRE_MIRROR_LUPIN: &[&str] = &["0.1.38", "0.1.39"];
 
 #[derive(Debug)]
 struct Obs {
@@ -186,8 +189,8 @@ fn check(machine: &str, entry: &Path, obs: &Obs, want: Want<'_>) {
     }
 }
 
-/// Every wolfgang lane answers `wolfgang`; lupin answers `pre` at
-/// 0.1.38 and `ruled` at any other version (`None`: the ruling leaves
+/// Every wolfgang lane answers `wolfgang`; lupin answers `pre` at a
+/// PRE_MIRROR_LUPIN version and `ruled` at any other (`None`: the ruling leaves
 /// lupin's answer to is55 beyond "it parses").
 fn every_lane(name: &str, wolfgang: Want<'_>, pre: Want<'_>, ruled: Option<Want<'_>>) {
     let entry = corpus(name);
@@ -201,7 +204,7 @@ fn every_lane(name: &str, wolfgang: Want<'_>, pre: Want<'_>, ruled: Option<Want<
     let Some((version, lupin)) = lupin_says(&entry) else {
         return;
     };
-    if version == PRE_MIRROR_LUPIN {
+    if PRE_MIRROR_LUPIN.contains(&version.as_str()) {
         check(
             &format!("lupin {version} (pre-mirror)"),
             &entry,
