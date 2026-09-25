@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 0.2.17 — 2026-09-26
+
+THE SEVENTEENTH. 0.2.16 refused programs 0.2.14 ran (#449), and the
+first release in which a `Scope` handle could be written as a parameter
+hung the native tier when one was (#431). Both are fixed here, and they
+go first. Beside them land the rulings the maintainer took on
+2026-09-24 — four clauses (s182), the index store's compiler half
+(s180, #438) and the record's file index (s181, #437) — and the pairing
+moves to lupin 0.1.40, the first lupin that answers #438 and #386 as
+ruled. Six lanes and 67 commits: s178, s182, s174 (the #431 gate), s179,
+s180, s181.
+
+### Read this before you bump the pin
 **0.2.16's new exclusivity leg refused programs 0.2.14 and lupin run
 (#449).** The `mut`-claim extent check that landed with "a container
 element is a place" reported a claim that is **not in the call's
@@ -43,6 +56,92 @@ is a branch spelled *inside* the argument list whose arms claim the
 place, whose blocks really are minted after the mark. Both downstreams'
 workarounds can be reverted under #449.
 
+### A `Scope` handle as a parameter (s179, #431 path A)
+
+**A `Scope` handle passed as a parameter no longer deadlocks the native
+lane (#431, path A).** `fn fan_out(s: Scope, ch: channel[int]) {
+s.spawn(fn() { ch.send(1) }) }`, called from `scope work { fan_out(work,
+ch) }`, hung the Cranelift tier on every platform in the shipping build
+— the published 0.2.16 linux archive (sha256 `84e30c05…`) included —
+because the task's capture record lived in `fan_out`'s frame and
+`fan_out` returns before the scope joins in `main`. The runtime now
+copies that record into the scope at the spawn seam: one additive
+symbol, `__wolf_rt_scope_env_copy(scope, env, len) -> env`, whose copy
+the scope frees after its join. Lowering calls it only for a spawn
+through a handle the spawning function did not open; a spawn into a
+scope the function opened keeps its frame slot, a spawn under a loop
+keeps s86's arena, and the frozen five-parameter
+`__wolf_rt_scope_spawn` does not move. No lowering snapshot in the
+corpus moved. On kasumi, release profile: the witness answers `1` in
+under a second on `wolf run`, `conform-run --native` and `--native
+--release`, where the same tree without the fix is killed at the cap;
+s174's gate (`crates/wolf_driver/tests/scope_handle_param.rs`) is green
+unedited. `[conc.task.scope]` is implemented as written; the spec does
+not move. A task spawned **in a loop** through a handle the function
+did not open is still refused by name at lowering.
+
+*Carried from s174, the gate this fix went green under (written for the 0.2.16 cycle, landing here because 0.2.16 shipped without it):*
+
+**#431 is not windows-only** (s174). The same program — a `Scope`
+handle passed as a parameter — deadlocks the **Cranelift native tier
+on linux x86-64**, measured on kasumi against trunk `2f8deb7f` under
+`cargo xtask dist`, the build that ships: rc 124 at 60 s, 3/3, on both
+`conform-run --native --json` and `wolf run`. The LLVM release tier
+answers `exit(0)` / `1` from the same binary, and the checked lane is
+an honest `unsupported` (C1 deferred).
+
+### The rulings' prose (s182)
+
+Four clauses landed for rulings the maintainer took on 2026-09-24. The
+machines follow in this wave, and none of the four moves a corpus row's
+verdict today.
+
+- **`[gram.expr.assign]` and `[mem.region.edge.elem]` — the index store
+  follows `push` (#438).** `xs[i] = v` and `m[k] = v` COPY a non-`Copy`
+  value in and leave `v` live; `xs[i] = take v` MOVES it, the one store
+  position an assignment admits a mode in. Accepts programs refused
+  today (a use of `v` after a plain store; a `read` parameter stored
+  plainly), changes no printed byte, and costs one deep copy per plain
+  store of a value that reaches the heap. The ruled witnesses were
+  parked in the planning repo
+  (`sprints/compiler/88-the-rulings-prose/witnesses/`) for s180 on the
+  wolfgang lanes (below) and is55 on lupin (lupin 0.1.40);
+  `corpus/memory/index_store_copy_elem.lu` pins the `Copy` half, which
+  holds on every machine already.
+- **`[mem.model.place.rhs]` — a store evaluates its right-hand side
+  first, then mints its place** (B123, s173's proposal 1, path B). Pins
+  what all three machines already do:
+  `corpus/memory/store_rhs_first_{list,map,pool}.lu`, asserted across
+  the lanes by `store_rhs_first_lanes.rs`. The order of the place's
+  own operands against the right-hand side is NOT ruled by it, and the
+  machines differ there (#452: for `xs[idx()] = val()` the checked
+  machine prints `val idx`, native, release and lupin `idx val`).
+- **`[os.fs.path.domain]` — every path the host allows** (#386, s175's
+  draft as written). Confinement is a scope decline by name, resolved
+  not lexical, never a row. wolf serves the whole domain on both tiers
+  already. lupin 0.1.38 refused `sub/../x` lexically; lupin 0.1.40
+  serves it and declines a symlink that carries a path out by name
+  (is55). *Corrected at the 0.2.17 cut:* this entry first said lupin
+  0.1.38 also answered a write through any symlinked directory with a
+  `not_found` row, a symlink defect. It had none — `lupin run` served
+  both symlink witnesses at 0.1.38. The row came from `lupin
+  conform-run` observing in a private root instead of the directory it
+  was invoked in, where the witness's setup had made its link; a plain
+  file in that directory failed the same way. 0.1.40's `conform-run`
+  resolves against the working directory, as `[os.fs.path]` says. The four
+  ruled witnesses and the symlink control are parked beside #438's,
+  because a corpus witness names a relative path with no `..`.
+- **`move xs[0]` on a `List[int]` refuses a later read of `xs[1]`
+  (#446, kept as it is — option A).** A consequence of #444's fix in
+  0.2.16: `move` records the move for every type now, and a container's
+  elements are ONE place on the compiler (`Proj::Opaque`; element
+  granularity is a declared non-target), so the refusal 0.2.14 already
+  gave a non-`Copy` element reaches `Copy` ones. lupin models elements
+  one by one and runs the program: a documented conservatism
+  divergence, the class of `[mem.tier0.mode.read]`'s rows, pinned by
+  `corpus/memory/elem_move_one_place.lu` and asserted on both sides by
+  `element_move_conservatism_lanes.rs`.
+
 ### The index store follows `push` (s180, #438)
 
 **`xs[i] = v` and `m[k] = v` copy a non-`Copy` value now, and
@@ -71,84 +170,60 @@ owner. `Copy` values and `str` are free, as before.
   A raw-pointer index store is unchanged. The operand order of an
   index store (#452) is untouched on every lane.
 - `index_store_lanes.rs` asserts every case on checked, native, release
-  and lupin. lupin 0.1.38 predates the mirror (is55): the gate pins
-  its measured 0.1.38 answers and demands the ruled ones from any other
-  version.
+  and lupin. lupin 0.1.38 and 0.1.39 predate the mirror: the gate pins
+  their measured answers (`PRE_MIRROR_LUPIN`) and demands the ruled ones
+  from any other version, so the pairing at lupin 0.1.40 (is55's mirror)
+  takes the ruled arm.
 
-### The rulings' prose (s182)
+### The record names a diagnostic's file (s181, #437)
 
-Four clauses landed for rulings the maintainer took on 2026-09-24. The
-machines follow in this wave, and none of the four moves a corpus row's
-verdict today.
+**A diagnostic whose span lies in a sibling module now says which file
+it is in.** A record's spans were byte offsets with no file, so a span
+from a sibling module read as an offset into the entry file — a wrong
+place, silently, for any tool that renders it. `[proto.record.diag]`
+gains an optional file index: the record carries a top-level `files`
+table (package-relative, entry first) and each diagnostic a `file`
+index into it, **only when some diagnostic lies outside the entry
+file**; every other record is byte-identical to 0.2.16's (`f7a91e78`,
+`0fa638b9`). `cargo xtask` validates the index all-or-nothing and
+compares the file a diagnostic names (`4d204bb3`, protocol fixture
+`with-file-index`, `cf36d489`).
 
-- **`[gram.expr.assign]` and `[mem.region.edge.elem]` — the index store
-  follows `push` (#438).** `xs[i] = v` and `m[k] = v` COPY a non-`Copy`
-  value in and leave `v` live; `xs[i] = take v` MOVES it, the one store
-  position an assignment admits a mode in. Accepts programs refused
-  today (a use of `v` after a plain store; a `read` parameter stored
-  plainly), changes no printed byte, and costs one deep copy per plain
-  store of a value that reaches the heap. Not yet built: the ruled
-  witnesses are parked in the planning repo
-  (`sprints/compiler/88-the-rulings-prose/witnesses/`) for s180 on the
-  wolfgang lanes and is55 on lupin; `corpus/memory/index_store_copy_elem.lu`
-  pins the `Copy` half, which holds on every machine already.
-- **`[mem.model.place.rhs]` — a store evaluates its right-hand side
-  first, then mints its place** (B123, s173's proposal 1, path B). Pins
-  what all three machines already do:
-  `corpus/memory/store_rhs_first_{list,map,pool}.lu`, asserted across
-  the lanes by `store_rhs_first_lanes.rs`. The order of the place's
-  own operands against the right-hand side is NOT ruled by it, and the
-  machines differ there (#452: for `xs[idx()] = val()` the checked
-  machine prints `val idx`, native, release and lupin `idx val`).
-- **`[os.fs.path.domain]` — every path the host allows** (#386, s175's
-  draft as written). Confinement is a scope decline by name, resolved
-  not lexical, never a row. wolf serves the whole domain on both tiers
-  already; lupin 0.1.38's lexical refusal of `sub/../x` and its
-  `not_found` row through any symlinked directory are is55's. The four
-  ruled witnesses and the symlink control are parked beside #438's,
-  because a corpus witness names a relative path with no `..`.
-- **`move xs[0]` on a `List[int]` refuses a later read of `xs[1]`
-  (#446, kept as it is — option A).** A consequence of #444's fix in
-  0.2.16: `move` records the move for every type now, and a container's
-  elements are ONE place on the compiler (`Proj::Opaque`; element
-  granularity is a declared non-target), so the refusal 0.2.14 already
-  gave a non-`Copy` element reaches `Copy` ones. lupin models elements
-  one by one and runs the program: a documented conservatism
-  divergence, the class of `[mem.tier0.mode.read]`'s rows, pinned by
-  `corpus/memory/elem_move_one_place.lu` and asserted on both sides by
-  `element_move_conservatism_lanes.rs`.
+- **Which records move: 16 per wolfgang lane**, predicted before the
+  edit (`51f7bea0`) and measured — the 15 corpus entries with a
+  diagnostic outside the entry file plus the new witness
+  `corpus/resolve/sibling_diag` (`ff6f2667`, `fail(E0302)`). Checked
+  and native are identical: the diagnostics come from the shared
+  frontend. `record_file_index.rs` asserts the named file on all three
+  machines (`a98f0ae2`).
+- **Path keys are lexical.** `canonicalize` spelled one side `\\?\`
+  on windows, so keys compare lexically and fold windows spelling
+  before keying (`9111a2e0`, `69de0e66`, `cf89d3c2`).
+- lupin admits both keys from 0.1.39 (is54, the lupin half); 0.1.38's
+  closed schema refused them. The pairing moved to 0.1.39 in this lane
+  (`48a12e6a`); s180's gate then recorded 0.1.39 as pre-mirror too
+  (`30e81609`) — the version pin did its job.
 
-**A `Scope` handle passed as a parameter no longer deadlocks the native
-lane (#431, path A).** `fn fan_out(s: Scope, ch: channel[int]) {
-s.spawn(fn() { ch.send(1) }) }`, called from `scope work { fan_out(work,
-ch) }`, hung the Cranelift tier on every platform in the shipping build
-— the published 0.2.16 linux archive (sha256 `84e30c05…`) included —
-because the task's capture record lived in `fan_out`'s frame and
-`fan_out` returns before the scope joins in `main`. The runtime now
-copies that record into the scope at the spawn seam: one additive
-symbol, `__wolf_rt_scope_env_copy(scope, env, len) -> env`, whose copy
-the scope frees after its join. Lowering calls it only for a spawn
-through a handle the spawning function did not open; a spawn into a
-scope the function opened keeps its frame slot, a spawn under a loop
-keeps s86's arena, and the frozen five-parameter
-`__wolf_rt_scope_spawn` does not move. No lowering snapshot in the
-corpus moved. On kasumi, release profile: the witness answers `1` in
-under a second on `wolf run`, `conform-run --native` and `--native
---release`, where the same tree without the fix is killed at the cap;
-s174's gate (`crates/wolf_driver/tests/scope_handle_param.rs`) is green
-unedited. `[conc.task.scope]` is implemented as written; the spec does
-not move. A task spawned **in a loop** through a handle the function
-did not open is still refused by name at lowering.
+### Shipped, by name
 
-*Carried from s174 (written for the 0.2.16 cycle, landing here because 0.2.16 shipped without it):*
+Open at the cut, and none of them new in 0.2.17:
 
-**#431 is not windows-only** (s174). The same program — a `Scope`
-handle passed as a parameter — deadlocks the **Cranelift native tier
-on linux x86-64**, measured on kasumi against trunk `2f8deb7f` under
-`cargo xtask dist`, the build that ships: rc 124 at 60 s, 3/3, on both
-`conform-run --native --json` and `wolf run`. The LLVM release tier
-answers `exit(0)` / `1` from the same binary, and the checked lane is
-an honest `unsupported` (C1 deferred).
+- **#452** — for `xs[idx()] = val()` the checked machine runs `val`
+  before `idx`; native, release and lupin run `idx` first.
+  `[mem.model.place.rhs]` pins only the place's address; the operand
+  order is a ruling owed.
+- **#446** — `move xs[0]` on a `List[int]` refuses a later read of
+  `xs[1]` (option A, the status quo since 0.2.16's #444 fix); the
+  maintainer's word is owed.
+- **#455** — on the native tier a first-class `region()` created inside
+  a function is not freed on return (8 × 50 MB peaks at 924 MB); the
+  block form `region r { … }` frees.
+- **#458** — an unannotated integer literal binding is typed by a later
+  comparison on wolfgang and runs as `int`; lupin keeps the `i32`
+  default and traps.
+- **#457** (the test suite, not the toolchain) — `scope_handle_param.rs`
+  runs whatever `target/release/wolf` exists and never rebuilds it, so a
+  stale release build reds it; rebuild before a release-profile run.
 
 ## 0.2.16 — 2026-09-22
 
