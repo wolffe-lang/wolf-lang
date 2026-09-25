@@ -24,5 +24,5 @@
 # counts" with N measured, names the files, and reports the moves that
 # live BELOW the ledger — a differing stdout on an unseeded file never
 # reaches a count, and that is where r13's real interpreter delta was.
-lupin-version = 0.1.38
-lupin-pin = 2e4ca76
+lupin-version = 0.1.39
+lupin-pin = 93a5fe5
