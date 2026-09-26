@@ -204,6 +204,23 @@ compares the file a diagnostic names (`4d204bb3`, protocol fixture
   (`48a12e6a`); s180's gate then recorded 0.1.39 as pre-mirror too
   (`30e81609`) — the version pin did its job.
 
+### The pairing: lupin 0.1.40
+
+`PAIRING` names **lupin 0.1.40 at pin `93a5fe5`** (wolf-interp release
+397033025; the linux x86-64 archive's sha256 `509929e6…`), the first
+lupin that answers #438's index store and #386's path domain as ruled.
+s180's gate takes its ruled arm for 0.1.40 with no edit
+(`PRE_MIRROR_LUPIN` stays 0.1.38 and 0.1.39). The ritual (#87, with
+#281's control against the 0.1.39 archive, same corpus, same release
+`wolf`) **moved 5 ledger counts on each tier, together**, and all five
+are s180's witnesses: `index_store_copies_{list,map}.lu` SOUNDNESS →
+agreement, `index_store_take_{list,map,read_param}.lu` completeness →
+agreement. Checked: 389 → 394 agreements, soundness 2 → 0, hard 9 → 7;
+native: 430 → 435, soundness 3 → 1, hard 12 → 10. Nothing moved below
+the ledger. Native's remaining soundness finding is
+`memory/unsafe_ub_uaf.lu` (`exit` vs `ub(mem.ub)`), the program's own
+use-after-free read on the compiled lane, as at 0.2.16.
+
 ### Shipped, by name
 
 Open at the cut, and none of them new in 0.2.17:
