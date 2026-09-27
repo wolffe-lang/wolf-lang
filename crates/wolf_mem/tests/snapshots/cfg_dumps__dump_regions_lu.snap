@@ -71,12 +71,12 @@ fn build_ring
     -> b9, b10
   b9:
     read cur @1346..1349
-    handle-check pool[_] @1341..1350
-    read pool[_].value @1341..1356
+    handle-check pool[cur] @1341..1350
+    read pool[cur].value @1341..1356
     mutate sum @1334..1337
     read cur @1380..1383
-    handle-check pool[_] @1375..1384
-    read pool[_].next @1375..1389
+    handle-check pool[cur] @1375..1384
+    read pool[cur].next @1375..1389
     init cur @1369..1372
     -> b8, trap
   b10:

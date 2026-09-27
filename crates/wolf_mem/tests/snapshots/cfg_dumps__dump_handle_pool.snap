@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_mem/tests/cfg_dumps.rs
-assertion_line: 144
 expression: "dump(&corpus(\"memory/handle_stale.lu\"))"
 ---
 fn main
@@ -24,8 +23,8 @@ fn main
     call remove [mut pool] @404..424
     alloc remove(..) -> region r @404..424
     read h @485..486
-    handle-check pool[_] @480..487
-    read pool[_].value @480..493
+    handle-check pool[h] @480..487
+    read pool[h].value @480..493
     init v @476..477
     read v @550..551
     region-close region r @556..557

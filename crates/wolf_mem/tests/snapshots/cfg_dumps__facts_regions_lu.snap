@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_mem/tests/cfg_dumps.rs
-assertion_line: 164
 expression: "facts(&corpus(\"regions.lu\"))"
 ---
 facts fn build_ring
@@ -12,8 +11,8 @@ facts fn build_ring
   alloc Node @1015..1202 -> region r
   alloc init(..) @1215..1243 -> region r
   promote region r @699..700 -> stack (create/free elided)
-  handle-check pool[_] @1341..1350 -> generation check (hoistable in unfreed window)
-  handle-check pool[_] @1375..1384 -> generation check (hoistable in unfreed window)
+  handle-check pool[cur] @1341..1350 -> generation check (hoistable in unfreed window)
+  handle-check pool[cur] @1375..1384 -> generation check (hoistable in unfreed window)
 
 facts fn build_config
   alloc Config @1556..1576 -> caller

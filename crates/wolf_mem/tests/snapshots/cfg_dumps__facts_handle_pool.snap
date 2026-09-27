@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_mem/tests/cfg_dumps.rs
-assertion_line: 149
 expression: "facts(&corpus(\"memory/handle_stale.lu\"))"
 ---
 facts fn main
@@ -10,4 +9,4 @@ facts fn main
   alloc init(..) @358..395 -> region r
   alloc remove(..) @404..424 -> region r
   promote region r @265..266 -> stack (create/free elided)
-  handle-check pool[_] @480..487 -> generation check (hoistable in unfreed window)
+  handle-check pool[h] @480..487 -> generation check (hoistable in unfreed window)
