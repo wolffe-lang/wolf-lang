@@ -26,6 +26,11 @@
 //! `i` blurs every moved place spelled through it, and a local that is
 //! ever borrowed — or any raw-tier statement in the body — never
 //! qualifies.
+//!
+//! Returns (`[mem.tier0.mode.mut]`, s184, wolf-lang#464): the state
+//! reaching the exit is what every caller gets back, so a place under
+//! a `mut` parameter still maybe-moved there is E1001 at its move — the
+//! caller's place would otherwise name the moved value.
 
 use std::collections::{BTreeMap, HashSet};
 
@@ -179,6 +184,72 @@ pub fn check(cfg: &Cfg, diags: &mut Vec<Diagnostic>) {
             transfer(cfg, &rule, stmt, &mut state, Some(&mut sink));
         }
     }
+
+    // ------------------------------------ `mut` parameters at return ----
+    if let Some(state) = &entry[cfg.exit.0 as usize] {
+        let used: HashSet<Span> = seen.iter().map(|&(_, _, moved_at)| moved_at).collect();
+        at_return(cfg, state, &used, diags);
+    }
+}
+
+/// `[mem.tier0.mode.mut]` (s184, wolf-lang#464): a `mut` parameter is
+/// initialized at every return of the callee. Every return — a
+/// `return`, the `?` error edge, the fall-through — joins `cfg.exit`
+/// after its defers, so the state there is what the caller gets back:
+/// a place under a `mut` parameter (the parameter itself, a field, an
+/// element, a map value) that is still maybe-moved there is refused at
+/// the move that emptied it. One report per parameter and move site,
+/// and none for a move whose use in the body already drew E1001 (one
+/// root cause, one diagnostic).
+fn at_return(cfg: &Cfg, state: &State, used: &HashSet<Span>, diags: &mut Vec<Diagnostic>) {
+    let mut seen: HashSet<(u32, Span)> = HashSet::new();
+    for (&moved, &why) in state {
+        let Base::Local(l) = cfg.places.get(moved).base else {
+            continue;
+        };
+        if cfg.locals[l as usize].param_mode != Some(Some(wolf_ast::ParamMode::Mut))
+            || why.uninit_decl
+            || used.contains(&why.span)
+            || !seen.insert((l, why.span))
+        {
+            continue;
+        }
+        diags.push(report_at_return(cfg, l, moved, why));
+    }
+}
+
+fn report_at_return(cfg: &Cfg, param: u32, moved: PlaceId, why: Emptied) -> Diagnostic {
+    let local = &cfg.locals[param as usize];
+    let name = local.name.clone();
+    let shown = cfg.show_place(moved);
+    let mut d = Diagnostic::error(
+        codes::E1001,
+        why.span,
+        format!("`{shown}` may return to the caller with its value moved away"),
+    )
+    .with_label("moved here, and not stored back on every path to a return")
+    .with_secondary(
+        local.span,
+        format!("`{name}` is `mut`: the caller reads it again after the call"),
+    )
+    .with_note(format!(
+        "a `mut` parameter is initialized at every return of the function \
+         [mem.tier0.mode.mut]: store a value back into `{shown}` before each return."
+    ));
+    if !cfg.pattern_moves.contains(&why.span) {
+        d = d.with_suggestion(Suggestion::new(
+            "to leave the parameter whole, copy it at the move".to_string(),
+            vec![(
+                Span::new(why.span.file, why.span.lo, why.span.lo),
+                "copy ".to_string(),
+            )],
+            Applicability::Maybe,
+        ));
+    }
+    // #325: the parameter this refusal names — W1002's "never written"
+    // for the same name stands down beside it (the move is the write
+    // its syntactic scan cannot see).
+    d.about(name, why.span)
 }
 
 /// Apply one statement. When `report` is given, uses of maybe-moved
