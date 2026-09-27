@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### A `mut` parameter is initialized at every return (s184, #464)
+
+- **A silent wrong answer in 0.2.17 is refused**: a function that moved
+  out of a `mut` parameter — the whole parameter, a field, an element,
+  a map value — and returned without storing a value back compiled with
+  only a W1002, and native and release handed the caller the moved
+  buffer (`var t = move xs; (mut t).push(9)` printed `2` for the
+  caller's `xs.len`, the #460 aliasing through a parameter). It is now
+  E1001 at the move on the checked, native and release lanes:
+  `[mem.tier0.mode.mut]` states that a `mut` parameter is initialized at
+  every return of the callee, the `?` error edge and an early `return`
+  included. A store back before each return (`xs = t`, `s.tags = t`,
+  `xs[0] = t`, `m[k] = take v` under `[mem.model.place.elem]`'s revival
+  rules) keeps it legal.
+- W1002's "this `mut` parameter is never written" no longer fires
+  beside that refusal: the move out was the write its scan cannot see.
+- **Read this before you bump the pin:** a function that moves out of a
+  `mut` parameter on some path and never puts a value back is E1001 now
+  — every caller of it was reading a moved value.
+- Witnesses: `corpus/memory/mut_param_moveout_{whole,field,elem,map,
+  one_path}.lu` (refused) and `mut_param_restore_{whole,field,elem,
+  map}.lu` (run), asserted on checked, native, release and lupin by
+  `mut_param_return_lanes.rs`.
+
 ### Index first, then value (s183, #452, the maintainer's ruling)
 
 - **The checked machine now evaluates a store's place operands before
