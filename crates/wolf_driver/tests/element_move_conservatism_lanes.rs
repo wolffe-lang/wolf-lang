@@ -122,7 +122,10 @@ fn moving_one_element_leaves_its_sibling_readable_on_every_lane() {
     assert_eq!(checked.stdout, want, "the CHECKED lane's answer");
     for flag in ["--native", "--release"] {
         if let Some(obs) = lane(&entry, flag) {
-            assert_eq!(obs.verdict, "exit(0)", "the {flag} lane disagrees with checked");
+            assert_eq!(
+                obs.verdict, "exit(0)",
+                "the {flag} lane disagrees with checked"
+            );
             assert_eq!(obs.stdout, want, "the {flag} lane's answer");
         }
     }
