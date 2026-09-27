@@ -417,3 +417,50 @@ fn a_store_through_a_reassigned_local_revives_nothing() {
         verdict("trap(use-after-move)"),
     );
 }
+
+// ------------------------------------- eg01b: R3 over any `Copy` local --
+//
+// The maintainer's ruling (2026-09-26): R1 and R3 are stated over any
+// `Copy`-typed local, not only an integer one. eg01 had narrowed
+// revival to integer locals, so each positive row below was E1001 at
+// `7841f7dc` (and compiled on 0.2.17 through wolf-lang#460's any-store
+// revival); the blur row stays E1001, and 0.2.17 printed a moved
+// buffer for it on every wolfgang lane.
+
+/// R3 through a `str` key, as a parameter and as a local.
+#[test]
+fn a_store_through_the_same_str_key_revives_the_value() {
+    let want = runs("3 7 2\n");
+    every_lane("elem_str_key_revive.lu", want, want, want);
+}
+
+/// R3 through `char` and `bool` key locals.
+#[test]
+fn a_store_through_the_same_char_or_bool_key_revives_the_value() {
+    let want = runs("2 2 2 4\n");
+    every_lane("elem_char_bool_key_revive.lu", want, want, want);
+}
+
+/// R3 fails once the `str` key local is written between: the store
+/// names `m["b"]`, and `m["a"]` stays read out. lupin 0.1.40's map read
+/// copies, so it prints the original `1`; the ruled answer is the trap.
+#[test]
+fn a_store_through_a_reassigned_key_revives_nothing() {
+    every_lane(
+        "elem_key_reassigned_no_revive.lu",
+        verdict("fail(E1001)"),
+        runs("1\n"),
+        verdict("trap(use-after-move)"),
+    );
+}
+
+/// R3 through a `Pool` handle local; lupin declines `Pool` by name.
+#[test]
+fn a_store_through_the_same_pool_handle_revives_the_element() {
+    every_lane(
+        "elem_pool_handle_revive.lu",
+        runs("2\n"),
+        verdict("unsupported"),
+        verdict("unsupported"),
+    );
+}
