@@ -1,74 +1,62 @@
 # Changelog
 
-## Unreleased
+## 0.2.18 — 2026-09-27
 
-### A `mut` parameter is initialized at every return (s184, #464)
+THE EIGHTEENTH, a point release. The published 0.2.17 gives two silent
+wrong answers on the native tier, and both are fixed here and go first:
+an index store revived a moved sibling element, so native and release
+printed a moved buffer through the container (#460); and a function
+that moved out of a `mut` parameter handed the caller the moved buffer
+(#464). Each witness below compiles and runs on 0.2.17 and is
+`fail(E1001)` on every wolfgang lane here; a downstream can run them
+against its own pin. Beside them land the maintainer's rulings of
+2026-09-26 — R1/R3 over any `Copy` local (eg01b) and index first, then
+value (s183, #452) — and the clause they all stand on (eg00), and the
+pairing moves to lupin 0.1.41, the first lupin whose element reads trap
+on a moved element (wolf-interp#141). Five lanes and 74 commits: eg00,
+eg01, eg01b, s183, s184.
 
-- **A silent wrong answer in 0.2.17 is refused**: a function that moved
-  out of a `mut` parameter — the whole parameter, a field, an element,
-  a map value — and returned without storing a value back compiled with
-  only a W1002, and native and release handed the caller the moved
-  buffer (`var t = move xs; (mut t).push(9)` printed `2` for the
-  caller's `xs.len`, the #460 aliasing through a parameter). It is now
-  E1001 at the move on the checked, native and release lanes:
-  `[mem.tier0.mode.mut]` states that a `mut` parameter is initialized at
-  every return of the callee, the `?` error edge and an early `return`
-  included. A store back before each return (`xs = t`, `s.tags = t`,
-  `xs[0] = t`, `m[k] = take v` under `[mem.model.place.elem]`'s revival
-  rules) keeps it legal.
-- W1002's "this `mut` parameter is never written" no longer fires
-  beside that refusal: the move out was the write its scan cannot see.
-- **Read this before you bump the pin:** a function that moves out of a
-  `mut` parameter on some path and never puts a value back is E1001 now
-  — every caller of it was reading a moved value.
-- Witnesses: `corpus/memory/mut_param_moveout_{whole,field,elem,map,
-  one_path}.lu` (refused) and `mut_param_restore_{whole,field,elem,
-  map}.lu` (run), asserted on checked, native, release and lupin by
-  `mut_param_return_lanes.rs`.
+### Read this before you bump the pin
 
-### Index first, then value (s183, #452, the maintainer's ruling)
+Two programs 0.2.17 compiled are refused, and both were reading a moved
+value on every machine that ran them.
 
-- **The checked machine now evaluates a store's place operands before
-  its right-hand side**: `xs[idx()] = val()` printed `val idx` under
-  `conform-run --checked` through 0.2.17 and `idx val` on native,
-  release and lupin; it prints `idx val` everywhere. The same holds
-  for a `Map` key (`m[key()] = val()`), every level of a nested index
-  (`g[i()][j()] = val()`: `i j val`), a compound store (`xs[i()] +=
-  v()`) and a raw-pointer element store (`p[i()] = v()`). The index's
-  value is taken first too: `ys[i] = bump(mut i)` stores at the old
-  `i` on every lane (the checked machine stored at the new one).
-- `[mem.model.place.rhs]` states the order: the place's operands, left
-  to right and outermost first, then the right-hand side, then the
-  address, then the store — the address is still located after the
-  right-hand side, so `xs[x()] = grow(mut xs)` stores into the grown
-  list.
-- Witnesses: `corpus/memory/ctl_store_order.lu` (s182's control) and
-  `ctl_store_order_{map,nested,nested_index,captured,compound,raw}.lu`,
-  asserted on checked, native, release and lupin by
-  `store_order_lanes.rs`. lupin 0.1.40 evaluates a multi-index store's
-  outer operands twice (wolf-interp#145); the gate pins that answer
-  for 0.1.40 and 0.1.41 by version.
+**#460 — an index store revived a moved sibling element.** On 0.2.17
+this compiles; the checked machine traps `use-after-move` at the read,
+native and release print `2 2 1` (the moved list and `xs[0]` are one
+buffer, so the push through `a` shows in `xs[0]`), and lupin 0.1.40
+prints a third answer, `2 1 1`. Here it is `fail(E1001)` on checked,
+native and release, and lupin 0.1.41 traps:
 
-### R3 over any `Copy` local (eg01b, the maintainer's ruling)
+```wolf
+var xs = List[List[int]]()
+(mut xs).push([1])
+(mut xs).push([2])
+var a = move xs[0]
+xs[1] = [5]
+(mut a).push(7)
+print("{a.len} {xs[0].len} {xs[1].len}")   // E1001: `xs[1] = …` revives only `xs[1]`
+```
 
-- **`m[k] = take v` revives again with a `str` key**: `var v = m[k]
-  else …; (mut v).push(x); m[k] = take v` compiled on 0.2.17 (through
-  #460's any-store revival) and was E1001 after eg01, whose R3 took
-  only an integer local. `[mem.model.place.elem]`'s R1 and R3 are now
-  stated over a local of any `Copy` type, and the compiler follows: a
-  store through the same `str`, `char` or `bool` key local, or the
-  same `Pool` handle local, unwritten since the read-out, revives it.
-  A key local written in between still revives nothing — on 0.2.17
-  that shape printed the moved buffer on every wolfgang lane.
-- The clause's stale sentences are fixed: R3 is no longer labelled not
-  implemented, item 3 names R3 as its exception, and "where the
-  machines stand" describes trunk rather than 0.2.17.
-- Diagnostics and CFG dumps name a pool handle (`pool[h]`) where they
-  printed `pool[_]`.
-- Witnesses: `corpus/memory/elem_str_key_revive.lu`,
-  `elem_char_bool_key_revive.lu`, `elem_pool_handle_revive.lu` and the
-  blur row `elem_key_reassigned_no_revive.lu`, asserted on checked,
-  native, release and lupin by `element_places_lanes.rs`.
+(`corpus/memory/elem_const_store_no_revive_heap.lu`; its three twins
+store through a run-time index, hold `int` elements, or both.)
+
+**#464 — a `mut` parameter left moved-out at return.** On 0.2.17 this
+compiles with only a W1002 ("never written"), and checked, native and
+release print `2`: the caller's `xs` still names the buffer `f` moved
+into `t` and grew. Here it is `fail(E1001)` at the move:
+
+```wolf
+fn f(mut xs: List[int]) {
+    var t = move xs   // E1001: `xs` returns to the caller moved-out
+    (mut t).push(9)
+}
+// main: var xs = [1]; f(mut xs); print("{xs.len}")
+```
+
+(`corpus/memory/mut_param_moveout_whole.lu`; the field, element, map
+value and one-path shapes beside it, and their store-back twins, which
+run.)
 
 ### Element places for moves, and #460 (eg01, EGC's EG1)
 
@@ -110,6 +98,74 @@
   `element_places_lanes.rs` (lupin 0.1.40's pre-mirror answers pinned
   by version, wolffe-lang/wolf-interp#141).
 
+### A `mut` parameter is initialized at every return (s184, #464)
+
+- **A silent wrong answer in 0.2.17 is refused**: a function that moved
+  out of a `mut` parameter — the whole parameter, a field, an element,
+  a map value — and returned without storing a value back compiled with
+  only a W1002, and native and release handed the caller the moved
+  buffer (`var t = move xs; (mut t).push(9)` printed `2` for the
+  caller's `xs.len`, the #460 aliasing through a parameter). It is now
+  E1001 at the move on the checked, native and release lanes:
+  `[mem.tier0.mode.mut]` states that a `mut` parameter is initialized at
+  every return of the callee, the `?` error edge and an early `return`
+  included. A store back before each return (`xs = t`, `s.tags = t`,
+  `xs[0] = t`, `m[k] = take v` under `[mem.model.place.elem]`'s revival
+  rules) keeps it legal.
+- W1002's "this `mut` parameter is never written" no longer fires
+  beside that refusal: the move out was the write its scan cannot see.
+- **Read this before you bump the pin:** a function that moves out of a
+  `mut` parameter on some path and never puts a value back is E1001 now
+  — every caller of it was reading a moved value.
+- Witnesses: `corpus/memory/mut_param_moveout_{whole,field,elem,map,
+  one_path}.lu` (refused) and `mut_param_restore_{whole,field,elem,
+  map}.lu` (run), asserted on checked, native, release and lupin by
+  `mut_param_return_lanes.rs`.
+
+### R3 over any `Copy` local (eg01b, the maintainer's ruling)
+
+- **`m[k] = take v` revives again with a `str` key**: `var v = m[k]
+  else …; (mut v).push(x); m[k] = take v` compiled on 0.2.17 (through
+  #460's any-store revival) and was E1001 after eg01, whose R3 took
+  only an integer local. `[mem.model.place.elem]`'s R1 and R3 are now
+  stated over a local of any `Copy` type, and the compiler follows: a
+  store through the same `str`, `char` or `bool` key local, or the
+  same `Pool` handle local, unwritten since the read-out, revives it.
+  A key local written in between still revives nothing — on 0.2.17
+  that shape printed the moved buffer on every wolfgang lane.
+- The clause's stale sentences are fixed: R3 is no longer labelled not
+  implemented, item 3 names R3 as its exception, and "where the
+  machines stand" describes trunk rather than 0.2.17.
+- Diagnostics and CFG dumps name a pool handle (`pool[h]`) where they
+  printed `pool[_]`.
+- Witnesses: `corpus/memory/elem_str_key_revive.lu`,
+  `elem_char_bool_key_revive.lu`, `elem_pool_handle_revive.lu` and the
+  blur row `elem_key_reassigned_no_revive.lu`, asserted on checked,
+  native, release and lupin by `element_places_lanes.rs`.
+
+### Index first, then value (s183, #452, the maintainer's ruling)
+
+- **The checked machine now evaluates a store's place operands before
+  its right-hand side**: `xs[idx()] = val()` printed `val idx` under
+  `conform-run --checked` through 0.2.17 and `idx val` on native,
+  release and lupin; it prints `idx val` everywhere. The same holds
+  for a `Map` key (`m[key()] = val()`), every level of a nested index
+  (`g[i()][j()] = val()`: `i j val`), a compound store (`xs[i()] +=
+  v()`) and a raw-pointer element store (`p[i()] = v()`). The index's
+  value is taken first too: `ys[i] = bump(mut i)` stores at the old
+  `i` on every lane (the checked machine stored at the new one).
+- `[mem.model.place.rhs]` states the order: the place's operands, left
+  to right and outermost first, then the right-hand side, then the
+  address, then the store — the address is still located after the
+  right-hand side, so `xs[x()] = grow(mut xs)` stores into the grown
+  list.
+- Witnesses: `corpus/memory/ctl_store_order.lu` (s182's control) and
+  `ctl_store_order_{map,nested,nested_index,captured,compound,raw}.lu`,
+  asserted on checked, native, release and lupin by
+  `store_order_lanes.rs`. lupin 0.1.40 evaluates a multi-index store's
+  outer operands twice (wolf-interp#145); the gate pins that answer
+  for 0.1.40 and 0.1.41 by version.
+
 ### The element clause (eg00, #446's campaign)
 
 - **`[mem.model.place.elem]`** (spec/02 §1) says which index shapes are
@@ -134,6 +190,33 @@
   through this hole.
 - **wolffe-lang/wolf-interp#141** (filed): lupin 0.1.40's index read
   does not trap on a moved element.
+
+### Shipped, by name
+
+Open at the cut:
+
+- **#446** — `move xs[0]` on a `List[int]` refused a later read of
+  `xs[1]` through 0.2.17; eg01 makes literal indices distinct places,
+  so that row now runs, but run-time indices stay one place and the
+  maintainer's word on the issue is still owed.
+- **#455** — on the native tier a first-class `region()` created inside
+  a function is not freed on return; the block form `region r { … }`
+  frees.
+- **#458** — an unannotated integer literal binding is typed by a later
+  comparison on wolfgang and runs as `int`; lupin keeps the `i32`
+  default and traps.
+- **#466** — a nested fn's `mut` parameter is read as plain `read` at
+  the call site (E1007).
+- **#457** (the test suite, not the toolchain) — `scope_handle_param.rs`
+  runs whatever `target/release/wolf` exists and never rebuilds it;
+  rebuild before a release-profile run.
+- On lupin 0.1.41, open and pinned by version in this release's gates:
+  wolffe-lang/wolf-interp#144 (a `Map` read copies a non-`Copy` value
+  out), wolffe-lang/wolf-interp#145 (a nested index store runs its
+  outer operands twice) and wolffe-lang/wolf-interp#146 (a caller does
+  not see its callee move a whole `mut` parameter); and
+  wolffe-lang/wolf-interp#143 (a whole read of a container holding a
+  moved part does not trap).
 
 ## 0.2.17 — 2026-09-26
 
