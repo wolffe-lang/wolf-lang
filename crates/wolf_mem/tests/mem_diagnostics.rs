@@ -1814,12 +1814,12 @@ fn e1001_r3_does_not_carry_across_loop_iterations() {
 }
 
 #[test]
-fn e1001_a_map_key_that_is_not_a_literal_revives_nothing() {
-    // Item 2/3: a `str` local key is one place with every key (R1/R3
-    // are stated over integer locals), so the store through it revives
-    // nothing — the conservative side of the clause.
+fn clean_r3_a_str_key_local_revives() {
+    // eg01b: R3 is stated over any `Copy` local (the maintainer's
+    // ruling), so the store through the same unwritten `str` key
+    // revives the value read out of it — eg01 refused this (E1001).
     snap(
-        "e1001_elem_map_str_local_key",
+        "clean_elem_r3_str_key",
         "fn main() -> !int {\n    \
              var m = Map[str, List[int]]()\n    \
              m[\"a\"] = [1]\n    \
@@ -1829,6 +1829,55 @@ fn e1001_a_map_key_that_is_not_a_literal_revives_nothing() {
              m[k] = take v\n    \
              let w = m[\"a\"] else List[int]()\n    \
              w.len\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1001_r3_over_a_copy_key_does_not_hold_after_the_key_is_written() {
+    // eg01b's blur twins: a `str`, `char` or `bool` key written between
+    // the read-out and the store blurs `m[k]` exactly as an integer
+    // index does — the store may name another key.
+    for (name, ty, init, lit, between) in [
+        ("e1001_elem_r3_str_key_assigned", "str", "\"a\"", "\"a\"", "k = \"b\""),
+        ("e1001_elem_r3_char_key_assigned", "char", "'a'", "'a'", "k = 'b'"),
+        ("e1001_elem_r3_bool_key_mut_lent", "bool", "true", "true", "flip(mut k)"),
+    ] {
+        let src = format!(
+            "fn flip(mut b: bool) {{\n    b = !b\n}}\n\
+             fn main() -> !int {{\n    \
+                 var m = Map[{ty}, List[int]]()\n    \
+                 m[{lit}] = [1]\n    \
+                 var k = {init}\n    \
+                 var v = m[k] else List[int]()\n    \
+                 (mut v).push(2)\n    \
+                 {between}\n    \
+                 m[k] = take v\n    \
+                 let w = m[{lit}] else List[int]()\n    \
+                 w.len\n\
+             }}\n"
+        );
+        insta::assert_snapshot!(name, render_mem(&src));
+    }
+}
+
+#[test]
+fn clean_r3_a_pool_handle_local_revives() {
+    // eg01b: a handle is a `Copy` value, so `move p[h]` … `p[h] = take
+    // t` with `h` unwritten revives the element.
+    snap(
+        "clean_elem_r3_pool_handle",
+        "struct Node { tags: List[int] }\n\
+         fn main() -> !int {\n    \
+             region r: pool(Node) {\n        \
+                 var p = Pool[Node]()\n        \
+                 let h = (mut p).reserve()\n        \
+                 (mut p).init(h, Node { tags: [1] })\n        \
+                 var t = move p[h]\n        \
+                 (mut t.tags).push(2)\n        \
+                 p[h] = take t\n        \
+                 p[h].tags.len\n    \
+             }\n\
          }\n",
     );
 }
