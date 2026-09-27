@@ -366,3 +366,51 @@ fn a_copy_element_is_not_revived_through_a_run_time_index() {
         verdict("trap(use-after-move)"),
     );
 }
+
+// ------------------------------------------ eg01: EG1 and item 3's + --
+
+/// Item 1(a) on a non-`Copy` element: `move xs[0]`, read `xs[1].len`.
+#[test]
+fn a_literal_element_moves_alone() {
+    let want = runs("1 2\n");
+    every_lane("elem_const_move_heap.lu", want, want, want);
+}
+
+/// Item 1(a), the path rule: `move xs[0].tags`, read `xs[1].tags.len`.
+#[test]
+fn paths_through_distinct_literals_are_distinct() {
+    let want = runs("1 2\n");
+    every_lane("elem_const_field_of_elem.lu", want, want, want);
+}
+
+/// Item 1(b): the value at `m["a"]` read out, `m["b"]` still readable.
+#[test]
+fn distinct_literal_keys_are_distinct_places() {
+    let want = runs("1 2\n");
+    every_lane("elem_key_move_map.lu", want, want, want);
+}
+
+/// Item 1(c): `move xs[0]`, then `xs.len` — the header is no element.
+#[test]
+fn the_header_is_not_an_element() {
+    let want = runs("1 2\n");
+    every_lane("elem_len_after_move.lu", want, want, want);
+}
+
+/// Item 3, positive: a store through the same literal revives it.
+#[test]
+fn a_store_through_the_same_literal_revives_the_element() {
+    let want = runs("2 1 7\n");
+    every_lane("elem_const_store_revives.lu", want, want, want);
+}
+
+/// R3 fails once the local is written between the move and the store.
+#[test]
+fn a_store_through_a_reassigned_local_revives_nothing() {
+    every_lane(
+        "elem_sym_reassigned_no_revive.lu",
+        verdict("fail(E1001)"),
+        runs("1 1 2\n"),
+        verdict("trap(use-after-move)"),
+    );
+}
