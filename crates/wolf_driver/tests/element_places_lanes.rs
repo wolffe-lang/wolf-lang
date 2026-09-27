@@ -33,6 +33,12 @@ fn wolf() -> &'static str {
 /// lupin releases that predate wolffe-lang/wolf-interp#141's fix.
 const PRE_MIRROR_LUPIN: &[&str] = &["0.1.40"];
 
+/// lupin releases whose `Map` read copies a non-`Copy` value out rather
+/// than moving it, so a later read of that key sees the original
+/// (wolffe-lang/wolf-interp#144). 0.1.41 is is56's head (`02433a0`),
+/// measured by eg01b: it fixes #141 and still copies.
+const PRE_MAP_MOVE_LUPIN: &[&str] = &["0.1.40", "0.1.41"];
+
 #[derive(Debug)]
 struct Obs {
     verdict: String,
@@ -190,6 +196,17 @@ fn check(machine: &str, entry: &Path, obs: &Obs, want: Want<'_>) {
 /// Every wolfgang lane answers `wolfgang`; lupin answers `pre` at a
 /// `PRE_MIRROR_LUPIN` version and `ruled` at any other.
 fn every_lane(name: &str, wolfgang: Want<'_>, pre: Want<'_>, ruled: Want<'_>) {
+    every_lane_pinned(name, PRE_MIRROR_LUPIN, wolfgang, pre, ruled)
+}
+
+/// `every_lane` with the pre-mirror versions named by the caller.
+fn every_lane_pinned(
+    name: &str,
+    pre_versions: &[&str],
+    wolfgang: Want<'_>,
+    pre: Want<'_>,
+    ruled: Want<'_>,
+) {
     let entry = corpus(name);
     let checked = lane(&entry, "--checked").expect("the checked lane always runs");
     check("checked", &entry, &checked, wolfgang);
@@ -201,7 +218,7 @@ fn every_lane(name: &str, wolfgang: Want<'_>, pre: Want<'_>, ruled: Want<'_>) {
     let Some((version, lupin)) = lupin_says(&entry) else {
         return;
     };
-    if PRE_MIRROR_LUPIN.contains(&version.as_str()) {
+    if pre_versions.contains(&version.as_str()) {
         check(
             &format!("lupin {version} (pre-mirror)"),
             &entry,
@@ -442,12 +459,14 @@ fn a_store_through_the_same_char_or_bool_key_revives_the_value() {
 }
 
 /// R3 fails once the `str` key local is written between: the store
-/// names `m["b"]`, and `m["a"]` stays read out. lupin 0.1.40's map read
-/// copies, so it prints the original `1`; the ruled answer is the trap.
+/// names `m["b"]`, and `m["a"]` stays read out. lupin's map read copies
+/// (wolffe-lang/wolf-interp#144), so it prints the original `1` at the
+/// `PRE_MAP_MOVE_LUPIN` versions; the ruled answer is the trap.
 #[test]
 fn a_store_through_a_reassigned_key_revives_nothing() {
-    every_lane(
+    every_lane_pinned(
         "elem_key_reassigned_no_revive.lu",
+        PRE_MAP_MOVE_LUPIN,
         verdict("fail(E1001)"),
         runs("1\n"),
         verdict("trap(use-after-move)"),
