@@ -47,12 +47,31 @@ vocabulary.
   is minted, so there are never two live paths and `[mem.tier0.excl.1]`
   is not engaged — s168's E1002 reaches a nested call under a `mut`
   ARGUMENT (`take2(mut xs[0], grow(mut xs))`), not a store's right-hand
-  side. **What it does not say:** the order of the place's own operands
-  against the right-hand side. For `xs[idx()] = val()` the checked
-  machine prints `val idx` and native, release and lupin 0.1.38 print
-  `idx val` (trunk `a565d4b9` and the published 0.2.16 alike), which is
-  a ruling still owed — wolf-lang#452 — and this sentence pins only the
-  address. **Cost:** zero — the address computation moves after the
+  side. **The place's operands run before the right-hand side; only
+  its address runs after.** Every index and key expression in the
+  place — left to right, outermost first, each exactly once, as
+  `[mem.model.order]` reads — is evaluated BEFORE `expr`; what "mints
+  its place" above moves after `expr` is the address alone: walking
+  the already-evaluated path through the container as it is once
+  `expr` has run. The two sentences are one order: operands, then
+  right-hand side, then address, then the store. So `xs[idx()] = val()`
+  and `m[key()] = val()` print `idx val` and `key val`; `ys[i] =
+  bump(mut i)` stores at the `i` read before `bump` changed it; and
+  `xs[x()] = grow(mut xs)` evaluates `x()`, then `grow`, then stores
+  at that index of the grown list. A compound store (`xs[i()] +=
+  v()`: operands, right-hand side, then read-combine-write) and a
+  raw-pointer element store (`p[i()] = v()`: pointer, index,
+  right-hand side, write) follow the same order. Ruled 2026-09-26
+  (wolf-lang#452, "index first, then value"): native, release and
+  lupin (0.1.38 and 0.1.40, measured) already did this; the checked
+  machine ran the right-hand side first (`val idx`, through 0.2.17)
+  and moved in 0.2.18. lupin 0.1.40 evaluates a multi-index store's
+  outer operands twice (wolf-interp#145). Witnesses
+  `corpus/memory/ctl_store_order.lu` (s182's control) and
+  `ctl_store_order_map.lu`, `ctl_store_order_nested.lu`,
+  `ctl_store_order_nested_index.lu`, `ctl_store_order_captured.lu`,
+  `ctl_store_order_compound.lu`, `ctl_store_order_raw.lu`. **Cost:**
+  zero — the address computation moves after the
   right-hand side; it does not multiply. Witnesses
   `corpus/memory/store_rhs_first_list.lu`, `store_rhs_first_map.lu`,
   `store_rhs_first_pool.lu` (the pool one is `unsupported` on lupin,
