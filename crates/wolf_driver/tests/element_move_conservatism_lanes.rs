@@ -1,13 +1,14 @@
-//! s182 (wolf-lang#446, option A kept) — `move xs[0]` on a `List[int]`
-//! then a read of `xs[1]` is `fail(E1001)` on both wolfgang lanes and
-//! RUNS on lupin. That is a documented conservatism divergence, the
-//! same class as `[mem.tier0.mode.read]`'s rows in the interpreter's
-//! divergence log: `Proj::Opaque` collapses a container's elements to
-//! one place (element granularity is a declared non-target, s18), and
-//! lupin models them one by one. This file asserts BOTH sides, so that
-//! a future change on either is loud: a wolfgang lane that starts
-//! running it has grown element granularity (option C, a campaign,
-//! not a drift), and a lupin that starts trapping has narrowed.
+//! s182 (wolf-lang#446) pinned `move xs[0]` on a `List[int]` then a
+//! read of `xs[1]` as a documented conservatism divergence: `fail(E1001)`
+//! on both wolfgang lanes (every element was one place, `Proj::Opaque`)
+//! and `exit(0)` `1 2` on lupin, which models elements one by one. The
+//! file asserted BOTH sides so that a change on either would be loud.
+//!
+//! eg01 (EGC's EG1) is that change, by ruling: `[mem.model.place.elem]`
+//! item 1(a) makes two integer-literal indices whose values differ
+//! distinct places, and the row now runs `1 2` on every machine. The
+//! soundness half — a run-time index stays one place, the moved element
+//! itself stays unreadable — is `element_places_lanes.rs`'s.
 //!
 //! Beside it, the half of #438 that already holds everywhere: a `Copy`
 //! element stored through an index is its own copy on all three
@@ -43,9 +44,9 @@ fn lane(entry: &Path, flag: &str) -> Option<Obs> {
         .arg("--json")
         .output()
         .expect("wolf runs");
-    if out.status.code() == Some(2) && flag == "--native" {
+    if out.status.code() == Some(2) && flag != "--checked" {
         eprintln!(
-            "SKIP: environment cannot run the native lane: {}",
+            "SKIP: environment cannot run the {flag} lane: {}",
             String::from_utf8_lossy(&out.stderr).trim()
         );
         return None;
@@ -106,30 +107,28 @@ fn corpus(name: &str) -> PathBuf {
     p
 }
 
-/// The conservatism row, both sides asserted.
+/// The former conservatism row: every lane runs it and prints `1 2`.
 /// `corpus/memory/elem_move_one_place.lu`.
 #[test]
-fn moving_one_element_empties_the_whole_list_on_wolfgang_and_not_on_lupin() {
+fn moving_one_element_leaves_its_sibling_readable_on_every_lane() {
     let entry = corpus("elem_move_one_place.lu");
+    let want = "1 2\n";
     let checked = lane(&entry, "--checked").expect("the checked lane always runs");
     assert_eq!(
-        checked.verdict, "fail(E1001)",
-        "the CHECKED lane runs `move xs[0]` then `xs[1]` — element granularity has \
-         changed (#446 option C?) and this row's header is stale"
+        checked.verdict, "exit(0)",
+        "the CHECKED lane refuses `move xs[0]` then `xs[1]` — `[mem.model.place.elem]` \
+         1(a) (EG1) has regressed to one place per container"
     );
-    if let Some(native) = lane(&entry, "--native") {
-        assert_eq!(
-            native.verdict, "fail(E1001)",
-            "the NATIVE lane disagrees with checked"
-        );
+    assert_eq!(checked.stdout, want, "the CHECKED lane's answer");
+    for flag in ["--native", "--release"] {
+        if let Some(obs) = lane(&entry, flag) {
+            assert_eq!(obs.verdict, "exit(0)", "the {flag} lane disagrees with checked");
+            assert_eq!(obs.stdout, want, "the {flag} lane's answer");
+        }
     }
     if let Some(lupin) = lupin_says(&entry) {
-        assert_eq!(
-            lupin.verdict, "exit(0)",
-            "lupin no longer runs the one-place element move — the conservatism row \
-             is gone and `[mem.tier0.mode.read]`'s class lost a member; update the row"
-        );
-        assert_eq!(lupin.stdout, "1 2\n", "lupin's answer");
+        assert_eq!(lupin.verdict, "exit(0)", "lupin's verdict");
+        assert_eq!(lupin.stdout, want, "lupin's answer");
     }
 }
 
