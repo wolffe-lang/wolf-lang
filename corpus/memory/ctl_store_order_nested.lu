@@ -1,18 +1,18 @@
-//! check: run(exit=0, stdout="i\nj\nval\n7\nc\nval\n7\np\nval\n7\nx\ngrow\n7 65\n")
+//! check: run(exit=0, stdout="c\nval\n7\np\nval\n7\nx\ngrow\n7 65\n")
 //! phase: run
 //! conforms: mem.model.place.rhs, mem.model.order
 //!
-//! s183 (wolf-lang#452, ruled index first, then value) — deeper
-//! places. Every index operand of the place runs before the right-hand
-//! side, outermost first: `g[i()][j()] = val()` prints `i j val`;
-//! `cs[c()].n = val()` prints `c val`; through a `mut` parameter,
-//! `xs[p()] = val()` prints `p val`. The last store is the two
-//! sentences of `[mem.model.place.rhs]` together: `xs[x()] =
+//! s183 (wolf-lang#452, ruled 2026-09-26: index first, then value) —
+//! the index under a longer place. `cs[at("c", 0)].n = val()` runs
+//! the index before the right-hand side (`c val`), and so does a store
+//! through a `mut` parameter (`p val`). The last store is both
+//! sentences of `[mem.model.place.rhs]` at once: `xs[at("x", 0)] =
 //! grow(mut xs)` runs the index (`x`), then the right-hand side
 //! (`grow`, which pushes 64 elements and moves the buffer), and only
-//! then mints the element's address — so the store lands at index 0
-//! of the grown list: `7 65`. Before s183 the checked lane ran every
-//! right-hand side first.
+//! then locates the element — so the store lands at index 0 of the
+//! grown list: `7 65`. Before s183 the checked lane ran every
+//! right-hand side first; native, release and lupin 0.1.40 already
+//! printed this. Two index levels are `ctl_store_order_nested_index.lu`.
 
 struct Cell { n: int }
 
@@ -39,9 +39,6 @@ fn store(mut xs: List[int]) {
 }
 
 fn main() -> !int {
-    var g = [[0, 0], [0, 0]]
-    g[at("i", 1)][at("j", 0)] = val()
-    print("{g[1][0]}")
     var cs = List[Cell]()
     (mut cs).push(Cell { n: 0 })
     cs[at("c", 0)].n = val()

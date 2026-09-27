@@ -1,0 +1,35 @@
+//! check: run(exit=0, stdout="idx\nval\n9\n")
+//! phase: run
+//! conforms: mem.model.place.rhs, mem.model.order, mem.unsafe.scope
+//!
+//! s183 (wolf-lang#452, ruled 2026-09-26: index first, then value) —
+//! a raw-pointer element store orders its operands the same way:
+//! `p[idx()] = val()` evaluates the pointer, then the index, then the
+//! right-hand side, then writes. Before s183 the checked lane ran
+//! `val` first; native, release and lupin 0.1.40 already printed this.
+
+import c "stdlib.h"
+
+fn idx() -> int {
+    print("idx")
+    0
+}
+
+fn val() -> u8 {
+    print("val")
+    9
+}
+
+fn main() -> !int {
+    var out = 0
+    // # Safety: p addresses a live 8-byte allocation for the whole
+    // block, every access is at offset 0, and it is freed exactly once.
+    unsafe {
+        let p = c.malloc(8) as *u8
+        p[idx()] = val()
+        out = p[0] as int
+        c.free(p)
+    }
+    print("{out}")
+    0
+}

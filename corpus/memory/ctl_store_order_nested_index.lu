@@ -1,0 +1,37 @@
+//! check: run(exit=0, stdout="i\nj\nval\n7\na\nb\nc\nval\n9\n")
+//! phase: run
+//! conforms: mem.model.place.rhs, mem.model.order
+//!
+//! s183 (wolf-lang#452, ruled 2026-09-26: index first, then value) —
+//! a place with several index operands evaluates them left to right,
+//! outermost first, each exactly once, and then the right-hand side:
+//! `g[i][j] = val()` prints `i j val`, `h[a][b][c] = val()` prints
+//! `a b c val`. Before s183 the checked lane printed `val` first;
+//! native and release already printed this. lupin 0.1.40 evaluates
+//! every operand but the last TWICE in a store (`i i j val`, `a b a b
+//! c val`; reads are once) — wolf-interp#145.
+
+fn at(tag: str, i: int) -> int {
+    print(tag)
+    i
+}
+
+fn val() -> int {
+    print("val")
+    7
+}
+
+fn nine() -> int {
+    print("val")
+    9
+}
+
+fn main() -> !int {
+    var g = [[0, 0], [0, 0]]
+    g[at("i", 1)][at("j", 0)] = val()
+    print("{g[1][0]}")
+    var h = [[[0]]]
+    h[at("a", 0)][at("b", 0)][at("c", 0)] = nine()
+    print("{h[0][0][0]}")
+    0
+}

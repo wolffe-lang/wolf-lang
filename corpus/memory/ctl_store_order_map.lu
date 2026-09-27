@@ -1,23 +1,20 @@
-//! check: run(exit=0, stdout="key\nval\n7 1\nkey\nj\nval\n0 5\n")
+//! check: run(exit=0, stdout="key\nval\n7 1\nkey\ngrow\n7 65\n")
 //! phase: run
 //! conforms: mem.model.place.rhs, mem.model.order, type.map
 //!
-//! s183 (wolf-lang#452, ruled index first, then value) — the `Map`
-//! twin of `ctl_store_order.lu`. `m[key()] = val()` evaluates the key
-//! before the right-hand side; `mm[key()][j()] = val()` evaluates the
-//! key, then the list index, then the right-hand side — the place's
-//! operands left to right, then the value, then the insert or the
-//! element write. Same bytes on every machine; before s183 the
-//! checked lane ran `val` first in both stores.
+//! s183 (wolf-lang#452, ruled 2026-09-26: index first, then value) —
+//! the `Map` twin of `ctl_store_order.lu`. `m[key()] = val()`
+//! evaluates the key before the right-hand side (`key val`). The
+//! second store is both sentences of `[mem.model.place.rhs]` at once:
+//! `m[key()] = grow(mut m)` evaluates the key, then the right-hand
+//! side (which inserts 64 keys and rehashes the map), and only then
+//! inserts — into the grown map: `7 65`. Before s183 the checked lane
+//! ran the right-hand side first in both stores (`val key`, `grow
+//! key`); native, release and lupin 0.1.40 already printed this.
 
 fn key() -> str {
     print("key")
     "a"
-}
-
-fn j() -> int {
-    print("j")
-    1
 }
 
 fn val() -> int {
@@ -25,19 +22,19 @@ fn val() -> int {
     7
 }
 
-fn five() -> int {
-    print("val")
-    5
+fn grow(mut m: Map[str, int]) -> int {
+    print("grow")
+    for i in 0..64 {
+        m["k{i}"] = i
+    }
+    7
 }
 
 fn main() -> !int {
     var m = Map[str, int]()
     m[key()] = val()
     print("{m["a"] else 0} {m.len}")
-    var mm = Map[str, List[int]]()
-    mm["a"] = [0, 0]
-    mm[key()][j()] = five()
-    var row = mm["a"] else List[int]()
-    print("{row[0]} {row[1]}")
+    m[key()] = grow(mut m)
+    print("{m["a"] else 0} {m.len}")
     0
 }
