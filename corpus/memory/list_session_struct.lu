@@ -12,6 +12,13 @@
 //! alignment class across the buffer and nothing is refused.
 //! Constructed, pushed, index-read, index-written, and iterated
 //! (nested `List` field included) on all three lanes.
+//!
+//! eg01 (wolf-lang#460): `s2` is a `copy` of `tbl[2]`. The row read
+//! `let s2 = tbl[2]` — a MOVE of a non-`Copy` element — and then walked
+//! `tbl`, reading the moved element; it compiled only because the
+//! store to `tbl[1]` revived every element. A store now revives only
+//! the element it names (`[mem.model.place.elem]` item 3), and the
+//! copy keeps the row's point and its bytes on every machine.
 
 struct Session {
     up: bool,
@@ -29,7 +36,7 @@ fn main() -> int {
         (mut tbl).push(Session { up: i % 2 == 0, fd: 100 + i, buf: b })
         i = i + 1
     }
-    let s2 = tbl[2]
+    let s2 = copy tbl[2]
     let u2 = if s2.up { 1 } else { 0 }
     tbl[1] = Session { up: true, fd: 999, buf: List[int]() }
     var fds = 0
