@@ -7,7 +7,8 @@
 //!
 //! Index projections (`[mem.model.place.elem]`, eg01) come in three
 //! spellings: a literal index or key (`xs[0]`, `m["a"]`), a plain
-//! integer local (`xs[i]`), and anything else. Two relations read them:
+//! local of a `Copy` type (`xs[i]`, `m[k]`, `p[h]` — eg01b widened it
+//! from integer locals), and anything else. Two relations read them:
 //!
 //! - [`PlaceTable::overlap`] / [`PlaceTable::covers`] still collapse
 //!   every index step to one place. Exclusivity (`[mem.tier0.excl]`),
@@ -64,7 +65,8 @@ pub enum Proj {
     /// A literal index or key (`xs[0]`, `m["a"]`): the same element as
     /// another `Lit` step iff the keys are equal.
     Lit(Key),
-    /// A plain integer local as the index (`xs[i]`, the local's id):
+    /// A plain `Copy` local as the index or key (`xs[i]`, `m[k]`,
+    /// `p[h]`; the local's id):
     /// one place with every other index for *may*; the same element as
     /// another `Sym` of the same local only while that local is
     /// unwritten (R3 — the moves pass decides that, not this table).

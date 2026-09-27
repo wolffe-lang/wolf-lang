@@ -2148,10 +2148,13 @@ impl<'t> Lowerer<'t> {
     /// whose kind the container's key type takes (an integer on a
     /// `List` or an integer-keyed `Map`; a plain string, `bool` or
     /// `char` literal on a `Map` keyed by that type) is a `Lit`, by
-    /// value; a plain local of an integer type is a `Sym` (R3's
-    /// spelling); everything else — any `Pool` handle, an expression,
-    /// an escaped or interpolated string, a signed literal — is
-    /// `Opaque`, one place with every index (item 2, the default).
+    /// value; a plain local of any `Copy` type — an integer index, a
+    /// `str`/`char`/`bool` key, a `Pool` handle — is a `Sym` (R3's
+    /// spelling, eg01b: the maintainer's ruling widened R1/R3 from
+    /// integer locals to `Copy` ones); everything else — an
+    /// expression, an escaped or interpolated string, a signed literal,
+    /// a local whose type is not `Copy` — is `Opaque`, one place with
+    /// every index (item 2, the default).
     fn elem_step(&self, b: wolf_ast::BracketApply<'t>, container: Option<Ty<'t>>) -> Proj {
         let args: Vec<_> = b.args().into_iter().flat_map(|l| l.args()).collect();
         let [a] = args.as_slice() else {
@@ -2163,6 +2166,23 @@ impl<'t> Lowerer<'t> {
         let Some(v) = wolf_ast::Arg::value(*a) else {
             return Proj::Opaque;
         };
+        // R3's spelling: a plain local of a `Copy` type. The value of an
+        // unwritten `Copy` local is fixed, so two uses of it name one
+        // element (a handle one slot, whose generation the access
+        // checks); whether it IS unwritten between two uses is the
+        // moves pass's question, not this one.
+        if v.kind == SyntaxKind::PathExpr {
+            let Some(local) = PathExpr::cast(v)
+                .and_then(|p| p.ident())
+                .and_then(|id| self.lookup(&self.text(id.span)))
+            else {
+                return Proj::Opaque;
+            };
+            return match self.tys[local.0 as usize] {
+                Some(ty) if is_copy(ty, 0) => Proj::Sym(local.0),
+                _ => Proj::Opaque,
+            };
+        }
         // The key type the literal must be a value of.
         let key: Option<TyKind> = container.and_then(|c| match c.kind() {
             TyKind::List(_) => Some(TyKind::Prim(Prim::Int)),
@@ -2204,18 +2224,6 @@ impl<'t> Lowerer<'t> {
                     && !t[1..t.len() - 1].contains(['\\', '{', '}', '"']) =>
             {
                 Proj::Lit(Key::Str(t[1..t.len() - 1].to_string()))
-            }
-            SyntaxKind::PathExpr if int_key => {
-                let Some(local) = PathExpr::cast(v)
-                    .and_then(|p| p.ident())
-                    .and_then(|id| self.lookup(&self.text(id.span)))
-                else {
-                    return Proj::Opaque;
-                };
-                match self.tys[local.0 as usize].map(|ty| ty.kind().clone()) {
-                    Some(TyKind::Prim(p)) if p.is_integer() => Proj::Sym(local.0),
-                    _ => Proj::Opaque,
-                }
             }
             _ => Proj::Opaque,
         }
