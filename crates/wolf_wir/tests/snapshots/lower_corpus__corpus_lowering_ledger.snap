@@ -361,6 +361,15 @@ memory/mut_elem_excl.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_elem_nested_call.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_param_aggregate_store.lu: lowers
 memory/mut_param_field_lend.lu: lowers
+memory/mut_param_moveout_elem.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_param_moveout_field.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_param_moveout_map.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_param_moveout_one_path.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_param_moveout_whole.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_param_restore_elem.lu: lowers
+memory/mut_param_restore_field.lu: lowers
+memory/mut_param_restore_map.lu: lowers
+memory/mut_param_restore_whole.lu: lowers
 memory/mut_place_nested.lu: lowers
 memory/mut_read_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/oob_bounds.lu: lowers
