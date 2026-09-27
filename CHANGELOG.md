@@ -191,6 +191,30 @@ run.)
 - **wolffe-lang/wolf-interp#141** (filed): lupin 0.1.40's index read
   does not trap on a moved element.
 
+### The pairing: lupin 0.1.41
+
+`PAIRING` names **lupin 0.1.41 at pin `93a5fe5`** (wolf-interp release
+397709135; the linux x86-64 archive's sha256 `18848901…`), the first
+lupin whose every element read traps on a moved element
+(wolffe-lang/wolf-interp#141). The ritual (#87, with #281's control
+against the 0.1.40 archive, same corpus, same release `wolf`) **moved 7
+ledger counts on each tier, together**, all `completeness → agreement`
+where the compiler's static E1001 now meets lupin's
+`trap(use-after-move)`: `elem_const_store_no_revive_{heap,int}.lu`,
+`elem_dyn_store_no_revive_{heap,int}.lu`, `elem_move_same_const_read.lu`,
+`elem_sym_reassigned_no_revive.lu` and `mut_param_moveout_elem.lu`.
+Checked: 420 → 427 agreements, completeness 197 → 190; native: 461 →
+468, 197 → 190. Nothing moved below the ledger. Native's one soundness
+finding is still `memory/unsafe_ub_uaf.lu` (`exit` vs `ub(mem.ub)`), the
+program's own use-after-free read on the compiled lane.
+
+The gates that pin lupin by version take 0.1.41 as follows: the seven
+#141 cases in `element_places_lanes.rs` and `mut_param_return_lanes.rs`
+now take the ruled arm (the trap) with no edit; the #146 list in
+`mut_param_return_lanes.rs` names 0.1.41 as pre-mirror (lupin still
+prints `1` when a callee moves a whole `mut` parameter); the #144 and
+#145 lists already named it.
+
 ### Shipped, by name
 
 Open at the cut:
