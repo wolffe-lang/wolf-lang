@@ -279,6 +279,13 @@ memory/closure_region_capture.lu: refused — a region captured by a closure (op
 memory/closure_value_paths.lu: lowers
 memory/consumed_walk_charges_nothing.lu: lowers
 memory/copy_independent.lu: lowers
+memory/ctl_store_order.lu: lowers
+memory/ctl_store_order_captured.lu: lowers
+memory/ctl_store_order_compound.lu: lowers
+memory/ctl_store_order_map.lu: lowers
+memory/ctl_store_order_nested.lu: lowers
+memory/ctl_store_order_nested_index.lu: lowers
+memory/ctl_store_order_raw.lu: lowers
 memory/defer_order.lu: lowers
 memory/destructure_bind.lu: lowers
 memory/destructure_partial_live.lu: lowers
