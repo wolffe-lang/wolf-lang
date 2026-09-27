@@ -1,5 +1,7 @@
 //! eg00 (EGC, wolf-lang#446's campaign) — `[mem.model.place.elem]`'s
-//! ten green witnesses, asserted on every machine.
+//! ten green witnesses, asserted on every machine; eg01 (EG1 and
+//! wolf-lang#460) adds the literal-index rows, item 3's must-revival
+//! rows and R3's failing twin.
 //!
 //! Why a driver test beside the corpus rows (s171's lesson, wave 45):
 //! `cargo xtask corpus` runs a `phase: run` entry on the NATIVE lane
@@ -8,11 +10,12 @@
 //! checked, native and release lanes give the row's verdict (and bytes)
 //! and that lupin gives the clause's ruled verdict.
 //!
-//! The one row where lupin's answer is not the ruled one is
-//! `elem_move_same_const_read.lu`: lupin 0.1.40 marks a moved element
-//! but its index read never consults the mark and prints `1 1`
-//! (wolffe-lang/wolf-interp#141). For the versions in
-//! `PRE_MIRROR_LUPIN` that case asserts the MEASURED answer; any later
+//! The rows where lupin's answer is not the ruled one read a moved
+//! element — `elem_move_same_const_read.lu`, the four
+//! `elem_*_store_no_revive_*.lu` and `elem_sym_reassigned_no_revive.lu`:
+//! lupin 0.1.40 marks a moved element but its index read never consults
+//! the mark (wolffe-lang/wolf-interp#141). For the versions in
+//! `PRE_MIRROR_LUPIN` those cases assert the MEASURED answer; any later
 //! version must trap, so a pin bump that carries lupin forward without
 //! the fix goes red here by name (s180's design).
 //!
