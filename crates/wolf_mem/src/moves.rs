@@ -222,7 +222,7 @@ fn report_at_return(cfg: &Cfg, param: u32, moved: PlaceId, why: Emptied) -> Diag
     let local = &cfg.locals[param as usize];
     let name = local.name.clone();
     let shown = cfg.show_place(moved);
-    let mut d = Diagnostic::error(
+    let d = Diagnostic::error(
         codes::E1001,
         why.span,
         format!("`{shown}` may return to the caller with its value moved away"),
@@ -236,16 +236,9 @@ fn report_at_return(cfg: &Cfg, param: u32, moved: PlaceId, why: Emptied) -> Diag
         "a `mut` parameter is initialized at every return of the function \
          [mem.tier0.mode.mut]: store a value back into `{shown}` before each return."
     ));
-    if !cfg.pattern_moves.contains(&why.span) {
-        d = d.with_suggestion(Suggestion::new(
-            "to leave the parameter whole, copy it at the move".to_string(),
-            vec![(
-                Span::new(why.span.file, why.span.lo, why.span.lo),
-                "copy ".to_string(),
-            )],
-            Applicability::Maybe,
-        ));
-    }
+    // No `copy` fix-it: copying at the move leaves the parameter whole
+    // but drops the callee's change on the floor, which is rarely what
+    // a `mut` parameter was for. The fix is the store back.
     // #325: the parameter this refusal names — W1002's "never written"
     // for the same name stands down beside it (the move is the write
     // its syntactic scan cannot see).
