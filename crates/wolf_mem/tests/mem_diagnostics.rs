@@ -1899,3 +1899,117 @@ fn clean_r3_a_pool_handle_local_revives() {
          }\n",
     );
 }
+
+// ------------------------- s184: `mut` parameters at return (#464) ----
+//
+// `[mem.tier0.mode.mut]`: a `mut` parameter is initialized at every
+// return of the callee. Each refused shape compiled before s184, and
+// native handed the caller the moved buffer (wolf-lang#464).
+
+#[test]
+fn e1001_mut_param_moveout_at_return() {
+    for (name, params, body) in [
+        (
+            "e1001_mut_param_moveout_whole",
+            "mut xs: List[int]",
+            "var t = move xs\n    (mut t).push(9)",
+        ),
+        (
+            "e1001_mut_param_moveout_field",
+            "mut s: S",
+            "var t = move s.tags\n    (mut t).push(9)",
+        ),
+        (
+            "e1001_mut_param_moveout_elem",
+            "mut xss: List[List[int]]",
+            "var t = move xss[0]\n    (mut t).push(9)",
+        ),
+        (
+            "e1001_mut_param_moveout_map",
+            "mut m: Map[str, List[int]], k: str",
+            "var v = m[k] else List[int]()\n    (mut v).push(9)",
+        ),
+        (
+            "e1001_mut_param_moveout_one_path",
+            "mut xs: List[int], c: bool",
+            "var t = move xs\n    (mut t).push(9)\n    if c {\n        xs = t\n    }",
+        ),
+        (
+            "e1001_mut_param_moveout_take_onward",
+            "mut xs: List[int]",
+            "sink(take xs)",
+        ),
+        (
+            "e1001_mut_param_moveout_partial_restore",
+            "mut s: S",
+            "var t = move s\n    s.name = \"b\"\n    sink(take t.tags)",
+        ),
+    ] {
+        let src = format!(
+            "struct S {{ name: str, tags: List[int] }}\n\
+             fn sink(take xs: List[int]) -> int {{\n    xs.len\n}}\n\
+             fn f({params}) {{\n    {body}\n}}\n"
+        );
+        snap(name, &src);
+    }
+}
+
+/// Every return, the `?` error edge included: the store back sits after
+/// a `?` that can leave first.
+#[test]
+fn e1001_mut_param_moveout_on_the_error_edge() {
+    snap(
+        "e1001_mut_param_moveout_error_edge",
+        "fn get(n: int) -> int ! {empty} {\n    if n == 0 {\n        return empty\n    }\n    n\n}\n\
+         fn f(mut xs: List[int], n: int) -> int ! {empty} {\n    \
+             var t = move xs\n    \
+             let v = get(n)?\n    \
+             (mut t).push(v)\n    \
+             xs = t\n    \
+             v\n}\n",
+    );
+}
+
+/// An early `return` before the store back.
+#[test]
+fn e1001_mut_param_moveout_on_an_early_return() {
+    snap(
+        "e1001_mut_param_moveout_early_return",
+        "fn f(mut xs: List[int], n: int) -> int {\n    \
+             var t = move xs\n    \
+             if n == 0 {\n        return 0\n    }\n    \
+             xs = t\n    \
+             n\n}\n",
+    );
+}
+
+/// A use of the moved parameter in the body already reports the move:
+/// one root cause, one diagnostic — no second report at the return.
+#[test]
+fn e1001_mut_param_used_after_move_reports_once() {
+    snap(
+        "e1001_mut_param_used_after_move_once",
+        "fn f(mut xs: List[int]) -> int {\n    \
+             var t = move xs\n    \
+             (mut t).push(9)\n    \
+             xs.len\n}\n",
+    );
+}
+
+/// The store back revives every shape, and a `defer` store runs on
+/// every return; a `take` parameter and a local may leave moved-out.
+#[test]
+fn clean_mut_param_stored_back_before_every_return() {
+    snap(
+        "clean_mut_param_stored_back",
+        "struct S { name: str, tags: List[int] }\n\
+         fn sink(take xs: List[int]) -> int {\n    xs.len\n}\n\
+         fn whole(mut xs: List[int]) {\n    var t = move xs\n    (mut t).push(9)\n    xs = t\n}\n\
+         fn field(mut s: S) {\n    var t = move s.tags\n    (mut t).push(9)\n    s.tags = t\n}\n\
+         fn elem(mut xss: List[List[int]]) {\n    var t = move xss[0]\n    (mut t).push(9)\n    xss[0] = t\n}\n\
+         fn map(mut m: Map[str, List[int]], k: str) {\n    var v = m[k] else List[int]()\n    (mut v).push(9)\n    m[k] = take v\n}\n\
+         fn both_paths(mut xs: List[int], c: bool) {\n    var t = move xs\n    if c {\n        xs = t\n    } else {\n        xs = List[int]()\n    }\n}\n\
+         fn taken(take xs: List[int]) -> int {\n    sink(take xs)\n}\n\
+         fn local() -> int {\n    let xs = [1]\n    sink(take xs)\n}\n",
+    );
+}
