@@ -1,0 +1,27 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.mut, mem.tier0.move.1, mem.model.place.elem
+//!
+//! s184 (wolf-lang#464) — an element of a `mut` parameter is a place
+//! under it (`[mem.model.place.elem]`), so it too is initialized at
+//! every return: `f` moves `xs[0]` out and returns without storing one
+//! back. E1001 at the move.
+//!
+//! Through 0.2.17 and trunk `a201c518` it compiled with only W1002;
+//! native and release printed `2` (the caller's `xs[0]` named the moved
+//! buffer), checked trapped `use-after-move` at the caller's read, and
+//! lupin 0.1.40 printed `1` (its index read ignores the moved mark,
+//! wolffe-lang/wolf-interp#141).
+
+fn f(mut xs: List[List[int]]) {
+    var t = move xs[0]   // ERROR E1001: `xs[0]` returns to the caller moved-out
+    (mut t).push(9)
+}
+
+fn main() -> !int {
+    var xs = List[List[int]]()
+    (mut xs).push([1])
+    f(mut xs)
+    print("{xs[0].len}")
+    0
+}

@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="2\n")
+//! phase: run
+//! conforms: mem.tier0.mode.mut, mem.tier0.move.4, mem.model.place.elem
+//!
+//! s184 (wolf-lang#464) — the legal twin of
+//! `mut_param_moveout_map.lu`: the value at `m[k]` is read out and
+//! stored back through the same `str` key before the return (R3 over a
+//! `Copy` local, `[mem.model.place.elem]` item 4). `2` on checked,
+//! native, release and lupin 0.1.40.
+
+fn f(mut m: Map[str, List[int]], k: str) {
+    var v = m[k] else List[int]()
+    (mut v).push(9)
+    m[k] = take v
+}
+
+fn main() -> !int {
+    var m = Map[str, List[int]]()
+    m["a"] = [1]
+    f(mut m, "a")
+    let a = m["a"] else List[int]()
+    print("{a.len}")
+    0
+}

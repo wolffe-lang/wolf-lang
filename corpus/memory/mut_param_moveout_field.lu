@@ -1,0 +1,26 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.mut, mem.tier0.move.1, mem.model.path.disjoint
+//!
+//! s184 (wolf-lang#464) — every place under a `mut` parameter is
+//! initialized at every return: `f` moves the field `s.tags` out and
+//! returns without storing one back. E1001 at the move.
+//!
+//! Through 0.2.17 and trunk `a201c518` it compiled with only W1002;
+//! native and release printed `2` (the caller's `s.tags` named the
+//! moved buffer), checked and lupin 0.1.40 trapped `use-after-move` at
+//! the caller's read.
+
+struct S { tags: List[int] }
+
+fn f(mut s: S) {
+    var t = move s.tags   // ERROR E1001: `s.tags` returns to the caller moved-out
+    (mut t).push(9)
+}
+
+fn main() -> !int {
+    var s = S { tags: [1] }
+    f(mut s)
+    print("{s.tags.len}")
+    0
+}

@@ -1,0 +1,26 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.mut, mem.tier0.move.1
+//!
+//! s184 (wolf-lang#464) — "at every return" is per path: `f` stores the
+//! value back only when `c` holds, so the path where it does not
+//! returns `xs` moved-out. A store on one path does not cover the
+//! other. E1001 at the move.
+//!
+//! Through trunk `a201c518` it compiled with only W1002, and with
+//! `c = false` the caller read the moved buffer (the #464 answer).
+
+fn f(mut xs: List[int], c: bool) {
+    var t = move xs   // ERROR E1001: `xs` may return to the caller moved-out
+    (mut t).push(9)
+    if c {
+        xs = t
+    }
+}
+
+fn main() -> !int {
+    var xs = [1]
+    f(mut xs, false)
+    print("{xs.len}")
+    0
+}

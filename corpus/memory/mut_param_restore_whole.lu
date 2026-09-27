@@ -1,0 +1,22 @@
+//! check: run(exit=0, stdout="2\n")
+//! phase: run
+//! conforms: mem.tier0.mode.mut, mem.tier0.move.4
+//!
+//! s184 (wolf-lang#464) — the legal twin of
+//! `mut_param_moveout_whole.lu`: the whole `mut` parameter moves out,
+//! is worked on, and is stored back before the return
+//! (`[mem.tier0.move.4]` revives it), so it is initialized at every
+//! return. `2` on checked, native, release and lupin 0.1.40.
+
+fn f(mut xs: List[int]) {
+    var t = move xs
+    (mut t).push(9)
+    xs = t
+}
+
+fn main() -> !int {
+    var xs = [1]
+    f(mut xs)
+    print("{xs.len}")
+    0
+}

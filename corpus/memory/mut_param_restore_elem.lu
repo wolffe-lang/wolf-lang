@@ -1,0 +1,22 @@
+//! check: run(exit=0, stdout="2\n")
+//! phase: run
+//! conforms: mem.tier0.mode.mut, mem.tier0.move.4, mem.model.place.elem
+//!
+//! s184 (wolf-lang#464) — the legal twin of
+//! `mut_param_moveout_elem.lu`: `xs[0]` moves out and is stored back
+//! through the same literal before the return (`[mem.model.place.elem]`
+//! item 3 revives it). `2` on checked, native, release and lupin 0.1.40.
+
+fn f(mut xs: List[List[int]]) {
+    var t = move xs[0]
+    (mut t).push(9)
+    xs[0] = t
+}
+
+fn main() -> !int {
+    var xs = List[List[int]]()
+    (mut xs).push([1])
+    f(mut xs)
+    print("{xs[0].len}")
+    0
+}

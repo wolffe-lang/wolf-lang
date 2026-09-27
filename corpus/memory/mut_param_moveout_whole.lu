@@ -1,0 +1,25 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.mut, mem.tier0.move.1
+//!
+//! s184 (wolf-lang#464) — a `mut` parameter is initialized at every
+//! return of the callee. `f` moves the whole parameter out and returns
+//! without storing a value back, so the caller's `xs` would come back
+//! moved-out: E1001 at the move.
+//!
+//! Through 0.2.17 and trunk `a201c518` it compiled with only W1002 (a
+//! wrong "never written"), and checked, native and release printed `2`:
+//! the caller's `xs` still named the buffer `f` moved into `t` and
+//! pushed to. lupin 0.1.40 prints `1`.
+
+fn f(mut xs: List[int]) {
+    var t = move xs   // ERROR E1001: `xs` returns to the caller moved-out
+    (mut t).push(9)
+}
+
+fn main() -> !int {
+    var xs = [1]
+    f(mut xs)
+    print("{xs.len}")
+    0
+}

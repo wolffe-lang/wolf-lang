@@ -1,0 +1,22 @@
+//! check: run(exit=0, stdout="2\n")
+//! phase: run
+//! conforms: mem.tier0.mode.mut, mem.tier0.move.4, mem.model.path.disjoint
+//!
+//! s184 (wolf-lang#464) — the legal twin of
+//! `mut_param_moveout_field.lu`: `s.tags` moves out and is stored back
+//! before the return. `2` on checked, native, release and lupin 0.1.40.
+
+struct S { tags: List[int] }
+
+fn f(mut s: S) {
+    var t = move s.tags
+    (mut t).push(9)
+    s.tags = t
+}
+
+fn main() -> !int {
+    var s = S { tags: [1] }
+    f(mut s)
+    print("{s.tags.len}")
+    0
+}
