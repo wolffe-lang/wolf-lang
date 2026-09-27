@@ -1,0 +1,14 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1001]: `xs` may return to the caller with its value moved away
+ --> mem:///main.lu:2:18
+  |
+1 | fn f(mut xs: List[int], n: int) -> int {
+  |          -- `xs` is `mut`: the caller reads it again after the call
+2 |     var t = move xs
+  |                  ^^ moved here, and not stored back on every path to a return
+  |
+  = note: a `mut` parameter is initialized at every return of the function [mem.tier0.mode.mut]:
+    store a value back into `xs` before each return.

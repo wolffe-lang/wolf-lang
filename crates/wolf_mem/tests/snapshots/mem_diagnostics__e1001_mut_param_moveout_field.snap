@@ -1,0 +1,14 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1001]: `s.tags` may return to the caller with its value moved away
+ --> mem:///main.lu:6:18
+  |
+5 | fn f(mut s: S) {
+  |          - `s` is `mut`: the caller reads it again after the call
+6 |     var t = move s.tags
+  |                  ^^^^^^ moved here, and not stored back on every path to a return
+  |
+  = note: a `mut` parameter is initialized at every return of the function [mem.tier0.mode.mut]:
+    store a value back into `s.tags` before each return.
