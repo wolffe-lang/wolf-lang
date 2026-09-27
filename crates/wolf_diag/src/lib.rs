@@ -295,10 +295,15 @@ impl Diagnostic {
 /// (drop the `mut`) walks the reader AWAY from the fix E0804 asks for.
 /// Two diagnostics that disagree about whether a line writes are one
 /// too many: the warning is dropped for that parameter.
+///
+/// s184 (wolf-lang#464): the same holds for E1001 at a `mut`
+/// parameter's move out of it — the one E1001 that names a subject. A
+/// move out of the parameter IS a write to the caller's place, and the
+/// refusal asks for a store back; "never written" beside it is false.
 pub fn suppress_mode_shadowed(diags: &mut Vec<Diagnostic>) {
     let mode_errors: Vec<(String, Span)> = diags
         .iter()
-        .filter(|d| matches!(d.code.as_str(), "E0804" | "E1014"))
+        .filter(|d| matches!(d.code.as_str(), "E0804" | "E1014" | "E1001"))
         .filter_map(|d| d.subject.as_ref().map(|(n, s)| (n.clone(), *s)))
         .collect();
     if mode_errors.is_empty() {
