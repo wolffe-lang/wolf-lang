@@ -25,7 +25,9 @@ vocabulary.
   identity beyond their current place.
 - `[mem.model.place]` A **place** is a storage location denoted by a
   **path**: a base binding followed by field/index projections (`a.x.y`,
-  `xs[i]`). Paths are field-granular: `a.x` and `a.y` are disjoint places.
+  `xs[i]`). Paths are field-granular: `a.x` and `a.y` are disjoint places;
+  they are element-granular exactly where `[mem.model.place.elem]` says,
+  and no further.
   `[mem.model.path.disjoint]` Two paths conflict iff one is a prefix of
   the other (after identical projections); otherwise they are disjoint.
   `[mem.model.place.rhs]` **A store evaluates its right-hand side
@@ -55,6 +57,85 @@ vocabulary.
   `corpus/memory/store_rhs_first_list.lu`, `store_rhs_first_map.lu`,
   `store_rhs_first_pool.lu` (the pool one is `unsupported` on lupin,
   which declines `Pool` by name).
+- `[mem.model.place.elem]` **Element places.** An index projection
+  `c[e]` on a `List`, `Map` or `Pool` denotes one element of `c`. Two
+  paths with the same base that first differ at an index step are
+  **distinct places** — disjoint under `[mem.model.path.disjoint]` —
+  only where the compiler can **prove** the two steps never denote the
+  same element; everywhere else they are **one place**, and every rule
+  that asks whether two paths conflict (the moves of `[mem.tier0.move]`,
+  `[mem.tier0.excl]`, `[mem.tier0.borrow]`, `[mem.iter.excl]`) treats
+  them as conflicting. The proof is static and reads the program's
+  text: nothing is evaluated to decide it, and a program is never
+  accepted because of a value it happens to compute.
+  1. **Distinct.** (a) Two **integer-literal** indices of one `List`
+     whose values differ: `xs[0]` and `xs[1]` (an origin shift,
+     `[gram.expr.index.origin]`, moves both alike and changes nothing).
+     (b) Two **literal keys** of one `Map` whose values differ after
+     escape decoding: `m["a"]` and `m["b"]`, `m[1]` and `m[2]`,
+     `m['x']` and `m['y']`, `m[true]` and `m[false]`. (c) An index step
+     and a member step on the same container: `xs[i]` and `xs.len`,
+     whatever `i` is — an element is never the container's header.
+     (d) Tuple positions are field steps (`t.0`, `t.1`) and were
+     distinct before this clause. A step pair that is distinct makes
+     every path through it distinct: `g[0][1]` and `g[1][0]`,
+     `xs[0].tags` and `xs[1].tags`.
+  2. **One place.** Everything else: an index that is not a literal
+     against any other index of the same container (`xs[i]` and
+     `xs[0]`, `xs[i]` and `xs[j]`, `xs[i]` and `xs[i]`); the same
+     literal twice; any `Pool` index (a handle is a run-time value); a
+     `Map` key that is not a literal. The whole container against any
+     of its elements is a prefix and conflicts, as it always did. This
+     is the soundness bar, not a shortfall: whether two run-time
+     indices differ is undecidable in general, and a refusal here is a
+     documented conservatism — the reference interpreter, which sees
+     every index as the value it has at run time, may run what the
+     compiler refuses, never the reverse.
+  3. **Re-initialization is a *must*.** `[mem.tier0.move.4]` revives a
+     moved element only through a store that provably denotes it:
+     `xs[1] = v` revives a moved `xs[1]`; a store at a different
+     literal, or at an index that is not a literal, revives nothing,
+     and the moved element stays unreadable (E1001). A store to the
+     whole container revives every element.
+  4. **Proof rules for run-time indices — stated here, NOT YET
+     IMPLEMENTED** (EGC milestone EG3; until each lands its shape is one
+     place under 2). **R1, offset:** `xs[i + a]` and `xs[i + b]`, with
+     `a` and `b` integer literals (either may be absent, as `0`) over
+     one local `i` of an integer type that is not assigned between the
+     two uses, are distinct when `a ≠ b` and the same element when
+     `a = b`. **R2, induction against a literal:** inside
+     `for i in lo..hi` with integer-literal `lo` and `hi`, `xs[i]` and
+     `xs[c]` for a literal `c` are distinct when `c < lo` or `c ≥ hi`
+     (`..=` includes `hi`). **R3, revival:** a store `xs[e] = v`
+     revives a moved `xs[e']` when R1 proves them the same element;
+     `var t = move xs[i]` … `xs[i] = take t` is the shape it keeps.
+     A spelling the rules cannot relate stays one place even when the
+     two indices are equal at run time — `xs[i]` against `xs[k + 1]`
+     with `k = i - 1`.
+
+  **Where the machines stand (wolf 0.2.17, lupin 0.1.40).** wolfgang
+  still collapses every index to one place (`Proj::Opaque`), so
+  items 1(a)–(c) are refused today (wolf-lang#446's conservatism row;
+  EG1 makes moves element-granular, EG2 `mut` claims), and it is
+  **looser than item 3**: any index store revives the collapsed place,
+  so `move xs[0]; xs[1] = v` followed by a read of `xs[0]` compiles,
+  traps on the checked machine and aliases the moved list on native
+  (wolf-lang#460) — the one place this clause is stricter than the
+  compiler, and the compiler moves, not the clause. Today's R3-shaped
+  programs compile by that same broad revival and must keep compiling
+  when it narrows. A `Map` element is a place for moves and stores; a
+  `mut` lend of `m[k]` is a typing question (the read is `V ! {none}`,
+  `[mem.map.absent]`, E0401 today) that this clause does not answer.
+  lupin separates elements at run time and is the oracle for which
+  element a move empties and for the exclusivity trap; its index read
+  does not yet trap on a moved element (wolffe-lang/wolf-interp#141).
+  **Cost:** none at run time — every rule here is static. Witnesses:
+  `corpus/memory/elem_*.lu` (ten rows green at trunk: tuple positions,
+  the one-place shapes, the same-index revival) and thirteen rows
+  parked with their ruled verdicts in the planning repository
+  (`sprints/compiler/90-element-granularity/witnesses/`), among them
+  `elem_move_one_place` — `corpus/memory/elem_move_one_place.lu`
+  under EG1: `exit(0)` printing `1 2` on every machine.
 - `[mem.model.granule]` A **granule** is the unit of ownership reasoning:
   a value (Tier 0), a region (Tier 1), or a shared/handle cell (Tier 2).
 - `[mem.model.machine]` The abstract machine state comprises:
