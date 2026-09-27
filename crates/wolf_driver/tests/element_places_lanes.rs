@@ -54,8 +54,6 @@ fn parse_obs(bytes: &[u8], what: &str) -> Obs {
     }
 }
 
-}
-
 /// One wolfgang lane. `None` means the host cannot run a native lane
 /// (the s59 skip pattern), never a silent pass.
 fn lane(entry: &Path, flag: &str) -> Option<Obs> {
