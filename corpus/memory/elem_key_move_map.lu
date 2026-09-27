@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="1 2\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.move.2
+//!
+//! eg01 (EGC's EG1) — `[mem.model.place.elem]` item 1(b): on a
+//! `Map[str, List[int]]` the value at `m["a"]` is read out (a move: the
+//! value is not `Copy`, s152), then `m["b"]` is read. Two literal keys
+//! whose values differ are distinct places. `1 2` on checked, native,
+//! release and lupin 0.1.40 (whose map read clones); E1001 on both
+//! wolfgang lanes through 0.2.17, when the read of `m["a"]` moved the
+//! collapsed `m[_]`.
+
+fn main() -> !int {
+    var m = Map[str, List[int]]()
+    m["a"] = [1]
+    m["b"] = [2, 3]
+    let a = m["a"] else List[int]()
+    let b = m["b"] else List[int]()
+    print("{a.len} {b.len}")
+    0
+}

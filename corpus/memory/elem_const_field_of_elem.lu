@@ -1,0 +1,23 @@
+//! check: run(exit=0, stdout="1 2\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.move.2
+//!
+//! eg01 (EGC's EG1) — `[mem.model.place.elem]` item 1(a), the path rule:
+//! `move xs[0].tags`, then a read of `xs[1].tags.len`. The two paths
+//! first differ at the index step and the literals differ, so every
+//! path through them is distinct. `1 2` on checked, native, release
+//! and lupin 0.1.40; E1001 on both wolfgang lanes through 0.2.17.
+
+struct Doc {
+    id: int,
+    tags: List[str],
+}
+
+fn main() -> !int {
+    var xs = List[Doc]()
+    (mut xs).push(Doc { id: 1, tags: ["a"] })
+    (mut xs).push(Doc { id: 2, tags: ["b", "c"] })
+    let a = move xs[0].tags
+    print("{a.len} {xs[1].tags.len}")
+    0
+}

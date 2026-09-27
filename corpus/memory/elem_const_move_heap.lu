@@ -1,0 +1,19 @@
+//! check: run(exit=0, stdout="1 2\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.move.2
+//!
+//! eg01 (EGC's EG1) — `[mem.model.place.elem]` item 1(a): `move xs[0]`
+//! on a `List[List[int]]`, then a read of `xs[1].len`. The non-`Copy`
+//! twin of `elem_move_one_place.lu` (the shape 0.2.14 already refused).
+//! Distinct literals are distinct places: `1 2` on checked, native,
+//! release and lupin 0.1.40. Through 0.2.17 it was E1001 on both
+//! wolfgang lanes.
+
+fn main() -> !int {
+    var xs = List[List[int]]()
+    (mut xs).push([1])
+    (mut xs).push([2, 3])
+    let a = move xs[0]
+    print("{a.len} {xs[1].len}")
+    0
+}
