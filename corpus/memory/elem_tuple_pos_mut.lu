@@ -1,0 +1,22 @@
+//! check: run(exit=0, stdout="2 12\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.excl.2, mem.model.path.disjoint
+//!
+//! eg00 — `[mem.model.place.elem]` item 1(d), the exclusivity half:
+//! two `mut` claims on two tuple positions in one call are disjoint
+//! (`[mem.tier0.excl.2]`'s `f(mut a.x, mut a.y)`, spelled with
+//! positions). `2 12` on checked, native, release and lupin 0.1.40.
+//! The `List` twin, `add2(mut xs[0], mut xs[1])`, is E1002 until EG2
+//! (`mut_elem_excl.lu`).
+
+fn bump2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn main() -> !int {
+    var t = (1, 2)
+    bump2(mut t.0, mut t.1)
+    print("{t.0} {t.1}")
+    0
+}

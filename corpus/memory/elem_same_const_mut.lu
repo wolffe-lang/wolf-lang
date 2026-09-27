@@ -1,0 +1,21 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.excl.1
+//!
+//! eg00 — `[mem.model.place.elem]` item 2: the same literal twice is
+//! the same element, and stays one place under every milestone. E1002
+//! on both wolfgang lanes; lupin 0.1.40 traps `exclusivity` citing
+//! `[mem.model.path.disjoint]`. All three machines refuse; this is the
+//! row EG2 must keep red while `elem_const_mut_pair` turns green.
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    add2(mut xs[0], mut xs[0])     // ERROR E1002: one element, claimed twice
+    print("{xs[0]}")
+    0
+}

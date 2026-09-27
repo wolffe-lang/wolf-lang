@@ -1,0 +1,24 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.move.2
+//!
+//! eg00 — `[mem.model.place.elem]` item 2, ONE PLACE: a move through
+//! a run-time index (`xs[i]`) against a literal index (`xs[0]`). The
+//! compiler cannot prove `i != 0` without evaluating the program, so
+//! the two are one place and the read of `xs[0]` is E1001 on both
+//! wolfgang lanes — now and after EG1; only an EG3 proof rule could
+//! separate them, and none applies to a bare local against a literal.
+//!
+//! lupin 0.1.40 sees `i` as `1` at run time and runs it (`2 1`,
+//! `exit(0)`): the documented conservatism, allowed in this direction
+//! only (the compiler may refuse what lupin runs, never the reverse).
+
+fn main() -> !int {
+    var xs = List[List[int]]()
+    (mut xs).push([1])
+    (mut xs).push([2, 3])
+    var i = 1
+    let a = move xs[i]
+    print("{a.len} {xs[0].len}")   // ERROR E1001: `xs[i]` and `xs[0]` are one place
+    0
+}

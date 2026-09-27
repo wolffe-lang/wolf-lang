@@ -1,0 +1,25 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.excl.1
+//!
+//! eg00 — `[mem.model.place.elem]` item 4, WHERE THE PROOF FAILS: EG3's
+//! R2 separates a loop index from a literal only when the literal lies
+//! outside the range. `0..3` contains `0`, so `xs[0]` and `xs[i]` stay
+//! one place — and on the first turn they are the same element. E1002
+//! on both wolfgang lanes, now and after EG3; lupin 0.1.40 traps
+//! `exclusivity` at `i = 0`. Its twin over `1..3` is parked
+//! (`elem_loop_induction_mut`), ruled to run once R2 lands.
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    for i in 0..3 {
+        add2(mut xs[0], mut xs[i])  // ERROR E1002: the range contains 0
+    }
+    print("{xs[0]} {xs[1]} {xs[2]}")
+    0
+}

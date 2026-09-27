@@ -1,0 +1,29 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.excl.1, mem.shared.handle
+//!
+//! eg00 — `[mem.model.place.elem]` item 2: a `Pool` index is a handle,
+//! a run-time value, never a literal, so two handles into one pool are
+//! one place under every milestone. E1002 on both wolfgang lanes.
+//! lupin 0.1.40 declines `Pool` by name (`unsupported` at resolve: a
+//! handle is not a `Map` key), as for `store_rhs_first_pool.lu`.
+
+struct Node { value: int }
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn main() -> !int {
+    region r: pool(Node) {
+        var p = Pool[Node]()
+        let a = (mut p).reserve()
+        (mut p).init(a, Node { value: 1 })
+        let b = (mut p).reserve()
+        (mut p).init(b, Node { value: 2 })
+        add2(mut p[a].value, mut p[b].value)  // ERROR E1002: handles are run-time values
+        print("{p[a].value} {p[b].value}")
+        0
+    }
+}

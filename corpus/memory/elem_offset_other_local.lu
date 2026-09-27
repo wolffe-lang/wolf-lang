@@ -1,0 +1,25 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.excl.1
+//!
+//! eg00 — `[mem.model.place.elem]` item 4, WHERE THE PROOF FAILS: EG3's
+//! R1 relates `xs[i + a]` and `xs[i + b]` over ONE local. Here the
+//! second index is spelled through another local, `k = i - 1`, so R1
+//! cannot relate `xs[i]` and `xs[k + 1]` and they stay one place —
+//! and at run time they ARE the same element. E1002 on both wolfgang
+//! lanes, now and after EG3; lupin 0.1.40 traps `exclusivity`. The
+//! row that proves the refusal is not a shortfall.
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    var i = 1
+    var k = i - 1
+    add2(mut xs[i], mut xs[k + 1])  // ERROR E1002: not provably distinct (and equal)
+    print("{xs[1]}")
+    0
+}

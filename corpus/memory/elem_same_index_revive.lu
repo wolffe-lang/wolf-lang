@@ -1,0 +1,26 @@
+//! check: run(exit=0, stdout="1 3\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.move.4, mem.region.edge.elem
+//!
+//! eg00 — `[mem.model.place.elem]` item 4's R3: take an element out
+//! through a run-time index, work on it, store it back through the
+//! SAME index (`i` unassigned between). The store provably denotes the
+//! moved element, so it revives it and the read is legal. `1 3` on
+//! checked, native, release and lupin 0.1.40.
+//!
+//! Today this compiles for a worse reason: any index store revives the
+//! collapsed element place (wolf-lang#460). When that revival narrows
+//! to item 3's must-rule, this row is what must keep compiling — R3 is
+//! the rule that keeps it.
+
+fn main() -> !int {
+    var xs = List[List[int]]()
+    (mut xs).push([1])
+    (mut xs).push([2, 3])
+    var i = 1
+    var t = move xs[i]
+    (mut t).push(4)
+    xs[i] = take t
+    print("{xs[0].len} {xs[i].len}")
+    0
+}

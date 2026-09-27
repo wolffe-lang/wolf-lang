@@ -1,0 +1,23 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.excl.1
+//!
+//! eg00 — `[mem.model.place.elem]` item 2, ONE PLACE: two `mut`
+//! claims through two run-time indices. `i` and `j` differ when the
+//! program runs, but no rule of the clause can prove it from the text,
+//! so the second claim is E1002 on both wolfgang lanes — now and after
+//! EG2. lupin 0.1.40 runs it (`2 12`): the conservatism direction.
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    var i = 0
+    var j = 1
+    add2(mut xs[i], mut xs[j])     // ERROR E1002: `xs[i]` and `xs[j]` are one place
+    print("{xs[0]} {xs[1]}")
+    0
+}

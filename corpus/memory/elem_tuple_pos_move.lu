@@ -1,0 +1,18 @@
+//! check: run(exit=0, stdout="1 2\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.model.place, mem.tier0.move.2
+//!
+//! eg00 (wolf-lang#446's campaign) — `[mem.model.place.elem]` item
+//! 1(d): tuple positions are FIELD steps (`t.0`, `t.1`), distinct
+//! places before the element clause existed. Moving `t.0` leaves
+//! `t.1` readable on every machine: checked, native, release and
+//! lupin 0.1.40 all print `1 2` (measured on kasumi, 0.2.17 archive).
+//! The contrast the clause draws is with a `List`, whose elements are
+//! one place until EG1 (`elem_move_one_place.lu`).
+
+fn main() -> !int {
+    var t = ([1], [2, 3])
+    let a = move t.0
+    print("{a.len} {t.1.len}")
+    0
+}
