@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+### Element places for moves, and #460 (eg01, EGC's EG1)
+
+- **#460 is fixed**: an index store no longer revives a moved sibling
+  element. `var a = move xs[0]; xs[1] = [5]` followed by a read of
+  `xs[0]` compiled on 0.2.17 and gave three answers — the checked
+  machine trapped `use-after-move`, native and release printed the
+  aliased `2 2 1` (the moved list and `xs[0]` were one buffer), lupin
+  printed `2 1 1`. It is now `fail(E1001)` on every wolfgang lane:
+  `[mem.model.place.elem]` item 3, a store revives a moved element only
+  through an index that surely denotes it — the same integer literal,
+  the same plain string/`bool`/`char` literal key, or (R3) the same
+  plain integer local unwritten since the move
+  (`var t = move xs[i]` … `xs[i] = take t` keeps compiling). A store to
+  the whole container still revives every element.
+- **Moves are element-granular for literal indices** (item 1): `move
+  xs[0]` leaves `xs[1]` readable (`xs[0].tags` and `xs[1].tags` too),
+  a value read out of `m["a"]` leaves `m["b"]` readable, and an element
+  move leaves the container's `len` readable. wolf-lang#446's
+  conservatism row, `corpus/memory/elem_move_one_place.lu`, now runs
+  `1 2` on every machine. Run-time indices stay one place (item 2), and
+  `mut` claims still treat a container's elements as one place (EG2).
+- **Read this before you bump the pin:** a program that read a moved
+  element because a store elsewhere in the container revived it is now
+  E1001 — it was reading a moved value on every machine.
+  `corpus/memory/list_session_struct.lu` was one (`let s2 = tbl[2]`
+  moved a `Session`, then `for c in tbl` read it); it now says
+  `copy tbl[2]` and prints the same bytes. A value read out of a `Map`
+  through a key that is not a literal (`m[k]` with `k` a `str` local)
+  and stored back through the same key does not revive: R1/R3 are
+  stated over integer locals.
+- Diagnostics name the element: `xs[0]`, `m["a"]`, `xs[i]` where they
+  printed `xs[_]`; E1002 between two elements says the claim treats a
+  container's elements as one place rather than calling them a path and
+  its prefix.
+- Witnesses: the four #460 rows, EG1's four parked rows, item 3's
+  positive twin and R3's failing twin under `corpus/memory/elem_*.lu`,
+  asserted on checked, native, release and lupin by
+  `element_places_lanes.rs` (lupin 0.1.40's pre-mirror answers pinned
+  by version, wolffe-lang/wolf-interp#141).
+
 ### The element clause (eg00, #446's campaign)
 
 - **`[mem.model.place.elem]`** (spec/02 §1) says which index shapes are
