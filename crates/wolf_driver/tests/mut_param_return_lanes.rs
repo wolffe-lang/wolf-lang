@@ -21,7 +21,7 @@
 //! is `[mem.tier0.move.2]`'s: the caller's read of a place the callee
 //! left moved-out traps `use-after-move`. lupin 0.1.40 does that on
 //! the field shape only; the whole and one-path shapes print the
-//! original `1` (wolffe-lang/wolf-interp#MIRROR), the element shape is
+//! original `1` (wolffe-lang/wolf-interp#146), the element shape is
 //! wolffe-lang/wolf-interp#141 and the map shape #144. For the versions
 //! pinned per case those cases assert the MEASURED answer; any later
 //! version must trap, so a pin bump that carries lupin forward without
@@ -221,7 +221,7 @@ fn every_lane_pinned(
 }
 
 /// lupin releases measured before the mirror of this clause
-/// (wolffe-lang/wolf-interp#MIRROR): a whole-parameter move is not
+/// (wolffe-lang/wolf-interp#146): a whole-parameter move is not
 /// seen by the caller.
 const PRE_MIRROR_LUPIN: &[&str] = &["0.1.40"];
 
