@@ -290,7 +290,11 @@ law: `.docs/refs/papers/swift-ownership-manifesto.md`.
 - `[mem.tier0.mode.mut]` `mut` parameters are **exclusive inout**: for the
   duration of the call no other access (read or write) to the argument
   place or any conflicting path may occur. Call sites must write `mut`
-  (X1, grammar `[gram.item.fn]`).
+  (X1, grammar `[gram.item.fn]`). **A `mut` parameter is initialized at
+  every return of the callee**: a path on which it, or any place under
+  it (a field, an element, a map value), may be left moved-out is a
+  compile error (E1001) in the safe tiers, and a store back before the
+  return (`[mem.tier0.move.4]`) makes that path legal.
 - `[mem.tier0.mode.take]` `take` consumes: the argument moves into the
   callee (`[mem.tier0.move.1]` applies at the call site).
 
