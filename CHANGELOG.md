@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### R3 over any `Copy` local (eg01b, the maintainer's ruling)
+
+- **`m[k] = take v` revives again with a `str` key**: `var v = m[k]
+  else …; (mut v).push(x); m[k] = take v` compiled on 0.2.17 (through
+  #460's any-store revival) and was E1001 after eg01, whose R3 took
+  only an integer local. `[mem.model.place.elem]`'s R1 and R3 are now
+  stated over a local of any `Copy` type, and the compiler follows: a
+  store through the same `str`, `char` or `bool` key local, or the
+  same `Pool` handle local, unwritten since the read-out, revives it.
+  A key local written in between still revives nothing — on 0.2.17
+  that shape printed the moved buffer on every wolfgang lane.
+- The clause's stale sentences are fixed: R3 is no longer labelled not
+  implemented, item 3 names R3 as its exception, and "where the
+  machines stand" describes trunk rather than 0.2.17.
+- Diagnostics and CFG dumps name a pool handle (`pool[h]`) where they
+  printed `pool[_]`.
+- Witnesses: `corpus/memory/elem_str_key_revive.lu`,
+  `elem_char_bool_key_revive.lu`, `elem_pool_handle_revive.lu` and the
+  blur row `elem_key_reassigned_no_revive.lu`, asserted on checked,
+  native, release and lupin by `element_places_lanes.rs`.
+
 ### Element places for moves, and #460 (eg01, EGC's EG1)
 
 - **#460 is fixed**: an index store no longer revives a moved sibling
@@ -28,10 +49,10 @@
   E1001 — it was reading a moved value on every machine.
   `corpus/memory/list_session_struct.lu` was one (`let s2 = tbl[2]`
   moved a `Session`, then `for c in tbl` read it); it now says
-  `copy tbl[2]` and prints the same bytes. A value read out of a `Map`
-  through a key that is not a literal (`m[k]` with `k` a `str` local)
-  and stored back through the same key does not revive: R1/R3 are
-  stated over integer locals.
+  `copy tbl[2]` and prints the same bytes. (A value read out of a
+  `Map` through a `str` local key and stored back through the same key
+  was refused here too, R1/R3 then being stated over integer locals;
+  eg01b below lifts it.)
 - Diagnostics name the element: `xs[0]`, `m["a"]`, `xs[i]` where they
   printed `xs[_]`; E1002 between two elements says the claim treats a
   container's elements as one place rather than calling them a path and
