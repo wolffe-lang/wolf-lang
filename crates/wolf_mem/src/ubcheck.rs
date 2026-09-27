@@ -3088,18 +3088,33 @@ impl<'t> Machine<'t> {
             && let Some(recv) = b.callee()
             && matches!(self.expr_ty(recv.span), Some(TyKind::Ptr(_)))
         {
+            // wolf-lang#452 (ruled 2026-09-26, `[mem.model.place.rhs]`):
+            // the place's operands — pointer, then index — run before
+            // the right-hand side; the byte write lands after it.
+            let (p, idx) = self.raw_index_parts(place_expr)?;
             let v = match d.value() {
                 Some(e) => val!(self.eval(e)),
                 None => Value::Unit,
             };
-            return self.raw_index_write(place_expr, v, compound, stmt.span);
+            return self.raw_index_write(place_expr, (p, idx), v, compound, stmt.span);
         }
         // wolf-lang#438 (`[mem.region.edge.elem]`): a plain `=` through
         // a container index COPIES a place's value in, as a plain
         // `push` does (the static tier treats it as `xs[i] = copy v`);
-        // `xs[i] = take v` moves it. The right-hand side still runs
-        // before the place is minted, and before the index operand
-        // (wolf-lang#452 names that order; it is not ruled here).
+        // `xs[i] = take v` moves it.
+        //
+        // wolf-lang#452 (ruled 2026-09-26: index first, then value;
+        // `[mem.model.place.rhs]`): the place's OPERANDS — every index
+        // and key, outermost first — are evaluated here, before the
+        // right-hand side, as native, release and lupin do. A `Place`
+        // carries their values, not an address: the element is found
+        // by `write_place` at the store, after the right-hand side has
+        // run, so a right-hand side that grows or rehashes the
+        // container still stores into the container as it is after
+        // the call.
+        let Some(place) = self.place_of(place_expr)? else {
+            return self.refuse("assignment through this place shape", place_expr.span);
+        };
         let elem_store = !compound && place_expr.kind == SyntaxKind::BracketApply;
         let copied = match d.value() {
             Some(e) if elem_store && !d.takes() => self.eval_elem_copy(e)?,
@@ -3120,9 +3135,6 @@ impl<'t> Machine<'t> {
                 other => return Ok(other),
             },
             (None, None) => Value::Unit,
-        };
-        let Some(place) = self.place_of(place_expr)? else {
-            return self.refuse("assignment through this place shape", place_expr.span);
         };
         if compound {
             let cur = self.read_place(&place, place_expr.span)?;
@@ -6903,14 +6915,17 @@ impl<'t> Machine<'t> {
         Ok(Flow::Val(Value::Int(n)))
     }
 
+    /// `parts` is the place's pointer and index, evaluated by the
+    /// caller BEFORE the right-hand side (wolf-lang#452).
     fn raw_index_write(
         &mut self,
         place_expr: &'t GreenNode,
+        parts: (PtrVal, i64),
         v: Value,
         compound: bool,
         span: Span,
     ) -> E<Flow> {
-        let (p, idx) = self.raw_index_parts(place_expr)?;
+        let (p, idx) = parts;
         let size = self.pointee_size(place_expr.span);
         let at = PtrVal {
             offset: p.offset + idx * size as i64,
