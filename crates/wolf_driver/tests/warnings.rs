@@ -338,6 +338,55 @@ fn mode_error_retires_the_mut_parameter_lint() {
     );
 }
 
+/// wolf-lang#464 (s184): a `mut` parameter moved out and never stored
+/// back is E1001 at the move (`[mem.tier0.mode.mut]`), and W1002's
+/// "never written" beside it was false — the move is the write the
+/// lint's flat scan cannot see, and its drop-the-`mut` fix would have
+/// walked away from the store back the refusal asks for. The build's
+/// stderr carries the refusal alone, and `wolf fix` offers no W1002
+/// edit.
+#[test]
+fn a_mut_parameter_left_moved_out_retires_the_lint() {
+    let dir = fixture(
+        "mut-lint-vs-moveout",
+        "fn f(mut xs: List[int]) {\n    var t = move xs\n    (mut t).push(9)\n}\n\n\
+         fn main() -> !int {\n    var xs = [1]\n    f(mut xs)\n    xs.len\n}\n",
+    );
+    let (code, err) = build_wir(&dir, &[]);
+    assert_eq!(code, 2, "the refusal stops the build:\n{err}");
+    assert!(err.contains("error[E1001]"), "the refusal renders:\n{err}");
+    assert!(
+        !err.contains("W1002"),
+        "the lint that contradicts it is retired:\n{err}"
+    );
+    let out = Command::new(wolf())
+        .arg("fix")
+        .arg(dir.join("main.lu"))
+        .output()
+        .expect("run wolf fix");
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert!(
+        !text.contains("W1002"),
+        "`wolf fix` offers no drop-the-`mut` edit here:\n{text}"
+    );
+}
+
+/// The control for the case above: moving out of a `copy` leaves the
+/// parameter whole and unwritten, so the lint still fires — and
+/// nothing is refused.
+#[test]
+fn a_mut_parameter_copied_from_still_warns() {
+    let dir = fixture(
+        "mut-lint-copy-control",
+        "fn f(mut xs: List[int]) {\n    var t = copy xs\n    (mut t).push(9)\n}\n\n\
+         fn main() -> !int {\n    var xs = [1]\n    f(mut xs)\n    xs.len - 1\n}\n",
+    );
+    let (code, err) = build_wir(&dir, &[]);
+    assert_eq!(code, 0, "a warning never fails a default build:\n{err}");
+    assert!(err.contains("warning[W1002]"), "the lint fires:\n{err}");
+    assert!(!err.contains("E1001"), "nothing is refused:\n{err}");
+}
+
 /// The control for the case above: with no mode error in sight the
 /// lint is unchanged — a `mut` parameter nothing writes still warns.
 #[test]
