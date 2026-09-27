@@ -1,0 +1,20 @@
+//! check: run(exit=0, stdout="2 1 7\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.move.4
+//!
+//! eg01 — `[mem.model.place.elem]` item 3, the positive half: a store
+//! through the same literal index surely denotes the moved element and
+//! revives it — `move xs[0]`, work on the value, `xs[0] = take a`, read
+//! `xs[0]`. The twin of `elem_const_store_no_revive_heap.lu`, where the
+//! store names `xs[1]` and revives nothing. `2 1 7` on every machine.
+
+fn main() -> !int {
+    var xs = List[List[int]]()
+    (mut xs).push([1])
+    (mut xs).push([2])
+    var a = move xs[0]
+    (mut a).push(7)
+    xs[0] = take a
+    print("{xs[0].len} {xs[1].len} {xs[0][1]}")
+    0
+}
