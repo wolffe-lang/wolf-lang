@@ -222,8 +222,9 @@ fn every_lane_pinned(
 
 /// lupin releases measured before the mirror of this clause
 /// (wolffe-lang/wolf-interp#146): a whole-parameter move is not
-/// seen by the caller.
-const PRE_MIRROR_LUPIN: &[&str] = &["0.1.40"];
+/// seen by the caller. 0.1.41 carries #141 but not #146 (r23, the
+/// pairing bump): it still prints the original `1`.
+const PRE_MIRROR_LUPIN: &[&str] = &["0.1.40", "0.1.41"];
 
 /// lupin releases whose index read ignores a moved element's mark
 /// (wolffe-lang/wolf-interp#141).
