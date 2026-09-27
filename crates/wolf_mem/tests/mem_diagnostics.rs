@@ -1839,9 +1839,27 @@ fn e1001_r3_over_a_copy_key_does_not_hold_after_the_key_is_written() {
     // the read-out and the store blurs `m[k]` exactly as an integer
     // index does — the store may name another key.
     for (name, ty, init, lit, between) in [
-        ("e1001_elem_r3_str_key_assigned", "str", "\"a\"", "\"a\"", "k = \"b\""),
-        ("e1001_elem_r3_char_key_assigned", "char", "'a'", "'a'", "k = 'b'"),
-        ("e1001_elem_r3_bool_key_mut_lent", "bool", "true", "true", "flip(mut k)"),
+        (
+            "e1001_elem_r3_str_key_assigned",
+            "str",
+            "\"a\"",
+            "\"a\"",
+            "k = \"b\"",
+        ),
+        (
+            "e1001_elem_r3_char_key_assigned",
+            "char",
+            "'a'",
+            "'a'",
+            "k = 'b'",
+        ),
+        (
+            "e1001_elem_r3_bool_key_mut_lent",
+            "bool",
+            "true",
+            "true",
+            "flip(mut k)",
+        ),
     ] {
         let src = format!(
             "fn flip(mut b: bool) {{\n    b = !b\n}}\n\
