@@ -1,0 +1,27 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.move.2, mem.tier0.move.4
+//!
+//! eg01b — R3 fails when the `Copy` key local is written between the
+//! read that emptied `m[k]` and the store through `m[k]`: `k = "b"`, so
+//! the store names another element and revives nothing; the read of
+//! `m["a"]` may read the moved value (E1001). The `str`-key twin of
+//! `elem_sym_reassigned_no_revive.lu`.
+//!
+//! Through 0.2.17 it compiled (any index store revived the collapsed
+//! element, wolf-lang#460) and checked, native and release all printed
+//! `2`: `m["a"]` still held the buffer moved into `v` and pushed to.
+//! lupin 0.1.40 prints `1` (its map read copies the value out).
+
+fn main() -> !int {
+    var m = Map[str, List[int]]()
+    m["a"] = [1]
+    var k = "a"
+    var v = m[k] else List[int]()
+    (mut v).push(7)
+    k = "b"
+    m[k] = take v
+    let a = m["a"] else List[int]()   // ERROR E1001: `k` changed after `m[k]` was read out
+    print("{a.len}")
+    0
+}

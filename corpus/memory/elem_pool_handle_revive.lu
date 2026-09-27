@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="2\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.move.4
+//!
+//! eg01b — R3 through a `Pool` handle local: a handle is a `Copy`
+//! value, so `move p[h]` … `p[h] = take t` with `h` unwritten between
+//! revives the element. Two handles stay one place for every other rule
+//! (item 2; `elem_pool_handles_one_place.lu`). 0.2.17 accepted this
+//! through any-store revival (wolf-lang#460); eg01 refused it (E1001).
+//! `2` on checked, native and release; lupin declines `Pool` by name.
+
+struct Node { tags: List[int] }
+
+fn main() -> !int {
+    region r: pool(Node) {
+        var p = Pool[Node]()
+        let h = (mut p).reserve()
+        (mut p).init(h, Node { tags: [1] })
+        var t = move p[h]
+        (mut t.tags).push(2)
+        p[h] = take t
+        print("{p[h].tags.len}")
+        0
+    }
+}
