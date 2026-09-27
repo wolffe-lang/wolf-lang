@@ -6,13 +6,15 @@
 //! assigned between: `var t = move xs[i]` with `i = 0`, then `i = 1`,
 //! then `xs[i] = take t`. The store and the move spell `xs[i]` alike but
 //! `i` changed, so the store is not provably the moved element and
-//! revives nothing; the read of `xs[0]` is E1001. The twin of
+//! revives nothing: the moved `xs[i]` may be any element, and both
+//! reads (`xs[0]`, `xs[1]`) are E1001. The twin of
 //! `elem_same_index_revive.lu`, where `i` is unassigned between.
 //!
 //! Through 0.2.17 it compiled (any index store revived the collapsed
-//! element, wolf-lang#460); lupin 0.1.40 runs it (its index read
-//! ignores the moved mark, wolffe-lang/wolf-interp#141) and prints
-//! `1 1 2`.
+//! element, wolf-lang#460): the checked machine trapped
+//! `use-after-move` at the read of `xs[0]`, native and release printed
+//! `1 1 2`. lupin 0.1.40 prints `1 1 2` too — its index read ignores
+//! the moved mark (wolffe-lang/wolf-interp#141).
 
 fn main() -> !int {
     var xs = List[List[int]]()
@@ -22,6 +24,6 @@ fn main() -> !int {
     var t = move xs[i]
     i = 1
     xs[i] = take t
-    print("{xs[0].len} {xs[1].len} {i + 1}")   // ERROR E1001: `i` changed after `xs[i]` moved
+    print("{xs[0].len} {xs[1].len} {i + 1}")   // ERROR E1001: `i` changed after `xs[i]` moved (both reads)
     0
 }
