@@ -3626,6 +3626,11 @@ fn conform_run(args: &[String]) {
                                     } else {
                                         let mut all = all;
                                         all.extend(mem.diagnostics.iter().cloned());
+                                        // s184 (#464): the mem rung's
+                                        // at-return E1001 retires W1002
+                                        // on the same parameter, as the
+                                        // typecheck rung's mode errors do.
+                                        wolf_diag::suppress_mode_shadowed(&mut all);
                                         wolf_diag::sort_diagnostics(&mut all);
                                         if let Some(code) =
                                             first_error_linted(&lints, &allow_regions, &all)
