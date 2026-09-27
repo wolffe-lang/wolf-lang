@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Index first, then value (s183, #452, the maintainer's ruling)
+
+- **The checked machine now evaluates a store's place operands before
+  its right-hand side**: `xs[idx()] = val()` printed `val idx` under
+  `conform-run --checked` through 0.2.17 and `idx val` on native,
+  release and lupin; it prints `idx val` everywhere. The same holds
+  for a `Map` key (`m[key()] = val()`), every level of a nested index
+  (`g[i()][j()] = val()`: `i j val`), a compound store (`xs[i()] +=
+  v()`) and a raw-pointer element store (`p[i()] = v()`). The index's
+  value is taken first too: `ys[i] = bump(mut i)` stores at the old
+  `i` on every lane (the checked machine stored at the new one).
+- `[mem.model.place.rhs]` states the order: the place's operands, left
+  to right and outermost first, then the right-hand side, then the
+  address, then the store — the address is still located after the
+  right-hand side, so `xs[x()] = grow(mut xs)` stores into the grown
+  list.
+- Witnesses: `corpus/memory/ctl_store_order.lu` (s182's control) and
+  `ctl_store_order_{map,nested,nested_index,captured,compound,raw}.lu`,
+  asserted on checked, native, release and lupin by
+  `store_order_lanes.rs`. lupin 0.1.40 evaluates a multi-index store's
+  outer operands twice (wolf-interp#145); the gate pins that answer
+  for 0.1.40 and 0.1.41 by version.
+
 ### R3 over any `Copy` local (eg01b, the maintainer's ruling)
 
 - **`m[k] = take v` revives again with a `str` key**: `var v = m[k]
