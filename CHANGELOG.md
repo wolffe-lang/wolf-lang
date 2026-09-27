@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### The element clause (eg00, #446's campaign)
+
+- **`[mem.model.place.elem]`** (spec/02 §1) says which index shapes are
+  distinct places: two integer-literal indices of a `List` with
+  different values, two literal `Map` keys with different values, an
+  element against its container's header member, and tuple positions
+  (already distinct). Everything else stays **one place** — a run-time
+  index against any other index, a `Pool` handle, a non-literal key —
+  and re-initialization is a *must*: a store revives a moved element
+  only through an index that provably denotes it. Three proof rules for
+  run-time indices (offset from one unassigned local, a loop index
+  against a literal outside its range, same-index revival) are stated
+  and marked not yet implemented. No compiler behaviour changes here:
+  the clause is the oracle for eg01–eg03.
+- Ten witnesses green at trunk (`corpus/memory/elem_*.lu`, asserted on
+  checked, native, release and lupin by `element_places_lanes.rs`);
+  thirteen parked with ruled verdicts in the planning repository.
+- **#460** (filed): an index store revives a moved sibling element —
+  `move xs[0]; xs[1] = v` then a read of `xs[0]` compiles; the checked
+  machine traps, native aliases the moved list, lupin prints a third
+  answer. `corpus/memory/list_session_struct.lu` reads a moved element
+  through this hole.
+- **wolffe-lang/wolf-interp#141** (filed): lupin 0.1.40's index read
+  does not trap on a moved element.
+
 ## 0.2.17 — 2026-09-26
 
 THE SEVENTEENTH. 0.2.16 refused programs 0.2.14 ran (#449), and the
