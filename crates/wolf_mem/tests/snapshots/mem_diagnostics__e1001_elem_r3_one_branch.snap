@@ -1,0 +1,21 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(&src)
+---
+error[E1001]: `xs[1].len` is used here after its value moved away
+  --> mem:///main.lu:12:5
+   |
+ 9 |     var t = move xs[i]
+   |                  ----- `xs[i]` moved here
+...
+12 |     xs[1].len
+   |     ^^^^^^^^^ used after the move
+   |
+   = note: `xs[1].len` may reach the moved `xs[i]`: an index that is not a literal is one place
+     with every other index of its container [mem.model.place.elem]. Distinct literal indices
+     stay usable.
+   = note: re-initializing the place (assigning to it) also makes it usable again.
+help: to keep the original, copy it at the move
+   |
+ 9 |     var t = move copy xs[i]
+   |

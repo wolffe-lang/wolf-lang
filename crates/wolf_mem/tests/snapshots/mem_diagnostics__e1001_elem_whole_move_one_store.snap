@@ -1,0 +1,20 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1001]: `xs[1].len` is used here after its value moved away
+ --> mem:///main.lu:7:14
+  |
+5 |     let ys = move xs
+  |                   -- `xs[1]` moved here
+6 |     xs[0] = [5]
+7 |     ys.len + xs[1].len
+  |              ^^^^^^^^^ used after the move
+  |
+  = note: `xs[1].len` is part of `xs[1]`; moving one empties the other. Disjoint fields stay
+    usable.
+  = note: re-initializing the place (assigning to it) also makes it usable again.
+help: to keep the original, copy it at the move
+  |
+5 |     let ys = move copy xs
+  |

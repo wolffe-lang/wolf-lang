@@ -1085,11 +1085,11 @@ fn e1002_nested_call_claims_a_spilled_bases_prefix() {
 
 #[test]
 fn e1002_two_element_lends_in_one_call() {
-    // s168's first leg: `[mem.model.place]` collapses every element of
-    // a container to ONE opaque projection, so a second element claim
-    // in the same call is the prefix conflict. Element-granular
-    // disjointness is a non-target, and lending addresses into a
-    // buffer is the reason it should stay one.
+    // s168's first leg: a `mut` claim treats every element of a
+    // container as ONE place, so a second element claim in the same
+    // call conflicts. eg01 made MOVES element-granular
+    // (`[mem.model.place.elem]`); claims stay one place until EGC's EG2,
+    // and the note says so rather than calling two literals a prefix.
     snap(
         "e1002_two_element_lends",
         "fn add2(mut a: int, mut b: int) {\n    \
@@ -1666,6 +1666,169 @@ fn built_strs_in_the_ambient_region_stay_silent() {
                  total = total + line.len\n    \
              }\n    \
              if total == 17 { 0 } else { 1 }\n\
+         }\n",
+    );
+}
+
+// ------------------------------------------ eg01: element places ----
+//
+// `[mem.model.place.elem]` for moves: distinct literal indices are
+// distinct places (1(a)/(b)), an element is not its container's header
+// (1(c)), a store revives a moved element only when it surely denotes
+// it (item 3, wolf-lang#460), and R3: `xs[i] = v` revives a moved
+// `xs[i]` only while `i` is unwritten since the move.
+
+#[test]
+fn clean_distinct_literals_and_the_header_after_an_element_move() {
+    snap(
+        "clean_elem_literals_and_header",
+        "fn main() -> !int {\n    \
+             var xs = List[List[int]]()\n    \
+             (mut xs).push([1])\n    \
+             (mut xs).push([2, 3])\n    \
+             let a = move xs[0]\n    \
+             a.len + xs[1].len + xs[0x1].len + xs.len\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1001_a_run_time_index_may_be_the_moved_element() {
+    // Item 2: `xs[i]` against the moved `xs[0]` — the note names the
+    // element rule, not a prefix.
+    snap(
+        "e1001_elem_may_alias",
+        "fn main() -> !int {\n    \
+             var xs = List[List[int]]()\n    \
+             (mut xs).push([1])\n    \
+             (mut xs).push([2, 3])\n    \
+             var i = 1\n    \
+             let a = move xs[0]\n    \
+             a.len + xs[i].len\n\
+         }\n",
+    );
+}
+
+#[test]
+fn clean_a_store_revives_the_literal_it_names_and_the_whole_revives_all() {
+    snap(
+        "clean_elem_literal_store_revives",
+        "fn main() -> !int {\n    \
+             var xs = List[List[int]]()\n    \
+             (mut xs).push([1])\n    \
+             (mut xs).push([2])\n    \
+             let a = move xs[0]\n    \
+             xs[0] = [7, 8]\n    \
+             let b = move xs[1]\n    \
+             xs = [[9]]\n    \
+             a.len + b.len + xs[0].len + xs[1].len\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1001_a_whole_move_is_not_revived_by_one_element_store() {
+    // Before eg01 the residue of a whole-container move re-initialized
+    // at one element was empty (every element overlapped the collapsed
+    // store), so `xs[1]` read the moved list.
+    snap(
+        "e1001_elem_whole_move_one_store",
+        "fn main() -> !int {\n    \
+             var xs = List[List[int]]()\n    \
+             (mut xs).push([1])\n    \
+             (mut xs).push([2])\n    \
+             let ys = move xs\n    \
+             xs[0] = [5]\n    \
+             ys.len + xs[1].len\n\
+         }\n",
+    );
+}
+
+#[test]
+fn clean_r3_same_local_index_revives() {
+    snap(
+        "clean_elem_r3_same_index",
+        "fn main() -> !int {\n    \
+             var xs = List[List[int]]()\n    \
+             (mut xs).push([1])\n    \
+             (mut xs).push([2, 3])\n    \
+             var i = 1\n    \
+             var t = move xs[i]\n    \
+             (mut t).push(4)\n    \
+             let n = i + 1\n    \
+             xs[i] = take t\n    \
+             xs[0].len + xs[i].len + n\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1001_r3_does_not_hold_after_the_index_is_written() {
+    // Assignment, compound assignment, a `mut` lend and a write on one
+    // branch each blur `xs[i]`: the store may name another element.
+    for (name, between) in [
+        ("e1001_elem_r3_assigned", "i = 0"),
+        ("e1001_elem_r3_compound", "i += 0"),
+        ("e1001_elem_r3_mut_lent", "bump(mut i)"),
+        ("e1001_elem_r3_one_branch", "if t.len > 5 { i = 0 }"),
+    ] {
+        let src = format!(
+            "fn bump(mut k: int) {{\n    k = k + 0\n}}\n\
+             fn main() -> !int {{\n    \
+                 var xs = List[List[int]]()\n    \
+                 (mut xs).push([1])\n    \
+                 (mut xs).push([2, 3])\n    \
+                 var i = 1\n    \
+                 var t = move xs[i]\n    \
+                 {between}\n    \
+                 xs[i] = take t\n    \
+                 xs[1].len\n\
+             }}\n"
+        );
+        insta::assert_snapshot!(name, render_mem(&src));
+    }
+}
+
+#[test]
+fn e1001_r3_does_not_carry_across_loop_iterations() {
+    // The loop variable is re-bound every iteration: a store in a later
+    // iteration names a later element, so the one moved earlier stays
+    // moved at the loop's exit.
+    snap(
+        "e1001_elem_r3_loop",
+        "fn main() -> !int {\n    \
+             var xs = List[List[int]]()\n    \
+             (mut xs).push([1])\n    \
+             (mut xs).push([2])\n    \
+             var keep = List[int]()\n    \
+             for i in 0..2 {\n        \
+                 if i == 0 {\n            \
+                     keep = move xs[i]\n        \
+                 } else {\n            \
+                     xs[i] = [9]\n        \
+                 }\n    \
+             }\n    \
+             keep.len + xs[0].len\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1001_a_map_key_that_is_not_a_literal_revives_nothing() {
+    // Item 2/3: a `str` local key is one place with every key (R1/R3
+    // are stated over integer locals), so the store through it revives
+    // nothing — the conservative side of the clause.
+    snap(
+        "e1001_elem_map_str_local_key",
+        "fn main() -> !int {\n    \
+             var m = Map[str, List[int]]()\n    \
+             m[\"a\"] = [1]\n    \
+             let k = \"a\"\n    \
+             var v = m[k] else List[int]()\n    \
+             (mut v).push(2)\n    \
+             m[k] = take v\n    \
+             let w = m[\"a\"] else List[int]()\n    \
+             w.len\n\
          }\n",
     );
 }
