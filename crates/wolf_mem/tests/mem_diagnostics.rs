@@ -1937,12 +1937,12 @@ fn e1001_mut_param_moveout_at_return() {
         (
             "e1001_mut_param_moveout_take_onward",
             "mut xs: List[int]",
-            "sink(take xs)",
+            "let n = sink(take xs)",
         ),
         (
             "e1001_mut_param_moveout_partial_restore",
             "mut s: S",
-            "var t = move s\n    s.name = \"b\"\n    sink(take t.tags)",
+            "var t = move s\n    s.name = \"b\"\n    let n = sink(take t.tags)",
         ),
     ] {
         let src = format!(
