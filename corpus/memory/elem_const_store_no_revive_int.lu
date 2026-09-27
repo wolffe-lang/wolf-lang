@@ -1,0 +1,22 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.move.2, mem.tier0.move.4
+//!
+//! eg01 (wolf-lang#460) — `[mem.model.place.elem]` item 3, the `Copy`
+//! twin: `let a = move xs[0]; xs[1] = 9`, then a read of `xs[0]` on a
+//! `List[int]`. Re-initialization is a must: a store at a different
+//! literal revives nothing, so `xs[0]` is still moved (E1001).
+//!
+//! Before eg01 every wolfgang lane accepted it and printed `1 1 9`,
+//! the checked machine included (B126: `Machine::take_value` skips
+//! `Moved` for a `Copy` value, reachable only through this hole).
+//! lupin 0.1.40 prints `1 1 9` too (wolffe-lang/wolf-interp#141); the
+//! ruled lupin verdict is the `use-after-move` trap.
+
+fn main() -> !int {
+    var xs = [1, 2]
+    let a = move xs[0]
+    xs[1] = 9
+    print("{a} {xs[0]} {xs[1]}")   // ERROR E1001: `xs[0]` moved; `xs[1] = 9` revives only `xs[1]`
+    0
+}

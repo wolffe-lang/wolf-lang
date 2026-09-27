@@ -1,0 +1,26 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.move.2, mem.tier0.move.4
+//!
+//! eg01 (wolf-lang#460) — `[mem.model.place.elem]` item 3 through a
+//! run-time index: `var a = move xs[0]; xs[i] = [5]` with `i = 1`. An
+//! index that is not the literal `0` does not provably denote the
+//! moved element, so the store revives nothing and the read of
+//! `xs[0].len` is E1001.
+//!
+//! Before eg01 it compiled with the same three answers as
+//! `elem_const_store_no_revive_heap.lu`: checked `trap(use-after-move)`,
+//! native and release `2 2 1` (aliased), lupin 0.1.40 `2 1 1`
+//! (wolffe-lang/wolf-interp#141).
+
+fn main() -> !int {
+    var xs = List[List[int]]()
+    (mut xs).push([1])
+    (mut xs).push([2])
+    var i = 1
+    var a = move xs[0]
+    xs[i] = [5]
+    (mut a).push(7)
+    print("{a.len} {xs[0].len} {xs[1].len}")   // ERROR E1001: `xs[i] = …` is not provably `xs[0]`
+    0
+}

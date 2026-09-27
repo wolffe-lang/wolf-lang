@@ -1,0 +1,28 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.move.2, mem.tier0.move.4
+//!
+//! eg01 (wolf-lang#460) — `[mem.model.place.elem]` item 3: a store
+//! revives a moved element only through an index that provably
+//! denotes it. `var a = move xs[0]; xs[1] = [5]` stores at a different
+//! literal, so `xs[0]` stays moved and the read of `xs[0].len` is
+//! E1001 on every wolfgang lane.
+//!
+//! Before eg01 any index store revived the collapsed element place and
+//! the program compiled: the checked machine trapped `use-after-move`
+//! at the read, and native and release printed `2 2 1` — the moved
+//! list and `xs[0]` were one buffer, so the push through `a` showed in
+//! `xs[0]` (published 0.2.17). lupin 0.1.40 prints `2 1 1`: its index
+//! read ignores the moved mark (wolffe-lang/wolf-interp#141); the
+//! ruled lupin verdict is the trap.
+
+fn main() -> !int {
+    var xs = List[List[int]]()
+    (mut xs).push([1])
+    (mut xs).push([2])
+    var a = move xs[0]
+    xs[1] = [5]
+    (mut a).push(7)
+    print("{a.len} {xs[0].len} {xs[1].len}")   // ERROR E1001: `xs[0]` moved; `xs[1] = …` revives only `xs[1]`
+    0
+}
