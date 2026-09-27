@@ -11,7 +11,8 @@
 //! Through 0.2.17 it compiled (any index store revived the collapsed
 //! element, wolf-lang#460) and checked, native and release all printed
 //! `2`: `m["a"]` still held the buffer moved into `v` and pushed to.
-//! lupin 0.1.40 prints `1` (its map read copies the value out).
+//! lupin 0.1.40 prints `1`: its map read copies the value out
+//! (wolffe-lang/wolf-interp#144).
 
 fn main() -> !int {
     var m = Map[str, List[int]]()
