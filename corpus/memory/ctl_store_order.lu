@@ -1,0 +1,30 @@
+//! check: run(exit=0, stdout="idx\nval\n7\n")
+//! phase: run
+//! conforms: mem.model.place.rhs, mem.model.order
+//!
+//! s183 (wolf-lang#452, ruled 2026-09-26: index first, then value) —
+//! s182's control, verbatim. In `xs[idx()] = val()` the place's index
+//! operand is evaluated before the right-hand side, left to right as
+//! `[mem.model.order]` reads; the element's address is minted after
+//! the right-hand side (`[mem.model.place.rhs]`). `idx val 7` on the
+//! checked, native and release lanes and on lupin. Before s183 the
+//! checked lane printed `val idx 7` (trunk a201c518 and every release
+//! through 0.2.17); native, release and lupin already printed this.
+
+fn idx() -> int {
+    print("idx")
+    0
+}
+
+fn val() -> int {
+    print("val")
+    7
+}
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    xs[idx()] = val()
+    print("{xs[0]}")
+    0
+}

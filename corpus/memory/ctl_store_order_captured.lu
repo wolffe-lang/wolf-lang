@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="5 0 1\n")
+//! phase: run
+//! conforms: mem.model.place.rhs, mem.model.order
+//!
+//! s183 (wolf-lang#452, ruled index first, then value) — the index's
+//! VALUE, not only its side effects, is taken before the right-hand
+//! side. In `ys[i] = bump(mut i)` the index reads `i` (0), then
+//! `bump` sets `i` to 1 and returns 5, and the store lands at index
+//! 0: `5 0 1`. Value first would store at index 1 (`0 5 1`), which is
+//! what the checked lane answered before s183.
+
+fn bump(mut i: int) -> int {
+    i = 1
+    5
+}
+
+fn main() -> !int {
+    var ys = List[int]()
+    (mut ys).push(0)
+    (mut ys).push(0)
+    var i = 0
+    ys[i] = bump(mut i)
+    print("{ys[0]} {ys[1]} {i}")
+    0
+}

@@ -1,0 +1,58 @@
+//! check: run(exit=0, stdout="i\nj\nval\n7\nc\nval\n7\np\nval\n7\nx\ngrow\n7 65\n")
+//! phase: run
+//! conforms: mem.model.place.rhs, mem.model.order
+//!
+//! s183 (wolf-lang#452, ruled index first, then value) — deeper
+//! places. Every index operand of the place runs before the right-hand
+//! side, outermost first: `g[i()][j()] = val()` prints `i j val`;
+//! `cs[c()].n = val()` prints `c val`; through a `mut` parameter,
+//! `xs[p()] = val()` prints `p val`. The last store is the two
+//! sentences of `[mem.model.place.rhs]` together: `xs[x()] =
+//! grow(mut xs)` runs the index (`x`), then the right-hand side
+//! (`grow`, which pushes 64 elements and moves the buffer), and only
+//! then mints the element's address — so the store lands at index 0
+//! of the grown list: `7 65`. Before s183 the checked lane ran every
+//! right-hand side first.
+
+struct Cell { n: int }
+
+fn at(tag: str, i: int) -> int {
+    print(tag)
+    i
+}
+
+fn val() -> int {
+    print("val")
+    7
+}
+
+fn grow(mut xs: List[int]) -> int {
+    print("grow")
+    for k in 0..64 {
+        (mut xs).push(k)
+    }
+    7
+}
+
+fn store(mut xs: List[int]) {
+    xs[at("p", 0)] = val()
+}
+
+fn main() -> !int {
+    var g = [[0, 0], [0, 0]]
+    g[at("i", 1)][at("j", 0)] = val()
+    print("{g[1][0]}")
+    var cs = List[Cell]()
+    (mut cs).push(Cell { n: 0 })
+    cs[at("c", 0)].n = val()
+    print("{cs[0].n}")
+    var ps = List[int]()
+    (mut ps).push(0)
+    store(mut ps)
+    print("{ps[0]}")
+    var xs = List[int]()
+    (mut xs).push(1)
+    xs[at("x", 0)] = grow(mut xs)
+    print("{xs[0]} {xs.len}")
+    0
+}

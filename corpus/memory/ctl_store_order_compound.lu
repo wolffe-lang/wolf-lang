@@ -1,0 +1,26 @@
+//! check: run(exit=0, stdout="idx\nval\n8\n")
+//! phase: run
+//! conforms: mem.model.place.rhs, mem.model.order
+//!
+//! s183 (wolf-lang#452, ruled index first, then value) — a compound
+//! store: `xs[idx()] += val()` evaluates the index, then the
+//! right-hand side, then reads, combines and writes the element.
+//! Before s183 the checked lane ran `val` first.
+
+fn idx() -> int {
+    print("idx")
+    0
+}
+
+fn val() -> int {
+    print("val")
+    7
+}
+
+fn main() -> !int {
+    var xs = List[int]()
+    (mut xs).push(1)
+    xs[idx()] += val()
+    print("{xs[0]}")
+    0
+}
