@@ -254,12 +254,7 @@ fn two_run_time_indices_are_one_place() {
 #[test]
 fn the_same_literal_twice_is_one_element_everywhere() {
     let trap = verdict("trap(exclusivity)");
-    every_lane(
-        "elem_same_const_mut.lu",
-        verdict("fail(E1002)"),
-        trap,
-        trap,
-    );
+    every_lane("elem_same_const_mut.lu", verdict("fail(E1002)"), trap, trap);
 }
 
 /// Item 4, where R1 fails: `xs[i]` and `xs[k + 1]` over two locals —
