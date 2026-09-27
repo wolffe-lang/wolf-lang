@@ -312,3 +312,57 @@ fn a_store_through_the_same_index_revives_the_element() {
     let want = runs("1 3\n");
     every_lane("elem_same_index_revive.lu", want, want, want);
 }
+
+// ------------------------------------------------ eg01: item 3 (#460) --
+//
+// A store revives a moved element only through an index that provably
+// denotes it. Before eg01 every one of these compiled (wolf-lang#460):
+// native and release printed the aliased `2 2 1`, checked trapped on
+// the heap twins and printed `1 1 9` on the `Copy` ones (B126). lupin
+// 0.1.40's index read ignores the moved mark (wolffe-lang/wolf-interp#141),
+// so its measured answer is pinned for the pre-mirror versions and the
+// trap is asserted for any later one.
+
+/// Item 3: `xs[1] = [5]` after `move xs[0]` revives nothing — #460's row.
+#[test]
+fn a_store_at_another_literal_revives_nothing() {
+    every_lane(
+        "elem_const_store_no_revive_heap.lu",
+        verdict("fail(E1001)"),
+        runs("2 1 1\n"),
+        verdict("trap(use-after-move)"),
+    );
+}
+
+/// Item 3, the `Copy` twin (B126's shape on the checked machine).
+#[test]
+fn a_copy_element_is_not_revived_by_a_sibling_store() {
+    every_lane(
+        "elem_const_store_no_revive_int.lu",
+        verdict("fail(E1001)"),
+        runs("1 1 9\n"),
+        verdict("trap(use-after-move)"),
+    );
+}
+
+/// Item 3 through a run-time index: `xs[i] = [5]` is not provably `xs[0]`.
+#[test]
+fn a_store_through_a_run_time_index_revives_nothing() {
+    every_lane(
+        "elem_dyn_store_no_revive_heap.lu",
+        verdict("fail(E1001)"),
+        runs("2 1 1\n"),
+        verdict("trap(use-after-move)"),
+    );
+}
+
+/// Item 3 through a run-time index, the `Copy` twin.
+#[test]
+fn a_copy_element_is_not_revived_through_a_run_time_index() {
+    every_lane(
+        "elem_dyn_store_no_revive_int.lu",
+        verdict("fail(E1001)"),
+        runs("1 1 9\n"),
+        verdict("trap(use-after-move)"),
+    );
+}
