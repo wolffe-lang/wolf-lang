@@ -3,9 +3,22 @@
 //! A place is a base plus a projection path: `a`, `a.x`, `a.x.y`. The
 //! overlap relation is the spec's, verbatim: two paths conflict iff one
 //! is a prefix of the other after identical projections; otherwise they
-//! are disjoint. Index projections collapse to a single opaque "some
-//! element" projection — element-granular disjointness is a non-target
-//! (s18), so an opaque step conservatively matches any step.
+//! are disjoint.
+//!
+//! Index projections (`[mem.model.place.elem]`, eg01) come in three
+//! spellings: a literal index or key (`xs[0]`, `m["a"]`), a plain
+//! integer local (`xs[i]`), and anything else. Two relations read them:
+//!
+//! - [`PlaceTable::overlap`] / [`PlaceTable::covers`] still collapse
+//!   every index step to one place. Exclusivity (`[mem.tier0.excl]`),
+//!   loans and iteration claims ask these — element `mut` claims are
+//!   EGC's EG2, not this change.
+//! - The moves pass (`[mem.tier0.move]`) asks [`PlaceTable::overlap_elem`]
+//!   (*may* the two share storage: two different literals never do,
+//!   and an element is never its container's header) and
+//!   [`PlaceTable::covers_must`] (does a store *surely* re-initialize
+//!   the moved place: item 3's must-revival, with R3 for a local index
+//!   the caller vouches is unwritten since the move).
 
 use std::collections::HashMap;
 
@@ -20,13 +33,52 @@ pub enum Base {
     Global(u32, String),
 }
 
+/// A literal index or key, by VALUE (`1`, `0x1` and `1_0`'s cousin
+/// `01` are one key): `[mem.model.place.elem]` 1(a)/(b).
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Key {
+    Int(u128),
+    /// A plain string literal's text (no escape, no interpolation).
+    Str(String),
+    Bool(bool),
+    /// A `char` literal's text between the quotes (no escape).
+    Char(String),
+}
+
+impl std::fmt::Display for Key {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Key::Int(n) => write!(f, "{n}"),
+            Key::Str(s) => write!(f, "\"{s}\""),
+            Key::Bool(b) => write!(f, "{b}"),
+            Key::Char(c) => write!(f, "'{c}'"),
+        }
+    }
+}
+
 /// One projection step.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Proj {
     /// A named field (tuple positions project as `"0"`, `"1"`, …).
     Field(String),
-    /// Any index projection (`v[i]`): all elements are one place.
+    /// A literal index or key (`xs[0]`, `m["a"]`): the same element as
+    /// another `Lit` step iff the keys are equal.
+    Lit(Key),
+    /// A plain integer local as the index (`xs[i]`, the local's id):
+    /// one place with every other index for *may*; the same element as
+    /// another `Sym` of the same local only while that local is
+    /// unwritten (R3 — the moves pass decides that, not this table).
+    Sym(u32),
+    /// Any other index projection (`v[f()]`, a pool handle): one place
+    /// with every index.
     Opaque,
+}
+
+impl Proj {
+    /// An index step of any spelling.
+    pub fn is_index(&self) -> bool {
+        !matches!(self, Proj::Field(_))
+    }
 }
 
 /// A place: base + projection path.
@@ -102,17 +154,100 @@ impl PlaceTable {
     pub fn covers(&self, a: PlaceId, b: PlaceId) -> bool {
         covers(self.get(a), self.get(b))
     }
+
+    /// `[mem.model.place.elem]` for moves: MAY the two places share
+    /// storage? Two different literal steps never do (1(a)/(b)); an
+    /// index step never meets a member step (1(c)); every other index
+    /// pair may.
+    pub fn overlap_elem(&self, a: PlaceId, b: PlaceId) -> bool {
+        overlap_elem(self.get(a), self.get(b))
+    }
+
+    /// May `a` contain all of `b` (a prefix under the *may* relation)?
+    pub fn covers_may(&self, a: PlaceId, b: PlaceId) -> bool {
+        let (a, b) = (self.get(a), self.get(b));
+        a.base == b.base
+            && a.proj.len() <= b.proj.len()
+            && a.proj
+                .iter()
+                .zip(b.proj.iter())
+                .all(|(x, y)| may_elem(x, y))
+    }
+
+    /// `[mem.model.place.elem]` item 3: does `a` SURELY contain all of
+    /// `b`? Fields and literals compare by equality; a `Sym` step equals
+    /// another only for the same local and only when `sym_ok` vouches
+    /// for it (R3: the local is unwritten between the two uses); an
+    /// `Opaque` step equals nothing.
+    pub fn covers_must(&self, a: PlaceId, b: PlaceId, sym_ok: &dyn Fn(u32) -> bool) -> bool {
+        covers_must(self.get(a), self.get(b), sym_ok)
+    }
+
+    /// Two paths that are a prefix pair AS SPELLED (every step of the
+    /// shorter equal to the longer's): the wording of a conflict note,
+    /// never a decision.
+    pub fn spelled_prefix(&self, a: PlaceId, b: PlaceId) -> bool {
+        let (a, b) = (self.get(a), self.get(b));
+        let (short, long) = if a.proj.len() <= b.proj.len() {
+            (a, b)
+        } else {
+            (b, a)
+        };
+        a.base == b.base && short.proj.iter().zip(long.proj.iter()).all(|(x, y)| x == y)
+    }
 }
 
+/// The collapsed relation: every index step, of any spelling, is one
+/// place with every step at its position.
 fn steps_match(a: &Proj, b: &Proj) -> bool {
     match (a, b) {
         (Proj::Field(x), Proj::Field(y)) => x == y,
-        // Opaque conservatively matches anything: two index
+        // An index step conservatively matches anything: two index
         // projections into the same base overlap, and an index
-        // projection overlaps any field path (a non-target refined
-        // no further).
-        (Proj::Opaque, _) | (_, Proj::Opaque) => true,
+        // projection overlaps any field path — until EG2 refines
+        // exclusivity, this is every consumer but the moves pass.
+        _ => true,
     }
+}
+
+/// `[mem.model.place.elem]`'s *may*: 1(a)/(b) literals by value, 1(c)
+/// an element against a member step, item 2 every other index pair.
+fn may_elem(a: &Proj, b: &Proj) -> bool {
+    match (a, b) {
+        (Proj::Field(x), Proj::Field(y)) => x == y,
+        (Proj::Lit(x), Proj::Lit(y)) => x == y,
+        (Proj::Field(_), _) | (_, Proj::Field(_)) => false,
+        _ => true,
+    }
+}
+
+/// Item 3's *must*: the two steps surely denote the same storage.
+fn must_elem(a: &Proj, b: &Proj, sym_ok: &dyn Fn(u32) -> bool) -> bool {
+    match (a, b) {
+        (Proj::Field(x), Proj::Field(y)) => x == y,
+        (Proj::Lit(x), Proj::Lit(y)) => x == y,
+        (Proj::Sym(x), Proj::Sym(y)) => x == y && sym_ok(*x),
+        _ => false,
+    }
+}
+
+/// See [`PlaceTable::overlap_elem`].
+pub fn overlap_elem(a: &Place, b: &Place) -> bool {
+    a.base == b.base
+        && a.proj
+            .iter()
+            .zip(b.proj.iter())
+            .all(|(x, y)| may_elem(x, y))
+}
+
+/// See [`PlaceTable::covers_must`].
+pub fn covers_must(a: &Place, b: &Place, sym_ok: &dyn Fn(u32) -> bool) -> bool {
+    a.base == b.base
+        && a.proj.len() <= b.proj.len()
+        && a.proj
+            .iter()
+            .zip(b.proj.iter())
+            .all(|(x, y)| must_elem(x, y, sym_ok))
 }
 
 /// Two paths conflict iff one is a prefix of the other after identical
@@ -178,6 +313,133 @@ mod tests {
                 proj: vec![Proj::Opaque],
             }
         ));
+    }
+
+    fn ix(base: u32, steps: Vec<Proj>) -> Place {
+        Place {
+            base: Base::Local(base),
+            proj: steps,
+        }
+    }
+
+    fn lit(n: u128) -> Proj {
+        Proj::Lit(Key::Int(n))
+    }
+
+    const YES: &dyn Fn(u32) -> bool = &|_| true;
+    const NO: &dyn Fn(u32) -> bool = &|_| false;
+
+    /// The collapsed relation is untouched by the new spellings: every
+    /// index step still matches every step (exclusivity until EG2).
+    #[test]
+    fn every_index_spelling_still_collapses_for_overlap() {
+        for a in [lit(0), Proj::Sym(3), Proj::Opaque] {
+            for b in [
+                lit(1),
+                Proj::Sym(4),
+                Proj::Opaque,
+                Proj::Field("len".into()),
+            ] {
+                assert!(overlap(&ix(0, vec![a.clone()]), &ix(0, vec![b.clone()])));
+                assert!(covers(&ix(0, vec![a.clone()]), &ix(0, vec![b.clone()])));
+            }
+        }
+    }
+
+    /// 1(a)/(b): two different literals never share storage; the same
+    /// literal always does; any other index pair may.
+    #[test]
+    fn literals_are_distinct_by_value_for_moves() {
+        assert!(!overlap_elem(&ix(0, vec![lit(0)]), &ix(0, vec![lit(1)])));
+        assert!(overlap_elem(&ix(0, vec![lit(1)]), &ix(0, vec![lit(1)])));
+        let s = |t: &str| Proj::Lit(Key::Str(t.into()));
+        assert!(!overlap_elem(&ix(0, vec![s("a")]), &ix(0, vec![s("b")])));
+        assert!(overlap_elem(
+            &ix(0, vec![lit(0)]),
+            &ix(0, vec![Proj::Sym(2)])
+        ));
+        assert!(overlap_elem(
+            &ix(0, vec![lit(0)]),
+            &ix(0, vec![Proj::Opaque])
+        ));
+        assert!(overlap_elem(
+            &ix(0, vec![Proj::Sym(2)]),
+            &ix(0, vec![Proj::Sym(2)])
+        ));
+        assert!(overlap_elem(
+            &ix(0, vec![Proj::Sym(2)]),
+            &ix(0, vec![Proj::Sym(5)])
+        ));
+        // The path rule: the first differing step decides.
+        assert!(!overlap_elem(
+            &ix(0, vec![lit(0), lit(1)]),
+            &ix(0, vec![lit(1), lit(0)])
+        ));
+        // A prefix still conflicts.
+        assert!(overlap_elem(&ix(0, vec![]), &ix(0, vec![lit(0)])));
+    }
+
+    /// 1(c): an element is never its container's header member.
+    #[test]
+    fn an_element_is_not_a_member() {
+        let len = Proj::Field("len".into());
+        for a in [lit(0), Proj::Sym(1), Proj::Opaque] {
+            assert!(!overlap_elem(&ix(0, vec![a]), &ix(0, vec![len.clone()])));
+        }
+    }
+
+    /// Item 3: must-revival. A literal revives the same literal; a
+    /// `Sym` the same local only when vouched for; `Opaque` nothing.
+    #[test]
+    fn covers_must_is_item_three() {
+        assert!(covers_must(&ix(0, vec![lit(1)]), &ix(0, vec![lit(1)]), YES));
+        assert!(!covers_must(
+            &ix(0, vec![lit(1)]),
+            &ix(0, vec![lit(0)]),
+            YES
+        ));
+        assert!(covers_must(
+            &ix(0, vec![Proj::Sym(2)]),
+            &ix(0, vec![Proj::Sym(2)]),
+            YES
+        ));
+        assert!(!covers_must(
+            &ix(0, vec![Proj::Sym(2)]),
+            &ix(0, vec![Proj::Sym(2)]),
+            NO
+        ));
+        assert!(!covers_must(
+            &ix(0, vec![Proj::Sym(2)]),
+            &ix(0, vec![Proj::Sym(3)]),
+            YES
+        ));
+        assert!(!covers_must(
+            &ix(0, vec![Proj::Sym(2)]),
+            &ix(0, vec![lit(0)]),
+            YES
+        ));
+        assert!(!covers_must(
+            &ix(0, vec![Proj::Opaque]),
+            &ix(0, vec![Proj::Opaque]),
+            YES
+        ));
+        // The whole container revives every element; a member path
+        // covers its own subpaths only.
+        assert!(covers_must(&ix(0, vec![]), &ix(0, vec![Proj::Opaque]), NO));
+        assert!(covers_must(
+            &ix(0, vec![lit(0)]),
+            &ix(0, vec![lit(0), Proj::Field("tags".into())]),
+            NO
+        ));
+        assert!(!covers_must(&ix(0, vec![lit(0)]), &ix(0, vec![]), YES));
+    }
+
+    #[test]
+    fn keys_display_by_value() {
+        assert_eq!(Key::Int(16).to_string(), "16");
+        assert_eq!(Key::Str("a".into()).to_string(), "\"a\"");
+        assert_eq!(Key::Bool(true).to_string(), "true");
+        assert_eq!(Key::Char("x".into()).to_string(), "'x'");
     }
 
     #[test]

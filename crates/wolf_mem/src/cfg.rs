@@ -320,7 +320,7 @@ impl Cfg {
         &self.locals[id.0 as usize]
     }
 
-    /// Render a place for diagnostics: `p`, `p.x`, `xs[_]`.
+    /// Render a place for diagnostics: `p`, `p.x`, `xs[0]`, `xs[i]`, `xs[_]`.
     pub fn show_place(&self, id: PlaceId) -> String {
         let place = self.places.get(id);
         let mut out = match &place.base {
@@ -332,6 +332,10 @@ impl Cfg {
                 crate::place::Proj::Field(f) => {
                     out.push('.');
                     out.push_str(f);
+                }
+                crate::place::Proj::Lit(k) => out.push_str(&format!("[{k}]")),
+                crate::place::Proj::Sym(l) => {
+                    out.push_str(&format!("[{}]", self.locals[*l as usize].name));
                 }
                 crate::place::Proj::Opaque => out.push_str("[_]"),
             }

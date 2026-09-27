@@ -40,7 +40,7 @@ help: to get a value of this function's own, copy it at the move
 8 |     let c = copy b
   |
 
-error[E1014]: `r.b[_]` reaches `bs`'s value through `r`, and `bs` is `read` for the whole call, so it cannot be assigned through
+error[E1014]: `r.b[0]` reaches `bs`'s value through `r`, and `bs` is `read` for the whole call, so it cannot be assigned through
   --> mem:///main.lu:15:5
    |
 13 | fn poke(bs: List[int]) -> int {

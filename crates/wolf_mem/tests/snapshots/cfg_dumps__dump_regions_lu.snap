@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_mem/tests/cfg_dumps.rs
-assertion_line: 159
 expression: "dump(&corpus(\"regions.lu\"))"
 ---
 fn build_ring
@@ -56,7 +55,7 @@ fn build_ring
     init node @1008..1012
     read i @1234..1235
     checked-op @1231..1236
-    read hs[_] @1231..1236
+    read hs[i] @1231..1236
     read node @1238..1242
     call init [mut pool, read node] @1215..1243
     alloc init(..) -> region r @1215..1243
@@ -64,7 +63,7 @@ fn build_ring
   b7:
     init sum @1266..1269
     checked-op @1292..1297
-    read hs[_] @1292..1297
+    read hs[0] @1292..1297
     init cur @1286..1289
     read n @1318..1319
     -> b8, trap

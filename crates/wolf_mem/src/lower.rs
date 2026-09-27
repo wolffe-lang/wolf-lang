@@ -37,7 +37,7 @@ use crate::cfg::{
     AllocSite, Block, BlockId, CallSurface, Cfg, Local, LocalId, Region, RegionId, RegionKind,
     SiteId, SiteKind, Stmt, Strategy,
 };
-use crate::place::{Base, Place, PlaceId, Proj};
+use crate::place::{Base, Key, Place, PlaceId, Proj};
 use crate::regions::{Binding, RegionSummary, RegionTable, Unify};
 
 type R<T> = Result<T, NotYet>;
@@ -1732,10 +1732,12 @@ impl<'t> Lowerer<'t> {
             return;
         };
         let (a, b) = (self.show_place_now(m), self.show_place_now(place));
-        let relation = if self.places.covers(m, place) {
+        let relation = if self.places.covers(m, place) && self.places.spelled_prefix(m, place) {
             format!(
                 "`{b}` is inside `{a}` — a path and its prefix conflict [mem.model.path.disjoint]."
             )
+        } else if self.places.covers(m, place) {
+            elements_one_place(&a, &b)
         } else {
             format!("`{a}` and `{b}` can reach the same memory.")
         };
@@ -1823,8 +1825,10 @@ impl<'t> Lowerer<'t> {
         }
         for (m, mspan, p, s, word) in hits {
             let (a, b) = (self.show_place_now(m), self.show_place_now(p));
-            let relation = if self.places.covers(m, p) || self.places.covers(p, m) {
+            let relation = if self.places.spelled_prefix(m, p) {
                 format!("`{a}` and `{b}` are a path and its prefix [mem.model.path.disjoint].")
+            } else if self.places.covers(m, p) || self.places.covers(p, m) {
+                elements_one_place(&a, &b)
             } else {
                 format!("`{a}` and `{b}` can reach the same memory.")
             };
@@ -2017,7 +2021,7 @@ impl<'t> Lowerer<'t> {
                 }
                 let base_place = self.places.get(base_id).clone();
                 let mut proj = base_place.proj;
-                proj.push(Proj::Opaque);
+                proj.push(self.elem_step(b, base_ty));
                 let place = Place {
                     base: base_place.base,
                     proj,
@@ -2097,7 +2101,7 @@ impl<'t> Lowerer<'t> {
         let outside = match p.proj.first() {
             None => true, // `self` whole
             Some(Proj::Field(f)) => !fields.contains(f),
-            Some(Proj::Opaque) => true,
+            Some(Proj::Lit(_) | Proj::Sym(_) | Proj::Opaque) => true,
         };
         if outside {
             let shown = self.show_place_now(place);
@@ -2132,10 +2136,89 @@ impl<'t> Lowerer<'t> {
                     out.push('.');
                     out.push_str(f);
                 }
+                Proj::Lit(k) => out.push_str(&format!("[{k}]")),
+                Proj::Sym(l) => out.push_str(&format!("[{}]", self.locals[*l as usize].name)),
                 Proj::Opaque => out.push_str("[_]"),
             }
         }
         out
+    }
+
+    /// `[mem.model.place.elem]`: the step an index mints. A literal
+    /// whose kind the container's key type takes (an integer on a
+    /// `List` or an integer-keyed `Map`; a plain string, `bool` or
+    /// `char` literal on a `Map` keyed by that type) is a `Lit`, by
+    /// value; a plain local of an integer type is a `Sym` (R3's
+    /// spelling); everything else — any `Pool` handle, an expression,
+    /// an escaped or interpolated string, a signed literal — is
+    /// `Opaque`, one place with every index (item 2, the default).
+    fn elem_step(&self, b: wolf_ast::BracketApply<'t>, container: Option<Ty<'t>>) -> Proj {
+        let args: Vec<_> = b.args().into_iter().flat_map(|l| l.args()).collect();
+        let [a] = args.as_slice() else {
+            return Proj::Opaque;
+        };
+        if a.mode().is_some() {
+            return Proj::Opaque;
+        }
+        let Some(v) = wolf_ast::Arg::value(*a) else {
+            return Proj::Opaque;
+        };
+        // The key type the literal must be a value of.
+        let key: Option<TyKind> = container.and_then(|c| match c.kind() {
+            TyKind::List(_) => Some(TyKind::Prim(Prim::Int)),
+            TyKind::Map(k, _) => Some(c.table.kind(*k).clone()),
+            _ => None, // `Pool`: a handle is a run-time value
+        });
+        let Some(key) = key else {
+            return Proj::Opaque;
+        };
+        let int_key = matches!(key, TyKind::Prim(p) if p.is_integer());
+        let text = self.text(v.span);
+        let t = text.trim();
+        match v.kind {
+            SyntaxKind::LiteralExpr => {
+                if int_key && let Some(n) = int_literal_value(t) {
+                    return Proj::Lit(Key::Int(n));
+                }
+                if matches!(key, TyKind::Prim(Prim::Bool)) {
+                    match t {
+                        "true" => return Proj::Lit(Key::Bool(true)),
+                        "false" => return Proj::Lit(Key::Bool(false)),
+                        _ => {}
+                    }
+                }
+                if matches!(key, TyKind::Prim(Prim::Char))
+                    && let Some(inner) = t.strip_prefix('\'').and_then(|r| r.strip_suffix('\''))
+                    && !inner.is_empty()
+                    && !inner.contains(['\\', '\''])
+                {
+                    return Proj::Lit(Key::Char(inner.to_string()));
+                }
+                Proj::Opaque
+            }
+            SyntaxKind::StringExpr
+                if matches!(key, TyKind::Prim(Prim::Str))
+                    && t.len() >= 2
+                    && t.starts_with('"')
+                    && t.ends_with('"')
+                    && !t[1..t.len() - 1].contains(['\\', '{', '}', '"']) =>
+            {
+                Proj::Lit(Key::Str(t[1..t.len() - 1].to_string()))
+            }
+            SyntaxKind::PathExpr if int_key => {
+                let Some(local) = PathExpr::cast(v)
+                    .and_then(|p| p.ident())
+                    .and_then(|id| self.lookup(&self.text(id.span)))
+                else {
+                    return Proj::Opaque;
+                };
+                match self.tys[local.0 as usize].map(|ty| ty.kind().clone()) {
+                    Some(TyKind::Prim(p)) if p.is_integer() => Proj::Sym(local.0),
+                    _ => Proj::Opaque,
+                }
+            }
+            _ => Proj::Opaque,
+        }
     }
 
     // ------------------------------------------------- place uses ----
@@ -5431,7 +5514,12 @@ impl<'t> Lowerer<'t> {
                         // which the E1004 note has named as planned
                         // since s19 and which would let BOTH forms say
                         // what they mean.
-                        let lend = matches!(self.places.get(place).proj.last(), Some(Proj::Opaque));
+                        let lend = self
+                            .places
+                            .get(place)
+                            .proj
+                            .last()
+                            .is_some_and(Proj::is_index);
                         self.demand_store(val, target, Some(cspan), place_expr.span, lend);
                     }
                 } else if let Some(rid) = val.region {
@@ -5738,4 +5826,31 @@ impl<'t> Lowerer<'t> {
             rc_cells,
         }
     }
+}
+
+/// The value of an integer literal's text (`[gram.lex.number]`: decimal
+/// or a `0x`/`0o`/`0b` radix, `_` separators), or `None` when it is not
+/// one (a float, a `char`) or does not fit.
+fn int_literal_value(t: &str) -> Option<u128> {
+    let digits: String = t.chars().filter(|&c| c != '_').collect();
+    let (radix, body) = match digits.get(..2) {
+        Some("0x") => (16, &digits[2..]),
+        Some("0o") => (8, &digits[2..]),
+        Some("0b") => (2, &digits[2..]),
+        _ => (10, digits.as_str()),
+    };
+    if body.is_empty() || !body.chars().all(|c| c.is_digit(radix)) {
+        return None;
+    }
+    u128::from_str_radix(body, radix).ok()
+}
+
+/// The exclusivity note for two element paths that conflict only
+/// because a `mut` claim still treats a container's elements as one
+/// place (`[mem.model.place.elem]`: element claims are EGC's EG2).
+pub(crate) fn elements_one_place(a: &str, b: &str) -> String {
+    format!(
+        "`{a}` and `{b}` are elements of one container, and a `mut` claim still treats a \
+         container's elements as one place [mem.model.place.elem]."
+    )
 }

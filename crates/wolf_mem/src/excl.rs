@@ -95,6 +95,10 @@ fn overlap_note(cfg: &Cfg, a: crate::place::PlaceId, b: crate::place::PlaceId) -
     let (sa, sb) = (cfg.show_place(a), cfg.show_place(b));
     if a == b {
         "the same place twice is never disjoint.".to_string()
+    } else if !cfg.places.spelled_prefix(a, b)
+        && (cfg.places.covers(a, b) || cfg.places.covers(b, a))
+    {
+        crate::lower::elements_one_place(&sa, &sb)
     } else if cfg.places.covers(a, b) {
         format!(
             "`{sb}` is inside `{sa}` — a path and its prefix conflict [mem.model.path.disjoint]. Disjoint fields (`x.a` with `x.b`) are fine together."
