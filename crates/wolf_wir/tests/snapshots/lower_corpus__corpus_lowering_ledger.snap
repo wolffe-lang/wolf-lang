@@ -284,7 +284,17 @@ memory/destructure_bind.lu: lowers
 memory/destructure_partial_live.lu: lowers
 memory/destructure_partial_move.lu: not mem-clean (pre-wir rungs own it)
 memory/div_zero.lu: lowers
+memory/elem_dyn_move_const_read.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_dyn_mut_pair.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_loop_covers_const.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_move_one_place.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_move_same_const_read.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_offset_other_local.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_pool_handles_one_place.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_same_const_mut.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_same_index_revive.lu: lowers
+memory/elem_tuple_pos_move.lu: lowers
+memory/elem_tuple_pos_mut.lu: lowers
 memory/excl_disjoint_ok.lu: lowers
 memory/excl_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/exclusivity.lu: lowers

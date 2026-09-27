@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 575..639 name=add2 body=Block
+FnDecl 641..830 name=main body=Block
