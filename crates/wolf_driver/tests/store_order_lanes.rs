@@ -230,11 +230,7 @@ fn the_index_value_is_taken_before_the_value_changes_it() {
 /// `xs[idx()] += val()`: index, value, then read-combine-write.
 #[test]
 fn a_compound_store_evaluates_its_index_before_its_value() {
-    every_lane_says(
-        &corpus("ctl_store_order_compound.lu"),
-        "idx\nval\n8\n",
-        &[],
-    );
+    every_lane_says(&corpus("ctl_store_order_compound.lu"), "idx\nval\n8\n", &[]);
 }
 
 /// `p[idx()] = val()` through a raw pointer: the same order.
