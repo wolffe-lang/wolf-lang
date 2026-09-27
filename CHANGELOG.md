@@ -13,7 +13,7 @@ against its own pin. Beside them land the maintainer's rulings of
 2026-09-26 — R1/R3 over any `Copy` local (eg01b) and index first, then
 value (s183, #452) — and the clause they all stand on (eg00), and the
 pairing moves to lupin 0.1.41, the first lupin whose element reads trap
-on a moved element (wolf-interp#141). Five lanes and 74 commits: eg00,
+on a moved element (wolffe-lang/wolf-interp#141). Five lanes and 74 commits: eg00,
 eg01, eg01b, s183, s184.
 
 ### Read this before you bump the pin
