@@ -1,0 +1,34 @@
+//! check: run(exit=0, stdout="2 12\n")
+//! phase: run
+//! conforms: mem.tier0.excl.1, mem.tier0.excl.2, mem.model.path.disjoint
+//!
+//! eg02 — wolf-lang#470's witness: two `mut` field claims off one `mut`
+//! parameter, `add2(mut r.a, mut r.b)`. Disjoint fields, so the mem
+//! tier accepts it and has since s18; checked, native and lupin print
+//! `2 12`. But both fields live in the parameter's one caller region,
+//! and through 0.2.18 the release tier's inliner bound the callee's
+//! two token chains to that one token: `ICE: mid-end broke the module`
+//! (`token-linearity`, "effect token consumed twice on one path"). EG2's
+//! element claims (`add2(mut xs[0], mut xs[1])`, two addresses in one
+//! list buffer) reach the same shape. `2 12` on every lane now.
+
+struct R {
+    a: int,
+    b: int,
+}
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn g(mut r: R) {
+    add2(mut r.a, mut r.b)
+}
+
+fn main() -> !int {
+    var r = R { a: 1, b: 2 }
+    g(mut r)
+    print("{r.a} {r.b}")
+    0
+}
