@@ -1,16 +1,16 @@
-//! check: fail(E1002)
-//! phase: typecheck
+//! check: run(exit=0, stdout="4 3\n")
+//! phase: run
 //! conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.order
 //!
-//! eg02 (EGC's EG2) — a documented conservatism: `bump(mut xs[0],
-//! xs.len)`. Item 1(c) makes an element and a member of its container
-//! distinct places, and the moves pass reads it so (`elem_len_after_move.lu`
-//! runs). Under a `mut` claim the compiler keeps the member read
-//! conflicting, because the oracle does: lupin 0.1.41 traps `exclusivity`
-//! here ("`xs` is accessed as `read` while `xs[0]` is held as `mut`") —
-//! it reads `.len` as a read of the whole container — and the clause lets
-//! the compiler be stricter than lupin, never looser (item 2). E1002 on
-//! every wolfgang lane, before and after EG2.
+//! eg02b (EGC, wolf-lang#472 ruled A) — item 1(c) under a claim:
+//! `bump(mut xs[0], xs.len)`. An element and a member of its container
+//! are distinct places whatever the index is, for claims as for moves
+//! (`elem_len_after_move.lu`): `xs.len` reads the header, which the claim
+//! on `xs[0]` does not reach. `4 3` on checked, native and release. eg02
+//! kept it E1002 because lupin 0.1.41 traps `exclusivity` here — it reads
+//! `.len` as a read of the whole container; the maintainer ruled the
+//! clause stands, and lupin mirrors it (is59). Its one-place twin, the
+//! whole container read, is `elem_claim_whole_read.lu`.
 
 fn bump(mut a: int, n: int) {
     a = a + n
@@ -18,7 +18,7 @@ fn bump(mut a: int, n: int) {
 
 fn main() -> !int {
     var xs = [1, 2, 3]
-    bump(mut xs[0], xs.len)     // ERROR E1002: a member read under an element claim
+    bump(mut xs[0], xs.len)
     print("{xs[0]} {xs.len}")
     0
 }
