@@ -1,0 +1,21 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.order
+//!
+//! eg02b (EGC, wolf-lang#472 ruled A) — the one-place twin of
+//! `elem_member_read_after_mut.lu`: `both(mut xs[0], xs)`. 1(c) separates
+//! an element from a MEMBER of its container; lending the whole container
+//! `read` beside a `mut` claim on `xs[0]` lends a prefix of the claimed
+//! place, which conflicts as it always did (item 2's last sentence).
+//! E1002 on every wolfgang lane; lupin traps `exclusivity`.
+
+fn both(mut a: int, ys: List[int]) {
+    a = a + ys.len
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    both(mut xs[0], xs)         // ERROR E1002: the whole container under an element claim
+    print("{xs[0]} {xs.len}")
+    0
+}

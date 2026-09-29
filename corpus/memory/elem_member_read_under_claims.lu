@@ -1,0 +1,39 @@
+//! check: run(exit=0, stdout="4 8 6 4 5\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.order
+//!
+//! eg02b (EGC, wolf-lang#472 ruled A) — item 1(c) under a claim, every
+//! leg: a member read before the claim (`pre(xs.len, mut xs[1])`), a
+//! run-time index (`bump(mut xs[i], xs.len)` — "whatever `i` is"), a
+//! member one level down (`g[0].len` beside `mut g[0][1]`), the outer
+//! container's member beside an inner element (`g.len` beside
+//! `mut g[1][0]`), and a member read inside a nested call's argument.
+//! No member read reaches an element's storage, so none conflicts.
+//! `4 8 6 4 5` on checked, native and release; lupin 0.1.41 traps the
+//! first leg (it reads a member as the whole container; is59 mirrors).
+
+fn bump(mut a: int, n: int) {
+    a = a + n
+}
+
+fn pre(n: int, mut a: int) {
+    a = a + n
+}
+
+fn id(n: int) -> int {
+    n
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    var i = 1
+    var g = [[1, 2], [3]]
+    pre(xs.len, mut xs[1])
+    bump(mut xs[0], xs.len)
+    bump(mut xs[i], xs.len)
+    bump(mut g[0][1], g[0].len)
+    bump(mut g[1][0], g.len)
+    bump(mut xs[2], id(xs.len))
+    print("{xs[0]} {xs[1]} {xs[2]} {g[0][1]} {g[1][0]}")
+    0
+}
