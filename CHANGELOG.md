@@ -17,9 +17,24 @@
   `corpus/memory/mut_elem_excl.lu` now runs. Every item 2 shape stays
   refused — a run-time index against any index, the same literal
   twice, `Pool` handles, a path and its prefix — each with a corpus
-  twin. **One shape is kept stricter than the clause:** a member read
-  under an element claim (`bump(mut xs[0], xs.len)`) stays E1002,
-  because lupin reads `.len` as the whole container and traps it.
+  twin.
+- **Item 1(c) holds under a claim too (eg02b, wolf-lang#472 ruled
+  A).** An element and a member of its container are distinct places
+  for claims as for moves, whatever the index: `bump(mut xs[0],
+  xs.len)`, `bump(mut xs[i], xs.len)`, `bump(mut g[0][1], g[0].len)`
+  and a member read before the claim compile and run on checked, native
+  and release; eg02 had kept them E1002 because lupin 0.1.41 reads
+  `.len` as the whole container and traps. `elem_member_read_after_mut.lu`
+  now runs. The whole container under an element claim
+  (`both(mut xs[0], xs)`) stays E1002. lupin through 0.1.41 still
+  traps these rows; the gate names those versions and expects the ruled
+  answer from any later one.
+- **An internal compiler error fails the driver gates (wolf-lang#471).**
+  `wolf` exits 2 both when a host cannot run a lane and on an ICE; 37
+  gate files under `crates/wolf_driver/tests/` read every exit 2 as an
+  environment skip, so an ICE on the native or release lane passed. They
+  now ask one helper, `lane_exit::environment_refusal`, which fails the
+  test when stderr carries the driver's `ICE:` line.
 - **wolf-lang#470 fixed: a release-tier ICE.** Two `mut` arguments in
   one caller region — two fields off a `mut` parameter, `add2(mut r.a,
   mut r.b)` inside `fn g(mut r: R)` — made 0.2.18's release build stop
