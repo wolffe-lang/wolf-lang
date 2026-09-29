@@ -20,6 +20,8 @@
 //! on ELF hosts and in the linked `.dSYM` on Mach-O (Apple's static
 //! link writes a debug map; `wolf build` runs dsymutil).
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -62,7 +64,7 @@ fn build_fixture(case: &str, src: &str) -> Option<PathBuf> {
         .expect("wolf runs");
     match out.status.code() {
         Some(0) => Some(exe),
-        Some(2) => {
+        Some(2) if lane_exit::environment_refusal(&out, "wolf build") => {
             eprintln!(
                 "SKIP: environment cannot link native binaries: {}",
                 String::from_utf8_lossy(&out.stderr).trim()
@@ -243,7 +245,7 @@ fn native_two_modules_share_an_item_name() {
         .arg("--native")
         .output()
         .expect("wolf runs");
-    if out.status.code() == Some(2) {
+    if lane_exit::environment_refusal(&out, "wolf conform-run") {
         eprintln!(
             "SKIP: environment cannot link native binaries: {}",
             String::from_utf8_lossy(&out.stderr).trim()
