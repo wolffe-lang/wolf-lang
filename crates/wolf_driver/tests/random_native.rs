@@ -14,6 +14,8 @@
 //! Hosts the native tier refuses skip loudly at runtime (the s59
 //! pattern: these tests start passing the moment a gate lifts).
 
+mod lane_exit;
+
 use std::path::Path;
 use std::process::Command;
 
@@ -38,7 +40,7 @@ fn lane(case: &str, src: &str, flag: &str) -> Option<Obs> {
         .arg("--json")
         .output()
         .expect("wolf runs");
-    if out.status.code() == Some(2) && flag == "--native" {
+    if lane_exit::environment_refusal(&out, &format!("wolf {flag}")) && flag == "--native" {
         eprintln!(
             "SKIP: environment cannot run the native lane: {}",
             String::from_utf8_lossy(&out.stderr).trim()
