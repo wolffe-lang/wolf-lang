@@ -20,6 +20,8 @@
 //! `wolf build` is the environment signal, per the s30 test contract);
 //! refusals and compile errors FAIL. Off-target the file compiles away.
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -65,7 +67,7 @@ fn build_verbose(dir: &Path, extra: &[&str]) -> Option<Vec<(String, String)>> {
     let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
     match out.status.code() {
         Some(0) => {}
-        Some(2) => {
+        Some(2) if lane_exit::environment_refusal(&out, "wolf build") => {
             eprintln!(
                 "SKIP: environment cannot link native binaries: {}",
                 stderr.trim()
@@ -246,7 +248,7 @@ fn hello_prints_natively() {
         .expect("wolf runs");
     match out.status.code() {
         Some(0) => {}
-        Some(2) => {
+        Some(2) if lane_exit::environment_refusal(&out, "wolf build") => {
             eprintln!(
                 "SKIP: environment cannot link native binaries: {}",
                 String::from_utf8_lossy(&out.stderr).trim()
