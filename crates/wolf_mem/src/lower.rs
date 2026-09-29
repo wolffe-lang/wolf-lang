@@ -1737,7 +1737,7 @@ impl<'t> Lowerer<'t> {
                 "`{b}` is inside `{a}` — a path and its prefix conflict [mem.model.path.disjoint]."
             )
         } else if self.places.covers(m, place) {
-            elements_one_place(&a, &b)
+            elements_one_place(&a, &b, self.places.meets_member(m, place))
         } else {
             format!("`{a}` and `{b}` can reach the same memory.")
         };
@@ -1828,7 +1828,7 @@ impl<'t> Lowerer<'t> {
             let relation = if self.places.spelled_prefix(m, p) {
                 format!("`{a}` and `{b}` are a path and its prefix [mem.model.path.disjoint].")
             } else if self.places.covers(m, p) || self.places.covers(p, m) {
-                elements_one_place(&a, &b)
+                elements_one_place(&a, &b, self.places.meets_member(m, p))
             } else {
                 format!("`{a}` and `{b}` can reach the same memory.")
             };
@@ -5853,12 +5853,22 @@ fn int_literal_value(t: &str) -> Option<u128> {
     u128::from_str_radix(body, radix).ok()
 }
 
-/// The exclusivity note for two element paths that conflict only
-/// because a `mut` claim still treats a container's elements as one
-/// place (`[mem.model.place.elem]`: element claims are EGC's EG2).
-pub(crate) fn elements_one_place(a: &str, b: &str) -> String {
-    format!(
-        "`{a}` and `{b}` are elements of one container, and a `mut` claim still treats a \
-         container's elements as one place [mem.model.place.elem]."
-    )
+/// The claim note for two paths that conflict only through an index
+/// step (`[mem.model.place.elem]`, eg02): a run-time index against any
+/// other index (item 2), or an element against a member of its
+/// container (1(c), kept one place under a claim).
+pub(crate) fn elements_one_place(a: &str, b: &str, member: bool) -> String {
+    if member {
+        format!(
+            "`{a}` and `{b}` are an element and a member of one container; under a claim the \
+             member is read as the whole container, so the two still conflict \
+             [mem.model.place.elem]."
+        )
+    } else {
+        format!(
+            "`{a}` and `{b}` may be one element: an index that is not a literal is one place \
+             with every other index of its container, and only two different literals are \
+             distinct [mem.model.place.elem]."
+        )
+    }
 }
