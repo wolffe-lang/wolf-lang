@@ -1,7 +1,9 @@
 //! eg00 (EGC, wolf-lang#446's campaign) — `[mem.model.place.elem]`'s
 //! ten green witnesses, asserted on every machine; eg01 (EG1 and
 //! wolf-lang#460) adds the literal-index rows, item 3's must-revival
-//! rows and R3's failing twin.
+//! rows and R3's failing twin; eg02 (EG2) adds element claims — each
+//! exclusivity, loan and iteration leg with two distinct literals, and
+//! its run-time-index twin that stays refused.
 //!
 //! Why a driver test beside the corpus rows (s171's lesson, wave 45):
 //! `cargo xtask corpus` runs a `phase: run` entry on the NATIVE lane
@@ -481,5 +483,180 @@ fn a_store_through_the_same_pool_handle_revives_the_element() {
         runs("2\n"),
         verdict("unsupported"),
         verdict("unsupported"),
+    );
+}
+
+// ---------------------------------------------- eg02: element claims ----
+//
+// EG2: every rule that asks whether two paths conflict under a claim —
+// call exclusivity (`[mem.tier0.excl]`, E1002, with D39's read and
+// s168's nested call inside a `mut` argument), borrows
+// (`[mem.tier0.borrow]`) and iteration (`[mem.iter.excl]`, E1013) —
+// reads the element relation eg01 gave the moves pass. Each distinct
+// row below was E1002/E1013 on every wolfgang lane through 0.2.18;
+// each has a run-time-index twin that must stay refused.
+
+/// Item 1(a), exclusivity: `add2(mut xs[0], mut xs[1])` (eg00's parked
+/// witness, ruled `2 12` on every machine).
+#[test]
+fn two_literal_elements_go_mut_together() {
+    let want = runs("2 12\n");
+    every_lane("elem_const_mut_pair.lu", want, want, want);
+}
+
+/// The path rule under claims: `add2(mut g[0][1], mut g[1][0])`.
+#[test]
+fn paths_through_distinct_literals_go_mut_together() {
+    let want = runs("3 13\n");
+    every_lane("elem_const_nested_mut.lu", want, want, want);
+}
+
+/// The headline shape: `swap(mut xs[0], mut xs[1])`.
+#[test]
+fn two_literal_elements_swap() {
+    let want = runs("2 1 3\n");
+    every_lane("elem_const_swap.lu", want, want, want);
+}
+
+/// Whole struct elements owning heap lists, both pushed through.
+#[test]
+fn two_heap_elements_swap_and_grow() {
+    let want = runs("2 1 1 2\n");
+    every_lane("elem_const_swap_heap.lu", want, want, want);
+}
+
+/// The same field of two distinct elements.
+#[test]
+fn one_field_of_two_literal_elements_goes_mut_together() {
+    let want = runs("2 12\n");
+    every_lane("elem_const_field_mut_pair.lu", want, want, want);
+}
+
+/// D39 per element: a `Copy` read of `xs[1]` inside the claim on `xs[0]`.
+#[test]
+fn a_literal_element_is_read_inside_another_ones_claim() {
+    let want = runs("3 2\n");
+    every_lane("elem_const_read_after_mut.lu", want, want, want);
+}
+
+/// s168's nested-call leg per element: `put(mut xs[0], grow(mut xs[1]))`.
+#[test]
+fn a_nested_call_may_claim_another_literal_element() {
+    let want = runs("2 5 65\n");
+    every_lane("elem_const_nested_call.lu", want, want, want);
+}
+
+/// `mut` against `take`: `put(mut xs[0], take xs[1])`.
+#[test]
+fn a_literal_element_moves_into_a_call_another_one_mutates_in() {
+    let want = runs("2 2\n");
+    every_lane("elem_const_take_while_mut.lu", want, want, want);
+}
+
+/// `read` against `take`: `keep(xs[0], take xs[1])`.
+#[test]
+fn a_literal_element_moves_into_a_call_another_one_is_lent_to() {
+    let want = runs("3 1\n");
+    every_lane("elem_const_read_while_take.lu", want, want, want);
+}
+
+/// `[mem.iter.excl]` per element: iterate `xs[0]`, push into `xs[1]`.
+#[test]
+fn another_literal_element_changes_under_the_loop() {
+    let want = runs("2 3 2\n");
+    every_lane("elem_const_iter_mut.lu", want, want, want);
+}
+
+/// `[mem.tier0.borrow]` per element: a dyn loan of `xs[0]`, a store to
+/// `xs[1]` while it is live.
+#[test]
+fn another_literal_element_is_stored_under_a_loan() {
+    let want = runs("7 9\n");
+    every_lane("elem_const_dyn_loan.lu", want, want, want);
+}
+
+/// Item 2 under D39: `bump(mut xs[0], xs[i])`; lupin sees `i = 1`.
+#[test]
+fn a_run_time_index_is_not_read_inside_a_claim() {
+    let lupin = runs("3 2\n");
+    every_lane(
+        "elem_dyn_read_after_mut.lu",
+        verdict("fail(E1002)"),
+        lupin,
+        lupin,
+    );
+}
+
+/// Item 2 under the nested-call leg: `put(mut xs[0], grow(mut xs[i]))`.
+#[test]
+fn a_nested_call_may_not_claim_a_run_time_index() {
+    let lupin = runs("2 65\n");
+    every_lane(
+        "elem_dyn_nested_call.lu",
+        verdict("fail(E1002)"),
+        lupin,
+        lupin,
+    );
+}
+
+/// Item 2 under `mut` against `take`: `put(mut xs[0], take xs[i])`.
+#[test]
+fn a_run_time_index_does_not_move_into_a_claiming_call() {
+    let lupin = runs("2\n");
+    every_lane(
+        "elem_dyn_take_while_mut.lu",
+        verdict("fail(E1002)"),
+        lupin,
+        lupin,
+    );
+}
+
+/// Item 2 under iteration: iterate `xs[0]`, push into `xs[i]`.
+#[test]
+fn a_run_time_index_does_not_change_under_the_loop() {
+    let lupin = runs("2 3\n");
+    every_lane(
+        "elem_dyn_iter_mut.lu",
+        verdict("fail(E1013)"),
+        lupin,
+        lupin,
+    );
+}
+
+/// Item 2 under a loan: a store through `xs[i]` while `xs[0]` is lent.
+#[test]
+fn a_run_time_index_is_not_stored_under_a_loan() {
+    let lupin = runs("7 9\n");
+    every_lane(
+        "elem_dyn_dyn_loan.lu",
+        verdict("fail(E1002)"),
+        lupin,
+        lupin,
+    );
+}
+
+/// A path and its prefix: `add2(mut g[0], mut g[0][1])`.
+#[test]
+fn an_element_and_a_path_inside_it_stay_one_claim() {
+    let trap = verdict("trap(exclusivity)");
+    every_lane(
+        "elem_prefix_mut_pair.lu",
+        verdict("fail(E1002)"),
+        trap,
+        trap,
+    );
+}
+
+/// The documented conservatism: 1(c) holds for moves, but a member read
+/// under an element claim stays refused because lupin traps it (it reads
+/// `.len` as the whole container).
+#[test]
+fn a_member_read_under_an_element_claim_stays_refused() {
+    let trap = verdict("trap(exclusivity)");
+    every_lane(
+        "elem_member_read_after_mut.lu",
+        verdict("fail(E1002)"),
+        trap,
+        trap,
     );
 }
