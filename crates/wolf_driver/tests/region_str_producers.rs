@@ -20,6 +20,8 @@
 //! the ledger's UNITS are explicitly not comparison surface
 //! (`[mem.region.account.1]`), so nothing here pins a byte count.
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -40,7 +42,7 @@ fn lane(entry: &Path, flag: &str) -> Option<Obs> {
         .arg("--json")
         .output()
         .expect("wolf runs");
-    if out.status.code() == Some(2) && flag == "--native" {
+    if lane_exit::environment_refusal(&out, &format!("wolf {flag}")) && flag == "--native" {
         eprintln!(
             "SKIP: environment cannot run the native lane: {}",
             String::from_utf8_lossy(&out.stderr).trim()
