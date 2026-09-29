@@ -16,6 +16,8 @@
 //! Behavior is pinned alongside every IR assertion: debug and release
 //! must print the same answer (facts change codegen, never results).
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -45,7 +47,7 @@ fn release_ir(dir: &Path) -> Option<String> {
         ])
         .output()
         .expect("spawn wolf");
-    if st.status.code() == Some(2) {
+    if lane_exit::environment_refusal(&st, "wolf build") {
         eprintln!(
             "SKIP (environment): {}",
             String::from_utf8_lossy(&st.stderr)
@@ -79,7 +81,7 @@ fn run(dir: &Path, release: bool) -> Option<(i32, String)> {
         args.insert(1, "--release".to_string());
     }
     let st = Command::new(wolf()).args(&args).output().expect("spawn");
-    if st.status.code() == Some(2) {
+    if lane_exit::environment_refusal(&st, "wolf build") {
         return None;
     }
     assert!(
