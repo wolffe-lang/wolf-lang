@@ -672,3 +672,13 @@ fn a_member_read_under_an_element_claim_stays_refused() {
         trap,
     );
 }
+
+/// wolf-lang#470 (found by eg02): two `mut` claims in ONE caller region
+/// — here two fields off a `mut` parameter, the pre-EG2 shape of it —
+/// ICEd the release tier's inliner through 0.2.18. Every element-pair
+/// case above asserts `--release` too, which is the other half.
+#[test]
+fn two_claims_in_one_caller_region_survive_the_release_inliner() {
+    let want = runs("2 12\n");
+    every_lane("mut_two_fields_one_region.lu", want, want, want);
+}
