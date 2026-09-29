@@ -19,6 +19,8 @@
 //! and the refusal cannot fire. Hosts without a release tier skip
 //! loudly (the s59 pattern).
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -58,7 +60,7 @@ fn release_lane(midend: bool) -> Option<serde_json::Value> {
         cmd.env("WOLF_MIDEND", "0");
     }
     let out = cmd.output().expect("wolf runs");
-    if out.status.code() == Some(2) {
+    if lane_exit::environment_refusal(&out, "wolf conform-run --release") {
         eprintln!(
             "SKIP: environment cannot run the release lane: {}",
             String::from_utf8_lossy(&out.stderr).trim()
