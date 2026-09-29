@@ -12,6 +12,8 @@
 //! Skips follow the s59 posture: environment exit-2 and the tier's
 //! named host refusal are loud skips, never verdicts.
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -65,7 +67,7 @@ fn lane(src: &Path, flag: &str) -> Option<(String, String)> {
         .args([flag, "--json"])
         .output()
         .expect("wolf runs");
-    if out.status.code() == Some(2) {
+    if lane_exit::environment_refusal(&out, &format!("wolf {flag}")) {
         eprintln!(
             "SKIP: environment cannot run {flag}: {}",
             String::from_utf8_lossy(&out.stderr).trim()
@@ -126,7 +128,7 @@ fn release_layout_matches_the_checked_lane() {
         .arg(&exe)
         .output()
         .expect("wolf runs");
-    if out.status.code() == Some(2) {
+    if lane_exit::environment_refusal(&out, "wolf build") {
         eprintln!(
             "SKIP: environment cannot build the release tier: {}",
             String::from_utf8_lossy(&out.stderr).trim()
