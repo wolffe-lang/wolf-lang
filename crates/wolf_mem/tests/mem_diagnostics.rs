@@ -1124,19 +1124,51 @@ fn e1002_a_run_time_index_beside_an_element_lend() {
 }
 
 #[test]
-fn e1002_a_member_read_under_an_element_claim() {
-    // 1(c) is the moves pass's alone: under a `mut` element claim a
-    // member read (`xs.len`) still conflicts, because the reference
-    // interpreter reads it as the whole container (eg02's documented
-    // conservatism). D39's order-sensitive half reports it.
+fn a_member_read_under_an_element_claim_stays_silent() {
+    // 1(c) under a claim (eg02b, wolf-lang#472 ruled A): an element and
+    // a member of its container are distinct places whatever the index
+    // is, so a member read beside a `mut` element claim — after it
+    // (D39's order-sensitive half), before it, through a run-time
+    // index, one level down, inside a nested call — conflicts with
+    // nothing. The whole container against its element still does
+    // (the next fixture).
     snap(
-        "e1002_elem_member_read",
+        "clean_elem_member_read_under_claim",
         "fn bump(mut a: int, n: int) {\n    \
              a = a + n\n\
          }\n\
+         fn pre(n: int, mut a: int) {\n    \
+             a = a + n\n\
+         }\n\
+         fn id(n: int) -> int { n }\n\
          fn main() -> !int {\n    \
              var xs = [1, 2, 3]\n    \
+             var i = 1\n    \
+             var g = [[1, 2], [3]]\n    \
              bump(mut xs[0], xs.len)\n    \
+             pre(xs.len, mut xs[1])\n    \
+             bump(mut xs[i], xs.len)\n    \
+             bump(mut g[0][1], g[0].len)\n    \
+             bump(mut g[1][0], g.len)\n    \
+             bump(mut xs[2], id(xs.len))\n    \
+             xs[0] - 4\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1002_the_whole_container_read_under_an_element_claim() {
+    // 1(c) is about a member, not the container: `both(mut xs[0], xs)`
+    // lends all of `xs`, a prefix of the claimed `xs[0]` (item 2's last
+    // sentence).
+    snap(
+        "e1002_elem_claim_whole_read",
+        "fn both(mut a: int, ys: List[int]) {\n    \
+             a = a + ys.len\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var xs = [1, 2, 3]\n    \
+             both(mut xs[0], xs)\n    \
              xs[0] - 4\n\
          }\n",
     );
