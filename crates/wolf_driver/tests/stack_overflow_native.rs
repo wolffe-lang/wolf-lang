@@ -12,6 +12,8 @@
 //! spawned task so the report names it. Hosts the native tier refuses
 //! skip loudly (the s59 pattern).
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -55,7 +57,7 @@ fn build_fixture(case: &str, src: &str) -> Option<PathBuf> {
         .expect("wolf runs");
     match out.status.code() {
         Some(0) => Some(exe),
-        Some(2) => {
+        Some(2) if lane_exit::environment_refusal(&out, "wolf build") => {
             eprintln!(
                 "SKIP: environment cannot link native binaries: {}",
                 String::from_utf8_lossy(&out.stderr).trim()
