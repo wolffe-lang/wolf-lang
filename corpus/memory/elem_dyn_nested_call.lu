@@ -1,0 +1,33 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.order
+//!
+//! eg02 (EGC's EG2) — item 2, ONE PLACE: the twin of
+//! `elem_const_nested_call.lu` through a run-time index, `put(mut xs[0],
+//! grow(mut xs[i]))`. Were `i` zero, the nested call would reallocate the
+//! buffer the outer claim points into; no rule proves it is not, so the
+//! claim is E1002 on every wolfgang lane, before and after EG2. lupin
+//! 0.1.41 sees `i = 1` and runs it (`2 65`).
+
+fn grow(mut ys: List[int]) -> int {
+    var i = 0
+    while i < 64 {
+        (mut ys).push(i)
+        i = i + 1
+    }
+    5
+}
+
+fn put(mut a: List[int], n: int) {
+    (mut a).push(n)
+}
+
+fn main() -> !int {
+    var xs = List[List[int]]()
+    (mut xs).push([1])
+    (mut xs).push([2])
+    var i = 1
+    put(mut xs[0], grow(mut xs[i]))     // ERROR E1002: `xs[i]` may be `xs[0]`
+    print("{xs[0].len} {xs[1].len}")
+    0
+}

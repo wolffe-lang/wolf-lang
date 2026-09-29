@@ -1,0 +1,22 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.order
+//!
+//! eg02 (EGC's EG2) — `[mem.model.place.elem]` item 2, ONE PLACE: the twin
+//! of `elem_const_read_after_mut.lu` through a run-time index,
+//! `bump(mut xs[0], xs[i])`. No rule proves `i != 0`, so the read inside
+//! the claim conflicts: E1002 on every wolfgang lane, before and after
+//! EG2. lupin 0.1.41 sees `i = 1` and runs it (`3 2`): the conservatism
+//! direction.
+
+fn bump(mut a: int, n: int) {
+    a = a + n
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    var i = 1
+    bump(mut xs[0], xs[i])     // ERROR E1002: `xs[i]` may be `xs[0]`
+    print("{xs[0]} {xs[1]}")
+    0
+}

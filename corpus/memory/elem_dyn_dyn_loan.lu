@@ -1,0 +1,34 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.borrow, mem.dyn.unsize
+//!
+//! eg02 (EGC's EG2) — item 2, ONE PLACE: the twin of `elem_const_dyn_loan.lu`
+//! through a run-time index: the store `xs[i] = Dot { x: 9 }` lands while
+//! the loan of `xs[0]` is live, and no rule proves `i != 0`: E1002 on
+//! every wolfgang lane, before and after EG2. lupin 0.1.41 sees `i = 1`
+//! and runs it (`7 9`).
+
+trait Draw {
+    fn draw(self) -> int
+}
+
+struct Dot {
+    x: int,
+}
+
+impl Draw for Dot {
+    fn draw(self) -> int {
+        self.x
+    }
+}
+
+fn main() -> !int {
+    var xs = List[Dot]()
+    (mut xs).push(Dot { x: 7 })
+    (mut xs).push(Dot { x: 8 })
+    var i = 1
+    let o = xs[0] as dyn Draw
+    xs[i] = Dot { x: 9 }     // ERROR E1002: `xs[i]` may be `xs[0]`, which is lent
+    print("{o.draw()} {xs[1].x}")
+    0
+}

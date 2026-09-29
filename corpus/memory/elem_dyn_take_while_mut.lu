@@ -1,0 +1,23 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.excl.1, mem.tier0.mode.take
+//!
+//! eg02 (EGC's EG2) — item 2, ONE PLACE: the twin of
+//! `elem_const_take_while_mut.lu` through a run-time index, `put(mut
+//! xs[0], take xs[i])`. The moved element may be the one being mutated:
+//! E1002 on every wolfgang lane, before and after EG2. lupin 0.1.41 sees
+//! `i = 1` and runs it.
+
+fn put(mut a: List[int], take b: List[int]) {
+    (mut a).push(b.len)
+}
+
+fn main() -> !int {
+    var xs = List[List[int]]()
+    (mut xs).push([1])
+    (mut xs).push([2, 3])
+    var i = 1
+    put(mut xs[0], take xs[i])     // ERROR E1002: `xs[i]` may be `xs[0]`
+    print("{xs.len}")
+    0
+}

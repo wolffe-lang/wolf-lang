@@ -1,0 +1,21 @@
+//! check: fail(E1013)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.iter.excl
+//!
+//! eg02 (EGC's EG2) — item 2, ONE PLACE: the twin of `elem_const_iter_mut.lu`
+//! through a run-time index, `for x in xs[0] { (mut xs[i]).push(x) }`.
+//! Were `i` zero the push would reallocate the list being iterated; no
+//! rule proves it is not: E1013 on every wolfgang lane, before and after
+//! EG2. lupin 0.1.41 sees `i = 1` and runs it (`2 3`).
+
+fn main() -> !int {
+    var xs = List[List[int]]()
+    (mut xs).push([1, 2])
+    (mut xs).push([10])
+    var i = 1
+    for x in xs[0] {
+        (mut xs[i]).push(x)     // ERROR E1013: `xs[i]` may be `xs[0]`
+    }
+    print("{xs[0].len} {xs[1].len}")
+    0
+}
