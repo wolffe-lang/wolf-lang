@@ -292,6 +292,7 @@ memory/destructure_partial_live.lu: lowers
 memory/destructure_partial_move.lu: not mem-clean (pre-wir rungs own it)
 memory/div_zero.lu: lowers
 memory/elem_char_bool_key_revive.lu: lowers
+memory/elem_claim_whole_read.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_const_dyn_loan.lu: lowers
 memory/elem_const_field_mut_pair.lu: lowers
 memory/elem_const_field_of_elem.lu: lowers
@@ -321,7 +322,8 @@ memory/elem_key_move_map.lu: lowers
 memory/elem_key_reassigned_no_revive.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_len_after_move.lu: lowers
 memory/elem_loop_covers_const.lu: not mem-clean (pre-wir rungs own it)
-memory/elem_member_read_after_mut.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_member_read_after_mut.lu: lowers
+memory/elem_member_read_under_claims.lu: lowers
 memory/elem_move_one_place.lu: lowers
 memory/elem_move_same_const_read.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_offset_other_local.lu: not mem-clean (pre-wir rungs own it)
