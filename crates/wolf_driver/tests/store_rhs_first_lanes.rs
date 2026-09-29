@@ -17,6 +17,8 @@
 //! `Pool` by name; the assertion on lupin there is that it says
 //! `unsupported`, not a row and not a different number.
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -49,7 +51,7 @@ fn lane(entry: &Path, flag: &str) -> Option<Obs> {
         .arg("--json")
         .output()
         .expect("wolf runs");
-    if out.status.code() == Some(2) && flag != "--checked" {
+    if lane_exit::environment_refusal(&out, &format!("wolf {flag}")) && flag != "--checked" {
         eprintln!(
             "SKIP: environment cannot run the {flag} lane: {}",
             String::from_utf8_lossy(&out.stderr).trim()
