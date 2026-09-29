@@ -1084,14 +1084,13 @@ fn e1002_nested_call_claims_a_spilled_bases_prefix() {
 }
 
 #[test]
-fn e1002_two_element_lends_in_one_call() {
-    // s168's first leg: a `mut` claim treats every element of a
-    // container as ONE place, so a second element claim in the same
-    // call conflicts. eg01 made MOVES element-granular
-    // (`[mem.model.place.elem]`); claims stay one place until EGC's EG2,
-    // and the note says so rather than calling two literals a prefix.
+fn two_literal_element_lends_stay_silent() {
+    // s168's first leg, per element since eg02 (EGC's EG2): two
+    // different literal indices are distinct places
+    // (`[mem.model.place.elem]` 1(a)), so two `mut` element claims in
+    // one call are disjoint. Through 0.2.18 this was E1002.
     snap(
-        "e1002_two_element_lends",
+        "clean_two_literal_element_lends",
         "fn add2(mut a: int, mut b: int) {\n    \
              a = a + 1\n    \
              b = b + 1\n\
@@ -1100,6 +1099,101 @@ fn e1002_two_element_lends_in_one_call() {
              var xs = [1, 2, 3]\n    \
              add2(mut xs[0], mut xs[1])\n    \
              xs[0] - 2\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1002_a_run_time_index_beside_an_element_lend() {
+    // Item 2 under a claim: `xs[i]` is one place with every index of
+    // `xs`, so the second claim conflicts; the note says why in the
+    // clause's words rather than calling two elements a prefix.
+    snap(
+        "e1002_elem_run_time_index_lend",
+        "fn add2(mut a: int, mut b: int) {\n    \
+             a = a + 1\n    \
+             b = b + 1\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var xs = [1, 2, 3]\n    \
+             var i = 1\n    \
+             add2(mut xs[0], mut xs[i])\n    \
+             xs[0] - 2\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1002_a_member_read_under_an_element_claim() {
+    // 1(c) is the moves pass's alone: under a `mut` element claim a
+    // member read (`xs.len`) still conflicts, because the reference
+    // interpreter reads it as the whole container (eg02's documented
+    // conservatism). D39's order-sensitive half reports it.
+    snap(
+        "e1002_elem_member_read",
+        "fn bump(mut a: int, n: int) {\n    \
+             a = a + n\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var xs = [1, 2, 3]\n    \
+             bump(mut xs[0], xs.len)\n    \
+             xs[0] - 4\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1002_a_nested_call_claims_a_run_time_index() {
+    // s168's nested-call leg under item 2: `grow(mut xs[i])` inside the
+    // claim on `xs[0]` may reallocate the very element lent.
+    snap(
+        "e1002_elem_nested_run_time_index",
+        "fn grow(mut ys: List[int]) -> int {\n    \
+             (mut ys).push(9)\n    \
+             5\n\
+         }\n\
+         fn put(mut a: List[int], n: int) {\n    \
+             (mut a).push(n)\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var xs = [[1], [2]]\n    \
+             var i = 1\n    \
+             put(mut xs[0], grow(mut xs[i]))\n    \
+             xs[0].len - 2\n\
+         }\n",
+    );
+}
+
+#[test]
+fn element_claims_per_leg_stay_silent() {
+    // EG2 on every claim leg at once, each over two different
+    // literals: D39's read inside a claim, s168's nested call, `mut`
+    // against `take`, iteration of one element while another changes.
+    snap(
+        "clean_elem_claims_per_leg",
+        "fn bump(mut a: int, n: int) {\n    \
+             a = a + n\n\
+         }\n\
+         fn grow(mut ys: List[int]) -> int {\n    \
+             (mut ys).push(9)\n    \
+             5\n\
+         }\n\
+         fn put(mut a: List[int], n: int) {\n    \
+             (mut a).push(n)\n\
+         }\n\
+         fn eat(mut a: List[int], take b: List[int]) {\n    \
+             (mut a).push(b.len)\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var ns = [1, 2]\n    \
+             bump(mut ns[0], ns[1])\n    \
+             var xs = [[1], [2], [3]]\n    \
+             put(mut xs[0], grow(mut xs[1]))\n    \
+             eat(mut xs[0], take xs[2])\n    \
+             for x in xs[0] {\n        \
+                 (mut xs[1]).push(x)\n    \
+             }\n    \
+             ns[0] + xs[1].len - 10\n\
          }\n",
     );
 }
