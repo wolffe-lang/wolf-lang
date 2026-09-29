@@ -1,0 +1,13 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1002]: `xs` is lent for this call while `xs[0]` goes `mut` in it
+ --> mem:///main.lu:6:21
+  |
+6 |     both(mut xs[0], xs)
+  |              ----- `xs[0]` is passed `mut` here
+  |                     ^^ read of a place being mutated
+  |
+  = note: `xs[0]` is inside `xs` — a path and its prefix conflict [mem.model.path.disjoint].
+    Disjoint fields (`x.a` with `x.b`) are fine together.
