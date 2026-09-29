@@ -146,6 +146,49 @@ fn inline_token_callee_rebinds_region() {
     insta::assert_snapshot!("inline_token_callee", out);
 }
 
+/// wolf-lang#470 (eg02): two token formals bound to ONE caller region —
+/// `add2(mut r.a, mut r.b)` off a `mut` parameter, or two elements of
+/// one list under EG2. The callee's two chains are one chain in the
+/// caller, so a splice would consume the caller's token twice; the
+/// call stays out of line and the whole pipeline verifies. Before the
+/// fix: `token-linearity`, "effect token consumed twice on one path".
+#[test]
+fn inline_keeps_a_call_whose_token_formals_share_a_region() {
+    let src = "fn @add2(mut ptr, mem.r0, mut ptr, mem.r1) {\n  \
+               b0(%0: ptr, %1: mem.r0, %2: ptr, %3: mem.r1):\n  \
+               %4 = load.i64 %0, %1\n  \
+               %5 = iconst.i64 1\n  \
+               %6 = iadd.chk %4, %5\n  \
+               %7 = store.i64 %6, %0, %1\n  \
+               %8 = load.i64 %2, %3\n  \
+               %9 = iconst.i64 10\n  \
+               %10 = iadd.chk %8, %9\n  \
+               %11 = store.i64 %10, %2, %3\n  \
+               ret\n\
+               }\n\
+               \n\
+               fn @main() -> i64 {\n\
+               b0:\n  \
+               %0: ptr, %1: mem.r0 = region.new\n  \
+               %2 = iconst.i64 16\n  \
+               %3: ptr, %4: mem.r0 = region.alloc %0, %2, %1\n  \
+               %5 = iconst.i64 8\n  \
+               %6 = ptr.off %3, %5, 1\n  \
+               %7 = iconst.i64 1\n  \
+               %8 = store.i64 %7, %3, %4\n  \
+               %9 = store.i64 %7, %6, %8\n  \
+               %10, %11 = call @add2(%3, %9, %6, %9)\n  \
+               %12 = load.i64 %3, %11\n  \
+               %13 = load.i64 %6, %11\n  \
+               %14 = iadd.chk %12, %13\n  \
+               region.free %0, %11\n  \
+               ret %14\n\
+               }\n";
+    let (out, stats) = pipeline(src);
+    assert_eq!(stats.inlined_calls, 0, "{stats}");
+    assert!(out.contains("call @add2"), "kept out of line:\n{out}");
+}
+
 // --------------------------------------------------------- memopt ----
 
 /// HOLY-GRAIL WITNESS 1 (contract acceptance, locked): a `read`-param
