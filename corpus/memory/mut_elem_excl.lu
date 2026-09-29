@@ -1,15 +1,20 @@
-//! check: fail(E1002)
-//! phase: typecheck
-//! conforms: mem.tier0.excl.1, mem.model.place, mem.model.path.disjoint
+//! check: run(exit=0, stdout="2\n")
+//! phase: run
+//! conforms: mem.tier0.excl.1, mem.model.place.elem, mem.model.path.disjoint
 //!
 //! s168 — the first leg of the exclusivity story an element lend
-//! rests on. `[mem.model.place]` collapses EVERY element of a
-//! container to one opaque projection, so `xs[0]` and `xs[1]` are the
-//! same place as far as the model is concerned and the second claim
-//! is E1002 on both lanes. Element-granular disjointness is a
-//! non-target (s18), and lending addresses into a buffer is exactly
-//! the reason it should stay one: a callee that could reach two
-//! elements could reach the header between them.
+//! rests on. Through 0.2.18 `[mem.model.place]` collapsed EVERY element
+//! of a container to one opaque projection under a claim, so `xs[0]`
+//! and `xs[1]` were the same place and the second claim was E1002 on
+//! both lanes.
+//!
+//! eg02 (EGC's EG2) lifts it: `[mem.model.place.elem]` item 1(a) — two
+//! integer-literal indices whose values differ are distinct places, for
+//! claims as for moves. The callee holds two addresses into one buffer
+//! that can never be the same element, and neither parameter can reach
+//! the buffer's header. `2` on checked, native, release and lupin
+//! 0.1.41. `elem_same_const_mut.lu` keeps the same literal twice
+//! refused; `elem_dyn_mut_pair.lu` two run-time indices.
 
 fn add2(mut a: int, mut b: int) {
     a = a + 1
@@ -18,7 +23,7 @@ fn add2(mut a: int, mut b: int) {
 
 fn main() -> !int {
     var xs = [1, 2, 3]
-    add2(mut xs[0], mut xs[1])     // ERROR E1002: one opaque element place
+    add2(mut xs[0], mut xs[1])
     print("{xs[0]}")
     0
 }
