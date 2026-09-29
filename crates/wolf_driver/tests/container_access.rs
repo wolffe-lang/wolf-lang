@@ -23,6 +23,8 @@
 //!
 //! Environment problems (no clang) SKIP loudly; refusals FAIL.
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -180,7 +182,7 @@ fn main() -> !int {
         .arg("--json")
         .output()
         .expect("wolf runs");
-    if out.status.code() == Some(2) {
+    if lane_exit::environment_refusal(&out, "wolf conform-run") {
         eprintln!(
             "SKIP: environment cannot run the release lane: {}",
             String::from_utf8_lossy(&out.stderr).trim()
