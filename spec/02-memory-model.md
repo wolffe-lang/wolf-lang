@@ -139,7 +139,7 @@ vocabulary.
      two indices are equal at run time — `xs[i]` against `xs[k + 1]`
      with `k = i - 1`.
 
-  **Where the machines stand (wolf 0.2.18; lupin 0.1.41).** wolfgang makes moves element-granular: items
+  **Where the machines stand (wolf trunk after 0.2.18, unreleased; lupin 0.1.41).** wolfgang makes moves element-granular: items
   1(a)–(c) hold for a moved element, item 3 holds (wolf-lang#460, where
   any index store revived a moved sibling and native aliased it, is
   fixed), and R3 holds for a store through the same plain local of a
@@ -147,8 +147,14 @@ vocabulary.
   stricter than R1's "not assigned between": a local some loan is taken
   on, and every local of a body with a raw-tier statement, never
   carries the proof. Exclusivity, borrows and iteration
-  (`[mem.tier0.excl]`, `[mem.tier0.borrow]`, `[mem.iter.excl]`) still
-  treat a container's elements as one place (EG2), and R1's distinct
+  (`[mem.tier0.excl]`, `[mem.tier0.borrow]`, `[mem.iter.excl]`) are
+  element-granular too (EG2): items 1(a) and 1(b) and the path rule
+  hold for a claim, so `add2(mut xs[0], mut xs[1])` and `add2(mut
+  g[0][1], mut g[1][0])` run, and every item 2 shape is still refused.
+  One shape stays stricter than 1(c): under a claim, a member read of
+  the container (`bump(mut xs[0], xs.len)`) still conflicts, because
+  lupin reads the member as the whole container and traps it, and the
+  compiler is never looser than the reference interpreter. R1's distinct
   half and R2 are not implemented (EG3), so their shapes are refused as
   item 2's. A `Map` element is a place for moves and stores; a `mut`
   lend of `m[k]` is a typing question (the read is `V ! {none}`,
@@ -161,9 +167,8 @@ vocabulary.
   Witnesses: `corpus/memory/elem_*.lu`, each asserted on checked,
   native, release and lupin by
   `crates/wolf_driver/tests/element_places_lanes.rs` or
-  `element_move_conservatism_lanes.rs`; the EG2 and EG3 rows
-  (`elem_const_mut_pair`, `elem_const_nested_mut`,
-  `elem_offset_mut_pair`, `elem_loop_induction_mut`) stay parked with
+  `element_move_conservatism_lanes.rs`; the EG3 rows
+  (`elem_offset_mut_pair`, `elem_loop_induction_mut`) stay parked with
   their ruled verdicts in the planning repository
   (`sprints/compiler/90-element-granularity/witnesses/`).
 - `[mem.model.granule]` A **granule** is the unit of ownership reasoning:
