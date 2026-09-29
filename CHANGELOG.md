@@ -1,5 +1,34 @@
 # Changelog
 
+## Unreleased
+
+- **`mut` claims are element-granular (EGC's EG2, eg02).**
+  `[mem.model.place.elem]`'s items 1(a)/(b) and the path rule now hold
+  for every rule that asks whether two paths conflict under a claim —
+  call exclusivity (`[mem.tier0.excl]`, E1002, with D39's read and
+  s168's nested call inside a `mut` argument), borrows
+  (`[mem.tier0.borrow]`) and iteration (`[mem.iter.excl]`, E1013) — not
+  only moves. `swap(mut xs[0], mut xs[1])`, `add2(mut g[0][1], mut
+  g[1][0])`, `f(mut cs[0].n, mut cs[1].n)`, `bump(mut xs[0], xs[1])`,
+  `put(mut xs[0], grow(mut xs[1]))`, `for x in xs[0] { (mut
+  xs[1]).push(x) }` and a store to `xs[1]` under a `dyn` loan of
+  `xs[0]` compile and run on checked, native and release with lupin
+  0.1.41's bytes; each was E1002 or E1013 through 0.2.18.
+  `corpus/memory/mut_elem_excl.lu` now runs. Every item 2 shape stays
+  refused — a run-time index against any index, the same literal
+  twice, `Pool` handles, a path and its prefix — each with a corpus
+  twin. **One shape is kept stricter than the clause:** a member read
+  under an element claim (`bump(mut xs[0], xs.len)`) stays E1002,
+  because lupin reads `.len` as the whole container and traps it.
+- **wolf-lang#470 fixed: a release-tier ICE.** Two `mut` arguments in
+  one caller region — two fields off a `mut` parameter, `add2(mut r.a,
+  mut r.b)` inside `fn g(mut r: R)` — made 0.2.18's release build stop
+  with `ICE: mid-end broke the module` (`token-linearity`) once the
+  callee inlined: the inliner bound the callee's two token chains to
+  the caller's one. Such a call now stays out of line. EG2's element
+  pairs reach the same shape. Witness
+  `corpus/memory/mut_two_fields_one_region.lu`, `2 12` on every lane.
+
 ## 0.2.18 — 2026-09-27
 
 THE EIGHTEENTH, a point release. The published 0.2.17 gives two silent
