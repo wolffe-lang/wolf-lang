@@ -26,6 +26,8 @@
 //! Environment problems (no cc/clang, no rt lib) SKIP loudly (exit 2
 //! from `wolf build`); refusals and compile errors FAIL.
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -135,7 +137,7 @@ fn build(dir: &Path, out: &str, extra: &[&str]) -> Option<String> {
     let stderr = String::from_utf8_lossy(&o.stderr).into_owned();
     match o.status.code() {
         Some(0) => Some(stderr),
-        Some(2) => {
+        Some(2) if lane_exit::environment_refusal(&o, "wolf build") => {
             eprintln!("SKIP: environment cannot build natively: {}", stderr.trim());
             None
         }
