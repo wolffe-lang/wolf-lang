@@ -1737,7 +1737,7 @@ impl<'t> Lowerer<'t> {
                 "`{b}` is inside `{a}` — a path and its prefix conflict [mem.model.path.disjoint]."
             )
         } else if self.places.covers(m, place) {
-            elements_one_place(&a, &b, self.places.meets_member(m, place))
+            elements_one_place(&a, &b)
         } else {
             format!("`{a}` and `{b}` can reach the same memory.")
         };
@@ -1828,7 +1828,7 @@ impl<'t> Lowerer<'t> {
             let relation = if self.places.spelled_prefix(m, p) {
                 format!("`{a}` and `{b}` are a path and its prefix [mem.model.path.disjoint].")
             } else if self.places.covers(m, p) || self.places.covers(p, m) {
-                elements_one_place(&a, &b, self.places.meets_member(m, p))
+                elements_one_place(&a, &b)
             } else {
                 format!("`{a}` and `{b}` can reach the same memory.")
             };
@@ -5855,20 +5855,12 @@ fn int_literal_value(t: &str) -> Option<u128> {
 
 /// The claim note for two paths that conflict only through an index
 /// step (`[mem.model.place.elem]`, eg02): a run-time index against any
-/// other index (item 2), or an element against a member of its
-/// container (1(c), kept one place under a claim).
-pub(crate) fn elements_one_place(a: &str, b: &str, member: bool) -> String {
-    if member {
-        format!(
-            "`{a}` and `{b}` are an element and a member of one container; under a claim the \
-             member is read as the whole container, so the two still conflict \
-             [mem.model.place.elem]."
-        )
-    } else {
-        format!(
-            "`{a}` and `{b}` may be one element: an index that is not a literal is one place \
-             with every other index of its container, and only two different literals are \
-             distinct [mem.model.place.elem]."
-        )
-    }
+/// other index (item 2). A member of the container never reaches here:
+/// 1(c) holds under a claim too (eg02b).
+pub(crate) fn elements_one_place(a: &str, b: &str) -> String {
+    format!(
+        "`{a}` and `{b}` may be one element: an index that is not a literal is one place \
+         with every other index of its container, and only two different literals are \
+         distinct [mem.model.place.elem]."
+    )
 }

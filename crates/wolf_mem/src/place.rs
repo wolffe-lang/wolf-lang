@@ -15,11 +15,10 @@
 //!   D39's read and s168's nested call inside a `mut` argument), loans
 //!   (`[mem.tier0.borrow]`) and iteration (`[mem.iter.excl]`) ask these.
 //!   Two different literals are distinct and the path rule holds (1(a),
-//!   (b)); every other index pair is one place (item 2); and an index
-//!   step still meets a member step — 1(c) is the moves pass's alone,
-//!   because the reference interpreter reads a member (`xs.len`) as the
-//!   whole container and traps it under an element claim, and the
-//!   compiler stays no looser than the oracle.
+//!   (b)); an index step never meets a member step (1(c): `xs.len` is
+//!   the header, not an element — eg02b, on the maintainer's ruling A
+//!   for wolf-lang#472); every other index pair is one place (item 2).
+//!   Step for step this is the moves pass's *may* relation.
 //! - The moves pass (`[mem.tier0.move]`) asks [`PlaceTable::overlap_elem`]
 //!   (*may* the two share storage: two different literals never do,
 //!   and an element is never its container's header) and
@@ -192,19 +191,6 @@ impl PlaceTable {
         covers_must(self.get(a), self.get(b), sym_ok)
     }
 
-    /// Do the two paths first part where a member step meets an index
-    /// step (`xs.len` against `xs[0]`)? The wording of a claim note:
-    /// 1(c)'s shape, kept one place for claims.
-    pub fn meets_member(&self, a: PlaceId, b: PlaceId) -> bool {
-        let (a, b) = (self.get(a), self.get(b));
-        a.base == b.base
-            && a.proj
-                .iter()
-                .zip(b.proj.iter())
-                .find(|(x, y)| x != y)
-                .is_some_and(|(x, y)| x.is_index() != y.is_index())
-    }
-
     /// Two paths that are a prefix pair AS SPELLED (every step of the
     /// shorter equal to the longer's): the wording of a conflict note,
     /// never a decision.
@@ -219,20 +205,9 @@ impl PlaceTable {
     }
 }
 
-/// The claim relation (EG2): two fields by name, two literals by
-/// value (1(a)/(b)); every other pair may be one place — two indices
-/// that are not both literals (item 2), and an index against a member
-/// step (1(c) is not taken for claims: see the module note).
-fn steps_match(a: &Proj, b: &Proj) -> bool {
-    match (a, b) {
-        (Proj::Field(x), Proj::Field(y)) => x == y,
-        (Proj::Lit(x), Proj::Lit(y)) => x == y,
-        _ => true,
-    }
-}
-
-/// `[mem.model.place.elem]`'s *may*: 1(a)/(b) literals by value, 1(c)
-/// an element against a member step, item 2 every other index pair.
+/// `[mem.model.place.elem]`'s *may*, the relation claims and moves both
+/// read: 1(a)/(b) literals by value, 1(c) an element against a member
+/// step, item 2 every other index pair.
 fn may_elem(a: &Proj, b: &Proj) -> bool {
     match (a, b) {
         (Proj::Field(x), Proj::Field(y)) => x == y,
@@ -280,7 +255,7 @@ pub fn overlap(a: &Place, b: &Place) -> bool {
     a.proj
         .iter()
         .zip(b.proj.iter())
-        .all(|(x, y)| steps_match(x, y))
+        .all(|(x, y)| may_elem(x, y))
 }
 
 /// Is `a` a (non-strict) prefix of `b`?
@@ -290,7 +265,7 @@ pub fn covers(a: &Place, b: &Place) -> bool {
         && a.proj
             .iter()
             .zip(b.proj.iter())
-            .all(|(x, y)| steps_match(x, y))
+            .all(|(x, y)| may_elem(x, y))
 }
 
 #[cfg(test)]
@@ -319,14 +294,17 @@ mod tests {
         assert!(overlap(&p(0, &["x"]), &p(0, &["x"])));
     }
 
+    /// An `Opaque` index matches every index at its step, itself
+    /// included — and no member step (1(c), eg02b).
     #[test]
-    fn opaque_matches_everything_at_its_step() {
+    fn opaque_matches_every_index_at_its_step() {
         let idx = Place {
             base: Base::Local(0),
             proj: vec![Proj::Opaque],
         };
-        assert!(overlap(&idx, &p(0, &["x"])));
+        assert!(!overlap(&idx, &p(0, &["len"])));
         assert!(overlap(&idx, &idx));
+        assert!(overlap(&idx, &ix(0, vec![lit(0)])));
         assert!(!overlap(
             &idx,
             &Place {
@@ -384,22 +362,25 @@ mod tests {
         }
     }
 
-    /// 1(c) is the moves pass's alone: under a claim a member step still
-    /// meets an index step (lupin traps `f(mut xs[0], xs.len)`).
+    /// 1(c) under a claim (eg02b, wolf-lang#472 ruled A): an element,
+    /// whatever its index, never meets a member of its container —
+    /// `f(mut xs[0], xs.len)`, `f(mut xs[i], xs.len)`, `f(mut g[0][1],
+    /// g[0].len)` — and the container itself still covers both.
     #[test]
-    fn a_member_still_meets_an_element_under_a_claim() {
+    fn a_member_never_meets_an_element_under_a_claim() {
         let len = Proj::Field("len".into());
         for a in [lit(0), Proj::Sym(1), Proj::Opaque] {
-            let (e, m) = (ix(0, vec![a]), ix(0, vec![len.clone()]));
-            assert!(overlap(&e, &m));
+            let (e, m) = (ix(0, vec![a.clone()]), ix(0, vec![len.clone()]));
+            assert!(!overlap(&e, &m) && !overlap(&m, &e));
+            assert!(!covers(&e, &m) && !covers(&m, &e));
             assert!(!overlap_elem(&e, &m));
+            let inner = ix(0, vec![lit(0), a]);
+            assert!(!overlap(&inner, &ix(0, vec![lit(0), len.clone()])));
+            assert!(!overlap(&inner, &ix(0, vec![len.clone()])));
         }
-        let mut t = PlaceTable::new();
-        let e = t.intern(ix(0, vec![lit(0)]), true);
-        let m = t.intern(ix(0, vec![len.clone()]), true);
-        let other = t.intern(ix(0, vec![Proj::Sym(2)]), true);
-        assert!(t.meets_member(e, m) && t.meets_member(m, e));
-        assert!(!t.meets_member(e, other));
+        let whole = ix(0, vec![]);
+        assert!(covers(&whole, &ix(0, vec![lit(0)])));
+        assert!(covers(&whole, &ix(0, vec![len.clone()])));
     }
 
     /// 1(a)/(b): two different literals never share storage; the same
