@@ -148,13 +148,10 @@ vocabulary.
   on, and every local of a body with a raw-tier statement, never
   carries the proof. Exclusivity, borrows and iteration
   (`[mem.tier0.excl]`, `[mem.tier0.borrow]`, `[mem.iter.excl]`) are
-  element-granular too (EG2): items 1(a) and 1(b) and the path rule
-  hold for a claim, so `add2(mut xs[0], mut xs[1])` and `add2(mut
-  g[0][1], mut g[1][0])` run, and every item 2 shape is still refused.
-  One shape stays stricter than 1(c): under a claim, a member read of
-  the container (`bump(mut xs[0], xs.len)`) still conflicts, because
-  lupin reads the member as the whole container and traps it, and the
-  compiler is never looser than the reference interpreter. R1's distinct
+  element-granular too (EG2): items 1(a)–(c) and the path rule hold
+  for a claim, so `add2(mut xs[0], mut xs[1])`, `add2(mut g[0][1], mut
+  g[1][0])` and `bump(mut xs[0], xs.len)` run, and every item 2 shape
+  is still refused. R1's distinct
   half and R2 are not implemented (EG3), so their shapes are refused as
   item 2's. A `Map` element is a place for moves and stores; a `mut`
   lend of `m[k]` is a typing question (the read is `V ! {none}`,
@@ -163,7 +160,10 @@ vocabulary.
   element a move empties and for the exclusivity trap; at 0.1.41 every
   read of a moved element traps (wolffe-lang/wolf-interp#141), and a
   value read out of a `Map` still stays in the map
-  (wolffe-lang/wolf-interp#144). **Cost:** none at run time — every rule here is static.
+  (wolffe-lang/wolf-interp#144), and a member read beside an element
+  claim (`bump(mut xs[0], xs.len)`) still reads the whole container and
+  traps, where 1(c) says the two are distinct (wolffe-lang/wolf-lang#472,
+  ruled so; lupin's mirror follows). **Cost:** none at run time — every rule here is static.
   Witnesses: `corpus/memory/elem_*.lu`, each asserted on checked,
   native, release and lupin by
   `crates/wolf_driver/tests/element_places_lanes.rs` or
