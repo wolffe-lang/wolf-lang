@@ -29,6 +29,8 @@
 //! runtime (the s59 pattern — environment or named refusal, never a
 //! verdict).
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -71,7 +73,7 @@ fn build_release(case: &str, kernel: &str) -> Option<PathBuf> {
     }
     match out.status.code() {
         Some(0) => Some(exe),
-        Some(2) => {
+        Some(2) if lane_exit::environment_refusal(&out, "wolf build") => {
             eprintln!(
                 "SKIP: environment cannot drive the release tier: {}",
                 String::from_utf8_lossy(&out.stderr).trim()
