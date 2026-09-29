@@ -19,6 +19,8 @@
 //! (wolf-interp `ba357aa`, `src/schema.rs:58-59` and `:258`), so
 //! against 0.1.38 this file is red by construction.
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -47,7 +49,7 @@ fn record_in(cwd: Option<&Path>, entry: &Path, flag: &str) -> Option<serde_json:
         cmd.current_dir(dir);
     }
     let out = cmd.output().expect("wolf runs");
-    if out.status.code() == Some(2) && flag == "--native" && out.stdout.is_empty() {
+    if lane_exit::environment_refusal(&out, &format!("wolf {flag}")) && flag == "--native" && out.stdout.is_empty() {
         eprintln!(
             "SKIP: environment cannot run the native lane: {}",
             String::from_utf8_lossy(&out.stderr).trim()
