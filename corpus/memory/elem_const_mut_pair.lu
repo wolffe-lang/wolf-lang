@@ -1,0 +1,23 @@
+//! check: run(exit=0, stdout="2 12\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.excl.1, mem.tier0.excl.2
+//!
+//! eg02 (EGC's EG2) — `[mem.model.place.elem]` item 1(a), exclusivity:
+//! `add2(mut xs[0], mut xs[1])`. Two integer literals whose values differ
+//! are distinct places, so the two `mut` claims in one call are disjoint
+//! (`[mem.tier0.excl.2]`). Ruled by eg00 and parked until EG2; through
+//! 0.2.18 it was E1002 on every wolfgang lane while lupin ran it. Now
+//! `2 12` on checked, native, release and lupin 0.1.41.
+//! `elem_same_const_mut.lu` keeps the same literal twice refused.
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    add2(mut xs[0], mut xs[1])
+    print("{xs[0]} {xs[1]}")
+    0
+}

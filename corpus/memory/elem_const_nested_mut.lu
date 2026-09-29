@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="3 13\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.excl.1
+//!
+//! eg02 (EGC's EG2) — `[mem.model.place.elem]` item 1(a), the path rule:
+//! `add2(mut g[0][1], mut g[1][0])` on a `List[List[int]]`. The paths
+//! first differ at the outer index step (`0` against `1`), so they are
+//! distinct whatever follows. Ruled by eg00 and parked until EG2; through
+//! 0.2.18 it was E1002 on every wolfgang lane. Now `3 13` on checked,
+//! native, release and lupin 0.1.41. `elem_prefix_mut_pair.lu` keeps a
+//! path and its prefix refused.
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn main() -> !int {
+    var g = List[List[int]]()
+    (mut g).push([1, 2])
+    (mut g).push([3, 4])
+    add2(mut g[0][1], mut g[1][0])
+    print("{g[0][1]} {g[1][0]}")
+    0
+}
