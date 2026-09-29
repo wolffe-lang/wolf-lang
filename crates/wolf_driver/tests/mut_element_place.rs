@@ -12,11 +12,13 @@
 //! right answer — cross-lane equality alone passes when both lanes
 //! are wrong together.
 //!
-//! The last two cases are the exclusivity story, and they are the
-//! reason the rest is sound: an element lend hands the callee a raw
-//! address into the container's buffer, so anything that could reach
-//! the container while the callee holds it has to be rejected before
-//! it runs. Both were seen red against the shipping fix removed.
+//! The exclusivity cases are the story the rest rests on: an element
+//! lend hands the callee a raw address into the container's buffer, so
+//! anything that could reach the container — or the same element —
+//! while the callee holds it has to be rejected before it runs. Both
+//! were seen red against the shipping fix removed. Since eg02 (EG2) a
+//! second lend of a provably DIFFERENT element runs; a run-time index
+//! beside it stays rejected.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -268,11 +270,15 @@ fn main() -> !int {
     }
 }
 
-/// Exclusivity, leg one: every element of a container is ONE place
-/// ([mem.model.place]), so a second element claim in the same call is
-/// E1002. Without this a callee holds two addresses into one buffer.
+/// Exclusivity, leg one — per element since eg02 (EGC's EG2,
+/// `[mem.model.place.elem]`). Two different literal indices are
+/// distinct places, so `add2(mut xs[0], mut xs[1])` hands the callee two
+/// addresses into one buffer that can never be the same element — and
+/// neither parameter can reach the buffer's header, so neither can move
+/// it. Both lanes run it. Through 0.2.18 every element was one place
+/// and this was E1002.
 #[test]
-fn two_element_lends_in_one_call_are_rejected() {
+fn two_literal_element_lends_in_one_call_run() {
     let entry = case(
         "s168_two_elements",
         r#"
@@ -284,6 +290,32 @@ fn add2(mut a: int, mut b: int) {
 fn main() -> !int {
     var xs = [1, 2, 3]
     add2(mut xs[0], mut xs[1])
+    print("{xs[0]} {xs[1]}")
+    0
+}
+"#,
+    );
+    both_lanes_say(&entry, "2 3\n");
+}
+
+/// The half of leg one that stays: a run-time index is one place with
+/// every index of its container (item 2), so a second claim through
+/// `xs[i]` is E1002 — were `i` zero, the callee would hold two
+/// addresses to one element.
+#[test]
+fn a_run_time_index_beside_an_element_lend_is_rejected() {
+    let entry = case(
+        "s168_two_elements_run_time",
+        r#"
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 1
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    var i = 0
+    add2(mut xs[0], mut xs[i])
     print("{xs[0]}")
     0
 }
