@@ -10,10 +10,16 @@
 //! local of a `Copy` type (`xs[i]`, `m[k]`, `p[h]` — eg01b widened it
 //! from integer locals), and anything else. Two relations read them:
 //!
-//! - [`PlaceTable::overlap`] / [`PlaceTable::covers`] still collapse
-//!   every index step to one place. Exclusivity (`[mem.tier0.excl]`),
-//!   loans and iteration claims ask these — element `mut` claims are
-//!   EGC's EG2, not this change.
+//! - [`PlaceTable::overlap`] / [`PlaceTable::covers`] are the relation
+//!   for CLAIMS (eg02, EGC's EG2): exclusivity (`[mem.tier0.excl]`,
+//!   D39's read and s168's nested call inside a `mut` argument), loans
+//!   (`[mem.tier0.borrow]`) and iteration (`[mem.iter.excl]`) ask these.
+//!   Two different literals are distinct and the path rule holds (1(a),
+//!   (b)); every other index pair is one place (item 2); and an index
+//!   step still meets a member step — 1(c) is the moves pass's alone,
+//!   because the reference interpreter reads a member (`xs.len`) as the
+//!   whole container and traps it under an element claim, and the
+//!   compiler stays no looser than the oracle.
 //! - The moves pass (`[mem.tier0.move]`) asks [`PlaceTable::overlap_elem`]
 //!   (*may* the two share storage: two different literals never do,
 //!   and an element is never its container's header) and
@@ -146,13 +152,14 @@ impl PlaceTable {
             .map(|(i, p)| (PlaceId(i as u32), p))
     }
 
-    /// `[mem.model.path.disjoint]`: do the two places conflict?
+    /// `[mem.model.path.disjoint]` under `[mem.model.place.elem]`, for
+    /// claims: may a claim on one place reach the other?
     pub fn overlap(&self, a: PlaceId, b: PlaceId) -> bool {
         overlap(self.get(a), self.get(b))
     }
 
-    /// Is `a` a (non-strict) prefix of `b` — does using `a` use all of
-    /// `b`?
+    /// Is `a` a (non-strict) prefix of `b` under the claim relation —
+    /// may using `a` use all of `b`?
     pub fn covers(&self, a: PlaceId, b: PlaceId) -> bool {
         covers(self.get(a), self.get(b))
     }
@@ -185,6 +192,19 @@ impl PlaceTable {
         covers_must(self.get(a), self.get(b), sym_ok)
     }
 
+    /// Do the two paths first part where a member step meets an index
+    /// step (`xs.len` against `xs[0]`)? The wording of a claim note:
+    /// 1(c)'s shape, kept one place for claims.
+    pub fn meets_member(&self, a: PlaceId, b: PlaceId) -> bool {
+        let (a, b) = (self.get(a), self.get(b));
+        a.base == b.base
+            && a.proj
+                .iter()
+                .zip(b.proj.iter())
+                .find(|(x, y)| x != y)
+                .is_some_and(|(x, y)| x.is_index() != y.is_index())
+    }
+
     /// Two paths that are a prefix pair AS SPELLED (every step of the
     /// shorter equal to the longer's): the wording of a conflict note,
     /// never a decision.
@@ -199,15 +219,14 @@ impl PlaceTable {
     }
 }
 
-/// The collapsed relation: every index step, of any spelling, is one
-/// place with every step at its position.
+/// The claim relation (EG2): two fields by name, two literals by
+/// value (1(a)/(b)); every other pair may be one place — two indices
+/// that are not both literals (item 2), and an index against a member
+/// step (1(c) is not taken for claims: see the module note).
 fn steps_match(a: &Proj, b: &Proj) -> bool {
     match (a, b) {
         (Proj::Field(x), Proj::Field(y)) => x == y,
-        // An index step conservatively matches anything: two index
-        // projections into the same base overlap, and an index
-        // projection overlaps any field path — until EG2 refines
-        // exclusivity, this is every consumer but the moves pass.
+        (Proj::Lit(x), Proj::Lit(y)) => x == y,
         _ => true,
     }
 }
@@ -253,7 +272,7 @@ pub fn covers_must(a: &Place, b: &Place, sym_ok: &dyn Fn(u32) -> bool) -> bool {
 }
 
 /// Two paths conflict iff one is a prefix of the other after identical
-/// projections.
+/// projections — identical under the claim relation.
 pub fn overlap(a: &Place, b: &Place) -> bool {
     if a.base != b.base {
         return false;
@@ -331,21 +350,56 @@ mod tests {
     const YES: &dyn Fn(u32) -> bool = &|_| true;
     const NO: &dyn Fn(u32) -> bool = &|_| false;
 
-    /// The collapsed relation is untouched by the new spellings: every
-    /// index step still matches every step (exclusivity until EG2).
+    /// EG2, the claim relation: two different literals are distinct,
+    /// the path rule holds, and every other index pair is one place.
     #[test]
-    fn every_index_spelling_still_collapses_for_overlap() {
+    fn claims_separate_literals_and_nothing_else() {
+        assert!(!overlap(&ix(0, vec![lit(0)]), &ix(0, vec![lit(1)])));
+        assert!(!covers(&ix(0, vec![lit(0)]), &ix(0, vec![lit(1)])));
+        assert!(overlap(&ix(0, vec![lit(1)]), &ix(0, vec![lit(1)])));
+        let s = |t: &str| Proj::Lit(Key::Str(t.into()));
+        assert!(!overlap(&ix(0, vec![s("a")]), &ix(0, vec![s("b")])));
+        // The path rule: `g[0][1]` and `g[1][0]`; `cs[0].n` and `cs[1].n`.
+        assert!(!overlap(
+            &ix(0, vec![lit(0), lit(1)]),
+            &ix(0, vec![lit(1), lit(0)])
+        ));
+        let n = Proj::Field("n".into());
+        assert!(!overlap(
+            &ix(0, vec![lit(0), n.clone()]),
+            &ix(0, vec![lit(1), n.clone()])
+        ));
+        // A prefix still conflicts: `g[0]` and `g[0][1]`, `xs` and `xs[0]`.
+        assert!(overlap(&ix(0, vec![lit(0)]), &ix(0, vec![lit(0), lit(1)])));
+        assert!(covers(&ix(0, vec![lit(0)]), &ix(0, vec![lit(0), lit(1)])));
+        assert!(overlap(&ix(0, vec![]), &ix(0, vec![lit(0)])));
+        // Item 2: any index that is not a literal is one place with
+        // every index, the same local included.
         for a in [lit(0), Proj::Sym(3), Proj::Opaque] {
-            for b in [
-                lit(1),
-                Proj::Sym(4),
-                Proj::Opaque,
-                Proj::Field("len".into()),
-            ] {
+            for b in [Proj::Sym(3), Proj::Sym(4), Proj::Opaque] {
                 assert!(overlap(&ix(0, vec![a.clone()]), &ix(0, vec![b.clone()])));
+                assert!(overlap(&ix(0, vec![b.clone()]), &ix(0, vec![a.clone()])));
                 assert!(covers(&ix(0, vec![a.clone()]), &ix(0, vec![b.clone()])));
             }
         }
+    }
+
+    /// 1(c) is the moves pass's alone: under a claim a member step still
+    /// meets an index step (lupin traps `f(mut xs[0], xs.len)`).
+    #[test]
+    fn a_member_still_meets_an_element_under_a_claim() {
+        let len = Proj::Field("len".into());
+        for a in [lit(0), Proj::Sym(1), Proj::Opaque] {
+            let (e, m) = (ix(0, vec![a]), ix(0, vec![len.clone()]));
+            assert!(overlap(&e, &m));
+            assert!(!overlap_elem(&e, &m));
+        }
+        let mut t = PlaceTable::new();
+        let e = t.intern(ix(0, vec![lit(0)]), true);
+        let m = t.intern(ix(0, vec![len.clone()]), true);
+        let other = t.intern(ix(0, vec![Proj::Sym(2)]), true);
+        assert!(t.meets_member(e, m) && t.meets_member(m, e));
+        assert!(!t.meets_member(e, other));
     }
 
     /// 1(a)/(b): two different literals never share storage; the same
