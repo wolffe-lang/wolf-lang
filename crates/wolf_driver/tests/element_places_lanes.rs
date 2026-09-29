@@ -637,24 +637,14 @@ fn a_run_time_index_does_not_move_into_a_claiming_call() {
 #[test]
 fn a_run_time_index_does_not_change_under_the_loop() {
     let lupin = runs("2 3\n");
-    every_lane(
-        "elem_dyn_iter_mut.lu",
-        verdict("fail(E1013)"),
-        lupin,
-        lupin,
-    );
+    every_lane("elem_dyn_iter_mut.lu", verdict("fail(E1013)"), lupin, lupin);
 }
 
 /// Item 2 under a loan: a store through `xs[i]` while `xs[0]` is lent.
 #[test]
 fn a_run_time_index_is_not_stored_under_a_loan() {
     let lupin = runs("7 9\n");
-    every_lane(
-        "elem_dyn_dyn_loan.lu",
-        verdict("fail(E1002)"),
-        lupin,
-        lupin,
-    );
+    every_lane("elem_dyn_dyn_loan.lu", verdict("fail(E1002)"), lupin, lupin);
 }
 
 /// A path and its prefix: `add2(mut g[0], mut g[0][1])`.
