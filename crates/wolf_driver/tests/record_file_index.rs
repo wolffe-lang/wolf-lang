@@ -49,7 +49,10 @@ fn record_in(cwd: Option<&Path>, entry: &Path, flag: &str) -> Option<serde_json:
         cmd.current_dir(dir);
     }
     let out = cmd.output().expect("wolf runs");
-    if lane_exit::environment_refusal(&out, &format!("wolf {flag}")) && flag == "--native" && out.stdout.is_empty() {
+    if lane_exit::environment_refusal(&out, &format!("wolf {flag}"))
+        && flag == "--native"
+        && out.stdout.is_empty()
+    {
         eprintln!(
             "SKIP: environment cannot run the native lane: {}",
             String::from_utf8_lossy(&out.stderr).trim()

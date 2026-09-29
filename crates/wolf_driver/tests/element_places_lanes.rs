@@ -92,7 +92,10 @@ fn lane(entry: &Path, flag: &str) -> Option<Obs> {
     // skips (eg02: wolf-lang#470's release ICE read as a skip before
     // this gate learned it; wolf-lang#471 moved the test to `lane_exit`).
     if flag != "--checked"
-        && lane_exit::environment_refusal(&out, &format!("conform-run {flag} on {}", entry.display()))
+        && lane_exit::environment_refusal(
+            &out,
+            &format!("conform-run {flag} on {}", entry.display()),
+        )
     {
         eprintln!(
             "SKIP: environment cannot run the {flag} lane: {}",

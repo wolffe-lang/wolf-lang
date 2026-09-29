@@ -46,7 +46,10 @@ fn an_exit_two_with_no_ice_is_an_environment_refusal() {
 #[test]
 fn any_other_exit_is_not_a_refusal() {
     for code in [0, 1, 3, 65, 101] {
-        assert!(!environment_refusal(&out(code, "wolf build: ICE: backend: x"), "test"));
+        assert!(!environment_refusal(
+            &out(code, "wolf build: ICE: backend: x"),
+            "test"
+        ));
     }
 }
 
@@ -54,7 +57,10 @@ fn any_other_exit_is_not_a_refusal() {
 #[should_panic(expected = "internal compiler error")]
 fn a_mid_end_ice_fails() {
     environment_refusal(
-        &out(2, "wolf build: ICE: mid-end broke the module\ntoken-linearity"),
+        &out(
+            2,
+            "wolf build: ICE: mid-end broke the module\ntoken-linearity",
+        ),
         "conform-run --release",
     );
 }
