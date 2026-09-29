@@ -3,7 +3,9 @@
 //! wolf-lang#460) adds the literal-index rows, item 3's must-revival
 //! rows and R3's failing twin; eg02 (EG2) adds element claims — each
 //! exclusivity, loan and iteration leg with two distinct literals, and
-//! its run-time-index twin that stays refused.
+//! its run-time-index twin that stays refused; eg02b (wolf-lang#472,
+//! ruled A) adds item 1(c) under a claim — a member read beside an
+//! element claim runs — and its whole-container twin that stays refused.
 //!
 //! Why a driver test beside the corpus rows (s171's lesson, wave 45):
 //! `cargo xtask corpus` runs a `phase: run` entry on the NATIVE lane
@@ -40,6 +42,15 @@ const PRE_MIRROR_LUPIN: &[&str] = &["0.1.40"];
 /// (wolffe-lang/wolf-interp#144). 0.1.41 is is56's head (`02433a0`),
 /// measured by eg01b: it fixes #141 and still copies.
 const PRE_MAP_MOVE_LUPIN: &[&str] = &["0.1.40", "0.1.41"];
+
+/// lupin releases that read a container MEMBER (`xs.len`) under an
+/// element claim as a read of the whole container, and so trap
+/// `bump(mut xs[0], xs.len)` where item 1(c) says the two are distinct
+/// (wolffe-lang/wolf-lang#472, ruled A on 2026-09-29; lupin's mirror is
+/// is59). Measured by eg02b on the published 0.1.40 and 0.1.41 archives.
+/// Any later version must run these rows: a pin bump that carries lupin
+/// forward without is59 goes red here by name.
+const PRE_MEMBER_LUPIN: &[&str] = &["0.1.40", "0.1.41"];
 
 #[derive(Debug)]
 struct Obs {
@@ -659,14 +670,44 @@ fn an_element_and_a_path_inside_it_stay_one_claim() {
     );
 }
 
-/// The documented conservatism: 1(c) holds for moves, but a member read
-/// under an element claim stays refused because lupin traps it (it reads
-/// `.len` as the whole container).
+/// Item 1(c) under a claim (eg02b, wolf-lang#472 ruled A):
+/// `bump(mut xs[0], xs.len)` — the member is the header, never the
+/// element. eg02 kept it E1002 because lupin traps it; lupin through
+/// `PRE_MEMBER_LUPIN` still does.
 #[test]
-fn a_member_read_under_an_element_claim_stays_refused() {
+fn a_member_read_under_an_element_claim_runs() {
+    let want = runs("4 3\n");
+    every_lane_pinned(
+        "elem_member_read_after_mut.lu",
+        PRE_MEMBER_LUPIN,
+        want,
+        verdict("trap(exclusivity)"),
+        want,
+    );
+}
+
+/// Item 1(c) under a claim, every leg: a member read before the claim,
+/// through a run-time index, one level down, the outer container's
+/// member, and inside a nested call.
+#[test]
+fn a_member_read_beside_an_element_claim_runs_on_every_leg() {
+    let want = runs("4 8 6 4 5\n");
+    every_lane_pinned(
+        "elem_member_read_under_claims.lu",
+        PRE_MEMBER_LUPIN,
+        want,
+        verdict("trap(exclusivity)"),
+        want,
+    );
+}
+
+/// The one-place twin: the whole container, not a member, read under an
+/// element claim — a prefix, refused as it always was.
+#[test]
+fn the_whole_container_read_under_an_element_claim_stays_refused() {
     let trap = verdict("trap(exclusivity)");
     every_lane(
-        "elem_member_read_after_mut.lu",
+        "elem_claim_whole_read.lu",
         verdict("fail(E1002)"),
         trap,
         trap,
