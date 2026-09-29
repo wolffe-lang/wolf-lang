@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="3 1\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.excl.1, mem.tier0.mode.take
+//!
+//! eg02 (EGC's EG2) — `read` against `take` per element: `keep(xs[0], take
+//! xs[1])` lends `xs[0]` to the call while `xs[1]` moves into it.
+//! Distinct literals: `3 1` on checked, native, release and lupin 0.1.41;
+//! E1002 on every wolfgang lane through 0.2.18.
+
+fn keep(a: List[int], take b: List[int]) -> int {
+    a.len + b.len
+}
+
+fn main() -> !int {
+    var xs = List[List[int]]()
+    (mut xs).push([1])
+    (mut xs).push([2, 3])
+    let n = keep(xs[0], take xs[1])
+    print("{n} {xs[0].len}")
+    0
+}

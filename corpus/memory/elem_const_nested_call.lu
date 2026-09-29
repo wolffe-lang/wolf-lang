@@ -1,0 +1,35 @@
+//! check: run(exit=0, stdout="2 5 65\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.order
+//!
+//! eg02 (EGC's EG2) — s168's second leg per element: `put(mut xs[0],
+//! grow(mut xs[1]))`. The nested call is evaluated inside the claim on
+//! `xs[0]` and claims `xs[1]`, a distinct literal. `grow` pushes 64 times,
+//! so `xs[1]`'s own buffer is reallocated while the callee holds the
+//! address of `xs[0]` — which lives in the container's buffer, untouched.
+//! `2 5 65` on checked, native, release and lupin 0.1.41; E1002 on every
+//! wolfgang lane through 0.2.18. `mut_elem_nested_call.lu` keeps a claim
+//! on the whole container refused; `elem_dyn_nested_call.lu` a run-time
+//! index.
+
+fn grow(mut ys: List[int]) -> int {
+    var i = 0
+    while i < 64 {
+        (mut ys).push(i)
+        i = i + 1
+    }
+    5
+}
+
+fn put(mut a: List[int], n: int) {
+    (mut a).push(n)
+}
+
+fn main() -> !int {
+    var xs = List[List[int]]()
+    (mut xs).push([1])
+    (mut xs).push([2])
+    put(mut xs[0], grow(mut xs[1]))
+    print("{xs[0].len} {xs[0][1]} {xs[1].len}")
+    0
+}

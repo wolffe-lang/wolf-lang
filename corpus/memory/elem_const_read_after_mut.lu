@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="3 2\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.order
+//!
+//! eg02 (EGC's EG2) — D39's order rule per element: `bump(mut xs[0],
+//! xs[1])`. The `Copy` read of `xs[1]` is evaluated inside the claim on
+//! `xs[0]`, and the two are distinct literals, so the read does not
+//! conflict. `3 2` on checked, native, release and lupin 0.1.41; E1002 on
+//! every wolfgang lane through 0.2.18. Its one-place twin is
+//! `elem_dyn_read_after_mut.lu`.
+
+fn bump(mut a: int, n: int) {
+    a = a + n
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    bump(mut xs[0], xs[1])
+    print("{xs[0]} {xs[1]}")
+    0
+}

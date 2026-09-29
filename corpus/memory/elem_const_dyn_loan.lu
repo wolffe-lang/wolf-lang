@@ -1,0 +1,34 @@
+//! check: run(exit=0, stdout="7 9\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.borrow, mem.dyn.unsize
+//!
+//! eg02 (EGC's EG2) — `[mem.tier0.borrow]` per element: `let o = xs[0] as
+//! dyn Draw` is a shared loan of `xs[0]` (D47), live until `o.draw()`; the
+//! store `xs[1] = Dot { x: 9 }` lands inside it at a distinct literal, and
+//! a list store never moves the buffer. `7 9` on checked, native, release
+//! and lupin 0.1.41; E1002 on every wolfgang lane through 0.2.18. Its
+//! one-place twin is `elem_dyn_dyn_loan.lu`.
+
+trait Draw {
+    fn draw(self) -> int
+}
+
+struct Dot {
+    x: int,
+}
+
+impl Draw for Dot {
+    fn draw(self) -> int {
+        self.x
+    }
+}
+
+fn main() -> !int {
+    var xs = List[Dot]()
+    (mut xs).push(Dot { x: 7 })
+    (mut xs).push(Dot { x: 8 })
+    let o = xs[0] as dyn Draw
+    xs[1] = Dot { x: 9 }
+    print("{o.draw()} {xs[1].x}")
+    0
+}

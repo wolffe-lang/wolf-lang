@@ -1,0 +1,22 @@
+//! check: run(exit=0, stdout="2 3 2\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.iter.excl
+//!
+//! eg02 (EGC's EG2) — `[mem.iter.excl]` per element: `for x in xs[0] {
+//! (mut xs[1]).push(x) }`. The loop holds a read claim on `xs[0]` for its
+//! extent; the push mutates `xs[1]`, a distinct literal, and reallocates
+//! only `xs[1]`'s buffer. `2 3 2` on checked, native, release and lupin
+//! 0.1.41; E1013 on every wolfgang lane through 0.2.18. Its one-place twin
+//! is `elem_dyn_iter_mut.lu`; `list_mutate_while_iter.lu` keeps a push on
+//! the iterated container itself refused.
+
+fn main() -> !int {
+    var xs = List[List[int]]()
+    (mut xs).push([1, 2])
+    (mut xs).push([10])
+    for x in xs[0] {
+        (mut xs[1]).push(x)
+    }
+    print("{xs[0].len} {xs[1].len} {xs[1][2]}")
+    0
+}

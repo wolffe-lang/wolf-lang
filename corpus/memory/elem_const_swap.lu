@@ -1,0 +1,22 @@
+//! check: run(exit=0, stdout="2 1 3\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.excl.1, mem.tier0.excl.2
+//!
+//! eg02 (EGC's EG2) — the campaign's headline shape: `swap(mut xs[0], mut
+//! xs[1])`. `swap` is an ordinary function here (the prelude has none).
+//! Two different literals, two disjoint claims: `2 1 3` on checked,
+//! native, release and lupin 0.1.41. Through 0.2.18 it was E1002 on every
+//! wolfgang lane.
+
+fn swap(mut a: int, mut b: int) {
+    let t = a
+    a = b
+    b = t
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    swap(mut xs[0], mut xs[1])
+    print("{xs[0]} {xs[1]} {xs[2]}")
+    0
+}

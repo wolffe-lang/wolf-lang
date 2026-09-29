@@ -1,0 +1,28 @@
+//! check: run(exit=0, stdout="2 12\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.path.disjoint
+//!
+//! eg02 (EGC's EG2) — the path rule through a field: `add2(mut cs[0].n,
+//! mut cs[1].n)`. `cs[0].n` and `cs[1].n` first differ at the index step,
+//! and the literals differ, so the claims are disjoint although the field
+//! is the same. `2 12` on checked, native, release and lupin 0.1.41; E1002
+//! on every wolfgang lane through 0.2.18.
+
+struct Cell {
+    n: int,
+    tag: int,
+}
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn main() -> !int {
+    var cs = List[Cell]()
+    (mut cs).push(Cell { n: 1, tag: 0 })
+    (mut cs).push(Cell { n: 2, tag: 0 })
+    add2(mut cs[0].n, mut cs[1].n)
+    print("{cs[0].n} {cs[1].n}")
+    0
+}

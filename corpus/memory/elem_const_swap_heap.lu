@@ -1,0 +1,33 @@
+//! check: run(exit=0, stdout="2 1 1 2\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.excl.1, mem.tier0.excl.2
+//!
+//! eg02 (EGC's EG2) — `elem_const_swap.lu` over whole struct elements that
+//! own a heap list: the callee swaps a field and pushes into BOTH lists
+//! through the two claims. Each push may reallocate its own element's
+//! buffer; neither can reach the container's, so the two element
+//! addresses the callee holds stay valid. `2 1 1 2` on checked, native,
+//! release and lupin 0.1.41; E1002 on every wolfgang lane through 0.2.18.
+
+struct Cell {
+    n: int,
+    vs: List[int],
+}
+
+fn swap(mut a: Cell, mut b: Cell) {
+    let t = a.n
+    a.n = b.n
+    b.n = t
+    (mut a.vs).push(1)
+    (mut b.vs).push(2)
+    (mut b.vs).push(3)
+}
+
+fn main() -> !int {
+    var cs = List[Cell]()
+    (mut cs).push(Cell { n: 1, vs: [] })
+    (mut cs).push(Cell { n: 2, vs: [] })
+    swap(mut cs[0], mut cs[1])
+    print("{cs[0].n} {cs[1].n} {cs[0].vs.len} {cs[1].vs.len}")
+    0
+}
