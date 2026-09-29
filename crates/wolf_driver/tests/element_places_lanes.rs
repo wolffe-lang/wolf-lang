@@ -599,16 +599,28 @@ fn a_nested_call_may_not_claim_a_run_time_index() {
     );
 }
 
-/// Item 2 under `mut` against `take`: `put(mut xs[0], take xs[i])`.
+/// Item 2 under `mut` against `take`: `put(mut xs[0], take xs[i])` —
+/// E1001 (the claim's use may reach the moved element) and E1002 (the
+/// element moves while the claim holds), on every wolfgang lane.
 #[test]
 fn a_run_time_index_does_not_move_into_a_claiming_call() {
     let lupin = runs("2\n");
     every_lane(
         "elem_dyn_take_while_mut.lu",
-        verdict("fail(E1002)"),
+        verdict("fail(E1001)"),
         lupin,
         lupin,
     );
+    let entry = corpus("elem_dyn_take_while_mut.lu");
+    for flag in ["--checked", "--native", "--release"] {
+        if let Some(obs) = lane(&entry, flag) {
+            assert!(
+                obs.codes.iter().any(|c| c == "E1002"),
+                "{flag}: the exclusivity half is reported too ({:?})",
+                obs.codes
+            );
+        }
+    }
 }
 
 /// Item 2 under iteration: iterate `xs[0]`, push into `xs[i]`.
