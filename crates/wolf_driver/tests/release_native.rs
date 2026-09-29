@@ -12,6 +12,8 @@
 //! Off-target (or without clang/cc) the lanes skip loudly; the linux
 //! CI lane provisions both, so a silent skip there is a lane bug.
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -67,7 +69,7 @@ fn lane(file: &Path, flag: &str) -> Option<(String, String)> {
         cmd.arg("--std-root").arg(root);
     }
     let out = cmd.output().expect("wolf runs");
-    if out.status.code() == Some(2) {
+    if lane_exit::environment_refusal(&out, &format!("wolf {flag}")) {
         eprintln!(
             "SKIP: environment cannot run {flag} on {}: {}",
             file.display(),
