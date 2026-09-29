@@ -158,6 +158,31 @@ fn calls_itself(f: &Function) -> bool {
     })
 }
 
+/// wolf-lang#470 (found by eg02): do two of the callee's token formals
+/// bind to ONE caller region at this site? `add2(mut r.a, mut r.b)` off
+/// a `mut` parameter does — both fields live in the parameter's slot —
+/// and so does every element claim EG2 admits (`add2(mut xs[0], mut
+/// xs[1])`: two addresses in one list buffer). The places are disjoint
+/// (the mem tier proved it), so the out-of-line call is sound; but the
+/// callee threads one token chain per formal, and a splice would bind
+/// both chains to the caller's single token, which the callee's stores
+/// then consume twice (token linearity). Such a call stays a call.
+fn formals_share_a_region(m: &Module, callee: &Function, caller: &Function, call: Inst) -> bool {
+    let entry = callee.entry().expect("verified callee");
+    let cargs = caller.vpool.get(caller.insts[call].args);
+    let mut seen: HashSet<RegionId> = HashSet::new();
+    for (&p, &a) in callee.block_params(entry).iter().zip(&cargs) {
+        if let (TypeData::Mem(_), TypeData::Mem(ra)) = (
+            m.types.get(callee.value_ty(p)),
+            m.types.get(caller.value_ty(a)),
+        ) && !seen.insert(*ra)
+        {
+            return true;
+        }
+    }
+    false
+}
+
 /// One prepared call-site splice.
 struct Plan {
     block: Block,
@@ -240,6 +265,9 @@ pub(crate) fn run(
             }
             if forwarder && calls_itself(callee) {
                 continue; // s150: a forwarder never unrolls a recursion
+            }
+            if formals_share_a_region(m, callee, caller, inst) {
+                continue; // wolf-lang#470: two callee chains, one caller chain
             }
             if decide(
                 m,
