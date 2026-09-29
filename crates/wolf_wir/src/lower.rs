@@ -17186,10 +17186,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// copy. `None` means the place walk proved a trap.
     ///
     /// The exclusivity that makes an element lend sound is the mem
-    /// tier's, not this one's: `[mem.model.place]` collapses every
-    /// element of a container to ONE opaque place, so any second
-    /// access path through the same base inside this call surface is
-    /// already E1002. See `crates/wolf_mem/src/place.rs`.
+    /// tier's, not this one's: under `[mem.model.place.elem]` (eg02,
+    /// EG2) a second claim through the same container inside this call
+    /// surface is E1002 unless it provably names a DIFFERENT element
+    /// (two different literals, `add2(mut xs[0], mut xs[1])`) — two
+    /// disjoint addresses in one buffer, neither able to reach the
+    /// header. Such lends share one caller region, which is why the
+    /// inliner keeps their call out of line (wolf-lang#470). See
+    /// `crates/wolf_mem/src/place.rs`.
     fn lower_mut_arg(&mut self, vexpr: &'t GreenNode) -> R<Option<MutArg>> {
         self.check_capture_write(vexpr, "lending `mut`")?;
         if vexpr.kind == SyntaxKind::PathExpr {
@@ -17248,9 +17252,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             PlaceLoc::Addr { ptr, region } => Ok(Some(MutArg::Relend { ptr, region })),
             // The element address is minted at the lend, which IS the
             // last moment: the callee holds it for the whole call, and
-            // nothing else may reach the container while it does —
-            // that is the exclusivity the mem tier proved, not an
-            // assumption made here.
+            // nothing else may reach the container — or this element —
+            // while it does; that is the exclusivity the mem tier
+            // proved, not an assumption made here.
             PlaceLoc::Elem { .. } | PlaceLoc::Slot { .. } => {
                 let (ptr, region) = self.elem_addr(&p.loc);
                 Ok(Some(MutArg::Relend { ptr, region }))
