@@ -76,9 +76,19 @@ fn lane(entry: &Path, flag: &str) -> Option<Obs> {
         .output()
         .expect("wolf runs");
     if out.status.code() == Some(2) && flag != "--checked" {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        // An internal compiler error also exits 2; it is a failure, never
+        // an environment skip (eg02: wolf-lang#470's release ICE read as
+        // a skip here before this line).
+        assert!(
+            !stderr.contains("ICE"),
+            "conform-run {flag} hit an internal compiler error on {}: {}",
+            entry.display(),
+            stderr.trim()
+        );
         eprintln!(
             "SKIP: environment cannot run the {flag} lane: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
+            stderr.trim()
         );
         return None;
     }
