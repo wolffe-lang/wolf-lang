@@ -23,6 +23,8 @@
 //! returned an error out of `main` exits with, and the two were
 //! indistinguishable at the process level until the clause ruled.
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -76,9 +78,10 @@ fn stdout(out: &Output) -> String {
 }
 
 /// Exit 2 from a build = environment (no cc/rt lib): skip loudly,
-/// exactly like the other native suites.
+/// exactly like the other native suites — unless it names an internal
+/// compiler error, which fails the test (wolf-lang#471, `lane_exit`).
 fn env_skip(out: &Output, what: &str) -> bool {
-    if out.status.code() == Some(2) {
+    if lane_exit::environment_refusal(out, what) {
         eprintln!("SKIP {what}: {}", stderr(out).trim());
         return true;
     }
