@@ -25,6 +25,8 @@
 //! Hosts the native tier refuses skip loudly at runtime (the s59
 //! pattern: these tests start passing the moment a gate lifts).
 
+mod lane_exit;
+
 use std::path::Path;
 use std::process::Command;
 
@@ -71,7 +73,7 @@ fn native_tier(file: &str, seed: Option<u64>, midend: bool, release: bool) -> Op
         cmd.arg(format!("--seed={s}"));
     }
     let out = cmd.output().expect("wolf runs");
-    if out.status.code() == Some(2) {
+    if lane_exit::environment_refusal(&out, "wolf conform-run") {
         eprintln!(
             "SKIP: environment cannot run the native lane: {}",
             String::from_utf8_lossy(&out.stderr).trim()
@@ -483,7 +485,7 @@ fn wolf_test_schedules_explores_a_native_body() {
         .expect("wolf test runs");
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
-    if stderr.contains("cannot") && out.status.code() == Some(2) {
+    if lane_exit::environment_refusal(&out, "wolf test") && stderr.contains("cannot") {
         eprintln!("SKIP: environment cannot run the native test lane");
         return;
     }
