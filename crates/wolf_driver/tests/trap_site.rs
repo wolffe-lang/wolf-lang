@@ -25,6 +25,8 @@
 //! executes for real; elsewhere the release steps skip by the tier's
 //! named `release tier targets …` refusal.
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -248,7 +250,7 @@ fn conform_run_verdicts_are_unchanged_by_the_site_line() {
             .args([flag, "--json"])
             .output()
             .expect("wolf runs");
-        if out.status.code() == Some(2) {
+        if lane_exit::environment_refusal(&out, &format!("wolf {flag}")) {
             eprintln!(
                 "SKIP: environment cannot run {flag}: {}",
                 String::from_utf8_lossy(&out.stderr).trim()
