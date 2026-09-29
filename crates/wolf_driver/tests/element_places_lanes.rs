@@ -27,6 +27,8 @@
 //! wolfgang lane that starts RUNNING one of them has made a run-time
 //! index distinct without a proof rule — a regression, not progress.
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -86,20 +88,15 @@ fn lane(entry: &Path, flag: &str) -> Option<Obs> {
         .arg("--json")
         .output()
         .expect("wolf runs");
-    if out.status.code() == Some(2) && flag != "--checked" {
-        let stderr = String::from_utf8_lossy(&out.stderr);
-        // An internal compiler error also exits 2; it is a failure, never
-        // an environment skip (eg02: wolf-lang#470's release ICE read as
-        // a skip here before this line).
-        assert!(
-            !stderr.contains("ICE"),
-            "conform-run {flag} hit an internal compiler error on {}: {}",
-            entry.display(),
-            stderr.trim()
-        );
+    // An internal compiler error also exits 2; it fails here, never
+    // skips (eg02: wolf-lang#470's release ICE read as a skip before
+    // this gate learned it; wolf-lang#471 moved the test to `lane_exit`).
+    if flag != "--checked"
+        && lane_exit::environment_refusal(&out, &format!("conform-run {flag} on {}", entry.display()))
+    {
         eprintln!(
             "SKIP: environment cannot run the {flag} lane: {}",
-            stderr.trim()
+            String::from_utf8_lossy(&out.stderr).trim()
         );
         return None;
     }
