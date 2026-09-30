@@ -1,0 +1,20 @@
+//! check: fail(E1014)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.read, gram.item.fn
+//!
+//! s186 (wolf-lang#466) — a nested fn's parameter without a mode is
+//! `read`, as a module fn's is: writing through it is E1014. Through
+//! 0.2.19 the parameter was a plain local, and native and release
+//! printed `2`: the write reached the caller's list. lupin 0.1.42 runs
+//! it and prints `1` (it copies the argument); the refusal is the
+//! conservative side of that disagreement.
+
+fn main() -> !int {
+    fn f(xs: List[int]) {
+        (mut xs).push(9)  // ERROR E1014: xs is read for the whole call
+    }
+    var xs = [1]
+    f(xs)
+    print("{xs.len}")
+    0
+}

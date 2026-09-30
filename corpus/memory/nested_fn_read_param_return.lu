@@ -1,0 +1,21 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.read, mem.tier0.excl.1, gram.item.fn
+//!
+//! s186 (wolf-lang#466) — a nested fn's `read` parameter is LENT
+//! (wolf-lang#366's rule, `[mem.tier0.mode.read]`): returning it hands
+//! the caller a second live path to its own list. Through 0.2.19 native
+//! and release printed `2 2` (the push through `ys` reached `xs`) where
+//! lupin 0.1.42 prints `1 2`. E1002 on every wolfgang lane now; the fix
+//! is `copy xs` or a `take` parameter.
+
+fn main() -> !int {
+    fn f(xs: List[int]) -> List[int] {
+        xs  // ERROR E1002: the caller's value, returned while the caller holds it
+    }
+    var xs = [1]
+    var ys = f(xs)
+    (mut ys).push(2)
+    print("{xs.len} {ys.len}")
+    0
+}

@@ -1,0 +1,22 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.mut, mem.tier0.move.1
+//!
+//! s186 (wolf-lang#466, s184's find) — once the call is legal, the
+//! nested fn's `mut` parameter is held to `[mem.tier0.mode.mut]`'s
+//! at-return sentence exactly as a module fn's is (#464): moved out
+//! and never stored back, it is E1001 at the move, checked at the
+//! NESTED fn's own exit. Before s186 the parameter was lowered as a
+//! plain local with no mode, so nothing could see it (the call was
+//! E1007 first).
+
+fn main() -> !int {
+    fn f(mut xs: List[int]) {
+        var t = move xs  // ERROR E1001: xs returns to the caller moved away
+        (mut t).push(9)
+    }
+    var xs = [1]
+    f(mut xs)
+    print("{xs.len}")
+    0
+}
