@@ -154,12 +154,7 @@ fn every_lane_says(entry: &Path, want: &str, lupin_pre_mirror: &[(&str, &str)]) 
             "{flag} verdict on {}",
             entry.display()
         );
-        assert_eq!(
-            obs.stdout,
-            want,
-            "the {flag} lane on {}",
-            entry.display()
-        );
+        assert_eq!(obs.stdout, want, "the {flag} lane on {}", entry.display());
     }
     if let Some(lupin) = lupin_says(entry) {
         assert_eq!(
@@ -187,7 +182,7 @@ fn every_lane_says(entry: &Path, want: &str, lupin_pre_mirror: &[(&str, &str)]) 
 /// the outer index of a slice's receiver runs more than once
 /// (wolffe-lang/wolf-interp#157). Pinned by version so a newer lupin
 /// that still differs reds by name (s180's design).
-const LUPIN_0_1_42_INDEXED_BASE: &str = 
+const LUPIN_0_1_42_INDEXED_BASE: &str =
     "let\ngi\ngi\nlo\nhi\n2\nlen\ngi\ngi\ngi\nlo\nhi\n2\nhole\ngi\ngi\nlo\nhi\n2\n";
 
 /// is60's c14/c18/c19: `let s = xs[lo()..hi()]` (the control),

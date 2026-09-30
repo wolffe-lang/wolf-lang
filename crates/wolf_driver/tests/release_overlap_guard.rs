@@ -187,7 +187,10 @@ fn release_module_dump(src: &Path, out: &Path) -> Option<String> {
         .expect("wolf runs");
     let stderr = String::from_utf8_lossy(&run.stderr).to_string();
     if lane_exit::environment_refusal(&run, "wolf build --release") {
-        eprintln!("SKIP: environment cannot build the release tier: {}", stderr.trim());
+        eprintln!(
+            "SKIP: environment cannot build the release tier: {}",
+            stderr.trim()
+        );
         return None;
     }
     if !run.status.success() && stderr.contains("release tier targets") {
