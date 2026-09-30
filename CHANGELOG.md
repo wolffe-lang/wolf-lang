@@ -44,6 +44,48 @@
   laid out after the last in-place `push`. With #146 planted back, the
   behavioural test stays green and the structural test goes red.
 
+### Fixed
+
+- **A read or write of a `mut`-claimed place inside a later argument
+  is E1002 (s186, wolf-lang#476).** The arguments after a `mut`
+  argument are evaluated inside its claim (`[mem.tier0.excl.1]`,
+  `[mem.model.order]`). The direct forms were always refused
+  (`both(mut xs[0], xs)`, `f(mut a, a.x)`), and so was a nested call's
+  own `mut`/`take` (s168); a read or a write one level down was not.
+  Through 0.2.19 these ran on checked, native and release while lupin
+  traps `exclusivity`: a whole read lend one call down
+  (`bump(mut xs[0], total(xs))`, `grow(mut xs, total(xs))`), a
+  whole-reading receiver (`bump(mut xs[0], xs.get(1) else 9)`), the
+  header under a whole claim (`grow(mut xs, xs.count())`), a `Copy`
+  read (`bump(mut xs[0], id(xs[0]))`), an operand (`bump(mut a,
+  a + 1)`), a `Map`. And one was a wrong answer: `bump(mut a, { a = 5;
+  1 })` printed `6` on checked and `2` on native and release. Each is
+  E1002 now, one report per access. What keeps running: a different
+  element (`id(xs[1])`), the header beside an element claim
+  (`id(xs.count())`, #474), a read before the claim begins
+  (`bump2(total(xs), mut xs[0])`), a disjoint field, a receiver claim
+  (two-phase, unchanged), and a closure body (it does not run where it
+  is written; its capture is the access). If your program is refused,
+  compute the value into a local before the call.
+- **A nested fn's `mut` and `take` parameters are real (s186,
+  wolf-lang#466).** `f(mut xs)` against a nested `fn f(mut xs: …)` was
+  E1007 ("takes this parameter as plain `read`"), and `f(xs)` compiled —
+  and on native and release the callee grew the caller's list through
+  it. The call site now spells the mode the nested fn declares (E1007
+  when omitted), the call runs on native and release with the callee's
+  writes reaching the caller (an `int`, an element, a list grown or
+  replaced, a `mut` parameter re-lent), and the memory checker holds the
+  nested body to its modes: a `mut` parameter left moved-out at the
+  nested fn's return is E1001 (#464's rule), a write through a `read`
+  parameter is E1014, and a `read` parameter returned is E1002
+  (wolf-lang#366's rule) — the last two ran through 0.2.19 with the write
+  reaching the caller where lupin 0.1.42 does not. A nested fn with a
+  moded parameter is called by name only: used as a value (`var g = f`,
+  passed to a higher-order fn) it is refused by name, since a fn type
+  carries no modes. The checked executor still declines every nested
+  fn (the #12 family), and lupin 0.1.42 declines one with a moded
+  parameter.
+
 ## 0.2.19 — 2026-09-30
 
 THE NINETEENTH. `mut` claims become element-granular (EGC's EG2):
