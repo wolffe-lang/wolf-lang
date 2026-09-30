@@ -326,7 +326,10 @@ fn a_nested_literal_moves_through_the_inner_shorthand() {
 fn a_struct_local_moves_through_the_outer_shorthand() {
     shorthand_is_longhand(
         "field_shorthand_nested_bound.lu",
-        &[("W { xs }", "W { xs: xs }"), ("O { w, n }", "O { w: w, n: n }")],
+        &[
+            ("W { xs }", "W { xs: xs }"),
+            ("O { w, n }", "O { w: w, n: n }"),
+        ],
         E1001,
         &[("0.1.42", ("exit(0)", "1 2 5\n"))],
     );
