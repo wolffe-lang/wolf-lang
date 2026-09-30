@@ -400,3 +400,169 @@ fn dead_mut_parameter_still_warns_without_a_mode_error() {
     assert_eq!(code, 0, "a warning never fails a default build:\n{err}");
     assert!(err.contains("warning[W1002]"), "the lint fires:\n{err}");
 }
+
+// ------------------------------------ s185: wolf-lang#469, deny-warnings --
+//
+// Under `--deny-warnings` W1002 is an error, and every door stopped on it
+// at the RESOLVE rung — before the mem rung whose E1001 retires it
+// (#464) or the typecheck rung whose E0804 does (#325). The build said
+// "never written" and "drop the `mut`", the retired wrong diagnosis,
+// exactly where a project denies warnings (bu10 found it in boreutils).
+// A promoted W1002 now waits for the mem rung; one nothing retired
+// still rejects the program, at `resolve`.
+
+/// #464's shape, the refusal alone.
+const MOVED_OUT: &str = "fn f(mut xs: List[int]) {\n    var t = move xs\n    (mut t).push(9)\n}\n\n\
+     fn main() -> !int {\n    var xs = [1]\n    f(mut xs)\n    xs.len\n}\n";
+
+/// A `mut` parameter nothing writes: W1002 stands.
+const DEAD_MUT: &str = "fn offset(mut base: int, delta: int) -> int {\n    base + delta\n}\n\n\
+     fn main() -> !int {\n    var b = 1\n    offset(mut b, 2) - 3\n}\n";
+
+/// `conform-run <main.lu> --json <extra>`'s record.
+fn conform_record(dir: &Path, extra: &[&str]) -> serde_json::Value {
+    let out = Command::new(wolf())
+        .arg("conform-run")
+        .arg(dir.join("main.lu"))
+        .arg("--json")
+        .args(extra)
+        .output()
+        .expect("run conform-run");
+    assert!(
+        out.status.success(),
+        "[proto.invoke.exit]: a record means exit 0, stderr:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    serde_json::from_slice(&out.stdout).expect("observation record parses")
+}
+
+/// The codes a record's diagnostics carry, in order.
+fn record_codes(rec: &serde_json::Value) -> Vec<String> {
+    rec["diagnostics"]
+        .as_array()
+        .map(|ds| {
+            ds.iter()
+                .filter_map(|d| d["code"].as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// `wolf test <main.lu> <extra>`: (exit code, stdout, stderr).
+fn wolf_test(dir: &Path, extra: &[&str]) -> (i32, String, String) {
+    let out = Command::new(wolf())
+        .arg("test")
+        .arg(dir.join("main.lu"))
+        .args(extra)
+        .output()
+        .expect("run wolf test");
+    (
+        out.status.code().unwrap_or(-1),
+        String::from_utf8_lossy(&out.stdout).into_owned(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+/// `wolf build --deny-warnings` on #464's shape: E1001, and no W1002.
+#[test]
+fn a_mut_parameter_left_moved_out_is_e1001_under_deny_warnings() {
+    let dir = fixture("deny-moveout-build", MOVED_OUT);
+    let (code, err) = build_wir(&dir, &["--deny-warnings"]);
+    assert_eq!(code, 2, "the refusal stops the build:\n{err}");
+    assert!(err.contains("error[E1001]"), "the refusal renders:\n{err}");
+    assert!(
+        !err.contains("W1002"),
+        "the retired lint does not come back under --deny-warnings:\n{err}"
+    );
+    assert!(
+        !err.contains("drop the `mut`"),
+        "no drop-the-`mut` help beside the store-back refusal:\n{err}"
+    );
+}
+
+/// `conform-run --deny-warnings` on #464's shape: `fail(E1001)` at
+/// `mem`, the rung that found it, and no W1002 in the record.
+#[test]
+fn conform_run_reports_e1001_not_w1002_under_deny_warnings() {
+    let dir = fixture("deny-moveout-record", MOVED_OUT);
+    let plain = conform_record(&dir, &[]);
+    let denied = conform_record(&dir, &["--deny-warnings"]);
+    for rec in [&plain, &denied] {
+        assert_eq!(rec["verdict"], "fail(E1001)", "{rec}");
+        assert_eq!(rec["phase_reached"], "mem", "{rec}");
+        assert_eq!(record_codes(rec), vec!["E1001".to_string()], "{rec}");
+    }
+}
+
+/// `wolf test --deny-warnings` on #464's shape: rejected on E1001.
+#[test]
+fn wolf_test_reports_e1001_not_w1002_under_deny_warnings() {
+    let dir = fixture("deny-moveout-test", MOVED_OUT);
+    let (code, out, err) = wolf_test(&dir, &["--deny-warnings"]);
+    assert_eq!(code, 1, "a rejected file fails the run:\n{out}\n{err}");
+    assert!(out.contains("REJECTED"), "the file is rejected:\n{out}");
+    assert!(err.contains("error[E1001]"), "the refusal renders:\n{err}");
+    assert!(!err.contains("W1002"), "no retired lint:\n{err}");
+}
+
+/// wolf-lang#325's shape under `--deny-warnings`: E0804 at typecheck
+/// retires W1002 there too, on the build and in the record.
+#[test]
+fn a_mode_error_retires_the_lint_under_deny_warnings() {
+    let dir = fixture(
+        "deny-mode-error",
+        "fn take_last[T](mut xs: List[T]) -> T ! {none} {\n    xs.pop()\n}\n\n\
+         fn main() -> !int {\n    var xs = List[int]()\n    (mut xs).push(1)\n    \
+         take_last(mut xs) else 0\n}\n",
+    );
+    let (code, err) = build_wir(&dir, &["--deny-warnings"]);
+    assert_eq!(code, 2, "the mode error stops the build:\n{err}");
+    assert!(err.contains("error[E0804]"), "the mode error renders:\n{err}");
+    assert!(!err.contains("W1002"), "no retired lint:\n{err}");
+    let rec = conform_record(&dir, &["--deny-warnings"]);
+    assert_eq!(rec["verdict"], "fail(E0804)", "{rec}");
+    assert_eq!(rec["phase_reached"], "typecheck", "{rec}");
+    assert!(
+        !record_codes(&rec).iter().any(|c| c == "W1002"),
+        "no retired lint in the record: {rec}"
+    );
+}
+
+/// The control: a `mut` parameter nothing writes is still refused under
+/// `--deny-warnings` on every door, as W1002, and the record still
+/// names `resolve`, the rung whose analysis found it.
+#[test]
+fn a_dead_mut_parameter_still_fails_under_deny_warnings() {
+    let dir = fixture("deny-dead-mut", DEAD_MUT);
+    let (code, err) = build_wir(&dir, &["--deny-warnings"]);
+    assert_eq!(code, 2, "the promoted lint fails the build:\n{err}");
+    assert!(err.contains("error[W1002]"), "promoted to error:\n{err}");
+    let rec = conform_record(&dir, &["--deny-warnings"]);
+    assert_eq!(rec["verdict"], "fail(W1002)", "{rec}");
+    assert_eq!(rec["phase_reached"], "resolve", "{rec}");
+    let rec = conform_record(&dir, &["--deny-warnings", "--phase=resolve"]);
+    assert_eq!(rec["verdict"], "fail(W1002)", "{rec}");
+    let (code, out, err) = wolf_test(&dir, &["--deny-warnings"]);
+    assert_eq!(code, 1, "rejected:\n{out}\n{err}");
+    assert!(out.contains("REJECTED"), "the file is rejected:\n{out}");
+    assert!(err.contains("error[W1002]"), "promoted to error:\n{err}");
+}
+
+/// The second control: a W1002 nothing retires, beside a later rung's
+/// own refusal, is still the verdict at `resolve` — the earliest rung
+/// that would have stopped before #469's deferral stops the record now.
+#[test]
+fn a_standing_w1002_beside_a_later_refusal_keeps_the_resolve_verdict() {
+    let dir = fixture(
+        "deny-dead-mut-and-moveout",
+        "fn offset(mut base: int, delta: int) -> int {\n    base + delta\n}\n\n\
+         fn main() -> !int {\n    var b = 1\n    var xs = [[1]]\n    \
+         let a = move xs[0]\n    let c = xs\n    offset(mut b, 2) - 3 + a.len - c.len\n}\n",
+    );
+    let rec = conform_record(&dir, &["--deny-warnings"]);
+    assert_eq!(rec["verdict"], "fail(W1002)", "{rec}");
+    assert_eq!(rec["phase_reached"], "resolve", "{rec}");
+    let (code, err) = build_wir(&dir, &["--deny-warnings"]);
+    assert_eq!(code, 2, "refused:\n{err}");
+    assert!(err.contains("error[W1002]"), "the lint stands:\n{err}");
+}
