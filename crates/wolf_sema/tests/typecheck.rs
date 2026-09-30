@@ -814,10 +814,7 @@ fn a_moded_nested_fn_is_called_by_name_only() {
         .flat_map(|(_, c)| c.params.iter().map(|p| p.mode))
         .collect();
     assert_eq!(modes, [Some(wolf_ast::ParamMode::Mut)], "the call surface");
-    for value_use in [
-        "    let g = inc\n",
-        "    if apply(inc, 1) {}\n",
-    ] {
+    for value_use in ["    let g = inc\n", "    if apply(inc, 1) {}\n"] {
         let tc = check_one(&format!(
             "fn apply(f: fn(int), v: int) -> bool {{ true }}\n\
              fn main() -> !int {{\n    fn inc(mut a: int) {{ a = a + 1 }}\n{value_use}    0\n}}\n"
