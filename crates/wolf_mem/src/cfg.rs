@@ -309,6 +309,11 @@ pub struct Cfg {
     /// moves, s128 #173): the `copy`-at-the-move fix-it does not parse
     /// there, so E1001 skips it.
     pub pattern_moves: Vec<wolf_span::Span>,
+    /// wolf-lang#466 (s186): each nested named fn's own exit block and
+    /// its parameter locals. The nested body is walked inline, so its
+    /// `mut` parameters are checked at THAT exit
+    /// (`[mem.tier0.mode.mut]`'s at-return rule), not the outer one.
+    pub nested_exits: Vec<(BlockId, Vec<u32>)>,
 }
 
 impl Cfg {

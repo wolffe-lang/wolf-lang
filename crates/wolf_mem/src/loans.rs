@@ -372,6 +372,7 @@ mod tests {
                     entry: BlockId(0),
                     exit: BlockId(0),
                     pattern_moves: Default::default(),
+                    nested_exits: Vec::new(),
                 },
             }
         }

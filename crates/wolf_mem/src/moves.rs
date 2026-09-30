@@ -186,9 +186,21 @@ pub fn check(cfg: &Cfg, diags: &mut Vec<Diagnostic>) {
     }
 
     // ------------------------------------ `mut` parameters at return ----
+    let used: HashSet<Span> = seen.iter().map(|&(_, _, moved_at)| moved_at).collect();
+    // wolf-lang#466 (s186): a nested fn's parameters at the nested
+    // fn's own exit — and only there: they are out of scope after it.
+    let nested: HashSet<u32> = cfg
+        .nested_exits
+        .iter()
+        .flat_map(|(_, ls)| ls.iter().copied())
+        .collect();
+    for (exit, params) in &cfg.nested_exits {
+        if let Some(state) = &entry[exit.0 as usize] {
+            at_return(cfg, state, &used, &|l| params.contains(&l), diags);
+        }
+    }
     if let Some(state) = &entry[cfg.exit.0 as usize] {
-        let used: HashSet<Span> = seen.iter().map(|&(_, _, moved_at)| moved_at).collect();
-        at_return(cfg, state, &used, diags);
+        at_return(cfg, state, &used, &|l| !nested.contains(&l), diags);
     }
 }
 
@@ -201,13 +213,20 @@ pub fn check(cfg: &Cfg, diags: &mut Vec<Diagnostic>) {
 /// the move that emptied it. One report per parameter and move site,
 /// and none for a move whose use in the body already drew E1001 (one
 /// root cause, one diagnostic).
-fn at_return(cfg: &Cfg, state: &State, used: &HashSet<Span>, diags: &mut Vec<Diagnostic>) {
+fn at_return(
+    cfg: &Cfg,
+    state: &State,
+    used: &HashSet<Span>,
+    mine: &dyn Fn(u32) -> bool,
+    diags: &mut Vec<Diagnostic>,
+) {
     let mut seen: HashSet<(u32, Span)> = HashSet::new();
     for (&moved, &why) in state {
         let Base::Local(l) = cfg.places.get(moved).base else {
             continue;
         };
-        if cfg.locals[l as usize].param_mode != Some(Some(wolf_ast::ParamMode::Mut))
+        if !mine(l)
+            || cfg.locals[l as usize].param_mode != Some(Some(wolf_ast::ParamMode::Mut))
             || why.uninit_decl
             || used.contains(&why.span)
             || !seen.insert((l, why.span))

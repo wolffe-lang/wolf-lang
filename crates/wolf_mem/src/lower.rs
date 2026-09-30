@@ -442,6 +442,9 @@ pub(crate) struct Lowerer<'t> {
     /// cannot be seen. The bool: the entry is a closure (it names its
     /// own refusal).
     unclaimed_pairs: Vec<(Span, bool)>,
+    /// wolf-lang#466 (s186): each nested fn's exit block and parameter
+    /// locals, for the at-return check (`Cfg::nested_exits`).
+    nested_exits: Vec<(BlockId, Vec<u32>)>,
     /// s186 (#476): closure bodies being walked. A closure body is
     /// lowered inline, but it does not RUN where it is written, so an
     /// access inside one is not inside a call argument's claim extent
@@ -3509,7 +3512,7 @@ impl<'t> Lowerer<'t> {
     // models; the cross-task laws are typing's and the runtime's.)
 
     /// Declare + init one binder at `span`, typed from sema's locals.
-    fn declare_init(&mut self, name: &str, span: Span) {
+    fn declare_init(&mut self, name: &str, span: Span) -> LocalId {
         let ty = self.local_tys.get(&span).map(|&id| Ty {
             table: &self.tb.table,
             id,
@@ -3523,6 +3526,7 @@ impl<'t> Lowerer<'t> {
             self.locals[local.0 as usize].is_copy,
         );
         self.push(Stmt::Init { place, span });
+        local
     }
 
     /// `scope name? { … }` — the handle binds over the body; the
@@ -5102,6 +5106,13 @@ impl<'t> Lowerer<'t> {
                 // walked in its own scope exactly as a capture-free
                 // closure's body is. The NAME binds as an initialized
                 // Copy local (a fn value is one code pointer).
+                //
+                // wolf-lang#466 (s186): the parameters carry their
+                // declared modes, as a module fn's do (`lower_fn`): a
+                // `read` one is E1014 to write and lent when it can
+                // reach shared storage (s165), and a `mut` one must be
+                // initialized at every return of the NESTED fn (s184),
+                // checked at its own exit (`Cfg::nested_exits`).
                 SyntaxKind::FnDecl => {
                     let d = wolf_ast::FnDecl::cast(stmt).expect("kind");
                     // A `return` in the nested fn leaves the nested fn
@@ -5112,18 +5123,35 @@ impl<'t> Lowerer<'t> {
                     self.exit = fn_exit;
                     self.push_scope();
                     self.ret_depth = self.scopes.len() - 1;
+                    let mut param_locals: Vec<u32> = Vec::new();
                     if let Some(params) = d.params() {
                         for p in params.params() {
                             if let Some(n) = p.name() {
                                 let nm = self.text(n.span);
-                                self.declare_init(&nm, n.span);
+                                let local = self.declare_init(&nm, n.span);
+                                let mode = p.mode();
+                                self.locals[local.0 as usize].param_mode = Some(mode);
+                                if mode.is_none()
+                                    && let Some(ty) = self.tys[local.0 as usize]
+                                    && !is_copy(ty, 0)
+                                    && !matches!(ty.kind(), TyKind::Shared(_) | TyKind::Weak(_))
+                                {
+                                    self.lent_params.insert(local.0);
+                                }
+                                param_locals.push(local.0);
                             }
                         }
                     }
                     if let Some(b) = d.body() {
-                        self.walk_block(b, false)?;
+                        // The tail is the nested fn's result: a lent
+                        // `read` parameter leaving through it is s165's
+                        // E1002, as at a module fn's tail.
+                        let tail = self.walk_block(b, true)?;
+                        let at = tail.origin.unwrap_or_else(|| end_span(b.syntax().span));
+                        self.refuse_lent_escape(&tail, at, "returned");
                     }
                     self.close_scope(end_span(stmt.span))?;
+                    self.nested_exits.push((fn_exit, param_locals));
                     self.goto(self.cur, fn_exit);
                     self.cur = fn_exit;
                     self.exit = saved_exit;
@@ -5796,6 +5824,7 @@ impl<'t> Lowerer<'t> {
             loans: Vec::new(),
             unclaimed_pairs: Vec::new(),
             deferred_depth: 0,
+            nested_exits: Vec::new(),
             deferred_stmts: std::collections::HashSet::new(),
             casts,
         }
@@ -5980,6 +6009,7 @@ impl<'t> Lowerer<'t> {
                 entry: BlockId(0),
                 exit: BlockId(1),
                 pattern_moves: self.pattern_moves,
+                nested_exits: self.nested_exits,
             },
             diags: self.diags,
             regions,
