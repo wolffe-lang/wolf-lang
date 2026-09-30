@@ -2,6 +2,39 @@
 
 ## Unreleased
 
+### The struct field shorthand is the longhand (s190, #486)
+
+- **`W { xs }` did not move `xs`.** The longhand `W { xs: xs }` moves a
+  non-`Copy` value (`[mem.tier0.move.1]`) and a later read of `xs` is
+  E1001. The shorthand was accepted, and wolf 0.2.19's native and
+  release builds left two names on one buffer:
+  `var w = W { xs }; (mut w.xs).push(9); print("{xs.len} {w.xs.len}")`
+  printed `2 2`. The same hole let `return W { xs }` move a `mut`
+  parameter out with only W1002, and handed the caller the moved
+  buffer. The checked machine dropped a shorthand field from the struct
+  and answered `unsupported` at the first field read. A shorthand
+  inside a closure or a task was never seen as a capture: `unsupported`
+  at lowering, and no E1002 for the borrow it takes.
+- The cause was the parse: a shorthand field carried a bare identifier
+  and no value, so every pass that reads a field's value read nothing.
+  The shorthand now carries a `PathExpr` naming the local, the
+  longhand's shape, as a shorthand struct pattern already carried an
+  `IdentPat`. Every pass reads it as `x: x`. `wolf fmt` output is
+  unchanged. The shorthand-only branches in the type checker, the
+  lowering and comptime are gone. A shorthand naming a module-level
+  `let` now resolves and lowers as the longhand does.
+- No shorthand field initializer existed in the corpus, wolf-std,
+  boreutils or lobo before this change, so no existing program changes
+  answer.
+- Witnesses: the twelve `corpus/memory/field_shorthand_*.lu` rows (the
+  issue's shape, `Copy` fields, a mixed literal, nested literals, a
+  `return`, a closure, a task, a closure's borrow).
+  `field_shorthand_lanes.rs` runs each row and its longhand twin on
+  checked, native, release and lupin. It asserts that the twins agree
+  and that the wolfgang lanes give the ruled answer. lupin 0.1.42
+  copies through the shorthand (wolffe-lang/wolf-interp#159), and the
+  gate pins its answers for 0.1.42 by version.
+
 ### Offsets and loop indices in one call (eg03, EGC's EG3)
 
 - **Two claims in one call through a run-time index are distinct where
