@@ -60,6 +60,35 @@
   (`elem_offset_*_mut.lu`, `elem_loop_*`). `element_places_lanes.rs`
   asserts them on checked, native, release and lupin.
 
+### An index operand that leaves early runs once (s189, #481)
+
+- **The checked machine ran an index operand again when it left
+  early.** Under `conform-run --checked`, `let v = xs[idx()?]` ran
+  `idx` twice when its `?` propagated, and three times in a hole, as a
+  `read` argument, as a member base, under `copy`, as a method receiver,
+  as a `for` iterable and as an element store's right-hand side. Under
+  a byte view (`ss[idx()?].bytes().len`) it ran six times. A `return`,
+  `break` or `continue` inside an index operand, and `xs[idx() else {
+  return 9 }]`, ran it twice. After a `continue`, the next iteration
+  trapped use-after-move on a list the re-run had moved. In `g[a()?][b()?]`
+  the operands that had already run ran again. Native, release and lupin
+  0.1.42 run each operand once, and now every lane does.
+- **A store target or `mut` argument whose index propagates** (`xs[idx()?]
+  = v()`, `xs[idx()?] += 1`, `g[a()?][0] = v()`, `bump(mut xs[idx()?])`)
+  was refused on the checked machine as "not a place". It now runs the
+  index once. The right-hand side never runs and nothing is stored, as
+  on the other lanes.
+- The place lookup now hands the operand's flow back to its caller,
+  which returns it. Before, it answered "not a place" and the caller
+  evaluated the expression again.
+- Witnesses: `corpus/memory/ctl_index_try_once.lu`,
+  `ctl_index_try_once_receivers.lu`, `ctl_slice_try_once.lu`,
+  `ctl_nested_index_try_once.lu`, `ctl_index_return_break_once.lu`,
+  `ctl_index_else_once.lu`, `ctl_store_index_try_once.lu`.
+  `index_flow_once_lanes.rs` asserts them on checked, native, release
+  and lupin. It pins lupin 0.1.42 by version where lupin runs a
+  receiver's operand twice (wolffe-lang/wolf-interp#157, #162).
+
 ### A slice's endpoints run once (s187, #479)
 
 - **The checked machine ran a slice's endpoints two or three times**
