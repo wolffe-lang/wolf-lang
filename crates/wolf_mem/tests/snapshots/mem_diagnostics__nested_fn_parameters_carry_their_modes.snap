@@ -1,0 +1,58 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+assertion_line: 56
+expression: render_mem(src)
+---
+error[E1001]: `xs` may return to the caller with its value moved away
+ --> mem:///main.lu:6:22
+  |
+5 |     fn drain(mut xs: List[int]) {
+  |                  -- `xs` is `mut`: the caller reads it again after the call
+6 |         var t = move xs
+  |                      ^^ moved here, and not stored back on every path to a return
+  |
+  = note: a `mut` parameter is initialized at every return of the function [mem.tier0.mode.mut]:
+    store a value back into `xs` before each return.
+
+error[E1014]: `xs` is `read` for the whole call, so it cannot be lent `mut`
+  --> mem:///main.lu:10:9
+   |
+ 9 |     fn write(xs: List[int]) {
+   |              -- `xs` is declared without a mode — that spells `read`, immutable for the call
+10 |         (mut xs).push(9)
+   |         ^^^^^^^^ write through a `read` parameter
+   |
+   = note: a `read` parameter is the caller's value, lent immutably [mem.tier0.mode.read]. Declare
+     it `mut` if this function's purpose is to change it (call sites then spell the
+     mutation), `take` it if the function consumes it, or mutate this function's own `copy`.
+
+error[E1002]: `xs` is the caller's value, and it is returned here while the caller still holds it
+  --> mem:///main.lu:13:9
+   |
+12 |     fn back(xs: List[int]) -> List[int] {
+   |             -- `xs` is declared without a mode — that spells `read`: lent for the call, and still the caller's after it
+13 |         xs
+   |         ^^ this would be a second live path to the value `xs` was lent
+   |
+   = note: a `read` parameter is lent, never given [mem.tier0.mode.read]. Handing it on past the
+     call would leave two places able to write one value, with no `shared` spelled anywhere
+     [mem.tier0.excl.1]. Hand on an independent value with `copy`, or declare the parameter
+     `take` so the caller gives it up (call sites then spell `take`).
+help: to hand on an independent value, copy it at the move
+   |
+13 |         copy xs
+   |
+
+error[E1007]: `push9` declares `xs` as `mut`, but the call site does not say so
+  --> mem:///main.lu:17:11
+   |
+ 2 |     fn push9(mut xs: List[int]) {
+   |                  -- the parameter is declared here
+...
+17 |     push9(xs)
+   |           ^^ this argument
+   |
+help: write the argument's mode: `mut …`
+   |
+17 |     push9(mut xs)
+   |

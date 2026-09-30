@@ -2202,3 +2202,121 @@ fn e1001_whole_read_methods_after_a_moved_part() {
          }\n",
     );
 }
+
+// ------------------------------------------ s186: wolf-lang#476 --
+
+#[test]
+fn e1002_accesses_inside_a_later_arguments_claim() {
+    // s186 (wolf-lang#476): the arguments after a `mut` argument are
+    // evaluated inside its claim ([mem.model.order]), so a read or a
+    // write of the claimed place there is E1002 however deep it sits —
+    // a read lend one call down, a whole-reading receiver, the header
+    // under a WHOLE claim, an operand, a store in a block argument, a
+    // `Map`. One report per access; the direct forms keep their own.
+    snap(
+        "e1002_accesses_inside_a_later_arguments_claim",
+        "fn bump(mut a: int, n: int) {\n    \
+             a = a + n\n\
+         }\n\
+         fn grow(mut ys: List[int], n: int) {\n    \
+             (mut ys).push(n)\n\
+         }\n\
+         fn total(ys: List[int]) -> int {\n    \
+             ys.len\n\
+         }\n\
+         fn msize(m: Map[str, int]) -> int {\n    \
+             m.len\n\
+         }\n\
+         fn mput(mut m: Map[str, int], n: int) {\n    \
+             m[\"z\"] = n\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var xs = [1, 2, 3]\n    \
+             bump(mut xs[0], total(xs))\n    \
+             bump(mut xs[0], xs.get(1) else 9)\n    \
+             grow(mut xs, xs.count())\n    \
+             var a = 1\n    \
+             bump(mut a, a + 1)\n    \
+             bump(mut a, {\n        \
+                 a = 5\n        \
+                 1\n    \
+             })\n    \
+             var m = Map[str, int]()\n    \
+             mput(mut m, msize(m))\n    \
+             a + xs.len + m.len\n\
+         }\n",
+    );
+}
+
+#[test]
+fn clean_disjoint_and_earlier_reads_beside_a_claim() {
+    // What the #476 scan must leave alone: a different element, the
+    // header beside an ELEMENT claim (#474), a read before the claim
+    // began, a disjoint field, and a closure's body (it does not run
+    // where it is written — its capture is the access, and a closure
+    // capturing nothing claimed is clean).
+    snap(
+        "clean_disjoint_and_earlier_reads_beside_a_claim",
+        "struct R { xs: List[int], k: int }\n\
+         fn bump(mut a: int, n: int) {\n    \
+             a = a + n\n\
+         }\n\
+         fn bump2(n: int, mut a: int) {\n    \
+             a = a + n\n\
+         }\n\
+         fn id(n: int) -> int {\n    \
+             n\n\
+         }\n\
+         fn total(ys: List[int]) -> int {\n    \
+             ys.len\n\
+         }\n\
+         fn apply(mut a: int, f: fn(int) -> int) {\n    \
+             a = f(a)\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var xs = [1, 2, 3]\n    \
+             bump(mut xs[0], id(xs[1]))\n    \
+             bump(mut xs[0], id(xs.count()))\n    \
+             bump2(total(xs), mut xs[0])\n    \
+             var r = R { xs: [4], k: 0 }\n    \
+             bump(mut r.k, total(r.xs))\n    \
+             apply(mut xs[1], fn(n: int) n + 1)\n    \
+             xs[0] + r.k\n\
+         }\n",
+    );
+}
+
+// ------------------------------------------ s186: wolf-lang#466 --
+
+#[test]
+fn nested_fn_parameters_carry_their_modes() {
+    // s186 (wolf-lang#466): a nested fn's `mut` parameter is spelled
+    // `mut` at the call (E1007 when omitted), checked at the nested
+    // fn's own return (#464's E1001), and a parameter without a mode
+    // is `read` — E1014 to write, lent when returned (s165's E1002).
+    snap(
+        "nested_fn_parameters_carry_their_modes",
+        "fn main() -> !int {\n    \
+             fn push9(mut xs: List[int]) {\n        \
+                 (mut xs).push(9)\n    \
+             }\n    \
+             fn drain(mut xs: List[int]) {\n        \
+                 var t = move xs\n        \
+                 (mut t).push(9)\n    \
+             }\n    \
+             fn write(xs: List[int]) {\n        \
+                 (mut xs).push(9)\n    \
+             }\n    \
+             fn back(xs: List[int]) -> List[int] {\n        \
+                 xs\n    \
+             }\n    \
+             var xs = [1]\n    \
+             push9(mut xs)\n    \
+             push9(xs)\n    \
+             drain(mut xs)\n    \
+             write(xs)\n    \
+             let ys = back(xs)\n    \
+             xs.len + ys.len\n\
+         }\n",
+    );
+}

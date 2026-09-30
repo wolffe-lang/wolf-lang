@@ -1,0 +1,74 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+assertion_line: 56
+expression: render_mem(src)
+---
+error[E1002]: `xs` is read while `xs[0]` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:18:27
+   |
+18 |     bump(mut xs[0], total(xs))
+   |              ----- `xs[0]` is passed `mut` here
+   |                           ^^ an access inside the outer call's `mut` claim
+   |
+   = note: `xs[0]` and `xs` are a path and its prefix [mem.model.path.disjoint]. A `mut` argument
+     is exclusive for the whole call, and the arguments after it are evaluated inside that
+     claim — nested calls and operators included [mem.tier0.excl]. Compute the value into a
+     local BEFORE the call.
+
+error[E1002]: `xs` is read while `xs[0]` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:19:21
+   |
+19 |     bump(mut xs[0], xs.get(1) else 9)
+   |              ----- `xs[0]` is passed `mut` here
+   |                     ^^ an access inside the outer call's `mut` claim
+   |
+   = note: `xs[0]` and `xs` are a path and its prefix [mem.model.path.disjoint]. A `mut` argument
+     is exclusive for the whole call, and the arguments after it are evaluated inside that
+     claim — nested calls and operators included [mem.tier0.excl]. Compute the value into a
+     local BEFORE the call.
+
+error[E1002]: `xs.len` is read while `xs` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:20:18
+   |
+20 |     grow(mut xs, xs.count())
+   |              -- `xs` is passed `mut` here
+   |                  ^^ an access inside the outer call's `mut` claim
+   |
+   = note: `xs` and `xs.len` are a path and its prefix [mem.model.path.disjoint]. A `mut` argument
+     is exclusive for the whole call, and the arguments after it are evaluated inside that
+     claim — nested calls and operators included [mem.tier0.excl]. Compute the value into a
+     local BEFORE the call.
+
+error[E1002]: `a` is read while `a` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:22:17
+   |
+22 |     bump(mut a, a + 1)
+   |              - `a` is passed `mut` here
+   |                 ^ an access inside the outer call's `mut` claim
+   |
+   = note: the same place twice is never disjoint. A `mut` argument is exclusive for the whole
+     call, and the arguments after it are evaluated inside that claim — nested calls and
+     operators included [mem.tier0.excl]. Compute the value into a local BEFORE the call.
+
+error[E1002]: `a` is written while `a` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:24:9
+   |
+23 |     bump(mut a, {
+   |              - `a` is passed `mut` here
+24 |         a = 5
+   |         ^ an access inside the outer call's `mut` claim
+   |
+   = note: the same place twice is never disjoint. A `mut` argument is exclusive for the whole
+     call, and the arguments after it are evaluated inside that claim — nested calls and
+     operators included [mem.tier0.excl]. Compute the value into a local BEFORE the call.
+
+error[E1002]: `m` is read while `m` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:28:23
+   |
+28 |     mput(mut m, msize(m))
+   |              - `m` is passed `mut` here
+   |                       ^ an access inside the outer call's `mut` claim
+   |
+   = note: the same place twice is never disjoint. A `mut` argument is exclusive for the whole
+     call, and the arguments after it are evaluated inside that claim — nested calls and
+     operators included [mem.tier0.excl]. Compute the value into a local BEFORE the call.
