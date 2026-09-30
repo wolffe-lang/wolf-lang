@@ -95,6 +95,14 @@ vocabulary.
      `m['x']` and `m['y']`, `m[true]` and `m[false]`. (c) An index step
      and a member step on the same container: `xs[i]` and `xs.len`,
      whatever `i` is — an element is never the container's header.
+     The header is read by `len`, `count` and `is_empty` and by
+     nothing else, so each is allowed beside a moved or claimed
+     element on every machine — the member `xs.len` and the methods
+     `xs.count()`, `xs.is_empty()` and a `Map`'s or `Pool`'s `len()`
+     — while every other method (`push`, `get`, `pop`, an impl
+     method's `self`) and a slice read the whole container, a prefix
+     of each of its elements (item 2; ruled 2026-09-30,
+     wolffe-lang/wolf-lang#474 and wolffe-lang/wolf-interp#149).
      (d) Tuple positions are field steps (`t.0`, `t.1`) and were
      distinct before this clause. A step pair that is distinct makes
      every path through it distinct: `g[0][1]` and `g[1][0]`,
