@@ -2,9 +2,9 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 623..668 name=bump body=Block
-FnDecl 670..716 name=bump2 body=Block
-FnDecl 718..748 name=id body=Block
-FnDecl 750..795 name=total body=Block
-StructDecl 797..840 name=R fields=2
-FnDecl 842..1142 name=main body=Block
+FnDecl 641..686 name=bump body=Block
+FnDecl 688..734 name=bump2 body=Block
+FnDecl 736..766 name=id body=Block
+FnDecl 768..813 name=total body=Block
+StructDecl 815..858 name=R fields=2
+FnDecl 860..1160 name=main body=Block

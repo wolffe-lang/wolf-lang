@@ -1,0 +1,14 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 1086..1127 name=Fl fields=2
+StructDecl 1129..1179 name=Ring fields=2
+StructDecl 1181..1243 name=Out fields=2
+FnDecl 1245..1290 name=bump body=Block
+FnDecl 1292..1351 name=grow body=Block
+FnDecl 1353..1425 name=fail body=Block
+FnDecl 1427..1524 name=ensure body=Block
+FnDecl 1526..1580 name=ring_len body=Block
+FnDecl 1582..1643 name=ring_drop body=Block
+FnDecl 1645..2163 name=main body=Block
