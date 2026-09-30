@@ -1,0 +1,18 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.move.2
+//!
+//! s185 (wolffe-lang/wolf-interp#149, ruled 2026-09-30) — the whole-read
+//! twin for `pop`, whose element taken is the live last one: the
+//! receiver is the whole container, a prefix of the moved `xs[0]`.
+//! E1001 on every wolfgang lane; lupin 0.1.40 and 0.1.41 run it
+//! (`1 2 1`); the ruled lupin answer is the `use-after-move` trap
+//! (is60).
+
+fn main() -> !int {
+    var xs = [[1], [2, 3]]
+    let a = move xs[0]
+    let b = (mut xs).pop() else [9]
+    print("{a.len} {b.len} {xs.len}")
+    0
+}
