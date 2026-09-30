@@ -661,7 +661,10 @@ literal ::= INT | FLOAT | CHAR_LIT | STRING | MULTILINE_STRING | RAW_STRING
 ```
 
 Struct literals: `ParseError { at: i, found: c }`; `Point { x }` shorthand
-binds the field from the identifier. Illegal in condition/scrutinee
+binds the field from the identifier. The shorthand is exactly the
+longhand `Point { x: x }`: the identifier is read as an expression, so a
+non-`Copy` `x` moves into the field (`[mem.tier0.move.1]`) and a later
+use of `x` is E1001 (s190, wolf-lang#486). Illegal in condition/scrutinee
 position without parens (`[gram.amb.structlit]`). The separating comma
 is **required** between field initializers — the production is the
 letter (D69, following D67's pattern-family precedent):
