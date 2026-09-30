@@ -323,6 +323,29 @@ pub fn suppress_mode_shadowed(diags: &mut Vec<Diagnostic>) {
     diags.retain(|d| d.code.as_str() != "W1002" || !shadowed(d));
 }
 
+/// A deny-promoted W1002 waits for the mem rung (s185, wolf-lang#469).
+///
+/// W1002's scan runs at the resolve rung; the refusals that retire it
+/// ([`suppress_mode_shadowed`]) run later — E0804 and E1014 at
+/// typecheck, #464's at-return E1001 at mem. Under `--deny-warnings` a
+/// front end that stopped on the promoted W1002 at resolve never
+/// produced the refusal that retires it, and reported the retired
+/// wrong diagnosis with its drop-the-`mut` help instead. So a promoted
+/// W1002 does not stop a front-end rung by itself: the rungs run on,
+/// the retirement is applied, and the last front-end rung stops on any
+/// W1002 still standing — the same program is refused either way.
+pub fn waits_for_mem(d: &Diagnostic) -> bool {
+    d.severity == Severity::Error && d.code.as_str() == "W1002"
+}
+
+/// Does an error stop a front-end rung BEFORE the last one? Every
+/// error does except a promoted W1002 ([`waits_for_mem`]).
+pub fn stops_early(diags: &[Diagnostic]) -> bool {
+    diags
+        .iter()
+        .any(|d| d.severity == Severity::Error && !waits_for_mem(d))
+}
+
 /// Deterministic report order: file, then span, then code. Stable for
 /// full ties (insertion order — lexer before parser at equal spans).
 pub fn sort_diagnostics(diags: &mut [Diagnostic]) {
@@ -689,5 +712,29 @@ mod tests {
         sort_diagnostics(&mut v);
         let order: Vec<&'static str> = v.iter().map(|d| d.code.as_str()).collect();
         assert_eq!(order, ["E0208", "E0201", "E0202", "E0203"]);
+    }
+
+    /// s185 (wolf-lang#469): only a PROMOTED W1002 waits for the mem
+    /// rung. Its warning form stops nothing, and every other error
+    /// (promoted or not) still stops the rung that produced it.
+    #[test]
+    fn a_promoted_w1002_alone_waits_for_the_mem_rung() {
+        let f = file();
+        let lint = Diagnostic::warning(codes::W1002, Span::new(f, 0, 1), "never written");
+        let mut promoted = lint.clone();
+        promoted.severity = Severity::Error;
+        let mut other = Diagnostic::warning(codes::E0802, Span::new(f, 2, 3), "dead arm");
+        other.severity = Severity::Error;
+        let hard = Diagnostic::error(codes::E1001, Span::new(f, 4, 5), "moved");
+
+        assert!(!waits_for_mem(&lint), "a warning is not an error at all");
+        assert!(waits_for_mem(&promoted));
+        assert!(!waits_for_mem(&other), "only W1002 has a later retirement");
+        assert!(!waits_for_mem(&hard));
+
+        assert!(!stops_early(&[lint.clone(), promoted.clone()]));
+        assert!(stops_early(&[promoted.clone(), other]));
+        assert!(stops_early(&[promoted, hard]));
+        assert!(!stops_early(&[lint]));
     }
 }
