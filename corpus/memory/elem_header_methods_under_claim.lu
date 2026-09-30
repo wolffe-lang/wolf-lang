@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="4 3\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.excl.1, mem.model.order
+//!
+//! s185 (wolf-lang#474, ruled 2026-09-30) — item 1(c) under a claim, for
+//! the header METHODS: `bump(mut xs[0], xs.count())` and
+//! `flag(mut xs[1], xs.is_empty())`. `count` and `is_empty` read the
+//! header as `xs.len` does (eg02b's `elem_member_read_under_claims.lu`),
+//! never the claimed element. Every wolfgang lane already ran this at
+//! 0.2.18 (the ruling keeps that); lupin 0.1.40 and 0.1.41 trap
+//! `exclusivity` (is60 mirrors).
+
+fn bump(mut a: int, n: int) {
+    a = a + n
+}
+
+fn flag(mut a: int, e: bool) {
+    if e { a = 0 } else { a = a + 1 }
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    bump(mut xs[0], xs.count())
+    flag(mut xs[1], xs.is_empty())
+    print("{xs[0]} {xs[1]}")
+    0
+}
