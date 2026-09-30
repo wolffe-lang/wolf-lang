@@ -1,0 +1,21 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+//!
+//! s186 (wolf-lang#476's rule, found by the lane) — no nested call at
+//! all: an OPERAND of a later argument reads the place the call holds
+//! `mut`. `bump(mut a, a)` was always E1002 (D39); `bump(mut a, a + 1)`
+//! ran `3` on checked, native and release through 0.2.19, and lupin
+//! traps `exclusivity`. The fix the note names: compute the value into
+//! a local before the call.
+
+fn bump(mut a: int, n: int) {
+    a = a + n
+}
+
+fn main() -> !int {
+    var a = 1
+    bump(mut a, a + 1)  // ERROR E1002: a read inside its own claim
+    print("{a}")
+    0
+}

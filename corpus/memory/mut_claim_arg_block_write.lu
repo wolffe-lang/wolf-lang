@@ -1,0 +1,23 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+//!
+//! s186 (wolf-lang#476's rule, found by the lane) — a WRITE of the
+//! claimed place inside a later argument. Through 0.2.19 this was a
+//! wrong answer, not only a looser one: the checked machine printed
+//! `6` and native and release printed `2`, with no diagnostic on any
+//! lane; lupin traps `exclusivity`. E1002 on every wolfgang lane now.
+
+fn bump(mut a: int, n: int) {
+    a = a + n
+}
+
+fn main() -> !int {
+    var a = 1
+    bump(mut a, {
+        a = 5  // ERROR E1002: a written inside its own claim
+        1
+    })
+    print("{a}")
+    0
+}
