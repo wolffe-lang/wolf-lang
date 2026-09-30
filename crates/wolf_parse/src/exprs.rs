@@ -1376,13 +1376,25 @@ fn struct_lit(p: &mut Parser<'_>, lhs: CompletedMarker, ctx: Ctx) -> CompletedMa
 }
 
 /// `IDENT (':' expr)?` — `Point { x }` shorthand binds from the name.
+///
+/// The shorthand IS the longhand (`[gram.expr]`: `x` is `x: x`), so it
+/// gets the longhand's shape: the IDENT is wrapped in a `PathExpr`, the
+/// value every consumer reads, exactly as a shorthand `FieldPat` wraps
+/// an `IdentPat`. Before s190 (wolf-lang#486) the shorthand carried a
+/// bare token and no value, and every pass that reads a field's value
+/// read nothing: the move checker recorded no move of `x`, the checked
+/// machine dropped the field, and resolution never saw the name.
 fn field_init(p: &mut Parser<'_>, ctx: Ctx) {
     let f = p.start();
     if p.at(TokenKind::Ident) {
-        p.bump();
-        if p.at_punct(Punct::Colon) {
-            p.bump();
+        if p.nth(1) == TokenKind::Punct(Punct::Colon) {
+            p.bump(); // field name
+            p.bump(); // `:`
             expr_required_ctx(p, ctx);
+        } else {
+            let v = p.start();
+            p.bump();
+            v.complete(p, SyntaxKind::PathExpr);
         }
     } else {
         p.arm_error(p.current_span(), "expected a field initializer");

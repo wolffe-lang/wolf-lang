@@ -1330,15 +1330,27 @@ impl<'a> StructLit<'a> {
 }
 
 ast_node!(
-    /// `IDENT (':' expr)?` in a struct literal.
+    /// `IDENT (':' expr)?` in a struct literal. The shorthand `x`
+    /// carries a single `PathExpr` child naming `x` — the longhand's
+    /// value — so `x` and `x: x` read alike everywhere (s190,
+    /// wolf-lang#486).
     FieldInit
 );
 
 impl<'a> FieldInit<'a> {
+    /// The field-name token, whichever form spelled it: the explicit
+    /// name before `:`, or the shorthand's own path identifier.
     pub fn name(self) -> Option<&'a GreenToken> {
-        self.0.child_token(SyntaxKind::Ident)
+        if let Some(t) = self.0.child_token(SyntaxKind::Ident) {
+            return Some(t);
+        }
+        self.value()
+            .filter(|v| v.kind == SyntaxKind::PathExpr)
+            .and_then(|v| v.child_token(SyntaxKind::Ident))
     }
 
+    /// The initializer: the explicit expression, or the shorthand's
+    /// `PathExpr`.
     pub fn value(self) -> Option<&'a GreenNode> {
         first_expr(self.0)
     }
