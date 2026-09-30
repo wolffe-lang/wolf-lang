@@ -10392,19 +10392,16 @@ impl<'a> Checker<'a> {
             };
             self.member_refs.push((nt.span, field.span));
             let fty = field_ty(self, field.ty);
-            match init.value() {
-                Some(v) => {
-                    let exp = Expect {
-                        ty: fty,
-                        reason: Reason::StructField(fname.clone()),
-                        because: Some(field.span),
-                    };
-                    self.check_expr(v, &exp)?;
-                }
-                // `x:` with no expression: the parse reported it. (The
-                // shorthand `{ x }` carries its own `PathExpr` value
-                // since s190 and is checked by the arm above.)
-                None => {}
+            // The shorthand `{ x }` carries its own `PathExpr` value
+            // since s190 and is checked here like `x: x`; an `x:` with no
+            // expression was reported by the parse.
+            if let Some(v) = init.value() {
+                let exp = Expect {
+                    ty: fty,
+                    reason: Reason::StructField(fname.clone()),
+                    because: Some(field.span),
+                };
+                self.check_expr(v, &exp)?;
             }
         }
         let missing: Vec<&str> = sig
