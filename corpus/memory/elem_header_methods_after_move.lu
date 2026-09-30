@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="1 2 false 20 1 2 2 false false\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.move.2
+//!
+//! s185 (wolf-lang#474 and wolffe-lang/wolf-interp#149, ruled
+//! 2026-09-30) — item 1(c)'s header reads beside a moved element:
+//! `count()` and `is_empty()` read only the container's header, as
+//! `xs.len` does, so after `move xs[0]` (and `move g[0][1]`, one level
+//! down) both run on the container and on every container above the
+//! moved element, in an interpolation hole and in an operand. E1001 on
+//! every wolfgang lane through 0.2.18; lupin 0.1.40 and 0.1.41 run it.
+
+fn main() -> !int {
+    var xs = [[1], [2, 3]]
+    let a = move xs[0]
+    var g = [[[1], [2]], [[3]]]
+    let b = move g[0][1]
+    var n = xs.count() * 10
+    if xs.is_empty() {
+        n = 0
+    }
+    print("{a.len} {xs.count()} {xs.is_empty()} {n} {b.len} {g[0].count()} {g.count()} {g[0].is_empty()} {g.is_empty()}")
+    0
+}

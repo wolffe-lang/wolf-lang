@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="1 1 false\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.move.2
+//!
+//! s185 (wolf-lang#474, wolffe-lang/wolf-interp#149, ruled 2026-09-30)
+//! — item 1(c)'s header reads on a `Pool` whose element at `h` moved
+//! out: `len()` and `is_empty()` count live slots from the header and
+//! touch no element; the element is stored back before the region
+//! closes. E1001 on every wolfgang lane through 0.2.18; lupin declines
+//! `Pool` by name (`unsupported`).
+
+struct Node { tags: List[int] }
+
+fn main() -> !int {
+    region r: pool(Node) {
+        var p = Pool[Node]()
+        let h = (mut p).reserve()
+        (mut p).init(h, Node { tags: [1] })
+        var t = move p[h]
+        print("{t.tags.len} {p.len()} {p.is_empty()}")
+        p[h] = take t
+        0
+    }
+}
