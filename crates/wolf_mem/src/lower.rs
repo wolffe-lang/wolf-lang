@@ -4571,8 +4571,21 @@ impl<'t> Lowerer<'t> {
         match selfp.mode {
             None => {
                 // `read self`: immutably lent for the call.
-                if let Some((place, _)) = self.as_place(recv) {
-                    self.emit_read(place, recv_span);
+                if let Some((place, ty)) = self.as_place(recv) {
+                    // s185 (wolf-lang#474, wolffe-lang/wolf-interp#149,
+                    // ruled 2026-09-30): a header method reads the
+                    // header, never an element, so the read — and the
+                    // call surface's `read` entry, which the moves pass
+                    // checks too — lands on `recv.len`, the member step
+                    // item 1(c) already keeps apart from every element.
+                    // Every other `read self` method reads the whole
+                    // receiver, as before. Regions and sites stay the
+                    // whole value's: the header read changes which
+                    // PLACE is used, not what the value holds.
+                    let read_at = self
+                        .header_place(place, ty, recv, &surface.callee)
+                        .unwrap_or(place);
+                    self.emit_read(read_at, recv_span);
                     self.mark_region_lent(place);
                     // s171 (#392): the receiver's OWN sites, recorded
                     // for a `[mem.str.view]` product that subslices
@@ -4582,7 +4595,7 @@ impl<'t> Lowerer<'t> {
                     // `trim` its stack promotion.
                     recv_sites.extend(self.sites_of_place(place).into_iter().map(|(s, _)| s));
                     if !self.places.is_copy(place) {
-                        surface.read_args.push((place, recv_span));
+                        surface.read_args.push((read_at, recv_span));
                     }
                 } else {
                     let rv = self.eval_value(recv)?;
@@ -4654,6 +4667,38 @@ impl<'t> Lowerer<'t> {
             }
         }
         Ok(())
+    }
+
+    /// `[mem.model.place.elem]` 1(c)'s header reads (s185, the
+    /// maintainer's ruling of 2026-09-30 on wolf-lang#474 and
+    /// wolffe-lang/wolf-interp#149): `len`, `count` and `is_empty` on a
+    /// builtin `List`, `Map` or `Pool` read only the container's header.
+    /// The place such a call reads is the header member `recv.len` — the
+    /// place `xs.len` already denotes — so a moved or claimed element of
+    /// the receiver does not meet it, and a move or claim of the whole
+    /// receiver still does (a prefix). `None` for every other method:
+    /// `push`, `get`, `pop`, `pairs`, an impl method's `self` (a user
+    /// type's method named `count` included) read the whole receiver.
+    fn header_place(
+        &mut self,
+        place: PlaceId,
+        ty: Option<Ty<'t>>,
+        recv: &'t GreenNode,
+        method: &str,
+    ) -> Option<PlaceId> {
+        if !matches!(method, "len" | "count" | "is_empty") {
+            return None;
+        }
+        let ty = ty.or_else(|| self.expr_ty(recv.span))?;
+        if !matches!(
+            ty.kind(),
+            TyKind::List(_) | TyKind::Map(..) | TyKind::Pool(_)
+        ) {
+            return None;
+        }
+        let mut header = self.places.get(place).clone();
+        header.proj.push(Proj::Field("len".to_string()));
+        Some(self.places.intern(header, true))
     }
 
     #[allow(clippy::too_many_arguments)]
