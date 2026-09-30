@@ -319,6 +319,7 @@ memory/elem_dyn_iter_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_dyn_move_const_read.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_dyn_mut_pair.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_dyn_nested_call.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_dyn_proofs_legs.lu: lowers
 memory/elem_dyn_read_after_mut.lu: lowers
 memory/elem_dyn_store_no_revive_heap.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_dyn_store_no_revive_int.lu: not mem-clean (pre-wir rungs own it)
@@ -331,11 +332,22 @@ memory/elem_key_move_map.lu: lowers
 memory/elem_key_reassigned_no_revive.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_len_after_move.lu: lowers
 memory/elem_loop_covers_const.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_loop_inclusive_covers_const.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_loop_induction_mut.lu: lowers
+memory/elem_loop_induction_written_mut.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_loop_nonliteral_range_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_member_read_after_mut.lu: lowers
 memory/elem_member_read_under_claims.lu: lowers
 memory/elem_move_one_place.lu: lowers
 memory/elem_move_same_const_read.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_offset_mut_pair.lu: lowers
+memory/elem_offset_negative_mut.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_offset_nonliteral_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_offset_other_local.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_offset_rebound_call_mut.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_offset_rebound_mut.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_offset_vs_literal_mut.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_offset_zero_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_pool_handle_revive.lu: lowers
 memory/elem_pool_handles_one_place.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_prefix_mut_pair.lu: not mem-clean (pre-wir rungs own it)
