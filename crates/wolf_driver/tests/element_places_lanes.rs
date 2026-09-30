@@ -10,7 +10,10 @@
 //! 2026-09-30) adds item 1(c)'s header METHODS — `count`, `is_empty` and
 //! a `Map`'s or `Pool`'s `len()` beside a moved or claimed element — and
 //! the whole-read twins (`push`, `get`, `pop`, a slice, an impl method's
-//! `self`) that stay refused.
+//! `self`) that stay refused; eg03 (EG3) adds item 4's R1 and R2 for one
+//! call's claims — offsets of one unwritten local, a literal-range loop
+//! index against a literal outside it — and the twins where the proof
+//! fails or is not read.
 //!
 //! Why a driver test beside the corpus rows (s171's lesson, wave 45):
 //! `cargo xtask corpus` runs a `phase: run` entry on the NATIVE lane
@@ -352,6 +355,66 @@ fn a_loop_range_containing_the_literal_stays_one_place() {
         trap,
         trap,
     );
+}
+
+/// EG3 (eg03), R1: `add2(mut xs[i], mut xs[i + 1])` — two offsets of
+/// one local the call leaves unwritten are distinct (K13, unparked).
+#[test]
+fn two_offsets_of_one_unwritten_local_go_mut_together() {
+    let want = runs("2 12\n");
+    every_lane("elem_offset_mut_pair.lu", want, want, want);
+}
+
+/// EG3 (eg03), R2: `for i in 1..3 { add2(mut xs[0], mut xs[i]) }` — a
+/// literal-range index the body never writes is never `0` (K14,
+/// unparked).
+#[test]
+fn a_loop_index_outside_the_literal_goes_mut_beside_it() {
+    let want = runs("3 12 13\n");
+    every_lane("elem_loop_induction_mut.lu", want, want, want);
+}
+
+/// EG3 (eg03): R1 and R2 on every leg of the call-surface relation —
+/// two nonzero offsets, the offset first, a nested path, a lent read,
+/// `..=`, a literal above the range, a `Copy` read of the index between
+/// the claims, and a `while` loop that writes the index between calls.
+#[test]
+fn offsets_and_loop_indices_are_distinct_on_every_leg() {
+    let want = runs("4 14 | 11 3 | 4 15 | 2 2 | 3 12 13 | 2 3 23 | 2 12 | 2 13 13\n");
+    every_lane("elem_dyn_proofs_legs.lu", want, want, want);
+}
+
+/// EG3's twins that lupin traps: R1 with the index written between the
+/// claims (a block argument, a nested `mut` call), R2 with the index
+/// written in the body or `..=` holding the literal, equal offsets, and
+/// an offset against a literal. Each is one element at run time.
+#[test]
+fn the_proof_rules_refuse_what_is_one_element_at_run_time() {
+    let trap = verdict("trap(exclusivity)");
+    for name in [
+        "elem_offset_rebound_mut.lu",
+        "elem_offset_rebound_call_mut.lu",
+        "elem_loop_induction_written_mut.lu",
+        "elem_loop_inclusive_covers_const.lu",
+        "elem_offset_zero_mut.lu",
+        "elem_offset_vs_literal_mut.lu",
+    ] {
+        every_lane(name, verdict("fail(E1002)"), trap, trap);
+    }
+}
+
+/// EG3's conservatism twins: a subtracted offset (`i - 1`), a local
+/// offset (`i + j`) and a non-literal range (`1..n`) are left out of
+/// R1/R2, so they stay one place; lupin runs each with its values.
+#[test]
+fn shapes_the_proof_rules_do_not_read_stay_one_place() {
+    for (name, bytes) in [
+        ("elem_offset_negative_mut.lu", "11 3\n"),
+        ("elem_offset_nonliteral_mut.lu", "2 12\n"),
+        ("elem_loop_nonliteral_range_mut.lu", "3 12 13\n"),
+    ] {
+        every_lane(name, verdict("fail(E1002)"), runs(bytes), runs(bytes));
+    }
 }
 
 /// Item 2: `Pool` handles are run-time values; lupin declines `Pool`.
