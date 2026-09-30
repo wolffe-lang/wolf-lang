@@ -1,0 +1,78 @@
+//! check: run(exit=0, stdout="4 14 | 11 3 | 4 15 | 2 2 | 3 12 13 | 2 3 23 | 2 12 | 2 13 13\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.excl.1, mem.tier0.excl.4
+//!
+//! eg03 (EGC's EG3) — R1 and R2 in every leg the claim relation reads:
+//! two nonzero offsets (`xs[i + 1]`, `xs[i + 2]`); the offset first
+//! (`xs[i + 1]`, `xs[i]`); one step down the path (`g[i][0]`,
+//! `g[i + 1][0]`); a lent `read` beside the claim (`grow(mut ys[i],
+//! ys[i + 1])`); an inclusive range whose end is below the literal's
+//! other side (`1..=2` against `0`); a literal above the range (`0..2`
+//! against `2`); a `Copy` read of the index between the claims (a read
+//! is not a write, `[mem.tier0.excl.4]`); and a `while` loop that
+//! writes `i` between calls, never inside one. lupin 0.1.42 prints the
+//! same bytes.
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn add3(mut a: int, n: int, mut b: int) {
+    a = a + 1
+    b = b + 10 + n
+}
+
+fn grow(mut a: List[int], b: List[int]) {
+    (mut a).push(b.len)
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3, 4]
+    var i = 1
+    add2(mut xs[i + 1], mut xs[i + 2])
+    let l1 = "{xs[2]} {xs[3]}"
+
+    var ws = [1, 2, 3]
+    var j = 0
+    add2(mut ws[j + 1], mut ws[j])
+    let l2 = "{ws[0]} {ws[1]}"
+
+    var g = [[1, 2], [3, 4], [5, 6]]
+    var k = 1
+    add2(mut g[k][0], mut g[k + 1][0])
+    let l3 = "{g[1][0]} {g[2][0]}"
+
+    var ys = [[1], [2, 3], [4]]
+    var m = 0
+    grow(mut ys[m], ys[m + 1])
+    let l4 = "{ys[0].len} {ys[1].len}"
+
+    var zs = [1, 2, 3]
+    for n in 1..=2 {
+        add2(mut zs[0], mut zs[n])
+    }
+    let l5 = "{zs[0]} {zs[1]} {zs[2]}"
+
+    var vs = [1, 2, 3]
+    for n in 0..2 {
+        add2(mut vs[n], mut vs[2])
+    }
+    let l6 = "{vs[0]} {vs[1]} {vs[2]}"
+
+    var us = [1, 2, 3]
+    var p = 0
+    add3(mut us[p], p, mut us[p + 1])
+    let l7 = "{us[0]} {us[1]}"
+
+    var ts = [1, 2, 3]
+    var q = 0
+    while q < 2 {
+        add2(mut ts[q], mut ts[q + 1])
+        q = q + 1
+    }
+    let l8 = "{ts[0]} {ts[1]} {ts[2]}"
+
+    print("{l1} | {l2} | {l3} | {l4} | {l5} | {l6} | {l7} | {l8}")
+    0
+}
