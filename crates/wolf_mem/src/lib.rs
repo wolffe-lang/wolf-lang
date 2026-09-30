@@ -105,10 +105,10 @@
 //!   last red row of the v0.1.0 audit): writes reaching a `read`
 //!   parameter — projections and `mut`-lends included — are E1014
 //!   (`[mem.tier0.mode.read]`, the callee-side half #27 found
-//!   missing); a `Copy` read evaluated after an earlier spelled `mut`
-//!   argument of the same call is the overlap rule's static half
-//!   (E1002, `f(mut a, a.x)` — receiver claims stay two-phase, so
-//!   `xs.push(xs.len)` stays legal); and `for x in xs` holds a READ
+//!   missing); arguments are two-phase — a later argument may read a
+//!   place an earlier `mut` argument claims (`f(mut a, a.x)`, legal
+//!   since s186's `[mem.tier0.excl.4]`) but not write or move it; and
+//!   `for x in xs` holds a READ
 //!   claim on the iterated place for the loop's extent
 //!   (`[mem.iter.excl]`) — the container never moves (the #15
 //!   reads-as-moves accident is dead), stays live after the loop, and

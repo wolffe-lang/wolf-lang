@@ -1730,51 +1730,8 @@ impl<'t> Lowerer<'t> {
         true
     }
 
-    /// E1002 for a `Copy` read overlapping an EARLIER `mut` argument
-    /// of the same call (s72, D39). The non-`Copy` half of the rule is
-    /// pairwise over the call surface in [`crate::excl`]; the `Copy`
-    /// half lives here because it is order-sensitive — the read is an
-    /// instant, not a loan, so only a claim already active when it
-    /// evaluates conflicts.
-    fn check_copy_read_after_mut(
-        &mut self,
-        place: PlaceId,
-        span: Span,
-        arg_muts: &[(PlaceId, Span)],
-    ) {
-        let Some(&(m, mspan)) = arg_muts
-            .iter()
-            .find(|&&(m, _)| self.places.overlap(m, place))
-        else {
-            return;
-        };
-        let (a, b) = (self.show_place_now(m), self.show_place_now(place));
-        let relation = if self.places.covers(m, place) && self.places.spelled_prefix(m, place) {
-            format!(
-                "`{b}` is inside `{a}` — a path and its prefix conflict [mem.model.path.disjoint]."
-            )
-        } else if self.places.covers(m, place) {
-            elements_one_place(&a, &b)
-        } else {
-            format!("`{a}` and `{b}` can reach the same memory.")
-        };
-        self.diags.push(
-            Diagnostic::error(
-                codes::E1002,
-                span,
-                format!("`{b}` is read for this call after `{a}` goes `mut` in it"),
-            )
-            .with_label("read of a place being mutated")
-            .with_secondary(mspan, format!("`{a}` is passed `mut` here"))
-            .with_note(format!(
-                "{relation} Read the value into a local before the call, or pass \
-                 disjoint fields."
-            )),
-        );
-    }
-
-    /// s168 — the other half of D39's order rule, and the half that
-    /// decides whether lending a container ELEMENT is sound.
+    /// s168 — the check that decides whether lending a container
+    /// ELEMENT is sound.
     ///
     /// A `mut` argument is exclusive for the WHOLE call, and the rest
     /// of the argument list is evaluated inside that claim.
@@ -1792,10 +1749,9 @@ impl<'t> Lowerer<'t> {
     /// already finished. It refused a program every release through
     /// 0.2.14 and lupin 0.1.38 run, at 12 sites in boreutils and 16 in
     /// lobo. The bound below is the fix: the mark carries the block
-    /// COUNT, and only blocks minted since it are new.
-    /// [`Self::check_copy_read_after_mut`] catches a bare read spelled
-    /// there (`f(mut a, a.x)`); this catches a nested CALL that claims
-    /// the same place — `f(mut xs[0], grow(mut xs))`.
+    /// COUNT, and only blocks minted since it are new. This catches a
+    /// nested CALL that claims the same place —
+    /// `f(mut xs[0], grow(mut xs))`.
     ///
     /// It is not a nicety. Measured before the check existed: the
     /// lowerer minted the element's address for the first argument,
@@ -1806,17 +1762,16 @@ impl<'t> Lowerer<'t> {
     /// spilled field (`f(mut r.a, g(mut r))`) loses the callee's write
     /// to the writeback instead, which is wrong more quietly still.
     ///
-    /// s186 (wolf-lang#476) — and a nested READ or WRITE of the claimed
-    /// place is inside the claim too. The first version compared only a
-    /// nested call's `mut`/`take` arguments with the earlier claims, so
-    /// `bump(mut xs[0], total(xs))`, `grow(mut xs, xs.count())` and
-    /// `bump(mut a, a + 1)` ran on every wolfgang lane while lupin
-    /// trapped `exclusivity` — and `bump(mut a, { a = 5; 1 })` printed
-    /// `6` on the checked machine and `2` on native. Every access this
-    /// argument emitted (a read, a move, a store, a nested call's read
-    /// lend) is compared now; the one exception is the argument's OWN
-    /// top-level place (`own`), which [`Self::check_copy_read_after_mut`]
-    /// and [`crate::excl`] already answer.
+    /// s186 (wolf-lang#476, ruled 2026-09-30 as "two-phase reads",
+    /// `[mem.tier0.excl.4]`) — a later argument may READ the claimed
+    /// place (the claim takes effect at call entry, and every such
+    /// read ends before it), but a WRITE or a MOVE of it inside a later
+    /// argument is E1002: `bump(mut a, { a = 5; 1 })` printed `6` on
+    /// the checked machine and `2` on native through 0.2.19. Every store
+    /// and move this argument emitted is compared now, outside closure
+    /// bodies (which do not run where they are written); the argument's
+    /// OWN top-level place and what it put on the call surface are
+    /// [`crate::excl`]'s.
     fn check_nested_claims_after_mut(
         &mut self,
         from: Mark,
@@ -1858,12 +1813,8 @@ impl<'t> Lowerer<'t> {
                                 hits.push((m, mspan, p, s, word));
                             }
                         }
-                        if !deferred {
-                            accesses.extend(c.read_args.iter().map(|&(p, s)| (p, s, "is read")));
-                        }
                     }
                     _ if deferred => {}
-                    Stmt::Read { place, span } => accesses.push((*place, *span, "is read")),
                     Stmt::Move { place, span } => accesses.push((*place, *span, "moves away")),
                     Stmt::Init { place, span } | Stmt::Mutate { place, span } => {
                         accesses.push((*place, *span, "is written"))
@@ -1873,22 +1824,21 @@ impl<'t> Lowerer<'t> {
             }
         }
         // One report per access site: a nested claim above already
-        // covers its own span (a `take` argument is also a `Move`, a
-        // read lend also a `Read`), and the argument's own place is
-        // answered elsewhere.
+        // covers its own span (a `take` argument is also a `Move`), and
+        // the argument's own place is answered elsewhere.
         let mut seen: std::collections::HashSet<Span> = hits.iter().map(|h| h.3).collect();
         seen.extend(own.iter().copied());
-        let mut reads: Vec<(PlaceId, Span, PlaceId, Span, &'static str)> = Vec::new();
+        let mut found: Vec<(PlaceId, Span, PlaceId, Span, &'static str)> = Vec::new();
         for (p, s, word) in accesses {
             if seen.contains(&s) {
                 continue;
             }
             if let Some(&(m, mspan)) = arg_muts.iter().find(|&&(m, _)| self.places.overlap(m, p)) {
                 seen.insert(s);
-                reads.push((m, mspan, p, s, word));
+                found.push((m, mspan, p, s, word));
             }
         }
-        for (m, mspan, p, s, word) in reads {
+        for (m, mspan, p, s, word) in found {
             let (a, b) = (self.show_place_now(m), self.show_place_now(p));
             let relation = if m == p {
                 "the same place twice is never disjoint.".to_string()
@@ -1908,10 +1858,9 @@ impl<'t> Lowerer<'t> {
                 .with_label("an access inside the outer call's `mut` claim")
                 .with_secondary(mspan, format!("`{a}` is passed `mut` here"))
                 .with_note(format!(
-                    "{relation} A `mut` argument is exclusive for the whole call, and the \
-                     arguments after it are evaluated inside that claim — nested calls and \
-                     operators included [mem.tier0.excl]. Compute the value into a local \
-                     BEFORE the call."
+                    "{relation} A later argument may read a place an earlier `mut` argument \
+                     claims, but it may not write or move it: the callee receives the place \
+                     exclusively [mem.tier0.excl.4]. Make the change before the call."
                 )),
             );
         }
@@ -4441,8 +4390,9 @@ impl<'t> Lowerer<'t> {
         let offset = usize::from(cs.map(|c| c.has_self).unwrap_or(false));
         let mut ctor_parts: Vec<(Val, Span)> = Vec::new();
         // Spelled `mut` arguments seen so far, in evaluation order —
-        // the claims a later `Copy` read of this call evaluates inside
-        // (s72, D39). Receiver `mut`s are two-phase and stay out.
+        // the claims a later argument may read but not write, move or
+        // claim again (s168, s186's `[mem.tier0.excl.4]`). Receiver
+        // `mut`s stay out.
         let mut arg_muts: Vec<(PlaceId, Span)> = Vec::new();
         for (i, arg) in args.iter().enumerate() {
             let Some(v) = Arg::value(*arg) else { continue };
@@ -4833,8 +4783,7 @@ impl<'t> Lowerer<'t> {
         // never checked against its own.
         let prior_muts: Vec<(PlaceId, Span)> = arg_muts.clone();
         // s186 (#476): the argument's own top-level place, whose access
-        // the direct checks answer (`check_copy_read_after_mut`, the
-        // call surface in `excl`); the nested scan skips it.
+        // the call surface answers (`excl`); the nested scan skips it.
         let mut own: Option<Span> = None;
         let surface_mark = (surface.read_args.len(), surface.take_args.len());
         let effective = if store_take {
@@ -4862,24 +4811,16 @@ impl<'t> Lowerer<'t> {
                     }
                     if !self.places.is_copy(place) {
                         // Non-`Copy` read arguments are lent for the
-                        // whole call; `Copy` ones were copied at
-                        // evaluation (which is what keeps the
-                        // two-phase `xs.push(xs.len)` shape legal).
+                        // whole call — a lend INTO the call, which
+                        // `excl` refuses beside an overlapping `mut`.
+                        // `Copy` ones were copied at evaluation: s186
+                        // (ruled 2026-09-30, `[mem.tier0.excl.4]`)
+                        // retires D39's refusal of that read after an
+                        // earlier `mut` argument (`f(mut a, a.x)`) —
+                        // a claim takes effect at call entry, after
+                        // the read has ended, as the receiver's
+                        // always did (`xs.push(xs.len)`).
                         surface.read_args.push((place, v.span));
-                    } else {
-                        // s72, D39 — the overlap rule's static half:
-                        // a `Copy` read completes at its own
-                        // evaluation, and left-to-right order
-                        // ([mem.model.order]) puts that evaluation
-                        // INSIDE any exclusive claim an earlier `mut`
-                        // argument of this call already spelled —
-                        // f(mut a, a.x) reads a place the call holds.
-                        // Receiver claims stay two-phase (reserved
-                        // until entry), which is what keeps
-                        // xs.push(xs.len) legal; a read BEFORE the
-                        // `mut` (f(a.x, mut a)) finished before the
-                        // claim began and stays legal too.
-                        self.check_copy_read_after_mut(place, v.span, arg_muts);
                     }
                 } else {
                     let av = self.eval_value(v)?;
