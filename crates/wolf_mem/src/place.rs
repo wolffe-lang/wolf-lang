@@ -25,6 +25,13 @@
 //!   [`PlaceTable::covers_must`] (does a store *surely* re-initialize
 //!   the moved place: item 3's must-revival, with R3 for a local index
 //!   the caller vouches is unwritten since the move).
+//! - The pairwise check of ONE call's argument surface
+//!   ([`crate::excl`]) asks [`PlaceTable::overlap_call`] (EG3, eg03):
+//!   the claim relation plus R1 (`xs[i + a]` and `xs[i + b]`, `a ≠ b`)
+//!   and R2 (a loop index over literal bounds against a literal outside
+//!   them), each only for a local the caller vouches keeps its value
+//!   through the call's evaluation ([`Proof`]). Moves, loans, iteration
+//!   and s186's nested-access check do not read R1 or R2.
 
 use std::collections::HashMap;
 
@@ -76,6 +83,12 @@ pub enum Proj {
     /// another `Sym` of the same local only while that local is
     /// unwritten (R3 — the moves pass decides that, not this table).
     Sym(u32),
+    /// A plain `int` local plus a positive integer literal (`xs[i + 1]`;
+    /// the local's id and the offset), EG3's R1 spelling. One place with
+    /// every index for *may* and never the same element for *must* (R3
+    /// never revives through an offset); only the call-surface relation
+    /// ([`PlaceTable::overlap_call`]) reads the offset.
+    Off(u32, u128),
     /// Any other index projection (`v[f()]`, a pool handle): one place
     /// with every index.
     Opaque,
@@ -191,6 +204,13 @@ impl PlaceTable {
         covers_must(self.get(a), self.get(b), sym_ok)
     }
 
+    /// EG3 (eg03): the claim relation for the argument surface of ONE
+    /// call, where R1 and R2 may prove two index steps distinct. See
+    /// [`overlap_call`].
+    pub fn overlap_call(&self, a: PlaceId, b: PlaceId, proof: &Proof<'_>) -> bool {
+        overlap_call(self.get(a), self.get(b), proof)
+    }
+
     /// Two paths that are a prefix pair AS SPELLED (every step of the
     /// shorter equal to the longer's): the wording of a conflict note,
     /// never a decision.
@@ -225,6 +245,64 @@ fn must_elem(a: &Proj, b: &Proj, sym_ok: &dyn Fn(u32) -> bool) -> bool {
         (Proj::Sym(x), Proj::Sym(y)) => x == y && sym_ok(*x),
         _ => false,
     }
+}
+
+/// What EG3's proof rules may assume at one call (`[mem.model.place.elem]`
+/// item 4). `stable(l)`: local `l` keeps its value through the call's
+/// callee, receiver and argument evaluation — nothing there writes it,
+/// no loan is ever taken on it, and the body has no raw-tier statement.
+/// `range(l)`: `l` is the index of `for l in LO..HI` (or `LO..=HI`) with
+/// integer-literal bounds and is never written in the loop's body; the
+/// half-open `[lo, hi)` it ranges over.
+pub struct Proof<'a> {
+    pub stable: &'a dyn Fn(u32) -> bool,
+    pub range: &'a dyn Fn(u32) -> Option<(u128, u128)>,
+}
+
+impl Proof<'_> {
+    /// No proof at all: `overlap_call` is then exactly `overlap`.
+    pub const NONE: Proof<'static> = Proof {
+        stable: &|_| false,
+        range: &|_| None,
+    };
+}
+
+/// EG3: do R1 or R2 prove the two index steps never denote one element?
+/// R1 — `i + a` and `i + b` over one stable local (a plain `Sym` is
+/// offset 0), `a ≠ b`. R2 — a stable loop index against an integer
+/// literal outside its literal range.
+fn proved_distinct(a: &Proj, b: &Proj, proof: &Proof<'_>) -> bool {
+    let off = |p: &Proj| match p {
+        Proj::Sym(l) => Some((*l, 0u128)),
+        Proj::Off(l, k) => Some((*l, *k)),
+        _ => None,
+    };
+    if let (Some((l1, k1)), Some((l2, k2))) = (off(a), off(b))
+        && l1 == l2
+        && k1 != k2
+    {
+        return (proof.stable)(l1);
+    }
+    match (a, b) {
+        (Proj::Sym(l), Proj::Lit(Key::Int(c))) | (Proj::Lit(Key::Int(c)), Proj::Sym(l)) => {
+            match (proof.range)(*l) {
+                Some((lo, hi)) => (*c < lo || *c >= hi) && (proof.stable)(*l),
+                None => false,
+            }
+        }
+        _ => false,
+    }
+}
+
+/// The claim relation ([`overlap`]) with EG3's proof rules: a step pair
+/// R1 or R2 proves distinct makes the two paths distinct, exactly as a
+/// pair of different literals does (the path rule).
+pub fn overlap_call(a: &Place, b: &Place, proof: &Proof<'_>) -> bool {
+    a.base == b.base
+        && a.proj
+            .iter()
+            .zip(b.proj.iter())
+            .all(|(x, y)| may_elem(x, y) && !proved_distinct(x, y, proof))
 }
 
 /// See [`PlaceTable::overlap_elem`].
@@ -469,6 +547,87 @@ mod tests {
             NO
         ));
         assert!(!covers_must(&ix(0, vec![lit(0)]), &ix(0, vec![]), YES));
+    }
+
+    /// EG3 (eg03), R1: two offsets of one stable local are distinct
+    /// when they differ; equal offsets, another local, an unstable
+    /// local, a literal and an `Opaque` index stay one place.
+    #[test]
+    fn r1_separates_offsets_of_one_stable_local() {
+        let stable = |l: u32| l != 9;
+        let none = |_: u32| None;
+        let pf = Proof {
+            stable: &stable,
+            range: &none,
+        };
+        let one = |a: Proj, b: Proj| overlap_call(&ix(0, vec![a]), &ix(0, vec![b]), &pf);
+        assert!(!one(Proj::Sym(1), Proj::Off(1, 1)));
+        assert!(!one(Proj::Off(1, 1), Proj::Sym(1)));
+        assert!(!one(Proj::Off(1, 1), Proj::Off(1, 2)));
+        assert!(one(Proj::Off(1, 1), Proj::Off(1, 1)));
+        assert!(one(Proj::Sym(1), Proj::Sym(1)));
+        assert!(one(Proj::Sym(1), Proj::Off(2, 1)));
+        assert!(one(Proj::Sym(9), Proj::Off(9, 1)));
+        assert!(one(lit(1), Proj::Off(1, 1)));
+        assert!(one(Proj::Opaque, Proj::Off(1, 1)));
+        // The path rule: `g[i][0]` and `g[i + 1][0]`.
+        assert!(!overlap_call(
+            &ix(0, vec![Proj::Sym(1), lit(0)]),
+            &ix(0, vec![Proj::Off(1, 1), lit(0)]),
+            &pf
+        ));
+        // A prefix still conflicts; another base never does.
+        assert!(overlap_call(
+            &ix(0, vec![]),
+            &ix(0, vec![Proj::Off(1, 1)]),
+            &pf
+        ));
+        // Without a proof the relation is the claim relation.
+        assert!(overlap_call(
+            &ix(0, vec![Proj::Sym(1)]),
+            &ix(0, vec![Proj::Off(1, 1)]),
+            &Proof::NONE
+        ));
+        // Moves and claims outside one call never read the offset.
+        assert!(overlap(
+            &ix(0, vec![Proj::Sym(1)]),
+            &ix(0, vec![Proj::Off(1, 1)])
+        ));
+        assert!(overlap_elem(
+            &ix(0, vec![Proj::Sym(1)]),
+            &ix(0, vec![Proj::Off(1, 1)])
+        ));
+        assert!(!covers_must(
+            &ix(0, vec![Proj::Off(1, 1)]),
+            &ix(0, vec![Proj::Off(1, 1)]),
+            YES
+        ));
+    }
+
+    /// EG3 (eg03), R2: a stable loop index over `[lo, hi)` is distinct
+    /// from a literal outside it, and one place with a literal inside.
+    #[test]
+    fn r2_separates_a_loop_index_from_a_literal_outside_its_range() {
+        let stable = |l: u32| l != 9;
+        let range = |l: u32| (l == 1 || l == 9).then_some((1u128, 3u128));
+        let pf = Proof {
+            stable: &stable,
+            range: &range,
+        };
+        let one = |a: Proj, b: Proj| overlap_call(&ix(0, vec![a]), &ix(0, vec![b]), &pf);
+        assert!(!one(lit(0), Proj::Sym(1)));
+        assert!(!one(Proj::Sym(1), lit(3)));
+        assert!(!one(Proj::Sym(1), lit(7)));
+        assert!(one(Proj::Sym(1), lit(1)));
+        assert!(one(Proj::Sym(1), lit(2)));
+        assert!(one(Proj::Sym(2), lit(0)), "no range, no proof");
+        assert!(
+            one(Proj::Sym(9), lit(0)),
+            "an unstable index proves nothing"
+        );
+        assert!(one(Proj::Off(1, 5), lit(0)), "R2 reads a plain index only");
+        let s = Proj::Lit(Key::Str("a".into()));
+        assert!(one(Proj::Sym(1), s), "R2 reads an integer literal only");
     }
 
     #[test]
