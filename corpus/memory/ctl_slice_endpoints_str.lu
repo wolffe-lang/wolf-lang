@@ -1,0 +1,32 @@
+//! check: run(exit=0, stdout="let\nlo\nhi\n2\nlen\nlo\nhi\n2\nhole\nlo\nhi\n2\n")
+//! phase: run
+//! conforms: str.slice, mem.model.order
+//!
+//! s187 (wolf-lang#479's neighbours) — a `str` slice as a member base
+//! runs its endpoints once. The checked machine's place lookup is the
+//! same for a `str` receiver as for a `List`, so it ran `lo` and `hi`
+//! twice for `s[lo()..hi()].len` and three times in a hole; native,
+//! release and lupin 0.1.42 ran them once. The `let` is the control.
+
+fn lo() -> int {
+    print("lo")
+    1
+}
+
+fn hi() -> int {
+    print("hi")
+    3
+}
+
+fn main() -> !int {
+    let s = "wolfgang"
+    print("let")
+    let t = s[lo()..hi()]
+    print("{t.len}")
+    print("len")
+    let n = s[lo()..hi()].len
+    print("{n}")
+    print("hole")
+    print("{s[lo()..hi()].len}")
+    0
+}

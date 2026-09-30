@@ -1,0 +1,32 @@
+//! check: run(exit=0, stdout="index\nlo\nhi\n20\nslice\nlo\nhi\n1\n")
+//! phase: run
+//! conforms: mem.list.slice, mem.model.order
+//!
+//! s187 (wolf-lang#479's neighbours) — a slice nested as the base of an
+//! index (`xs[lo()..hi()][0]`) and of another slice's member read
+//! (`xs[lo()..hi()][0..1].len`) runs the inner endpoints once. The
+//! checked machine ran them twice and three times: the outer place
+//! lookup asked the inner one first, and each "not a place" answer was
+//! followed by another evaluation. Native, release and lupin 0.1.42
+//! ran them once.
+
+fn lo() -> int {
+    print("lo")
+    1
+}
+
+fn hi() -> int {
+    print("hi")
+    3
+}
+
+fn main() -> !int {
+    var xs = [10, 20, 30, 40]
+    print("index")
+    let v = xs[lo()..hi()][0]
+    print("{v}")
+    print("slice")
+    let n = xs[lo()..hi()][0..1].len
+    print("{n}")
+    0
+}

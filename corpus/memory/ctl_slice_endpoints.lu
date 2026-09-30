@@ -1,0 +1,38 @@
+//! check: run(exit=0, stdout="let\nlo\nhi\n2\nlen\nlo\nhi\n2\nhole\nlo\nhi\n2\n")
+//! phase: run
+//! conforms: mem.list.slice, mem.model.order
+//!
+//! s187 (wolf-lang#479) — a slice's endpoints run once, however the
+//! slice is used. `[mem.model.order]` evaluates every operand exactly
+//! once, left to right. The checked machine ran `lo` and `hi` twice
+//! when the slice was the base of a member read (`xs[lo()..hi()].len`)
+//! and three times inside an interpolation hole; native, release and
+//! lupin 0.1.42 ran them once. The cause was the checked machine's
+//! place lookup: it evaluated the bracket operands before learning the
+//! index was a range (a slice is never a place), answered "not a
+//! place", and every caller then evaluated the slice again. The first
+//! shape (`let s = xs[lo()..hi()]`) never took that path and is the
+//! control. is60's probes c14, c18 and c19.
+
+fn lo() -> int {
+    print("lo")
+    1
+}
+
+fn hi() -> int {
+    print("hi")
+    3
+}
+
+fn main() -> !int {
+    var xs = [10, 20, 30, 40]
+    print("let")
+    let s = xs[lo()..hi()]
+    print("{s.len}")
+    print("len")
+    let n = xs[lo()..hi()].len
+    print("{n}")
+    print("hole")
+    print("{xs[lo()..hi()].len}")
+    0
+}

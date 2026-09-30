@@ -1,0 +1,39 @@
+//! check: run(exit=0, stdout="let\ngi\nlo\nhi\n2\nlen\ngi\nlo\nhi\n2\nhole\ngi\nlo\nhi\n2\n")
+//! phase: run
+//! conforms: mem.list.slice, mem.model.order
+//!
+//! s187 (wolf-lang#479's neighbours) — a slice of an indexed element
+//! (`g[gi()][lo()..hi()]`) runs the index and both endpoints once, left
+//! to right. As a member base the checked machine ran all three twice
+//! (`.len`) and three times (in an interpolation hole); native and
+//! release ran them once. lupin 0.1.42 runs `gi` twice even in the
+//! plain `let` and three times as a member base (wolffe-lang/wolf-interp#157;
+//! the driver gate pins that answer by version).
+
+fn lo() -> int {
+    print("lo")
+    1
+}
+
+fn hi() -> int {
+    print("hi")
+    3
+}
+
+fn gi() -> int {
+    print("gi")
+    1
+}
+
+fn main() -> !int {
+    var g = [[1, 2, 3, 4], [5, 6, 7, 8]]
+    print("let")
+    let s = g[gi()][lo()..hi()]
+    print("{s.len}")
+    print("len")
+    let n = g[gi()][lo()..hi()].len
+    print("{n}")
+    print("hole")
+    print("{g[gi()][lo()..hi()].len}")
+    0
+}

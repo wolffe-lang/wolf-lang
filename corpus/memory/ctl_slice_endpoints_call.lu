@@ -1,0 +1,49 @@
+//! check: run(exit=0, stdout="arg\nlo\nhi\n50\ncount\nlo\nhi\n2\nis_empty\nlo\nhi\nfalse\nfor\nlo\nhi\n50\n")
+//! phase: run
+//! conforms: mem.list.slice, mem.model.order
+//!
+//! s187 (wolf-lang#479's neighbours) — a slice passed as a `read`
+//! argument, a slice as a method receiver (`count`, `is_empty`) and a
+//! slice as a `for` iterable each run its endpoints once. The checked
+//! machine ran them twice in all four positions, for the same reason
+//! as `ctl_slice_endpoints.lu`: each position asks for a place first
+//! and evaluates the expression when there is none. Native, release
+//! and lupin 0.1.42 ran them once.
+
+fn lo() -> int {
+    print("lo")
+    1
+}
+
+fn hi() -> int {
+    print("hi")
+    3
+}
+
+fn total(ys: List[int]) -> int {
+    var s = 0
+    for y in ys {
+        s = s + y
+    }
+    s
+}
+
+fn main() -> !int {
+    var xs = [10, 20, 30, 40]
+    print("arg")
+    let t = total(xs[lo()..hi()])
+    print("{t}")
+    print("count")
+    let c = xs[lo()..hi()].count()
+    print("{c}")
+    print("is_empty")
+    let e = xs[lo()..hi()].is_empty()
+    print("{e}")
+    print("for")
+    var s = 0
+    for v in xs[lo()..hi()] {
+        s = s + v
+    }
+    print("{s}")
+    0
+}
