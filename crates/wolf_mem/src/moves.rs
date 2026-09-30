@@ -66,14 +66,15 @@ impl Emptied {
 /// Which locals can never carry R3's proof: every local some loan is
 /// taken on (a write through the borrower is not a statement on the
 /// local), and — when the body has any raw-tier statement — all of
-/// them.
-struct SymRule {
+/// them. EG3's call-surface proof (`crate::excl`, eg03) excludes the
+/// same locals.
+pub(crate) struct SymRule {
     loaned: HashSet<u32>,
     raw: bool,
 }
 
 impl SymRule {
-    fn new(cfg: &Cfg) -> Self {
+    pub(crate) fn new(cfg: &Cfg) -> Self {
         let loaned = cfg
             .loans
             .iter()
@@ -105,7 +106,7 @@ impl SymRule {
 
     /// For two places both read NOW (a store's target and a place of
     /// the universe): only the standing exclusions apply.
-    fn now(&self, local: u32) -> bool {
+    pub(crate) fn now(&self, local: u32) -> bool {
         !self.raw && !self.loaned.contains(&local)
     }
 }

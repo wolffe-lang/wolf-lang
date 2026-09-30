@@ -13,19 +13,38 @@
 //! of it is retired). A write or move of the claimed place inside a
 //! later argument is order-sensitive and lives in the lowerer
 //! (`check_nested_claims_after_mut`), where evaluation order exists.
+//!
+//! EG3 (eg03, `[mem.model.place.elem]` item 4): the pairs here are
+//! decided by [`crate::place::PlaceTable::overlap_call`], which may
+//! prove two run-time index steps distinct — R1 (`xs[i]` and
+//! `xs[i + 1]`) and R2 (a literal-range loop index against a literal
+//! outside the range) — for an index local that keeps its value through
+//! this call's evaluation: nothing the callee, receiver or arguments
+//! lower writes it (`CallSurface::unstable`), no loan is ever taken on
+//! it, and the body has no raw-tier statement (the moves pass's R3
+//! exclusions).
 
 use wolf_diag::{Diagnostic, codes};
 
 use crate::cfg::{Cfg, Stmt};
+use crate::place::{PlaceId, Proof};
 
 pub fn check(cfg: &Cfg, diags: &mut Vec<Diagnostic>) {
+    let rule = crate::moves::SymRule::new(cfg);
     for block in &cfg.blocks {
         for stmt in &block.stmts {
             let Stmt::Call(c) = stmt else { continue };
+            let stable = |l: u32| rule.now(l) && !c.unstable.contains(&l);
+            let range = |l: u32| cfg.induction.get(&l).copied();
+            let proof = Proof {
+                stable: &stable,
+                range: &range,
+            };
+            let overlap = |a: PlaceId, b: PlaceId| cfg.places.overlap_call(a, b, &proof);
             // mut vs mut / read / take.
             for (i, &(m, mspan)) in c.mut_args.iter().enumerate() {
                 for &(m2, m2span) in c.mut_args.iter().skip(i + 1) {
-                    if cfg.places.overlap(m, m2) {
+                    if overlap(m, m2) {
                         let (a, b) = (cfg.show_place(m), cfg.show_place(m2));
                         diags.push(
                             Diagnostic::error(
@@ -40,7 +59,7 @@ pub fn check(cfg: &Cfg, diags: &mut Vec<Diagnostic>) {
                     }
                 }
                 for &(r, rspan) in &c.read_args {
-                    if cfg.places.overlap(m, r) {
+                    if overlap(m, r) {
                         let (a, b) = (cfg.show_place(m), cfg.show_place(r));
                         diags.push(
                             Diagnostic::error(
@@ -55,7 +74,7 @@ pub fn check(cfg: &Cfg, diags: &mut Vec<Diagnostic>) {
                     }
                 }
                 for &(t, tspan) in &c.take_args {
-                    if cfg.places.overlap(m, t) {
+                    if overlap(m, t) {
                         let (a, b) = (cfg.show_place(m), cfg.show_place(t));
                         diags.push(
                             Diagnostic::error(
@@ -74,7 +93,7 @@ pub fn check(cfg: &Cfg, diags: &mut Vec<Diagnostic>) {
             // read vs take: the lent place may not move away.
             for &(r, rspan) in &c.read_args {
                 for &(t, tspan) in &c.take_args {
-                    if cfg.places.overlap(r, t) {
+                    if overlap(r, t) {
                         let (a, b) = (cfg.show_place(r), cfg.show_place(t));
                         diags.push(
                             Diagnostic::error(
