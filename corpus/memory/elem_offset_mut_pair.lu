@@ -1,0 +1,28 @@
+//! check: run(exit=0, stdout="2 12\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.excl.1
+//!
+//! eg03 (EGC's EG3) — `[mem.model.place.elem]` item 4, R1: `add2(mut
+//! xs[i], mut xs[i + 1])`. Two offsets from one integer local with
+//! different literal offsets (`0` and `1`) never denote the same
+//! element while the local keeps its value, and nothing in the call
+//! writes `i`, so the two `mut` claims are disjoint. Ruled by eg00 and
+//! parked until EG3 (K13); through 0.2.19 it was E1002 on every
+//! wolfgang lane while lupin ran it. Now `2 12` on checked, native,
+//! release and lupin 0.1.42. The twins that stay refused:
+//! `elem_offset_other_local.lu` (another local), `elem_offset_rebound_*`
+//! (the local written between the claims), `elem_offset_{negative,
+//! nonliteral,zero,vs_literal}_mut.lu`.
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    var i = 0
+    add2(mut xs[i], mut xs[i + 1])
+    print("{xs[0]} {xs[1]}")
+    0
+}

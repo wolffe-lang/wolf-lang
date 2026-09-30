@@ -1,0 +1,29 @@
+//! check: run(exit=0, stdout="3 12 13\n")
+//! phase: run
+//! conforms: mem.model.place.elem, mem.tier0.excl.1
+//!
+//! eg03 (EGC's EG3) — `[mem.model.place.elem]` item 4, R2: `for i in
+//! 1..3 { add2(mut xs[0], mut xs[i]) }`. A loop index over the literal
+//! bounds `1..3`, never written in the body, takes only the values 1
+//! and 2, so it never equals the literal `0`. Ruled by eg00 and parked
+//! until EG3 (K14); through 0.2.19 it was E1002 on every wolfgang lane
+//! while lupin ran it. Now `3 12 13` on checked, native, release and
+//! lupin 0.1.42. The twins that stay refused:
+//! `elem_loop_covers_const.lu` (`0..3` holds `0`),
+//! `elem_loop_inclusive_covers_const.lu` (`..=` holds its end),
+//! `elem_loop_induction_written_mut.lu` (the index assigned in the
+//! body), `elem_loop_nonliteral_range_mut.lu` (`1..n`).
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    for i in 1..3 {
+        add2(mut xs[0], mut xs[i])
+    }
+    print("{xs[0]} {xs[1]} {xs[2]}")
+    0
+}
