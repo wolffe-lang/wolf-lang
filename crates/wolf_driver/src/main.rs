@@ -1007,15 +1007,26 @@ fn compile_native(
     // EVERYTHING pending and stops. `pending` carries surviving
     // warnings across phases so a clean build still reports them.
     let mut pending: Vec<Diagnostic> = Vec::new();
+    // `last`: the mem rung, the front end's final one. Before it a
+    // deny-promoted W1002 does not stop the build (s185, wolf-lang#469,
+    // `wolf_diag::waits_for_mem`): the refusal that retires it may come
+    // from a later rung, and stopping on it at resolve reported the
+    // retired wrong diagnosis in place of the E1001.
     let gate = |sources: &Sources,
                 pending: &mut Vec<Diagnostic>,
-                diags: Vec<Diagnostic>|
+                diags: Vec<Diagnostic>,
+                last: bool|
      -> Result<(), BuildStop> {
         pending.extend(wolf_diag::lint::apply(&levels, &scan.allows, diags));
         // #325: a mode refusal retires the `mut`-parameter lint it
         // contradicts — the accumulator is where the two phases meet.
         wolf_diag::suppress_mode_shadowed(pending);
-        if has_errors(pending) {
+        let stop = if last {
+            has_errors(pending)
+        } else {
+            wolf_diag::stops_early(pending)
+        };
+        if stop {
             wolf_diag::sort_diagnostics(pending);
             render(sources, pending);
             return Err(BuildStop::Errors(first_reported_code(pending)));
@@ -1024,7 +1035,7 @@ fn compile_native(
     };
     let mut resolve_diags = res.diagnostics.clone();
     resolve_diags.extend(scan.diagnostics.iter().cloned());
-    gate(sources, &mut pending, resolve_diags)?;
+    gate(sources, &mut pending, resolve_diags, false)?;
     // I13's import-graph half (s51): a package whose modules import a
     // capability-carrying std facade module must declare the
     // capability in its manifest — E1504, an error, never a warning.
@@ -1033,24 +1044,33 @@ fn compile_native(
             sources,
             &mut pending,
             pkg_cmd::capability_diagnostics(project, &res.package),
+            false,
         )?;
     }
     let tc = wolf_sema::typecheck_package(&res);
     if let Some(nyc) = tc.not_yet.first() {
+        // A rung that declines ends the front end early: a promoted
+        // W1002 still waiting stops the build, as it did before #469's
+        // deferral, rather than turning into the refusal.
+        gate(sources, &mut pending, Vec::new(), true)?;
         return Err(BuildStop::Refused {
             phase: "resolve",
             reason: format!("{} @{}..{}", nyc.construct, nyc.span.lo, nyc.span.hi),
         });
     }
-    gate(sources, &mut pending, tc.diagnostics.clone())?;
+    gate(sources, &mut pending, tc.diagnostics.clone(), false)?;
     let mem = wolf_mem::check_package(&res.package, &tc);
     if let Some(nyc) = mem.not_yet.first() {
+        // A rung that declines ends the front end early: a promoted
+        // W1002 still waiting stops the build, as it did before #469's
+        // deferral, rather than turning into the refusal.
+        gate(sources, &mut pending, Vec::new(), true)?;
         return Err(BuildStop::Refused {
             phase: "typecheck",
             reason: format!("{} @{}..{}", nyc.construct, nyc.span.lo, nyc.span.hi),
         });
     }
-    gate(sources, &mut pending, mem.diagnostics.clone())?;
+    gate(sources, &mut pending, mem.diagnostics.clone(), true)?;
     // No later phase produces diagnostics: report the surviving
     // warnings now, whatever `--emit` does next.
     if opts.report_warnings && !pending.is_empty() {
@@ -3527,13 +3547,36 @@ fn conform_run(args: &[String]) {
         // that failed. Used from the resolve rung down, which is where
         // the `#[allow]` regions are known; before that the plain
         // question stands, so no attribute can be missed.
-        let first_error_linted = |lints: &LintLevels, allows: &[AllowRegion], ds: &[Diagnostic]| {
+        //
+        // s185 (wolf-lang#469): except a promoted W1002, which waits for
+        // the mem rung (`wolf_diag::waits_for_mem`) — the refusal that
+        // retires it (E0804/E1014 at typecheck, #464's E1001 at mem)
+        // comes later, and stopping at resolve reported the retired
+        // wrong diagnosis in its place. `last` is the rung the ladder
+        // ends at (the requested phase, or mem). A W1002 still standing
+        // when the ladder stops is the verdict, at `resolve`, where its
+        // analysis ran ([`waiting_w1002`]).
+        let first_error_linted =
+            |lints: &LintLevels, allows: &[AllowRegion], ds: &[Diagnostic], last: bool| {
+                if lints.is_empty() {
+                    return first_error(ds);
+                }
+                let linted = wolf_diag::lint::apply(lints, allows, ds.to_vec());
+                if !last && !wolf_diag::stops_early(&linted) {
+                    return None;
+                }
+                linted
+                    .iter()
+                    .find(|d| d.severity == wolf_diag::Severity::Error)
+                    .map(|d| d.code)
+            };
+        let waiting_w1002 = |lints: &LintLevels, allows: &[AllowRegion], ds: &[Diagnostic]| {
             if lints.is_empty() {
-                return first_error(ds);
+                return None;
             }
             wolf_diag::lint::apply(lints, allows, ds.to_vec())
                 .iter()
-                .find(|d| d.severity == wolf_diag::Severity::Error)
+                .find(|d| wolf_diag::waits_for_mem(d))
                 .map(|d| d.code)
         };
         // Phase ladder, deepest implemented: mem (s18). Each rung either
@@ -3580,7 +3623,12 @@ fn conform_run(args: &[String]) {
                         let mut all = res.diagnostics.clone();
                         all.extend(scan.diagnostics);
                         wolf_diag::sort_diagnostics(&mut all);
-                        if let Some(code) = first_error_linted(&lints, &allow_regions, &all) {
+                        if let Some(code) = first_error_linted(
+                            &lints,
+                            &allow_regions,
+                            &all,
+                            phase.as_deref() == Some("resolve"),
+                        ) {
                             ("resolve", format!("fail({code})"), all)
                         } else if phase.as_deref() == Some("resolve") {
                             ("resolve", "pass".to_string(), all)
@@ -3597,16 +3645,27 @@ fn conform_run(args: &[String]) {
                             // fully-checkable file fail here.
                             let tc = wolf_sema::typecheck_package(&res);
                             if !tc.not_yet.is_empty() {
-                                report_refusal(tc.not_yet.first(), &mut x_ext);
-                                ("resolve", "unsupported".to_string(), all)
+                                if let Some(w) = waiting_w1002(&lints, &allow_regions, &all) {
+                                    ("resolve", format!("fail({w})"), all)
+                                } else {
+                                    report_refusal(tc.not_yet.first(), &mut x_ext);
+                                    ("resolve", "unsupported".to_string(), all)
+                                }
                             } else {
                                 let mut all = all;
                                 all.extend(tc.diagnostics.iter().cloned());
                                 wolf_diag::suppress_mode_shadowed(&mut all);
                                 wolf_diag::sort_diagnostics(&mut all);
-                                if let Some(code) = first_error_linted(&lints, &allow_regions, &all)
-                                {
-                                    ("typecheck", format!("fail({code})"), all)
+                                if let Some(code) = first_error_linted(
+                                    &lints,
+                                    &allow_regions,
+                                    &all,
+                                    phase.as_deref() == Some("typecheck"),
+                                ) {
+                                    match waiting_w1002(&lints, &allow_regions, &all) {
+                                        Some(w) => ("resolve", format!("fail({w})"), all),
+                                        None => ("typecheck", format!("fail({code})"), all),
+                                    }
                                 } else if phase.as_deref() == Some("typecheck") {
                                     ("typecheck", "pass".to_string(), all)
                                 } else {
@@ -3621,8 +3680,14 @@ fn conform_run(args: &[String]) {
                                     // memory errors are withheld.
                                     let mem = wolf_mem::check_package(&res.package, &tc);
                                     if !mem.not_yet.is_empty() {
-                                        report_refusal(mem.not_yet.first(), &mut x_ext);
-                                        ("typecheck", "unsupported".to_string(), all)
+                                        if let Some(w) =
+                                            waiting_w1002(&lints, &allow_regions, &all)
+                                        {
+                                            ("resolve", format!("fail({w})"), all)
+                                        } else {
+                                            report_refusal(mem.not_yet.first(), &mut x_ext);
+                                            ("typecheck", "unsupported".to_string(), all)
+                                        }
                                     } else {
                                         let mut all = all;
                                         all.extend(mem.diagnostics.iter().cloned());
@@ -3633,9 +3698,12 @@ fn conform_run(args: &[String]) {
                                         wolf_diag::suppress_mode_shadowed(&mut all);
                                         wolf_diag::sort_diagnostics(&mut all);
                                         if let Some(code) =
-                                            first_error_linted(&lints, &allow_regions, &all)
+                                            first_error_linted(&lints, &allow_regions, &all, true)
                                         {
-                                            ("mem", format!("fail({code})"), all)
+                                            match waiting_w1002(&lints, &allow_regions, &all) {
+                                                Some(w) => ("resolve", format!("fail({w})"), all),
+                                                None => ("mem", format!("fail({code})"), all),
+                                            }
                                         } else if phase.as_deref() == Some("mem") {
                                             ("mem", "pass".to_string(), all)
                                         } else {
