@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 516..542 name=W fields=1
+FnDecl 544..661 name=wrap body=Block
+FnDecl 663..788 name=main body=Block
