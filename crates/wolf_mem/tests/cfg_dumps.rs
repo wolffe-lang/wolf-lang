@@ -318,6 +318,7 @@ mod fuzz {
                             read_args: vec![(second, s)],
                             take_args: Vec::new(),
                             c_call: false,
+                            unstable: Vec::new(),
                         })
                     }
                 };
@@ -359,6 +360,7 @@ mod fuzz {
             exit: BlockId(n_blocks as u32 - 1),
             pattern_moves: Default::default(),
             nested_exits: Vec::new(),
+            induction: Default::default(),
         }
     }
 

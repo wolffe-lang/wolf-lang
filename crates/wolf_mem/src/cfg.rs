@@ -176,6 +176,12 @@ pub struct CallSurface {
     /// D11, always emitted (even with an empty argument surface) as
     /// the FFI attribution point ([mem.boundary.ffi]).
     pub c_call: bool,
+    /// EG3 (eg03, `[mem.model.place.elem]` item 4): every local the
+    /// call's callee, receiver or argument evaluation may write — a
+    /// store, a move, a nested `mut`/`take` lend. R1 and R2 never prove
+    /// anything through one of these (`xs[i]` and `xs[i + 1]` name one
+    /// element again once an argument runs `i = i - 1`).
+    pub unstable: Vec<u32>,
 }
 
 /// One effect statement.
@@ -314,6 +320,10 @@ pub struct Cfg {
     /// `mut` parameters are checked at THAT exit
     /// (`[mem.tier0.mode.mut]`'s at-return rule), not the outer one.
     pub nested_exits: Vec<(BlockId, Vec<u32>)>,
+    /// EG3's R2 (eg03): each `for` index whose range has integer-literal
+    /// bounds and which its body never writes, with the half-open range
+    /// `[lo, hi)` of values it takes (`LO..=HI` is `[LO, HI + 1)`).
+    pub induction: std::collections::HashMap<u32, (u128, u128)>,
 }
 
 impl Cfg {
@@ -325,7 +335,8 @@ impl Cfg {
         &self.locals[id.0 as usize]
     }
 
-    /// Render a place for diagnostics: `p`, `p.x`, `xs[0]`, `xs[i]`, `xs[_]`.
+    /// Render a place for diagnostics: `p`, `p.x`, `xs[0]`, `xs[i]`,
+    /// `xs[i + 1]`, `xs[_]`.
     pub fn show_place(&self, id: PlaceId) -> String {
         let place = self.places.get(id);
         let mut out = match &place.base {
@@ -341,6 +352,9 @@ impl Cfg {
                 crate::place::Proj::Lit(k) => out.push_str(&format!("[{k}]")),
                 crate::place::Proj::Sym(l) => {
                     out.push_str(&format!("[{}]", self.locals[*l as usize].name));
+                }
+                crate::place::Proj::Off(l, k) => {
+                    out.push_str(&format!("[{} + {k}]", self.locals[*l as usize].name));
                 }
                 crate::place::Proj::Opaque => out.push_str("[_]"),
             }
