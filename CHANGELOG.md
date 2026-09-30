@@ -126,6 +126,33 @@ literal elements (E1002 or E1013 through 0.2.18), a member read
   error reported, `fail(E1001)` at `mem` in the record. A W1002 nothing
   retires still rejects the program, at `resolve`.
 
+### The pairing: lupin 0.1.42
+
+`PAIRING` names **lupin 0.1.42 at pin `ec56a08`** (wolf-interp release
+400022505; the linux x86-64 archive's sha256 `9856335a…`), whose spec
+pin is this compiler's v0.2.18 tag and which carries
+wolffe-lang/wolf-interp#143–#146, #149, #151, #152 and the lupin halves
+of #472 and #474. The ritual (#87, with #281's control against the 0.1.41
+archive, same corpus, same release `wolf`) **moved 13 ledger counts on
+each tier, together**, all to agreement: `elem_header_methods_under_claim`,
+`elem_member_read_after_mut` and `elem_member_read_under_claims`
+(soundness → agreement: 0.2.19 runs them and lupin now does too);
+`elem_key_reassigned_no_revive`, the six `elem_whole_read_*_after_move`
+rows and `mut_param_moveout_{map,one_path,whole}` (completeness →
+agreement: the compiler's E1001 now meets lupin's `trap(use-after-move)`).
+Checked: 444 → 457 agreements, completeness 200 → 190, soundness 3 → 0;
+native: 485 → 498, 200 → 190, 4 → 1. One file moved below the ledger:
+`ctl_store_order_nested_index.lu`, whose lupin stdout is now the
+compiler's (#145, each index operand once). Native's one soundness
+finding is still `memory/unsafe_ub_uaf.lu` (`exit` vs `ub(mem.ub)`), the
+program's own use-after-free read on the compiled lane.
+
+The gates that pinned lupin by version drop every 0.1.40 and 0.1.41
+entry: nine lists in `element_places_lanes.rs`, `mut_param_return_lanes.rs`
+and `store_order_lanes.rs` are empty, and the fourteen cases pinned at
+0.1.41 (#144, #145, #146, #149, #472, #474) take the ruled arm against
+the published 0.1.42. None is widened and none stays pinned.
+
 ## 0.2.18 — 2026-09-27
 
 THE EIGHTEENTH, a point release. The published 0.2.17 gives two silent
