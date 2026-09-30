@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 688..778 name=lo body=Block
+FnDecl 780..820 name=hi body=Block
+FnDecl 822..912 name=gi body=Block
+FnDecl 914..1011 name=endpoint body=Block
+FnDecl 1013..1121 name=base body=Block
+FnDecl 1123..1417 name=main body=Block

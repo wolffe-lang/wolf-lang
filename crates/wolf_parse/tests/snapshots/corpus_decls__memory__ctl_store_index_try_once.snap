@@ -1,0 +1,13 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 803..895 name=idx body=Block
+FnDecl 897..985 name=a body=Block
+FnDecl 987..1025 name=v body=Block
+FnDecl 1027..1064 name=bump body=Block
+FnDecl 1066..1153 name=store body=Block
+FnDecl 1155..1244 name=compound body=Block
+FnDecl 1246..1339 name=nested body=Block
+FnDecl 1341..1432 name=claim body=Block
+FnDecl 1434..2174 name=main body=Block

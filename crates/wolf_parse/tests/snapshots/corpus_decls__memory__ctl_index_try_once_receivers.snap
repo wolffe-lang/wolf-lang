@@ -1,0 +1,15 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 870..962 name=idx body=Block
+FnDecl 964..1065 name=cp body=Block
+FnDecl 1067..1154 name=cnt body=Block
+FnDecl 1156..1296 name=loop_over body=Block
+FnDecl 1298..1410 name=elem_copy body=Block
+FnDecl 1412..1531 name=push_into body=Block
+FnDecl 1533..1615 name=blen body=Block
+FnDecl 1617..1750 name=bfor body=Block
+FnDecl 1752..1826 name=slen body=Block
+FnDecl 1828..1909 name=pr body=Block
+FnDecl 1911..2771 name=main body=Block
