@@ -494,7 +494,8 @@ impl<'t> Lowerer<'t> {
     fn push(&mut self, s: Stmt) {
         let block = &mut self.blocks[self.cur.0 as usize].stmts;
         if self.deferred_depth > 0 {
-            self.deferred_stmts.insert((self.cur.0 as usize, block.len()));
+            self.deferred_stmts
+                .insert((self.cur.0 as usize, block.len()));
         }
         block.push(s);
     }
@@ -1858,8 +1859,7 @@ impl<'t> Lowerer<'t> {
                             }
                         }
                         if !deferred {
-                            accesses
-                                .extend(c.read_args.iter().map(|&(p, s)| (p, s, "is read")));
+                            accesses.extend(c.read_args.iter().map(|&(p, s)| (p, s, "is read")));
                         }
                     }
                     _ if deferred => {}

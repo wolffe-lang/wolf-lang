@@ -217,11 +217,7 @@ fn only(entry: &Path, code: &str) {
 #[test]
 fn a_nested_fn_mut_parameter_spelled_mut_runs() {
     let entry = corpus("nested_fn_mut_param.lu");
-    wolfgang(
-        &entry,
-        verdict("unsupported"),
-        runs("4 42 2 9 7 5\n4\n"),
-    );
+    wolfgang(&entry, verdict("unsupported"), runs("4 42 2 9 7 5\n4\n"));
     oracle(&entry, verdict("unsupported"));
 }
 

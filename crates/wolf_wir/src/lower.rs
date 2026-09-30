@@ -6002,7 +6002,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     }
 
     fn bind_nested_fn(&mut self, e: &'t GreenNode, ext: ExtFunc, rec: Value) {
-        let Some(name_span) = wolf_ast::FnDecl::cast(e).and_then(|d| d.name()).map(|t| t.span)
+        let Some(name_span) = wolf_ast::FnDecl::cast(e)
+            .and_then(|d| d.name())
+            .map(|t| t.span)
         else {
             return;
         };
