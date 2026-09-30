@@ -8,6 +8,7 @@
 //! native and release (lupin 0.1.42: `1 2 5`).
 
 struct W { xs: List[int] }
+
 struct O { w: W, n: int }
 
 fn main() -> !int {

@@ -8,6 +8,7 @@
 //! answered `unsupported` before s190.
 
 struct W { xs: List[int] }
+
 struct O { w: W, n: int }
 
 fn main() -> !int {
