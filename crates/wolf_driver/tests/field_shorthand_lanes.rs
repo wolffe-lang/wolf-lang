@@ -253,11 +253,7 @@ fn shorthand_is_longhand(
             }
         }
     }
-    assert!(
-        misses.is_empty(),
-        "{name}:\n  {}",
-        misses.join("\n  ")
-    );
+    assert!(misses.is_empty(), "{name}:\n  {}", misses.join("\n  "));
 }
 
 const E1001: Ruled = Ruled::Refused("fail(E1001)", &["E1001"]);
