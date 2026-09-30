@@ -3015,11 +3015,6 @@ impl<'t> Lowerer<'t> {
                 let d = StructLit::cast(e).expect("kind");
                 let mut parts: Vec<(Option<String>, Val, Span)> = Vec::new();
                 for f in d.fields() {
-                    // PLANT (s190, evidence only; reverted next): the move
-                    // checker skips a shorthand field again, as before #486.
-                    if f.syntax().child_token(SyntaxKind::Ident).is_none() {
-                        continue;
-                    }
                     if let Some(v) = FieldInit::value(f) {
                         // Field initializers consume their values.
                         let fv = self.eval_value(v)?;
