@@ -1,5 +1,49 @@
 # Changelog
 
+## Unreleased
+
+### A slice's endpoints run once (s187, #479)
+
+- **The checked machine ran a slice's endpoints two or three times**
+  when the slice was not simply bound: `xs[lo()..hi()].len` ran `lo`
+  and `hi` twice under `conform-run --checked`, and
+  `"{xs[lo()..hi()].len}"` ran them three times. Native, release and
+  lupin 0.1.42 ran them once, and now every lane does. The same fix
+  covers a slice passed as a `read` argument, a slice as the receiver
+  of `count` or `is_empty`, a slice as a `for` iterable (all ran
+  twice), a slice nested under an index or another slice
+  (`xs[lo()..hi()][0]`, `xs[lo()..hi()][0..1].len`), a slice of an
+  indexed element (`g[gi()][lo()..hi()]`, which ran `gi` as often as
+  the endpoints), and a `str` slice (`s[lo()..hi()].len`). The cause
+  was the place lookup: it evaluated the bracket's operands before
+  learning the index was a range. It now decides that a slice is not a
+  place from the syntax, before any operand runs.
+- Witnesses: `corpus/memory/ctl_slice_endpoints.lu` (is60's c14, c18
+  and c19) and `ctl_slice_endpoints_{call,nested,indexed_base,str}.lu`.
+  `slice_endpoint_once_lanes.rs` asserts them on checked, native,
+  release and lupin. lupin 0.1.42 runs an indexed base's outer index
+  twice or three times (wolffe-lang/wolf-interp#157), and the gate
+  pins that answer for 0.1.42 by version.
+- Not fixed here: when the `?` in an index operand propagates
+  (`xs[idx()?]`), the checked machine still runs the operand twice
+  (#481).
+
+### The #146 gate measures again (s187, #477)
+
+- `release_overlap_guard.rs` had compared `fail(E1014)` with
+  `fail(E1014)` since the memory checker began refusing its witness.
+  The witness is respelled so that it runs (`var x = copy x0`). The
+  gate now asserts that native prints the known sum before it compares
+  release with native.
+- Safe source can no longer hand the versioned loop two overlapping
+  lists (#384 fixed `copy`, and #93 keeps two live Lists off one
+  buffer). So a stale overlap guard gives the same answer as a correct
+  one, and the behavioural half cannot see #146. A second test reads
+  the release mid-end's module (`WOLF_MIDEND_DUMP=1`) and asserts that
+  every overlap guard in the witness takes its extent from a len load
+  laid out after the last in-place `push`. With #146 planted back, the
+  behavioural test stays green and the structural test goes red.
+
 ## 0.2.19 — 2026-09-30
 
 THE NINETEENTH. `mut` claims become element-granular (EGC's EG2):
