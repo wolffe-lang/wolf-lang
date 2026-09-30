@@ -507,6 +507,16 @@ struct Checker<'a> {
     /// is the resolve rung's law since s29 (DIV-2026-010) — this
     /// checker no longer tracks `let` provenance.
     scopes: Vec<Vec<(String, TyId)>>,
+    /// wolf-lang#466 (s186): per scope, the entries of `scopes` that a
+    /// nested fn with a `mut` or `take` parameter bound — (index in
+    /// the scope, index into `nested_fns`). A fn TYPE carries no
+    /// modes, so a call through the name reads the declaration here.
+    scope_fns: Vec<Vec<(usize, u32)>>,
+    /// The declared parameters of each moded nested fn.
+    nested_fns: Vec<Vec<ParamSig>>,
+    /// The callee path of the moded nested-fn call being checked: its
+    /// one sanctioned use (every other use is a value, refused).
+    nested_callee: Option<Span>,
     diags: Vec<Diagnostic>,
     exprs: Vec<(Span, TyId)>,
     locals: Vec<(String, Span, TyId)>,
@@ -744,6 +754,9 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         lo: Lower::new(pkg, sigs.table.clone()),
         vars: VarStore::new(),
         scopes: Vec::new(),
+        scope_fns: Vec::new(),
+        nested_fns: Vec::new(),
+        nested_callee: None,
         diags: Vec::new(),
         exprs: Vec::new(),
         locals: Vec::new(),
@@ -921,6 +934,9 @@ pub(crate) fn collect_body_rows(
         lo: Lower::new(pkg, sigs.table.clone()),
         vars: VarStore::new(),
         scopes: Vec::new(),
+        scope_fns: Vec::new(),
+        nested_fns: Vec::new(),
+        nested_callee: None,
         diags: Vec::new(),
         exprs: Vec::new(),
         locals: Vec::new(),
@@ -1100,10 +1116,28 @@ impl<'a> Checker<'a> {
 
     fn push_scope(&mut self) {
         self.scopes.push(Vec::new());
+        self.scope_fns.push(Vec::new());
     }
 
     fn pop_scope(&mut self) {
         self.scopes.pop();
+        self.scope_fns.pop();
+    }
+
+    /// wolf-lang#466: the moded nested fn the innermost binding of
+    /// `name` is, if it is one (shadowing-correct: a later `let` of
+    /// the same name hides it).
+    fn lookup_moded_nested_fn(&self, name: &str) -> Option<u32> {
+        for (depth, scope) in self.scopes.iter().enumerate().rev() {
+            if let Some(i) = scope.iter().rposition(|(n, _)| n == name) {
+                return self
+                    .scope_fns
+                    .get(depth)
+                    .and_then(|fs| fs.iter().find(|&&(at, _)| at == i))
+                    .map(|&(_, id)| id);
+            }
+        }
+        None
     }
 
     fn bind(&mut self, name: String, span: Span, ty: TyId) {
@@ -4945,6 +4979,17 @@ impl<'a> Checker<'a> {
         };
         let name = self.text(t.span);
         if let Some((depth, ty)) = self.lookup_local_depth(&name) {
+            // wolf-lang#466: a nested fn with a `mut`/`take` parameter
+            // is called by its name and nowhere else — a fn value
+            // carries no modes, so a call through it would pass the
+            // caller's place by value into a body that writes it.
+            if self.nested_callee != Some(e.span) && self.lookup_moded_nested_fn(&name).is_some() {
+                return Err(NotYet {
+                    construct: "a nested fn with `mut` or `take` parameters used as a value \
+                                (a fn type carries no modes; call it by name)",
+                    span: e.span,
+                });
+            }
             self.note_capture(depth, &name, ty);
             return Ok(ty);
         }
@@ -7350,6 +7395,9 @@ impl<'a> Checker<'a> {
             let t = PathExpr::cast(callee).and_then(|p| p.ident());
             if let Some(t) = t {
                 let name = self.text(t.span);
+                if let Some(id) = self.lookup_moded_nested_fn(&name) {
+                    return self.call_moded_nested_fn(id, callee, e, d.args());
+                }
                 if self.lookup_local(&name).is_none() {
                     // The comptime intrinsics allowlist (D29/D33).
                     // These come FIRST and are the only ambient names
@@ -11947,6 +11995,10 @@ impl<'a> Checker<'a> {
         let params: Vec<_> = d.params().into_iter().flat_map(|p| p.params()).collect();
         let mut ptys = Vec::new();
         let mut binds = Vec::new();
+        // wolf-lang#466: the declared parameters, modes included — the
+        // call site must spell each mode (X1, E1007), and `wolf_mem`
+        // checks the body under them.
+        let mut declared: Vec<ParamSig> = Vec::new();
         for p in &params {
             let Some(t) = p.ty() else {
                 return Err(NotYet {
@@ -11958,6 +12010,14 @@ impl<'a> Checker<'a> {
             if let Some(n) = p.name() {
                 binds.push((self.text(n.span), n.span, ty));
             }
+            declared.push(ParamSig {
+                name: p.name().map(|n| self.text(n.span)).unwrap_or_default(),
+                ty,
+                span: p.name().map(|n| n.span).unwrap_or(p.syntax().span),
+                mode: p.mode(),
+                view: None,
+                store: false,
+            });
             ptys.push(ty);
         }
         let ret = match d.ret_ty() {
@@ -12032,8 +12092,77 @@ impl<'a> Checker<'a> {
         if let Some(n) = d.name() {
             let name = self.text(n.span);
             self.bind(name, n.span, fnty);
+            if declared.iter().any(|p| p.mode.is_some()) {
+                let id = self.nested_fns.len() as u32;
+                self.nested_fns.push(declared);
+                let at = self.scopes.last().map_or(0, |s| s.len().saturating_sub(1));
+                if let Some(fs) = self.scope_fns.last_mut() {
+                    fs.push((at, id));
+                }
+            }
         }
         Ok(())
+    }
+
+    /// wolf-lang#466 (s186) — a call to a nested fn that declares a
+    /// `mut` or `take` parameter, by its name. The call surface
+    /// carries the DECLARED parameters, so `wolf_mem` holds the site
+    /// to X1 exactly as for a module fn: `f(mut xs)` against `mut xs`
+    /// is legal and `f(xs)` is E1007 (before s186 it was the reverse —
+    /// the synthesized `read` params of a fn-typed callee). No
+    /// `decl_span`: the callee is not an item, and the lowering finds
+    /// the body through the binding.
+    fn call_moded_nested_fn(
+        &mut self,
+        id: u32,
+        callee: &GreenNode,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        self.nested_callee = Some(callee.span);
+        let callee_ty = self.synth_expr(callee);
+        self.nested_callee = None;
+        let callee_ty = callee_ty?;
+        let TyKind::Fn(_, ret) = self.kind_of(callee_ty) else {
+            return Ok(self.error_ty());
+        };
+        let params = self.nested_fns[id as usize].clone();
+        let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
+        let callee_name = self.text(callee.span);
+        if arg_nodes.len() != params.len() {
+            self.wrong_arg_count(&callee_name, e.span, None, params.len(), arg_nodes.len());
+        }
+        self.calls.push((
+            e.span,
+            CallSig {
+                callee: callee_name.clone(),
+                decl_span: None,
+                has_self: false,
+                ctor: false,
+                params: params.clone(),
+                c_call: false,
+            },
+        ));
+        for (i, arg) in arg_nodes.iter().enumerate() {
+            let Some(v) = Arg::value(*arg) else { continue };
+            match params.get(i) {
+                Some(p) => {
+                    let exp = Expect {
+                        ty: p.ty,
+                        reason: Reason::ArgOfCall {
+                            callee: callee_name.clone(),
+                            index: i,
+                        },
+                        because: Some(p.span),
+                    };
+                    self.check_expr(v, &exp)?;
+                }
+                None => {
+                    self.synth_expr(v)?;
+                }
+            }
+        }
+        Ok(ret)
     }
 
     // ---------------------------------------------------- defaulting ---
