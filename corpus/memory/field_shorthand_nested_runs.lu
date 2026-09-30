@@ -1,0 +1,20 @@
+//! check: run(exit=0, stdout="3 5\n")
+//! phase: run
+//! conforms: gram.expr.primary, mem.tier0.move.1
+//!
+//! s190 (wolf-lang#486) — the accepted twin of
+//! `field_shorthand_nested.lu`: the nested shorthand with no later use
+//! of `xs`. Every lane prints the same line; the checked machine
+//! answered `unsupported` before s190.
+
+struct W { xs: List[int] }
+struct O { w: W, n: int }
+
+fn main() -> !int {
+    var xs = [1, 2]
+    let n = 5
+    var o = O { w: W { xs }, n }
+    (mut o.w.xs).push(9)
+    print("{o.w.xs.len} {o.n}")
+    0
+}

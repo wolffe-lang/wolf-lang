@@ -1,0 +1,24 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: gram.expr.primary, conc.task.spawn, mem.tier0.move.1
+//!
+//! s190 (wolf-lang#486) — the shorthand inside a task: the spawned
+//! closure's `W { xs }` moves the captured `xs`, as `W { xs: xs }`
+//! does, so the answer is the longhand's E1001 at the closure and at
+//! the later `xs.len`. wolf 0.2.19 answered `unsupported` ("this
+//! field-init shorthand") on native and release.
+
+struct W { xs: List[int] }
+
+fn main() -> !int {
+    var xs = [1]
+    scope s {
+        s.spawn(fn() {   // ERROR E1001: the task uses xs after its own body moved it
+            var w = W { xs }
+            (mut w.xs).push(9)
+            print("{w.xs.len}")
+        })
+    }
+    print("{xs.len}")   // ERROR E1001: xs moved inside the task
+    0
+}

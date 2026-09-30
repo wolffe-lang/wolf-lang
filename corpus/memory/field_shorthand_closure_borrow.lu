@@ -1,0 +1,22 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: gram.expr.primary, gram.expr.closure, mem.tier0.borrow.1
+//! warns: W1102
+//!
+//! s190 (wolf-lang#486) — a closure capturing through the shorthand
+//! borrows its capture exactly as the longhand does: `fn() { P { n } }`
+//! needs `n`, so the write `n = 2` while `f` is still needed is E1002,
+//! with W1102's stale-capture advisory beside it
+//! (`closure_borrow_write.lu`'s rule). wolf 0.2.19 saw no capture at
+//! all: no E1002, no W1102, and `unsupported` at lowering.
+
+struct P { n: int }
+
+fn main() -> !int {
+    var n = 1
+    let f = fn() { P { n } }
+    n = 2   // ERROR E1002: f still needs n
+    let a = f()
+    print("{a.n} {n}")
+    0
+}

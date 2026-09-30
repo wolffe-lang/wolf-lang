@@ -1,0 +1,20 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: gram.expr.primary, mem.tier0.move.1, mem.tier0.move.2
+//!
+//! s190 (wolf-lang#486) — a shorthand inside a nested literal:
+//! `O { w: W { xs }, n }` moves `xs` into the inner `W`. The read of
+//! `xs.len` after it is E1001. wolf 0.2.19 printed `2 2 5` on native
+//! and release (lupin 0.1.42: `1 2 5`).
+
+struct W { xs: List[int] }
+struct O { w: W, n: int }
+
+fn main() -> !int {
+    var xs = [1]
+    let n = 5
+    var o = O { w: W { xs }, n }
+    (mut o.w.xs).push(9)
+    print("{xs.len} {o.w.xs.len} {o.n}")   // ERROR E1001: xs moved into o.w
+    0
+}

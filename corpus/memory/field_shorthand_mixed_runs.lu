@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="2 2 3 2\n")
+//! phase: run
+//! conforms: gram.expr.primary, mem.tier0.move.1
+//!
+//! s190 (wolf-lang#486) — the accepted twin of
+//! `field_shorthand_mixed.lu`: the same mixed literal with no later use
+//! of a moved local. The `Copy` local `n` stays readable. Every lane
+//! prints the same line; the checked machine answered `unsupported`
+//! before s190.
+
+struct M { xs: List[int], n: int, ys: List[int] }
+
+fn main() -> !int {
+    var xs = [1]
+    let n = 2
+    var ys = [3, 4, 5]
+    var m = M { xs, n, ys: ys }
+    (mut m.xs).push(9)
+    print("{m.xs.len} {m.n} {m.ys.len} {n}")
+    0
+}

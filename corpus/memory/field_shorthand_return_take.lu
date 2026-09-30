@@ -1,0 +1,22 @@
+//! check: run(exit=0, stdout="3\n")
+//! phase: run
+//! conforms: gram.expr.primary, mem.tier0.move.1
+//!
+//! s190 (wolf-lang#486) — the accepted twin of
+//! `field_shorthand_return_mut.lu`: a `take` parameter is the callee's
+//! to move, so `return W { xs }` is legal. Every lane prints the same
+//! line; the checked machine answered `unsupported` before s190.
+
+struct W { xs: List[int] }
+
+fn wrap(take xs: List[int]) -> W {
+    return W { xs }
+}
+
+fn main() -> !int {
+    var xs = [1, 2]
+    var w = wrap(take xs)
+    (mut w.xs).push(9)
+    print("{w.xs.len}")
+    0
+}

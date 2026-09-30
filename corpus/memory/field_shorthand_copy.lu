@@ -1,0 +1,19 @@
+//! check: run(exit=0, stdout="3 hi 3 hi\n")
+//! phase: run
+//! conforms: gram.expr.primary, mem.tier0.move.3
+//!
+//! s190 (wolf-lang#486) — a `Copy` field through the shorthand stays a
+//! copy: `P { n, s }` copies `n` (an `int`) and `s` (a `str` view), and
+//! both locals stay usable. Every lane prints the same line. Before
+//! s190 the checked machine dropped shorthand fields from the struct
+//! and answered `unsupported` at the first field read.
+
+struct P { n: int, s: str }
+
+fn main() -> !int {
+    let n = 3
+    let s = "hi"
+    let p = P { n, s }
+    print("{n} {s} {p.n} {p.s}")
+    0
+}

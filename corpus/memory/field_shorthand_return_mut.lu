@@ -1,0 +1,24 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: gram.expr.primary, mem.tier0.mode.mut, mem.tier0.move.1
+//!
+//! s190 (wolf-lang#486) — the shorthand in a `return`: `return W { xs }`
+//! moves the `mut` parameter `xs` out, and a `mut` parameter must be
+//! initialized at every return (s184, `[mem.tier0.mode.mut]`), exactly
+//! as for `W { xs: xs }`. wolf 0.2.19 compiled the shorthand with W1002
+//! and handed the caller two names on one buffer: `2 2` on native and
+//! release (lupin 0.1.42: `1 2`).
+
+struct W { xs: List[int] }
+
+fn wrap(mut xs: List[int]) -> W {
+    return W { xs }   // ERROR E1001: the mut parameter xs is moved out at return
+}
+
+fn main() -> !int {
+    var xs = [1]
+    var w = wrap(mut xs)
+    (mut w.xs).push(9)
+    print("{xs.len} {w.xs.len}")
+    0
+}
