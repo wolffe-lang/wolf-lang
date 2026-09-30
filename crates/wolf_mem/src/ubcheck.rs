@@ -2540,7 +2540,8 @@ impl<'t> Machine<'t> {
                         // caller's `eval` fallback run it again.
                         idx_val = Some(match self.eval(v)? {
                             Flow::Val(x) => x,
-                            f => return Ok(Found::Flow(f)),
+                            // PLANT (s189): drop the flow again.
+                            _ => return Ok(Found::Not),
                         });
                     }
                 }
