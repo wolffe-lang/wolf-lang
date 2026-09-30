@@ -1,0 +1,15 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1002]: `xs[i + 1]` cannot go `mut` here: it overlaps `xs[i]`, already passed `mut` in this call
+ --> mem:///main.lu:8:43
+  |
+8 |     add3(mut xs[i], { i = i - 1; 0 }, mut xs[i + 1])
+  |              ----- `xs[i]` is passed `mut` here
+  |                                           ^^^^^^^^^ second exclusive claim on the same place
+  |
+  = note: `xs[i]` and `xs[i + 1]` may be one element: an index that is not a literal is one place
+    with every other index of its container; only two different literals, two offsets `i +
+    a` and `i + b` of one local the call leaves unwritten, and a loop index over literal
+    bounds against a literal outside them are distinct [mem.model.place.elem].

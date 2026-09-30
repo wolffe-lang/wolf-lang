@@ -1124,6 +1124,75 @@ fn e1002_a_run_time_index_beside_an_element_lend() {
 }
 
 #[test]
+fn offsets_and_loop_indices_stay_silent_in_one_call() {
+    // EG3 (eg03), `[mem.model.place.elem]` item 4: R1 (`xs[i]` and
+    // `xs[i + 1]`, `xs[i + 1]` and `xs[i + 2]`) and R2 (a `1..3` index
+    // the body never writes against `0`; a `0..2` one against `2`)
+    // prove the claims of one call distinct.
+    snap(
+        "clean_elem_r1_r2_one_call",
+        "fn add2(mut a: int, mut b: int) {\n    \
+             a = a + 1\n    \
+             b = b + 1\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var xs = [1, 2, 3, 4]\n    \
+             var i = 0\n    \
+             add2(mut xs[i], mut xs[i + 1])\n    \
+             add2(mut xs[i + 1], mut xs[i + 2])\n    \
+             for j in 1..3 {\n        \
+                 add2(mut xs[0], mut xs[j])\n    \
+             }\n    \
+             for j in 0..2 {\n        \
+                 add2(mut xs[j], mut xs[2])\n    \
+             }\n    \
+             xs[0] - xs[0]\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1002_an_index_written_between_the_claims() {
+    // EG3 (eg03): R1 holds only while the call keeps `i` unwritten. A
+    // block argument between the claims writes it, so `xs[i]` and
+    // `xs[i + 1]` stay one place — and at run time they are one element.
+    snap(
+        "e1002_elem_offset_rebound",
+        "fn add3(mut a: int, n: int, mut b: int) {\n    \
+             a = a + n\n    \
+             b = b + 1\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var xs = [1, 2, 3]\n    \
+             var i = 1\n    \
+             add3(mut xs[i], { i = i - 1; 0 }, mut xs[i + 1])\n    \
+             xs[0] - 1\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1002_a_loop_index_the_body_writes() {
+    // EG3 (eg03): R2 holds only for a loop index the body never
+    // assigns; `i = 0` puts it back on the literal.
+    snap(
+        "e1002_elem_induction_written",
+        "fn add2(mut a: int, mut b: int) {\n    \
+             a = a + 1\n    \
+             b = b + 1\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var xs = [1, 2, 3]\n    \
+             for i in 1..3 {\n        \
+                 i = 0\n        \
+                 add2(mut xs[0], mut xs[i])\n    \
+             }\n    \
+             xs[0] - 1\n\
+         }\n",
+    );
+}
+
+#[test]
 fn a_member_read_under_an_element_claim_stays_silent() {
     // 1(c) under a claim (eg02b, wolf-lang#472 ruled A): an element and
     // a member of its container are distinct places whatever the index
