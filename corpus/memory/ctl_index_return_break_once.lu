@@ -1,0 +1,52 @@
+//! check: run(exit=0, stdout="return\nidx\n20\nidx\n9\nbreak\nidx\n10\nidx\ndone\ncontinue\nidx\n10\nidx\nidx\n30\ndone\n")
+//! phase: run
+//! conforms: mem.model.order, mem.list.index
+//!
+//! s189 (wolf-lang#481) — `return`, `break` and `continue` inside an
+//! index operand: the operand runs once and the flow leaves as it would
+//! from any other operand. The checked machine dropped the flow as "not
+//! a place" and ran the operand again.
+
+fn ret(xs: List[int], ok: bool) -> int {
+    let v = xs[{
+        print("idx")
+        if ok { 1 } else { return 9 }
+    }]
+    v
+}
+
+fn brk(xs: List[int]) {
+    for k in 0..3 {
+        let v = xs[{
+            print("idx")
+            if k == 1 { break }
+            k
+        }]
+        print("{v}")
+    }
+    print("done")
+}
+
+fn cont(xs: List[int]) {
+    for k in 0..3 {
+        let v = xs[{
+            print("idx")
+            if k == 1 { continue }
+            k
+        }]
+        print("{v}")
+    }
+    print("done")
+}
+
+fn main() -> !int {
+    var xs = [10, 20, 30, 40]
+    print("return")
+    print("{ret(xs, true)}")
+    print("{ret(xs, false)}")
+    print("break")
+    brk(xs)
+    print("continue")
+    cont(xs)
+    0
+}

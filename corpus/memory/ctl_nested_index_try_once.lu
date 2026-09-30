@@ -1,0 +1,35 @@
+//! check: run(exit=0, stdout="both\na\nb\n6\nouter\na\n9\ninner\na\nb\n9\n")
+//! phase: run
+//! conforms: mem.model.order, mem.list.index
+//!
+//! s189 (wolf-lang#481) — a nested index `g[a()?][b()?]`: the outer
+//! operand, then the inner, once each; when either `?` propagates, no
+//! operand runs again and nothing after it runs at all. The checked
+//! machine re-ran the operands that had run (`a` two or three times,
+//! `b` twice).
+
+fn a(ok: bool) -> int ! {parse} {
+    print("a")
+    if ok { 1 } else { return parse }
+}
+
+fn b(ok: bool) -> int ! {parse} {
+    print("b")
+    if ok { 1 } else { return parse }
+}
+
+fn pick(g: List[List[int]], oka: bool, okb: bool) -> int ! {parse} {
+    let v = g[a(oka)?][b(okb)?]
+    v
+}
+
+fn main() -> !int {
+    var g = [[1, 2], [5, 6]]
+    print("both")
+    print("{pick(g, true, true) else 9}")
+    print("outer")
+    print("{pick(g, false, true) else 9}")
+    print("inner")
+    print("{pick(g, true, false) else 9}")
+    0
+}

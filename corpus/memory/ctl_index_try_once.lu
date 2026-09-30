@@ -1,0 +1,57 @@
+//! check: run(exit=0, stdout="let\nidx\n20\nidx\n9\nhole\nidx\n20\n0\nidx\n9\narg\nidx\n20\n0\nidx\n9\nmember\nidx\n2\nidx\n9\n")
+//! phase: run
+//! conforms: mem.model.order, mem.list.index
+//!
+//! s189 (wolf-lang#481) — an index operand whose `?` propagates runs
+//! once, wherever the indexed place stands: bound by `let`, inside an
+//! interpolation hole, as a `read` argument, and as a member base. The
+//! checked machine evaluated the operand, dropped its flow as "not a
+//! place", and evaluated the whole expression again: `idx` ran two or
+//! three times. Native, release and lupin run it once.
+
+fn idx(ok: bool) -> int ! {parse} {
+    print("idx")
+    if ok { 1 } else { return parse }
+}
+
+fn show(n: int) {
+    print("{n}")
+}
+
+fn bound(xs: List[int], ok: bool) -> int ! {parse} {
+    let v = xs[idx(ok)?]
+    v
+}
+
+fn hole(xs: List[int], ok: bool) -> int ! {parse} {
+    print("{xs[idx(ok)?]}")
+    0
+}
+
+fn arg(xs: List[int], ok: bool) -> int ! {parse} {
+    show(xs[idx(ok)?])
+    0
+}
+
+fn member(rows: List[List[int]], ok: bool) -> int ! {parse} {
+    let n = rows[idx(ok)?].len
+    n
+}
+
+fn main() -> !int {
+    var xs = [10, 20, 30, 40]
+    var rows = [[1], [2, 3]]
+    print("let")
+    print("{bound(xs, true) else 9}")
+    print("{bound(xs, false) else 9}")
+    print("hole")
+    print("{hole(xs, true) else 9}")
+    print("{hole(xs, false) else 9}")
+    print("arg")
+    print("{arg(xs, true) else 9}")
+    print("{arg(xs, false) else 9}")
+    print("member")
+    print("{member(rows, true) else 9}")
+    print("{member(rows, false) else 9}")
+    0
+}

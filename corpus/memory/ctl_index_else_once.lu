@@ -1,0 +1,35 @@
+//! check: run(exit=0, stdout="value\nidx\n20\nidx\n10\nreturn\nidx\n20\nidx\n9\n")
+//! phase: run
+//! conforms: mem.model.order, mem.list.index
+//!
+//! s189 (wolf-lang#481) — `else` in an index operand. `xs[idx() else 0]`
+//! handles the row inside the operand, so the operand yields a value
+//! and runs once on every machine (a control). `xs[idx() else { return
+//! 9 }]` leaves the function from inside the operand: it runs once and
+//! the `return` wins. The checked machine ran it twice.
+
+fn idx(ok: bool) -> int ! {parse} {
+    print("idx")
+    if ok { 1 } else { return parse }
+}
+
+fn value(xs: List[int], ok: bool) -> int {
+    let v = xs[idx(ok) else 0]
+    v
+}
+
+fn leave(xs: List[int], ok: bool) -> int {
+    let v = xs[idx(ok) else { return 9 }]
+    v
+}
+
+fn main() -> !int {
+    var xs = [10, 20, 30, 40]
+    print("value")
+    print("{value(xs, true)}")
+    print("{value(xs, false)}")
+    print("return")
+    print("{leave(xs, true)}")
+    print("{leave(xs, false)}")
+    0
+}

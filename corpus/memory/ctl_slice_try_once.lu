@@ -1,0 +1,50 @@
+//! check: run(exit=0, stdout="endpoint\nlo\nhi\n2\nlo\n9\nbase\ngi\nlo\nhi\n2\ngi\n9\n")
+//! phase: run
+//! conforms: mem.model.order, mem.list.slice
+//!
+//! s189 (wolf-lang#481) — a `?` in a slice: in an endpoint
+//! (`xs[lo()?..hi()].len`) and in the index of the slice's base
+//! (`g[gi()?][lo()..hi()]`). Each operand runs once, and the
+//! propagating one stops the rest. The endpoint case is a control:
+//! s187 already keeps a slice out of the checked machine's place
+//! lookup. The base-index case ran `gi` three times on checked. lupin
+//! 0.1.42 runs `gi` twice when it does not propagate
+//! (wolffe-lang/wolf-interp#157; the driver gate pins that answer by
+//! version).
+
+fn lo(ok: bool) -> int ! {parse} {
+    print("lo")
+    if ok { 1 } else { return parse }
+}
+
+fn hi() -> int {
+    print("hi")
+    3
+}
+
+fn gi(ok: bool) -> int ! {parse} {
+    print("gi")
+    if ok { 1 } else { return parse }
+}
+
+fn endpoint(xs: List[int], ok: bool) -> int ! {parse} {
+    let n = xs[lo(ok)?..hi()].len
+    n
+}
+
+fn base(g: List[List[int]], ok: bool) -> int ! {parse} {
+    let s = g[gi(ok)?][lo(true)?..hi()]
+    s.len
+}
+
+fn main() -> !int {
+    var xs = [10, 20, 30, 40]
+    var g = [[1, 2, 3, 4], [5, 6, 7, 8]]
+    print("endpoint")
+    print("{endpoint(xs, true) else 9}")
+    print("{endpoint(xs, false) else 9}")
+    print("base")
+    print("{base(g, true) else 9}")
+    print("{base(g, false) else 9}")
+    0
+}

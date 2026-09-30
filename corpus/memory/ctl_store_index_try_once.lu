@@ -1,0 +1,80 @@
+//! check: run(exit=0, stdout="store\nidx\nv\n[10, 7, 30]\nidx\n9\n[10, 7, 30]\ncompound\nidx\n[10, 8, 30]\nidx\n9\n[10, 8, 30]\nnested\na\nv\n[[1, 2], [7, 6]]\na\n9\n[[1, 2], [7, 6]]\nmut\nidx\n[10, 9, 30]\nidx\n9\n[10, 9, 30]\n")
+//! phase: run
+//! conforms: mem.model.order, mem.model.place.rhs, mem.list.index
+//!
+//! s189 (wolf-lang#481) — a store whose target index propagates
+//! (`xs[idx()?] = v()`, `xs[idx()?] += 1`, `g[a()?][0] = v()`) and a
+//! `mut` argument over one (`bump(mut xs[idx()?])`). The index runs
+//! first and once ([mem.model.place.rhs]); when its `?` propagates,
+//! the right-hand side never runs and nothing is stored. The checked
+//! machine dropped the flow and refused the store as "assignment
+//! through this place shape" (and the `mut` argument as "a non-place").
+
+fn idx(ok: bool) -> int ! {parse} {
+    print("idx")
+    if ok { 1 } else { return parse }
+}
+
+fn a(ok: bool) -> int ! {parse} {
+    print("a")
+    if ok { 1 } else { return parse }
+}
+
+fn v() -> int {
+    print("v")
+    7
+}
+
+fn bump(mut n: int) {
+    n = n + 1
+}
+
+fn store(mut xs: List[int], ok: bool) -> int ! {parse} {
+    xs[idx(ok)?] = v()
+    0
+}
+
+fn compound(mut xs: List[int], ok: bool) -> int ! {parse} {
+    xs[idx(ok)?] += 1
+    0
+}
+
+fn nested(mut g: List[List[int]], ok: bool) -> int ! {parse} {
+    g[a(ok)?][0] = v()
+    0
+}
+
+fn claim(mut xs: List[int], ok: bool) -> int ! {parse} {
+    bump(mut xs[idx(ok)?])
+    0
+}
+
+fn main() -> !int {
+    var xs = [10, 20, 30]
+    var g = [[1, 2], [5, 6]]
+    print("store")
+    store(mut xs, true) else 9
+    print("{xs}")
+    let store_miss = store(mut xs, false) else 9
+    print("{store_miss}")
+    print("{xs}")
+    print("compound")
+    compound(mut xs, true) else 9
+    print("{xs}")
+    let compound_miss = compound(mut xs, false) else 9
+    print("{compound_miss}")
+    print("{xs}")
+    print("nested")
+    nested(mut g, true) else 9
+    print("{g}")
+    let nested_miss = nested(mut g, false) else 9
+    print("{nested_miss}")
+    print("{g}")
+    print("mut")
+    claim(mut xs, true) else 9
+    print("{xs}")
+    let claim_miss = claim(mut xs, false) else 9
+    print("{claim_miss}")
+    print("{xs}")
+    0
+}
