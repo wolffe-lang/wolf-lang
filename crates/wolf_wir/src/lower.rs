@@ -4888,19 +4888,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         for fi in d.fields() {
             let Some(name_tok) = fi.name() else { continue };
             let fname = self.text(name_tok.span);
-            let value = match fi.value() {
-                Some(v) => flow_val!(self.lower_expr(v)),
-                // `{ x }` field-init shorthand reads the same name.
-                None => match self.lookup(&fname) {
-                    Some(LocalBind::Val { var, .. }) => Some(self.b.use_var(var)),
-                    Some(LocalBind::MutRef {
-                        ptr, region, elem, ..
-                    }) => Some(self.read_mut_ref(ptr, region, elem, fi.syntax().span)?),
-                    _ => {
-                        return Err(refuse("this field-init shorthand", fi.syntax().span));
-                    }
-                },
+            // The shorthand `{ x }` carries its own `PathExpr` value
+            // (s190): it lowers exactly as `{ x: x }`.
+            let Some(v) = fi.value() else {
+                return Err(refuse(
+                    "a field initializer without a value",
+                    fi.syntax().span,
+                ));
             };
+            let value = flow_val!(self.lower_expr(v));
             let Some(value) = value else {
                 return Err(refuse("unit-typed struct fields", fi.syntax().span));
             };

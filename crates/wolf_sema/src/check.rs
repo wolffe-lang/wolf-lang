@@ -10401,16 +10401,10 @@ impl<'a> Checker<'a> {
                     };
                     self.check_expr(v, &exp)?;
                 }
-                None => {
-                    // Shorthand `{ x }`: the local of the same name.
-                    let ty = self.lookup_local(&fname).unwrap_or_else(|| self.error_ty());
-                    let exp = Expect {
-                        ty: fty,
-                        reason: Reason::StructField(fname.clone()),
-                        because: Some(field.span),
-                    };
-                    self.expect_unify(nt.span, ty, &exp);
-                }
+                // `x:` with no expression: the parse reported it. (The
+                // shorthand `{ x }` carries its own `PathExpr` value
+                // since s190 and is checked by the arm above.)
+                None => {}
             }
         }
         let missing: Vec<&str> = sig

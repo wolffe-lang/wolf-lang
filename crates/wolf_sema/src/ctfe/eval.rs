@@ -1361,7 +1361,7 @@ impl<'a> Engine<'a> {
                 for init in d.fields() {
                     let (Some(nt), Some(v)) = (FieldInit::name(init), FieldInit::value(init))
                     else {
-                        gap!(node.span, "a shorthand field initializer at comptime");
+                        gap!(node.span, "a field initializer without a value at comptime");
                     };
                     names.push(self.text(file, nt.span));
                     inits.push(v);
