@@ -388,10 +388,19 @@ memory/move_ok.lu: lowers
 memory/move_use_after.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_arg_element.lu: lowers
 memory/mut_arg_temporary.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_claim_arg_block_write.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_claim_cond_write.lu: lowers
 memory/mut_claim_if_else.lu: lowers
 memory/mut_claim_if_no_else.lu: lowers
 memory/mut_claim_match_arms.lu: lowers
+memory/mut_claim_nested_copy_read.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_claim_nested_disjoint_reads.lu: lowers
+memory/mut_claim_nested_get.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_claim_nested_header.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_claim_nested_map.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_claim_nested_read_elem.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_claim_nested_read_whole.lu: not mem-clean (pre-wir rungs own it)
+memory/mut_claim_operand_read.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_elem_excl.lu: lowers
 memory/mut_elem_nested_call.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_param_aggregate_store.lu: lowers
@@ -408,6 +417,11 @@ memory/mut_param_restore_whole.lu: lowers
 memory/mut_place_nested.lu: lowers
 memory/mut_read_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/mut_two_fields_one_region.lu: lowers
+memory/nested_fn_mut_moveout.lu: not mem-clean (pre-wir rungs own it)
+memory/nested_fn_mut_omitted.lu: not mem-clean (pre-wir rungs own it)
+memory/nested_fn_mut_param.lu: lowers
+memory/nested_fn_read_param_return.lu: not mem-clean (pre-wir rungs own it)
+memory/nested_fn_read_param_write.lu: not mem-clean (pre-wir rungs own it)
 memory/oob_bounds.lu: lowers
 memory/pool_accessors.lu: lowers
 memory/pool_place_write.lu: lowers
