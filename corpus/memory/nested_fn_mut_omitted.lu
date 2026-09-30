@@ -1,0 +1,20 @@
+//! check: fail(E1007)
+//! phase: typecheck
+//! conforms: mem.tier0.mode.mut, gram.item.fn
+//!
+//! s186 (wolf-lang#466) — the other polarity: a nested fn declares
+//! `mut xs`, so the call site must spell `mut` (X1). Through 0.2.19 the
+//! call type-checked as a `read` argument to a fn value, and native and
+//! release printed `2` — the callee grew the caller's list through an
+//! argument the caller never lent `mut`; the checked executor declined.
+//! E1007 on every wolfgang lane now.
+
+fn main() -> !int {
+    fn f(mut xs: List[int]) {
+        (mut xs).push(9)
+    }
+    var xs = [1]
+    f(xs)  // ERROR E1007: `f` takes `xs` as `mut`
+    print("{xs.len}")
+    0
+}

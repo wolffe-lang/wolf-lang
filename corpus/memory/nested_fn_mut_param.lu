@@ -1,0 +1,51 @@
+//! check: run(exit=0, stdout="4 42 2 9 7 5\n4\n")
+//! phase: run
+//! conforms: mem.tier0.mode.mut, mem.tier0.mode.take, gram.item.fn
+//!
+//! s186 (wolf-lang#466) — a nested named fn's `mut` and `take`
+//! parameters are the module fn's: the call site spells the mode (X1),
+//! and the callee's writes reach the caller's place — a list grown in
+//! place, an `int` incremented, an element lent `mut`, a parameter
+//! moved out and stored back before the return, a `mut` parameter
+//! re-lent to a module fn, and a `take` that consumes. Through 0.2.19
+//! every spelled `mut`/`take` here was E1007 ("takes this parameter as
+//! plain `read`"): the call went through the fn VALUE's type, which
+//! carries no modes. The native tiers lower the nested fn as a direct
+//! call with the module fn's convention; the checked executor still
+//! refuses a nested fn by name (the #12 family, as
+//! `typecheck/nested_fn_value.lu` says), and lupin 0.1.42 declines a
+//! nested fn with a moded parameter.
+
+fn grow(mut ys: List[int], n: int) {
+    (mut ys).push(n)
+}
+
+fn main() -> !int {
+    fn push9(mut xs: List[int]) {
+        (mut xs).push(9)
+    }
+    fn inc(mut a: int) {
+        a = a + 1
+    }
+    fn refill(mut xs: List[int]) {
+        var t = move xs
+        (mut t).push(7)
+        xs = t
+    }
+    fn relend(mut xs: List[int]) {
+        grow(mut xs, 5)
+    }
+    fn size(take xs: List[int]) -> int {
+        xs.len
+    }
+    var xs = [1]
+    push9(mut xs)
+    var n = 41
+    inc(mut n)
+    inc(mut xs[0])
+    refill(mut xs)
+    relend(mut xs)
+    print("{xs.len} {n} {xs[0]} {xs[1]} {xs[2]} {xs[3]}")
+    print("{size(take xs)}")
+    0
+}
