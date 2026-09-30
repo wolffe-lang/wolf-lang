@@ -442,6 +442,15 @@ pub(crate) struct Lowerer<'t> {
     /// cannot be seen. The bool: the entry is a closure (it names its
     /// own refusal).
     unclaimed_pairs: Vec<(Span, bool)>,
+    /// s186 (#476): closure bodies being walked. A closure body is
+    /// lowered inline, but it does not RUN where it is written, so an
+    /// access inside one is not inside a call argument's claim extent
+    /// (the capture, which is, is its own `Read` at the closure).
+    deferred_depth: u32,
+    /// Every statement pushed while `deferred_depth > 0`, as
+    /// (block, index) — what [`Self::check_nested_claims_after_mut`]'s
+    /// access scan skips.
+    deferred_stmts: std::collections::HashSet<(usize, usize)>,
 }
 
 /// Where the statement stream stood before one call argument lowered
@@ -480,7 +489,11 @@ impl<'t> Lowerer<'t> {
     }
 
     fn push(&mut self, s: Stmt) {
-        self.blocks[self.cur.0 as usize].stmts.push(s);
+        let block = &mut self.blocks[self.cur.0 as usize].stmts;
+        if self.deferred_depth > 0 {
+            self.deferred_stmts.insert((self.cur.0 as usize, block.len()));
+        }
+        block.push(s);
     }
 
     // ---------------------------------------------------- locals ----
@@ -1788,11 +1801,29 @@ impl<'t> Lowerer<'t> {
     /// answer with no diagnostic on either lane. The same shape over a
     /// spilled field (`f(mut r.a, g(mut r))`) loses the callee's write
     /// to the writeback instead, which is wrong more quietly still.
-    fn check_nested_claims_after_mut(&mut self, from: Mark, arg_muts: &[(PlaceId, Span)]) {
+    ///
+    /// s186 (wolf-lang#476) — and a nested READ or WRITE of the claimed
+    /// place is inside the claim too. The first version compared only a
+    /// nested call's `mut`/`take` arguments with the earlier claims, so
+    /// `bump(mut xs[0], total(xs))`, `grow(mut xs, xs.count())` and
+    /// `bump(mut a, a + 1)` ran on every wolfgang lane while lupin
+    /// trapped `exclusivity` — and `bump(mut a, { a = 5; 1 })` printed
+    /// `6` on the checked machine and `2` on native. Every access this
+    /// argument emitted (a read, a move, a store, a nested call's read
+    /// lend) is compared now; the one exception is the argument's OWN
+    /// top-level place (`own`), which [`Self::check_copy_read_after_mut`]
+    /// and [`crate::excl`] already answer.
+    fn check_nested_claims_after_mut(
+        &mut self,
+        from: Mark,
+        arg_muts: &[(PlaceId, Span)],
+        own: &[Span],
+    ) {
         if arg_muts.is_empty() {
             return;
         }
         let mut hits: Vec<(PlaceId, Span, PlaceId, Span, &'static str)> = Vec::new();
+        let mut accesses: Vec<(PlaceId, Span, &'static str)> = Vec::new();
         for (bi, block) in self.blocks.iter().enumerate() {
             // s178 (#449): the extent is what THIS argument emitted,
             // and nothing else. A block that already existed when the
@@ -1807,21 +1838,79 @@ impl<'t> Lowerer<'t> {
             } else {
                 continue;
             };
-            for st in block.stmts.iter().skip(start) {
-                let Stmt::Call(c) = st else { continue };
-                let claims = c
-                    .mut_args
-                    .iter()
-                    .map(|&(p, s)| (p, s, "goes `mut`"))
-                    .chain(c.take_args.iter().map(|&(p, s)| (p, s, "moves away")));
-                for (p, s, word) in claims {
-                    if let Some(&(m, mspan)) =
-                        arg_muts.iter().find(|&&(m, _)| self.places.overlap(m, p))
-                    {
-                        hits.push((m, mspan, p, s, word));
+            for (si, st) in block.stmts.iter().enumerate().skip(start) {
+                let deferred = self.deferred_stmts.contains(&(bi, si));
+                match st {
+                    Stmt::Call(c) => {
+                        let claims = c
+                            .mut_args
+                            .iter()
+                            .map(|&(p, s)| (p, s, "goes `mut`"))
+                            .chain(c.take_args.iter().map(|&(p, s)| (p, s, "moves away")));
+                        for (p, s, word) in claims {
+                            if let Some(&(m, mspan)) =
+                                arg_muts.iter().find(|&&(m, _)| self.places.overlap(m, p))
+                            {
+                                hits.push((m, mspan, p, s, word));
+                            }
+                        }
+                        if !deferred {
+                            accesses
+                                .extend(c.read_args.iter().map(|&(p, s)| (p, s, "is read")));
+                        }
                     }
+                    _ if deferred => {}
+                    Stmt::Read { place, span } => accesses.push((*place, *span, "is read")),
+                    Stmt::Move { place, span } => accesses.push((*place, *span, "moves away")),
+                    Stmt::Init { place, span } | Stmt::Mutate { place, span } => {
+                        accesses.push((*place, *span, "is written"))
+                    }
+                    _ => {}
                 }
             }
+        }
+        // One report per access site: a nested claim above already
+        // covers its own span (a `take` argument is also a `Move`, a
+        // read lend also a `Read`), and the argument's own place is
+        // answered elsewhere.
+        let mut seen: std::collections::HashSet<Span> = hits.iter().map(|h| h.3).collect();
+        seen.extend(own.iter().copied());
+        let mut reads: Vec<(PlaceId, Span, PlaceId, Span, &'static str)> = Vec::new();
+        for (p, s, word) in accesses {
+            if seen.contains(&s) {
+                continue;
+            }
+            if let Some(&(m, mspan)) = arg_muts.iter().find(|&&(m, _)| self.places.overlap(m, p)) {
+                seen.insert(s);
+                reads.push((m, mspan, p, s, word));
+            }
+        }
+        for (m, mspan, p, s, word) in reads {
+            let (a, b) = (self.show_place_now(m), self.show_place_now(p));
+            let relation = if m == p {
+                "the same place twice is never disjoint.".to_string()
+            } else if self.places.spelled_prefix(m, p) || self.places.spelled_prefix(p, m) {
+                format!("`{a}` and `{b}` are a path and its prefix [mem.model.path.disjoint].")
+            } else if self.places.covers(m, p) || self.places.covers(p, m) {
+                elements_one_place(&a, &b)
+            } else {
+                format!("`{a}` and `{b}` can reach the same memory.")
+            };
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E1002,
+                    s,
+                    format!("`{b}` {word} while `{a}` is lent `mut` to the call being evaluated"),
+                )
+                .with_label("an access inside the outer call's `mut` claim")
+                .with_secondary(mspan, format!("`{a}` is passed `mut` here"))
+                .with_note(format!(
+                    "{relation} A `mut` argument is exclusive for the whole call, and the \
+                     arguments after it are evaluated inside that claim — nested calls and \
+                     operators included [mem.tier0.excl]. Compute the value into a local \
+                     BEFORE the call."
+                )),
+            );
         }
         for (m, mspan, p, s, word) in hits {
             let (a, b) = (self.show_place_now(m), self.show_place_now(p));
@@ -3497,6 +3586,7 @@ impl<'t> Lowerer<'t> {
         let (saved_exit, saved_depth) = (self.exit, self.ret_depth);
         let closure_exit = self.new_block();
         self.exit = closure_exit;
+        self.deferred_depth += 1;
         self.push_scope();
         self.ret_depth = self.scopes.len() - 1;
         if let Some(params) = d.params() {
@@ -3521,6 +3611,7 @@ impl<'t> Lowerer<'t> {
         // frame, exactly as a function's return claims one.
         self.claim_closure_leaving(&tail, e.span);
         self.close_scope(end_span(e.span))?;
+        self.deferred_depth -= 1;
         self.goto(self.cur, closure_exit);
         self.cur = closure_exit;
         self.exit = saved_exit;
@@ -4737,6 +4828,11 @@ impl<'t> Lowerer<'t> {
         // Only claims spelled by EARLIER arguments: an argument is
         // never checked against its own.
         let prior_muts: Vec<(PlaceId, Span)> = arg_muts.clone();
+        // s186 (#476): the argument's own top-level place, whose access
+        // the direct checks answer (`check_copy_read_after_mut`, the
+        // call surface in `excl`); the nested scan skips it.
+        let mut own: Option<Span> = None;
+        let surface_mark = (surface.read_args.len(), surface.take_args.len());
         let effective = if store_take {
             Some(ParamMode::Take)
         } else {
@@ -4752,6 +4848,7 @@ impl<'t> Lowerer<'t> {
                     // semantics (the callee does not consume).
                 }
                 if let Some((place, _)) = self.as_place(v) {
+                    own = Some(v.span);
                     self.emit_read(place, v.span);
                     self.mark_region_lent(place);
                     if sent {
@@ -4819,6 +4916,7 @@ impl<'t> Lowerer<'t> {
             },
             Some(ParamMode::Take) => {
                 if let Some((place, _)) = self.as_place(v) {
+                    own = Some(v.span);
                     self.check_read_param_take(place, v.span);
                     self.escape_to_callee(place, carry);
                     self.emit_move(place, v.span);
@@ -4835,7 +4933,14 @@ impl<'t> Lowerer<'t> {
                 }
             }
         }
-        self.check_nested_claims_after_mut(mark, &prior_muts);
+        // What this argument put on the call surface (a closure's or a
+        // dyn cast's borrow, a place's lend) `excl` answers pairwise.
+        let answered: Vec<Span> = own
+            .into_iter()
+            .chain(surface.read_args[surface_mark.0..].iter().map(|&(_, s)| s))
+            .chain(surface.take_args[surface_mark.1..].iter().map(|&(_, s)| s))
+            .collect();
+        self.check_nested_claims_after_mut(mark, &prior_muts, &answered);
         Ok(())
     }
 
@@ -5690,6 +5795,8 @@ impl<'t> Lowerer<'t> {
             unsafe_depth: 0,
             loans: Vec::new(),
             unclaimed_pairs: Vec::new(),
+            deferred_depth: 0,
+            deferred_stmts: std::collections::HashSet::new(),
             casts,
         }
     }
