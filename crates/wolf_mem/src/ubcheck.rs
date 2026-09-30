@@ -2477,6 +2477,21 @@ impl<'t> Machine<'t> {
                 if matches!(self.expr_ty(recv.span), Some(TyKind::Ptr(_))) {
                     return Ok(None);
                 }
+                // A slice (`xs[a..b]`, `s[a..b]`) is never a place: it
+                // builds a value of its own. Decide that from the
+                // syntax, as `eval` does, BEFORE any operand runs —
+                // evaluating the endpoints here and then answering
+                // "not a place" made every caller's `eval` fallback run
+                // them again (wolf-lang#479: `xs[a()..2].len` ran `a`
+                // twice, `"{xs[a()..2].len}"` three times).
+                if b.args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .filter_map(Arg::value)
+                    .any(|v| v.kind == SyntaxKind::RangeExpr)
+                {
+                    return Ok(None);
+                }
                 let Some(base) = self.place_of(recv)? else {
                     return Ok(None);
                 };
