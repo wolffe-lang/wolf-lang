@@ -847,8 +847,5 @@ fn an_impl_self_after_a_moved_field_stays_refused() {
 /// method spelled `count`/`is_empty` takes the whole `self`.
 #[test]
 fn a_method_named_count_is_not_a_header_read() {
-    a_whole_read_stays_refused(
-        "elem_whole_read_named_count_after_move.lu",
-        "1 2 false\n",
-    );
+    a_whole_read_stays_refused("elem_whole_read_named_count_after_move.lu", "1 2 false\n");
 }
