@@ -29,6 +29,31 @@
   (`both(mut xs[0], xs)`) stays E1002. lupin through 0.1.41 still
   traps these rows; the gate names those versions and expects the ruled
   answer from any later one.
+- **`len`, `count` and `is_empty` are header reads (s185, wolf-lang#474
+  and wolffe-lang/wolf-interp#149, ruled 2026-09-30).** They read only a
+  container's header, so they are allowed beside a moved element:
+  `xs.count()` and `xs.is_empty()` after `move xs[0]`, a `Map`'s
+  `count()`, `is_empty()` and `len()` after a value is read out, a
+  `Pool`'s `len()` and `is_empty()` after `move p[h]` compile and run on
+  checked, native and release (lupin 0.1.41's bytes where lupin runs
+  them); each was E1001 through 0.2.18. Beside an element claim they
+  already ran (`bump(mut xs[0], xs.count())`), and the ruling keeps
+  that. Every other method still reads the whole container and stays
+  E1001 beside a moved part — `push`, `get`, `pop`, a slice, an impl
+  method's `self`, a user type's method named `count` — and a whole move
+  still refuses `count()`. `[mem.model.place.elem]` 1(c) names the
+  header reads. lupin through 0.1.41 traps the header methods under a
+  claim and runs the whole-read methods beside a moved part; the gate
+  names those versions and expects the ruled answer from any later one.
+- **`--deny-warnings` no longer hides #464's refusal (wolf-lang#469).**
+  A `mut` parameter moved out and never stored back is E1001, and
+  W1002's "never written" stands down beside it — but under
+  `--deny-warnings` the promoted W1002 stopped `wolf build`, `wolf test`
+  and `conform-run` at the resolve rung, before the E1001 existed, and
+  its help said to drop the `mut`. A promoted W1002 now waits for the
+  mem rung; the E1001 (or #325's E0804) retires it and is the one
+  error reported, `fail(E1001)` at `mem` in the record. A W1002 nothing
+  retires still rejects the program, at `resolve`.
 - **An internal compiler error fails the driver gates (wolf-lang#471).**
   `wolf` exits 2 both when a host cannot run a lane and on an ICE; 37
   gate files under `crates/wolf_driver/tests/` read every exit 2 as an
