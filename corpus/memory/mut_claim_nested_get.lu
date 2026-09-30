@@ -1,13 +1,13 @@
-//! check: fail(E1002)
-//! phase: typecheck
-//! conforms: mem.tier0.excl.1, mem.model.order, mem.model.place.elem
+//! check: run(exit=0, stdout="3\n")
+//! phase: run
+//! conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.model.order, mem.model.place.elem
 //!
-//! s186 (wolf-lang#476, the first of s185's two shapes) — a method
-//! RECEIVER inside a later argument: `get` reads the whole container
-//! (`[mem.model.place.elem]` 1(c), ruled 2026-09-30: only `len`,
-//! `count` and `is_empty` read the header), and the whole container is
-//! a prefix of the claimed `xs[0]`. Ran `3` on checked, native and
-//! release through 0.2.19; lupin traps `exclusivity`.
+//! s186 (wolf-lang#476, the first of s185's two shapes; ruled
+//! two-phase, `[mem.tier0.excl.4]`) — a whole-reading RECEIVER in a
+//! later argument: `get` reads all of `xs` (1(c): only `len`, `count`
+//! and `is_empty` are header reads), and the read ends before the claim
+//! on `xs[0]` takes effect. `get(1)` is 2, `xs[0]` becomes 3. lupin
+//! 0.1.42 traps `exclusivity` (pre-mirror).
 
 fn bump(mut a: int, n: int) {
     a = a + n
@@ -15,7 +15,7 @@ fn bump(mut a: int, n: int) {
 
 fn main() -> !int {
     var xs = [1, 2, 3]
-    bump(mut xs[0], xs.get(1) else 9)  // ERROR E1002: get reads all of xs
+    bump(mut xs[0], xs.get(1) else 9)
     print("{xs[0]}")
     0
 }

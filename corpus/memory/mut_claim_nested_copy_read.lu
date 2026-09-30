@@ -1,12 +1,11 @@
-//! check: fail(E1002)
-//! phase: typecheck
-//! conforms: mem.tier0.excl.1, mem.model.order, mem.model.place.elem
+//! check: run(exit=0, stdout="2\n")
+//! phase: run
+//! conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.model.order, mem.model.place.elem
 //!
-//! s186 (wolf-lang#476's rule, found by the lane) — a `Copy` read of
-//! the claimed element itself, one call down. The same read spelled
-//! directly (`bump(mut xs[0], xs[0])`) is D39's E1002; inside `id(…)`
-//! it ran `2` on checked, native and release through 0.2.19, and lupin
-//! traps `exclusivity`.
+//! s186 (wolf-lang#476's rule; ruled two-phase, `[mem.tier0.excl.4]`)
+//! — a `Copy` read of the claimed element itself, one call down:
+//! `id(xs[0])` is 1 before the call, and `xs[0]` becomes 2. lupin
+//! 0.1.42 traps `exclusivity` (pre-mirror).
 
 fn bump(mut a: int, n: int) {
     a = a + n
@@ -18,7 +17,7 @@ fn id(n: int) -> int {
 
 fn main() -> !int {
     var xs = [1, 2, 3]
-    bump(mut xs[0], id(xs[0]))  // ERROR E1002: xs[0] read inside its own claim
+    bump(mut xs[0], id(xs[0]))
     print("{xs[0]}")
     0
 }

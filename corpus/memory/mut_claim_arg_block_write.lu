@@ -1,6 +1,6 @@
 //! check: fail(E1002)
 //! phase: typecheck
-//! conforms: mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+//! conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
 //!
 //! s186 (wolf-lang#476's rule, found by the lane) — a WRITE of the
 //! claimed place inside a later argument. Through 0.2.19 this was a

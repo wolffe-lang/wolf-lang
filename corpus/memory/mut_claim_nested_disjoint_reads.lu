@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="11 3\n")
 //! phase: run
-//! conforms: mem.tier0.excl.1, mem.model.order, mem.model.place.elem, mem.model.path.disjoint
+//! conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.model.order, mem.model.place.elem, mem.model.path.disjoint
 //!
 //! s186 (wolf-lang#476) — the shapes the nested-access check must
 //! keep running: a nested read of a DIFFERENT element (`id(xs[1])`,

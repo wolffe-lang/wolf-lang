@@ -1,17 +1,15 @@
-//! check: fail(E1002)
-//! phase: typecheck
-//! conforms: mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order, mem.model.place.elem
+//! check: run(exit=0, stdout="4 3\n")
+//! phase: run
+//! conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order, mem.model.place.elem
 //!
-//! s186 (wolf-lang#476, eg02b's find) — a read lend of the WHOLE
-//! container one call down, inside a later argument, while `mut xs[0]`
-//! is claimed. The arguments after a `mut` argument are evaluated
-//! inside its claim ([mem.model.order]), and the whole container is a
-//! prefix of its element (`[mem.model.place.elem]` item 2), so `total`
-//! reads a place the call holds exclusively ([mem.tier0.excl.1]).
-//! The direct lend (`both(mut xs[0], xs)`, `elem_claim_whole_read.lu`)
-//! was always E1002; this one ran `4 3` on checked, native and release
-//! through 0.2.19 while lupin traps `exclusivity`. E1002 on every
-//! wolfgang lane now.
+//! s186 (wolf-lang#476, eg02b's find; ruled 2026-09-30 two-phase,
+//! `[mem.tier0.excl.4]`) — a read lend of the WHOLE container one
+//! call down, inside a later argument, beside `mut xs[0]`. The claim
+//! takes effect at call entry; `total(xs)` has ended by then and its
+//! result lends nothing from `xs`, so the call runs with the read's
+//! value from before it: `total` is 3, `xs[0]` becomes 4. Every
+//! wolfgang lane printed this through 0.2.19 too; lupin 0.1.42 traps
+//! `exclusivity` (pinned pre-mirror in the gate; is63 moves lupin).
 
 fn bump(mut a: int, n: int) {
     a = a + n
@@ -23,7 +21,7 @@ fn total(ys: List[int]) -> int {
 
 fn main() -> !int {
     var xs = [1, 2, 3]
-    bump(mut xs[0], total(xs))  // ERROR E1002: xs read inside xs[0]'s claim
+    bump(mut xs[0], total(xs))
     print("{xs[0]} {xs.len}")
     0
 }

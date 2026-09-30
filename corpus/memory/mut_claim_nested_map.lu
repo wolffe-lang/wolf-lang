@@ -1,11 +1,12 @@
-//! check: fail(E1002)
-//! phase: typecheck
-//! conforms: mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+//! check: run(exit=0, stdout="2\n")
+//! phase: run
+//! conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
 //!
-//! s186 (wolf-lang#476's rule, found by the lane) — the `Map` twin of
-//! `mut_claim_nested_read_whole.lu`: `mput(mut m, msize(m))` lends the
-//! whole map one call down inside its own claim. Ran `2` on checked,
-//! native and release through 0.2.19; lupin traps `exclusivity`.
+//! s186 (wolf-lang#476's rule; ruled two-phase, `[mem.tier0.excl.4]`)
+//! — the `Map` twin of `mut_claim_nested_read_whole.lu`:
+//! `msize(m)` is 1 before the call, and `mput` stores it under a new
+//! key, so the map holds 2. lupin 0.1.42 traps `exclusivity`
+//! (pre-mirror).
 
 fn msize(m: Map[str, int]) -> int {
     m.len
@@ -18,7 +19,7 @@ fn mput(mut m: Map[str, int], n: int) {
 fn main() -> !int {
     var m = Map[str, int]()
     m["a"] = 1
-    mput(mut m, msize(m))  // ERROR E1002: m read inside its own claim
+    mput(mut m, msize(m))
     print("{m.len}")
     0
 }
