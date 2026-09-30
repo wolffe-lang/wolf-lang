@@ -324,6 +324,30 @@ law: `.docs/refs/papers/swift-ownership-manifesto.md`.
 - `[mem.tier0.excl.3]` View sets declare a callee's path footprint:
   `fn norm(mut self.{x, y})` may touch only `self.x`/`self.y`; the caller
   may concurrently use `self.z`. The footprint is part of the signature.
+- `[mem.tier0.excl.4]` **Arguments are two-phase.** Within one call the
+  arguments are evaluated left to right (`[mem.model.order]`), and a
+  `mut` argument's claim takes effect when the call is entered, not when
+  its argument is evaluated. A later argument may therefore **read** the
+  claimed place or any conflicting path, and every such read sees the
+  value from before the call: a `Copy` value (`f(mut a, a.x)`), an
+  operand (`bump(mut a, a + 1)`), a header or member read
+  (`grow(mut xs, xs.len)`, `xs.count()`), a whole read such as string
+  interpolation (`fail(mut fl, "{fl.store}")`), or a nested call whose
+  result lends nothing from the place (`ring_drop(mut r, ring_len(r))`,
+  `bump(mut xs[0], total(xs))`). A later argument may **not** write the
+  place, move it, claim it again (`mut`), or lend it into the same call
+  (a non-`Copy` place passed `read`, `both(mut xs[0], xs)`, or a closure
+  or `dyn` value that borrows it): each is E1002, and the dynamic machine
+  traps with kind `exclusivity`. So `bump(mut a, { a = 5; 1 })` is
+  refused. `take` arguments are unchanged: a move happens where it is
+  written. A receiver's `mut` claim was always two-phase
+  (`(mut xs).push(xs.len)`). Ruled 2026-09-30 (wolffe-lang/wolf-lang#476):
+  through 0.2.19 the compiler refused a direct `Copy` read after a
+  `mut` argument and ran a nested one, and lupin 0.1.42 traps both.
+  Witnesses `corpus/memory/mut_claim_nested_*.lu`,
+  `mut_claim_operand_read.lu`, `mut_claim_two_phase_reads.lu` (reads
+  that run) and `mut_claim_arg_block_write.lu`,
+  `mut_claim_arg_block_move.lu` (a write and a move, refused).
 
 ### Local borrows `[mem.tier0.borrow]`
 

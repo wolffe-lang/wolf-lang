@@ -360,6 +360,7 @@
     "mem.tier0.excl.1": "02-memory-model.md",
     "mem.tier0.excl.2": "02-memory-model.md",
     "mem.tier0.excl.3": "02-memory-model.md",
+    "mem.tier0.excl.4": "02-memory-model.md",
     "mem.tier0.mode": "02-memory-model.md",
     "mem.tier0.mode.mut": "02-memory-model.md",
     "mem.tier0.mode.read": "02-memory-model.md",
