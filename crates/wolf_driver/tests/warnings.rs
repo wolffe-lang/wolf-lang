@@ -517,7 +517,10 @@ fn a_mode_error_retires_the_lint_under_deny_warnings() {
     );
     let (code, err) = build_wir(&dir, &["--deny-warnings"]);
     assert_eq!(code, 2, "the mode error stops the build:\n{err}");
-    assert!(err.contains("error[E0804]"), "the mode error renders:\n{err}");
+    assert!(
+        err.contains("error[E0804]"),
+        "the mode error renders:\n{err}"
+    );
     assert!(!err.contains("W1002"), "no retired lint:\n{err}");
     let rec = conform_record(&dir, &["--deny-warnings"]);
     assert_eq!(rec["verdict"], "fail(E0804)", "{rec}");

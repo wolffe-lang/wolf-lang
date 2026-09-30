@@ -3680,8 +3680,7 @@ fn conform_run(args: &[String]) {
                                     // memory errors are withheld.
                                     let mem = wolf_mem::check_package(&res.package, &tc);
                                     if !mem.not_yet.is_empty() {
-                                        if let Some(w) =
-                                            waiting_w1002(&lints, &allow_regions, &all)
+                                        if let Some(w) = waiting_w1002(&lints, &allow_regions, &all)
                                         {
                                             ("resolve", format!("fail({w})"), all)
                                         } else {
