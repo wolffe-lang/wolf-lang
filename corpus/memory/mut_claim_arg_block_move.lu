@@ -1,0 +1,25 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.model.order
+//!
+//! s186 (`[mem.tier0.excl.4]`) — the move twin of
+//! `mut_claim_arg_block_write.lu`: a later argument may read the place
+//! an earlier `mut` argument claims, but it may not MOVE it (nor write
+//! it). Here the block moves `xs` out and stores a fresh list back
+//! before the call is entered: two accesses inside the claim, each
+//! E1002 on every wolfgang lane.
+
+fn grow(mut ys: List[int], n: int) {
+    (mut ys).push(n)
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    grow(mut xs, {
+        var t = move xs  // ERROR E1002: xs moved inside its own claim
+        xs = [9]  // ERROR E1002: xs written inside its own claim
+        t.len
+    })
+    print("{xs.len}")
+    0
+}
