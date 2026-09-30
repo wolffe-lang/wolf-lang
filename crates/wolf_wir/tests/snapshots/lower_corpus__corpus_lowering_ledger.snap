@@ -318,6 +318,10 @@ memory/elem_dyn_read_after_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_dyn_store_no_revive_heap.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_dyn_store_no_revive_int.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_dyn_take_while_mut.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_header_methods_after_move.lu: lowers
+memory/elem_header_methods_after_move_map.lu: lowers
+memory/elem_header_methods_after_move_pool.lu: lowers
+memory/elem_header_methods_under_claim.lu: lowers
 memory/elem_key_move_map.lu: lowers
 memory/elem_key_reassigned_no_revive.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_len_after_move.lu: lowers
@@ -336,6 +340,12 @@ memory/elem_str_key_revive.lu: lowers
 memory/elem_sym_reassigned_no_revive.lu: not mem-clean (pre-wir rungs own it)
 memory/elem_tuple_pos_move.lu: lowers
 memory/elem_tuple_pos_mut.lu: lowers
+memory/elem_whole_read_get_after_move.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_whole_read_named_count_after_move.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_whole_read_pop_after_move.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_whole_read_push_after_move.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_whole_read_self_after_move.lu: not mem-clean (pre-wir rungs own it)
+memory/elem_whole_read_slice_after_move.lu: not mem-clean (pre-wir rungs own it)
 memory/excl_disjoint_ok.lu: lowers
 memory/excl_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/exclusivity.lu: lowers
