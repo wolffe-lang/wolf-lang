@@ -569,6 +569,31 @@ fn raise(v: Value) -> Flow {
 
 type E<T> = Result<T, Stop>;
 
+/// What a place lookup (or a byte view) found (wolf-lang#481): the
+/// thing itself, nothing ("not a place" — the caller evaluates the
+/// expression instead, and no operand has run), or the FLOW an operand
+/// produced on the way (a propagating `?`, a `return`, a `break`). An
+/// operand runs once ([mem.model.order]), so a flow is handed back and
+/// returned by the caller, never dropped and re-run by its fallback.
+enum Found<T> {
+    At(T),
+    Not,
+    Flow(Flow),
+}
+
+/// `Found` as an `Option`, returning an operand's flow from the
+/// enclosing `E<Flow>` function at the point its `eval` fallback would
+/// have returned it.
+macro_rules! found {
+    ($e:expr) => {
+        match $e? {
+            Found::At(x) => Some(x),
+            Found::Not => None,
+            Found::Flow(f) => return Ok(f),
+        }
+    };
+}
+
 macro_rules! val {
     ($e:expr) => {
         match $e? {
@@ -1466,23 +1491,26 @@ impl<'t> Machine<'t> {
     /// place or evaluated); `None` for every other expression — the
     /// caller evaluates as before, and `let bs = s.bytes()` still
     /// materializes through the `"bytes"` method arm, charged.
-    fn eval_bytes_view(&mut self, e: &'t GreenNode) -> E<Option<Vec<u8>>> {
+    fn eval_bytes_view(&mut self, e: &'t GreenNode) -> E<Found<Vec<u8>>> {
         let src = &self.pkg.files[self.ctx().src_file].raw.src;
         let Some(recv) = crate::byteview::view_recv(e, src, &|sp| self.expr_ty(sp).cloned()) else {
-            return Ok(None);
+            return Ok(Found::Not);
         };
-        let sv = if let Some(place) = self.place_of(recv)? {
-            self.read_place(&place, recv.span)?
-        } else {
-            match self.eval(recv)? {
+        // A receiver whose operand leaves early (`ss[i()?].bytes()`)
+        // hands its flow back: answering "no view" made the caller
+        // evaluate the receiver again (wolf-lang#481).
+        let sv = match self.place_of(recv)? {
+            Found::At(place) => self.read_place(&place, recv.span)?,
+            Found::Flow(f) => return Ok(Found::Flow(f)),
+            Found::Not => match self.eval(recv)? {
                 Flow::Val(v) => v,
-                _ => return Ok(None),
-            }
+                f => return Ok(Found::Flow(f)),
+            },
         };
         let Value::Str(s) = sv else {
-            return Ok(None);
+            return Ok(Found::Not);
         };
-        Ok(Some(s.into_bytes()))
+        Ok(Found::At(s.into_bytes()))
     }
 
     /// A fresh `str` built by `+`/`+=` or by an interpolation with a
@@ -2423,32 +2451,34 @@ impl<'t> Machine<'t> {
 
     // ------------------------------------------------------ places --
 
-    /// Resolve an lvalue-shaped expression to a place. `None`: not a
-    /// place (temporary, item reference).
-    fn place_of(&mut self, e: &'t GreenNode) -> E<Option<Place>> {
+    /// Resolve an lvalue-shaped expression to a place. `Not`: not a
+    /// place (temporary, item reference). `Flow`: an index operand left
+    /// early (wolf-lang#481) — the caller returns it; it never
+    /// evaluates the expression again.
+    fn place_of(&mut self, e: &'t GreenNode) -> E<Found<Place>> {
         match e.kind {
             SyntaxKind::PathExpr => {
                 let name = self.text(e.span);
                 if name.contains('.') || name.contains("::") {
-                    return Ok(None);
+                    return Ok(Found::Not);
                 }
                 match self.lookup(&name) {
-                    Some((frame, local)) => Ok(Some(Place {
+                    Some((frame, local)) => Ok(Found::At(Place {
                         frame,
                         local,
                         path: Vec::new(),
                     })),
-                    None => Ok(None),
+                    None => Ok(Found::Not),
                 }
             }
             SyntaxKind::ParenExpr => match ParenExpr::cast(e).and_then(|p| p.expr()) {
                 Some(inner) => self.place_of(inner),
-                None => Ok(None),
+                None => Ok(Found::Not),
             },
             SyntaxKind::MemberExpr => {
                 let m = MemberExpr::cast(e).expect("kind");
                 let Some(base) = m.base() else {
-                    return Ok(None);
+                    return Ok(Found::Not);
                 };
                 // `(mut recv)` in receiver position unwraps.
                 let base = match ParenExpr::cast(base) {
@@ -2456,26 +2486,26 @@ impl<'t> Machine<'t> {
                     _ => base,
                 };
                 let Some(member) = m.member() else {
-                    return Ok(None);
+                    return Ok(Found::Not);
                 };
                 let field = self.text(member.span);
                 match self.place_of(base)? {
-                    Some(mut place) => {
+                    Found::At(mut place) => {
                         place.path.push(PStep::Field(field));
-                        Ok(Some(place))
+                        Ok(Found::At(place))
                     }
-                    None => Ok(None),
+                    other => Ok(other),
                 }
             }
             SyntaxKind::BracketApply => {
                 let b = BracketApply::cast(e).expect("kind");
                 let Some(recv) = b.callee() else {
-                    return Ok(None);
+                    return Ok(Found::Not);
                 };
                 // Raw-pointer indexing is never a place — the raw
                 // tier owns it.
                 if matches!(self.expr_ty(recv.span), Some(TyKind::Ptr(_))) {
-                    return Ok(None);
+                    return Ok(Found::Not);
                 }
                 // A slice (`xs[a..b]`, `s[a..b]`) is never a place: it
                 // builds a value of its own. Decide that from the
@@ -2490,19 +2520,27 @@ impl<'t> Machine<'t> {
                     .filter_map(Arg::value)
                     .any(|v| v.kind == SyntaxKind::RangeExpr)
                 {
-                    return Ok(None);
+                    return Ok(Found::Not);
                 }
-                let Some(base) = self.place_of(recv)? else {
-                    return Ok(None);
+                // The receiver's own operands run first (outermost
+                // first); a flow among them is this place's flow.
+                let base = match self.place_of(recv)? {
+                    Found::At(p) => p,
+                    other => return Ok(other),
                 };
                 let mut idx_val: Option<Value> = None;
                 for a in b.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a)
                         && wolf_ast::is_expr_kind(v.kind)
                     {
+                        // wolf-lang#481: an operand that leaves early
+                        // (`xs[idx()?]`, a `return` or `break` inside
+                        // it) has RUN; its flow is handed back.
+                        // Answering "not a place" here made every
+                        // caller's `eval` fallback run it again.
                         idx_val = Some(match self.eval(v)? {
                             Flow::Val(x) => x,
-                            _ => return Ok(None),
+                            f => return Ok(Found::Flow(f)),
                         });
                     }
                 }
@@ -2511,10 +2549,10 @@ impl<'t> Machine<'t> {
                 // key's value shape (an `int` key is not a list index).
                 if matches!(self.expr_ty(recv.span), Some(TyKind::Map(..))) {
                     let Some(key) = idx_val.as_ref().and_then(MapKey::of) else {
-                        return Ok(None);
+                        return Ok(Found::Not);
                     };
                     place.path.push(PStep::MapKey { key, span: e.span });
-                    return Ok(Some(place));
+                    return Ok(Found::At(place));
                 }
                 match idx_val {
                     Some(Value::Int(i)) => {
@@ -2535,11 +2573,11 @@ impl<'t> Machine<'t> {
                         generation,
                         span: e.span,
                     }),
-                    _ => return Ok(None),
+                    _ => return Ok(Found::Not),
                 }
-                Ok(Some(place))
+                Ok(Found::At(place))
             }
-            _ => Ok(None),
+            _ => Ok(Found::Not),
         }
     }
 
@@ -2885,7 +2923,7 @@ impl<'t> Machine<'t> {
         // element untouched, so the source stays element-wise live.
         if let (Some(pat), Some(e)) = (pat, init)
             && pat.kind == SyntaxKind::TuplePat
-            && let Some(base) = self.place_of(e)?
+            && let Some(base) = found!(self.place_of(e))
         {
             self.bind_tuple_from_place(pat, &base)?;
             return Ok(Flow::Val(Value::Unit));
@@ -2896,7 +2934,7 @@ impl<'t> Machine<'t> {
         // leave the source field-wise live.
         if let (Some(pat), Some(e)) = (pat, init)
             && pat.kind == SyntaxKind::StructPat
-            && let Some(base) = self.place_of(e)?
+            && let Some(base) = found!(self.place_of(e))
         {
             self.bind_struct_from_place(pat, &base)?;
             return Ok(Flow::Val(Value::Unit));
@@ -3127,7 +3165,7 @@ impl<'t> Machine<'t> {
         // run, so a right-hand side that grows or rehashes the
         // container still stores into the container as it is after
         // the call.
-        let Some(place) = self.place_of(place_expr)? else {
+        let Some(place) = found!(self.place_of(place_expr)) else {
             return self.refuse("assignment through this place shape", place_expr.span);
         };
         let elem_store = !compound && place_expr.kind == SyntaxKind::BracketApply;
@@ -3196,17 +3234,20 @@ impl<'t> Machine<'t> {
             });
         let v = match inner.kind {
             SyntaxKind::PathExpr | SyntaxKind::MemberExpr => match self.place_of(inner)? {
-                Some(place) => self.read_place(&place, inner.span)?,
+                Found::At(place) => self.read_place(&place, inner.span)?,
                 // A module item or a member of a temporary: read by
                 // `eval` (neither is move-tracked), then copied.
-                None => match self.eval(inner)? {
+                Found::Not => match self.eval(inner)? {
                     Flow::Val(v) => v,
                     other => return Ok(Some(other)),
                 },
+                Found::Flow(f) => return Ok(Some(f)),
             },
             SyntaxKind::BracketApply if list_elem => match self.place_of(inner)? {
-                Some(place) => self.read_place(&place, inner.span)?,
-                None => return Ok(None),
+                Found::At(place) => self.read_place(&place, inner.span)?,
+                Found::Not => return Ok(None),
+                // wolf-lang#481: `xs[i] = ys[j()?]` — the operand ran.
+                Found::Flow(f) => return Ok(Some(f)),
             },
             _ => return Ok(None),
         };
@@ -3223,7 +3264,7 @@ impl<'t> Machine<'t> {
                 None => Ok(Flow::Val(Value::Unit)),
             },
             SyntaxKind::PathExpr | SyntaxKind::MemberExpr => {
-                if let Some(place) = self.place_of(e)? {
+                if let Some(place) = found!(self.place_of(e)) {
                     let v = self.take_value(&place, e.span)?;
                     return Ok(Flow::Val(v));
                 }
@@ -3259,7 +3300,7 @@ impl<'t> Machine<'t> {
                 if let Some(recv) = b.callee()
                     && matches!(self.expr_ty(recv.span), Some(TyKind::Map(..)))
                 {
-                    let mv = match self.place_of(recv)? {
+                    let mv = match found!(self.place_of(recv)) {
                         Some(place) => self.read_place(&place, recv.span)?,
                         None => val!(self.eval(recv)),
                     };
@@ -3298,7 +3339,7 @@ impl<'t> Machine<'t> {
                 {
                     return self.eval_list_slice(e);
                 }
-                if let Some(place) = self.place_of(e)? {
+                if let Some(place) = found!(self.place_of(e)) {
                     let v = self.read_place(&place, e.span)?;
                     return Ok(Flow::Val(v));
                 }
@@ -3317,7 +3358,7 @@ impl<'t> Machine<'t> {
                     // #308): the receiver's octets — uncharged, and
                     // unretained: the byte is read off the `str`'s
                     // own storage and no list is minted.
-                    let view = self.eval_bytes_view(recv)?;
+                    let view = found!(self.eval_bytes_view(recv));
                     let base = match view {
                         Some(_) => None,
                         None => Some(val!(self.eval(recv))),
@@ -3540,7 +3581,7 @@ impl<'t> Machine<'t> {
     /// read that does NOT move the affine value (opening is not
     /// consumption).
     fn eval_region_ref(&mut self, e: &'t GreenNode) -> E<Flow> {
-        if let Some(place) = self.place_of(e)? {
+        if let Some(place) = found!(self.place_of(e)) {
             let v = self.read_place(&place, e.span)?;
             return Ok(Flow::Val(v));
         }
@@ -4034,12 +4075,12 @@ impl<'t> Machine<'t> {
             // (#232): the view, uncharged — and since s153 (#308)
             // unretained: the octets ARE the loop's items, and no
             // list is minted for them.
-            Some(it) => match self.eval_bytes_view(it)? {
+            Some(it) => match found!(self.eval_bytes_view(it)) {
                 Some(octets) => {
                     view_items = Some(octets.into_iter().map(Value::Byte).collect());
                     Value::Unit
                 }
-                None => match self.place_of(it)? {
+                None => match found!(self.place_of(it)) {
                     Some(place) => self.read_place(&place, it.span)?,
                     None => val!(self.eval(it)),
                 },
@@ -4160,7 +4201,7 @@ impl<'t> Machine<'t> {
         match d.op().map(|t| t.kind) {
             Some(SyntaxKind::CopyKw) => {
                 // `copy x`: an independent deep duplicate.
-                let v = if let Some(place) = self.place_of(operand)? {
+                let v = if let Some(place) = found!(self.place_of(operand)) {
                     self.read_place(&place, operand.span)?
                 } else {
                     val!(self.eval(operand))
@@ -4169,7 +4210,7 @@ impl<'t> Machine<'t> {
                 Ok(Flow::Val(copied))
             }
             Some(SyntaxKind::MoveKw) => {
-                if let Some(place) = self.place_of(operand)? {
+                if let Some(place) = found!(self.place_of(operand)) {
                     let v = self.take_value(&place, operand.span)?;
                     Ok(Flow::Val(v))
                 } else {
@@ -4781,7 +4822,7 @@ impl<'t> Machine<'t> {
             let ispan = i.syntax().span;
             let v = match i.expr() {
                 Some(hole) => {
-                    let hv = if let Some(place) = self.place_of(hole)? {
+                    let hv = if let Some(place) = found!(self.place_of(hole)) {
                         self.read_place(&place, hole.span)?
                     } else {
                         val!(self.eval(hole))
@@ -6620,7 +6661,7 @@ impl<'t> Machine<'t> {
                 let field = self.text(member.span);
                 // `s.bytes().len` reads the view (#232; s153, #308):
                 // the receiver's byte count, nothing minted.
-                let bv = match self.eval_bytes_view(base)? {
+                let bv = match found!(self.eval_bytes_view(base)) {
                     Some(octets) if field == "len" => {
                         return Ok(Flow::Val(Value::Int(octets.len() as i64)));
                     }
@@ -6797,7 +6838,7 @@ impl<'t> Machine<'t> {
         let Some(recv) = b.callee() else {
             return self.refuse("a slice without a receiver", e.span);
         };
-        let lv = if let Some(place) = self.place_of(recv)? {
+        let lv = if let Some(place) = found!(self.place_of(recv)) {
             self.read_place(&place, recv.span)?
         } else {
             val!(self.eval(recv))
@@ -6830,7 +6871,7 @@ impl<'t> Machine<'t> {
         let Some(recv) = b.callee() else {
             return self.refuse("a slice without a receiver", e.span);
         };
-        let sv = if let Some(place) = self.place_of(recv)? {
+        let sv = if let Some(place) = found!(self.place_of(recv)) {
             self.read_place(&place, recv.span)?
         } else {
             val!(self.eval(recv))
@@ -6874,13 +6915,13 @@ impl<'t> Machine<'t> {
     fn raw_index_parts(&mut self, e: &'t GreenNode) -> E<(PtrVal, i64)> {
         let b = BracketApply::cast(e).expect("kind");
         let recv = b.callee().expect("raw index receiver");
-        let pv = if let Some(place) = self.place_of(recv)? {
-            self.read_place(&place, recv.span)?
-        } else {
-            match self.eval(recv)? {
+        let pv = match self.place_of(recv)? {
+            Found::At(place) => self.read_place(&place, recv.span)?,
+            Found::Not => match self.eval(recv)? {
                 Flow::Val(v) => v,
                 _ => return self.refuse("control flow in a raw index", e.span),
-            }
+            },
+            Found::Flow(_) => return self.refuse("control flow in a raw index", e.span),
         };
         let Value::Ptr(p) = pv else {
             return self.refuse("raw index through a non-pointer", e.span);
@@ -6975,7 +7016,7 @@ impl<'t> Machine<'t> {
             Some(CastKind::Raw) => {
                 // Bridges are reads, never moves (deriving is not a
                 // use).
-                let v = if let Some(place) = self.place_of(inner)? {
+                let v = if let Some(place) = found!(self.place_of(inner)) {
                     self.read_place(&place, inner.span)?
                 } else {
                     val!(self.eval(inner))
@@ -7056,7 +7097,7 @@ impl<'t> Machine<'t> {
                 // static loan already guards every write under a live
                 // pair), and the value carries the concrete type's
                 // name — this machine's vtable half.
-                let v = if let Some(place) = self.place_of(inner)? {
+                let v = if let Some(place) = found!(self.place_of(inner)) {
                     self.read_place(&place, inner.span)?
                 } else {
                     val!(self.eval(inner))
@@ -7173,7 +7214,7 @@ impl<'t> Machine<'t> {
         let d = wolf_ast::AssumeStmt::cast(stmt).expect("kind");
         let mut ptrs: Vec<(PtrVal, Span)> = Vec::new();
         for op in d.exprs() {
-            let v = if let Some(place) = self.place_of(op)? {
+            let v = if let Some(place) = found!(self.place_of(op)) {
                 self.read_place(&place, op.span)?
             } else {
                 val!(self.eval(op))
@@ -7229,7 +7270,7 @@ impl<'t> Machine<'t> {
         };
         let ptr = match d.source() {
             Some(p) => {
-                let v = if let Some(place) = self.place_of(p)? {
+                let v = if let Some(place) = found!(self.place_of(p)) {
                     self.read_place(&place, p.span)?
                 } else {
                     val!(self.eval(p))
@@ -7387,7 +7428,7 @@ impl<'t> Machine<'t> {
                 let mut out = String::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
-                        let x = if let Some(place) = self.place_of(v)? {
+                        let x = if let Some(place) = found!(self.place_of(v)) {
                             self.read_place(&place, v.span)?
                         } else {
                             val!(self.eval(v))
@@ -7424,7 +7465,7 @@ impl<'t> Machine<'t> {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
-                        let x = if let Some(place) = self.place_of(v)? {
+                        let x = if let Some(place) = found!(self.place_of(v)) {
                             self.read_place(&place, v.span)?
                         } else {
                             val!(self.eval(v))
@@ -7443,7 +7484,7 @@ impl<'t> Machine<'t> {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
-                        let x = if let Some(place) = self.place_of(v)? {
+                        let x = if let Some(place) = found!(self.place_of(v)) {
                             self.read_place(&place, v.span)?
                         } else {
                             val!(self.eval(v))
@@ -7467,7 +7508,7 @@ impl<'t> Machine<'t> {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
-                        let x = if let Some(place) = self.place_of(v)? {
+                        let x = if let Some(place) = found!(self.place_of(v)) {
                             self.read_place(&place, v.span)?
                         } else {
                             val!(self.eval(v))
@@ -7489,7 +7530,7 @@ impl<'t> Machine<'t> {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
-                        let x = if let Some(place) = self.place_of(v)? {
+                        let x = if let Some(place) = found!(self.place_of(v)) {
                             self.read_place(&place, v.span)?
                         } else {
                             val!(self.eval(v))
@@ -7645,7 +7686,7 @@ impl<'t> Machine<'t> {
         let through_value = match by_decl {
             Some(_) => None,
             None => match d.callee() {
-                Some(callee) => match self.place_of(callee)? {
+                Some(callee) => match found!(self.place_of(callee)) {
                     Some(place) => match self.read_place(&place, callee.span)? {
                         Value::Fn(b) => Some(b),
                         _ => None,
@@ -7748,7 +7789,7 @@ impl<'t> Machine<'t> {
         };
         match mode {
             Some(wolf_ast::ParamMode::Mut) => {
-                let Some(place) = self.place_of(inner)? else {
+                let Some(place) = found!(self.place_of(inner)) else {
                     return self.refuse("`mut` of a non-place in checked execution", v.span);
                 };
                 // Raw-pointer arguments retag at parameter entry
@@ -7761,14 +7802,14 @@ impl<'t> Machine<'t> {
                 Ok(Flow::Val(Value::Ref(place)))
             }
             Some(wolf_ast::ParamMode::Take) => {
-                if let Some(place) = self.place_of(inner)? {
+                if let Some(place) = found!(self.place_of(inner)) {
                     self.take_value(&place, inner.span).map(Flow::Val)
                 } else {
                     self.eval_arg_value(inner)
                 }
             }
             _ => {
-                if let Some(place) = self.place_of(inner)? {
+                if let Some(place) = found!(self.place_of(inner)) {
                     let cur = self.read_place(&place, inner.span)?;
                     if let Value::Ptr(p) = cur {
                         // `read` retag: a Frozen child, protected for
@@ -7833,7 +7874,7 @@ impl<'t> Machine<'t> {
         e: &'t GreenNode,
         args: Option<wolf_ast::ArgList<'t>>,
     ) -> E<Flow> {
-        let ch = match self.place_of(recv)? {
+        let ch = match found!(self.place_of(recv)) {
             Some(place) => self.read_place(&place, recv.span)?,
             None => val!(self.eval(recv)),
         };
@@ -7909,7 +7950,7 @@ impl<'t> Machine<'t> {
         let recv_ty = self.expr_ty(recv.span).cloned();
         // Raw-pointer provenance ops.
         if matches!(recv_ty, Some(TyKind::Ptr(_))) {
-            let pv = if let Some(place) = self.place_of(recv)? {
+            let pv = if let Some(place) = found!(self.place_of(recv)) {
                 self.read_place(&place, recv.span)?
             } else {
                 val!(self.eval(recv))
@@ -7980,7 +8021,7 @@ impl<'t> Machine<'t> {
                 // stand in this spot said "List method on a temporary",
                 // a place-model sentence that never mentioned views;
                 // what is left of it below names the real rule.
-                let recv_place = self.place_of(recv)?;
+                let recv_place = found!(self.place_of(recv));
                 let recv_val = match &recv_place {
                     Some(place) => self.read_place(place, recv.span)?,
                     // `s.bytes().len` and the query family read the
@@ -7989,7 +8030,7 @@ impl<'t> Machine<'t> {
                     // receiver's octets and no list is minted. The
                     // mutators refuse by the same sentence a
                     // materialized temporary gets (below).
-                    None => match self.eval_bytes_view(recv)? {
+                    None => match found!(self.eval_bytes_view(recv)) {
                         Some(octets) => {
                             let none = || {
                                 Ok(raise(Value::ErrTag {
@@ -8140,7 +8181,7 @@ impl<'t> Machine<'t> {
             // `List[(K, V)]` in insertion order (the tuple is the
             // positional struct the TupleExpr evaluator builds).
             Some(TyKind::Map(..)) => {
-                let recv_place = self.place_of(recv)?;
+                let recv_place = found!(self.place_of(recv));
                 let recv_val = match &recv_place {
                     Some(place) => self.read_place(place, recv.span)?,
                     None => val!(self.eval(recv)),
@@ -8200,7 +8241,7 @@ impl<'t> Machine<'t> {
                 }
             }
             Some(TyKind::Pool(_)) => {
-                let Some(place) = self.place_of(recv)? else {
+                let Some(place) = found!(self.place_of(recv)) else {
                     return self.refuse("Pool method on a temporary", e.span);
                 };
                 let Value::Pool(id) = self.read_place(&place, recv.span)? else {
@@ -8308,7 +8349,7 @@ impl<'t> Machine<'t> {
                 }
             }
             Some(TyKind::Shared(_)) => {
-                let Some(place) = self.place_of(recv)? else {
+                let Some(place) = found!(self.place_of(recv)) else {
                     return self.refuse("cell method on a temporary", e.span);
                 };
                 let Value::Shared(cell) = self.read_place(&place, recv.span)? else {
@@ -8327,7 +8368,7 @@ impl<'t> Machine<'t> {
                 }
             }
             Some(TyKind::Weak(_)) => {
-                let Some(place) = self.place_of(recv)? else {
+                let Some(place) = found!(self.place_of(recv)) else {
                     return self.refuse("cell method on a temporary", e.span);
                 };
                 let Value::Weak(cell) = self.read_place(&place, recv.span)? else {
@@ -8353,7 +8394,7 @@ impl<'t> Machine<'t> {
             // `{none}` rows, never traps. Views materialize `List`s
             // at v0 (the zero-copy protocol is D28's).
             Some(TyKind::Prim(Prim::Str)) => {
-                let sv = if let Some(place) = self.place_of(recv)? {
+                let sv = if let Some(place) = found!(self.place_of(recv)) {
                     self.read_place(&place, recv.span)?
                 } else {
                     val!(self.eval(recv))
@@ -8662,7 +8703,7 @@ impl<'t> Machine<'t> {
         let mut args = Vec::new();
         for a in d.args().into_iter().flat_map(|l| l.args()) {
             if let Some(v) = Arg::value(a) {
-                let x = if let Some(place) = self.place_of(v)? {
+                let x = if let Some(place) = found!(self.place_of(v)) {
                     self.read_place(&place, v.span)?
                 } else {
                     val!(self.eval(v))
