@@ -384,37 +384,70 @@ fn offsets_and_loop_indices_are_distinct_on_every_leg() {
     every_lane("elem_dyn_proofs_legs.lu", want, want, want);
 }
 
-/// EG3's twins that lupin traps: R1 with the index written between the
-/// claims (a block argument, a nested `mut` call), R2 with the index
-/// written in the body or `..=` holding the literal, equal offsets, and
-/// an offset against a literal. Each is one element at run time.
-#[test]
-fn the_proof_rules_refuse_what_is_one_element_at_run_time() {
+/// EG3's twins that lupin traps: each is one element at run time.
+fn one_element_at_run_time(name: &str) {
     let trap = verdict("trap(exclusivity)");
-    for name in [
-        "elem_offset_rebound_mut.lu",
-        "elem_offset_rebound_call_mut.lu",
-        "elem_loop_induction_written_mut.lu",
-        "elem_loop_inclusive_covers_const.lu",
-        "elem_offset_zero_mut.lu",
-        "elem_offset_vs_literal_mut.lu",
-    ] {
-        every_lane(name, verdict("fail(E1002)"), trap, trap);
-    }
+    every_lane(name, verdict("fail(E1002)"), trap, trap);
 }
 
-/// EG3's conservatism twins: a subtracted offset (`i - 1`), a local
-/// offset (`i + j`) and a non-literal range (`1..n`) are left out of
-/// R1/R2, so they stay one place; lupin runs each with its values.
+/// R1 fails: a block argument writes `i` between the claims.
 #[test]
-fn shapes_the_proof_rules_do_not_read_stay_one_place() {
-    for (name, bytes) in [
-        ("elem_offset_negative_mut.lu", "11 3\n"),
-        ("elem_offset_nonliteral_mut.lu", "2 12\n"),
-        ("elem_loop_nonliteral_range_mut.lu", "3 12 13\n"),
-    ] {
-        every_lane(name, verdict("fail(E1002)"), runs(bytes), runs(bytes));
-    }
+fn an_offset_after_a_block_that_writes_the_index_stays_one_place() {
+    one_element_at_run_time("elem_offset_rebound_mut.lu");
+}
+
+/// R1 fails: a nested `back(mut i)` writes `i` between the claims.
+#[test]
+fn an_offset_after_a_call_that_writes_the_index_stays_one_place() {
+    one_element_at_run_time("elem_offset_rebound_call_mut.lu");
+}
+
+/// R2 fails: the body assigns the loop index (`i = 0`).
+#[test]
+fn a_loop_index_the_body_writes_stays_one_place() {
+    one_element_at_run_time("elem_loop_induction_written_mut.lu");
+}
+
+/// R2 fails: `1..=2` holds the literal `2`.
+#[test]
+fn an_inclusive_range_holding_the_literal_stays_one_place() {
+    one_element_at_run_time("elem_loop_inclusive_covers_const.lu");
+}
+
+/// R1's same half: `xs[i]` and `xs[i + 0]` are one element.
+#[test]
+fn a_zero_offset_is_the_same_element() {
+    one_element_at_run_time("elem_offset_zero_mut.lu");
+}
+
+/// R1 relates offsets of one local, never an offset and a literal.
+#[test]
+fn an_offset_against_a_literal_stays_one_place() {
+    one_element_at_run_time("elem_offset_vs_literal_mut.lu");
+}
+
+/// EG3's conservatism twins: shapes R1/R2 do not read stay one place;
+/// lupin runs each with its values.
+fn not_read_by_the_rules(name: &str, bytes: &str) {
+    every_lane(name, verdict("fail(E1002)"), runs(bytes), runs(bytes));
+}
+
+/// A subtracted offset (`xs[i - 1]`) is not R1's spelling.
+#[test]
+fn a_subtracted_offset_stays_one_place() {
+    not_read_by_the_rules("elem_offset_negative_mut.lu", "11 3\n");
+}
+
+/// A local offset (`xs[i + j]`) is not a literal.
+#[test]
+fn a_local_offset_stays_one_place() {
+    not_read_by_the_rules("elem_offset_nonliteral_mut.lu", "2 12\n");
+}
+
+/// A range bound that is a local (`1..n`) is not a literal range.
+#[test]
+fn a_non_literal_range_stays_one_place() {
+    not_read_by_the_rules("elem_loop_nonliteral_range_mut.lu", "3 12 13\n");
 }
 
 /// Item 2: `Pool` handles are run-time values; lupin declines `Pool`.
