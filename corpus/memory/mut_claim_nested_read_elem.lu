@@ -1,0 +1,29 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order, mem.model.place.elem
+//!
+//! s186 (wolf-lang#476, eg02b's find) — a read lend of the WHOLE
+//! container one call down, inside a later argument, while `mut xs[0]`
+//! is claimed. The arguments after a `mut` argument are evaluated
+//! inside its claim ([mem.model.order]), and the whole container is a
+//! prefix of its element (`[mem.model.place.elem]` item 2), so `total`
+//! reads a place the call holds exclusively ([mem.tier0.excl.1]).
+//! The direct lend (`both(mut xs[0], xs)`, `elem_claim_whole_read.lu`)
+//! was always E1002; this one ran `4 3` on checked, native and release
+//! through 0.2.19 while lupin traps `exclusivity`. E1002 on every
+//! wolfgang lane now.
+
+fn bump(mut a: int, n: int) {
+    a = a + n
+}
+
+fn total(ys: List[int]) -> int {
+    ys.len
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    bump(mut xs[0], total(xs))  // ERROR E1002: xs read inside xs[0]'s claim
+    print("{xs[0]} {xs.len}")
+    0
+}

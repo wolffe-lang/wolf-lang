@@ -1,0 +1,21 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.1, mem.model.order, mem.model.place.elem
+//!
+//! s186 (wolf-lang#476, the second of s185's two shapes) — `count`
+//! reads only the header (`[mem.model.place.elem]` 1(c)), so beside a
+//! claimed ELEMENT it runs (`elem_header_methods_under_claim.lu`,
+//! #474); but a claim on the WHOLE container covers its header, a
+//! prefix like any other. Ran `4` on checked, native and release
+//! through 0.2.19; lupin traps `exclusivity`.
+
+fn grow(mut ys: List[int], n: int) {
+    (mut ys).push(n)
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    grow(mut xs, xs.count())  // ERROR E1002: the header of a claimed xs
+    print("{xs.len}")
+    0
+}

@@ -1,0 +1,21 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.1, mem.model.order, mem.model.place.elem
+//!
+//! s186 (wolf-lang#476, the first of s185's two shapes) — a method
+//! RECEIVER inside a later argument: `get` reads the whole container
+//! (`[mem.model.place.elem]` 1(c), ruled 2026-09-30: only `len`,
+//! `count` and `is_empty` read the header), and the whole container is
+//! a prefix of the claimed `xs[0]`. Ran `3` on checked, native and
+//! release through 0.2.19; lupin traps `exclusivity`.
+
+fn bump(mut a: int, n: int) {
+    a = a + n
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    bump(mut xs[0], xs.get(1) else 9)  // ERROR E1002: get reads all of xs
+    print("{xs[0]}")
+    0
+}
