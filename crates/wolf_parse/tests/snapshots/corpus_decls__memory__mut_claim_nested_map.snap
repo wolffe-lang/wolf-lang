@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 398..445 name=msize body=Block
+FnDecl 447..503 name=mput body=Block
+FnDecl 505..667 name=main body=Block
