@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### Offsets and loop indices in one call (eg03, EGC's EG3)
+
+- **Two claims in one call through a run-time index are distinct where
+  `[mem.model.place.elem]` item 4 proves it.** R1: `add2(mut xs[i],
+  mut xs[i + 1])` runs, and so do `xs[i + 1]` beside `xs[i + 2]` and
+  `g[i][0]` beside `g[i + 1][0]`. R2: `for i in 1..3 { add2(mut xs[0],
+  mut xs[i]) }` runs, and so do `1..=2` against `0` and `0..2` against
+  `2`. Through 0.2.19 each was E1002 on every wolfgang lane while lupin
+  ran it. Both rules need the index local unchanged: nothing the call
+  evaluates may write it, no loan may be taken on it, and the body may
+  have no raw-tier statement. R2 also needs the loop's body never to
+  assign the index (a `for` binding is assignable).
+- Still refused, each with a row: `i` written between the claims (a
+  block argument, or a nested `back(mut i)`), the loop index assigned
+  in the body, a range that holds the literal (`1..=2` against `2`),
+  `i + 0`, an offset against a literal, `i - 1`, `i + j` and `1..n`.
+  lupin 0.1.42 traps the first six and runs the last three.
+- Left out, and stated in the clause: moves, local borrows, iteration
+  and s186's writes inside a later argument do not read R1 or R2.
+- Witnesses: `corpus/memory/elem_offset_mut_pair.lu`,
+  `elem_loop_induction_mut.lu` (eg00's parked K13 and K14),
+  `elem_dyn_proofs_legs.lu`, and nine twins
+  (`elem_offset_*_mut.lu`, `elem_loop_*`). `element_places_lanes.rs`
+  asserts them on checked, native, release and lupin.
+
 ### A slice's endpoints run once (s187, #479)
 
 - **The checked machine ran a slice's endpoints two or three times**
