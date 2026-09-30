@@ -1,0 +1,44 @@
+//! check: run(exit=0, stdout="11 3\n")
+//! phase: run
+//! conforms: mem.tier0.excl.1, mem.model.order, mem.model.place.elem, mem.model.path.disjoint
+//!
+//! s186 (wolf-lang#476) — the shapes the nested-access check must
+//! keep running: a nested read of a DIFFERENT element (`id(xs[1])`,
+//! item 1(a)), of the header beside an element claim (`id(xs.count())`,
+//! 1(c) and #474), a read evaluated BEFORE the claim began (`bump2`'s
+//! first argument), a disjoint field (`r.xs` beside `mut r.k`), and a
+//! header method in a branch. Each ran on every wolfgang lane before
+//! s186 with lupin's bytes, and still does.
+
+fn bump(mut a: int, n: int) {
+    a = a + n
+}
+
+fn bump2(n: int, mut a: int) {
+    a = a + n
+}
+
+fn id(n: int) -> int {
+    n
+}
+
+fn total(ys: List[int]) -> int {
+    ys.len
+}
+
+struct R {
+    xs: List[int],
+    k: int,
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    bump(mut xs[0], id(xs[1]))
+    bump(mut xs[0], id(xs.count()))
+    bump2(total(xs), mut xs[0])
+    var r = R { xs: [4, 5, 6], k: 0 }
+    bump(mut r.k, total(r.xs))
+    bump(mut xs[0], if xs.is_empty() { 1 } else { 2 })
+    print("{xs[0]} {r.k}")
+    0
+}
