@@ -5071,6 +5071,21 @@ impl<'a> Checker<'a> {
                         span,
                     });
                 }
+                // wolf-lang#484 (s188): a fn type carries no modes
+                // (`[gram.type]`, `[type.fn.value]`), so a call through
+                // the value could not spell `mut` or `take` (X1,
+                // `[mem.tier0.mode.mut]`) and would pass the caller's
+                // place as a `read` into a body that writes or consumes
+                // it. Refused by name, as s186 refuses a moded nested fn
+                // used as a value (#466); a call by name is unaffected
+                // (`call_named` never comes here).
+                if f.params.iter().any(|p| p.mode.is_some()) {
+                    return Err(NotYet {
+                        construct: "a fn with `mut` or `take` parameters used as a value \
+                                    (a fn type carries no modes; call it by name)",
+                        span,
+                    });
+                }
                 let params: Vec<TyId> = f.params.iter().map(|p| p.ty).collect();
                 let ret = f.ret;
                 Ok(self.lo.table.intern(TyKind::Fn(params, ret)))
