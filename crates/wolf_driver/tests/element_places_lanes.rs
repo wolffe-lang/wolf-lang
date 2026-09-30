@@ -5,7 +5,12 @@
 //! exclusivity, loan and iteration leg with two distinct literals, and
 //! its run-time-index twin that stays refused; eg02b (wolf-lang#472,
 //! ruled A) adds item 1(c) under a claim — a member read beside an
-//! element claim runs — and its whole-container twin that stays refused.
+//! element claim runs — and its whole-container twin that stays refused;
+//! s185 (wolf-lang#474 and wolffe-lang/wolf-interp#149, ruled
+//! 2026-09-30) adds item 1(c)'s header METHODS — `count`, `is_empty` and
+//! a `Map`'s or `Pool`'s `len()` beside a moved or claimed element — and
+//! the whole-read twins (`push`, `get`, `pop`, a slice, an impl method's
+//! `self`) that stay refused.
 //!
 //! Why a driver test beside the corpus rows (s171's lesson, wave 45):
 //! `cargo xtask corpus` runs a `phase: run` entry on the NATIVE lane
@@ -53,6 +58,23 @@ const PRE_MAP_MOVE_LUPIN: &[&str] = &["0.1.40", "0.1.41"];
 /// Any later version must run these rows: a pin bump that carries lupin
 /// forward without is59 goes red here by name.
 const PRE_MEMBER_LUPIN: &[&str] = &["0.1.40", "0.1.41"];
+
+/// lupin releases that read a header METHOD (`xs.count()`,
+/// `xs.is_empty()`) under an element claim as a read of the whole
+/// container, and so trap `bump(mut xs[0], xs.count())` where item 1(c)
+/// says the header is not the element (wolf-lang#474, ruled 2026-09-30:
+/// `len`, `count` and `is_empty` are header reads on every machine;
+/// lupin's mirror is is60). Measured by s185 on the published 0.1.40 and
+/// 0.1.41 archives. Any later version must run the row.
+const PRE_HEADER_METHOD_LUPIN: &[&str] = &["0.1.40", "0.1.41"];
+
+/// lupin releases whose method receiver on a container or struct
+/// holding a moved part runs instead of trapping — `push`, `get`, `pop`,
+/// a slice, an impl method's `self` (wolffe-lang/wolf-interp#149, ruled
+/// 2026-09-30: every method but the header reads reads the whole
+/// container; lupin's mirror is is60). Measured by s185 on the published
+/// 0.1.40 and 0.1.41 archives. Any later version must trap.
+const PRE_WHOLE_RECEIVER_LUPIN: &[&str] = &["0.1.40", "0.1.41"];
 
 #[derive(Debug)]
 struct Obs {
@@ -722,4 +744,111 @@ fn the_whole_container_read_under_an_element_claim_stays_refused() {
 fn two_claims_in_one_caller_region_survive_the_release_inliner() {
     let want = runs("2 12\n");
     every_lane("mut_two_fields_one_region.lu", want, want, want);
+}
+
+// ------------------------------- s185: the header methods (#474, #149) --
+//
+// The maintainer's ruling of 2026-09-30: `len`, `count` and `is_empty`
+// read only a container's header, so they are allowed beside a claimed
+// or moved element on every machine; every other method reads the whole
+// container. Through 0.2.18 every wolfgang lane refused a header method
+// on a container with a moved element (E1001) — the receiver was read
+// as the whole container — and already ran one beside an element claim.
+
+/// Item 1(c) beside a moved element: `count()` and `is_empty()` on the
+/// container and on every container above the moved element.
+#[test]
+fn header_methods_run_beside_a_moved_element() {
+    let want = runs("1 2 false 20 1 2 2 false false\n");
+    every_lane("elem_header_methods_after_move.lu", want, want, want);
+}
+
+/// The `Map` header: `count()`, `is_empty()`, `len()` after a value is
+/// read out.
+#[test]
+fn map_header_methods_run_beside_a_read_out_value() {
+    let want = runs("1 2 false 2\n");
+    every_lane("elem_header_methods_after_move_map.lu", want, want, want);
+}
+
+/// The `Pool` header: `len()` and `is_empty()` after `move p[h]`; lupin
+/// declines `Pool` by name.
+#[test]
+fn pool_header_methods_run_beside_a_moved_element() {
+    let declines = verdict("unsupported");
+    every_lane(
+        "elem_header_methods_after_move_pool.lu",
+        runs("1 1 false\n"),
+        declines,
+        declines,
+    );
+}
+
+/// Item 1(c) under a claim, for the methods: `bump(mut xs[0],
+/// xs.count())`, `flag(mut xs[1], xs.is_empty())` — every wolfgang lane
+/// ran this through 0.2.18 and the ruling keeps it (wolf-lang#474);
+/// lupin through `PRE_HEADER_METHOD_LUPIN` traps.
+#[test]
+fn header_methods_run_under_an_element_claim() {
+    let want = runs("4 3\n");
+    every_lane_pinned(
+        "elem_header_methods_under_claim.lu",
+        PRE_HEADER_METHOD_LUPIN,
+        want,
+        verdict("trap(exclusivity)"),
+        want,
+    );
+}
+
+/// A whole-read method on a container (or struct) holding a moved part:
+/// E1001 on every wolfgang lane; lupin through `PRE_WHOLE_RECEIVER_LUPIN`
+/// runs it and prints `pre`, any later lupin traps.
+fn a_whole_read_stays_refused(name: &str, pre: &str) {
+    every_lane_pinned(
+        name,
+        PRE_WHOLE_RECEIVER_LUPIN,
+        verdict("fail(E1001)"),
+        runs(pre),
+        verdict("trap(use-after-move)"),
+    );
+}
+
+/// `(mut xs).push([3])` after `move xs[0]`.
+#[test]
+fn push_after_a_moved_element_stays_refused() {
+    a_whole_read_stays_refused("elem_whole_read_push_after_move.lu", "1 3\n");
+}
+
+/// `xs.get(1)` after `move xs[0]` — a live index, through the method.
+#[test]
+fn get_after_a_moved_element_stays_refused() {
+    a_whole_read_stays_refused("elem_whole_read_get_after_move.lu", "1 2\n");
+}
+
+/// `(mut xs).pop()` after `move xs[0]`, the last element live.
+#[test]
+fn pop_after_a_moved_element_stays_refused() {
+    a_whole_read_stays_refused("elem_whole_read_pop_after_move.lu", "1 2 1\n");
+}
+
+/// `xs[1..3]` beside the moved `xs[0]`.
+#[test]
+fn a_slice_beside_a_moved_element_stays_refused() {
+    a_whole_read_stays_refused("elem_whole_read_slice_after_move.lu", "1 2\n");
+}
+
+/// An impl method's `self` after `move p.x`.
+#[test]
+fn an_impl_self_after_a_moved_field_stays_refused() {
+    a_whole_read_stays_refused("elem_whole_read_self_after_move.lu", "1 2\n");
+}
+
+/// A header read is a builtin container's, not a method name: an impl
+/// method spelled `count`/`is_empty` takes the whole `self`.
+#[test]
+fn a_method_named_count_is_not_a_header_read() {
+    a_whole_read_stays_refused(
+        "elem_whole_read_named_count_after_move.lu",
+        "1 2 false\n",
+    );
 }
