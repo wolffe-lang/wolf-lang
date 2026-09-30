@@ -10,7 +10,8 @@ error[E1002]: `xs[i]` goes `mut` in a call evaluated while `xs[0]` is lent `mut`
    |                             ^^^^^ a second claim inside the outer call's extent
    |
    = note: `xs[0]` and `xs[i]` may be one element: an index that is not a literal is one place with
-     every other index of its container, and only two different literals are distinct
-     [mem.model.place.elem]. A `mut` argument is exclusive for the whole call, and the
-     arguments after it are evaluated inside that claim [mem.tier0.excl]. Evaluate the inner
-     call into a local BEFORE the outer one.
+     every other index of its container; only two different literals, two offsets `i + a` and
+     `i + b` of one local the call leaves unwritten, and a loop index over literal bounds
+     against a literal outside them are distinct [mem.model.place.elem]. A `mut` argument is
+     exclusive for the whole call, and the arguments after it are evaluated inside that claim
+     [mem.tier0.excl]. Evaluate the inner call into a local BEFORE the outer one.

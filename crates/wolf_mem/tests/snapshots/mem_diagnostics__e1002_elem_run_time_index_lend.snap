@@ -10,5 +10,6 @@ error[E1002]: `xs[i]` cannot go `mut` here: it overlaps `xs[0]`, already passed 
   |                         ^^^^^ second exclusive claim on the same place
   |
   = note: `xs[0]` and `xs[i]` may be one element: an index that is not a literal is one place with
-    every other index of its container, and only two different literals are distinct
-    [mem.model.place.elem].
+    every other index of its container; only two different literals, two offsets `i + a` and
+    `i + b` of one local the call leaves unwritten, and a loop index over literal bounds
+    against a literal outside them are distinct [mem.model.place.elem].
