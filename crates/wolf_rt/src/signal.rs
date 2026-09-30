@@ -33,6 +33,19 @@
 //!   `[os.signal.platform]` pre-authorized). The module rides the task
 //!   layer's platform gate, which covers both since s59; FreeBSD joins
 //!   with s61 (same POSIX shape, or `kqueue` `EVFILT_SIGNAL`).
+//!   **An inherited mask (s188, wolf-lang#483).** A process inherits
+//!   its signal mask across `fork` and `exec`; a job started from a
+//!   shell that blocks SIGQUIT has it blocked on every thread, and a
+//!   handler for it never runs (`kill -QUIT` pends forever). Masks are
+//!   per thread, and a process-directed signal goes to any thread that
+//!   does not block it, so `listen` has the drain thread — the one
+//!   thread the runtime keeps for the program's whole life (pool
+//!   workers retire) — unblock exactly the signals the program arms,
+//!   and waits until it has. Every other bit of every thread's mask
+//!   stays as inherited, and the runtime never touches a signal the
+//!   program did not arm. The request rides the self-pipe as a control
+//!   byte (`CTL_UNBLOCK`), because only a thread can change its
+//!   own mask.
 //! - **Windows (s60b):** POSIX signals do not exist; the meaning
 //!   abstraction maps to `SetConsoleCtrlHandler` — CTRL_C / CTRL_BREAK
 //!   / CTRL_CLOSE → TERMINATE / QUIT / TERMINATE, exactly the clause's
@@ -165,14 +178,24 @@ fn deliver(h: &Hub, m: i64) {
 mod sys {
     use super::{Hub, deliver, meaning, sig_code};
     use std::os::fd::RawFd;
-    use std::sync::Once;
     use std::sync::atomic::{AtomicI32, Ordering};
+    use std::sync::{Condvar, Mutex, Once};
 
     /// The self-pipe write end, reachable from the async-signal
     /// handler WITHOUT a lock (an atomic load is async-signal-safe; a
     /// mutex is not). `-1` until the hub is initialized.
     static SELF_PIPE_W: AtomicI32 = AtomicI32::new(-1);
     static READER: Once = Once::new();
+
+    /// A self-pipe byte with this bit set is a CONTROL byte, never a
+    /// delivered meaning (meanings are 1/2/4/8): "drain thread, unblock
+    /// the signal of the meaning in the low bits" (wolf-lang#483).
+    pub const CTL_UNBLOCK: u8 = 0x80;
+
+    /// The meanings whose signal the drain thread has unblocked on
+    /// itself, and the condvar `unblock` waits on until it has.
+    static UNBLOCKED: Mutex<i64> = Mutex::new(0);
+    static UNBLOCKED_CV: Condvar = Condvar::new();
 
     /// Build the self-pipe; returns the read end (the write end
     /// publishes through [`SELF_PIPE_W`]).
@@ -294,8 +317,90 @@ mod sys {
                 return; // write end closed (process teardown)
             }
             for &b in &buf[..n as usize] {
-                deliver(h, i64::from(b));
+                if b & CTL_UNBLOCK != 0 {
+                    unblock_here(i64::from(b & !CTL_UNBLOCK));
+                } else {
+                    deliver(h, i64::from(b));
+                }
             }
+        }
+    }
+
+    /// On the drain thread: unblock the meaning's signal on THIS thread
+    /// (the only mask a thread can change is its own), then publish it.
+    /// A signal already pending process-wide is delivered to the
+    /// trampoline as soon as it is unblocked, so nothing sent while it
+    /// was blocked is lost.
+    fn unblock_here(m: i64) {
+        if let Some(sig) = to_signal(m) {
+            // SAFETY: a zeroed sigset filled by sigemptyset/sigaddset; the
+            // old-mask pointer is null.
+            unsafe {
+                let mut set: libc::sigset_t = std::mem::zeroed();
+                libc::sigemptyset(&mut set);
+                libc::sigaddset(&mut set, sig);
+                libc::pthread_sigmask(libc::SIG_UNBLOCK, &set, std::ptr::null_mut());
+            }
+        }
+        let mut done = UNBLOCKED.lock().unwrap_or_else(|p| p.into_inner());
+        *done |= m;
+        UNBLOCKED_CV.notify_all();
+    }
+
+    /// Have the drain thread unblock the signals of `armed` (only
+    /// those), and return once it has: after `listen` returns, a signal
+    /// the program armed reaches it whatever mask the process
+    /// inherited. Each meaning is asked for once; the ask is one
+    /// control byte on the self-pipe.
+    pub fn unblock(armed: i64) {
+        let mut done = UNBLOCKED.lock().unwrap_or_else(|p| p.into_inner());
+        let want = armed & meaning::ALL;
+        let missing = want & !*done;
+        if missing == 0 {
+            return;
+        }
+        let fd = SELF_PIPE_W.load(Ordering::Relaxed);
+        if fd < 0 {
+            return;
+        }
+        for bit in [
+            meaning::RELOAD,
+            meaning::TERMINATE,
+            meaning::QUIT,
+            meaning::UPGRADE,
+        ] {
+            if missing & bit != 0 {
+                let byte = CTL_UNBLOCK | bit as u8;
+                // The write end is nonblocking; a full pipe (the drain
+                // thread behind by 64 KiB of deliveries) is retried.
+                loop {
+                    // SAFETY: a one-byte write to the runtime's own pipe.
+                    let n = unsafe { libc::write(fd, (&raw const byte).cast(), 1) };
+                    if n == 1 {
+                        break;
+                    }
+                    let e = std::io::Error::last_os_error().raw_os_error();
+                    if e != Some(libc::EAGAIN) && e != Some(libc::EINTR) {
+                        return;
+                    }
+                    drop(done);
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                    done = UNBLOCKED.lock().unwrap_or_else(|p| p.into_inner());
+                }
+            }
+        }
+        // Bounded: a drain thread gone at teardown must not hang
+        // `listen`; the unblock is then simply not in force.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        while *done & want != want {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            if left.is_zero() {
+                return;
+            }
+            done = UNBLOCKED_CV
+                .wait_timeout(done, left)
+                .unwrap_or_else(|p| p.into_inner())
+                .0;
         }
     }
 
@@ -362,6 +467,10 @@ mod sys {
     /// Nothing to start: the console handler is installed by the
     /// first `listen`, and the system runs it on a thread of its own.
     pub fn init(_h: &'static Hub) {}
+
+    /// No signal masks on windows: console control events are not
+    /// blocked by one (wolf-lang#483 is a unix fact).
+    pub fn unblock(_armed: i64) {}
 
     /// The spec'd table (`[os.signal.platform]`): CTRL_C → TERMINATE,
     /// CTRL_BREAK → QUIT, CTRL_CLOSE → TERMINATE. Everything else
@@ -446,6 +555,11 @@ pub fn listen(mask: i64) -> i64 {
             st.installed |= bit;
         }
     }
+    let armed = st.installed & mask;
+    // The unblock waits on the drain thread, which takes the hub lock to
+    // deliver: release it first.
+    drop(st);
+    sys::unblock(armed);
     sig_code::OK
 }
 
