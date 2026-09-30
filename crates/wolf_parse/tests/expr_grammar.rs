@@ -402,7 +402,14 @@ fn struct_literals_and_shorthand() {
     let fields: Vec<_> = lit.fields().collect();
     assert_eq!(fields.len(), 2);
     assert!(fields[0].value().is_some());
-    assert!(fields[1].value().is_none(), "shorthand binds from the name");
+    // s190 (#486): the shorthand `y` is `y: y` — its value is a
+    // `PathExpr` naming `y`, and its field name is that path's ident.
+    let v = fields[1].value().expect("the shorthand carries its value");
+    assert_eq!(v.kind, SyntaxKind::PathExpr, "shorthand binds from the name");
+    let name = fields[1].name().expect("the shorthand names its field");
+    let ident = wolf_ast::PathExpr::cast(v).and_then(|p| p.ident()).expect("ident");
+    assert_eq!(name.span, ident.span);
+    assert_eq!(&src.as_bytes()[name.span.lo as usize..name.span.hi as usize], b"y");
 }
 
 #[test]
