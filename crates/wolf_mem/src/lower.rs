@@ -454,6 +454,9 @@ pub(crate) struct Lowerer<'t> {
     /// (block, index) — what [`Self::check_nested_claims_after_mut`]'s
     /// access scan skips.
     deferred_stmts: std::collections::HashSet<(usize, usize)>,
+    /// EG3's R2 (eg03): `for` indices over literal bounds that their
+    /// body never writes (`Cfg::induction`).
+    induction: HashMap<u32, (u128, u128)>,
 }
 
 /// Where the statement stream stood before one call argument lowered
@@ -1730,6 +1733,57 @@ impl<'t> Lowerer<'t> {
         true
     }
 
+    /// Where the statement stream stands now.
+    fn mark(&self) -> Mark {
+        Mark {
+            block: self.cur.0 as usize,
+            stmt: self.blocks[self.cur.0 as usize].stmts.len(),
+            blocks: self.blocks.len(),
+        }
+    }
+
+    /// EG3 (eg03): every local a statement emitted since `from` may
+    /// write — an `Init`, `Mutate` or `Move` of a place based on it, or
+    /// a nested call's `mut`/`take` lend of one. Closure bodies are
+    /// counted too (they do not run here, but counting them only
+    /// refuses more). A write through a borrower is not a statement on
+    /// the local; the proof's callers exclude loaned locals for that.
+    fn locals_written_since(&self, from: Mark) -> Vec<u32> {
+        let mut out: Vec<u32> = Vec::new();
+        let mut note = |p: PlaceId| {
+            if let Base::Local(l) = self.places.get(p).base
+                && !out.contains(&l)
+            {
+                out.push(l);
+            }
+        };
+        for (bi, block) in self.blocks.iter().enumerate() {
+            let start = if bi == from.block {
+                from.stmt
+            } else if bi >= from.blocks {
+                0
+            } else {
+                continue;
+            };
+            for st in block.stmts.iter().skip(start) {
+                match st {
+                    Stmt::Init { place, .. }
+                    | Stmt::Mutate { place, .. }
+                    | Stmt::Move { place, .. }
+                    | Stmt::Uninit { place, .. } => note(*place),
+                    Stmt::Call(c) => {
+                        for &(p, _) in c.mut_args.iter().chain(c.take_args.iter()) {
+                            note(p);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        out.sort_unstable();
+        out
+    }
+
     /// s168 — the check that decides whether lending a container
     /// ELEMENT is sound.
     ///
@@ -2142,7 +2196,7 @@ impl<'t> Lowerer<'t> {
         let outside = match p.proj.first() {
             None => true, // `self` whole
             Some(Proj::Field(f)) => !fields.contains(f),
-            Some(Proj::Lit(_) | Proj::Sym(_) | Proj::Opaque) => true,
+            Some(Proj::Lit(_) | Proj::Sym(_) | Proj::Off(..) | Proj::Opaque) => true,
         };
         if outside {
             let shown = self.show_place_now(place);
@@ -2179,6 +2233,9 @@ impl<'t> Lowerer<'t> {
                 }
                 Proj::Lit(k) => out.push_str(&format!("[{k}]")),
                 Proj::Sym(l) => out.push_str(&format!("[{}]", self.locals[*l as usize].name)),
+                Proj::Off(l, k) => {
+                    out.push_str(&format!("[{} + {k}]", self.locals[*l as usize].name))
+                }
                 Proj::Opaque => out.push_str("[_]"),
             }
         }
@@ -2195,7 +2252,10 @@ impl<'t> Lowerer<'t> {
     /// integer locals to `Copy` ones); everything else — an
     /// expression, an escaped or interpolated string, a signed literal,
     /// a local whose type is not `Copy` — is `Opaque`, one place with
-    /// every index (item 2, the default).
+    /// every index (item 2, the default). EG3 (eg03): on a `List`, a
+    /// plain `int` local plus a positive integer literal (`xs[i + 1]`)
+    /// is an `Off`, R1's spelling; any other sum, a difference, a zero
+    /// offset and a parenthesized index stay `Opaque`.
     fn elem_step(&self, b: wolf_ast::BracketApply<'t>, container: Option<Ty<'t>>) -> Proj {
         let args: Vec<_> = b.args().into_iter().flat_map(|l| l.args()).collect();
         let [a] = args.as_slice() else {
@@ -2221,6 +2281,36 @@ impl<'t> Lowerer<'t> {
             };
             return match self.tys[local.0 as usize] {
                 Some(ty) if is_copy(ty, 0) => Proj::Sym(local.0),
+                _ => Proj::Opaque,
+            };
+        }
+        // EG3's R1 spelling (eg03): `i + k` on a `List`, `i` a plain
+        // `int` local, `k` a positive integer literal. Whether `i` keeps
+        // its value between two uses is the call surface's question
+        // (`CallSurface::unstable`), not this one.
+        if v.kind == SyntaxKind::BinExpr
+            && let Some(TyKind::List(_)) = container.map(|c| c.kind().clone())
+            && let Some(d) = wolf_ast::BinExpr::cast(v)
+            && d.op().map(|t| t.kind) == Some(SyntaxKind::Plus)
+            && let (Some(l), Some(r)) = (d.lhs(), d.rhs())
+            && l.kind == SyntaxKind::PathExpr
+            && r.kind == SyntaxKind::LiteralExpr
+        {
+            let local = PathExpr::cast(l)
+                .and_then(|p| p.ident())
+                .and_then(|id| self.lookup(&self.text(id.span)));
+            let k = int_literal_value(self.text(r.span).trim());
+            return match (local, k) {
+                (Some(local), Some(k))
+                    if k > 0
+                        && k <= i64::MAX as u128
+                        && matches!(
+                            self.tys[local.0 as usize].map(|t| t.kind().clone()),
+                            Some(TyKind::Prim(Prim::Int))
+                        ) =>
+                {
+                    Proj::Off(local.0, k)
+                }
                 _ => Proj::Opaque,
             };
         }
@@ -4125,6 +4215,28 @@ impl<'t> Lowerer<'t> {
         // is copied at loop entry and carries no claim — the same
         // instant-read model as `Copy` call arguments.
         let mut claimed = false;
+        // EG3's R2 (eg03): `LO..HI` / `LO..=HI` with integer-literal
+        // bounds, as the half-open range of values the index takes.
+        let literal_range = d.iterable().and_then(|it| {
+            let r = RangeExpr::cast(it)?;
+            let ends: Vec<_> = r.endpoints().collect();
+            let [lo, hi] = ends.as_slice() else {
+                return None;
+            };
+            if lo.kind != SyntaxKind::LiteralExpr || hi.kind != SyntaxKind::LiteralExpr {
+                return None;
+            }
+            let lo = int_literal_value(self.text(lo.span).trim())?;
+            let hi = int_literal_value(self.text(hi.span).trim())?;
+            Some((
+                lo,
+                if r.is_inclusive() {
+                    hi.saturating_add(1)
+                } else {
+                    hi
+                },
+            ))
+        });
         if let Some(iter) = d.iterable() {
             match self.as_place(iter) {
                 Some((place, _)) => {
@@ -4147,6 +4259,7 @@ impl<'t> Lowerer<'t> {
         self.goto(head, exit);
         self.cur = body;
         self.push_scope();
+        let mut index_locals: Vec<u32> = Vec::new();
         if let Some(pat) = d.pattern() {
             let mut binds = Vec::new();
             collect_binding_spans(pat, &mut binds);
@@ -4157,6 +4270,7 @@ impl<'t> Lowerer<'t> {
                     id,
                 });
                 let local = self.declare(&name, span, ty);
+                index_locals.push(local.0);
                 let place = self.places.intern(
                     Place {
                         base: Base::Local(local.0),
@@ -4172,8 +4286,16 @@ impl<'t> Lowerer<'t> {
             continue_to: head,
             scope_depth: self.scopes.len(),
         });
+        let body_mark = self.mark();
         if let Some(b) = d.body() {
             self.walk_block(b, false)?;
+        }
+        // R2 holds for the one index of a literal range that the body
+        // never writes (a `for` binding is assignable, `[gram.pat]`).
+        if let (Some(range), [index]) = (literal_range, index_locals.as_slice())
+            && !self.locals_written_since(body_mark).contains(index)
+        {
+            self.induction.insert(*index, range);
         }
         self.loops.pop();
         if claimed {
@@ -4251,6 +4373,9 @@ impl<'t> Lowerer<'t> {
     fn eval_call(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = CallExpr::cast(e).expect("kind");
         let cs = self.calls.get(&e.span).copied();
+        // EG3 (eg03): the statement stream before the callee, receiver
+        // and arguments lower — what they write is `unstable`.
+        let call_mark = self.mark();
         let mut surface = CallSurface {
             callee: cs.map(|c| c.callee.clone()).unwrap_or_else(|| {
                 d.callee()
@@ -4262,6 +4387,7 @@ impl<'t> Lowerer<'t> {
             read_args: Vec::new(),
             take_args: Vec::new(),
             c_call: cs.map(|c| c.c_call).unwrap_or(false),
+            unstable: Vec::new(),
         };
         // s22: a call through the `import c` namespace is unsafe-tier
         // (D11) — the ring is required, and the call is always emitted
@@ -4509,6 +4635,7 @@ impl<'t> Lowerer<'t> {
             || !surface.take_args.is_empty();
         let callee = surface.callee.clone();
         if has_surface || surface.c_call {
+            surface.unstable = self.locals_written_since(call_mark);
             self.push(Stmt::Call(surface));
         }
         // s160 (wolf-lang#321): a `str`-producing builtin that
@@ -4774,11 +4901,7 @@ impl<'t> Lowerer<'t> {
         // `mut` claim an EARLIER argument of the same call already
         // spelled, so mark the statement stream here and check what
         // lands after it.
-        let mark = Mark {
-            block: self.cur.0 as usize,
-            stmt: self.blocks[self.cur.0 as usize].stmts.len(),
-            blocks: self.blocks.len(),
-        };
+        let mark = self.mark();
         // Only claims spelled by EARLIER arguments: an argument is
         // never checked against its own.
         let prior_muts: Vec<(PlaceId, Span)> = arg_muts.clone();
@@ -5767,6 +5890,7 @@ impl<'t> Lowerer<'t> {
             deferred_depth: 0,
             nested_exits: Vec::new(),
             deferred_stmts: std::collections::HashSet::new(),
+            induction: HashMap::new(),
             casts,
         }
     }
@@ -5951,6 +6075,7 @@ impl<'t> Lowerer<'t> {
                 exit: BlockId(1),
                 pattern_moves: self.pattern_moves,
                 nested_exits: self.nested_exits,
+                induction: self.induction,
             },
             diags: self.diags,
             regions,
@@ -5983,7 +6108,8 @@ fn int_literal_value(t: &str) -> Option<u128> {
 pub(crate) fn elements_one_place(a: &str, b: &str) -> String {
     format!(
         "`{a}` and `{b}` may be one element: an index that is not a literal is one place \
-         with every other index of its container, and only two different literals are \
-         distinct [mem.model.place.elem]."
+         with every other index of its container; only two different literals, two offsets \
+         `i + a` and `i + b` of one local the call leaves unwritten, and a loop index over \
+         literal bounds against a literal outside them are distinct [mem.model.place.elem]."
     )
 }
