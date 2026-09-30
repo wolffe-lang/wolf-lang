@@ -1,6 +1,57 @@
 # Changelog
 
-## Unreleased
+## 0.2.19 — 2026-09-30
+
+THE NINETEENTH. `mut` claims become element-granular (EGC's EG2):
+`swap(mut xs[0], mut xs[1])` and its nested, field and loan shapes
+compile and run, and every one-place shape is still refused. Item 1(c)
+of `[mem.model.place.elem]` holds under a claim as it does for moves
+(wolf-lang#472, ruled A), and `len`, `count` and `is_empty` are header
+reads beside a moved or claimed element (wolf-lang#474 and
+wolffe-lang/wolf-interp#149, ruled 2026-09-30). Fixed first: a
+release-tier ICE in the published 0.2.18 (#470). Also fixed:
+`--deny-warnings` hid #464's refusal behind a W1002 (#469), and 37 gate
+files read an ICE as an environment skip (#471). The pairing moves to
+lupin 0.1.42, whose spec pin moves to v0.2.18 (it was two releases
+behind) and which carries every mirror 0.2.18's gates pinned by
+version. Three lanes and 100 commits: eg02, eg02b, s185.
+
+### Read this before you bump the pin
+
+**#470 — the release tier stopped with an internal compiler error.** On
+0.2.18 this runs on the checked and native tiers (`2 12`), and the
+release tier stops with `ICE: mid-end broke the module`
+(`token-linearity`, "effect token consumed twice on one path"): the
+inliner bound `add2`'s two token chains to the caller's one region.
+Here the call stays out of line and it prints `2 12` on every lane:
+
+```wolf
+struct R {
+    a: int,
+    b: int,
+}
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn g(mut r: R) {
+    add2(mut r.a, mut r.b)   // 0.2.18, release tier: ICE (token-linearity)
+}
+// main: var r = R { a: 1, b: 2 }; g(mut r); print("{r.a} {r.b}")
+```
+
+(`corpus/memory/mut_two_fields_one_region.lu`.) EG2's element pairs,
+`add2(mut xs[0], mut xs[1])`, reach the same shape, which is how eg02
+found it.
+
+**Programs that were refused now compile.** Two `mut` claims on two
+literal elements (E1002 or E1013 through 0.2.18), a member read
+(`xs.len`) beside an element claim (E1002), and `count()`,
+`is_empty()` or a `Map`/`Pool`'s header beside a moved element (E1001).
+
+### Element-granular claims (eg02, EGC's EG2)
 
 - **`mut` claims are element-granular (EGC's EG2, eg02).**
   `[mem.model.place.elem]`'s items 1(a)/(b) and the path rule now hold
@@ -18,6 +69,17 @@
   refused — a run-time index against any index, the same literal
   twice, `Pool` handles, a path and its prefix — each with a corpus
   twin.
+- **wolf-lang#470 fixed: a release-tier ICE.** Two `mut` arguments in
+  one caller region — two fields off a `mut` parameter, `add2(mut r.a,
+  mut r.b)` inside `fn g(mut r: R)` — made 0.2.18's release build stop
+  with `ICE: mid-end broke the module` (`token-linearity`) once the
+  callee inlined: the inliner bound the callee's two token chains to
+  the caller's one. Such a call now stays out of line. EG2's element
+  pairs reach the same shape. Witness
+  `corpus/memory/mut_two_fields_one_region.lu`, `2 12` on every lane.
+
+### Item 1(c) under a claim (eg02b, #472) and ICEs fail the gates (#471)
+
 - **Item 1(c) holds under a claim too (eg02b, wolf-lang#472 ruled
   A).** An element and a member of its container are distinct places
   for claims as for moves, whatever the index: `bump(mut xs[0],
@@ -29,6 +91,15 @@
   (`both(mut xs[0], xs)`) stays E1002. lupin through 0.1.41 still
   traps these rows; the gate names those versions and expects the ruled
   answer from any later one.
+- **An internal compiler error fails the driver gates (wolf-lang#471).**
+  `wolf` exits 2 both when a host cannot run a lane and on an ICE; 37
+  gate files under `crates/wolf_driver/tests/` read every exit 2 as an
+  environment skip, so an ICE on the native or release lane passed. They
+  now ask one helper, `lane_exit::environment_refusal`, which fails the
+  test when stderr carries the driver's `ICE:` line.
+
+### Header reads (s185, #474, wolffe-lang/wolf-interp#149) and `--deny-warnings` (#469)
+
 - **`len`, `count` and `is_empty` are header reads (s185, wolf-lang#474
   and wolffe-lang/wolf-interp#149, ruled 2026-09-30).** They read only a
   container's header, so they are allowed beside a moved element:
@@ -54,20 +125,6 @@
   mem rung; the E1001 (or #325's E0804) retires it and is the one
   error reported, `fail(E1001)` at `mem` in the record. A W1002 nothing
   retires still rejects the program, at `resolve`.
-- **An internal compiler error fails the driver gates (wolf-lang#471).**
-  `wolf` exits 2 both when a host cannot run a lane and on an ICE; 37
-  gate files under `crates/wolf_driver/tests/` read every exit 2 as an
-  environment skip, so an ICE on the native or release lane passed. They
-  now ask one helper, `lane_exit::environment_refusal`, which fails the
-  test when stderr carries the driver's `ICE:` line.
-- **wolf-lang#470 fixed: a release-tier ICE.** Two `mut` arguments in
-  one caller region — two fields off a `mut` parameter, `add2(mut r.a,
-  mut r.b)` inside `fn g(mut r: R)` — made 0.2.18's release build stop
-  with `ICE: mid-end broke the module` (`token-linearity`) once the
-  callee inlined: the inliner bound the callee's two token chains to
-  the caller's one. Such a call now stays out of line. EG2's element
-  pairs reach the same shape. Witness
-  `corpus/memory/mut_two_fields_one_region.lu`, `2 12` on every lane.
 
 ## 0.2.18 — 2026-09-27
 
