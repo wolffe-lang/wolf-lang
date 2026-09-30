@@ -225,17 +225,20 @@ fn every_lane_pinned(
 /// lupin releases measured before the mirror of this clause
 /// (wolffe-lang/wolf-interp#146): a whole-parameter move is not
 /// seen by the caller. 0.1.41 carries #141 but not #146 (r23, the
-/// pairing bump): it still prints the original `1`.
-const PRE_MIRROR_LUPIN: &[&str] = &["0.1.40", "0.1.41"];
+/// pairing bump): it still prints the original `1`. Emptied at the 0.1.42
+/// pairing (r24): 0.1.42 carries is58's #146 mirror and traps.
+const PRE_MIRROR_LUPIN: &[&str] = &[];
 
 /// lupin releases whose index read ignores a moved element's mark
-/// (wolffe-lang/wolf-interp#141).
-const PRE_ELEM_TRAP_LUPIN: &[&str] = &["0.1.40"];
+/// (wolffe-lang/wolf-interp#141): 0.1.40 alone. Emptied at the 0.1.42
+/// pairing (r24): the pairing's sibling is 0.1.42, which traps.
+const PRE_ELEM_TRAP_LUPIN: &[&str] = &[];
 
 /// lupin releases whose `Map` read copies a non-`Copy` value out rather
 /// than moving it (wolffe-lang/wolf-interp#144); 0.1.41 is is56's head
-/// as eg01b measured it.
-const PRE_MAP_MOVE_LUPIN: &[&str] = &["0.1.40", "0.1.41"];
+/// as eg01b measured it. Emptied at the 0.1.42 pairing (r24): 0.1.42
+/// carries is58's #144 mirror and traps.
+const PRE_MAP_MOVE_LUPIN: &[&str] = &[];
 
 const fn refused() -> Want<'static> {
     verdict("fail(E1001)")

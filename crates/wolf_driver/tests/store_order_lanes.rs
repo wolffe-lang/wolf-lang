@@ -208,17 +208,16 @@ fn the_index_runs_first_under_a_field_a_mut_parameter_and_a_growing_value() {
 }
 
 /// Two and three index levels: every operand once, outermost first,
-/// then the value. lupin 0.1.40 evaluates each operand but the last
-/// twice in a store (wolf-interp#145, filed by s183); 0.1.41 is pinned
-/// with it because the issue was filed after is56, the lane cutting
-/// 0.1.41, launched — a lupin that fixes it drops its row here.
+/// then the value. lupin 0.1.40 and 0.1.41 evaluated each operand but
+/// the last twice in a store (wolf-interp#145, filed by s183) and were
+/// pinned here with that answer; 0.1.42 carries is58's fix, so the rows
+/// dropped at its pairing (r24) and every lane gives the one answer.
 #[test]
 fn every_index_operand_runs_once_outermost_first_before_the_value() {
-    const LUPIN_145: &str = "i\ni\nj\nval\n7\na\nb\na\nb\nc\nval\n9\n";
     every_lane_says(
         &corpus("ctl_store_order_nested_index.lu"),
         "i\nj\nval\n7\na\nb\nc\nval\n9\n",
-        &[("0.1.40", LUPIN_145), ("0.1.41", LUPIN_145)],
+        &[],
     );
 }
 

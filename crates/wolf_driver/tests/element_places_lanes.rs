@@ -41,14 +41,18 @@ fn wolf() -> &'static str {
     env!("CARGO_BIN_EXE_wolf")
 }
 
-/// lupin releases that predate wolffe-lang/wolf-interp#141's fix.
-const PRE_MIRROR_LUPIN: &[&str] = &["0.1.40"];
+/// lupin releases that predate wolffe-lang/wolf-interp#141's fix: 0.1.40
+/// alone. Emptied at the 0.1.42 pairing (r24): the pairing's sibling is
+/// 0.1.42, which carries the fix and takes the ruled arm on every case.
+const PRE_MIRROR_LUPIN: &[&str] = &[];
 
 /// lupin releases whose `Map` read copies a non-`Copy` value out rather
 /// than moving it, so a later read of that key sees the original
 /// (wolffe-lang/wolf-interp#144). 0.1.41 is is56's head (`02433a0`),
-/// measured by eg01b: it fixes #141 and still copies.
-const PRE_MAP_MOVE_LUPIN: &[&str] = &["0.1.40", "0.1.41"];
+/// measured by eg01b: it fixes #141 and still copies. Emptied at the
+/// 0.1.42 pairing (r24): 0.1.42 carries is58's #144 mirror and takes the
+/// ruled arm.
+const PRE_MAP_MOVE_LUPIN: &[&str] = &[];
 
 /// lupin releases that read a container MEMBER (`xs.len`) under an
 /// element claim as a read of the whole container, and so trap
@@ -56,8 +60,9 @@ const PRE_MAP_MOVE_LUPIN: &[&str] = &["0.1.40", "0.1.41"];
 /// (wolffe-lang/wolf-lang#472, ruled A on 2026-09-29; lupin's mirror is
 /// is59). Measured by eg02b on the published 0.1.40 and 0.1.41 archives.
 /// Any later version must run these rows: a pin bump that carries lupin
-/// forward without is59 goes red here by name.
-const PRE_MEMBER_LUPIN: &[&str] = &["0.1.40", "0.1.41"];
+/// forward without is59 goes red here by name. Emptied at the 0.1.42
+/// pairing (r24): 0.1.42 carries is59 and runs these rows.
+const PRE_MEMBER_LUPIN: &[&str] = &[];
 
 /// lupin releases that read a header METHOD (`xs.count()`,
 /// `xs.is_empty()`) under an element claim as a read of the whole
@@ -65,16 +70,18 @@ const PRE_MEMBER_LUPIN: &[&str] = &["0.1.40", "0.1.41"];
 /// says the header is not the element (wolf-lang#474, ruled 2026-09-30:
 /// `len`, `count` and `is_empty` are header reads on every machine;
 /// lupin's mirror is is60). Measured by s185 on the published 0.1.40 and
-/// 0.1.41 archives. Any later version must run the row.
-const PRE_HEADER_METHOD_LUPIN: &[&str] = &["0.1.40", "0.1.41"];
+/// 0.1.41 archives. Any later version must run the row. Emptied at the
+/// 0.1.42 pairing (r24): 0.1.42 carries is60 and runs it.
+const PRE_HEADER_METHOD_LUPIN: &[&str] = &[];
 
 /// lupin releases whose method receiver on a container or struct
 /// holding a moved part runs instead of trapping — `push`, `get`, `pop`,
 /// a slice, an impl method's `self` (wolffe-lang/wolf-interp#149, ruled
 /// 2026-09-30: every method but the header reads reads the whole
 /// container; lupin's mirror is is60). Measured by s185 on the published
-/// 0.1.40 and 0.1.41 archives. Any later version must trap.
-const PRE_WHOLE_RECEIVER_LUPIN: &[&str] = &["0.1.40", "0.1.41"];
+/// 0.1.40 and 0.1.41 archives. Any later version must trap. Emptied at
+/// the 0.1.42 pairing (r24): 0.1.42 carries is60 and traps.
+const PRE_WHOLE_RECEIVER_LUPIN: &[&str] = &[];
 
 #[derive(Debug)]
 struct Obs {
