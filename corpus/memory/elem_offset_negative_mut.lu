@@ -1,0 +1,22 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.excl.1
+//!
+//! eg03 — `[mem.model.place.elem]` item 4, LEFT OUT OF R1: a
+//! subtracted offset. R1 reads `i + k` with `k` a non-negative integer
+//! literal; `xs[i - 1]` is another spelling, so it stays one place with
+//! `xs[i]`: E1002 on every wolfgang lane. lupin 0.1.42 runs it (`11 3`)
+//! — a documented conservatism row, never the reverse.
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    var i = 1
+    add2(mut xs[i], mut xs[i - 1])  // ERROR E1002: R1 reads i + k only
+    print("{xs[0]} {xs[1]}")
+    0
+}

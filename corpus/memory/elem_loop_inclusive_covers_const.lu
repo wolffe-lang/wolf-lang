@@ -1,0 +1,22 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.excl.1
+//!
+//! eg03 — `[mem.model.place.elem]` item 4, WHERE R2 FAILS: `..=`
+//! includes its end, so `1..=2` holds `2` and `xs[i]` is `xs[2]` on
+//! the last turn. The literal lies inside the range: E1002 on every
+//! wolfgang lane. lupin 0.1.42 traps `exclusivity` at `i = 2`.
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    for i in 1..=2 {
+        add2(mut xs[2], mut xs[i])  // ERROR E1002: 1..=2 contains 2
+    }
+    print("{xs[0]} {xs[1]} {xs[2]}")
+    0
+}

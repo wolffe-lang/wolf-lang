@@ -1,0 +1,21 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.excl.1
+//!
+//! eg03 — `[mem.model.place.elem]` item 4, WHERE R1 FAILS: an offset
+//! against a literal. R1 relates two offsets of ONE local; `xs[1]` and
+//! `xs[i + 1]` are one place, and with `i = 0` they are one element.
+//! E1002 on every wolfgang lane; lupin 0.1.42 traps `exclusivity`.
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    var i = 0
+    add2(mut xs[1], mut xs[i + 1])  // ERROR E1002: an offset against a literal
+    print("{xs[0]} {xs[1]}")
+    0
+}

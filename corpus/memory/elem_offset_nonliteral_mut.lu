@@ -1,0 +1,23 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.model.place.elem, mem.tier0.excl.1
+//!
+//! eg03 — `[mem.model.place.elem]` item 4, WHERE R1 FAILS: the offset
+//! is a local, not a literal (`xs[i + j]`). Whether `j` is zero is a
+//! run-time value, and the proof never reads one: E1002 on every
+//! wolfgang lane. lupin 0.1.42 runs it (`2 12`, because `j` is 1) — a
+//! conservatism row.
+
+fn add2(mut a: int, mut b: int) {
+    a = a + 1
+    b = b + 10
+}
+
+fn main() -> !int {
+    var xs = [1, 2, 3]
+    var i = 0
+    var j = 1
+    add2(mut xs[i], mut xs[i + j])  // ERROR E1002: the offset is not a literal
+    print("{xs[0]} {xs[1]}")
+    0
+}
