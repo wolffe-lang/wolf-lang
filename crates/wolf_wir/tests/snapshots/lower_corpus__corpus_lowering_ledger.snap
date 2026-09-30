@@ -366,6 +366,18 @@ memory/elem_whole_read_slice_after_move.lu: not mem-clean (pre-wir rungs own it)
 memory/excl_disjoint_ok.lu: lowers
 memory/excl_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/exclusivity.lu: lowers
+memory/field_shorthand_closure.lu: not mem-clean (pre-wir rungs own it)
+memory/field_shorthand_closure_borrow.lu: not mem-clean (pre-wir rungs own it)
+memory/field_shorthand_copy.lu: lowers
+memory/field_shorthand_mixed.lu: not mem-clean (pre-wir rungs own it)
+memory/field_shorthand_mixed_runs.lu: lowers
+memory/field_shorthand_moves.lu: not mem-clean (pre-wir rungs own it)
+memory/field_shorthand_nested.lu: not mem-clean (pre-wir rungs own it)
+memory/field_shorthand_nested_bound.lu: not mem-clean (pre-wir rungs own it)
+memory/field_shorthand_nested_runs.lu: lowers
+memory/field_shorthand_return_mut.lu: not mem-clean (pre-wir rungs own it)
+memory/field_shorthand_return_take.lu: lowers
+memory/field_shorthand_task.lu: not mem-clean (pre-wir rungs own it)
 memory/foreign_root_aliasing.lu: lowers
 memory/handle_stale.lu: lowers
 memory/index_store_copies_list.lu: lowers
