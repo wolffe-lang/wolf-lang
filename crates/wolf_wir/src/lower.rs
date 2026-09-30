@@ -1104,7 +1104,7 @@ fn lower_task_body<'t>(
                     .push((name.clone(), bind));
             }
         }
-        PendingKind::Closure { params } => {
+        PendingKind::Closure { params, modes } => {
             // s150 (#300): EVERY closure entry takes its callable
             // record first ([abi.native.closure]) — a capture-free
             // closure ignores it, a capturing one reads its captures
@@ -1138,16 +1138,50 @@ fn lower_task_body<'t>(
                         .push((name.clone(), bind));
                 }
             }
+            // wolf-lang#466 (s186): a nested fn's `mut` parameter is two
+            // entry words (pointer, token), bound as the module fn's
+            // prologue binds one; everything else is one word.
+            let mut at = 1usize;
+            let mut mut_ptrs: Vec<(Value, TypeId)> = Vec::new();
             for (j, (name, sema)) in params.iter().enumerate() {
-                let val = entry_params[1 + j];
+                let wrapping = matches!(lo.table.kind(lo.strip_sema(*sema)), TyKind::Wrapping(_));
+                let unsigned = sema_unsigned(lo.table, *sema);
+                if modes.get(j).copied().flatten() == Some(ParamMode::Mut) {
+                    let ptr = entry_params[at];
+                    let tok = entry_params[at + 1];
+                    at += 2;
+                    let types::TypeData::Mem(region) =
+                        *lo.b.module.types.get(lo.b.func.value_ty(tok))
+                    else {
+                        unreachable!("mut params carry their token param");
+                    };
+                    let Some(elem) = lo.wir_value_ty(*sema, task.span)? else {
+                        unreachable!("unit params refused at sig build");
+                    };
+                    lo.b.func.add_debug_var(name.clone(), ptr, true);
+                    mut_ptrs.push((ptr, elem));
+                    lo.scopes.last_mut().expect("scope").binds.push((
+                        name.clone(),
+                        LocalBind::MutRef {
+                            ptr,
+                            region,
+                            elem,
+                            wrapping,
+                            unsigned,
+                        },
+                    ));
+                    continue;
+                }
+                let val = entry_params[at];
+                at += 1;
                 let wty = lo.b.func.value_ty(val);
                 let var = lo.b.declare_var(wty);
                 lo.b.def_var(var, val);
                 lo.b.func.add_debug_var(name.clone(), val, true);
                 let bind = LocalBind::Val {
                     var,
-                    wrapping: matches!(lo.table.kind(lo.strip_sema(*sema)), TyKind::Wrapping(_)),
-                    unsigned: sema_unsigned(lo.table, *sema),
+                    wrapping,
+                    unsigned,
                     wir_ty: wty,
                 };
                 lo.scopes
@@ -1155,6 +1189,25 @@ fn lower_task_body<'t>(
                     .expect("scope")
                     .binds
                     .push((name.clone(), bind));
+            }
+            // The module fn's entry facts for its `mut` parameters
+            // (s26): the memory checker proved each exclusive, so the
+            // element is dereferenceable and the pointers pairwise
+            // noalias.
+            for &(ptr, elem) in &mut_ptrs {
+                let size = flat_size(&lo.b.module.types, elem).expect("mut params are flat");
+                lo.b.func.add_fact(FactData::new(
+                    FactKind::Deref(ptr, DerefSize::Const(size)),
+                    Just::Theorem(Theorem::ExclMut),
+                ));
+            }
+            for (i, &(a, _)) in mut_ptrs.iter().enumerate() {
+                for &(b, _) in &mut_ptrs[i + 1..] {
+                    lo.b.func.add_fact(FactData::new(
+                        FactKind::Noalias(a, b),
+                        Just::Theorem(Theorem::ExclMut),
+                    ));
+                }
             }
         }
     }
@@ -2573,6 +2626,13 @@ enum LocalBind {
     /// leading; a read as a VALUE is the record pointer, which IS the
     /// one-word fn value every callee expects (#300).
     Closure { entry: Value, rec: Value },
+    /// wolf-lang#466 (s186): a nested named fn that declares a `mut` or
+    /// `take` parameter. Its entry takes each `mut` parameter as the
+    /// module-fn convention does — (pointer, token) — so it is called
+    /// DIRECTLY, never through a fn value (whose type carries no modes;
+    /// sema refuses every value use). `rec` is the static record the
+    /// entry's leading parameter expects.
+    NestedFn { ext: ExtFunc, rec: Value },
     /// A unit-typed binding (no runtime value).
     Unit,
     /// A `when`-body payload rebind (s73, [conc.when.body]): reads and
@@ -3052,6 +3112,9 @@ enum PendingKind {
     /// The closure's declared parameters (name, sema type), in order.
     Closure {
         params: Vec<(String, TyId)>,
+        /// wolf-lang#466 (s186): a nested fn's declared modes, one per
+        /// parameter; empty for a closure (every parameter by value).
+        modes: Vec<Option<ParamMode>>,
     },
 }
 
@@ -3593,6 +3656,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // of the s95 `func.addr` value.
             SyntaxKind::FnDecl => {
                 let d = wolf_ast::FnDecl::cast(stmt).expect("kind");
+                // wolf-lang#466 (s186): a `mut`/`take` parameter makes
+                // the nested fn a direct-call entry with the module
+                // fn's convention (never a fn value).
+                let modes: Vec<Option<ParamMode>> = d
+                    .params()
+                    .into_iter()
+                    .flat_map(|l| l.params())
+                    .map(|p| p.mode())
+                    .collect();
+                if modes.iter().any(Option::is_some) {
+                    self.queue_moded_nested_entry(stmt, modes)?;
+                    return Ok(Flow::Val(None));
+                }
                 let (entry_name, _) = self.queue_closure_entry(stmt, Vec::new(), None)?;
                 let v = self.fn_value_static(&entry_name);
                 let Some(name_span) = d.name().map(|t| t.span) else {
@@ -4219,6 +4295,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                  c25 closeout)",
                 place.span,
             )),
+            // wolf-lang#466: sema binds a nested fn like a `let`; the
+            // resolve rung refuses a reassignment before this.
+            LocalBind::NestedFn { .. } => Err(refuse(
+                "reassigning a nested fn with parameter modes",
+                place.span,
+            )),
             // s89: a lent view is read-only — the lend analysis admits
             // no assignment to the parameter, so reaching here would be
             // the two halves disagreeing. Refusing keeps that
@@ -4500,6 +4582,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     // another value) or at the OP (container
                     // elements), by name.
                     Some(LocalBind::Region { handle, .. }) => Ok(Flow::Val(Some(handle))),
+                    // wolf-lang#466: sema refuses every value use of a
+                    // moded nested fn (its fn type would erase the
+                    // modes); reaching here is the two halves
+                    // disagreeing, refused by name.
+                    Some(LocalBind::NestedFn { .. }) => Err(refuse(
+                        "a nested fn with `mut` or `take` parameters used as a value",
+                        e.span,
+                    )),
                     // s150 (#300): a capturing closure read as a VALUE
                     // is its record pointer — the one-word fn value
                     // (`[abi.native.closure]`). Its captures were
@@ -5803,10 +5893,200 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             body_ret,
             span: e.span,
             proc: false,
-            kind: PendingKind::Closure { params },
+            kind: PendingKind::Closure {
+                params,
+                modes: Vec::new(),
+            },
         });
         let ext = self.rt_like_import(&name, entry_sig);
         Ok((name, ext))
+    }
+
+    /// wolf-lang#466 (s186): queue a nested fn that declares a `mut` or
+    /// `take` parameter. The entry keeps the closure convention's
+    /// leading record word, then lays each parameter out as a module
+    /// fn's signature does ([`wir_sig_of`]): `mut` is (pointer, token of
+    /// its own formal region), `take` and `read` are the value.
+    fn queue_moded_nested_entry(
+        &mut self,
+        e: &'t GreenNode,
+        modes: Vec<Option<ParamMode>>,
+    ) -> R<ExtFunc> {
+        let Some(cty) = self.expr_sema_ty(e.span) else {
+            return Err(refuse("a nested fn without a recorded type", e.span));
+        };
+        let TyKind::Fn(ptys, _) = self.table.kind(self.strip_sema(cty)).clone() else {
+            return Err(refuse("a nested fn without a fn type", e.span));
+        };
+        let pnames: Vec<String> = callable_params(e)
+            .into_iter()
+            .flat_map(|l| l.params())
+            .map(|p| {
+                p.name()
+                    .map(|n| self.text(n.span))
+                    .unwrap_or_else(|| "_".to_string())
+            })
+            .collect();
+        if pnames.len() != ptys.len() || modes.len() != ptys.len() {
+            return Err(refuse(
+                "a nested fn whose parameter list disagrees with its type",
+                e.span,
+            ));
+        }
+        let params: Vec<(String, TyId)> = pnames.into_iter().zip(ptys).collect();
+        let body_ret = self.task_body_ret(e)?;
+        let mut sigparams: Vec<Param> = vec![Param {
+            ty: types::PTR,
+            mode: Mode::Val,
+        }];
+        let mut next_formal = 0u32;
+        for ((_, sema), mode) in params.iter().zip(&modes) {
+            if matches!(self.table.kind(self.strip_sema(*sema)), TyKind::RegionTy) {
+                return Err(refuse("a region parameter on a nested fn", e.span));
+            }
+            let Some(w) = self.wir_value_ty(*sema, e.span)? else {
+                return Err(refuse("unit-typed nested fn parameters", e.span));
+            };
+            match mode {
+                None => sigparams.push(Param {
+                    ty: w,
+                    mode: Mode::Val,
+                }),
+                Some(ParamMode::Take) => sigparams.push(Param {
+                    ty: w,
+                    mode: Mode::Take,
+                }),
+                Some(ParamMode::Mut) => {
+                    if flat_size(&self.b.module.types, w).is_none() {
+                        return Err(refuse(
+                            "`mut` parameters of non-flat types (spill layout)",
+                            e.span,
+                        ));
+                    }
+                    let formal = RegionId::new(next_formal);
+                    next_formal += 1;
+                    let tok = self.b.module.types.mem(formal);
+                    sigparams.push(Param {
+                        ty: types::PTR,
+                        mode: Mode::Mut,
+                    });
+                    sigparams.push(Param {
+                        ty: tok,
+                        mode: Mode::Val,
+                    });
+                }
+            }
+        }
+        let results: Vec<TypeId> = body_ret.into_iter().collect();
+        let entry_sig = self.b.module.make_sig(sigparams, results);
+        let n = self.pending_tasks.len();
+        let base = self.b.func.name.clone();
+        let name = format!("{base}.cls{n}");
+        self.pending_tasks.push(PendingTask {
+            shim_name: name.clone(),
+            body_name: name.clone(),
+            body_sig: entry_sig,
+            closure: Some(e),
+            caps: Vec::new(),
+            cap_wtys: Vec::new(),
+            cap_offs: Vec::new(),
+            body_ret,
+            span: e.span,
+            proc: false,
+            kind: PendingKind::Closure { params, modes },
+        });
+        let ext = self.rt_like_import(&name, entry_sig);
+        let rec = self.fn_value_static(&name);
+        self.bind_nested_fn(e, ext, rec);
+        Ok(ext)
+    }
+
+    fn bind_nested_fn(&mut self, e: &'t GreenNode, ext: ExtFunc, rec: Value) {
+        let Some(name_span) = wolf_ast::FnDecl::cast(e).and_then(|d| d.name()).map(|t| t.span)
+        else {
+            return;
+        };
+        let name = self.text(name_span);
+        self.scopes
+            .last_mut()
+            .expect("scope")
+            .binds
+            .push((name, LocalBind::NestedFn { ext, rec }));
+    }
+
+    /// wolf-lang#466 (s186): a call, by name, to a nested fn with a
+    /// `mut` or `take` parameter — the module fn's argument discipline
+    /// (a `mut` argument spills to a slot the callee writes through
+    /// and reloads after, or re-lends a `mut` parameter's pointer), a
+    /// direct call to the entry with its record leading.
+    fn lower_nested_fn_call(
+        &mut self,
+        ext: ExtFunc,
+        rec: Value,
+        d: CallExpr<'t>,
+        cs: &CallSig,
+    ) -> R<Flow> {
+        let mut args = vec![rec];
+        let mut formal_regions: HashMap<u32, RegionId> = HashMap::new();
+        let mut next_formal = 0u32;
+        let mut writebacks: Vec<WriteBack> = Vec::new();
+        let mut spilled_slots: Vec<Value> = Vec::new();
+        for (i, a) in d.args().into_iter().flat_map(|l| l.args()).enumerate() {
+            let mode = cs.params.get(i).and_then(|p| p.mode);
+            let Some(vexpr) = Arg::value(a) else { continue };
+            if mode == Some(ParamMode::Take) {
+                self.check_capture_write(vexpr, "consuming (`take`)")?;
+            }
+            if mode == Some(ParamMode::Mut) {
+                let formal = next_formal;
+                next_formal += 1;
+                let Some(marg) = self.lower_mut_arg(vexpr)? else {
+                    return Ok(Flow::Diverged);
+                };
+                match marg {
+                    MutArg::Spill {
+                        cur,
+                        size,
+                        writeback,
+                    } => {
+                        let (slot_region, slot) = self.b.ins_stack_alloc(size);
+                        self.b.func.add_fact(FactData::new(
+                            FactKind::Region(slot, slot_region),
+                            Just::DefOp,
+                        ));
+                        self.b.func.add_fact(FactData::new(
+                            FactKind::Deref(slot, DerefSize::Const(size)),
+                            Just::DefOp,
+                        ));
+                        self.store_flat(cur, slot, slot_region, vexpr.span)?;
+                        formal_regions.insert(formal, slot_region);
+                        args.push(slot);
+                        spilled_slots.push(slot);
+                        writebacks.push(writeback.filled(slot, slot_region, vexpr.span));
+                    }
+                    MutArg::Relend { ptr, region } => {
+                        formal_regions.insert(formal, region);
+                        args.push(ptr);
+                    }
+                }
+                continue;
+            }
+            let Some(v) = flow_val!(self.lower_expr(vexpr)) else {
+                return Err(refuse("unit-typed arguments", vexpr.span));
+            };
+            args.push(v);
+        }
+        for (i, &a) in spilled_slots.iter().enumerate() {
+            for &b in &spilled_slots[i + 1..] {
+                self.b.func.add_fact(FactData::new(
+                    FactKind::Noalias(a, b),
+                    Just::Theorem(Theorem::ExclField),
+                ));
+            }
+        }
+        let results = self.b.ins_call_regions(ext, &args, &formal_regions);
+        self.run_writebacks(writebacks)?;
+        Ok(Flow::Val(results.first().copied()))
     }
 
     /// s150 (#300): the one-word fn value of a function that captures
@@ -5880,6 +6160,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         "a region captured by a task (send it through a channel — \
                          [conc.chan.move])"
                     },
+                    span,
+                ));
+            }
+            Some(LocalBind::NestedFn { .. }) => {
+                return Err(refuse(
+                    "a nested fn with `mut` or `take` parameters captured as a value",
                     span,
                 ));
             }
@@ -9284,8 +9570,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // call.
         if callee.kind == SyntaxKind::PathExpr {
             let name = self.text(callee.span);
-            if let Some(LocalBind::Closure { entry, rec }) = self.lookup(&name) {
-                return self.lower_closure_call(entry, rec, d, cs, e);
+            match self.lookup(&name) {
+                Some(LocalBind::Closure { entry, rec }) => {
+                    return self.lower_closure_call(entry, rec, d, cs, e);
+                }
+                Some(LocalBind::NestedFn { ext, rec }) => {
+                    return self.lower_nested_fn_call(ext, rec, d, cs);
+                }
+                _ => {}
             }
         }
         let Some(fn_ty) = self.expr_sema_ty(callee.span) else {
