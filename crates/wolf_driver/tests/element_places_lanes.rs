@@ -625,16 +625,14 @@ fn another_literal_element_is_stored_under_a_loan() {
     every_lane("elem_const_dyn_loan.lu", want, want, want);
 }
 
-/// Item 2 under D39: `bump(mut xs[0], xs[i])`; lupin sees `i = 1`.
+/// Item 2 under a claim, read: `bump(mut xs[0], xs[i])`. E1002 under
+/// D39 through 0.2.19; a read of a claimed place in a later argument is
+/// legal since s186 (`[mem.tier0.excl.4]`), and every lane prints
+/// lupin's bytes.
 #[test]
-fn a_run_time_index_is_not_read_inside_a_claim() {
-    let lupin = runs("3 2\n");
-    every_lane(
-        "elem_dyn_read_after_mut.lu",
-        verdict("fail(E1002)"),
-        lupin,
-        lupin,
-    );
+fn a_run_time_index_may_be_read_beside_a_claim() {
+    let want = runs("3 2\n");
+    every_lane("elem_dyn_read_after_mut.lu", want, want, want);
 }
 
 /// Item 2 under the nested-call leg: `put(mut xs[0], grow(mut xs[i]))`.
