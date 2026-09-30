@@ -837,3 +837,58 @@ fn a_moded_nested_fn_is_called_by_name_only() {
         shadowed.not_yet
     );
 }
+
+/// wolf-lang#484 (s188): a MODULE fn with a `mut` or `take` parameter
+/// read as a value refuses by name, as s186's nested fn does — a fn type
+/// carries no modes. Called by name it checks, and a modeless module fn
+/// is still a value; a local of the same name shadows the item.
+#[test]
+fn a_moded_module_fn_is_called_by_name_only() {
+    let called = check_one(
+        "fn inc(mut a: int) { a = a + 1 }\nfn main() -> !int {\n    var n = 1\n    inc(mut n)\n    n - 2\n}\n",
+    );
+    assert!(
+        called.fully_checked(),
+        "{:?} / {:?}",
+        called.diagnostics,
+        called.not_yet
+    );
+    for (decl, value_use) in [
+        ("fn inc(mut a: int) { a = a + 1 }", "    let g = inc\n"),
+        (
+            "fn inc(mut a: int) { a = a + 1 }",
+            "    if apply(inc, 1) {}\n",
+        ),
+        ("fn inc(take a: List[int]) { }", "    let g = inc\n"),
+    ] {
+        let tc = check_one(&format!(
+            "fn apply(f: fn(int), v: int) -> bool {{ true }}\n{decl}\n\
+             fn main() -> !int {{\n{value_use}    0\n}}\n"
+        ));
+        assert!(
+            tc.not_yet
+                .iter()
+                .any(|n| n.construct.contains("used as a value")),
+            "{decl} / {value_use}: {:?}",
+            tc.not_yet
+        );
+    }
+    let modeless = check_one(
+        "fn inc(a: int) -> int { a + 1 }\nfn main() -> !int {\n    let g = inc\n    g(1) - 2\n}\n",
+    );
+    assert!(
+        modeless.fully_checked(),
+        "{:?} / {:?}",
+        modeless.diagnostics,
+        modeless.not_yet
+    );
+    let shadowed = check_one(
+        "fn inc(mut a: int) { a = a + 1 }\nfn main() -> !int {\n    let inc = 3\n    inc - 3\n}\n",
+    );
+    assert!(
+        shadowed.fully_checked(),
+        "{:?} / {:?}",
+        shadowed.diagnostics,
+        shadowed.not_yet
+    );
+}
