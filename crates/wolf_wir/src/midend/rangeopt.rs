@@ -1842,7 +1842,11 @@ fn overlap_pairs(
         let kmin = lens.iter().map(|&(k, ..)| k).min()?;
         lens.iter()
             .find(|&&(k, li, _, lb)| {
-                k == kmin && len_is_current(f, view, &foreign, &cur, &cdoms, li, lb, ph)
+                // s187 PLANT (wolf-lang#146 back, reverted in the next
+                // commit): the first min-k len load in layout order,
+                // current or not.
+                let _current = len_is_current(f, view, &foreign, &cur, &cdoms, li, lb, ph);
+                k == kmin
             })
             .map(|&(_, _, v, _)| v)
     };
