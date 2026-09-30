@@ -2139,3 +2139,66 @@ fn clean_mut_param_stored_back_before_every_return() {
          fn local() -> int {\n    let xs = [1]\n    sink(take xs)\n}\n",
     );
 }
+
+#[test]
+fn header_methods_beside_a_moved_or_claimed_element_stay_silent() {
+    // s185 (wolf-lang#474, wolffe-lang/wolf-interp#149, ruled
+    // 2026-09-30): `len`, `count` and `is_empty` read only a builtin
+    // container's header — the place `xs.len` denotes — so after an
+    // element moves out (a `List` element, one level down, a `Map`
+    // value read out) and beside a `mut` element claim they conflict
+    // with nothing. Every other method reads the whole receiver (the
+    // next fixture).
+    snap(
+        "clean_header_methods_beside_an_element",
+        "fn bump(mut a: int, n: int) {\n    \
+             a = a + n\n\
+         }\n\
+         fn flag(mut a: int, e: bool) {\n    \
+             if e { a = 0 } else { a = a + 1 }\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var xs = [[1], [2, 3]]\n    \
+             let a = move xs[0]\n    \
+             var g = [[[1], [2]], [[3]]]\n    \
+             let b = move g[0][1]\n    \
+             var m = Map[str, List[int]]()\n    \
+             m[\"a\"] = [1]\n    \
+             let c = m[\"a\"] else List[int]()\n    \
+             var ys = [1, 2, 3]\n    \
+             bump(mut ys[0], ys.count())\n    \
+             flag(mut ys[1], ys.is_empty())\n    \
+             let n = xs.count() + g[0].count() + g.count() + m.count() + m.len()\n    \
+             if xs.is_empty() || g.is_empty() || m.is_empty() { 1 } else { n - a.len - b.len - c.len - 5 }\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1001_whole_read_methods_after_a_moved_part() {
+    // The other half of the ruling: `push`, `get`, a slice and an impl
+    // method's `self` (even one NAMED `count`) take the whole receiver,
+    // a prefix of the moved part. And a whole move still reaches the
+    // header: `count()` after `move ys` is E1001 at `ys.len`.
+    snap(
+        "e1001_whole_read_methods_after_a_moved_part",
+        "struct P { x: List[int], y: int }\n\
+         impl P {\n    \
+             fn count(self) -> int { self.y }\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var xs = [[1], [2, 3], [4]]\n    \
+             let a = move xs[0]\n    \
+             (mut xs).push([5])\n    \
+             let b = xs.get(1) else [9]\n    \
+             let s = xs[1..3]\n    \
+             var p = P { x: [1], y: 2 }\n    \
+             let c = move p.x\n    \
+             let d = p.count()\n    \
+             var ys = [1]\n    \
+             let zs = move ys\n    \
+             let e = ys.count()\n    \
+             a.len + b.len + s.len + c.len + d + zs.len + e\n\
+         }\n",
+    );
+}
