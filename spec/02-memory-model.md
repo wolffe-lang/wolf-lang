@@ -147,7 +147,7 @@ vocabulary.
      two indices are equal at run time — `xs[i]` against `xs[k + 1]`
      with `k = i - 1`.
 
-  **Where the machines stand (wolf trunk after 0.2.18, unreleased; lupin 0.1.41).** wolfgang makes moves element-granular: items
+  **Where the machines stand (wolf 0.2.19; lupin 0.1.42).** wolfgang makes moves element-granular: items
   1(a)–(c) hold for a moved element, item 3 holds (wolf-lang#460, where
   any index store revived a moved sibling and native aliased it, is
   fixed), and R3 holds for a store through the same plain local of a
@@ -165,13 +165,15 @@ vocabulary.
   lend of `m[k]` is a typing question (the read is `V ! {none}`,
   `[mem.map.absent]`, E0401 today) that this clause does not answer.
   lupin separates elements at run time and is the oracle for which
-  element a move empties and for the exclusivity trap; at 0.1.41 every
-  read of a moved element traps (wolffe-lang/wolf-interp#141), and a
-  value read out of a `Map` still stays in the map
-  (wolffe-lang/wolf-interp#144), and a member read beside an element
-  claim (`bump(mut xs[0], xs.len)`) still reads the whole container and
-  traps, where 1(c) says the two are distinct (wolffe-lang/wolf-lang#472,
-  ruled so; lupin's mirror follows). **Cost:** none at run time — every rule here is static.
+  element a move empties and for the exclusivity trap; at 0.1.42 every
+  read of a moved element traps (wolffe-lang/wolf-interp#141), a whole
+  read of a place holding a moved part traps (wolffe-lang/wolf-interp#143),
+  a non-`Copy` value read out of a `Map` moves out of it
+  (wolffe-lang/wolf-interp#144), a member read or a header method (`len`,
+  `count`, `is_empty`) beside an element claim or a moved element reads
+  only the header (wolffe-lang/wolf-lang#472, #474), and any other method
+  or a slice beside a moved part reads the whole container and traps
+  (wolffe-lang/wolf-interp#149). **Cost:** none at run time — every rule here is static.
   Witnesses: `corpus/memory/elem_*.lu`, each asserted on checked,
   native, release and lupin by
   `crates/wolf_driver/tests/element_places_lanes.rs` or
