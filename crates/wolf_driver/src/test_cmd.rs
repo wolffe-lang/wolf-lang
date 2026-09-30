@@ -364,18 +364,28 @@ pub fn test_cmd(args: &[String]) {
         let has_errors =
             |ds: &[Diagnostic]| ds.iter().any(|d| d.severity == wolf_diag::Severity::Error);
         let mut pending: Vec<Diagnostic> = Vec::new();
-        let gate =
-            |pending: &mut Vec<Diagnostic>, sources: &Sources, diags: Vec<Diagnostic>| -> bool {
-                pending.extend(wolf_diag::lint::apply(&levels, &scan.allows, diags));
-                wolf_diag::suppress_mode_shadowed(pending);
-                if has_errors(pending) {
-                    wolf_diag::sort_diagnostics(pending);
-                    render(sources, pending);
-                    true
-                } else {
-                    false
-                }
+        // `last`: the mem rung. Before it a deny-promoted W1002 does
+        // not reject the file (s185, wolf-lang#469,
+        // `wolf_diag::waits_for_mem`): the refusal that retires it may
+        // come from a later rung.
+        let gate = |pending: &mut Vec<Diagnostic>,
+                    sources: &Sources,
+                    diags: Vec<Diagnostic>,
+                    last: bool|
+         -> bool {
+            pending.extend(wolf_diag::lint::apply(&levels, &scan.allows, diags));
+            wolf_diag::suppress_mode_shadowed(pending);
+            let stop = if last {
+                has_errors(pending)
+            } else {
+                wolf_diag::stops_early(pending)
             };
+            if stop {
+                wolf_diag::sort_diagnostics(pending);
+                render(sources, pending);
+            }
+            stop
+        };
         // A file the compiler rejected is REJECTED, never FAILED
         // (#157, s169): it never ran, so it found nothing, so it is not
         // a failing test. The diagnostics above the line already said
@@ -393,7 +403,7 @@ pub fn test_cmd(args: &[String]) {
         };
         let mut resolve_diags = res.diagnostics.clone();
         resolve_diags.extend(scan.diagnostics.iter().cloned());
-        if gate(&mut pending, &sources, resolve_diags) {
+        if gate(&mut pending, &sources, resolve_diags, false) {
             file_rejected(&mut tally, "does not compile");
             if fail_fast {
                 stopped_early = true;
@@ -403,10 +413,20 @@ pub fn test_cmd(args: &[String]) {
         }
         let tc = wolf_sema::typecheck_package(&res);
         if let Some(nyc) = tc.not_yet.first() {
+            // A promoted W1002 still waiting rejects the file, as it
+            // did before #469's deferral.
+            if gate(&mut pending, &sources, Vec::new(), true) {
+                file_rejected(&mut tally, "does not compile");
+                if fail_fast {
+                    stopped_early = true;
+                    break 'files;
+                }
+                continue;
+            }
             report_file_unsupported(&mut tally, json, &display, nyc.construct);
             continue;
         }
-        if gate(&mut pending, &sources, tc.diagnostics.clone()) {
+        if gate(&mut pending, &sources, tc.diagnostics.clone(), false) {
             file_rejected(&mut tally, "does not compile");
             if fail_fast {
                 stopped_early = true;
@@ -416,10 +436,20 @@ pub fn test_cmd(args: &[String]) {
         }
         let mem = wolf_mem::check_package(&res.package, &tc);
         if let Some(nyc) = mem.not_yet.first() {
+            // A promoted W1002 still waiting rejects the file, as it
+            // did before #469's deferral.
+            if gate(&mut pending, &sources, Vec::new(), true) {
+                file_rejected(&mut tally, "does not compile");
+                if fail_fast {
+                    stopped_early = true;
+                    break 'files;
+                }
+                continue;
+            }
             report_file_unsupported(&mut tally, json, &display, nyc.construct);
             continue;
         }
-        if gate(&mut pending, &sources, mem.diagnostics.clone()) {
+        if gate(&mut pending, &sources, mem.diagnostics.clone(), true) {
             file_rejected(&mut tally, "does not compile");
             if fail_fast {
                 stopped_early = true;
