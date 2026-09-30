@@ -1,0 +1,53 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+assertion_line: 56
+expression: render_mem(src)
+---
+error[E1002]: `a` is written while `a` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:10:9
+   |
+ 9 |     bump(mut a, {
+   |              - `a` is passed `mut` here
+10 |         a = 5
+   |         ^ an access inside the outer call's `mut` claim
+   |
+   = note: the same place twice is never disjoint. A later argument may read a place an earlier
+     `mut` argument claims, but it may not write or move it: the callee receives the place
+     exclusively [mem.tier0.excl.4]. Make the change before the call.
+
+error[E1002]: `a` is written while `a` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:14:9
+   |
+13 |     bump(mut a, {
+   |              - `a` is passed `mut` here
+14 |         a += 2
+   |         ^ an access inside the outer call's `mut` claim
+   |
+   = note: the same place twice is never disjoint. A later argument may read a place an earlier
+     `mut` argument claims, but it may not write or move it: the callee receives the place
+     exclusively [mem.tier0.excl.4]. Make the change before the call.
+
+error[E1002]: `xs` moves away while `xs` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:19:22
+   |
+18 |     grow(mut xs, {
+   |              -- `xs` is passed `mut` here
+19 |         var t = move xs
+   |                      ^^ an access inside the outer call's `mut` claim
+   |
+   = note: the same place twice is never disjoint. A later argument may read a place an earlier
+     `mut` argument claims, but it may not write or move it: the callee receives the place
+     exclusively [mem.tier0.excl.4]. Make the change before the call.
+
+error[E1002]: `xs` is written while `xs` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:20:9
+   |
+18 |     grow(mut xs, {
+   |              -- `xs` is passed `mut` here
+19 |         var t = move xs
+20 |         xs = [9]
+   |         ^^ an access inside the outer call's `mut` claim
+   |
+   = note: the same place twice is never disjoint. A later argument may read a place an earlier
+     `mut` argument claims, but it may not write or move it: the callee receives the place
+     exclusively [mem.tier0.excl.4]. Make the change before the call.

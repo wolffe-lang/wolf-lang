@@ -1017,12 +1017,13 @@ fn read_param_reads_stay_silent() {
 }
 
 #[test]
-fn e1002_copy_read_after_mut_arg() {
-    // D39, the overlap rule's static half: the `Copy` read of `p.x`
-    // evaluates inside the exclusive claim `mut p` already spelled —
-    // f(mut a, a.x), the shape lupin traps dynamically.
+fn clean_copy_read_after_mut_arg() {
+    // D39's refusal, retired by s186 (`[mem.tier0.excl.4]`, ruled
+    // 2026-09-30): the `Copy` read of `p.x` in the later argument ends
+    // before the claim `mut p` takes effect at call entry —
+    // f(mut a, a.x) is two-phase, like the receiver's `xs.push(xs.len)`.
     snap(
-        "e1002_copy_read_after_mut",
+        "clean_copy_read_after_mut",
         "struct P { x: int, y: int }\n\
          fn bump(mut a: P, n: int) { a.x += n }\n\
          fn main() -> !int {\n    \
@@ -1035,10 +1036,9 @@ fn e1002_copy_read_after_mut_arg() {
 
 #[test]
 fn e1002_nested_call_claims_inside_a_mut_arg() {
-    // s168 — D39's rule taken one step further than a bare read. The
-    // arguments after a `mut` one are evaluated INSIDE its claim, so a
-    // nested CALL that claims the same place conflicts exactly as a
-    // read does. Untested before element lends existed; with them it
+    // s168 — a nested CALL that claims the same place inside a later
+    // argument conflicts: the callee receives the place exclusively,
+    // and a second claim is not a read (`[mem.tier0.excl.4]`). Untested before element lends existed; with them it
     // is the difference between a diagnostic and a dangling write.
     snap(
         "e1002_nested_call_after_mut",
@@ -2206,16 +2206,52 @@ fn e1001_whole_read_methods_after_a_moved_part() {
 // ------------------------------------------ s186: wolf-lang#476 --
 
 #[test]
-fn e1002_accesses_inside_a_later_arguments_claim() {
-    // s186 (wolf-lang#476): the arguments after a `mut` argument are
-    // evaluated inside its claim ([mem.model.order]), so a read or a
-    // write of the claimed place there is E1002 however deep it sits —
-    // a read lend one call down, a whole-reading receiver, the header
-    // under a WHOLE claim, an operand, a store in a block argument, a
-    // `Map`. One report per access; the direct forms keep their own.
+fn e1002_writes_and_moves_inside_a_later_arguments_claim() {
+    // s186 (wolf-lang#476, `[mem.tier0.excl.4]`): arguments are
+    // two-phase, so a later argument may read the claimed place but may
+    // not write it (a store, a compound store) or move it. One report
+    // per access.
     snap(
-        "e1002_accesses_inside_a_later_arguments_claim",
+        "e1002_writes_and_moves_inside_a_later_arguments_claim",
         "fn bump(mut a: int, n: int) {\n    \
+             a = a + n\n\
+         }\n\
+         fn grow(mut ys: List[int], n: int) {\n    \
+             (mut ys).push(n)\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var a = 1\n    \
+             bump(mut a, {\n        \
+                 a = 5\n        \
+                 1\n    \
+             })\n    \
+             bump(mut a, {\n        \
+                 a += 2\n        \
+                 1\n    \
+             })\n    \
+             var xs = [1, 2]\n    \
+             grow(mut xs, {\n        \
+                 var t = move xs\n        \
+                 xs = [9]\n        \
+                 t.len\n    \
+             })\n    \
+             a\n\
+         }\n",
+    );
+}
+
+#[test]
+fn clean_two_phase_reads_of_a_claimed_place() {
+    // s186 (ruled 2026-09-30, `[mem.tier0.excl.4]`): every read a later
+    // argument makes of the claimed place ends before the claim takes
+    // effect — a direct `Copy` read (D39's E1002 through 0.2.19), a
+    // member read, a read lend one call down, a whole-reading receiver,
+    // the header under a WHOLE claim, an operand, a `Map`, and string
+    // interpolation of a field.
+    snap(
+        "clean_two_phase_reads_of_a_claimed_place",
+        "struct Fl { store: str, n: int }\n\
+         fn bump(mut a: int, n: int) {\n    \
              a = a + n\n\
          }\n\
          fn grow(mut ys: List[int], n: int) {\n    \
@@ -2230,20 +2266,24 @@ fn e1002_accesses_inside_a_later_arguments_claim() {
          fn mput(mut m: Map[str, int], n: int) {\n    \
              m[\"z\"] = n\n\
          }\n\
+         fn fail(mut fl: Fl, msg: str) -> int {\n    \
+             fl.n = fl.n + 1\n    \
+             msg.len\n\
+         }\n\
          fn main() -> !int {\n    \
+             var a = 1\n    \
+             bump(mut a, a)\n    \
              var xs = [1, 2, 3]\n    \
+             grow(mut xs, xs.len)\n    \
              bump(mut xs[0], total(xs))\n    \
              bump(mut xs[0], xs.get(1) else 9)\n    \
              grow(mut xs, xs.count())\n    \
-             var a = 1\n    \
              bump(mut a, a + 1)\n    \
-             bump(mut a, {\n        \
-                 a = 5\n        \
-                 1\n    \
-             })\n    \
              var m = Map[str, int]()\n    \
              mput(mut m, msize(m))\n    \
-             a + xs.len + m.len\n\
+             var fl = Fl { store: \"/var\", n: 0 }\n    \
+             let k = fail(mut fl, \"under {fl.store}\")\n    \
+             a + xs.len + m.len + k\n\
          }\n",
     );
 }
