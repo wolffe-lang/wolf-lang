@@ -786,3 +786,57 @@ fn nested_fn_refusals_are_named() {
         generic.not_yet
     );
 }
+
+/// wolf-lang#466 (s186): a nested fn with a `mut` or `take` parameter
+/// is called by name with its DECLARED parameters on the call surface
+/// (the modes `wolf_mem` holds the site to), and every other use of the
+/// name — a binding, a higher-order argument — refuses by name, since a
+/// fn type carries no modes. A later `let` of the same name shadows it
+/// into an ordinary value.
+#[test]
+fn a_moded_nested_fn_is_called_by_name_only() {
+    let called = check_one(
+        "fn main() -> !int {\n    fn inc(mut a: int) { a = a + 1 }\n    var n = 1\n    inc(mut n)\n    n - 2\n}\n",
+    );
+    assert!(
+        called.fully_checked(),
+        "{:?} / {:?}",
+        called.diagnostics,
+        called.not_yet
+    );
+    let BodyResult::Checked(t) = body(&called, "main") else {
+        panic!("main checks");
+    };
+    let modes: Vec<_> = t
+        .calls
+        .iter()
+        .filter(|(_, c)| c.callee == "inc")
+        .flat_map(|(_, c)| c.params.iter().map(|p| p.mode))
+        .collect();
+    assert_eq!(modes, [Some(wolf_ast::ParamMode::Mut)], "the call surface");
+    for value_use in [
+        "    let g = inc\n",
+        "    if apply(inc, 1) {}\n",
+    ] {
+        let tc = check_one(&format!(
+            "fn apply(f: fn(int), v: int) -> bool {{ true }}\n\
+             fn main() -> !int {{\n    fn inc(mut a: int) {{ a = a + 1 }}\n{value_use}    0\n}}\n"
+        ));
+        assert!(
+            tc.not_yet
+                .iter()
+                .any(|n| n.construct.contains("used as a value")),
+            "{value_use}: {:?}",
+            tc.not_yet
+        );
+    }
+    let shadowed = check_one(
+        "fn main() -> !int {\n    fn inc(mut a: int) { a = a + 1 }\n    let inc = 3\n    inc - 3\n}\n",
+    );
+    assert!(
+        shadowed.fully_checked(),
+        "{:?} / {:?}",
+        shadowed.diagnostics,
+        shadowed.not_yet
+    );
+}
