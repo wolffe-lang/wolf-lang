@@ -126,9 +126,22 @@ vocabulary.
      stays unreadable (E1001). A store to the whole container revives
      every element.
   4. **Proof rules for run-time indices.** R3 is implemented for a
-     store through the same plain local (`a = b = 0` below); R1's
-     distinct half, any offset, and R2 are **NOT YET IMPLEMENTED** (EGC
-     milestone EG3; until each lands its shape is one place under 2).
+     store through the same plain local (`a = b = 0` below). R1's
+     distinct half and R2 are implemented (EGC milestone EG3) for the
+     claims of **one call** (`[mem.tier0.excl]`: two `mut` arguments,
+     or a `mut` argument beside a lent `read` or a `take` one), for an
+     index local that the call keeps unwritten — nothing its callee,
+     receiver or arguments evaluate stores to it, moves it, or lends it
+     `mut` or `take` — that no loan is ever taken on, in a body with no
+     raw-tier statement. They are **NOT IMPLEMENTED** for moves
+     (`[mem.tier0.move]`), local borrows (`[mem.tier0.borrow]`),
+     iteration (`[mem.iter.excl]`), or a write or move inside a later
+     argument (`[mem.tier0.excl.4]`): there each of their shapes is one
+     place under 2. The compiler reads R1's offset only as `i + k`, with
+     `i` a plain `int` local and `k` a positive integer literal, on a
+     `List`; a difference (`xs[i - 1]`), a local offset (`xs[i + j]`), a
+     reordered or parenthesized sum (`xs[1 + i]`, `xs[(i + 1)]`) and any
+     other integer type are not read, and stay one place.
      **R1, offset:** `xs[i + a]` and `xs[i + b]`, with `a` and `b`
      integer literals (either may be absent, as `0`) over one local `i`
      of a `Copy` type — an integer index, a `str`, `char` or `bool`
@@ -136,8 +149,11 @@ vocabulary.
      `i` — that is not assigned between the two uses, are distinct when
      `a ≠ b` and the same element when `a = b`. **R2, induction
      against a literal:** inside `for i in lo..hi` with integer-literal
-     `lo` and `hi`, `xs[i]` and `xs[c]` for a literal `c` are distinct
-     when `c < lo` or `c ≥ hi` (`..=` includes `hi`). **R3, revival:**
+     `lo` and `hi`, where the loop's body never assigns `i` (a `for`
+     binding is assignable, and `i = 0` in the body puts it back in
+     range), `xs[i]` and `xs[c]` for a literal `c` are distinct
+     when `c < lo` or `c ≥ hi` (`..=` includes `hi`); an offset of the
+     index (`xs[i + 1]`) against a literal is not R2's shape. **R3, revival:**
      a store `xs[e] = v`
      revives a moved `xs[e']` when R1 proves them the same element;
      `var t = move xs[i]` … `xs[i] = take t` is the shape it keeps, and
@@ -147,7 +163,7 @@ vocabulary.
      two indices are equal at run time — `xs[i]` against `xs[k + 1]`
      with `k = i - 1`.
 
-  **Where the machines stand (wolf 0.2.19; lupin 0.1.42).** wolfgang makes moves element-granular: items
+  **Where the machines stand (wolf trunk after 0.2.19, unreleased; lupin 0.1.42).** wolfgang makes moves element-granular: items
   1(a)–(c) hold for a moved element, item 3 holds (wolf-lang#460, where
   any index store revived a moved sibling and native aliased it, is
   fixed), and R3 holds for a store through the same plain local of a
@@ -159,9 +175,10 @@ vocabulary.
   element-granular too (EG2): items 1(a)–(c) and the path rule hold
   for a claim, so `add2(mut xs[0], mut xs[1])`, `add2(mut g[0][1], mut
   g[1][0])` and `bump(mut xs[0], xs.len)` run, and every item 2 shape
-  is still refused. R1's distinct
-  half and R2 are not implemented (EG3), so their shapes are refused as
-  item 2's. A `Map` element is a place for moves and stores; a `mut`
+  is still refused. EG3's R1 and R2 hold for the claims of one call
+  (item 4), so `add2(mut xs[i], mut xs[i + 1])` and `for i in 1..3 {
+  add2(mut xs[0], mut xs[i]) }` run; for moves, borrows and iteration
+  their shapes are still refused as item 2's. A `Map` element is a place for moves and stores; a `mut`
   lend of `m[k]` is a typing question (the read is `V ! {none}`,
   `[mem.map.absent]`, E0401 today) that this clause does not answer.
   lupin separates elements at run time and is the oracle for which
@@ -178,9 +195,11 @@ vocabulary.
   native, release and lupin by
   `crates/wolf_driver/tests/element_places_lanes.rs` or
   `element_move_conservatism_lanes.rs`; the EG3 rows
-  (`elem_offset_mut_pair`, `elem_loop_induction_mut`) stay parked with
-  their ruled verdicts in the planning repository
-  (`sprints/compiler/90-element-granularity/witnesses/`).
+  `elem_offset_mut_pair.lu`, `elem_loop_induction_mut.lu` and
+  `elem_dyn_proofs_legs.lu` run, and their twins where the proof fails
+  or is not read (`elem_offset_{rebound,rebound_call,zero,vs_literal,
+  negative,nonliteral}_mut.lu`, `elem_loop_{induction_written_mut,
+  inclusive_covers_const,nonliteral_range_mut}.lu`) stay refused.
 - `[mem.model.granule]` A **granule** is the unit of ownership reasoning:
   a value (Tier 0), a region (Tier 1), or a shared/handle cell (Tier 2).
 - `[mem.model.machine]` The abstract machine state comprises:
