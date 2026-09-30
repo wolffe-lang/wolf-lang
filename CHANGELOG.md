@@ -46,27 +46,23 @@
 
 ### Fixed
 
-- **A read or write of a `mut`-claimed place inside a later argument
-  is E1002 (s186, wolf-lang#476).** The arguments after a `mut`
-  argument are evaluated inside its claim (`[mem.tier0.excl.1]`,
-  `[mem.model.order]`). The direct forms were always refused
-  (`both(mut xs[0], xs)`, `f(mut a, a.x)`), and so was a nested call's
-  own `mut`/`take` (s168); a read or a write one level down was not.
-  Through 0.2.19 these ran on checked, native and release while lupin
-  traps `exclusivity`: a whole read lend one call down
-  (`bump(mut xs[0], total(xs))`, `grow(mut xs, total(xs))`), a
-  whole-reading receiver (`bump(mut xs[0], xs.get(1) else 9)`), the
-  header under a whole claim (`grow(mut xs, xs.count())`), a `Copy`
-  read (`bump(mut xs[0], id(xs[0]))`), an operand (`bump(mut a,
-  a + 1)`), a `Map`. And one was a wrong answer: `bump(mut a, { a = 5;
-  1 })` printed `6` on checked and `2` on native and release. Each is
-  E1002 now, one report per access. What keeps running: a different
-  element (`id(xs[1])`), the header beside an element claim
-  (`id(xs.count())`, #474), a read before the claim begins
-  (`bump2(total(xs), mut xs[0])`), a disjoint field, a receiver claim
-  (two-phase, unchanged), and a closure body (it does not run where it
-  is written; its capture is the access). If your program is refused,
-  compute the value into a local before the call.
+- **Arguments are two-phase (s186, wolf-lang#476, ruled 2026-09-30;
+  `[mem.tier0.excl.4]`).** Within one call the arguments evaluate left
+  to right and a `mut` argument's claim takes effect at call entry. A
+  later argument may READ the claimed place and sees the value from
+  before the call: a `Copy` value (`f(mut a, a.x)`), an operand
+  (`bump(mut a, a + 1)`), a header or member (`grow(mut xs, xs.len)`,
+  `xs.count()`), string interpolation (`fail(mut fl, "{fl.store}")`),
+  or a nested call whose result lends nothing from the place
+  (`bump(mut xs[0], total(xs))`, `ring_drop(mut r, ring_len(r))`). A
+  direct read (D39's rule) was E1002 through 0.2.19, and it runs now. A
+  read one call down ran already, while lupin traps it; the compiler's
+  answer is the ruled one, and is63 moves lupin. A later argument may
+  not WRITE or MOVE the claimed place, and that is E1002 now:
+  `bump(mut a, { a = 5; 1 })` printed `6` on checked and `2` on native
+  and release through 0.2.19. A second claim, or a lend into the same
+  call (`both(mut xs[0], xs)`, a capturing closure), stays E1002, and
+  so do `take` arguments.
 - **A nested fn's `mut` and `take` parameters are real (s186,
   wolf-lang#466).** `f(mut xs)` against a nested `fn f(mut xs: …)` was
   E1007 ("takes this parameter as plain `read`"), and `f(xs)` compiled —
