@@ -131,6 +131,50 @@
   laid out after the last in-place `push`. With #146 planted back, the
   behavioural test stays green and the structural test goes red.
 
+### An armed signal is heard under an inherited blocked mask (s188, #483)
+
+- **A program that inherited a signal blocked never answered it.** A
+  process inherits its signal mask across `exec`. lobo, started from
+  fish with `ssh -f … &`, inherited SIGINT and SIGQUIT blocked on every
+  thread, so the handler `os_signal_listen(QUIT)` installed never ran:
+  `kill -QUIT` stayed pending (`ShdPnd 0x4`) and the graceful quit
+  never came (found by ws44). nginx sets its own mask; wolf now does
+  the equivalent. `os_signal_listen` has the runtime's drain thread
+  (`wolf-signal`, the one thread it keeps for the program's life)
+  unblock exactly the signals of the meanings the program arms, and
+  returns once it has. Every other signal keeps the inherited mask, on
+  every thread: an unarmed SIGHUP or SIGINT stays blocked and pending.
+  A signal sent while it was still blocked arrives when the listen
+  unblocks it. Written into `[os.signal.listen]`.
+- Witness: `signal_blocked_mask.rs` launches the program with the set
+  blocked (`sigprocmask` in the forked child), sends the signal, and
+  reads every thread's mask on linux. It was red at trunk on linux and
+  macOS (native and release) and is green here.
+- Windows has no signal mask. Its inheritable analog, the console's
+  CTRL+C-ignore flag, is not cleared yet (#490).
+
+### A moded module fn is refused as a value (s188, #484)
+
+- **A module fn with a `mut` or `take` parameter read as a value ran
+  with its mode erased.** A fn type carries no modes, so a call through
+  the value passed the argument as a plain `read`. `var g = f; g(xs)`
+  against `fn f(mut xs: List[int])` printed `2` on checked (the callee
+  grew the caller's list through a `read` argument) and `1` on native
+  and release, with no diagnostic. Through a value a `take` parameter
+  never moved (`2 2`). A `mut int` parameter's fn returned as a value
+  lost its write on checked and was an ICE on native and release. It is
+  now refused by name on every lane (`unsupported`, "a fn with `mut` or
+  `take` parameters used as a value"): bound, passed, returned, or
+  qualified from another module. Call it by name. This is s186's rule
+  for a nested fn, and lupin 0.1.42 already refuses each of these. The
+  spec clauses are `[gram.type]` (a fn type has no mode slot),
+  `[type.fn.value]`, and `[mem.tier0.mode.mut]` (a call site must
+  spell `mut`).
+- Witnesses: `fn_value_modes_lanes.rs` on checked, native, release and
+  lupin, with both polarities: five refused shapes, and a modeless fn
+  value and the by-name calls, which run. Also a `wolf_sema`
+  typecheck test.
+
 ### Fixed
 
 - **Arguments are two-phase (s186, wolf-lang#476, ruled 2026-09-30;
