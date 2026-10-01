@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 434..460 name=Acc fields=1
+ImplDecl 462..576 path=Acc
+  FnDecl 477..574 name=absorb body=Block
+FnDecl 578..720 name=main body=Block
