@@ -2429,3 +2429,125 @@ fn nested_fn_parameters_carry_their_modes() {
          }\n",
     );
 }
+
+// ------------------------------------------ s192: wolf-lang#487 --
+
+#[test]
+fn e1002_a_mut_receiver_written_moved_or_claimed_in_its_own_arguments() {
+    // s192 (wolf-lang#487, `[mem.tier0.excl.4]`): a `mut` receiver is
+    // the call's first argument, so its own arguments may not write it,
+    // move it, or claim it again — directly, through an element or a
+    // field receiver, through a prefix of the claimed place, or through
+    // a view set's own field. One report per access, naming the
+    // receiver.
+    snap(
+        "e1002_a_mut_receiver_written_moved_or_claimed_in_its_own_arguments",
+        "struct Out { bytes: List[int], class_off: List[int] }\n\
+         struct V { x: int, y: int, z: int }\n\
+         impl V {\n    \
+             fn set_x(mut self.{x}, n: int) {\n        \
+                 self.x = self.x + n\n    \
+             }\n\
+         }\n\
+         fn drain(mut ys: List[int]) -> int {\n    \
+             ys.len\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var xs = [1, 2]\n    \
+             (mut xs).push({\n        \
+                 xs = [9]\n        \
+                 5\n    \
+             })\n    \
+             (mut xs).push({\n        \
+                 var t = move xs\n        \
+                 xs = [9]\n        \
+                 t.len\n    \
+             })\n    \
+             (mut xs).push({\n        \
+                 (mut xs).push(7)\n        \
+                 5\n    \
+             })\n    \
+             (mut xs).push(drain(mut xs))\n    \
+             var ys = [[1], [2]]\n    \
+             (mut ys[0]).push({\n        \
+                 ys[0] = [7]\n        \
+                 5\n    \
+             })\n    \
+             (mut ys[0]).push({\n        \
+                 ys = [[7]]\n        \
+                 5\n    \
+             })\n    \
+             var out = Out { bytes: [7], class_off: [1] }\n    \
+             (mut out.class_off).push({\n        \
+                 out.class_off = [9]\n        \
+                 5\n    \
+             })\n    \
+             (mut out.class_off).push({\n        \
+                 out = Out { bytes: [], class_off: [9] }\n        \
+                 5\n    \
+             })\n    \
+             var p = V { x: 1, y: 2, z: 3 }\n    \
+             (mut p).set_x({\n        \
+                 p.x = 50\n        \
+                 1\n    \
+             })\n    \
+             xs.len + p.x\n\
+         }\n",
+    );
+}
+
+#[test]
+fn clean_reads_and_disjoint_writes_beside_a_mut_receiver() {
+    // What s192's receiver seeding must leave alone: header and whole
+    // reads, a block writing only its own local, bu12's sibling-field
+    // read (`tr.lu:528`), a sibling-field write, a different literal
+    // element written, a write after the call, a view set's other field
+    // written, and a closure made and called inside the argument (its
+    // body does not run where it is written; its capture is a read).
+    snap(
+        "clean_reads_and_disjoint_writes_beside_a_mut_receiver",
+        "struct Out { bytes: List[int], class_off: List[int] }\n\
+         struct V { x: int, y: int, z: int }\n\
+         impl V {\n    \
+             fn set_x(mut self.{x}, n: int) {\n        \
+                 self.x = self.x + n\n    \
+             }\n\
+         }\n\
+         fn total(ys: List[int]) -> int {\n    \
+             ys.len\n\
+         }\n\
+         fn main() -> !int {\n    \
+             var xs = [1, 2]\n    \
+             (mut xs).push(xs.len)\n    \
+             (mut xs).push(total(xs))\n    \
+             (mut xs).push({\n        \
+                 var t = xs.len\n        \
+                 t = t + xs[0]\n        \
+                 t\n    \
+             })\n    \
+             (mut xs).push({\n        \
+                 let f = fn() xs.len\n        \
+                 f()\n    \
+             })\n    \
+             var out = Out { bytes: [7, 8], class_off: List[int]() }\n    \
+             (mut out.class_off).push(out.bytes.len)\n    \
+             (mut out.class_off).push({\n        \
+                 out.bytes = [4]\n        \
+                 1\n    \
+             })\n    \
+             var ys = [[1], [2]]\n    \
+             (mut ys[0]).push({\n        \
+                 ys[1] = [7]\n        \
+                 ys[1].len\n    \
+             })\n    \
+             xs = [9]\n    \
+             (mut xs).push(xs[0])\n    \
+             var p = V { x: 1, y: 2, z: 3 }\n    \
+             (mut p).set_x({\n        \
+                 p.z = 9\n        \
+                 p.x\n    \
+             })\n    \
+             xs.len + p.x\n\
+         }\n",
+    );
+}
