@@ -163,7 +163,7 @@ vocabulary.
      two indices are equal at run time — `xs[i]` against `xs[k + 1]`
      with `k = i - 1`.
 
-  **Where the machines stand (wolf trunk after 0.2.19, unreleased; lupin 0.1.42).** wolfgang makes moves element-granular: items
+  **Where the machines stand (wolf 0.2.20; lupin 0.1.43).** wolfgang makes moves element-granular: items
   1(a)–(c) hold for a moved element, item 3 holds (wolf-lang#460, where
   any index store revived a moved sibling and native aliased it, is
   fixed), and R3 holds for a store through the same plain local of a
@@ -182,7 +182,7 @@ vocabulary.
   lend of `m[k]` is a typing question (the read is `V ! {none}`,
   `[mem.map.absent]`, E0401 today) that this clause does not answer.
   lupin separates elements at run time and is the oracle for which
-  element a move empties and for the exclusivity trap; at 0.1.42 every
+  element a move empties and for the exclusivity trap; at 0.1.43 every
   read of a moved element traps (wolffe-lang/wolf-interp#141), a whole
   read of a place holding a moved part traps (wolffe-lang/wolf-interp#143),
   a non-`Copy` value read out of a `Map` moves out of it
@@ -362,7 +362,8 @@ law: `.docs/refs/papers/swift-ownership-manifesto.md`.
   written. A receiver's `mut` claim was always two-phase
   (`(mut xs).push(xs.len)`). Ruled 2026-09-30 (wolffe-lang/wolf-lang#476):
   through 0.2.19 the compiler refused a direct `Copy` read after a
-  `mut` argument and ran a nested one, and lupin 0.1.42 traps both.
+  `mut` argument and ran a nested one, and lupin through 0.1.42 trapped
+  both; wolf 0.2.20 and lupin 0.1.43 run both.
   Witnesses `corpus/memory/mut_claim_nested_*.lu`,
   `mut_claim_operand_read.lu`, `mut_claim_two_phase_reads.lu` (reads
   that run) and `mut_claim_arg_block_write.lu`,
