@@ -42,16 +42,15 @@ b0:
   %13, %14 = call @P.norm(%4, %12)
   %15 = load.i64 %4, %14
   %16 = load.i64 %8, %14
-  %17 = load.i64 %11, %14
-  %18 = iadd.chk %13, %17
-  %19 = iconst.i64 42
-  %20 = icmp.eq %18, %19
-  br %20, b1, b2
+  %17 = iadd.chk %13, %2
+  %18 = iconst.i64 42
+  %19 = icmp.eq %17, %18
+  br %19, b1, b2
 b1:
-  %21 = iconst.i64 0
-  jmp b3(%21)
+  %20 = iconst.i64 0
+  jmp b3(%20)
 b2:
   jmp b3(%0)
-b3(%22: i64):
-  ret %22
+b3(%21: i64):
+  ret %21
 }

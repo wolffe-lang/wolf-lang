@@ -60,7 +60,7 @@ fn @main() -> i64 {
   fact deref %17 8 : op
   fact deref %20 8 : op
   fact deref %28 24 : op
-  fact deref %42 24 : op
+  fact deref %41 24 : op
   fact deref %7 8 : op
   fact noalias %17 %20 : excl.field
   fact noalias %7 %10 : excl.field
@@ -68,7 +68,7 @@ fn @main() -> i64 {
   fact region %17 r2 : op
   fact region %20 r3 : op
   fact region %28 r4 : op
-  fact region %42 r5 : op
+  fact region %41 r5 : op
   fact region %7 r0 : op
 b0:
   %0 = iconst.i64 1
@@ -103,30 +103,27 @@ b0:
   %36, %37 = call @V.norm(%28, %35)
   %38 = load.i64 %28, %37
   %39 = load.i64 %31, %37
-  %40 = load.i64 %34, %37
-  %41 = iadd.chk %36, %26
-  %42: ptr, %43: mem.r5 = stack.alloc %27
-  %44 = store.i64 %38, %42, %43
-  %45 = ptr.off %42, %6, 1
-  %46 = store.i64 %39, %45, %44
-  %47 = ptr.off %42, %33, 1
-  %48 = store.i64 %40, %47, %46
-  %49 = call @V.set_x(%42, %48, %40)
-  %50 = load.i64 %42, %49
-  %51 = load.i64 %45, %49
-  %52 = load.i64 %47, %49
-  %53 = agg.make %50, %51, %52
-  %54 = call @eat(%53)
-  %55 = iconst.i64 0
-  %56 = iadd.chk %41, %54
-  %57 = iadd.chk %56, %4
-  %58 = iconst.i64 18
-  %59 = icmp.eq %57, %58
-  br %59, b1, b2
+  %40 = iadd.chk %36, %26
+  %41: ptr, %42: mem.r5 = stack.alloc %27
+  %43 = store.i64 %38, %41, %42
+  %44 = ptr.off %41, %6, 1
+  %45 = store.i64 %39, %44, %43
+  %46 = ptr.off %41, %33, 1
+  %47 = store.i64 %2, %46, %45
+  %48 = call @V.set_x(%41, %47, %2)
+  %49 = load.i64 %41, %48
+  %50 = agg.make %49, %39, %2
+  %51 = call @eat(%50)
+  %52 = iconst.i64 0
+  %53 = iadd.chk %40, %51
+  %54 = iadd.chk %53, %4
+  %55 = iconst.i64 18
+  %56 = icmp.eq %54, %55
+  br %56, b1, b2
 b1:
-  jmp b3(%55)
+  jmp b3(%52)
 b2:
   jmp b3(%0)
-b3(%60: i64):
-  ret %60
+b3(%57: i64):
+  ret %57
 }
