@@ -66,6 +66,8 @@ fn main() -> !int {
     (mut zs).push(zs[0] + 1)
     var p = V { x: 1, y: 2, z: 3 }
     (mut p).set_x(p.x + p.z)
-    print("{xs.len} {xs[2]} {xs[3]} {xs[4]} {out.class_off[0]} {out.class_off[1]} {out.bytes.len} {ys[0][1]} {ys[0][2]} {ys[1].len} {zs.len} {zs[1]} {p.x}")
+    print(
+        "{xs.len} {xs[2]} {xs[3]} {xs[4]} {out.class_off[0]} {out.class_off[1]} {out.bytes.len} {ys[0][1]} {ys[0][2]} {ys[1].len} {zs.len} {zs[1]} {p.x}",
+    )
     0
 }
