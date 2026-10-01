@@ -2931,6 +2931,21 @@ enum WriteBackShape {
         path: Vec<usize>,
         fty: TypeId,
     },
+    /// A view-set receiver (`mut self.{x, y}`, `[mem.tier0.excl.3]`;
+    /// s193, wolf-lang#494): the local (or the field path `path` of
+    /// it) spilled whole, but only the view set's `fields` come back,
+    /// each loaded from its own offset in the slot and rebuilt into
+    /// the variable's CURRENT value. The callee may touch nothing
+    /// else, and the arguments ran before the claim
+    /// (`[mem.tier0.excl.4]`), so a write they made to a field outside
+    /// the view stands. Through s192 the receiver wrote back whole and
+    /// `(mut p).set_x({ p.z = 9; p.z })` printed `10 3`.
+    View {
+        var: Var,
+        path: Vec<usize>,
+        ty: TypeId,
+        fields: Vec<usize>,
+    },
 }
 
 struct WriteBack {
@@ -17040,9 +17055,97 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     let rebuilt = self.rebuild_at(cur_agg, &path, back);
                     self.b.def_var(var, rebuilt);
                 }
+                WriteBackShape::View {
+                    var,
+                    path,
+                    ty,
+                    fields,
+                } => {
+                    let types::TypeData::Agg(ftys) = self.b.module.types.get(ty).clone() else {
+                        return Err(refuse("a view set over a non-aggregate receiver", span));
+                    };
+                    let Some(offs) = flat_offsets(&self.b.module.types, &ftys) else {
+                        return Err(refuse("a view set over non-flat fields", span));
+                    };
+                    let mut cur = self.b.use_var(var);
+                    let mut at = path;
+                    for k in fields {
+                        let addr = self.field_addr(slot, offs[k]);
+                        let back = self.load_flat(ftys[k], addr, region, span)?;
+                        at.push(k);
+                        cur = self.rebuild_at(cur, &at, back);
+                        at.pop();
+                    }
+                    self.b.def_var(var, cur);
+                }
             }
         }
         Ok(())
+    }
+
+    /// s193 (wolf-lang#494): narrow a spilled receiver's write-back to
+    /// its declared view set. `recv` is the receiver place (its
+    /// recorded type names the struct the view's fields are looked up
+    /// in, declaration order — the order `Agg` lays them out); a
+    /// receiver with no view set, or one that re-lends, is unchanged.
+    fn view_writeback(
+        &self,
+        wb: WriteBackShape,
+        view: Option<&Vec<String>>,
+        recv: &'t GreenNode,
+    ) -> R<WriteBackShape> {
+        let Some(view) = view else {
+            return Ok(wb);
+        };
+        let Some(recv_sema) = self.expr_sema_ty(recv.span) else {
+            return Err(refuse(
+                "a view-set receiver without a recorded type",
+                recv.span,
+            ));
+        };
+        let mut ty = recv_sema;
+        let mut table = self.table;
+        let ss = loop {
+            match table.kind(ty) {
+                TyKind::Distinct(inner) => ty = *inner,
+                TyKind::Nominal { module, name, .. } => {
+                    match self.sigs.get(*module as usize, name) {
+                        Some(ItemSig::Struct(ss)) => break ss,
+                        Some(ItemSig::Distinct { base, .. }) => {
+                            ty = *base;
+                            table = self.sig_table;
+                        }
+                        _ => return Err(refuse("a view set on a non-struct receiver", recv.span)),
+                    }
+                }
+                _ => return Err(refuse("a view set on a non-struct receiver", recv.span)),
+            }
+        };
+        let mut fields = Vec::with_capacity(view.len());
+        for f in view {
+            let Some(k) = ss.fields.iter().position(|sf| &sf.name == f) else {
+                return Err(refuse(
+                    "a view-set field the struct does not declare",
+                    recv.span,
+                ));
+            };
+            fields.push(k);
+        }
+        Ok(match wb {
+            WriteBackShape::Var { var, ty } => WriteBackShape::View {
+                var,
+                path: Vec::new(),
+                ty,
+                fields,
+            },
+            WriteBackShape::Field { var, path, fty } => WriteBackShape::View {
+                var,
+                path,
+                ty: fty,
+                fields,
+            },
+            v @ WriteBackShape::View { .. } => v,
+        })
     }
 
     /// Rebuild an aggregate value with the leaf at `path` replaced.
@@ -17969,6 +18072,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         formal_regions.insert(formal, slot_region);
                         args.push(slot);
                         spilled_slots.push(slot);
+                        // s193: a view-set receiver writes back its
+                        // view set only (wolf-lang#494).
+                        let view = cs.params.first().and_then(|p| p.view.as_ref());
+                        let writeback = self.view_writeback(writeback, view, recv_place)?;
                         writebacks.push(writeback.filled(slot, slot_region, recv_place.span));
                     }
                     MutArg::Relend { ptr, region } => {
