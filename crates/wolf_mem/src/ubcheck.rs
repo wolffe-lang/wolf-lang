@@ -4168,7 +4168,14 @@ impl<'t> Machine<'t> {
             other => other,
         };
         match scrut {
-            Flow::Err(err, _) => {
+            // `[type.row.else]` (#492, ruling #18): the handler runs for
+            // the scrutinee's OWN row only — a raw row (a fallible
+            // call's failure, an absent key, a block whose value is a
+            // row). A `?` that fired inside the scrutinee, or a row
+            // `return`ed from inside it, is already propagating
+            // (`Flow::Err(_, true)`) and leaves past the `else`, as on
+            // native, release and lupin; it falls to `other` below.
+            Flow::Err(err, false) => {
                 self.push_scope();
                 if let Some(pat) = d.handler_pattern() {
                     if pat.kind == SyntaxKind::PathPat {
