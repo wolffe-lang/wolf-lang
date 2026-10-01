@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+### A `mut` receiver's own arguments (s192, #487)
+
+- **`(mut xs).push({ xs = [9]; 5 })` ran and lost the push.** Every
+  wolfgang lane printed `1 9`, the 0.2.19 archive included, with no
+  diagnostic; lupin 0.1.42 answers `ub(mem.ub)`. `[mem.tier0.excl.4]`
+  makes a `mut` receiver the call's first argument: its own arguments
+  may read it, but a write, a move, a re-claim (`mut`) or a lend of it
+  is E1002. s186's scan of a later argument's writes, moves and nested
+  claims never saw the receiver's claim. It does now, on checked,
+  native and release. The receiver's claims (a view set's named fields,
+  when it has one) are the first entries the scan checks against.
+- Shapes that ran before and are refused now: the receiver written or
+  moved out and stored back; a nested call that claims it again
+  (`(mut xs).push({ (mut xs).push(7); 5 })` printed `4 7`;
+  `(mut xs).push(drain(mut xs))` ran to `trap(bounds)`); an element
+  receiver (`(mut xs[0]).push({ xs[0] = …; 5 })`) written, moved, or its
+  container replaced; a field receiver written, moved, or its struct
+  replaced; and a view-set receiver's own field written
+  (`mut self.{x}`: checked printed `51`, native and release `2`). The
+  direct re-claim `(mut a).absorb(mut a)`, the `read` lend
+  `(mut a).absorb(a)` and a closure argument capturing the receiver were
+  already refused by the call surface's pairwise check.
+- Reads still run with the value from before the call:
+  `(mut xs).push(xs.len)`, a whole read one call down, bu12's
+  `(mut out.class_off).push(out.bytes.len)`, a sibling field written, a
+  different literal element written, a view set's own field read.
+- The report names the receiver ("`xs` is the call's `mut` receiver
+  here"). A nested claim of the same place now says "the same place
+  twice is never disjoint", where it said "a path and its prefix".
+- boreutils `0b273a03` and lobo `35f93a35` build with no diagnostic (46
+  of 46 builds, before and after), so no downstream site used a
+  refused shape.
+- Witnesses: the fifteen `corpus/memory/recv_claim_arg_*.lu` rows.
+  `receiver_claim_args_lanes.rs` runs each on checked, native, release
+  and lupin. lupin 0.1.42 holds no receiver claim while the arguments
+  run (`ub(mem.ub)` on nine rows, and it runs the other five). The gate
+  pins those answers for 0.1.42 by version; any later lupin must trap
+  `exclusivity`.
+- Not changed: a view-set receiver whose argument writes a field
+  OUTSIDE the view set is legal, and still answers `10 9` on checked
+  and `10 3` on native, release and lupin (wolf-lang#494, found here).
+
 ### The struct field shorthand is the longhand (s190, #486)
 
 - **`W { xs }` did not move `xs`.** The longhand `W { xs: xs }` moves a
