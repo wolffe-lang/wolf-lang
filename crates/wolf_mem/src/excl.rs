@@ -12,7 +12,9 @@
 //! entry (`[mem.tier0.excl.4]`, s186, ruled 2026-09-30; D39's refusal
 //! of it is retired). A write or move of the claimed place inside a
 //! later argument is order-sensitive and lives in the lowerer
-//! (`check_nested_claims_after_mut`), where evaluation order exists.
+//! (`check_nested_claims_after_mut`), where evaluation order exists;
+//! a `mut` receiver's claim is the first argument's there (s192,
+//! wolf-lang#487).
 //!
 //! EG3 (eg03, `[mem.model.place.elem]` item 4): the pairs here are
 //! decided by [`crate::place::PlaceTable::overlap_call`], which may

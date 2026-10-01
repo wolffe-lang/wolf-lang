@@ -1826,6 +1826,11 @@ impl<'t> Lowerer<'t> {
     /// bodies (which do not run where they are written); the argument's
     /// OWN top-level place and what it put on the call surface are
     /// [`crate::excl`]'s.
+    ///
+    /// s192 (wolf-lang#487) — `arg_muts` includes a `mut` receiver's
+    /// claims, because the receiver is the first argument:
+    /// `(mut xs).push({ xs = [9]; 5 })` is the twin of the block write
+    /// above and printed `1 9` on every lane through 0.2.19.
     fn check_nested_claims_after_mut(
         &mut self,
         from: Mark,
@@ -4517,9 +4522,14 @@ impl<'t> Lowerer<'t> {
         let mut ctor_parts: Vec<(Val, Span)> = Vec::new();
         // Spelled `mut` arguments seen so far, in evaluation order —
         // the claims a later argument may read but not write, move or
-        // claim again (s168, s186's `[mem.tier0.excl.4]`). Receiver
-        // `mut`s stay out.
-        let mut arg_muts: Vec<(PlaceId, Span)> = Vec::new();
+        // claim again (s168, s186's `[mem.tier0.excl.4]`). s192
+        // (wolf-lang#487): a `mut` receiver is the call's first
+        // argument, so its claims (the view set's fields, when it
+        // names one) seed the list. Nothing else has reached the
+        // surface's `mut` list yet. Before s192 the receiver stayed
+        // out, and `(mut xs).push({ xs = [9]; 5 })` ran and lost the
+        // push on every lane.
+        let mut arg_muts: Vec<(PlaceId, Span)> = surface.mut_args.clone();
         for (i, arg) in args.iter().enumerate() {
             let Some(v) = Arg::value(*arg) else { continue };
             let site_mode = Arg::mode(*arg);
