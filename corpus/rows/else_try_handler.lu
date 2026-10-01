@@ -1,0 +1,53 @@
+//! check: run(exit=0, stdout="bind\nkey\nlook a\nafter 5\n5\nkey\n9\nkey\nlook a\ncaught none\nafter -1\n-1\npath\nkey\n9\nkey\nlook a\nafter -2\n-2\n")
+//! phase: run
+//! conforms: type.row.else, err.else, err.propagate
+//!
+//! s191 (wolf-lang#492) — an `else |e|` handler that inspects the
+//! error. The handler is typed over `look`'s row, `{none}`
+//! (`[type.row.else]`), and runs for that row only: `key`'s `parse`
+//! leaves the function through the `?` and never reaches it. A
+//! binding handler that matches on the tag, then the path form
+//! `else |none|`, each with the `?` firing and with the handler's own
+//! row arriving (an empty map). The checked machine handed `parse` to
+//! a handler typed over `{none}`.
+
+fn key(ok: bool) -> str ! {parse} {
+    print("key")
+    if ok { "a" } else { return parse }
+}
+
+fn look(m: Map[str, int], k: str) -> int ! {none} {
+    print("look {k}")
+    m[k]
+}
+
+fn bind(m: Map[str, int], ok: bool) -> int ! {parse} {
+    let v = look(m, key(ok)?) else |e| {
+        print("caught {e}")
+        match e {
+            none => -1,
+        }
+    }
+    print("after {v}")
+    v
+}
+
+fn path(m: Map[str, int], ok: bool) -> int ! {parse} {
+    let v = look(m, key(ok)?) else |none| -2
+    print("after {v}")
+    v
+}
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["a"] = 5
+    let empty = Map[str, int]()
+    print("bind")
+    print("{bind(m, true) else 9}")
+    print("{bind(m, false) else 9}")
+    print("{bind(empty, true) else 9}")
+    print("path")
+    print("{path(m, false) else 9}")
+    print("{path(empty, true) else 9}")
+    0
+}

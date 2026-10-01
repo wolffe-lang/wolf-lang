@@ -1,0 +1,42 @@
+//! check: run(exit=0, stdout="key\nlook a\nname 5\nlook a\nafter 5\n5\nkey\n9\nkey\nlook a\nname 0\nlook z\nafter 7\n7\n")
+//! phase: run
+//! conforms: type.row.else, err.else, err.propagate
+//!
+//! s191 (wolf-lang#492) — a `?` under three nested `else`s. Each
+//! `else` handles its own scrutinee's row only, so `key`'s `parse`
+//! passes through all three and leaves `nested`; the caller's `else 9`
+//! answers. The second call is the control: with an empty map every
+//! `else` handles its own scrutinee's `none` in turn (0, then "z",
+//! then 7), on every machine. The checked machine's innermost `else`
+//! caught the propagating `?` and the chain ran on to `after 7`.
+
+fn key(ok: bool) -> str ! {parse} {
+    print("key")
+    if ok { "a" } else { return parse }
+}
+
+fn look(m: Map[str, int], k: str) -> int ! {none} {
+    print("look {k}")
+    m[k]
+}
+
+fn name(n: int) -> str ! {none} {
+    print("name {n}")
+    if n > 0 { "a" } else { return none }
+}
+
+fn nested(m: Map[str, int], ok: bool) -> int ! {parse} {
+    let v = look(m, name(look(m, key(ok)?) else 0) else "z") else 7
+    print("after {v}")
+    v
+}
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["a"] = 5
+    let empty = Map[str, int]()
+    print("{nested(m, true) else 9}")
+    print("{nested(m, false) else 9}")
+    print("{nested(empty, true) else 9}")
+    0
+}

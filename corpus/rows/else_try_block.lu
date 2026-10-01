@@ -1,0 +1,39 @@
+//! check: run(exit=0, stdout="key\nlook a\ndefer\nafter 5\n5\nkey\nerrdefer\ndefer\n9\n")
+//! phase: run
+//! conforms: type.row.else, err.else, err.propagate, err.errdefer
+//!
+//! s191 (wolf-lang#492) — a `?` inside a block within the scrutinee.
+//! The block's `let k = key(ok)?` propagates: the block's scope closes
+//! on the error path (its `errdefer`, then its `defer`, LIFO) and the
+//! row leaves the function past the `else`, which handles the block's
+//! own row only. The checked machine's `else` caught it, so `after 0`
+//! printed and the function answered 0.
+
+fn key(ok: bool) -> str ! {parse} {
+    print("key")
+    if ok { "a" } else { return parse }
+}
+
+fn look(m: Map[str, int], k: str) -> int ! {none} {
+    print("look {k}")
+    m[k]
+}
+
+fn block(m: Map[str, int], ok: bool) -> int ! {parse} {
+    let v = {
+        defer print("defer")
+        errdefer print("errdefer")
+        let k = key(ok)?
+        look(m, k)
+    } else 0
+    print("after {v}")
+    v
+}
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["a"] = 5
+    print("{block(m, true) else 9}")
+    print("{block(m, false) else 9}")
+    0
+}

@@ -1,0 +1,55 @@
+//! check: run(exit=0, stdout="plain\nlook a\n5\nlook zz\n0\ntry\nkey\nlook a\n0\ncallee\nlook zz\n0\nblock\nblk\nlook zz\n0\nhandler\nlook zz\ncaught none\n-1\n")
+//! phase: run
+//! conforms: type.row.else, err.else, err.propagate
+//!
+//! s191 (wolf-lang#492) — the control: an `else` whose scrutinee fails
+//! on its OWN row handles it, on every machine. A plain fallible call;
+//! the same call with a `?` in its argument that does not fire (the
+//! call itself then misses); a callee whose own body propagated with
+//! `?` (a call's failure is the call's own row at its call site); a
+//! block whose tail fails; and a binding handler. Green at trunk.
+
+fn key(ok: bool) -> str ! {parse} {
+    print("key")
+    if ok { "a" } else { return parse }
+}
+
+fn look(m: Map[str, int], k: str) -> int ! {none} {
+    print("look {k}")
+    m[k]
+}
+
+fn look_q(m: Map[str, int], k: str) -> int ! {none} {
+    let v = look(m, k)?
+    v
+}
+
+fn try_arg(m: Map[str, int], ok: bool) -> int ! {parse} {
+    look(m, key(ok)?) else 0
+}
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["a"] = 5
+    let empty = Map[str, int]()
+    print("plain")
+    print("{look(m, "a") else 0}")
+    print("{look(m, "zz") else 0}")
+    print("try")
+    print("{try_arg(empty, true) else 9}")
+    print("callee")
+    print("{look_q(m, "zz") else 0}")
+    print("block")
+    let b = {
+        print("blk")
+        look(m, "zz")
+    } else 0
+    print("{b}")
+    print("handler")
+    let h = look(m, "zz") else |e| {
+        print("caught {e}")
+        -1
+    }
+    print("{h}")
+    0
+}

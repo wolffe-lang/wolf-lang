@@ -1,0 +1,51 @@
+//! check: run(exit=0, stdout="tag\nblk\nlook a\nafter 5\n5\nblk\n9\nvalue\nblk\nlook a\nafter 5\n5\nblk\n3\n")
+//! phase: run
+//! conforms: type.row.else, err.else
+//!
+//! s191 (wolf-lang#492) — a `return` inside a block within the
+//! scrutinee. `return parse` returns the row from the function: it is
+//! not the block's own failure, so the `else` does not handle it and
+//! the caller's `else 9` answers. `return 3` is its value twin (a
+//! control: a returned value already passed every `else`). The checked
+//! machine's `else` caught the returned row and answered 0.
+
+fn look(m: Map[str, int], k: str) -> int ! {none} {
+    print("look {k}")
+    m[k]
+}
+
+fn tag(m: Map[str, int], ok: bool) -> int ! {parse} {
+    let v = {
+        print("blk")
+        if !ok {
+            return parse
+        }
+        look(m, "a")
+    } else 0
+    print("after {v}")
+    v
+}
+
+fn value(m: Map[str, int], ok: bool) -> int ! {parse} {
+    let v = {
+        print("blk")
+        if !ok {
+            return 3
+        }
+        look(m, "a")
+    } else 0
+    print("after {v}")
+    v
+}
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["a"] = 5
+    print("tag")
+    print("{tag(m, true) else 9}")
+    print("{tag(m, false) else 9}")
+    print("value")
+    print("{value(m, true) else 9}")
+    print("{value(m, false) else 9}")
+    0
+}
