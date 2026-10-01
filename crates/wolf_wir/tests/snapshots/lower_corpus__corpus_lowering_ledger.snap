@@ -611,7 +611,14 @@ resolve/two_mod/main.lu: lowers
 resolve/unused/main.lu: not mem-clean (pre-wir rungs own it)
 rows/coarsen.lu: lowers
 rows/cross_module_arms/main.lu: lowers
+rows/else_own_failure.lu: lowers
+rows/else_return_tag.lu: lowers
 rows/else_tag_payload.lu: lowers
+rows/else_try_block.lu: lowers
+rows/else_try_call_arg.lu: lowers
+rows/else_try_handler.lu: lowers
+rows/else_try_index.lu: lowers
+rows/else_try_nested_else.lu: lowers
 rows/error_alias_ident.lu: lowers
 rows/error_alias_qualified/main.lu: lowers
 rows/error_alias_row.lu: lowers
