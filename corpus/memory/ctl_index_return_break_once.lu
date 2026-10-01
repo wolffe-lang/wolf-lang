@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="return\nidx\n20\nidx\n9\nbreak\nidx\n10\nidx\ndone\ncontinue\nidx\n10\nidx\nidx\n30\ndone\n")
 //! phase: run
-//! conforms: mem.model.order, mem.list.index
+//! conforms: mem.model.order, mem.model.place
 //!
 //! s189 (wolf-lang#481) — `return`, `break` and `continue` inside an
 //! index operand: the operand runs once and the flow leaves as it would

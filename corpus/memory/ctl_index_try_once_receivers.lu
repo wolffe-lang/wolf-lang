@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="copy\nidx\n9\ncount\nidx\n9\nfor\nidx\n9\nelemcopy\nidx\n5\nidx\n9\npush\nidx\n3\nidx\n9\nbytes\nidx\n9\nbytesfor\nidx\n9\nstrlen\nidx\n9\nprint\nidx\ncde\n0\nidx\n9\n")
 //! phase: run
-//! conforms: mem.model.order, mem.list.index
+//! conforms: mem.model.order, mem.model.place
 //!
 //! s189 (wolf-lang#481) — an index operand whose `?` propagates, under
 //! the other readers of a place: `copy`, a method receiver (`count`,

@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="let\nidx\n20\nidx\n9\nhole\nidx\n20\n0\nidx\n9\narg\nidx\n20\n0\nidx\n9\nmember\nidx\n2\nidx\n9\n")
 //! phase: run
-//! conforms: mem.model.order, mem.list.index
+//! conforms: mem.model.order, mem.model.place
 //!
 //! s189 (wolf-lang#481) — an index operand whose `?` propagates runs
 //! once, wherever the indexed place stands: bound by `let`, inside an

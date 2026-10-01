@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="both\na\nb\n6\nouter\na\n9\ninner\na\nb\n9\n")
 //! phase: run
-//! conforms: mem.model.order, mem.list.index
+//! conforms: mem.model.order, mem.model.place
 //!
 //! s189 (wolf-lang#481) — a nested index `g[a()?][b()?]`: the outer
 //! operand, then the inner, once each; when either `?` propagates, no

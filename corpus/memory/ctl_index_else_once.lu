@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="value\nidx\n20\nidx\n10\nreturn\nidx\n20\nidx\n9\n")
 //! phase: run
-//! conforms: mem.model.order, mem.list.index
+//! conforms: mem.model.order, mem.model.place
 //!
 //! s189 (wolf-lang#481) — `else` in an index operand. `xs[idx() else 0]`
 //! handles the row inside the operand, so the operand yields a value
