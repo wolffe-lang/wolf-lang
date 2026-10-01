@@ -475,6 +475,21 @@ memory/read_param_rebind_write.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_return.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_take.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_write.lu: not mem-clean (pre-wir rungs own it)
+memory/recv_claim_arg_closure.lu: not mem-clean (pre-wir rungs own it)
+memory/recv_claim_arg_elem_move.lu: not mem-clean (pre-wir rungs own it)
+memory/recv_claim_arg_elem_whole_write.lu: not mem-clean (pre-wir rungs own it)
+memory/recv_claim_arg_elem_write.lu: not mem-clean (pre-wir rungs own it)
+memory/recv_claim_arg_field_move.lu: not mem-clean (pre-wir rungs own it)
+memory/recv_claim_arg_field_prefix_write.lu: not mem-clean (pre-wir rungs own it)
+memory/recv_claim_arg_field_write.lu: not mem-clean (pre-wir rungs own it)
+memory/recv_claim_arg_lend.lu: not mem-clean (pre-wir rungs own it)
+memory/recv_claim_arg_move.lu: not mem-clean (pre-wir rungs own it)
+memory/recv_claim_arg_reads.lu: lowers
+memory/recv_claim_arg_reclaim.lu: not mem-clean (pre-wir rungs own it)
+memory/recv_claim_arg_reclaim_call.lu: not mem-clean (pre-wir rungs own it)
+memory/recv_claim_arg_reclaim_nested.lu: not mem-clean (pre-wir rungs own it)
+memory/recv_claim_arg_view_write.lu: not mem-clean (pre-wir rungs own it)
+memory/recv_claim_arg_write.lu: not mem-clean (pre-wir rungs own it)
 memory/region_ambient_ok.lu: lowers
 memory/region_bytes_query.lu: lowers
 memory/region_bytes_value.lu: lowers
