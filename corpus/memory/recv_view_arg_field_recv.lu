@@ -1,0 +1,37 @@
+//! check: run(exit=0, stdout="10 9 8\n")
+//! phase: run
+//! conforms: mem.tier0.excl.3, mem.tier0.excl.4, mem.tier0.mode.mut, mem.model.order
+//!
+//! s193 (wolf-lang#494) — the view-set receiver is itself a FIELD
+//! (`(mut o.v).set_x(..)`), and the argument writes a field of `o.v`
+//! outside the view and a sibling of `o.v`. Both stand. Through s192
+//! native and release printed `10 3 8` (the sibling survived, the
+//! field inside the receiver did not); lupin 0.1.42 prints `10 3 8`.
+
+struct V {
+    x: int,
+    y: int,
+    z: int,
+}
+
+struct O {
+    v: V,
+    k: int,
+}
+
+impl V {
+    fn set_x(mut self.{x}, n: int) {
+        self.x = self.x + n
+    }
+}
+
+fn main() -> !int {
+    var o = O { v: V { x: 1, y: 2, z: 3 }, k: 4 }
+    (mut o.v).set_x({
+        o.v.z = 9
+        o.k = 8
+        o.v.z
+    })
+    print("{o.v.x} {o.v.z} {o.k}")
+    0
+}

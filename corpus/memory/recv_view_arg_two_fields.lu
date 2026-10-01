@@ -1,0 +1,30 @@
+//! check: run(exit=0, stdout="10 7 9\n")
+//! phase: run
+//! conforms: mem.tier0.excl.3, mem.tier0.excl.4, mem.tier0.mode.mut, mem.model.order
+//!
+//! s193 (wolf-lang#494) — two fields outside a one-field view set,
+//! both written in the argument. Both stand. Through s192 native and
+//! release printed `10 2 3`; lupin 0.1.42 prints `10 2 3`.
+
+struct V {
+    x: int,
+    y: int,
+    z: int,
+}
+
+impl V {
+    fn set_x(mut self.{x}, n: int) {
+        self.x = self.x + n
+    }
+}
+
+fn main() -> !int {
+    var p = V { x: 1, y: 2, z: 3 }
+    (mut p).set_x({
+        p.y = 7
+        p.z = 9
+        p.y + 2
+    })
+    print("{p.x} {p.y} {p.z}")
+    0
+}

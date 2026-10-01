@@ -1,0 +1,33 @@
+//! check: run(exit=0, stdout="10 20 9\n")
+//! phase: run
+//! conforms: mem.tier0.excl.3, mem.tier0.excl.4, mem.tier0.mode.mut, mem.model.order
+//!
+//! s193 (wolf-lang#494) — the callee writes BOTH of its view fields
+//! while the argument wrote the field outside the view. Every view
+//! field the callee wrote comes back (`x` and `y`), and the argument's
+//! `z` stands: the write-back is the whole view set, not only the
+//! fields the caller can name. Through s192 native and release printed
+//! `10 20 3`; lupin 0.1.42 prints `10 20 3`.
+
+struct V {
+    x: int,
+    y: int,
+    z: int,
+}
+
+impl V {
+    fn spread(mut self.{x, y}, n: int) {
+        self.x = self.x + n
+        self.y = self.y * 10
+    }
+}
+
+fn main() -> !int {
+    var p = V { x: 1, y: 2, z: 3 }
+    (mut p).spread({
+        p.z = 9
+        p.z
+    })
+    print("{p.x} {p.y} {p.z}")
+    0
+}

@@ -1,0 +1,30 @@
+//! check: run(exit=0, stdout="4 3 7\n")
+//! phase: run
+//! conforms: mem.tier0.excl.3, mem.tier0.excl.4, mem.tier0.mode.mut, mem.model.order
+//!
+//! s193 (wolf-lang#494) — a `List` field outside the view set replaced
+//! in the argument. The new buffer stands. Through s192 native and
+//! release wrote the stale spill back over it and printed `4 1 5`:
+//! the replaced buffer came back and the new one was lost. lupin
+//! 0.1.42 prints `4 1 5`.
+
+struct V {
+    x: int,
+    tags: List[int],
+}
+
+impl V {
+    fn set_x(mut self.{x}, n: int) {
+        self.x = self.x + n
+    }
+}
+
+fn main() -> !int {
+    var p = V { x: 1, tags: [5] }
+    (mut p).set_x({
+        p.tags = [7, 8, 9]
+        p.tags.len
+    })
+    print("{p.x} {p.tags.len} {p.tags[0]}")
+    0
+}
