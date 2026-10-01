@@ -1,0 +1,133 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1002]: `xs` is written while `xs` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:14:9
+   |
+13 |     (mut xs).push({
+   |     -------- `xs` is the call's `mut` receiver here
+14 |         xs = [9]
+   |         ^^ an access inside the outer call's `mut` claim
+   |
+   = note: the same place twice is never disjoint. A later argument may read a place an earlier
+     `mut` argument claims, but it may not write or move it: the callee receives the place
+     exclusively [mem.tier0.excl.4]. A `mut` receiver is the call's first argument. Make the
+     change before the call.
+
+error[E1002]: `xs` moves away while `xs` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:18:22
+   |
+17 |     (mut xs).push({
+   |     -------- `xs` is the call's `mut` receiver here
+18 |         var t = move xs
+   |                      ^^ an access inside the outer call's `mut` claim
+   |
+   = note: the same place twice is never disjoint. A later argument may read a place an earlier
+     `mut` argument claims, but it may not write or move it: the callee receives the place
+     exclusively [mem.tier0.excl.4]. A `mut` receiver is the call's first argument. Make the
+     change before the call.
+
+error[E1002]: `xs` is written while `xs` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:19:9
+   |
+17 |     (mut xs).push({
+   |     -------- `xs` is the call's `mut` receiver here
+18 |         var t = move xs
+19 |         xs = [9]
+   |         ^^ an access inside the outer call's `mut` claim
+   |
+   = note: the same place twice is never disjoint. A later argument may read a place an earlier
+     `mut` argument claims, but it may not write or move it: the callee receives the place
+     exclusively [mem.tier0.excl.4]. A `mut` receiver is the call's first argument. Make the
+     change before the call.
+
+error[E1002]: `xs` goes `mut` in a call evaluated while `xs` is lent `mut`
+  --> mem:///main.lu:23:9
+   |
+22 |     (mut xs).push({
+   |     -------- `xs` is the call's `mut` receiver here
+23 |         (mut xs).push(7)
+   |         ^^^^^^^^ a second claim inside the outer call's extent
+   |
+   = note: the same place twice is never disjoint. A `mut` argument is exclusive for the whole
+     call, and the arguments after it are evaluated inside that claim [mem.tier0.excl]. A
+     `mut` receiver is the call's first argument. Evaluate the inner call into a local BEFORE
+     the outer one.
+
+error[E1002]: `xs` goes `mut` in a call evaluated while `xs` is lent `mut`
+  --> mem:///main.lu:26:29
+   |
+26 |     (mut xs).push(drain(mut xs))
+   |     -------- `xs` is the call's `mut` receiver here
+   |                             ^^ a second claim inside the outer call's extent
+   |
+   = note: the same place twice is never disjoint. A `mut` argument is exclusive for the whole
+     call, and the arguments after it are evaluated inside that claim [mem.tier0.excl]. A
+     `mut` receiver is the call's first argument. Evaluate the inner call into a local BEFORE
+     the outer one.
+
+error[E1002]: `ys[0]` is written while `ys[0]` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:29:9
+   |
+28 |     (mut ys[0]).push({
+   |     ----------- `ys[0]` is the call's `mut` receiver here
+29 |         ys[0] = [7]
+   |         ^^^^^ an access inside the outer call's `mut` claim
+   |
+   = note: the same place twice is never disjoint. A later argument may read a place an earlier
+     `mut` argument claims, but it may not write or move it: the callee receives the place
+     exclusively [mem.tier0.excl.4]. A `mut` receiver is the call's first argument. Make the
+     change before the call.
+
+error[E1002]: `ys` is written while `ys[0]` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:33:9
+   |
+32 |     (mut ys[0]).push({
+   |     ----------- `ys[0]` is the call's `mut` receiver here
+33 |         ys = [[7]]
+   |         ^^ an access inside the outer call's `mut` claim
+   |
+   = note: `ys[0]` and `ys` are a path and its prefix [mem.model.path.disjoint]. A later argument
+     may read a place an earlier `mut` argument claims, but it may not write or move it: the
+     callee receives the place exclusively [mem.tier0.excl.4]. A `mut` receiver is the call's
+     first argument. Make the change before the call.
+
+error[E1002]: `out.class_off` is written while `out.class_off` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:38:9
+   |
+37 |     (mut out.class_off).push({
+   |     ------------------- `out.class_off` is the call's `mut` receiver here
+38 |         out.class_off = [9]
+   |         ^^^^^^^^^^^^^ an access inside the outer call's `mut` claim
+   |
+   = note: the same place twice is never disjoint. A later argument may read a place an earlier
+     `mut` argument claims, but it may not write or move it: the callee receives the place
+     exclusively [mem.tier0.excl.4]. A `mut` receiver is the call's first argument. Make the
+     change before the call.
+
+error[E1002]: `out` is written while `out.class_off` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:42:9
+   |
+41 |     (mut out.class_off).push({
+   |     ------------------- `out.class_off` is the call's `mut` receiver here
+42 |         out = Out { bytes: [], class_off: [9] }
+   |         ^^^ an access inside the outer call's `mut` claim
+   |
+   = note: `out.class_off` and `out` are a path and its prefix [mem.model.path.disjoint]. A later
+     argument may read a place an earlier `mut` argument claims, but it may not write or move
+     it: the callee receives the place exclusively [mem.tier0.excl.4]. A `mut` receiver is
+     the call's first argument. Make the change before the call.
+
+error[E1002]: `p.x` is written while `p.x` is lent `mut` to the call being evaluated
+  --> mem:///main.lu:47:9
+   |
+46 |     (mut p).set_x({
+   |     ------- `p.x` is the call's `mut` receiver here
+47 |         p.x = 50
+   |         ^^^ an access inside the outer call's `mut` claim
+   |
+   = note: the same place twice is never disjoint. A later argument may read a place an earlier
+     `mut` argument claims, but it may not write or move it: the callee receives the place
+     exclusively [mem.tier0.excl.4]. A `mut` receiver is the call's first argument. Make the
+     change before the call.
