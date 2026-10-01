@@ -1,0 +1,22 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+//!
+//! s192 (wolf-lang#487) — the `mut` receiver lent `mut` to a function
+//! called in its own argument. Through 0.2.19 every wolfgang lane ran
+//! it to `trap(bounds)`: `drain` emptied the list, and the push landed
+//! on a value the program no longer held. lupin 0.1.42 answers
+//! `ub(mem.ub)`. E1002 now.
+
+fn drain(mut ys: List[int]) -> int {
+    let n = ys.len
+    ys = List[int]()
+    n
+}
+
+fn main() -> !int {
+    var xs = [1, 2]
+    (mut xs).push(drain(mut xs))  // ERROR E1002: xs claimed inside its own receiver claim
+    print("{xs.len} {xs[0]}")
+    0
+}

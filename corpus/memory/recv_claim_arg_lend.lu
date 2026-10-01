@@ -1,0 +1,26 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+//!
+//! s192 (wolf-lang#487) — a non-`Copy` `mut` receiver passed `read` to
+//! its own call: a lend into the same call. The call surface refused
+//! this before s192; the row records it. lupin 0.1.42 runs it and
+//! prints `6`.
+
+struct Acc {
+    n: int,
+    tag: List[int],
+}
+
+impl Acc {
+    fn absorb(mut self, other: Acc) {
+        self.n = self.n + other.n
+    }
+}
+
+fn main() -> !int {
+    var a = Acc { n: 3, tag: [1] }
+    (mut a).absorb(a)  // ERROR E1002: a lent into its own receiver claim
+    print("{a.n}")
+    0
+}

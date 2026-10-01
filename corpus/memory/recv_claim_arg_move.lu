@@ -1,0 +1,20 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+//!
+//! s192 (wolf-lang#487) — the move twin of `recv_claim_arg_write.lu`:
+//! the argument moves the `mut` receiver out and stores a fresh list
+//! back before the call is entered. Through 0.2.19 every wolfgang lane
+//! printed `1 9`; lupin 0.1.42 answers `ub(mem.ub)`. Two accesses
+//! inside the claim, each E1002 now.
+
+fn main() -> !int {
+    var xs = [1, 2]
+    (mut xs).push({
+        var t = move xs  // ERROR E1002: xs moved inside its own receiver claim
+        xs = [9]  // ERROR E1002: xs written inside its own receiver claim
+        t.len
+    })
+    print("{xs.len} {xs[0]}")
+    0
+}

@@ -1,0 +1,20 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+//!
+//! s192 (wolf-lang#487, found by is63) — a `mut` receiver WRITTEN
+//! inside its own call's argument. The receiver is the call's first
+//! argument (`[mem.tier0.excl.4]`), so this is the twin of
+//! `mut_claim_arg_block_write.lu`. Through 0.2.19 every wolfgang lane
+//! ran it and printed `1 9`: the push was lost, with no diagnostic.
+//! lupin 0.1.42 answers `ub(mem.ub)`. E1002 on every wolfgang lane now.
+
+fn main() -> !int {
+    var xs = [1, 2]
+    (mut xs).push({
+        xs = [9]  // ERROR E1002: xs written inside its own receiver claim
+        5
+    })
+    print("{xs.len} {xs[0]}")
+    0
+}

@@ -1,0 +1,24 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+//!
+//! s192 (wolf-lang#487) — a FIELD receiver written inside its own
+//! call's argument (the shape of bu12's `tr.lu:528`, with the write
+//! the clause forbids where bu12 read a sibling). Through 0.2.19 every
+//! wolfgang lane printed `1 9`; lupin 0.1.42 answers `ub(mem.ub)`.
+//! E1002 now.
+
+struct Out {
+    bytes: List[int],
+    class_off: List[int],
+}
+
+fn main() -> !int {
+    var out = Out { bytes: [7, 8], class_off: [1] }
+    (mut out.class_off).push({
+        out.class_off = [9]  // ERROR E1002: written inside its own receiver claim
+        5
+    })
+    print("{out.class_off.len} {out.class_off[0]}")
+    0
+}

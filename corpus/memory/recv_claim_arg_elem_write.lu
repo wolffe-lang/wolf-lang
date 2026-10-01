@@ -1,0 +1,17 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+//!
+//! s192 (wolf-lang#487) — an ELEMENT receiver written inside its own
+//! call's argument. Through 0.2.19 every wolfgang lane printed `2 7`
+//! (the push was lost); lupin 0.1.42 answers `ub(mem.ub)`. E1002 now.
+
+fn main() -> !int {
+    var xs = [[1], [2]]
+    (mut xs[0]).push({
+        xs[0] = [7, 7]  // ERROR E1002: xs[0] written inside its own receiver claim
+        5
+    })
+    print("{xs[0].len} {xs[0][0]}")
+    0
+}

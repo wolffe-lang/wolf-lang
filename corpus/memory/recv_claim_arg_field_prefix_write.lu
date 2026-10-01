@@ -1,0 +1,23 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+//!
+//! s192 (wolf-lang#487) — the struct that holds a field receiver
+//! replaced whole inside the call's argument: a write of a prefix of
+//! the claimed place. Through 0.2.19 every wolfgang lane printed `1 9`;
+//! lupin 0.1.42 runs it and prints `2 9`. E1002 now.
+
+struct Out {
+    bytes: List[int],
+    class_off: List[int],
+}
+
+fn main() -> !int {
+    var out = Out { bytes: [7, 8], class_off: [1] }
+    (mut out.class_off).push({
+        out = Out { bytes: [], class_off: [9] }  // ERROR E1002: out written inside the claim on out.class_off
+        5
+    })
+    print("{out.class_off.len} {out.class_off[0]}")
+    0
+}

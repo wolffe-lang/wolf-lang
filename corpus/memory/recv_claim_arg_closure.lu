@@ -1,0 +1,27 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+//!
+//! s192 (wolf-lang#487) — a closure argument that captures the `mut`
+//! receiver lends it into the same call. The call surface refused this
+//! before s192 (the closure's borrow is a `read` entry beside the
+//! receiver's `mut`); the row records it. lupin 0.1.42 runs it and
+//! prints `12`.
+
+struct Acc {
+    n: int,
+}
+
+impl Acc {
+    fn apply(mut self, f: fn() -> int) {
+        self.n = self.n + 10
+        self.n = self.n + f()
+    }
+}
+
+fn main() -> !int {
+    var a = Acc { n: 1 }
+    (mut a).apply(fn() a.n)  // ERROR E1002: the closure borrows the claimed receiver
+    print("{a.n}")
+    0
+}

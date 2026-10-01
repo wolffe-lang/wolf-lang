@@ -1,0 +1,27 @@
+//! check: fail(E1002)
+//! phase: typecheck
+//! conforms: mem.tier0.excl.4, mem.tier0.excl.1, mem.tier0.mode.mut, mem.model.order
+//!
+//! s192 (wolf-lang#487) — the `mut` receiver claimed AGAIN, directly,
+//! as a later `mut` argument of the same call. The call surface refused
+//! this before s192 (the pairwise check sees both claims); the row
+//! records it beside the nested re-claims. lupin 0.1.42 runs it and
+//! prints `6`.
+
+struct Acc {
+    n: int,
+}
+
+impl Acc {
+    fn absorb(mut self, mut other: Acc) {
+        self.n = self.n + other.n
+        other.n = 0
+    }
+}
+
+fn main() -> !int {
+    var a = Acc { n: 3 }
+    (mut a).absorb(mut a)  // ERROR E1002: a claimed twice in one call
+    print("{a.n}")
+    0
+}
