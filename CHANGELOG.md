@@ -1,6 +1,56 @@
 # Changelog
 
-## Unreleased
+## 0.2.20 — 2026-10-01
+
+THE TWENTIETH. Arguments are two-phase (the maintainer's ruling #17,
+`[mem.tier0.excl.4]`): a later argument may read what an earlier `mut`
+argument claims, and may not write, move, re-claim or lend it — for a
+`mut` receiver too. Seven silent wrong answers in the published 0.2.19
+are fixed, and the checked machine no longer runs a slice's endpoints
+or a propagating index operand twice. EG3 lands for one call's
+claims: `add2(mut xs[i], mut xs[i + 1])` and a loop index against a
+literal run. An `else` handles its scrutinee's own row only (ruling
+#18, `[type.row.else]`). A program that inherited a signal blocked
+now hears the signals it arms. The pairing moves to lupin 0.1.43, whose
+spec pin moves to v0.2.19 and which carries every mirror this release's
+gates pinned lupin 0.1.42's answers on by version. Ten lanes and 144 commits: s187, s186,
+eg03, s190, s189, s188, s192, s194, s191, s193.
+
+### Read this before you bump the pin
+
+**Seven programs gave a wrong answer with no diagnostic on 0.2.19.**
+Each is now refused or answers the ruled bytes on every lane:
+
+- `var w = W { xs }; (mut w.xs).push(9); print("{xs.len} {w.xs.len}")`
+  printed `2 2` on native and release: the field shorthand did not move
+  `xs` (#486). It is the longhand now, so the later read is E1001.
+- `(mut xs).push({ xs = [9]; 5 })` printed `1 9` on every lane and lost
+  the push (#487). E1002 now.
+- `(mut p).set_x({ p.z = 9; p.z })` under `fn set_x(mut self.{x}, ..)`
+  printed `10 3` on native and release (#494). `10 9` on every lane now.
+- `bump(mut a, { a = 5; 1 })` printed `6` on checked and `2` on native
+  and release (#476). E1002 now.
+- `var g = f; g(xs)` against `fn f(mut xs: List[int])` printed `2` on
+  checked and `1` on native and release (#484). Refused by name now.
+- A nested fn's `read` parameter written, or `f(xs)` against a nested
+  `fn f(mut xs: …)`, let the callee's write reach the caller on native
+  and release (#466). E1014 / E1007 now.
+- `look(m, key()?) else 0` answered `0` on the checked machine when
+  `key` failed (#492). It propagates `key`'s row on every lane now.
+
+**Programs that compiled are now refused.** A write, move, re-claim or
+lend of a `mut`-claimed place (or a `mut` receiver) inside a later
+argument of the same call (E1002); a moded fn used as a value; a call
+to a nested fn that omits the mode its parameter declares (E1007); a
+read of a local after `W { local }` moved it (E1001). s186 and s192
+built boreutils and lobo with no diagnostic; s190 found no shorthand
+initializer in either.
+
+**Programs that were refused now compile.** A direct read of a
+claimed place in a later argument (`f(mut a, a.x)`, `grow(mut xs,
+xs.len)`; E1002 through 0.2.19), and two claims in one call through an
+offset or a loop index that `[mem.model.place.elem]` item 4 proves
+distinct.
 
 ### A view-set receiver keeps its arguments' writes (s193, #494)
 
