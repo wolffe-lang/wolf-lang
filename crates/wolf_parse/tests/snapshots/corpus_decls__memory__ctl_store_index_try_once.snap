@@ -2,12 +2,12 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 803..895 name=idx body=Block
-FnDecl 897..985 name=a body=Block
-FnDecl 987..1025 name=v body=Block
-FnDecl 1027..1064 name=bump body=Block
-FnDecl 1066..1153 name=store body=Block
-FnDecl 1155..1244 name=compound body=Block
-FnDecl 1246..1339 name=nested body=Block
-FnDecl 1341..1432 name=claim body=Block
-FnDecl 1434..2174 name=main body=Block
+FnDecl 804..896 name=idx body=Block
+FnDecl 898..986 name=a body=Block
+FnDecl 988..1026 name=v body=Block
+FnDecl 1028..1065 name=bump body=Block
+FnDecl 1067..1154 name=store body=Block
+FnDecl 1156..1245 name=compound body=Block
+FnDecl 1247..1340 name=nested body=Block
+FnDecl 1342..1433 name=claim body=Block
+FnDecl 1435..2175 name=main body=Block
