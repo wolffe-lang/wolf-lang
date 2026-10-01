@@ -4175,7 +4175,7 @@ impl<'t> Machine<'t> {
             // `return`ed from inside it, is already propagating
             // (`Flow::Err(_, true)`) and leaves past the `else`, as on
             // native, release and lupin; it falls to `other` below.
-            Flow::Err(err, false) => {
+            Flow::Err(err, _) => { // PLANT
                 self.push_scope();
                 if let Some(pat) = d.handler_pattern() {
                     if pat.kind == SyntaxKind::PathPat {
