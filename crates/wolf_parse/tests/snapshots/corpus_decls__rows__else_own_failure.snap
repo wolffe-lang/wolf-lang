@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 658..752 name=key body=Block
+FnDecl 754..838 name=look body=Block
+FnDecl 840..925 name=look_q body=Block
+FnDecl 927..1015 name=try_arg body=Block
+FnDecl 1017..1553 name=main body=Block
