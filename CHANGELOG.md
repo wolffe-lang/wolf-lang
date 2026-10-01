@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### An `else` handles its scrutinee's own row only (s191, #492)
+
+- **The checked machine's `else` caught a `?` that was propagating
+  from inside its scrutinee.** `look(m, key()?) else 0` and
+  `m[key()?] else 0` answered 0 when `key` failed, and the function
+  ran on past the `else`. Native, release and lupin 0.1.42 leave the
+  function with `key`'s row. The checked machine's `else` matched
+  every error flow, whether it was the scrutinee's own raw row or one
+  a `?` was already propagating. A row `return`ed from a block inside
+  the scrutinee was caught the same way. An `else |e|` handler typed
+  over `{none}` was handed `parse`.
+- Ruled by the maintainer (#18 = A) and written as `[type.row.else]`
+  beside `[type.row.operand]`: the handler runs for the scrutinee's
+  own row only. The checked machine now passes a propagating row past
+  the `else`. Native and release are unchanged.
+- Witnesses: seven `corpus/rows/else_*.lu` rows (a `?` in a call
+  argument, in a `Map` index, under three nested `else`s, under an
+  `else |e|` and an `else |none|` handler, in a block with `defer`
+  and `errdefer`, a `return` of a row from a block, and the
+  own-failure control). `else_scrutinee_own_row_lanes.rs` runs each
+  row on checked, native, release and lupin, and asserts that they
+  agree on the right answer.
+- Found beside it and filed: #497 (`match` straight over a `!T` is
+  refused on every wolfgang lane and runs on lupin), #498 (`?` inside
+  a `defer` or `errdefer` overflows the compiler's stack on native and
+  release), #499 (`errdefer` in a block whose value is a raw row runs
+  on checked and lupin, not on native and release).
+
 ### A scaled deref of element size 0 round-trips through the WIR text (s194, #496)
 
 - **The fuzz target `wir_parse` found a verified module that did not
