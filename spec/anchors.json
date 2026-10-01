@@ -532,6 +532,7 @@
     "type.range.name": "10-types.md",
     "type.range.value": "10-types.md",
     "type.row": "10-types.md",
+    "type.row.else": "10-types.md",
     "type.row.operand": "10-types.md",
     "type.str": "10-types.md",
     "type.str.concat": "10-types.md",
