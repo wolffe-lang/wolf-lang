@@ -689,6 +689,34 @@ carrying a rule about operators. The rule is written here, beside
   Witnesses: `rows/negative/row_operand_add.lu`,
   `rows/negative/row_operand_compare.lu`,
   `rows/negative/row_operand_rhs.lu`.
+- `[type.row.else]` **An `else` handles its scrutinee's own row, and
+  nothing else.** In `e else f` and `e else |p| f`, the handler runs
+  when `e` itself yields an error of `e`'s row — a fallible call's
+  own failure, an absent `Map` key, a block whose value is a row — and
+  only then. A `?` that fires *inside* `e` (in a call argument, an
+  index, a nested `else`'s scrutinee, a block within `e`) propagates
+  out of the enclosing function, past every `else` it sits under, as
+  a `?` does anywhere; so does a `return` of a row from inside `e`.
+  `look(m, key()?) else 0` answers 0 when `look` misses and leaves the
+  function with `key`'s row when `key` fails. This is the reading the
+  types already give: the scrutinee's type is `T ! R` with `R` the
+  scrutinee's own row, the `?` strips its operand's row from that type
+  and checks it against the function's, and the handler pattern types
+  over `R` alone — so a handler that caught an inner `?` would bind a
+  tag its own pattern was never typed against. E0809's note ("an
+  `else` handler runs for every error its operand can carry") says
+  the same thing from the coverage side. (Ruled 2026-09-30, the
+  maintainer's #18 = A, s191 — wolf-lang#492. The checked machine's
+  `else` caught a propagating `?` from inside its scrutinee and bound
+  the fallback; native, release and lupin 0.1.42 propagated. **The
+  cost, stated:** zero on native and release, which already lower it
+  this way; one flag test on the checked machine. The rest of the
+  error vocabulary — `?`'s target in general, `errdefer` — stays in
+  the reserved `err` namespace's unwritten document.) Witnesses:
+  `rows/else_try_call_arg.lu`, `rows/else_try_index.lu`,
+  `rows/else_try_nested_else.lu`, `rows/else_try_handler.lu`,
+  `rows/else_try_block.lu`, `rows/else_return_tag.lu`, and the
+  control `rows/else_own_failure.lu`.
 
 This chapter deliberately does **not** write the full numeric tower
 (mixed integer-width arithmetic, a complete `Add`/`Mul` trait hierarchy
