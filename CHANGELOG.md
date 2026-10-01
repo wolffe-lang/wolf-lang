@@ -37,7 +37,7 @@
 - Witnesses: the fifteen `corpus/memory/recv_claim_arg_*.lu` rows.
   `receiver_claim_args_lanes.rs` runs each on checked, native, release
   and lupin. lupin 0.1.42 holds no receiver claim while the arguments
-  run (`ub(mem.ub)` on nine rows, and it runs the other five). The gate
+  run (`ub(mem.ub)` on eight rows, and it runs the other six). The gate
   pins those answers for 0.1.42 by version; any later lupin must trap
   `exclusivity`.
 - Not changed: a view-set receiver whose argument writes a field
