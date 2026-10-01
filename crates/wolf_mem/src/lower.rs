@@ -454,6 +454,10 @@ pub(crate) struct Lowerer<'t> {
     /// (block, index) — what [`Self::check_nested_claims_after_mut`]'s
     /// access scan skips.
     deferred_stmts: std::collections::HashSet<(usize, usize)>,
+    /// s192 (wolf-lang#487): the spans of `mut` receivers, which seed a
+    /// call's claim list as its first argument — so a report names the
+    /// receiver as such.
+    receiver_claims: std::collections::HashSet<Span>,
     /// EG3's R2 (eg03): `for` indices over literal bounds that their
     /// body never writes (`Cfg::induction`).
     induction: HashMap<u32, (u128, u128)>,
@@ -1899,6 +1903,7 @@ impl<'t> Lowerer<'t> {
         }
         for (m, mspan, p, s, word) in found {
             let (a, b) = (self.show_place_now(m), self.show_place_now(p));
+            let receiver = self.receiver_claims.contains(&mspan);
             let relation = if m == p {
                 "the same place twice is never disjoint.".to_string()
             } else if self.places.spelled_prefix(m, p) || self.places.spelled_prefix(p, m) {
@@ -1915,17 +1920,21 @@ impl<'t> Lowerer<'t> {
                     format!("`{b}` {word} while `{a}` is lent `mut` to the call being evaluated"),
                 )
                 .with_label("an access inside the outer call's `mut` claim")
-                .with_secondary(mspan, format!("`{a}` is passed `mut` here"))
+                .with_secondary(mspan, claimed_here(&a, receiver))
                 .with_note(format!(
                     "{relation} A later argument may read a place an earlier `mut` argument \
                      claims, but it may not write or move it: the callee receives the place \
-                     exclusively [mem.tier0.excl.4]. Make the change before the call."
+                     exclusively [mem.tier0.excl.4].{} Make the change before the call.",
+                    receiver_is_first(receiver)
                 )),
             );
         }
         for (m, mspan, p, s, word) in hits {
             let (a, b) = (self.show_place_now(m), self.show_place_now(p));
-            let relation = if self.places.spelled_prefix(m, p) {
+            let receiver = self.receiver_claims.contains(&mspan);
+            let relation = if m == p {
+                "the same place twice is never disjoint.".to_string()
+            } else if self.places.spelled_prefix(m, p) {
                 format!("`{a}` and `{b}` are a path and its prefix [mem.model.path.disjoint].")
             } else if self.places.covers(m, p) || self.places.covers(p, m) {
                 elements_one_place(&a, &b)
@@ -1939,11 +1948,12 @@ impl<'t> Lowerer<'t> {
                     format!("`{b}` {word} in a call evaluated while `{a}` is lent `mut`"),
                 )
                 .with_label("a second claim inside the outer call's extent")
-                .with_secondary(mspan, format!("`{a}` is passed `mut` here"))
+                .with_secondary(mspan, claimed_here(&a, receiver))
                 .with_note(format!(
                     "{relation} A `mut` argument is exclusive for the whole call, and the \
-                     arguments after it are evaluated inside that claim [mem.tier0.excl]. \
-                     Evaluate the inner call into a local BEFORE the outer one."
+                     arguments after it are evaluated inside that claim [mem.tier0.excl].{} \
+                     Evaluate the inner call into a local BEFORE the outer one.",
+                    receiver_is_first(receiver)
                 )),
             );
         }
@@ -4530,6 +4540,8 @@ impl<'t> Lowerer<'t> {
         // out, and `(mut xs).push({ xs = [9]; 5 })` ran and lost the
         // push on every lane.
         let mut arg_muts: Vec<(PlaceId, Span)> = surface.mut_args.clone();
+        self.receiver_claims
+            .extend(arg_muts.iter().map(|&(_, s)| s));
         for (i, arg) in args.iter().enumerate() {
             let Some(v) = Arg::value(*arg) else { continue };
             let site_mode = Arg::mode(*arg);
@@ -5900,6 +5912,7 @@ impl<'t> Lowerer<'t> {
             deferred_depth: 0,
             nested_exits: Vec::new(),
             deferred_stmts: std::collections::HashSet::new(),
+            receiver_claims: std::collections::HashSet::new(),
             induction: HashMap::new(),
             casts,
         }
@@ -6109,6 +6122,25 @@ fn int_literal_value(t: &str) -> Option<u128> {
         return None;
     }
     u128::from_str_radix(body, radix).ok()
+}
+
+/// s192 (wolf-lang#487): the secondary label on the claim a nested
+/// access meets — a `mut` receiver is named as one.
+fn claimed_here(a: &str, receiver: bool) -> String {
+    if receiver {
+        format!("`{a}` is the call's `mut` receiver here")
+    } else {
+        format!("`{a}` is passed `mut` here")
+    }
+}
+
+/// s192 (wolf-lang#487): the sentence a receiver's report adds.
+fn receiver_is_first(receiver: bool) -> &'static str {
+    if receiver {
+        " A `mut` receiver is the call's first argument."
+    } else {
+        ""
+    }
 }
 
 /// The claim note for two paths that conflict only through an index
