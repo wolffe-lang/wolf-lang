@@ -333,13 +333,20 @@ fn tokenize(src: &str) -> PResult<Vec<Spanned>> {
 
 /// Lex a number starting at `chars[0]` (an ASCII digit or `-`).
 /// Returns (lexeme, chars consumed). `0..` stops before the dots;
-/// `8x%n` stops before the `x`.
+/// `8x%n` stops before the `x`, and so does `0x%n` (#496): `0x` is a
+/// hex prefix only when a hex digit follows it, which is what lets the
+/// printer's `{elem}x{count}` deref spelling round-trip at element
+/// size 0. A `0x` with no digit was refused by every number reader
+/// before, so no input that parsed changes meaning.
 fn lex_number(chars: &[char]) -> (String, usize) {
     let mut j = 0usize;
     if chars[0] == '-' {
         j = 1;
     }
-    if chars.get(j) == Some(&'0') && chars.get(j + 1) == Some(&'x') {
+    if chars.get(j) == Some(&'0')
+        && chars.get(j + 1) == Some(&'x')
+        && chars.get(j + 2).is_some_and(|c| c.is_ascii_hexdigit())
+    {
         j += 2;
         while j < chars.len() && chars[j].is_ascii_hexdigit() {
             j += 1;
