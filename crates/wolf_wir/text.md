@@ -18,6 +18,9 @@ fixpoint for every module (property-tested).
   in reverse postorder from the entry; hand-written files may use any
   names and are normalized on the first print.
 - Integers: decimal (optionally negative) or `0x…` hex (bit pattern).
+  `0x` starts a hex integer only when a hex digit follows it; otherwise
+  the `0` is a decimal integer on its own, so the scaled deref size
+  `0x%n` reads as element size 0 times `%n` (#496).
   Float constants print canonically as raw IEEE-754 bits (`0x…`, 16
   hex digits for f64, 8 for f32); the parser also accepts plain
   decimal literals (`1.5`).
