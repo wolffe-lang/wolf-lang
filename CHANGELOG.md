@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### A scaled deref of element size 0 round-trips through the WIR text (s194, #496)
+
+- **The fuzz target `wir_parse` found a verified module that did not
+  re-parse.** `fact deref %q 00x%n` parses as element size 0 times
+  `%n`, verifies, and printed as `0x%2`; the lexer took `0x` as a hex
+  prefix with no digits and refused it (`bad unsigned integer \`0x\``).
+  It turned CI's fuzz smoke red on any run that reached that input.
+- `0x` now starts a hex integer only when a hex digit follows. A `0x`
+  with no digit was refused by every number reader before, so no input
+  that parsed changes meaning. The printer, the verifier and every
+  lowered dump are unchanged; lowering never emits a scaled deref.
+- A search of every printer format that writes a number beside another
+  token found one other such format, `{lo}..={hi}`, which was already
+  safe. `crates/wolf_wir/tests/fact_text_edges.rs` covers both at their
+  edges: 448 facts (every kind and justification) and 29 instruction
+  immediates each re-parse to themselves. The artifact joins the seed
+  corpus as `fuzz/corpus/wir_parse/deref-elem0-c255f8ab.wir`.
+
 ### A `mut` receiver's own arguments (s192, #487)
 
 - **`(mut xs).push({ xs = [9]; 5 })` ran and lost the push.** Every
