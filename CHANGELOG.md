@@ -2,6 +2,33 @@
 
 ## Unreleased
 
+### A view-set receiver keeps its arguments' writes (s193, #494)
+
+- **`(mut p).set_x({ p.z = 9; p.z })` under `fn set_x(mut self.{x}, ..)`
+  lost the write to `p.z` on native and release.** They printed `10 3`
+  where checked printed `10 9`, with no diagnostic; trunk and the 0.2.19
+  archive alike. `[mem.tier0.excl.3]` leaves the fields outside a view
+  set to the caller, and `[mem.tier0.excl.4]` runs the arguments before
+  the claim, so the write stands. The two native tiers spilled a
+  by-value receiver whole before the arguments ran and reloaded the
+  whole slot after the call. The reload now carries the view set's
+  fields only, each rebuilt into the variable's current value; a
+  receiver without a view set is unchanged.
+- Shapes that answered wrong before and agree with checked now: two
+  fields written outside the view, a nested struct field outside it, a
+  two-field view set with the third field written, the callee writing
+  both view fields beside an argument's write, a field receiver with a
+  view set (`(mut o.v).set_x(..)`), and a `List` field replaced in the
+  argument (`4 1 5`: the replaced buffer came back). An element receiver
+  and a re-lent `mut self` lend an address and were already right.
+- boreutils and lobo declare no view-set receiver; their emitted code is
+  unchanged.
+- Witnesses: the nine `corpus/memory/recv_view_arg_*.lu` rows.
+  `view_set_writeback_lanes.rs` runs each on checked, native, release
+  and lupin. lupin 0.1.42 writes the receiver back whole on all nine
+  (the element and re-lent forms too); it is pinned pre-mirror by
+  version, and any later lupin must give checked's bytes.
+
 ### An `else` handles its scrutinee's own row only (s191, #492)
 
 - **The checked machine's `else` caught a `?` that was propagating
