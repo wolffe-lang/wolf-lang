@@ -5900,7 +5900,8 @@ impl<'a> Checker<'a> {
                 // operand's ok type keeps the check going. A closure
                 // boundary clears `in_defer`, so a `?` in a closure
                 // defined under the defer is that closure's own.
-                if let Some((kw, is_err)) = self.in_defer {
+                // PLANT (s196): the refusal disabled, to see the gate red.
+                if let Some((kw, is_err)) = self.in_defer.filter(|_| false) {
                     self.report_try_under_defer(e.span, kw, is_err);
                     return Ok(ok);
                 }
