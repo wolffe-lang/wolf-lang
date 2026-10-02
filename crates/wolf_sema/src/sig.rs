@@ -290,6 +290,10 @@ pub fn build_sigs(pkg: &Package) -> SigTables {
     // signature elaboration and every later consumer reads one map.
     let origin_scan = crate::origin::scan_origins(pkg);
     diagnostics.extend(origin_scan.diagnostics);
+    // The closed attribute set and the one ABI string (K13, K7):
+    // syntax-only, beside the origin scan, so every lane refuses the
+    // same attributes at the same phase.
+    diagnostics.extend(crate::attrs::check(pkg));
     let mut sigs = SigTables {
         table: lower.table,
         modules,

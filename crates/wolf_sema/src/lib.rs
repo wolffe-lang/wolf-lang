@@ -202,6 +202,7 @@
 //! The std/prelude stub tables ([`prelude`]) carry *names only* until
 //! the real standard library lands (s05/s51).
 
+pub mod attrs;
 pub mod audit;
 pub mod check;
 pub mod coerce;
