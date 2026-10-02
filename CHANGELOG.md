@@ -372,9 +372,11 @@ ritual moves, on each tier.
   when standard input is a file, `kind` 2 when it is a pipe.
   `fs_read`/`fs_read_chunk`/`fs_write`/`fs_write_chunk`/`fs_close`
   still answer `io` on 0..2 (#405).
-- windows: handles from an open are served through std's seek and
-  `seek_read` (the pointer put back); any handle that is not a regular
-  disk file is `unseekable` there, decided by asking for its metadata.
+- windows: handles are served through std's seek and `seek_read` (the
+  pointer put back); `GetFileType` decides what a handle IS — anything
+  but a disk file is `kind` 2 for `fs_fstat` and `unseekable` for the
+  offset calls, because std's metadata calls an anonymous pipe a
+  regular file there (measured on the runner, CI run 37062798818).
 - Witnesses: `corpus/fs/seek_tell.lu`, `corpus/fs/read_at.lu`, the
   stdin fixtures under `crates/wolf_driver/tests/fixtures/fs_std/`;
   `fs_std_lanes.rs` runs them on checked, native, release and lupin
