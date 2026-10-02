@@ -1,0 +1,122 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 481..656
+  FnDecl 481..539
+    Attribute 481..506
+      PoundBracket 481..483 "#["
+      AttrItem 483..505
+        Path 483..486
+          Ident 483..486 "cfg"
+        AttrInput 486..505
+          LParen 486..487 "("
+          AttrItem 487..504
+            Path 487..493
+              Ident 487..493 "target"
+            AttrInput 494..504
+              Eq 494..495 "="
+              StringLit 496..504
+                StrBegin 496..497 "\""
+                StrFragment 497..503 "x86_64"
+                StrEnd 503..504 "\""
+          RParen 504..505 ")"
+      RBracket 505..506 "]"
+    FnKw 507..509 "fn"
+    Ident 510..519 "arch_bits"
+    ParamList 519..521
+      LParen 519..520 "("
+      RParen 520..521 ")"
+    RetType 522..528
+      Arrow 522..524 "->"
+      PathType 525..528
+        Path 525..528
+          Ident 525..528 "int"
+    Block 529..539
+      LBrace 529..530 "{"
+      ExprStmt 535..538
+        LiteralExpr 535..537
+          Int 535..537 "64"
+        Term 537..538 "\n"
+      RBrace 538..539 "}"
+  Term 539..540 "\n"
+  FnDecl 541..600
+    Attribute 541..567
+      PoundBracket 541..543 "#["
+      AttrItem 543..566
+        Path 543..546
+          Ident 543..546 "cfg"
+        AttrInput 546..566
+          LParen 546..547 "("
+          AttrItem 547..565
+            Path 547..553
+              Ident 547..553 "target"
+            AttrInput 554..565
+              Eq 554..555 "="
+              StringLit 556..565
+                StrBegin 556..557 "\""
+                StrFragment 557..564 "aarch64"
+                StrEnd 564..565 "\""
+          RParen 565..566 ")"
+      RBracket 566..567 "]"
+    FnKw 568..570 "fn"
+    Ident 571..580 "arch_bits"
+    ParamList 580..582
+      LParen 580..581 "("
+      RParen 581..582 ")"
+    RetType 583..589
+      Arrow 583..585 "->"
+      PathType 586..589
+        Path 586..589
+          Ident 586..589 "int"
+    Block 590..600
+      LBrace 590..591 "{"
+      ExprStmt 596..599
+        LiteralExpr 596..598
+          Int 596..598 "64"
+        Term 598..599 "\n"
+      RBrace 599..600 "}"
+  Term 600..601 "\n"
+  FnDecl 602..655
+    FnKw 602..604 "fn"
+    Ident 605..609 "main"
+    ParamList 609..611
+      LParen 609..610 "("
+      RParen 610..611 ")"
+    RetType 612..618
+      Arrow 612..614 "->"
+      PathType 615..618
+        Path 615..618
+          Ident 615..618 "int"
+    Block 619..655
+      LBrace 619..620 "{"
+      ExprStmt 625..648
+        CallExpr 625..647
+          PathExpr 625..630
+            Ident 625..630 "print"
+          ArgList 630..647
+            LParen 630..631 "("
+            Arg 631..646
+              StringExpr 631..646
+                StrBegin 631..632 "\""
+                Interp 632..645
+                  InterpOpen 632..633 "{"
+                  CallExpr 633..644
+                    PathExpr 633..642
+                      Ident 633..642 "arch_bits"
+                    ArgList 642..644
+                      LParen 642..643 "("
+                      RParen 643..644 ")"
+                  InterpClose 644..645 "}"
+                StrEnd 645..646 "\""
+            RParen 646..647 ")"
+        Term 647..648 "\n"
+      ExprStmt 652..654
+        LiteralExpr 652..653
+          Int 652..653 "0"
+        Term 653..654 "\n"
+      RBrace 654..655 "}"
+  Term 655..656 "\n"
+  Eof 656..656 ""
+== diagnostics ==

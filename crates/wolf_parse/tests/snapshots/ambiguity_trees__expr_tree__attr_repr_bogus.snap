@@ -1,0 +1,109 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 421..563
+  StructDecl 421..492
+    Attribute 421..456
+      PoundBracket 421..423 "#["
+      AttrItem 423..445
+        Path 423..427
+          Ident 423..427 "repr"
+        AttrInput 427..445
+          LParen 427..428 "("
+          AttrItem 428..433
+            Path 428..433
+              Ident 428..433 "bogus"
+          Comma 433..434 ","
+          AttrItem 435..444
+            Path 435..441
+              Ident 435..441 "packed"
+            AttrInput 441..444
+              LParen 441..442 "("
+              Int 442..443 "3"
+              RParen 443..444 ")"
+          RParen 444..445 ")"
+      Comma 445..446 ","
+      AttrItem 447..455
+        Path 447..452
+          Ident 447..452 "align"
+        AttrInput 452..455
+          LParen 452..453 "("
+          Int 453..454 "7"
+          RParen 454..455 ")"
+      RBracket 455..456 "]"
+    StructKw 457..463 "struct"
+    Ident 464..465 "R"
+    LBrace 466..467 "{"
+    StructField 472..478
+      Ident 472..473 "a"
+      Colon 473..474 ":"
+      PathType 475..477
+        Path 475..477
+          Ident 475..477 "u8"
+      Comma 477..478 ","
+    StructField 483..490
+      Ident 483..484 "b"
+      Colon 484..485 ":"
+      PathType 486..489
+        Path 486..489
+          Ident 486..489 "u32"
+      Comma 489..490 ","
+    RBrace 491..492 "}"
+  Term 492..493 "\n"
+  FnDecl 494..562
+    FnKw 494..496 "fn"
+    Ident 497..501 "main"
+    ParamList 501..503
+      LParen 501..502 "("
+      RParen 502..503 ")"
+    RetType 504..510
+      Arrow 504..506 "->"
+      PathType 507..510
+        Path 507..510
+          Ident 507..510 "int"
+    Block 511..562
+      LBrace 511..512 "{"
+      LetDecl 517..542
+        LetKw 517..520 "let"
+        IdentPat 521..522
+          Ident 521..522 "r"
+        Eq 523..524 "="
+        StructLit 525..541
+          PathExpr 525..526
+            Ident 525..526 "R"
+          LBrace 527..528 "{"
+          FieldInit 529..533
+            Ident 529..530 "a"
+            Colon 530..531 ":"
+            LiteralExpr 532..533
+              Int 532..533 "1"
+          Comma 533..534 ","
+          FieldInit 535..539
+            Ident 535..536 "b"
+            Colon 536..537 ":"
+            LiteralExpr 538..539
+              Int 538..539 "2"
+          RBrace 540..541 "}"
+        Term 541..542 "\n"
+      ExprStmt 546..561
+        BinExpr 546..560
+          CastExpr 546..556
+            MemberExpr 546..549
+              PathExpr 546..547
+                Ident 546..547 "r"
+              Dot 547..548 "."
+              Ident 548..549 "a"
+            AsKw 550..552 "as"
+            PathType 553..556
+              Path 553..556
+                Ident 553..556 "int"
+          Minus 557..558 "-"
+          LiteralExpr 559..560
+            Int 559..560 "1"
+        Term 560..561 "\n"
+      RBrace 561..562 "}"
+  Term 562..563 "\n"
+  Eof 563..563 ""
+== diagnostics ==

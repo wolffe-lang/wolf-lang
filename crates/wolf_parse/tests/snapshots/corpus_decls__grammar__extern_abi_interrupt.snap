@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 495..547 name=kw_isr extern body=Block
+FnDecl 549..575 name=main body=Block

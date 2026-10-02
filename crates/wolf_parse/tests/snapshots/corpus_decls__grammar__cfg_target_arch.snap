@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 481..539 name=arch_bits attrs=1 body=Block
+FnDecl 541..600 name=arch_bits attrs=1 body=Block
+FnDecl 602..655 name=main body=Block

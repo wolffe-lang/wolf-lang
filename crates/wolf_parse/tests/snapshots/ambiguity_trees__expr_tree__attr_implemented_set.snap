@@ -1,0 +1,268 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 435..804
+  StructDecl 435..484
+    Attribute 435..445
+      PoundBracket 435..437 "#["
+      AttrItem 437..444
+        Path 437..441
+          Ident 437..441 "repr"
+        AttrInput 441..444
+          LParen 441..442 "("
+          AttrItem 442..443
+            Path 442..443
+              Ident 442..443 "c"
+          RParen 443..444 ")"
+      RBracket 444..445 "]"
+    StructKw 446..452 "struct"
+    Ident 453..457 "Pair"
+    LBrace 458..459 "{"
+    StructField 464..470
+      Ident 464..465 "a"
+      Colon 465..466 ":"
+      PathType 467..469
+        Path 467..469
+          Ident 467..469 "u8"
+      Comma 469..470 ","
+    StructField 475..482
+      Ident 475..476 "b"
+      Colon 476..477 ":"
+      PathType 478..481
+        Path 478..481
+          Ident 478..481 "u32"
+      Comma 481..482 ","
+    RBrace 483..484 "}"
+  Term 484..485 "\n"
+  FnDecl 486..522
+    ComptimeKw 486..494 "comptime"
+    FnKw 495..497 "fn"
+    Ident 498..503 "seven"
+    ParamList 503..505
+      LParen 503..504 "("
+      RParen 504..505 ")"
+    RetType 506..512
+      Arrow 506..508 "->"
+      PathType 509..512
+        Path 509..512
+          Ident 509..512 "int"
+    Block 513..522
+      LBrace 513..514 "{"
+      ExprStmt 519..521
+        LiteralExpr 519..520
+          Int 519..520 "7"
+        Term 520..521 "\n"
+      RBrace 521..522 "}"
+  Term 522..523 "\n"
+  FnDecl 524..803
+    FnKw 524..526 "fn"
+    Ident 527..531 "main"
+    ParamList 531..533
+      LParen 531..532 "("
+      RParen 532..533 ")"
+    RetType 534..540
+      Arrow 534..536 "->"
+      PathType 537..540
+        Path 537..540
+          Ident 537..540 "int"
+    Block 541..803
+      LBrace 541..542 "{"
+      LetDecl 547..575
+        LetKw 547..550 "let"
+        IdentPat 551..552
+          Ident 551..552 "p"
+        Eq 553..554 "="
+        StructLit 555..574
+          PathExpr 555..559
+            Ident 555..559 "Pair"
+          LBrace 560..561 "{"
+          FieldInit 562..566
+            Ident 562..563 "a"
+            Colon 563..564 ":"
+            LiteralExpr 565..566
+              Int 565..566 "1"
+          Comma 566..567 ","
+          FieldInit 568..572
+            Ident 568..569 "b"
+            Colon 569..570 ":"
+            LiteralExpr 571..572
+              Int 571..572 "2"
+          RBrace 573..574 "}"
+        Term 574..575 "\n"
+      VarDecl 579..600
+        VarKw 579..582 "var"
+        IdentPat 583..585
+          Ident 583..585 "xs"
+        Eq 586..587 "="
+        CallExpr 588..599
+          BracketApply 588..597
+            PathExpr 588..592
+              Ident 588..592 "List"
+            ArgList 592..597
+              LBracket 592..593 "["
+              Arg 593..596
+                PathExpr 593..596
+                  Ident 593..596 "int"
+              RBracket 596..597 "]"
+          ArgList 597..599
+            LParen 597..598 "("
+            RParen 598..599 ")"
+        Term 599..600 "\n"
+      ExprStmt 604..630
+        CallExpr 604..629
+          MemberExpr 604..617
+            ParenExpr 604..612
+              LParen 604..605 "("
+              MutKw 605..608 "mut"
+              PathExpr 609..611
+                Ident 609..611 "xs"
+              RParen 611..612 ")"
+            Dot 612..613 "."
+            Ident 613..617 "push"
+          ArgList 617..629
+            LParen 617..618 "("
+            Arg 618..628
+              CastExpr 618..628
+                MemberExpr 618..621
+                  PathExpr 618..619
+                    Ident 618..619 "p"
+                  Dot 619..620 "."
+                  Ident 620..621 "a"
+                AsKw 622..624 "as"
+                PathType 625..628
+                  Path 625..628
+                    Ident 625..628 "int"
+            RParen 628..629 ")"
+        Term 629..630 "\n"
+      ExprStmt 634..660
+        CallExpr 634..659
+          MemberExpr 634..647
+            ParenExpr 634..642
+              LParen 634..635 "("
+              MutKw 635..638 "mut"
+              PathExpr 639..641
+                Ident 639..641 "xs"
+              RParen 641..642 ")"
+            Dot 642..643 "."
+            Ident 643..647 "push"
+          ArgList 647..659
+            LParen 647..648 "("
+            Arg 648..658
+              CastExpr 648..658
+                MemberExpr 648..651
+                  PathExpr 648..649
+                    Ident 648..649 "p"
+                  Dot 649..650 "."
+                  Ident 650..651 "b"
+                AsKw 652..654 "as"
+                PathType 655..658
+                  Path 655..658
+                    Ident 655..658 "int"
+            RParen 658..659 ")"
+        Term 659..660 "\n"
+      LetDecl 664..706
+        Attribute 664..675
+          PoundBracket 664..666 "#["
+          AttrItem 666..674
+            Path 666..671
+              Ident 666..671 "index"
+            AttrInput 671..674
+              LParen 671..672 "("
+              Int 672..673 "1"
+              RParen 673..674 ")"
+          RBracket 674..675 "]"
+        LetKw 680..683 "let"
+        IdentPat 684..689
+          Ident 684..689 "total"
+        Eq 690..691 "="
+        BinExpr 692..705
+          BracketApply 692..697
+            PathExpr 692..694
+              Ident 692..694 "xs"
+            ArgList 694..697
+              LBracket 694..695 "["
+              Arg 695..696
+                LiteralExpr 695..696
+                  Int 695..696 "1"
+              RBracket 696..697 "]"
+          Plus 698..699 "+"
+          BracketApply 700..705
+            PathExpr 700..702
+              Ident 700..702 "xs"
+            ArgList 702..705
+              LBracket 702..703 "["
+              Arg 703..704
+                LiteralExpr 703..704
+                  Int 703..704 "2"
+              RBracket 704..705 "]"
+        Term 705..706 "\n"
+      ExprStmt 710..727
+        CallExpr 710..726
+          PathExpr 710..715
+            Ident 710..715 "print"
+          ArgList 715..726
+            LParen 715..716 "("
+            Arg 716..725
+              StringExpr 716..725
+                StrBegin 716..717 "\""
+                Interp 717..724
+                  InterpOpen 717..718 "{"
+                  PathExpr 718..723
+                    Ident 718..723 "total"
+                  InterpClose 723..724 "}"
+                StrEnd 724..725 "\""
+            RParen 725..726 ")"
+        Term 726..727 "\n"
+      ConstDecl 731..779
+        Attribute 731..756
+          PoundBracket 731..733 "#["
+          AttrItem 733..755
+            Path 733..739
+              Ident 733..739 "budget"
+            AttrInput 739..755
+              LParen 739..740 "("
+              AttrItem 740..754
+                Path 740..744
+                  Ident 740..744 "fuel"
+                AttrInput 745..754
+                  Eq 745..746 "="
+                  Int 747..754 "1000000"
+              RParen 754..755 ")"
+          RBracket 755..756 "]"
+        ConstKw 761..766 "const"
+        Ident 767..768 "S"
+        Eq 769..770 "="
+        CallExpr 771..778
+          PathExpr 771..776
+            Ident 771..776 "seven"
+          ArgList 776..778
+            LParen 776..777 "("
+            RParen 777..778 ")"
+        Term 778..779 "\n"
+      ExprStmt 783..796
+        CallExpr 783..795
+          PathExpr 783..788
+            Ident 783..788 "print"
+          ArgList 788..795
+            LParen 788..789 "("
+            Arg 789..794
+              StringExpr 789..794
+                StrBegin 789..790 "\""
+                Interp 790..793
+                  InterpOpen 790..791 "{"
+                  PathExpr 791..792
+                    Ident 791..792 "S"
+                  InterpClose 792..793 "}"
+                StrEnd 793..794 "\""
+            RParen 794..795 ")"
+        Term 795..796 "\n"
+      ExprStmt 800..802
+        LiteralExpr 800..801
+          Int 800..801 "0"
+        Term 801..802 "\n"
+      RBrace 802..803 "}"
+  Term 803..804 "\n"
+  Eof 804..804 ""
+== diagnostics ==

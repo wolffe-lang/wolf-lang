@@ -1,0 +1,45 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 342..411
+  VarDecl 342..383
+    Attribute 342..357
+      PoundBracket 342..344 "#["
+      AttrItem 344..356
+        Path 344..356
+          Ident 344..356 "thread_local"
+      RBracket 356..357 "]"
+    VarKw 358..361 "var"
+    IdentPat 362..373
+      Ident 362..373 "errno_value"
+    Colon 373..374 ":"
+    PathType 375..378
+      Path 375..378
+        Ident 375..378 "int"
+    Eq 379..380 "="
+    LiteralExpr 381..382
+      Int 381..382 "0"
+    Term 382..383 "\n"
+  FnDecl 384..410
+    FnKw 384..386 "fn"
+    Ident 387..391 "main"
+    ParamList 391..393
+      LParen 391..392 "("
+      RParen 392..393 ")"
+    RetType 394..400
+      Arrow 394..396 "->"
+      PathType 397..400
+        Path 397..400
+          Ident 397..400 "int"
+    Block 401..410
+      LBrace 401..402 "{"
+      ExprStmt 407..409
+        LiteralExpr 407..408
+          Int 407..408 "0"
+        Term 408..409 "\n"
+      RBrace 409..410 "}"
+  Term 410..411 "\n"
+  Eof 411..411 ""
+== diagnostics ==

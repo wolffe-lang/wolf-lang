@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 347..417 name=only_elsewhere attrs=1 body=Block
+FnDecl 419..464 name=main body=Block

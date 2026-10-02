@@ -1,0 +1,62 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 350..429
+  FnDecl 350..392
+    Attribute 350..362
+      PoundBracket 350..352 "#["
+      AttrItem 352..361
+        Path 352..355
+          Ident 352..355 "cfg"
+        AttrInput 355..361
+          LParen 355..356 "("
+          AttrItem 356..360
+            Path 356..360
+              Ident 356..360 "unix"
+          RParen 360..361 ")"
+      RBracket 361..362 "]"
+    FnKw 363..365 "fn"
+    Ident 366..373 "on_unix"
+    ParamList 373..375
+      LParen 373..374 "("
+      RParen 374..375 ")"
+    RetType 376..382
+      Arrow 376..378 "->"
+      PathType 379..382
+        Path 379..382
+          Ident 379..382 "int"
+    Block 383..392
+      LBrace 383..384 "{"
+      ExprStmt 389..391
+        LiteralExpr 389..390
+          Int 389..390 "0"
+        Term 390..391 "\n"
+      RBrace 391..392 "}"
+  Term 392..393 "\n"
+  FnDecl 394..428
+    FnKw 394..396 "fn"
+    Ident 397..401 "main"
+    ParamList 401..403
+      LParen 401..402 "("
+      RParen 402..403 ")"
+    RetType 404..410
+      Arrow 404..406 "->"
+      PathType 407..410
+        Path 407..410
+          Ident 407..410 "int"
+    Block 411..428
+      LBrace 411..412 "{"
+      ExprStmt 417..427
+        CallExpr 417..426
+          PathExpr 417..424
+            Ident 417..424 "on_unix"
+          ArgList 424..426
+            LParen 424..425 "("
+            RParen 425..426 ")"
+        Term 426..427 "\n"
+      RBrace 427..428 "}"
+  Term 428..429 "\n"
+  Eof 429..429 ""
+== diagnostics ==

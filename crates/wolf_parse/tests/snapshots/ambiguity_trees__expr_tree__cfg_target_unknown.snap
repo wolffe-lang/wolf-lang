@@ -1,0 +1,72 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 347..465
+  FnDecl 347..417
+    Attribute 347..380
+      PoundBracket 347..349 "#["
+      AttrItem 349..379
+        Path 349..352
+          Ident 349..352 "cfg"
+        AttrInput 352..379
+          LParen 352..353 "("
+          AttrItem 353..378
+            Path 353..359
+              Ident 353..359 "target"
+            AttrInput 360..378
+              Eq 360..361 "="
+              StringLit 362..378
+                StrBegin 362..363 "\""
+                StrFragment 363..377 "no-such-target"
+                StrEnd 377..378 "\""
+          RParen 378..379 ")"
+      RBracket 379..380 "]"
+    FnKw 381..383 "fn"
+    Ident 384..398 "only_elsewhere"
+    ParamList 398..400
+      LParen 398..399 "("
+      RParen 399..400 ")"
+    RetType 401..407
+      Arrow 401..403 "->"
+      PathType 404..407
+        Path 404..407
+          Ident 404..407 "int"
+    Block 408..417
+      LBrace 408..409 "{"
+      ExprStmt 414..416
+        LiteralExpr 414..415
+          Int 414..415 "2"
+        Term 415..416 "\n"
+      RBrace 416..417 "}"
+  Term 417..418 "\n"
+  FnDecl 419..464
+    FnKw 419..421 "fn"
+    Ident 422..426 "main"
+    ParamList 426..428
+      LParen 426..427 "("
+      RParen 427..428 ")"
+    RetType 429..435
+      Arrow 429..431 "->"
+      PathType 432..435
+        Path 432..435
+          Ident 432..435 "int"
+    Block 436..464
+      LBrace 436..437 "{"
+      ExprStmt 442..463
+        BinExpr 442..462
+          CallExpr 442..458
+            PathExpr 442..456
+              Ident 442..456 "only_elsewhere"
+            ArgList 456..458
+              LParen 456..457 "("
+              RParen 457..458 ")"
+          Minus 459..460 "-"
+          LiteralExpr 461..462
+            Int 461..462 "2"
+        Term 462..463 "\n"
+      RBrace 463..464 "}"
+  Term 464..465 "\n"
+  Eof 465..465 ""
+== diagnostics ==

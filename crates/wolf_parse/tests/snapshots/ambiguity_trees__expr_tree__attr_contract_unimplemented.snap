@@ -1,0 +1,114 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 353..503
+  FnDecl 353..444
+    Attribute 353..363
+      PoundBracket 353..355 "#["
+      AttrItem 355..362
+        Path 355..362
+          Ident 355..362 "noalloc"
+      RBracket 362..363 "]"
+    FnKw 364..366 "fn"
+    Ident 367..372 "build"
+    ParamList 372..374
+      LParen 372..373 "("
+      RParen 373..374 ")"
+    RetType 375..387
+      Arrow 375..377 "->"
+      PathType 378..387
+        Path 378..382
+          Ident 378..382 "List"
+        TypeArgList 382..387
+          LBracket 382..383 "["
+          PathType 383..386
+            Path 383..386
+              Ident 383..386 "int"
+          RBracket 386..387 "]"
+    Block 388..444
+      LBrace 388..389 "{"
+      VarDecl 394..415
+        VarKw 394..397 "var"
+        IdentPat 398..400
+          Ident 398..400 "xs"
+        Eq 401..402 "="
+        CallExpr 403..414
+          BracketApply 403..412
+            PathExpr 403..407
+              Ident 403..407 "List"
+            ArgList 407..412
+              LBracket 407..408 "["
+              Arg 408..411
+                PathExpr 408..411
+                  Ident 408..411 "int"
+              RBracket 411..412 "]"
+          ArgList 412..414
+            LParen 412..413 "("
+            RParen 413..414 ")"
+        Term 414..415 "\n"
+      ExprStmt 419..436
+        CallExpr 419..435
+          MemberExpr 419..432
+            ParenExpr 419..427
+              LParen 419..420 "("
+              MutKw 420..423 "mut"
+              PathExpr 424..426
+                Ident 424..426 "xs"
+              RParen 426..427 ")"
+            Dot 427..428 "."
+            Ident 428..432 "push"
+          ArgList 432..435
+            LParen 432..433 "("
+            Arg 433..434
+              LiteralExpr 433..434
+                Int 433..434 "1"
+            RParen 434..435 ")"
+        Term 435..436 "\n"
+      ExprStmt 440..443
+        PathExpr 440..442
+          Ident 440..442 "xs"
+        Term 442..443 "\n"
+      RBrace 443..444 "}"
+  Term 444..445 "\n"
+  FnDecl 446..502
+    FnKw 446..448 "fn"
+    Ident 449..453 "main"
+    ParamList 453..455
+      LParen 453..454 "("
+      RParen 454..455 ")"
+    RetType 456..462
+      Arrow 456..458 "->"
+      PathType 459..462
+        Path 459..462
+          Ident 459..462 "int"
+    Block 463..502
+      LBrace 463..464 "{"
+      LetDecl 469..486
+        LetKw 469..472 "let"
+        IdentPat 473..475
+          Ident 473..475 "xs"
+        Eq 476..477 "="
+        CallExpr 478..485
+          PathExpr 478..483
+            Ident 478..483 "build"
+          ArgList 483..485
+            LParen 483..484 "("
+            RParen 484..485 ")"
+        Term 485..486 "\n"
+      ExprStmt 490..501
+        BinExpr 490..500
+          MemberExpr 490..496
+            PathExpr 490..492
+              Ident 490..492 "xs"
+            Dot 492..493 "."
+            Ident 493..496 "len"
+          Minus 497..498 "-"
+          LiteralExpr 499..500
+            Int 499..500 "1"
+        Term 500..501 "\n"
+      RBrace 501..502 "}"
+  Term 502..503 "\n"
+  Eof 503..503 ""
+== diagnostics ==

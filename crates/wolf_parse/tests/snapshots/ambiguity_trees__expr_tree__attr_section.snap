@@ -1,0 +1,67 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 354..443
+  FnDecl 354..405
+    Attribute 354..378
+      PoundBracket 354..356 "#["
+      AttrItem 356..377
+        Path 356..363
+          Ident 356..363 "section"
+        AttrInput 363..377
+          LParen 363..364 "("
+          StringLit 364..376
+            StrBegin 364..365 "\""
+            StrFragment 365..375 ".text.boot"
+            StrEnd 375..376 "\""
+          RParen 376..377 ")"
+      RBracket 377..378 "]"
+    FnKw 379..381 "fn"
+    Ident 382..386 "boot"
+    ParamList 386..388
+      LParen 386..387 "("
+      RParen 387..388 ")"
+    RetType 389..395
+      Arrow 389..391 "->"
+      PathType 392..395
+        Path 392..395
+          Ident 392..395 "int"
+    Block 396..405
+      LBrace 396..397 "{"
+      ExprStmt 402..404
+        LiteralExpr 402..403
+          Int 402..403 "1"
+        Term 403..404 "\n"
+      RBrace 404..405 "}"
+  Term 405..406 "\n"
+  FnDecl 407..442
+    FnKw 407..409 "fn"
+    Ident 410..414 "main"
+    ParamList 414..416
+      LParen 414..415 "("
+      RParen 415..416 ")"
+    RetType 417..423
+      Arrow 417..419 "->"
+      PathType 420..423
+        Path 420..423
+          Ident 420..423 "int"
+    Block 424..442
+      LBrace 424..425 "{"
+      ExprStmt 430..441
+        BinExpr 430..440
+          CallExpr 430..436
+            PathExpr 430..434
+              Ident 430..434 "boot"
+            ArgList 434..436
+              LParen 434..435 "("
+              RParen 435..436 ")"
+          Minus 437..438 "-"
+          LiteralExpr 439..440
+            Int 439..440 "1"
+        Term 440..441 "\n"
+      RBrace 441..442 "}"
+  Term 442..443 "\n"
+  Eof 443..443 ""
+== diagnostics ==

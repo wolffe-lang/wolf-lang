@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 354..405 name=boot attrs=1 body=Block
+FnDecl 407..442 name=main body=Block

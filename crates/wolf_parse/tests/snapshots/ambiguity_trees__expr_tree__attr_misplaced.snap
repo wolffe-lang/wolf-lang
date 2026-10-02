@@ -1,0 +1,104 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 347..480
+  FnDecl 347..381
+    Attribute 347..357
+      PoundBracket 347..349 "#["
+      AttrItem 349..356
+        Path 349..353
+          Ident 349..353 "repr"
+        AttrInput 353..356
+          LParen 353..354 "("
+          AttrItem 354..355
+            Path 354..355
+              Ident 354..355 "c"
+          RParen 355..356 ")"
+      RBracket 356..357 "]"
+    FnKw 358..360 "fn"
+    Ident 361..362 "f"
+    ParamList 362..364
+      LParen 362..363 "("
+      RParen 363..364 ")"
+    RetType 365..371
+      Arrow 365..367 "->"
+      PathType 368..371
+        Path 368..371
+          Ident 368..371 "int"
+    Block 372..381
+      LBrace 372..373 "{"
+      ExprStmt 378..380
+        LiteralExpr 378..379
+          Int 378..379 "1"
+        Term 379..380 "\n"
+      RBrace 380..381 "}"
+  Term 381..382 "\n"
+  StructDecl 383..420
+    Attribute 383..395
+      PoundBracket 383..385 "#["
+      AttrItem 385..394
+        Path 385..394
+          Ident 385..394 "consttime"
+      RBracket 394..395 "]"
+    StructKw 396..402 "struct"
+    Ident 403..404 "S"
+    LBrace 405..406 "{"
+    StructField 411..418
+      Ident 411..412 "x"
+      Colon 412..413 ":"
+      PathType 414..417
+        Path 414..417
+          Ident 414..417 "int"
+      Comma 417..418 ","
+    RBrace 419..420 "}"
+  Term 420..421 "\n"
+  FnDecl 422..479
+    FnKw 422..424 "fn"
+    Ident 425..429 "main"
+    ParamList 429..431
+      LParen 429..430 "("
+      RParen 430..431 ")"
+    RetType 432..438
+      Arrow 432..434 "->"
+      PathType 435..438
+        Path 435..438
+          Ident 435..438 "int"
+    Block 439..479
+      LBrace 439..440 "{"
+      LetDecl 445..464
+        LetKw 445..448 "let"
+        IdentPat 449..450
+          Ident 449..450 "s"
+        Eq 451..452 "="
+        StructLit 453..463
+          PathExpr 453..454
+            Ident 453..454 "S"
+          LBrace 455..456 "{"
+          FieldInit 457..461
+            Ident 457..458 "x"
+            Colon 458..459 ":"
+            LiteralExpr 460..461
+              Int 460..461 "1"
+          RBrace 462..463 "}"
+        Term 463..464 "\n"
+      ExprStmt 468..478
+        BinExpr 468..477
+          CallExpr 468..471
+            PathExpr 468..469
+              Ident 468..469 "f"
+            ArgList 469..471
+              LParen 469..470 "("
+              RParen 470..471 ")"
+          Minus 472..473 "-"
+          MemberExpr 474..477
+            PathExpr 474..475
+              Ident 474..475 "s"
+            Dot 475..476 "."
+            Ident 476..477 "x"
+        Term 477..478 "\n"
+      RBrace 478..479 "}"
+  Term 479..480 "\n"
+  Eof 480..480 ""
+== diagnostics ==

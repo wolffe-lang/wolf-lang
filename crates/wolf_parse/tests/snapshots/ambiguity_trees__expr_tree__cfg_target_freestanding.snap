@@ -1,0 +1,141 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 515..759
+  FnDecl 515..598
+    Attribute 515..553
+      PoundBracket 515..517 "#["
+      AttrItem 517..552
+        Path 517..520
+          Ident 517..520 "cfg"
+        AttrInput 520..552
+          LParen 520..521 "("
+          AttrItem 521..551
+            Path 521..527
+              Ident 521..527 "target"
+            AttrInput 528..551
+              Eq 528..529 "="
+              StringLit 530..551
+                StrBegin 530..531 "\""
+                StrFragment 531..550 "x86_64-unknown-none"
+                StrEnd 550..551 "\""
+          RParen 551..552 ")"
+      RBracket 552..553 "]"
+    FnKw 554..556 "fn"
+    Ident 557..568 "kernel_only"
+    ParamList 568..570
+      LParen 568..569 "("
+      RParen 569..570 ")"
+    RetType 571..577
+      Arrow 571..573 "->"
+      PathType 574..577
+        Path 574..577
+          Ident 574..577 "int"
+    Block 578..598
+      LBrace 578..579 "{"
+      ExprStmt 584..597
+        StringExpr 584..596
+          StrBegin 584..585 "\""
+          StrFragment 585..595 "not an int"
+          StrEnd 595..596 "\""
+        Term 596..597 "\n"
+      RBrace 597..598 "}"
+  Term 598..599 "\n"
+  FnDecl 600..758
+    FnKw 600..602 "fn"
+    Ident 603..607 "main"
+    ParamList 607..609
+      LParen 607..608 "("
+      RParen 608..609 ")"
+    RetType 610..616
+      Arrow 610..612 "->"
+      PathType 613..616
+        Path 613..616
+          Ident 613..616 "int"
+    Block 617..758
+      LBrace 617..618 "{"
+      VarDecl 623..633
+        VarKw 623..626 "var"
+        IdentPat 627..628
+          Ident 627..628 "n"
+        Eq 629..630 "="
+        LiteralExpr 631..632
+          Int 631..632 "1"
+        Term 632..633 "\n"
+      AssignStmt 637..714
+        Attribute 637..675
+          PoundBracket 637..639 "#["
+          AttrItem 639..674
+            Path 639..642
+              Ident 639..642 "cfg"
+            AttrInput 642..674
+              LParen 642..643 "("
+              AttrItem 643..673
+                Path 643..649
+                  Ident 643..649 "target"
+                AttrInput 650..673
+                  Eq 650..651 "="
+                  StringLit 652..673
+                    StrBegin 652..653 "\""
+                    StrFragment 653..672 "x86_64-unknown-none"
+                    StrEnd 672..673 "\""
+              RParen 673..674 ")"
+          RBracket 674..675 "]"
+        PathExpr 680..681
+          Ident 680..681 "n"
+        Eq 682..683 "="
+        BinExpr 684..713
+          CallExpr 684..697
+            PathExpr 684..695
+              Ident 684..695 "kernel_only"
+            ArgList 695..697
+              LParen 695..696 "("
+              RParen 696..697 ")"
+          Plus 698..699 "+"
+          CallExpr 700..713
+            PathExpr 700..711
+              Ident 700..711 "serial_port"
+            ArgList 711..713
+              LParen 711..712 "("
+              RParen 712..713 ")"
+        Term 713..714 "\n"
+      ExprStmt 718..734
+        CallExpr 718..733
+          PathExpr 718..723
+            Ident 718..723 "print"
+          ArgList 723..733
+            LParen 723..724 "("
+            Arg 724..732
+              StringExpr 724..732
+                StrBegin 724..725 "\""
+                StrFragment 725..731 "hosted"
+                StrEnd 731..732 "\""
+            RParen 732..733 ")"
+        Term 733..734 "\n"
+      ExprStmt 738..751
+        CallExpr 738..750
+          PathExpr 738..743
+            Ident 738..743 "print"
+          ArgList 743..750
+            LParen 743..744 "("
+            Arg 744..749
+              StringExpr 744..749
+                StrBegin 744..745 "\""
+                Interp 745..748
+                  InterpOpen 745..746 "{"
+                  PathExpr 746..747
+                    Ident 746..747 "n"
+                  InterpClose 747..748 "}"
+                StrEnd 748..749 "\""
+            RParen 749..750 ")"
+        Term 750..751 "\n"
+      ExprStmt 755..757
+        LiteralExpr 755..756
+          Int 755..756 "0"
+        Term 756..757 "\n"
+      RBrace 757..758 "}"
+  Term 758..759 "\n"
+  Eof 759..759 ""
+== diagnostics ==

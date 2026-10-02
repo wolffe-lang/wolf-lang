@@ -1,0 +1,50 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 495..576
+  FnDecl 495..547
+    ExternKw 495..501 "extern"
+    StringLit 502..517
+      StrBegin 502..503 "\""
+      StrFragment 503..516 "x86-interrupt"
+      StrEnd 516..517 "\""
+    FnKw 518..520 "fn"
+    Ident 521..527 "kw_isr"
+    ParamList 527..529
+      LParen 527..528 "("
+      RParen 528..529 ")"
+    Block 530..547
+      LBrace 530..531 "{"
+      LetDecl 536..546
+        LetKw 536..539 "let"
+        IdentPat 540..541
+          Ident 540..541 "x"
+        Eq 542..543 "="
+        LiteralExpr 544..545
+          Int 544..545 "1"
+        Term 545..546 "\n"
+      RBrace 546..547 "}"
+  Term 547..548 "\n"
+  FnDecl 549..575
+    FnKw 549..551 "fn"
+    Ident 552..556 "main"
+    ParamList 556..558
+      LParen 556..557 "("
+      RParen 557..558 ")"
+    RetType 559..565
+      Arrow 559..561 "->"
+      PathType 562..565
+        Path 562..565
+          Ident 562..565 "int"
+    Block 566..575
+      LBrace 566..567 "{"
+      ExprStmt 572..574
+        LiteralExpr 572..573
+          Int 572..573 "0"
+        Term 573..574 "\n"
+      RBrace 574..575 "}"
+  Term 575..576 "\n"
+  Eof 576..576 ""
+== diagnostics ==

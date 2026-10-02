@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+VarDecl 342..383 pat=errno_value attrs=1 init=LiteralExpr
+FnDecl 384..410 name=main body=Block
