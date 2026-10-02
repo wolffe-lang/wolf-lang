@@ -3670,7 +3670,9 @@ impl<'t> Machine<'t> {
         // propagating row (`Flow::Err(_, true)`, a `?` that fired
         // inside the scrutinee) leaves past the arms exactly as it
         // leaves past an `else` (`[type.row.else]`, #492).
-        let fallible = d.scrutinee().and_then(|s| self.fallible_match_names(s.span));
+        let fallible = d
+            .scrutinee()
+            .and_then(|s| self.fallible_match_names(s.span));
         let domain = match &fallible {
             Some(_) => None,
             None => d.scrutinee().and_then(|s| self.match_domain_names(s.span)),

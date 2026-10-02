@@ -10828,7 +10828,8 @@ impl<'a> Checker<'a> {
         let Some(vs) = self.scrut_variants(ok) else {
             return false;
         };
-        let Some((vname, payload, vspan)) = vs.into_iter().find(|(n, ..)| tags.iter().any(|t| t == n))
+        let Some((vname, payload, vspan)) =
+            vs.into_iter().find(|(n, ..)| tags.iter().any(|t| t == n))
         else {
             return false;
         };
@@ -10845,7 +10846,9 @@ impl<'a> Checker<'a> {
                 span,
                 format!("the row tag `{vname}` is also a variant of `{shown_ok}`"),
             )
-            .with_label(format!("this `match` is over `{shown}`; an arm `{spelled}` could be either half"))
+            .with_label(format!(
+                "this `match` is over `{shown}`; an arm `{spelled}` could be either half"
+            ))
             .with_secondary(vspan, "the variant of the value type")
             .with_note(
                 "a `match` over a fallible value sorts its arms by name — a tag of the row \

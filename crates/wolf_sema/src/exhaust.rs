@@ -460,7 +460,10 @@ pub(crate) fn render_pat(p: &Pat) -> String {
             }
             // The value half renders as the value it carries; the
             // checker says which half a top-level witness is on.
-            Ctor::Ok => args.first().map(render_pat).unwrap_or_else(|| "_".to_string()),
+            Ctor::Ok => args
+                .first()
+                .map(render_pat)
+                .unwrap_or_else(|| "_".to_string()),
         },
     }
 }
@@ -592,7 +595,11 @@ mod tests {
         let eof = ctor(Ctor::Named("eof".into()), vec![]);
         let value = |p| ctor(Ctor::Ok, vec![p]);
         // `Bad(_)`, `v`: `eof` is the witness.
-        let ws = witnesses(&[vec![bad.clone()], vec![value(Pat::Wild)]], &[col.clone()], 3);
+        let ws = witnesses(
+            &[vec![bad.clone()], vec![value(Pat::Wild)]],
+            &[col.clone()],
+            3,
+        );
         let rendered: Vec<String> = ws.iter().map(render_pat).collect();
         assert_eq!(rendered, vec!["eof"]);
         // `Bad(_)`, `eof`: the value half is the witness.
@@ -601,7 +608,11 @@ mod tests {
         assert!(matches!(&ws[0], Pat::Ctor { ctor: Ctor::Ok, .. }));
         assert_eq!(render_pat(&ws[0]), "_");
         // `Bad(_)`, `eof`, `0`: the value witness is the next integer.
-        let m = vec![vec![bad.clone()], vec![eof.clone()], vec![value(ctor(Ctor::Int(0), vec![]))]];
+        let m = vec![
+            vec![bad.clone()],
+            vec![eof.clone()],
+            vec![value(ctor(Ctor::Int(0), vec![]))],
+        ];
         let ws = witnesses(&m, &[col.clone()], 3);
         assert_eq!(ws.len(), 1);
         assert_eq!(render_pat(&ws[0]), "1");

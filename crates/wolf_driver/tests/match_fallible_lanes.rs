@@ -214,7 +214,10 @@ fn a_bare_tag_arm_and_a_value_binding() {
     every_lane_says(
         &corpus("match_row_bare_tag.lu"),
         "look zz\n-1\nlook a\n6\nlook zz\n-2\nlook a\n1\n",
-        &[("0.1.43", "look zz\n-1\nlook a\n-1\nlook zz\n-2\nlook a\n-2\n")],
+        &[(
+            "0.1.43",
+            "look zz\n-1\nlook a\n-1\nlook zz\n-2\nlook a\n-2\n",
+        )],
     );
 }
 

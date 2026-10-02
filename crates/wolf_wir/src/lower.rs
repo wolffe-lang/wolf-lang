@@ -19870,7 +19870,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // A decided union: one half lowers, the other is dead code.
             Some(true) => {
                 self.lower_fallible_row_half(
-                    sv, &slots, &row_arms, row_sema, want_v, merge_eu, exhaustive, &mut merge, e.span,
+                    sv, &slots, &row_arms, row_sema, want_v, merge_eu, exhaustive, &mut merge,
+                    e.span,
                 )?;
             }
             Some(false) => {
@@ -19894,7 +19895,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 self.b.switch_to_block(err_bb);
                 self.b.gvn_push_scope();
                 let r = self.lower_fallible_row_half(
-                    sv, &slots, &row_arms, row_sema, want_v, merge_eu, exhaustive, &mut merge, e.span,
+                    sv, &slots, &row_arms, row_sema, want_v, merge_eu, exhaustive, &mut merge,
+                    e.span,
                 );
                 self.b.gvn_pop_scope();
                 r?;
@@ -20047,7 +20049,6 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         span: Span,
     ) -> R<()> {
         let n = arms.len();
-        let domain = domain;
         let mut open = true; // the current block still needs a decision
         // Every block the chain CONTINUES in after the first branch —
         // each arm's `next_bb`, each guard's fresh re-entry — fails to
@@ -20587,7 +20588,6 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
         Ok(())
     }
-
 
     /// Enter one arm: bind payloads (or the whole scrutinee), run the
     /// guard (failure re-enters the chain per `next`), lower the
