@@ -1127,6 +1127,23 @@ one of the members, or by giving the shared tags their own alias that
 both name.
 "#);
 
+code!(E0611, "`?` inside a `defer` or `errdefer` has nowhere to send its error", r#"
+A deferred expression runs while the function is already leaving: its
+result is formed, and the `defer`/`errdefer` chain is running on the
+way out of the scope. A `?` fires by leaving the function with an
+error, and there is no second exit to take — replacing the result
+already on its way out would lose it, and dropping the `?`'s error
+would hide it — so wolf refuses the shape rather than choose silently
+(`[type.row.defer]`). Handle the fallible call's row inside the
+deferred expression with `else` (`defer close(f) else |e| note(e)`,
+`defer print("{read() else "-"}")`), or move the fallible call out of
+the `defer` into the body, where its `?` has a function to leave. The
+refusal reads the whole deferred expression: a `?` nested in a block, a
+binding or a call argument under the `defer` is the same error. A `?`
+inside a closure defined under the `defer` is that closure's own
+propagation and is not this error.
+"#);
+
 // ------------------------------------------------------------------------
 // E07xx — comptime / CTFE (s16, D29 + D33). The sandbox family: every
 // refusal names its reason, every budget is finite, and the witness
