@@ -725,7 +725,9 @@ fn std_stream(fd: i64) -> Option<std::mem::ManuallyDrop<File>> {
         }
         // SAFETY: the process's own std handle, borrowed for one call;
         // the `ManuallyDrop` never closes it.
-        Some(std::mem::ManuallyDrop::new(unsafe { File::from_raw_handle(h) }))
+        Some(std::mem::ManuallyDrop::new(unsafe {
+            File::from_raw_handle(h)
+        }))
     }
     #[cfg(not(any(unix, windows)))]
     {

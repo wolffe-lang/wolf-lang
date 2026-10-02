@@ -54,9 +54,9 @@ fn wolf() -> &'static str {
 const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[("0.1.43", Some("6d6cde5")), ("0.1.44", None)];
 
 fn pre_mirror(lupin: &Obs) -> bool {
-    PRE_MIRROR_LUPIN.iter().any(|(v, c)| {
-        *v == lupin.version && c.is_none_or(|c| lupin.commit.starts_with(c))
-    })
+    PRE_MIRROR_LUPIN
+        .iter()
+        .any(|(v, c)| *v == lupin.version && c.is_none_or(|c| lupin.commit.starts_with(c)))
 }
 
 #[derive(Debug)]
@@ -162,7 +162,11 @@ fn build(entry: &Path, dir: &Path, release: bool) -> Option<PathBuf> {
         std::env::consts::EXE_SUFFIX
     ));
     let mut cmd = Command::new(wolf());
-    cmd.arg("build").arg(entry).arg("-o").arg(&exe).arg("--no-cache");
+    cmd.arg("build")
+        .arg(entry)
+        .arg("-o")
+        .arg(&exe)
+        .arg("--no-cache");
     if release {
         cmd.arg("--release");
     }
@@ -287,8 +291,7 @@ fn every_lane_with_stdin(name: &str, stdin: Stdin, want: &str, pre: (&str, &str)
     let entry = fixture(name);
     let what = format!("{name} with stdin {stdin:?}");
     let dir = scratch(&format!("{}_{stdin:?}", name.replace('.', "_")));
-    let checked =
-        conform(&entry, &dir, "--checked", stdin).expect("the checked lane always runs");
+    let checked = conform(&entry, &dir, "--checked", stdin).expect("the checked lane always runs");
     assert_eq!(
         (checked.verdict.as_str(), checked.stdout.as_str()),
         ("exit(0)", want),

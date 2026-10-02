@@ -13103,11 +13103,7 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             let list_byte = byte_list(table);
             (
                 vec![int_, int_, int_],
-                rowed(
-                    table,
-                    list_byte,
-                    &["eof", "invalid", "io", "unseekable"],
-                ),
+                rowed(table, list_byte, &["eof", "invalid", "io", "unseekable"]),
             )
         }
         // The s39 net builtin tier (blocking TCP v0): the row
