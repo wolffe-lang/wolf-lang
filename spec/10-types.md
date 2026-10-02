@@ -744,6 +744,47 @@ carrying a rule about operators. The rule is written here, beside
   `rows/negative/try_in_defer.lu`, `rows/negative/try_in_errdefer.lu`,
   `rows/negative/try_in_defer_block.lu`, and the control
   `rows/defer_else_handles.lu`.
+- `[type.row.match]` **A `match` over a fallible value has two
+  halves, sorted by name.** The scrutinee has type `T ! {row}`. An arm
+  is a **row arm** — a tag of the row by name, binding its payload
+  when it has one: `none => …`, `Io(e) => …` — or a **value arm** —
+  any pattern over `T`, exactly as a `match` over `T` today: `0 => …`,
+  `v => …`, `Line(k) => …`. An identifier (or a path head) that names
+  a tag of the scrutinee's row is a row arm; anything else is a value
+  pattern; `_` covers whatever is left on both halves. The arms are
+  tried in source order, and neither half sees the other: a row value
+  can match only a row arm or `_`, a value only a value arm or `_`,
+  so a binding `v` after the tags takes the whole of `T` and leaves
+  the row to a later `_`, which is then reachable, not dead. The
+  match must cover every tag of the row and the whole of `T`;
+  **E0801** names the missing tag (`` `eof` ``) or the uncovered
+  value half (`` `_` (the value half, `int`) ``), with the engine's
+  usual witness for a partly covered `T` (`` `1` ``). The expression's
+  type is the arms' type, and the row is consumed as an `else`
+  consumes it (`[type.row.operand]`): it handles the scrutinee's own
+  row only, so a `?` that fires *inside* the scrutinee leaves the
+  function past the arms (`[type.row.else]`). A tag of the row that
+  is also a variant of `T` (`Shape ! {Line(int)}` beside `Shape.Line`)
+  is **E0816**, refused by name whether or not an arm spells it —
+  never guessed; `else |e| match e { … }` keeps the halves apart and
+  keeps working beside this form. Shapes the rule does not name — an
+  or-pattern mixing a row arm with a value pattern, an `@`-binding at
+  the top of an arm — are refused by name. The grammar is unchanged:
+  `[gram.pat]` already spells a bare tag as `IDENT` and a tag with a
+  payload as `path '(' pattern… ')'`. (Ruled 2026-10-02, the
+  maintainer's #21 "yes, as proposed", s197 — wolf-lang#497. Before
+  it, every wolfgang lane refused the form as unsupported and lupin
+  0.1.42 ran it with no clause to say which was right. **The cost,
+  stated:** zero on an accepted program beyond what `else |e| match
+  e` already costs — one `is_err` test and one arm chain per half on
+  native and release; the checked machine dispatches by the flow it
+  already carries.) Witnesses: `rows/match_row_bare_tag.lu`,
+  `rows/match_row_payload_tag.lu`, `rows/match_row_wild_each_half.lu`,
+  `rows/match_row_nested.lu`, `rows/match_row_try_scrutinee.lu`, the
+  control `rows/match_row_else_control.lu`, and the refusals
+  `rows/negative/match_row_missing_tag.lu`,
+  `rows/negative/match_row_missing_value.lu`,
+  `rows/negative/match_row_tag_variant_collision.lu`.
 
 This chapter deliberately does **not** write the full numeric tower
 (mixed integer-width arithmetic, a complete `Add`/`Mul` trait hierarchy
