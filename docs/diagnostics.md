@@ -1540,6 +1540,50 @@ so the two name sets stay apart.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__match_row_tag_variant_collision.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0816_tag_variant_collision.snap
 
+## E0817 — an attribute this compiler does not know or does not implement
+
+The attribute set is closed ([gram.item.attr]): an attribute either
+means something to the compiler or the program is refused. Before this
+rule an attribute nothing read compiled silently and meant nothing — a
+`#[noalloc]` function that allocated ran, a `#[repr(packed)]` struct was
+laid out unpacked, a `#[cfg(target = …)]` item was compiled for every
+target — which is a promise the reader believes and the compiler never
+kept. This code fires for:
+
+- a name wolf does not know (`#[frobnicate]`);
+- a known attribute nothing implements yet, named with the lane that
+  owns it: the performance contracts `noalloc`, `nopanic`, `inplace`,
+  `bounded_stack` (no checker exists), `repr(packed)`, `repr(align(N))`
+  and `repr(transparent)` (the exact-layout lane), `thread_local`,
+  `section` and `link_section`;
+- an implemented attribute where it means nothing (`#[repr(c)]` on a
+  function, `#[consttime]` on a struct);
+- a `cfg` the compiler cannot decide: the one predicate is
+  `target = "…"`, naming a target triple (`x86_64-unknown-linux-gnu`) or
+  an architecture (`x86_64`), and a name that matches no target is
+  refused rather than read as false, so a typo cannot silently drop
+  code ([gram.item.attr.cfg]).
+
+The attributes implemented are `trusted`, `consttime`, `allow`, `index`,
+`budget`, `repr(c)` and `cfg(target = "…")`. Delete the attribute, or
+move it to where it applies.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_contract_unimplemented.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_misplaced.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_repr_bogus.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_repr_unimplemented.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_section.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_thread_local.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_unknown.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__cfg_predicate_unknown.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__cfg_target_unknown.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_cfg_unix.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_cfg_unknown_target.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_misplaced.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_noalloc.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_repr_args.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_unknown.snap
+
+## E0818 — an `extern` ABI string other than `c`
+
+`extern "c"` is the one ABI seam a function has ([abi.c.seams]); any
+other string is refused by name. Before this rule the string selected
+nothing: `extern "x86-interrupt" fn isr() { … }` compiled as an ordinary
+wolf function that returns with `ret`, so a kernel that installed it as
+an interrupt handler would corrupt its stack on the first interrupt.
+Wolf has no interrupt calling convention: an interrupt enters through an
+assembly trampoline that saves the registers, calls an `export fn` with
+the C convention, and returns with `iretq` (KWC F7). Write `extern "c"`
+for a C-callable function, or no `extern` for an ordinary one.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__extern_abi_interrupt.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0818_x86_interrupt.snap
+
 ## E1001 — this value was moved away (or never given one) before this use
 
 In wolf, assignment and argument passing *move* a value: after
