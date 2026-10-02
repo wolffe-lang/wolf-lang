@@ -11,15 +11,17 @@
   as outside `i32`. The literal has no context of its own
   (`[type.numlit.propagate]`), so it takes `i32` and is **E0415** when
   it does not fit; a later use still decides the binding's type
-  (`let n = 0; take_int(n)` is unchanged). The same holds for the
-  literals of the initializer's `+ - * / %` term. `[type.numlit.value]`
+  (`let n = 0; take_int(n)` is unchanged). The same holds when the
+  initializer is a `+ - * / %` term made only of literals; a term with
+  a value operand keeps that operand's type. `[type.numlit.value]`
   carries the rule and corrects its 2026-09-15 measurement.
 - **One corpus row depended on the old reading and moved:**
   `faults/index_origin_min_overflow.lu` (`let i = 0 -
   9223372036854775807 - 1`, used as an index) is E0415 unannotated; it
   now spells `let i: int`, and all four machines trap at the index
   shift it is about (lupin used to trap it at the literal). No
-  boreutils or lobo build moved.
+  boreutils or lobo build moved (lobo's `packed / 10000000000` is a
+  value term and keeps `int`).
 - Witnesses `corpus/typecheck/numlit_binding_literal*.lu` and the
   control `numlit_binding_value_later_use.lu`; gate
   `numlit_binding_literal_lanes.rs`.
