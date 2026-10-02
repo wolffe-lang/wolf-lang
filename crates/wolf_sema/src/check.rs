@@ -541,6 +541,13 @@ struct Checker<'a> {
     map_index_place: Option<(Span, String)>,
     level: u32,
     in_closure: bool,
+    /// Inside a `defer`/`errdefer` expression (s196, `[type.row.defer]`):
+    /// the keyword's span and whether it is an `errdefer`. A `?` that
+    /// would leave the enclosing function from here is E0611 — the
+    /// function is already leaving when the expression runs. Cleared
+    /// at a closure boundary: a `?` in a closure's body is the
+    /// closure's own.
+    in_defer: Option<(Span, bool)>,
     loops: Vec<LoopCtx>,
     /// `defer`/`errdefer` sites in declaration order (s15 → s27).
     cleanups: Vec<(Span, bool)>,
@@ -770,6 +777,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         map_index_place: None,
         level: 0,
         in_closure: false,
+        in_defer: None,
         loops: Vec::new(),
         cleanups: Vec::new(),
         trace_points: Vec::new(),
@@ -950,6 +958,7 @@ pub(crate) fn collect_body_rows(
         map_index_place: None,
         level: 0,
         in_closure: false,
+        in_defer: None,
         loops: Vec::new(),
         cleanups: Vec::new(),
         trace_points: Vec::new(),
@@ -3676,7 +3685,19 @@ impl<'a> Checker<'a> {
                     self.diags.push(diag);
                 }
                 if let Some(e) = d.and_then(|d| d.expr()) {
-                    self.synth_expr(e)?;
+                    // s196 (`[type.row.defer]`): the deferred
+                    // expression runs while the function is leaving,
+                    // so a `?` in it has nowhere to go — `synth_try`
+                    // refuses it (E0611) while this is set.
+                    let kw = s
+                        .tokens()
+                        .find(|t| matches!(t.kind, SyntaxKind::DeferKw | SyntaxKind::ErrdeferKw))
+                        .map(|t| t.span)
+                        .unwrap_or(s.span);
+                    let was = self.in_defer.replace((kw, is_err));
+                    let r = self.synth_expr(e);
+                    self.in_defer = was;
+                    r?;
                 }
                 // Declaration order recorded; s27 lowers the strict
                 // LIFO interleave of `defer`/`errdefer` from this.
@@ -5872,6 +5893,17 @@ impl<'a> Checker<'a> {
         let t = self.synth_expr(operand)?;
         match self.kind_of(t) {
             TyKind::ErrUnion(ok, row) => {
+                // s196 (wolf-lang#498, ruling #19, `[type.row.defer]`):
+                // a `?` inside a `defer`/`errdefer` expression would
+                // leave the function while the function is already
+                // leaving. Refused before any row is widened; the
+                // operand's ok type keeps the check going. A closure
+                // boundary clears `in_defer`, so a `?` in a closure
+                // defined under the defer is that closure's own.
+                if let Some((kw, is_err)) = self.in_defer {
+                    self.report_try_under_defer(e.span, kw, is_err);
+                    return Ok(ok);
+                }
                 if self.in_closure {
                     // s73 closure rows: `?` inside a closure raises
                     // into the CLOSURE's own (inferred) row — the
@@ -5942,6 +5974,39 @@ impl<'a> Checker<'a> {
     }
 
     /// E0604 — `?` in a function whose signature admits no errors.
+    /// E0611 (s196, `[type.row.defer]`): a `?` inside a `defer` or
+    /// `errdefer` expression. Says why (the deferred expression runs
+    /// while the function is leaving, so a second error has nowhere to
+    /// go) and the fix (an `else` inside the deferred expression, or
+    /// the fallible call moved out of it). No mechanical fix-it: the
+    /// fallback value is the author's.
+    fn report_try_under_defer(&mut self, span: Span, kw: Span, is_err: bool) {
+        if self.collect.is_some() {
+            return;
+        }
+        let what = if is_err { "errdefer" } else { "defer" };
+        let fn_name = self
+            .ret
+            .as_ref()
+            .map(|(_, n, _)| n.clone())
+            .unwrap_or_else(|| "this function".to_string());
+        let d = Diagnostic::error(
+            codes::E0611,
+            span,
+            format!("`?` inside an `{what}` has nowhere to send its error"),
+        )
+        .with_label(format!(
+            "this would leave `{fn_name}` while `{fn_name}` is already leaving"
+        ))
+        .with_secondary(kw, format!("the `{what}` runs as `{fn_name}` leaves"))
+        .with_note(format!(
+            "a deferred expression runs while the function is leaving, so a second \
+             error has nowhere to go: handle it inside the `{what}` with `else`, or \
+             move the fallible call out of the `{what}` into the body.",
+        ));
+        self.diags.push(d);
+    }
+
     fn report_nonfallible_try(&mut self, span: Span, callee_row: TyId) {
         if self.collect.is_some() {
             return;
@@ -11819,6 +11884,7 @@ impl<'a> Checker<'a> {
                 }
                 let was = self.in_closure;
                 self.in_closure = true;
+                let was_defer = self.in_defer.take();
                 self.closure_rows.push(Vec::new());
                 // The body checks against its OWN result var; the
                 // context's `ret` unifies afterwards, wrapped in the
@@ -11847,6 +11913,7 @@ impl<'a> Checker<'a> {
                 let raised = self.closure_rows.pop().expect("closure row frame");
                 self.closure_rets.pop();
                 self.in_closure = was;
+                self.in_defer = was_defer;
                 self.level -= 1;
                 self.pop_scope();
                 let frame = self.capture_frames.pop().expect("closure capture frame");
@@ -11943,6 +12010,7 @@ impl<'a> Checker<'a> {
         }
         let was = self.in_closure;
         self.in_closure = true;
+        let was_defer = self.in_defer.take();
         self.closure_rows.push(Vec::new());
         // A synthesized body has no context result: a fresh var
         // stands for it, so a `return` inside (#268) and the body's
@@ -11956,6 +12024,7 @@ impl<'a> Checker<'a> {
         let raised = self.closure_rows.pop().expect("closure row frame");
         self.closure_rets.pop();
         self.in_closure = was;
+        self.in_defer = was_defer;
         self.level -= 1;
         self.pop_scope();
         let frame = self.capture_frames.pop().expect("closure capture frame");
@@ -12058,6 +12127,7 @@ impl<'a> Checker<'a> {
         }
         let was = self.in_closure;
         self.in_closure = true;
+        let was_defer = self.in_defer.take();
         self.closure_rows.push(Vec::new());
         // A `return` in the nested fn's body types against its
         // declared return type (#268).
@@ -12076,6 +12146,7 @@ impl<'a> Checker<'a> {
         let raised = self.closure_rows.pop().expect("closure row frame");
         self.closure_rets.pop();
         self.in_closure = was;
+        self.in_defer = was_defer;
         self.level -= 1;
         self.pop_scope();
         let frame = self.capture_frames.pop().expect("closure capture frame");
