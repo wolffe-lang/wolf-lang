@@ -204,6 +204,11 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 161] = [
     // s142 (#261): the stat on an open handle — fd in, code out, the
     // `List[int]` header through the out slot.
     ("__wolf_rt_fs_fstat", 2, true),
+    // s199 (#426): the handle's offset — seek (fd, off, whence, out),
+    // tell (fd, out), and the positional read (fd, off, max, out).
+    ("__wolf_rt_fs_seek", 4, true),
+    ("__wolf_rt_fs_tell", 2, true),
+    ("__wolf_rt_fs_read_at", 4, true),
     ("__wolf_rt_fs_rename", 4, true),
     ("__wolf_rt_read_line", 1, true),
     // The s106 net family (wolf_rt::net, #118's first crossing): fd
