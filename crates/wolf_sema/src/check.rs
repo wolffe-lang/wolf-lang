@@ -13087,6 +13087,29 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
                 rowed(table, list_int, &["not_found", "denied", "io"]),
             )
         }
+        // s199 (#426, `[os.fs.seek]`, `[os.fs.tell]`,
+        // `[os.fs.read_at]`): the handle's offset. `unseekable` is a
+        // pipe, fifo, socket or terminal (ESPIPE) — its own tag
+        // because the response differs from `io`: read forward
+        // instead. `invalid` is a whence outside {0, 1, 2} or an
+        // offset below zero. 0, 1 and 2 are the standard streams
+        // (`[os.fs.std]`, #424).
+        "fs_seek" => (
+            vec![int_, int_, int_],
+            rowed(table, int_, &["invalid", "io", "unseekable"]),
+        ),
+        "fs_tell" => (vec![int_], rowed(table, int_, &["io", "unseekable"])),
+        "fs_read_at" => {
+            let list_byte = byte_list(table);
+            (
+                vec![int_, int_, int_],
+                rowed(
+                    table,
+                    list_byte,
+                    &["eof", "invalid", "io", "unseekable"],
+                ),
+            )
+        }
         // The s39 net builtin tier (blocking TCP v0): the row
         // vocabulary is {refused, timeout, closed, io} — `closed`
         // is the peer's finish (the socket `eof`), `timeout` is
