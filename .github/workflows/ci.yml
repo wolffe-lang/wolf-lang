@@ -123,9 +123,38 @@ jobs:
     # ct_asm_witness, struct-layout) now EXECUTE here; bench-gates
     # alone keeps its named skip — its ceilings are linux/x86-64
     # measurements (rig-pinned, D5).
-    name: native gauntlet (macOS aarch64)
+    #
+    # s195: sharded. The one-job gauntlet took 21.4–27.5 min on trunk's
+    # six runs e0466d7c..abf4e5cf (2026-10-01) and bb060157's was
+    # cancelled at the 30-minute limit. Per step, from the job logs'
+    # timestamps: `test` 456–744 s, `lane-coverage` 510–594 s (70–73 %
+    # of the gauntlet between them), `corpus` 91–160 s, `dist-smoke`
+    # 74–146 s, the other seventeen steps under 90 s together. So the
+    # list is cut into three shards keyed on the step name
+    # (`CI_SHARDS` in xtask/src/main.rs; a unit test proves the
+    # partition): `build` carries fmt, clippy, test, fuzz-check and
+    # deps-check; `gates` the fourteen quick gates plus corpus and
+    # dist-smoke; `coverage` lane-coverage alone. Each limit is about
+    # twice its shard's worst measured wall. The linux job still runs
+    # the whole list in one process, so the gauntlet's content is one
+    # list on both hosts; only the macOS wall is divided.
+    name: native gauntlet (macOS aarch64, ${{ matrix.shard }})
     runs-on: macos-latest
-    timeout-minutes: 30
+    timeout-minutes: ${{ matrix.timeout }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # worst measured: test 744 s + clippy 33 s + setup ≈ 14 min
+          - shard: build
+            timeout: 30
+          # worst measured: corpus 160 s + dist-smoke 146 s + the rest
+          # ≈ 6 min, plus this job's own build of wolf
+          - shard: gates
+            timeout: 20
+          # worst measured: lane-coverage 594 s, plus the build
+          - shard: coverage
+            timeout: 25
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -134,8 +163,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: clang version floor (the release tier requires >= 15)
         run: clang --version
-      - name: full gauntlet (fmt, clippy, test, corpus, abi-check, debug-check, lane-coverage)
-        run: cargo xtask ci
+      - name: the shard key, for the whole gauntlet
+        run: cargo xtask ci --plan
+      - name: gauntlet shard ${{ matrix.shard }}
+        run: cargo xtask ci --shard ${{ matrix.shard }}
 
   fuzz-smoke:
     name: fuzz smoke (60s/target)
