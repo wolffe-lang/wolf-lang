@@ -3149,7 +3149,9 @@ impl<'t> Machine<'t> {
                 Some(e) => val!(self.eval(e)),
                 None => Value::Unit,
             };
-            return self.raw_index_write(place_expr, (p, idx), v, compound, stmt.span);
+            let op = d.op().map(|t| t.kind).filter(|_| compound);
+            let ty_span = d.value().map(|x| x.span).unwrap_or(place_expr.span);
+            return self.raw_index_write(place_expr, (p, idx), v, op, ty_span, stmt.span);
         }
         // wolf-lang#438 (`[mem.region.edge.elem]`): a plain `=` through
         // a container index COPIES a place's value in, as a plain
@@ -6985,6 +6987,26 @@ impl<'t> Machine<'t> {
         }
     }
 
+    /// The element width of `p[i]`: the size of `p`'s own pointee type
+    /// (`*T` → `T`), read off the receiver. The element expression's
+    /// recorded type is not enough: a write's place carries none, so a
+    /// `*i64` store wrote one byte at offset `i` and the read of the
+    /// same element took eight at `8 * i` (kw01 — the checked machine
+    /// printed `0` for `w[1] = 9; w[1]`). Falls back to the element
+    /// expression's type where the receiver records none.
+    fn raw_elem_size(&self, e: &'t GreenNode) -> u64 {
+        let pointee = BracketApply::cast(e)
+            .and_then(|b| b.callee())
+            .and_then(|r| match self.expr_ty(r.span) {
+                Some(TyKind::Ptr(t)) => Some(self.ctx().tb.table.kind(*t)),
+                _ => None,
+            });
+        match pointee {
+            Some(TyKind::Prim(p)) => prim_size(*p),
+            _ => self.pointee_size(e.span),
+        }
+    }
+
     fn raw_index_parts(&mut self, e: &'t GreenNode) -> E<(PtrVal, i64)> {
         let b = BracketApply::cast(e).expect("kind");
         let recv = b.callee().expect("raw index receiver");
@@ -7016,7 +7038,7 @@ impl<'t> Machine<'t> {
 
     fn raw_index_read(&mut self, e: &'t GreenNode) -> E<Flow> {
         let (p, idx) = self.raw_index_parts(e)?;
-        let size = self.pointee_size(e.span);
+        let size = self.raw_elem_size(e);
         let at = PtrVal {
             offset: p.offset + idx * size as i64,
             addr: p.addr.wrapping_add((idx * size as i64) as u64),
@@ -7046,16 +7068,21 @@ impl<'t> Machine<'t> {
 
     /// `parts` is the place's pointer and index, evaluated by the
     /// caller BEFORE the right-hand side (wolf-lang#452).
+    /// `op` is the compound operator (`+=`, `*=`, …) or `None` for a
+    /// plain `=`; `ty_span` is the right-hand side's span, whose
+    /// recorded type carries the checked range (as the non-raw
+    /// compound path does).
     fn raw_index_write(
         &mut self,
         place_expr: &'t GreenNode,
         parts: (PtrVal, i64),
         v: Value,
-        compound: bool,
+        op: Option<SyntaxKind>,
+        ty_span: Span,
         span: Span,
     ) -> E<Flow> {
         let (p, idx) = parts;
-        let size = self.pointee_size(place_expr.span);
+        let size = self.raw_elem_size(place_expr);
         let at = PtrVal {
             offset: p.offset + idx * size as i64,
             addr: p.addr.wrapping_add((idx * size as i64) as u64),
@@ -7066,13 +7093,19 @@ impl<'t> Machine<'t> {
             Value::Bool(b) => i64::from(b),
             _ => return self.refuse("raw write of a non-scalar", span),
         };
-        if compound {
+        // wolf-lang#542's checked half: the operator is the statement's
+        // (it was always `+`, so `p[0] *= 31` added), with the same
+        // checked arithmetic as every other compound assignment.
+        if let Some(op) = op {
             let bytes = self.raw_read_bytes(at, size, span, "a raw pointer read")?;
             let mut cur: i64 = 0;
             for (i, b) in bytes.iter().enumerate() {
                 cur |= (*b as i64) << (8 * i);
             }
-            n += cur;
+            n = match self.arith_binop(op, Value::Int(cur), Value::Int(n), span, ty_span)? {
+                Value::Int(r) => r,
+                _ => return self.refuse("raw write of a non-scalar", span),
+            };
         }
         let data: Vec<u8> = (0..size).map(|i| ((n >> (8 * i)) & 0xff) as u8).collect();
         self.raw_write_bytes(at, &data, span, "a raw pointer write")?;
