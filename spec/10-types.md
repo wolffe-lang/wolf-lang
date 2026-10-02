@@ -764,8 +764,8 @@ carrying a rule about operators. The rule is written here, beside
   machine ran the deferred `?` and dropped its error, lupin 0.1.42 made
   it the function's result. **The cost, stated:** zero — a static
   refusal, with no instruction added to any accepted program; lupin
-  0.1.43 still runs the shape and is pinned by version as pre-mirror
-  in the gate until wolf-interp mirrors the refusal.) Witnesses:
+  0.1.43 ran the shape and was pinned by version as pre-mirror in the
+  gate; lupin 0.1.44 refuses it, E0611 at the `?`.) Witnesses:
   `rows/negative/try_in_defer.lu`, `rows/negative/try_in_errdefer.lu`,
   `rows/negative/try_in_defer_block.lu`, and the control
   `rows/defer_else_handles.lu`.
