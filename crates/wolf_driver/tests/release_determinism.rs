@@ -147,11 +147,19 @@ fn build(src: &Path, out: &Path, emit: Option<&str>) -> Option<Vec<u8>> {
 
 /// Three builds, three processes, one answer. Names the entry and the
 /// first differing byte offset on a miss, with the three digests.
+///
+/// Every build writes the SAME output path, removed between builds: a
+/// reproducible build is the same program built to the same place
+/// twice, and on macOS the output file's name is part of the binary
+/// (the linker's ad-hoc code signature carries it as the identifier),
+/// so `-1.bin` against `-2.bin` differed there while linux and kasumi
+/// agreed (run 36957396958, job 110683323829: byte 1768 of 669,192).
 fn assert_three_identical(src: &Path, tag: &str, emit: Option<&str>) {
     let ext = emit.map(|_| "ll").unwrap_or("bin");
+    let out = out_dir().join(format!("{tag}.{ext}"));
     let mut outs: Vec<Vec<u8>> = Vec::new();
-    for i in 1..=3 {
-        let out = out_dir().join(format!("{tag}-{i}.{ext}"));
+    for _ in 1..=3 {
+        let _ = std::fs::remove_file(&out);
         let Some(b) = build(src, &out, emit) else {
             return;
         };
