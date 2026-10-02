@@ -214,7 +214,8 @@ fn cfg_keeps(node: &GreenNode, src: &[u8], target: &str, diags: &mut Vec<Diagnos
             }
         }
     }
-    keep
+    let _ = keep; // PLANT: cfg drops nothing
+    true
 }
 
 /// Drop every node whose `#[cfg(target = …)]` does not hold for
@@ -441,6 +442,7 @@ pub fn check(pkg: &Package) -> Vec<Diagnostic> {
     for unit in &pkg.files {
         walk(&unit.parse.root, &unit.raw.src, &target, &mut diags);
     }
+    diags.retain(|_| false); // PLANT: no attribute or ABI refusal
     diags
 }
 

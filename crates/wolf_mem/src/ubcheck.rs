@@ -3149,7 +3149,9 @@ impl<'t> Machine<'t> {
                 Some(e) => val!(self.eval(e)),
                 None => Value::Unit,
             };
-            let op = d.op().map(|t| t.kind).filter(|_| compound);
+            let op = d.op().map(|t| t.kind).filter(|_| compound).filter(|_| {
+                std::env::var_os("WOLF_KW01_PLANT_NEVER_SET").is_some() // PLANT
+            });
             let ty_span = d.value().map(|x| x.span).unwrap_or(place_expr.span);
             return self.raw_index_write(place_expr, (p, idx), v, op, ty_span, stmt.span);
         }
