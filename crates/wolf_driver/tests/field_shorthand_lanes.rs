@@ -21,7 +21,9 @@
 //! would not say the spellings agree. lupin 0.1.42 copies through the
 //! shorthand (wolffe-lang/wolf-interp#159): its measured answers are
 //! pinned by version below as pre-mirror (s180's design), so a newer
-//! lupin that still differs from its own longhand reds by name.
+//! lupin that still differs from its own longhand reds by name. The
+//! pins were dropped at the 0.1.43 pairing (r25): 0.1.43 carries is62's
+//! #159 mirror and gives every row its longhand's answer.
 
 mod lane_exit;
 
@@ -266,7 +268,7 @@ fn the_shorthand_moves_its_local() {
         "field_shorthand_moves.lu",
         &[("W { xs }", "W { xs: xs }")],
         E1001,
-        &[("0.1.42", ("exit(0)", "1 2\n"))],
+        &[],
     );
 }
 
@@ -290,7 +292,7 @@ fn a_mixed_literal_moves_through_both_spellings() {
         "field_shorthand_mixed.lu",
         &[("M { xs, n, ys: ys }", "M { xs: xs, n: n, ys: ys }")],
         E1001,
-        &[("0.1.42", ("exit(0)", "1 2 2 1\n"))],
+        &[],
     );
 }
 
@@ -312,7 +314,7 @@ fn a_nested_literal_moves_through_the_inner_shorthand() {
         "field_shorthand_nested.lu",
         &[("O { w: W { xs }, n }", "O { w: W { xs: xs }, n: n }")],
         E1001,
-        &[("0.1.42", ("exit(0)", "1 2 5\n"))],
+        &[],
     );
 }
 
@@ -327,7 +329,7 @@ fn a_struct_local_moves_through_the_outer_shorthand() {
             ("O { w, n }", "O { w: w, n: n }"),
         ],
         E1001,
-        &[("0.1.42", ("exit(0)", "1 2 5\n"))],
+        &[],
     );
 }
 
@@ -350,7 +352,7 @@ fn a_returned_shorthand_moves_a_mut_parameter_out() {
         "field_shorthand_return_mut.lu",
         &[("W { xs }", "W { xs: xs }")],
         E1001,
-        &[("0.1.42", ("exit(0)", "1 2\n"))],
+        &[],
     );
 }
 
@@ -399,6 +401,6 @@ fn a_shorthand_capture_is_a_borrow() {
         "field_shorthand_closure_borrow.lu",
         &[("P { n }", "P { n: n }")],
         Ruled::Refused("fail(E1002)", &["E1002", "W1102"]),
-        &[("0.1.42", ("exit(0)", "1 2\n"))],
+        &[],
     );
 }
