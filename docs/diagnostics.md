@@ -731,7 +731,7 @@ unfitting constant sailed into lowering and died as a verifier ICE
 (`[const-range]`, wolf-lang#151) — an abort where a diagnostic was
 owed.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__list_lit_elem_unfit.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_fit.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_annotated_narrow.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_default_i32_overflow.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_negative_and_unsigned.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_wrapping_literal.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__list_lit_elem_unfit.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_binding_literal.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_binding_literal_call.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_binding_literal_term.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__numlit_fit.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_annotated_narrow.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_default_i32_overflow.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_negative_and_unsigned.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0415_wrapping_literal.snap
 
 ## E0416 — a `str` cannot be assigned through an index or slice
 
