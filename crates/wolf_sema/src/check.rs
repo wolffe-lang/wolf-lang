@@ -10696,14 +10696,36 @@ impl<'a> Checker<'a> {
             Some(s) => self.synth_expr(s)?,
             None => self.error_ty(),
         };
-        // Matching a fallible value directly is not a surface: `?`
-        // unwraps it, `else |err|` hands you the row value to match.
-        if let TyKind::ErrUnion(..) = self.kind_of(scrut_ty) {
-            return Err(NotYet {
-                construct: "`match` over a fallible value (unwrap with `?` or bind the error with `else |err|`)",
-                span: e.span,
-            });
-        }
+        // `[type.row.match]` (s197, #497, ruling #21): a `match` over
+        // `T ! {row}` has two halves. An arm naming a tag of the row
+        // is a row arm (its payload binds as a handler's would); any
+        // other pattern is a value pattern over `T`; `_` covers both.
+        // The row is consumed here as an `else` consumes it, so the
+        // match is an error-trace point ([abi.err.trace]). A row that
+        // is not yet a sealed set of tags (a generic row variable) is
+        // refused by name, never guessed.
+        let fallible: Option<(TyId, TyId, Vec<String>)> = match self.kind_of(scrut_ty) {
+            TyKind::ErrUnion(ok, row) => {
+                let tags: Vec<String> = match self.kind_of(row) {
+                    TyKind::Row { tags, .. } => tags.into_iter().map(|(n, _)| n).collect(),
+                    TyKind::Error => Vec::new(),
+                    _ => {
+                        return Err(NotYet {
+                            construct: "`match` over a fallible value whose row is a generic row variable",
+                            span: e.span,
+                        });
+                    }
+                };
+                if self.fallible_collision(e.span, scrut_ty, ok, &tags) {
+                    // One root cause, one report: the arms cannot be
+                    // sorted into halves, so they are not typed.
+                    return Ok(self.error_ty());
+                }
+                self.trace_points.push(e.span);
+                Some((ok, row, tags))
+            }
+            _ => None,
+        };
         let mut rec = MatchRec {
             span: e.span,
             scrut: scrut_ty,
@@ -10713,7 +10735,10 @@ impl<'a> Checker<'a> {
         for arm in d.arms() {
             self.push_scope();
             if let Some(p) = arm.pattern() {
-                let lowered = self.match_pattern(p, scrut_ty)?;
+                let lowered = match &fallible {
+                    Some((ok, row, tags)) => self.fallible_pattern(p, *ok, *row, tags)?,
+                    None => self.match_pattern(p, scrut_ty)?,
+                };
                 rec.arms.push((lowered, arm.guard().is_some(), p.span));
             }
             if let Some(g) = arm.guard()
@@ -10752,6 +10777,84 @@ impl<'a> Checker<'a> {
                 .map(|(t, _)| t)
                 .unwrap_or_else(|| self.lo.table.never())),
         }
+    }
+
+    /// One arm pattern over a fallible scrutinee `ok ! row`
+    /// (`[type.row.match]`, s197). The half is decided by name
+    /// ([`fallible_arm_half`]): a row arm types against the row exactly
+    /// as a `match` over a bound row value does (tag by name, payload
+    /// arity E0808, unknown tag E0602); a value pattern types against
+    /// `ok` exactly as a `match` over `ok` does, and lowers under the
+    /// [`exhaust::Ctor::Ok`] constructor so the engine sees the value
+    /// half as one case; `_` is the wildcard over both. The shapes the
+    /// ruling does not name — an or-pattern mixing the halves, an
+    /// `@`-binding at the top of an arm — are refused by name.
+    fn fallible_pattern(
+        &mut self,
+        pat: &GreenNode,
+        ok: TyId,
+        row: TyId,
+        tags: &[String],
+    ) -> R<exhaust::Pat> {
+        use exhaust::{Ctor, Pat};
+        let half = {
+            let text = |s: Span| self.text(s);
+            let is_tag = |n: &str| tags.iter().any(|t| t == n);
+            fallible_arm_half(pat, &text, &is_tag)
+        };
+        match half {
+            Err(construct) => Err(NotYet {
+                construct,
+                span: pat.span,
+            }),
+            Ok(FallibleHalf::Both) => Ok(Pat::Wild),
+            Ok(FallibleHalf::Row) => self.match_pattern(pat, row),
+            Ok(FallibleHalf::Value) => {
+                let sub = self.match_pattern(pat, ok)?;
+                Ok(Pat::Ctor {
+                    ctor: Ctor::Ok,
+                    args: vec![sub],
+                })
+            }
+        }
+    }
+
+    /// E0816 (`[type.row.match]`): a tag of the row that is also a
+    /// variant of the value type. An arm spelling that name could be
+    /// either half, and the match never guesses — the whole match is
+    /// refused by name, whether or not an arm spells it. `true` when
+    /// reported.
+    fn fallible_collision(&mut self, span: Span, scrut: TyId, ok: TyId, tags: &[String]) -> bool {
+        let Some(vs) = self.scrut_variants(ok) else {
+            return false;
+        };
+        let Some((vname, payload, vspan)) = vs.into_iter().find(|(n, ..)| tags.iter().any(|t| t == n))
+        else {
+            return false;
+        };
+        let shown_ok = self.show(ok);
+        let shown = self.show(scrut);
+        let spelled = if payload.is_empty() {
+            vname.clone()
+        } else {
+            format!("{vname}({})", vec!["_"; payload.len()].join(", "))
+        };
+        self.diags.push(
+            Diagnostic::error(
+                codes::E0816,
+                span,
+                format!("the row tag `{vname}` is also a variant of `{shown_ok}`"),
+            )
+            .with_label(format!("this `match` is over `{shown}`; an arm `{spelled}` could be either half"))
+            .with_secondary(vspan, "the variant of the value type")
+            .with_note(
+                "a `match` over a fallible value sorts its arms by name — a tag of the row \
+                 is a row arm, anything else is a value pattern — and it never guesses a \
+                 name both halves own. Bind the row first (`else |e| match e { … }`) and \
+                 match the value separately, or rename the tag.",
+            ),
+        );
+        true
     }
 
     /// Type one match pattern against the scrutinee and lower it to
@@ -11382,9 +11485,29 @@ impl<'a> Checker<'a> {
             let exhaustive = ws.is_empty();
             self.match_facts.push((rec.span, exhaustive));
             if !exhaustive {
+                // `[type.row.match]`: a witness on the value half of a
+                // fallible scrutinee says so, naming the value type —
+                // "the uncovered value half", never a bare `_`.
+                let fallible_ok = match self.lo.table.kind(scrut).clone() {
+                    TyKind::ErrUnion(ok, _) => Some(ok),
+                    _ => None,
+                };
                 let rendered: Vec<String> = ws
                     .iter()
-                    .map(|w| format!("`{}`", exhaust::render_pat(w)))
+                    .map(|w| match (fallible_ok, w) {
+                        (
+                            Some(ok),
+                            exhaust::Pat::Ctor {
+                                ctor: exhaust::Ctor::Ok,
+                                ..
+                            },
+                        ) => format!(
+                            "`{}` (the value half, `{}`)",
+                            exhaust::render_pat(w),
+                            self.show(ok)
+                        ),
+                        _ => format!("`{}`", exhaust::render_pat(w)),
+                    })
                     .collect();
                 let mut d = Diagnostic::error(
                     codes::E0801,
@@ -11392,6 +11515,13 @@ impl<'a> Checker<'a> {
                     format!("this `match` does not cover {}", rendered.join(", ")),
                 )
                 .with_label("not every value is matched");
+                if fallible_ok.is_some() {
+                    d = d.with_note(
+                        "over a fallible value a row arm covers one tag of the row, a \
+                         value pattern covers values of the ok type, and `_` covers \
+                         whatever is left on both halves ([type.row.match]).",
+                    );
+                }
                 if any_guarded {
                     d = d.with_note(
                         "arms with `if` guards do not count toward coverage — a \
@@ -11509,6 +11639,31 @@ impl<'a> Checker<'a> {
                 ColTy::Row {
                     tags: out,
                     open: tail.is_some(),
+                }
+            }
+            // `[type.row.match]` (s197): a fallible scrutinee is the
+            // row's tags plus the value half as one more constructor
+            // over `T`'s own column. A row that is not a sealed tag
+            // set (a row variable) is open: only `_` closes it.
+            TyKind::ErrUnion(ok, row) => {
+                let okc = self.col_ty(ok, depth + 1)?;
+                let rz = zonk(&mut self.lo.table, &self.vars, row);
+                let (tags, open) = match self.lo.table.kind(rz).clone() {
+                    TyKind::Row { tags, tail } => (tags, tail.is_some()),
+                    _ => (Vec::new(), true),
+                };
+                let mut out = Vec::new();
+                for (n, payload) in tags {
+                    let mut cols = Vec::new();
+                    for p in payload {
+                        cols.push(self.col_ty(p, depth + 1)?);
+                    }
+                    out.push((n, cols));
+                }
+                ColTy::Fallible {
+                    ok: Box::new(okc),
+                    tags: out,
+                    open,
                 }
             }
             _ => ColTy::Opaque,
@@ -12471,6 +12626,88 @@ fn parse_int_text(text: &str) -> Option<i128> {
 ///
 /// The escape set is the string set plus `\'`:
 /// `\n \t \r \\ \' \" \0 \xNN \u{1–6 hex}`.
+/// Which half of a `T ! {row}` scrutinee an arm pattern belongs to
+/// (`[type.row.match]`, s197, ruling #21). THE one rule, replayed by
+/// the checked machine and the WIR lowering so every tier sorts arms
+/// the same way: `_` covers both halves; a bare identifier or a path
+/// head that names a tag of the row (by its dotted spelling or its
+/// last segment) is a row arm; every other pattern is a value pattern
+/// over `T`. An or-pattern takes the half its alternatives agree on
+/// (`_` agrees with either); one that mixes the halves, and an
+/// `@`-binding at the top of an arm, are refused by name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FallibleHalf {
+    Row,
+    Value,
+    Both,
+}
+
+impl FallibleHalf {
+    /// Does an arm of this half run when the scrutinee is a row
+    /// (`row == true`) or a value?
+    pub fn admits(self, row: bool) -> bool {
+        match self {
+            FallibleHalf::Both => true,
+            FallibleHalf::Row => row,
+            FallibleHalf::Value => !row,
+        }
+    }
+}
+
+/// See [`FallibleHalf`]. `text` reads a span's source; `is_tag` says
+/// whether a name is a tag of the scrutinee's row.
+pub fn fallible_arm_half(
+    pat: &GreenNode,
+    text: &dyn Fn(Span) -> String,
+    is_tag: &dyn Fn(&str) -> bool,
+) -> Result<FallibleHalf, &'static str> {
+    match pat.kind {
+        SyntaxKind::WildcardPat => Ok(FallibleHalf::Both),
+        SyntaxKind::IdentPat => {
+            let name = pat
+                .child_token(SyntaxKind::Ident)
+                .map(|t| text(t.span))
+                .unwrap_or_default();
+            Ok(if is_tag(&name) {
+                FallibleHalf::Row
+            } else {
+                FallibleHalf::Value
+            })
+        }
+        SyntaxKind::PathPat => {
+            let dotted = pat
+                .nodes()
+                .find(|n| n.kind == SyntaxKind::Path)
+                .map(|p| text(p.span))
+                .unwrap_or_default();
+            let last = dotted.rsplit('.').next().unwrap_or(dotted.as_str());
+            Ok(if is_tag(&dotted) || is_tag(last) {
+                FallibleHalf::Row
+            } else {
+                FallibleHalf::Value
+            })
+        }
+        SyntaxKind::OrPat => {
+            let mut acc = FallibleHalf::Both;
+            for alt in pat.nodes().filter(|n| wolf_ast::is_pattern_kind(n.kind)) {
+                let h = fallible_arm_half(alt, text, is_tag)?;
+                acc = match (acc, h) {
+                    (FallibleHalf::Both, h) | (h, FallibleHalf::Both) => h,
+                    (a, h) if a == h => a,
+                    _ => {
+                        return Err(
+                            "an or-pattern mixing a row arm and a value pattern over a fallible value",
+                        );
+                    }
+                };
+            }
+            Ok(acc)
+        }
+        SyntaxKind::BindingPat => Err("an `@`-binding at the top of an arm over a fallible value"),
+        _ => Ok(FallibleHalf::Value),
+    }
+}
+
 pub fn cook_char_literal(text: &str) -> Option<char> {
     let inner = text.strip_prefix('\'')?.strip_suffix('\'')?;
     let mut cs = inner.chars();

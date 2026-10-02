@@ -1451,6 +1451,18 @@ literals, so the checker decides this at compile time; over `char`
 the order is scalar order ([type.char.order]).
 "#);
 
+code!(E0816, "a row tag that is also a variant of the value type", r#"
+A `match` over a fallible value `T ! {row}` sorts its arms by name
+([type.row.match]): an identifier that names a tag of the row is a row
+arm, and every other pattern is a value pattern over `T`. This
+scrutinee's row carries a tag that is also a variant of `T`, so an arm
+spelling that name could be either half, and the match never guesses —
+the whole match is refused, whether or not an arm spells the name.
+Bind the row first and match the value separately
+(`v else |e| match e { … }`, then `match v { … }`), or rename the tag
+so the two name sets stay apart.
+"#);
+
 // ------------------------------------------------------------------------
 // E1xxx — the memory tier (c04, spec/02). s18 registers the Tier-0
 // value/exclusivity codes; s19 the region-inference codes (E1004

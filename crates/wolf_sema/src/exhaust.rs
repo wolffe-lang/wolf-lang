@@ -66,6 +66,17 @@ pub(crate) enum ColTy {
         tags: Vec<(String, Vec<ColTy>)>,
         open: bool,
     },
+    /// A fallible value `T ! {row}` (`[type.row.match]`, s197): two
+    /// halves in one column. The row's tags are constructors as in
+    /// [`ColTy::Row`]; the value half is one more constructor,
+    /// [`Ctor::Ok`], whose single field is `T`'s own column. A row arm
+    /// covers one tag, a value pattern covers `Ok(p)`, and `_` covers
+    /// both halves. The set is complete when the row is sealed.
+    Fallible {
+        ok: Box<ColTy>,
+        tags: Vec<(String, Vec<ColTy>)>,
+        open: bool,
+    },
     /// A type the engine cannot split (structs, functions, regions,
     /// archetypes, …): only a wildcard/binding covers it.
     Opaque,
@@ -100,6 +111,10 @@ pub(crate) enum Ctor {
     Tuple,
     /// An enum variant or error-row tag, by name.
     Named(String),
+    /// The value half of a [`ColTy::Fallible`] column: the one
+    /// constructor every value pattern wears, its single field the
+    /// value itself.
+    Ok,
 }
 
 impl Ctor {
@@ -127,11 +142,13 @@ impl Ctor {
                 .find(|(v, _)| v == n)
                 .map(|(_, fs)| fs.clone())
                 .unwrap_or_default(),
-            (Ctor::Named(n), ColTy::Row { tags, .. }) => tags
+            (Ctor::Named(n), ColTy::Row { tags, .. })
+            | (Ctor::Named(n), ColTy::Fallible { tags, .. }) => tags
                 .iter()
                 .find(|(t, _)| t == n)
                 .map(|(_, fs)| fs.clone())
                 .unwrap_or_default(),
+            (Ctor::Ok, ColTy::Fallible { ok, .. }) => vec![(**ok).clone()],
             _ => Vec::new(),
         }
     }
@@ -148,6 +165,12 @@ fn complete_set(col: &ColTy) -> Option<Vec<Ctor>> {
         ColTy::Row { tags, open } if !open => {
             Some(tags.iter().map(|(n, _)| Ctor::Named(n.clone())).collect())
         }
+        ColTy::Fallible { tags, open, .. } if !open => Some(
+            tags.iter()
+                .map(|(n, _)| Ctor::Named(n.clone()))
+                .chain(std::iter::once(Ctor::Ok))
+                .collect(),
+        ),
         _ => None,
     }
 }
@@ -435,6 +458,9 @@ pub(crate) fn render_pat(p: &Pat) -> String {
                     format!("{n}({})", parts.join(", "))
                 }
             }
+            // The value half renders as the value it carries; the
+            // checker says which half a top-level witness is on.
+            Ctor::Ok => args.first().map(render_pat).unwrap_or_else(|| "_".to_string()),
         },
     }
 }
@@ -547,6 +573,49 @@ mod tests {
             vec![ctor(Ctor::Named("Timeout".into()), vec![])],
         ];
         assert!(witnesses(&matrix, &[col], 3).is_empty());
+    }
+
+    /// `[type.row.match]` (s197): a fallible column is the row's tags
+    /// plus the value half. A tag arm and a value binding leave the
+    /// other tag as the witness; a tag arm alone leaves the value half
+    /// (rendered as the value's own witness); `_` closes both; a
+    /// binding after `_`-less tag arms is reachable, and `_` after a
+    /// value binding is reachable (it still covers the tags).
+    #[test]
+    fn fallible_column_splits_both_halves() {
+        let col = ColTy::Fallible {
+            ok: Box::new(ColTy::Int),
+            tags: vec![("Bad".into(), vec![ColTy::Str]), ("eof".into(), vec![])],
+            open: false,
+        };
+        let bad = ctor(Ctor::Named("Bad".into()), vec![Pat::Wild]);
+        let eof = ctor(Ctor::Named("eof".into()), vec![]);
+        let value = |p| ctor(Ctor::Ok, vec![p]);
+        // `Bad(_)`, `v`: `eof` is the witness.
+        let ws = witnesses(&[vec![bad.clone()], vec![value(Pat::Wild)]], &[col.clone()], 3);
+        let rendered: Vec<String> = ws.iter().map(render_pat).collect();
+        assert_eq!(rendered, vec!["eof"]);
+        // `Bad(_)`, `eof`: the value half is the witness.
+        let ws = witnesses(&[vec![bad.clone()], vec![eof.clone()]], &[col.clone()], 3);
+        assert_eq!(ws.len(), 1);
+        assert!(matches!(&ws[0], Pat::Ctor { ctor: Ctor::Ok, .. }));
+        assert_eq!(render_pat(&ws[0]), "_");
+        // `Bad(_)`, `eof`, `0`: the value witness is the next integer.
+        let m = vec![vec![bad.clone()], vec![eof.clone()], vec![value(ctor(Ctor::Int(0), vec![]))]];
+        let ws = witnesses(&m, &[col.clone()], 3);
+        assert_eq!(ws.len(), 1);
+        assert_eq!(render_pat(&ws[0]), "1");
+        // `_` closes everything; `v` then `_`: `_` is still useful.
+        assert!(witnesses(&[vec![Pat::Wild]], &[col.clone()], 3).is_empty());
+        assert!(is_useful(
+            &[vec![value(Pat::Wild)]],
+            &[Pat::Wild],
+            std::slice::from_ref(&col)
+        ));
+        // `Bad(_)`, `eof`, `v`: exhaustive; a later `_` is dead.
+        let m = vec![vec![bad], vec![eof], vec![value(Pat::Wild)]];
+        assert!(witnesses(&m, std::slice::from_ref(&col), 3).is_empty());
+        assert!(!is_useful(&m, &[Pat::Wild], &[col]));
     }
 
     #[test]
