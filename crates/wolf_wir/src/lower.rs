@@ -2422,6 +2422,45 @@ fn flat_offsets(it: &types::TypeInterner, fields: &[TypeId]) -> Option<Vec<u64>>
     Some(out)
 }
 
+/// `[abi.layout.c]` (K4, wolf-lang#523): the psABI's C layout of a
+/// flat type — every scalar at its natural alignment (its size), an
+/// aggregate aligned to its strictest field, fields in declaration
+/// order each at the next offset its alignment allows, the size
+/// rounded up to the alignment. This is the layout a raw pointee has:
+/// what C reads at `p[i]` is what wolf wrote there, field for field,
+/// and `p[i]`'s stride is the C `sizeof`. x86-64 SysV and AAPCS64
+/// agree on every scalar WIR has, so one rule serves both release
+/// targets. Before kw01 the raw tier used [`flat_offsets`]' packed
+/// spill layout here (`{u8, u32, u8}` at 0 1 5, stride 6; C has 0 4 8,
+/// size 12).
+fn c_layout(it: &types::TypeInterner, t: TypeId) -> Option<(u64, u64)> {
+    if let Some(s) = scalar_size(t) {
+        return Some((s, s));
+    }
+    match it.get(t) {
+        types::TypeData::Agg(fields) => {
+            let (_, size, align) = c_offsets(it, &fields.clone())?;
+            Some((size, align))
+        }
+        _ => None,
+    }
+}
+
+/// Each field's C offset, and the aggregate's C size and alignment.
+fn c_offsets(it: &types::TypeInterner, fields: &[TypeId]) -> Option<(Vec<u64>, u64, u64)> {
+    let mut out = Vec::with_capacity(fields.len());
+    let mut off = 0u64;
+    let mut align = 1u64;
+    for &f in fields {
+        let (fs, fa) = c_layout(it, f)?;
+        off = off.div_ceil(fa) * fa;
+        out.push(off);
+        off += fs;
+        align = align.max(fa);
+    }
+    Some((out, off.div_ceil(align) * align, align))
+}
+
 fn types_is_int(t: TypeId) -> bool {
     matches!(t, types::I8 | types::I16 | types::I32 | types::I64)
 }
@@ -13696,7 +13735,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 };
                 let p = self.raw_elem_addr(base, idx, size);
                 let region = self.foreign_buf_region();
-                Ok(Flow::Val(Some(self.load_flat(ewty, p, region, e.span)?)))
+                Ok(Flow::Val(Some(self.load_c(ewty, p, region, e.span)?)))
             }
             _ => Err(refuse(
                 "indexing outside str/List/Pool and raw pointers (a map read answers a row, \
@@ -14099,7 +14138,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         else {
             return Err(refuse("raw pointers to unit types", span));
         };
-        let Some(size) = flat_size(&self.b.module.types, ewty) else {
+        // `[abi.layout.c]`: the stride is the C `sizeof`, tail padding
+        // included (wolf-lang#523).
+        let Some((size, _)) = c_layout(&self.b.module.types, ewty) else {
             return Err(refuse("raw pointers to types without a flat layout", span));
         };
         Ok((ewty, size))
@@ -14474,7 +14515,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             };
             let p = self.raw_elem_addr(base, idx, size);
             let region = self.foreign_buf_region();
-            self.store_flat(val, p, region, vexpr.span)?;
+            self.store_c(val, p, region, vexpr.span)?;
             return Ok(Flow::Val(None));
         }
         let TyKind::List(elem) = self.table.kind(self.strip_sema(base_sema)) else {
@@ -21249,6 +21290,52 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         Ok(self.b.ins(Opcode::AggMake, &parts, &[ty], Aux::None).one())
     }
 
+    /// Load a raw pointee at the C layout (`[abi.layout.c]`): a
+    /// scalar directly, an aggregate field-wise at its C offsets. The
+    /// padding is never read.
+    fn load_c(&mut self, ty: TypeId, ptr: Value, region: RegionId, span: Span) -> R<Value> {
+        if scalar_size(ty).is_some() {
+            return Ok(self.b.ins_load(ty, ptr, region));
+        }
+        let types::TypeData::Agg(fields) = self.b.module.types.get(ty).clone() else {
+            return Err(refuse("loading a non-flat type", span));
+        };
+        let Some((offs, _, _)) = c_offsets(&self.b.module.types, &fields) else {
+            return Err(refuse("loading a non-flat aggregate", span));
+        };
+        let mut parts = Vec::with_capacity(fields.len());
+        for (k, &fty) in fields.iter().enumerate() {
+            let addr = self.field_addr(ptr, offs[k]);
+            parts.push(self.load_c(fty, addr, region, span)?);
+        }
+        Ok(self.b.ins(Opcode::AggMake, &parts, &[ty], Aux::None).one())
+    }
+
+    /// [`Lowerer::load_c`]'s write twin: the fields at their C offsets;
+    /// the padding is never written.
+    fn store_c(&mut self, val: Value, ptr: Value, region: RegionId, span: Span) -> R<()> {
+        let ty = self.b.func.value_ty(val);
+        if scalar_size(ty).is_some() {
+            self.b.ins_store(val, ptr, region);
+            return Ok(());
+        }
+        let types::TypeData::Agg(fields) = self.b.module.types.get(ty).clone() else {
+            return Err(refuse("storing a non-flat type", span));
+        };
+        let Some((offs, _, _)) = c_offsets(&self.b.module.types, &fields) else {
+            return Err(refuse("storing a non-flat aggregate", span));
+        };
+        for (k, &fty) in fields.iter().enumerate() {
+            let part = self
+                .b
+                .ins(Opcode::AggGet, &[val], &[fty], Aux::Int(k as i64))
+                .one();
+            let addr = self.field_addr(ptr, offs[k]);
+            self.store_c(part, addr, region, span)?;
+        }
+        Ok(())
+    }
+
     /// Store a flat value field-wise (scalar loads/stores only — the
     /// text format's typed mnemonics are scalar).
     fn store_flat(&mut self, val: Value, ptr: Value, region: RegionId, span: Span) -> R<()> {
@@ -21720,5 +21807,33 @@ fn wrap_bits(v: u64, bits: u32) -> i64 {
         (r as i64) - (m as i64)
     } else {
         r as i64
+    }
+}
+
+#[cfg(test)]
+mod c_layout_tests {
+    use super::*;
+
+    /// `[abi.layout.c]` against the psABI's answers (wolf-lang#523's
+    /// shapes): `{u8, u32, u8}` is 0 4 8 / size 12 / align 4, and the
+    /// packed spill layout the raw tier used before kw01 is 0 1 5.
+    #[test]
+    fn the_c_layout_is_the_psabi_one() {
+        let mut it = types::TypeInterner::new();
+        let c3 = it.intern(types::TypeData::Agg(vec![types::I8, types::I32, types::I8]));
+        let fields = vec![types::I8, types::I32, types::I8];
+        assert_eq!(c_offsets(&it, &fields), Some((vec![0, 4, 8], 12, 4)));
+        assert_eq!(c_layout(&it, c3), Some((12, 4)));
+        assert_eq!(flat_offsets(&it, &fields), Some(vec![0, 1, 5]));
+        // A nested aggregate aligns to its strictest field; a trailing
+        // byte rounds the size up to the alignment.
+        let inner = it.intern(types::TypeData::Agg(vec![types::I8, types::I64]));
+        assert_eq!(c_layout(&it, inner), Some((16, 8)));
+        let outer = vec![types::I8, inner, types::I16];
+        assert_eq!(c_offsets(&it, &outer), Some((vec![0, 8, 24], 32, 8)));
+        // Scalars are unchanged: a `*u8` still steps one byte.
+        assert_eq!(c_layout(&it, types::I8), Some((1, 1)));
+        assert_eq!(c_layout(&it, types::PTR), Some((8, 8)));
+        assert_eq!(c_layout(&it, types::BOOL), Some((1, 1)));
     }
 }
