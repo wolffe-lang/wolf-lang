@@ -14,8 +14,9 @@
 //! `continue` re-ran it and then trapped on a receiver the fallback had
 //! moved, and a store or `mut` argument was refused as "not a place".
 //! Native, release and lupin 0.1.42 run each operand once (lupin 0.1.42
-//! runs some receivers' operands twice — pinned below by version,
-//! wolffe-lang/wolf-interp#157 and #162).
+//! runs some receivers' operands twice, wolffe-lang/wolf-interp#157 and
+//! #162; pinned by version until the 0.1.43 pairing, r25 — 0.1.43 runs
+//! them once).
 //!
 //! Why a driver test beside the corpus rows (s171's lesson, wave 45):
 //! `cargo xtask corpus` runs every `phase: run` entry on the NATIVE
@@ -182,21 +183,6 @@ fn every_lane_says(entry: &Path, want: &str, lupin_pre_mirror: &[(&str, &str)]) 
     }
 }
 
-/// lupin 0.1.42's measured answer on `ctl_index_try_once_receivers.lu`:
-/// a propagating `?` in the index of a method receiver (`count`,
-/// `(mut …).push`), a byte view's receiver and a `str` member base runs
-/// twice (wolffe-lang/wolf-interp#162). Pinned by version so a newer
-/// lupin that still differs reds by name (s180's design).
-const LUPIN_0_1_42_RECEIVERS: &str = "copy\nidx\n9\ncount\nidx\nidx\n9\nfor\nidx\n9\n\
-elemcopy\nidx\n5\nidx\n9\npush\nidx\n3\nidx\nidx\n9\nbytes\nidx\nidx\n9\n\
-bytesfor\nidx\nidx\n9\nstrlen\nidx\nidx\n9\nprint\nidx\ncde\n0\nidx\n9\n";
-
-/// lupin 0.1.42's measured answer on `ctl_slice_try_once.lu`: a
-/// slice's base index runs twice when it does NOT propagate
-/// (wolffe-lang/wolf-interp#157's shape). Pinned by version.
-const LUPIN_0_1_42_SLICE_BASE: &str =
-    "endpoint\nlo\nhi\n2\nlo\n9\nbase\ngi\ngi\nlo\nhi\n2\ngi\n9\n";
-
 /// The issue's own shape, `let v = xs[idx()?]`, then the same index in
 /// a hole, as a `read` argument and as a member base (`rows[idx()?].len`).
 /// Red at trunk 87e105b1 on the checked lane (twice, then three times).
@@ -221,7 +207,7 @@ fn a_propagating_index_operand_runs_once_under_every_reader() {
         "copy\nidx\n9\ncount\nidx\n9\nfor\nidx\n9\nelemcopy\nidx\n5\nidx\n9\n\
 push\nidx\n3\nidx\n9\nbytes\nidx\n9\nbytesfor\nidx\n9\nstrlen\nidx\n9\n\
 print\nidx\ncde\n0\nidx\n9\n",
-        &[("0.1.42", LUPIN_0_1_42_RECEIVERS)],
+        &[],
     );
 }
 
@@ -234,7 +220,7 @@ fn a_propagating_slice_endpoint_or_base_index_runs_once() {
     every_lane_says(
         &corpus("ctl_slice_try_once.lu"),
         "endpoint\nlo\nhi\n2\nlo\n9\nbase\ngi\nlo\nhi\n2\ngi\n9\n",
-        &[("0.1.42", LUPIN_0_1_42_SLICE_BASE)],
+        &[],
     );
 }
 
