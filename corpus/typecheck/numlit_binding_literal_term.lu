@@ -5,13 +5,13 @@
 //! s202 (wolf-lang#458): the literal inside the initializer's term.
 //! `+ - * / %` share one type across the term, so `3000000000` has the
 //! term's context, which is the binding's, which is none: `i32`. The
-//! negative and the parenthesised spellings are the same literal. Each
+//! negative and the longer spellings are the same literal. Each
 //! ran on every wolfgang lane until s202 (the later `int` operand
 //! pinned them); lupin 0.1.43 traps on the first.
 
 fn main() -> !int {
     let c = 3000000000 + 1
-    let d = -(3000000000)
+    let d = 0 - 3000000000
     let e = -3000000000 * 2
     let s: int = 0
     if c > s && d < s && e < s {
