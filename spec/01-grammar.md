@@ -507,15 +507,56 @@ attr_arg  ::= attr | literal   /* `key = "v"` is attr with '=' input */
 ```
 
 Closed, structured — attributes are not token soup (no macros at v1).
-Known at v1: `#[trusted]`, `#[noalloc]`, `#[inplace]`, `#[nopanic]`,
-`#[bounded_stack]`, `#[repr(c)]`, `#[cfg(target = "…")]`,
-`#[allow(w1301)]` (item-granular warning suppression, §9.3 — the
-arguments are diagnostic codes through the ordinary `attr_arg`
-production; no new grammar), `#[consttime]` /
-`#[consttime(public(…))]` (the constant-time contract, spec/09
-`[ct.attr]` — the `public(…)` exemption also rides the ordinary
-`attr_arg` production), and `#[index(0)]` / `#[index(1)]` (the origin
-marker, `[gram.attr.index]`).
+
+**The set is closed, and the closure is enforced** `[gram.item.attr.set]`
+(K13, ruled 2026-10-02, STATUS #31 — wolf-lang#519): an attribute
+either means something to the compiler, in the position where it is
+written, or the program is refused with **E0817** naming it. Before
+the rule an attribute nothing read compiled on every machine and meant
+nothing. The implemented attributes and their positions:
+
+| attribute | written on | meaning |
+|---|---|---|
+| `#[trusted]`, `#[trusted("…")]` | a function | the audited ring (`[mem.unsafe]`, E1303) |
+| `#[consttime]`, `#[consttime(public(…))]` | a function | the constant-time contract (spec/09 `[ct.attr]`) |
+| `#[allow(w1301, …)]` | any attributed node | item-granular warning suppression (§9.3); the arguments are diagnostic codes through the ordinary `attr_arg` production |
+| `#[index(0)]`, `#[index(1)]` | any attributed node | the origin marker (`[gram.attr.index]`) |
+| `#[budget(fuel = N, heap = N, depth = N)]` | a statement or an item | the comptime evaluation budget at that site (E0709) |
+| `#[repr(c)]` | a struct | the C layout (spec/04 `[abi.layout.c]`) |
+| `#[cfg(target = "…")]` | an item, a statement, a field | conditional compilation (`[gram.item.attr.cfg]`) |
+
+Everything else is E0817: a name wolf does not know; a known attribute
+nothing implements yet — the performance contracts `#[noalloc]`,
+`#[inplace]`, `#[nopanic]`, `#[bounded_stack]` (named at v1, no
+checker exists, wolf-lang#180), `repr(packed)`, `repr(align(N))` and
+`repr(transparent)` (KWC F4's later half), `#[thread_local]` (STATUS
+#32 R4), `#[section(…)]` / `#[link_section(…)]` (KWC K6) — each
+refused by name until the lane that implements it; and an implemented
+attribute in a position where nothing reads it (`#[repr(c)]` on a
+function). A refused attribute takes no effect. The inner form
+`#![…]` keeps its own rule (E0813, below).
+
+**Conditional compilation** `[gram.item.attr.cfg]`: `#[cfg(target =
+"S")]` keeps the node it is written on when `S` names the build's
+target — the whole triple (`x86_64-unknown-linux-gnu`) or the
+triple's architecture, its first component (`x86_64`) — and drops it
+otherwise. Several `cfg` items on one node all have to hold. A dropped
+node is removed after parsing and before name resolution: its names
+are never defined, its body is never resolved, typed or lowered, on
+any machine, so it may name what exists only on its own target. It
+must still parse. The predicate is exactly one `target = "…"`; `S`
+must name a target wolf knows (the hosted triples `[abi.c.targets]`
+lists, `x86_64-unknown-none`, or the architectures `x86_64` and
+`aarch64`); anything else — another key (`cfg(unix)`), several
+predicates, a string that names no target — is E0817 and the node is
+kept, so a typo can never silently drop code and one mistake is one
+diagnostic. The build's target is the host's until a build can select
+another (KWC K1). Witnesses: `grammar/cfg_target_arch.lu` (exactly
+one of two definitions survives on every host),
+`grammar/cfg_target_freestanding.lu` (an ill-typed item and statement
+gated to the freestanding target never reach the type checker),
+`grammar/cfg_target_unknown.lu`, `grammar/cfg_predicate_unknown.lu`;
+refused attributes: `grammar/attr_*.lu`.
 
 **The origin marker** `[gram.attr.index]` (D61, s126): the marker
 decides whether subscripts in its lexical scope count from 0 or from 1

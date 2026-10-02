@@ -116,8 +116,36 @@ AAPCS64, win64, Apple arm64 deltas).
 
 - `[abi.c.seams]` Exactly three ABI seams exist: `extern "c"` function
   types/imports, `export`ed wolf functions (C-callable), and
-  `#[repr(c)]` (+ `packed`, `transparent`) data. There is no fourth
-  mechanism; everything else is `wolf-abi-0` internal.
+  `#[repr(c)]` (+ `packed`, `transparent`, not yet implemented) data.
+  There is no fourth mechanism; everything else is `wolf-abi-0`
+  internal. **The only ABI string is `"c"`**: `extern "S"` with any
+  other `S` is **E0818**, naming it (K7, STATUS #31 — wolf-lang#524).
+  In particular wolf has no interrupt calling convention: an interrupt
+  or exception enters through an assembly trampoline that calls an
+  `export fn` with the C convention (KWC F7); before the rule
+  `extern "x86-interrupt" fn` compiled as an ordinary function
+  returning with `ret`.
+- `[abi.layout.c]` `#[repr(c)]` on a struct is the target psABI's C
+  layout (K4, STATUS #31): fields in declaration order, each scalar at
+  its natural alignment (its size), an aggregate field aligned to its
+  strictest member, the size rounded up to the struct's alignment. It
+  holds wherever the bytes can be observed: a local or a field (the
+  native layout already places aggregates this way), and **a raw
+  pointee** — `p[i]` through `p: *T` loads and stores `T`'s fields at
+  their C offsets and steps `p` by the C `sizeof`, tail padding
+  included, so what C reads is what wolf wrote and the reverse
+  (wolf-lang#523: before kw01 the raw tier wrote a pointee packed,
+  `{u8, u32, u8}` at offsets 0 1 5 where C has 0 4 8, size 12). The
+  raw tier uses this layout for every struct pointee; for a struct
+  without `#[repr(c)]` it is a fact of this version, not a promise
+  (`[abi.native.layout]`). Padding is never read or written. The
+  checked machine and the reference interpreter refuse a
+  whole-aggregate raw load or store by name (they have no byte-level
+  aggregate) rather than model a layout. `packed`, `align(N)`,
+  `transparent` and the comptime `size_of` / `align_of` / `offset_of`
+  are KWC F4's later half: E0817 and E0708 until then. Witnesses:
+  `memory/raw_repr_c_layout.lu`, and `repr_c_raw_layout.rs`, which
+  holds a C compiler to both directions on both compiling tiers.
 - `[abi.c.types]` Only repr(c)-compatible types cross a membrane by
   value: scalars, raw pointers, `#[repr(c)]` aggregates. Anything else
   is a compile error with a fix-it naming the nearest compatible shape
