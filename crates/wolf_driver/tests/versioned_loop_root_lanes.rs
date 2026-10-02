@@ -167,7 +167,7 @@ fn every_lane_says(entry: &Path, verdict: &str, stdout: &str, lupin_also: &[&str
 #[test]
 fn a_loop_holding_an_inlined_root_builds_on_release() {
     every_lane_says(
-        &corpus("kernels/versioned_loop_inlined_root.lu"),
+        &corpus("memory/versioned_loop_inlined_root.lu"),
         "exit(0)",
         "4\n",
         &[],
@@ -179,7 +179,7 @@ fn a_loop_holding_an_inlined_root_builds_on_release() {
 #[test]
 fn a_loop_holding_a_cross_module_root_builds_on_release() {
     every_lane_says(
-        &corpus("kernels/versioned_loop_cross_module/main.lu"),
+        &corpus("memory/versioned_loop_cross_module/main.lu"),
         "exit(0)",
         "4\n",
         &[],
