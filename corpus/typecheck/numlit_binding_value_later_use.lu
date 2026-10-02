@@ -1,0 +1,26 @@
+//! check: run(exit=0, stdout="1 60 3 922337203685477580 5000000001\n")
+//! phase: run
+//! conforms: type.numlit.default, type.numlit.value
+//!
+//! s202 (wolf-lang#458), the controls. What a later use still decides
+//! is the binding's type: `let n = 0` then `take_int(n)` is an `int`,
+//! and `var i = 0` compared with `xs.len` is an `int`, exactly as
+//! `[type.numlit.value]` says; their literals fit `i32`, so nothing is
+//! refused. The annotated spellings of #458's literals run everywhere.
+//! A literal in a call argument has the parameter's type.
+
+fn take_int(x: int) -> int { x + 1 }
+
+fn main() -> !int {
+    let n = 0
+    let xs = [10, 20, 30]
+    var i = 0
+    var t = 0
+    while i < xs.len {
+        t += xs[i]
+        i += 1
+    }
+    let c: int = 922337203685477580
+    print("{take_int(n)} {t} {i} {c} {take_int(5000000000)}")
+    0
+}

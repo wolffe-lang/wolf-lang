@@ -1,0 +1,25 @@
+//! check: fail(E0415)
+//! phase: resolve
+//! conforms: type.numlit.default, type.numlit.propagate, type.numlit.value
+//!
+//! s202 (wolf-lang#458), the issue's witness. The literal is an
+//! unannotated binding's whole value, so it has no context of its own
+//! (`[type.numlit.propagate]`: adoption does not cross a binding) and
+//! takes `i32` (`[type.numlit.default]`), which cannot hold it. The
+//! later comparison against an `int` may decide the binding's type; it
+//! never decides the literal's. Until s202 every wolfgang lane let the
+//! comparison type the literal and ran the program as 64-bit
+//! (`922337203685477580`, exit 0) while lupin 0.1.43 trapped
+//! (`trap(overflow)`: "the literal is outside `i32`, the binding's
+//! type"). E0415 here and lupin's trap are the same answer, as
+//! `[type.numlit.value]`'s note records for an unused binding.
+
+fn main() -> int {
+    let c = 922337203685477580
+    var s: int = 5
+    if s > c {
+        print("big")
+    }
+    print("{c}")
+    0
+}

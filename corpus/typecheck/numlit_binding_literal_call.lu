@@ -1,0 +1,18 @@
+//! check: fail(E0415)
+//! phase: resolve
+//! conforms: type.numlit.default, type.numlit.propagate, type.numlit.value
+//!
+//! s202 (wolf-lang#458): `[type.numlit.value]`'s own example, `let big
+//! = 5000000000` then `take_int(big)`. The call decides `big`'s type
+//! (`int`), but the literal was written where nothing gave it one, so
+//! it is an `i32` literal that does not fit. Ran as `5000000001` on
+//! every wolfgang lane until s202; lupin 0.1.43 traps. The spelling
+//! that means 64-bit is the annotation, `let big: int = 5000000000`.
+
+fn take_int(x: int) -> int { x + 1 }
+
+fn main() -> !int {
+    let big = 5000000000
+    print("{take_int(big)}")
+    0
+}
