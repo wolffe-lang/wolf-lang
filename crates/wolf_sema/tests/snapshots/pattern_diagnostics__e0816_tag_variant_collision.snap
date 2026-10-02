@@ -1,0 +1,20 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0816]: the row tag `Line` is also a variant of `Shape`
+  --> mem:///main.lu:12:13
+   |
+ 3 |     Line(int),
+   |     ---- the variant of the value type
+...
+12 |     let v = match pick(1) {
+   |             ^^^^^^^^^^^^^^^
+13 |         Dot => 0,
+14 |         _ => 1,
+15 |     }
+   | ^^^^^ this `match` is over `Shape ! {Line(int)}`; an arm `Line(_)` could be either half
+   |
+   = note: a `match` over a fallible value sorts its arms by name — a tag of the row is a row arm,
+     anything else is a value pattern — and it never guesses a name both halves own. Bind the
+     row first (`else |e| match e { … }`) and match the value separately, or rename the tag.

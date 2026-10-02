@@ -1,0 +1,18 @@
+---
+source: crates/wolf_sema/tests/pattern_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0801]: this `match` does not cover `eof`
+  --> mem:///main.lu:8:13
+   |
+ 8 |     let n = match parse("ab") {
+   |             ^^^^^^^^^^^^^^^^^^^
+ 9 |         Bad(_) => 0,
+10 |         v => v,
+11 |     }
+   | ^^^^^ not every value is matched
+   |
+   = note: over a fallible value a row arm covers one tag of the row, a value pattern covers values
+     of the ok type, and `_` covers whatever is left on both halves ([type.row.match]).
+   = note: add arms for the missing cases, or end the `match` with a `_` arm to catch the rest
+     deliberately.
