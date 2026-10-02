@@ -8,7 +8,7 @@
 //! value numbering, and layout come back canonical there, never
 //! mid-pass.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use crate::ir::{Aux, Block, Function, Inst, Value, ValueDef};
 use crate::ops::Opcode;
@@ -134,9 +134,18 @@ pub(crate) fn dominators(cfg: &Cfg) -> Doms {
 }
 
 /// One natural loop: all back edges to one header, bodies merged.
+///
+/// `blocks` is an ORDERED set (#503). Passes walk it to collect
+/// candidates — rangeopt's versioner builds its guard chain in the
+/// order it meets the loop's bounds guards — and a `HashSet` here
+/// handed every such walk a per-process random order (`RandomState`),
+/// so two builds of one program with one compiler emitted the guards
+/// in different orders, the bodies hashed differently, and dedup,
+/// clustering and the LLVM text all followed. Block ids are dense in
+/// layout order after compaction, so id order is layout order.
 pub(crate) struct NaturalLoop {
     pub header: Block,
-    pub blocks: HashSet<Block>,
+    pub blocks: BTreeSet<Block>,
 }
 
 pub(crate) struct Loops {
@@ -148,7 +157,7 @@ pub(crate) struct Loops {
 }
 
 pub(crate) fn loops(f: &Function, cfg: &Cfg, doms: &Doms) -> Loops {
-    let mut by_header: HashMap<Block, HashSet<Block>> = HashMap::new();
+    let mut by_header: BTreeMap<Block, BTreeSet<Block>> = BTreeMap::new();
     for &b in &cfg.rpo {
         for s in successors(f, b) {
             if cfg.reachable.contains(&s) && doms.dominates(s, b) {

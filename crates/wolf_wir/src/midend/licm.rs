@@ -251,7 +251,7 @@ fn load_licensed(
     f: &crate::ir::Function,
     view: &super::ModView,
     foreign: &std::collections::HashMap<u32, crate::ops::ForeignRole>,
-    blocks: &HashSet<Block>,
+    blocks: &std::collections::BTreeSet<Block>,
     load: Inst,
     wsets: &std::collections::HashMap<String, super::memopt::WriteSet>,
 ) -> bool {
