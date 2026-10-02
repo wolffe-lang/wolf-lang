@@ -15,7 +15,7 @@ mod ritual;
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
-        Some("ci") => ci(),
+        Some("ci") => ci(&args[1..]),
         Some("deps-check") => deps_check(),
         Some("corpus") => corpus_cmd(),
         Some("abi-check") => abi_check(),
@@ -97,7 +97,7 @@ fn main() -> ExitCode {
         Some("audit-surface") => audit_surface(),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci|deps-check|corpus|peel|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|release-notes|spec-extract|conformance|differ|lane-coverage|print-gate|diag-catalog|doc-catalog|fmt-lu|audit-surface|midend-rate>"
+                "usage: cargo xtask <ci [--shard <name>] [--plan]|deps-check|corpus|peel|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|release-notes|spec-extract|conformance|differ|lane-coverage|print-gate|diag-catalog|doc-catalog|fmt-lu|audit-surface|midend-rate>"
             );
             eprintln!(
                 "       cargo xtask release-notes <TAG> [--out FILE]\n\
@@ -133,60 +133,170 @@ fn main() -> ExitCode {
 }
 
 /// fmt-check + clippy (deny warnings) + tests + graph law + corpus.
-fn ci() -> ExitCode {
-    let steps: &[(&str, &[&str])] = &[
-        ("fmt", &["fmt", "--all", "--check"]),
-        (
+/// The gauntlet's steps, in the fixed order every host runs them.
+const CI_STEPS: &[(&str, &[&str])] = &[
+    ("fmt", &["fmt", "--all", "--check"]),
+    (
+        "clippy",
+        &[
             "clippy",
-            &[
-                "clippy",
-                "--workspace",
-                "--all-targets",
-                "--",
-                "-D",
-                "warnings",
-            ],
-        ),
-        ("test", &["test", "--workspace"]),
-        // `fuzz/` is deliberately NOT a workspace member (it needs
-        // nightly to *build*), so `--workspace` never type-checks it and
-        // a field added to a shared struct stayed green here and went
-        // red on CI. Checking costs seconds and needs only stable.
-        (
-            "fuzz-check",
-            &["check", "--manifest-path", "fuzz/Cargo.toml"],
-        ),
-        ("deps-check", &["xtask", "deps-check"]),
-        ("corpus", &["xtask", "corpus"]),
-        ("abi-check", &["xtask", "abi-check"]),
-        ("debug-check", &["xtask", "debug-check"]),
-        ("midend-rate", &["xtask", "midend-rate"]),
-        // s44: the DETERMINISTIC bench gates only (IR volume ratchet +
-        // vectorization witnesses). Wall-derived M2 numbers are nightly
-        // and report-only — D5, and this sprint is where that line got
-        // drawn on purpose rather than by accident.
-        ("bench-gates", &["xtask", "bench-gates"]),
-        ("spec-extract", &["xtask", "spec-extract", "--check"]),
-        ("conformance", &["xtask", "conformance"]),
-        ("print-gate", &["xtask", "print-gate"]),
-        ("diag-catalog", &["xtask", "diag-catalog", "--check"]),
-        ("doc-catalog", &["xtask", "doc-catalog", "--check"]),
-        ("fmt-lu", &["xtask", "fmt-lu"]),
-        ("fmt-fuzz", &["xtask", "fmt-fuzz", "--ci"]),
-        ("audit-surface", &["xtask", "audit-surface"]),
-        // The release archive is public-facing product: staging it in
-        // CI keeps a broken manifest from reaching a release page again
-        // (it did once — the archive shipped without the runtime lib,
-        // and a later license edit made staging panic outright).
-        ("dist-smoke", &["xtask", "dist"]),
-        ("differ-self", &["xtask", "differ", "--self"]),
-        // s82: what the differential actually covers, gated. The
-        // release-parity floor keeps two tiers compared on a file set
-        // that may not shrink; this keeps the file set itself from
-        // shrinking under all three lanes at once.
-        ("lane-coverage", &["xtask", "lane-coverage"]),
-    ];
-    for (name, args) in steps {
+            "--workspace",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings",
+        ],
+    ),
+    ("test", &["test", "--workspace"]),
+    // `fuzz/` is deliberately NOT a workspace member (it needs
+    // nightly to *build*), so `--workspace` never type-checks it and
+    // a field added to a shared struct stayed green here and went
+    // red on CI. Checking costs seconds and needs only stable.
+    (
+        "fuzz-check",
+        &["check", "--manifest-path", "fuzz/Cargo.toml"],
+    ),
+    ("deps-check", &["xtask", "deps-check"]),
+    ("corpus", &["xtask", "corpus"]),
+    ("abi-check", &["xtask", "abi-check"]),
+    ("debug-check", &["xtask", "debug-check"]),
+    ("midend-rate", &["xtask", "midend-rate"]),
+    // s44: the DETERMINISTIC bench gates only (IR volume ratchet +
+    // vectorization witnesses). Wall-derived M2 numbers are nightly
+    // and report-only — D5, and this sprint is where that line got
+    // drawn on purpose rather than by accident.
+    ("bench-gates", &["xtask", "bench-gates"]),
+    ("spec-extract", &["xtask", "spec-extract", "--check"]),
+    ("conformance", &["xtask", "conformance"]),
+    ("print-gate", &["xtask", "print-gate"]),
+    ("diag-catalog", &["xtask", "diag-catalog", "--check"]),
+    ("doc-catalog", &["xtask", "doc-catalog", "--check"]),
+    ("fmt-lu", &["xtask", "fmt-lu"]),
+    ("fmt-fuzz", &["xtask", "fmt-fuzz", "--ci"]),
+    ("audit-surface", &["xtask", "audit-surface"]),
+    // The release archive is public-facing product: staging it in
+    // CI keeps a broken manifest from reaching a release page again
+    // (it did once — the archive shipped without the runtime lib,
+    // and a later license edit made staging panic outright).
+    ("dist-smoke", &["xtask", "dist"]),
+    ("differ-self", &["xtask", "differ", "--self"]),
+    // s82: what the differential actually covers, gated. The
+    // release-parity floor keeps two tiers compared on a file set
+    // that may not shrink; this keeps the file set itself from
+    // shrinking under all three lanes at once.
+    ("lane-coverage", &["xtask", "lane-coverage"]),
+];
+
+/// The gauntlet's shards (s195): the macOS native gauntlet runs one
+/// shard per job, the linux job runs every step in one process. The
+/// key is a function of the STEP NAME alone, so a failure names the
+/// same shard twice and the matrix cannot drift from the list above;
+/// `ci_shards_partition_the_steps` proves every step is in exactly
+/// one shard. The cut follows the measurement of trunk's last six
+/// macOS runs (e0466d7c..abf4e5cf, 2026-10-01): `test` 456–744 s and
+/// `lane-coverage` 510–594 s were 70–73 % of a 21–30 min job, `corpus`
+/// 91–160 s and `dist-smoke` 74–146 s most of the rest, the other
+/// seventeen steps under 90 s together.
+const CI_SHARDS: &[(&str, &[&str])] = &[
+    (
+        "build",
+        &["fmt", "clippy", "test", "fuzz-check", "deps-check"],
+    ),
+    (
+        "gates",
+        &[
+            "corpus",
+            "abi-check",
+            "debug-check",
+            "midend-rate",
+            "bench-gates",
+            "spec-extract",
+            "conformance",
+            "print-gate",
+            "diag-catalog",
+            "doc-catalog",
+            "fmt-lu",
+            "fmt-fuzz",
+            "audit-surface",
+            "dist-smoke",
+            "differ-self",
+        ],
+    ),
+    ("coverage", &["lane-coverage"]),
+];
+
+/// `cargo xtask ci [--shard <name>] [--plan]`. With no shard, every
+/// step; with one, that shard's steps and nothing else. An unknown
+/// shard is an error, never "everything" — a shard that silently ran
+/// the whole gauntlet would be a fast-looking pass of the thing being
+/// sharded (the is57 lesson). `--plan` prints the shard key and exits.
+fn ci(args: &[String]) -> ExitCode {
+    let mut shard: Option<&str> = None;
+    let mut plan = false;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--plan" => plan = true,
+            "--shard" => match it.next() {
+                Some(s) => shard = Some(s.as_str()),
+                None => {
+                    eprintln!("usage: cargo xtask ci [--shard <build|gates|coverage>] [--plan]");
+                    return ExitCode::FAILURE;
+                }
+            },
+            other => {
+                eprintln!("xtask ci: unknown argument `{other}`");
+                eprintln!("usage: cargo xtask ci [--shard <build|gates|coverage>] [--plan]");
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+    if plan {
+        for (name, steps) in CI_SHARDS {
+            eprintln!(
+                "xtask ci: shard {name}: {} step(s): {}",
+                steps.len(),
+                steps.join(" ")
+            );
+        }
+        eprintln!(
+            "xtask ci: {} step(s) in {} shard(s)",
+            CI_STEPS.len(),
+            CI_SHARDS.len()
+        );
+    }
+    let selected: Vec<&str> = match shard {
+        None => CI_STEPS.iter().map(|(n, _)| *n).collect(),
+        Some(s) => match CI_SHARDS.iter().find(|(n, _)| *n == s) {
+            Some((_, steps)) => steps.to_vec(),
+            None => {
+                eprintln!(
+                    "xtask ci: no shard named `{s}` (the shards are {})",
+                    CI_SHARDS
+                        .iter()
+                        .map(|(n, _)| *n)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                return ExitCode::FAILURE;
+            }
+        },
+    };
+    if plan {
+        return ExitCode::SUCCESS;
+    }
+    if let Some(s) = shard {
+        eprintln!(
+            "xtask ci: shard {s} runs {} of {} step(s): {}",
+            selected.len(),
+            CI_STEPS.len(),
+            selected.join(" ")
+        );
+    }
+    for (name, args) in CI_STEPS {
+        if !selected.contains(name) {
+            continue;
+        }
         eprintln!("== xtask ci: {name}");
         let ok = Command::new("cargo")
             .args(*args)
@@ -198,8 +308,56 @@ fn ci() -> ExitCode {
             return ExitCode::FAILURE;
         }
     }
-    eprintln!("xtask ci: all steps green");
+    match shard {
+        Some(s) => eprintln!("xtask ci: shard {s} green ({} step(s))", selected.len()),
+        None => eprintln!("xtask ci: all steps green"),
+    }
     ExitCode::SUCCESS
+}
+
+#[cfg(test)]
+mod ci_shards {
+    use super::{CI_SHARDS, CI_STEPS};
+
+    /// Every step is in exactly one shard, every shard names only real
+    /// steps, and a shard keeps the gauntlet's order — so three green
+    /// shards are the one green gauntlet, by counting rather than by
+    /// three greens (the wave-45 split rule).
+    #[test]
+    fn ci_shards_partition_the_steps() {
+        let steps: Vec<&str> = CI_STEPS.iter().map(|(n, _)| *n).collect();
+        let mut seen: Vec<&str> = Vec::new();
+        for (shard, members) in CI_SHARDS {
+            assert!(!members.is_empty(), "shard `{shard}` is empty");
+            let mut last = None;
+            for m in *members {
+                let pos = steps
+                    .iter()
+                    .position(|s| s == m)
+                    .unwrap_or_else(|| panic!("shard `{shard}` names `{m}`, which is not a step"));
+                assert!(
+                    last.is_none_or(|l| l < pos),
+                    "shard `{shard}` lists `{m}` out of gauntlet order"
+                );
+                last = Some(pos);
+                assert!(!seen.contains(m), "step `{m}` is in two shards");
+                seen.push(m);
+            }
+        }
+        let missing: Vec<&str> = steps
+            .iter()
+            .copied()
+            .filter(|s| !seen.contains(s))
+            .collect();
+        assert!(missing.is_empty(), "step(s) in no shard: {missing:?}");
+        assert_eq!(
+            seen.len(),
+            steps.len(),
+            "{} shard members for {} steps",
+            seen.len(),
+            steps.len()
+        );
+    }
 }
 
 // ------------------------------------------------------------- abi-check --
