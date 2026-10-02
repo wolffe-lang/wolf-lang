@@ -37,7 +37,9 @@ fn main() -> !int {
     let at5 = fs_read_at(fd, 5, 3)?
     let tell = fs_tell(fd)?
     let next = fs_read_chunk(fd, 2)?
-    print("head={str_from_utf8(head)?} at5={str_from_utf8(at5)?} tell={tell} next={str_from_utf8(next)?}")
+    print(
+        "head={str_from_utf8(head)?} at5={str_from_utf8(at5)?} tell={tell} next={str_from_utf8(next)?}",
+    )
 
     let at_end = read_at_row(fd, 10, 4)
     let empty = fs_read_at(fd, 3, 0)?
