@@ -197,6 +197,59 @@ ritual moves, on each tier.
 
 - **Release IR is reproducible across builds (s195, #503).** The mid-end walked a natural loop's block set in `HashSet` order, so the versioner's guard chain came out in a per-process order and three release builds of lobo were three binaries; the set is ordered now, `release_determinism.rs` builds a fixed corpus set three times and asserts byte identity (IR and binary), and the macOS native gauntlet runs as three shards (`cargo xtask ci --shard`).
 
+### The attribute set is closed, `cfg(target)` is evaluated, `"c"` is the only ABI (kw01, #519, #524, ruling #31 K13/K7)
+
+- **An attribute nothing read compiled silently on every machine and
+  meant nothing**: `#[frobnicate]`, `#[repr(packed)]` (laid out
+  unpacked), `#[section(".text.boot")]` (landed in `.text`),
+  `#[noalloc]` over a function that allocates, `#[thread_local]`. New
+  **E0817** refuses, by name, an attribute wolf does not know, a known
+  one nothing implements yet (the four performance contracts,
+  `repr(packed | align(N) | transparent)`, `thread_local`, `section`,
+  `link_section`, each naming the lane that owns it), and an
+  implemented one where no pass reads it (`#[repr(c)]` on a function).
+  The implemented set is `trusted`, `consttime`, `allow`, `index`,
+  `budget`, `repr(c)` and `cfg(target = "…")`
+  (`[gram.item.attr.set]`).
+- **`#[cfg(target = "S")]` was ignored**, so target-gated code was
+  compiled for every target. It now keeps its item, statement or field
+  when `S` names the build's target triple or its architecture and
+  drops it before resolution otherwise; a string that names no target,
+  or another predicate (`cfg(unix)`), is E0817 rather than "false"
+  (`[gram.item.attr.cfg]`). The build's target is the host's until
+  `--target` lands.
+- **`extern "x86-interrupt" fn` compiled as an ordinary function
+  returning with `ret`.** New **E0818** refuses every ABI string but
+  `"c"` (`[abi.c.seams]`).
+- Downstream: `corpus/comptime.lu` drops its `#[noalloc]` (it claimed
+  a verification nothing performs); `corpus/ffi.lu` gains an aarch64
+  twin of its x86_64-gated `asm` so its phase is one truth on every
+  host. wolf-std, boreutils and lobo use only implemented attributes;
+  the book's `#[noalloc]` exercises (ch20 `ex20-5.lu`, `ex20-8.lu`,
+  `EXERCISES.md` 20-8) become E0817 at its next pin.
+- Witnesses: `corpus/grammar/attr_*.lu`, `cfg_*.lu`,
+  `extern_abi_interrupt.lu`; `attr_closed_set_lanes.rs` asserts every
+  wolfgang lane and pins lupin 0.1.43 by version (it reads no
+  attribute; the mirror is wolf-interp#174).
+
+### A `#[repr(c)]` struct through a raw pointer has the C layout (kw01, #523, ruling #31 K4)
+
+- **A silent wrong answer at the C membrane on native and release**:
+  a struct stored or loaded through `*T` used the packed spill layout,
+  `{u8, u32, u8}` at offsets 0 1 5 with stride 6, where C has 0 4 8,
+  size 12. The raw tier now loads and stores a pointee field by field
+  at its psABI offsets and steps by the C `sizeof` (`[abi.layout.c]`).
+  The checked machine and lupin refuse a whole-aggregate raw store by
+  name, as before. `repr_c_raw_layout.rs` holds a C compiler to both
+  directions (C reads what wolf wrote, wolf reads what C wrote) on
+  both compiling tiers.
+- **`p[i] op= v` through a raw pointer was wrong on three lanes
+  (#542)**: native and release dropped the operator (`p[0] += 5`
+  stored 5); the checked machine always added and sized a `*i64`
+  element by the wrong type (`w[1] = 9; w[1]` read 0). All three now
+  read, apply the operator with the checked arithmetic, and store, as
+  lupin already did (`corpus/memory/raw_compound_assign.lu`).
+
 ### A `?` inside a `defer` or `errdefer` is refused (s196, #498, ruling #19)
 
 - **Native and release overflowed the compiler's stack** on
