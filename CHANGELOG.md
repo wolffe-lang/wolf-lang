@@ -50,6 +50,35 @@
   `errdefer_block_row_lanes.rs` runs each on checked, native, release
   and lupin and asserts they agree on the ruled bytes.
 
+### `match` over a fallible value (s197, #497, ruling #21)
+
+- **`match look(m, k) { none => -1, v => v }` compiles and runs on
+  every lane.** Before this, every wolfgang lane refused a `match`
+  whose scrutinee has type `T ! {row}` as `unsupported`, and lupin ran
+  it with no clause to say what the arms mean. Ruled by the maintainer
+  (#21, "yes, as proposed") and written as `[type.row.match]` beside
+  `[type.row.else]`: an arm naming a tag of the row is a **row arm**
+  (`none`, `Io(e)` with its payload bound); any other pattern is a
+  **value arm** over `T`, exactly as a `match` over `T`; `_` covers
+  what is left on both halves. The match must cover every tag and the
+  whole of `T` — E0801 names the missing tag or the uncovered value
+  half. The row is consumed as `else` consumes it: a `?` that fires
+  inside the scrutinee leaves the function past the arms.
+- **New: E0816** — a tag of the row that is also a variant of `T`
+  (`Shape ! {Line(int)}`) is refused by name, never guessed; `else |e|
+  match e { … }` keeps the halves apart and keeps working.
+- The checked machine dispatches a raw or `let`-bound row to the row
+  arms and a value to the value arms; native and release split the
+  union once (`eu.is_err`) and run one arm chain per half. The sema
+  arm sorter (`fallible_arm_half`) is the one rule all three replay.
+- Witnesses: six `corpus/rows/match_row_*.lu` rows (every arm kind,
+  payload tags, `_` on each half, an enum value half with a nested
+  match, the #492 shape, the `else |e| match e` control) and three
+  refusals under `rows/negative/`. `match_fallible_lanes.rs` runs each
+  on checked, native, release and lupin. lupin 0.1.43 takes the first
+  bare-tag arm for a value too; its answers are pinned by version as
+  pre-mirror (is67 moves lupin).
+
 ## 0.2.20 — 2026-10-01
 
 THE TWENTIETH. Arguments are two-phase (the maintainer's ruling #17,
