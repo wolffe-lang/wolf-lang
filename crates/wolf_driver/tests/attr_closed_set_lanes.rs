@@ -158,7 +158,11 @@ fn every_lane(row: &str, want: Want<'_>, lupin_pre_mirror: &[Pin<'_>]) {
         let Some(obs) = lane(&entry, flag) else {
             continue;
         };
-        let lane_name = if flag == "--checked" { "the CHECKED lane" } else { flag };
+        let lane_name = if flag == "--checked" {
+            "the CHECKED lane"
+        } else {
+            flag
+        };
         assert_eq!(
             obs.verdict, want.verdict,
             "{lane_name} on {row} (K13/K7: read or refused by name, never ignored); codes \
@@ -190,8 +194,16 @@ fn every_lane(row: &str, want: Want<'_>, lupin_pre_mirror: &[Pin<'_>]) {
                 "lupin {}'s answer on {row} (the mirror of K13/K7 is wolf-interp#174); codes {:?}",
                 lupin.version, lupin.codes
             );
-            assert_eq!(lupin.codes, codes, "lupin {}'s codes on {row}", lupin.version);
-            assert_eq!(lupin.stdout, want.stdout, "lupin {}'s stdout on {row}", lupin.version);
+            assert_eq!(
+                lupin.codes, codes,
+                "lupin {}'s codes on {row}",
+                lupin.version
+            );
+            assert_eq!(
+                lupin.stdout, want.stdout,
+                "lupin {}'s stdout on {row}",
+                lupin.version
+            );
         }
     }
 }

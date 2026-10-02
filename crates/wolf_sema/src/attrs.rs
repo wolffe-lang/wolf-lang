@@ -160,7 +160,10 @@ fn cfg_item(
     let (true, Some(value)) = (key == "target", value) else {
         diags.push(e0817(
             pred.syntax().span,
-            format!("`cfg({})` is not a predicate wolf knows", text(src, pred.syntax().span)),
+            format!(
+                "`cfg({})` is not a predicate wolf knows",
+                text(src, pred.syntax().span)
+            ),
             "not a predicate this compiler decides",
             shape_note(),
         ));
@@ -294,7 +297,10 @@ fn check_item(
         }
         "budget" => {
             if !is_stmt_kind(kind) {
-                misplaced(diags, "a statement or an item holding a comptime evaluation");
+                misplaced(
+                    diags,
+                    "a statement or an item holding a comptime evaluation",
+                );
             }
         }
         "repr" => check_repr(item, kind, src, diags),
@@ -371,7 +377,10 @@ fn check_repr(
                 "known, but nothing implements it",
             ),
             _ => (
-                format!("`repr({})` is not a representation wolf knows", text(src, rspan)),
+                format!(
+                    "`repr({})` is not a representation wolf knows",
+                    text(src, rspan)
+                ),
                 "unknown representation",
             ),
         };
@@ -459,7 +468,10 @@ mod tests {
         assert!(target_known("x86_64-unknown-none", t));
         assert!(target_known("aarch64", t));
         // The host is always a target, even off the matrix.
-        assert!(target_known("riscv64-unknown-linux-gnu", "riscv64-unknown-linux-gnu"));
+        assert!(target_known(
+            "riscv64-unknown-linux-gnu",
+            "riscv64-unknown-linux-gnu"
+        ));
     }
 
     #[test]
@@ -504,7 +516,10 @@ mod tests {
     #[test]
     fn an_undecidable_predicate_is_refused_and_keeps_its_node() {
         for (src, frag) in [
-            ("#[cfg(target = \"no-such-target\")]\nfn a() { }\n", "no-such-target"),
+            (
+                "#[cfg(target = \"no-such-target\")]\nfn a() { }\n",
+                "no-such-target",
+            ),
             ("#[cfg(unix)]\nfn a() { }\n", "cfg(unix)"),
             ("#[cfg]\nfn a() { }\n", "exactly one predicate"),
             (

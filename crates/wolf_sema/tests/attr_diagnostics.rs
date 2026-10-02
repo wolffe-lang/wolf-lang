@@ -62,7 +62,9 @@ fn e0817_repr_arguments() {
 fn e0817_misplaced() {
     insta::assert_snapshot!(
         "e0817_misplaced",
-        render_attrs("#[repr(c)]\nfn f() -> int {\n    1\n}\n\n#[consttime]\nstruct S {\n    x: int,\n}\n")
+        render_attrs(
+            "#[repr(c)]\nfn f() -> int {\n    1\n}\n\n#[consttime]\nstruct S {\n    x: int,\n}\n"
+        )
     );
 }
 

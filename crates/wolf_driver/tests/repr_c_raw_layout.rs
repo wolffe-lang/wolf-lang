@@ -138,7 +138,9 @@ fn ensure_rt_staticlib() {
 }
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("repr_c_raw_layout").join(name);
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join("repr_c_raw_layout")
+        .join(name);
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("mkdir");
     dir
@@ -163,10 +165,14 @@ fn c_program(tag: &str) -> Option<PathBuf> {
             Some(exe)
         }
         Err(e) if cfg!(windows) => {
-            eprintln!("SKIP: no C compiler on this host ({cc}: {e}) — the C membrane witness needs one");
+            eprintln!(
+                "SKIP: no C compiler on this host ({cc}: {e}) — the C membrane witness needs one"
+            );
             None
         }
-        Err(e) => panic!("no C compiler ({cc}: {e}): the C membrane witness needs one on this host"),
+        Err(e) => {
+            panic!("no C compiler ({cc}: {e}): the C membrane witness needs one on this host")
+        }
     }
 }
 
@@ -238,13 +244,18 @@ fn c_reads_the_struct_wolf_wrote() {
         let Some((verdict, stdout, stderr)) = lane(&prog, flag) else {
             continue;
         };
-        assert_eq!(verdict, "exit(0)", "the {flag} lane runs the writer: {stderr}");
+        assert_eq!(
+            verdict, "exit(0)",
+            "the {flag} lane runs the writer: {stderr}"
+        );
         let bytes: Vec<&str> = stdout.split_whitespace().collect();
-        let out = Command::new(&c3).args(&bytes).output().expect("the C half runs");
+        let out = Command::new(&c3)
+            .args(&bytes)
+            .output()
+            .expect("the C half runs");
         let c_says = String::from_utf8_lossy(&out.stdout);
         assert_eq!(
-            c_says,
-            "sizeof=12 off=0,4,8\n17 3735928559 34\n68 7 85\n",
+            c_says, "sizeof=12 off=0,4,8\n17 3735928559 34\n68 7 85\n",
             "the {flag} lane's `*C3` stores, read by C as `struct C3[2]` (wolf-lang#523: \
              before kw01 they were packed, 0 1 5, stride 6); wolf printed {stdout:?}"
         );
@@ -257,7 +268,10 @@ fn c_reads_the_struct_wolf_wrote() {
 fn wolf_reads_the_struct_c_wrote() {
     ensure_rt_staticlib();
     let Some(c3) = c_program("write") else { return };
-    let out = Command::new(&c3).arg("write").output().expect("the C half runs");
+    let out = Command::new(&c3)
+        .arg("write")
+        .output()
+        .expect("the C half runs");
     assert!(out.status.success());
     let image: Vec<u8> = String::from_utf8_lossy(&out.stdout)
         .split_whitespace()
@@ -270,7 +284,10 @@ fn wolf_reads_the_struct_c_wrote() {
         let Some((verdict, stdout, stderr)) = lane(&prog, flag) else {
             continue;
         };
-        assert_eq!(verdict, "exit(0)", "the {flag} lane runs the reader: {stderr}");
+        assert_eq!(
+            verdict, "exit(0)",
+            "the {flag} lane runs the reader: {stderr}"
+        );
         assert_eq!(
             stdout, "17 3735928559 34\n68 7 85\n",
             "the {flag} lane's `*C3` loads of C's image {image:?} (wolf-lang#523: before \
@@ -320,7 +337,8 @@ fn the_modelling_machines_refuse_the_aggregate_store_by_name() {
 #[test]
 fn the_corpus_row_agrees_on_both_compiling_tiers() {
     ensure_rt_staticlib();
-    let row = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/memory/raw_repr_c_layout.lu");
+    let row =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/memory/raw_repr_c_layout.lu");
     assert!(row.is_file(), "corpus row missing: {}", row.display());
     let want = "1 0 0 0 2 0 0 0 3 0 0 0 4 0 0 0 5 0 0 0 6 0 0 0\n17 3735928559 34\n";
     for flag in ["--native", "--release"] {
@@ -328,7 +346,10 @@ fn the_corpus_row_agrees_on_both_compiling_tiers() {
             continue;
         };
         assert_eq!(verdict, "exit(0)", "the {flag} lane on the row: {stderr}");
-        assert_eq!(stdout, want, "the {flag} lane's bytes on the row (wolf-lang#523)");
+        assert_eq!(
+            stdout, want,
+            "the {flag} lane's bytes on the row (wolf-lang#523)"
+        );
     }
 }
 
@@ -340,13 +361,17 @@ fn the_corpus_row_agrees_on_both_compiling_tiers() {
 #[test]
 fn a_raw_compound_assignment_applies_its_operator_on_every_lane() {
     ensure_rt_staticlib();
-    let row = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/memory/raw_compound_assign.lu");
+    let row =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/memory/raw_compound_assign.lu");
     assert!(row.is_file(), "corpus row missing: {}", row.display());
     for flag in ["--checked", "--native", "--release"] {
         let Some((verdict, stdout, stderr)) = lane(&row, flag) else {
             continue;
         };
         assert_eq!(verdict, "exit(0)", "the {flag} lane on the row: {stderr}");
-        assert_eq!(stdout, "8\n248\n12\n", "the {flag} lane on `p[i] op= v` (wolf-lang#542)");
+        assert_eq!(
+            stdout, "8\n248\n12\n",
+            "the {flag} lane on `p[i] op= v` (wolf-lang#542)"
+        );
     }
 }
