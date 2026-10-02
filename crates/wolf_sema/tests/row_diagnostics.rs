@@ -138,6 +138,31 @@ fn e0608_else_on_infallible() {
     );
 }
 
+// ---------------------------------------------------------- E0611 -----
+
+/// s196 (`[type.row.defer]`, wolf-lang#498, ruling #19): a `?` inside a
+/// `defer` expression. The primary is the `?`, the secondary the
+/// `defer` keyword, and the note says why and names both fixes.
+#[test]
+fn e0611_try_under_defer() {
+    snap_one(
+        "e0611_try_under_defer",
+        "fn key(ok: bool) -> str ! {parse} {\n    if ok { \"a\" } else { return parse }\n}\n\nfn under(ok: bool) -> int ! {parse} {\n    defer print(\"deferred {key(ok)?}\")\n    1\n}\n\nfn main() -> !int {\n    under(true) else 9\n}\n",
+    );
+}
+
+/// The `errdefer` spelling, with the `?` in a call argument under an
+/// `else` inside the deferred expression: the `else` handles `look`'s
+/// own row only, so the `?` is still a leaving `?` (E0611, "an
+/// `errdefer`").
+#[test]
+fn e0611_try_under_errdefer() {
+    snap_one(
+        "e0611_try_under_errdefer",
+        "fn key(ok: bool) -> str ! {parse} {\n    if ok { \"a\" } else { return parse }\n}\n\nfn look(m: Map[str, int], k: str) -> int ! {none} {\n    m[k]\n}\n\nfn under(m: Map[str, int], ok: bool) -> int ! {parse} {\n    errdefer print(\"errdefer {look(m, key(ok)?) else 0}\")\n    let k = key(ok)?\n    look(m, k) else 4\n}\n\nfn main() -> !int {\n    var m = Map[str, int]()\n    m[\"a\"] = 5\n    under(m, true) else 9\n}\n",
+    );
+}
+
 // ---------------------------------------------------------- E0610 -----
 
 /// s158 (`[type.err.alias.cycle]`, wolf-lang#36): a cycle among
