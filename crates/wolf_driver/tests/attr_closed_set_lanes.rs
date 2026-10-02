@@ -10,7 +10,7 @@
 //! freestanding-gated code of `cfg_target_freestanding` was resolved
 //! (E0301). lupin 0.1.43 reads no attribute either: it runs every
 //! refused row, and each parting is pinned below by version as
-//! pre-mirror (the lupin half is filed on wolf-interp); a newer lupin
+//! pre-mirror (the lupin half is wolf-interp#174); a newer lupin
 //! must answer what the compiler answers.
 //!
 //! Why a driver gate beside the corpus rows: `cargo xtask corpus` reads
@@ -187,7 +187,7 @@ fn every_lane(row: &str, want: Want<'_>, lupin_pre_mirror: &[Pin<'_>]) {
         None => {
             assert_eq!(
                 lupin.verdict, want.verdict,
-                "lupin {}'s answer on {row} (the mirror of K13/K7 is wolf-interp's); codes {:?}",
+                "lupin {}'s answer on {row} (the mirror of K13/K7 is wolf-interp#174); codes {:?}",
                 lupin.version, lupin.codes
             );
             assert_eq!(lupin.codes, codes, "lupin {}'s codes on {row}", lupin.version);
