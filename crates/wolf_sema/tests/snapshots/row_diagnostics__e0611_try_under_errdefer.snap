@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/row_diagnostics.rs
+expression: render_rows(src)
+---
+error[E0611]: `?` inside an `errdefer` has nowhere to send its error
+  --> mem:///main.lu:10:39
+   |
+10 |     errdefer print("errdefer {look(m, key(ok)?) else 0}")
+   |     -------- the `errdefer` runs as `under` leaves
+   |                                       ^^^^^^^^ this would leave `under` while `under` is already leaving
+   |
+   = note: a deferred expression runs while the function is leaving, so a second error has nowhere
+     to go: handle it inside the `errdefer` with `else`, or move the fallible call out of the
+     `errdefer` into the body.
