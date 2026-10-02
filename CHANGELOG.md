@@ -4,6 +4,52 @@
 
 - **Release IR is reproducible across builds (s195, #503).** The mid-end walked a natural loop's block set in `HashSet` order, so the versioner's guard chain came out in a per-process order and three release builds of lobo were three binaries; the set is ordered now, `release_determinism.rs` builds a fixed corpus set three times and asserts byte identity (IR and binary), and the macOS native gauntlet runs as three shards (`cargo xtask ci --shard`).
 
+### A `?` inside a `defer` or `errdefer` is refused (s196, #498, ruling #19)
+
+- **Native and release overflowed the compiler's stack** on
+  `defer print("deferred {key(ok)?}")` and on the same `?` under an
+  `errdefer` (`wolf build` and `conform-run` both aborted, rc=134, no
+  record): the `?`'s error edge re-lowered the defer that contains it,
+  without end. The checked machine ran the deferred `?` and dropped
+  its row; lupin 0.1.42 and 0.1.43 make it the function's result.
+- Ruled by the maintainer (#19 = refused) and written as
+  `[type.row.defer]` beside `[type.row.else]`: a deferred expression
+  runs while the function is already leaving, so a second error has
+  nowhere to go. **New E0611** on every machine, at the `?`, naming the
+  `defer`/`errdefer` and the fix (an `else` inside the deferred
+  expression, or the fallible call moved out of it). The refusal reads
+  the whole deferred expression; a `?` in a closure defined under the
+  defer is the closure's own and is not refused.
+- Witnesses: `corpus/rows/negative/try_in_defer.lu`,
+  `try_in_errdefer.lu`, `try_in_defer_block.lu` and the control
+  `corpus/rows/defer_else_handles.lu`; `try_under_defer_refused_lanes.rs`
+  asserts E0611 on checked, native and release, that `wolf build`
+  answers with the diagnostic and never a signal, and pins lupin
+  0.1.43's measured bytes by version until wolf-interp mirrors the
+  refusal (is66).
+
+### A block's `errdefer` runs when the block's value is an error (s196, #499, ruling #20)
+
+- **Native and release skipped a block's `errdefer`** when the block's
+  trailing value was a failing call handled by an `else` outside it:
+  `let b = { errdefer print("errdefer blk"); defer print("defer blk");
+  look(m, "zz") } else 0` printed `defer blk` only. The checked machine
+  and lupin ran both, and at a function's tail all four agreed.
+- Ruled by the maintainer (#20 = it runs) and written into
+  `[mem.model.order]`: a scope has left on the error path when its own
+  value is an error, so a block whose value is a row carrying an error
+  runs its `errdefer` as a function whose tail is an error does. The
+  WIR lowering now forks a block's fall-through on the value's err bit
+  — only when the block holds an `errdefer` and its value is a `!T`;
+  every other block's exit is unchanged. The checked machine already
+  did this.
+- Witnesses: `corpus/rows/errdefer_block_row.lu` (the issue's shape),
+  `errdefer_block_nested.lu` (nested blocks, and a block as a
+  function's tail), `errdefer_block_loop_break.lu` (a block in a loop
+  whose `else` breaks) and the control `errdefer_fn_tail_control.lu`;
+  `errdefer_block_row_lanes.rs` runs each on checked, native, release
+  and lupin and asserts they agree on the ruled bytes.
+
 ## 0.2.20 — 2026-10-01
 
 THE TWENTIETH. Arguments are two-phase (the maintainer's ruling #17,
