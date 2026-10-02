@@ -21308,24 +21308,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// `assert(cond)` / `assert(cond, msg)` — the one user-raised trap
     /// (`[conf.trap.assert]`): `br cond, continue, trap`. A constant
     /// condition folds to nothing (true) or a plain `trap` (false) —
-    /// X3 semantics exactly. The message renders once traps carry
-    /// payloads (fmt, c06); an effect-free literal is dropped today.
+    /// X3 semantics exactly. The message is a `str` evaluated ONLY on
+    /// the failing path, so it lowers into the trap block, before the
+    /// trap, and its value is dropped: the clause lets an
+    /// implementation drop the rendering until traps carry payloads,
+    /// never the evaluation (wolf-lang#398 — this used to refuse any
+    /// message that was not a literal or an interpolation by syntax
+    /// kind, and dropped an interpolation's calls unevaluated).
     fn lower_assert(&mut self, d: CallExpr<'t>) -> R<Flow> {
         let mut args = d.args().into_iter().flat_map(|l| l.args());
         let Some(first) = args.next() else {
             return Ok(Flow::Val(None));
         };
-        // The optional message: evaluated only on the failing path —
-        // a literal has no effects, so dropping it is that evaluation.
-        for extra in args {
-            let Some(m) = Arg::value(extra) else { continue };
-            if !matches!(m.kind, SyntaxKind::StringExpr | SyntaxKind::LiteralExpr) {
-                return Err(refuse(
-                    "assert messages with effects (trap payload rendering)",
-                    m.span,
-                ));
-            }
-        }
+        let msg: Vec<&'t GreenNode> = args.filter_map(Arg::value).collect();
         let Some(vexpr) = Arg::value(first) else {
             return Ok(Flow::Val(None));
         };
@@ -21339,7 +21334,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             Some(false) => {
                 self.b.stats.fold += 1;
-                self.b.ins_trap(TrapKind::Assert);
+                if self.lower_assert_message(&msg)? {
+                    self.b.ins_trap(TrapKind::Assert);
+                }
                 return Ok(Flow::Diverged);
             }
             None => {
@@ -21348,12 +21345,45 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 self.b.ins_br(v, cont, &[], trap_bb, &[]);
                 self.b.seal_block(trap_bb);
                 self.b.switch_to_block(trap_bb);
-                self.b.ins_trap(TrapKind::Assert);
+                if self.lower_assert_message(&msg)? {
+                    self.b.ins_trap(TrapKind::Assert);
+                }
                 self.b.seal_block(cont);
                 self.b.switch_to_block(cont);
             }
         }
         Ok(Flow::Val(None))
+    }
+
+    /// The failing path's message: evaluated for its effects, the value
+    /// dropped (`[conf.trap.assert]`). `false` when the evaluation
+    /// itself left the path (a `?` that propagated, a trap inside it),
+    /// so no `trap` follows a terminator.
+    /// A literal, or a string with no holes, has no effects, so
+    /// dropping it is its evaluation and it emits nothing. The trap
+    /// block dominates nothing after it, so whatever the message
+    /// computes lives in a GVN scope of its own: the continuation must
+    /// never reuse a value defined only on the failing path.
+    fn lower_assert_message(&mut self, msg: &[&'t GreenNode]) -> R<bool> {
+        self.b.gvn_push_scope();
+        let r = self.lower_assert_message_in(msg);
+        self.b.gvn_pop_scope();
+        r
+    }
+
+    fn lower_assert_message_in(&mut self, msg: &[&'t GreenNode]) -> R<bool> {
+        for &m in msg {
+            let constant = m.kind == SyntaxKind::LiteralExpr
+                || (m.kind == SyntaxKind::StringExpr && m.nodes().next().is_none());
+            if constant {
+                continue;
+            }
+            match self.lower_expr(m)? {
+                Flow::Val(_) => {}
+                Flow::Diverged => return Ok(false),
+            }
+        }
+        Ok(true)
     }
 }
 
