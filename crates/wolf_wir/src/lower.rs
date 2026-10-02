@@ -2435,7 +2435,7 @@ fn flat_offsets(it: &types::TypeInterner, fields: &[TypeId]) -> Option<Vec<u64>>
 /// size 12).
 fn c_layout(it: &types::TypeInterner, t: TypeId) -> Option<(u64, u64)> {
     if let Some(s) = scalar_size(t) {
-        return Some((s, 1)); // PLANT: every alignment 1, the packed layout
+        return Some((s, s));
     }
     match it.get(t) {
         types::TypeData::Agg(fields) => {
@@ -14486,7 +14486,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if let TyKind::Ptr(elem) = self.table.kind(self.strip_sema(base_sema)) {
             let elem = *elem;
             let (ewty, size) = self.raw_pointee(elem, span)?;
-            let op = d.op().map(|_| SyntaxKind::Eq).unwrap_or(SyntaxKind::Eq); // PLANT
+            let op = d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq);
             let Some(base) = flow_val!(self.lower_expr(recv)) else {
                 return Err(refuse("a valueless raw pointer", recv.span));
             };
