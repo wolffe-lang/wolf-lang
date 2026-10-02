@@ -597,13 +597,13 @@ mod tests {
         // `Bad(_)`, `v`: `eof` is the witness.
         let ws = witnesses(
             &[vec![bad.clone()], vec![value(Pat::Wild)]],
-            &[col.clone()],
+            std::slice::from_ref(&col),
             3,
         );
         let rendered: Vec<String> = ws.iter().map(render_pat).collect();
         assert_eq!(rendered, vec!["eof"]);
         // `Bad(_)`, `eof`: the value half is the witness.
-        let ws = witnesses(&[vec![bad.clone()], vec![eof.clone()]], &[col.clone()], 3);
+        let ws = witnesses(&[vec![bad.clone()], vec![eof.clone()]], std::slice::from_ref(&col), 3);
         assert_eq!(ws.len(), 1);
         assert!(matches!(&ws[0], Pat::Ctor { ctor: Ctor::Ok, .. }));
         assert_eq!(render_pat(&ws[0]), "_");
@@ -613,11 +613,11 @@ mod tests {
             vec![eof.clone()],
             vec![value(ctor(Ctor::Int(0), vec![]))],
         ];
-        let ws = witnesses(&m, &[col.clone()], 3);
+        let ws = witnesses(&m, std::slice::from_ref(&col), 3);
         assert_eq!(ws.len(), 1);
         assert_eq!(render_pat(&ws[0]), "1");
         // `_` closes everything; `v` then `_`: `_` is still useful.
-        assert!(witnesses(&[vec![Pat::Wild]], &[col.clone()], 3).is_empty());
+        assert!(witnesses(&[vec![Pat::Wild]], std::slice::from_ref(&col), 3).is_empty());
         assert!(is_useful(
             &[vec![value(Pat::Wild)]],
             &[Pat::Wild],
