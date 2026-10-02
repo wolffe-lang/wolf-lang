@@ -1,0 +1,32 @@
+//! check: run(exit=0, stdout="42\n42\n42\n")
+//! phase: run
+//! conforms: type.interp.union, err.union
+//!
+//! s202 (wolf-lang#393): a `!int` call bound WITHOUT `?`, when the
+//! callee's inferred row is empty. `[type.interp.union]` renders a
+//! `!T` hole as its ok payload when it holds one, so every line here
+//! is `42`. A statically-empty row lowers as its plain ok value
+//! (`else` and `?` already knew that); the hole did not, reached
+//! `eu.ok` on a plain i64, and native and release PANICKED
+//! (`build.rs:1210`, every release since 0.2.14). The checked machine
+//! and lupin always ran it. The issue's program, its `{ f() }` twin,
+//! and the same binding in a `-> int` main.
+
+fn f() -> !int {
+    42
+}
+
+fn show() -> int {
+    let z = f()
+    print("{z}")
+    0
+}
+
+fn main() -> !int {
+    let x = f()
+    print("{x}")
+    let y = { f() }
+    print("{y}")
+    show()
+    0
+}

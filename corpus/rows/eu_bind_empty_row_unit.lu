@@ -1,0 +1,19 @@
+//! check: run(exit=0, stdout="g\n()\n")
+//! phase: run
+//! conforms: type.interp.union, err.union
+//!
+//! s202 (wolf-lang#393): the unit twin. `g` returns `!()` with an
+//! empty inferred row, so the bound value is valueless on native and
+//! release, and the hole renders the ok half, `()`. At trunk 12a56b22
+//! native and release refused it as "a valueless union in
+//! interpolation"; checked and lupin printed `()`.
+
+fn g() -> !() {
+    print("g")
+}
+
+fn main() -> !int {
+    let u = g()
+    print("{u}")
+    0
+}

@@ -1,0 +1,31 @@
+//! check: run(exit=0, stdout="43 42 42\n")
+//! phase: run
+//! conforms: type.row.match, type.row.else, err.union, err.rows
+//!
+//! s202 (wolf-lang#393): the other readings of a bound `!int` whose
+//! inferred row is empty. A `match` over it has no tag to name, so its
+//! arms are value arms over the `int` (`43`); `else` passes the value
+//! through (`42`); returning it from a fn with a wider row wraps the ok
+//! half (`42`). At trunk 12a56b22 the `match` answered `unsupported`
+//! on native and release; checked and lupin ran it.
+
+fn f() -> !int {
+    42
+}
+
+fn g() -> int ! {bad} {
+    let x = f()
+    x
+}
+
+fn main() -> !int {
+    let a = f()
+    let m = match a {
+        v => v + 1,
+    }
+    let b = f()
+    let e = b else 0
+    let c = g()
+    print("{m} {e} {c}")
+    0
+}
