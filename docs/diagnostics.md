@@ -1161,6 +1161,25 @@ both name.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__error_alias_cycle.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0610_error_alias_cycle.snap
 
+## E0611 — `?` inside a `defer` or `errdefer` has nowhere to send its error
+
+A deferred expression runs while the function is already leaving: its
+result is formed, and the `defer`/`errdefer` chain is running on the
+way out of the scope. A `?` fires by leaving the function with an
+error, and there is no second exit to take — replacing the result
+already on its way out would lose it, and dropping the `?`'s error
+would hide it — so wolf refuses the shape rather than choose silently
+(`[type.row.defer]`). Handle the fallible call's row inside the
+deferred expression with `else` (`defer close(f) else |e| note(e)`,
+`defer print("{read() else "-"}")`), or move the fallible call out of
+the `defer` into the body, where its `?` has a function to leave. The
+refusal reads the whole deferred expression: a `?` nested in a block, a
+binding or a call argument under the `defer` is the same error. A `?`
+inside a closure defined under the `defer` is that closure's own
+propagation and is not this error.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__try_in_defer.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__try_in_defer_block.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__try_in_errdefer.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0611_try_under_defer.snap, crates/wolf_sema/tests/snapshots/row_diagnostics__e0611_try_under_errdefer.snap
+
 ## E0701 — comptime code reached for ambient IO
 
 Comptime evaluation is hermetically sandboxed (D33): no filesystem, no
