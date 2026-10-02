@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Release IR is reproducible across builds (s195, #503).** The mid-end walked a natural loop's block set in `HashSet` order, so the versioner's guard chain came out in a per-process order and three release builds of lobo were three binaries; the set is ordered now, `release_determinism.rs` builds a fixed corpus set three times and asserts byte identity (IR and binary), and the macOS native gauntlet runs as three shards (`cargo xtask ci --shard`).
+
 ## 0.2.20 — 2026-10-01
 
 THE TWENTIETH. Arguments are two-phase (the maintainer's ruling #17,
