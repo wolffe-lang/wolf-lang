@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+EnumDecl 412..450 name=Shape variants=2
+FnDecl 452..546 name=pick body=Block
+FnDecl 548..649 name=main body=Block

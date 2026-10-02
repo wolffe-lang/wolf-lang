@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 622..776 name=step body=Block
+FnDecl 778..885 name=rest_both body=Block
+FnDecl 887..1044 name=rest_value body=Block
+FnDecl 1046..1155 name=rest_row body=Block
+FnDecl 1157..1365 name=main body=Block
