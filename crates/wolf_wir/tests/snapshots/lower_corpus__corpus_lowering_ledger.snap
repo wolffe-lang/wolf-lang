@@ -233,8 +233,6 @@ kernels/hot_header_alias.lu: lowers
 kernels/hot_scale_versioned.lu: lowers
 kernels/hot_sum_reduce.lu: lowers
 kernels/sha256_block.lu: lowers
-kernels/versioned_loop_cross_module/main.lu: lowers
-kernels/versioned_loop_inlined_root.lu: lowers
 kernels/walk_twice.lu: lowers
 lints/allow_item.lu: lowers
 lints/allow_nothing.lu: lowers
@@ -559,6 +557,8 @@ memory/unsafe_raw_outside.lu: not mem-clean (pre-wir rungs own it)
 memory/unsafe_sig.lu: not mem-clean (pre-wir rungs own it)
 memory/unsafe_trusted.lu: lowers
 memory/unsafe_ub_uaf.lu: lowers
+memory/versioned_loop_cross_module/main.lu: lowers
+memory/versioned_loop_inlined_root.lu: lowers
 memory/view_set_norm.lu: lowers
 memory/view_set_violation.lu: not mem-clean (pre-wir rungs own it)
 methods/comb_map_filter_fold.lu: lowers
