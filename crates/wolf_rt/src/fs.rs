@@ -666,14 +666,16 @@ pub unsafe extern "C" fn __wolf_rt_fs_fstat(fd: i64, out: i64) -> i64 {
     // s199 (#424): 0, 1 and 2 are the standard streams (`[os.fs.std]`).
     // The fd table is released before the list is minted: allocation
     // is the ambient region's business (`fs_read_chunk`'s order).
-    let Some(md) = with_handle(fd, File::metadata) else {
+    let Some((md, disk)) = with_handle(fd, |f| (f.metadata(), is_disk(f))) else {
         return fs_code::IO;
     };
     let md = match md {
         Err(e) => return code_of(&e),
         Ok(m) => m,
     };
-    let kind = if md.is_file() {
+    // windows: a handle that is not a disk file is `kind` 2 whatever
+    // the metadata calls it ([`is_disk`]).
+    let kind = if md.is_file() && disk {
         0
     } else if md.is_dir() {
         1
@@ -763,13 +765,39 @@ fn seek_code(e: &std::io::Error) -> i64 {
     }
 }
 
+/// Is `f` a disk file, by the host's own classification? unix: always
+/// `true` here — `fstat`'s mode bits already tell a fifo, a socket or a
+/// device from a regular file, and an offset call there answers the
+/// host's `ESPIPE`. windows: `GetFileType` is `FILE_TYPE_DISK`. The
+/// metadata std reads on windows does NOT tell: it calls an anonymous
+/// pipe a regular file whose size is the bytes waiting in it, and a
+/// seek on a pipe "succeeds" while a positional read consumes the pipe
+/// (measured on the windows runner, wolf-lang CI run 37062798818, job
+/// 111023227162: `fstat0 kind=0 size=19` with standard input a pipe).
+#[cfg(windows)]
+fn is_disk(f: &File) -> bool {
+    use std::os::windows::io::AsRawHandle as _;
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetFileType(h: *mut core::ffi::c_void) -> u32;
+    }
+    const FILE_TYPE_DISK: u32 = 1;
+    // SAFETY: the handle is `f`'s, live for the duration of the call.
+    unsafe { GetFileType(f.as_raw_handle()) == FILE_TYPE_DISK }
+}
+
+#[cfg(not(windows))]
+fn is_disk(_f: &File) -> bool {
+    true
+}
+
 /// windows has no `ESPIPE` on this path (a pipe or console handle's
 /// file pointer is undefined, not refused), so an offset call there
-/// asks first: anything whose metadata is not a regular file is
+/// asks first: anything that is not a disk file ([`is_disk`]) is
 /// `unseekable`, by name. unix asks the host and maps its `ESPIPE`.
 #[cfg(windows)]
 fn windows_unseekable(f: &File) -> bool {
-    !f.metadata().is_ok_and(|m| m.is_file())
+    !is_disk(f)
 }
 
 /// `fs_seek(fd, off, whence) -> int ! {invalid, io, unseekable}` —
