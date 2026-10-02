@@ -3842,37 +3842,49 @@ impl<'a> Checker<'a> {
     }
 
     /// wolf-lang#458 (`[type.numlit.propagate]`, `[type.numlit.value]`):
-    /// record the integer literals that make up an unannotated
-    /// binding's initializer TERM — the literal itself, `-literal`, and
-    /// the literals reached through parentheses and `+ - * / %`, the
-    /// operators whose operands share the term's (the binding's) type.
-    /// Nothing else is descended into: a call argument has its
-    /// parameter's type, a comparison's operands are not the binding's,
-    /// a block or a branch is its own context.
+    /// record the integer literals of an unannotated binding's
+    /// initializer when that initializer is a LITERAL TERM — literals
+    /// joined by parentheses, unary minus and `+ - * / %`, nothing else.
+    /// Such a term has no context of its own: its type reaches it only
+    /// through the binding, and adoption does not cross a binding. A
+    /// term with any other operand (`packed / 10000000000`) takes that
+    /// operand's type, which is its own context, and records nothing.
     fn note_binding_literals(&mut self, e: &GreenNode) {
+        let mut lits = Vec::new();
+        if self.literal_term(e, &mut lits) {
+            self.binding_lits.extend(lits);
+        }
+    }
+
+    /// Is `e` a literal term? Collects the report span of each integer
+    /// literal in it (a `-literal` reports as the prefix, as
+    /// [`Checker::check_literal_fit`] keys it).
+    fn literal_term(&self, e: &GreenNode, out: &mut Vec<Span>) -> bool {
         match e.kind {
             SyntaxKind::LiteralExpr => {
                 if crate::wave::literal_value(Some(e), self.src()).is_some() {
-                    self.binding_lits.insert(e.span);
+                    out.push(e.span);
                 }
+                true
             }
             SyntaxKind::PrefixExpr => {
                 if crate::wave::literal_value(Some(e), self.src()).is_some() {
-                    self.binding_lits.insert(e.span);
-                } else if e
+                    out.push(e.span);
+                    return true;
+                }
+                let minus = e
                     .tokens()
                     .next()
-                    .is_some_and(|t| t.kind == SyntaxKind::Minus)
-                    && let Some(inner) = e.nodes().next()
-                {
-                    self.note_binding_literals(inner);
+                    .is_some_and(|t| t.kind == SyntaxKind::Minus);
+                match e.nodes().next() {
+                    Some(inner) if minus => self.literal_term(inner, out),
+                    _ => false,
                 }
             }
-            SyntaxKind::ParenExpr => {
-                if let Some(inner) = e.nodes().next() {
-                    self.note_binding_literals(inner);
-                }
-            }
+            SyntaxKind::ParenExpr => match e.nodes().next() {
+                Some(inner) => self.literal_term(inner, out),
+                None => false,
+            },
             SyntaxKind::BinExpr => {
                 let d = BinExpr::cast(e).expect("kind");
                 let arith = matches!(
@@ -3885,13 +3897,12 @@ impl<'a> Checker<'a> {
                             | SyntaxKind::Percent
                     )
                 );
-                if arith {
-                    for side in [d.lhs(), d.rhs()].into_iter().flatten() {
-                        self.note_binding_literals(side);
-                    }
+                match (arith, d.lhs(), d.rhs()) {
+                    (true, Some(l), Some(r)) => self.literal_term(l, out) && self.literal_term(r, out),
+                    _ => false,
                 }
             }
-            _ => {}
+            _ => false,
         }
     }
 
