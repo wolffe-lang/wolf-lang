@@ -134,11 +134,12 @@ fn cfg_item(
 ) -> CfgVerdict {
     let span = item.syntax().span;
     let preds = args(item);
+    // The notes name no host: a diagnostic's text is one truth on
+    // every host (the fixtures are snapshots).
     let shape_note = || {
-        format!(
-            "the one predicate is `cfg(target = \"<triple or architecture>\")` \
-             ([gram.item.attr.cfg]); this build's target is `{target}`."
-        )
+        "the one predicate is `cfg(target = \"<triple or architecture>\")` \
+         ([gram.item.attr.cfg])."
+            .to_string()
     };
     if preds.len() != 1 {
         diags.push(e0817(
@@ -173,7 +174,7 @@ fn cfg_item(
             format!(
                 "a `target` predicate names a triple ({}) or an architecture ({}); a name \
                  that matches nothing is refused, never read as \"false\", so a typo cannot \
-                 silently drop code. This build's target is `{target}`.",
+                 silently drop code.",
                 KNOWN_TARGETS
                     .iter()
                     .map(|t| format!("`{t}`"))
