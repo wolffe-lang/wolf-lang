@@ -78,7 +78,11 @@ ct/public_typo.lu: not mem-clean (pre-wir rungs own it)
 entry_no_return.lu: lowers
 errors.lu: not mem-clean (pre-wir rungs own it)
 faults/assert_fails.lu: lowers
+faults/assert_msg_effect_fails.lu: lowers
 faults/assert_msg_holds.lu: lowers
+faults/assert_msg_name.lu: lowers
+faults/assert_msg_name_fails.lu: lowers
+faults/assert_msg_try.lu: lowers
 faults/bounds_slice.lu: lowers
 faults/byte_view_slice_reversed.lu: lowers
 faults/cast_float_nan_trap.lu: lowers
@@ -229,6 +233,8 @@ kernels/hot_header_alias.lu: lowers
 kernels/hot_scale_versioned.lu: lowers
 kernels/hot_sum_reduce.lu: lowers
 kernels/sha256_block.lu: lowers
+kernels/versioned_loop_cross_module/main.lu: lowers
+kernels/versioned_loop_inlined_root.lu: lowers
 kernels/walk_twice.lu: lowers
 lints/allow_item.lu: lowers
 lints/allow_nothing.lu: lowers
@@ -638,6 +644,9 @@ rows/error_alias_qualified/main.lu: lowers
 rows/error_alias_row.lu: lowers
 rows/error_alias_transparent.lu: lowers
 rows/error_alias_union.lu: lowers
+rows/eu_bind_empty_row.lu: lowers
+rows/eu_bind_empty_row_handled.lu: lowers
+rows/eu_bind_empty_row_unit.lu: lowers
 rows/eu_main_err_exit.lu: lowers
 rows/handler_diverge_call.lu: lowers
 rows/handler_diverge_trap.lu: lowers
