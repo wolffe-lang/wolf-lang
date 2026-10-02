@@ -1326,7 +1326,7 @@ a guard can be false, so only unguarded arms prove anything. Add arms
 for the listed witnesses, or end the `match` with a `_` arm (or a
 binding) to catch the rest deliberately.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__match_nullary_variant.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_arm_product_nonexhaustive.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_missing.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_str_nonexhaustive.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_enum_witnesses.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_guard_non_contribution.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_int_witness.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_row_missing_tag.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_witness_past_range.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__match_nullary_variant.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__match_row_missing_tag.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__match_row_missing_value.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_arm_product_nonexhaustive.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_missing.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__match_str_nonexhaustive.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_enum_witnesses.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_fallible_missing_tag.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_fallible_value_half.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_fallible_value_witness.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_guard_non_contribution.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_int_witness.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_row_missing_tag.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0801_witness_past_range.snap
 
 ## E0802 — this `match` arm can never match
 
@@ -1525,6 +1525,20 @@ literals, so the checker decides this at compile time; over `char`
 the order is scalar order ([type.char.order]).
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__match_range_empty.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0815_empty_range_backwards.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0815_empty_range_same_ends.snap
+
+## E0816 — a row tag that is also a variant of the value type
+
+A `match` over a fallible value `T ! {row}` sorts its arms by name
+([type.row.match]): an identifier that names a tag of the row is a row
+arm, and every other pattern is a value pattern over `T`. This
+scrutinee's row carries a tag that is also a variant of `T`, so an arm
+spelling that name could be either half, and the match never guesses —
+the whole match is refused, whether or not an arm spells the name.
+Bind the row first and match the value separately
+(`v else |e| match e { … }`, then `match v { … }`), or rename the tag
+so the two name sets stay apart.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__match_row_tag_variant_collision.snap, crates/wolf_sema/tests/snapshots/pattern_diagnostics__e0816_tag_variant_collision.snap
 
 ## E1001 — this value was moved away (or never given one) before this use
 
