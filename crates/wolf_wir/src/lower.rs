@@ -3458,8 +3458,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             None => false,
         };
-        // PLANT (s196): the fork disabled, to see the gate red.
-        let flowing = if forks && std::env::var_os("S196_PLANT_UNSET").is_some() {
+        let flowing = if forks {
             self.run_scope_exit_on_row(si, out.expect("forks only with a value"))
         } else {
             self.run_one_scope_exit(si, false)
