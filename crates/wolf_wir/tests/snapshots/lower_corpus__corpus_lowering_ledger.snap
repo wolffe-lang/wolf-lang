@@ -119,8 +119,10 @@ fs/bytes_dirs.lu: lowers
 fs/error_row.lu: lowers
 fs/fstat.lu: lowers
 fs/open_nonblock.lu: lowers
+fs/read_at.lu: lowers
 fs/remove_dir_refused.lu: lowers
 fs/roundtrip.lu: lowers
+fs/seek_tell.lu: lowers
 generics/box_method.lu: lowers
 generics/explicit_apply.lu: lowers
 generics/explicit_apply_arity.lu: not mem-clean (pre-wir rungs own it)
