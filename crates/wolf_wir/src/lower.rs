@@ -19769,6 +19769,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(sv) = sv else {
             return Err(refuse("match on a valueless scrutinee", e.span));
         };
+        if let TyKind::ErrUnion(ok_sema, row_sema) =
+            self.table.kind(self.strip_sema(scrut_sema)).clone()
+        {
+            return self.lower_match_fallible(e, d, sv, ok_sema, row_sema, want);
+        }
         let domain = self.match_domain(scrut_sema, e.span)?;
         // ONE discriminant read: payload-carrying enum/row values are
         // aggregates whose field 0 is the tag.
@@ -19789,9 +19794,260 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let merge_eu = self.eu_ty_of_span(e.span)?;
         let exhaustive = self.matches.get(&e.span).copied().unwrap_or(false);
         let arms: Vec<MatchArm> = d.arms().collect();
-        let n = arms.len();
         // The merge point, created on the first arm that completes.
         let mut merge: Option<(Block, Option<Value>)> = None;
+        self.lower_match_arms(
+            &arms, sv, disc, &domain, scrut_sema, want_v, merge_eu, exhaustive, &mut merge, e.span,
+        )?;
+        match merge {
+            Some((mb, param)) => {
+                self.b.seal_block(mb);
+                self.b.switch_to_block(mb);
+                Ok(Flow::Val(param))
+            }
+            None => Ok(Flow::Diverged),
+        }
+    }
+
+    /// `match` over a fallible value (`[type.row.match]`, s197, #497,
+    /// ruling #21): the union splits as an `else` splits it (`eu.is_err`,
+    /// one branch), and each half runs its own arm chain — the row
+    /// arms over the row value, built exactly as `lower_else_handler`
+    /// builds an `else |e|` binding (the tag, or `Agg[tag, slots…]`),
+    /// with the row's tags as the domain; the value arms over `eu.ok`
+    /// with the ok type's own domain. `_` is in both chains. The arms
+    /// are sorted by [`wolf_sema::check::fallible_arm_half`] — the one
+    /// rule the checker and the checked machine replay — so no tier
+    /// guesses a half. Both chains jump to one merge.
+    fn lower_match_fallible(
+        &mut self,
+        e: &'t GreenNode,
+        d: MatchExpr<'t>,
+        sv: Value,
+        ok_sema: TyId,
+        row_sema: TyId,
+        want: bool,
+    ) -> R<Flow> {
+        let vty = self.b.func.value_ty(sv);
+        let types::TypeData::Eu { ok, slots } = self.b.module.types.get(vty).clone() else {
+            return Err(refuse("a fallible scrutinee without a union shape", e.span));
+        };
+        let tags: Vec<String> = match self.table.kind(row_sema) {
+            TyKind::Row { tags, .. } => tags.iter().map(|(n, _)| n.clone()).collect(),
+            _ => {
+                return Err(refuse(
+                    "`match` over a fallible value whose row is a generic row variable",
+                    e.span,
+                ));
+            }
+        };
+        let want_v = match self.expr_sema_ty(e.span) {
+            Some(t) => self.wir_value_ty(t, e.span)?.is_some(),
+            None => want,
+        };
+        let merge_eu = self.eu_ty_of_span(e.span)?;
+        let exhaustive = self.matches.get(&e.span).copied().unwrap_or(false);
+        let mut row_arms: Vec<MatchArm<'t>> = Vec::new();
+        let mut val_arms: Vec<MatchArm<'t>> = Vec::new();
+        for arm in d.arms() {
+            let Some(pat) = arm.pattern() else { continue };
+            let half = {
+                let text = |s: Span| self.text(s);
+                let is_tag = |n: &str| tags.iter().any(|t| t == n);
+                wolf_sema::check::fallible_arm_half(pat, &text, &is_tag)
+            };
+            let half = half.map_err(|c| refuse(c, pat.span))?;
+            if half.admits(true) {
+                row_arms.push(arm);
+            }
+            if half.admits(false) {
+                val_arms.push(arm);
+            }
+        }
+        let mut merge: Option<(Block, Option<Value>)> = None;
+        let is_err = self.b.ins_eu_is_err(sv);
+        match self.b.as_bool_const(is_err) {
+            // A decided union: one half lowers, the other is dead code.
+            Some(true) => {
+                self.lower_fallible_row_half(
+                    sv, &slots, &row_arms, row_sema, want_v, merge_eu, exhaustive, &mut merge, e.span,
+                )?;
+            }
+            Some(false) => {
+                self.lower_fallible_value_half(
+                    sv, ok, &val_arms, ok_sema, want_v, merge_eu, exhaustive, &mut merge, e.span,
+                )?;
+            }
+            None => {
+                let err_bb = self.b.create_block();
+                let ok_bb = self.b.create_block();
+                self.b.ins_br(is_err, err_bb, &[], ok_bb, &[]);
+                self.b.seal_block(err_bb);
+                self.b.seal_block(ok_bb);
+                self.b.switch_to_block(ok_bb);
+                self.b.gvn_push_scope();
+                let r = self.lower_fallible_value_half(
+                    sv, ok, &val_arms, ok_sema, want_v, merge_eu, exhaustive, &mut merge, e.span,
+                );
+                self.b.gvn_pop_scope();
+                r?;
+                self.b.switch_to_block(err_bb);
+                self.b.gvn_push_scope();
+                let r = self.lower_fallible_row_half(
+                    sv, &slots, &row_arms, row_sema, want_v, merge_eu, exhaustive, &mut merge, e.span,
+                );
+                self.b.gvn_pop_scope();
+                r?;
+            }
+        }
+        match merge {
+            Some((mb, param)) => {
+                self.b.seal_block(mb);
+                self.b.switch_to_block(mb);
+                Ok(Flow::Val(param))
+            }
+            None => Ok(Flow::Diverged),
+        }
+    }
+
+    /// The row half of a fallible `match`: the caught row as a value
+    /// (`lower_else_handler`'s `|e|` shape), the row domain, the row
+    /// arms.
+    #[allow(clippy::too_many_arguments)]
+    fn lower_fallible_row_half(
+        &mut self,
+        sv: Value,
+        slots: &[TypeId],
+        arms: &[MatchArm<'t>],
+        row_sema: TyId,
+        want_v: bool,
+        merge_eu: Option<TypeId>,
+        exhaustive: bool,
+        merge: &mut Option<(Block, Option<Value>)>,
+        span: Span,
+    ) -> R<()> {
+        let tag = self.b.ins_eu_err_tag(sv);
+        let rv = if slots.is_empty() {
+            tag
+        } else {
+            let mut parts = vec![tag];
+            for k in 0..slots.len() {
+                parts.push(self.b.ins_eu_err_slot(sv, k));
+            }
+            let mut fields = vec![types::I64];
+            fields.extend_from_slice(slots);
+            let aggt = self.b.module.types.intern(types::TypeData::Agg(fields));
+            self.b
+                .ins(Opcode::AggMake, &parts, &[aggt], Aux::None)
+                .one()
+        };
+        let domain = self.match_domain(row_sema, span)?;
+        // ONE discriminant read: the tag is field 0 of the aggregate.
+        let disc = if slots.is_empty() { rv } else { tag };
+        self.lower_match_arms(
+            arms, rv, disc, &domain, row_sema, want_v, merge_eu, exhaustive, merge, span,
+        )
+    }
+
+    /// The value half of a fallible `match`: `eu.ok` under the ok
+    /// type's own domain. A unit ok half has no value: its arms can
+    /// only be `_` (a binding of unit is refused by name).
+    #[allow(clippy::too_many_arguments)]
+    fn lower_fallible_value_half(
+        &mut self,
+        sv: Value,
+        ok: Option<TypeId>,
+        arms: &[MatchArm<'t>],
+        ok_sema: TyId,
+        want_v: bool,
+        merge_eu: Option<TypeId>,
+        exhaustive: bool,
+        merge: &mut Option<(Block, Option<Value>)>,
+        span: Span,
+    ) -> R<()> {
+        let Some(_) = ok else {
+            for arm in arms {
+                let Some(pat) = arm.pattern() else { continue };
+                if pat.kind != SyntaxKind::WildcardPat || arm.guard().is_some() {
+                    return Err(refuse(
+                        "a value arm other than a bare `_` over the unit half of a `!()`",
+                        pat.span,
+                    ));
+                }
+                self.enter_match_arm(
+                    arm,
+                    sv,
+                    &[],
+                    None,
+                    want_v,
+                    merge_eu,
+                    merge,
+                    ArmNext::None,
+                    span,
+                )?;
+                return Ok(());
+            }
+            // Sema's totality theorem: a value arm exists.
+            self.b.ins_trap(TrapKind::Assert);
+            return Ok(());
+        };
+        let okv = self.b.ins_eu_ok(sv);
+        // The ok type's domain; a type the lowering cannot split
+        // (a list, a map, …) still takes the irrefutable arms a
+        // `match` over it would be refused on — `v => v` is THE
+        // idiom of this form, and a bare binding needs no domain.
+        let domain = match self.match_domain(ok_sema, span) {
+            Ok(d) => d,
+            Err(x) => {
+                let irrefutable = arms.iter().all(|a| {
+                    a.pattern().is_none_or(|p| {
+                        matches!(p.kind, SyntaxKind::WildcardPat | SyntaxKind::IdentPat)
+                    })
+                });
+                if irrefutable {
+                    MatchDomain::Scalar
+                } else {
+                    return Err(x);
+                }
+            }
+        };
+        let ok_ty = self.b.func.value_ty(okv);
+        let disc = match (&domain, self.b.module.types.get(ok_ty).clone()) {
+            (MatchDomain::Enum(_) | MatchDomain::Row(_), types::TypeData::Agg(fields)) => self
+                .b
+                .ins(Opcode::AggGet, &[okv], &[fields[0]], Aux::Int(0))
+                .one(),
+            _ => okv,
+        };
+        self.lower_match_arms(
+            arms, okv, disc, &domain, ok_sema, want_v, merge_eu, exhaustive, merge, span,
+        )
+    }
+
+    /// The arm chain of one `match` — or of one HALF of a `match` over
+    /// a fallible value (`[type.row.match]`, s197): `arms` in source
+    /// order, `sv` the scrutinee value of this domain, `disc` its
+    /// discriminant. `exhaustive` is sema's totality theorem for the
+    /// whole match, which licenses the closing arm of a half too: the
+    /// halves are disjoint, so a total match covers each half with
+    /// that half's own arms (plus `_`). Leaves the builder positioned
+    /// after the chain's last block; a live residual edge traps.
+    #[allow(clippy::too_many_arguments)]
+    fn lower_match_arms(
+        &mut self,
+        arms: &[MatchArm<'t>],
+        sv: Value,
+        disc: Value,
+        domain: &MatchDomain,
+        scrut_sema: TyId,
+        want_v: bool,
+        merge_eu: Option<TypeId>,
+        exhaustive: bool,
+        merge: &mut Option<(Block, Option<Value>)>,
+        span: Span,
+    ) -> R<()> {
+        let n = arms.len();
+        let domain = domain;
         let mut open = true; // the current block still needs a decision
         // Every block the chain CONTINUES in after the first branch —
         // each arm's `next_bb`, each guard's fresh re-entry — fails to
@@ -19807,7 +20063,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 break; // an irrefutable arm ended the chain (E0802'd)
             }
             let Some(pat) = arm.pattern() else { continue };
-            let shape = self.pattern_shape(pat, &domain)?;
+            let shape = self.pattern_shape(pat, domain)?;
             let is_last = i + 1 == n;
             match shape {
                 PatShape::Irrefutable(bind) => {
@@ -19828,9 +20084,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             bind,
                             want_v,
                             merge_eu,
-                            &mut merge,
+                            merge,
                             ArmNext::Fresh,
-                            e.span,
+                            span,
                         )? {
                             Some(nb) => {
                                 self.b.seal_block(nb);
@@ -19849,9 +20105,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         bind,
                         want_v,
                         merge_eu,
-                        &mut merge,
+                        merge,
                         ArmNext::None,
-                        e.span,
+                        span,
                     )?;
                     open = false;
                 }
@@ -19875,9 +20131,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                                 None,
                                 want_v,
                                 merge_eu,
-                                &mut merge,
+                                merge,
                                 ArmNext::Fresh,
-                                e.span,
+                                span,
                             )? {
                                 Some(nb) => {
                                     self.b.seal_block(nb);
@@ -19897,9 +20153,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                                 None,
                                 want_v,
                                 merge_eu,
-                                &mut merge,
+                                merge,
                                 ArmNext::None,
-                                e.span,
+                                span,
                             )?;
                             open = false;
                         }
@@ -19913,9 +20169,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             None,
                             want_v,
                             merge_eu,
-                            &mut merge,
+                            merge,
                             ArmNext::None,
-                            e.span,
+                            span,
                         )?;
                         open = false;
                     } else {
@@ -19935,9 +20191,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             None,
                             want_v,
                             merge_eu,
-                            &mut merge,
+                            merge,
                             ArmNext::To(next_bb),
-                            e.span,
+                            span,
                         )?;
                         self.b.seal_block(next_bb);
                         self.b.switch_to_block(next_bb);
@@ -19987,9 +20243,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                                 None,
                                 want_v,
                                 merge_eu,
-                                &mut merge,
+                                merge,
                                 ArmNext::Fresh,
-                                e.span,
+                                span,
                             )? {
                                 Some(nb) => {
                                     self.b.seal_block(nb);
@@ -20009,9 +20265,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                                 None,
                                 want_v,
                                 merge_eu,
-                                &mut merge,
+                                merge,
                                 ArmNext::None,
-                                e.span,
+                                span,
                             )?;
                             open = false;
                         }
@@ -20027,9 +20283,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             None,
                             want_v,
                             merge_eu,
-                            &mut merge,
+                            merge,
                             ArmNext::None,
-                            e.span,
+                            span,
                         )?;
                         open = false;
                     } else {
@@ -20079,9 +20335,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             None,
                             want_v,
                             merge_eu,
-                            &mut merge,
+                            merge,
                             ArmNext::To(next_bb),
-                            e.span,
+                            span,
                         )?;
                         self.b.seal_block(next_bb);
                         self.b.switch_to_block(next_bb);
@@ -20105,9 +20361,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             None,
                             want_v,
                             merge_eu,
-                            &mut merge,
+                            merge,
                             ArmNext::None,
-                            e.span,
+                            span,
                         )?;
                         open = false;
                         continue;
@@ -20150,9 +20406,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                                 None,
                                 want_v,
                                 merge_eu,
-                                &mut merge,
+                                merge,
                                 ArmNext::Fresh,
-                                e.span,
+                                span,
                             )? {
                                 Some(nb) => {
                                     self.b.seal_block(nb);
@@ -20170,9 +20426,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                                 None,
                                 want_v,
                                 merge_eu,
-                                &mut merge,
+                                merge,
                                 ArmNext::None,
-                                e.span,
+                                span,
                             )?;
                             open = false;
                         }
@@ -20219,9 +20475,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         None,
                         want_v,
                         merge_eu,
-                        &mut merge,
+                        merge,
                         ArmNext::To(next_bb),
-                        e.span,
+                        span,
                     )?;
                     self.b.seal_block(next_bb);
                     self.b.switch_to_block(next_bb);
@@ -20239,7 +20495,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     let mut binds: Vec<(String, LocalBind)> = Vec::new();
                     let mut dead = false;
                     self.product_top(
-                        pat, sv, disc, scrut_sema, &domain, &mut conds, &mut binds, &mut dead,
+                        pat, sv, disc, scrut_sema, domain, &mut conds, &mut binds, &mut dead,
                     )?;
                     if dead {
                         continue;
@@ -20258,9 +20514,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                                 None,
                                 want_v,
                                 merge_eu,
-                                &mut merge,
+                                merge,
                                 ArmNext::Fresh,
-                                e.span,
+                                span,
                             )? {
                                 Some(nb) => {
                                     self.b.seal_block(nb);
@@ -20281,9 +20537,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                                 None,
                                 want_v,
                                 merge_eu,
-                                &mut merge,
+                                merge,
                                 ArmNext::None,
-                                e.span,
+                                span,
                             )?;
                             open = false;
                         }
@@ -20309,9 +20565,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         None,
                         want_v,
                         merge_eu,
-                        &mut merge,
+                        merge,
                         ArmNext::To(next_bb),
-                        e.span,
+                        span,
                     )?;
                     self.b.seal_block(next_bb);
                     self.b.switch_to_block(next_bb);
@@ -20329,15 +20585,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         for _ in 0..chain_gvn {
             self.b.gvn_pop_scope();
         }
-        match merge {
-            Some((mb, param)) => {
-                self.b.seal_block(mb);
-                self.b.switch_to_block(mb);
-                Ok(Flow::Val(param))
-            }
-            None => Ok(Flow::Diverged),
-        }
+        Ok(())
     }
+
 
     /// Enter one arm: bind payloads (or the whole scrutinee), run the
     /// guard (failure re-enters the chain per `next`), lower the
