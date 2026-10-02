@@ -3660,13 +3660,46 @@ impl<'t> Machine<'t> {
         // row/enum type names the identifiers that are TAG TESTS in
         // arm position — everything else is a binding. Resolved once,
         // statically, from the recorded scrutinee type.
-        let domain = d.scrutinee().and_then(|s| self.match_domain_names(s.span));
-        let scrut = match d.scrutinee() {
-            Some(s) => val!(self.eval(s)),
-            None => Value::Unit,
+        //
+        // `[type.row.match]` (s197, #497, ruling #21): over a fallible
+        // scrutinee the two halves are dispatched apart. A raw row
+        // (`Flow::Err(_, false)`: the call's own failure) and a bound
+        // row value (`Value::ErrTag`, #122's `let`-bound shape) go to
+        // the row arms with the row's tags as the test domain; a value
+        // goes to the value arms with the ok type's own domain; a
+        // propagating row (`Flow::Err(_, true)`, a `?` that fired
+        // inside the scrutinee) leaves past the arms exactly as it
+        // leaves past an `else` (`[type.row.else]`, #492).
+        let fallible = d.scrutinee().and_then(|s| self.fallible_match_names(s.span));
+        let domain = match &fallible {
+            Some(_) => None,
+            None => d.scrutinee().and_then(|s| self.match_domain_names(s.span)),
+        };
+        let flow = match d.scrutinee() {
+            Some(s) => self.eval(s)?,
+            None => Flow::Val(Value::Unit),
+        };
+        let (scrut, row_half, domain) = match (&fallible, flow) {
+            (Some((tags, _)), Flow::Err(err, false)) => (err, true, Some(tags.clone())),
+            (Some((tags, _)), Flow::Val(v @ Value::ErrTag { .. })) => (v, true, Some(tags.clone())),
+            (Some((_, value_names)), Flow::Val(v)) => (v, false, value_names.clone()),
+            (None, Flow::Val(v)) => (v, false, domain),
+            (_, other) => return Ok(other),
         };
         for arm in d.arms() {
             let Some(pat) = arm.pattern() else { continue };
+            if let Some((tags, _)) = &fallible {
+                let half = {
+                    let text = |s: Span| self.text(s);
+                    let is_tag = |n: &str| tags.iter().any(|t| t == n);
+                    wolf_sema::check::fallible_arm_half(pat, &text, &is_tag)
+                };
+                match half {
+                    Ok(h) if h.admits(row_half) => {}
+                    Ok(_) => continue,
+                    Err(construct) => return self.refuse(construct, pat.span),
+                }
+            }
             let binds = match self.match_pattern(pat, &scrut, domain.as_deref(), false)? {
                 Some(b) => b,
                 None => continue,
@@ -3712,7 +3745,38 @@ impl<'t> Machine<'t> {
     /// for scalar scrutinees: every identifier arm binds there.
     fn match_domain_names(&self, span: Span) -> Option<Vec<String>> {
         let ctx = self.ctx();
+        let id = *ctx.expr_tys.get(&span)?;
+        self.case_names_of(id)
+    }
+
+    /// `[type.row.match]` (s197): for a scrutinee recorded as
+    /// `T ! {row}`, the row's tag names (the row arms' test domain)
+    /// and `T`'s own case names, if it has any (the value arms'
+    /// domain). `None` for every other scrutinee.
+    #[allow(clippy::type_complexity)]
+    fn fallible_match_names(&self, span: Span) -> Option<(Vec<String>, Option<Vec<String>>)> {
+        let ctx = self.ctx();
         let mut id = *ctx.expr_tys.get(&span)?;
+        for _ in 0..32 {
+            match ctx.tb.table.kind(id) {
+                TyKind::Distinct(inner) => id = *inner,
+                _ => break,
+            }
+        }
+        let TyKind::ErrUnion(ok, row) = ctx.tb.table.kind(id) else {
+            return None;
+        };
+        let tags = match ctx.tb.table.kind(*row) {
+            TyKind::Row { tags, .. } => tags.iter().map(|(n, _)| n.clone()).collect(),
+            _ => Vec::new(),
+        };
+        Some((tags, self.case_names_of(*ok)))
+    }
+
+    /// The tag/variant names of a type id, through `distinct`
+    /// wrappers: a row's tags or a (non-generic) enum's variants.
+    fn case_names_of(&self, mut id: TyId) -> Option<Vec<String>> {
+        let ctx = self.ctx();
         for _ in 0..32 {
             match ctx.tb.table.kind(id) {
                 TyKind::Distinct(inner) => id = *inner,
