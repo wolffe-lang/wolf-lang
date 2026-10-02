@@ -14485,7 +14485,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // one store, no bound (`[mem.unsafe.raw.1]`).
         if let TyKind::Ptr(elem) = self.table.kind(self.strip_sema(base_sema)) {
             let elem = *elem;
-            let (_, size) = self.raw_pointee(elem, span)?;
+            let (ewty, size) = self.raw_pointee(elem, span)?;
+            let op = d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq);
             let Some(base) = flow_val!(self.lower_expr(recv)) else {
                 return Err(refuse("a valueless raw pointer", recv.span));
             };
@@ -14515,6 +14516,23 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             };
             let p = self.raw_elem_addr(base, idx, size);
             let region = self.foreign_buf_region();
+            // `p[i] op= v` (wolf-lang#542): read-modify-write at the
+            // pointee's type, the List form's rule (#55). Before kw01
+            // the operator was dropped and `v` stored.
+            let val = if op == SyntaxKind::Eq {
+                val
+            } else {
+                let Some(bin) = Self::compound_bin(op) else {
+                    return Err(refuse("this compound assignment operator", span));
+                };
+                let cur = self.load_c(ewty, p, region, span)?;
+                let wrapping = matches!(self.table.kind(elem), TyKind::Wrapping(_));
+                let unsigned = sema_unsigned(self.table, elem);
+                match self.arith(bin, cur, val, wrapping, unsigned, ewty, span)? {
+                    Some(v) => v,
+                    None => return Ok(Flow::Diverged),
+                }
+            };
             self.store_c(val, p, region, vexpr.span)?;
             return Ok(Flow::Val(None));
         }
