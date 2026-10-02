@@ -19857,12 +19857,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 wolf_sema::check::fallible_arm_half(pat, &text, &is_tag)
             };
             let half = half.map_err(|c| refuse(c, pat.span))?;
-            if half.admits(true) {
-                row_arms.push(arm);
-            }
-            if half.admits(false) {
-                val_arms.push(arm);
-            }
+            // PLANT (s197): every arm in both halves — a bare tag binds the value.
+            let _ = half;
+            row_arms.push(arm);
+            val_arms.push(arm);
         }
         let mut merge: Option<(Block, Option<Value>)> = None;
         let is_err = self.b.ins_eu_is_err(sv);
