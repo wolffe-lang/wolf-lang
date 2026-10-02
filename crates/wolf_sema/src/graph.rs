@@ -730,7 +730,7 @@ impl ModuleData {
             let Some(mark) = standalone_mark(base, &raw.src) else {
                 continue;
             };
-            let (parse, _) = parse_unit(raw.file, &raw.src);
+            let parse = parse_unit(raw.file, &raw.src);
             if collect_items(&parse.root, &raw.src)
                 .iter()
                 .any(|(n, ..)| n == name)
@@ -821,12 +821,12 @@ pub fn load_package(
 /// for the build's target (`[gram.item.attr.cfg]`, K13): every item
 /// table, binding and body below is built from the stripped tree, so
 /// an excluded node is never resolved, typed or lowered on any lane.
-/// The second half is the E0817s for predicates the strip could not
-/// decide.
-fn parse_unit(file: wolf_span::FileId, src: &[u8]) -> (wolf_parse::Parse, Vec<Diagnostic>) {
+/// A predicate the strip cannot decide keeps its node and is refused
+/// by the attribute check (E0817), beside every other attribute.
+fn parse_unit(file: wolf_span::FileId, src: &[u8]) -> wolf_parse::Parse {
     let mut parse = wolf_parse::parse_file(file, src);
-    let diags = crate::attrs::strip_cfg(&mut parse.root, src, &crate::attrs::host_target());
-    (parse, diags)
+    crate::attrs::strip_cfg(&mut parse.root, src, &crate::attrs::host_target());
+    parse
 }
 
 /// Owned shape of one `use`/`import c` declaration (extracted from the
@@ -920,8 +920,7 @@ impl LoadState<'_> {
         // Parse every file of the module.
         let mut file_indices = Vec::new();
         for r in loaded.files {
-            let (parse, cfg_diags) = parse_unit(r.file, &r.src);
-            self.diags.extend(cfg_diags);
+            let parse = parse_unit(r.file, &r.src);
             file_indices.push(self.files.len());
             self.files.push(SourceUnit { raw: r, parse });
         }
@@ -1077,7 +1076,7 @@ impl LoadState<'_> {
         let loaded = &self.peeked[path];
         let mut all = Vec::new();
         for r in &loaded.files {
-            let (parse, _) = parse_unit(r.file, &r.src);
+            let parse = parse_unit(r.file, &r.src);
             for (n, k, v, ..) in collect_items(&parse.root, &r.src) {
                 all.push((n, k, v));
             }

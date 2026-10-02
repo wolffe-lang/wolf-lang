@@ -26,17 +26,11 @@ fn render(res: &Resolution, diags: &[&wolf_diag::Diagnostic]) -> String {
     out
 }
 
-/// The attribute check's diagnostics plus the load-time cfg ones.
+/// The attribute check's diagnostics.
 fn render_attrs(src: &str) -> String {
     let res = resolve(src);
     let check = wolf_sema::attrs::check(&res.package);
-    let mut all: Vec<&wolf_diag::Diagnostic> = res
-        .package
-        .diagnostics
-        .iter()
-        .filter(|d| d.code == "E0817")
-        .collect();
-    all.extend(check.iter());
+    let all: Vec<&wolf_diag::Diagnostic> = check.iter().collect();
     render(&res, &all)
 }
 

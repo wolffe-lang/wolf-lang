@@ -13,9 +13,9 @@
 //!   does not hold for the build's target is dropped, so resolution,
 //!   typing, the checked machine and both lowerings never see it
 //!   (`[gram.item.attr.cfg]`). A predicate this compiler cannot decide
-//!   — an unknown target string, another key, several predicates — is
-//!   **E0817** and the node is KEPT (one mistake is one diagnostic,
-//!   never a cascade of unresolved names at its callers).
+//!   — an unknown target string, another key, several predicates —
+//!   KEEPS its node (one mistake is one diagnostic, never a cascade of
+//!   unresolved names at its callers), and [`check`] refuses it.
 //! - [`check`] walks every surviving attribute: each must be one this
 //!   compiler implements, in a position where it means something.
 //!   Everything else is **E0817**, naming the attribute and what exists
@@ -216,22 +216,22 @@ fn cfg_keeps(node: &GreenNode, src: &[u8], target: &str, diags: &mut Vec<Diagnos
 /// Drop every node whose `#[cfg(target = …)]` does not hold for
 /// `target` (`[gram.item.attr.cfg]`). Runs on a freshly parsed tree,
 /// before items are collected; a dropped node's contents are never
-/// resolved, typed or lowered. Returns the E0817s for predicates it
-/// could not decide.
-pub fn strip_cfg(root: &mut GreenNode, src: &[u8], target: &str) -> Vec<Diagnostic> {
-    let mut diags = Vec::new();
-    strip_in(root, src, target, &mut diags);
-    diags
+/// resolved, typed or lowered. A predicate it cannot decide keeps its
+/// node; [`check`] reports it (E0817), at the same phase as every
+/// other attribute refusal.
+pub fn strip_cfg(root: &mut GreenNode, src: &[u8], target: &str) {
+    node_strip(root, src, target);
 }
 
-fn strip_in(node: &mut GreenNode, src: &[u8], target: &str, diags: &mut Vec<Diagnostic>) {
+fn node_strip(node: &mut GreenNode, src: &[u8], target: &str) {
+    let mut quiet = Vec::new();
     node.children.retain(|c| match c {
-        Child::Node(n) => cfg_keeps(n, src, target, diags),
+        Child::Node(n) => cfg_keeps(n, src, target, &mut quiet),
         Child::Token(_) => true,
     });
     for c in node.children.iter_mut() {
         if let Child::Node(n) = c {
-            strip_in(n, src, target, diags);
+            node_strip(n, src, target);
         }
     }
 }
@@ -249,6 +249,7 @@ fn check_item(
     item: &wolf_ast::AttrItem<'_>,
     kind: SyntaxKind,
     src: &[u8],
+    target: &str,
     diags: &mut Vec<Diagnostic>,
 ) {
     let name = item_name(item, src);
@@ -278,7 +279,13 @@ fn check_item(
     };
     match name.as_str() {
         // Read anywhere an attribute may be written.
-        "allow" | "index" | "cfg" => {}
+        "allow" | "index" => {}
+        // Every `cfg` still in the tree held or could not be decided
+        // (the strip dropped the rest); the undecidable ones are
+        // refused here.
+        "cfg" => {
+            cfg_item(item, src, target, diags);
+        }
         "trusted" | "consttime" => {
             if !is_fn(kind) {
                 misplaced(diags, "a function");
@@ -405,23 +412,24 @@ fn check_abi(node: &GreenNode, src: &[u8], diags: &mut Vec<Diagnostic>) {
     );
 }
 
-fn walk(node: &GreenNode, src: &[u8], diags: &mut Vec<Diagnostic>) {
+fn walk(node: &GreenNode, src: &[u8], target: &str, diags: &mut Vec<Diagnostic>) {
     for attr in node.nodes().filter_map(wolf_ast::Attribute::cast) {
         for item in attr.items() {
-            check_item(&item, node.kind, src, diags);
+            check_item(&item, node.kind, src, target, diags);
         }
     }
     check_abi(node, src, diags);
     for child in node.nodes() {
-        walk(child, src, diags);
+        walk(child, src, target, diags);
     }
 }
 
 /// E0817 and E0818 over every file of `pkg` (after [`strip_cfg`]).
 pub fn check(pkg: &Package) -> Vec<Diagnostic> {
+    let target = host_target();
     let mut diags = Vec::new();
     for unit in &pkg.files {
-        walk(&unit.parse.root, &unit.raw.src, &mut diags);
+        walk(&unit.parse.root, &unit.raw.src, &target, &mut diags);
     }
     diags
 }
@@ -460,10 +468,13 @@ mod tests {
         assert!(h.contains('-'), "{h}");
     }
 
+    /// The stripped tree's text, and what the check then refuses.
     fn stripped(src: &str, target: &str) -> (String, Vec<Diagnostic>) {
         let parse = wolf_parse::parse_file(wolf_span::FileId::from_index(0), src.as_bytes());
         let mut root = parse.root;
-        let diags = strip_cfg(&mut root, src.as_bytes(), target);
+        strip_cfg(&mut root, src.as_bytes(), target);
+        let mut diags = Vec::new();
+        walk(&root, src.as_bytes(), target, &mut diags);
         (String::from_utf8(root.text(src.as_bytes())).unwrap(), diags)
     }
 
