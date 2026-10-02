@@ -759,9 +759,7 @@ fn with_handle<R>(fd: i64, f: impl FnOnce(&File) -> R) -> Option<R> {
 /// otherwise.
 fn seek_code(e: &std::io::Error) -> i64 {
     match e.kind() {
-        // PLANT (s199): the runtime forgets ESPIPE — the gate's native
-        // and release legs must go red while the checked leg stays green.
-        std::io::ErrorKind::NotSeekable => fs_code::IO,
+        std::io::ErrorKind::NotSeekable => fs_code::UNSEEKABLE,
         std::io::ErrorKind::InvalidInput => fs_code::INVALID,
         _ => code_of(e),
     }
