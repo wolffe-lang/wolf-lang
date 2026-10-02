@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/attr_diagnostics.rs
+expression: "render_attrs(\"extern \\\"x86-interrupt\\\" fn isr() {\\n    let x = 1\\n}\\n\")"
+---
+error[E0818]: `"x86-interrupt"` is not an ABI wolf has — the only one is `"c"`
+ --> mem:///main.lu:1:8
+  |
+1 | extern "x86-interrupt" fn isr() {
+  |        ^^^^^^^^^^^^^^^ unknown ABI
+  |
+  = note: `[abi.c.seams]`: the one ABI string is `"c"`. An interrupt or exception handler is
+    entered through an assembly trampoline that saves the registers, calls an `export fn`
+    with the C convention, and returns with `iretq` (KWC F7, K7); a function written with
+    another ABI string would compile as an ordinary function and return with `ret`.

@@ -1,0 +1,23 @@
+---
+source: crates/wolf_sema/tests/attr_diagnostics.rs
+expression: "render_attrs(\"#[repr(c, packed), repr(bogus)]\\nstruct P {\\n    a: u8,\\n    b: u32,\\n}\\n\")"
+---
+error[E0817]: `repr(packed)` is not implemented yet
+ --> mem:///main.lu:1:11
+  |
+1 | #[repr(c, packed), repr(bogus)]
+  |           ^^^^^^ known, but nothing implements it
+  |
+  = note: the one representation implemented is `#[repr(c)]` ([abi.layout.c]); `packed`,
+    `align(N)` and `transparent` are KWC F4's later half (kw08) and are refused by name
+    until then, never ignored.
+
+error[E0817]: `repr(bogus)` is not a representation wolf knows
+ --> mem:///main.lu:1:25
+  |
+1 | #[repr(c, packed), repr(bogus)]
+  |                         ^^^^^ unknown representation
+  |
+  = note: the one representation implemented is `#[repr(c)]` ([abi.layout.c]); `packed`,
+    `align(N)` and `transparent` are KWC F4's later half (kw08) and are refused by name
+    until then, never ignored.

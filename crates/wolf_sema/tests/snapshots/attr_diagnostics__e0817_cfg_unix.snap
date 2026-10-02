@@ -1,0 +1,11 @@
+---
+source: crates/wolf_sema/tests/attr_diagnostics.rs
+expression: "render_attrs(\"#[cfg(unix)]\\nfn f() -> int {\\n    1\\n}\\n\")"
+---
+error[E0817]: `cfg(unix)` is not a predicate wolf knows
+ --> mem:///main.lu:1:7
+  |
+1 | #[cfg(unix)]
+  |       ^^^^ not a predicate this compiler decides
+  |
+  = note: the one predicate is `cfg(target = "<triple or architecture>")` ([gram.item.attr.cfg]).

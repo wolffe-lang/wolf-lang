@@ -1,0 +1,15 @@
+---
+source: crates/wolf_sema/tests/attr_diagnostics.rs
+expression: "render_attrs(\"#[cfg(target = \\\"x86-64\\\")]\\nfn f() -> int {\\n    1\\n}\\n\")"
+---
+error[E0817]: `x86-64` names no target wolf knows
+ --> mem:///main.lu:1:7
+  |
+1 | #[cfg(target = "x86-64")]
+  |       ^^^^^^^^^^^^^^^^^ no such target
+  |
+  = note: a `target` predicate names a triple (`x86_64-unknown-linux-gnu`,
+    `aarch64-unknown-linux-gnu`, `aarch64-apple-darwin`, `x86_64-pc-windows-msvc`,
+    `x86_64-unknown-freebsd`, `x86_64-unknown-none`) or an architecture (`x86_64`,
+    `aarch64`); a name that matches nothing is refused, never read as "false", so a typo
+    cannot silently drop code.
