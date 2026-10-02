@@ -129,11 +129,23 @@ generics/list_wrapping_elem.lu: lowers
 generics/pair_of.lu: lowers
 generics/two_instances.lu: lowers
 generics/two_level_raise.lu: lowers
+grammar/attr_contract_unimplemented.lu: not mem-clean (pre-wir rungs own it)
+grammar/attr_implemented_set.lu: lowers
+grammar/attr_misplaced.lu: not mem-clean (pre-wir rungs own it)
+grammar/attr_repr_bogus.lu: not mem-clean (pre-wir rungs own it)
+grammar/attr_repr_unimplemented.lu: not mem-clean (pre-wir rungs own it)
+grammar/attr_section.lu: not mem-clean (pre-wir rungs own it)
+grammar/attr_thread_local.lu: not mem-clean (pre-wir rungs own it)
+grammar/attr_unknown.lu: not mem-clean (pre-wir rungs own it)
 grammar/bang_errunion.lu: lowers
 grammar/bang_not.lu: lowers
 grammar/bom_at_start.lu: lowers
 grammar/brackets_generic_call.lu: lowers
 grammar/brackets_index.lu: not mem-clean (pre-wir rungs own it)
+grammar/cfg_predicate_unknown.lu: not mem-clean (pre-wir rungs own it)
+grammar/cfg_target_arch.lu: lowers
+grammar/cfg_target_freestanding.lu: lowers
+grammar/cfg_target_unknown.lu: not mem-clean (pre-wir rungs own it)
 grammar/char_uni_seven_digits.lu: not mem-clean (pre-wir rungs own it)
 grammar/closure_extent.lu: not mem-clean (pre-wir rungs own it)
 grammar/closure_params_no_separator.lu: not mem-clean (pre-wir rungs own it)
@@ -141,6 +153,7 @@ grammar/defer_loop_turn.lu: lowers
 grammar/else_chain.lu: lowers
 grammar/else_default.lu: lowers
 grammar/else_default_newline.lu: lowers
+grammar/extern_abi_interrupt.lu: not mem-clean (pre-wir rungs own it)
 grammar/if_then_arm.lu: lowers
 grammar/if_then_block.lu: lowers
 grammar/if_then_chain.lu: lowers
@@ -468,6 +481,8 @@ memory/push_copies_element.lu: lowers
 memory/push_grow_guarded_index.lu: lowers
 memory/push_grow_nested_guarded_index.lu: lowers
 memory/push_take_moves.lu: not mem-clean (pre-wir rungs own it)
+memory/raw_compound_assign.lu: lowers
+memory/raw_repr_c_layout.lu: lowers
 memory/read_param_escape_field.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_generic.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_local.lu: not mem-clean (pre-wir rungs own it)
