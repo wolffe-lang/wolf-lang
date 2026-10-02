@@ -599,6 +599,13 @@ struct Checker<'a> {
     /// although a bound on them rejects `i32` — with the integer types
     /// that DO satisfy every bound (none, or more than one).
     literal_default_miss: HashMap<u32, Vec<Prim>>,
+    /// wolf-lang#458: the integer literals an unannotated binding's
+    /// initializer term is built from (report spans, as
+    /// [`Checker::check_literal_fit`] keys them). Such a literal has no
+    /// context of its own (`[type.numlit.propagate]`: adoption does not
+    /// cross a binding), so it takes `i32` and must fit it, whatever a
+    /// later use of the binding decides for the VALUE.
+    binding_lits: HashSet<Span>,
     /// Lexically enclosing `when` blocks, outermost first
     /// ([conc.when.nonest]): a non-empty stack makes another `when`
     /// E1103. The stack survives into closures deliberately — the
@@ -796,6 +803,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         row_tags: BTreeSet::new(),
         expect_enum: None,
         literal_default_miss: HashMap::new(),
+        binding_lits: HashSet::new(),
         when_stack: Vec::new(),
         spawn_ctx: None,
         proc_entries: Vec::new(),
@@ -977,6 +985,7 @@ pub(crate) fn collect_body_rows(
         row_tags: BTreeSet::new(),
         expect_enum: None,
         literal_default_miss: HashMap::new(),
+        binding_lits: HashSet::new(),
         when_stack: Vec::new(),
         spawn_ctx: None,
         proc_entries: Vec::new(),
@@ -3818,6 +3827,7 @@ impl<'a> Checker<'a> {
                 // could. Annotated bindings above never reach here, so a
                 // literal checked directly against a float annotation
                 // still adopts (`[type.numlit.adopt]`).
+                self.note_binding_literals(i);
                 let ty = self.synth_expr(i)?;
                 if let TyKind::Var(v) = self.kind_of(ty) {
                     self.vars.freeze_value(v);
@@ -3828,6 +3838,60 @@ impl<'a> Checker<'a> {
             // analysis is c04; type-wise this is a fresh existential
             // (E0405 if no later use pins it).
             (None, None) => Ok(self.fresh(NumKind::Any, stmt_span)),
+        }
+    }
+
+    /// wolf-lang#458 (`[type.numlit.propagate]`, `[type.numlit.value]`):
+    /// record the integer literals that make up an unannotated
+    /// binding's initializer TERM — the literal itself, `-literal`, and
+    /// the literals reached through parentheses and `+ - * / %`, the
+    /// operators whose operands share the term's (the binding's) type.
+    /// Nothing else is descended into: a call argument has its
+    /// parameter's type, a comparison's operands are not the binding's,
+    /// a block or a branch is its own context.
+    fn note_binding_literals(&mut self, e: &GreenNode) {
+        match e.kind {
+            SyntaxKind::LiteralExpr => {
+                if crate::wave::literal_value(Some(e), self.src()).is_some() {
+                    self.binding_lits.insert(e.span);
+                }
+            }
+            SyntaxKind::PrefixExpr => {
+                if crate::wave::literal_value(Some(e), self.src()).is_some() {
+                    self.binding_lits.insert(e.span);
+                } else if e
+                    .tokens()
+                    .next()
+                    .is_some_and(|t| t.kind == SyntaxKind::Minus)
+                    && let Some(inner) = e.nodes().next()
+                {
+                    self.note_binding_literals(inner);
+                }
+            }
+            SyntaxKind::ParenExpr => {
+                if let Some(inner) = e.nodes().next() {
+                    self.note_binding_literals(inner);
+                }
+            }
+            SyntaxKind::BinExpr => {
+                let d = BinExpr::cast(e).expect("kind");
+                let arith = matches!(
+                    d.op().map(|t| t.kind),
+                    Some(
+                        SyntaxKind::Plus
+                            | SyntaxKind::Minus
+                            | SyntaxKind::Star
+                            | SyntaxKind::Slash
+                            | SyntaxKind::Percent
+                    )
+                );
+                if arith {
+                    for side in [d.lhs(), d.rhs()].into_iter().flatten() {
+                        self.note_binding_literals(side);
+                    }
+                }
+            }
+            _ => {}
         }
     }
 
@@ -12559,6 +12623,32 @@ impl<'a> Checker<'a> {
             let Some((lo, hi)) = crate::wave::int_range(p) else {
                 continue;
             };
+            // wolf-lang#458: a literal an unannotated binding is built
+            // from took `i32` at the binding; a later use may decide the
+            // binding's VALUE type, never this literal's.
+            if (lo <= value && value <= hi)
+                && self.binding_lits.contains(&report)
+                && let Some((ilo, ihi)) = crate::wave::int_range(Prim::I32)
+                && (value < ilo || value > ihi)
+            {
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E0415,
+                        report,
+                        format!("`{value}` does not fit `i32`"),
+                    )
+                    .with_label(format!("i32 holds {ilo}..={ihi}"))
+                    .with_note(
+                        "a literal written as an unannotated binding's value has no \
+                         context of its own, so it takes `i32` \
+                         ([type.numlit.default]); a later use can decide the \
+                         binding's type, never the literal's \
+                         ([type.numlit.propagate]) — annotate the binding \
+                         (`let n: int = …`)",
+                    ),
+                );
+                continue;
+            }
             if value < lo || value > hi {
                 self.diags.push(
                     Diagnostic::error(
