@@ -26,9 +26,11 @@
 //!
 //! lupin 0.1.43 predates the mirror (it does not resolve the three new
 //! names, and its first handle is 1), so its answers are pinned by
-//! version as pre-mirror (s180's design), never widened; 0.1.44 is
-//! pinned beside it because r26 cuts it from a wolf-interp tree whose
-//! fs tier is byte-identical to 0.1.43's (`src/eval/fs.rs` and
+//! version as pre-mirror (s180's design), never widened — with its
+//! release commit, so a development build that still calls itself
+//! 0.1.43 is held to the ruled answers; 0.1.44 is pinned beside it
+//! because r26 cuts it from a wolf-interp tree whose fs tier is
+//! byte-identical to 0.1.43's (`src/eval/fs.rs` and
 //! `src/eval/builtin.rs`, no diff between `v0.1.43` and trunk
 //! `6ce7bc8`). The mirror is wolf-interp's s199 PR.
 
@@ -42,14 +44,27 @@ fn wolf() -> &'static str {
     env!("CARGO_BIN_EXE_wolf")
 }
 
-/// The lupin releases that predate the mirror.
-const PRE_MIRROR_LUPIN: &[&str] = &["0.1.43", "0.1.44"];
+/// The lupin releases that predate the mirror: a version, and the
+/// release's commit where it is known. `0.1.43` is pinned with its
+/// release commit, so a development build of wolf-interp that still
+/// says 0.1.43 (the mirror's own branch, before a release) is held to
+/// the ruled answers; `0.1.44` is pinned by version alone because r26
+/// cuts it from a tree without the mirror and its commit is not tagged
+/// yet.
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[("0.1.43", Some("6d6cde5")), ("0.1.44", None)];
+
+fn pre_mirror(lupin: &Obs) -> bool {
+    PRE_MIRROR_LUPIN.iter().any(|(v, c)| {
+        *v == lupin.version && c.is_none_or(|c| lupin.commit.starts_with(c))
+    })
+}
 
 #[derive(Debug)]
 struct Obs {
     verdict: String,
     stdout: String,
     version: String,
+    commit: String,
 }
 
 fn parse_obs(bytes: &[u8], what: &str) -> Obs {
@@ -59,6 +74,7 @@ fn parse_obs(bytes: &[u8], what: &str) -> Obs {
         verdict: rec["verdict"].as_str().unwrap_or("").to_string(),
         stdout: rec["stdout_inline"].as_str().unwrap_or("").to_string(),
         version: rec["impl_version"].as_str().unwrap_or("").to_string(),
+        commit: rec["commit"].as_str().unwrap_or("").to_string(),
     }
 }
 
@@ -225,19 +241,21 @@ fn fixture(name: &str) -> PathBuf {
 /// lupin's answer: `want` from a mirrored lupin, `pre` (verdict,
 /// stdout) from a version named in [`PRE_MIRROR_LUPIN`].
 fn lupin_agrees(lupin: &Obs, want: &str, pre: (&str, &str), what: &str) {
-    if PRE_MIRROR_LUPIN.contains(&lupin.version.as_str()) {
+    if pre_mirror(lupin) {
         assert_eq!(
             (lupin.verdict.as_str(), lupin.stdout.as_str()),
             pre,
-            "lupin {} (pre-mirror, pinned by version) on {what}",
-            lupin.version
+            "lupin {} at {} (pre-mirror, pinned by version) on {what}",
+            lupin.version,
+            lupin.commit
         );
     } else {
         assert_eq!(
             (lupin.verdict.as_str(), lupin.stdout.as_str()),
             ("exit(0)", want),
-            "lupin {} on {what} (wolf-lang#426/#424 mirrored)",
-            lupin.version
+            "lupin {} at {} on {what} (wolf-lang#426/#424 mirrored)",
+            lupin.version,
+            lupin.commit
         );
     }
 }
