@@ -1463,6 +1463,46 @@ Bind the row first and match the value separately
 so the two name sets stay apart.
 "#);
 
+code!(E0817, "an attribute this compiler does not know or does not implement", r#"
+The attribute set is closed ([gram.item.attr]): an attribute either
+means something to the compiler or the program is refused. Before this
+rule an attribute nothing read compiled silently and meant nothing — a
+`#[noalloc]` function that allocated ran, a `#[repr(packed)]` struct was
+laid out unpacked, a `#[cfg(target = …)]` item was compiled for every
+target — which is a promise the reader believes and the compiler never
+kept. This code fires for:
+
+- a name wolf does not know (`#[frobnicate]`);
+- a known attribute nothing implements yet, named with the lane that
+  owns it: the performance contracts `noalloc`, `nopanic`, `inplace`,
+  `bounded_stack` (no checker exists), `repr(packed)`, `repr(align(N))`
+  and `repr(transparent)` (the exact-layout lane), `thread_local`,
+  `section` and `link_section`;
+- an implemented attribute where it means nothing (`#[repr(c)]` on a
+  function, `#[consttime]` on a struct);
+- a `cfg` the compiler cannot decide: the one predicate is
+  `target = "…"`, naming a target triple (`x86_64-unknown-linux-gnu`) or
+  an architecture (`x86_64`), and a name that matches no target is
+  refused rather than read as false, so a typo cannot silently drop
+  code ([gram.item.attr.cfg]).
+
+The attributes implemented are `trusted`, `consttime`, `allow`, `index`,
+`budget`, `repr(c)` and `cfg(target = "…")`. Delete the attribute, or
+move it to where it applies.
+"#);
+
+code!(E0818, "an `extern` ABI string other than `c`", r#"
+`extern "c"` is the one ABI seam a function has ([abi.c.seams]); any
+other string is refused by name. Before this rule the string selected
+nothing: `extern "x86-interrupt" fn isr() { … }` compiled as an ordinary
+wolf function that returns with `ret`, so a kernel that installed it as
+an interrupt handler would corrupt its stack on the first interrupt.
+Wolf has no interrupt calling convention: an interrupt enters through an
+assembly trampoline that saves the registers, calls an `export fn` with
+the C convention, and returns with `iretq` (KWC F7). Write `extern "c"`
+for a C-callable function, or no `extern` for an ordinary one.
+"#);
+
 // ------------------------------------------------------------------------
 // E1xxx — the memory tier (c04, spec/02). s18 registers the Tier-0
 // value/exclusivity codes; s19 the region-inference codes (E1004
