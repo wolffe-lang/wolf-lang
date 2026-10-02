@@ -187,8 +187,10 @@ fn check(machine: &str, entry: &Path, obs: &Obs, want: Want<'_>) {
 }
 
 /// lupin releases measured before the mirror of `[mem.tier0.excl.4]`:
-/// each traps a read of a claimed place in a later argument.
-const PRE_TWO_PHASE_LUPIN: &[&str] = &["0.1.40", "0.1.41", "0.1.42"];
+/// each traps a read of a claimed place in a later argument. 0.1.40
+/// through 0.1.42; emptied at the 0.1.43 pairing (r25): 0.1.43 carries
+/// is63's two-phase arguments and prints the ruled bytes on every row.
+const PRE_TWO_PHASE_LUPIN: &[&str] = &[];
 
 /// Every wolfgang lane answers `wolfgang`; lupin answers `pre` at one
 /// of `pre_versions` and `ruled` at any other.
