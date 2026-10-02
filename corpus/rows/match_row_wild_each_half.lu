@@ -1,0 +1,52 @@
+//! check: run(exit=0, stdout="0: closed | closed | some error\n1: other | io | some error\n2: other | bad 2 | some error\n3: other | value | value 30\n")
+//! phase: run
+//! conforms: type.row.match, err.union, err.rows
+//!
+//! s197 (wolf-lang#497, ruling #21) — `_` covers what is left on BOTH
+//! halves. `rest_both`: one tag named, `_` takes the other two tags
+//! and every value. `rest_value`: every tag named, `_` takes only the
+//! value half. `rest_row`: the binding `v` takes the value half (a
+//! name that is not a tag is a value pattern), so `_` takes only the
+//! row — and is reachable, not a dead arm.
+
+fn step(n: int) -> int ! {closed, io, Bad(int)} {
+    if n == 0 { return closed }
+    if n == 1 { return io }
+    if n == 2 { return Bad(n) }
+    n * 10
+}
+
+fn rest_both(n: int) -> str {
+    match step(n) {
+        closed => "closed",
+        _ => "other",
+    }
+}
+
+fn rest_value(n: int) -> str {
+    match step(n) {
+        closed => "closed",
+        io => "io",
+        Bad(k) => "bad {k}",
+        _ => "value",
+    }
+}
+
+fn rest_row(n: int) -> str {
+    match step(n) {
+        v => "value {v}",
+        _ => "some error",
+    }
+}
+
+fn main() -> !int {
+    var n = 0
+    while n < 4 {
+        let a = rest_both(n)
+        let b = rest_value(n)
+        let c = rest_row(n)
+        print("{n}: {a} | {b} | {c}")
+        n = n + 1
+    }
+    0
+}

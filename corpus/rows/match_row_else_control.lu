@@ -1,0 +1,33 @@
+//! check: run(exit=0, stdout="look zz\n-1\nlook zz\nseven\nlook a\n5\n")
+//! phase: run
+//! conforms: type.row.match, type.row.else, err.union, err.rows
+//!
+//! s197 (wolf-lang#497, ruling #21) — the control: `else |e| match e {
+//! … }` binds the row and matches it, and `match (… else 7)` matches
+//! the defaulted value. Both keep working beside the direct form;
+//! both ran on every machine before this lane (s191's m3 probe).
+//! Green at trunk.
+
+fn look(m: Map[str, int], k: str) -> int ! {none} {
+    print("look {k}")
+    m[k]
+}
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["a"] = 5
+    let r = look(m, "zz") else |e| match e {
+        none => -1,
+    }
+    print("{r}")
+    let s = match (look(m, "zz") else 7) {
+        7 => "seven",
+        _ => "other",
+    }
+    print("{s}")
+    let t = look(m, "a") else |e| match e {
+        none => -1,
+    }
+    print("{t}")
+    0
+}

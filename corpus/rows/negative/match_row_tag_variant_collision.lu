@@ -1,0 +1,27 @@
+//! check: fail(E0816)
+//! phase: resolve
+//! conforms: type.row.match
+//!
+//! s197 (wolf-lang#497, ruling #21) — `Color ! {Red}`: the tag `Red`
+//! is also a variant of the value type, so an arm `Red` could be
+//! either half. The match is refused by name (E0816), never guessed;
+//! `else |e| match e { … }` is the spelling that keeps the halves
+//! apart.
+
+enum Color {
+    Red,
+    Green,
+}
+
+fn pick(n: int) -> Color ! {Red} {
+    if n > 0 { return Color.Green }
+    Color.Red
+}
+
+fn main() -> !int {
+    let v = match pick(1) {
+        Red => 1,
+        Green => 2,
+    }
+    v
+}

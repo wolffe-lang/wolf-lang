@@ -1,0 +1,44 @@
+//! check: run(exit=0, stdout="look zz\n-1\nlook a\n6\nlook zz\n-2\nlook a\n1\n")
+//! phase: run
+//! conforms: type.row.match, type.row.operand, err.union, err.rows
+//!
+//! s197 (wolf-lang#497, ruling #21) — `match` straight over a fallible
+//! value, the two-arm shape: a row arm (`none`, a tag of the row by
+//! name) and a value arm (`v`, a binding over the `int` half). The
+//! first pair matches the call itself; the second matches a bound
+//! `!int` (`let x = look(m, "zz")`), with `_` covering the value half.
+//! Red at trunk cdde128a on every wolfgang lane (`unsupported`);
+//! lupin runs it.
+
+fn look(m: Map[str, int], k: str) -> int ! {none} {
+    print("look {k}")
+    m[k]
+}
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["a"] = 5
+    let r = match look(m, "zz") {
+        none => -1,
+        v => v,
+    }
+    print("{r}")
+    let s = match look(m, "a") {
+        none => -1,
+        v => v + 1,
+    }
+    print("{s}")
+    let x = look(m, "zz")
+    let t = match x {
+        none => -2,
+        _ => 1,
+    }
+    print("{t}")
+    let y = look(m, "a")
+    let u = match y {
+        none => -2,
+        _ => 1,
+    }
+    print("{u}")
+    0
+}

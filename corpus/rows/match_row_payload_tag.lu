@@ -1,0 +1,40 @@
+//! check: run(exit=0, stdout="eof\nbad x\ntwo\nlong 4\nlen 1\n")
+//! phase: run
+//! conforms: type.row.match, gram.pat, err.union, err.rows
+//!
+//! s197 (wolf-lang#497, ruling #21) — every arm kind in one `match`
+//! over `int ! {Bad(str), eof}`: a row arm with a payload (`Bad(what)`
+//! binds the `str`), a bare row arm (`eof`), a literal value arm
+//! (`2`), a guarded binding (`n if n > 2`) and the closing binding
+//! (`n`). The row arms are tried by tag, the value arms by the value;
+//! neither half sees the other.
+
+fn parse(s: str) -> int ! {Bad(str), eof} {
+    if s == "" { return eof }
+    if s == "x" { return Bad(s) }
+    s.len
+}
+
+fn describe(s: str) -> str {
+    match parse(s) {
+        Bad(what) => "bad {what}",
+        eof => "eof",
+        2 => "two",
+        n if n > 2 => "long {n}",
+        n => "len {n}",
+    }
+}
+
+fn main() -> !int {
+    let a = describe("")
+    print("{a}")
+    let b = describe("x")
+    print("{b}")
+    let c = describe("ab")
+    print("{c}")
+    let d = describe("abcd")
+    print("{d}")
+    let e = describe("a")
+    print("{e}")
+    0
+}

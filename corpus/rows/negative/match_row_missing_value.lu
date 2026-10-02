@@ -1,0 +1,21 @@
+//! check: fail(E0801)
+//! phase: resolve
+//! conforms: type.row.match, ty.match.exhaustive
+//!
+//! s197 (wolf-lang#497, ruling #21) — a `match` over `int ! {none}`
+//! must cover the whole of the value half too: `none` alone covers
+//! the row and nothing of the `int`, and E0801 names the uncovered
+//! value half.
+
+fn look(m: Map[str, int], k: str) -> int ! {none} {
+    m[k]
+}
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["a"] = 5
+    let r = match look(m, "a") {
+        none => -1,
+    }
+    r
+}

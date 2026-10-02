@@ -1,0 +1,22 @@
+//! check: fail(E0801)
+//! phase: resolve
+//! conforms: type.row.match, ty.match.exhaustive
+//!
+//! s197 (wolf-lang#497, ruling #21) — a `match` over `int ! {Bad(str),
+//! eof}` must cover every tag of the row: `Bad(_)` and the binding `v`
+//! (the whole value half) leave `eof` uncovered, and E0801 names the
+//! missing tag — never a bare "not exhaustive".
+
+fn parse(s: str) -> int ! {Bad(str), eof} {
+    if s == "" { return eof }
+    if s == "x" { return Bad(s) }
+    s.len
+}
+
+fn main() -> !int {
+    let n = match parse("ab") {
+        Bad(_) => 0,
+        v => v,
+    }
+    n
+}

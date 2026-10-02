@@ -1,0 +1,61 @@
+//! check: run(exit=0, stdout="none dot line 3\nlook a\nlook b\n12\nlook a\nlook zz\n5\nlook zz\n-1\n")
+//! phase: run
+//! conforms: type.row.match, gram.pat.nullary, err.union, err.rows
+//!
+//! s197 (wolf-lang#497, ruling #21) — two nestings. `shape_name`: the
+//! value half is an enum, so `Dot` and `Line(k)` are value patterns
+//! over `Shape` while `none` is the row arm; no name is shared, so
+//! nothing is guessed. `both`: a value arm whose body is another
+//! `match` over a fallible value, the outer binding `v` read inside
+//! the inner arms.
+
+enum Shape {
+    Dot,
+    Line(int),
+}
+
+fn pick(n: int) -> Shape ! {none} {
+    if n < 0 { return none }
+    if n == 0 { return Shape.Dot }
+    Shape.Line(n)
+}
+
+fn look(m: Map[str, int], k: str) -> int ! {none} {
+    print("look {k}")
+    m[k]
+}
+
+fn shape_name(n: int) -> str {
+    match pick(n) {
+        none => "none",
+        Dot => "dot",
+        Line(k) => "line {k}",
+    }
+}
+
+fn both(m: Map[str, int], a: str, b: str) -> int {
+    match look(m, a) {
+        none => -1,
+        v => match look(m, b) {
+            none => v,
+            w => v + w,
+        },
+    }
+}
+
+fn main() -> !int {
+    let a = shape_name(-1)
+    let b = shape_name(0)
+    let c = shape_name(3)
+    print("{a} {b} {c}")
+    var m = Map[str, int]()
+    m["a"] = 5
+    m["b"] = 7
+    let x = both(m, "a", "b")
+    print("{x}")
+    let y = both(m, "a", "zz")
+    print("{y}")
+    let z = both(m, "zz", "b")
+    print("{z}")
+    0
+}
