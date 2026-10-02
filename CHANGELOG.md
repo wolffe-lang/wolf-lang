@@ -52,6 +52,35 @@ xs.len)`; E1002 through 0.2.19), and two claims in one call through an
 offset or a loop index that `[mem.model.place.elem]` item 4 proves
 distinct.
 
+### The pairing: lupin 0.1.43
+
+`PAIRING` names **lupin 0.1.43 at pin `c2401f0`** (wolf-interp release
+401010971; the linux x86-64 archive's sha256 `e957c8de…`), whose spec
+pin is this compiler's v0.2.19 tag and which carries
+wolffe-lang/wolf-interp#155, #157, #159, #160, #162, #164, ruling #17's
+two-phase arguments and the lupin halves of #487 and #494. The ritual
+(#87, with #281's control against the 0.1.42 archive, same corpus, same
+release `wolf`) **moved 29 ledger counts on each tier, together**, all
+to agreement: the six `field_shorthand_*` rows and the fourteen refused
+`recv_claim_arg_*` rows (completeness → agreement: the compiler's E1001
+or E1002 now meets lupin's trap), and the eight `mut_claim_*` read rows
+with `mut_read_overlap.lu` (soundness → agreement: both run them now).
+Checked: 502 → 531 agreements, completeness 218 → 198, soundness 9 → 0;
+native: 543 → 572, 218 → 198, 10 → 1. Twelve files moved below the
+ledger, lupin's stdout now the compiler's: `ctl_index_try_once_receivers`,
+`ctl_slice_try_once`, `ctl_slice_endpoints_indexed_base` (#157, #162:
+each operand once) and the nine `recv_view_arg_*` rows (#494). Native's
+one soundness finding is still `memory/unsafe_ub_uaf.lu` (`exit` vs
+`ub(mem.ub)`), the program's own use-after-free read on the compiled
+lane.
+
+The gates that pinned lupin by version drop every 0.1.42 entry:
+`PRE_TWO_PHASE_LUPIN` (with its 0.1.40 and 0.1.41), `PRE_RECEIVER_LUPIN`
+and `PRE_VIEW_LUPIN` are empty, and the six `field_shorthand_lanes.rs`
+pins and the three measured `LUPIN_0_1_42_*` answers are gone. The 40
+cases they held take the ruled arm against the published 0.1.43. None
+is widened and none stays pinned.
+
 ### A view-set receiver keeps its arguments' writes (s193, #494)
 
 - **`(mut p).set_x({ p.z = 9; p.z })` under `fn set_x(mut self.{x}, ..)`
