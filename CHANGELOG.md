@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### A literal written at an unannotated binding takes `i32` (s202, #458)
+
+- **A later use typed the literal, not only the binding.** `let c =
+  922337203685477580` followed by `if s > c` with `s: int` ran as
+  64-bit on checked, native and release, and `let big = 5000000000`
+  then `take_int(big)` printed `5000000001`; lupin 0.1.43 traps both
+  as outside `i32`. The literal has no context of its own
+  (`[type.numlit.propagate]`), so it takes `i32` and is **E0415** when
+  it does not fit; a later use still decides the binding's type
+  (`let n = 0; take_int(n)` is unchanged). The same holds for the
+  literals of the initializer's `+ - * / %` term. `[type.numlit.value]`
+  carries the rule and corrects its 2026-09-15 measurement.
+- **One corpus row depended on the old reading and moved:**
+  `faults/index_origin_min_overflow.lu` (`let i = 0 -
+  9223372036854775807 - 1`, used as an index) is E0415 unannotated; it
+  now spells `let i: int`, and all four machines trap at the index
+  shift it is about (lupin used to trap it at the literal). No
+  boreutils or lobo build moved.
+- Witnesses `corpus/typecheck/numlit_binding_literal*.lu` and the
+  control `numlit_binding_value_later_use.lu`; gate
+  `numlit_binding_literal_lanes.rs`.
+
 ### Three native and release crashes and one refusal by syntax kind (s202, #393, #398, #425)
 
 - **A `!T` bound without `?` panicked native and release when its row
