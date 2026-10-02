@@ -120,6 +120,23 @@ fn reader_src(bytes: &[u8]) -> String {
     )
 }
 
+/// The native and release lanes link `libwolf_rt.a` from beside the
+/// `wolf` binary; `cargo test -p wolf_driver` does not build it, and
+/// without it both lanes are an environment SKIP — which made this
+/// gate green at trunk, vacuously, the first time it ran (kasumi,
+/// `red-gate-trunk-12a56b22-cc.log`). Build it first, as
+/// `release_struct_layout.rs` does.
+fn ensure_rt_staticlib() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let status = Command::new(env!("CARGO"))
+            .args(["build", "-p", "wolf_rt"])
+            .status()
+            .expect("cargo builds wolf_rt");
+        assert!(status.success(), "wolf_rt staticlib build failed");
+    });
+}
+
 fn scratch(name: &str) -> PathBuf {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("repr_c_raw_layout").join(name);
     let _ = std::fs::remove_dir_all(&dir);
@@ -127,9 +144,11 @@ fn scratch(name: &str) -> PathBuf {
     dir
 }
 
-/// The C side, compiled once per test; `None` is the windows skip.
-fn c_program() -> Option<PathBuf> {
-    let dir = scratch("c");
+/// The C side, compiled once per test into its own directory (two
+/// tests sharing one executable race: "Text file busy"); `None` is the
+/// windows skip.
+fn c_program(tag: &str) -> Option<PathBuf> {
+    let dir = scratch(&format!("c-{tag}"));
     let src = dir.join("c3.c");
     std::fs::write(&src, C_SRC).expect("write c3.c");
     let exe = dir.join("c3");
@@ -211,7 +230,8 @@ fn sibling_lupin() -> Option<PathBuf> {
 /// `struct C3[2]`, on native and on release.
 #[test]
 fn c_reads_the_struct_wolf_wrote() {
-    let Some(c3) = c_program() else { return };
+    ensure_rt_staticlib();
+    let Some(c3) = c_program("read") else { return };
     let dir = scratch("wolf_writes");
     let prog = write_prog(&dir, &writer_src());
     for flag in ["--native", "--release"] {
@@ -235,7 +255,8 @@ fn c_reads_the_struct_wolf_wrote() {
 /// through `*C3`, on native and on release.
 #[test]
 fn wolf_reads_the_struct_c_wrote() {
-    let Some(c3) = c_program() else { return };
+    ensure_rt_staticlib();
+    let Some(c3) = c_program("write") else { return };
     let out = Command::new(&c3).arg("write").output().expect("the C half runs");
     assert!(out.status.success());
     let image: Vec<u8> = String::from_utf8_lossy(&out.stdout)
@@ -298,6 +319,7 @@ fn the_modelling_machines_refuse_the_aggregate_store_by_name() {
 /// it there); the release lane must print the same bytes.
 #[test]
 fn the_corpus_row_agrees_on_both_compiling_tiers() {
+    ensure_rt_staticlib();
     let row = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/memory/raw_repr_c_layout.lu");
     assert!(row.is_file(), "corpus row missing: {}", row.display());
     let want = "1 0 0 0 2 0 0 0 3 0 0 0 4 0 0 0 5 0 0 0 6 0 0 0\n17 3735928559 34\n";
@@ -315,6 +337,7 @@ fn the_corpus_row_agrees_on_both_compiling_tiers() {
 /// 12a56b22 native and release stored `v` (`5`, `31`, `3`).
 #[test]
 fn a_raw_compound_assignment_applies_its_operator_on_every_lane() {
+    ensure_rt_staticlib();
     let row = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/memory/raw_compound_assign.lu");
     assert!(row.is_file(), "corpus row missing: {}", row.display());
     for flag in ["--checked", "--native", "--release"] {

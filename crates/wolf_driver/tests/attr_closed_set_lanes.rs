@@ -53,8 +53,23 @@ fn parse_obs(bytes: &[u8], what: &str) -> Obs {
     }
 }
 
+/// The native and release lanes need `libwolf_rt.a` beside `wolf`;
+/// without it they SKIP and the gate measures one lane (kw01 met this
+/// as a vacuous green at trunk). Build it first.
+fn ensure_rt_staticlib() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let status = Command::new(env!("CARGO"))
+            .args(["build", "-p", "wolf_rt"])
+            .status()
+            .expect("cargo builds wolf_rt");
+        assert!(status.success(), "wolf_rt staticlib build failed");
+    });
+}
+
 /// One wolfgang lane; `None` is the s59 environment skip (never an ICE).
 fn lane(entry: &Path, flag: &str) -> Option<Obs> {
+    ensure_rt_staticlib();
     let out = Command::new(wolf())
         .arg("conform-run")
         .arg(entry)
