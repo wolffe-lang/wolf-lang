@@ -309,3 +309,19 @@ fn the_corpus_row_agrees_on_both_compiling_tiers() {
         assert_eq!(stdout, want, "the {flag} lane's bytes on the row (wolf-lang#523)");
     }
 }
+
+/// wolf-lang#542 (found beside #523, same lowering arm): `p[i] op= v`
+/// through a raw pointer is a read-modify-write on every lane. At trunk
+/// 12a56b22 native and release stored `v` (`5`, `31`, `3`).
+#[test]
+fn a_raw_compound_assignment_applies_its_operator_on_every_lane() {
+    let row = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus/memory/raw_compound_assign.lu");
+    assert!(row.is_file(), "corpus row missing: {}", row.display());
+    for flag in ["--checked", "--native", "--release"] {
+        let Some((verdict, stdout, stderr)) = lane(&row, flag) else {
+            continue;
+        };
+        assert_eq!(verdict, "exit(0)", "the {flag} lane on the row: {stderr}");
+        assert_eq!(stdout, "8\n248\n12\n", "the {flag} lane on `p[i] op= v` (wolf-lang#542)");
+    }
+}
