@@ -113,7 +113,7 @@ a binding), so it takes `i32` and must fit it: `let big = 5000000000`
 followed by `take_int(big)` is **E0415** at the literal, because the
 call decides `big`'s type but never the literal's. The same holds when
 the initializer is a term made only of literals (`3000000000 + 1`,
-`-(3000000000)`, `0 - 9223372036854775807 - 1`). A term with any other
+`-3000000000 * 2`, `0 - 9223372036854775807 - 1`). A term with any other
 operand has that operand's type as its own context, so `packed /
 10000000000` with `packed: int` is an `int` division; and a literal in
 a call argument, a comparison operand or a block inside the
