@@ -212,6 +212,59 @@ fn e0815_empty_range_backwards() {
     );
 }
 
+// ------------------------------------------------ [type.row.match] -----
+
+/// `[type.row.match]` (s197, #497): a `match` over `int ! {Bad(str),
+/// eof}` with `Bad(_)` and the binding `v` leaves `eof` uncovered —
+/// E0801 names the missing tag.
+#[test]
+fn e0801_fallible_missing_tag() {
+    snap_one(
+        "e0801_fallible_missing_tag",
+        "fn parse(s: str) -> int ! {Bad(str), eof} {\n    if s == \"\" { return eof }\n    \
+         if s == \"x\" { return Bad(s) }\n    s.len\n}\n\n\
+         fn main() -> !int {\n    let n = match parse(\"ab\") {\n        Bad(_) => 0,\n        \
+         v => v,\n    }\n    n\n}\n",
+    );
+}
+
+/// `[type.row.match]`: `none` alone covers the row and nothing of the
+/// `int` — E0801 names the uncovered value half, with the value type.
+#[test]
+fn e0801_fallible_value_half() {
+    snap_one(
+        "e0801_fallible_value_half",
+        "fn look(m: Map[str, int], k: str) -> int ! {none} {\n    m[k]\n}\n\n\
+         fn main() -> !int {\n    var m = Map[str, int]()\n    m[\"a\"] = 5\n    \
+         let r = match look(m, \"a\") {\n        none => -1,\n    }\n    r\n}\n",
+    );
+}
+
+/// `[type.row.match]`: a literal arm never completes the value half —
+/// the witness is the engine's next integer, on the value half.
+#[test]
+fn e0801_fallible_value_witness() {
+    snap_one(
+        "e0801_fallible_value_witness",
+        "fn look(m: Map[str, int], k: str) -> int ! {none} {\n    m[k]\n}\n\n\
+         fn main() -> !int {\n    var m = Map[str, int]()\n    m[\"a\"] = 5\n    \
+         let r = match look(m, \"a\") {\n        none => -1,\n        0 => 0,\n    }\n    r\n}\n",
+    );
+}
+
+/// `[type.row.match]`: the tag `Line` is also a variant of `Shape` —
+/// E0816 refuses the match by name, whether or not an arm spells it.
+#[test]
+fn e0816_tag_variant_collision() {
+    snap_one(
+        "e0816_tag_variant_collision",
+        "enum Shape {\n    Dot,\n    Line(int),\n}\n\n\
+         fn pick(n: int) -> Shape ! {Line(int)} {\n    if n > 0 { return Shape.Line(n) }\n    \
+         Shape.Dot\n}\n\n\
+         fn main() -> !int {\n    let v = match pick(1) {\n        Dot => 0,\n        _ => 1,\n    }\n    v\n}\n",
+    );
+}
+
 /// A literal inside an earlier range is dead: E0802 cites the range
 /// arm (subsumption is exact against one covering arm).
 #[test]
