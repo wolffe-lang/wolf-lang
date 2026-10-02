@@ -1,0 +1,30 @@
+//! check: run(exit=0, stdout="8\n248\n12\n")
+//! phase: run
+//! conforms: mem.unsafe.raw, gram.expr.assign
+//!
+//! kw01 (wolf-lang#542, a silent wrong answer): `p[i] op= v` through a
+//! raw pointer is a read-modify-write at the pointee's type, exactly
+//! the List form (#55). At trunk 12a56b22 native and release dropped
+//! the operator and stored `v` (`5`, `31`, `3`); the checked machine
+//! and lupin 0.1.43 printed these lines.
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: 16 zeroed bytes; byte 0 and the i64 at element 1 stay
+    // inside; freed once.
+    unsafe {
+        let p = c.calloc(1, 16) as *u8
+        p[0] = 3
+        p[0] += 5
+        print("{p[0] as int}")
+        p[0] *= 31
+        print("{p[0] as int}")
+        let w = p as *i64
+        w[1] = 9
+        w[1] += 3
+        print("{w[1]}")
+        c.free(p)
+    }
+    0
+}
