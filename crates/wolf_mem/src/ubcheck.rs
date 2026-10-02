@@ -5547,7 +5547,9 @@ impl<'t> Machine<'t> {
                     Err(e) => return Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
                     Ok(m) => m,
                 };
-                let kind = if md.is_file() {
+                // windows: a handle that is not a disk file is `kind` 2
+                // whatever std's metadata calls it (`fs_is_disk`).
+                let kind = if md.is_file() && fs_is_disk(&f) {
                     0
                 } else if md.is_dir() {
                     1
@@ -5602,7 +5604,7 @@ impl<'t> Machine<'t> {
                 };
                 #[cfg(windows)]
                 {
-                    if !f.metadata().is_ok_and(|m| m.is_file()) {
+                    if !fs_is_disk(&f) {
                         return Ok(tag("unseekable"));
                     }
                     let base = match to {
@@ -5653,7 +5655,7 @@ impl<'t> Machine<'t> {
                 }
                 #[cfg(windows)]
                 {
-                    if !f.metadata().is_ok_and(|m| m.is_file()) {
+                    if !fs_is_disk(&f) {
                         return Ok(tag("unseekable"));
                     }
                 }
@@ -9625,6 +9627,28 @@ fn std_stream_dup(fd: i64) -> Option<std::fs::File> {
         let _ = fd;
         None
     }
+}
+
+/// s199: is `f` a disk file, by the host's own classification?
+/// `wolf_rt::fs::is_disk`'s twin: unix `true` (the mode bits and
+/// `ESPIPE` already tell), windows `GetFileType == FILE_TYPE_DISK` —
+/// std's metadata calls an anonymous pipe a regular file there
+/// (wolf-lang CI run 37062798818, job 111023227162).
+#[cfg(windows)]
+fn fs_is_disk(f: &std::fs::File) -> bool {
+    use std::os::windows::io::AsRawHandle as _;
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn GetFileType(h: *mut core::ffi::c_void) -> u32;
+    }
+    const FILE_TYPE_DISK: u32 = 1;
+    // SAFETY: the handle is `f`'s, live for the duration of the call.
+    unsafe { GetFileType(f.as_raw_handle()) == FILE_TYPE_DISK }
+}
+
+#[cfg(not(windows))]
+fn fs_is_disk(_f: &std::fs::File) -> bool {
+    true
 }
 
 /// One positional read at `off`, the cursor untouched — `pread` on
