@@ -1,0 +1,22 @@
+//! check: run(exit=trap(assert), stdout="effect\n")
+//! phase: run
+//! conforms: conf.trap.assert
+//!
+//! s202 (wolf-lang#398), the other direction: an interpolation whose
+//! hole CALLS was accepted by native and release and dropped
+//! unevaluated, so on the failing path `effect` never printed, while
+//! checked and lupin print it. The message is evaluated on the
+//! failing path, before the trap, on every lane.
+
+fn noisy() -> str {
+    print("effect")
+    "m"
+}
+
+fn main() -> !int {
+    var c = 0
+    for _ in 0..1 { c += 1 }
+    assert(c == 2, "{noisy()}")
+    print("after")
+    0
+}

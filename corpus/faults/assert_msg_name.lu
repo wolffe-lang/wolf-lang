@@ -1,0 +1,37 @@
+//! check: run(exit=0, stdout="ok\nafter\n")
+//! phase: run
+//! conforms: conf.trap.assert
+//!
+//! s202 (wolf-lang#398): any `str` is an assert message
+//! (`[conf.trap.assert]`), and it is evaluated ONLY on the failing
+//! path. The issue's helper passes its message as a bare parameter;
+//! a field read is the same kind of message. Native and release
+//! refused both as "assert messages with effects" because the check
+//! was by syntax kind (a name is not a literal), while checked and
+//! lupin ran them. The holding asserts below run nothing: `noisy()`
+//! never prints, whether the message is the call itself or an
+//! interpolation of it.
+
+struct E { why: str }
+
+fn bail(msg: str) {
+    assert(true, msg)
+}
+
+fn noisy() -> str {
+    print("effect")
+    "m"
+}
+
+fn main() -> !int {
+    bail("x")
+    let e = E { why: "w" }
+    var c = 0
+    for _ in 0..1 { c += 1 }
+    assert(c == 1, e.why)
+    print("ok")
+    assert(c == 1, noisy())
+    assert(c == 1, "{noisy()}")
+    print("after")
+    0
+}

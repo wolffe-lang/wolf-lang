@@ -1,0 +1,22 @@
+//! check: run(exit=trap(assert), stdout="before\n")
+//! phase: run
+//! conforms: conf.trap.assert
+//!
+//! s202 (wolf-lang#398): the failing twin of `assert_msg_name.lu`.
+//! The message is a bare parameter and the condition is the constant
+//! `false`, so the trap is unconditional and the message is read on
+//! the way to it. Native and release refused the program at trunk
+//! 12a56b22. lupin renders the message as a line before the trap,
+//! which `[conf.trap.assert]` allows and does not require; the
+//! compiler drops the rendering, never the evaluation.
+
+fn bail(msg: str) {
+    assert(false, msg)
+}
+
+fn main() -> !int {
+    print("before")
+    bail("boom")
+    print("after")
+    0
+}

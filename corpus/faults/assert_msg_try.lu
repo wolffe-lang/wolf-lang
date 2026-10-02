@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="7\n-1\n")
+//! phase: run
+//! conforms: conf.trap.assert, err.propagate
+//!
+//! s202 (wolf-lang#398): a message that can leave the function. On the
+//! failing path `why(n)?` propagates `nope` before any trap, so
+//! `check(1)` returns the row and the caller's `else` answers `-1`; on
+//! the holding path the message is never evaluated. Native and
+//! release refused this at trunk 12a56b22; checked and lupin ran it.
+
+fn why(n: int) -> str ! {nope} {
+    if n > 0 { return nope }
+    "why"
+}
+
+fn check(n: int) -> !int {
+    assert(n == 0, why(n)?)
+    7
+}
+
+fn main() -> !int {
+    let a = check(0)?
+    print("{a}")
+    let b = check(1) else -1
+    print("{b}")
+    0
+}
