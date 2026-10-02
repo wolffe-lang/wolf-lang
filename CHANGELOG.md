@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+### Three native and release crashes and one refusal by syntax kind (s202, #393, #398, #425)
+
+- **A `!T` bound without `?` panicked native and release when its row
+  was empty (#393).** `let x = f()` with `f() -> !int` and nothing
+  for `f` to raise, then `print("{x}")`, stopped the compiler at
+  `build.rs:1210` ("eu.ok on a non-eu or unit-ok value") in every
+  release since 0.2.14; checked and lupin printed `42`. A
+  statically-empty row lowers as the plain ok value, which `else` and
+  `?` already handled; the interpolation hole and `match` now do too
+  (the `match` answered `unsupported`, the unit case refused as "a
+  valueless union"). Witnesses `corpus/rows/eu_bind_empty_row*.lu`,
+  gate `fallible_bind_empty_row_lanes.rs`.
+- **An assert message is any `str`, evaluated only on the failing path
+  (#398, `[conf.trap.assert]`).** Native and release decided by syntax
+  kind: a bare parameter or a field read was refused as "assert
+  messages with effects", while an interpolation that calls was
+  accepted and dropped without running its call. The message now
+  lowers into the trap block, before the trap; a literal still emits
+  nothing. Witnesses `corpus/faults/assert_msg_*.lu`, gate
+  `assert_message_lanes.rs`.
+- **The mid-end's loop versioner no longer clones a loop that holds a
+  region token root (#425).** An inlined callee that reads a lent
+  `List` mints its `region.foreign` roots at the call site, inside the
+  caller's loop; versioning copied them and `--release` stopped on
+  `[region-root] ... two token roots` (boreutils `cut -n`'s walk).
+  Such a loop keeps its checks; it did not compile before. Witnesses
+  `corpus/kernels/versioned_loop_inlined_root.lu` and
+  `versioned_loop_cross_module/`, gate `versioned_loop_root_lanes.rs`.
+
 - **Release IR is reproducible across builds (s195, #503).** The mid-end walked a natural loop's block set in `HashSet` order, so the versioner's guard chain came out in a per-process order and three release builds of lobo were three binaries; the set is ordered now, `release_determinism.rs` builds a fixed corpus set three times and asserts byte identity (IR and binary), and the macOS native gauntlet runs as three shards (`cargo xtask ci --shard`).
 
 ### A `?` inside a `defer` or `errdefer` is refused (s196, #498, ruling #19)
