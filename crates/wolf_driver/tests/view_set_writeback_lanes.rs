@@ -190,8 +190,10 @@ fn check(machine: &str, entry: &Path, obs: &Obs, want: Want<'_>) {
     }
 }
 
-/// lupin releases measured before the mirror of wolf-lang#494.
-const PRE_VIEW_LUPIN: &[&str] = &["0.1.42"];
+/// lupin releases measured before the mirror of wolf-lang#494: 0.1.42.
+/// Emptied at the 0.1.43 pairing (r25): 0.1.43 carries is62's view-set
+/// write-back and gives the checked bytes on every row.
+const PRE_VIEW_LUPIN: &[&str] = &[];
 
 /// A row that runs: the ruled bytes on every wolfgang lane; lupin
 /// answers `pre` at a pinned version and the ruled bytes at any other.
