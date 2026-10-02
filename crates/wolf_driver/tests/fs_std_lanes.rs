@@ -124,7 +124,12 @@ fn run_with(mut cmd: Command, dir: &Path, stdin: Stdin, tag: &str) -> Output {
     }
     let mut child = cmd.spawn().expect("spawn");
     if let Some(mut w) = child.stdin.take() {
-        w.write_all(INPUT).expect("write the pipe");
+        // The program never reads descriptor 0 — it asks what it IS —
+        // so it may exit before the write lands; EPIPE then is the
+        // race, not a failure (CI run 37062798818 met it on linux).
+        if let Err(e) = w.write_all(INPUT) {
+            assert_eq!(e.kind(), std::io::ErrorKind::BrokenPipe, "write the pipe: {e}");
+        }
         // Dropped here: the program sees the pipe's end after INPUT.
     }
     child.wait_with_output().expect("wait")
