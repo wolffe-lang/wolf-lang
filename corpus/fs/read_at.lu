@@ -1,0 +1,56 @@
+//! check: run(exit=0, stdout="head=01 at5=567 tell=2 next=23\nat_end=eof empty_len=0 negative=invalid\ntell_unmoved=4 closed=io forged=io\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.read_at, os.fs.tell, err.union, err.propagate
+//!
+//! s199 (wolf-lang#426, `[os.fs.read_at]`) — a positional read: the
+//! bytes at an offset, and the handle's own cursor left exactly where
+//! it was (`pread`). The relations this file pins, on every tier and
+//! host:
+//!
+//!   head / at5 / tell / next   two bytes read forward, then three at
+//!                              offset 5; the cursor still says 2 and
+//!                              the next forward read is bytes 2..4.
+//!   at_end                     a positional read at the size is `eof`.
+//!   empty_len                  a `max` of zero is the empty list.
+//!   negative                   a negative offset is `invalid`.
+//!   tell_unmoved               none of the three moved the cursor.
+//!   closed / forged            the family's rule: `io`.
+
+fn read_at_row(fd: int, off: int, max: int) -> str {
+    let got = fs_read_at(fd, off, max) else |e| {
+        return match e {
+            eof => "eof",
+            invalid => "invalid",
+            unseekable => "unseekable",
+            io => "io",
+        }
+    }
+    str_from_utf8(got) else "utf8"
+}
+
+fn main() -> !int {
+    let path = "target/s199-read-at.tmp"
+    fs_write_text(path, "0123456789")?
+    let fd = fs_open(path)?
+
+    let head = fs_read_chunk(fd, 2)?
+    let at5 = fs_read_at(fd, 5, 3)?
+    let tell = fs_tell(fd)?
+    let next = fs_read_chunk(fd, 2)?
+    print("head={str_from_utf8(head)?} at5={str_from_utf8(at5)?} tell={tell} next={str_from_utf8(next)?}")
+
+    let at_end = read_at_row(fd, 10, 4)
+    let empty = fs_read_at(fd, 3, 0)?
+    let negative = read_at_row(fd, 0 - 1, 4)
+    print("at_end={at_end} empty_len={empty.len} negative={negative}")
+
+    let tell_unmoved = fs_tell(fd)?
+    fs_close(fd)?
+    let closed = read_at_row(fd, 0, 4)
+    let forged = read_at_row(999999, 0, 4)
+    print("tell_unmoved={tell_unmoved} closed={closed} forged={forged}")
+
+    fs_remove(path)?
+    print("cleaned={!fs_exists(path)}")
+    0
+}

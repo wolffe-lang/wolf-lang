@@ -1,0 +1,91 @@
+//! check: run(exit=0, stdout="first_handle_above_2=true\ntell_after_reads=7 read=0123456\nend=10 size=10 at_end_is_eof=true\nback=7 last=789\nstart=2 cur=5 next=56\npast_end=14 past_end_is_eof=true\nbad_whence=invalid before_start=invalid closed=io forged=io\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.seek, os.fs.tell, os.fs.std, err.union, err.propagate
+//!
+//! s199 (wolf-lang#426, `[os.fs.seek]`, `[os.fs.tell]`) — a handle's
+//! offset can be read and moved. Before this file a program could only
+//! read forward from byte zero, so `tail -n 10` of a file read the
+//! whole file. The relations this file pins, on every tier and host:
+//!
+//!   first_handle_above_2   the first open answers a number above 2:
+//!                          0, 1 and 2 are the standard streams
+//!                          (`[os.fs.std]`), never a file's handle.
+//!   tell_after_reads       reads of 3 and 4 bytes leave the cursor at 7.
+//!   end / size             a seek to the end (whence 2) answers the
+//!                          offset from the start, the file's size, and
+//!                          the next read is `eof`.
+//!   back / last            a seek of -3 from the end, then a read, is
+//!                          the last three bytes.
+//!   start / cur / next     whence 0 is from the start, whence 1 from
+//!                          the cursor.
+//!   past_end               a seek past the end is legal (POSIX) and
+//!                          the read there is `eof`.
+//!   bad_whence             a whence outside {0, 1, 2} is `invalid`.
+//!   before_start           an offset that would land below zero is
+//!                          `invalid`, and the cursor does not move.
+//!   closed / forged        the family's rule: `io`.
+
+fn seek_row(fd: int, off: int, whence: int) -> str {
+    let at = fs_seek(fd, off, whence) else |e| {
+        return match e {
+            invalid => "invalid",
+            unseekable => "unseekable",
+            io => "io",
+        }
+    }
+    "{at}"
+}
+
+fn main() -> !int {
+    let path = "target/s199-seek-tell.tmp"
+    fs_write_text(path, "0123456789")?
+    let fd = fs_open(path)?
+    print("first_handle_above_2={fd > 2}")
+
+    let a = fs_read_chunk(fd, 3)?
+    let b = fs_read_chunk(fd, 4)?
+    let ab = str_from_utf8(a)? + str_from_utf8(b)?
+    print("tell_after_reads={fs_tell(fd)?} read={ab}")
+
+    let end = fs_seek(fd, 0, 2)?
+    var at_end_is_eof = false
+    fs_read_chunk(fd, 4) else |e| match e {
+        eof => {
+            at_end_is_eof = true
+            List[byte]()
+        },
+        _ => List[byte](),
+    }
+    print("end={end} size={fs_size(path)?} at_end_is_eof={at_end_is_eof}")
+
+    let back = fs_seek(fd, 0 - 3, 2)?
+    let last = fs_read_chunk(fd, 16)?
+    print("back={back} last={str_from_utf8(last)?}")
+
+    let start = fs_seek(fd, 2, 0)?
+    let cur = fs_seek(fd, 3, 1)?
+    let next = fs_read_chunk(fd, 2)?
+    print("start={start} cur={cur} next={str_from_utf8(next)?}")
+
+    let past = fs_seek(fd, 4, 2)?
+    var past_end_is_eof = false
+    fs_read_chunk(fd, 4) else |e| match e {
+        eof => {
+            past_end_is_eof = true
+            List[byte]()
+        },
+        _ => List[byte](),
+    }
+    print("past_end={past} past_end_is_eof={past_end_is_eof}")
+
+    let bad_whence = seek_row(fd, 0, 3)
+    let before_start = seek_row(fd, 0 - 1, 0)
+    fs_close(fd)?
+    let closed = seek_row(fd, 0, 0)
+    let forged = seek_row(999999, 0, 0)
+    print("bad_whence={bad_whence} before_start={before_start} closed={closed} forged={forged}")
+
+    fs_remove(path)?
+    print("cleaned={!fs_exists(path)}")
+    0
+}
