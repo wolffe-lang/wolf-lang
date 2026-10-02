@@ -5984,7 +5984,7 @@ impl<'a> Checker<'a> {
         if self.collect.is_some() {
             return;
         }
-        let what = if is_err { "errdefer" } else { "defer" };
+        let (what, an) = if is_err { ("errdefer", "an") } else { ("defer", "a") };
         let fn_name = self
             .ret
             .as_ref()
@@ -5993,7 +5993,7 @@ impl<'a> Checker<'a> {
         let d = Diagnostic::error(
             codes::E0611,
             span,
-            format!("`?` inside an `{what}` has nowhere to send its error"),
+            format!("`?` inside {an} `{what}` has nowhere to send its error"),
         )
         .with_label(format!(
             "this would leave `{fn_name}` while `{fn_name}` is already leaving"
