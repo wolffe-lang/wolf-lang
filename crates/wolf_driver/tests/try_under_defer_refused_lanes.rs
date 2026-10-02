@@ -270,7 +270,10 @@ fn build_refuses(entry: &Path) {
 #[test]
 fn a_try_in_a_defer_is_refused_everywhere() {
     let row = corpus("try_in_defer.lu");
-    every_lane_refuses(&row, &[("0.1.43", "body\nkey\ndeferred a\n1\nbody\nkey\n9\n")]);
+    every_lane_refuses(
+        &row,
+        &[("0.1.43", "body\nkey\ndeferred a\n1\nbody\nkey\n9\n")],
+    );
     build_refuses(&row);
 }
 
@@ -287,6 +290,9 @@ fn a_try_in_an_errdefer_is_refused_everywhere() {
 #[test]
 fn a_try_in_a_defer_block_is_refused_everywhere() {
     let row = corpus("try_in_defer_block.lu");
-    every_lane_refuses(&row, &[("0.1.43", "body\nkey\ndeferred a\n1\nbody\nkey\n9\n")]);
+    every_lane_refuses(
+        &row,
+        &[("0.1.43", "body\nkey\ndeferred a\n1\nbody\nkey\n9\n")],
+    );
     build_refuses(&row);
 }
