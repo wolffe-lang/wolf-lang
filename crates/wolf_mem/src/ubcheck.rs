@@ -3682,7 +3682,7 @@ impl<'t> Machine<'t> {
             None => Flow::Val(Value::Unit),
         };
         let (scrut, row_half, domain) = match (&fallible, flow) {
-            // PLANT (s197): a raw row leaves past the arms, as before the fix.
+            (Some((tags, _)), Flow::Err(err, false)) => (err, true, Some(tags.clone())),
             (Some((tags, _)), Flow::Val(v @ Value::ErrTag { .. })) => (v, true, Some(tags.clone())),
             (Some((_, value_names)), Flow::Val(v)) => (v, false, value_names.clone()),
             (None, Flow::Val(v)) => (v, false, domain),
