@@ -1633,6 +1633,25 @@ fn version_loops(
         if has_call {
             continue;
         }
+        // Root-free (wolf-lang#425). The clone copies every instruction
+        // with its result types, so a token ROOT inside the loop (the
+        // `region.foreign` an inlined callee mints at its call site, a
+        // `region.new`, a `stack.alloc`) would come out twice for one
+        // region, and `[region-root]` rightly refuses two roots. The
+        // twin cannot share the original: the original sits in the slow
+        // copy and dominates nothing in the fast one. Such a loop keeps
+        // its checks; before this it did not compile at all.
+        let has_root = l.blocks.iter().any(|&b| {
+            f.blocks[b].insts.iter().any(|&i| {
+                matches!(
+                    f.insts[i].op,
+                    Opcode::RegionForeign | Opcode::RegionNew | Opcode::StackAlloc
+                )
+            })
+        });
+        if has_root {
+            continue;
+        }
         plans.push((li, cands));
     }
     for (li, cands) in plans {
