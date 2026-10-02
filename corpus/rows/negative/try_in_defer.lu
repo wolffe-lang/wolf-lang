@@ -1,0 +1,29 @@
+//! check: fail(E0611)
+//! phase: resolve
+//! conforms: type.row.defer, err.propagate, err.errdefer
+//!
+//! s196 (wolf-lang#498, ruling #19) — a `?` inside a `defer`, the
+//! issue's shape. The deferred expression runs while `under` is
+//! already leaving, so `key`'s row has nowhere to go: E0611 on every
+//! machine. Before the ruling native and release overflowed the
+//! compiler's stack lowering it (the `?`'s error edge re-lowered the
+//! defer that contains it, without end), the checked machine ran the
+//! `?` and dropped its row, and lupin 0.1.43 made it the function's
+//! result.
+
+fn key(ok: bool) -> str ! {parse} {
+    print("key")
+    if ok { "a" } else { return parse }
+}
+
+fn under(ok: bool) -> int ! {parse} {
+    defer print("deferred {key(ok)?}")
+    print("body")
+    1
+}
+
+fn main() -> !int {
+    print("{under(true) else 9}")
+    print("{under(false) else 9}")
+    0
+}

@@ -1,0 +1,39 @@
+//! check: run(exit=0, stdout="look a\ndefer fn\n5\nlook zz\ndefer fn\nerrdefer fn\n9\nearly\ndefer fn\nerrdefer fn\n9\n")
+//! phase: run
+//! conforms: mem.model.order, err.errdefer
+//!
+//! s196 (wolf-lang#499, ruling #20) — the function-tail control. A
+//! function whose tail value is a row, and one that returns a tag
+//! early: the `errdefer` runs on both error exits and never on the
+//! ok one, on every machine, before and after the ruling. The block
+//! rows (`errdefer_block_*.lu`) are this behaviour at a block.
+
+fn look(m: Map[str, int], k: str) -> int ! {none} {
+    print("look {k}")
+    m[k]
+}
+
+fn tail_row(m: Map[str, int], k: str) -> int ! {none} {
+    errdefer print("errdefer fn")
+    defer print("defer fn")
+    look(m, k)
+}
+
+fn early(m: Map[str, int], k: str) -> int ! {none} {
+    errdefer print("errdefer fn")
+    defer print("defer fn")
+    if k == "" {
+        print("early")
+        return none
+    }
+    look(m, k)
+}
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["a"] = 5
+    print("{tail_row(m, "a") else 9}")
+    print("{tail_row(m, "zz") else 9}")
+    print("{early(m, "") else 9}")
+    0
+}

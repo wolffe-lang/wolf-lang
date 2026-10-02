@@ -1,0 +1,33 @@
+//! check: fail(E0611)
+//! phase: resolve
+//! conforms: type.row.defer, err.propagate, err.errdefer
+//!
+//! s196 (wolf-lang#498, ruling #19) — a `?` inside an `errdefer`, in a
+//! call argument under an `else`. The `else` handles `look`'s own row
+//! only (`[type.row.else]`), so the `?` would leave `under` while
+//! `under` is already leaving on `key`'s first failure: E0611. The same
+//! stack overflow on native and release before the ruling.
+
+fn key(ok: bool) -> str ! {parse} {
+    print("key")
+    if ok { "a" } else { return parse }
+}
+
+fn look(m: Map[str, int], k: str) -> int ! {none} {
+    print("look {k}")
+    m[k]
+}
+
+fn under(m: Map[str, int], ok: bool) -> int ! {parse} {
+    errdefer print("errdefer {look(m, key(ok)?) else 0}")
+    let k = key(ok)?
+    look(m, k) else 4
+}
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["a"] = 5
+    print("{under(m, true) else 9}")
+    print("{under(m, false) else 9}")
+    0
+}

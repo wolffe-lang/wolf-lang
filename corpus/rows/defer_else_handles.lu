@@ -1,0 +1,31 @@
+//! check: run(exit=0, stdout="body\nkey\na\nkey\ndeferred a\n1\nbody\nkey\nkey\nerrdefer -\nkey\ndeferred -\n9\n")
+//! phase: run
+//! conforms: type.row.defer, err.else, err.errdefer, mem.model.order
+//!
+//! s196 (wolf-lang#498, ruling #19) — the control, and E0611's fix:
+//! the fallible call under a `defer` or `errdefer` handles its own row
+//! with `else` inside the deferred expression, so nothing tries to
+//! leave the function while it is leaving. Green on every machine
+//! before and after the ruling. On the error path the `errdefer` runs
+//! before the `defer` (declared after it; LIFO), and each runs `key`
+//! again.
+
+fn key(ok: bool) -> str ! {parse} {
+    print("key")
+    if ok { "a" } else { return parse }
+}
+
+fn under(ok: bool) -> int ! {parse} {
+    defer print("deferred {key(ok) else "-"}")
+    errdefer print("errdefer {key(ok) else "-"}")
+    print("body")
+    let k = key(ok)?
+    print("{k}")
+    1
+}
+
+fn main() -> !int {
+    print("{under(true) else 9}")
+    print("{under(false) else 9}")
+    0
+}

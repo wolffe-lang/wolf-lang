@@ -1,0 +1,35 @@
+//! check: run(exit=0, stdout="look zz\ndefer blk\nerrdefer blk\n0\nlook a\ndefer fn\n5\nlook zz\ndefer fn\nerrdefer fn\n9\n")
+//! phase: run
+//! conforms: mem.model.order, err.errdefer, type.row.else
+//!
+//! s196 (wolf-lang#499, ruling #20) — the issue's shape. A block whose
+//! value is an error has left on the error path, so its `errdefer`
+//! runs, exactly as a function's does at its tail (`tail_row` is the
+//! in-file control). Before the ruling native and release ran the
+//! block's `defer` and skipped its `errdefer`; the checked machine and
+//! lupin 0.1.43 ran both.
+
+fn look(m: Map[str, int], k: str) -> int ! {none} {
+    print("look {k}")
+    m[k]
+}
+
+fn tail_row(m: Map[str, int], k: str) -> int ! {none} {
+    errdefer print("errdefer fn")
+    defer print("defer fn")
+    look(m, k)
+}
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["a"] = 5
+    let b = {
+        errdefer print("errdefer blk")
+        defer print("defer blk")
+        look(m, "zz")
+    } else 0
+    print("{b}")
+    print("{tail_row(m, "a") else 9}")
+    print("{tail_row(m, "zz") else 9}")
+    0
+}

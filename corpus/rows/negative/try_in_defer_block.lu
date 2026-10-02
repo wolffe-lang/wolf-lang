@@ -1,0 +1,28 @@
+//! check: fail(E0611)
+//! phase: resolve
+//! conforms: type.row.defer, err.propagate, err.errdefer
+//!
+//! s196 (wolf-lang#498, ruling #19) — a `?` in a binding inside a
+//! `defer` block. The refusal reads the whole deferred expression, not
+//! only its top level: a `?` nested in a block, a binding or a call
+//! argument under the `defer` is the same E0611.
+
+fn key(ok: bool) -> str ! {parse} {
+    print("key")
+    if ok { "a" } else { return parse }
+}
+
+fn under(ok: bool) -> int ! {parse} {
+    defer {
+        let k = key(ok)?
+        print("deferred {k}")
+    }
+    print("body")
+    1
+}
+
+fn main() -> !int {
+    print("{under(true) else 9}")
+    print("{under(false) else 9}")
+    0
+}

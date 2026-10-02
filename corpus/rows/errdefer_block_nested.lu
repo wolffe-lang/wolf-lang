@@ -1,0 +1,50 @@
+//! check: run(exit=0, stdout="look a\ndefer inner\ndefer outer\n5\nlook zz\ndefer inner\nerrdefer inner\ndefer outer\nerrdefer outer\n-1\nlook a\ndefer blk\ndefer fn\n5\nlook zz\ndefer blk\nerrdefer blk\ndefer fn\nerrdefer fn\n9\n")
+//! phase: run
+//! conforms: mem.model.order, err.errdefer, type.row.else
+//!
+//! s196 (wolf-lang#499, ruling #20) — nested blocks. The inner block's
+//! value is a row, so the inner scope leaves on the error path and runs
+//! its `errdefer`; that row is then the outer block's value, so the
+//! outer scope leaves the same way: inner cleanup first, each scope
+//! LIFO. `tail_nested` is the same shape as a function's tail: the
+//! block's `errdefer` runs, then the function's. Native and release
+//! skipped every block-level `errdefer` here before the ruling.
+
+fn look(m: Map[str, int], k: str) -> int ! {none} {
+    print("look {k}")
+    m[k]
+}
+
+fn nested(m: Map[str, int], k: str) -> !int {
+    let v = {
+        errdefer print("errdefer outer")
+        defer print("defer outer")
+        {
+            errdefer print("errdefer inner")
+            defer print("defer inner")
+            look(m, k)
+        }
+    } else -1
+    print("{v}")
+    0
+}
+
+fn tail_nested(m: Map[str, int], k: str) -> int ! {none} {
+    errdefer print("errdefer fn")
+    defer print("defer fn")
+    {
+        errdefer print("errdefer blk")
+        defer print("defer blk")
+        look(m, k)
+    }
+}
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["a"] = 5
+    nested(m, "a")?
+    nested(m, "zz")?
+    print("{tail_nested(m, "a") else 9}")
+    print("{tail_nested(m, "zz") else 9}")
+    0
+}

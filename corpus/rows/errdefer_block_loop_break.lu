@@ -1,0 +1,39 @@
+//! check: run(exit=0, stdout="look a\ndefer blk a\ntotal 5\nlook b\ndefer blk b\ntotal 12\nlook zz\ndefer blk zz\nerrdefer blk zz\ndone 12\n")
+//! phase: run
+//! conforms: mem.model.order, err.errdefer, type.row.else
+//!
+//! s196 (wolf-lang#499, ruling #20) — a block inside a loop, its row
+//! handled by an `else` that breaks. The block's `errdefer` runs on
+//! the turn whose lookup fails, before the `else` runs and before the
+//! `break` leaves the loop (the block's scope closes first, the
+//! handler sees a closed scope). The keys that hit run the `defer`
+//! only. Native and release skipped `errdefer blk zz` before the
+//! ruling.
+
+fn look(m: Map[str, int], k: str) -> int ! {none} {
+    print("look {k}")
+    m[k]
+}
+
+fn main() -> !int {
+    var m = Map[str, int]()
+    m["a"] = 5
+    m["b"] = 7
+    var keys = List[str]()
+    (mut keys).push("a")
+    (mut keys).push("b")
+    (mut keys).push("zz")
+    (mut keys).push("c")
+    var total = 0
+    for k in keys {
+        let v = {
+            errdefer print("errdefer blk {k}")
+            defer print("defer blk {k}")
+            look(m, k)
+        } else { break }
+        total = total + v
+        print("total {total}")
+    }
+    print("done {total}")
+    0
+}
