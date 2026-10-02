@@ -717,6 +717,33 @@ carrying a rule about operators. The rule is written here, beside
   `rows/else_try_nested_else.lu`, `rows/else_try_handler.lu`,
   `rows/else_try_block.lu`, `rows/else_return_tag.lu`, and the
   control `rows/else_own_failure.lu`.
+- `[type.row.defer]` **A `?` inside a `defer` or `errdefer` expression
+  is refused.** A deferred expression runs while its function is
+  already leaving — the function's result is formed and the
+  `defer`/`errdefer` chain of `[mem.model.order]` is running on the
+  way out — so an error a `?` would propagate from inside it has
+  nowhere honest to go: replacing the result already on its way out
+  would lose that result, and dropping the `?`'s error would hide it.
+  The shape is **E0611** at compile time on every machine, and the
+  refusal reads the whole deferred expression: a `?` in a call
+  argument, an interpolation hole, a binding or a block under the
+  `defer` is the same refusal. The fix is to handle the row inside the
+  deferred expression (`defer close(f) else |e| note(e)`) or to move
+  the fallible call out of the `defer` into the body, where its `?` has
+  a function to leave. A `?` inside a closure defined under the
+  `defer` is that closure's own propagation (`[type.row.else]`'s
+  reading of frames) and is not refused by this clause. (Ruled
+  2026-10-02, the maintainer's #19 = refused, s196 — wolf-lang#498.
+  Before the ruling the machines parted three ways: native and release
+  overflowed the compiler's stack lowering the shape, the checked
+  machine ran the deferred `?` and dropped its error, lupin 0.1.42 made
+  it the function's result. **The cost, stated:** zero — a static
+  refusal, with no instruction added to any accepted program; lupin
+  0.1.43 still runs the shape and is pinned by version as pre-mirror
+  in the gate until wolf-interp mirrors the refusal.) Witnesses:
+  `rows/negative/try_in_defer.lu`, `rows/negative/try_in_errdefer.lu`,
+  `rows/negative/try_in_defer_block.lu`, and the control
+  `rows/defer_else_handles.lu`.
 
 This chapter deliberately does **not** write the full numeric tower
 (mixed integer-width arithmetic, a complete `Add`/`Mul` trait hierarchy

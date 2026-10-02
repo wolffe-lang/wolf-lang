@@ -224,7 +224,17 @@ vocabulary.
   control flow: `defer`/`errdefer` run at **scope exit**, LIFO with the
   destructor drops of `[mem.shared.drop.1]`, after the error value is
   formed. Scope, not frame (D66): a `defer` in a loop body runs at the
-  end of every turn, not when the enclosing function returns.
+  end of every turn, not when the enclosing function returns. An
+  `errdefer` runs when its scope is left **on the error path**, and a
+  scope has left on the error path when a `?` or an error `return`
+  leaves it or when **its own value is an error** — a block whose
+  trailing value is a row carrying an error runs its `errdefer` as a
+  function whose tail value is an error does, before any `else` outside
+  the block sees that error (ruled 2026-10-02, the maintainer's #20,
+  s196 — wolf-lang#499; witnesses `rows/errdefer_block_row.lu`,
+  `rows/errdefer_block_nested.lu`, `rows/errdefer_block_loop_break.lu`,
+  and the control `rows/errdefer_fn_tail_control.lu`). A `?` inside a
+  deferred expression is refused, `[type.row.defer]`.
 - `[mem.codes]` Diagnostic-code families by tier: `E000x` (spec-01 §9)
   + `E01xx` (lexer) + `E02xx` (parser) are syntax-tier — the file fails
   to lex or parse. `E03xx` (resolution), `E04xx` (types), `E1xxx`
