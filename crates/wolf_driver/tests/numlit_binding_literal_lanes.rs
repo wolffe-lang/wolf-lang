@@ -155,11 +155,21 @@ fn every_lane_runs(entry: &Path, want: &str) {
             assert_ne!(flag, "--checked", "the checked lane always runs");
             continue;
         };
-        assert_eq!(obs.verdict, "exit(0)", "the {flag} verdict on {}", entry.display());
+        assert_eq!(
+            obs.verdict,
+            "exit(0)",
+            "the {flag} verdict on {}",
+            entry.display()
+        );
         assert_eq!(obs.stdout, want, "the {flag} stdout on {}", entry.display());
     }
     if let Some(lupin) = lupin_says(entry) {
-        assert_eq!(lupin.verdict, "exit(0)", "lupin's verdict on {}", entry.display());
+        assert_eq!(
+            lupin.verdict,
+            "exit(0)",
+            "lupin's verdict on {}",
+            entry.display()
+        );
         assert_eq!(lupin.stdout, want, "lupin's stdout on {}", entry.display());
     }
 }

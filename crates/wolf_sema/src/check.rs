@@ -3898,7 +3898,9 @@ impl<'a> Checker<'a> {
                     )
                 );
                 match (arith, d.lhs(), d.rhs()) {
-                    (true, Some(l), Some(r)) => self.literal_term(l, out) && self.literal_term(r, out),
+                    (true, Some(l), Some(r)) => {
+                        self.literal_term(l, out) && self.literal_term(r, out)
+                    }
                     _ => false,
                 }
             }
