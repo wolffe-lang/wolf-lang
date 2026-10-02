@@ -646,12 +646,21 @@ rows/hof_tail.lu: lowers
 rows/inferred_private.lu: lowers
 rows/iter_diverging_else_bound.lu: lowers
 rows/match_range_empty.lu: not mem-clean (pre-wir rungs own it)
+rows/match_row_bare_tag.lu: lowers
+rows/match_row_else_control.lu: lowers
+rows/match_row_nested.lu: lowers
+rows/match_row_payload_tag.lu: lowers
+rows/match_row_try_scrutinee.lu: lowers
+rows/match_row_wild_each_half.lu: lowers
 rows/negative/dup_tags.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/errdefer_infallible.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/error_alias_cycle.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/error_alias_open.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/error_alias_private/main.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/handler_uncovered.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/match_row_missing_tag.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/match_row_missing_value.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/match_row_tag_variant_collision.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/missing_tag.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/nested_row_conflict.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/open_into_closed.lu: not mem-clean (pre-wir rungs own it)
