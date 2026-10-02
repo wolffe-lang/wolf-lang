@@ -71,6 +71,11 @@ pub mod fs_code {
     pub const INVALID: i64 = 6;
     pub const EXISTS: i64 = 7;
     pub const CROSS_DEVICE: i64 = 8;
+    /// s199 (wolf-lang#426, `[os.fs.seek]`): the handle has no offset
+    /// to move or read at — a pipe, a fifo, a socket, a terminal
+    /// (`ESPIPE`). A tag of its own because the response differs from
+    /// `io`: a program falls back to reading forward.
+    pub const UNSEEKABLE: i64 = 9;
 }
 
 /// `fs_open_mode`'s mode argument. The set is deliberately small and
@@ -110,7 +115,14 @@ pub mod fs_mode {
     pub const READ_NONBLOCK: i64 = 5;
 }
 
+/// The open files, by handle. Slots 0, 1 and 2 are never filled: those
+/// three numbers are the process's standard streams (`[os.fs.std]`,
+/// s199 — wolf-lang#424), so the first open answers 3 and
+/// [`std_stream`] serves 0..2 for the calls that take them.
 static FILES: Mutex<Vec<Option<File>>> = Mutex::new(Vec::new());
+
+/// The first number an open answers (`[os.fs.std]`).
+pub const FIRST_HANDLE: usize = 3;
 
 fn code_of(e: &std::io::Error) -> i64 {
     match e.kind() {
@@ -259,6 +271,9 @@ pub unsafe extern "C" fn __wolf_rt_fs_open(pp: i64, pl: i64, mode: i64) -> i64 {
         Err(e) => -code_of(&e),
         Ok(f) => {
             let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
+            if files.len() < FIRST_HANDLE {
+                files.resize_with(FIRST_HANDLE, || None);
+            }
             files.push(Some(f));
             (files.len() - 1) as i64
         }
@@ -637,19 +652,23 @@ pub unsafe extern "C" fn __wolf_rt_fs_stat(pp: i64, pl: i64, which: i64, out: i6
 /// a server classifies directories by path there, as it did before.
 /// That difference is `fs_open`'s and is stated, not papered.
 ///
+/// s199 (wolf-lang#424, `[os.fs.std]`): `fd` 0, 1 and 2 are the
+/// process's standard streams, so a program can ask what its stdin or
+/// stdout IS — a regular file (`kind` 0, its size), a pipe or a
+/// terminal (`kind` 2). Before s199 those three numbers were indices
+/// into this table and answered `io` whatever the descriptors were.
+///
 /// # Safety
 ///
 /// `out` must address 8 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_fstat(fd: i64, out: i64) -> i64 {
-    let files = FILES.lock().unwrap_or_else(|p| p.into_inner());
-    let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| files.get(i)) else {
-        return fs_code::IO;
-    };
-    let md = f.metadata();
+    // s199 (#424): 0, 1 and 2 are the standard streams (`[os.fs.std]`).
     // The fd table is released before the list is minted: allocation
     // is the ambient region's business (`fs_read_chunk`'s order).
-    drop(files);
+    let Some(md) = with_handle(fd, File::metadata) else {
+        return fs_code::IO;
+    };
     let md = match md {
         Err(e) => return code_of(&e),
         Ok(m) => m,
@@ -673,6 +692,262 @@ pub unsafe extern "C" fn __wolf_rt_fs_fstat(fd: i64, out: i64) -> i64 {
     push_int(hdr, ms);
     unsafe { write_word(out, hdr as i64) };
     fs_code::OK
+}
+
+// ---------- s199: offsets and the standard streams (#426, #424) --
+
+/// Descriptors 0, 1 and 2 — the standard streams the process was
+/// started with — borrowed as a `File` for one call, never closed.
+/// `None` is a host that hands the process no such stream (windows'
+/// null std handle); a descriptor that is merely closed reaches the
+/// host call and answers its error there (`EBADF`, the `io` row).
+fn std_stream(fd: i64) -> Option<std::mem::ManuallyDrop<File>> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::FromRawFd as _;
+        let n = i32::try_from(fd).ok().filter(|n| (0..3).contains(n))?;
+        // SAFETY: 0..2 are integers the host defines, and the
+        // `ManuallyDrop` means this borrow never closes the descriptor
+        // whatever it names.
+        Some(std::mem::ManuallyDrop::new(unsafe { File::from_raw_fd(n) }))
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::{AsRawHandle as _, FromRawHandle as _};
+        let h = match fd {
+            0 => std::io::stdin().as_raw_handle(),
+            1 => std::io::stdout().as_raw_handle(),
+            2 => std::io::stderr().as_raw_handle(),
+            _ => return None,
+        };
+        if h.is_null() {
+            return None;
+        }
+        // SAFETY: the process's own std handle, borrowed for one call;
+        // the `ManuallyDrop` never closes it.
+        Some(std::mem::ManuallyDrop::new(unsafe { File::from_raw_handle(h) }))
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = fd;
+        None
+    }
+}
+
+/// Run `f` on the file `fd` names — a standard stream for 0..2
+/// ([`std_stream`]), the table's slot otherwise, held under the table
+/// lock for the call. `None` is a closed or forged handle (`io`).
+fn with_handle<R>(fd: i64, f: impl FnOnce(&File) -> R) -> Option<R> {
+    if (0..FIRST_HANDLE as i64).contains(&fd) {
+        let file = std_stream(fd)?;
+        return Some(f(&file));
+    }
+    let files = FILES.lock().unwrap_or_else(|p| p.into_inner());
+    let Some(Some(file)) = usize::try_from(fd).ok().and_then(|i| files.get(i)) else {
+        return None;
+    };
+    Some(f(file))
+}
+
+/// The code of a failed offset call: `unseekable` for `ESPIPE`
+/// (`ErrorKind::NotSeekable`), `invalid` for an offset the host refuses
+/// as out of range (`EINVAL`, a seek below zero), the family's mapping
+/// otherwise.
+fn seek_code(e: &std::io::Error) -> i64 {
+    match e.kind() {
+        std::io::ErrorKind::NotSeekable => fs_code::UNSEEKABLE,
+        std::io::ErrorKind::InvalidInput => fs_code::INVALID,
+        _ => code_of(e),
+    }
+}
+
+/// windows has no `ESPIPE` on this path (a pipe or console handle's
+/// file pointer is undefined, not refused), so an offset call there
+/// asks first: anything whose metadata is not a regular file is
+/// `unseekable`, by name. unix asks the host and maps its `ESPIPE`.
+#[cfg(windows)]
+fn windows_unseekable(f: &File) -> bool {
+    !f.metadata().is_ok_and(|m| m.is_file())
+}
+
+/// `fs_seek(fd, off, whence) -> int ! {invalid, io, unseekable}` —
+/// move the handle's offset and answer the new one, from the start
+/// (`[os.fs.seek]`). `whence` 0 is from the start, 1 from the current
+/// offset, 2 from the end — POSIX's `SEEK_SET`/`SEEK_CUR`/`SEEK_END`,
+/// one `lseek`. A `whence` outside the set is `invalid`, decided before
+/// the host is touched; an offset that lands below zero is `invalid`
+/// and the cursor does not move; past the end is legal and a read there
+/// is `eof`. A pipe, fifo, socket or terminal is `unseekable`; a closed
+/// or forged handle is `io`.
+///
+/// # Safety
+///
+/// `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_fs_seek(fd: i64, off: i64, whence: i64, out: i64) -> i64 {
+    use std::io::{Seek as _, SeekFrom};
+    let r = with_handle(fd, |f| {
+        let to = match whence {
+            0 => match u64::try_from(off) {
+                Ok(o) => SeekFrom::Start(o),
+                Err(_) => return Err(fs_code::INVALID),
+            },
+            1 => SeekFrom::Current(off),
+            2 => SeekFrom::End(off),
+            _ => return Err(fs_code::INVALID),
+        };
+        #[cfg(windows)]
+        {
+            if windows_unseekable(f) {
+                return Err(fs_code::UNSEEKABLE);
+            }
+            // ERROR_NEGATIVE_SEEK's mapping is not pinned by std, so
+            // the one refusal the clause names is decided here.
+            let base = match to {
+                SeekFrom::Start(_) => 0,
+                SeekFrom::Current(_) => {
+                    let mut g = f;
+                    g.stream_position().map_err(|e| seek_code(&e))? as i128
+                }
+                SeekFrom::End(_) => f.metadata().map_err(|e| code_of(&e))?.len() as i128,
+            };
+            if !matches!(to, SeekFrom::Start(_)) && base + i128::from(off) < 0 {
+                return Err(fs_code::INVALID);
+            }
+        }
+        let mut g = f;
+        g.seek(to).map_err(|e| seek_code(&e))
+    });
+    match r {
+        None => fs_code::IO,
+        Some(Err(code)) => code,
+        Some(Ok(at)) => match i64::try_from(at) {
+            Ok(at) => {
+                unsafe { write_word(out, at) };
+                fs_code::OK
+            }
+            Err(_) => fs_code::IO,
+        },
+    }
+}
+
+/// `fs_tell(fd) -> int ! {io, unseekable}` — the handle's offset from
+/// the start, the cursor not moved (`[os.fs.tell]`; `lseek(fd, 0,
+/// SEEK_CUR)`). Rows as [`__wolf_rt_fs_seek`]'s.
+///
+/// # Safety
+///
+/// `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_fs_tell(fd: i64, out: i64) -> i64 {
+    use std::io::Seek as _;
+    let r = with_handle(fd, |f| {
+        #[cfg(windows)]
+        {
+            if windows_unseekable(f) {
+                return Err(fs_code::UNSEEKABLE);
+            }
+        }
+        // No `invalid` in this row: only `ESPIPE` is told apart.
+        let mut g = f;
+        g.stream_position().map_err(|e| match e.kind() {
+            std::io::ErrorKind::NotSeekable => fs_code::UNSEEKABLE,
+            _ => code_of(&e),
+        })
+    });
+    match r {
+        None => fs_code::IO,
+        Some(Err(code)) => code,
+        Some(Ok(at)) => match i64::try_from(at) {
+            Ok(at) => {
+                unsafe { write_word(out, at) };
+                fs_code::OK
+            }
+            Err(_) => fs_code::IO,
+        },
+    }
+}
+
+/// One positional read of at most `buf.len()` bytes at `off`, the
+/// handle's cursor untouched: `pread` on unix; on windows `seek_read`
+/// moves the file pointer, so it is put back — under the table lock,
+/// so no other hand sees the moved cursor. An interrupted read is
+/// retried, never an `io`.
+fn read_at(f: &File, buf: &mut [u8], off: u64) -> std::io::Result<usize> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileExt as _;
+        loop {
+            match f.read_at(buf, off) {
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                r => return r,
+            }
+        }
+    }
+    #[cfg(windows)]
+    {
+        use std::io::{Seek as _, SeekFrom};
+        use std::os::windows::fs::FileExt as _;
+        let mut g = f;
+        let at = g.stream_position()?;
+        let r = f.seek_read(buf, off);
+        g.seek(SeekFrom::Start(at))?;
+        r
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (f, buf, off);
+        Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
+    }
+}
+
+/// `fs_read_at(fd, off, max) -> List[byte] ! {eof, invalid, io,
+/// unseekable}` — `fs_read_chunk` at an offset, the handle's own
+/// cursor left exactly where it was (`[os.fs.read_at]`). The order is
+/// the family's: the handle first (closed or forged is `io`), then the
+/// offset (below zero is `invalid`), then `max` (at or below zero is
+/// the empty list), the 1 MiB clamp, and 0 bytes at a positive `max`
+/// is `eof` — at or past the end. A pipe, fifo, socket or terminal is
+/// `unseekable`.
+///
+/// # Safety
+///
+/// `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_fs_read_at(fd: i64, off: i64, max: i64, out: i64) -> i64 {
+    let r = with_handle(fd, |f| {
+        let Ok(off) = u64::try_from(off) else {
+            return Err(fs_code::INVALID);
+        };
+        if max <= 0 {
+            return Ok(Vec::new());
+        }
+        #[cfg(windows)]
+        {
+            if windows_unseekable(f) {
+                return Err(fs_code::UNSEEKABLE);
+            }
+        }
+        let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
+        match read_at(f, &mut buf, off) {
+            Err(e) => Err(seek_code(&e)),
+            Ok(0) => Err(fs_code::EOF),
+            Ok(n) => {
+                buf.truncate(n);
+                Ok(buf)
+            }
+        }
+    });
+    // The fd table is released before the list is minted
+    // (`fs_read_chunk`'s order).
+    match r {
+        None => fs_code::IO,
+        Some(Err(code)) => code,
+        Some(Ok(bytes)) => {
+            unsafe { write_bytes_list(out, &bytes) };
+            fs_code::OK
+        }
+    }
 }
 
 // ------------------------------------ s90: rename (wolf-lang#51) --
@@ -1185,6 +1460,124 @@ mod tests {
             }
         }
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ----------------------------------------------------- s199 --
+
+    /// s199 (#426, `[os.fs.seek]`, `[os.fs.tell]`, `[os.fs.read_at]`):
+    /// the offset moved from each end, read back, and left alone by a
+    /// positional read; `invalid`, `eof` and `io` where the clauses
+    /// put them; the first handle above 2 (`[os.fs.std]`).
+    #[test]
+    fn seek_tell_and_read_at_on_a_file() {
+        let dir = scratch("seek");
+        let f = dir.join("f.txt");
+        std::fs::write(&f, b"0123456789").unwrap();
+        let fs_ = f.display().to_string();
+        let (fp, fl) = pair_of(&fs_);
+        let mut w = [0i64; 1];
+        let o = w.as_mut_ptr() as i64;
+        unsafe {
+            let fd = __wolf_rt_fs_open(fp, fl, fs_mode::READ);
+            assert!(fd >= FIRST_HANDLE as i64, "0..2 are the standard streams");
+            assert_eq!(__wolf_rt_fs_read_chunk(fd, 3, o), fs_code::OK);
+            assert_eq!(__wolf_rt_fs_tell(fd, o), fs_code::OK);
+            assert_eq!(w[0], 3, "tell after a 3-byte read");
+            assert_eq!(__wolf_rt_fs_seek(fd, 0, 2, o), fs_code::OK);
+            assert_eq!(w[0], 10, "seek to the end answers the size");
+            assert_eq!(__wolf_rt_fs_read_chunk(fd, 4, o), fs_code::EOF);
+            assert_eq!(__wolf_rt_fs_seek(fd, -3, 2, o), fs_code::OK);
+            assert_eq!(w[0], 7);
+            assert_eq!(__wolf_rt_fs_read_chunk(fd, 16, o), fs_code::OK);
+            assert_eq!(list_u8(w[0]), b"789");
+            assert_eq!(__wolf_rt_fs_seek(fd, 2, 0, o), fs_code::OK);
+            assert_eq!(__wolf_rt_fs_seek(fd, 3, 1, o), fs_code::OK);
+            assert_eq!(w[0], 5, "whence 1 counts from the cursor");
+            // The positional read: bytes at 1, the cursor still at 5.
+            assert_eq!(__wolf_rt_fs_read_at(fd, 1, 2, o), fs_code::OK);
+            assert_eq!(list_u8(w[0]), b"12");
+            assert_eq!(__wolf_rt_fs_tell(fd, o), fs_code::OK);
+            assert_eq!(w[0], 5, "read_at leaves the cursor alone");
+            assert_eq!(__wolf_rt_fs_read_at(fd, 10, 4, o), fs_code::EOF);
+            assert_eq!(__wolf_rt_fs_read_at(fd, 3, 0, o), fs_code::OK);
+            assert_eq!(list_u8(w[0]), b"", "max 0 is the empty list");
+            assert_eq!(__wolf_rt_fs_read_at(fd, -1, 4, o), fs_code::INVALID);
+            // Past the end is legal; the read there is eof.
+            assert_eq!(__wolf_rt_fs_seek(fd, 4, 2, o), fs_code::OK);
+            assert_eq!(w[0], 14);
+            assert_eq!(__wolf_rt_fs_read_chunk(fd, 4, o), fs_code::EOF);
+            // `invalid`: a whence outside the set, a start below zero,
+            // a result below zero — and the cursor does not move.
+            assert_eq!(__wolf_rt_fs_seek(fd, 0, 3, o), fs_code::INVALID);
+            assert_eq!(__wolf_rt_fs_seek(fd, -1, 0, o), fs_code::INVALID);
+            assert_eq!(__wolf_rt_fs_seek(fd, -100, 1, o), fs_code::INVALID);
+            assert_eq!(__wolf_rt_fs_tell(fd, o), fs_code::OK);
+            assert_eq!(w[0], 14, "a refused seek moves nothing");
+            assert_eq!(__wolf_rt_fs_close(fd), fs_code::OK);
+            // Closed, forged and negative handles are `io`, handle first.
+            for bad in [fd, 1 << 40, -1] {
+                assert_eq!(__wolf_rt_fs_seek(bad, 0, 9, o), fs_code::IO);
+                assert_eq!(__wolf_rt_fs_tell(bad, o), fs_code::IO);
+                assert_eq!(__wolf_rt_fs_read_at(bad, -1, 4, o), fs_code::IO);
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// s199 (#426): a handle with no offset is `unseekable` — a fifo
+    /// here (`ESPIPE`), opened with mode 5 so the open does not park.
+    #[cfg(unix)]
+    #[test]
+    fn a_fifo_is_unseekable() {
+        let dir = scratch("unseekable");
+        let fifo = dir.join("pipe");
+        let c = std::ffi::CString::new(fifo.display().to_string()).unwrap();
+        // SAFETY: a NUL-terminated path in a scratch directory.
+        assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o600) }, 0, "mkfifo");
+        let fs_ = fifo.display().to_string();
+        let (pp, pl) = pair_of(&fs_);
+        let mut w = [0i64; 1];
+        let o = w.as_mut_ptr() as i64;
+        unsafe {
+            let fd = __wolf_rt_fs_open(pp, pl, fs_mode::READ_NONBLOCK);
+            assert!(fd >= FIRST_HANDLE as i64);
+            assert_eq!(__wolf_rt_fs_seek(fd, 0, 2, o), fs_code::UNSEEKABLE);
+            assert_eq!(__wolf_rt_fs_tell(fd, o), fs_code::UNSEEKABLE);
+            assert_eq!(__wolf_rt_fs_read_at(fd, 0, 4, o), fs_code::UNSEEKABLE);
+            // The order holds on a pipe too: `invalid` before the host.
+            assert_eq!(__wolf_rt_fs_seek(fd, 0, 7, o), fs_code::INVALID);
+            assert_eq!(__wolf_rt_fs_read_at(fd, -1, 4, o), fs_code::INVALID);
+            assert_eq!(__wolf_rt_fs_close(fd), fs_code::OK);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// s199 (#424, `[os.fs.std]`): 0, 1 and 2 are never a file's
+    /// handle — `fs_read`, `fs_write` and `fs_close` answer `io` there
+    /// (reading the streams is #405's), and an fs_fstat of each answers
+    /// SOMETHING other than the old table miss whenever the test runner
+    /// gave the process that descriptor. What each one IS depends on
+    /// the runner, so the per-kind answers are the driver gate's
+    /// (`fs_std_lanes.rs`, stdin a file and a pipe).
+    #[test]
+    fn the_standard_streams_are_not_table_slots() {
+        let mut w = [0i64; 2];
+        let o = w.as_mut_ptr() as i64;
+        let (sp, sl) = pair_of("x");
+        unsafe {
+            for fd in 0..3 {
+                assert_eq!(__wolf_rt_fs_read(fd, 1, o), fs_code::IO, "read {fd}");
+                assert_eq!(__wolf_rt_fs_write(fd, sp, sl), fs_code::IO, "write {fd}");
+                assert_eq!(__wolf_rt_fs_close(fd), fs_code::IO, "close {fd}");
+            }
+            #[cfg(unix)]
+            {
+                // stderr is open under every runner this suite meets.
+                assert_eq!(__wolf_rt_fs_fstat(2, o), fs_code::OK, "fstat(2)");
+                let st = crate::list::i64_elems(w[0]).expect("a List[int]");
+                assert!((0..=2).contains(&st[0]), "a kind: {st:?}");
+            }
+        }
     }
 
     #[test]
