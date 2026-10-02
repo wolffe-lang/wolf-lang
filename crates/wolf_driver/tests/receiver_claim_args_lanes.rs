@@ -190,8 +190,10 @@ fn check(machine: &str, entry: &Path, obs: &Obs, want: Want<'_>) {
     }
 }
 
-/// lupin releases measured before the mirror of wolf-lang#487.
-const PRE_RECEIVER_LUPIN: &[&str] = &["0.1.42"];
+/// lupin releases measured before the mirror of wolf-lang#487: 0.1.42.
+/// Emptied at the 0.1.43 pairing (r25): 0.1.43 carries is62's receiver
+/// claim (wolffe-lang/wolf-interp#164) and traps `exclusivity` on every row.
+const PRE_RECEIVER_LUPIN: &[&str] = &[];
 
 /// A refused row: only E1002s on every wolfgang lane; lupin answers
 /// `pre` at a pinned version and traps `exclusivity` at any other.
