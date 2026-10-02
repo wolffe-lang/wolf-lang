@@ -1,6 +1,46 @@
 # Changelog
 
-## Unreleased
+## 0.2.21 — 2026-10-02
+
+THE TWENTY-FIRST. A `match` over a fallible value compiles and runs on
+every lane (the maintainer's ruling #21, `[type.row.match]`): an arm
+naming a tag of the scrutinee's row handles the error half, any other
+pattern handles the value half, and the match must cover both. A `?`
+inside a `defer` or `errdefer` is refused (ruling #19,
+`[type.row.defer]`, new E0611) where native and release overflowed the
+compiler's stack, and a block's `errdefer` runs when the block's value
+is an error (ruling #20). Release builds are reproducible again. The
+pairing moves to lupin 0.1.44, whose spec pin moves to v0.2.20 and
+which carries every mirror this release's gates pinned lupin 0.1.43's
+answers on by version. Three lanes and 49 commits: s195, s196, s197.
+
+### Read this before you bump the pin
+
+**Two programs gave a wrong answer with no diagnostic on 0.2.20.**
+Each is now refused or answers the ruled bytes on every lane:
+
+- `let b = { errdefer print("errdefer blk"); defer print("defer blk");
+  look(m, "zz") } else 0` printed `defer blk` alone on native and
+  release: a block's `errdefer` did not run when the block's value was
+  an error (#499). Both run on every lane now, as the checked machine
+  and lupin already ran them.
+- `defer print("deferred {key(ok)?}")` ran on the checked machine and
+  dropped the `?`'s error, so the function answered `1` (#498); native
+  and release overflowed the compiler's stack on the same program.
+  E0611 on every lane now.
+
+**Programs that compiled are now refused.** A `?` anywhere inside a
+deferred expression (E0611). s196 found no `?` under a defer in any
+downstream.
+
+**Programs that were refused now compile.** A `match` whose scrutinee
+has type `T ! {row}`: `match look(m, k) { none => -1, v => v }`
+(`unsupported` on every wolfgang lane through 0.2.20); a tag that is
+also a variant of the value type is E0816, never guessed.
+
+**Release builds are reproducible.** With the mid-end on, three
+release builds of one program by one compiler gave three different
+binaries on 0.2.20 (#503). They are byte-identical now.
 
 ### A literal written at an unannotated binding takes `i32` (s202, #458)
 
@@ -64,7 +104,7 @@
   `errdefer` (`wolf build` and `conform-run` both aborted, rc=134, no
   record): the `?`'s error edge re-lowered the defer that contains it,
   without end. The checked machine ran the deferred `?` and dropped
-  its row; lupin 0.1.42 and 0.1.43 make it the function's result.
+  its row; lupin 0.1.42 and 0.1.43 made it the function's result.
 - Ruled by the maintainer (#19 = refused) and written as
   `[type.row.defer]` beside `[type.row.else]`: a deferred expression
   runs while the function is already leaving, so a second error has
@@ -77,9 +117,9 @@
   `try_in_errdefer.lu`, `try_in_defer_block.lu` and the control
   `corpus/rows/defer_else_handles.lu`; `try_under_defer_refused_lanes.rs`
   asserts E0611 on checked, native and release, that `wolf build`
-  answers with the diagnostic and never a signal, and pins lupin
-  0.1.43's measured bytes by version until wolf-interp mirrors the
-  refusal (is66).
+  answers with the diagnostic and never a signal, and pinned lupin
+  0.1.43's measured bytes by version until this release's pairing
+  (below), where 0.1.44 refuses with the same code.
 
 ### A block's `errdefer` runs when the block's value is an error (s196, #499, ruling #20)
 
@@ -128,9 +168,9 @@
   payload tags, `_` on each half, an enum value half with a nested
   match, the #492 shape, the `else |e| match e` control) and three
   refusals under `rows/negative/`. `match_fallible_lanes.rs` runs each
-  on checked, native, release and lupin. lupin 0.1.43 takes the first
-  bare-tag arm for a value too; its answers are pinned by version as
-  pre-mirror (is67 moves lupin).
+  on checked, native, release and lupin. lupin 0.1.43 took the first
+  bare-tag arm for a value too; its answers were pinned by version as
+  pre-mirror until this release's pairing (below).
 
 ## 0.2.20 — 2026-10-01
 
