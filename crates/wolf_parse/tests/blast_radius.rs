@@ -20,9 +20,26 @@
 //! target and the `parse_mutated` target, which mutate freely); this
 //! property pins the parser tier's containment.
 //!
+//! The bounds count WRECK SITES, not diagnostics (ruling #27,
+//! wolf-lang#367, 2026-10-02): one mutation that breaks two separate
+//! places is two problems, not a cascade. The rule, exactly
+//! ([`wreck_sites`]): order the added cascade diagnostics by offset;
+//! two consecutive ones belong to different sites when the MUTATED tree
+//! holds an intact construct — a declaration, a statement or a match /
+//! select arm, with no error node and no missing token anywhere inside
+//! it — lying wholly between them. An intact construct is the parser
+//! proving it had the thread back: it read real source correctly after
+//! the first break and before the second. Each site is held to the
+//! bound (3, or 5 when structural); the bounds do not move. A cascade —
+//! the parser reporting one confusion again and again, or reading the
+//! wreckage as new broken constructs — has no intact construct between
+//! its reports, so it stays one site and still fails.
+//!
 //! Budget: `MUTATE_BUDGET` mutations per corpus file (default 3 for PR
 //! speed; nightly runs crank it up). Deterministic per (file, index):
-//! failures reproduce.
+//! failures reproduce. Every violation in the run is collected and
+//! reported together: asserting on the first one hid #367 behind #360
+//! for a release.
 
 use std::path::{Path, PathBuf};
 use wolf_ast::{Child, GreenNode};
@@ -171,6 +188,112 @@ fn withheld_terminator(
         .iter()
         .any(|t| t.kind == TokenKind::Term && t.span.lo == before.span.lo);
     (!still).then_some(before.span)
+}
+
+// ------------------------------------------------------- wreck sites ----
+
+/// The constructs whose intact presence between two diagnostics proves
+/// the parser resynchronized: declarations, statements, and arms — the
+/// units recovery resumes at. Smaller nodes (a name, a type, a pattern)
+/// survive inside a cascade and prove nothing.
+fn is_resync_construct(kind: wolf_ast::SyntaxKind) -> bool {
+    use wolf_ast::SyntaxKind as K;
+    kind.is_item()
+        || matches!(
+            kind,
+            K::ExprStmt | K::AssignStmt | K::DeferStmt | K::AssumeStmt | K::MatchArm | K::SelectArm
+        )
+}
+
+/// The first intact construct lying wholly in `lo..hi`, if any.
+fn intact_between(node: &GreenNode, lo: u32, hi: u32) -> Option<&GreenNode> {
+    if node.span.hi <= lo || node.span.lo >= hi {
+        return None;
+    }
+    if is_resync_construct(node.kind)
+        && !node.span.is_empty()
+        && node.span.lo >= lo
+        && node.span.hi <= hi
+        && !has_damage(node)
+    {
+        return Some(node);
+    }
+    node.nodes().find_map(|n| intact_between(n, lo, hi))
+}
+
+/// Ruling #27's partition (module docs): the added cascade diagnostics,
+/// ordered by offset, cut wherever an intact construct lies wholly
+/// between the end of the site so far and the next diagnostic.
+fn wreck_sites<'d>(root: &GreenNode, added: &[&'d wolf_diag::Diagnostic]) -> Vec<Vec<&'d wolf_diag::Diagnostic>> {
+    let mut sorted = added.to_vec();
+    sorted.sort_by_key(|d| (d.primary.span.lo, d.primary.span.hi));
+    let mut sites: Vec<Vec<&wolf_diag::Diagnostic>> = Vec::new();
+    let mut reach = 0u32;
+    for d in sorted {
+        let span = d.primary.span;
+        match sites.last_mut() {
+            Some(site) if intact_between(root, reach, span.lo).is_none() => site.push(d),
+            _ => sites.push(vec![d]),
+        }
+        reach = reach.max(span.hi);
+    }
+    sites
+}
+
+/// The mutated parse's diagnostics that the baseline does not account
+/// for. A baseline diagnostic (the corpus counter-example files) is
+/// matched by code at its span moved by the splice; one that moved
+/// inside the wreck pays for one same-code diagnostic anywhere — the
+/// per-code reading of the count-based subtraction this replaced.
+fn added_diagnostics<'d>(
+    original: &[wolf_diag::Diagnostic],
+    mutated: &'d [wolf_diag::Diagnostic],
+    m: &Mutation,
+) -> Vec<&'d wolf_diag::Diagnostic> {
+    let delta = m.text.len() as i64 - (m.hi - m.lo) as i64;
+    let mut left: Vec<&wolf_diag::Diagnostic> = mutated.iter().collect();
+    let mut unmatched = Vec::new();
+    for b in original {
+        let s = b.primary.span;
+        let moved = if s.hi <= m.lo {
+            Some((s.lo, s.hi))
+        } else if s.lo >= m.hi {
+            Some(((s.lo as i64 + delta) as u32, (s.hi as i64 + delta) as u32))
+        } else {
+            None
+        };
+        let at = moved.and_then(|(lo, hi)| {
+            left.iter()
+                .position(|d| d.code == b.code && d.primary.span.lo == lo && d.primary.span.hi == hi)
+        });
+        match at {
+            Some(i) => {
+                left.remove(i);
+            }
+            None => unmatched.push(b.code),
+        }
+    }
+    for code in unmatched {
+        if let Some(i) = left.iter().position(|d| d.code == code) {
+            left.remove(i);
+        }
+    }
+    left
+}
+
+fn render_sites(sites: &[Vec<&wolf_diag::Diagnostic>]) -> String {
+    sites
+        .iter()
+        .enumerate()
+        .map(|(i, s)| {
+            let ds: Vec<String> = s
+                .iter()
+                .map(|d| format!("{} {}..{} {}", d.code, d.primary.span.lo, d.primary.span.hi, d.message))
+                .collect();
+            format!("site {} ({}): [{}]", i + 1, s.len(), ds.join("; "))
+        })
+        .collect::<Vec<_>>()
+        .join("\n    ")
 }
 
 /// One mutation: replace byte range `lo..hi` with `text`.
@@ -512,6 +635,8 @@ fn single_token_mutations_have_bounded_blast_radius() {
     assert!(!files.is_empty(), "corpus not found at {}", root.display());
 
     let mut sm = wolf_span::SourceMap::new();
+    let mut failures: Vec<String> = Vec::new();
+    let mut mutations = 0usize;
     for f in &files {
         let src = std::fs::read(f).expect("read corpus file");
         let file = sm.intern(f);
@@ -542,6 +667,7 @@ fn single_token_mutations_have_bounded_blast_radius() {
             let Some(m) = pick_mutation(&mut rng, &src, &lexed.tokens) else {
                 continue;
             };
+            mutations += 1;
             let mut mutated = Vec::with_capacity(src.len() + 8);
             mutated.extend_from_slice(&src[..m.lo as usize]);
             mutated.extend_from_slice(&m.text);
@@ -554,8 +680,10 @@ fn single_token_mutations_have_bounded_blast_radius() {
             let ctx = || format!("{} [{}]", f.display(), m.describe);
 
             // Invariant 0: complete lossless tree, verifier clean.
-            wolf_ast::verify(&parse.root, &mutated)
-                .unwrap_or_else(|e| panic!("verifier failed for {}: {e}", ctx()));
+            if let Err(e) = wolf_ast::verify(&parse.root, &mutated) {
+                failures.push(format!("verifier failed for {}: {e}", ctx()));
+                continue;
+            }
 
             // Invariant 1: the parser emits at most 3 diagnostics (5
             // when the mutation unbalances delimiters — see module
@@ -643,29 +771,33 @@ fn single_token_mutations_have_bounded_blast_radius() {
             // Their own budget keeps the teeth: boundaries are bounded
             // per unclosed opener, so a storm of them still fails, and
             // nesting depth in the corpus is what sets the number.
-            let boundaries = |ds: &[wolf_diag::Diagnostic], want: bool| {
-                ds.iter()
-                    .filter(|d| (d.code == wolf_parse::codes::UNCLOSED_DELIMITER) == want)
-                    .count()
-            };
-            let added_of = |want: bool| {
-                boundaries(&parse.diagnostics, want)
-                    .saturating_sub(boundaries(&original.diagnostics, want))
-            };
-            let cascade = added_of(false);
-            let boundary = added_of(true);
-            assert!(
-                cascade <= max,
-                "{}: {cascade} added cascade diagnostics (max {max}): {:?}",
-                ctx(),
-                parse.diagnostics
-            );
-            assert!(
-                boundary <= MAX_BOUNDARY,
-                "{}: {boundary} added recovery-boundary diagnostics (max {MAX_BOUNDARY}): {:?}",
-                ctx(),
-                parse.diagnostics
-            );
+            //
+            // Cascade is counted per WRECK SITE (ruling #27, module docs
+            // and [`wreck_sites`]); boundaries stay per mutation — they
+            // are per unclosed opener already.
+            let added = added_diagnostics(&original.diagnostics, &parse.diagnostics, &m);
+            let (bounds, cascade): (Vec<_>, Vec<_>) = added
+                .into_iter()
+                .partition(|d| d.code == wolf_parse::codes::UNCLOSED_DELIMITER);
+            let sites = wreck_sites(&parse.root, &cascade);
+            if let Some(worst) = sites.iter().map(Vec::len).max().filter(|&n| n > max) {
+                failures.push(format!(
+                    "{}: {worst} added cascade diagnostics at one wreck site (max {max}; {} \
+                     site(s), {} in all):\n    {}",
+                    ctx(),
+                    sites.len(),
+                    cascade.len(),
+                    render_sites(&sites)
+                ));
+            }
+            if bounds.len() > MAX_BOUNDARY {
+                failures.push(format!(
+                    "{}: {} added recovery-boundary diagnostics (max {MAX_BOUNDARY}): {:?}",
+                    ctx(),
+                    bounds.len(),
+                    parse.diagnostics
+                ));
+            }
 
             // Invariant 2: untouched declarations parse without error
             // nodes or missing markers (wherever they re-parented) —
@@ -687,14 +819,15 @@ fn single_token_mutations_have_bounded_blast_radius() {
                     .iter()
                     .find(|t| t.span.lo >= term.hi && !t.span.is_empty())
                     .map(|t| t.kind);
-                assert_eq!(
-                    next,
-                    Some(TokenKind::Kw(wolf_lex::Keyword::Else)),
-                    "{}: a terminator was withheld at {}..{} and the next token is not `else`",
-                    ctx(),
-                    term.lo,
-                    term.hi
-                );
+                if next != Some(TokenKind::Kw(wolf_lex::Keyword::Else)) {
+                    failures.push(format!(
+                        "{}: a terminator was withheld at {}..{} and the next token is not \
+                         `else` ({next:?})",
+                        ctx(),
+                        term.lo,
+                        term.hi
+                    ));
+                }
             }
             let exempt = withheld.and_then(|t| {
                 items
@@ -712,25 +845,162 @@ fn single_token_mutations_have_bounded_blast_radius() {
                 match find_span(&parse.root, kind, mlo, mhi) {
                     Some(node) if !has_damage(node) => {}
                     _ if Some(idx) == exempt => {
-                        assert!(
-                            find_start(&parse.root, kind, mlo).is_some(),
-                            "{}: the statement before a line-leading `else` is no longer a \
-                             {kind:?} starting at {mlo}",
-                            ctx()
-                        );
+                        if find_start(&parse.root, kind, mlo).is_none() {
+                            failures.push(format!(
+                                "{}: the statement before a line-leading `else` is no longer a \
+                                 {kind:?} starting at {mlo}",
+                                ctx()
+                            ));
+                        }
                     }
-                    Some(_) => panic!(
+                    Some(_) => failures.push(format!(
                         "{}: untouched {kind:?} at {mlo}..{mhi} contains error nodes",
                         ctx()
-                    ),
-                    None => panic!(
+                    )),
+                    None => failures.push(format!(
                         "{}: untouched {kind:?} {lo}..{hi} not found at {mlo}..{mhi}",
                         ctx()
-                    ),
+                    )),
                 }
             }
         }
     }
+    eprintln!(
+        "blast radius: {} corpus files, {mutations} mutations at budget {budget}, {} violation(s)",
+        files.len(),
+        failures.len()
+    );
+    assert!(
+        failures.is_empty(),
+        "{} violation(s) of the blast-radius property:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+/// A pinned nightly case: splice `text` over the `len` bytes that start
+/// `skip` bytes into the first `probe` in corpus file `rel`, and return
+/// the mutated parse with its wreck sites (cascade only; boundaries
+/// counted apart, as in the property).
+fn pinned_case(
+    rel: &str,
+    probe: &[u8],
+    skip: usize,
+    len: usize,
+    text: &[u8],
+) -> (wolf_parse::Parse, Vec<Vec<wolf_diag::Diagnostic>>) {
+    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus").join(rel);
+    let src = std::fs::read(&f).unwrap_or_else(|e| panic!("read {rel}: {e}"));
+    let lo = src
+        .windows(probe.len())
+        .position(|w| w == probe)
+        .unwrap_or_else(|| panic!("{rel} still spells {:?}", String::from_utf8_lossy(probe)))
+        + skip;
+    let m = Mutation {
+        lo: lo as u32,
+        hi: (lo + len) as u32,
+        text: text.to_vec(),
+        describe: String::new(),
+    };
+    let mut mutated = src.clone();
+    mutated.splice(lo..lo + len, text.iter().copied());
+    let mut sm = wolf_span::SourceMap::new();
+    let baseline = wolf_parse::parse_tokens(&wolf_lex::lex(sm.intern(&f), &src), &src);
+    let mfile = sm.intern(&f.with_extension("pinned"));
+    let parse = wolf_parse::parse_tokens(&wolf_lex::lex(mfile, &mutated), &mutated);
+    wolf_ast::verify(&parse.root, &mutated).expect("verifier clean");
+    let cascade: Vec<&wolf_diag::Diagnostic> =
+        added_diagnostics(&baseline.diagnostics, &parse.diagnostics, &m)
+            .into_iter()
+            .filter(|d| d.code != wolf_parse::codes::UNCLOSED_DELIMITER)
+            .collect();
+    let sites = wreck_sites(&parse.root, &cascade)
+        .into_iter()
+        .map(|s| s.into_iter().cloned().collect())
+        .collect();
+    (parse, sites)
+}
+
+/// wolf-lang#367, the nightly's budget-1000 `conc/capture_mut_arg.lu
+/// [replace token 30 at 520..525 with \`match\`]`, pinned: `scope s {`
+/// becomes `match s {`, and each of the two `s.spawn(fn() { … })` lines
+/// is read as a match arm. Each breaks the same way — `spawn` as a path
+/// segment (E0008), the `=>` missing at the `fn` (E0201) — four cascade
+/// diagnostics against the tight bound of three, two at each line.
+///
+/// Ruling #27: two separate places, two problems. The tree says they
+/// are separate, which is the rule's whole test: the first arm's body is
+/// the closure `fn() { bump(mut n) }`, read cleanly, and its statement
+/// `bump(mut n)` is an intact construct lying wholly between the two
+/// reports. (The issue read the arm BETWEEN them as intact; it is not —
+/// it is the stray `)` as an arm, an error node whose own reports the
+/// arm fold swallowed, so it emitted nothing and reset the fold.)
+#[test]
+fn scope_read_as_match_is_two_wreck_sites() {
+    let (parse, sites) = pinned_case(
+        "conc/capture_mut_arg.lu",
+        b"scope s {",
+        0,
+        b"scope".len(),
+        b" match ",
+    );
+    let total: usize = sites.iter().map(Vec::len).sum();
+    assert_eq!(total, 4, "four cascade diagnostics: {:?}", parse.diagnostics);
+    assert_eq!(sites.len(), 2, "two wreck sites: {sites:?}");
+    for site in &sites {
+        assert_eq!(site.len(), 2, "each site is one spawn line's two reports: {site:?}");
+        assert!(site.len() <= 3, "each site within the tight bound");
+    }
+    // The construct that separates them is the first arm's own statement.
+    let (a, b) = (
+        sites[0].iter().map(|d| d.primary.span.hi).max().unwrap(),
+        sites[1][0].primary.span.lo,
+    );
+    let between = intact_between(&parse.root, a, b).expect("an intact construct between the sites");
+    assert_eq!(between.kind, wolf_ast::SyntaxKind::ExprStmt, "it is `bump(mut n)`");
+}
+
+/// wolf-lang#544, the nightly red since `abf4e5cf`: `memory/
+/// recv_view_arg_outside_write.lu [replace token 2 at 644..645 with
+/// \`let\`]`, pinned. The struct's `{` becomes `let`: `struct V` has no
+/// body (E0201), and the body is read as ONE `let` with three valueless
+/// binders, `let x: int, y: int, z: int,` — one report per binder (D63)
+/// and the closing `}` after the trailing comma.
+///
+/// Under ruling #27 this is ONE site: nothing between any two of its
+/// reports is an intact construct (the binders are not statements, and
+/// every one carries a missing initializer). So the site rule does not
+/// excuse it, and that is the rule having teeth: a cascade stays one
+/// site. What brought it under the structural bound is the parser: the
+/// `}` was reported twice on one token — E0207 for the binder the
+/// trailing comma promised, then E0203 for the same `}` as a stray
+/// top-level line — and a stray run whose first token already carries a
+/// report is that report's wreck (the #243 reading: one token, one
+/// report). Five, one site.
+#[test]
+fn struct_body_read_as_let_is_one_wreck_site_within_the_bound() {
+    let (parse, sites) = pinned_case(
+        "memory/recv_view_arg_outside_write.lu",
+        b"struct V {",
+        b"struct V ".len(),
+        1,
+        b" let ",
+    );
+    assert_eq!(sites.len(), 1, "one wreck site, not several: {sites:?}");
+    assert!(
+        sites[0].len() <= 5,
+        "#544 regression: {} cascade diagnostics at one site (max 5, structural): {:?}",
+        sites[0].len(),
+        parse.diagnostics
+    );
+    // And the reading above stays true: the closing `}` is one report.
+    let brace = sites[0].iter().map(|d| d.primary.span.lo).max().unwrap();
+    assert_eq!(
+        parse.diagnostics.iter().filter(|d| d.primary.span.lo == brace).count(),
+        1,
+        "the stray `}}` is reported once: {:?}",
+        parse.diagnostics
+    );
 }
 
 /// The exact #283 counter-example, pinned deterministically (no
