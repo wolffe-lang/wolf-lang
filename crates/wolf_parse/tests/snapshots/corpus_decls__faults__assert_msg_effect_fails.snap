@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 420..469 name=noisy body=Block
+FnDecl 471..592 name=main body=Block

@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 904..985 name=Ring fields=4
+FnDecl 987..1109 name=ring_at body=Block
+StructDecl 1111..1143 name=Span fields=2
+FnDecl 1145..1219 name=continuation body=Block
+FnDecl 1221..1890 name=positions_of body=Block
+FnDecl 1892..2292 name=main body=Block

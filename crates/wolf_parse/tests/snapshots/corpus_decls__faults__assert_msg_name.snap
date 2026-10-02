@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 649..670 name=E fields=1
+FnDecl 672..715 name=bail body=Block
+FnDecl 717..766 name=noisy body=Block
+FnDecl 768..1000 name=main body=Block

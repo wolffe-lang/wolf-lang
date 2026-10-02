@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 177..278 name=Ring pub fields=4
+FnDecl 351..477 name=ring_at pub body=Block
