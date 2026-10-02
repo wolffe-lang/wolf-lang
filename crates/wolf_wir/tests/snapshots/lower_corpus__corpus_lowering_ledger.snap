@@ -818,6 +818,10 @@ typecheck/nested_fn_value.lu: lowers
 typecheck/numlit_ambiguity_named.lu: not mem-clean (pre-wir rungs own it)
 typecheck/numlit_annotation_float.lu: lowers
 typecheck/numlit_arith_through.lu: lowers
+typecheck/numlit_binding_literal.lu: not mem-clean (pre-wir rungs own it)
+typecheck/numlit_binding_literal_call.lu: not mem-clean (pre-wir rungs own it)
+typecheck/numlit_binding_literal_term.lu: not mem-clean (pre-wir rungs own it)
+typecheck/numlit_binding_value_later_use.lu: lowers
 typecheck/numlit_c2f.lu: lowers
 typecheck/numlit_compare_adopts.lu: lowers
 typecheck/numlit_div_float.lu: lowers
