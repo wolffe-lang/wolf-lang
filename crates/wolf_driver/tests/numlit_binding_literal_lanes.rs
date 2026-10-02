@@ -185,12 +185,13 @@ fn a_literal_in_the_initializer_term_takes_i32() {
     every_lane_refuses_the_literal(&corpus("typecheck/numlit_binding_literal_term.lu"));
 }
 
-/// The controls: a later use still types the binding; annotated and
-/// argument-position literals keep their context. Green at trunk.
+/// The controls: a later use still types the binding; annotated,
+/// argument-position and value-beside literals keep their context.
+/// Green at trunk.
 #[test]
 fn a_later_use_still_types_the_binding() {
     every_lane_runs(
         &corpus("typecheck/numlit_binding_value_later_use.lu"),
-        "1 60 3 922337203685477580 5000000001\n",
+        "1 60 3 922337203685477580 5000000001 12\n",
     );
 }

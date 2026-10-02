@@ -1,4 +1,4 @@
-//! check: run(exit=0, stdout="1 60 3 922337203685477580 5000000001\n")
+//! check: run(exit=0, stdout="1 60 3 922337203685477580 5000000001 12\n")
 //! phase: run
 //! conforms: type.numlit.default, type.numlit.value
 //!
@@ -7,7 +7,10 @@
 //! and `var i = 0` compared with `xs.len` is an `int`, exactly as
 //! `[type.numlit.value]` says; their literals fit `i32`, so nothing is
 //! refused. The annotated spellings of #458's literals run everywhere.
-//! A literal in a call argument has the parameter's type.
+//! A literal in a call argument has the parameter's type, and a
+//! literal beside a value in a term has the value's: lobo's
+//! `packed / 10000000000` (`src/acme/acme.lu`) is an `int` division,
+//! which s202's first cut of the rule refused by mistake.
 
 fn take_int(x: int) -> int { x + 1 }
 
@@ -21,6 +24,8 @@ fn main() -> !int {
         i += 1
     }
     let c: int = 922337203685477580
-    print("{take_int(n)} {t} {i} {c} {take_int(5000000000)}")
+    let packed: int = 123456789012
+    let y = packed / 10000000000
+    print("{take_int(n)} {t} {i} {c} {take_int(5000000000)} {y}")
     0
 }
