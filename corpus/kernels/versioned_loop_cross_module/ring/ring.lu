@@ -1,0 +1,21 @@
+//! member: true
+//! conforms: arith.checked
+//!
+//! The far side: `ring_at` reads the ring it is lent.
+
+/// A byte ring over a `List[byte]` (boreutils' `bore.Ring`, cut down).
+pub struct Ring {
+    pub data: List[byte],
+    pub start: int,
+    pub len: int,
+    pub cap: int,
+}
+
+/// The byte `i` places after the oldest; traps `bounds` past the end.
+pub fn ring_at(r: Ring, i: int) -> byte {
+    var k = r.start + i
+    if k >= r.cap {
+        k -= r.cap
+    }
+    r.data[k]
+}

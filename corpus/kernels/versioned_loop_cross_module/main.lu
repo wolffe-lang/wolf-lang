@@ -1,0 +1,62 @@
+//! check: run(exit=0, stdout="4\n")
+//! phase: run
+//! conforms: arith.checked
+//!
+//! s202 (wolf-lang#425): `versioned_loop_inlined_root.lu` with the ring
+//! in its own module, the shape the issue filed (`bore.ring_at` is
+//! cross-module from `src/cut.lu`). The mid-end inlines the imported
+//! `ring_at` into the walk, its `region.foreign` roots land inside the
+//! loop, and the versioner cloned them: `--release` was an ICE
+//! (`[region-root] ... two token roots`) at trunk 12a56b22.
+
+use ring
+
+struct Span { lo: int, hi: int }
+
+fn continuation(b: byte) -> bool {
+    b as int >= 128 && b as int < 192
+}
+
+fn positions_of(mut buf: List[byte], r: ring.Ring, len: int, spans: List[Span]) {
+    for s in spans {
+        var hi = s.hi
+        if hi > len {
+            hi = len
+        }
+        var nf = -1
+        var nt = 0
+        var cs = 0
+        var j = 1
+        while j <= len {
+            if j == len || !continuation(ring.ring_at(r, j)) {
+                if j >= s.lo && j <= hi {
+                    if nf < 0 { nf = cs }
+                    nt = j
+                }
+                cs = j
+            }
+            j += 1
+        }
+        var k = if nf < 0 then 0 else nf
+        while k < nt {
+            (mut buf).push(ring.ring_at(r, k))
+            k += 1
+        }
+    }
+}
+
+fn main() -> !int {
+    var d = List[byte]()
+    for c in "héllo wörld".bytes() {
+        (mut d).push(c)
+    }
+    let n = d.len
+    let r = ring.Ring { data: d, start: 0, len: n, cap: n }
+    var spans = List[Span]()
+    (mut spans).push(Span { lo: 2, hi: 3 })
+    (mut spans).push(Span { lo: 7, hi: 9 })
+    var out = List[byte]()
+    positions_of(mut out, r, n, spans)
+    print("{out.len}")
+    0
+}

@@ -1,0 +1,81 @@
+//! check: run(exit=0, stdout="4\n")
+//! phase: run
+//! conforms: arith.checked
+//!
+//! s202 (wolf-lang#425): boreutils `cut -n`'s walk, reduced. `ring_at`
+//! reads a `List[byte]` it was lent, so it mints its own foreign-region
+//! roots, and inlining puts those `region.foreign` instructions INSIDE
+//! the caller's `while j <= len` loop. The loop is innermost, call-free
+//! and carries a check the range analysis can version away, so the
+//! versioner cloned it, roots and all: two token roots for one region,
+//! and `--release` stopped on `wir verify error [region-root] ... has
+//! two token roots` (an ICE). `WOLF_MIDEND=0`, the default backend and
+//! the checked machine always ran it. A loop holding a root is no
+//! longer versioned; it keeps its checks. The issue's 40-line
+//! extractions missed the trigger: the walk must sit inside an outer
+//! loop of a fn that does not itself inline.
+
+struct Ring {
+    data: List[byte],
+    start: int,
+    len: int,
+    cap: int,
+}
+
+fn ring_at(r: Ring, i: int) -> byte {
+    var k = r.start + i
+    if k >= r.cap {
+        k -= r.cap
+    }
+    r.data[k]
+}
+
+struct Span { lo: int, hi: int }
+
+fn continuation(b: byte) -> bool {
+    b as int >= 128 && b as int < 192
+}
+
+fn positions_of(mut buf: List[byte], r: Ring, len: int, spans: List[Span]) {
+    for s in spans {
+        var hi = s.hi
+        if hi > len {
+            hi = len
+        }
+        var nf = -1
+        var nt = 0
+        var cs = 0
+        var j = 1
+        while j <= len {
+            if j == len || !continuation(ring_at(r, j)) {
+                if j >= s.lo && j <= hi {
+                    if nf < 0 { nf = cs }
+                    nt = j
+                }
+                cs = j
+            }
+            j += 1
+        }
+        var k = if nf < 0 then 0 else nf
+        while k < nt {
+            (mut buf).push(ring_at(r, k))
+            k += 1
+        }
+    }
+}
+
+fn main() -> !int {
+    var d = List[byte]()
+    for c in "héllo wörld".bytes() {
+        (mut d).push(c)
+    }
+    let n = d.len
+    let r = Ring { data: d, start: 0, len: n, cap: n }
+    var spans = List[Span]()
+    (mut spans).push(Span { lo: 2, hi: 3 })
+    (mut spans).push(Span { lo: 7, hi: 9 })
+    var out = List[byte]()
+    positions_of(mut out, r, n, spans)
+    print("{out.len}")
+    0
+}
