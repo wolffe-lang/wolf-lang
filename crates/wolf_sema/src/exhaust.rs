@@ -603,7 +603,11 @@ mod tests {
         let rendered: Vec<String> = ws.iter().map(render_pat).collect();
         assert_eq!(rendered, vec!["eof"]);
         // `Bad(_)`, `eof`: the value half is the witness.
-        let ws = witnesses(&[vec![bad.clone()], vec![eof.clone()]], std::slice::from_ref(&col), 3);
+        let ws = witnesses(
+            &[vec![bad.clone()], vec![eof.clone()]],
+            std::slice::from_ref(&col),
+            3,
+        );
         assert_eq!(ws.len(), 1);
         assert!(matches!(&ws[0], Pat::Ctor { ctor: Ctor::Ok, .. }));
         assert_eq!(render_pat(&ws[0]), "_");
