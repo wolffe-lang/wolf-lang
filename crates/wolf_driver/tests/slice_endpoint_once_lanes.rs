@@ -10,7 +10,8 @@
 //! every caller then evaluated the slice again: the endpoints ran two
 //! or three times. Native, release and lupin 0.1.42 ran them once
 //! (lupin 0.1.42 runs an indexed base's OUTER index twice or three
-//! times — pinned below by version, wolffe-lang/wolf-interp#157).
+//! times, wolffe-lang/wolf-interp#157; it was pinned by version until
+//! the 0.1.43 pairing, r25, and 0.1.43 runs it once).
 //!
 //! Why a driver test beside the corpus rows (s171's lesson, wave 45):
 //! `cargo xtask corpus` runs every `phase: run` entry on the NATIVE
@@ -178,13 +179,6 @@ fn every_lane_says(entry: &Path, want: &str, lupin_pre_mirror: &[(&str, &str)]) 
     }
 }
 
-/// lupin 0.1.42's measured answer on `ctl_slice_endpoints_indexed_base.lu`:
-/// the outer index of a slice's receiver runs more than once
-/// (wolffe-lang/wolf-interp#157). Pinned by version so a newer lupin
-/// that still differs reds by name (s180's design).
-const LUPIN_0_1_42_INDEXED_BASE: &str =
-    "let\ngi\ngi\nlo\nhi\n2\nlen\ngi\ngi\ngi\nlo\nhi\n2\nhole\ngi\ngi\nlo\nhi\n2\n";
-
 /// is60's c14/c18/c19: `let s = xs[lo()..hi()]` (the control),
 /// `let n = xs[lo()..hi()].len`, and `"{xs[lo()..hi()].len}"`. Red at
 /// trunk c2401f05 on the checked lane (`len` twice, `hole` three times).
@@ -222,14 +216,14 @@ fn a_nested_slice_runs_its_inner_endpoints_once() {
 
 /// `g[gi()][lo()..hi()]` bound, as a member base, and in a hole: the
 /// index, then both endpoints, once each. Red at trunk on the checked
-/// lane. lupin 0.1.42 runs `gi` twice, three times and twice
-/// (LUPIN_0_1_42_INDEXED_BASE, measured).
+/// lane. lupin 0.1.42 ran `gi` twice, three times and twice (measured;
+/// pinned until the 0.1.43 pairing, r25, which runs it once).
 #[test]
 fn a_slice_of_an_indexed_element_runs_the_index_and_endpoints_once() {
     every_lane_says(
         &corpus("ctl_slice_endpoints_indexed_base.lu"),
         "let\ngi\nlo\nhi\n2\nlen\ngi\nlo\nhi\n2\nhole\ngi\nlo\nhi\n2\n",
-        &[("0.1.42", LUPIN_0_1_42_INDEXED_BASE)],
+        &[],
     );
 }
 
