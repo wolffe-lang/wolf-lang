@@ -221,8 +221,10 @@ fn every_lane_refuses(entry: &Path, lupin_pre_mirror: &[(&str, &str)]) {
 }
 
 /// `wolf build` on the row: the compiler answers with the diagnostic
-/// and an ordinary failure status — never a signal. Red at trunk
-/// cdde128a with `thread 'main' has overflowed its stack`, rc=134.
+/// and the front door's rejection status — exit 2 (`[conf.exit.static]`:
+/// a rejection is 2, never 1) with no ICE marker — never a signal. Red
+/// at trunk cdde128a with `thread 'main' has overflowed its stack`,
+/// rc=134 and no diagnostic.
 fn build_refuses(entry: &Path) {
     let out_dir = std::env::temp_dir().join(format!(
         "s196-build-{}-{}",
@@ -244,15 +246,16 @@ fn build_refuses(entry: &Path) {
         entry.display(),
         out.status
     );
-    assert!(
-        !out.status.success(),
-        "wolf build on {} succeeded; a `?` under a defer must be refused",
-        entry.display()
-    );
-    assert_ne!(
+    assert_eq!(
         out.status.code(),
         Some(2),
-        "wolf build on {} exited 2 (an ICE or an environment refusal), not a diagnostic:\n{stderr}",
+        "wolf build on {} did not exit 2, the front door's rejection status \
+         ([conf.exit.static]):\n{stderr}",
+        entry.display()
+    );
+    assert!(
+        !stderr.contains(": ICE:"),
+        "wolf build on {} hit an internal compiler error, not a diagnostic:\n{stderr}",
         entry.display()
     );
     assert!(
