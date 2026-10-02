@@ -334,7 +334,9 @@ fn the_corpus_row_agrees_on_both_compiling_tiers() {
 
 /// wolf-lang#542 (found beside #523, same lowering arm): `p[i] op= v`
 /// through a raw pointer is a read-modify-write on every lane. At trunk
-/// 12a56b22 native and release stored `v` (`5`, `31`, `3`).
+/// 12a56b22 native and release stored `v` (`5`, `31`, `3`) and the
+/// checked machine always added and mis-sized a `*i64` element (`8`,
+/// `39`, `0`); lupin 0.1.43 already printed the row's answer.
 #[test]
 fn a_raw_compound_assignment_applies_its_operator_on_every_lane() {
     ensure_rt_staticlib();

@@ -2,11 +2,12 @@
 //! phase: run
 //! conforms: mem.unsafe.raw, gram.expr.assign
 //!
-//! kw01 (wolf-lang#542, a silent wrong answer): `p[i] op= v` through a
-//! raw pointer is a read-modify-write at the pointee's type, exactly
-//! the List form (#55). At trunk 12a56b22 native and release dropped
-//! the operator and stored `v` (`5`, `31`, `3`); the checked machine
-//! and lupin 0.1.43 printed these lines.
+//! kw01 (wolf-lang#542, a silent wrong answer on three lanes): `p[i]
+//! op= v` through a raw pointer is a read-modify-write at the pointee's
+//! type, exactly the List form (#55). At trunk 12a56b22 native and
+//! release dropped the operator and stored `v` (`5`, `31`, `3`); the
+//! checked machine always ADDED and sized a `*i64` element by the wrong
+//! type (`8`, `39`, `0`). lupin 0.1.43 printed these lines.
 
 import c "stdlib.h"
 
