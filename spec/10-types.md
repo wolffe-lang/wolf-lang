@@ -106,7 +106,17 @@ to §`[type.numlit.default]`: `i32` when nothing in the body decides it,
 `take_int(n)` pins it, because defaulting is applied once at the end of
 the enclosing body and a reachable expectation gets there first. Either
 way the VALUE is then fixed: `let x: f64 = n` is **refused** (E0401) —
-the `.0` of adoption is a literal's privilege, not a value's. This is the X3 safety posture and the closed-coercion-set
+the `.0` of adoption is a literal's privilege, not a value's. **The
+literal written at the binding is not that later type.** It has no
+context of its own (`[type.numlit.propagate]`: adoption does not cross
+a binding), so it takes `i32` and must fit it: `let big = 5000000000`
+followed by `take_int(big)` is **E0415** at the literal, because the
+call decides `big`'s type but never the literal's. The same holds for
+every literal the initializer's term is built from (`3000000000 + 1`,
+`-(3000000000)`); a literal in a call argument, a comparison operand or
+a block inside the initializer has that position's context instead.
+The spelling that means a wider literal is the annotation, `let big:
+int = 5000000000`. This is the X3 safety posture and the closed-coercion-set
 discipline of the memory model (`[mem.dyn.unsize]`'s "the coercion table
 grows by addition, never by a new implicit mechanism"): C's
 usual-arithmetic-conversions and Swift's exponential-search overloading
@@ -122,7 +132,19 @@ not fit `i32`", and `trap(overflow)` on lupin 0.1.36; add
 `take_int(big)` and wolf runs it, the later use having pinned `int`
 before the rule fires. The section's own point — a value never
 implicitly changes its type — was never at issue. Witnesses:
-`typecheck/numlit_fit.lu`, `typecheck/numlit_value_refused.lu`.)
+`typecheck/numlit_fit.lu`, `typecheck/numlit_value_refused.lu`.
+Corrected 2026-10-02 by s202 for wolf-lang#458: that last measurement
+was the defect, not the rule. A later `int` use typed the literal as
+well as the binding, so `let c = 922337203685477580` compared with an
+`int` ran as 64-bit on every wolfgang lane while lupin 0.1.43 trapped
+it as outside `i32`. The literal now takes `i32` at the binding on
+checked, native and release (E0415), which is lupin's answer; a later
+use still types the binding, so `let n = 0; take_int(n)` and `var i =
+0` compared with `xs.len` are unchanged. No corpus row and no
+boreutils or lobo build moved. Witnesses:
+`typecheck/numlit_binding_literal.lu`, `numlit_binding_literal_call.lu`,
+`numlit_binding_literal_term.lu`, and the control
+`numlit_binding_value_later_use.lu`.)
 
 ## §3 The numeric cast `[type.numlit.cast]`
 
