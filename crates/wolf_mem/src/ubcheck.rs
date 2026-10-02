@@ -5260,6 +5260,12 @@ impl<'t> Machine<'t> {
                 match opts.open(&path) {
                     Err(e) => Ok(tag(&errtag(&e, declared))),
                     Ok(f) => {
+                        // s199 (#424, `[os.fs.std]`): 0, 1 and 2 are the
+                        // standard streams, so the first open is 3 —
+                        // `wolf_rt::fs::FIRST_HANDLE`, the same table.
+                        if self.files.len() < FS_FIRST_HANDLE {
+                            self.files.resize_with(FS_FIRST_HANDLE, || None);
+                        }
                         let fd = self.files.len() as i64;
                         self.files.push(Some(f));
                         Ok(Flow::Val(Value::Int(fd)))
@@ -5533,7 +5539,8 @@ impl<'t> Machine<'t> {
                 let Some(fd) = int_arg(0) else {
                     return self.refuse("this fs call shape", span);
                 };
-                let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| self.files.get(i)) else {
+                // s199 (#424): 0, 1 and 2 are the standard streams.
+                let Some(f) = self.fs_handle(fd) else {
                     return Ok(tag("io"));
                 };
                 let md = match f.metadata() {
@@ -5558,7 +5565,131 @@ impl<'t> Machine<'t> {
                 let id = self.mint_list(items, span)?;
                 Ok(Flow::Val(Value::List(id)))
             }
+            // s199 (#426, `[os.fs.seek]`, `[os.fs.tell]`,
+            // `[os.fs.read_at]`): the handle's offset, `wolf_rt::fs`'s
+            // three calls row for row. `unseekable` is `ESPIPE`
+            // (`ErrorKind::NotSeekable`); a whence outside {0, 1, 2}
+            // or a start offset below zero is `invalid` before the
+            // host is touched, a result below zero is the host's
+            // `EINVAL` (`InvalidInput`), also `invalid`.
+            "fs_seek" | "fs_tell" => {
+                use std::io::{Seek as _, SeekFrom};
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                // `fs_tell` is a seek of nothing from the cursor.
+                let (off, whence) = if name == "fs_tell" {
+                    (0, 1)
+                } else {
+                    let (Some(off), Some(whence)) = (int_arg(1), int_arg(2)) else {
+                        return self.refuse("this fs call shape", span);
+                    };
+                    (off, whence)
+                };
+                // The handle first, the whence second — the runtime's
+                // order, so a forged handle is `io` whatever `whence`.
+                let Some(f) = self.fs_handle(fd) else {
+                    return Ok(tag("io"));
+                };
+                let to = match whence {
+                    0 => match u64::try_from(off) {
+                        Ok(o) => SeekFrom::Start(o),
+                        Err(_) => return Ok(tag("invalid")),
+                    },
+                    1 => SeekFrom::Current(off),
+                    2 => SeekFrom::End(off),
+                    _ => return Ok(tag("invalid")),
+                };
+                #[cfg(windows)]
+                {
+                    if !f.metadata().is_ok_and(|m| m.is_file()) {
+                        return Ok(tag("unseekable"));
+                    }
+                    let base = match to {
+                        SeekFrom::Start(_) => 0,
+                        SeekFrom::Current(_) => match (&*f).stream_position() {
+                            Ok(p) => i128::from(p),
+                            Err(_) => return Ok(tag("io")),
+                        },
+                        SeekFrom::End(_) => match f.metadata() {
+                            Ok(m) => i128::from(m.len()),
+                            Err(_) => return Ok(tag("io")),
+                        },
+                    };
+                    if let SeekFrom::Current(o) | SeekFrom::End(o) = to
+                        && base + i128::from(o) < 0
+                    {
+                        return Ok(tag("invalid"));
+                    }
+                }
+                let r = (&*f).seek(to);
+                drop(f);
+                match r {
+                    Err(e) => Ok(tag(match e.kind() {
+                        std::io::ErrorKind::NotSeekable => "unseekable",
+                        std::io::ErrorKind::InvalidInput if name == "fs_seek" => "invalid",
+                        _ => "io",
+                    })),
+                    Ok(at) => match i64::try_from(at) {
+                        Ok(at) => Ok(Flow::Val(Value::Int(at))),
+                        Err(_) => Ok(tag("io")),
+                    },
+                }
+            }
+            "fs_read_at" => {
+                let (Some(fd), Some(off), Some(max)) = (int_arg(0), int_arg(1), int_arg(2)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                // The family's order: the handle, the offset, `max`.
+                let Some(f) = self.fs_handle(fd) else {
+                    return Ok(tag("io"));
+                };
+                let Ok(off) = u64::try_from(off) else {
+                    return Ok(tag("invalid"));
+                };
+                if max <= 0 {
+                    drop(f);
+                    return Ok(Flow::Val(self.byte_list_value(&[], span)?));
+                }
+                #[cfg(windows)]
+                {
+                    if !f.metadata().is_ok_and(|m| m.is_file()) {
+                        return Ok(tag("unseekable"));
+                    }
+                }
+                let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
+                let r = fs_read_at_host(&f, &mut buf, off);
+                drop(f);
+                match r {
+                    Err(e) => Ok(tag(match e.kind() {
+                        std::io::ErrorKind::NotSeekable => "unseekable",
+                        _ => "io",
+                    })),
+                    Ok(0) => Ok(tag("eof")),
+                    Ok(n) => {
+                        buf.truncate(n);
+                        self.charge_mem(n as u64)?;
+                        Ok(Flow::Val(self.byte_list_value(&buf, span)?))
+                    }
+                }
+            }
             _ => self.refuse("this io/fs builtin", span),
+        }
+    }
+
+    /// s199 (#424, `[os.fs.std]`): the file `fd` names — for 0, 1 and
+    /// 2 the machine's own standard stream (the `wolf` process's, which
+    /// is the checked program's), duplicated for this one call so the
+    /// offset is shared and nothing the machine holds is ever closed;
+    /// the table's slot otherwise. `None` is a closed or forged handle,
+    /// or a standard stream the process does not have (`io`).
+    fn fs_handle(&self, fd: i64) -> Option<FsHandle<'_>> {
+        if (0..FS_FIRST_HANDLE as i64).contains(&fd) {
+            return std_stream_dup(fd).map(FsHandle::Std);
+        }
+        match usize::try_from(fd).ok().and_then(|i| self.files.get(i)) {
+            Some(Some(f)) => Some(FsHandle::Table(f)),
+            _ => None,
         }
     }
 
@@ -7608,7 +7739,9 @@ impl<'t> Machine<'t> {
             | "fs_remove_dir" | "fs_remove_dir_all" | "fs_rename" | "fs_is_file"
             | "fs_is_dir" | "fs_size" | "fs_modified_ms"
             // s142 (#261): the stat on an open handle.
-            | "fs_fstat" => {
+            | "fs_fstat"
+            // s199 (#426): the handle's offset.
+            | "fs_seek" | "fs_tell" | "fs_read_at" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
@@ -9437,5 +9570,90 @@ fn collect_binding_spans(pat: &GreenNode, out: &mut Vec<Span>) {
     }
     for child in pat.nodes().filter(|n| is_pattern_kind(n.kind)) {
         collect_binding_spans(child, out);
+    }
+}
+
+/// s199 (#424, `[os.fs.std]`): the first number an open answers; 0, 1
+/// and 2 are the standard streams. `wolf_rt::fs::FIRST_HANDLE`'s twin.
+const FS_FIRST_HANDLE: usize = 3;
+
+/// A file an fs call reads through: a standard stream duplicated for
+/// the call, or a slot of the machine's table.
+enum FsHandle<'a> {
+    Std(std::fs::File),
+    Table(&'a std::fs::File),
+}
+
+impl std::ops::Deref for FsHandle<'_> {
+    type Target = std::fs::File;
+    fn deref(&self) -> &std::fs::File {
+        match self {
+            FsHandle::Std(f) => f,
+            FsHandle::Table(f) => f,
+        }
+    }
+}
+
+/// Descriptor 0, 1 or 2, duplicated (`dup`; `DuplicateHandle`): the
+/// duplicate shares the stream's offset, so a seek through it is a
+/// seek of the stream, and dropping it closes only the duplicate.
+fn std_stream_dup(fd: i64) -> Option<std::fs::File> {
+    #[cfg(unix)]
+    {
+        use std::os::fd::AsFd as _;
+        let owned = match fd {
+            0 => std::io::stdin().as_fd().try_clone_to_owned(),
+            1 => std::io::stdout().as_fd().try_clone_to_owned(),
+            2 => std::io::stderr().as_fd().try_clone_to_owned(),
+            _ => return None,
+        };
+        owned.ok().map(std::fs::File::from)
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::io::AsHandle as _;
+        let owned = match fd {
+            0 => std::io::stdin().as_handle().try_clone_to_owned(),
+            1 => std::io::stdout().as_handle().try_clone_to_owned(),
+            2 => std::io::stderr().as_handle().try_clone_to_owned(),
+            _ => return None,
+        };
+        owned.ok().map(std::fs::File::from)
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = fd;
+        None
+    }
+}
+
+/// One positional read at `off`, the cursor untouched — `pread` on
+/// unix; on windows `seek_read` moves the file pointer, so it is put
+/// back. `wolf_rt::fs::read_at`'s twin; an interrupted read is retried.
+fn fs_read_at_host(f: &std::fs::File, buf: &mut [u8], off: u64) -> std::io::Result<usize> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileExt as _;
+        loop {
+            match f.read_at(buf, off) {
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                r => return r,
+            }
+        }
+    }
+    #[cfg(windows)]
+    {
+        use std::io::{Seek as _, SeekFrom};
+        use std::os::windows::fs::FileExt as _;
+        let mut g = f;
+        let at = g.stream_position()?;
+        let r = f.seek_read(buf, off);
+        g.seek(SeekFrom::Start(at))?;
+        r
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (f, buf, off);
+        Err(std::io::Error::from(std::io::ErrorKind::Unsupported))
     }
 }
