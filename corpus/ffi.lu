@@ -27,10 +27,16 @@ fn main() -> !int {
         total += p[0] as int
         c.free(p)
 
-        // typed-operand inline asm (x86-64 variant; target-gated)
+        // typed-operand inline asm, one variant per architecture: the
+        // build's target keeps exactly one (`[gram.item.attr.cfg]`, kw01)
         #[cfg(target = "x86_64")]
         asm {
             "add {t}, 35",
+            t = inout(reg) total,
+        }
+        #[cfg(target = "aarch64")]
+        asm {
+            "add {t}, {t}, #35",
             t = inout(reg) total,
         }
     }

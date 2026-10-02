@@ -1,11 +1,13 @@
 //! check: run(exit=0)
 //! phase: run
-//! conforms: comptime.fn, comptime.types_as_values, perf.contract
+//! conforms: comptime.fn, comptime.types_as_values
 //!
 //! The single metaprogramming tier (D29): full CTFE, types as comptime
-//! values, reflection — no macros at v1. Plus a checked perf contract
-//! (I15): `#[noalloc]` is compiler-VERIFIED against WIR facts, not a
-//! comment that rots.
+//! values, reflection — no macros at v1. (Until kw01 `dot` carried
+//! `#[noalloc]` under a comment claiming the compiler verified it; no
+//! checker exists (wolf-lang#180), so the attribute is now refused by
+//! name, E0817, and `grammar/attr_contract_unimplemented.lu` is its
+//! row.)
 
 // runs entirely at compile time when arguments are comptime-known
 comptime fn fib(n: int) -> int {
@@ -19,8 +21,6 @@ comptime fn field_count(T: type) -> int {
 
 struct Vec3 { x: f64, y: f64, z: f64 }
 
-// the compiler PROVES this allocates nothing, or rejects it (I15)
-#[noalloc]
 fn dot(a: Vec3, b: Vec3) -> f64 {
     a.x * b.x + a.y * b.y + a.z * b.z
 }
