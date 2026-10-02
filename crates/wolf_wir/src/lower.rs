@@ -16718,6 +16718,21 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
             }
             TyKind::ErrUnion(ok, row) => {
+                // A statically-empty row lowers as its plain ok value
+                // (`wir_ty`'s rule, which `else` and `?` already honour):
+                // there is no err half to test, and the hole is the ok
+                // payload's own rendering (wolf-lang#393, where
+                // `let x = f()` of an inferred-empty `!int` reached
+                // `eu.ok` on a plain i64 and panicked).
+                let plain = v.is_some_and(|v| {
+                    !matches!(
+                        self.b.module.types.get(self.b.func.value_ty(v)),
+                        types::TypeData::Eu { .. }
+                    )
+                });
+                if row_is_empty(table, row) || plain {
+                    return self.emit_value(sink, v, table, ok, 0, span);
+                }
                 let Some(v) = v else {
                     return Err(refuse("a valueless union in interpolation", span));
                 };
@@ -19769,10 +19784,22 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(sv) = sv else {
             return Err(refuse("match on a valueless scrutinee", e.span));
         };
+        let mut scrut_sema = scrut_sema;
         if let TyKind::ErrUnion(ok_sema, row_sema) =
             self.table.kind(self.strip_sema(scrut_sema)).clone()
         {
-            return self.lower_match_fallible(e, d, sv, ok_sema, row_sema, want);
+            let plain = !matches!(
+                self.b.module.types.get(self.b.func.value_ty(sv)),
+                types::TypeData::Eu { .. }
+            );
+            if !(row_is_empty(self.table, row_sema) || plain) {
+                return self.lower_match_fallible(e, d, sv, ok_sema, row_sema, want);
+            }
+            // A statically-empty row lowered as its plain ok value
+            // (wolf-lang#393): no row arm can name a tag, so every arm
+            // is a value arm over the ok type, and the match is the
+            // ordinary one over that type.
+            scrut_sema = ok_sema;
         }
         let domain = self.match_domain(scrut_sema, e.span)?;
         // ONE discriminant read: payload-carrying enum/row values are
