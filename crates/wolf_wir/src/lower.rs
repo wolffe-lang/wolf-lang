@@ -3442,12 +3442,93 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // trailing value is already an SSA value — formed before the
         // defers run, [mem.model.order]).
         let si = self.scopes.len() - 1;
-        let flowing = self.run_one_scope_exit(si, false);
+        // s196 (wolf-lang#499, ruling #20, `[mem.model.order]`): a
+        // block whose value is an error has left on the error path, so
+        // its errdefer entries run — exactly as `emit_return` decides
+        // for a function's tail. The fork is emitted only when this
+        // scope holds an errdefer AND the value is a `!T`; every other
+        // block's exit is unchanged.
+        let forks = match out {
+            Some(val) => {
+                self.scopes[si].defers.iter().any(|d| d.errdefer)
+                    && matches!(
+                        self.b.module.types.get(self.b.func.value_ty(val)),
+                        types::TypeData::Eu { .. }
+                    )
+            }
+            None => false,
+        };
+        let flowing = if forks {
+            self.run_scope_exit_on_row(si, out.expect("forks only with a value"))
+        } else {
+            self.run_one_scope_exit(si, false)
+        };
         self.scopes.pop();
         if !flowing? {
             return Ok(Flow::Diverged);
         }
         Ok(Flow::Val(out))
+    }
+
+    /// A block's fall-through exit when its value `val` is a `!T` and
+    /// the scope holds an errdefer (s196, wolf-lang#499): decide the
+    /// path from the value's err bit — statically where the union was
+    /// built right here, otherwise by a branch whose two edges run the
+    /// scope's chain on the error path and on the ok path and rejoin.
+    /// The value itself is already formed and dominates the join, so
+    /// the join carries no parameter.
+    fn run_scope_exit_on_row(&mut self, si: usize, val: Value) -> R<bool> {
+        let def_op = match self.b.func.values[val].def {
+            crate::ir::ValueDef::Result(di, _) => Some(self.b.func.insts[di].op),
+            _ => None,
+        };
+        match def_op {
+            Some(Opcode::EuMakeErr) => return self.run_one_scope_exit(si, true),
+            Some(Opcode::EuMakeOk) => return self.run_one_scope_exit(si, false),
+            _ => {}
+        }
+        let is_err = self.b.ins_eu_is_err(val);
+        if let Some(c) = self.b.as_bool_const(is_err) {
+            return self.run_one_scope_exit(si, c);
+        }
+        let err_bb = self.b.create_block();
+        let ok_bb = self.b.create_block();
+        self.b.ins_br(is_err, err_bb, &[], ok_bb, &[]);
+        self.b.seal_block(err_bb);
+        self.b.seal_block(ok_bb);
+        self.b.switch_to_block(err_bb);
+        self.b.gvn_push_scope();
+        let err_flowing = self.run_one_scope_exit(si, true);
+        self.b.gvn_pop_scope();
+        let err_flowing = err_flowing?;
+        let err_end = self.b.current_block();
+        self.b.switch_to_block(ok_bb);
+        self.b.gvn_push_scope();
+        let ok_flowing = self.run_one_scope_exit(si, false);
+        self.b.gvn_pop_scope();
+        let ok_flowing = ok_flowing?;
+        let ok_end = self.b.current_block();
+        match (err_flowing, ok_flowing) {
+            (false, false) => Ok(false),
+            (true, false) => {
+                self.b.switch_to_block(err_end);
+                Ok(true)
+            }
+            (false, true) => {
+                self.b.switch_to_block(ok_end);
+                Ok(true)
+            }
+            (true, true) => {
+                let join = self.b.create_block();
+                self.b.switch_to_block(err_end);
+                self.b.ins_jmp(join, &[]);
+                self.b.switch_to_block(ok_end);
+                self.b.ins_jmp(join, &[]);
+                self.b.seal_block(join);
+                self.b.switch_to_block(join);
+                Ok(true)
+            }
+        }
     }
 
     // ------------------------------------------- exit edges (s27) ----
