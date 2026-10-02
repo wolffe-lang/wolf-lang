@@ -1,0 +1,20 @@
+//! check: fail(E0817)
+//! phase: resolve
+//! conforms: gram.item.attr
+//!
+//! kw01 (K13 — wolf-lang#519, #180): `#[noalloc]` is a known attribute
+//! nothing implements. A promise no checker keeps is refused by name:
+//! before kw01 this function allocated a `List` under the attribute and
+//! every machine ran it (the book's exercise 20-5 shape).
+
+#[noalloc]
+fn build() -> List[int] {
+    var xs = List[int]()
+    (mut xs).push(1)
+    xs
+}
+
+fn main() -> int {
+    let xs = build()
+    xs.len - 1
+}

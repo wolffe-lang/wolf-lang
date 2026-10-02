@@ -1,0 +1,33 @@
+//! check: run(exit=0, stdout="3\n7\n")
+//! phase: run
+//! conforms: gram.item.attr, gram.attr.index, abi.layout.c
+//!
+//! kw01 (K13 — wolf-lang#519): the control. The closed set refuses
+//! what nothing reads and keeps what is implemented: `#[repr(c)]` on a
+//! struct, an `#[index(1)]` statement marker, a `#[budget]` on a
+//! comptime evaluation, and a `cfg` that holds on every host compile
+//! and run unchanged on every lane.
+
+#[repr(c)]
+struct Pair {
+    a: u8,
+    b: u32,
+}
+
+comptime fn seven() -> int {
+    7
+}
+
+fn main() -> int {
+    let p = Pair { a: 1, b: 2 }
+    var xs = List[int]()
+    (mut xs).push(p.a as int)
+    (mut xs).push(p.b as int)
+    #[index(1)]
+    let total = xs[1] + xs[2]
+    print("{total}")
+    #[budget(fuel = 1000000)]
+    const S = seven()
+    print("{S}")
+    0
+}

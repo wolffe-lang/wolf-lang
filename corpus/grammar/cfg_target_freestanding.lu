@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="hosted\n1\n")
+//! phase: run
+//! conforms: gram.item.attr.cfg
+//!
+//! kw01 (K13; K1 — wolf-lang#519): no hosted build is the freestanding
+//! target `x86_64-unknown-none`, so what it gates is dropped before
+//! resolution on every host — never resolved, typed or lowered. The
+//! gated function does not type-check (it returns a string as an
+//! `int`) and the gated statement names a function that does not
+//! exist; before kw01 both were compiled and the program was refused.
+
+#[cfg(target = "x86_64-unknown-none")]
+fn kernel_only() -> int {
+    "not an int"
+}
+
+fn main() -> int {
+    var n = 1
+    #[cfg(target = "x86_64-unknown-none")]
+    n = kernel_only() + serial_port()
+    print("hosted")
+    print("{n}")
+    0
+}

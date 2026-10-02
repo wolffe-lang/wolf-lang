@@ -1,0 +1,17 @@
+//! check: fail(E0817)
+//! phase: resolve
+//! conforms: gram.item.attr
+//!
+//! kw01 (K13; K6 — wolf-lang#519): `#[section(".text.boot")]` is ruled
+//! (K6) and not implemented (kw09). Before kw01 the function landed in
+//! `.text` with no diagnostic (kw00's `f6_section.lu`): a kernel's boot
+//! path would have been linked wherever the linker liked.
+
+#[section(".text.boot")]
+fn boot() -> int {
+    1
+}
+
+fn main() -> int {
+    boot() - 1
+}

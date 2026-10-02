@@ -1,0 +1,17 @@
+//! check: fail(E0817)
+//! phase: resolve
+//! conforms: gram.item.attr.cfg
+//!
+//! kw01 (K13 — wolf-lang#519): a `target` that names no target wolf
+//! knows is refused, never read as "false" — a typo must not silently
+//! drop code. kw00's `f4_attrs.lu` shape: at trunk 12a56b22 the gated
+//! function compiled and ran on all four machines.
+
+#[cfg(target = "no-such-target")]
+fn only_elsewhere() -> int {
+    2
+}
+
+fn main() -> int {
+    only_elsewhere() - 2
+}

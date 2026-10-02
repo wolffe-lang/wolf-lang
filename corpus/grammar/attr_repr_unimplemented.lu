@@ -1,0 +1,20 @@
+//! check: fail(E0817)
+//! phase: resolve
+//! conforms: gram.item.attr, abi.layout.c
+//!
+//! kw01 (K13, K4 — wolf-lang#519): `#[repr(c, packed)]` asks for a
+//! layout nothing implements yet (KWC F4's later half, kw08). lc00 saw
+//! it accepted with no effect: a C caller passing a packed struct read
+//! `0x0` for `0xdeadbeef`. `c` alone is implemented; `packed` is
+//! refused by name.
+
+#[repr(c, packed)]
+struct P {
+    a: u8,
+    b: u32,
+}
+
+fn main() -> int {
+    let p = P { a: 1, b: 2 }
+    p.b as int - 2
+}

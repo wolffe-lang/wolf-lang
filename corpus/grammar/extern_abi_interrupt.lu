@@ -1,0 +1,18 @@
+//! check: fail(E0818)
+//! phase: resolve
+//! conforms: abi.c.seams
+//!
+//! kw01 (K7, STATUS #31 — wolf-lang#524): `"c"` is the one ABI string.
+//! kw00's `f7_isr.lu`: at trunk 12a56b22 this compiled on all four
+//! machines as an ordinary mangled wolf function ending in `ret`, so a
+//! kernel installing it as an interrupt handler would corrupt its stack
+//! on the first interrupt. Interrupts enter through an assembly
+//! trampoline that calls an `export fn` (K7); the string is refused.
+
+extern "x86-interrupt" fn kw_isr() {
+    let x = 1
+}
+
+fn main() -> int {
+    0
+}

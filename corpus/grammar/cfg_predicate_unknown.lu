@@ -1,0 +1,17 @@
+//! check: fail(E0817)
+//! phase: resolve
+//! conforms: gram.item.attr.cfg
+//!
+//! kw01 (K13 — wolf-lang#519): `target = "…"` is the one predicate.
+//! `cfg(unix)` (Rust's spelling) is a predicate this compiler cannot
+//! decide, so it is refused by name, and the node is kept: one mistake
+//! is one diagnostic, not a cascade at `main`'s call.
+
+#[cfg(unix)]
+fn on_unix() -> int {
+    0
+}
+
+fn main() -> int {
+    on_unix()
+}

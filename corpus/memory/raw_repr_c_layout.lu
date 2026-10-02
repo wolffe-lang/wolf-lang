@@ -1,0 +1,62 @@
+//! check: run(exit=0, stdout="1 0 0 0 2 0 0 0 3 0 0 0 4 0 0 0 5 0 0 0 6 0 0 0\n17 3735928559 34\n")
+//! phase: run
+//! conforms: abi.layout.c, mem.unsafe.raw
+//!
+//! kw01 (K4, STATUS #31 — wolf-lang#523, a silent wrong answer at the C
+//! membrane): a `#[repr(c)]` struct stored or loaded through a raw
+//! pointer has the C layout, `{u8, u32, u8}` at offsets 0 4 8, size 12,
+//! so `p[1]` starts at byte 12. At trunk 12a56b22 native and release
+//! wrote it packed (`1 2 0 0 0 3`, stride 6) and read `b` from offset 1.
+//! The second line reads the struct back from bytes laid down at C's
+//! offsets, as a C program would leave them. The checked machine and
+//! lupin refuse the aggregate store by name (a raw write of a
+//! non-scalar); `repr_c_raw_layout.rs` holds a real C compiler to both
+//! directions on both compiling tiers.
+
+import c "stdlib.h"
+
+#[repr(c)]
+struct C3 {
+    a: u8,
+    b: u32,
+    c: u8,
+}
+
+fn main() -> int {
+    var out = 0
+    // # Safety: the buffer is 32 zeroed bytes from calloc; every access
+    // (two 12-byte elements, 24 single bytes, one element read) stays
+    // inside it, and it is freed exactly once.
+    unsafe {
+        let p = c.calloc(1, 32) as *C3
+        p[0] = C3 { a: 1, b: 2, c: 3 }
+        p[1] = C3 { a: 4, b: 5, c: 6 }
+        let q = p as *u8
+        var i = 0
+        var s = ""
+        while i < 24 {
+            if i > 0 {
+                s = s + " "
+            }
+            s = s + "{q[i] as int}"
+            i += 1
+        }
+        print(s)
+        // C's image of { 0x11, 0xdeadbeef, 0x22 }, padding zeroed.
+        var j = 0
+        while j < 12 {
+            q[j] = 0
+            j += 1
+        }
+        q[0] = 17
+        q[4] = 239
+        q[5] = 190
+        q[6] = 173
+        q[7] = 222
+        q[8] = 34
+        let v = p[0]
+        print("{v.a as int} {v.b as int} {v.c as int}")
+        c.free(q)
+    }
+    out
+}

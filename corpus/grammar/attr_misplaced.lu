@@ -1,0 +1,23 @@
+//! check: fail(E0817)
+//! phase: resolve
+//! conforms: gram.item.attr
+//!
+//! kw01 (K13 — wolf-lang#519): an implemented attribute where no pass
+//! reads it means nothing, so it is refused there. `#[repr(c)]` lays
+//! out a struct, not a function; `#[consttime]` is a function's
+//! contract, not a struct's. Both compiled silently at trunk.
+
+#[repr(c)]
+fn f() -> int {
+    1
+}
+
+#[consttime]
+struct S {
+    x: int,
+}
+
+fn main() -> int {
+    let s = S { x: 1 }
+    f() - s.x
+}

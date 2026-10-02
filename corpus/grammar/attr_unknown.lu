@@ -1,0 +1,13 @@
+//! check: fail(E0817)
+//! phase: resolve
+//! conforms: gram.item.attr
+//!
+//! kw01 (K13, STATUS #31 — wolf-lang#519): the attribute set is
+//! closed, so a name no pass reads is refused by name instead of
+//! compiled and ignored. kw00's probe `f4_attrs.lu` put `#[frobnicate]`
+//! on `main`; at trunk 12a56b22 it ran on all four machines.
+
+#[frobnicate(yes)]
+fn main() -> int {
+    0
+}

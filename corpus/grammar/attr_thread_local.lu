@@ -1,0 +1,15 @@
+//! check: fail(E0817)
+//! phase: resolve
+//! conforms: gram.item.attr
+//!
+//! kw01 (K13; STATUS #32 R4 — wolf-lang#519, #517): `#[thread_local]`
+//! is ruled and waits on its own lane, so it is refused by name. Before
+//! kw01 it was accepted silently (lc00's C6 probe) and the module `var`
+//! was refused later for an unrelated reason.
+
+#[thread_local]
+var errno_value: int = 0
+
+fn main() -> int {
+    0
+}

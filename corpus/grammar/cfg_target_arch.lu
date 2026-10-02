@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="64\n")
+//! phase: run
+//! conforms: gram.item.attr.cfg
+//!
+//! kw01 (K13 — wolf-lang#519): `#[cfg(target = "S")]` is evaluated
+//! against the build's target; S names the triple or its architecture.
+//! Exactly one `arch_bits` survives on an x86-64 host and on an
+//! aarch64 host, so the program is one truth on every tier-1 host.
+//! Before kw01 nothing read `cfg`, both definitions stayed, and the
+//! module defined `arch_bits` twice (E0302).
+
+#[cfg(target = "x86_64")]
+fn arch_bits() -> int {
+    64
+}
+
+#[cfg(target = "aarch64")]
+fn arch_bits() -> int {
+    64
+}
+
+fn main() -> int {
+    print("{arch_bits()}")
+    0
+}
