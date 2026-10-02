@@ -6,13 +6,21 @@
 //! index value with no representable predecessor — int.min — traps
 //! `overflow` before the bounds question is asked. Priced and
 //! accepted in D61; every other out-of-range index traps `bounds`.
+//!
+//! s202 (wolf-lang#458): `i` is annotated. Unannotated, the literal
+//! `9223372036854775807` is an `i32` literal at the binding (E0415);
+//! this row ran only because the later index use typed the literal as
+//! well as the binding, the defect #458 removes. lupin 0.1.43 trapped
+//! the unannotated row at the literal, not at the shift: the same
+//! verdict for another reason. Annotated, all four machines trap at
+//! `xs[i]`, the shift this row is about.
 
 #![index(1)]
 
 fn main() -> !int {
     var xs = List[int]()
     (mut xs).push(10)
-    let i = 0 - 9223372036854775807 - 1
+    let i: int = 0 - 9223372036854775807 - 1
     let v = xs[i]                  // TRAP overflow: i - 1 has no home
     v
 }
