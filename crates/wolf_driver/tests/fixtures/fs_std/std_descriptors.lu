@@ -1,0 +1,75 @@
+//! member: false
+//! s199 (wolf-lang#424, `[os.fs.std]`) — descriptors 0, 1 and 2 are
+//! the process's standard streams for `fs_fstat`, `fs_seek`, `fs_tell`
+//! and `fs_read_at`. Not a corpus row: its answer depends on what the
+//! harness wires to descriptor 0, so `fs_std_lanes.rs` runs it with
+//! standard input a regular file and then a pipe, on every machine.
+//!
+//! With a file on descriptor 0: `kind=0`, the size, a seek to the end
+//! answering the size, a positional read of the first four bytes, and
+//! the cursor still at 0. With a pipe: `kind=2`, and every offset call
+//! `unseekable`.
+
+fn fstat_line(fd: int) -> str {
+    let st = fs_fstat(fd) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+    }
+    if st[0] == 0 {
+        "kind=0 size={st[1]}"
+    } else {
+        "kind={st[0]}"
+    }
+}
+
+fn seek_line(fd: int) -> str {
+    let at = fs_seek(fd, 0, 2) else |e| {
+        return match e {
+            invalid => "invalid",
+            unseekable => "unseekable",
+            io => "io",
+        }
+    }
+    let back = fs_seek(fd, 0, 0) else |e| {
+        return match e {
+            invalid => "invalid",
+            unseekable => "unseekable",
+            io => "io",
+        }
+    }
+    "end={at} back={back}"
+}
+
+fn tell_line(fd: int) -> str {
+    let at = fs_tell(fd) else |e| {
+        return match e {
+            unseekable => "unseekable",
+            io => "io",
+        }
+    }
+    "{at}"
+}
+
+fn read_at_line(fd: int) -> str {
+    let got = fs_read_at(fd, 0, 4) else |e| {
+        return match e {
+            eof => "eof",
+            invalid => "invalid",
+            unseekable => "unseekable",
+            io => "io",
+        }
+    }
+    str_from_utf8(got) else "utf8"
+}
+
+fn main() -> int {
+    print("fstat0 {fstat_line(0)}")
+    print("seek0 {seek_line(0)}")
+    print("read_at0 {read_at_line(0)}")
+    print("tell0 {tell_line(0)}")
+    print("fstat2 {fstat_line(2)}")
+    0
+}

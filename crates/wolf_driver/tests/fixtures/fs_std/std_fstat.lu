@@ -1,0 +1,38 @@
+//! member: false
+//! s199 (wolf-lang#424, `[os.fs.std]`, `[os.fs.fstat]`) — `fs_fstat`
+//! on descriptors 0 and 2, and the first handle an open answers. Only
+//! calls that existed before s199, so the same file runs on a compiler
+//! that predates the fix and shows the defect: there 0..2 were indices
+//! into the runtime's own table and every one answered `io`.
+//!
+//! Not a corpus row: its answer depends on what the harness wires to
+//! descriptor 0. `fs_std_lanes.rs` runs it with standard input a
+//! regular file (`kind=0` and the size) and a pipe (`kind=2`); the
+//! harness always pipes descriptor 2, so `fstat2` is `kind=2`.
+
+fn fstat_line(fd: int) -> str {
+    let st = fs_fstat(fd) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+    }
+    if st[0] == 0 {
+        "kind=0 size={st[1]}"
+    } else {
+        "kind={st[0]}"
+    }
+}
+
+fn main() -> !int {
+    print("fstat0 {fstat_line(0)}")
+    print("fstat2 {fstat_line(2)}")
+    let path = "target/s199-std-fstat.tmp"
+    fs_write_text(path, "x")?
+    let fd = fs_open(path)?
+    print("first_handle_above_2={fd > 2}")
+    fs_close(fd)?
+    fs_remove(path)?
+    0
+}
