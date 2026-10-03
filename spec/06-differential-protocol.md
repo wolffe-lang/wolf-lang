@@ -54,8 +54,24 @@ One JSON object on stdout. Schema (`"protocol": 1`):
 - `[proto.record.verdict]` `verdict` is one of:
   `pass` (the ladder stopped clean and nothing executed —
   `[proto.record.pass]`), `fail(CODE)` (rejected;
-  first diagnostic's code), `exit(N)`, `trap(kind)` (kind per
-  `[conf.trap.set]`), `ub(anchor)`, `unsupported`.
+  first diagnostic's code, first per `[proto.record.first]`), `exit(N)`,
+  `trap(kind)` (kind per `[conf.trap.set]`), `ub(anchor)`, `unsupported`.
+- `[proto.record.first]` Which diagnostic is first (ruled 2026-10-02,
+  wolf-lang#377). Among the ERROR diagnostics of the rung that failed,
+  the one whose span starts at the **earliest byte offset** is first;
+  at the same offset the **earlier phase** is first — lex, then parse,
+  then resolve, then every later phase. Across the files of one rung the
+  entry file comes first. Lex and parse are ONE rung for this question:
+  the parser reads the lexer's recovered tokens over the whole file, so
+  a parse error that starts before the file's first lex error is the
+  first diagnostic, and `phase_reached` is the phase of the diagnostic
+  that won. An implementation that stops at its first error in each
+  phase still answers with the first under this order. Two consequences
+  worth stating: a boundary diagnostic sits at its opener, so an
+  unclosed `(` before an unterminated string inside it is first (E0202
+  over E0102); and two diagnostics at one offset in one phase are not
+  ordered here — what code that fact carries is the registry's question,
+  not this clause's.
 - `[proto.record.pass]` `pass` is the ladder's CLEAN STOP: every rung
   through `phase_reached` completed and found nothing to report, and
   nothing was executed. It arises two ways and they are one fact —
