@@ -181,7 +181,13 @@ fn a_call_no_listed_source_defines_is_e1306() {
             &manifest("[\"rt_stub.S\"]"),
         );
         let mut args = vec![
-            "build", "kmain.lu", "--target", TARGET, "--emit=obj", "-o", "k.o",
+            "build",
+            "kmain.lu",
+            "--target",
+            TARGET,
+            "--emit=obj",
+            "-o",
+            "k.o",
         ];
         if tier == "release" {
             args.push("--release");
@@ -287,7 +293,9 @@ fn the_manifest_refuses_a_missing_source_a_non_list_and_a_dependency_by_name() {
     let out = wolf_in(&dir, &["build", "main.lu", "-o", "x"]);
     let err = text(&out.stderr);
     assert!(
-        !out.status.success() && err.contains("boot/nope.S") && !err.contains("unknown manifest key"),
+        !out.status.success()
+            && err.contains("boot/nope.S")
+            && !err.contains("unknown manifest key"),
         "a listed `asm` source that does not exist is refused naming it (exit {:?}):\n{err}",
         out.status.code()
     );
@@ -369,7 +377,12 @@ mod linked {
             let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
             let r = tool(
                 &cc,
-                &["-c", dir.join("start.S").to_str().unwrap(), "-o", start.to_str().unwrap()],
+                &[
+                    "-c",
+                    dir.join("start.S").to_str().unwrap(),
+                    "-o",
+                    start.to_str().unwrap(),
+                ],
             );
             assert!(r.status.success(), "assemble start.S: {}", text(&r.stderr));
             let exe = dir.join("kmain.elf");
@@ -388,7 +401,11 @@ mod linked {
             };
             assert!(r.status.success(), "{tier}: link: {}", text(&r.stderr));
             let out = tool(exe.to_str().unwrap(), &[]);
-            assert_eq!(text(&out.stdout), "KWC\n", "{tier}: the kernel's port writes");
+            assert_eq!(
+                text(&out.stdout),
+                "KWC\n",
+                "{tier}: the kernel's port writes"
+            );
             assert_eq!(out.status.code(), Some(33), "{tier}: kmain's result");
         }
     }
