@@ -1,0 +1,16 @@
+//! check: fail(E1301)
+//! phase: typecheck
+//! conforms: mem.unsafe.volatile, mem.unsafe.scope, mem.codes
+//!
+//! kw07: a volatile read is an access through the pointer, so it needs
+//! the `unsafe` ring like `p[0]` does (`[mem.unsafe.volatile]`). The
+//! pointer itself is made inside the ring and is inert outside it.
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: a live 8-byte allocation, leaked (the row is the read).
+    let p = unsafe { c.calloc(1, 8) as *u32 }
+    let v = p.read_volatile()      // E1301: an access outside the ring
+    v as int
+}

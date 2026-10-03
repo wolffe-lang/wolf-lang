@@ -1,0 +1,23 @@
+//! check: run(exit=trap(ub))
+//! phase: wir
+//! conforms: mem.unsafe.volatile.3, mem.ub, mem.prov.region
+//!
+//! kw07: on an allocation a volatile access is an ordinary access
+//! (`[mem.unsafe.volatile.3]`), so a volatile read after `c.free` is §7
+//! row P1 exactly as `p[0]` is (`unsafe_ub_uaf.lu`): the checked machine
+//! traps `ub` with x-ub-row P1. What the compiled tiers do is undefined —
+//! they compile and run it — so `wir` is the deepest phase this header
+//! can promise, as for the ordinary read.
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: DELIBERATELY UNSOUND — the read after free is the row.
+    unsafe {
+        let p = c.malloc(8) as *u32
+        p.write_volatile(7)
+        c.free(p as *u8)
+        let v = p.read_volatile()  // UB P1
+        v as int
+    }
+}

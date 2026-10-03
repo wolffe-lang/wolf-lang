@@ -1,0 +1,63 @@
+//! check: run(exit=0, stdout="255 65535 4294967295 9223372036854775807\n-128 -32768 -2147483648 -9223372036854775808\n200 4 772\n17367812 5\n")
+//! phase: run
+//! conforms: mem.unsafe.volatile, mem.unsafe.volatile.1, mem.unsafe.volatile.3
+//!
+//! kw07 (K3 = B, STATUS #31): `p.read_volatile()` / `p.write_volatile(v)`
+//! on every pointee `[mem.unsafe.volatile.1]` admits, through one 8-byte
+//! allocation. On an allocation a volatile access is an ordinary access of
+//! the pointee's width (`[mem.unsafe.volatile.3]`): the widths overlap
+//! little-endian exactly as `p[i]` does, and the last line mixes the two
+//! spellings in both directions. Before kw07 every machine answered
+//! `unsupported` ("this raw-pointer operation"); lupin 0.1.45 still does
+//! (pinned by version, wolf-interp#XXX).
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: one live, zeroed 8-byte allocation from calloc; every
+    // access below is at its offset 0 (aligned for every width) or, for
+    // `p[2]`, inside it; freed once at the end.
+    unsafe {
+        let p = c.calloc(1, 8) as *u8
+        let h = p as *u16
+        let w = p as *u32
+        let d = p as *u64
+        p.write_volatile(255)
+        let a = p.read_volatile()
+        h.write_volatile(65535)
+        let b = h.read_volatile()
+        w.write_volatile(4294967295)
+        let cc = w.read_volatile()
+        d.write_volatile(9223372036854775807)
+        let dd = d.read_volatile()
+        print("{a} {b} {cc} {dd}")
+        let s1 = p as *i8
+        let s2 = p as *i16
+        let s4 = p as *i32
+        let s8 = p as *i64
+        s1.write_volatile(0 - 127 - 1)
+        let e1 = s1.read_volatile()
+        s2.write_volatile(0 - 32767 - 1)
+        let e2 = s2.read_volatile()
+        s4.write_volatile(0 - 2147483647 - 1)
+        let e4 = s4.read_volatile()
+        s8.write_volatile(0 - 9223372036854775807 - 1)
+        let e8 = s8.read_volatile()
+        print("{e1} {e2} {e4} {e8}")
+        let by = p as *byte
+        by.write_volatile(200 as byte)
+        let g = by.read_volatile() as int
+        d.write_volatile(0)
+        w.write_volatile(16909060)
+        let lo = p.read_volatile()
+        let lo16 = h.read_volatile()
+        print("{g} {lo} {lo16}")
+        p[2] = 9
+        let mixed = w.read_volatile()
+        p.write_volatile(5)
+        let back = p[0]
+        print("{mixed} {back}")
+        c.free(p)
+    }
+    0
+}

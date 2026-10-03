@@ -1,0 +1,19 @@
+//! check: fail(E1307)
+//! phase: resolve
+//! conforms: mem.unsafe.volatile.1, mem.codes
+//!
+//! kw07: a `bool` pointee is not a volatile pointee
+//! (`[mem.unsafe.volatile.1]`): its value set is restricted (T1), and a
+//! device can write a 2 there. Read the `u8` and compare it.
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: a live 8-byte allocation, freed once.
+    unsafe {
+        let p = c.calloc(1, 8) as *bool
+        let v = p.read_volatile()  // E1307: `*bool`
+        c.free(p as *u8)
+        if v { 1 } else { 0 }
+    }
+}

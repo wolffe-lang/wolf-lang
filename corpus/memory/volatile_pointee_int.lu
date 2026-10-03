@@ -1,0 +1,18 @@
+//! check: fail(E1307)
+//! phase: resolve
+//! conforms: mem.unsafe.volatile.1, mem.codes
+//!
+//! kw07: `int` names the platform's integer, not a width, so it is not a
+//! volatile pointee (`[mem.unsafe.volatile.1]`); `*i64` is the spelling.
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: a live 8-byte allocation, freed once.
+    unsafe {
+        let p = c.calloc(1, 8) as *int
+        p.write_volatile(7)        // E1307: `*int`
+        c.free(p as *u8)
+    }
+    0
+}
