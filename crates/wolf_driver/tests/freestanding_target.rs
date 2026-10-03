@@ -320,6 +320,28 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`spawn`",
             "hosted runtime",
         ),
+        // s199's positional I/O (#426): host builtins like any other.
+        (
+            "fs_seek",
+            "",
+            "let at = fs_seek(0, 0, 0) else |e| {\n        return 0\n    }\n    at",
+            "`fs_seek`",
+            "hosted runtime",
+        ),
+        (
+            "fs_tell",
+            "",
+            "let at = fs_tell(0) else |e| {\n        return 0\n    }\n    at",
+            "`fs_tell`",
+            "hosted runtime",
+        ),
+        (
+            "fs_read_at",
+            "",
+            "let got = fs_read_at(0, 0, 4) else |e| {\n        return 0\n    }\n    got.len",
+            "`fs_read_at`",
+            "hosted runtime",
+        ),
         (
             "float",
             "",
