@@ -2,7 +2,7 @@
 //!
 //! An interpretive checker over sema's typed HIR plus this crate's own
 //! facts: it executes the SAME dynamic semantics the corpus pins, at
-//! the depth needed to decide `[mem.ub]` rows P1–P6/L1/L2/T1 on
+//! the depth needed to decide `[mem.ub]` rows P1–P6/L1–L3/T1 on
 //! unsafe-tier programs. It is deliberately NOT a second full
 //! interpreter — the independent oracle is wolf-interp's is04 machine;
 //! this machine exists so the *compiler* can check the model it
@@ -85,6 +85,9 @@ pub enum UbRow {
     P6,
     L1,
     L2,
+    /// kw07: a volatile access through a misaligned address
+    /// (`[mem.unsafe.volatile.3]`).
+    L3,
     T1,
 }
 
@@ -99,6 +102,7 @@ impl UbRow {
             UbRow::P6 => "P6",
             UbRow::L1 => "L1",
             UbRow::L2 => "L2",
+            UbRow::L3 => "L3",
             UbRow::T1 => "T1",
         }
     }
@@ -112,6 +116,7 @@ impl UbRow {
             UbRow::P5 => "mem.unsafe.raw.2",
             UbRow::P6 => "mem.unsafe.door",
             UbRow::L2 => "mem.unsafe.raw.1",
+            UbRow::L3 => "mem.unsafe.volatile",
             UbRow::P3 | UbRow::L1 | UbRow::T1 => "mem.ub",
         }
     }
@@ -151,6 +156,10 @@ impl UbRow {
             UbRow::L2 => {
                 "O8: escape analysis / stack promotion without conservatively \
                           pinning addresses"
+            }
+            UbRow::L3 => {
+                "O11: each volatile call is one aligned machine access of its \
+                          width — no split into narrower accesses, no alignment check"
             }
             UbRow::T1 => {
                 "O9: niche packing; match jump tables without default arms; \
@@ -1769,6 +1778,70 @@ impl<'t> Machine<'t> {
             }
         }
         Ok(())
+    }
+
+    /// kw07 (`[mem.unsafe.volatile]`): `p.read_volatile()` (`value`
+    /// `None`) or `p.write_volatile(v)`. On an allocation it is an
+    /// ordinary access of the pointee's width at offset 0 — the same
+    /// row-ordered check `p[0]` gets (`[mem.unsafe.volatile.3]`) —
+    /// after one more: the address must be a multiple of the width
+    /// (row L3; allocations are placed at `ALLOC_STRIDE` multiples, so
+    /// the address alone decides it). Signed pointees read back
+    /// sign-extended, `byte` as a byte.
+    fn volatile_access(
+        &mut self,
+        p: PtrVal,
+        pointee: Prim,
+        value: Option<Value>,
+        span: Span,
+    ) -> E<Flow> {
+        let write = value.is_some();
+        let opdesc = if write {
+            "a volatile write"
+        } else {
+            "a volatile read"
+        };
+        let size = prim_size(pointee);
+        if p.alloc.is_some() && p.addr % size != 0 {
+            let tag_span = p.alloc.map(|a| self.allocs[a].span).unwrap_or(span);
+            return self.ub(
+                UbRow::L3,
+                format!(
+                    "{opdesc} of {size} bytes at address {:#x}, which is not a multiple of {size}",
+                    p.addr
+                ),
+                span,
+                tag_span,
+            );
+        }
+        match value {
+            Some(v) => {
+                let n = match v {
+                    Value::Int(n) => n,
+                    Value::Byte(b) => i64::from(b),
+                    _ => return self.refuse("a volatile write of a non-integer", span),
+                };
+                let data: Vec<u8> = (0..size).map(|i| ((n >> (8 * i)) & 0xff) as u8).collect();
+                self.raw_write_bytes(p, &data, span, opdesc)?;
+                Ok(Flow::Val(Value::Unit))
+            }
+            None => {
+                let bytes = self.raw_read_bytes(p, size, span, opdesc)?;
+                let mut n: i64 = 0;
+                for (i, b) in bytes.iter().enumerate() {
+                    n |= (*b as i64) << (8 * i);
+                }
+                if pointee == Prim::Byte {
+                    return Ok(Flow::Val(Value::Byte(n as u8)));
+                }
+                let signed = matches!(pointee, Prim::I8 | Prim::I16 | Prim::I32);
+                if signed {
+                    let shift = 64 - 8 * size as u32;
+                    n = (n << shift) >> shift;
+                }
+                Ok(Flow::Val(Value::Int(n)))
+            }
+        }
     }
 
     fn raw_read_bytes(&mut self, p: PtrVal, len: u64, span: Span, opdesc: &str) -> E<Vec<u8>> {
@@ -8410,6 +8483,16 @@ impl<'t> Machine<'t> {
                     };
                     let out = self.resolve_exposed(*n as u64, e.span);
                     Ok(Flow::Val(Value::Ptr(out)))
+                }
+                "read_volatile" | "write_volatile" => {
+                    let Some(TyKind::Ptr(t)) = &recv_ty else {
+                        unreachable!("matched above")
+                    };
+                    let pointee = match self.ctx().tb.table.kind(*t) {
+                        TyKind::Prim(p) => *p,
+                        _ => return self.refuse("a volatile access of a non-scalar", e.span),
+                    };
+                    self.volatile_access(p, pointee, arg_vals.first().cloned(), e.span)
                 }
                 _ => self.refuse("this pointer method", e.span),
             };
