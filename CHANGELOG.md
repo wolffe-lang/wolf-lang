@@ -1,6 +1,80 @@
 # Changelog
 
-## Unreleased
+## 0.2.22 — 2026-10-03
+
+THE TWENTY-SECOND. wolf builds for a freestanding target:
+`--target x86_64-unknown-none` emits a kernel object with no `main`
+shim and no runtime, one trap hook, and everything that needs the
+hosted runtime or an allocator refused by name; assembly sources
+listed in `wolf.pkg` (`asm: [...]`) are assembled and linked, and on
+that target a call into assembly must name the roster (E1306). The
+attribute set is
+closed and `cfg(target)` is evaluated against the build's target
+(E0817, E0818), a `#[repr(c)]` struct through a raw pointer has the C
+layout, `export fn` is a C function and a hand-declared `extern "c" fn`
+is callable, `*T` crosses the C membrane, and an integer cast keeps its
+value or traps (`[type.numlit.cast.narrow]`). A `for` piece cannot
+outlive its region, and the checked machine discards a row nobody
+consumes, as the other lanes do. Programs can seek, tell and read at an
+offset, and descriptors 0, 1 and 2 are the standard streams: **the first
+handle an open answers is 3**. A refusal carries one code on every lane
+(`[proto.record.first]`), and the blast-radius property counts wreck
+sites. The pairing moves to lupin 0.1.45, whose spec pin moves to
+v0.2.21 and which heals the one parting 0.2.21 shipped pinned. Eight
+lanes and 209 commits: s203, kw01, kw02, s207, kw03, s199, kw04, kw05.
+
+### Read this before you bump the pin
+
+**Eight programs gave a wrong answer with no diagnostic on 0.2.21.**
+Each is now refused or answers the ruled bytes on its lane:
+
+- `for w in s.words() { last = w }` inside `region scratch { }` handed
+  `last` out of the region and printed from freed bytes on checked,
+  native and release (#540). E1010 now; lupin trapped it.
+- A `#[repr(c)]` struct stored or loaded through `*T` used a packed
+  layout on native and release, `{u8, u32, u8}` at offsets 0 1 5 where
+  C has 0 4 8 (#523). The C layout now.
+- `p[0] += 5` through a raw pointer stored 5 on native and release; the
+  checked machine sized a `*i64` element by the wrong type (#542).
+- `-1 as u64` printed `-1` and `128 as u8 as i8` printed `-128` on
+  native and release (#533). Both trap `overflow` now, as the checked
+  machine and lupin did. Spell the bits `v as wrapping[u64]`.
+- `let v = if c { maybe(n) }` bound `3` or `none` on the checked machine,
+  where the value is `()`, and a discarded raising statement left
+  `main` with `error: bad` there (#541).
+- A `mut p: *u8` reassigned in a private callee never reached the
+  caller on the checked machine (`2` where native printed `42`), and a
+  write through a pointer argument was UB row P2 there (kw02).
+- `#[repr(packed)]` was laid out unpacked, `#[section(…)]` landed in
+  `.text`, `#[noalloc]` verified nothing, and `#[cfg(target = "…")]` was
+  ignored, so target-gated code compiled for every target (#519).
+- `extern "x86-interrupt" fn` compiled as an ordinary function
+  returning with `ret` (#524).
+
+**Programs that compiled are now refused.** An attribute wolf does not
+know or does not implement yet (E0817, naming the lane that owns it);
+any ABI string but `"c"` (E0818); a `cfg` predicate other than `target`;
+a `for` piece, a `List[str]` element or `copy s` of a region-built
+`str` held past its region (E1010). A sign-changing or narrowing cast
+that does not fit now traps at run time where native and release
+reinterpreted the bits. In the downstreams, `corpus/comptime.lu` drops
+its `#[noalloc]`, and the book's `#[noalloc]` exercises become E0817 at
+its next pin. wolf-std, boreutils and lobo use only implemented
+attributes.
+
+**Programs that were refused now compile.** `wolf build --target
+x86_64-unknown-none --emit=obj` (it was an unknown flag); `asm:` in
+the root `wolf.pkg` (it was E1502, an unknown key). Every narrowing integer
+cast on native and release; `export fn` (a C symbol under the target's
+C plan); a call to a hand-declared `extern "c" fn` inside `unsafe`; a
+raw pointer in a module-private signature or across the C membrane
+(`pub` signatures still E1302); `return boom()` in a unit fn, which
+stopped native and release with an internal error.
+
+**Handles moved.** The first handle `fs_open` answers is 3 on every
+machine (it was 0 on the compiler and 1 on lupin). `fs_fstat(0)`,
+`(1)` and `(2)` describe the standard streams instead of answering
+`io`.
 
 ### Linked assembly: `asm` in `wolf.pkg` (kw05, ruling #31 K2 = C)
 
@@ -300,8 +374,6 @@
   with standard input a file and a pipe, and pins lupin 0.1.43/0.1.44
   by version until wolf-interp's mirror ships.
 
-- **Release IR is reproducible across builds (s195, #503).** The mid-end walked a natural loop's block set in `HashSet` order, so the versioner's guard chain came out in a per-process order and three release builds of lobo were three binaries; the set is ordered now, `release_determinism.rs` builds a fixed corpus set three times and asserts byte identity (IR and binary), and the macOS native gauntlet runs as three shards (`cargo xtask ci --shard`).
-
 ## 0.2.21 — 2026-10-02
 
 THE TWENTY-FIRST. A `match` over a fallible value compiles and runs on
@@ -448,6 +520,8 @@ ritual moves, on each tier.
   `versioned_loop_cross_module/`, gate `versioned_loop_root_lanes.rs`.
 
 ### Release IR is reproducible across builds (s195, #503)
+
+The mid-end walked a natural loop's block set in `HashSet` order, so the versioner's guard chain came out in a per-process order and three release builds of lobo were three binaries; the set is ordered now, `release_determinism.rs` builds a fixed corpus set three times and asserts byte identity (IR and binary), and the macOS native gauntlet runs as three shards (`cargo xtask ci --shard`).
 
 ### A `?` inside a `defer` or `errdefer` is refused (s196, #498, ruling #19)
 
