@@ -7489,6 +7489,28 @@ impl<'a> Checker<'a> {
         )
     }
 
+    /// `[mem.unsafe.volatile.1]`: the pointees a volatile access may
+    /// name — the eight fixed-width integers and `byte`, each exactly
+    /// one machine access. `int`/`uint` (the platform's integer, not a
+    /// width), `bool` (a restricted value set, T1), floats and
+    /// aggregates are E1307.
+    fn volatile_pointee(&self, t: TyId) -> bool {
+        matches!(
+            self.kind_of(t),
+            TyKind::Prim(
+                Prim::I8
+                    | Prim::I16
+                    | Prim::I32
+                    | Prim::I64
+                    | Prim::U8
+                    | Prim::U16
+                    | Prim::U32
+                    | Prim::U64
+                    | Prim::Byte
+            )
+        )
+    }
+
     /// s22 — the builtin method surface of `*T` ([mem.unsafe.raw],
     /// spec/02 §6). The strict-provenance ops exist so unsafe code can
     /// be written *without* wildcard provenance (RFC 3559's shape):
@@ -7527,10 +7549,47 @@ impl<'a> Checker<'a> {
             // p.expose() / p.with_exposed(a) — the exposed round-trip.
             "expose" => (vec![p("self", recv_ty)], uint_),
             "with_exposed" => (vec![p("self", recv_ty), p("addr", uint_)], recv_ty),
+            // kw07 (K3 = B, `[mem.unsafe.volatile]`): one access of the
+            // pointee's width per call, never elided, split, merged or
+            // reordered against another. The pointee must BE one access
+            // (`[mem.unsafe.volatile.1]`, E1307); wolf_mem rings both
+            // (E1301).
+            "read_volatile" | "write_volatile" => {
+                let TyKind::Ptr(pointee) = self.kind_of(recv_ty) else {
+                    unreachable!("ptr_method_call on a non-pointer receiver")
+                };
+                if !self.volatile_pointee(pointee) {
+                    let shown = self.show(pointee);
+                    self.diags.push(
+                        Diagnostic::error(
+                            codes::E1307,
+                            member_span,
+                            format!(
+                                "`{mname}` needs a fixed-width integer or `byte` pointee, \
+                                 and this pointer's is `{shown}`"
+                            ),
+                        )
+                        .with_label(format!("a `*{shown}` here"))
+                        .with_note(
+                            "a volatile access is exactly one machine access of the \
+                             pointee's width ([mem.unsafe.volatile.1]): u8, u16, u32, u64, \
+                             i8, i16, i32, i64 or byte — cast the pointer to the width the \
+                             hardware defines (`p as *u32`)",
+                        ),
+                    );
+                }
+                if mname == "read_volatile" {
+                    (vec![p("self", recv_ty)], pointee)
+                } else {
+                    let unit = self.lo.table.unit();
+                    (vec![p("self", recv_ty), p("value", pointee)], unit)
+                }
+            }
             _ => {
                 return Err(NotYet {
                     construct: "this raw-pointer operation (the surface is \
-                                is_null/addr/with_addr/expose/with_exposed)",
+                                is_null/addr/with_addr/expose/with_exposed/read_volatile/\
+                                write_volatile)",
                     span: e.span,
                 });
             }
