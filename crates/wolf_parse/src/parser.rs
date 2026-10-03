@@ -117,6 +117,11 @@ pub(crate) struct Parser<'a> {
     /// cleared when an arm parses without diagnostics (D22
     /// containment; one misaligned arm otherwise poisons the list).
     pub(crate) arm_error_reported: bool,
+    /// Damage done so far: every `Missing` placeholder and every error
+    /// node completed bumps it. An arm that emitted nothing may still be
+    /// wreckage whose reports a fold swallowed; only an arm that added
+    /// no damage is clean (s203).
+    pub(crate) damage: u32,
 }
 
 /// The panic-mode sync set: declaration-leading keywords (spec §2) —
@@ -158,6 +163,7 @@ impl<'a> Parser<'a> {
             toplevel_error_reported: false,
             decl_floor: None,
             arm_error_reported: false,
+            damage: 0,
             line_end_fold_once: false,
             assign_error_reported: false,
             eof_unclosed_reported: false,
@@ -349,6 +355,27 @@ impl<'a> Parser<'a> {
         ) || self.at_decl_keyword()
     }
 
+    /// Is the current token a declaration start that BEGINS its line at
+    /// or left of the item floor — a sibling of the declaration being
+    /// parsed, never a part of it (s203)? Indentation already says so;
+    /// the recoveries that ask are the ones that otherwise read across a
+    /// line break into the next declaration (a type, a path segment, a
+    /// raw argument group).
+    pub(crate) fn at_sibling_decl(&self) -> bool {
+        let Some(floor) = self.item_floor else {
+            return false;
+        };
+        let lo = self.current_span().lo;
+        let line = self.src[..(lo as usize).min(self.src.len())]
+            .iter()
+            .rposition(|&b| b == b'\n')
+            .map_or(0, |i| i + 1);
+        let leads = self.src[line..lo as usize]
+            .iter()
+            .all(|b| matches!(b, b' ' | b'\t'));
+        leads && self.at_decl_start() && self.line_indent(lo) <= floor
+    }
+
     // ------------------------------------------------------ consumption --
 
     pub(crate) fn bump(&mut self) {
@@ -462,15 +489,8 @@ impl<'a> Parser<'a> {
             return;
         }
         self.toplevel_error_reported = true;
-        // One token, one report (s203, wolf-lang#544; the #243
-        // reading). A stray run whose first token already carries a
-        // report — the `}` a `let` group's trailing comma left as its
-        // missing binder — is that report's wreck: the run folds into
-        // it instead of being announced again under the same caret.
-        let span = d.primary.span;
-        if self.diags.iter().any(|p| p.primary.span == span) {
-            return;
-        }
+        // A stray run whose first token already carries a report folds
+        // into it ([`Self::push_diag`]'s one token, one report).
         self.push_diag(d);
     }
 
@@ -540,6 +560,7 @@ impl<'a> Parser<'a> {
 
     /// Insert a zero-width missing-token marker (after diagnosing).
     pub(crate) fn missing(&mut self) {
+        self.damage += 1;
         self.events.push(Event::Missing);
     }
 
@@ -585,12 +606,29 @@ impl<'a> Parser<'a> {
     // ------------------------------------------------------ diagnostics --
 
     pub(crate) fn error(&mut self, code: Code, span: Span, message: impl Into<String>) {
-        self.diags.push(Diagnostic::error(code, span, message));
+        self.push_diag(Diagnostic::error(code, span, message));
     }
 
     /// Push a fully built diagnostic (label / secondary / suggestion
     /// call sites build it themselves).
+    ///
+    /// One token, one report (s203, wolf-lang#544; the #243 reading,
+    /// made general): a second parser report under a caret that already
+    /// carries one is the same confusion said twice — `}` as the binder a
+    /// trailing comma promised AND as a stray top-level line; a pattern
+    /// expected after `:` AND a `=>` expected at the same `let`. The
+    /// first report stands. Boundaries (E0202) are exempt: they sit at an
+    /// opener and say where a wreck ends, a different question.
     pub(crate) fn push_diag(&mut self, d: Diagnostic) {
+        let boundary = |c: Code| c == crate::codes::UNCLOSED_DELIMITER;
+        if !boundary(d.code)
+            && self
+                .diags
+                .iter()
+                .any(|p| !boundary(p.code) && p.primary.span == d.primary.span)
+        {
+            return;
+        }
         self.diags.push(d);
     }
 
@@ -817,6 +855,9 @@ impl<'a> Parser<'a> {
 
 impl Marker {
     pub(crate) fn complete(self, p: &mut Parser<'_>, kind: SyntaxKind) -> CompletedMarker {
+        if kind == SyntaxKind::ErrorNode {
+            p.damage += 1;
+        }
         match &mut p.events[self.pos as usize] {
             Event::Start { kind: slot, .. } => *slot = kind,
             _ => unreachable!("marker does not point at a Start event"),
