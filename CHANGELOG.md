@@ -202,6 +202,42 @@
   fallible fn still raises on all four machines; the clause's list
   reads otherwise, and the ruling is asked on #541.
 
+### Seek, tell and the positional read; `fs_fstat` on descriptors 0, 1 and 2 (s199, #426, #424)
+
+- **Nothing in wolf named an offset**: a program could only read a
+  handle forward from byte zero, so boreutils `tail -n 10` of a
+  256 MiB file read all of it (111 ms against GNU's 0.2 ms). Three new
+  builtins, on every machine: `fs_seek(fd, off, whence) -> int !
+  {invalid, io, unseekable}` (whence 0 start, 1 current, 2 end; the new
+  offset from the start), `fs_tell(fd) -> int ! {io, unseekable}` and
+  `fs_read_at(fd, off, max) -> List[byte] ! {eof, invalid, io,
+  unseekable}` (`pread`: the cursor does not move). **New tag
+  `unseekable`**: a pipe, fifo, socket or terminal (`ESPIPE`), its own
+  tag because a program falls back to reading forward. Clauses
+  `[os.fs.seek]`, `[os.fs.tell]`, `[os.fs.read_at]`; the host table is
+  78 lines.
+- **`fs_fstat(0)`, `(1)` and `(2)` answered `io` whatever the
+  descriptors were**: the handle number was an index into the runtime's
+  own table and the first open was 0 (lupin's was 1). **The first handle
+  an open answers is now 3** on every machine, and 0, 1 and 2 are the
+  process's standard streams for `fs_fstat`, `fs_seek`, `fs_tell` and
+  `fs_read_at` (`[os.fs.std]`): `fs_fstat(0)` is `kind` 0 and the size
+  when standard input is a file, `kind` 2 when it is a pipe.
+  `fs_read`/`fs_read_chunk`/`fs_write`/`fs_write_chunk`/`fs_close`
+  still answer `io` on 0..2 (#405).
+- windows: handles are served through std's seek and `seek_read` (the
+  pointer put back); `GetFileType` decides what a handle IS — anything
+  but a disk file is `kind` 2 for `fs_fstat` and `unseekable` for the
+  offset calls, because std's metadata calls an anonymous pipe a
+  regular file there (measured on the runner, CI run 37062798818).
+- Witnesses: `corpus/fs/seek_tell.lu`, `corpus/fs/read_at.lu`, the
+  stdin fixtures under `crates/wolf_driver/tests/fixtures/fs_std/`;
+  `fs_std_lanes.rs` runs them on checked, native, release and lupin
+  with standard input a file and a pipe, and pins lupin 0.1.43/0.1.44
+  by version until wolf-interp's mirror ships.
+
+- **Release IR is reproducible across builds (s195, #503).** The mid-end walked a natural loop's block set in `HashSet` order, so the versioner's guard chain came out in a per-process order and three release builds of lobo were three binaries; the set is ordered now, `release_determinism.rs` builds a fixed corpus set three times and asserts byte identity (IR and binary), and the macOS native gauntlet runs as three shards (`cargo xtask ci --shard`).
+
 ## 0.2.21 — 2026-10-02
 
 THE TWENTY-FIRST. A `match` over a fallible value compiles and runs on
@@ -348,42 +384,6 @@ ritual moves, on each tier.
   `versioned_loop_cross_module/`, gate `versioned_loop_root_lanes.rs`.
 
 ### Release IR is reproducible across builds (s195, #503)
-
-### Seek, tell and the positional read; `fs_fstat` on descriptors 0, 1 and 2 (s199, #426, #424)
-
-- **Nothing in wolf named an offset**: a program could only read a
-  handle forward from byte zero, so boreutils `tail -n 10` of a
-  256 MiB file read all of it (111 ms against GNU's 0.2 ms). Three new
-  builtins, on every machine: `fs_seek(fd, off, whence) -> int !
-  {invalid, io, unseekable}` (whence 0 start, 1 current, 2 end; the new
-  offset from the start), `fs_tell(fd) -> int ! {io, unseekable}` and
-  `fs_read_at(fd, off, max) -> List[byte] ! {eof, invalid, io,
-  unseekable}` (`pread`: the cursor does not move). **New tag
-  `unseekable`**: a pipe, fifo, socket or terminal (`ESPIPE`), its own
-  tag because a program falls back to reading forward. Clauses
-  `[os.fs.seek]`, `[os.fs.tell]`, `[os.fs.read_at]`; the host table is
-  78 lines.
-- **`fs_fstat(0)`, `(1)` and `(2)` answered `io` whatever the
-  descriptors were**: the handle number was an index into the runtime's
-  own table and the first open was 0 (lupin's was 1). **The first handle
-  an open answers is now 3** on every machine, and 0, 1 and 2 are the
-  process's standard streams for `fs_fstat`, `fs_seek`, `fs_tell` and
-  `fs_read_at` (`[os.fs.std]`): `fs_fstat(0)` is `kind` 0 and the size
-  when standard input is a file, `kind` 2 when it is a pipe.
-  `fs_read`/`fs_read_chunk`/`fs_write`/`fs_write_chunk`/`fs_close`
-  still answer `io` on 0..2 (#405).
-- windows: handles are served through std's seek and `seek_read` (the
-  pointer put back); `GetFileType` decides what a handle IS — anything
-  but a disk file is `kind` 2 for `fs_fstat` and `unseekable` for the
-  offset calls, because std's metadata calls an anonymous pipe a
-  regular file there (measured on the runner, CI run 37062798818).
-- Witnesses: `corpus/fs/seek_tell.lu`, `corpus/fs/read_at.lu`, the
-  stdin fixtures under `crates/wolf_driver/tests/fixtures/fs_std/`;
-  `fs_std_lanes.rs` runs them on checked, native, release and lupin
-  with standard input a file and a pipe, and pins lupin 0.1.43/0.1.44
-  by version until wolf-interp's mirror ships.
-
-- **Release IR is reproducible across builds (s195, #503).** The mid-end walked a natural loop's block set in `HashSet` order, so the versioner's guard chain came out in a per-process order and three release builds of lobo were three binaries; the set is ordered now, `release_determinism.rs` builds a fixed corpus set three times and asserts byte identity (IR and binary), and the macOS native gauntlet runs as three shards (`cargo xtask ci --shard`).
 
 ### A `?` inside a `defer` or `errdefer` is refused (s196, #498, ruling #19)
 
