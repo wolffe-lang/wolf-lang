@@ -530,11 +530,21 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   tier: they are refusals, and the builtins they name were already
   allocating — what changes is that the bytes are now attributed, so a
   region holding only string work stops being called empty by W1001.
-  The repair costs, and the second half's costs more: hoisting the
-  build out of the block is free, but `copy` — the first rung of the
-  ladder — materializes the bytes into the ambient region, one
-  allocation and one copy of the value's length, where the view cost
-  nothing. The second half is also deliberately **conservative rather
+  The repair: hoisting the build out of the block is free, and so is
+  `copy` — the first rung of the ladder — which for a `str` shares the
+  bytes rather than materializing them (`[mem.tier0.move.3]`: "a
+  `str`'s bytes are immutable and the copy shares them"). So `copy`
+  repairs what crosses between regions that both outlive the use —
+  E1004's cross-parameter-region store, below — and is no repair for
+  bytes built inside the region, whose sites it carries.
+  (Amended 2026-10-03, ruling #35 = share, by s208: this sentence said
+  `copy` "materializes the bytes into the ambient region, one
+  allocation and one copy of the value's length". No machine ever did
+  — native, release and lupin share, and s207 made the mem tier carry
+  the shared bytes' sites — and the mem clause said "shares them"; the
+  two readings refuse the same region escapes and differ only on when
+  E1004 fires, so the clause and the machines stand and the sentence
+  moved.) The second half is also deliberately **conservative rather
   than precise**: there is no per-field site tracking, so a field read
   carries the parent's whole site set and a literal-initialized field
   (`region scratch { let d = Doc { title: "static" }; d.title }`) is
@@ -580,9 +590,11 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   stated.** Nothing at run time on either tier — this is a refusal, and
   no lane emits an instruction for it; `[mem.str.view]`'s allocation
   commitment is unchanged, a view still allocates nothing and still
-  charges zero. The repair is the same ladder the second half of s160
-  named: hoist the build out of the block, or `copy` the view, which
-  materializes the bytes into the ambient region. Measured before it
+  charges zero. The repair is to hoist the build out of the block.
+  `copy` of the view is not one: it shares the receiver's bytes
+  (`[mem.tier0.move.3]`) and carries their sites (amended 2026-10-03,
+  ruling #35 = share, by s208; this sentence said `copy` "materializes
+  the bytes into the ambient region", which no machine did). Measured before it
   landed, pre-fix binary against post: over `corpus/` (670 files),
   wolf-std (51 module entries, 419 test and 780 upstream files), lobo
   (151) and boreutils (61) — 23,722 `.lu` files in all, every one of
@@ -625,8 +637,8 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   meaning (lobo's `acc.addr = copy pl.pt.authority`, s160's one
   moved row, still compiles). s160's and s171's
   sentences that `copy` "materializes the bytes into the ambient
-  region" disagree with that clause and with the lowering; the
-  disagreement is recorded on wolf-lang#540, not decided here.
+  region" disagreed with that clause and with the lowering; ruling #35
+  (share) amended them to match, with no code change (s208).
   Measured before it landed, trunk binary against head: boreutils' 54
   binaries and lobo's two build byte-identical with no diagnostic, and
   wolf-std's `std-test` answers as it did. Witnesses
