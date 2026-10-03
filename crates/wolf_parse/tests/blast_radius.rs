@@ -966,6 +966,10 @@ const SWEEP_1000: &[(&str, usize)] = &[
     ("kernels/ct_tag_compare.lu", 789),
     ("memory/recv_claim_arg_closure.lu", 305),
     ("memory/recv_claim_arg_closure.lu", 808),
+    // Rebased onto s202's corpus (trunk `ebba7574`), budget 300 found
+    // one more: `pub struct Ring {` with `{` and `pub` swapped reads the
+    // field lines as a stray block's broken statements.
+    ("memory/versioned_loop_cross_module/ring/ring.lu", 83),
     ("net/inherit_listener.lu", 361),
     ("rows/negative/error_alias_cycle.lu", 976),
     ("typecheck/cast_set.lu", 344),
