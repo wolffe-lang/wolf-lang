@@ -18,9 +18,12 @@
   trap calls `wolf_trap(kind, file, file_len, line, col)`, which the
   program supplies and which must not return (`ud2` follows the call);
   the native tier had called `__wolf_rt_trap_at` and the release tier
-  `__wolf_rt_trap` or `__wolf_rt_trap_at`. The hosted runtime now
-  exports `wolf_trap` as the same report-and-exit; hosted code still
-  calls the runtime's reporters, so hosted binaries do not move.
+  `__wolf_rt_trap` or `__wolf_rt_trap_at`. On a hosted target
+  `wolf_trap` is the runtime's own report-and-exit: a program that
+  imports it links it as a link-time alias of `__wolf_rt_trap_at`.
+  Compiled into `libwolf_rt.a` it moved every hosted binary (debug info
+  and LLVM's `.llvm.<hash>` names), so hosted binaries that do not
+  import it are byte-identical to 0.2.21's.
 - **Kernel code generation.** The release tier emits
   `x86_64-unknown-none-elf` with `noredzone`, `"frame-pointer"="all"`
   and no MMX/SSE/AVX (`+soft-float`) on every function; the native

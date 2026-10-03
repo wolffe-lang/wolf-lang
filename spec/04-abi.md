@@ -294,10 +294,13 @@ AAPCS64, win64, Apple arm64 deltas).
   the call; (b) `memcpy`, `memmove`, `memset` and `memcmp` with C's
   meaning, which a tier may emit for an aggregate copy; (c) the
   program's own `extern "c"` declarations. The program supplies (a) and
-  (b), in wolf (`export fn`) or assembly. The hosted runtime defines
-  `wolf_trap` as the report-and-exit every hosted trap takes; hosted
-  code keeps calling the runtime's own reporters, so no hosted program
-  changes.
+  (b), in wolf (`export fn`) or assembly. On a hosted target
+  `wolf_trap` is the runtime's own report-and-exit: a hosted program
+  that imports it (a freestanding module's logic under a hosted test,
+  say) links it as an alias of the runtime's sited reporter. The alias
+  is made at the link and only for a program that imports the hook,
+  and hosted code keeps calling the runtime's own reporters, so no
+  other hosted program changes by a byte.
 - `[abi.target.none.alloc]` No allocating construct compiles for the
   freestanding target (K8(b) = A): `List`, `Map`, `Pool`, string
   interpolation, a capturing closure, `region` and a boxed channel
