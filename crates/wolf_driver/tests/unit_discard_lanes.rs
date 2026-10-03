@@ -306,11 +306,7 @@ fn a_fallible_fns_else_less_tail_if_discards() {
         "exit(0)",
         "in a\na false\nc false\nd false\n",
         true,
-        &[(
-            LUPIN_179,
-            "exit(0)",
-            "in a\na true\nc true\nd true\n",
-        )],
+        &[(LUPIN_179, "exit(0)", "in a\na true\nc true\nd true\n")],
     );
 }
 
@@ -337,7 +333,8 @@ fn a_closures_else_less_tail_if_discards() {
     let entry = corpus("rows/unit_discard_tail_if_closure.lu");
     let checked = lane(&entry, "--checked").expect("the checked lane always runs");
     assert_eq!(
-        checked.verdict, "unsupported",
+        checked.verdict,
+        "unsupported",
         "the --checked answer on {} ({ISSUE}): {checked:?}",
         entry.display()
     );
