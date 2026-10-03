@@ -190,6 +190,46 @@ fn native_objects_import_the_hook_list_and_nothing_else_on_every_host() {
         "the trap kernel's overflow check reaches the one hook ([abi.target.none.hooks]); \
          imports: {undef:?}"
     );
+    let w = staged("native_kmain_wide", "kmain_wide.lu");
+    assert_step2_symbols(&build_obj(&w, "native"), &[]);
+}
+
+/// `[abi.target.none.hooks]`: the hosted runtime defines `wolf_trap` as
+/// the report-and-exit every hosted trap takes, so a hosted program that
+/// calls the hook (or links a freestanding object) traps as its own code
+/// does — on both tiers' native runs.
+#[cfg(unix)]
+#[test]
+fn the_hosted_runtime_defines_the_trap_hook() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let status = Command::new(env!("CARGO"))
+            .args(["build", "-p", "wolf_rt"])
+            .status()
+            .expect("cargo builds wolf_rt");
+        assert!(status.success(), "wolf_rt staticlib build failed");
+    });
+    let dir = scratch("hosted_hook");
+    std::fs::write(
+        dir.join("h.lu"),
+        "extern \"c\" fn wolf_trap(kind: i32, file: i64, file_len: i64, line: i64, col: i64)\n\n\
+         fn main() -> int {\n    // # Safety: the hosted runtime defines the hook.\n    \
+         unsafe {\n        wolf_trap(1, 0, 0, 0, 0)\n    }\n    0\n}\n",
+    )
+    .expect("write");
+    for lane in ["--native", "--release"] {
+        let out = wolf_in(&dir, &["conform-run", "h.lu", lane, "--json"]);
+        let stdout = text(&out.stdout);
+        let rec: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap_or_else(|e| {
+            panic!("{lane}: one record ({e}): {stdout}\n{}", text(&out.stderr))
+        });
+        assert_eq!(
+            rec["verdict"],
+            "trap(overflow)",
+            "{lane}: the hosted `wolf_trap` reports kind 1 and exits as a trap: {stdout}\n{}",
+            text(&out.stderr)
+        );
+    }
 }
 
 /// `[abi.target.none]`: every construct that needs the hosted runtime,
@@ -610,9 +650,14 @@ mod linux_x86_64 {
                 "{tier}: the trap hook"
             );
             assert_disassembly(&obj);
+            let w = staged(&format!("step2_wide_{tier}"), "kmain_wide.lu");
+            let obj = build_obj(&w, tier);
+            assert_step2_symbols(&obj, &[]);
+            assert_disassembly(&obj);
             if tier == "release" {
                 assert_release_ir(&k);
                 assert_release_ir(&t);
+                assert_release_ir(&w);
             }
         }
     }
