@@ -2839,8 +2839,8 @@ impl<'t> Machine<'t> {
                         // statement is W0601's other half — consumed
                         // by no one, so its raw row is discarded and
                         // the block goes on.
-                        let discarded = i != last
-                            && matches!(self.expr_ty(e.span), Some(TyKind::ErrUnion(..)));
+                        let discarded =
+                            i != last && matches!(self.expr_ty(e.span), Some(TyKind::ErrUnion(..)));
                         match self.eval(e)? {
                             Flow::Val(v) => {
                                 if Some(e.span) == last_value {
