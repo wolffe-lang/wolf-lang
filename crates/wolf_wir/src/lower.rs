@@ -8564,7 +8564,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 if let (Some(fb), Some(tb)) = (int_bits(src), int_bits(dst)) {
                     let src_unsigned = sema_unsigned(self.table, from);
                     let dst_unsigned = sema_unsigned(self.table, to);
-                    if matches!(self.table.kind(to), TyKind::Wrapping(_))
+                    if !matches!(self.table.kind(to), TyKind::Wrapping(_))
                         && let Some(fits) =
                             self.narrow_fits(v, src, fb, src_unsigned, tb, dst_unsigned)
                         && self.trap_unless(fits, TrapKind::Overflow)
