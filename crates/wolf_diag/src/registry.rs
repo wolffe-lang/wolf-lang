@@ -1831,7 +1831,8 @@ Raw pointers themselves are inert values: creating, copying, storing,
 and passing them is free in safe code (creation is not a use). What
 the safe tier cannot contain are the raw tier's *operations* — reading
 or writing through a pointer, pointer casts, provenance operations
-(`addr`, `with_addr`, `expose`, `with_exposed`), `assume noalias`,
+(`addr`, `with_addr`, `expose`, `with_exposed`), volatile reads and
+writes (`read_volatile`, `write_volatile`), `assume noalias`,
 `borrow … from …`, and calls into imported C. Each of those can reach
 behavior the safe tier's guarantees do not cover, so each one lives
 inside the `unsafe { }` ring, where the enclosing module carries the
@@ -1903,6 +1904,19 @@ unsafe ring is visible in one file. List the source that defines the
 routine under `asm`, add its `.globl` there, or remove the call.
 "#);
 
+code!(E1307, "a volatile access needs a fixed-width integer or `byte` pointee", r#"
+`p.read_volatile()` and `p.write_volatile(v)` are exactly one machine
+access of the pointee's width, never split, merged or dropped — the
+access a device register or a firmware-written structure expects. That
+promise has a meaning only for a pointee that IS one access: `u8`,
+`u16`, `u32`, `u64`, `i8`, `i16`, `i32`, `i64` or `byte`. `int` and
+`uint` name the platform's integer rather than a width; a `bool` has a
+restricted value set a device can violate; a float or an aggregate is
+not one integer access on every target. Point the `*T` at the
+fixed-width type the hardware defines (`p as *u32`), and convert the
+value after the read.
+"#);
+
 // ------------------------------------------------------------------------
 // E14xx — the checked-execution family (s23): verdicts of the miri-lite
 // UB machine, reported when `--checked` runs a program dynamically.
@@ -1912,7 +1926,7 @@ code!(E1401, "undefined behavior detected by the checked-build UB machine", r#"
 The `--checked` execution machine (the miri-lite UB checker) ran this
 program against the operational memory model and reached a state the
 spec's closed UB enumeration names: every finding cites its `[mem.ub]`
-row (P1-P6, L1, L2, T1), the raw-tier operation responsible, and the
+row (P1-P6, L1-L3, T1), the raw-tier operation responsible, and the
 licensed optimization the spec pairs with that row — the
 transformation compiled code is entitled to make, which is exactly why
 the unchecked behavior is undefined rather than merely wrong. The
