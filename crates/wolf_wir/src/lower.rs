@@ -4983,7 +4983,21 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         Flow::Val(v) => v,
                         Flow::Diverged => return Ok(Flow::Diverged),
                     },
-                    (Some(x), None) => flow_val!(self.lower_expr(x)),
+                    // s207 (wolf-lang#541): in a unit fn the operand
+                    // of a `return` is a unit context
+                    // (`[type.unit.context]`), so a `!T` operand is the
+                    // warned discard — evaluated for its effects, its
+                    // value and row dropped — and `ret` carries nothing.
+                    // Until s207 the operand's value rode the `ret` and
+                    // verification stopped the build.
+                    (Some(x), None) => {
+                        let v = flow_val!(self.lower_expr(x));
+                        if self.b.module.sigs[self.b.func.sig].results.is_empty() {
+                            None
+                        } else {
+                            v
+                        }
+                    }
                     (None, Some(eu)) => Some(self.b.ins_eu_make_ok(eu, None)),
                     (None, None) => None,
                 };
