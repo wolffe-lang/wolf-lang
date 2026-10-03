@@ -13,7 +13,7 @@
 //!
 //! lupin 0.1.45 (the 0.2.22 pairing) has no volatile surface; each row's
 //! parting is pinned below by that version as pre-mirror (lupin's half is
-//! wolf-interp#LUPIN_ISSUE). A newer lupin must answer what the clause
+//! wolf-interp#185). A newer lupin must answer what the clause
 //! says.
 
 mod lane_exit;
@@ -25,7 +25,7 @@ fn wolf() -> &'static str {
     env!("CARGO_BIN_EXE_wolf")
 }
 
-const LUPIN_ISSUE: &str = "wolf-interp#LUPIN_ISSUE";
+const LUPIN_ISSUE: &str = "wolf-interp#185";
 
 #[derive(Debug)]
 struct Obs {
@@ -345,11 +345,17 @@ fn a_misaligned_volatile_read_is_row_l3() {
         named: "a method call without an elaborated impl",
         ub: ("", ""),
     };
+    // lupin 0.1.45 stops one call earlier, at `with_addr` (its half is
+    // wolf-interp#184, kw06's); the mirror needs both issues.
     every_machine(
         "volatile_ub_misaligned.lu",
         l3,
         Some(refused),
         l3,
-        PRE_MIRROR,
+        &[Pin {
+            version: "0.1.45",
+            verdict: "unsupported",
+            named: "`with_addr`",
+        }],
     );
 }
