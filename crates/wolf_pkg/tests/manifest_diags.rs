@@ -192,9 +192,9 @@ fn dep_without_source_is_schema_error() {
       |
       = note: the wolf.pkg schema: `name`, `version`, `edition`, `wolf`, `fingerprint`, `deps`,
         `test`, `bench`, `features`, `capabilities`, `paths`, `min_age`, `c`, `lints`,
-        `trusted`, `replace`, `exclude` (the last two are top-level-exclusive). Dependency
-        sources: `{ path: "…" }`, `{ git: "…", tag: "…" }`, or `{ pkg: "owner/name", major: N,
-        min: "X.Y.Z" }`.
+        `trusted`, `replace`, `exclude`, `target`, `asm` (the last four are the root manifest's
+        alone). Dependency sources: `{ path: "…" }`, `{ git: "…", tag: "…" }`, or `{ pkg:
+        "owner/name", major: N, min: "X.Y.Z" }`.
     "#);
 }
 
@@ -222,9 +222,9 @@ fn version_range_is_refused() {
       |
       = note: the wolf.pkg schema: `name`, `version`, `edition`, `wolf`, `fingerprint`, `deps`,
         `test`, `bench`, `features`, `capabilities`, `paths`, `min_age`, `c`, `lints`,
-        `trusted`, `replace`, `exclude` (the last two are top-level-exclusive). Dependency
-        sources: `{ path: "…" }`, `{ git: "…", tag: "…" }`, or `{ pkg: "owner/name", major: N,
-        min: "X.Y.Z" }`.
+        `trusted`, `replace`, `exclude`, `target`, `asm` (the last four are the root manifest's
+        alone). Dependency sources: `{ path: "…" }`, `{ git: "…", tag: "…" }`, or `{ pkg:
+        "owner/name", major: N, min: "X.Y.Z" }`.
     "#);
 }
 
@@ -249,9 +249,9 @@ fn bad_capability_word_is_schema_error() {
       |
       = note: the wolf.pkg schema: `name`, `version`, `edition`, `wolf`, `fingerprint`, `deps`,
         `test`, `bench`, `features`, `capabilities`, `paths`, `min_age`, `c`, `lints`,
-        `trusted`, `replace`, `exclude` (the last two are top-level-exclusive). Dependency
-        sources: `{ path: "…" }`, `{ git: "…", tag: "…" }`, or `{ pkg: "owner/name", major: N,
-        min: "X.Y.Z" }`.
+        `trusted`, `replace`, `exclude`, `target`, `asm` (the last four are the root manifest's
+        alone). Dependency sources: `{ path: "…" }`, `{ git: "…", tag: "…" }`, or `{ pkg:
+        "owner/name", major: N, min: "X.Y.Z" }`.
     "#);
 }
 

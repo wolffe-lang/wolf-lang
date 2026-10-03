@@ -23,6 +23,7 @@
 //! reading a manifest that rides in a script's `//!` block, plus the
 //! cache layout ([`source::cache_root`]) every artifact lives under.
 
+pub mod asm;
 pub mod audit;
 pub mod lock;
 pub mod log;
@@ -35,6 +36,8 @@ pub mod version;
 
 pub use lock::{Lock, LockEntry, hash_tree};
 pub use manifest::{Cap, Dep, DepSource, Manifest, is_manifest};
-pub use project::{Project, ResolveOpts, ResolvedPkg, resolve_manifest, resolve_project};
+pub use project::{
+    AsmSource, Project, ResolveOpts, ResolvedPkg, resolve_manifest, resolve_project,
+};
 pub use script::{Frontmatter, Script, script_id};
 pub use version::Version;

@@ -139,6 +139,15 @@ pub struct Manifest {
     /// the build's target, as `--target` names it (the flag wins). The
     /// driver validates the triple; the manifest only carries it.
     pub target: Option<(String, Span)>,
+    /// `asm: ["boot/io.S"]` (kw05, spec/04 `[abi.asm.link]`, K2 = C):
+    /// assembly sources the driver assembles for the build's target,
+    /// each path relative to the manifest's directory, with its span.
+    /// Read from the ROOT manifest only: an assembly source is not part
+    /// of a package's content address (`[pkg.sum]`), so a dependency
+    /// listing one is refused at resolution.
+    pub asm: Vec<(String, Span)>,
+    /// The `asm` list's own span, when present.
+    pub asm_span: Option<Span>,
 }
 
 /// One `exclude:` entry.
@@ -529,8 +538,9 @@ fn schema_err(span: Span, msg: impl Into<String>) -> Diagnostic {
     Diagnostic::error(codes::E1502, span, msg).with_note(
         "the wolf.pkg schema: `name`, `version`, `edition`, `wolf`, \
          `fingerprint`, `deps`, `test`, `bench`, `features`, `capabilities`, \
-         `paths`, `min_age`, `c`, `lints`, `trusted`, `replace`, `exclude` \
-         (the last two are top-level-exclusive). Dependency sources: \
+         `paths`, `min_age`, `c`, `lints`, `trusted`, `replace`, `exclude`, \
+         `target`, `asm` (the last four are the root manifest's alone). \
+         Dependency sources: \
          `{ path: \"…\" }`, `{ git: \"…\", tag: \"…\" }`, or \
          `{ pkg: \"owner/name\", major: N, min: \"X.Y.Z\" }`."
             .to_string(),
@@ -919,6 +929,8 @@ pub fn parse_opts(
         replace: Vec::new(),
         exclude: Vec::new(),
         target: None,
+        asm: Vec::new(),
+        asm_span: None,
     };
     for e in &entries {
         match e.key.as_str() {
@@ -952,6 +964,35 @@ pub fn parse_opts(
             "target" => {
                 if let Some((s, sp)) = expect_str("target", &e.value, &mut diags) {
                     m.target = Some((s, sp));
+                }
+            }
+            "asm" => {
+                let Value::List(items, sp) = &e.value else {
+                    diags.push(schema_err(
+                        e.value.span(),
+                        format!(
+                            "`asm` takes a list of assembly source paths (`asm: [\"boot/io.S\"]`), \
+                             not {}",
+                            e.value.kind_name()
+                        ),
+                    ));
+                    continue;
+                };
+                m.asm_span = Some(*sp);
+                for it in items {
+                    match it {
+                        Value::Str(s, sp) if !s.is_empty() => m.asm.push((s.clone(), *sp)),
+                        Value::Str(_, sp) => {
+                            diags.push(schema_err(*sp, "an `asm` source path is empty".to_string()))
+                        }
+                        other => diags.push(schema_err(
+                            other.span(),
+                            format!(
+                                "`asm` holds source paths (strings), not {}",
+                                other.kind_name()
+                            ),
+                        )),
+                    }
                 }
             }
             "fingerprint" => match &e.value {

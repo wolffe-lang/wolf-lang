@@ -40,6 +40,17 @@ pub struct ResolvedPkg {
     pub is_std: bool,
 }
 
+/// One assembly source a root manifest lists (`[abi.asm.link]`).
+#[derive(Debug, Clone)]
+pub struct AsmSource {
+    /// The path as the manifest spells it.
+    pub spelled: String,
+    /// The path resolved against the root package's directory.
+    pub path: PathBuf,
+    /// The entry's span in the manifest.
+    pub span: Span,
+}
+
 /// A manifest file the caller should register with its `Sources` so
 /// manifest-spanned diagnostics render.
 #[derive(Debug)]
@@ -64,6 +75,10 @@ pub struct Project {
     /// target when `--target` does not name one. A dependency's
     /// `target` says nothing about the build that consumes it.
     pub target: Option<(String, Span)>,
+    /// The ROOT manifest's `asm` sources (kw05, `[abi.asm.link]`), in
+    /// manifest order: each as spelled, resolved against the root
+    /// package's directory, with its span in the manifest.
+    pub asm: Vec<AsmSource>,
     pub manifests: Vec<ManifestSource>,
     pub diagnostics: Vec<Diagnostic>,
 }
@@ -191,6 +206,15 @@ fn resolve_with_root(
 ) -> Project {
     let root_span = root_manifest.span;
     project.target = root_manifest.target.clone();
+    project.asm = root_manifest
+        .asm
+        .iter()
+        .map(|(spelled, span)| AsmSource {
+            spelled: spelled.clone(),
+            path: root_dir.join(spelled),
+            span: *span,
+        })
+        .collect();
     project.pkgs.push(ResolvedPkg {
         alias: String::new(),
         name: root_manifest.name.clone(),
@@ -243,6 +267,29 @@ fn resolve_with_root(
                     "the consuming project's own wolf.pkg is the only place a \
                      replacement or exclusion applies (vgo rule: the build's root \
                      decides, dependencies advise)."
+                        .to_string(),
+                ),
+            );
+        }
+        // kw05 (`[abi.asm.link]`): an assembly source is not part of a
+        // package's content address (`[pkg.sum]` hashes `wolf.pkg`,
+        // `*.lu` and `*.wolfi`), so a dependency's listed source would
+        // reach the build unhashed. Only the root lists assembly.
+        if consumer != 0 && !m.asm.is_empty() {
+            project.diagnostics.push(
+                Diagnostic::error(
+                    codes::E1502,
+                    m.asm_span.unwrap_or(m.span),
+                    format!(
+                        "`asm` in `{}`'s manifest: a dependency cannot list assembly sources",
+                        m.name
+                    ),
+                )
+                .with_note(
+                    "an assembly source is not part of a package's content address (`wolf.sum` \
+                     hashes `wolf.pkg`, `*.lu` and `*.wolfi`), so only the build's root \
+                     manifest lists `asm`; the consuming project lists the dependency's \
+                     routines itself."
                         .to_string(),
                 ),
             );
