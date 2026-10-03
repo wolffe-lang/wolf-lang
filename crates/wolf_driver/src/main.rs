@@ -1805,7 +1805,7 @@ fn compile_native(
         }
         // kw05 (`[abi.asm.link]`): each listed source's object beside
         // the build's own, `K.asm-<stem>.o`, for the boot code's link.
-        for (spelled, src) in listed_asm.sources.iter().take(0) {
+        for (spelled, src) in &listed_asm.sources {
             let obj = asm::beside(out, spelled);
             asm::assemble(spelled, src, &obj, target).map_err(BuildStop::Environment)?;
             if opts.verbose {
