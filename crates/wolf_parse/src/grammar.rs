@@ -121,8 +121,17 @@ fn item_inner(p: &mut Parser<'_>, in_body: bool) {
         prefixed = true;
     }
     if p.at_kw(Keyword::Pub) {
-        visibility(p);
+        let ok = visibility(p);
         prefixed = true;
+        // A broken `pub(…)` whose recovery ran onto a sibling
+        // declaration's line does not own it (s203, the budget-1000
+        // `typecheck/method_scope/p.lu` case: `pub (` swallowed a struct
+        // header and handed its visibility to the `impl` below, which
+        // then started 31 bytes early). The wreck is its own item.
+        if !ok && p.at_sibling_decl() {
+            m.complete(p, SyntaxKind::ErrorNode);
+            return;
+        }
     }
     match p.current() {
         // Bounded lookahead: `fn (` is a closure — a stray expression
@@ -251,6 +260,12 @@ pub(crate) fn fn_item(p: &mut Parser<'_>, m: Marker) {
         m.complete(p, SyntaxKind::FnDecl);
         return;
     }
+    // A reserved keyword where the name goes was already reported as
+    // the name (E0008); with no `(` after it the keyword IS the header's
+    // wreck — `if !f fn return 1 }` read a phantom `fn return` — and
+    // "expected `(`" would say the same confusion twice (s203, the
+    // budget-1000 `conc/proc_cap_fault_join.lu` cases; #243's reading).
+    let keyword_named = matches!(p.current(), TokenKind::Kw(_));
     let named = name_token(p, "function");
     if p.at_punct(Punct::LBracket) {
         generic_param_list(p);
@@ -260,7 +275,7 @@ pub(crate) fn fn_item(p: &mut Parser<'_>, m: Marker) {
     } else {
         // One report per broken header: a missing name was already
         // diagnosed above.
-        if named {
+        if named && !keyword_named {
             p.error(
                 codes::EXPECTED_TOKEN,
                 p.here(),
@@ -437,12 +452,11 @@ fn param_type(p: &mut Parser<'_>) {
         type_required(p);
     } else {
         // One report for the missing ascription; still salvage a type
-        // that starts here anyway (`fn f(x int)`).
-        p.error(
-            codes::EXPECTED_TOKEN,
-            p.here(),
-            "expected `:` and a type after the parameter name",
-        );
+        // that starts here anyway (`fn f(x int)`). Folded per list: a
+        // call's arguments re-keyed as a header by a stray `fn` lack
+        // every ascription at once, and each is the same confusion
+        // (s203, the budget-1000 `net/inherit_listener.lu` case).
+        p.arg_list_error(p.here(), "expected `:` and a type after the parameter name");
         p.missing();
         type_(p);
     }
@@ -826,14 +840,21 @@ fn group_report(p: &mut Parser<'_>, kw: Keyword, shapes: &[BinderShape]) {
     }
     let Some(first_init) = shapes.iter().position(|s| s.has_init) else {
         // `var i, c` — no initializer anywhere: the production's
-        // letter, unchanged. One report per valueless binder.
-        for &i in &deferred {
-            p.error(
-                codes::EXPECTED_TOKEN,
-                shapes[i].eq_site,
-                "this binding has no value — expected `=` and an initializer",
-            );
+        // letter, said once for the group, every valueless binder
+        // labelled (s203). One report per binder made a struct body
+        // read as a `let` group — `let x: int, y: int, z: int,`, the
+        // #544 family — or a call's arguments behind a stray `let`
+        // (`kernels/ct_tag_compare.lu`, six binders) one report per
+        // line of the same wreck.
+        let mut d = wolf_diag::Diagnostic::error(
+            codes::EXPECTED_TOKEN,
+            shapes[deferred[0]].eq_site,
+            "this binding has no value — expected `=` and an initializer",
+        );
+        for &i in &deferred[1..] {
+            d = d.with_secondary(shapes[i].eq_site, "nor has this one");
         }
+        p.push_diag(d);
         return;
     };
     if deferred.iter().any(|&i| i > first_init) {
@@ -1587,7 +1608,15 @@ pub(crate) fn inner_attribute(p: &mut Parser<'_>, misplaced: bool) {
         );
     }
     p.bump(); // `#![`
+    // A file-wide attribute is parsed before any declaration sets the
+    // item floor, so its recovery had none: a `{` in its arguments
+    // shielded a skip to the end of the file and the attribute
+    // swallowed every declaration after it (s203, the budget-1000
+    // `grammar/index_origin_*.lu` cases). Its own line is its floor.
+    let saved = p.item_floor;
+    p.item_floor = Some(p.line_indent(opener.lo));
     attr_list_tail(p, opener, "#![");
+    p.item_floor = saved;
     m.complete(p, SyntaxKind::InnerAttribute);
 }
 
@@ -1707,10 +1736,11 @@ fn attr_input_eq(p: &mut Parser<'_>) {
     m.complete(p, SyntaxKind::AttrInput);
 }
 
-/// `pub` / `pub(pkg)`.
-pub(crate) fn visibility(p: &mut Parser<'_>) {
+/// `pub` / `pub(pkg)`. Returns whether the qualifier parsed clean.
+pub(crate) fn visibility(p: &mut Parser<'_>) -> bool {
     let m = p.start();
     p.bump(); // `pub`
+    let mut ok = true;
     if p.at_punct(Punct::LParen) {
         p.bump();
         if p.at(TokenKind::Ident) && p.current_text() == b"pkg" {
@@ -1722,10 +1752,12 @@ pub(crate) fn visibility(p: &mut Parser<'_>) {
                 "the only visibility qualifier is `pub(pkg)` — expected `pkg` here",
             );
             p.recover_until(true, |k| k == TokenKind::Punct(Punct::RParen));
+            ok = false;
         }
-        p.expect_punct(Punct::RParen, "`)` to close `pub(`");
+        ok &= p.expect_punct(Punct::RParen, "`)` to close `pub(`");
     }
     m.complete(p, SyntaxKind::Visibility);
+    ok
 }
 
 // ---------------------------------------------------------------- paths --
@@ -1750,6 +1782,20 @@ pub(crate) fn path(p: &mut Parser<'_>, what: &str) {
             break;
         }
         p.bump();
+        // A `.` at a line end continues the path onto the next line —
+        // but never into a sibling declaration (s203, the budget-1000
+        // `rows/negative/error_alias_cycle.lu` case: `{B, io .` took the
+        // contextual `error` of `error B = …` below as its segment and
+        // the second alias vanished into the first).
+        if p.at_sibling_decl() {
+            p.error(
+                codes::EXPECTED_TOKEN,
+                p.here(),
+                "expected a path segment after `.`",
+            );
+            p.missing();
+            break;
+        }
         name_token(p, "path segment");
     }
     m.complete(p, SyntaxKind::Path);
@@ -1769,6 +1815,13 @@ pub(crate) fn type_(p: &mut Parser<'_>) -> bool {
 /// payload types — except an item return, where [`ret_type`] owns the
 /// `! {row}` tail (keeping the header's tree shape).
 fn type_general(p: &mut Parser<'_>, postfix_row: bool) -> bool {
+    // A type never starts at a sibling declaration: `type M = distinct`
+    // with its operand deleted read the next line's `fn main` as a
+    // function type and swallowed the function (s203, the budget-1000
+    // `typecheck/cast_set.lu` cases).
+    if p.at_sibling_decl() {
+        return false;
+    }
     let cm = match p.current() {
         TokenKind::Punct(Punct::Not) => {
             let m = p.start();
@@ -2693,6 +2746,13 @@ fn raw_scan(p: &mut Parser<'_>, stop: impl Fn(TokenKind) -> bool) -> usize {
         if let TokenKind::Kw(kw) = k
             && is_decl_keyword(kw)
         {
+            flush_unclosed(p, &mut stack);
+            break;
+        }
+        // An attribute opening a sibling's line is that sibling's (s203,
+        // the budget-1000 `ct/membrane.lu` case: a raw type argument
+        // swallowed `#[consttime]` and left `fn leaky` without it).
+        if p.at_sibling_decl() {
             flush_unclosed(p, &mut stack);
             break;
         }
