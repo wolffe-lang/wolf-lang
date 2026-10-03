@@ -11065,19 +11065,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .ins(Opcode::Icmp, &[v, z], &[types::BOOL], Aux::IntCc(IntCc::Ne))
             .one()
     }
-    /// `[type.numlit.cast.narrow]`'s rail: the `bool` that says the
-    /// integer `v` (WIR type `src`, `fb` bits, signedness by
-    /// `src_unsigned`) fits a `tb`-bit target of `dst_unsigned`'s
-    /// signedness — or `None` when every source value fits and the cast
-    /// needs no check (same-signedness widening, unsigned into a wider
-    /// signed type, the identity). One compare per pair:
-    /// - an unsigned source, or a signed one going to an unsigned
-    ///   target no wider than it: `v <=u max(T)` (a negative signed
-    ///   value is a huge unsigned one, so the sign rail rides along);
-    /// - a signed source going to an unsigned target at least as wide:
-    ///   `v >= 0`;
-    /// - signed to a narrower signed target: the value survives the
-    ///   round trip, `sext(trunc(v)) == v`.
+
     /// `ptr.to_int`: a pointer's address as one `i64` word (kw06).
     fn ptr_addr(&mut self, p: Value) -> Value {
         self.b
@@ -11130,6 +11118,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.ins(op, &[v], &[types::I64], Aux::None).one()
     }
 
+    /// `[type.numlit.cast.narrow]`'s rail: the `bool` that says the
+    /// integer `v` (WIR type `src`, `fb` bits, signedness by
+    /// `src_unsigned`) fits a `tb`-bit target of `dst_unsigned`'s
+    /// signedness — or `None` when every source value fits and the cast
+    /// needs no check (same-signedness widening, unsigned into a wider
+    /// signed type, the identity). One compare per pair:
+    /// - an unsigned source, or a signed one going to an unsigned
+    ///   target no wider than it: `v <=u max(T)` (a negative signed
+    ///   value is a huge unsigned one, so the sign rail rides along);
+    /// - a signed source going to an unsigned target at least as wide:
+    ///   `v >= 0`;
+    /// - signed to a narrower signed target: the value survives the
+    ///   round trip, `sext(trunc(v)) == v`.
     fn narrow_fits(
         &mut self,
         v: Value,
