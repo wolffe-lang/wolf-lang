@@ -216,8 +216,16 @@ fn the_same_list_as_both_params_cannot_be_spelled() {
     );
 }
 
+/// The C membrane's kill, re-witnessed after kw02. s99 wrote it as a
+/// `List` reaching `export fn poke(xs: List[int])`; that program cannot
+/// be built any more — `[abi.c.types]` refuses a container at the
+/// membrane by name (a `List` is not a C type) — so the escape it
+/// poisoned no longer exists. What the kill still has to protect is the
+/// export's OWN parameters: C may call `bump` with any `int`, so a
+/// wolf call site's `bump(3)` must mint no range for `i`, and `bump`'s
+/// `i + 1` keeps its overflow check in the exported definition.
 #[test]
-fn a_list_reaching_the_c_membrane_is_poisoned() {
+fn a_list_never_reaches_the_c_membrane() {
     let dir = case(
         "s99_export",
         &program(
@@ -226,11 +234,36 @@ fn a_list_reaching_the_c_membrane_is_poisoned() {
             "    let n = poke(src)\n    if n < 0 { return 1 }\n",
         ),
     );
-    let Some(ir) = release_ir(&dir) else { return };
-    let fir = func_ir(&ir, "fill");
+    let st = Command::new(wolf())
+        .args(["build", dir.join("main.lu").to_str().unwrap(), "--release"])
+        .output()
+        .expect("spawn wolf");
+    if lane_exit::environment_refusal(&st, "wolf build") {
+        return;
+    }
+    let err = String::from_utf8_lossy(&st.stderr);
     assert!(
-        overflow_intrinsics(fir) > 0,
-        "a list reaching an export must keep fill's checks:\n{fir}"
+        !st.status.success() && err.contains("does not cross the C membrane"),
+        "a List at the membrane is refused by name ([abi.c.types]), got:\n{err}"
+    );
+}
+
+#[test]
+fn an_exports_parameter_stays_unknown_to_the_range_channel() {
+    let dir = case(
+        "s99_export_param",
+        &program(
+            "i & 255",
+            "export fn bump(i: int) -> int {\n    i + 1\n}\n\n",
+            "    let n = bump(3)\n    if n < 0 { return 1 }\n",
+        ),
+    );
+    let Some(ir) = release_ir(&dir) else { return };
+    let bir = func_ir(&ir, "\"bump\"");
+    assert!(
+        overflow_intrinsics(bir) > 0,
+        "an export's parameter is C's to choose — `bump(3)` must not discharge \
+         `i + 1`:\n{bir}"
     );
     tiers_agree(&dir);
 }
