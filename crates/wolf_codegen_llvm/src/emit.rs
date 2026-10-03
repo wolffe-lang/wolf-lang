@@ -2510,7 +2510,11 @@ impl<'a> Fx<'a> {
                     return Err(ice("call without callee"));
                 };
                 let callee = self.f.ext_funcs[ef].clone();
-                self.lower_call(&callee.name, callee.sig, &args, &results)?;
+                if let Some((store, width)) = wolf_wir::volatile_intrinsic(&callee.name) {
+                    self.lower_volatile(store, width, &args, &results)?;
+                } else {
+                    self.lower_call(&callee.name, callee.sig, &args, &results)?;
+                }
             }
             Opcode::CallInd => {
                 let Aux::Sig(sig) = data.aux else {
@@ -2952,6 +2956,40 @@ impl<'a> Fx<'a> {
                 Ok(t)
             }
         }
+    }
+
+    /// kw07 (`[mem.unsafe.volatile.2]`): a volatile intrinsic call is
+    /// one `load volatile`/`store volatile` of the width at its natural
+    /// alignment — LLVM never elides, splits, merges or reorders a
+    /// volatile access against another — with no alias-scope metadata
+    /// and no declaration (nothing is imported). The alignment is the
+    /// clause's, not a fact, so `strip_facts` does not lower it.
+    fn lower_volatile(
+        &mut self,
+        store: bool,
+        width: u32,
+        args: &[WValue],
+        results: &[WValue],
+    ) -> Result<(), BackendError> {
+        let ty = format!("i{}", width * 8);
+        let p = self.op(args[0])?;
+        let mut rest = results;
+        if store {
+            let v = self.op(args[1])?;
+            self.line(format!("  store volatile {ty} {v}, ptr {p}, align {width}"));
+        } else {
+            let t = self.tmp();
+            self.line(format!("  {t} = load volatile {ty}, ptr {p}, align {width}"));
+            let (&r, tail) = results
+                .split_first()
+                .ok_or_else(|| ice("a volatile load without a result"))?;
+            self.vals.insert(r, Repr::Scalar(t));
+            rest = tail;
+        }
+        for &tok in rest {
+            self.vals.insert(tok, Repr::Token);
+        }
+        Ok(())
     }
 
     /// Lower one call, executing the callee's ABI plan (tokens erased,
