@@ -220,3 +220,25 @@ fn e0811_dyn_cast_without_an_impl() {
          }\n",
     );
 }
+
+// ---------------------------------------------------------- E1307 -----
+
+#[test]
+fn e1307_volatile_pointee_not_one_access() {
+    // kw07 (`[mem.unsafe.volatile.1]`): a volatile access names exactly
+    // one machine access, so the pointee is one of the eight fixed-width
+    // integers or `byte`. `*bool` (a restricted value set) and `*int`
+    // (the platform integer, not a width) are each E1307 on the method.
+    snap_one(
+        "e1307_volatile_pointee",
+        "fn flag(p: *bool) -> bool {\n    \
+             // # Safety: the caller passes a live `*bool`.\n    \
+             unsafe { p.read_volatile() }\n\
+         }\n\
+         fn poke(p: *int) {\n    \
+             // # Safety: the caller passes a live `*int`.\n    \
+             unsafe { p.write_volatile(7) }\n\
+         }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}

@@ -1,0 +1,23 @@
+---
+source: crates/wolf_sema/tests/method_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E1307]: `read_volatile` needs a fixed-width integer or `byte` pointee, and this pointer's is `bool`
+ --> mem:///main.lu:3:16
+  |
+3 |     unsafe { p.read_volatile() }
+  |                ^^^^^^^^^^^^^ a `*bool` here
+  |
+  = note: a volatile access is exactly one machine access of the pointee's width
+    ([mem.unsafe.volatile.1]): u8, u16, u32, u64, i8, i16, i32, i64 or byte — cast the
+    pointer to the width the hardware defines (`p as *u32`)
+
+error[E1307]: `write_volatile` needs a fixed-width integer or `byte` pointee, and this pointer's is `int`
+ --> mem:///main.lu:7:16
+  |
+7 |     unsafe { p.write_volatile(7) }
+  |                ^^^^^^^^^^^^^^ a `*int` here
+  |
+  = note: a volatile access is exactly one machine access of the pointee's width
+    ([mem.unsafe.volatile.1]): u8, u16, u32, u64, i8, i16, i32, i64 or byte — cast the
+    pointer to the width the hardware defines (`p as *u32`)
