@@ -10,7 +10,8 @@
 //! and 0.1.44 stop at the keyword, pinned pre-mirror by version.
 
 fn evaluate(n: int) -> int ! {
-    var stack = n
+    var stack
+    stack = n
     stack
 }
 

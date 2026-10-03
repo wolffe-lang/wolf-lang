@@ -115,6 +115,23 @@ fn corpus_parse_expectations() {
                     f.display()
                 );
             }
+            Some(code) if src.lines().any(|l| l.starts_with("//! conforms:") && l.contains("proto.record.first")) => {
+                // A `[proto.record.first]` witness (s203, ruling #28) may
+                // carry several diagnostics by construction — the clause
+                // is about which of them is first. Its pin is the FIRST,
+                // in the clause's order; the rest are what it competes
+                // with.
+                fail += 1;
+                let first = wolf_diag::first_error(&parse.diagnostics)
+                    .unwrap_or_else(|| panic!("{} has no error", f.display()));
+                assert_eq!(
+                    first.code.as_str(),
+                    code,
+                    "{}'s first diagnostic ([proto.record.first]) must be {code}; got {:?}",
+                    f.display(),
+                    parse.diagnostics
+                );
+            }
             Some(code) => {
                 fail += 1;
                 for d in &parse.diagnostics {
