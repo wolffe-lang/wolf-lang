@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="run false\n")
+//! phase: run
+//! conforms: type.unit.context, type.unit.discard, type.closure.return, diag.sev.warn
+//! warns: W0601
+//!
+//! s208 (ruling #34 = A, wolf-lang#541 part 2) — the closure form of
+//! the fallible tail: a closure checked against `fn(bool) -> () ! {bad}`
+//! whose body ends in an else-less `if`. The then-block is a unit
+//! context there as in a fn, so the raise is discarded, warned, and
+//! `f(true)?` in `run` has nothing to propagate. Until s208 native,
+//! release and lupin let the raise leave the closure (`run true`); the
+//! checked machine does not execute closures (`unsupported`).
+
+fn boom() -> () ! {bad} {
+    return bad
+}
+
+fn run(f: fn(bool) -> () ! {bad}) -> () ! {bad} {
+    f(true)?
+}
+
+fn main() -> !int {
+    var raised = false
+    run(fn(c: bool) { if c { boom() } }) else |_| { raised = true }
+    print("run {raised}")
+    0
+}
