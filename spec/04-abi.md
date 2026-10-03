@@ -322,6 +322,59 @@ AAPCS64, win64, Apple arm64 deltas).
   links both tiers' objects with an assembly boot stub and trap hook,
   no libc and no runtime, and runs them.
 
+## §6 Assembly `[abi.asm]`
+
+- `[abi.asm]` Assembly reaches a wolf program one way at this cut:
+  whole routines in assembly source files the root `wolf.pkg` lists,
+  linked beside the program and called through bodyless `extern "c" fn`
+  declarations (K2 = C, STATUS #31: linked files now, the inline `asm`
+  block later). An interrupt entry, `lgdt`/`lidt`, a context switch and a
+  boot path are whole routines, so they are written this way.
+- `[abi.asm.link]` `asm: ["boot/io.S", …]` in the ROOT manifest
+  (`[pkg.manifest.schema]`) lists assembly sources, each path relative to
+  the manifest's directory; a listed file that does not exist is refused
+  naming it. The driver assembles each with the C driver the build
+  already uses for its target — on `x86_64-unknown-none` the release
+  tier's clang (`WOLF_CLANG`, else `clang`) with
+  `--target=x86_64-unknown-none-elf`, from any host, and the result must
+  be an ELF x86-64 object; on a hosted target the link's `CC` (else
+  `cc`) — and hands the objects to the link, or, under `--emit=obj -o
+  K.o`, writes each beside the program's object as `K.asm-<stem>.o` for
+  the boot code's link (K6(b): the consuming build links a freestanding
+  image). A routine is reached through a bodyless `extern "c" fn`
+  declaration called inside `unsafe` (E1301, `[abi.c.import]`). An
+  assembly source is not part of a package's content address
+  (`[pkg.sum]`), so a DEPENDENCY's manifest that lists `asm` is refused
+  (E1502): only the build's root lists assembly. A build that lists none
+  links exactly as before, byte for byte.
+- `[abi.asm.roster]` The listed sources are audited like `#[trusted]`
+  code (`[mem.boundary.trusted]`). Their roster is the names their
+  `.globl`/`.global` directives make visible, read from the text (a
+  routine made global by a macro or an included file is not on it). On
+  the freestanding target, a package that lists assembly calls through a
+  bodyless `extern "c" fn` only into its roster or the hooks
+  (`[abi.target.none.hooks]`); a call into any other name is **E1306**
+  at the call, naming the routine — E1303's sibling, so a kernel's unsafe
+  ring is visible in its manifest. (On a hosted target an extern may be
+  the C library's, so the roster names assembly but refuses nothing.)
+- `[abi.asm.machines]` The checked machine and lupin have no assembly
+  membrane. A call into a listed routine is `unsupported` on the checked
+  machine with the construct `` a call into assembly `NAME` `` (the
+  roster is read from the `wolf.pkg` beside the entry; the verdict is the
+  same `unsupported` without it, since the record is reproducible from
+  the file and the flags alone); lupin refuses the call to a bodyless
+  declaration by name (`` `NAME` has no body ``). A refusal is excluded
+  from divergence counting and listed in the conservatism ledger
+  (`[proto.record.unsupported]`). Hosted-testable logic takes its port
+  writes as a parameter so it runs on all four machines.
+- `[abi.asm.inline]` The `asm { "…", t = inout(reg) x }` block
+  (`[gram.expr.unsafe]`): template holes, operand directions, the `reg`
+  class and named registers, clobbers and `options(nomem, nostack,
+  noreturn)` are reserved for KWC kw13 (LLVM inline assembly on the
+  release tier, outlined to a generated assembly file on the native tier,
+  which has none). **Not yet implemented**: until then every machine
+  answers an `asm` block `unsupported` by name.
+
 ---
 
 Cross-references: no-unwinding invariant `[abi.native.nounwind]` ⇄

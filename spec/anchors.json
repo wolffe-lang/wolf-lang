@@ -1,5 +1,10 @@
 {
   "anchors": {
+    "abi.asm": "04-abi.md",
+    "abi.asm.inline": "04-abi.md",
+    "abi.asm.link": "04-abi.md",
+    "abi.asm.machines": "04-abi.md",
+    "abi.asm.roster": "04-abi.md",
     "abi.c": "04-abi.md",
     "abi.c.export": "04-abi.md",
     "abi.c.import": "04-abi.md",
