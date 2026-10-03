@@ -40,7 +40,7 @@
   and every float. `--emit=bin`, `wolf run`, `--checked` and
   `--profile-gen` refuse the target by name; `conform-run --target
   x86_64-unknown-none` is `unsupported` on every rung, never run.
-- `cfg(target = "…")` reads the build's target; anchors 554 → 560.
+- `cfg(target = "…")` reads the build's target; anchors 558 → 564.
 
 ### The narrowing cast: keep the value or trap (kw03, #533, ruling #31 K12)
 
