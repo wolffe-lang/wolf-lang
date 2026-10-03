@@ -1,5 +1,38 @@
 # Changelog
 
+## Unreleased
+
+### Integers and pointers (kw06, ruling #31 K9(a) and K9(c))
+
+- **The casts and the provenance methods lower.** `int as *T`, `*T as
+  int`, `p.addr()`, `p.with_addr(a)`, `p.expose()`, `p.with_exposed(a)`
+  and `p.is_null()` were `unsupported` on native and release ("raw casts
+  that change the machine shape", "a method call without an elaborated
+  impl"); now they lower through two WIR ops, `ptr.to_int` and
+  `ptr.from_int` (`ptrtoint`/`inttoptr` on release, the identity on
+  native), and `with_addr` is an offset from the receiver, keeping its
+  provenance. `N as *T` widens `N` by its own signedness; `*T as N` is
+  the address's bits for a 64-bit `N` and the address as `uint` under
+  `[type.numlit.cast.narrow]` for a narrower one (`[mem.prov.expose]`).
+- **Prefix `*p`.** A read, a write and a compound write through a raw
+  pointer, `p[0]` by another name, on all three tiers (it was
+  `unsupported` on every one, and `*p = v` was refused at resolve).
+  Outside `unsafe` it is E1301; on a non-pointer, E0409.
+- **Foreign memory, `[mem.prov.device]`.** An access no allocation owns
+  is UB row L2 on a hosted target, as before; on the freestanding
+  target it is the platform's — `0xb8000 as *u16` stores to `0xb8000` —
+  and the checked machine and lupin refuse a freestanding program by
+  name, never answering UB.
+- **Fixed on the way.** The checked machine read a signed raw pointee
+  unsigned (`*i32` holding -6 read 4294967290; wolf-lang#561), and gave
+  `*T as u8` the whole address under a `u8` type. Hosted programs that
+  use none of this build byte-for-byte as before (boreutils, lobo:
+  every binary identical, dev and release). Anchors 569 → 570.
+- lupin 0.1.45 has no `addr`/`with_addr`/`expose`/`with_exposed`, forgets
+  the address of an integer-made pointer no allocation owns, and runs
+  `*p` outside `unsafe` (wolf-interp#184); pinned by version in
+  `int_ptr_lanes.rs`.
+
 ## 0.2.22 — 2026-10-03
 
 THE TWENTY-SECOND. wolf builds for a freestanding target:
