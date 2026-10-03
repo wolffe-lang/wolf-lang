@@ -242,17 +242,19 @@ fn wreck_sites<'d>(root: &GreenNode, added: &[&'d wolf_diag::Diagnostic]) -> Vec
 
 /// The mutated parse's diagnostics that the baseline does not account
 /// for. A baseline diagnostic (the corpus counter-example files) is
-/// matched by code at its span moved by the splice; one that moved
-/// inside the wreck pays for one same-code diagnostic anywhere — the
-/// per-code reading of the count-based subtraction this replaced.
+/// matched by code at its span moved by the splice; one the wreck moved
+/// or recoded pays for the nearest remaining diagnostic of its kind
+/// (boundary or cascade) — so the count is exactly the count-based
+/// subtraction this replaced, and only WHICH ones are added is new.
 fn added_diagnostics<'d>(
     original: &[wolf_diag::Diagnostic],
     mutated: &'d [wolf_diag::Diagnostic],
     m: &Mutation,
 ) -> Vec<&'d wolf_diag::Diagnostic> {
     let delta = m.text.len() as i64 - (m.hi - m.lo) as i64;
+    let boundary = |c: wolf_diag::Code| c == wolf_parse::codes::UNCLOSED_DELIMITER;
     let mut left: Vec<&wolf_diag::Diagnostic> = mutated.iter().collect();
-    let mut unmatched = Vec::new();
+    let mut unmatched: Vec<(wolf_diag::Code, u32)> = Vec::new();
     for b in original {
         let s = b.primary.span;
         let moved = if s.hi <= m.lo {
@@ -270,11 +272,17 @@ fn added_diagnostics<'d>(
             Some(i) => {
                 left.remove(i);
             }
-            None => unmatched.push(b.code),
+            None => unmatched.push((b.code, moved.map_or(m.lo, |(lo, _)| lo))),
         }
     }
-    for code in unmatched {
-        if let Some(i) = left.iter().position(|d| d.code == code) {
+    for (code, near) in unmatched {
+        let pick = left
+            .iter()
+            .enumerate()
+            .filter(|(_, d)| boundary(d.code) == boundary(code))
+            .min_by_key(|(_, d)| (d.code != code, d.primary.span.lo.abs_diff(near)))
+            .map(|(i, _)| i);
+        if let Some(i) = pick {
             left.remove(i);
         }
     }
