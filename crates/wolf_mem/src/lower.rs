@@ -2699,6 +2699,43 @@ impl<'t> Lowerer<'t> {
         Ok(())
     }
 
+    /// kw06: prefix `*p` — `p[0]` spelled as a dereference
+    /// ([mem.unsafe.raw.1]). The same ring requirement and the same
+    /// attribution statement as `raw_index`; the pointer's own read is
+    /// a separate statement when it is a place.
+    fn raw_deref(&mut self, e: &'t GreenNode, write: bool) -> R<()> {
+        let verb = if write {
+            "a raw pointer write"
+        } else {
+            "a raw pointer read"
+        };
+        self.require_unsafe(verb, e.span);
+        let mut ptr = "<ptr>".to_string();
+        if let Some(operand) = PrefixExpr::cast(e).and_then(|d| d.operand()) {
+            if let Some((place, _)) = self.as_place(operand) {
+                self.emit_read(place, operand.span);
+            } else {
+                self.eval_value(operand)?;
+            }
+            ptr = self.text(operand.span);
+        }
+        if write {
+            self.push(Stmt::RawWrite { ptr, span: e.span });
+        } else {
+            self.push(Stmt::RawRead { ptr, span: e.span });
+        }
+        Ok(())
+    }
+
+    /// Is `e` a prefix `*p`? Sema types the operand as a raw pointer
+    /// (anything else is its error), so the spelling decides.
+    fn is_raw_deref(&self, e: &GreenNode) -> bool {
+        e.kind == SyntaxKind::PrefixExpr
+            && PrefixExpr::cast(e)
+                .and_then(|d| d.op())
+                .is_some_and(|t| t.kind == SyntaxKind::Star)
+    }
+
     /// Is `e` a `p[i]` access through a raw pointer? (The bracket
     /// place machinery owns containers; the raw tier owns this.)
     fn is_raw_index(&self, e: &GreenNode) -> bool {
@@ -3486,6 +3523,11 @@ impl<'t> Lowerer<'t> {
             return Ok(Val::none());
         };
         match d.op().map(|t| t.kind) {
+            // kw06: `*p` reads through a raw pointer.
+            Some(SyntaxKind::Star) => {
+                self.raw_deref(e, false)?;
+                Ok(Val::none())
+            }
             // s155 (`[type.trait.op]`): `-x` on a user type or a type
             // parameter is `Neg.neg(x)` — a read argument, a call
             // result.
@@ -3578,10 +3620,6 @@ impl<'t> Lowerer<'t> {
             }
             Some(SyntaxKind::Amp) => Err(NotYet {
                 construct: "first-class borrow expressions (typeable with the region campaign)",
-                span: e.span,
-            }),
-            Some(SyntaxKind::Star) => Err(NotYet {
-                construct: "the unsafe tier",
                 span: e.span,
             }),
             Some(SyntaxKind::SharedKw) => {
@@ -5699,7 +5737,15 @@ impl<'t> Lowerer<'t> {
             return Ok(());
         };
         // s22: `p[i] = v` / `p[i] op= v` through a raw pointer is a
-        // raw-tier write (compound also reads), not a place effect.
+        // raw-tier write (compound also reads), not a place effect;
+        // kw06: so is `*p = v` / `*p op= v`.
+        if self.is_raw_deref(place_expr) {
+            if d.op().map(|t| t.kind != SyntaxKind::Eq).unwrap_or(false) {
+                self.raw_deref(place_expr, false)?;
+            }
+            self.raw_deref(place_expr, true)?;
+            return Ok(());
+        }
         if self.is_raw_index(place_expr) {
             if d.op().map(|t| t.kind != SyntaxKind::Eq).unwrap_or(false) {
                 self.raw_index(place_expr, false)?;
