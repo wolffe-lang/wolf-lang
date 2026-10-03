@@ -593,6 +593,47 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   yet follow**: 0.1.37 runs the refused shape to `exit(0)`, so the
   wolf-interp mirror is filed and the differ will carry the row until
   it lands.)
+  (Extended 2026-10-03 by s207 for wolf-lang#540. **A `for` binding
+  carries its iterable's sites.** s171 named "the pieces of
+  `split`/`words`/`lines`" and the compiler refused a piece reached by
+  index (`s.split(",")[0]`), but a piece bound by a `for` over the same
+  call carried no site at all: `for w in s.words() { last = w }` handed
+  `last` out of the region, `exit(0)` from freed bytes on all three
+  lanes, while lupin traps `region-fault`. A loop binding is read out
+  of its iterable exactly as `xs[i]` is, so it carries what `xs[i]`
+  carries: a place's sites, or a value's — and a piece carries its
+  receiver's. Two sites are not where an element's bytes live, and
+  neither attaches: the `List` a `split`/`words`/`lines` call allocates
+  ("the LIST is, never the strings inside it" — so the pieces of a
+  literal, of a parameter, or of a `str` built outside the region
+  still leave freely), and a channel's own allocation, whose payloads
+  `[conc.chan.payload]` already refuses to let out of a region. A
+  binding of a scalar type carries nothing, as a `Copy` field read
+  carries nothing. The rule is not about views alone: `for w in mk()`,
+  where `mk` builds a `List[str]` in its caller's region, binds strings
+  whose bytes live there, and holding one past the region is the same
+  E1010. **The cost, stated.** Nothing at run time on any tier — a
+  refusal. The repair is to hoist the build out of the block. `copy` is
+  not a repair for a `str`: "a `str`'s bytes are immutable and the copy
+  shares them" (`[mem.tier0.move.3]`), and native and release lower
+  `copy s` as `s`, so `copy w` names the receiver's bytes and carries
+  its sites as `w` does — and so does `copy s` of a region-built `s`,
+  which the mem tier had let leave site-free
+  (`region_str_copy_return.lu`; lupin traps it). A parameter's
+  pseudo-site does not ride a `copy`: a parameter's bytes outlive the
+  frame and can escape no region in it, and E1004's fix-it keeps its
+  meaning (lobo's `acc.addr = copy pl.pt.authority`, s160's one
+  moved row, still compiles). s160's and s171's
+  sentences that `copy` "materializes the bytes into the ambient
+  region" disagree with that clause and with the lowering; the
+  disagreement is recorded on wolf-lang#540, not decided here.
+  Measured before it landed, trunk binary against head: boreutils' 54
+  binaries and lobo's two build byte-identical with no diagnostic, and
+  wolf-std's `std-test` answers as it did. Witnesses
+  `corpus/memory/region_str_view_for_*.lu`,
+  `region_str_list_for_held.lu`, `region_str_copy_return.lu`, and the
+  legal companion
+  `region_str_view_for_inside.lu`.)
   (Ruled 2026-09-11 by s153 for wolf-lang#310: `region scratch { let s
   = "re" + "gions"; s }` returned from a function printed `regions`
   from freed bytes on wolf 0.2.10 and lupin 0.1.31 alike, with a W1001
