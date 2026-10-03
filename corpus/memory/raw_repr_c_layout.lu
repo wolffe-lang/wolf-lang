@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="1 0 0 0 2 0 0 0 3 0 0 0 4 0 0 0 5 0 0 0 6 0 0 0\n17 3735928559 34\n")
 //! phase: run
-//! conforms: abi.layout.c, mem.unsafe.raw
+//! conforms: abi.layout.c, mem.unsafe.raw.1
 //!
 //! kw01 (K4, STATUS #31 — wolf-lang#523, a silent wrong answer at the C
 //! membrane): a `#[repr(c)]` struct stored or loaded through a raw

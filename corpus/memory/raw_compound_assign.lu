@@ -1,6 +1,6 @@
 //! check: run(exit=0, stdout="8\n248\n12\n")
 //! phase: run
-//! conforms: mem.unsafe.raw, gram.expr.assign
+//! conforms: mem.unsafe.raw.1, gram.expr.assign
 //!
 //! kw01 (wolf-lang#542, a silent wrong answer on three lanes): `p[i]
 //! op= v` through a raw pointer is a read-modify-write at the pointee's
