@@ -1073,7 +1073,45 @@ the C-style pointer arithmetic and two-phase patterns SB rejects.
 - `[mem.prov.expose]` Int→ptr casts produce a pointer with **exposed**
   provenance resolved angelically among exposed tags (a defined execution
   is chosen if one exists); ptr→int casts expose the tag. Wildcard
-  pointers from FFI behave as exposed.
+  pointers from FFI behave as exposed. The methods of `*T` are the
+  strict-provenance spellings beside the casts: `p.addr()` reads the
+  address without exposing the tag, `p.with_addr(a)` is `p`'s own
+  provenance at address `a`, and `p.expose()` / `p.with_exposed(a)` are
+  the two casts; `p.is_null()` compares the address with zero.
+  **Lowering** (K9(a), STATUS #31; kw06): every cast and method lowers
+  on every compiling tier — `ptrtoint`/`inttoptr` on the release tier,
+  the identity on the native tier's 64-bit pointers — and `with_addr`
+  is an offset from `p` (a non-`inbounds` `getelementptr`), so the
+  compiled tiers keep `p`'s provenance as the checked machine does. The
+  integer side of a cast: `N as *T` widens `N` to the address word by
+  `N`'s own signedness and never traps; `*T as N` is the address's bits
+  when `N` is 64 bits wide (`int`, `i64`, `uint`, `u64`; a higher-half
+  address read as `int` is negative), and otherwise the address as
+  `uint` under `[type.numlit.cast.narrow]` (kept in range, `overflow`
+  outside). Prefix `*p` is `p[0]`, as a read and as a place (`*p = v`,
+  `*p op= v`), under the same ring (E1301); `*` on anything but a `*T`
+  is E0409. The checked machine's addresses are its own (allocation
+  bases at a fixed stride), so output that prints an address is
+  machine-specific; offsets, differences and round trips agree.
+  Witnesses: `memory/prov_cast_round_trip.lu`,
+  `memory/prov_expose_round_trip.lu`, `memory/prov_addr_with_addr.lu`,
+  `memory/prov_is_null.lu`, `memory/prov_narrow_cast.lu`,
+  `memory/raw_deref.lu`, `memory/raw_deref_signed.lu`.
+- `[mem.prov.device]` An access through a pointer whose address no
+  allocation owns is an access to **foreign memory**. On a hosted
+  target it is UB row L2, as a dangling pointer is: the checked machine
+  answers E1401 and lupin `ub(mem.ub)`, and a compiled tier does
+  whatever the address does. On the freestanding target
+  (`[abi.target]`) its meaning is the platform's — a device register, a
+  physical frame, a boot protocol's table — and the compiling tiers
+  emit the access as written: `0xb8000 as *u16` stores to `0xb8000`.
+  Neither the checked machine nor lupin models a platform, so neither
+  answers UB for one: both refuse a freestanding program by name before
+  any access (`conform-run --target x86_64-unknown-none` is
+  `unsupported` with the freestanding target named, `[abi.target]`),
+  and a kernel's logic that touches no device runs on all four machines
+  under the hosted target (K9(c), STATUS #31). Witness:
+  `crates/wolf_driver/tests/int_ptr_lanes.rs`.
 - `[mem.prov.region]` Region composition: freeing a region **Disables
   every tag tree** of every allocation it owns; `freeze` transitions all
   its tags to Frozen. Region identity partitions provenance: tags rooted

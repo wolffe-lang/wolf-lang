@@ -297,6 +297,7 @@
     "mem.model.place.rhs": "02-memory-model.md",
     "mem.model.value": "02-memory-model.md",
     "mem.prov": "02-memory-model.md",
+    "mem.prov.device": "02-memory-model.md",
     "mem.prov.expose": "02-memory-model.md",
     "mem.prov.region": "02-memory-model.md",
     "mem.prov.state": "02-memory-model.md",
