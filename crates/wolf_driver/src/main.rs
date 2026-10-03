@@ -1783,7 +1783,20 @@ fn compile_native(
         }
         return Ok(());
     }
-    link_objects(&objects, out, opts.verbose)
+    // `[abi.target.none.hooks]` (kw04): the hosted toolchain defines the
+    // trap hook as the runtime's own report-and-exit, so a hosted program
+    // that calls `wolf_trap` (as a freestanding object's logic does when
+    // a hosted test links it) traps exactly as its own checks do. It is a
+    // LINK-TIME alias, added only when the program imports the hook: a
+    // `wolf_trap` compiled into `libwolf_rt.a` moved every hosted binary
+    // (its debug info and LLVM's `.llvm.<hash>` names), and hosted
+    // binaries must not move.
+    let trap_hook = module.funcs.values().any(|f| {
+        f.ext_funcs
+            .values()
+            .any(|e| e.name == format!("c.{}", wolf_backend::target::TRAP_HOOK))
+    });
+    link_objects(&objects, out, opts.verbose, trap_hook)
 }
 
 /// `--codegen-report` (s43): the whole-program phase's decisions, in
@@ -2033,7 +2046,12 @@ fn lld_fuse_flag() -> Option<&'static str> {
 /// [`windows_linker`]'s documented order. Objects are staged under
 /// deterministic temp names so cached and `--no-cache` links see
 /// identical inputs (the CI determinism check's ground).
-fn link_objects(objects: &[(String, Vec<u8>)], out: &Path, verbose: bool) -> Result<(), BuildStop> {
+fn link_objects(
+    objects: &[(String, Vec<u8>)],
+    out: &Path,
+    verbose: bool,
+    trap_hook: bool,
+) -> Result<(), BuildStop> {
     let rt = find_rt_lib().ok_or_else(|| {
         BuildStop::Environment(format!(
             "{RT_LIB_NAME} not found next to the `wolf` binary (build it with \
@@ -2066,7 +2084,7 @@ fn link_objects(objects: &[(String, Vec<u8>)], out: &Path, verbose: bool) -> Res
             .map_err(|e| BuildStop::Environment(format!("write {}: {e}", p.display())))?;
         paths.push(p);
     }
-    let result = link_staged(&paths, out, &rt, &dir, verbose);
+    let result = link_staged(&paths, out, &rt, &dir, verbose, trap_hook);
     let _ = std::fs::remove_dir_all(&dir);
     result
 }
@@ -2093,6 +2111,7 @@ fn link_staged(
     rt: &Path,
     dir: &Path,
     verbose: bool,
+    trap_hook: bool,
 ) -> Result<(), BuildStop> {
     let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
     let mut cmd = std::process::Command::new(&cc);
@@ -2131,6 +2150,21 @@ fn link_staged(
     cmd.arg("-Wl,-dead_strip");
     #[cfg(not(target_os = "macos"))]
     cmd.arg("-Wl,--gc-sections");
+    // kw04: `wolf_trap` = the runtime's sited reporter, for a program
+    // that imports the hook (see `compile_native`); the reporter is
+    // forced in, since an alias alone pulls no archive member.
+    if trap_hook {
+        #[cfg(target_os = "macos")]
+        cmd.args([
+            "-Wl,-u,___wolf_rt_trap_at",
+            "-Wl,-alias,___wolf_rt_trap_at,_wolf_trap",
+        ]);
+        #[cfg(not(target_os = "macos"))]
+        cmd.args([
+            "-Wl,--undefined=__wolf_rt_trap_at",
+            "-Wl,--defsym=wolf_trap=__wolf_rt_trap_at",
+        ]);
+    }
     if let Some(flag) = lld_fuse_flag() {
         cmd.arg(flag);
     }
@@ -2200,6 +2234,7 @@ fn link_staged(
     rt: &Path,
     _dir: &Path,
     verbose: bool,
+    trap_hook: bool,
 ) -> Result<(), BuildStop> {
     let linker = windows_linker()?;
     if verbose {
@@ -2235,6 +2270,12 @@ fn link_staged(
         "bcrypt.lib",
         "msvcrt.lib",
     ]);
+    // kw04: `wolf_trap` = the runtime's sited reporter, for a program
+    // that imports the hook (see `compile_native`).
+    if trap_hook {
+        cmd.arg("/INCLUDE:__wolf_rt_trap_at")
+            .arg("/ALTERNATENAME:wolf_trap=__wolf_rt_trap_at");
+    }
     let status = cmd.status().map_err(|e| {
         BuildStop::Environment(format!(
             "cannot run the linker `{}` ({}): {e}",
