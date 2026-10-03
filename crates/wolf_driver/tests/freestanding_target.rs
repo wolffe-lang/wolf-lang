@@ -194,11 +194,10 @@ fn native_objects_import_the_hook_list_and_nothing_else_on_every_host() {
     assert_step2_symbols(&build_obj(&w, "native"), &[]);
 }
 
-/// `[abi.target.none.hooks]`: the hosted runtime defines `wolf_trap` as
-/// the report-and-exit every hosted trap takes, so a hosted program that
-/// calls the hook (or links a freestanding object) traps as its own code
-/// does — on both tiers' native runs.
-#[cfg(unix)]
+/// `[abi.target.none.hooks]`: on a hosted target `wolf_trap` is the
+/// runtime's own report-and-exit (a link-time alias of the sited
+/// reporter, made for a program that imports the hook), so a hosted
+/// program that calls it traps as its own code does — on both tiers.
 #[test]
 fn the_hosted_runtime_defines_the_trap_hook() {
     static ONCE: std::sync::Once = std::sync::Once::new();
@@ -217,7 +216,13 @@ fn the_hosted_runtime_defines_the_trap_hook() {
          unsafe {\n        wolf_trap(1, 0, 0, 0, 0)\n    }\n    0\n}\n",
     )
     .expect("write");
-    for lane in ["--native", "--release"] {
+    // The release tier does not open on windows (s127's host gate).
+    let lanes: &[&str] = if cfg!(windows) {
+        &["--native"]
+    } else {
+        &["--native", "--release"]
+    };
+    for &lane in lanes {
         let out = wolf_in(&dir, &["conform-run", "h.lu", lane, "--json"]);
         let stdout = text(&out.stdout);
         let rec: serde_json::Value = serde_json::from_str(stdout.trim()).unwrap_or_else(|e| {
