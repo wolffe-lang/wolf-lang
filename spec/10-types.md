@@ -573,6 +573,29 @@ expected. This section is that clause; `send`'s row follows it in
   warning already names — propagate with `?`, handle with `else`, or
   bind it away — and the corpus witnesses spell the first.
 
+  (Measured 2026-10-03 by s207 for wolf-lang#541. **Lost means lost on
+  every machine.** W0601 fired on all three lanes, and native and
+  release then discarded (lupin too, but for an else-less `if`'s
+  raising value, which it binds — wolf-interp#179), while the checked
+  machine handed the row on:
+  a unit function's raising tail left `main` with `error: bad`, a
+  raising statement in `main` stopped it, and `let v = if c {
+  maybe(n) }` bound the value (`3`) or the row (`none`) where the
+  block's value is `()`. The checked machine now discards at every
+  tail the checker records as a unit-context discard and at every
+  non-trailing `!T` statement, and a `?` inside either still
+  propagates, because that row was consumed. "The operand of a
+  `return`" in a unit function is on the closed list too:
+  `return boom()` there stopped native and release with an internal
+  error and propagated on checked; it is the same discard now.
+  Witnesses `corpus/rows/unit_discard_*.lu`. One position is left as
+  the machines answer it: an else-less `if` that is itself the tail of
+  a fallible function (`fn g(c: bool) -> () ! {bad} { if c { boom() }
+  }`) hands the raise to `g`'s caller on all four machines and draws
+  no W0601, though "the then-block of an `if` with no `else`" is on the
+  list without exception; which way it goes is a ruling, recorded on
+  #541.)
+
 - `[type.unit.consume]` **A closure body with no fixed result is not a
   unit context.** `s.spawn(fn() { ch.send(v) })` infers `fn() -> !()`
   from its tail as `[type.closure.return]` says, and the scope consumes
