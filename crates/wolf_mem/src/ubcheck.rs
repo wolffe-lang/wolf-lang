@@ -57,7 +57,7 @@
 //! reports `unsupported` (the conservatism ledger). Execution is
 //! budget-bounded ([`Budget`]) with honest exhaustion.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use wolf_ast::{
     Arg, AssignStmt, Block as AstBlock, BorrowExpr, BracketApply, CallExpr, CastExpr, DeferStmt,
@@ -1120,6 +1120,10 @@ struct Ctx<'t> {
     expr_tys: HashMap<Span, TyId>,
     dispatch: HashMap<Span, &'t Dispatch>,
     src_file: usize,
+    /// s207 (wolf-lang#541, `[type.unit.discard]`): the `!T` tails
+    /// sema accepted in a unit context — the block's value there is
+    /// `()`, and the row is lost.
+    unit_discards: HashSet<Span>,
 }
 
 struct Machine<'t> {
@@ -2262,6 +2266,7 @@ impl<'t> Machine<'t> {
                 expr_tys: tb.exprs.iter().map(|(s, t)| (*s, *t)).collect(),
                 dispatch: tb.dispatch.iter().map(|(s, d)| (*s, d)).collect(),
                 src_file: b.file,
+                unit_discards: tb.unit_discards.iter().copied().collect(),
             };
             m.ctxs.push(Some(ctx));
         }
@@ -2822,18 +2827,27 @@ impl<'t> Machine<'t> {
             None
         };
         let mut out = Value::Unit;
-        for stmt in b.statements() {
+        let stmts: Vec<&'t GreenNode> = b.statements().collect();
+        let last = stmts.len().saturating_sub(1);
+        for (i, stmt) in stmts.into_iter().enumerate() {
             self.tick()?;
             match stmt.kind {
                 SyntaxKind::ExprStmt => {
                     let d = ExprStmt::cast(stmt).expect("kind");
                     if let Some(e) = d.expr() {
+                        // s207 (wolf-lang#541): a non-trailing `!T`
+                        // statement is W0601's other half — consumed
+                        // by no one, so its raw row is discarded and
+                        // the block goes on.
+                        let discarded = i != last
+                            && matches!(self.expr_ty(e.span), Some(TyKind::ErrUnion(..)));
                         match self.eval(e)? {
                             Flow::Val(v) => {
                                 if Some(e.span) == last_value {
                                     out = v;
                                 }
                             }
+                            Flow::Err(_, false) if discarded => {}
                             other => {
                                 self.close_scope(matches!(other, Flow::Err(..)))?;
                                 return Ok(other);
@@ -3257,6 +3271,31 @@ impl<'t> Machine<'t> {
     }
 
     fn eval(&mut self, e: &'t GreenNode) -> E<Flow> {
+        // s207 (wolf-lang#541, `[type.unit.discard]`): "A `!T` tail in
+        // a unit context is a discard, warned (W0601), never a
+        // mismatch. The value's row is lost — and, when T is not `()`,
+        // the value with it." Sema records each such tail; here its
+        // value and its raw row both become `()`. A `?` that fired
+        // inside it (`Flow::Err(_, true)`) still leaves: that row was
+        // consumed, not discarded. Until s207 this machine handed the
+        // row on — a unit fn's raising tail left `main` with
+        // `error: bad` where native, release and lupin printed the
+        // next line.
+        let discarded = self
+            .frames
+            .last()
+            .and_then(|f| self.ctxs[f.body].as_ref())
+            .is_some_and(|c| c.unit_discards.contains(&e.span));
+        if discarded {
+            return match self.eval_expr(e)? {
+                Flow::Val(_) | Flow::Err(_, false) => Ok(Flow::Val(Value::Unit)),
+                other => Ok(other),
+            };
+        }
+        self.eval_expr(e)
+    }
+
+    fn eval_expr(&mut self, e: &'t GreenNode) -> E<Flow> {
         self.tick()?;
         match e.kind {
             SyntaxKind::LiteralExpr => Ok(Flow::Val(self.literal(e)?)),
