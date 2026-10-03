@@ -1043,8 +1043,8 @@ Simpler than the safe tier, not stricter (anti-Stacked-Borrows lesson).
     ordinary access of `T`'s width: the checked machine and lupin run
     it under the same rows as `p[0]` (P1–P4, L1, L2, T1). An address
     that is not a multiple of `T`'s size is UB row L3. An address no
-    allocation owns is row L2 there (device memory is
-    `[mem.prov.device]`'s, F9).
+    allocation owns is row L2 there; device memory is F9's clause
+    (kw06), not this one's.
 - `[mem.unsafe.door]` Exactly two doors re-enter the safe world:
   1. `borrow r from ptr` — produces a region-scoped reference from a raw
      pointer. Obligation: `ptr` addresses a live allocation wholly inside
