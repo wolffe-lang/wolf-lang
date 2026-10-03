@@ -939,7 +939,7 @@ fn lower_body(
         membrane_sig_check(sig_tbl, sigs, fsig)?;
     }
     let mut b = FuncBuilder::new(module, wir_name, sig);
-    b.func.export = false; // PLANT (kw02): the export seam unset — the gates must go red
+    b.func.export = export;
     if export {
         b.func.ret_ext = match sig_tbl.kind(fsig.ret) {
             TyKind::Prim(Prim::I8 | Prim::I16) => Mode::Sext,
