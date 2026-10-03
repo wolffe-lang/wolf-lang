@@ -18712,7 +18712,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 // kw07 (`[mem.unsafe.volatile]`): the two volatile
                 // methods on a raw pointer lower to one access each.
-                TyKind::Ptr(elem) if matches!(mname.as_str(), "read_volatile" | "write_volatile") => {
+                TyKind::Ptr(elem)
+                    if matches!(mname.as_str(), "read_volatile" | "write_volatile") =>
+                {
                     let elem = *elem;
                     return self.lower_volatile(d, recv_place, elem, &mname, e);
                 }
