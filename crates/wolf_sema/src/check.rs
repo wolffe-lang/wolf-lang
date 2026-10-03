@@ -4538,6 +4538,13 @@ impl<'a> Checker<'a> {
                 }
             }
             SyntaxKind::IfExpr => {
+                if let Some(unit_exp) = self.bare_if_at_fallible_unit(e, exp) {
+                    self.record(e.span, unit_exp.ty);
+                    self.check_if(e, &unit_exp)?;
+                    let unit = unit_exp.ty;
+                    self.expect_unify(e.span, unit, exp);
+                    return Ok(());
+                }
                 self.record(e.span, exp.ty);
                 self.check_if(e, exp)
             }
@@ -10722,6 +10729,39 @@ impl<'a> Checker<'a> {
             because: None,
         };
         self.check_expr(cond, &exp)
+    }
+
+    /// Ruling #34 = A (s208, wolf-lang#541 part 2): an `if` with no
+    /// `else` (or a chain that ends without one) checked against a
+    /// fallible `!()` — the tail of a `-> () ! {…}` function, the operand
+    /// of a `return` in one — is still `[type.unit.context]`'s "then-block
+    /// of an `if` with no `else`": its blocks are checked against `()`, so
+    /// a `!T` tail there is the warned discard (`[type.unit.discard]`),
+    /// and the `if`'s own value, `()`, is what the function's `!()` takes
+    /// as its ok value. Until s208 the blocks were checked against the
+    /// `!()` itself, a raising tail met it, and the raise left the
+    /// function with no `?`, no `return` and no W0601 — on all four
+    /// machines, and native and release already discarded it in an
+    /// else-if chain. Any other expectation keeps the old path: a plain
+    /// `()` is the same check, and a non-unit one is the bare-`if`
+    /// mismatch either way.
+    fn bare_if_at_fallible_unit(&mut self, e: &GreenNode, exp: &Expect) -> Option<Expect> {
+        if !chain_is_bare(e) {
+            return None;
+        }
+        let expected = self.shallow(exp.ty);
+        let TyKind::ErrUnion(ok, _) = self.lo.table.kind(expected).clone() else {
+            return None;
+        };
+        let ok = self.shallow(ok);
+        if !matches!(self.lo.table.kind(ok), TyKind::Unit) {
+            return None;
+        }
+        Some(Expect {
+            ty: self.lo.table.unit(),
+            reason: Reason::BareIf,
+            because: Some(e.span),
+        })
     }
 
     fn check_if(&mut self, e: &GreenNode, exp: &Expect) -> R<()> {
