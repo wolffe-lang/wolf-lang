@@ -639,13 +639,272 @@ fn nested_item_inside_a_spilled_body_is_one_stray_run() {
 /// gets noisier.
 const MAX_BOUNDARY: usize = 3;
 
+/// One corpus file, read and parsed once for every mutation of it.
+struct Subject {
+    path: PathBuf,
+    /// Corpus-relative, `/`-separated: the seed's input.
+    rel: String,
+    src: Vec<u8>,
+    lexed: wolf_lex::Lexed,
+    original: wolf_parse::Parse,
+    /// The untouched-declaration ledger: top-level items and their
+    /// spans in the original parse. Items that are damaged in the
+    /// *baseline* (the corpus counter-example files) are exempt — the
+    /// property tracks clean declarations staying clean.
+    items: Vec<(wolf_ast::SyntaxKind, u32, u32)>,
+}
+
+fn corpus_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus")
+}
+
+fn subject(f: &Path, sm: &mut wolf_span::SourceMap) -> Subject {
+    let root = corpus_root();
+    let src = std::fs::read(f).unwrap_or_else(|e| panic!("read {}: {e}", f.display()));
+    let lexed = wolf_lex::lex(sm.intern(f), &src);
+    let original = wolf_parse::parse_tokens(&lexed, &src);
+    let items = original
+        .root
+        .nodes()
+        .filter(|n| n.kind.is_item() && !has_damage(n))
+        .map(|n| (n.kind, n.span.lo, n.span.hi))
+        .collect();
+    let rel = f.strip_prefix(&root).unwrap_or(f);
+    Subject {
+        path: f.to_path_buf(),
+        rel: rel.to_string_lossy().replace('\\', "/"),
+        src,
+        lexed,
+        original,
+        items,
+    }
+}
+
+/// The `iteration`-th mutation of a file. Seed from the CORPUS-RELATIVE
+/// path (separators normalized): the explored mutation set must be
+/// identical on every platform AND in every checkout location. Seeding
+/// from the absolute path made CI and local runs explore different
+/// mutations — a red `cargo test --workspace` at a green-CI sha (#20).
+fn mutation_of(s: &Subject, iteration: usize) -> Option<Mutation> {
+    let seed = fnv(s.rel.as_bytes()) ^ (iteration as u64).wrapping_mul(0x9e37);
+    let mut rng = Rng::new(seed);
+    pick_mutation(&mut rng, &s.src, &s.lexed.tokens)
+}
+
+/// Every invariant one mutation breaks, as messages (empty when it
+/// holds), and the mutated source.
+fn violations(
+    s: &Subject,
+    m: &Mutation,
+    iteration: usize,
+    sm: &mut wolf_span::SourceMap,
+) -> (Vec<String>, Vec<u8>) {
+    let mut mutated = Vec::with_capacity(s.src.len() + 8);
+    mutated.extend_from_slice(&s.src[..m.lo as usize]);
+    mutated.extend_from_slice(&m.text);
+    mutated.extend_from_slice(&s.src[m.hi as usize..]);
+    let delta = m.text.len() as i64 - (m.hi - m.lo) as i64;
+
+    let mfile = sm.intern(&s.path.with_extension(format!("mut{iteration}")));
+    let mlexed = wolf_lex::lex(mfile, &mutated);
+    let parse = wolf_parse::parse_tokens(&mlexed, &mutated);
+    let ctx = || format!("{} [{}]", s.path.display(), m.describe);
+    let mut failures: Vec<String> = Vec::new();
+
+    // Invariant 0: complete lossless tree, verifier clean.
+    if let Err(e) = wolf_ast::verify(&parse.root, &mutated) {
+        failures.push(format!("verifier failed for {}: {e}", ctx()));
+        return (failures, mutated);
+    }
+
+    // Invariant 1: the parser emits at most 3 diagnostics (5
+    // when the mutation unbalances delimiters — see module
+    // docs).
+    let delims = |bytes: &[u8]| -> Vec<u8> {
+        bytes
+            .iter()
+            .copied()
+            .filter(|b| matches!(b, b'(' | b')' | b'[' | b']' | b'{' | b'}'))
+            .collect()
+    };
+    let decl_kw = |bytes: &[u8]| -> Vec<String> {
+        let s = String::from_utf8_lossy(bytes).into_owned();
+        s.split_whitespace()
+            .filter(|w| {
+                [
+                    "fn", "let", "var", "const", "type", "struct", "enum", "trait", "impl",
+                    "use", "import", "pub", "extern", "export", "comptime",
+                ]
+                .contains(w)
+            })
+            .map(str::to_owned)
+            .collect()
+    };
+    let removed = &s.src[m.lo as usize..m.hi as usize];
+    // Structural: the mutation touches the delimiter skeleton,
+    // a declaration keyword, a `;`, an `=`/`=>`, or a `:` —
+    // the constructs that key nesting, statement, and binding
+    // structure (moving or changing any of them shifts
+    // everything downstream; `:` keys `name: type` in params,
+    // generic params, fields and lets — losing it inside
+    // `fn f[N: type]` legitimately draws one report per
+    // enclosing tier, the #20 finding). Everything else must
+    // stay within the tight bound.
+    let keyed = |bytes: &[u8]| {
+        !delims(bytes).is_empty()
+            || !decl_kw(bytes).is_empty()
+            || bytes.contains(&b';')
+            || bytes.contains(&b'=')
+            || bytes.contains(&b':')
+    };
+    // Damage INSIDE a generic parameter list re-keys the whole
+    // declaration header (`fn f[N: type](…) -> …`): parameter
+    // name, bracket balance, parameter list and return type
+    // each report once — one per enclosing tier, the module-doc
+    // allowance. Classified structurally by the ORIGINAL tree,
+    // not by mutation bytes (#20: deleting the bare `N` is as
+    // structural as replacing the `:`).
+    let in_generics = |node: &GreenNode| {
+        fn hit(n: &GreenNode, lo: u32, hi: u32) -> bool {
+            if n.kind == wolf_ast::SyntaxKind::GenericParamList
+                && lo < n.span.hi
+                && hi > n.span.lo
+            {
+                return true;
+            }
+            n.nodes().any(|c| hit(c, lo, hi))
+        }
+        hit(node, m.lo, m.hi)
+    };
+    let structural = keyed(removed) || keyed(&m.text) || in_generics(&s.original.root);
+    let max = if structural { 5 } else { 3 };
+    // Baseline diagnostics (the corpus counter-example files)
+    // are pre-existing; the property bounds the *added* ones.
+    //
+    // Two kinds of added diagnostic, counted apart, because they
+    // answer different questions and one pays for the other.
+    //
+    // CASCADE is what this property exists to bound: the parser
+    // losing the thread and reporting the same wreck again and
+    // again, or misreading the wreckage as new constructs.
+    //
+    // A BOUNDARY diagnostic (E0202, `this `{` is never closed`)
+    // is the opposite. It is the parser saying exactly where the
+    // damage ends, once per unclosed opener, and it is the thing
+    // that STOPS the wreck from swallowing what follows. Charged
+    // to the mutation it made recovery self-defeating: closing a
+    // damaged block costs a diagnostic, so a fix for the
+    // untouched-declarations invariant below (a block that ends
+    // at a sibling-level item keyword) paid for itself by
+    // breaking this one — measured, one case fixed for one case
+    // broken, a net of zero. The bound was a cap on how well the
+    // parser was allowed to recover.
+    //
+    // Their own budget keeps the teeth: boundaries are bounded
+    // per unclosed opener, so a storm of them still fails, and
+    // nesting depth in the corpus is what sets the number.
+    //
+    // Cascade is counted per WRECK SITE (ruling #27, module docs
+    // and [`wreck_sites`]); boundaries stay per mutation — they
+    // are per unclosed opener already.
+    let added = added_diagnostics(&s.original.diagnostics, &parse.diagnostics, &m);
+    let (bounds, cascade): (Vec<_>, Vec<_>) = added
+        .into_iter()
+        .partition(|d| d.code == wolf_parse::codes::UNCLOSED_DELIMITER);
+    let sites = wreck_sites(&parse.root, &cascade);
+    if let Some(worst) = sites.iter().map(Vec::len).max().filter(|&n| n > max) {
+        failures.push(format!(
+            "{}: {worst} added cascade diagnostics at one wreck site (max {max}; {} \
+             site(s), {} in all):\n    {}",
+            ctx(),
+            sites.len(),
+            cascade.len(),
+            render_sites(&sites)
+        ));
+    }
+    if bounds.len() > MAX_BOUNDARY {
+        failures.push(format!(
+            "{}: {} added recovery-boundary diagnostics (max {MAX_BOUNDARY}): {:?}",
+            ctx(),
+            bounds.len(),
+            parse.diagnostics
+        ));
+    }
+
+    // Invariant 2: untouched declarations parse without error
+    // nodes or missing markers (wherever they re-parented) —
+    // with the one designed exception, wolf-lang#283: a
+    // mutation that puts `else` at the start of a line withdraws
+    // the terminator above it (`[gram.lex.newline]`'s lookahead,
+    // #276), and the statement that terminator closed may take
+    // the `else` in. The reach is one statement by construction
+    // (one terminator withheld), and the property asserts
+    // exactly that: the token after the withheld terminator IS
+    // `else`; at most the ONE item ending at that terminator is
+    // exempt; and even that item is still a node of its own
+    // kind starting where it started — it grew, it did not
+    // vanish. Every other untouched declaration holds as before.
+    let withheld = withheld_terminator(&s.lexed.tokens, &mlexed.tokens, &s.src, m.lo);
+    if let Some(term) = withheld {
+        let next = mlexed
+            .tokens
+            .iter()
+            .find(|t| t.span.lo >= term.hi && !t.span.is_empty())
+            .map(|t| t.kind);
+        if next != Some(TokenKind::Kw(wolf_lex::Keyword::Else)) {
+            failures.push(format!(
+                "{}: a terminator was withheld at {}..{} and the next token is not \
+                 `else` ({next:?})",
+                ctx(),
+                term.lo,
+                term.hi
+            ));
+        }
+    }
+    let exempt = withheld.and_then(|t| {
+        s.items
+            .iter()
+            .position(|&(_, _, hi)| hi == t.hi || hi == t.lo)
+    });
+    for (idx, &(kind, lo, hi)) in s.items.iter().enumerate() {
+        let (mlo, mhi) = if hi <= m.lo {
+            (lo, hi)
+        } else if lo >= m.hi {
+            ((lo as i64 + delta) as u32, (hi as i64 + delta) as u32)
+        } else {
+            continue; // touched by the mutation
+        };
+        match find_span(&parse.root, kind, mlo, mhi) {
+            Some(node) if !has_damage(node) => {}
+            _ if Some(idx) == exempt => {
+                if find_start(&parse.root, kind, mlo).is_none() {
+                    failures.push(format!(
+                        "{}: the statement before a line-leading `else` is no longer a \
+                         {kind:?} starting at {mlo}",
+                        ctx()
+                    ));
+                }
+            }
+            Some(_) => failures.push(format!(
+                "{}: untouched {kind:?} at {mlo}..{mhi} contains error nodes",
+                ctx()
+            )),
+            None => failures.push(format!(
+                "{}: untouched {kind:?} {lo}..{hi} not found at {mlo}..{mhi}",
+                ctx()
+            )),
+        }
+    }
+    (failures, mutated)
+}
+
 #[test]
 fn single_token_mutations_have_bounded_blast_radius() {
     let budget: usize = std::env::var("MUTATE_BUDGET")
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(3);
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus");
+    let root = corpus_root();
     let mut files = Vec::new();
     collect(&root, &mut files);
     files.sort();
@@ -655,242 +914,24 @@ fn single_token_mutations_have_bounded_blast_radius() {
     let mut failures: Vec<String> = Vec::new();
     let mut mutations = 0usize;
     for f in &files {
-        let src = std::fs::read(f).expect("read corpus file");
-        let file = sm.intern(f);
-        let lexed = wolf_lex::lex(file, &src);
-        let original = wolf_parse::parse_tokens(&lexed, &src);
-        // The untouched-declaration ledger: top-level items and their
-        // spans in the original parse. Items that are damaged in the
-        // *baseline* (the corpus counter-example files) are exempt —
-        // the property tracks clean declarations staying clean.
-        let items: Vec<(wolf_ast::SyntaxKind, u32, u32)> = original
-            .root
-            .nodes()
-            .filter(|n| n.kind.is_item() && !has_damage(n))
-            .map(|n| (n.kind, n.span.lo, n.span.hi))
-            .collect();
-
+        let s = subject(f, &mut sm);
         for iteration in 0..budget {
-            // Seed from the CORPUS-RELATIVE path (separators
-            // normalized): the explored mutation set must be identical
-            // on every platform AND in every checkout location.
-            // Seeding from the absolute path made CI and local runs
-            // explore different mutations — a red `cargo test
-            // --workspace` at a green-CI sha (#20).
-            let rel = f.strip_prefix(&root).unwrap_or(f);
-            let seed = fnv(rel.to_string_lossy().replace('\\', "/").as_bytes())
-                ^ (iteration as u64).wrapping_mul(0x9e37);
-            let mut rng = Rng::new(seed);
-            let Some(m) = pick_mutation(&mut rng, &src, &lexed.tokens) else {
+            let Some(m) = mutation_of(&s, iteration) else {
                 continue;
             };
             mutations += 1;
-            let mut mutated = Vec::with_capacity(src.len() + 8);
-            mutated.extend_from_slice(&src[..m.lo as usize]);
-            mutated.extend_from_slice(&m.text);
-            mutated.extend_from_slice(&src[m.hi as usize..]);
-            let delta = m.text.len() as i64 - (m.hi - m.lo) as i64;
-
-            let mfile = sm.intern(&f.with_extension(format!("mut{iteration}")));
-            let mlexed = wolf_lex::lex(mfile, &mutated);
-            let parse = wolf_parse::parse_tokens(&mlexed, &mutated);
-            let ctx = || format!("{} [{}]", f.display(), m.describe);
-            let reported = failures.len();
-
-            // Invariant 0: complete lossless tree, verifier clean.
-            if let Err(e) = wolf_ast::verify(&parse.root, &mutated) {
-                failures.push(format!("verifier failed for {}: {e}", ctx()));
-                continue;
-            }
-
-            // Invariant 1: the parser emits at most 3 diagnostics (5
-            // when the mutation unbalances delimiters — see module
-            // docs).
-            let delims = |bytes: &[u8]| -> Vec<u8> {
-                bytes
-                    .iter()
-                    .copied()
-                    .filter(|b| matches!(b, b'(' | b')' | b'[' | b']' | b'{' | b'}'))
-                    .collect()
-            };
-            let decl_kw = |bytes: &[u8]| -> Vec<String> {
-                let s = String::from_utf8_lossy(bytes).into_owned();
-                s.split_whitespace()
-                    .filter(|w| {
-                        [
-                            "fn", "let", "var", "const", "type", "struct", "enum", "trait", "impl",
-                            "use", "import", "pub", "extern", "export", "comptime",
-                        ]
-                        .contains(w)
-                    })
-                    .map(str::to_owned)
-                    .collect()
-            };
-            let removed = &src[m.lo as usize..m.hi as usize];
-            // Structural: the mutation touches the delimiter skeleton,
-            // a declaration keyword, a `;`, an `=`/`=>`, or a `:` —
-            // the constructs that key nesting, statement, and binding
-            // structure (moving or changing any of them shifts
-            // everything downstream; `:` keys `name: type` in params,
-            // generic params, fields and lets — losing it inside
-            // `fn f[N: type]` legitimately draws one report per
-            // enclosing tier, the #20 finding). Everything else must
-            // stay within the tight bound.
-            let keyed = |bytes: &[u8]| {
-                !delims(bytes).is_empty()
-                    || !decl_kw(bytes).is_empty()
-                    || bytes.contains(&b';')
-                    || bytes.contains(&b'=')
-                    || bytes.contains(&b':')
-            };
-            // Damage INSIDE a generic parameter list re-keys the whole
-            // declaration header (`fn f[N: type](…) -> …`): parameter
-            // name, bracket balance, parameter list and return type
-            // each report once — one per enclosing tier, the module-doc
-            // allowance. Classified structurally by the ORIGINAL tree,
-            // not by mutation bytes (#20: deleting the bare `N` is as
-            // structural as replacing the `:`).
-            let in_generics = |node: &GreenNode| {
-                fn hit(n: &GreenNode, lo: u32, hi: u32) -> bool {
-                    if n.kind == wolf_ast::SyntaxKind::GenericParamList
-                        && lo < n.span.hi
-                        && hi > n.span.lo
-                    {
-                        return true;
-                    }
-                    n.nodes().any(|c| hit(c, lo, hi))
-                }
-                hit(node, m.lo, m.hi)
-            };
-            let structural = keyed(removed) || keyed(&m.text) || in_generics(&original.root);
-            let max = if structural { 5 } else { 3 };
-            // Baseline diagnostics (the corpus counter-example files)
-            // are pre-existing; the property bounds the *added* ones.
-            //
-            // Two kinds of added diagnostic, counted apart, because they
-            // answer different questions and one pays for the other.
-            //
-            // CASCADE is what this property exists to bound: the parser
-            // losing the thread and reporting the same wreck again and
-            // again, or misreading the wreckage as new constructs.
-            //
-            // A BOUNDARY diagnostic (E0202, `this `{` is never closed`)
-            // is the opposite. It is the parser saying exactly where the
-            // damage ends, once per unclosed opener, and it is the thing
-            // that STOPS the wreck from swallowing what follows. Charged
-            // to the mutation it made recovery self-defeating: closing a
-            // damaged block costs a diagnostic, so a fix for the
-            // untouched-declarations invariant below (a block that ends
-            // at a sibling-level item keyword) paid for itself by
-            // breaking this one — measured, one case fixed for one case
-            // broken, a net of zero. The bound was a cap on how well the
-            // parser was allowed to recover.
-            //
-            // Their own budget keeps the teeth: boundaries are bounded
-            // per unclosed opener, so a storm of them still fails, and
-            // nesting depth in the corpus is what sets the number.
-            //
-            // Cascade is counted per WRECK SITE (ruling #27, module docs
-            // and [`wreck_sites`]); boundaries stay per mutation — they
-            // are per unclosed opener already.
-            let added = added_diagnostics(&original.diagnostics, &parse.diagnostics, &m);
-            let (bounds, cascade): (Vec<_>, Vec<_>) = added
-                .into_iter()
-                .partition(|d| d.code == wolf_parse::codes::UNCLOSED_DELIMITER);
-            let sites = wreck_sites(&parse.root, &cascade);
-            if let Some(worst) = sites.iter().map(Vec::len).max().filter(|&n| n > max) {
-                failures.push(format!(
-                    "{}: {worst} added cascade diagnostics at one wreck site (max {max}; {} \
-                     site(s), {} in all):\n    {}",
-                    ctx(),
-                    sites.len(),
-                    cascade.len(),
-                    render_sites(&sites)
-                ));
-            }
-            if bounds.len() > MAX_BOUNDARY {
-                failures.push(format!(
-                    "{}: {} added recovery-boundary diagnostics (max {MAX_BOUNDARY}): {:?}",
-                    ctx(),
-                    bounds.len(),
-                    parse.diagnostics
-                ));
-            }
-
-            // Invariant 2: untouched declarations parse without error
-            // nodes or missing markers (wherever they re-parented) —
-            // with the one designed exception, wolf-lang#283: a
-            // mutation that puts `else` at the start of a line withdraws
-            // the terminator above it (`[gram.lex.newline]`'s lookahead,
-            // #276), and the statement that terminator closed may take
-            // the `else` in. The reach is one statement by construction
-            // (one terminator withheld), and the property asserts
-            // exactly that: the token after the withheld terminator IS
-            // `else`; at most the ONE item ending at that terminator is
-            // exempt; and even that item is still a node of its own
-            // kind starting where it started — it grew, it did not
-            // vanish. Every other untouched declaration holds as before.
-            let withheld = withheld_terminator(&lexed.tokens, &mlexed.tokens, &src, m.lo);
-            if let Some(term) = withheld {
-                let next = mlexed
-                    .tokens
-                    .iter()
-                    .find(|t| t.span.lo >= term.hi && !t.span.is_empty())
-                    .map(|t| t.kind);
-                if next != Some(TokenKind::Kw(wolf_lex::Keyword::Else)) {
-                    failures.push(format!(
-                        "{}: a terminator was withheld at {}..{} and the next token is not \
-                         `else` ({next:?})",
-                        ctx(),
-                        term.lo,
-                        term.hi
-                    ));
-                }
-            }
-            let exempt = withheld.and_then(|t| {
-                items
-                    .iter()
-                    .position(|&(_, _, hi)| hi == t.hi || hi == t.lo)
-            });
-            for (idx, &(kind, lo, hi)) in items.iter().enumerate() {
-                let (mlo, mhi) = if hi <= m.lo {
-                    (lo, hi)
-                } else if lo >= m.hi {
-                    ((lo as i64 + delta) as u32, (hi as i64 + delta) as u32)
-                } else {
-                    continue; // touched by the mutation
-                };
-                match find_span(&parse.root, kind, mlo, mhi) {
-                    Some(node) if !has_damage(node) => {}
-                    _ if Some(idx) == exempt => {
-                        if find_start(&parse.root, kind, mlo).is_none() {
-                            failures.push(format!(
-                                "{}: the statement before a line-leading `else` is no longer a \
-                                 {kind:?} starting at {mlo}",
-                                ctx()
-                            ));
-                        }
-                    }
-                    Some(_) => failures.push(format!(
-                        "{}: untouched {kind:?} at {mlo}..{mhi} contains error nodes",
-                        ctx()
-                    )),
-                    None => failures.push(format!(
-                        "{}: untouched {kind:?} {lo}..{hi} not found at {mlo}..{mhi}",
-                        ctx()
-                    )),
-                }
-            }
+            let (found, mutated) = violations(&s, &m, iteration, &mut sm);
             // `BLAST_DUMP=<dir>` writes each violating mutation's source,
             // named for its file and iteration, so a nightly red is one
             // `tree_dump` away from its tree.
-            if failures.len() > reported
+            if !found.is_empty()
                 && let Some(dir) = std::env::var_os("BLAST_DUMP")
             {
-                let name = rel.to_string_lossy().replace(['/', '\\'], "__");
+                let name = s.rel.replace('/', "__");
                 let out = Path::new(&dir).join(format!("{name}.mut{iteration}.lu"));
                 std::fs::write(&out, &mutated).expect("write BLAST_DUMP file");
             }
+            failures.extend(found);
         }
     }
     eprintln!(
@@ -901,6 +942,53 @@ fn single_token_mutations_have_bounded_blast_radius() {
     assert!(
         failures.is_empty(),
         "{} violation(s) of the blast-radius property:\n{}",
+        failures.len(),
+        failures.join("\n")
+    );
+}
+
+/// The budget-1000 sweep's violations, pinned by (file, iteration) so
+/// the PR gauntlet holds them, not only a 1000-budget run nobody
+/// schedules. Before s203 the sweep asserted on its FIRST violation, so
+/// at 1000 it stopped at #367 and never reported these; collecting
+/// every violation found seventeen more (s203's `BLAST_DUMP` run at
+/// `d3648d6a`). Each was a recovery path, fixed in the parser; none
+/// moved a bound. A corpus edit to one of these files re-rolls its
+/// mutations, so a row that stops reproducing its shape is re-derived
+/// from a sweep, not deleted.
+const SWEEP_1000: &[(&str, usize)] = &[
+    ("conc/proc_cap_fault_join.lu", 451),
+    ("conc/proc_cap_fault_join.lu", 897),
+    ("ct/membrane.lu", 909),
+    ("grammar/index_origin_bad.lu", 642),
+    ("grammar/index_origin_closure.lu", 367),
+    ("grammar/match_arm_at_binding.lu", 442),
+    ("grammar/struct_pattern_match_arm.lu", 804),
+    ("grammar/struct_pattern_unknown_field.lu", 607),
+    ("kernels/ct_tag_compare.lu", 789),
+    ("memory/recv_claim_arg_closure.lu", 305),
+    ("memory/recv_claim_arg_closure.lu", 808),
+    ("net/inherit_listener.lu", 361),
+    ("rows/negative/error_alias_cycle.lu", 976),
+    ("typecheck/cast_set.lu", 344),
+    ("typecheck/cast_set.lu", 543),
+    ("typecheck/cast_set.lu", 876),
+    ("typecheck/method_scope/p.lu", 954),
+];
+
+#[test]
+fn the_budget_1000_sweep_cases_hold() {
+    let mut sm = wolf_span::SourceMap::new();
+    let mut failures = Vec::new();
+    for &(rel, iteration) in SWEEP_1000 {
+        let s = subject(&corpus_root().join(rel), &mut sm);
+        let m = mutation_of(&s, iteration)
+            .unwrap_or_else(|| panic!("{rel} mutation {iteration} no longer picks a target"));
+        failures.extend(violations(&s, &m, iteration, &mut sm).0);
+    }
+    assert!(
+        failures.is_empty(),
+        "{} of the pinned budget-1000 cases fail:\n{}",
         failures.len(),
         failures.join("\n")
     );
