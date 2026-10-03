@@ -238,3 +238,48 @@ fn frem_survives_the_textual_ir() {
         "print→parse→print fixpoint"
     );
 }
+
+/// kw02 (`[abi.c.export]`, `[abi.c.import]`): an export's result
+/// widening and a C import's argument widening are canonical text —
+/// they change the code a C caller or callee sees, so print → parse →
+/// print is a fixpoint and the content hash moves with them.
+#[test]
+fn c_membrane_widening_round_trips() {
+    let src = "decl @c.kc_neg8(sext i8, zext i16, i64) -> i8\n\
+               \n\
+               export sext fn @kx_neg8(i8) -> i8 {\n\
+               b0(%0: i8):\n  ret %0\n}\n\
+               \n\
+               export zext fn @kx_pos(i64) -> bool {\n\
+               b0(%0: i64):\n  %1 = icmp.sgt %0, %0\n  ret %1\n}\n\
+               \n\
+               export fn @kx_wide(i64) -> i64 {\n\
+               b0(%0: i64):\n  ret %0\n}\n";
+    let m = wolf_wir::parse_module(src).expect("parses");
+    let once = wolf_wir::print_module(&m);
+    assert!(
+        once.contains("export sext fn @kx_neg8(i8) -> i8 {"),
+        "{once}"
+    );
+    assert!(
+        once.contains("export zext fn @kx_pos(i64) -> bool {"),
+        "{once}"
+    );
+    assert!(once.contains("export fn @kx_wide(i64) -> i64 {"), "{once}");
+    let again = wolf_wir::print_module(&wolf_wir::parse_module(&once).expect("reparses"));
+    assert_eq!(once, again, "print → parse → print is a fixpoint");
+    let kx = |text: &str| {
+        let m = wolf_wir::parse_module(text).expect("parses");
+        let f = m
+            .funcs
+            .values()
+            .find(|f| f.name == "kx_neg8")
+            .expect("kx_neg8");
+        (f.export, f.ret_ext)
+    };
+    assert_eq!(kx(&once), (true, wolf_wir::Mode::Sext));
+    assert_eq!(
+        kx(&once.replace("export sext fn @kx_neg8", "export fn @kx_neg8")),
+        (true, wolf_wir::Mode::Val)
+    );
+}
