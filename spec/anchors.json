@@ -451,6 +451,7 @@
     "proto.record.diag": "06-differential-protocol.md",
     "proto.record.ext": "06-differential-protocol.md",
     "proto.record.fields": "06-differential-protocol.md",
+    "proto.record.first": "06-differential-protocol.md",
     "proto.record.pass": "06-differential-protocol.md",
     "proto.record.phase": "06-differential-protocol.md",
     "proto.record.trap": "06-differential-protocol.md",
