@@ -6,8 +6,9 @@
 //! lane refused the form as `unsupported` and lupin 0.1.43 ran it —
 //! taking the first bare-tag arm for a VALUE too (`match look(m, "a")
 //! { none => -1, v => v }` answered -1 on a hit), which is why its
-//! answers are pinned here by version as pre-mirror (is67 moves
-//! lupin), never widened.
+//! answers were pinned here by version as pre-mirror, never widened.
+//! The pins were dropped at the 0.1.44 pairing (r26): 0.1.44 carries
+//! is67's mirror and takes the ruled arm on every case.
 //!
 //! Why a driver test beside the corpus rows (s171's lesson, wave 45):
 //! `cargo xtask corpus` runs every `phase: run` entry on the NATIVE
@@ -207,17 +208,14 @@ fn every_lane_refuses(entry: &Path, code: &str, lupin_pre_mirror: &[(&str, &str)
 
 /// The issue's shape: a bare row arm and a value binding, over the
 /// call and over a bound `!int`. Red at trunk cdde128a on every
-/// wolfgang lane (`unsupported`). lupin 0.1.43 takes the `none` arm
+/// wolfgang lane (`unsupported`). lupin 0.1.43 took the `none` arm
 /// for a value too.
 #[test]
 fn a_bare_tag_arm_and_a_value_binding() {
     every_lane_says(
         &corpus("match_row_bare_tag.lu"),
         "look zz\n-1\nlook a\n6\nlook zz\n-2\nlook a\n1\n",
-        &[(
-            "0.1.43",
-            "look zz\n-1\nlook a\n-1\nlook zz\n-2\nlook a\n-2\n",
-        )],
+        &[],
     );
 }
 
@@ -228,7 +226,7 @@ fn every_arm_kind_over_one_fallible_value() {
     every_lane_says(
         &corpus("match_row_payload_tag.lu"),
         "eof\nbad x\ntwo\nlong 4\nlen 1\n",
-        &[("0.1.43", "eof\nbad x\neof\neof\neof\n")],
+        &[],
     );
 }
 
@@ -241,11 +239,7 @@ fn a_wildcard_covers_what_is_left_on_each_half() {
         &corpus("match_row_wild_each_half.lu"),
         "0: closed | closed | some error\n1: other | io | some error\n\
 2: other | bad 2 | some error\n3: other | value | value 30\n",
-        &[(
-            "0.1.43",
-            "0: closed | closed | value closed\n1: other | io | value io\n\
-2: other | bad 2 | value Bad(2)\n3: closed | closed | value 30\n",
-        )],
+        &[],
     );
 }
 
@@ -256,10 +250,7 @@ fn an_enum_value_half_and_a_nested_match() {
     every_lane_says(
         &corpus("match_row_nested.lu"),
         "none dot line 3\nlook a\nlook b\n12\nlook a\nlook zz\n5\nlook zz\n-1\n",
-        &[(
-            "0.1.43",
-            "none dot line 3\nlook a\n-1\nlook a\n-1\nlook zz\n-1\n",
-        )],
+        &[],
     );
 }
 
@@ -272,10 +263,7 @@ fn a_propagating_try_in_the_scrutinee_leaves_past_the_arms() {
     every_lane_says(
         &corpus("match_row_try_scrutinee.lu"),
         "key\nlook a\nafter 5\n5\nkey\nlook a\nafter -1\n-1\nkey\n9\n",
-        &[(
-            "0.1.43",
-            "key\nlook a\nafter -1\n-1\nkey\nlook a\nafter -1\n-1\nkey\n9\n",
-        )],
+        &[],
     );
 }
 
@@ -291,34 +279,26 @@ fn the_else_handler_match_keeps_working() {
 }
 
 /// A missing tag is E0801 on every wolfgang lane (`unsupported` at
-/// trunk). lupin 0.1.43 runs the program and exits 2.
+/// trunk). lupin 0.1.43 ran the program and exited 2.
 #[test]
 fn a_missing_tag_is_e0801() {
-    every_lane_refuses(
-        &corpus("negative/match_row_missing_tag.lu"),
-        "E0801",
-        &[("0.1.43", "exit(2)")],
-    );
+    every_lane_refuses(&corpus("negative/match_row_missing_tag.lu"), "E0801", &[]);
 }
 
 /// The uncovered value half is E0801 on every wolfgang lane. lupin
-/// 0.1.43 runs the program and exits 255.
+/// 0.1.43 ran the program and exited 255.
 #[test]
 fn an_uncovered_value_half_is_e0801() {
-    every_lane_refuses(
-        &corpus("negative/match_row_missing_value.lu"),
-        "E0801",
-        &[("0.1.43", "exit(255)")],
-    );
+    every_lane_refuses(&corpus("negative/match_row_missing_value.lu"), "E0801", &[]);
 }
 
 /// A tag that is also a variant of `T` is E0816 on every wolfgang
-/// lane, never guessed. lupin 0.1.43 runs the program and exits 1.
+/// lane, never guessed. lupin 0.1.43 ran the program and exited 1.
 #[test]
 fn a_tag_that_is_also_a_variant_is_e0816() {
     every_lane_refuses(
         &corpus("negative/match_row_tag_variant_collision.lu"),
         "E0816",
-        &[("0.1.43", "exit(1)")],
+        &[],
     );
 }
