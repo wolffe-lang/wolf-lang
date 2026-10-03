@@ -181,8 +181,16 @@ fn item_inner(p: &mut Parser<'_>, in_body: bool) {
             );
             if p.at_punct(Punct::LBrace) {
                 // A stray block: parse it — declarations nested inside
-                // survive intact instead of being skipped raw (D22).
+                // survive intact instead of being skipped raw (D22) —
+                // with its statements' line-end misses folded to one
+                // (s203, the post-s202 budget-300 case: `pub struct Ring
+                // {` with `{` and `pub` swapped read the field lines as
+                // four broken statements).
+                let saved = (p.in_stray_block, p.stray_miss_reset());
+                p.in_stray_block = true;
                 crate::exprs::block(p);
+                p.in_stray_block = saved.0;
+                p.stray_miss_restore(saved.1);
             } else {
                 p.skip_until(in_body, |k| k == TokenKind::Term);
             }

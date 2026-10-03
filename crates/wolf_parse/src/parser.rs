@@ -122,6 +122,12 @@ pub(crate) struct Parser<'a> {
     /// wreckage whose reports a fold swallowed; only an arm that added
     /// no damage is clean (s203).
     pub(crate) damage: u32,
+    /// Inside a block the top level met as a stray line (E0203 already
+    /// said so): its statements' missing-terminator reports fold to one
+    /// — a struct body that lost its header reads as a block whose every
+    /// field line is a broken statement, one wreck (s203).
+    pub(crate) in_stray_block: bool,
+    stray_miss_reported: bool,
 }
 
 /// The panic-mode sync set: declaration-leading keywords (spec §2) —
@@ -164,6 +170,8 @@ impl<'a> Parser<'a> {
             decl_floor: None,
             arm_error_reported: false,
             damage: 0,
+            in_stray_block: false,
+            stray_miss_reported: false,
             line_end_fold_once: false,
             assign_error_reported: false,
             eof_unclosed_reported: false,
@@ -469,11 +477,27 @@ impl<'a> Parser<'a> {
             }
             self.suppressed_miss_reported = true;
         }
+        if self.in_stray_block {
+            if self.stray_miss_reported {
+                return;
+            }
+            self.stray_miss_reported = true;
+        }
         self.error(
             crate::codes::EXPECTED_TOKEN,
             self.here(),
             format!("expected the line to end after the {what}"),
         );
+    }
+
+    /// Enter a stray block's fold: clear its one-shot and hand back the
+    /// enclosing value for [`Self::stray_miss_restore`].
+    pub(crate) fn stray_miss_reset(&mut self) -> bool {
+        std::mem::replace(&mut self.stray_miss_reported, false)
+    }
+
+    pub(crate) fn stray_miss_restore(&mut self, saved: bool) {
+        self.stray_miss_reported = saved;
     }
 
     /// An unexpected-at-declaration-position diagnostic (E0203), folded
