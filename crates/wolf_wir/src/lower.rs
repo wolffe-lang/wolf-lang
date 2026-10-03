@@ -4536,6 +4536,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if place.kind == SyntaxKind::BracketApply {
             return self.lower_index_assign(d, place, stmt.span);
         }
+        if place.kind == SyntaxKind::PrefixExpr
+            && let Some(pre) = PrefixExpr::cast(place)
+            && pre.op().is_some_and(|t| t.kind == SyntaxKind::Star)
+            && let Some(operand) = pre.operand()
+        {
+            return self.lower_deref_assign(d, operand, stmt.span);
+        }
         if place.kind != SyntaxKind::PathExpr {
             return Err(refuse("assignment through nested places", place.span));
         }
@@ -8061,10 +8068,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 "shared-cell surface lowering (rc.* receivers)",
                 e.span,
             )),
-            Some(SyntaxKind::Amp) | Some(SyntaxKind::Star) => Err(refuse(
-                "borrow/deref lowering (unsafe-tier WIR ops)",
-                e.span,
-            )),
+            // kw06 (`[mem.unsafe.raw.1]`): `*p` is `p[0]` — one load
+            // through the raw pointer, no bound.
+            Some(SyntaxKind::Star) => self.lower_deref_read(operand, e),
+            Some(SyntaxKind::Amp) => Err(refuse("borrow lowering (unsafe-tier WIR ops)", e.span)),
             _ => self.lower_expr(operand),
         }
     }
@@ -8638,22 +8645,31 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // s173 (`[mem.unsafe.raw.1]`): a raw cast between two
             // pointer types is the IDENTITY at WIR — provenance is the
             // checker's machinery and the value is one word either
-            // way. A cast that changes the WIR shape (an integer to a
-            // pointer, the `expose`/`with_exposed` pair) is not this
-            // and keeps its own refusal.
+            // way. kw06 (`[mem.prov.expose]`'s lowering sentence): the
+            // integer/pointer bridges lower too, through `ptr.to_int`
+            // and `ptr.from_int`.
             CastKind::Raw => {
                 let Some(v) = v else {
                     return Err(refuse("a raw cast of a valueless expression", e.span));
                 };
                 let from_w = self.wir_value_ty(from, e.span)?;
                 let to_w = self.wir_value_ty(to, e.span)?;
-                if from_w == Some(types::PTR) && to_w == Some(types::PTR) {
-                    return Ok(Flow::Val(Some(v)));
+                match (from_w, to_w) {
+                    (Some(types::PTR), Some(types::PTR)) => Ok(Flow::Val(Some(v))),
+                    (Some(types::PTR), Some(dst)) if int_bits(dst).is_some() => {
+                        let addr = self.ptr_addr(v);
+                        self.addr_as_int(addr, to, dst)
+                    }
+                    (Some(src), Some(types::PTR)) if int_bits(src).is_some() => {
+                        let addr = self.int_as_addr(v, from, src);
+                        Ok(Flow::Val(Some(self.addr_as_ptr(addr))))
+                    }
+                    _ => Err(refuse(
+                        "raw casts that change the machine shape (a region or a \
+                         non-integer on the integer side)",
+                        e.span,
+                    )),
                 }
-                Err(refuse(
-                    "raw casts that change the machine shape (integer/pointer round trips)",
-                    e.span,
-                ))
             }
             CastKind::Unsize => self.lower_dyn_cast(e, v, from, to),
             // s121 (D58): `char as int` is TOTAL — the 32-bit scalar
@@ -11062,6 +11078,58 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     ///   `v >= 0`;
     /// - signed to a narrower signed target: the value survives the
     ///   round trip, `sext(trunc(v)) == v`.
+    /// `ptr.to_int`: a pointer's address as one `i64` word (kw06).
+    fn ptr_addr(&mut self, p: Value) -> Value {
+        self.b
+            .ins(Opcode::PtrToInt, &[p], &[types::I64], Aux::None)
+            .one()
+    }
+
+    /// `ptr.from_int`: the pointer at an `i64` address, exposed
+    /// provenance (kw06).
+    fn addr_as_ptr(&mut self, a: Value) -> Value {
+        self.b
+            .ins(Opcode::PtrFromInt, &[a], &[types::PTR], Aux::None)
+            .one()
+    }
+
+    /// `*T as N` after the address is read (`[mem.prov.expose]`): a
+    /// 64-bit `N` is the address's own bits, signed or not, so a
+    /// higher-half kernel address read as `int` is negative and never
+    /// traps; a narrower `N` is the address as `uint` under
+    /// `[type.numlit.cast.narrow]` — kept in range, `overflow` outside.
+    fn addr_as_int(&mut self, addr: Value, to: TyId, dst: TypeId) -> R<Flow> {
+        let tb = int_bits(dst).expect("an integer target");
+        if tb >= 64 {
+            return Ok(Flow::Val(Some(addr)));
+        }
+        let dst_unsigned = sema_unsigned(self.table, to);
+        if let Some(fits) = self.narrow_fits(addr, types::I64, 64, true, tb, dst_unsigned)
+            && self.trap_unless(fits, TrapKind::Overflow)
+        {
+            return Ok(Flow::Diverged);
+        }
+        Ok(Flow::Val(Some(
+            self.b.ins(Opcode::Itrunc, &[addr], &[dst], Aux::None).one(),
+        )))
+    }
+
+    /// `N as *T` before the pointer is made: the integer widened to the
+    /// address word by its OWN signedness (`-1 as *u8` is the all-ones
+    /// address, `0xffff_ffff as u32 as *u8` is not), never a trap.
+    fn int_as_addr(&mut self, v: Value, from: TyId, src: TypeId) -> Value {
+        let fb = int_bits(src).expect("an integer source");
+        if fb >= 64 {
+            return v;
+        }
+        let op = if sema_unsigned(self.table, from) {
+            Opcode::Zext
+        } else {
+            Opcode::Sext
+        };
+        self.b.ins(op, &[v], &[types::I64], Aux::None).one()
+    }
+
     fn narrow_fits(
         &mut self,
         v: Value,
@@ -14509,6 +14577,137 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// difference between this and `l[i]`.
     fn raw_elem_addr(&mut self, base: Value, idx: Value, size: u64) -> Value {
         self.b.ins_ptr_off(base, idx, size)
+    }
+
+    /// The pointee type of the raw pointer `ptr` evaluates to.
+    fn deref_pointee(&self, ptr: &GreenNode, span: Span) -> R<TyId> {
+        let Some(t) = self.expr_sema_ty(ptr.span) else {
+            return Err(refuse("a dereference of an untyped operand", span));
+        };
+        match self.table.kind(self.strip_sema(t)) {
+            TyKind::Ptr(elem) => Ok(*elem),
+            _ => Err(refuse("a dereference of a non-pointer", span)),
+        }
+    }
+
+    /// kw06: `*p` read — `p[0]`'s load (`[mem.unsafe.raw.1]`).
+    fn lower_deref_read(&mut self, operand: &'t GreenNode, e: &'t GreenNode) -> R<Flow> {
+        let elem = self.deref_pointee(operand, e.span)?;
+        let (ewty, _) = self.raw_pointee(elem, e.span)?;
+        let Some(p) = flow_val!(self.lower_expr(operand)) else {
+            return Err(refuse("a valueless raw pointer", operand.span));
+        };
+        let region = self.foreign_buf_region();
+        Ok(Flow::Val(Some(self.load_c(ewty, p, region, e.span)?)))
+    }
+
+    /// kw06: `*p = v` / `*p op= v` — `p[0]`'s store. The pointer runs
+    /// before the right-hand side (`[mem.model.place.rhs]`), and a
+    /// compound operator reads the pointee at its own type first
+    /// (wolf-lang#542's rule for the index form).
+    fn lower_deref_assign(
+        &mut self,
+        d: AssignStmt<'t>,
+        operand: &'t GreenNode,
+        span: Span,
+    ) -> R<Flow> {
+        let elem = self.deref_pointee(operand, span)?;
+        let (ewty, _) = self.raw_pointee(elem, span)?;
+        let op = d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq);
+        let Some(p) = flow_val!(self.lower_expr(operand)) else {
+            return Err(refuse("a valueless raw pointer", operand.span));
+        };
+        let Some(vexpr) = d.value() else {
+            return Err(refuse("a dereference write without a value", span));
+        };
+        let Some(val) = flow_val!(self.lower_expr(vexpr)) else {
+            return Err(refuse("a unit-typed raw payload", vexpr.span));
+        };
+        let region = self.foreign_buf_region();
+        let val = if op == SyntaxKind::Eq {
+            val
+        } else {
+            let Some(bin) = Self::compound_bin(op) else {
+                return Err(refuse("this compound assignment operator", span));
+            };
+            let cur = self.load_c(ewty, p, region, span)?;
+            let wrapping = matches!(self.table.kind(elem), TyKind::Wrapping(_));
+            let unsigned = sema_unsigned(self.table, elem);
+            match self.arith(bin, cur, val, wrapping, unsigned, ewty, span)? {
+                Some(v) => v,
+                None => return Ok(Flow::Diverged),
+            }
+        };
+        self.store_c(val, p, region, vexpr.span)?;
+        Ok(Flow::Val(None))
+    }
+
+    /// kw06: the methods of `*T` (`[mem.unsafe.raw]`; sema's
+    /// `ptr_method_call` is the surface). `addr` and `expose` read the
+    /// address (`ptr.to_int`); `with_exposed` makes a pointer from one
+    /// (`ptr.from_int`, exposed provenance); `with_addr` keeps the
+    /// receiver's provenance, so it is an OFFSET from the receiver
+    /// (`ptr.off p, a - p.addr(), 1` — a non-`inbounds` GEP on the
+    /// release tier, which LLVM may not assume stays in the
+    /// allocation); `is_null` compares the address with zero. The
+    /// receiver is evaluated before the argument, as on the checked
+    /// machine.
+    fn lower_ptr_method(
+        &mut self,
+        d: CallExpr<'t>,
+        recv_place: &'t GreenNode,
+        mname: &str,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        let Some(p) = flow_val!(self.lower_expr(recv_place)) else {
+            return Err(refuse("a valueless raw pointer", recv_place.span));
+        };
+        let arg = d
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .filter_map(Arg::value)
+            .next();
+        // The address argument; `None` when evaluating it diverged.
+        let addr_arg = |this: &mut Self| -> R<Option<Value>> {
+            let a =
+                arg.ok_or_else(|| refuse("a raw-pointer method without its address", e.span))?;
+            match this.lower_expr(a)? {
+                Flow::Val(Some(v)) => Ok(Some(v)),
+                Flow::Val(None) => Err(refuse("a valueless address", a.span)),
+                Flow::Diverged => Ok(None),
+            }
+        };
+        match mname {
+            "is_null" => {
+                let a = self.ptr_addr(p);
+                let z = self.b.iconst(types::I64, 0);
+                Ok(Flow::Val(Some(
+                    self.b
+                        .ins(Opcode::Icmp, &[a, z], &[types::BOOL], Aux::IntCc(IntCc::Eq))
+                        .one(),
+                )))
+            }
+            "addr" | "expose" => Ok(Flow::Val(Some(self.ptr_addr(p)))),
+            "with_addr" => {
+                let Some(a) = addr_arg(self)? else {
+                    return Ok(Flow::Diverged);
+                };
+                let cur = self.ptr_addr(p);
+                let delta = self
+                    .b
+                    .ins(Opcode::IsubWrap, &[a, cur], &[types::I64], Aux::None)
+                    .one();
+                Ok(Flow::Val(Some(self.b.ins_ptr_off(p, delta, 1))))
+            }
+            "with_exposed" => {
+                let Some(a) = addr_arg(self)? else {
+                    return Ok(Flow::Diverged);
+                };
+                Ok(Flow::Val(Some(self.addr_as_ptr(a))))
+            }
+            _ => Err(refuse("this raw-pointer method", e.span)),
+        }
     }
 
     /// The payload's WIR type and stride — the pair every pool seam
@@ -18461,6 +18660,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 TyKind::ExitReason => {
                     return self.lower_reason_method(recv_place, &mname, e);
+                }
+                // kw06: the raw-pointer surface (`[mem.unsafe.raw]`,
+                // `[mem.prov.expose]`) is builtin, never an impl.
+                TyKind::Ptr(_) => {
+                    return self.lower_ptr_method(d, recv_place, &mname, e);
                 }
                 _ => {}
             }
