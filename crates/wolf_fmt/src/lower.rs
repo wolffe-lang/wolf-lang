@@ -970,7 +970,17 @@ impl<'a> Fmt<'a> {
         match n.kind {
             K::ExprStmt => self.walk_children(n, out, Ctx::Free),
             K::AssignStmt => {
-                let mut it = n.nodes();
+                // A statement attribute (`#[cfg(target = …)]`,
+                // `#[index(1)]`) prefixes the assignment on its own
+                // line, as on every other statement. It used to be
+                // taken for the place, so the place was rendered as
+                // the right-hand side, the self-check failed, and the
+                // file fell back unformatted (kw01).
+                for a in n.nodes().filter(|m| m.kind == K::Attribute) {
+                    self.node(a, out, Ctx::Free);
+                    out.push(Doc::Hardline);
+                }
+                let mut it = n.nodes().filter(|m| m.kind != K::Attribute);
                 let place = it.next();
                 let rhs = it.next();
                 if let Some(p) = place {
