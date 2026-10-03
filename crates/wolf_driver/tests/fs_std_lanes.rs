@@ -28,11 +28,12 @@
 //! names, and its first handle is 1), so its answers are pinned by
 //! version as pre-mirror (s180's design), never widened — with its
 //! release commit, so a development build that still calls itself
-//! 0.1.43 is held to the ruled answers; 0.1.44 is pinned beside it
-//! because r26 cuts it from a wolf-interp tree whose fs tier is
-//! byte-identical to 0.1.43's (`src/eval/fs.rs` and
-//! `src/eval/builtin.rs`, no diff between `v0.1.43` and trunk
-//! `6ce7bc8`). The mirror is wolf-interp's s199 PR.
+//! 0.1.43 is held to the ruled answers; 0.1.44 (r26, the pairing since
+//! 0.2.21) is pinned beside it with its own release commit: r26 cut it
+//! from a wolf-interp tree whose fs tier is byte-identical to 0.1.43's
+//! (`src/eval/fs.rs` and `src/eval/builtin.rs`, no diff between
+//! `v0.1.43` and `6ce7bc8`), and its answers here were measured equal.
+//! The mirror is wolf-interp's s199 PR (wolf-interp#171).
 
 mod lane_exit;
 
@@ -44,14 +45,14 @@ fn wolf() -> &'static str {
     env!("CARGO_BIN_EXE_wolf")
 }
 
-/// The lupin releases that predate the mirror: a version, and the
-/// release's commit where it is known. `0.1.43` is pinned with its
-/// release commit, so a development build of wolf-interp that still
-/// says 0.1.43 (the mirror's own branch, before a release) is held to
-/// the ruled answers; `0.1.44` is pinned by version alone because r26
-/// cuts it from a tree without the mirror and its commit is not tagged
-/// yet.
-const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[("0.1.43", Some("6d6cde5")), ("0.1.44", None)];
+/// The lupin releases that predate the mirror, each with the commit its
+/// release archive reports. A development build of wolf-interp still
+/// says the last released version (the mirror's own branch reports
+/// `0.1.44` at its own commit before a release), so the commit is what
+/// holds that build to the ruled answers. 0.1.44's archive (r26,
+/// release sha256 e44aae06…) reports `ba47627`, measured.
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] =
+    &[("0.1.43", Some("6d6cde5")), ("0.1.44", Some("ba47627"))];
 
 fn pre_mirror(lupin: &Obs) -> bool {
     PRE_MIRROR_LUPIN
