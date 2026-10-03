@@ -2,6 +2,26 @@
 
 ## Unreleased
 
+### The narrowing cast: keep the value or trap (kw03, #533, ruling #31 K12)
+
+- **An integer cast keeps the value, and traps `overflow` when the
+  target cannot hold it**, on every machine (`[type.numlit.cast.narrow]`).
+  Native and release refused every cast to a narrower integer
+  ("narrowing numeric casts (range-check semantics)"); `b as int as u8`
+  now compiles, with one compare and a branch to the trap.
+- **A change of sign is a narrowing cast.** Native and release ran
+  `-1 as u64`, `u32 as i32` and `i8 as u16` by reinterpreting the bits
+  (`-1 as u64` printed `-1`, `128 as u8 as i8` printed `-128`), a
+  silent wrong answer where the checked machine and lupin trap. They
+  trap now. A program that wanted the bits spells it
+  `v as wrapping[u64]`.
+- **Truncation is `v as wrapping[T] as T`.** The checked machine
+  range-checked a signed wrapping value's stored mask instead of its
+  value, so `200 as wrapping[i8] as i8` trapped there and printed `-56`
+  everywhere else; it keeps `-56` now. It also refuses by name a cast
+  that would hold a `u64` above `i64::MAX`, which it cannot represent
+  (#551), instead of trapping it.
+
 ### The export seam: C calls wolf, wolf calls C, `*T` crosses (kw02, #513, #521, #514, rulings #31 K9(b) and #32 R1)
 
 - **`export fn` is a C function.** It was lowered as a wolf function:
