@@ -4837,20 +4837,6 @@ impl<'t> Machine<'t> {
         None
     }
 
-    /// The width (in bits) of the expression's type when it is a
-    /// SIGNED integer prim (`int`/`i8`/`i16`/`i32`/`i64`) — the D56
-    /// target-side query for `wrapping[T] as int`.
-    fn signed_int_bits(&self, span: Span) -> Option<u32> {
-        let ctx = self.ctx();
-        let id = ctx.expr_tys.get(&span)?;
-        if let TyKind::Prim(p) = ctx.tb.table.kind(*id)
-            && matches!(p, Prim::Int | Prim::I8 | Prim::I16 | Prim::I32 | Prim::I64)
-        {
-            return prim_bits(*p);
-        }
-        None
-    }
-
     /// The checked range of the expression's prim type, when narrower
     /// than i64.
     fn prim_range(&self, span: Span) -> Option<(i64, i64)> {
@@ -7306,6 +7292,47 @@ impl<'t> Machine<'t> {
                 // Adapter/identity casts are value-preserving here;
                 // out-of-range narrowing traps (X3 posture).
                 if let Value::Int(n) = v {
+                    // The source's VALUE first. A sub-64 wrapping value
+                    // is stored masked non-negative (`arith_binop_at`'s
+                    // convention), so a signed one sign-extends from its
+                    // width before anything reads it: `wrapping[i8]`
+                    // holding 200 is -56. A `wrapping[u64]` with the top
+                    // bit set is stored as the negative `i64` pattern;
+                    // its value is above `i64::MAX`. Until kw03 the mask
+                    // was range-checked as if it were the value, so `v
+                    // as wrapping[i8] as i8` trapped whenever the
+                    // truncated value was negative — the spelling
+                    // `[type.numlit.cast.narrow]` gives truncation —
+                    // where native, release and lupin keep it.
+                    let n = match self.wrapping_width(inner.span) {
+                        Some((_, sbits, false)) if sbits < 64 => {
+                            let shift = 64 - sbits;
+                            (n << shift) >> shift
+                        }
+                        Some((_, 64, true)) if n < 0 => {
+                            // D56 (#135): above `i64::MAX` fits no
+                            // signed target and no narrower unsigned
+                            // one, so the cast TRAPS (overflow). Into
+                            // `u64`/`uint` the value is in range, and
+                            // this machine's `u64` holds only
+                            // `0..=i64::MAX` (wolf-lang#551): refused by
+                            // name, never a trap that is not the
+                            // program's.
+                            if self.wrapping_width(e.span).is_none()
+                                && matches!(self.prim_range(e.span), Some((0, i64::MAX)))
+                            {
+                                return self.refuse(
+                                    "a `u64` above `i64::MAX` in checked execution (wolf-lang#551)",
+                                    e.span,
+                                );
+                            }
+                            if self.wrapping_width(e.span).is_none() {
+                                return self.trap("overflow", "type.numlit.cast.narrow", e.span);
+                            }
+                            n
+                        }
+                        _ => n,
+                    };
                     // A WRAPPING-typed cast target wraps at its width
                     // (#131's checked twin): mask-to-width, the
                     // native rung's `itrunc` — never a trap. The
@@ -7314,39 +7341,14 @@ impl<'t> Machine<'t> {
                     if let Some((mask, ..)) = self.wrapping_width(e.span) {
                         return Ok(Flow::Val(Value::Int(n & mask)));
                     }
-                    // D56 (#135): `wrapping[T] as int` is a
-                    // value-preserving conversion. An unsigned wrapping
-                    // value that does not fit the signed target TRAPS
-                    // (joining the D54.4 float→int trap family) — never
-                    // the silent negative bit-cast the native rung used
-                    // to emit. lupin already traps; this brings the
-                    // checked lane to agreement. A sub-64 wrapping is
-                    // stored non-negative already; a full `u64` with the
-                    // top bit set is stored as a negative `i64` pattern,
-                    // whose unsigned value exceeds `i64::MAX`.
-                    if let Some((_, sbits, true)) = self.wrapping_width(inner.span)
-                        && let Some(tbits) = self.signed_int_bits(e.span)
-                    {
-                        let width_mask = if sbits >= 64 {
-                            u64::MAX
-                        } else {
-                            (1u64 << sbits) - 1
-                        };
-                        let uval = (n as u64) & width_mask;
-                        let smax = if tbits >= 64 {
-                            i64::MAX as u64
-                        } else {
-                            (1u64 << (tbits - 1)) - 1
-                        };
-                        if uval > smax {
-                            return self.trap("overflow", "mem.ub.defined", e.span);
-                        }
-                        return Ok(Flow::Val(Value::Int(n)));
-                    }
+                    // `[type.numlit.cast.narrow]` (K12, wolf-lang#533):
+                    // an integer cast keeps the value or traps
+                    // (overflow) when the target cannot hold it. D56's
+                    // `wrapping[T] as int` is this rule's case.
                     if let Some((lo, hi)) = self.prim_range(e.span)
                         && (n < lo || n > hi)
                     {
-                        return self.trap("overflow", "mem.ub.defined", e.span);
+                        return self.trap("overflow", "type.numlit.cast.narrow", e.span);
                     }
                     return Ok(Flow::Val(Value::Int(n)));
                 }
