@@ -209,8 +209,9 @@ fn a_unit_fn_returns_unit_when_its_tail_raises() {
 }
 
 /// A unit `main` whose tail raises exits 0. Red at trunk dfcc2f13:
-/// checked answers `exit(1)`, `hi\nerror: bad`, as lupin 0.1.44 does
-/// (is68 mirrored it, wolf-interp#103).
+/// checked answers `exit(1)`, `hi\nerror: bad`, as lupin 0.1.44 did
+/// (is68 mirrored it, wolf-interp#103). The pin was dropped at the
+/// 0.1.45 pairing (r27): 0.1.45 carries is68 and exits 0.
 #[test]
 fn a_unit_main_whose_tail_raises_exits_zero() {
     every_lane_says(
@@ -218,13 +219,14 @@ fn a_unit_main_whose_tail_raises_exits_zero() {
         "exit(0)",
         "hi\n",
         true,
-        &[("0.1.44", "exit(1)", "hi\nerror: bad\n")],
+        &[],
     );
 }
 
 /// An else-less `if`'s value is `()` whether its tail succeeds or
 /// raises. Red at trunk dfcc2f13: checked prints `3 none`. lupin 0.1.44
-/// prints `3 none` and is68's `() none` (wolf-interp#179).
+/// prints `3 none` and is68's `() none` (wolf-interp#179); 0.1.45 (the
+/// 0.2.22 pairing, r27) prints `() none`, measured, kept with its issue.
 #[test]
 fn an_else_less_if_is_unit_valued_whatever_its_tail() {
     every_lane_says(
@@ -235,6 +237,7 @@ fn an_else_less_if_is_unit_valued_whatever_its_tail() {
         &[
             ("0.1.44", "exit(0)", "3 none\n"),
             ("0.1.44", "exit(0)", "() none\n"),
+            ("0.1.45", "exit(0)", "() none\n"),
         ],
     );
 }
