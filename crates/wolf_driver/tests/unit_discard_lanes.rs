@@ -362,14 +362,16 @@ fn a_consumed_row_at_a_fallible_tail_if_still_leaves() {
 /// trunk 8e36bc1a: every lane raised (`g true`).
 #[test]
 fn a_bare_tag_at_a_fallible_tail_if_is_the_statement_construct() {
-    let entry = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/unit_tail_if/bare_tag.lu");
+    let entry =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/unit_tail_if/bare_tag.lu");
     for flag in ["--checked", "--native", "--release"] {
         let Some(obs) = lane(&entry, flag) else {
             assert_ne!(flag, "--checked", "the checked lane always runs");
             continue;
         };
         assert_eq!(
-            obs.verdict, "unsupported",
+            obs.verdict,
+            "unsupported",
             "the {flag} answer on {} ({ISSUE}): {obs:?}",
             entry.display()
         );
