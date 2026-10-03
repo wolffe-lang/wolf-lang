@@ -1,4 +1,4 @@
-//! check: run(exit=0, stdout="in a\na false\nb false\nc false\nd false\n")
+//! check: run(exit=0, stdout="in a\na false\nc false\nd false\n")
 //! phase: run
 //! conforms: type.unit.context, type.unit.discard, diag.sev.warn
 //! warns: W0601
@@ -11,8 +11,11 @@
 //! `()`, which the function's `!()` result takes as its ok value. Until
 //! s208 all four machines handed the raise to the caller here, with no
 //! W0601: the one place a raise left a function with no `?` and no
-//! `return` to mark it. The plain tail, an inferred `!()` row, a
-//! method, and an else-less `if` nested in another one's then-block.
+//! `return` to mark it. The plain tail, a method, and an else-less `if`
+//! nested in another one's then-block. (An inferred `-> !()` row whose
+//! only raise was this one is now empty, and `else` on an empty-row call
+//! is `unsupported` on native and release — a refusal older than s208,
+//! measured on 0.2.22 with no `if` at all — so that shape is not here.)
 
 fn boom() -> () ! {bad} {
     return bad
@@ -20,10 +23,6 @@ fn boom() -> () ! {bad} {
 
 fn a(c: bool) -> () ! {bad} {
     print("in a")
-    if c { boom() }
-}
-
-fn b(c: bool) -> !() {
     if c { boom() }
 }
 
@@ -45,9 +44,6 @@ fn main() -> !int {
     var raised = false
     a(true) else |_| { raised = true }
     print("a {raised}")
-    raised = false
-    b(true) else |_| { raised = true }
-    print("b {raised}")
     raised = false
     let s = S { n: 1 }
     s.c(true) else |_| { raised = true }
