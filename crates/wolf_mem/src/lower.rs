@@ -238,6 +238,31 @@ fn result_is_copy(t: Ty<'_>) -> bool {
             .all(|(_, payload)| payload.iter().all(|&p| is_copy(at(p), 0)))
 }
 
+/// s207 (wolf-lang#540): may a value of this type name bytes some
+/// allocation owns — the question a `for` binding's sites answer. A
+/// scalar names none (an `int` drawn from a region pins nothing, the
+/// rule that keeps a `Copy` field read site-free); a `str` names its
+/// view's bytes; anything else is answered conservatively, yes.
+fn may_name_bytes(t: Ty<'_>) -> bool {
+    match t.kind() {
+        TyKind::Unit | TyKind::Never | TyKind::Error | TyKind::Range(_) | TyKind::Wrapping(_) => {
+            false
+        }
+        TyKind::Prim(p) => matches!(p, Prim::Str),
+        TyKind::Distinct(inner) => may_name_bytes(Ty {
+            table: t.table,
+            id: *inner,
+        }),
+        TyKind::Tuple(items) => items.iter().any(|&id| {
+            may_name_bytes(Ty {
+                table: t.table,
+                id,
+            })
+        }),
+        _ => true,
+    }
+}
+
 /// One lowered body: the CFG, the context-free diagnostics found on
 /// the way, and the region inference record (s19).
 pub struct Lowered {
@@ -329,6 +354,11 @@ pub(crate) struct Lowerer<'t> {
     /// May-hold: root local -> the sites its value may contain, each
     /// with the span where it flowed in (diagnostic anchor).
     holds: BTreeMap<u32, BTreeMap<SiteId, Span>>,
+    /// s207 (wolf-lang#540): the LIST a `split`/`words`/`lines` call
+    /// allocates. Its pieces are subslices of the receiver, so a piece
+    /// bound by a `for` carries the receiver's sites and never this one
+    /// ("the LIST is, never the strings inside it").
+    view_lists: BTreeSet<SiteId>,
     /// s165 (#366): the non-`Copy` `read` parameters — the values this
     /// frame was lent and the caller kept.
     lent_params: BTreeSet<u32>,
@@ -4252,19 +4282,38 @@ impl<'t> Lowerer<'t> {
                 },
             ))
         });
+        // s207 (wolf-lang#540, `[mem.region.escape]`): the sites an
+        // element may name. A `for` binding is read out of its
+        // iterable exactly as `xs[i]` is, so it carries what `xs[i]`
+        // carries — the place's sites, or the value's — and a piece of
+        // `split`/`words`/`lines` carries its receiver's. Until s207
+        // the binding carried nothing, so `for w in s.words() { last =
+        // w }` handed `last` out of the region with no diagnostic while
+        // `s.split(",")[0]` was E1010.
+        let mut elem_sites: Vec<SiteId> = Vec::new();
         if let Some(iter) = d.iterable() {
             match self.as_place(iter) {
                 Some((place, _)) => {
                     self.emit_read(place, iter.span);
+                    elem_sites = self.val_of_place(place, iter.span).sites;
                     if !self.places.is_copy(place) {
                         self.iter_claims.push((place, iter.span));
                         claimed = true;
                     }
                 }
                 None => {
-                    self.eval_value(iter)?;
+                    elem_sites = self.eval_value(iter)?.sites;
                 }
             }
+            // A channel's own allocation holds no payload's bytes, and
+            // `[conc.chan.payload]` already refuses a region-built one.
+            if self
+                .expr_ty(iter.span)
+                .is_some_and(|t| matches!(t.kind(), TyKind::Chan(_)))
+            {
+                elem_sites.clear();
+            }
+            elem_sites.retain(|s| !self.view_lists.contains(s));
         }
         let head = self.new_block();
         self.goto(self.cur, head);
@@ -4284,6 +4333,7 @@ impl<'t> Lowerer<'t> {
                     table: &self.tb.table,
                     id,
                 });
+                let names_bytes = ty.is_none_or(may_name_bytes);
                 let local = self.declare(&name, span, ty);
                 index_locals.push(local.0);
                 let place = self.places.intern(
@@ -4294,6 +4344,11 @@ impl<'t> Lowerer<'t> {
                     self.locals[local.0 as usize].is_copy,
                 );
                 self.push(Stmt::Init { place, span });
+                if names_bytes && !elem_sites.is_empty() {
+                    let mut v = Val::none();
+                    v.sites = elem_sites.clone();
+                    self.hold(local.0, &v, span);
+                }
             }
         }
         self.loops.push(LoopFrame {
@@ -4674,6 +4729,9 @@ impl<'t> Lowerer<'t> {
                 format!("{callee}(..)")
             };
             let site = self.alloc_site(ty, SiteKind::CallResult, e.span);
+            if ret_heap && self.is_str_view_call(e) {
+                self.view_lists.insert(site);
+            }
             // s21: a call handing back a `shared`/`weak` cell
             // (`clone`, `downgrade`) — the result is RC-owned, not
             // region-owned.
@@ -5885,6 +5943,7 @@ impl<'t> Lowerer<'t> {
             sites: Vec::new(),
             site_escape: Vec::new(),
             holds: BTreeMap::new(),
+            view_lists: BTreeSet::new(),
             lent_params: BTreeSet::new(),
             lent_holds: BTreeMap::new(),
             lent_escapes: std::collections::HashSet::new(),
