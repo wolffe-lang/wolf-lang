@@ -3147,9 +3147,16 @@ impl<'a> Fx<'a> {
         } else {
             ""
         };
+        // kw02 (`[abi.c.export]`): an export widens a narrow result
+        // for its C caller (Apple arm64 callers rely on it).
+        let ret_ext = match (self.f.export, self.f.ret_ext, si.ret_comps.len()) {
+            (true, Mode::Sext, 1) => "signext ",
+            (true, Mode::Zext, 1) => "zeroext ",
+            _ => "",
+        };
         let _ = writeln!(
             out,
-            "define {linkage}{} @\"{symbol}\"({}) nounwind{noinline} {{",
+            "define {linkage}{ret_ext}{} @\"{symbol}\"({}) nounwind{noinline} {{",
             si.ret_ty(),
             named.join(", ")
         );

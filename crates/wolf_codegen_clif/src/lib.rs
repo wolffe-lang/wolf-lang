@@ -216,7 +216,10 @@ impl Backend for ClifBackend {
         } else {
             wolf_backend::abi::Conv::Wolf
         };
-        let si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv())?;
+        let mut si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv())?;
+        if let Some(f) = module.funcs.get(id).filter(|f| f.export) {
+            si = translate::with_ret_ext(si, f.ret_ext);
+        }
         let fid = self
             .module
             .declare_function(symbol, clif_linkage(linkage), &si.clif)
@@ -251,7 +254,10 @@ impl Backend for ClifBackend {
         } else {
             wolf_backend::abi::Conv::Wolf
         };
-        let si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv())?;
+        let mut si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv())?;
+        if func.export {
+            si = translate::with_ret_ext(si, func.ret_ext);
+        }
         let mut ctx = self.module.make_context();
         ctx.func.signature = si.clif.clone();
         ctx.func.name = UserFuncName::user(0, id.as_u32());

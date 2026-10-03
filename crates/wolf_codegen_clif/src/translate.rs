@@ -401,6 +401,22 @@ pub(crate) struct SigInfo {
     pub sret_first: bool,
 }
 
+/// kw02 (`[abi.c.export]`): an export's narrow result widened by the
+/// callee, as its C callers on Apple arm64 expect (`Function::ret_ext`).
+/// Applied to the signature the definition is DECLARED and DEFINED
+/// with, so the two agree.
+pub(crate) fn with_ret_ext(mut si: SigInfo, ext: wolf_wir::ir::Mode) -> SigInfo {
+    if let (Some(RSlot::Direct(_)), 1) = (si.rets.first(), si.clif.returns.len()) {
+        let r = si.clif.returns[0];
+        si.clif.returns[0] = match ext {
+            wolf_wir::ir::Mode::Sext => r.sext(),
+            wolf_wir::ir::Mode::Zext => r.uext(),
+            _ => r,
+        };
+    }
+    si
+}
+
 fn scalar_clif_ty(m: &WModule, ty: TypeId) -> Option<cranelift_codegen::ir::Type> {
     Some(match m.types.get(ty) {
         TypeData::I8 | TypeData::Bool => ctypes::I8,
