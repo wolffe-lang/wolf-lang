@@ -197,11 +197,13 @@ fn a_bound_empty_row_value_renders_its_ok_half() {
 
 /// `match`, `else` and a wider return over the bound value. Red at
 /// trunk 12a56b22: native and release answer `unsupported` on the
-/// `match`. lupin 0.1.44 is pinned pre-mirror (r26, the 0.2.21
-/// pairing; wolffe-lang/wolf-interp#176): its row-match reader takes
-/// `f`'s inferred `-> !int` row as open and refuses the one value arm,
+/// `match`. lupin 0.1.44 was pinned pre-mirror (r26, the 0.2.21
+/// pairing; wolffe-lang/wolf-interp#176): its row-match reader took
+/// `f`'s inferred `-> !int` row as open and refused the one value arm,
 /// `fail(E0801)`, where `[gram]`'s inferred private row is empty and
 /// every other machine — lupin 0.1.43 included — prints `43 42 42`.
+/// The pin was dropped at the 0.1.45 pairing (r27): 0.1.45 carries
+/// is69's inferred row and prints `43 42 42`.
 #[test]
 fn a_bound_empty_row_value_matches_elses_and_widens() {
     every_lane_says(
@@ -209,7 +211,7 @@ fn a_bound_empty_row_value_matches_elses_and_widens() {
         "exit(0)",
         "43 42 42\n",
         &[],
-        &[("0.1.44", "fail(E0801)")],
+        &[],
     );
 }
 
