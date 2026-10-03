@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Linked assembly: `asm` in `wolf.pkg` (kw05, ruling #31 K2 = C)
+
+- **Assembly sources in the manifest.** `asm: ["boot/io.S"]` in the
+  root `wolf.pkg` was an unknown key (E1502). Now each listed source is
+  assembled for the build's target — on `x86_64-unknown-none` by the
+  release tier's clang with `--target=x86_64-unknown-none-elf`, from
+  any host, checked ELF x86-64; hosted, by the link's `cc` — and handed
+  to the link, or written beside `--emit=obj -o K.o` as
+  `K.asm-<stem>.o` for the boot code's link (`[abi.asm.link]`). A
+  routine is called through a bodyless `extern "c" fn` inside `unsafe`.
+  A dependency's manifest that lists `asm` is refused: an assembly
+  source is not part of a package's content address.
+- **The assembly roster, E1306.** The roster is the `.globl` names of
+  the listed sources. On the freestanding target a package that lists
+  assembly calls through `extern "c"` only into its roster or the hooks;
+  any other call is E1306 naming the routine (`[abi.asm.roster]`).
+- **The machines.** The checked machine refuses a call into a listed
+  routine as `` a call into assembly `NAME` `` (`[abi.asm.machines]`);
+  lupin already refuses a call to a bodyless declaration by name. The
+  inline `asm` block stays `unsupported` (`[abi.asm.inline]`, kw13).
+- A build that lists no `asm` links byte-for-byte as before (boreutils,
+  lobo: every binary identical, dev and release). The manifest schema
+  note now names `target` and `asm`. Anchors 564 → 569.
+
 ### The freestanding target: `--target x86_64-unknown-none` (kw04, ruling #31 K1, K8(a), K10)
 
 - **A kernel object, with no `main` shim and no runtime.** `--target`
