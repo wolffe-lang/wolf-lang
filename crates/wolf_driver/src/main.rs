@@ -1033,6 +1033,23 @@ fn compile_native(
         }
         Ok(())
     };
+    // The entry's front end is a rung of its own, as on `conform-run`'s
+    // ladder and in the LSP (ruling #28, wolf-lang#377): a program whose
+    // entry does not lex and parse reports those diagnostics and stops,
+    // so the code at the top of the screen is the code every lane's
+    // record carries. Until s203 the resolve rung's reports were merged
+    // in and sorted with them, and a name error above the first parse
+    // error took the top line.
+    let entry_id = sm.intern(&wolf_sema::anchor_entry(file));
+    let front: Vec<Diagnostic> = res
+        .diagnostics
+        .iter()
+        .filter(|d| d.primary.span.file == entry_id && wolf_diag::phase_rank(d.code) <= 1)
+        .cloned()
+        .collect();
+    if front.iter().any(|d| d.severity == wolf_diag::Severity::Error) {
+        gate(sources, &mut pending, front, true)?;
+    }
     let mut resolve_diags = res.diagnostics.clone();
     resolve_diags.extend(scan.diagnostics.iter().cloned());
     gate(sources, &mut pending, resolve_diags, false)?;
@@ -3535,11 +3552,11 @@ fn conform_run(args: &[String]) {
         let id = sm.intern(Path::new(&file));
         sources.add(id, file.replace('\\', "/"), &bytes);
         let lexed = wolf_lex::lex(id, &bytes);
-        let first_error = |ds: &[Diagnostic]| {
-            ds.iter()
-                .find(|d| d.severity == wolf_diag::Severity::Error)
-                .map(|d| d.code)
-        };
+        // The code a refusal carries (ruling #28, wolf-lang#377,
+        // `[proto.record.first]`): the earliest byte offset, then the
+        // earlier phase — `wolf_diag::first_error`, whatever order the
+        // rung handed its diagnostics over in.
+        let first_error = |ds: &[Diagnostic]| wolf_diag::first_error(ds).map(|d| d.code);
         // The same question asked through the lint configuration
         // (s169, #49). `--deny-warnings` must reject at the rung whose
         // analysis produced the warning, not at the end — the verdict
@@ -3583,18 +3600,32 @@ fn conform_run(args: &[String]) {
         // stops with fail(code) at that rung, passes at the requested rung,
         // or falls through deeper; past the last rung the verdict is
         // `unsupported` (conservatism ledger).
-        let result = if let Some(code) = first_error(&lexed.diagnostics) {
-            ("lex", format!("fail({code})"), lexed.diagnostics)
-        } else if phase.as_deref() == Some("lex") {
-            ("lex", "pass".to_string(), lexed.diagnostics)
+        //
+        // Lex and parse are ONE rung for that question (ruling #28): the
+        // parser reads the lexer's recovered stream over the whole file,
+        // so a parse error that comes before the first lex error is the
+        // file's first diagnostic. Until s203 a lex error stopped the
+        // ladder before the parser ran and the record carried the lex
+        // code wherever it sat. A lex winner keeps the lex-only record
+        // it always had; a parse winner records both, sorted.
+        let result = if phase.as_deref() == Some("lex") {
+            match first_error(&lexed.diagnostics) {
+                Some(code) => ("lex", format!("fail({code})"), lexed.diagnostics),
+                None => ("lex", "pass".to_string(), lexed.diagnostics),
+            }
         } else {
             let parsed = wolf_parse::parse_tokens(&lexed, &bytes);
-            let parse_error = first_error(&parsed.diagnostics);
+            let lex_only = lexed.diagnostics.clone();
             let mut all = lexed.diagnostics;
             all.extend(parsed.diagnostics);
             wolf_diag::sort_diagnostics(&mut all);
-            if let Some(code) = parse_error {
-                ("parse", format!("fail({code})"), all)
+            let winner = wolf_diag::first_error(&all).map(|d| d.code);
+            if let Some(code) = winner {
+                if wolf_diag::phase_rank(code) == 0 {
+                    ("lex", format!("fail({code})"), lex_only)
+                } else {
+                    ("parse", format!("fail({code})"), all)
+                }
             } else if phase.as_deref() == Some("parse") {
                 ("parse", "pass".to_string(), all)
             } else {
