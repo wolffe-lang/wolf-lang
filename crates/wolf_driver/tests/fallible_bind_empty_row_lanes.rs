@@ -123,8 +123,17 @@ fn corpus(rel: &str) -> PathBuf {
 
 /// Every wolfgang lane answers `verdict` with `stdout`; lupin, when
 /// present, answers the same verdict with `stdout` or with one of
-/// `lupin_also` (an answer the clause allows besides the compiler's).
-fn every_lane_says(entry: &Path, verdict: &str, stdout: &str, lupin_also: &[&str]) {
+/// `lupin_also` (an answer the clause allows besides the compiler's) —
+/// or, for a version named in `lupin_pre_mirror`, the measured verdict
+/// of a known lupin defect, pinned by version so a newer lupin that
+/// still differs reds by name (s180's design).
+fn every_lane_says(
+    entry: &Path,
+    verdict: &str,
+    stdout: &str,
+    lupin_also: &[&str],
+    lupin_pre_mirror: &[(&str, &str)],
+) {
     for flag in ["--checked", "--native", "--release"] {
         let Some(obs) = lane(entry, flag) else {
             assert_ne!(flag, "--checked", "the checked lane always runs");
@@ -144,6 +153,16 @@ fn every_lane_says(entry: &Path, verdict: &str, stdout: &str, lupin_also: &[&str
         );
     }
     if let Some(lupin) = lupin_says(entry) {
+        if let Some((_, measured)) = lupin_pre_mirror.iter().find(|(v, _)| *v == lupin.version) {
+            assert_eq!(
+                lupin.verdict,
+                *measured,
+                "lupin {} (pre-mirror) verdict on {}",
+                lupin.version,
+                entry.display()
+            );
+            return;
+        }
         assert_eq!(
             lupin.verdict,
             verdict,
@@ -172,12 +191,17 @@ fn a_bound_empty_row_value_renders_its_ok_half() {
         "exit(0)",
         "42\n42\n42\n",
         &[],
+        &[],
     );
 }
 
 /// `match`, `else` and a wider return over the bound value. Red at
 /// trunk 12a56b22: native and release answer `unsupported` on the
-/// `match`.
+/// `match`. lupin 0.1.44 is pinned pre-mirror (r26, the 0.2.21
+/// pairing; wolffe-lang/wolf-interp#176): its row-match reader takes
+/// `f`'s inferred `-> !int` row as open and refuses the one value arm,
+/// `fail(E0801)`, where `[gram]`'s inferred private row is empty and
+/// every other machine — lupin 0.1.43 included — prints `43 42 42`.
 #[test]
 fn a_bound_empty_row_value_matches_elses_and_widens() {
     every_lane_says(
@@ -185,6 +209,7 @@ fn a_bound_empty_row_value_matches_elses_and_widens() {
         "exit(0)",
         "43 42 42\n",
         &[],
+        &[("0.1.44", "fail(E0801)")],
     );
 }
 
@@ -197,6 +222,7 @@ fn a_bound_empty_row_unit_renders_unit() {
         &corpus("rows/eu_bind_empty_row_unit.lu"),
         "exit(0)",
         "g\n()\n",
+        &[],
         &[],
     );
 }
