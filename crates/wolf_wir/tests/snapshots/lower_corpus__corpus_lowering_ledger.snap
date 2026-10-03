@@ -648,6 +648,7 @@ rows/eu_bind_empty_row.lu: lowers
 rows/eu_bind_empty_row_handled.lu: lowers
 rows/eu_bind_empty_row_unit.lu: lowers
 rows/eu_main_err_exit.lu: lowers
+rows/first_list_literal_sum.lu: lowers
 rows/handler_diverge_call.lu: lowers
 rows/handler_diverge_trap.lu: lowers
 rows/handler_match_tags.lu: lowers
@@ -666,6 +667,12 @@ rows/negative/errdefer_infallible.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/error_alias_cycle.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/error_alias_open.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/error_alias_private/main.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/first_boundary_before_lex.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/first_keyword_pattern.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/first_parse_before_lex.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/first_parse_before_resolve.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/first_same_offset_lex.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/first_stray_backtick.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/handler_uncovered.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/match_row_missing_tag.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/match_row_missing_value.lu: not mem-clean (pre-wir rungs own it)
