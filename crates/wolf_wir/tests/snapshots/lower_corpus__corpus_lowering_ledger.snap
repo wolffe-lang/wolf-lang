@@ -607,6 +607,12 @@ memory/versioned_loop_cross_module/main.lu: lowers
 memory/versioned_loop_inlined_root.lu: lowers
 memory/view_set_norm.lu: lowers
 memory/view_set_violation.lu: not mem-clean (pre-wir rungs own it)
+memory/volatile_outside_unsafe.lu: not mem-clean (pre-wir rungs own it)
+memory/volatile_pointee_bool.lu: not mem-clean (pre-wir rungs own it)
+memory/volatile_pointee_int.lu: not mem-clean (pre-wir rungs own it)
+memory/volatile_ub_misaligned.lu: refused — a method call without an elaborated impl
+memory/volatile_ub_uaf.lu: lowers
+memory/volatile_widths.lu: lowers
 methods/comb_map_filter_fold.lu: lowers
 methods/comb_sort_enumerate_zip.lu: lowers
 methods/comb_sorted_ord.lu: lowers
