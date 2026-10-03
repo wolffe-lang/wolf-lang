@@ -984,8 +984,23 @@ Simpler than the safe tier, not stricter (anti-Stacked-Borrows lesson).
   Discharging a door's obligation falsely is UB at the *door* (§7/P6),
   not later — the safe tier stays safe by construction.
 - `[mem.unsafe.scope]` `unsafe { }` blocks appear only inside functions
-  whose signatures are fully safe; the enclosing **module** is the audit
-  granule (§8).
+  whose signatures are fully safe outside the module
+  (`[mem.unsafe.sig]`); the enclosing **module** is the audit granule
+  (§8).
+- `[mem.unsafe.sig]` A `*T` may appear in the signature of a
+  **module-private** fn item (every caller is inside the audit
+  granule) and of a function at the **C membrane** (`export fn`,
+  `extern "c" fn`, either side — the pointer is C's there,
+  `[abi.c.types]`). Anywhere else — a `pub` or `pub(pkg)` fn, every
+  impl and trait method, an exported type's field or payload, an
+  exported global — it is E1302 (K9(b) = B and R1, STATUS #31 and #32;
+  wolf-lang#514). A raw pointer passed by value is a copy of the
+  pointer and nothing more: no retag, no freeze of the pointee
+  (`[mem.unsafe.raw.1]`; the compiled tiers give a `*T` parameter no
+  `readonly`/`noalias`); passed by `mut` it is the caller's pointer
+  variable, call-by-reference-result. Witnesses:
+  `memory/raw_ptr_private_sig.lu`, `memory/raw_ptr_mut_param.lu`,
+  `memory/unsafe_sig.lu` (the `pub` control).
 
 ## §6 Provenance `[mem.prov]`
 

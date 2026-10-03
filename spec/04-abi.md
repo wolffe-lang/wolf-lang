@@ -125,6 +125,41 @@ AAPCS64, win64, Apple arm64 deltas).
   `export fn` with the C convention (KWC F7); before the rule
   `extern "x86-interrupt" fn` compiled as an ordinary function
   returning with `ret`.
+- `[abi.c.export]` `export fn f(…) { … }`, and `extern "c" fn f(…)`
+  **with** a body, define a wolf function C calls: one global symbol
+  named exactly `f` (no module path — an export in a child module is
+  still `f`; C has no modules), defined under the target's C plan
+  (`[abi.c.targets]`), and kept by every tier whether or not wolf code
+  calls it. A wolf call to it crosses under the same C plan, in or out
+  of its object. An export is one function: a generic or `comptime`
+  `export fn`, an export read as a fn value (fn values are
+  wolf-convention; C function pointers are wolf-lang#520's), a
+  `mut`/`take` parameter, and a second function under the same symbol
+  (another export, a package-root function, or `main`) are refused by
+  name. Before kw02 (wolf-lang#513) the source spelling reached none of
+  this: the symbol was mangled under the wolf convention (a
+  `#[repr(c)]` struct by value from C segfaulted) and `--release`
+  dropped it. Witnesses: `corpus/membrane/export_called.lu`,
+  `export_child.lu`, and `c_membrane_link.rs`, where a C program calls
+  21 exports on both compiling tiers and checks every value.
+- `[abi.c.import]` `extern "c" fn f(…)` **without** a body declares a C
+  function wolf calls: a call is a call into imported C, the raw-tier
+  operation E1301 gates to `unsafe` (as `c.malloc` is,
+  `[mem.unsafe.scope]`), and lowers to the plain symbol `f` under the C
+  plan, with exactly the declared prototype (a variadic C function
+  declared without its varargs is the author's error, as in C;
+  wolf-lang#515). A narrow integer or `bool` argument is widened to 32
+  bits by the caller according to its signedness, the rule C callers
+  keep and clang's callees and the Apple arm64 ABI rely on. The
+  program's link supplies `f` (the C library, or an object linked
+  beside the wolf objects). The checked machine and the reference
+  interpreter have no C membrane and refuse the call by name. `import
+  c` resolves the modelled five (`malloc`, `calloc`, `free`, `memset`,
+  `memcpy`); its other names wait for the header importer (the second
+  half of wolf-lang#521). Witnesses: `corpus/membrane/extern_libc.lu`,
+  `corpus/memory/extern_c_outside_unsafe.lu`, and `c_membrane_link.rs`,
+  where wolf calls 14 C functions and two of them write through wolf
+  pointers.
 - `[abi.layout.c]` `#[repr(c)]` on a struct is the target psABI's C
   layout (K4, STATUS #31): fields in declaration order, each scalar at
   its natural alignment (its size), an aggregate field aligned to its
@@ -147,9 +182,15 @@ AAPCS64, win64, Apple arm64 deltas).
   `memory/raw_repr_c_layout.lu`, and `repr_c_raw_layout.rs`, which
   holds a C compiler to both directions on both compiling tiers.
 - `[abi.c.types]` Only repr(c)-compatible types cross a membrane by
-  value: scalars, raw pointers, `#[repr(c)]` aggregates. Anything else
-  is a compile error with a fix-it naming the nearest compatible shape
-  (E1201).
+  value: scalars (the sized integers, `int`/`uint` as 64-bit, `byte`,
+  `bool`, `f32`, `f64`), raw pointers (`*T` stands in a membrane
+  signature by `[mem.unsafe.sig]`), and non-generic `#[repr(c)]`
+  aggregates whose fields cross. Anything else — `str`, a container, a
+  struct without `#[repr(c)]`, an error union (`[abi.err.row]`) — is a
+  compile error with a fix-it naming the nearest compatible shape
+  (E1201). E1201 is not built yet: until it is, the compiling tiers
+  refuse such a parameter or result by name (`unsupported`, the
+  construct named), never with a guessed layout.
 - `[abi.c.targets]` Per-target lowering contracts, by name: SysV AMD64
   classification (linux/freebsd x86-64; the s29 implementation),
   **Apple-arm64 (macOS aarch64; implemented s59)** — AAPCS64 with the
