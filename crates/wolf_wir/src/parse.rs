@@ -687,6 +687,14 @@ fn parse_sig(line: &mut Line, module: &mut Module) -> PResult<SigId> {
                     line.next();
                     Mode::Take
                 }
+                Some(Tok::Ident(kw)) if kw == "sext" => {
+                    line.next();
+                    Mode::Sext
+                }
+                Some(Tok::Ident(kw)) if kw == "zext" => {
+                    line.next();
+                    Mode::Zext
+                }
                 _ => Mode::Val,
             };
             let ty = parse_type(line, module)?;

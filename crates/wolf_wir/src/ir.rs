@@ -54,6 +54,14 @@ pub enum Mode {
     Read,
     /// `take` — ownership transfers to the callee.
     Take,
+    /// kw02 (`[abi.c.import]`): a plain value the C membrane widens
+    /// to 32 bits SIGNED before the call — C's rule for a narrow
+    /// argument (`i8`/`i16`), which clang's callees rely on and the
+    /// Apple arm64 ABI requires. Only a `c.*` import carries it.
+    Sext,
+    /// kw02: the unsigned twin of [`Mode::Sext`] (`u8`, `u16`, `bool`,
+    /// `byte`): zero-extended to 32 bits before the call.
+    Zext,
 }
 
 impl Mode {
@@ -63,6 +71,8 @@ impl Mode {
             Mode::Mut => Some("mut"),
             Mode::Read => Some("read"),
             Mode::Take => Some("take"),
+            Mode::Sext => Some("sext"),
+            Mode::Zext => Some("zext"),
         }
     }
 }
