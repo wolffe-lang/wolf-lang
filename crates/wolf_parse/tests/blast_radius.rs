@@ -695,6 +695,7 @@ fn single_token_mutations_have_bounded_blast_radius() {
             let mlexed = wolf_lex::lex(mfile, &mutated);
             let parse = wolf_parse::parse_tokens(&mlexed, &mutated);
             let ctx = || format!("{} [{}]", f.display(), m.describe);
+            let reported = failures.len();
 
             // Invariant 0: complete lossless tree, verifier clean.
             if let Err(e) = wolf_ast::verify(&parse.root, &mutated) {
@@ -879,6 +880,16 @@ fn single_token_mutations_have_bounded_blast_radius() {
                         ctx()
                     )),
                 }
+            }
+            // `BLAST_DUMP=<dir>` writes each violating mutation's source,
+            // named for its file and iteration, so a nightly red is one
+            // `tree_dump` away from its tree.
+            if failures.len() > reported
+                && let Some(dir) = std::env::var_os("BLAST_DUMP")
+            {
+                let name = rel.to_string_lossy().replace(['/', '\\'], "__");
+                let out = Path::new(&dir).join(format!("{name}.mut{iteration}.lu"));
+                std::fs::write(&out, &mutated).expect("write BLAST_DUMP file");
             }
         }
     }
