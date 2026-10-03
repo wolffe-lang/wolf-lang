@@ -2,6 +2,53 @@
 
 ## Unreleased
 
+### The export seam: C calls wolf, wolf calls C, `*T` crosses (kw02, #513, #521, #514, rulings #31 K9(b) and #32 R1)
+
+- **`export fn` is a C function.** It was lowered as a wolf function:
+  a mangled symbol (`_Wkw_x$9716…`), the wolf convention (lc00 measured
+  a segfault passing a `#[repr(c)]` struct by value from C), and
+  dropped by `--release`. Nothing above WIR set the flag the backends
+  already honoured. Now `export fn f` (and `extern "c" fn f` with a
+  body) is the global symbol `f` under the target's C plan on both
+  tiers, kept whether or not wolf calls it, also from a child module
+  (`[abi.c.export]`). A wolf call into an export crosses under the same
+  plan, in or out of its object.
+- **A hand-declared `extern "c" fn` is callable.** A call was refused
+  at codegen ("hand-declared externs beyond the modelled c.* set").
+  It now lowers to the plain symbol with the declared prototype, inside
+  `unsafe` (E1301, as `c.malloc`); a narrow integer or `bool` argument
+  is widened to 32 bits by its signedness (WIR `sext`/`zext`, cranelift
+  extension, LLVM `signext`/`zeroext`): before that, clang-compiled
+  callees read `i8 -5` and `i16 -300` zero-extended (`[abi.c.import]`).
+  `import c` beyond the modelled five is still the header importer's
+  (#521's other half).
+- **`*T` crosses the membrane, and a module-private signature.** E1302
+  refused a raw pointer in every signature. Ruled K9(b) = B: a
+  module-private fn and either side of the C membrane may carry `*T`;
+  `pub` fns, methods and exported types may not (`[mem.unsafe.sig]`).
+  `corpus/memory/unsafe_sig.lu`'s `peek` became `pub` to keep its E1302.
+- **The checked machine** refuses a call into hand-declared C by name,
+  and passes a raw pointer argument as a copy (by value) or as the
+  caller's variable (`mut`). It had frozen the pointee at the call, so
+  a private `poke(p)` writing through `p` was UB row P2 there and ran
+  natively; a `mut p: *u8` reassigned in the callee never reached the
+  caller (it printed `2` where native printed `42`).
+- **What does not cross is refused by name**, not guessed: `str`,
+  containers, a struct without `#[repr(c)]`, an error union, a
+  `mut`/`take` parameter, a generic or `comptime` export, an export as
+  a fn value, two functions under one C symbol (E1201 is not built;
+  `[abi.c.types]`).
+- Witnesses: `c_membrane_link.rs` builds two fixtures `--emit=obj` on
+  both tiers and links them with their C half: C calls 21 exports
+  (eight mixed-width integers, nine floats, every `#[repr(c)]` class by
+  value both ways, `*Big` read and written back, a `*u8` string) and
+  checks 36 values; wolf calls 14 C functions, two of which write
+  through wolf pointers. Run under gcc 16.2.1 and clang 23.1.1 on
+  kasumi. `c_membrane_lanes.rs` asserts seven corpus rows on the
+  checked, native and release lanes and lupin, and seven refusals by
+  name; lupin 0.1.44 is pinned pre-mirror where it parts
+  (wolf-interp#181).
+
 ### Which code a refusal carries: the first diagnostic (s203, #377, ruling #28)
 
 - **One program, one code, on every lane.** `conform-run` stopped at
