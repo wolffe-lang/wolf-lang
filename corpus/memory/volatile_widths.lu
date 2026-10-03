@@ -9,7 +9,7 @@
 //! little-endian exactly as `p[i]` does, and the last line mixes the two
 //! spellings in both directions. Before kw07 every machine answered
 //! `unsupported` ("this raw-pointer operation"); lupin 0.1.45 still does
-//! (pinned by version, wolf-interp#XXX).
+//! (pinned by version, wolf-interp#185).
 
 import c "stdlib.h"
 
