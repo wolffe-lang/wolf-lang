@@ -469,7 +469,18 @@ impl Backend for LlvmBackend {
         // -x ir: the module carries its own triple/datalayout;
         // -fPIC: host toolchains link PIE by default (matches the
         // debug tier's is_pic).
-        let out = Command::new(&self.clang)
+        let mut cmd = Command::new(&self.clang);
+        // kw07: the freestanding target names itself to the DRIVER too.
+        // The module's own triple sets the code clang emits, but the
+        // driver validates its flags against the HOST's default target
+        // first: on a windows host `-fPIC` is "unsupported for target
+        // x86_64-pc-windows-msvc" and the object was never built. The
+        // hosted targets keep the host default (the invocation, and so
+        // every hosted object, unchanged).
+        if self.target == ReleaseTarget::X86_64None {
+            cmd.arg(format!("--target={}", self.target.triple()));
+        }
+        let out = cmd
             .arg("-x")
             .arg("ir")
             .arg(&ll)
