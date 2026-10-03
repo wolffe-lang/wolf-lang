@@ -88,6 +88,9 @@ faults/byte_view_slice_reversed.lu: lowers
 faults/cast_float_nan_trap.lu: lowers
 faults/cast_float_overflow_trap.lu: lowers
 faults/cast_float_to_int_truncate.lu: lowers
+faults/cast_narrow_sign_trap.lu: lowers
+faults/cast_narrow_unsigned_to_signed_trap.lu: lowers
+faults/cast_narrow_width_trap.lu: lowers
 faults/char_cast_negative_trap.lu: lowers
 faults/char_cast_range_trap.lu: lowers
 faults/char_cast_surrogate_trap.lu: lowers
@@ -819,6 +822,8 @@ typecheck/byte_narrow_fail.lu: not mem-clean (pre-wir rungs own it)
 typecheck/byte_shapes.lu: lowers
 typecheck/cast_bad.lu: not mem-clean (pre-wir rungs own it)
 typecheck/cast_int_to_float.lu: lowers
+typecheck/cast_narrow_in_range.lu: lowers
+typecheck/cast_narrow_wrapping_truncates.lu: lowers
 typecheck/cast_set.lu: lowers
 typecheck/closure_param_call.lu: lowers
 typecheck/closure_return.lu: lowers
