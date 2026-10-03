@@ -621,13 +621,30 @@ expected. This section is that clause; `send`'s row follows it in
   `return`" in a unit function is on the closed list too:
   `return boom()` there stopped native and release with an internal
   error and propagated on checked; it is the same discard now.
-  Witnesses `corpus/rows/unit_discard_*.lu`. One position is left as
-  the machines answer it: an else-less `if` that is itself the tail of
-  a fallible function (`fn g(c: bool) -> () ! {bad} { if c { boom() }
-  }`) hands the raise to `g`'s caller on all four machines and draws
-  no W0601, though "the then-block of an `if` with no `else`" is on the
-  list without exception; which way it goes is a ruling, recorded on
-  #541.)
+  Witnesses `corpus/rows/unit_discard_*.lu`.)
+  (Ruled 2026-10-03, ruling #34 = A, by s208 for wolf-lang#541 part 2.
+  **The list has no exception.** An else-less `if` — or a chain that
+  ends without an `else` — that is itself the tail of a fallible
+  function (`fn g(c: bool) -> () ! {bad} { if c { boom() } }`) is the
+  same unit context it is one line higher: its then-block's raise is
+  discarded, warned (W0601), and the `if`'s value `()` is what `g`'s
+  `!()` takes as its ok value. So is the same `if` ending a closure
+  checked against `fn(…) -> () ! {…}`. Until s208 all four machines
+  handed that raise to the caller with no W0601 — except an else-if
+  chain, which native and release already discarded while the checked
+  machine and lupin raised — and it was the one place a raise left a
+  function with no `?` and no `return` to mark it. A `?`, a `return`
+  or an `else` in the then-block is not a discard and is untouched:
+  wolf-std's `move_file` (`std/fs/fs.lu`), the one such tail across
+  1,868 fallible functions downstream and in the corpus, ends in a `?`
+  and answers as before. A value-carrying row there (`if c { maybe(9)
+  }` ending a `-> () ! {none}` function) is the discard with its value,
+  where the compiler had refused the `int` (E0401). A bare tag as that
+  then-block's tail (`if c { bad }`) is the construct it is in the
+  statement form — declined by name on the compiler (`unsupported`, "an
+  error-row tag outside `!T` context") and discarded by lupin; `return
+  bad` is the spelling that raises. Witnesses `corpus/rows/unit_discard_tail_if*.lu`; lupin's
+  half is wolf-interp#179.)
 
 - `[type.unit.consume]` **A closure body with no fixed result is not a
   unit context.** `s.spawn(fn() { ch.send(v) })` infers `fn() -> !()`
