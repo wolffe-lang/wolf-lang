@@ -1,0 +1,28 @@
+//! check: run(exit=0, stdout="raised\n")
+//! phase: run
+//! conforms: type.unit.context, type.unit.discard, err.rows
+//!
+//! s207 (wolf-lang#541), the control: a discard is a row NOBODY
+//! consumes. `?` consumes it — it propagates the row out of the loop
+//! body and out of `g` — so the discard rule never touches it, on any
+//! machine.
+
+fn boom() -> () ! {bad} {
+    return bad
+}
+
+fn g() -> () ! {bad} {
+    for _ in 0..2 {
+        boom()?
+    }
+    print("unreached")
+}
+
+fn main() -> !int {
+    g() else |_| {
+        print("raised")
+        return 0
+    }
+    print("ok")
+    0
+}

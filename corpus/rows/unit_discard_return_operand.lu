@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="after\n")
+//! phase: run
+//! conforms: type.unit.context, type.unit.discard, diag.sev.warn
+//! warns: W0601
+//!
+//! s207 (wolf-lang#541) — "the operand of a `return`" in a unit
+//! function is on `[type.unit.context]`'s list, so `return boom()` is
+//! the warned discard and `f` returns `()`. Native and release stopped
+//! with an internal error (`ret carries 1 value(s), signature returns
+//! 0`) and the checked machine propagated the row until s207; lupin
+//! prints `after`.
+
+fn boom() -> () ! {bad} {
+    return bad
+}
+
+fn f() {
+    return boom()
+}
+
+fn main() -> !int {
+    f()
+    print("after")
+    0
+}

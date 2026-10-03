@@ -1,0 +1,19 @@
+//! check: run(exit=0, stdout="hi\n")
+//! phase: run
+//! conforms: type.unit.context, type.unit.discard, diag.sev.warn
+//! warns: W0601
+//!
+//! s207 (wolf-lang#541) — `main` with no declared result is a unit
+//! function, so its raising tail is the warned discard and the process
+//! exits 0. Native and release always did; the checked machine reported
+//! the row as `main`'s error value (`exit(1)`, `error: bad`) until
+//! s207; lupin did too until wolf-interp#172 (is68).
+
+fn boom() -> () ! {bad} {
+    return bad
+}
+
+fn main() {
+    print("hi")
+    boom()
+}

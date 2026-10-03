@@ -1,0 +1,65 @@
+//! check: run(exit=0, stdout="a\nb\nc\nd\ne 3\nf 3\ng 3\nother\nh\n")
+//! phase: run
+//! conforms: type.unit.context, type.unit.discard, diag.sev.warn
+//! warns: W0601
+//!
+//! s207 (wolf-lang#541) — a discarded row is discarded on every
+//! machine. `[type.unit.discard]`: "A `!T` tail in a unit context is a
+//! discard, warned (W0601), never a mismatch. The value's row is lost";
+//! W0601 has said the same of a non-trailing `!T` statement since s67.
+//! Every `boom()` below raises and nobody consumes it: a statement, an
+//! `int ! {none}` statement, an else-less `if`'s then-block, the last
+//! block of an `if … else if` chain with no `else`, a `for`, `while` and
+//! `loop` body's tail, and a `match` arm in a loop body. Native,
+//! release and lupin always printed every line; the checked machine
+//! propagated the first row out of `main` (`exit(1)`, `error: bad`)
+//! until s207.
+
+fn boom() -> () ! {bad} {
+    return bad
+}
+
+fn maybe(n: int) -> int ! {none} {
+    if n > 5 { return none }
+    n
+}
+
+fn main() -> !int {
+    boom()
+    print("a")
+    maybe(9)
+    print("b")
+    let c = true
+    if c { boom() }
+    print("c")
+    let n = 2
+    if n > 5 { print("big") } else if n > 1 { boom() }
+    print("d")
+    var i = 0
+    for _ in 0..3 {
+        i += 1
+        boom()
+    }
+    print("e {i}")
+    var j = 0
+    while j < 3 {
+        j += 1
+        boom()
+    }
+    print("f {j}")
+    var m = 0
+    loop {
+        m += 1
+        if m > 2 { break }
+        boom()
+    }
+    print("g {m}")
+    for x in [1, 2] {
+        match x {
+            1 => boom(),
+            _ => print("other"),
+        }
+    }
+    print("h")
+    0
+}

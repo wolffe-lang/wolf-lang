@@ -1,0 +1,29 @@
+//! check: run(exit=0, stdout="after if\n7\n")
+//! phase: run
+//! conforms: type.unit.context, type.unit.discard, diag.sev.warn
+//! warns: W0601
+//!
+//! s207 (wolf-lang#541) — an else-less `if` as a STATEMENT in a
+//! fallible function is still a unit context: its raising then-block is
+//! discarded, warned, and the function goes on to its own tail. Native,
+//! release and lupin print `after if` and `7`; the checked machine let
+//! the row leave `g` and the caller's `else` printed `0` until s207.
+//! (The same `if` as `g`'s TAIL raises on all four machines and draws
+//! no W0601 — a ruling question, filed with #541, not decided here.)
+
+fn maybe(n: int) -> int ! {none} {
+    if n > 5 { return none }
+    n
+}
+
+fn g(n: int) -> int ! {none} {
+    if n > 1 { maybe(n) }
+    print("after if")
+    7
+}
+
+fn main() -> !int {
+    let v = g(9) else 0
+    print("{v}")
+    0
+}

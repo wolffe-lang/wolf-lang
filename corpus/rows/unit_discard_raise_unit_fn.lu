@@ -1,0 +1,51 @@
+//! check: run(exit=0, stdout="in f\nafter f\nafter g\nafter go\ndefer ran\nafter h\n")
+//! phase: run
+//! conforms: type.unit.context, type.unit.discard, diag.sev.warn
+//! warns: W0601
+//!
+//! s207 (wolf-lang#541) — the body of a unit function is a unit context
+//! (`[type.unit.context]`), so a raising `!()` tail there is the warned
+//! discard, and so is a raising statement before it. Native, release and
+//! lupin returned `()` to the caller every time; the checked machine
+//! handed the caller the row, and `main` left with `error: bad`, until
+//! s207. A unit method and a unit fn with a `defer` are the same
+//! context; the `defer` runs on the way out either way.
+
+fn boom() -> () ! {bad} {
+    return bad
+}
+
+fn f() {
+    boom()
+    print("in f")
+}
+
+fn g() {
+    boom()
+}
+
+struct C { n: int }
+
+impl C {
+    fn go(self) {
+        boom()
+    }
+}
+
+fn h() {
+    defer print("defer ran")
+    boom()
+}
+
+fn main() -> !int {
+    f()
+    print("after f")
+    g()
+    print("after g")
+    let c = C { n: 1 }
+    c.go()
+    print("after go")
+    h()
+    print("after h")
+    0
+}
