@@ -17,9 +17,10 @@
 //! property of the native and release lanes. Every case here asserts
 //! that each wolfgang lane ANSWERS (a dead compiler is a failed test,
 //! never a skip — the s59/#471 pattern reads an abort as neither exit 2
-//! nor success) and answers E0611 exactly once; lupin 0.1.43 is pinned
-//! by version to its measured bytes, and any newer lupin must refuse
-//! with the same code (s180's design; wolf-interp's mirror is is66).
+//! nor success) and answers E0611 exactly once; lupin 0.1.43 was
+//! pinned by version to its measured bytes (s180's design) until the
+//! 0.1.44 pairing (r26): 0.1.44 carries the mirror (it rode with is67)
+//! and refuses with the same code, as any later lupin must.
 
 mod lane_exit;
 
@@ -209,7 +210,7 @@ fn every_lane_refuses(entry: &Path, lupin_pre_mirror: &[(&str, &str)]) {
             None => assert_eq!(
                 lupin.verdict,
                 want,
-                "lupin {}'s answer on {} (the mirror of ruling #19 is wolf-interp's is66); \
+                "lupin {}'s answer on {} (the mirror of ruling #19 rode with wolf-interp's is67); \
                  codes {:?}, stdout {:?}",
                 lupin.version,
                 entry.display(),
@@ -270,10 +271,7 @@ fn build_refuses(entry: &Path) {
 #[test]
 fn a_try_in_a_defer_is_refused_everywhere() {
     let row = corpus("try_in_defer.lu");
-    every_lane_refuses(
-        &row,
-        &[("0.1.43", "body\nkey\ndeferred a\n1\nbody\nkey\n9\n")],
-    );
+    every_lane_refuses(&row, &[]);
     build_refuses(&row);
 }
 
@@ -281,7 +279,7 @@ fn a_try_in_a_defer_is_refused_everywhere() {
 #[test]
 fn a_try_in_an_errdefer_is_refused_everywhere() {
     let row = corpus("try_in_errdefer.lu");
-    every_lane_refuses(&row, &[("0.1.43", "key\nlook a\n5\nkey\nkey\n9\n")]);
+    every_lane_refuses(&row, &[]);
     build_refuses(&row);
 }
 
@@ -290,9 +288,6 @@ fn a_try_in_an_errdefer_is_refused_everywhere() {
 #[test]
 fn a_try_in_a_defer_block_is_refused_everywhere() {
     let row = corpus("try_in_defer_block.lu");
-    every_lane_refuses(
-        &row,
-        &[("0.1.43", "body\nkey\ndeferred a\n1\nbody\nkey\n9\n")],
-    );
+    every_lane_refuses(&row, &[]);
     build_refuses(&row);
 }
