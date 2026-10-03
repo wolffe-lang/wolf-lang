@@ -62,6 +62,31 @@
   `*p` outside `unsafe` (wolf-interp#184); pinned by version in
   `int_ptr_lanes.rs`.
 
+### An else-less `if` at a fallible fn's tail discards its raise (s208, ruling #34, #541)
+
+- **Ruling #34 = A: the then-block of an `if` with no `else` is a unit
+  context everywhere, a fallible fn's tail included.** `fn g(c: bool)
+  -> () ! {bad} { if c { boom() } }` handed `boom`'s raise to `g`'s
+  caller on checked, native, release and lupin, with no W0601 — the
+  one place a raise left a function with no `?` and no `return`. It is
+  the warned discard now, as the same `if` one line higher already
+  was, and `g` returns `()`. Before, an else-if chain with no final
+  `else` at that tail split the machines (native and release
+  discarded, checked and lupin raised); a value-carrying row there
+  (`if c { maybe(9) }`) was E0401; a closure checked against
+  `fn(bool) -> () ! {bad}` raised the same way. All three discard now.
+  `?`, `return` and `else` inside the block are untouched: wolf-std's
+  `move_file` (`std/fs/fs.lu`), the one such tail downstream, ends in a
+  `?` and answers as before. A bare tag as that block's tail (`if c {
+  bad }`) is now what it is in a statement `if`: `unsupported` by name;
+  write `return bad`. Witnesses `corpus/rows/unit_discard_tail_if*.lu`,
+  gate `unit_discard_lanes.rs`; lupin 0.1.45 answers the old way, pinned
+  by version (wolf-interp#179).
+- **Ruling #35 = share (spec text only).** `copy` of a `str` shares its
+  bytes (`[mem.tier0.move.3]`), as every machine already did; s160's
+  and s171's notes in `spec/02-memory-model.md` said it "materializes
+  the bytes into the ambient region" and are amended. No code change.
+
 ## 0.2.22 — 2026-10-03
 
 THE TWENTY-SECOND. wolf builds for a freestanding target:
