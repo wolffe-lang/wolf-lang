@@ -3,14 +3,17 @@
 //! conforms: proto.record.first, gram.lex.str
 //!
 //! s203 (wolf-lang#377 class 1, ruling #28) — a stray `")` (38 of
-//! wl21's 99 three-way rejections began with one a code fence left
-//! behind; there it sat at the top level, here after a value, where the
+//! wl21's 99 three-way rejections carried one a code fence left behind;
+//! there it sat at the top level, here after a value, where the
 //! formatter can still lay the file out). Two reports start at the same
 //! byte: the lexer's E0102 (the string never closes) and the parser's
 //! E0201 (the line should have ended). At one offset the earlier phase
 //! is first, so the refusal is E0102 on every lane. Through s202
 //! `conform-run` said E0102 (its ladder stopped at lex) and `wolf run`
-//! said E0201 (its report sorted the shorter span first).
+//! said E0201 (its report sorted the shorter span first). Where stray
+//! top-level text comes BEFORE the quote — 19 of the 25 regenerated
+//! candidates that reproduce the class — the parser's E0203 is the
+//! earlier offset and wins (`first_parse_before_lex.lu`'s shape).
 
 fn main() -> !int {
     let x = 1 ")

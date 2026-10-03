@@ -172,7 +172,11 @@ ritual moves, on each tier.
   error-row class and kw00's top-level `union`, which no formatter can
   lay out); `first_diagnostic_lanes.rs` asserts the
   checked, native and release records and both `wolf run` screens, and
-  pins lupin 0.1.43/0.1.44 by version where it parts. The two
+  pins lupin 0.1.43/0.1.44 by version where it parts. Over 90
+  candidates the teacher regenerated for #377's four refusal classes
+  (8 byte-identical to wl21's), the four wolfgang screens and records
+  agree on every one (57 of 90 at trunk); lupin parts where #175 says.
+  The two
   `exit(0)`-vs-E0201 programs were lupin 0.1.36 without list literals
   (closed at 0.1.37), not a refusal question.
 

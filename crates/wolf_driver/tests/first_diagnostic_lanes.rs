@@ -206,8 +206,10 @@ fn every_lane_refuses(entry: &Path, want: &str, phase: &str, pre_mirror: PreMirr
     }
 }
 
-/// #377 class 1 (38 of wl21's 99): lex E0102 and a parse report start
-/// at one byte; the earlier phase is first. Red at trunk 12a56b22 on
+/// #377 class 1 (38 of wl21's 99), its tie: lex E0102 and a parse
+/// report start at one byte; the earlier phase is first. (Most of the
+/// class is the other shape — stray text before the quote, the parser's
+/// E0203 the earlier offset — `parse_error_before_a_lex_error_is_first`.) Red at trunk 12a56b22 on
 /// the screen: `wolf run` said E0203 for the top-level shape (wl21's)
 /// and E0201 for the row's in-body shape.
 #[test]
