@@ -229,32 +229,6 @@ pub unsafe extern "C" fn __wolf_rt_trap_at(
     std::process::exit(TRAP_EXIT_CODE)
 }
 
-/// The trap hook (kw04, K8(a), spec/04 `[abi.target.none.hooks]`):
-/// `wolf_trap(kind, file, file_len, line, col)`, never returning. On the
-/// freestanding target `x86_64-unknown-none` every trap of both tiers
-/// calls it and the PROGRAM supplies it; the hosted runtime defines it
-/// as the report-and-exit every hosted trap already takes
-/// ([`__wolf_rt_trap_at`]), so a hosted program that calls the hook,
-/// or links a freestanding object, traps exactly as its own code does.
-/// Hosted codegen still calls `__wolf_rt_trap_at`/`__wolf_rt_trap`
-/// directly: hosted binaries do not move.
-///
-/// # Safety
-///
-/// As [`__wolf_rt_trap_at`]: `file` must be null or point at
-/// `file_len` readable bytes that live for the call.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wolf_trap(
-    kind: i32,
-    file: *const u8,
-    file_len: i64,
-    line: i64,
-    col: i64,
-) -> ! {
-    // SAFETY: the caller's contract is `__wolf_rt_trap_at`'s.
-    unsafe { __wolf_rt_trap_at(kind, file, file_len, line, col) }
-}
-
 /// `main` returned an error value (D30, s29 `[abi.err]`): the
 /// documented process behavior is `error: <tag name>` on STDOUT
 /// (matching the reference interpreter) and exit 1 — an error return
