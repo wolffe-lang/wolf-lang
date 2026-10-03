@@ -99,7 +99,7 @@ fn build_kernel(dir: &Path, src: &str, tier: &str) -> PathBuf {
     assert!(
         out.status.success() && obj.is_file(),
         "wolf build {src} --target {TARGET} --emit=obj ({tier}) with listed assembly must \
-         build (exit {:?}) — a refusal here is the gate failing, never a skip:\n{}",
+         build (exit {:?}) — a refusal here is the gate failing (#550):\n{}",
         out.status.code(),
         text(&out.stderr)
     );
