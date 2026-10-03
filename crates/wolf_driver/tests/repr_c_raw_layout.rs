@@ -25,7 +25,8 @@
 //! asserts the refusal so a machine that starts guessing goes red.
 //!
 //! The C compiler is `$CC`, else `cc`. A host with none is a loud skip
-//! on windows (no C toolchain on the runner) and a failure elsewhere.
+//! on windows (where a runner may have no C toolchain) and a failure
+//! elsewhere; the windows runner has one, so the witness runs there too.
 
 mod lane_exit;
 
@@ -253,7 +254,10 @@ fn c_reads_the_struct_wolf_wrote() {
             .args(&bytes)
             .output()
             .expect("the C half runs");
-        let c_says = String::from_utf8_lossy(&out.stdout);
+        // A C program's text-mode stdout ends lines with `\r\n` on
+        // windows (CI run 37087868222 found a `cc` there); the layout
+        // is what is compared, not the line ending.
+        let c_says = String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n");
         assert_eq!(
             c_says, "sizeof=12 off=0,4,8\n17 3735928559 34\n68 7 85\n",
             "the {flag} lane's `*C3` stores, read by C as `struct C3[2]` (wolf-lang#523: \
