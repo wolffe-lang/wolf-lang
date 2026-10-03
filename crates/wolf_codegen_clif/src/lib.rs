@@ -100,6 +100,8 @@ pub struct ClifBackend {
     /// into the object at `finish` (s30).
     debug_sections: Vec<DebugSection>,
     fb_ctx: FunctionBuilderContext,
+    /// The build's target (kw04): the host, or `x86_64-unknown-none`.
+    target: wolf_backend::target::Target,
 }
 
 impl ClifBackend {
@@ -109,20 +111,40 @@ impl ClifBackend {
     /// driver against `wolf_rt.lib`) — anything else is an honest
     /// refusal (c13, D35's tier-1 matrix).
     pub fn new() -> Result<ClifBackend, BackendError> {
-        let triple = target_lexicon::Triple::host();
-        let supported = matches!(
-            (&triple.architecture, &triple.operating_system),
-            (
-                target_lexicon::Architecture::X86_64,
-                target_lexicon::OperatingSystem::Linux
-            ) | (
-                target_lexicon::Architecture::Aarch64(_),
-                target_lexicon::OperatingSystem::Darwin(_)
-            ) | (
-                target_lexicon::Architecture::X86_64,
-                target_lexicon::OperatingSystem::Windows
-            )
-        );
+        Self::for_target(wolf_backend::target::Target::Host)
+    }
+
+    /// A backend for `target` (kw04). The freestanding
+    /// `x86_64-unknown-none` is emitted from EVERY host (Cranelift's
+    /// x86 backend is built everywhere): ELF, the SysV convention for
+    /// exports, position-independent, frame pointers kept
+    /// (`[abi.target.none.codegen]`). Cranelift's x86-64 frames never
+    /// use the red zone, and nothing it emits for integer code touches
+    /// an SSE register — floats, its only SSE use, are refused before
+    /// this backend runs (the gate disassembles every object to prove
+    /// both).
+    pub fn for_target(target: wolf_backend::target::Target) -> Result<ClifBackend, BackendError> {
+        let triple = if target.is_freestanding() {
+            "x86_64-unknown-none-elf"
+                .parse::<target_lexicon::Triple>()
+                .map_err(|e| BackendError::Internal(format!("freestanding triple: {e}")))?
+        } else {
+            target_lexicon::Triple::host()
+        };
+        let supported = target.is_freestanding()
+            || matches!(
+                (&triple.architecture, &triple.operating_system),
+                (
+                    target_lexicon::Architecture::X86_64,
+                    target_lexicon::OperatingSystem::Linux
+                ) | (
+                    target_lexicon::Architecture::Aarch64(_),
+                    target_lexicon::OperatingSystem::Darwin(_)
+                ) | (
+                    target_lexicon::Architecture::X86_64,
+                    target_lexicon::OperatingSystem::Windows
+                )
+            );
         if !supported {
             return Err(BackendError::Environment(format!(
                 "this host cannot run the native tier: native codegen targets \
@@ -171,6 +193,7 @@ impl ClifBackend {
             clif_texts: Vec::new(),
             debug_sections: Vec::new(),
             fb_ctx: FunctionBuilderContext::new(),
+            target,
         })
     }
 
@@ -277,6 +300,7 @@ impl Backend for ClifBackend {
                 &mut self.data_ids,
                 &self.site_files,
                 &mut self.site_file_data,
+                self.target.is_freestanding(),
             )?;
         }
         let symbol = self

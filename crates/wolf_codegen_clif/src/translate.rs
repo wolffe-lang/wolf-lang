@@ -631,6 +631,10 @@ struct Tx<'a, 'b> {
     /// Per-file rodata path symbols defined so far (module-level, like
     /// `data_ids`): FileId index → object data id for the path bytes.
     site_file_data: &'a mut HashMap<u32, cranelift_module::DataId>,
+    /// The freestanding target (kw04, `[abi.target.none]`): every trap
+    /// reports through the one hook `wolf_trap`, and nothing else of
+    /// the runtime may be referenced.
+    freestanding: bool,
     /// The srcspan `lo` of the instruction being translated (s125):
     /// what a trap check emitted from it names as its site.
     cur_span_lo: Option<u32>,
@@ -691,6 +695,7 @@ pub(crate) fn translate_function(
     data_ids: &mut HashMap<u32, cranelift_module::DataId>,
     site_files: &HashMap<u32, wolf_backend::dwarf::SourceFile>,
     site_file_data: &mut HashMap<u32, cranelift_module::DataId>,
+    freestanding: bool,
 ) -> Result<Vec<(String, DebugTy, StackSlot, bool)>, BackendError> {
     let mut tx = Tx {
         b,
@@ -704,6 +709,7 @@ pub(crate) fn translate_function(
         data_ids,
         site_files,
         site_file_data,
+        freestanding,
         cur_span_lo: None,
         blocks: HashMap::new(),
         vals: HashMap::new(),
@@ -1037,20 +1043,24 @@ impl<'a, 'b> Tx<'a, 'b> {
         for ((code, site), tb) in pending {
             self.b.switch_to_block(tb);
             let c = self.b.ins().iconst(ctypes::I32, code as i64);
-            match site {
-                Some((line, col)) => {
-                    let (did, len) = self.site_file_symbol()?;
-                    let gv = self.om.declare_data_in_func(did, self.b.func);
-                    let fref = self.rt_ref("__wolf_rt_trap_at")?;
-                    let p = self.b.ins().symbol_value(ctypes::I64, gv);
-                    let l = self.b.ins().iconst(ctypes::I64, len as i64);
-                    let ln = self.b.ins().iconst(ctypes::I64, line as i64);
-                    let cl = self.b.ins().iconst(ctypes::I64, col as i64);
-                    self.b.ins().call(fref, &[c, p, l, ln, cl]);
-                }
-                None => {
-                    let fref = self.rt_ref("__wolf_rt_trap")?;
-                    self.b.ins().call(fref, &[c]);
+            if self.freestanding {
+                self.hook_trap_call(c, site)?;
+            } else {
+                match site {
+                    Some((line, col)) => {
+                        let (did, len) = self.site_file_symbol()?;
+                        let gv = self.om.declare_data_in_func(did, self.b.func);
+                        let fref = self.rt_ref("__wolf_rt_trap_at")?;
+                        let p = self.b.ins().symbol_value(ctypes::I64, gv);
+                        let l = self.b.ins().iconst(ctypes::I64, len as i64);
+                        let ln = self.b.ins().iconst(ctypes::I64, line as i64);
+                        let cl = self.b.ins().iconst(ctypes::I64, col as i64);
+                        self.b.ins().call(fref, &[c, p, l, ln, cl]);
+                    }
+                    None => {
+                        let fref = self.rt_ref("__wolf_rt_trap")?;
+                        self.b.ins().call(fref, &[c]);
+                    }
                 }
             }
             self.b
@@ -1058,6 +1068,61 @@ impl<'a, 'b> Tx<'a, 'b> {
                 .trap(TrapCode::user(code as u8).ok_or_else(|| ice("trap code 0"))?);
         }
         Ok(())
+    }
+
+    /// The freestanding trap report (kw04, K8(a), `[abi.target.none.hooks]`):
+    /// `wolf_trap(kind, file, file_len, line, col)` — the site when this
+    /// trap has one, `(null, 0, 0, 0)` otherwise. The caller emits the
+    /// CLIF `trap` (`ud2`) after it: the hook must not return.
+    fn hook_trap_call(
+        &mut self,
+        code: CValue,
+        site: Option<(u64, u64)>,
+    ) -> Result<(), BackendError> {
+        let fref = self.hook_ref()?;
+        let (p, len, line, col) = match site {
+            Some((line, col)) => {
+                let (did, len) = self.site_file_symbol()?;
+                let gv = self.om.declare_data_in_func(did, self.b.func);
+                let p = self.b.ins().symbol_value(ctypes::I64, gv);
+                (p, len as i64, line as i64, col as i64)
+            }
+            None => (self.b.ins().iconst(ctypes::I64, 0), 0, 0, 0),
+        };
+        let l = self.b.ins().iconst(ctypes::I64, len);
+        let ln = self.b.ins().iconst(ctypes::I64, line);
+        let cl = self.b.ins().iconst(ctypes::I64, col);
+        self.b.ins().call(fref, &[code, p, l, ln, cl]);
+        Ok(())
+    }
+
+    /// Declare (once) and import (per function) the trap hook
+    /// `wolf_trap(i32, ptr, i64, i64, i64)` under the platform C
+    /// convention (kw04). Not a runtime shim: the program supplies it.
+    fn hook_ref(&mut self) -> Result<cranelift_codegen::ir::FuncRef, BackendError> {
+        let name = wolf_backend::target::TRAP_HOOK;
+        if let Some(&(fr, _)) = self.fref_cache.get(name) {
+            return Ok(fr);
+        }
+        let fid = match self.rt.get(name) {
+            Some(&fid) => fid,
+            None => {
+                let mut sig = Signature::new(self.om.isa().default_call_conv());
+                sig.params.push(AbiParam::new(ctypes::I32));
+                for _ in 0..4 {
+                    sig.params.push(AbiParam::new(ctypes::I64));
+                }
+                let fid = self
+                    .om
+                    .declare_function(name, cranelift_module::Linkage::Import, &sig)
+                    .map_err(|e| ice(e.to_string()))?;
+                self.rt.insert(name, fid);
+                fid
+            }
+        };
+        let fr = self.om.declare_func_in_func(fid, self.b.func);
+        self.fref_cache.insert(name.to_string(), (fr, Conv::C));
+        Ok(fr)
     }
 
     /// Branch to the (kind, current site) trap block when `cond` is
@@ -1082,6 +1147,17 @@ impl<'a, 'b> Tx<'a, 'b> {
     ) -> Result<cranelift_codegen::ir::FuncRef, BackendError> {
         if let Some(&(fr, _)) = self.fref_cache.get(name) {
             return Ok(fr);
+        }
+        if self.freestanding {
+            // The driver refuses these by name before any backend runs
+            // (`wolf_backend::target::freestanding_refusal`); this is
+            // the defensive twin, so no runtime symbol can reach a
+            // freestanding object whatever the caller skipped.
+            let (construct, _) = wolf_backend::target::runtime_construct(name);
+            return Err(BackendError::Unsupported(format!(
+                "{construct} needs the hosted runtime (target {})",
+                wolf_backend::target::FREESTANDING
+            )));
         }
         let fid = match self.rt.get(name) {
             Some(&fid) => fid,
@@ -1161,6 +1237,12 @@ impl<'a, 'b> Tx<'a, 'b> {
         let key = format!("libm::{symbol}");
         if let Some(&(fr, _)) = self.fref_cache.get(&key) {
             return Ok(fr);
+        }
+        if self.freestanding {
+            return Err(BackendError::Unsupported(format!(
+                "a floating-point value (`{symbol}`) on target {} (K10)",
+                wolf_backend::target::FREESTANDING
+            )));
         }
         let fid = match self.imports.get(&key) {
             Some(&fid) => fid,
@@ -1985,20 +2067,25 @@ impl<'a, 'b> Tx<'a, 'b> {
                 // s125: an unconditional trap is already cold where it
                 // stands — report its site inline, same immediates as
                 // a sited cold block.
-                match self.cur_trap_site() {
-                    Some((line, col)) => {
-                        let (did, len) = self.site_file_symbol()?;
-                        let gv = self.om.declare_data_in_func(did, self.b.func);
-                        let fref = self.rt_ref("__wolf_rt_trap_at")?;
-                        let p = self.b.ins().symbol_value(ctypes::I64, gv);
-                        let l = self.b.ins().iconst(ctypes::I64, len as i64);
-                        let ln = self.b.ins().iconst(ctypes::I64, line as i64);
-                        let cl = self.b.ins().iconst(ctypes::I64, col as i64);
-                        self.b.ins().call(fref, &[c, p, l, ln, cl]);
-                    }
-                    None => {
-                        let fref = self.rt_ref("__wolf_rt_trap")?;
-                        self.b.ins().call(fref, &[c]);
+                if self.freestanding {
+                    let site = self.cur_trap_site();
+                    self.hook_trap_call(c, site)?;
+                } else {
+                    match self.cur_trap_site() {
+                        Some((line, col)) => {
+                            let (did, len) = self.site_file_symbol()?;
+                            let gv = self.om.declare_data_in_func(did, self.b.func);
+                            let fref = self.rt_ref("__wolf_rt_trap_at")?;
+                            let p = self.b.ins().symbol_value(ctypes::I64, gv);
+                            let l = self.b.ins().iconst(ctypes::I64, len as i64);
+                            let ln = self.b.ins().iconst(ctypes::I64, line as i64);
+                            let cl = self.b.ins().iconst(ctypes::I64, col as i64);
+                            self.b.ins().call(fref, &[c, p, l, ln, cl]);
+                        }
+                        None => {
+                            let fref = self.rt_ref("__wolf_rt_trap")?;
+                            self.b.ins().call(fref, &[c]);
+                        }
                     }
                 }
                 self.b

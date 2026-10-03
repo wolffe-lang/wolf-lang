@@ -10,7 +10,10 @@ rust-version.workspace = true
 wolf_wir.workspace = true
 wolf_backend.workspace = true
 wolf_rt.workspace = true
-cranelift-codegen = "0.134"
+# kw04: the `x86` backend on every host (not only `host-arch`'s), so
+# the freestanding x86_64-unknown-none target is emitted from a macOS
+# aarch64 host too (`[abi.target]`).
+cranelift-codegen = { version = "0.134", features = ["x86"] }
 cranelift-frontend = "0.134"
 cranelift-module = "0.134"
 cranelift-object = "0.134"
