@@ -1,6 +1,8 @@
 {
   "anchors": {
     "abi.c": "04-abi.md",
+    "abi.c.export": "04-abi.md",
+    "abi.c.import": "04-abi.md",
     "abi.c.panic": "04-abi.md",
     "abi.c.seams": "04-abi.md",
     "abi.c.targets": "04-abi.md",
@@ -382,6 +384,7 @@
     "mem.unsafe.raw.2": "02-memory-model.md",
     "mem.unsafe.raw.3": "02-memory-model.md",
     "mem.unsafe.scope": "02-memory-model.md",
+    "mem.unsafe.sig": "02-memory-model.md",
     "os.cpus": "11-os.md",
     "os.fs": "11-os.md",
     "os.fs.fstat": "11-os.md",
