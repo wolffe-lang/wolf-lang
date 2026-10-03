@@ -4621,6 +4621,32 @@ impl<'t> Lowerer<'t> {
                     span: e.span,
                 });
             }
+            // kw07 (`[mem.unsafe.volatile]`): a volatile read or write
+            // is an ACCESS through the pointer — ring-gated like `p[i]`
+            // and recorded as the same raw access, so the dynamic rows
+            // (P1–P4, L1, L2, and L3 for a misaligned address) are
+            // attributed to it.
+            if matches!(
+                self.expr_ty(recv_expr.span).map(|t| t.kind().clone()),
+                Some(TyKind::Ptr(_))
+            ) && matches!(cs.callee.as_str(), "read_volatile" | "write_volatile")
+            {
+                let write = cs.callee == "write_volatile";
+                self.require_unsafe(
+                    if write {
+                        "a volatile write"
+                    } else {
+                        "a volatile read"
+                    },
+                    e.span,
+                );
+                let ptr = self.text(recv_expr.span);
+                if write {
+                    self.push(Stmt::RawWrite { ptr, span: e.span });
+                } else {
+                    self.push(Stmt::RawRead { ptr, span: e.span });
+                }
+            }
             receiver_done = true;
         }
         // A constructor's callee is a type head (`Node`, or the s21
