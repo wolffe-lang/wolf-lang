@@ -7426,10 +7426,20 @@ impl<'t> Machine<'t> {
                 match (src_t, tgt_t, v) {
                     // ptr -> ptr: free retyping, same tag.
                     (TyKind::Ptr(_), TyKind::Ptr(_), Value::Ptr(p)) => Ok(Flow::Val(Value::Ptr(p))),
-                    // ptr -> int: exposes the tag.
-                    (TyKind::Ptr(_), _, Value::Ptr(p)) => {
+                    // ptr -> int: exposes the tag. kw06 (the compiled
+                    // tiers' rule, `[mem.prov.expose]`): a 64-bit target
+                    // is the address's bits; a narrower one is the
+                    // address as `uint` under `[type.numlit.cast.narrow]`.
+                    (TyKind::Ptr(_), tgt, Value::Ptr(p)) => {
                         if let Some(a) = p.alloc {
                             self.allocs[a].tags[p.tag as usize].exposed = true;
+                        }
+                        if let TyKind::Prim(pr) = tgt
+                            && prim_bits(pr).is_some_and(|b| b < 64)
+                            && let Some((_, hi)) = prim_range(pr)
+                            && p.addr > hi as u64
+                        {
+                            return self.trap("overflow", "type.numlit.cast.narrow", e.span);
                         }
                         Ok(Flow::Val(Value::Int(p.addr as i64)))
                     }
