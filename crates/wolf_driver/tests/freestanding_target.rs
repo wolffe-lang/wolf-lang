@@ -197,70 +197,97 @@ fn native_objects_import_the_hook_list_and_nothing_else_on_every_host() {
 /// the construct, on both tiers, before any backend runs.
 #[test]
 fn hosted_allocating_and_float_constructs_are_refused_by_name() {
-    // (case, body of `export fn kmain() -> i64`, the name the refusal
-    // carries, the reason class).
-    let rows: &[(&str, &str, &str, &str)] = &[
-        ("print", "print(\"hi\")\n    0", "`print`", "hosted runtime"),
-        ("env_args", "env_args().len", "`env_args`", "hosted runtime"),
+    // (case, a helper item or "", the body of `fn work() -> int` that
+    // `export fn kmain` returns, the name the refusal carries, the
+    // reason class). Each program builds on the hosted target (a
+    // `main` added) and imports the runtime there (kasumi, kw04
+    // evidence/snippets-trunk.log); here it must be refused instead.
+    let same = "fn same(a: str, b: str) -> bool {\n    a == b\n}\n\n";
+    let rows: &[(&str, &str, &str, &str, &str)] = &[
+        (
+            "print",
+            "",
+            "print(\"hi\")\n    0",
+            "`print`",
+            "hosted runtime",
+        ),
+        (
+            "env_args",
+            "",
+            "env_args().len",
+            "`env_args`",
+            "hosted runtime",
+        ),
         (
             "str_compare",
-            "let a = \"x\"\n    let b = \"y\"\n    if a == b { 1 } else { 0 }",
+            same,
+            "if same(\"x\", \"y\") { 1 } else { 0 }",
             "`str` comparison",
             "hosted runtime",
         ),
         (
             "list",
+            "",
             "var xs = [1, 2]\n    (mut xs).push(3)\n    xs.len",
             "`List`",
             "allocates",
         ),
         (
             "map",
+            "",
             "var m = Map[str, int]()\n    m[\"a\"] = 1\n    0",
             "`Map`",
             "allocates",
         ),
         (
             "pool",
-            "var p = Pool[int]()\n    p.len",
+            "",
+            "var p = Pool[int]()\n    0",
             "`Pool`",
             "allocates",
         ),
         (
             "interpolation",
+            "",
             "let n = 5\n    let s = \"n={n}\"\n    s.len",
             "string interpolation",
             "allocates",
         ),
         (
             "closure",
+            "",
             "let k = 3\n    let f = fn(x) x + k\n    f(1)",
             "a capturing closure",
             "allocates",
         ),
         (
             "region",
+            "",
             "var n = 0\n    region scratch {\n        n = 1\n    }\n    n",
             "`region`",
             "allocates",
         ),
         (
             "spawn",
+            "",
             "scope s {\n        s.spawn(fn() { })\n    }\n    0",
             "`spawn`",
             "hosted runtime",
         ),
         (
             "float",
+            "",
             "let x = 1.5\n    if x > 1.0 { 1 } else { 0 }",
             "`f64`",
             "floating-point",
         ),
     ];
     let mut misses = Vec::new();
-    for (case, body, name, class) in rows {
+    for (case, prelude, body, name, class) in rows {
         let dir = scratch(&format!("refuse_{case}"));
-        let src = format!("export fn kmain() -> i64 {{\n    {body}\n}}\n");
+        let src = format!(
+            "{prelude}fn work() -> int {{\n    {body}\n}}\n\nexport fn kmain() -> int {{\n    work()\n}}\n"
+        );
         std::fs::write(dir.join("k.lu"), &src).expect("write");
         for tier in ["native", "release"] {
             let mut args = vec![
