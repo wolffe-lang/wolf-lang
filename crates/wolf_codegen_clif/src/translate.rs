@@ -1648,6 +1648,13 @@ impl<'a, 'b> Tx<'a, 'b> {
                 self.vals.insert(results[0], Repr::Scalar(r));
             }
 
+            // kw06 (`[mem.prov.expose]`): a pointer is one 64-bit word
+            // on this tier, so both bridges are the identity.
+            Opcode::PtrToInt | Opcode::PtrFromInt => {
+                let a = self.scalar(args[0])?;
+                self.vals.insert(results[0], Repr::Scalar(a));
+            }
+
             // ---- memory ----
             Opcode::PtrOff => {
                 let Aux::Scale(scale) = data.aux else {
