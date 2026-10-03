@@ -187,8 +187,9 @@ ritual moves, on each tier.
   declaration, statement or arm wholly between them; each site is held
   to the bound (3, 5 structural), which does not move. It now collects
   every violation instead of stopping at the first, which at budget 1000
-  surfaced seventeen recoveries the first had hidden; each is fixed in
-  the parser and pinned by (file, iteration). #544's `struct` body read
+  surfaced seventeen recoveries the first had hidden (and one more at
+  300 once s202's rows joined the corpus); each is fixed in the parser
+  and pinned by (file, iteration). #544's `struct` body read
   as a `let` is one site and was over the bound: the parser now says
   one thing per token, reports a valueless binder group once, resets
   the arm fold only on a clean arm, and stops recovery at a sibling
