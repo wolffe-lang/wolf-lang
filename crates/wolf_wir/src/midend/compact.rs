@@ -35,6 +35,7 @@ pub(crate) fn compact(f: &Function) -> CompactOut {
     let cfg = analysis::cfg(f);
     let mut nf = Function::new(f.name.clone(), f.sig);
     nf.export = f.export;
+    nf.ret_ext = f.ret_ext;
     nf.src_file = f.src_file;
     // c28: the constant-time contract survives every pass ([ct.attr.carry]).
     nf.consttime = f.consttime.clone();

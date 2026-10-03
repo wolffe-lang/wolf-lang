@@ -636,11 +636,19 @@ pub fn parse_module(src: &str) -> Result<Module, ParseError> {
                 i = end;
             }
             Tok::Ident(kw) if kw == "fn" || kw == "consttime" => {
-                i = parse_function(&toks, i, &mut p, false)?;
+                i = parse_function(&toks, i, &mut p, None)?;
             }
-            // `export fn @name…` — the C membrane marker (s29).
+            // `export fn @name…` — the C membrane marker (s29); kw02's
+            // `export sext fn` / `export zext fn` carry the result's
+            // widening.
             Tok::Ident(kw) if kw == "export" => {
-                i = parse_function(&toks, i + 1, &mut p, true)?;
+                let ext = match toks.get(i + 1) {
+                    Some((Tok::Ident(e), ..)) if e == "sext" => Some(Mode::Sext),
+                    Some((Tok::Ident(e), ..)) if e == "zext" => Some(Mode::Zext),
+                    _ => None,
+                };
+                let at = if ext.is_some() { i + 2 } else { i + 1 };
+                i = parse_function(&toks, at, &mut p, Some(ext.unwrap_or(Mode::Val)))?;
             }
             t => {
                 let (l, c) = (toks[i].1, toks[i].2);
@@ -802,7 +810,12 @@ enum LineKind {
     Inst,
 }
 
-fn parse_function(toks: &[Spanned], start: usize, p: &mut Parser, export: bool) -> PResult<usize> {
+fn parse_function(
+    toks: &[Spanned],
+    start: usize,
+    p: &mut Parser,
+    export: Option<Mode>,
+) -> PResult<usize> {
     // Header line: `('export')? ('consttime' '(' idx,* ')')? fn
     // @name(SIG) [-> ...] {` (the caller consumed any `export`;
     // `start` points at `consttime` or `fn`).
@@ -925,7 +938,8 @@ fn parse_function(toks: &[Spanned], start: usize, p: &mut Parser, export: bool) 
     };
 
     let mut func = Function::new(name.clone(), sig);
-    func.export = export;
+    func.export = export.is_some();
+    func.ret_ext = export.unwrap_or(Mode::Val);
     if let Some(secret) = consttime {
         let nparams = p.module.sigs[sig].params.len();
         if let Some(&bad) = secret.iter().find(|&&ix| ix as usize >= nparams) {

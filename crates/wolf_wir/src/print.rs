@@ -378,7 +378,12 @@ pub(crate) fn render_fact(canon: &Canon, fact: &FactData) -> String {
 pub(crate) fn print_function(m: &Module, f: &Function) -> String {
     let canon = canonicalize(f);
     let mut out = String::new();
-    let export = if f.export { "export " } else { "" };
+    let export = match (f.export, f.ret_ext) {
+        (false, _) => "",
+        (true, crate::ir::Mode::Sext) => "export sext ",
+        (true, crate::ir::Mode::Zext) => "export zext ",
+        (true, _) => "export ",
+    };
     // c28 [ct.attr.carry]: the constant-time contract is canonical
     // text — `consttime(i, j)` lists the SECRET signature params.
     let ct = match &f.consttime {

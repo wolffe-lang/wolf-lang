@@ -251,6 +251,14 @@ pub struct Function {
     /// external linkage. Textually `export fn @name…`. Everything else
     /// stays `wolf-abi-0` internal.
     pub export: bool,
+    /// kw02 (`[abi.c.export]`): how an EXPORT widens a narrow integer
+    /// or `bool` result to 32 bits before it returns — [`Mode::Sext`],
+    /// [`Mode::Zext`], or [`Mode::Val`] for none. C's callers on the
+    /// Apple arm64 target rely on the callee's extension (clang marks
+    /// the result `signext`/`zeroext` there); WIR's `i8` is both `i8`
+    /// and `u8`, so lowering records the signedness here. Canonical:
+    /// textually `export sext fn @name…`.
+    pub ret_ext: Mode,
     /// c28 — the constant-time contract ([ct.attr.carry]): `Some` iff
     /// the source function carried `#[consttime]`. Canonical and
     /// hash-bearing: textually `consttime(i, j) fn @name…` where the
@@ -293,6 +301,7 @@ impl Function {
             name: name.into(),
             sig,
             export: false,
+            ret_ext: Mode::Val,
             consttime: None,
             blocks: PrimaryMap::new(),
             insts: PrimaryMap::new(),
