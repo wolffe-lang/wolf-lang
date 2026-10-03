@@ -76,6 +76,57 @@ machine (it was 0 on the compiler and 1 on lupin). `fs_fstat(0)`,
 `(1)` and `(2)` describe the standard streams instead of answering
 `io`.
 
+### The pairing: lupin 0.1.45
+
+`PAIRING` names **lupin 0.1.45 at pin `dfcc2f1`** (wolf-interp release
+402670966; the linux x86-64 archive's sha256 `907cfb1a…`), whose spec pin is
+this compiler's v0.2.21 tag. It carries is69 (wolffe-lang/wolf-interp#176),
+is68 (#126, #103 row 1, #125, #138, #169) and the mirror of s199's
+`fs_seek`/`fs_tell`/`fs_read_at` and standard streams. The ritual (#87,
+with #281's control against the 0.1.44 archive, same corpus, same
+release `wolf`) **moved 16 ledger counts on the checked tier and 17 on
+native**, each toward agreement but one:
+
+- **Healed.** `rows/eu_bind_empty_row_handled.lu` (Verdict → agreement):
+  0.2.21's one pinned parting, #176. The two s199 rows `fs/seek_tell.lu`
+  and `fs/read_at.lu` (unsupported → agreement). is68's
+  `memory/region_str_view_return.lu` and the nine
+  `region_str_view_for_*.lu` rows (completeness → agreement: lupin traps
+  `region-fault` where the compiler refuses E1010). The #169 rows
+  `nested_fn_mut_moveout.lu` (→ agreement) and `nested_fn_mut_omitted.lu`
+  (→ completeness), and `rows/unit_discard_unit_main.lu` (Verdict → a
+  warning-only Diag).
+- **One move into a hard divergence**: `grammar/cfg_target_freestanding.lu`
+  (unsupported → Verdict). lupin still reads no `cfg` (#174) and keeps
+  the code the freestanding target gates; is68's wider scalar pass now
+  types that code and refuses it, `fail(E0401)`, where 0.1.44 declined.
+- `memory/nested_fn_mut_param.lu` moves to agreement on native only: the
+  checked machine declines the row, so the move sits below its ledger.
+
+Below the ledger on both tiers: `rows/unit_discard_if_value.lu` (lupin's
+stdout `3 none` → `() none`, #179) and `strings/trim_cutset_refused.lu`
+(`exit(0)` → `fail(E0402)`, #125). Checked: 564 → 577 agreements, completeness 233 → 223, hard
+divergences 17, soundness 0; native: 605 → 619, 233 → 223, 21, soundness 1 (still
+`memory/unsafe_ub_uaf.lu`, the program's own use-after-free read on the
+compiled lane).
+
+The gates that pinned lupin's answer: **dropped, 17 cases** — the #176
+pin (`fallible_bind_empty_row_lanes.rs`), `fs_std_lanes.rs`'s
+`PRE_MIRROR_LUPIN` (six cases), `region_view_for_lanes.rs`'s
+`PRE_VIEW_TRAP_LUPIN` (six, is68's #126),
+`unit_discard_lanes.rs`'s unit-`main` pin (#103), and
+`nested_fn_modes_lanes.rs`'s three moded nested-fn rows, whose oracle
+said `unsupported` for every version and now asks for the ruled answers
+(is68's #169). Against the published 0.1.44 exactly those seventeen go
+red. **Kept, 26 cases, each carried to
+0.1.45 with 0.1.44's answer**, each naming its open lupin issue:
+`attr_closed_set_lanes.rs` 13 (wolf-interp#174), `c_membrane_lanes.rs` 4
+(#181), `first_diagnostic_lanes.rs` 7 (#175), `region_view_for_lanes.rs`'s
+`PRE_RETURN_TRAP_LUPIN` 1 (#178) and `unit_discard_lanes.rs`'s else-less
+`if` 1 (#179; is68's `() none` only). **Kept, verdict changed, one case**:
+`cfg_target_freestanding.lu` is pinned at 0.1.45's `fail(E0401)` (#174,
+above). None is widened.
+
 ### Linked assembly: `asm` in `wolf.pkg` (kw05, ruling #31 K2 = C)
 
 - **Assembly sources in the manifest.** `asm: ["boot/io.S"]` in the
