@@ -462,6 +462,15 @@ impl<'a> Parser<'a> {
             return;
         }
         self.toplevel_error_reported = true;
+        // One token, one report (s203, wolf-lang#544; the #243
+        // reading). A stray run whose first token already carries a
+        // report — the `}` a `let` group's trailing comma left as its
+        // missing binder — is that report's wreck: the run folds into
+        // it instead of being announced again under the same caret.
+        let span = d.primary.span;
+        if self.diags.iter().any(|p| p.primary.span == span) {
+            return;
+        }
         self.push_diag(d);
     }
 
