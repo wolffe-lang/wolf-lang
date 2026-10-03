@@ -805,7 +805,7 @@ fn violations(
     // Cascade is counted per WRECK SITE (ruling #27, module docs
     // and [`wreck_sites`]); boundaries stay per mutation — they
     // are per unclosed opener already.
-    let added = added_diagnostics(&s.original.diagnostics, &parse.diagnostics, &m);
+    let added = added_diagnostics(&s.original.diagnostics, &parse.diagnostics, m);
     let (bounds, cascade): (Vec<_>, Vec<_>) = added
         .into_iter()
         .partition(|d| d.code == wolf_parse::codes::UNCLOSED_DELIMITER);
@@ -992,25 +992,28 @@ fn the_budget_1000_sweep_cases_hold() {
     );
 }
 
-/// A pinned nightly case: splice `text` over the `len` bytes that start
-/// `skip` bytes into the first `probe` in corpus file `rel`, and return
-/// the mutated parse with its wreck sites (cascade only; boundaries
-/// counted apart, as in the property).
-fn pinned_case(
-    rel: &str,
+/// A pinned case: splice `text` over the `len` bytes that start `skip`
+/// bytes into the first `probe` in `src` (named `name`), and return the
+/// mutated parse with its wreck sites (cascade only; boundaries counted
+/// apart, as in the property).
+fn sites_of(
+    name: &Path,
+    src: &[u8],
     probe: &[u8],
     skip: usize,
     len: usize,
     text: &[u8],
 ) -> (wolf_parse::Parse, Vec<Vec<wolf_diag::Diagnostic>>) {
-    let f = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../corpus")
-        .join(rel);
-    let src = std::fs::read(&f).unwrap_or_else(|e| panic!("read {rel}: {e}"));
     let lo = src
         .windows(probe.len())
         .position(|w| w == probe)
-        .unwrap_or_else(|| panic!("{rel} still spells {:?}", String::from_utf8_lossy(probe)))
+        .unwrap_or_else(|| {
+            panic!(
+                "{} still spells {:?}",
+                name.display(),
+                String::from_utf8_lossy(probe)
+            )
+        })
         + skip;
     let m = Mutation {
         lo: lo as u32,
@@ -1018,11 +1021,11 @@ fn pinned_case(
         text: text.to_vec(),
         describe: String::new(),
     };
-    let mut mutated = src.clone();
+    let mut mutated = src.to_vec();
     mutated.splice(lo..lo + len, text.iter().copied());
     let mut sm = wolf_span::SourceMap::new();
-    let baseline = wolf_parse::parse_tokens(&wolf_lex::lex(sm.intern(&f), &src), &src);
-    let mfile = sm.intern(&f.with_extension("pinned"));
+    let baseline = wolf_parse::parse_tokens(&wolf_lex::lex(sm.intern(name), src), src);
+    let mfile = sm.intern(&name.with_extension("pinned"));
     let parse = wolf_parse::parse_tokens(&wolf_lex::lex(mfile, &mutated), &mutated);
     wolf_ast::verify(&parse.root, &mutated).expect("verifier clean");
     let cascade: Vec<&wolf_diag::Diagnostic> =
@@ -1037,20 +1040,51 @@ fn pinned_case(
     (parse, sites)
 }
 
+/// [`sites_of`] over a corpus file.
+fn pinned_case(
+    rel: &str,
+    probe: &[u8],
+    skip: usize,
+    len: usize,
+    text: &[u8],
+) -> (wolf_parse::Parse, Vec<Vec<wolf_diag::Diagnostic>>) {
+    let f = corpus_root().join(rel);
+    let src = std::fs::read(&f).unwrap_or_else(|e| panic!("read {rel}: {e}"));
+    sites_of(&f, &src, probe, skip, len, text)
+}
+
+/// The construct that separates two consecutive sites.
+fn separator<'t>(
+    root: &'t GreenNode,
+    sites: &[Vec<wolf_diag::Diagnostic>],
+    i: usize,
+) -> &'t GreenNode {
+    let reach = sites[i].iter().map(|d| d.primary.span.hi).max().unwrap();
+    let next = sites[i + 1][0].primary.span.lo;
+    intact_between(root, reach, next).expect("an intact construct between the sites")
+}
+
 /// wolf-lang#367, the nightly's budget-1000 `conc/capture_mut_arg.lu
 /// [replace token 30 at 520..525 with \`match\`]`, pinned: `scope s {`
 /// becomes `match s {`, and each of the two `s.spawn(fn() { … })` lines
-/// is read as a match arm. Each breaks the same way — `spawn` as a path
-/// segment (E0008), the `=>` missing at the `fn` (E0201) — four cascade
-/// diagnostics against the tight bound of three, two at each line.
+/// is read as a match arm. At trunk `12a56b22` that was four cascade
+/// diagnostics against the tight bound of three — `spawn` as a path
+/// segment (E0008) and the `=>` missing at the `fn` (E0201), at each
+/// line.
 ///
 /// Ruling #27: two separate places, two problems. The tree says they
 /// are separate, which is the rule's whole test: the first arm's body is
 /// the closure `fn() { bump(mut n) }`, read cleanly, and its statement
 /// `bump(mut n)` is an intact construct lying wholly between the two
-/// reports. (The issue read the arm BETWEEN them as intact; it is not —
-/// it is the stray `)` as an arm, an error node whose own reports the
-/// arm fold swallowed, so it emitted nothing and reset the fold.)
+/// sites.
+///
+/// The issue read the arm BETWEEN the two as intact, and the arm fold's
+/// reset as the design working; neither held. That arm is the stray `)`
+/// as an arm — an error node whose report the fold swallowed — and the
+/// fold counted its silence as health and reset. s203 resets the fold on
+/// a clean arm only, so the second line's missing `=>` folds into the
+/// first's: three diagnostics, still two sites (E0008 and E0201, then
+/// E0008). The rule is load-bearing on the three-line shape below.
 #[test]
 fn scope_read_as_match_is_two_wreck_sites() {
     let (parse, sites) = pinned_case(
@@ -1060,51 +1094,64 @@ fn scope_read_as_match_is_two_wreck_sites() {
         b"scope".len(),
         b" match ",
     );
-    let total: usize = sites.iter().map(Vec::len).sum();
+    let shape: Vec<Vec<&str>> = sites
+        .iter()
+        .map(|s| s.iter().map(|d| d.code.as_str()).collect())
+        .collect();
     assert_eq!(
-        total, 4,
-        "four cascade diagnostics: {:?}",
+        shape,
+        [vec!["E0008", "E0201"], vec!["E0008"]],
+        "two wreck sites: {:?}",
         parse.diagnostics
     );
-    assert_eq!(sites.len(), 2, "two wreck sites: {sites:?}");
-    for site in &sites {
-        assert_eq!(
-            site.len(),
-            2,
-            "each site is one spawn line's two reports: {site:?}"
-        );
-        assert!(site.len() <= 3, "each site within the tight bound");
-    }
-    // The construct that separates them is the first arm's own statement.
-    let (a, b) = (
-        sites[0].iter().map(|d| d.primary.span.hi).max().unwrap(),
-        sites[1][0].primary.span.lo,
-    );
-    let between = intact_between(&parse.root, a, b).expect("an intact construct between the sites");
     assert_eq!(
-        between.kind,
+        separator(&parse.root, &sites, 0).kind,
         wolf_ast::SyntaxKind::ExprStmt,
         "it is `bump(mut n)`"
     );
+}
+
+/// The ruling's rule where it decides the answer: the #367 shape with a
+/// third spawn line. Four cascade diagnostics in all — over the tight
+/// bound of three, so a count of diagnostics fails it — at three
+/// separate places, each one statement of the original, each site
+/// separated from the next by the closure body it read intact. Three
+/// problems, three sites, each within the bound.
+#[test]
+fn three_separate_breaks_are_three_sites_not_a_cascade() {
+    let src = b"fn bump(mut k: int) {\n    k = k + 1\n}\n\nfn main() -> !int {\n    var n = 0\n    scope s {\n        s.spawn(fn() { bump(mut n) })\n        s.spawn(fn() { bump(mut n) })\n        s.spawn(fn() { bump(mut n) })\n    }\n    0\n}\n";
+    let (parse, sites) = sites_of(
+        Path::new("three_spawns.lu"),
+        src,
+        b"scope s {",
+        0,
+        b"scope".len(),
+        b" match ",
+    );
+    let total: usize = sites.iter().map(Vec::len).sum();
+    assert!(total > 3, "over the tight bound by count: {:?}", parse.diagnostics);
+    assert_eq!(sites.len(), 3, "three sites: {sites:?}");
+    assert!(sites.iter().all(|s| s.len() <= 3), "each within the bound");
+    for i in 0..2 {
+        assert_eq!(separator(&parse.root, &sites, i).kind, wolf_ast::SyntaxKind::ExprStmt);
+    }
 }
 
 /// wolf-lang#544, the nightly red since `abf4e5cf`: `memory/
 /// recv_view_arg_outside_write.lu [replace token 2 at 644..645 with
 /// \`let\`]`, pinned. The struct's `{` becomes `let`: `struct V` has no
 /// body (E0201), and the body is read as ONE `let` with three valueless
-/// binders, `let x: int, y: int, z: int,` — one report per binder (D63)
-/// and the closing `}` after the trailing comma.
+/// binders, `let x: int, y: int, z: int,`, then the closing `}`.
 ///
-/// Under ruling #27 this is ONE site: nothing between any two of its
-/// reports is an intact construct (the binders are not statements, and
-/// every one carries a missing initializer). So the site rule does not
-/// excuse it, and that is the rule having teeth: a cascade stays one
-/// site. What brought it under the structural bound is the parser: the
-/// `}` was reported twice on one token — E0207 for the binder the
-/// trailing comma promised, then E0203 for the same `}` as a stray
-/// top-level line — and a stray run whose first token already carries a
-/// report is that report's wreck (the #243 reading: one token, one
-/// report). Five, one site.
+/// Under ruling #27 this is ONE site, and that is the rule having
+/// teeth: nothing between any two of its reports is an intact construct
+/// (binders are not statements, and each one carries a missing
+/// initializer). At trunk it was six against five: one report per
+/// valueless binder (D63's letter), and the `}` reported twice on one
+/// token — E0207 for the binder the trailing comma promised, E0203 for
+/// the same `}` as a stray top-level line. The parser now says one
+/// thing per token, and the group's valueless binders once, every one
+/// labelled: three, one site.
 #[test]
 fn struct_body_read_as_let_is_one_wreck_site_within_the_bound() {
     let (parse, sites) = pinned_case(
@@ -1121,7 +1168,8 @@ fn struct_body_read_as_let_is_one_wreck_site_within_the_bound() {
         sites[0].len(),
         parse.diagnostics
     );
-    // And the reading above stays true: the closing `}` is one report.
+    // And the reading above stays true: the closing `}` is one report,
+    // and the three binders are one report naming all three.
     let brace = sites[0].iter().map(|d| d.primary.span.lo).max().unwrap();
     assert_eq!(
         parse
@@ -1133,6 +1181,13 @@ fn struct_body_read_as_let_is_one_wreck_site_within_the_bound() {
         "the stray `}}` is reported once: {:?}",
         parse.diagnostics
     );
+    let group: Vec<_> = parse
+        .diagnostics
+        .iter()
+        .filter(|d| d.message.starts_with("this binding has no value"))
+        .collect();
+    assert_eq!(group.len(), 1, "the valueless group is one report: {group:?}");
+    assert_eq!(group[0].secondary.len(), 2, "naming the other two binders");
 }
 
 /// The exact #283 counter-example, pinned deterministically (no
