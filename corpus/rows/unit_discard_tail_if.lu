@@ -1,0 +1,59 @@
+//! check: run(exit=0, stdout="in a\na false\nb false\nc false\nd false\n")
+//! phase: run
+//! conforms: type.unit.context, type.unit.discard, diag.sev.warn
+//! warns: W0601
+//!
+//! s208 (ruling #34 = A, wolf-lang#541 part 2) — "the then-block of an
+//! `if` with no `else`" is on `[type.unit.context]`'s closed list
+//! without exception, so an else-less `if` that is itself the TAIL of a
+//! fallible function discards its then-block's raise, warned (W0601),
+//! exactly as the same `if` one line higher does. The `if`'s value is
+//! `()`, which the function's `!()` result takes as its ok value. Until
+//! s208 all four machines handed the raise to the caller here, with no
+//! W0601: the one place a raise left a function with no `?` and no
+//! `return` to mark it. The plain tail, an inferred `!()` row, a
+//! method, and an else-less `if` nested in another one's then-block.
+
+fn boom() -> () ! {bad} {
+    return bad
+}
+
+fn a(c: bool) -> () ! {bad} {
+    print("in a")
+    if c { boom() }
+}
+
+fn b(c: bool) -> !() {
+    if c { boom() }
+}
+
+struct S { n: int }
+
+impl S {
+    fn c(self, c: bool) -> () ! {bad} {
+        if c { boom() }
+    }
+}
+
+fn d(c: bool) -> () ! {bad} {
+    if c {
+        if c { boom() }
+    }
+}
+
+fn main() -> !int {
+    var raised = false
+    a(true) else |_| { raised = true }
+    print("a {raised}")
+    raised = false
+    b(true) else |_| { raised = true }
+    print("b {raised}")
+    raised = false
+    let s = S { n: 1 }
+    s.c(true) else |_| { raised = true }
+    print("c {raised}")
+    raised = false
+    d(true) else |_| { raised = true }
+    print("d {raised}")
+    0
+}

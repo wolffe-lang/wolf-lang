@@ -1,0 +1,28 @@
+//! check: run(exit=0, stdout="g false\n")
+//! phase: run
+//! conforms: type.unit.context, type.unit.discard, diag.sev.warn
+//! warns: W0601
+//!
+//! s208 (ruling #34 = A, wolf-lang#541 part 2) — a value-carrying row
+//! at that tail: `maybe(9)` is `int ! {none}`, and the then-block of
+//! the else-less `if` ending `g` is a unit context, so its value and its
+//! row are both discarded, warned (`[type.unit.discard]`: "when `T` is
+//! not `()`, the value with it"). Until s208 the compiler checked the
+//! then-block against `g`'s own `!()` and refused the `int` (E0401),
+//! while lupin ran it and handed `none` to the caller.
+
+fn maybe(n: int) -> int ! {none} {
+    if n > 5 { return none }
+    n
+}
+
+fn g(n: int) -> () ! {none} {
+    if n > 1 { maybe(n) }
+}
+
+fn main() -> !int {
+    var raised = false
+    g(9) else |_| { raised = true }
+    print("g {raised}")
+    0
+}

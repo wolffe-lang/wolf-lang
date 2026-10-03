@@ -1,0 +1,62 @@
+//! check: run(exit=0, stdout="fine\nfine\na true\nb true\nhandled\nc false\nd true\n")
+//! phase: run
+//! conforms: type.unit.context, type.unit.discard, err.rows
+//!
+//! s208 (ruling #34 = A, wolf-lang#541 part 2), the control: a discard
+//! is a row NOBODY consumes. At an else-less `if` that ends a fallible
+//! function, a `?` in the then-block consumes the row and propagates it
+//! (`a`: wolf-std's `move_file`, `std/fs/fs.lu:609`, has this shape — two
+//! `?` statements, the last one the block's tail), a `return bad`
+//! leaves by its own keyword (`b`), an `else` handles it (`c`), and a
+//! `?` on a statement before the tail still leaves (`d`). None of these
+//! is a discard, none draws W0601, and every machine answers them as it
+//! did before the ruling.
+
+fn boom() -> () ! {bad} {
+    return bad
+}
+
+fn fine() -> () ! {bad} {
+    print("fine")
+}
+
+fn a(c: bool) -> () ! {bad} {
+    var by_hand = false
+    fine() else |_| { by_hand = false }
+    by_hand = c
+    if by_hand {
+        fine()?
+        boom()?
+    }
+}
+
+fn b(c: bool) -> () ! {bad} {
+    if c { return bad }
+}
+
+fn c(c: bool) -> () ! {bad} {
+    if c { boom() else |_| { print("handled") } }
+}
+
+fn d(c: bool) -> () ! {bad} {
+    if c {
+        boom()?
+        print("unreached")
+    }
+}
+
+fn main() -> !int {
+    var raised = false
+    a(true) else |_| { raised = true }
+    print("a {raised}")
+    raised = false
+    b(true) else |_| { raised = true }
+    print("b {raised}")
+    raised = false
+    c(true) else |_| { raised = true }
+    print("c {raised}")
+    raised = false
+    d(true) else |_| { raised = true }
+    print("d {raised}")
+    0
+}

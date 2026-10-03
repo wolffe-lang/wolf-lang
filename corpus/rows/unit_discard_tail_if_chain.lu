@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="g false\n")
+//! phase: run
+//! conforms: type.unit.context, type.unit.discard, diag.sev.warn
+//! warns: W0601
+//!
+//! s208 (ruling #34 = A, wolf-lang#541 part 2) — "every block of an
+//! `if … else if …` chain that ends without one" is a unit context, at
+//! a fallible function's tail as anywhere. Before s208 the machines did
+//! not even agree here: native and release discarded the taken block's
+//! raise (`g false`) while the checked machine and lupin handed it to
+//! the caller (`g true`), and none warned. All four discard now, and the
+//! compiler warns at each raising block.
+
+fn boom() -> () ! {bad} {
+    return bad
+}
+
+fn g(c: bool) -> () ! {bad} {
+    if !c { boom() } else if c { boom() }
+}
+
+fn main() -> !int {
+    var raised = false
+    g(true) else |_| { raised = true }
+    print("g {raised}")
+    0
+}
