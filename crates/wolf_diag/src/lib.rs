@@ -346,17 +346,43 @@ pub fn stops_early(diags: &[Diagnostic]) -> bool {
         .any(|d| d.severity == Severity::Error && !waits_for_mem(d))
 }
 
-/// Deterministic report order: file, then span, then code. Stable for
-/// full ties (insertion order — lexer before parser at equal spans).
+/// The phase a code is born in, read off its family (the registry's
+/// numbering, `registry.rs` docs): `E01xx` the lexer (0); `E000x` and
+/// `E02xx` the parser (1); `E03xx` name resolution (2); every later
+/// family (3). Warnings read the same way by number. This is the
+/// phase half of ruling #28's order ([`sort_diagnostics`]).
+pub fn phase_rank(code: Code) -> u8 {
+    let n: u32 = code.as_str()[1..].parse().unwrap_or(u32::MAX);
+    match n {
+        100..=199 => 0,
+        0..=99 | 200..=299 => 1,
+        300..=399 => 2,
+        _ => 3,
+    }
+}
+
+/// Deterministic report order, and ruling #28 (wolf-lang#377,
+/// `[proto.record.first]`): file, then the earliest byte offset, then
+/// the earlier phase at the same offset (lex, parse, resolve, later —
+/// [`phase_rank`]); past the ruling, the shorter span, then the code.
+/// The first ERROR in this order is the code a refusal carries on every
+/// lane ([`first_error`]). Stable for full ties.
 pub fn sort_diagnostics(diags: &mut [Diagnostic]) {
-    diags.sort_by_key(|d| {
-        (
-            d.primary.span.file,
-            d.primary.span.lo,
-            d.primary.span.hi,
-            d.code.as_str(),
-        )
-    });
+    diags.sort_by_key(report_order);
+}
+
+fn report_order(d: &Diagnostic) -> (wolf_span::FileId, u32, u8, u32, &'static str) {
+    let span = d.primary.span;
+    (span.file, span.lo, phase_rank(d.code), span.hi, d.code.as_str())
+}
+
+/// The diagnostic a refusal carries: the first ERROR in
+/// [`sort_diagnostics`]'s order, whatever order `diags` is in.
+pub fn first_error(diags: &[Diagnostic]) -> Option<&Diagnostic> {
+    diags
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .min_by_key(|d| report_order(d))
 }
 
 /// Collapse repeated teach notes *destructively*: within one sorted
@@ -641,6 +667,42 @@ mod tests {
         assert_eq!(v[1].code, codes::E0102);
         assert_eq!(v[1].secondary.len(), 1);
         assert_eq!(v[1].notes.len(), 1);
+    }
+
+    /// Ruling #28 (wolf-lang#377): the earliest byte offset wins; at the
+    /// same offset the earlier phase. The four shapes the order decides:
+    /// a parse error BEFORE a lex error (the old ladder answered the lex
+    /// code), a lex and a parse error at one offset whose parse span is
+    /// shorter (the old order answered the parse code), a resolve error
+    /// against a parse error at one offset, and a later code at an
+    /// earlier offset.
+    #[test]
+    fn first_error_is_earliest_offset_then_earlier_phase() {
+        let f = file();
+        let e = |c, lo, hi| Diagnostic::error(c, Span::new(f, lo, hi), "x");
+        assert_eq!(phase_rank(codes::E0102), 0);
+        assert_eq!(phase_rank(codes::E0008), 1);
+        assert_eq!(phase_rank(codes::E0203), 1);
+        assert_eq!(phase_rank(codes::E0301), 2);
+        assert_eq!(phase_rank(codes::E0401), 3);
+        let parse_first = [e(codes::E0102, 40, 45), e(codes::E0207, 10, 13)];
+        assert_eq!(first_error(&parse_first).unwrap().code, codes::E0207);
+        let same_offset = [e(codes::E0203, 0, 1), e(codes::E0102, 0, 2)];
+        assert_eq!(first_error(&same_offset).unwrap().code, codes::E0102);
+        let resolve_tie = [e(codes::E0301, 5, 6), e(codes::E0201, 5, 9)];
+        assert_eq!(first_error(&resolve_tie).unwrap().code, codes::E0201);
+        let later_code_earlier = [e(codes::E0201, 9, 10), e(codes::E0401, 3, 4)];
+        assert_eq!(first_error(&later_code_earlier).unwrap().code, codes::E0401);
+        // Warnings never carry the refusal.
+        let warned = [
+            Diagnostic::warning(codes::E0201, Span::new(f, 0, 1), "w"),
+            e(codes::E0203, 4, 5),
+        ];
+        assert_eq!(first_error(&warned).unwrap().code, codes::E0203);
+        // The sort agrees with first_error.
+        let mut v = same_offset.to_vec();
+        sort_diagnostics(&mut v);
+        assert_eq!(v[0].code, codes::E0102);
     }
 
     #[test]
