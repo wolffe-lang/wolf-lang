@@ -1841,15 +1841,19 @@ the invariant the block maintains in a `# Safety:` comment.
 "#);
 
 code!(E1302, "a raw pointer type cannot cross this boundary", r#"
-Unsafety never appears in types crossing function boundaries: every
-function signature is fully safe, and there are no `unsafe fn`s — the
-proof obligation is discharged at the `unsafe` block, and the module
-is the audit granule. A `*T` in a parameter or return type, or in an
+Unsafety never appears in types crossing a module's boundary: there are
+no `unsafe fn`s — the proof obligation is discharged at the `unsafe`
+block, and the module is the audit granule. A `*T` in the parameter or
+return type of a `pub` function, an impl or trait method, or in an
 exported type's fields, would silently spread the raw tier through
-every caller's audit surface. Keep the pointer inside: pass a `handle`
-(revalidated at every access) or a region value instead, or hold the
-`*T` in a module-private field where the module's own invariants —
-and its `unsafe` blocks — can vouch for it.
+every caller's audit surface. Two places are inside the granule and
+take a `*T` freely: the signature of a module-private function (every
+caller is in the same module) and a function at the C membrane
+(`export fn`, `extern "c" fn` — the pointer is C's there anyway).
+Elsewhere keep the pointer inside: pass a `handle` (revalidated at
+every access) or a region value instead, or hold the `*T` in a
+module-private field where the module's own invariants — and its
+`unsafe` blocks — can vouch for it.
 "#);
 
 code!(E1303, "this module holds `#[trusted]` code the manifest does not declare", r#"

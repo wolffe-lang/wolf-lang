@@ -466,18 +466,26 @@ fn e1302(span: Span, what: &str) -> Diagnostic {
     )
     .with_label("`*T` crosses the boundary here")
     .with_note(
-        "unsafety never appears in types crossing function boundaries — there are \
+        "unsafety never appears in types crossing a module's boundary — there are \
          no `unsafe fn`s; the proof lives at the `unsafe` block and the module is \
-         the audit granule. Pass a `handle` (revalidated per access) or a region \
-         value, or keep the `*T` in a module-private field.",
+         the audit granule. A `*T` may stand in a module-private fn's signature or \
+         at the C membrane (`export`/`extern \"c\"`); elsewhere pass a `handle` \
+         (revalidated per access) or a region value, or keep the `*T` in a \
+         module-private field.",
     )
 }
 
-/// The s22 boundary rule ([mem.unsafe.scope]): every *function
-/// signature* — module fns, impl methods, trait methods — is fully
-/// safe, and no *exported* type (struct field, enum payload, global)
-/// mentions `*T`. Module-private data may hold raw pointers: the
-/// module is the audit granule, and allocator internals need a home.
+/// The s22 boundary rule ([mem.unsafe.scope]), as K9(b) = B narrowed
+/// it (`[mem.unsafe.sig]`; STATUS #31 and #32 R1, kw02 — wolf-lang#514):
+/// a `*T` may appear in the signature of a **module-private** fn item
+/// (every caller is inside the module, the audit granule) and of a
+/// fn at the **C membrane** (`export fn`, `extern "c" fn`, either
+/// side — there the pointer is C's anyway). Everywhere else — a `pub`
+/// or `pub(pkg)` fn, every impl method and trait method — the
+/// signature is fully safe (E1302). No *exported* type (struct field,
+/// enum payload, global) mentions `*T`. Module-private data may hold
+/// raw pointers: the module is the audit granule, and allocator
+/// internals need a home.
 fn unsafe_sig_check(pkg: &Package, sigs: &SigTables, diags: &mut Vec<Diagnostic>) {
     let ptr = |id: TyId| contains_ptr(&sigs.table, id, 0);
     let check_fn = |name: &str, f: &wolf_sema::sig::FnSig, diags: &mut Vec<Diagnostic>| {
@@ -501,6 +509,8 @@ fn unsafe_sig_check(pkg: &Package, sigs: &SigTables, diags: &mut Vec<Diagnostic>
                 .and_then(|t| t.get(name))
                 .is_some_and(|i| i.vis != wolf_sema::Vis::Private);
             match sig {
+                // `[mem.unsafe.sig]`: the two places a `*T` may stand.
+                ItemSig::Fn(f) if f.membrane.is_some() || !exported => {}
                 ItemSig::Fn(f) => check_fn(name, f, diags),
                 ItemSig::Struct(ss) if exported => {
                     for f in &ss.fields {
