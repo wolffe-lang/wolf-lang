@@ -548,10 +548,22 @@ memory/region_open_ancestor.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_charged.lu: lowers
 memory/region_str_concat_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_concat_send.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_copy_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_field_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_from_utf8_return.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_list_for_held.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_producers_charged.lu: lowers
 memory/region_str_repeat_return.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_view_for_copy.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_view_for_held.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_view_for_inside.lu: lowers
+memory/region_str_view_for_lines.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_view_for_nested.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_view_for_place.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_view_for_return.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_view_for_split.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_view_for_value.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_view_for_words.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_view_inside.lu: lowers
 memory/region_str_view_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_transfer_open.lu: not mem-clean (pre-wir rungs own it)
@@ -721,6 +733,13 @@ rows/tag_arg_position.lu: lowers
 rows/tag_let_position.lu: lowers
 rows/tag_shadow_local.lu: lowers
 rows/to_int_parse.lu: lowers
+rows/unit_discard_fallible_body_stmt.lu: lowers
+rows/unit_discard_if_value.lu: lowers
+rows/unit_discard_raise_stmts.lu: lowers
+rows/unit_discard_raise_unit_fn.lu: lowers
+rows/unit_discard_return_operand.lu: lowers
+rows/unit_discard_try_leaves.lu: lowers
+rows/unit_discard_unit_main.lu: lowers
 strings/boundary_battery.lu: lowers
 strings/builtin_methods.lu: lowers
 strings/byte_view.lu: lowers
