@@ -14770,6 +14770,77 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// generation-bumping `remove`, and s37's observability trio
     /// (`len`, `is_empty`, `alive`) plus D50's `capacity`, `has` and
     /// `clear`.
+    /// kw07 (`[mem.unsafe.volatile]`, K3 = B): `p.read_volatile()` /
+    /// `p.write_volatile(v)` — exactly one access of the pointee's
+    /// width, never elided, split, merged or reordered against another.
+    ///
+    /// The access is a call to a width-named intrinsic
+    /// ([`crate::VOLATILE_PREFIX`]) threaded on the raw-buffer token
+    /// — the token every `p[i]` uses — so it is ordered against every
+    /// other raw access by the token spine, and every mid-end pass
+    /// already treats it as what it is: an opaque effect (DCE never
+    /// removes a call, memopt neither forwards across nor eliminates
+    /// one, licm and sink never move one, the inliner has no body to
+    /// inline). Both backends expand the intrinsic in place to one
+    /// aligned load or store of the width and import nothing; a `load`
+    /// opcode would have been an ordinary access every one of those
+    /// passes is entitled to optimize.
+    fn lower_volatile(
+        &mut self,
+        d: CallExpr<'t>,
+        recv_place: &'t GreenNode,
+        elem: TyId,
+        mname: &str,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        let (ewty, size) = self.raw_pointee(elem, e.span)?;
+        let Some((load, store)) = crate::volatile_intrinsics(size) else {
+            return Err(refuse(
+                "a volatile access of a pointee that is not one integer access",
+                e.span,
+            ));
+        };
+        let Some(ptr) = flow_val!(self.lower_expr(recv_place)) else {
+            return Err(refuse("a valueless raw pointer", recv_place.span));
+        };
+        let region = self.foreign_buf_region();
+        let tok = self.b.module.types.mem(RegionId::new(0));
+        let formal: HashMap<u32, RegionId> = [(0u32, region)].into_iter().collect();
+        if mname == "read_volatile" {
+            let params = vec![
+                Param::val(types::PTR),
+                Param {
+                    ty: tok,
+                    mode: Mode::Val,
+                },
+            ];
+            let ext = self.rt_import(load, params, vec![ewty]);
+            let r = self.b.ins_call_regions(ext, &[ptr], &formal);
+            return Ok(Flow::Val(r.first().copied()));
+        }
+        let vx = d
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .filter_map(Arg::value)
+            .next()
+            .ok_or_else(|| refuse("a volatile write without a value", e.span))?;
+        let Some(val) = flow_val!(self.lower_expr(vx)) else {
+            return Err(refuse("a unit-typed volatile payload", vx.span));
+        };
+        let params = vec![
+            Param::val(types::PTR),
+            Param::val(ewty),
+            Param {
+                ty: tok,
+                mode: Mode::Val,
+            },
+        ];
+        let ext = self.rt_import(store, params, Vec::new());
+        self.b.ins_call_regions(ext, &[ptr, val], &formal);
+        Ok(Flow::Val(None))
+    }
+
     fn lower_pool_method(
         &mut self,
         d: CallExpr<'t>,
@@ -18638,6 +18709,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 TyKind::Map(k, v) => {
                     let (k, v) = (*k, *v);
                     return self.lower_map_method(d, recv_place, k, v, &mname, e);
+                }
+                // kw07 (`[mem.unsafe.volatile]`): the two volatile
+                // methods on a raw pointer lower to one access each.
+                TyKind::Ptr(elem) if matches!(mname.as_str(), "read_volatile" | "write_volatile") => {
+                    let elem = *elem;
+                    return self.lower_volatile(d, recv_place, elem, &mname, e);
                 }
                 // s173: and the `Pool` receiver. `Pool` has no home
                 // module (`[type.method.home]`'s table is closed), so

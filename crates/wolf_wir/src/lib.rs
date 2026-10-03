@@ -99,6 +99,45 @@ pub mod types;
 pub mod verify;
 
 pub use build::{Const, FuncBuilder, InsOut, Stats, Var};
+
+/// kw07 (`[mem.unsafe.volatile]`): the volatile intrinsics. A volatile
+/// access is a token-threaded `call` to one of these names, never a
+/// `load`/`store` opcode, so every mid-end pass treats it as the opaque
+/// effect it is; the backends expand it in place to one aligned access
+/// of the width and import no symbol. No user function can collide:
+/// a wolf identifier has no dots, and module functions mangle.
+pub const VOLATILE_PREFIX: &str = "wolf.volatile.";
+
+/// The (load, store) intrinsic names for a pointee of `size` bytes.
+pub fn volatile_intrinsics(size: u64) -> Option<(&'static str, &'static str)> {
+    Some(match size {
+        1 => ("wolf.volatile.load.i8", "wolf.volatile.store.i8"),
+        2 => ("wolf.volatile.load.i16", "wolf.volatile.store.i16"),
+        4 => ("wolf.volatile.load.i32", "wolf.volatile.store.i32"),
+        8 => ("wolf.volatile.load.i64", "wolf.volatile.store.i64"),
+        _ => return None,
+    })
+}
+
+/// What a backend needs from a callee name: `Some((is_store, width in
+/// bytes))` for a volatile intrinsic, `None` for any other callee.
+pub fn volatile_intrinsic(name: &str) -> Option<(bool, u32)> {
+    let rest = name.strip_prefix(VOLATILE_PREFIX)?;
+    let (store, ty) = if let Some(t) = rest.strip_prefix("load.") {
+        (false, t)
+    } else {
+        (true, rest.strip_prefix("store.")?)
+    };
+    let width = match ty {
+        "i8" => 1,
+        "i16" => 2,
+        "i32" => 4,
+        "i64" => 8,
+        _ => return None,
+    };
+    Some((store, width))
+}
+
 pub use ct::{CtSink, CtViolation, check_module as ct_check_module};
 pub use facts::{DerefSize, FactData, FactId, FactKind, Just, Theorem};
 pub use hash::sha256_hex;
