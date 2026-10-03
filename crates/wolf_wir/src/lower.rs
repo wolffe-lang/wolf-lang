@@ -940,6 +940,13 @@ fn lower_body(
     }
     let mut b = FuncBuilder::new(module, wir_name, sig);
     b.func.export = export;
+    if export {
+        b.func.ret_ext = match sig_tbl.kind(fsig.ret) {
+            TyKind::Prim(Prim::I8 | Prim::I16) => Mode::Sext,
+            TyKind::Prim(Prim::U8 | Prim::U16 | Prim::Bool | Prim::Byte) => Mode::Zext,
+            _ => Mode::Val,
+        };
+    }
     // s30: spans thread from the typed HIR into WIR (the lossless s07
     // chain) — the file once per function, then a per-statement span
     // cursor the builder stamps on every appended instruction.
