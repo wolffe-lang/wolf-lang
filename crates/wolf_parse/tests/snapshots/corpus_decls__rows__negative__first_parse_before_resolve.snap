@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 580..639 name=main body=Block
+-- diagnostics --
+E0207 [Error] 628..629 expected a pattern

@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 636..681 name=main body=Block
+-- diagnostics --
+E0107 [Error] 670..673 the character ``` is not part of wolf syntax
+E0201 [Error] 670..673 expected the line to end after the initializer

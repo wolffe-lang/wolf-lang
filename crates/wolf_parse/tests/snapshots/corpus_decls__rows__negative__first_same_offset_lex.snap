@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 714..758 name=main body=Block
+-- diagnostics --
+E0102 [Error] 748..750 this string never closes
+E0201 [Error] 748..749 expected the line to end after the initializer

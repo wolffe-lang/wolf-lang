@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 486..541 name=main body=Block
+-- diagnostics --
+E0207 [Error] 514..515 expected a pattern
+E0202 [Error] 527..528 this `(` is never closed
+E0102 [Error] 528..533 this string never closes
+E0201 [Error] 538..539 expected `,` or `)` in the argument list
