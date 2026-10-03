@@ -8,8 +8,9 @@
 //! discarded, warned, and the function goes on to its own tail. Native,
 //! release and lupin print `after if` and `7`; the checked machine let
 //! the row leave `g` and the caller's `else` printed `0` until s207.
-//! (The same `if` as `g`'s TAIL raises on all four machines and draws
-//! no W0601 — a ruling question, filed with #541, not decided here.)
+//! (The same `if` as `g`'s TAIL raised on all four machines with no
+//! W0601 until s208; ruling #34 = A made it this same discard —
+//! `unit_discard_tail_if*.lu`.)
 
 fn maybe(n: int) -> int ! {none} {
     if n > 5 { return none }
