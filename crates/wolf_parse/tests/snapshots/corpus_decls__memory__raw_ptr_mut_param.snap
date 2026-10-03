@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ImportCDecl 445..465 header="stdlib.h"
+FnDecl 466..511 name=retarget body=Block
+FnDecl 513..924 name=main body=Block

@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ImportCDecl 384..404 header="stdlib.h"
+FnDecl 405..441 name=strlen extern
+FnDecl 442..477 name=llabs extern
+FnDecl 478..887 name=main body=Block

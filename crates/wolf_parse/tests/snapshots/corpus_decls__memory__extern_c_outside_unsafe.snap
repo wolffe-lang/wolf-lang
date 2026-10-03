@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 338..373 name=llabs extern
+FnDecl 374..449 name=main body=Block

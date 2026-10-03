@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 68..126 name=kx_area pub export body=Block
+FnDecl 193..252 name=perimeter pub body=Block

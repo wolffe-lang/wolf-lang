@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 361..395 name=kw_x export body=Block
+FnDecl 397..435 name=kw_e extern body=Block
+FnDecl 437..496 name=main body=Block
