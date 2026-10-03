@@ -63,15 +63,17 @@ pin is this compiler's v0.2.20 tag and which carries
 wolffe-lang/wolf-interp#163 and the lupin halves of rulings #21
 (`[type.row.match]`, E0801, E0816) and #19 (`[type.row.defer]`,
 E0611). The ritual (#87, with #281's control against the 0.1.43
-archive, same corpus, same release `wolf`) **moved no ledger count on
-either tier** and moved **eleven files below the ledger on each tier,
-the same eleven**, each to the compiler's answer: the five
+archive, same corpus, same release `wolf`) **moved one ledger count on
+each tier** — the parting named below — and moved **eleven files below
+the ledger on each tier, the same eleven**, each to the compiler's
+answer: the five
 `rows/match_row_*` rows (lupin's stdout now the ruled bytes: 0.1.43
 took the first bare-tag arm for a value too), the three
 `rows/negative/match_row_*` refusals (`exit` → `fail(E0801)` or
 `fail(E0816)`) and the three `rows/negative/try_in_*` rows (`exit(0)`
-→ `fail(E0611)`). Checked: 542 agreements, completeness 204, soundness
-0, on both sides; native: 583, 204, 1. Native's one soundness finding
+→ `fail(E0611)`). Checked: 552 → 551 agreements, hard divergences
+7 → 8, completeness 207, soundness 0; native: 593 → 592, 10 → 11,
+207, 1. Native's one soundness finding
 is still `memory/unsafe_ub_uaf.lu` (`exit` vs `ub(mem.ub)`), the
 program's own use-after-free read on the compiled lane.
 
@@ -80,6 +82,15 @@ eight `match_fallible_lanes.rs` pins and the three
 `try_under_defer_refused_lanes.rs` pins are gone. The eleven cases they
 held take the ruled arm against the published 0.1.44. None is widened
 and none stays pinned.
+
+One new pin, on one case: lupin 0.1.44 refuses s202's
+`rows/eu_bind_empty_row_handled.lu` with E0801, reading `f`'s inferred
+`-> !int` row as open where the row is empty and every other machine
+(lupin 0.1.43 included) prints `43 42 42`. That is lupin's defect
+(wolffe-lang/wolf-interp#176, which a lupin lane is fixing);
+`fallible_bind_empty_row_lanes.rs` pins 0.1.44's `fail(E0801)` by
+version until the next pairing, and it is the one ledger count the
+ritual moves, on each tier.
 
 ### A literal written at an unannotated binding takes `i32` (s202, #458)
 
