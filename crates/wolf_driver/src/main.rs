@@ -1303,7 +1303,7 @@ fn compile_native(
     // `[abi.target.none]`: a freestanding object has no `main` shim — its
     // entry is whatever `export fn` the boot code calls, and `main` (if
     // any) is an ordinary function.
-    let shim = if target.is_freestanding() && std::env::var("KW04_PLANT").is_ok() {
+    let shim = if target.is_freestanding() {
         None
     } else {
         Some(wolf_codegen_clif::add_entry_shim(&mut module).map_err(|e| refuse("wir", e))?)
