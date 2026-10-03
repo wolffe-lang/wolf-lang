@@ -1,0 +1,16 @@
+// kw04: M-KW's kernel (kw00 §3e step 1) without kw03's narrowing cast:
+// `b` is already a `u8`. `kw_outb` is the gate's port write (rt_stub.S
+// writes the byte to stdout, user space having no port I/O); the boot
+// stub (start.S) exits with `kmain`'s result.
+extern "c" fn kw_outb(port: u16, v: u8)
+
+export fn kmain() -> i64 {
+    let msg = "KWC\n"
+    for b in msg.bytes() {
+        // # Safety: kw_outb is rt_stub.S's port write; 0x3f8 is COM1.
+        unsafe {
+            kw_outb(1016, b)
+        }
+    }
+    33
+}
