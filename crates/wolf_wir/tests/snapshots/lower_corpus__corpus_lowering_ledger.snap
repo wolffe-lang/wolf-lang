@@ -757,6 +757,10 @@ rows/unit_discard_if_value.lu: lowers
 rows/unit_discard_raise_stmts.lu: lowers
 rows/unit_discard_raise_unit_fn.lu: lowers
 rows/unit_discard_return_operand.lu: lowers
+rows/unit_discard_tail_if.lu: lowers
+rows/unit_discard_tail_if_chain.lu: lowers
+rows/unit_discard_tail_if_leaves.lu: lowers
+rows/unit_discard_tail_if_value_row.lu: not mem-clean (pre-wir rungs own it)
 rows/unit_discard_try_leaves.lu: lowers
 rows/unit_discard_unit_main.lu: lowers
 strings/boundary_battery.lu: lowers
