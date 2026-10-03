@@ -149,6 +149,45 @@ ritual moves, on each tier.
 
 - **Release IR is reproducible across builds (s195, #503).** The mid-end walked a natural loop's block set in `HashSet` order, so the versioner's guard chain came out in a per-process order and three release builds of lobo were three binaries; the set is ordered now, `release_determinism.rs` builds a fixed corpus set three times and asserts byte identity (IR and binary), and the macOS native gauntlet runs as three shards (`cargo xtask ci --shard`).
 
+### Which code a refusal carries: the first diagnostic (s203, #377, ruling #28)
+
+- **One program, one code, on every lane.** `conform-run` stopped at
+  lex whenever lex had an error, wherever it sat, and otherwise took
+  the parser's first error in emission order; `wolf run`/`build`
+  sorted lex, parse and resolve diagnostics together by (offset, span
+  end, code). A file could be E0102 on its record and E0203 on its
+  screen (38 of wl21's 99 three-way rejections), or E0207 and E0301.
+- Ruled by the maintainer (#28) and written as `[proto.record.first]`:
+  the earliest byte offset is first; at one offset the earlier phase
+  (lex, parse, resolve, then later). Lex and parse are one rung for the
+  question, so a parse error before the first lex error is the refusal;
+  `wolf run`/`build` stop at the entry's front end as the ladder does.
+  `wolf_diag::first_error` is the one place that picks. A boundary
+  (E0202) sits at its opener, so an unclosed `(` before an unterminated
+  string inside it is first.
+- Witnesses: nine rows `corpus/rows/negative/first_*.lu` and
+  `corpus/rows/first_list_literal_sum.lu` — #377's five classes, kw00's
+  top-level `union`, and the parse-before-lex, boundary-before-lex and
+  parse-before-resolve shapes; `first_diagnostic_lanes.rs` asserts the
+  checked, native and release records and both `wolf run` screens, and
+  pins lupin 0.1.43/0.1.44 by version where it parts. The two
+  `exit(0)`-vs-E0201 programs were lupin 0.1.36 without list literals
+  (closed at 0.1.37), not a refusal question.
+
+### The blast radius counts wreck sites (s203, #367, #544, ruling #27)
+
+- **The property counts wreck sites, not diagnostics**: two added
+  diagnostics are separate sites when the mutated tree holds an intact
+  declaration, statement or arm wholly between them; each site is held
+  to the bound (3, 5 structural), which does not move. It now collects
+  every violation instead of stopping at the first, which at budget 1000
+  surfaced seventeen recoveries the first had hidden; each is fixed in
+  the parser and pinned by (file, iteration). #544's `struct` body read
+  as a `let` is one site and was over the bound: the parser now says
+  one thing per token, reports a valueless binder group once, resets
+  the arm fold only on a clean arm, and stops recovery at a sibling
+  declaration. Budgets 300 (the nightly's) and 1000 are green.
+
 ### A `?` inside a `defer` or `errdefer` is refused (s196, #498, ruling #19)
 
 - **Native and release overflowed the compiler's stack** on
