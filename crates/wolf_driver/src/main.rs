@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 use wolf_diag::lint::{AllowRegion, Level, LintLevels, Selector};
 use wolf_diag::{Diagnostic, HumanReporter, JsonReporter, RenderOptions, Reporter, Sources};
 
+mod asm;
 mod cimport_cmd;
 mod doc_cmd;
 mod doctest_cmd;
@@ -1001,6 +1002,9 @@ fn compile_native(
     // root manifest's `target` (for `wolf build`/`run` only), else the
     // host. Selected before the front end: `cfg(target = "…")` reads it.
     let target = build_target(opts, pkg_project)?;
+    // kw05 (`[abi.asm.link]`): the root manifest's assembly sources,
+    // read once — for the roster now, assembled after codegen.
+    let listed_asm = asm::listed(pkg_project).map_err(BuildStop::Environment)?;
     let _target_scope = target
         .is_freestanding()
         .then(|| wolf_sema::attrs::enter_build_target(wolf_backend::target::FREESTANDING));
@@ -1097,6 +1101,24 @@ fn compile_native(
         });
     }
     gate(sources, &mut pending, tc.diagnostics.clone(), false)?;
+    // kw05 (`[abi.asm.roster]`): on the freestanding target a package
+    // that lists assembly calls only into its roster or the hooks.
+    if target.is_freestanding() && !listed_asm.is_empty() {
+        let hooks: Vec<&str> = std::iter::once(wolf_backend::target::TRAP_HOOK)
+            .chain(wolf_backend::target::MEM_HOOKS)
+            .collect();
+        gate(
+            sources,
+            &mut pending,
+            wolf_sema::audit::asm_roster_check(
+                &tc,
+                &listed_asm.roster,
+                &hooks,
+                &listed_asm.spelled(),
+            ),
+            false,
+        )?;
+    }
     let mem = wolf_mem::check_package(&res.package, &tc);
     if let Some(nyc) = mem.not_yet.first() {
         // A rung that declines ends the front end early: a promoted
@@ -1781,7 +1803,35 @@ fn compile_native(
                     .map_err(|e| BuildStop::Environment(format!("write {}: {e}", p.display())))?;
             }
         }
+        // kw05 (`[abi.asm.link]`): each listed source's object beside
+        // the build's own, `K.asm-<stem>.o`, for the boot code's link.
+        for (spelled, src) in &listed_asm.sources {
+            let obj = asm::beside(out, spelled);
+            asm::assemble(spelled, src, &obj, target).map_err(BuildStop::Environment)?;
+            if opts.verbose {
+                eprintln!("wolf build: assembled {spelled} -> {}", obj.display());
+            }
+        }
         return Ok(());
+    }
+    // kw05 (`[abi.asm.link]`): a linked build hands each listed
+    // source's object to the link beside the module objects. A build
+    // that lists nothing links exactly as before.
+    for (spelled, src) in &listed_asm.sources {
+        let tmp = std::env::temp_dir().join(format!(
+            "wolf-asm-{}-{}.o",
+            std::process::id(),
+            objects.len()
+        ));
+        let assembled = asm::assemble(spelled, src, &tmp, target)
+            .and_then(|()| std::fs::read(&tmp).map_err(|e| format!("read {}: {e}", tmp.display())));
+        let _ = std::fs::remove_file(&tmp);
+        let bytes = assembled.map_err(BuildStop::Environment)?;
+        let stem = Path::new(spelled)
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "asm".to_string());
+        objects.push((format!("asm-{stem}"), bytes));
     }
     // `[abi.target.none.hooks]` (kw04): the hosted toolchain defines the
     // trap hook as the runtime's own report-and-exit, so a hosted program
@@ -3753,6 +3803,11 @@ fn conform_run(args: &[String]) {
     // conformance surface honors them — collected at the resolve rung,
     // applied to the final diagnostic set.
     let mut allow_regions: Vec<AllowRegion> = Vec::new();
+    // kw05 (`[abi.asm.machines]`): the checked machine names a call into
+    // a routine the manifest's `asm` sources define.
+    if checked {
+        wolf_mem::ubcheck::set_asm_roster(asm::roster_beside(Path::new(&file)));
+    }
     let (phase_reached, verdict, diagnostics) = if freestanding {
         let construct = format!(
             "the freestanding target {}",
