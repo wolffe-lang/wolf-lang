@@ -253,12 +253,9 @@ fn may_name_bytes(t: Ty<'_>) -> bool {
             table: t.table,
             id: *inner,
         }),
-        TyKind::Tuple(items) => items.iter().any(|&id| {
-            may_name_bytes(Ty {
-                table: t.table,
-                id,
-            })
-        }),
+        TyKind::Tuple(items) => items
+            .iter()
+            .any(|&id| may_name_bytes(Ty { table: t.table, id })),
         _ => true,
     }
 }
