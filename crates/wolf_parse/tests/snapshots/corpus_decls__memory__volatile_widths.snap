@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ImportCDecl 801..821 header="stdlib.h"
+FnDecl 822..2397 name=main body=Block
