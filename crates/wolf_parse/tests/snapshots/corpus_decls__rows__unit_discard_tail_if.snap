@@ -1,0 +1,12 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 884..926 name=boom body=Block
+FnDecl 928..997 name=a body=Block
+FnDecl 999..1043 name=b body=Block
+StructDecl 1045..1064 name=S fields=1
+ImplDecl 1066..1146 path=S
+  FnDecl 1079..1144 name=c body=Block
+FnDecl 1148..1220 name=d body=Block
+FnDecl 1222..1606 name=main body=Block

@@ -1,0 +1,11 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 774..816 name=boom body=Block
+FnDecl 818..863 name=fine body=Block
+FnDecl 865..1031 name=a body=Block
+FnDecl 1033..1088 name=b body=Block
+FnDecl 1090..1171 name=c body=Block
+FnDecl 1173..1264 name=d body=Block
+FnDecl 1266..1625 name=main body=Block
