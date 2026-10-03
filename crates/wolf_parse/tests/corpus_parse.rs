@@ -115,7 +115,11 @@ fn corpus_parse_expectations() {
                     f.display()
                 );
             }
-            Some(code) if src.lines().any(|l| l.starts_with("//! conforms:") && l.contains("proto.record.first")) => {
+            Some(code)
+                if src.lines().any(|l| {
+                    l.starts_with("//! conforms:") && l.contains("proto.record.first")
+                }) =>
+            {
                 // A `[proto.record.first]` witness (s203, ruling #28) may
                 // carry several diagnostics by construction — the clause
                 // is about which of them is first. Its pin is the FIRST,

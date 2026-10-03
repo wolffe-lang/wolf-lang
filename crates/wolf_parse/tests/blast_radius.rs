@@ -1129,11 +1129,18 @@ fn three_separate_breaks_are_three_sites_not_a_cascade() {
         b" match ",
     );
     let total: usize = sites.iter().map(Vec::len).sum();
-    assert!(total > 3, "over the tight bound by count: {:?}", parse.diagnostics);
+    assert!(
+        total > 3,
+        "over the tight bound by count: {:?}",
+        parse.diagnostics
+    );
     assert_eq!(sites.len(), 3, "three sites: {sites:?}");
     assert!(sites.iter().all(|s| s.len() <= 3), "each within the bound");
     for i in 0..2 {
-        assert_eq!(separator(&parse.root, &sites, i).kind, wolf_ast::SyntaxKind::ExprStmt);
+        assert_eq!(
+            separator(&parse.root, &sites, i).kind,
+            wolf_ast::SyntaxKind::ExprStmt
+        );
     }
 }
 
@@ -1186,7 +1193,11 @@ fn struct_body_read_as_let_is_one_wreck_site_within_the_bound() {
         .iter()
         .filter(|d| d.message.starts_with("this binding has no value"))
         .collect();
-    assert_eq!(group.len(), 1, "the valueless group is one report: {group:?}");
+    assert_eq!(
+        group.len(),
+        1,
+        "the valueless group is one report: {group:?}"
+    );
     assert_eq!(group[0].secondary.len(), 2, "naming the other two binders");
 }
 
