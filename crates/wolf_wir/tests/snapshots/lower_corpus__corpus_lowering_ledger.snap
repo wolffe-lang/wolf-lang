@@ -279,6 +279,9 @@ lints/shadow_prelude_call.lu: lowers
 lints/tag_case_payload.lu: lowers
 lints/tag_name_collision.lu: lowers
 lints/take_returned.lu: lowers
+membrane/export_called.lu: lowers
+membrane/export_child.lu: lowers
+membrane/extern_libc.lu: lowers
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/byte_list_ledger.lu: lowers
 memory/byte_producers_ledger.lu: lowers
@@ -390,6 +393,7 @@ memory/elem_whole_read_slice_after_move.lu: not mem-clean (pre-wir rungs own it)
 memory/excl_disjoint_ok.lu: lowers
 memory/excl_overlap.lu: not mem-clean (pre-wir rungs own it)
 memory/exclusivity.lu: lowers
+memory/extern_c_outside_unsafe.lu: not mem-clean (pre-wir rungs own it)
 memory/field_shorthand_closure.lu: not mem-clean (pre-wir rungs own it)
 memory/field_shorthand_closure_borrow.lu: not mem-clean (pre-wir rungs own it)
 memory/field_shorthand_copy.lu: lowers
@@ -482,6 +486,8 @@ memory/push_grow_guarded_index.lu: lowers
 memory/push_grow_nested_guarded_index.lu: lowers
 memory/push_take_moves.lu: not mem-clean (pre-wir rungs own it)
 memory/raw_compound_assign.lu: lowers
+memory/raw_ptr_mut_param.lu: lowers
+memory/raw_ptr_private_sig.lu: lowers
 memory/raw_repr_c_layout.lu: lowers
 memory/read_param_escape_field.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_generic.lu: not mem-clean (pre-wir rungs own it)
