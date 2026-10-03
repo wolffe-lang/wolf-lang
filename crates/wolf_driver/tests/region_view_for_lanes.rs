@@ -292,12 +292,24 @@ fn pieces_whose_bytes_outlive_the_region_still_run() {
             assert_ne!(flag, "--checked", "the checked lane always runs");
             continue;
         };
-        assert_eq!(obs.verdict, "exit(0)", "{flag} on the legal row: {:?}", obs.codes);
+        assert_eq!(
+            obs.verdict, "exit(0)",
+            "{flag} on the legal row: {:?}",
+            obs.codes
+        );
         assert_eq!(obs.stdout, want, "{flag} stdout on the legal row");
     }
     if let Some(lupin) = lupin_says(&entry) {
-        assert_eq!(lupin.verdict, "exit(0)", "lupin {} on the legal row", lupin.version);
-        assert_eq!(lupin.stdout, want, "lupin {} stdout on the legal row", lupin.version);
+        assert_eq!(
+            lupin.verdict, "exit(0)",
+            "lupin {} on the legal row",
+            lupin.version
+        );
+        assert_eq!(
+            lupin.stdout, want,
+            "lupin {} stdout on the legal row",
+            lupin.version
+        );
     }
 }
 
@@ -306,25 +318,82 @@ fn pieces_whose_bytes_outlive_the_region_still_run() {
 /// Every one was already E1010 on the three tiers at trunk dfcc2f13;
 /// lupin traps each from is68 on.
 const IS68_SHAPES: &[(&str, &str)] = &[
-    ("v126_block_value", "fn main() -> !int {\n    let t = region scratch {\n        let s = \"  re\" + \"gions  \"\n        s.trim()\n    }\n    print(\"[{t}]\")\n    0\n}\n"),
-    ("v126_copy_in_region", "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = copy s.trim()\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n"),
-    ("v126_field_view", "struct Doc { title: str }\n\nfn build() -> str {\n    region scratch {\n        let d = Doc { title: \"  re\" + \"gions  \" }\n        d.title.trim()\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n"),
-    ("v126_get_inclusive", "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        s.get(2..=5) else \"?\"\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n"),
-    ("v126_get_open", "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s.get(2..) else \"?\"\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n"),
-    ("v126_get_range", "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s.get(2..6) else \"?\"\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n"),
-    ("v126_held_outside", "fn main() -> !int {\n    var keep = \"\"\n    region scratch {\n        let s = \"  ab\" + \"cd  \"\n        keep = s.trim()\n    }\n    print(\"[{keep}]\")\n    0\n}\n"),
-    ("v126_issue", "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions  \"\n        let t = s.trim()\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"{build()}\")\n    0\n}\n"),
-    ("v126_proc_send", "fn worker(n: int, out: channel[str]) -> !int {\n    let s = \"  ab\".repeat(n)\n    out.send(s.trim())?\n    0\n}\n\nfn main() -> !int {\n    let out = channel[str](4)\n    let c = spawn proc worker(2, out)\n    let m = c.monitor()\n    let v = out.recv() else \"none\"\n    print(\"[{v}]\")\n    0\n}\n"),
-    ("v126_slice", "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s[2..6]\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n"),
-    ("v126_split_index", "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let ps = s.split(\",\")\n        ps[0]\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n"),
-    ("v126_strip_prefix", "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s.strip_prefix(\"  \") else \"?\"\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n"),
-    ("v126_strip_prefix_tail", "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        s.strip_prefix(\"  \") else \"?\"\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n"),
-    ("v126_strip_suffix", "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s.strip_suffix(\"  \") else \"?\"\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n"),
-    ("v126_trim", "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s.trim()\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n"),
-    ("v126_trim_end", "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s.trim_end()\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n"),
-    ("v126_trim_start", "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s.trim_start()\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n"),
-    ("v126_trim_tail", "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        s.trim()\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n"),
-    ("v126_view_of_view", "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s.trim().trim_end()\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n"),
+    (
+        "v126_block_value",
+        "fn main() -> !int {\n    let t = region scratch {\n        let s = \"  re\" + \"gions  \"\n        s.trim()\n    }\n    print(\"[{t}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_copy_in_region",
+        "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = copy s.trim()\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_field_view",
+        "struct Doc { title: str }\n\nfn build() -> str {\n    region scratch {\n        let d = Doc { title: \"  re\" + \"gions  \" }\n        d.title.trim()\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_get_inclusive",
+        "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        s.get(2..=5) else \"?\"\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_get_open",
+        "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s.get(2..) else \"?\"\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_get_range",
+        "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s.get(2..6) else \"?\"\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_held_outside",
+        "fn main() -> !int {\n    var keep = \"\"\n    region scratch {\n        let s = \"  ab\" + \"cd  \"\n        keep = s.trim()\n    }\n    print(\"[{keep}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_issue",
+        "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions  \"\n        let t = s.trim()\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"{build()}\")\n    0\n}\n",
+    ),
+    (
+        "v126_proc_send",
+        "fn worker(n: int, out: channel[str]) -> !int {\n    let s = \"  ab\".repeat(n)\n    out.send(s.trim())?\n    0\n}\n\nfn main() -> !int {\n    let out = channel[str](4)\n    let c = spawn proc worker(2, out)\n    let m = c.monitor()\n    let v = out.recv() else \"none\"\n    print(\"[{v}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_slice",
+        "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s[2..6]\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_split_index",
+        "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let ps = s.split(\",\")\n        ps[0]\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_strip_prefix",
+        "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s.strip_prefix(\"  \") else \"?\"\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_strip_prefix_tail",
+        "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        s.strip_prefix(\"  \") else \"?\"\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_strip_suffix",
+        "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s.strip_suffix(\"  \") else \"?\"\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_trim",
+        "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s.trim()\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_trim_end",
+        "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s.trim_end()\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_trim_start",
+        "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s.trim_start()\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_trim_tail",
+        "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        s.trim()\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n",
+    ),
+    (
+        "v126_view_of_view",
+        "fn build() -> str {\n    region scratch {\n        let s = \"  re\" + \"gions,x  \"\n        let t = s.trim().trim_end()\n        t\n    }\n}\n\nfn main() -> !int {\n    print(\"[{build()}]\")\n    0\n}\n",
+    ),
 ];
 
 #[test]
