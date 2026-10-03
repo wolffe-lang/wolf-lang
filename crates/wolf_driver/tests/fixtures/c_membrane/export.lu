@@ -36,20 +36,36 @@ struct C3 {
 extern "c" fn kw_c_main() -> i32
 
 export fn kx_ints(a: i8, b: u8, c: i16, d: u16, e: i32, f: u32, g: i64, h: u64) -> i64 {
-    a as i64 + 2 * (b as i64) + 3 * (c as i64) + 4 * (d as i64) + 5 * (e as i64) +
-        6 * (f as i64) + 7 * g + 8 * (h as i64)
+    a as i64 +
+        2 * b as i64 +
+        3 * c as i64 +
+        4 * d as i64 +
+        5 * e as i64 +
+        6 * f as i64 +
+        7 * g +
+        8 * h as i64
 }
 
 export fn kx_floats(a: f32, b: f64, c: f32, d: f64, e: f32, f: f64, g: f32, h: f64, i: f64) -> f64 {
     b + 2.0 * d + 3.0 * f + 4.0 * h + 5.0 * i
 }
 
-export fn kx_floats32(a: f32, b: f64, c: f32, d: f64, e: f32, f: f64, g: f32, h: f64, i: f64) -> f32 {
+export fn kx_floats32(
+    a: f32,
+    b: f64,
+    c: f32,
+    d: f64,
+    e: f32,
+    f: f64,
+    g: f32,
+    h: f64,
+    i: f64,
+) -> f32 {
     a + 2.0 * c + 3.0 * e + 4.0 * g
 }
 
 export fn kx_mixed(a: i64, x: f64, b: i32, y: f32, c: u8, z: f64) -> f64 {
-    (a as f64) * x + (b as f64) + (c as f64) * z
+    a as f64 * x + b as f64 + c as f64 * z
 }
 
 export fn kx_mixed32(a: i64, x: f64, b: i32, y: f32, c: u8, z: f64) -> f32 {
@@ -77,7 +93,7 @@ export fn kx_u64(x: u64) -> u64 {
 }
 
 export fn kx_big_sum(r: Big) -> i64 {
-    r.a as i64 + 2 * r.b + 3 * (r.c as i64) + 5 * (r.e as i64)
+    r.a as i64 + 2 * r.b + 3 * r.c as i64 + 5 * r.e as i64
 }
 
 export fn kx_big_d(r: Big) -> f64 {
@@ -105,7 +121,7 @@ export fn kx_c3_make(a: u8) -> C3 {
 }
 
 export fn kx_c3_sum(c3: C3) -> i64 {
-    c3.a as i64 + 2 * (c3.b as i64) + 3 * (c3.c as i64)
+    c3.a as i64 + 2 * c3.b as i64 + 3 * c3.c as i64
 }
 
 export fn kx_big_ptr(p: *Big) -> i64 {

@@ -5,9 +5,11 @@
 //! the platform C library's own `strlen` and `llabs`, a raw pointer
 //! crossing the membrane (wolf-lang#514). The checked machine and lupin
 //! have no C membrane and refuse the calls by name.
+
 import c "stdlib.h"
 
 extern "c" fn strlen(s: *u8) -> u64
+
 extern "c" fn llabs(n: i64) -> i64
 
 fn main() -> int {

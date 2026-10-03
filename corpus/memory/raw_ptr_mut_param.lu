@@ -6,6 +6,7 @@
 //! says nothing about the pointee. `retarget` points `p` at `b`, so the
 //! caller reads 41 through it. Before kw02 the checked machine passed a
 //! retagged copy, never wrote it back, and printed 2.
+
 import c "stdlib.h"
 
 fn retarget(mut p: *u8, q: *u8) {

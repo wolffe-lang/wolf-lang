@@ -5,6 +5,7 @@
 //! operation, as `c.malloc` is: it needs an `unsafe` block (E1301).
 //! Before kw02 the call type-checked as an ordinary one and the
 //! compiled tiers refused it at codegen.
+
 extern "c" fn llabs(n: i64) -> i64
 
 fn main() -> int {

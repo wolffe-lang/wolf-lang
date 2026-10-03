@@ -8,6 +8,7 @@
 //! `poke` writes through it. Before kw02 this was E1302 on every
 //! machine; the checked machine also froze the pointee at the call, so
 //! the write was UB row P2 there while the compiled tiers ran it.
+
 import c "stdlib.h"
 
 fn poke(p: *u8, i: int, v: u8) {

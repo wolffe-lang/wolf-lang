@@ -5,6 +5,7 @@
 //! function, called from wolf too. Each is one global symbol under its
 //! own name with the C convention, on both compiling tiers (wolf-lang#513:
 //! before kw02 native mangled both and release dropped both).
+
 export fn kw_x() -> i64 {
     41
 }
