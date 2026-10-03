@@ -86,7 +86,11 @@ fn cc() -> String {
 }
 
 /// Build `src` on one tier into `dir` as relocatable objects; `None` is
-/// the release tier's host refusal (a loud skip, never an ICE).
+/// the release tier's host refusal (a loud skip). Anything else that
+/// stops the build fails the gate: `wolf build` exits 2 for a compile
+/// error too, and at trunk 10a16d87 that exit read as an environment
+/// skip and both witnesses passed vacuously (kasumi,
+/// `evidence/red-0fece716-gcc.log`, four `SKIP` lines naming E1302).
 fn wolf_objects(src: &Path, tier: &str, dir: &Path) -> Option<Vec<PathBuf>> {
     let mut cmd = Command::new(wolf());
     cmd.arg("build")
@@ -99,13 +103,18 @@ fn wolf_objects(src: &Path, tier: &str, dir: &Path) -> Option<Vec<PathBuf>> {
     }
     let out = cmd.output().expect("wolf runs");
     let stderr = String::from_utf8_lossy(&out.stderr);
-    if lane_exit::environment_refusal(&out, &format!("wolf build --emit=obj ({tier})")) {
-        eprintln!("SKIP: the {tier} tier cannot build here: {}", stderr.trim());
+    let refusal = lane_exit::environment_refusal(&out, &format!("wolf build --emit=obj ({tier})"));
+    if refusal && tier == "release" && stderr.contains("release tier targets") {
+        eprintln!(
+            "SKIP: the release tier refuses this host: {}",
+            stderr.trim()
+        );
         return None;
     }
     assert!(
         out.status.success(),
-        "wolf build --emit=obj ({tier}) on {}: {stderr}",
+        "wolf build --emit=obj ({tier}) on {} must build — a compile error or an \
+         `unsupported` here is the witness failing, never a skip: {stderr}",
         src.display()
     );
     let mut objs: Vec<PathBuf> = std::fs::read_dir(dir)
