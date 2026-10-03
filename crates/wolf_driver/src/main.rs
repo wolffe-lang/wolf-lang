@@ -792,6 +792,15 @@ struct BuildOpts {
     /// across thousands of lines, which scrolls the *first* and most
     /// fixable one off the top of the terminal.
     error_limit: usize,
+    /// `--target <triple>` (kw04, `[abi.target]`): the build's target
+    /// as the flag spells it; `None` defers to the manifest, then the
+    /// host.
+    target: Option<String>,
+    /// Whether the root manifest's `target` key may select the target.
+    /// `wolf build`/`run` read it; the conform-run rungs and `wolf
+    /// test` never do — a record is reproducible from the file and the
+    /// flags alone.
+    manifest_target: bool,
 }
 
 impl BuildOpts {
@@ -811,6 +820,8 @@ impl BuildOpts {
             // The differential/conformance rungs compare whole
             // diagnostic sets: never truncate what a machine reads.
             error_limit: 0,
+            target: None,
+            manifest_target: false,
         }
     }
 }
@@ -986,6 +997,13 @@ fn compile_native(
             return Err(BuildStop::Errors(first_reported_code(&project.diagnostics)));
         }
     }
+    // kw04 (`[abi.target]`, K1): the build's target — the flag, else the
+    // root manifest's `target` (for `wolf build`/`run` only), else the
+    // host. Selected before the front end: `cfg(target = "…")` reads it.
+    let target = build_target(opts, pkg_project)?;
+    let _target_scope = target
+        .is_freestanding()
+        .then(|| wolf_sema::attrs::enter_build_target(wolf_backend::target::FREESTANDING));
     let res = resolve_from_entry(file, &mut sm, sources, std_root, pkg_project)
         .map_err(BuildStop::Environment)?;
     // The warning system (s67): source `#[allow]` regions + manifest
@@ -1118,6 +1136,23 @@ fn compile_native(
         std::fs::write(out, text)
             .map_err(|e| BuildStop::Environment(format!("write {}: {e}", out.display())))?;
         return Ok(());
+    }
+    // kw04 (`[abi.target.none]`, `[abi.target.none.alloc]`, K10): on the
+    // freestanding target every construct that needs the hosted runtime,
+    // allocates, or computes with a float is refused BY NAME here, on the
+    // lowered module and before the mid-end, so both tiers answer alike
+    // (a construct the optimizer would fold away is still the program's).
+    if target.is_freestanding()
+        && let Some(r) = wolf_backend::target::freestanding_refusal(&module)
+    {
+        let reason = match r.span {
+            Some((lo, hi)) => format!("{} @{lo}..{hi}", r.message()),
+            None => r.message(),
+        };
+        return Err(BuildStop::Refused {
+            phase: "wir",
+            reason,
+        });
     }
     // c28 [ct.taint.verify], first run: the constructed WIR. Refusals
     // here are the deterministic, well-spanned ones a crypto author
@@ -1265,13 +1300,20 @@ fn compile_native(
             std::process::exit(2);
         }
     };
-    let shim = wolf_codegen_clif::add_entry_shim(&mut module).map_err(|e| refuse("wir", e))?;
+    // `[abi.target.none]`: a freestanding object has no `main` shim — its
+    // entry is whatever `export fn` the boot code calls, and `main` (if
+    // any) is an ordinary function.
+    let shim = if target.is_freestanding() {
+        None
+    } else {
+        Some(wolf_codegen_clif::add_entry_shim(&mut module).map_err(|e| refuse("wir", e))?)
+    };
 
     // `--emit=llvm-ir` (s41): the release tier's whole-module IR, one
     // inspectable text — every stage inspectable, like `--emit=wir`.
     if opts.emit == Emit::LlvmIr {
         let mut backend =
-            wolf_codegen_llvm::LlvmBackend::with_options(emit_opts(branch_weights.clone()))
+            wolf_codegen_llvm::LlvmBackend::with_options(emit_opts(branch_weights.clone(), target))
                 .map_err(|e| refuse("wir", e))?;
         let all: Vec<wolf_wir::FuncId> = module.funcs.keys().collect();
         // s125: trap sites in the inspectable IR too — the emitted
@@ -1301,8 +1343,8 @@ fn compile_native(
             &mut backend,
             &module,
             &all,
-            Some(shim),
-            true,
+            shim,
+            shim.is_some(),
             false,
             &mut wolf_backend::NullDebugSink,
         )
@@ -1396,7 +1438,7 @@ fn compile_native(
         ),
         _ => "-".to_string(),
     };
-    let env_comp = format!(
+    let mut env_comp = format!(
         "wolf {} commit {} abi {} profile {} pgo {}",
         env!("CARGO_PKG_VERSION"),
         option_env!("WOLF_COMMIT").unwrap_or("unknown"),
@@ -1408,6 +1450,11 @@ fn compile_native(
         },
         pgo_comp,
     );
+    // kw04: a freestanding object is a different object for the same
+    // source; a hosted build's key is unchanged.
+    if target.is_freestanding() {
+        env_comp.push_str(&format!(" target {}", wolf_backend::target::FREESTANDING));
+    }
     let mut units: Vec<ModUnit> = Vec::new();
     // ---- release: cluster units (s43 target 5) -------------------------
     //
@@ -1492,16 +1539,17 @@ fn compile_native(
             );
             units.push(ModUnit {
                 name: c.name.clone(),
-                is_entry: funcs.contains(&shim),
+                is_entry: shim.is_some_and(|s| funcs.contains(&s)),
                 funcs,
                 key,
                 comps,
             });
         }
-        // The entry shim must land in exactly one object.
+        // The entry shim must land in exactly one object (none on the
+        // freestanding target, which has no shim).
         debug_assert_eq!(
             units.iter().filter(|u| u.is_entry).count(),
-            1,
+            usize::from(shim.is_some()),
             "exactly one cluster carries the entry shim"
         );
     }
@@ -1557,7 +1605,7 @@ fn compile_native(
             )
             .as_bytes(),
         );
-        let is_entry = funcs.contains(&shim);
+        let is_entry = shim.is_some_and(|s| funcs.contains(&s));
         units.push(ModUnit {
             name,
             funcs: funcs.clone(),
@@ -1648,7 +1696,15 @@ fn compile_native(
             };
             format!("wolf build: {}: compiled ({reason})", u.name)
         });
-        let bytes = compile_unit(&module, u, shim, pkg, opts.release, branch_weights.clone())?;
+        let bytes = compile_unit(
+            &module,
+            u,
+            shim,
+            pkg,
+            opts.release,
+            branch_weights.clone(),
+            target,
+        )?;
         if let Some(p) = &obj_file {
             if let Some(dir) = p.parent() {
                 let _ = std::fs::create_dir_all(dir);
@@ -1769,14 +1825,63 @@ fn codegen_report(wp: &wolf_wir::midend::WholeProgram) -> String {
 /// it beside them.
 fn emit_opts(
     branch_weights: Option<wolf_codegen_llvm::BranchWeights>,
+    target: wolf_backend::target::Target,
 ) -> wolf_codegen_llvm::EmitOptions {
     wolf_codegen_llvm::EmitOptions {
         strip_facts: std::env::var("WOLF_STRIP_FACTS").as_deref() == Ok("1"),
         branch_weights,
         // The host target (s127): the backend resolves `None` to the
-        // host and refuses unsupported hosts by name.
-        target: None,
+        // host and refuses unsupported hosts by name. The freestanding
+        // target (kw04) is pinned explicitly and emitted from any host.
+        target: target
+            .is_freestanding()
+            .then_some(wolf_codegen_llvm::ReleaseTarget::X86_64None),
     }
+}
+
+/// The build's target (kw04, `[abi.target]`, K1): `--target`, else the
+/// root manifest's `target` when this command reads it, else the host.
+/// A freestanding build emits objects only (`[abi.target.none]`): `bin`
+/// is refused by name, as are the two hosted-runtime build modes.
+fn build_target(
+    opts: &BuildOpts,
+    project: Option<&wolf_pkg::Project>,
+) -> Result<wolf_backend::target::Target, BuildStop> {
+    use wolf_backend::target::{FREESTANDING, Target};
+    let spelled = match &opts.target {
+        Some(t) => Some(t.clone()),
+        None if opts.manifest_target => {
+            project.and_then(|p| p.target.as_ref().map(|(t, _)| t.clone()))
+        }
+        None => None,
+    };
+    let Some(spelled) = spelled else {
+        return Ok(Target::Host);
+    };
+    let target = Target::parse(&spelled, &wolf_sema::attrs::host_target())
+        .map_err(BuildStop::Environment)?;
+    if target.is_freestanding() {
+        if opts.emit == Emit::Bin {
+            return Err(BuildStop::Environment(format!(
+                "target {FREESTANDING} emits objects only — pass `--emit=obj` (`bin` needs a \
+                 hosted target's `main` shim, runtime library and linker; the boot code that \
+                 calls your `export fn` links the object)"
+            )));
+        }
+        if opts.checked {
+            return Err(BuildStop::Environment(format!(
+                "--checked is the hosted runtime's checked profile; target {FREESTANDING} has \
+                 no runtime"
+            )));
+        }
+        if opts.profile_gen.is_some() {
+            return Err(BuildStop::Environment(format!(
+                "--profile-gen writes its profile through the hosted runtime; target \
+                 {FREESTANDING} has none"
+            )));
+        }
+    }
+    Ok(target)
 }
 
 /// Read a `.wprof` for `--profile=`. A file the compiler cannot read is
@@ -1799,10 +1904,11 @@ fn load_profile(path: &Path) -> Result<wolf_wir::profile::Profile, BuildStop> {
 fn compile_unit(
     module: &wolf_wir::Module,
     u: &ModUnit,
-    shim: wolf_wir::FuncId,
+    shim: Option<wolf_wir::FuncId>,
     pkg: &wolf_sema::Package,
     release: bool,
     branch_weights: Option<wolf_codegen_llvm::BranchWeights>,
+    target: wolf_backend::target::Target,
 ) -> Result<Vec<u8>, BuildStop> {
     let refuse = |e: wolf_backend::BackendError| match e {
         wolf_backend::BackendError::Unsupported(reason) => BuildStop::Refused {
@@ -1817,11 +1923,11 @@ fn compile_unit(
     };
     let mut backend: Box<dyn wolf_backend::Backend> = if release {
         Box::new(
-            wolf_codegen_llvm::LlvmBackend::with_options(emit_opts(branch_weights))
+            wolf_codegen_llvm::LlvmBackend::with_options(emit_opts(branch_weights, target))
                 .map_err(refuse)?,
         )
     } else {
-        Box::new(wolf_codegen_clif::ClifBackend::new().map_err(refuse)?)
+        Box::new(wolf_codegen_clif::ClifBackend::for_target(target).map_err(refuse)?)
     };
     // The unit's source files as plain data — display path + line
     // starts — for two consumers with one truth: the trap-site
@@ -1875,7 +1981,7 @@ fn compile_unit(
         backend.as_mut(),
         module,
         &u.funcs,
-        u.is_entry.then_some(shim),
+        if u.is_entry { shim } else { None },
         u.is_entry,
         true,
         sink,
@@ -2360,6 +2466,8 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         profile_gen: None,
         profile_use: None,
         error_limit: DEFAULT_ERROR_LIMIT,
+        target: None,
+        manifest_target: true,
     };
     let mut prog_args: Vec<String> = Vec::new();
     let mut script = script_cmd::Posture::default();
@@ -2395,6 +2503,15 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
                 Ok(n) => opts.error_limit = n,
                 Err(_) => fail("--error-limit needs a count (0 for no limit)"),
             }
+        } else if a == "--target" {
+            // kw04 (`[abi.target]`, K1): the build's target triple.
+            i += 1;
+            match args.get(i) {
+                Some(v) => opts.target = Some(v.clone()),
+                None => fail("--target needs a target triple (x86_64-unknown-none)"),
+            }
+        } else if let Some(v) = a.strip_prefix("--target=") {
+            opts.target = Some(v.to_string());
         } else if a == "--deny-warnings" {
             opts.lints.deny_warnings();
         } else if let Some((flag, level)) = match a.as_str() {
@@ -2632,6 +2749,26 @@ fn run(args: &[String]) {
     if cli.opts.emit != Emit::Bin {
         eprintln!("wolf run: --emit makes no sense here; use `wolf build`");
         std::process::exit(2);
+    }
+    // kw04 (`[abi.target.none]`): a freestanding object has no host
+    // process to run in. (A manifest-selected target is refused by the
+    // build itself: `bin` is not emitted for it.)
+    if let Some(t) = &cli.opts.target {
+        match wolf_backend::target::Target::parse(t, &wolf_sema::attrs::host_target()) {
+            Ok(target) if target.is_freestanding() => {
+                eprintln!(
+                    "wolf run: target {t} cannot run on this host — a freestanding program \
+                     is an object for a boot stub to link (`wolf build --target {t} \
+                     --emit=obj`)"
+                );
+                std::process::exit(2);
+            }
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("wolf run: {e}");
+                std::process::exit(2);
+            }
+        }
     }
     // s53 script mode: a file that announces itself with `#!` or with a
     // `pkg { … }` frontmatter block is a first-class package whose state
@@ -3444,6 +3581,40 @@ fn conform_run(args: &[String]) {
     // drives the s32/s36 scheduler PRNG) — `[proto.seed.flag]` made
     // real for the native rung; the record reports `seeded` honestly.
     let mut seed: Option<u64> = None;
+    // kw04 (`[abi.target]`, kw00 F1 §4): `--target <triple>`. No machine
+    // here runs a freestanding program — it has no `main`, no host
+    // process, no runtime — so the freestanding target is refused by
+    // name on every rung, never run; the host's own triple is the
+    // ordinary run.
+    let mut target_flag: Option<String> = None;
+    let mut args_iter = args.iter();
+    let mut args_seen: Vec<String> = Vec::new();
+    while let Some(a) = args_iter.next() {
+        if a == "--target" {
+            match args_iter.next() {
+                Some(v) => target_flag = Some(v.clone()),
+                None => {
+                    eprintln!("wolf conform-run: --target needs a target triple");
+                    std::process::exit(2);
+                }
+            }
+        } else if let Some(v) = a.strip_prefix("--target=") {
+            target_flag = Some(v.to_string());
+        } else {
+            args_seen.push(a.clone());
+        }
+    }
+    let freestanding = match &target_flag {
+        None => false,
+        Some(t) => match wolf_backend::target::Target::parse(t, &wolf_sema::attrs::host_target()) {
+            Ok(target) => target.is_freestanding(),
+            Err(e) => {
+                eprintln!("wolf conform-run: {e}");
+                std::process::exit(2);
+            }
+        },
+    };
+    let args = &args_seen[..];
     for a in args {
         if a == "--json" {
             continue; // accepted per [proto.invoke.cli]
@@ -3541,7 +3712,18 @@ fn conform_run(args: &[String]) {
     // conformance surface honors them — collected at the resolve rung,
     // applied to the final diagnostic set.
     let mut allow_regions: Vec<AllowRegion> = Vec::new();
-    let (phase_reached, verdict, diagnostics) = if phase.as_deref() == Some("none") {
+    let (phase_reached, verdict, diagnostics) = if freestanding {
+        let construct = format!(
+            "the freestanding target {}",
+            wolf_backend::target::FREESTANDING
+        );
+        eprintln!(
+            "wolf conform-run: unsupported — {construct} (a freestanding program is an object \
+             for a boot stub; no machine here runs one)"
+        );
+        record_refusal(&mut x_ext, &construct, None);
+        ("none", "unsupported".to_string(), Vec::new())
+    } else if phase.as_deref() == Some("none") {
         ("none", "unsupported".to_string(), Vec::new())
     } else {
         let bytes = match std::fs::read(&file) {
