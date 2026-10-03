@@ -150,6 +150,38 @@
   read, apply the operator with the checked arithmetic, and store, as
   lupin already did (`corpus/memory/raw_compound_assign.lu`).
 
+### A `for` piece cannot outlive its region; a discarded row is discarded on every lane (s207, #540, #541)
+
+- **A piece bound by a `for` over `words()`/`lines()`/`split()` is
+  refused E1010 when it outlives its region (#540).** `for w in
+  s.words() { last = w }` handed `last` out of `region scratch { }`
+  and printed from freed bytes on checked, native and release, while
+  `s.split(",")[0]` was already E1010 and lupin traps `region-fault`.
+  A loop binding now carries its iterable's sites as `xs[i]` does —
+  less the `List` a view call allocates, which holds no piece's bytes,
+  and a channel's own allocation — so the pieces of a parameter, a
+  literal, or a `str` built outside the region still leave freely. The
+  same rule refuses an element of a region-built `List[str]` held past
+  the region, and `copy s` of a region-built `str`, which shares its
+  bytes (`[mem.tier0.move.3]`) but carried no site. Nothing changes at
+  run time. Witnesses `corpus/memory/region_str_view_for_*.lu`,
+  `region_str_list_for_held.lu`, `region_str_copy_return.lu`; gate
+  `region_view_for_lanes.rs`, which also runs is68's 19 view escapes.
+- **The checked machine discards a row nobody consumes (#541,
+  `[type.unit.discard]`).** Every lane warned W0601; native, release
+  and lupin then dropped the row, but the checked machine propagated
+  it: a unit fn's raising tail, a raising statement, a loop body's
+  tail or an else-less `if` left `main` with `error: bad`, and `let v
+  = if c { maybe(n) }` bound `3` or `none` where the value is `()`. It
+  discards now at every unit-context tail and non-trailing `!T`
+  statement; `?` still propagates. `return boom()` in a unit fn — "the
+  operand of a `return`" is a unit context — stopped native and
+  release with an internal error (`ret carries 1 value(s)`); it is the
+  same discard now. Witnesses `corpus/rows/unit_discard_*.lu`, gate
+  `unit_discard_lanes.rs`. An else-less `if` that is the TAIL of a
+  fallible fn still raises on all four machines; the clause's list
+  reads otherwise, and the ruling is asked on #541.
+
 ## 0.2.21 — 2026-10-02
 
 THE TWENTY-FIRST. A `match` over a fallible value compiles and runs on
