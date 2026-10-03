@@ -11,7 +11,12 @@
 //! (E0301). lupin 0.1.43 and 0.1.44 read no attribute either: they run every
 //! refused row, and each parting is pinned below by version as
 //! pre-mirror (the lupin half is wolf-interp#174); a newer lupin
-//! must answer what the compiler answers.
+//! must answer what the compiler answers. 0.1.45 (the 0.2.22 pairing,
+//! r27) still reads none, measured, and is pinned with 0.1.44's answers
+//! but one: is68's wide scalar pass (#138) types the freestanding-gated
+//! code `cfg_target_freestanding.lu` keeps, so 0.1.45 answers
+//! `fail(E0401)` there where 0.1.44 declined it `unsupported` — the same
+//! unread `cfg`, reached one pass sooner.
 //!
 //! Why a driver gate beside the corpus rows: `cargo xtask corpus` reads
 //! a row on its default lane only, and the rule is "on every machine".
@@ -221,6 +226,11 @@ const RUNS: &[Pin<'static>] = &[
         verdict: "exit(0)",
         stdout: "",
     },
+    Pin {
+        version: "0.1.45",
+        verdict: "exit(0)",
+        stdout: "",
+    },
 ];
 
 fn refused(row: &str, codes: &[&str]) {
@@ -309,6 +319,11 @@ fn cfg_keeps_the_definition_for_this_target_only() {
                 verdict: "fail(E0302)",
                 stdout: "",
             },
+            Pin {
+                version: "0.1.45",
+                verdict: "fail(E0302)",
+                stdout: "",
+            },
         ],
     );
 }
@@ -334,6 +349,11 @@ fn cfg_drops_what_another_target_gates_before_resolution() {
                 verdict: "unsupported",
                 stdout: "",
             },
+            Pin {
+                version: "0.1.45",
+                verdict: "fail(E0401)",
+                stdout: "",
+            },
         ],
     );
 }
@@ -356,6 +376,11 @@ fn the_implemented_attributes_still_compile() {
             },
             Pin {
                 version: "0.1.44",
+                verdict: "unsupported",
+                stdout: "",
+            },
+            Pin {
+                version: "0.1.45",
                 verdict: "unsupported",
                 stdout: "",
             },
