@@ -2,15 +2,16 @@
 //! phase: none
 //! conforms: proto.record.first, gram.lex
 //!
-//! s203 (wolf-lang#377 class 2, ruling #28) — a program pasted with its
-//! Markdown fence. The fence's backticks begin no token: E0107, a stray
-//! character, from the lexer at the first byte; the parser's E0203 at
-//! the same byte loses to the earlier phase. lupin 0.1.43 and 0.1.44
-//! answer E0101 (the registry's "invalid escape sequence") for the same
-//! fact — a lupin code defect, pinned pre-mirror by version in
-//! `first_diagnostic_lanes.rs`.
-```wolf
+//! s203 (wolf-lang#377 class 2, ruling #28) — a Markdown fence's
+//! backticks (wl21's candidates were pasted with the fence; here the
+//! backticks follow a value, where the formatter can still lay the file
+//! out). They begin no token: E0107, a stray character, from the lexer;
+//! the parser's report at the same byte loses to the earlier phase.
+//! lupin 0.1.43 and 0.1.44 answer E0101 (the registry's "invalid escape
+//! sequence") for the same fact — a lupin code defect, pinned
+//! pre-mirror by version in `first_diagnostic_lanes.rs`.
+
 fn main() -> !int {
-    0
+    let x = 1 ```
+    x
 }
-```

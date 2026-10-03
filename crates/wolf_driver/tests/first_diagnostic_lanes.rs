@@ -206,9 +206,10 @@ fn every_lane_refuses(entry: &Path, want: &str, phase: &str, pre_mirror: PreMirr
     }
 }
 
-/// #377 class 1 (38 of wl21's 99): lex E0102 and parse E0203 start at
-/// one byte; the earlier phase is first. Red at trunk 12a56b22 on the
-/// screen: `wolf run` said E0203.
+/// #377 class 1 (38 of wl21's 99): lex E0102 and a parse report start
+/// at one byte; the earlier phase is first. Red at trunk 12a56b22 on
+/// the screen: `wolf run` said E0203 for the top-level shape (wl21's)
+/// and E0201 for the row's in-body shape.
 #[test]
 fn same_offset_lex_before_parse() {
     every_lane_refuses(
@@ -261,7 +262,7 @@ fn unclosed_row_brace_is_earlier_than_the_keyword() {
 #[test]
 fn toplevel_union_is_e0203() {
     every_lane_refuses(
-        &corpus("negative/first_union_toplevel.lu"),
+        &fixture("union_toplevel.lu"),
         "fail(E0203)",
         "parse",
         &[("0.1.43", "fail(E0201)"), ("0.1.44", "fail(E0201)")],

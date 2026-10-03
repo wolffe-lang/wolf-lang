@@ -2,6 +2,10 @@
 //! phase: lex
 //! conforms: proto.record.first, gram.item
 //!
+//! A driver fixture, not a corpus row: a top-level `union` is no
+//! declaration the formatter can lay out (corpus files must format
+//! fully).
+//!
 //! s203 (kw00's sixth pair on wolf-lang#377) — `union` is no
 //! declaration keyword: E0203, "expected a declaration here", at the
 //! `union`. lupin 0.1.43 and 0.1.44 answer E0201 at the same span in

@@ -236,9 +236,9 @@ fn corpus_parse_expectations() {
     // Plus s163's E0206 keyword in type position
     // (grammar/type_position_keyword — `p: proc`, a token that cannot
     // begin a type, `[gram.type.start]`, wolf-lang#320). Plus s203's
-    // seven `[proto.record.first]` witnesses (rows/negative/first_*.lu,
+    // six `[proto.record.first]` witnesses (rows/negative/first_*.lu,
     // ruling #28), pinned by their first diagnostic.
-    assert_eq!(fail, 36, "syntax-tier fail-file count drifted");
+    assert_eq!(fail, 35, "syntax-tier fail-file count drifted");
     assert_eq!(
         member_fail, 2,
         "member-sibling fail-file count drifted (the broken_sibling \
