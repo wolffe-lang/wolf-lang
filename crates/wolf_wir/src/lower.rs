@@ -8544,112 +8544,96 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let (Some(src), Some(dst)) = (src, dst) else {
                     return Err(refuse("cast on unit types", e.span));
                 };
-                if src == dst {
-                    // D56 (#135): `wrapping[T] as int` is a
-                    // value-preserving conversion, NOT the silent
-                    // bit-cast that used to lie here. A same-width
-                    // unsigned wrapping value whose top bit is set does
-                    // not fit the signed target, so it TRAPS
-                    // (overflow) — joining the D54.4 float→int trap
-                    // family (`as int` never lies). In-range values
-                    // convert unchanged; the widening unsigned→int case
-                    // already zero-extends value-preservingly below.
-                    // lupin already traps; this brings wolfc to
-                    // agreement.
-                    if matches!(self.table.kind(from), TyKind::Wrapping(_))
-                        && sema_unsigned(self.table, from)
-                        && !sema_unsigned(self.table, to)
+                // `[type.numlit.cast.narrow]` (K12, wolf-lang#533): an
+                // integer-to-integer `as` keeps the VALUE. Where the
+                // target cannot hold every value of the source (a
+                // narrower width, or a change of sign) the cast checks
+                // the value against the target's range and TRAPS
+                // (`overflow`) outside it, joining the float row's and
+                // D56's family; inside it the bits are the value's own
+                // (truncate, extend by the source's signedness, or
+                // keep). A WRAPPING target never traps: mask-to-width is
+                // that family's whole meaning (#131), so `v as
+                // wrapping[T] as T` is the spelling of truncation. Until
+                // kw03 the width-narrowing pairs were refused here
+                // ("range-check semantics") and the sign-changing pairs
+                // reinterpreted the bits silently (`-1 as u64` printed
+                // -1, `128 as u8 as i8` printed -128) where the checked
+                // machine and lupin trap. D56's `wrapping[u64] as int`
+                // rail is this rule's unsigned-to-signed case.
+                if let (Some(fb), Some(tb)) = (int_bits(src), int_bits(dst)) {
+                    let src_unsigned = sema_unsigned(self.table, from);
+                    let dst_unsigned = sema_unsigned(self.table, to);
+                    if !matches!(self.table.kind(to), TyKind::Wrapping(_))
+                        && let Some(fits) =
+                            self.narrow_fits(v, src, fb, src_unsigned, tb, dst_unsigned)
+                        && self.trap_unless(fits, TrapKind::Overflow)
                     {
-                        let z = self.b.iconst(dst, 0);
-                        let fits = self
-                            .b
-                            .ins(
-                                Opcode::Icmp,
-                                &[v, z],
-                                &[types::BOOL],
-                                Aux::IntCc(IntCc::Sge),
-                            )
-                            .one();
-                        if self.trap_unless(fits, TrapKind::Overflow) {
-                            // The value is a proven out-of-range
-                            // constant: the trap is unconditional and
-                            // this path diverges.
-                            return Ok(Flow::Diverged);
-                        }
+                        // A proven out-of-range constant: the trap is
+                        // unconditional and this path diverges.
+                        return Ok(Flow::Diverged);
                     }
+                    let out = match tb.cmp(&fb) {
+                        std::cmp::Ordering::Greater => {
+                            // Widening extends by the SOURCE's signedness
+                            // (unsigned zero-extends, the s26 decision); a
+                            // signed value reaching an unsigned target has
+                            // passed the `>= 0` rail, so either extension
+                            // is its value.
+                            let op = if src_unsigned {
+                                Opcode::Zext
+                            } else {
+                                Opcode::Sext
+                            };
+                            self.b.ins(op, &[v], &[dst], Aux::None).one()
+                        }
+                        std::cmp::Ordering::Less => {
+                            self.b.ins(Opcode::Itrunc, &[v], &[dst], Aux::None).one()
+                        }
+                        std::cmp::Ordering::Equal => v,
+                    };
+                    return Ok(Flow::Val(Some(out)));
+                }
+                if src == dst {
                     return Ok(Flow::Val(Some(v)));
                 }
-                match (int_bits(src), int_bits(dst)) {
-                    (Some(fb), Some(tb)) if tb > fb => {
-                        // Widening extends by the SOURCE's signedness
-                        // (unsigned zero-extends — the s26 decision).
-                        let op = if sema_unsigned(self.table, from) {
-                            Opcode::Zext
-                        } else {
-                            Opcode::Sext
-                        };
-                        Ok(Flow::Val(Some(
-                            self.b.ins(op, &[v], &[dst], Aux::None).one(),
-                        )))
-                    }
-                    (Some(_), Some(_)) => {
-                        // Narrowing to a WRAPPING target is defined
-                        // (#131): mask-to-width is the family's whole
-                        // point — bit truncation, the committed dual
-                        // of the widening direction's extension, and
-                        // what lupin implements. The general
-                        // narrowing cast keeps its s27 range-check
-                        // question open.
-                        if matches!(self.table.kind(to), TyKind::Wrapping(_)) {
-                            return Ok(Flow::Val(Some(
-                                self.b.ins(Opcode::Itrunc, &[v], &[dst], Aux::None).one(),
-                            )));
-                        }
-                        Err(refuse(
-                            "narrowing numeric casts (range-check semantics)",
-                            e.span,
-                        ))
-                    }
-                    _ => {
-                        // One side is a float (#138, D54.4). `int_bits`
-                        // is `Some` only for integers, so the arms:
-                        let src_int = int_bits(src).is_some();
-                        let dst_float = self.b.module.types.is_float(dst);
-                        let src_float = self.b.module.types.is_float(src);
-                        let dst_int = int_bits(dst).is_some();
-                        if src_int && dst_float {
-                            // int → float `[type.numlit.cast.widen]`: the
-                            // free widening direction, no trap. Source
-                            // signedness picks the conversion.
-                            let op = if sema_unsigned(self.table, from) {
-                                Opcode::Uitofp
-                            } else {
-                                Opcode::Sitofp
-                            };
-                            return Ok(Flow::Val(Some(
-                                self.b.ins(op, &[v], &[dst], Aux::None).one(),
-                            )));
-                        }
-                        if src_float && dst_int {
-                            // float → int `[type.numlit.cast.trunc]`:
-                            // truncate toward zero, TRAP (overflow) on
-                            // out-of-range or NaN. Target signedness
-                            // picks fptosi vs fptoui.
-                            let op = if sema_unsigned(self.table, to) {
-                                Opcode::FtouiChk
-                            } else {
-                                Opcode::FtosiChk
-                            };
-                            return Ok(Flow::Val(Some(
-                                self.b.ins(op, &[v], &[dst], Aux::None).one(),
-                            )));
-                        }
-                        // f32↔f64 width casts are a numeric-cast gap of
-                        // their own (not D54's int/float story); still
-                        // refused by name, unchanged.
-                        Err(refuse("float-width casts (`f32`↔`f64`)", e.span))
-                    }
+                // One side is a float (#138, D54.4). `int_bits`
+                // is `Some` only for integers, so the arms:
+                let src_int = int_bits(src).is_some();
+                let dst_float = self.b.module.types.is_float(dst);
+                let src_float = self.b.module.types.is_float(src);
+                let dst_int = int_bits(dst).is_some();
+                if src_int && dst_float {
+                    // int → float `[type.numlit.cast.widen]`: the
+                    // free widening direction, no trap. Source
+                    // signedness picks the conversion.
+                    let op = if sema_unsigned(self.table, from) {
+                        Opcode::Uitofp
+                    } else {
+                        Opcode::Sitofp
+                    };
+                    return Ok(Flow::Val(Some(
+                        self.b.ins(op, &[v], &[dst], Aux::None).one(),
+                    )));
                 }
+                if src_float && dst_int {
+                    // float → int `[type.numlit.cast.trunc]`:
+                    // truncate toward zero, TRAP (overflow) on
+                    // out-of-range or NaN. Target signedness
+                    // picks fptosi vs fptoui.
+                    let op = if sema_unsigned(self.table, to) {
+                        Opcode::FtouiChk
+                    } else {
+                        Opcode::FtosiChk
+                    };
+                    return Ok(Flow::Val(Some(
+                        self.b.ins(op, &[v], &[dst], Aux::None).one(),
+                    )));
+                }
+                // f32↔f64 width casts are a numeric-cast gap of
+                // their own (not D54's int/float story); still
+                // refused by name, unchanged.
+                Err(refuse("float-width casts (`f32`↔`f64`)", e.span))
             }
             // s173 (`[mem.unsafe.raw.1]`): a raw cast between two
             // pointer types is the IDENTITY at WIR — provenance is the
@@ -11060,6 +11044,68 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b
             .ins(Opcode::Icmp, &[v, z], &[types::BOOL], Aux::IntCc(IntCc::Ne))
             .one()
+    }
+    /// `[type.numlit.cast.narrow]`'s rail: the `bool` that says the
+    /// integer `v` (WIR type `src`, `fb` bits, signedness by
+    /// `src_unsigned`) fits a `tb`-bit target of `dst_unsigned`'s
+    /// signedness — or `None` when every source value fits and the cast
+    /// needs no check (same-signedness widening, unsigned into a wider
+    /// signed type, the identity). One compare per pair:
+    /// - an unsigned source, or a signed one going to an unsigned
+    ///   target no wider than it: `v <=u max(T)` (a negative signed
+    ///   value is a huge unsigned one, so the sign rail rides along);
+    /// - a signed source going to an unsigned target at least as wide:
+    ///   `v >= 0`;
+    /// - signed to a narrower signed target: the value survives the
+    ///   round trip, `sext(trunc(v)) == v`.
+    fn narrow_fits(
+        &mut self,
+        v: Value,
+        src: TypeId,
+        fb: u32,
+        src_unsigned: bool,
+        tb: u32,
+        dst_unsigned: bool,
+    ) -> Option<Value> {
+        let max = |bits: u32, unsigned: bool| -> u128 {
+            if unsigned {
+                (1u128 << bits) - 1
+            } else {
+                (1u128 << (bits - 1)) - 1
+            }
+        };
+        let (src_max, dst_max) = (max(fb, src_unsigned), max(tb, dst_unsigned));
+        let cmp = |b: &mut Self, l: Value, r: Value, cc: IntCc| {
+            b.b.ins(Opcode::Icmp, &[l, r], &[types::BOOL], Aux::IntCc(cc))
+                .one()
+        };
+        match (src_unsigned, dst_unsigned) {
+            // Unsigned source: only the upper rail can miss.
+            (true, _) => (dst_max < src_max).then(|| {
+                // `dst_max < src_max <= u64::MAX`, so it is at most
+                // `i64::MAX` and the constant is exact in `src`.
+                let c = self
+                    .b
+                    .iconst(src, i64::try_from(dst_max).expect("below the source max"));
+                cmp(self, v, c, IntCc::Ule)
+            }),
+            (false, true) if tb >= fb => {
+                let z = self.b.iconst(src, 0);
+                Some(cmp(self, v, z, IntCc::Sge))
+            }
+            (false, true) => {
+                let c = self
+                    .b
+                    .iconst(src, i64::try_from(dst_max).expect("a narrower target"));
+                Some(cmp(self, v, c, IntCc::Ule))
+            }
+            (false, false) => (tb < fb).then(|| {
+                let dst = int_ty(tb);
+                let t = self.b.ins(Opcode::Itrunc, &[v], &[dst], Aux::None).one();
+                let back = self.b.ins(Opcode::Sext, &[t], &[src], Aux::None).one();
+                cmp(self, back, v, IntCc::Eq)
+            }),
+        }
     }
 
     /// Branch to a `kind` trap unless `hit` holds; continue otherwise.
@@ -21764,6 +21810,16 @@ fn int_bits(t: TypeId) -> Option<u32> {
         types::I32 => Some(32),
         types::I64 => Some(64),
         _ => None,
+    }
+}
+
+/// `int_bits`' inverse over the four integer widths.
+fn int_ty(bits: u32) -> TypeId {
+    match bits {
+        8 => types::I8,
+        16 => types::I16,
+        32 => types::I32,
+        _ => types::I64,
     }
 }
 
