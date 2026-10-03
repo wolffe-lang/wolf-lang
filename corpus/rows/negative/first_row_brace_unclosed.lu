@@ -1,0 +1,19 @@
+//! check: fail(E0202)
+//! phase: lex
+//! conforms: proto.record.first, gram.type.row
+//!
+//! s203 (wolf-lang#377 class 4, ruling #28) — `-> int ! {` meant as
+//! "fallible, then the body", read as an error row: the row's `{` meets
+//! `var` on the next line and is never closed. E0202 at that `{` starts
+//! before lupin's E0008 at `var` (`var` cannot name a tag), so the
+//! earliest offset decides it for the compiler's report; lupin 0.1.43
+//! and 0.1.44 stop at the keyword, pinned pre-mirror by version.
+
+fn evaluate(n: int) -> int ! {
+    var stack = n
+    stack
+}
+
+fn main() -> !int {
+    0
+}

@@ -1,0 +1,16 @@
+//! check: fail(E0202)
+//! phase: lex
+//! conforms: proto.record.first, gram.lex.str
+//!
+//! s203 (ruling #28, the consequence `[proto.record.first]` names) —
+//! an unterminated string inside a call's `(`. The `(` is never closed,
+//! and E0202 sits at the `(`, one byte before the string's E0102: the
+//! earliest offset is the boundary's. `wolf run` always answered E0202
+//! here; `conform-run` answered E0102 until s203. lupin 0.1.43 and
+//! 0.1.44 answer E0102 (lex first), pinned pre-mirror by version.
+
+fn main() -> !int {
+    let x = 1 +
+    print("abc)
+    0
+}

@@ -1,0 +1,17 @@
+//! check: fail(E0207)
+//! phase: lex
+//! conforms: proto.record.first, gram.pat
+//!
+//! s203 (ruling #28) — a name that does not resolve on line 1 of the
+//! body, a parse error on line 2. A program that does not parse is not
+//! resolved: the parse rung fails and its E0207 is the refusal on every
+//! lane. Through s202 `conform-run` said E0207 and `wolf run` said
+//! E0301 — its report merged the resolve rung in and sorted the earlier
+//! name error to the top. lupin 0.1.43 and 0.1.44 answer E0201 for
+//! E0207's fact (`first_keyword_pattern.lu`), pinned pre-mirror.
+
+fn main() -> !int {
+    print("{nope}")
+    let = 1
+    0
+}

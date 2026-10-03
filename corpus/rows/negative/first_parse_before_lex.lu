@@ -1,0 +1,16 @@
+//! check: fail(E0207)
+//! phase: lex
+//! conforms: proto.record.first, gram.pat
+//!
+//! s203 (ruling #28) — a parse error on line 1 of the body, an
+//! unterminated string on line 2. The earliest offset is the parser's,
+//! so the refusal is E0207 on every lane. Through s202 `conform-run`
+//! answered E0102: a lex error stopped its ladder before the parser
+//! ran, wherever in the file it sat. lupin 0.1.43 and 0.1.44 still stop
+//! at lex (E0102), pinned pre-mirror by version.
+
+fn main() -> !int {
+    let = 1
+    print("abc)
+    0
+}

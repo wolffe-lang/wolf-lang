@@ -1,0 +1,15 @@
+//! check: fail(E0203)
+//! phase: lex
+//! conforms: proto.record.first, gram.item
+//!
+//! s203 (kw00's sixth pair on wolf-lang#377) — `union` is no
+//! declaration keyword: E0203, "expected a declaration here", at the
+//! `union`. lupin 0.1.43 and 0.1.44 answer E0201 at the same span in
+//! the same phase, so ruling #28 does not order the two; the registry
+//! names the fact (E0203, a declaration expected at the top level), and
+//! lupin's E0201 is pinned pre-mirror by version.
+union Word { w: u64, b: u8 }
+
+fn main() -> !int {
+    0
+}

@@ -1,0 +1,17 @@
+//! check: fail(E0102)
+//! phase: none
+//! conforms: proto.record.first, gram.lex.str
+//!
+//! s203 (wolf-lang#377 class 1, ruling #28) — the stray `")` a code
+//! fence leaves behind (38 of wl21's 99 three-way rejections). Two
+//! reports start at the same byte: the lexer's E0102 (the string never
+//! closes) and the parser's E0203 (a string is not a declaration). At
+//! one offset the earlier phase is first, so the refusal is E0102 on
+//! every lane. Through s202 `conform-run` said E0102 (its ladder
+//! stopped at lex) and `wolf run` said E0203 (its report sorted the
+//! shorter span first).
+")
+
+fn main() -> !int {
+    0
+}

@@ -1,0 +1,15 @@
+//! check: fail(E0207)
+//! phase: lex
+//! conforms: proto.record.first, gram.pat
+//!
+//! s203 (wolf-lang#377 class 3, ruling #28) — `let mut f = 0`, Rust's
+//! spelling. `mut` cannot start a pattern: E0207, "expected a pattern",
+//! on every wolfgang lane. lupin 0.1.43 and 0.1.44 say the same words
+//! at the same span under E0201; one offset and one phase, so the
+//! ruling does not order them — the registry names the fact (E0207),
+//! and lupin's E0201 is pinned pre-mirror by version.
+
+fn main() -> !int {
+    let mut f = 0
+    f
+}

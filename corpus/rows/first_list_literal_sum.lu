@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="285\n")
+//! phase: run
+//! conforms: proto.record.first, gram.expr.list
+//!
+//! s203 (wolf-lang#377 class 5) — the two programs the compiler ran and
+//! lupin refused at parse (`exit(0)` against `fail(E0201)`, wl21's
+//! book-ex13-2 s3 and s4), reconstructed: a list literal, squared and
+//! summed. wolf 0.2.13 was the first release with list literals
+//! (`[gram.expr.list]`); lupin 0.1.36 refused them by E0201 at the `[`
+//! until is49 (0.1.37). Not a refusal-code question and not unsound: a
+//! grammar addition one release behind. Every lane runs it now.
+
+fn main() -> !int {
+    let numbers = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+    var squares = List[int]()
+    for n in numbers {
+        (mut squares).push(n * n)
+    }
+    var total = 0
+    for s in squares {
+        total += s
+    }
+    print("{total}")
+    0
+}
