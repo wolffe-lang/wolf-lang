@@ -3188,6 +3188,25 @@ impl<'t> Machine<'t> {
             let ty_span = d.value().map(|x| x.span).unwrap_or(place_expr.span);
             return self.raw_index_write(place_expr, (p, idx), v, op, ty_span, stmt.span);
         }
+        // kw06: `*p = v` / `*p op= v` — the raw tier's write at offset
+        // zero. The pointer runs before the right-hand side, as the
+        // index form's operands do (`[mem.model.place.rhs]`).
+        if place_expr.kind == SyntaxKind::PrefixExpr
+            && let Some(pre) = PrefixExpr::cast(place_expr)
+            && pre.op().is_some_and(|t| t.kind == SyntaxKind::Star)
+            && let Some(operand) = pre.operand()
+        {
+            let p = self.raw_deref_ptr(place_expr)?;
+            let v = match d.value() {
+                Some(e) => val!(self.eval(e)),
+                None => Value::Unit,
+            };
+            let op = d.op().map(|t| t.kind).filter(|_| compound);
+            let ty_span = d.value().map(|x| x.span).unwrap_or(place_expr.span);
+            let size = self.raw_ptr_size(operand, place_expr.span);
+            let signed = self.raw_ptr_signed(operand);
+            return self.raw_write_at(p, size, signed, v, op, ty_span, stmt.span);
+        }
         // wolf-lang#438 (`[mem.region.edge.elem]`): a plain `=` through
         // a container index COPIES a place's value in, as a plain
         // `push` does (the static tier treats it as `xs[i] = copy v`);
@@ -4334,6 +4353,8 @@ impl<'t> Machine<'t> {
             return Ok(Flow::Val(Value::Unit));
         };
         match d.op().map(|t| t.kind) {
+            // kw06: `*p` reads through a raw pointer.
+            Some(SyntaxKind::Star) => self.raw_deref_read(e),
             Some(SyntaxKind::CopyKw) => {
                 // `copy x`: an independent deep duplicate.
                 let v = if let Some(place) = found!(self.place_of(operand)) {
@@ -7174,16 +7195,54 @@ impl<'t> Machine<'t> {
     /// printed `0` for `w[1] = 9; w[1]`). Falls back to the element
     /// expression's type where the receiver records none.
     fn raw_elem_size(&self, e: &'t GreenNode) -> u64 {
-        let pointee = BracketApply::cast(e)
-            .and_then(|b| b.callee())
-            .and_then(|r| match self.expr_ty(r.span) {
-                Some(TyKind::Ptr(t)) => Some(self.ctx().tb.table.kind(*t)),
-                _ => None,
-            });
-        match pointee {
-            Some(TyKind::Prim(p)) => prim_size(*p),
-            _ => self.pointee_size(e.span),
+        match BracketApply::cast(e).and_then(|b| b.callee()) {
+            Some(r) => self.raw_ptr_size(r, e.span),
+            None => self.pointee_size(e.span),
         }
+    }
+
+    /// The pointee width through the pointer EXPRESSION `ptr` (`*T` →
+    /// `T`), falling back to the access's own type at `access`.
+    fn raw_ptr_size(&self, ptr: &GreenNode, access: Span) -> u64 {
+        match self.raw_ptr_prim(ptr) {
+            Some(p) => prim_size(p),
+            None => self.pointee_size(access),
+        }
+    }
+
+    fn raw_ptr_prim(&self, ptr: &GreenNode) -> Option<Prim> {
+        match self.expr_ty(ptr.span) {
+            Some(TyKind::Ptr(t)) => match self.ctx().tb.table.kind(*t) {
+                TyKind::Prim(p) => Some(*p),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// Does a read through `ptr` sign-extend? A signed integer pointee
+    /// narrower than the word does (wolf-lang#561: before kw06
+    /// every raw read zero-extended, so `*i32` holding -6 read back
+    /// 4294967290 here while native, release and lupin read -6).
+    fn raw_ptr_signed(&self, ptr: &GreenNode) -> bool {
+        matches!(
+            self.raw_ptr_prim(ptr),
+            Some(Prim::I8 | Prim::I16 | Prim::I32 | Prim::I64 | Prim::Int)
+        )
+    }
+
+    /// Little-endian bytes as the pointee's value.
+    fn raw_decode(bytes: &[u8], signed: bool) -> i64 {
+        let mut n: i64 = 0;
+        for (i, b) in bytes.iter().enumerate() {
+            n |= (*b as i64) << (8 * i);
+        }
+        let bits = 8 * bytes.len() as u32;
+        if signed && bits < 64 {
+            let shift = 64 - bits;
+            n = (n << shift) >> shift;
+        }
+        n
     }
 
     fn raw_index_parts(&mut self, e: &'t GreenNode) -> E<(PtrVal, i64)> {
@@ -7218,31 +7277,68 @@ impl<'t> Machine<'t> {
     fn raw_index_read(&mut self, e: &'t GreenNode) -> E<Flow> {
         let (p, idx) = self.raw_index_parts(e)?;
         let size = self.raw_elem_size(e);
+        let signed = BracketApply::cast(e)
+            .and_then(|b| b.callee())
+            .is_some_and(|r| self.raw_ptr_signed(r));
         let at = PtrVal {
             offset: p.offset + idx * size as i64,
             addr: p.addr.wrapping_add((idx * size as i64) as u64),
             ..p
         };
-        let bytes = self.raw_read_bytes(at, size, e.span, "a raw pointer read")?;
-        let mut n: i64 = 0;
-        for (i, b) in bytes.iter().enumerate() {
-            n |= (*b as i64) << (8 * i);
-        }
+        self.raw_read_at(at, size, signed, e.span)
+    }
+
+    /// One raw read of `size` bytes at `at`, as the value the access
+    /// at `span` is typed.
+    fn raw_read_at(&mut self, at: PtrVal, size: u64, signed: bool, span: Span) -> E<Flow> {
+        let bytes = self.raw_read_bytes(at, size, span, "a raw pointer read")?;
+        let n = Self::raw_decode(&bytes, signed);
         // T1 — a restricted type produced from raw bytes must be a
         // valid value of that type.
-        if matches!(self.expr_ty(e.span), Some(TyKind::Prim(Prim::Bool))) {
+        if matches!(self.expr_ty(span), Some(TyKind::Prim(Prim::Bool))) {
             if n > 1 {
-                let tag_span = p.alloc.map(|a| self.allocs[a].span).unwrap_or(e.span);
+                let tag_span = at.alloc.map(|a| self.allocs[a].span).unwrap_or(span);
                 return self.ub(
                     UbRow::T1,
                     format!("this read produces `{n}` as a `bool` — not a valid value of the type"),
-                    e.span,
+                    span,
                     tag_span,
                 );
             }
             return Ok(Flow::Val(Value::Bool(n == 1)));
         }
         Ok(Flow::Val(Value::Int(n)))
+    }
+
+    /// kw06: the pointer a prefix `*p` reads or writes through — `p`
+    /// evaluated as a read, never a move (a pointer is a copy).
+    fn raw_deref_ptr(&mut self, e: &'t GreenNode) -> E<PtrVal> {
+        let Some(operand) = PrefixExpr::cast(e).and_then(|d| d.operand()) else {
+            return self.refuse("a dereference without an operand", e.span);
+        };
+        let pv = match self.place_of(operand)? {
+            Found::At(place) => self.read_place(&place, operand.span)?,
+            Found::Not => match self.eval(operand)? {
+                Flow::Val(v) => v,
+                _ => return self.refuse("control flow in a dereference", e.span),
+            },
+            Found::Flow(_) => return self.refuse("control flow in a dereference", e.span),
+        };
+        let Value::Ptr(p) = pv else {
+            return self.refuse("a dereference of a non-pointer", e.span);
+        };
+        Ok(p)
+    }
+
+    /// kw06: `*p` — `p[0]` spelled as a dereference.
+    fn raw_deref_read(&mut self, e: &'t GreenNode) -> E<Flow> {
+        let p = self.raw_deref_ptr(e)?;
+        let operand = PrefixExpr::cast(e)
+            .and_then(|d| d.operand())
+            .expect("checked");
+        let size = self.raw_ptr_size(operand, e.span);
+        let signed = self.raw_ptr_signed(operand);
+        self.raw_read_at(p, size, signed, e.span)
     }
 
     /// `parts` is the place's pointer and index, evaluated by the
@@ -7262,11 +7358,30 @@ impl<'t> Machine<'t> {
     ) -> E<Flow> {
         let (p, idx) = parts;
         let size = self.raw_elem_size(place_expr);
+        let signed = BracketApply::cast(place_expr)
+            .and_then(|b| b.callee())
+            .is_some_and(|r| self.raw_ptr_signed(r));
         let at = PtrVal {
             offset: p.offset + idx * size as i64,
             addr: p.addr.wrapping_add((idx * size as i64) as u64),
             ..p
         };
+        self.raw_write_at(at, size, signed, v, op, ty_span, span)
+    }
+
+    /// One raw write of `size` bytes at `at`; `op` is a compound
+    /// operator, which reads the pointee first (as the pointee's type).
+    #[allow(clippy::too_many_arguments)]
+    fn raw_write_at(
+        &mut self,
+        at: PtrVal,
+        size: u64,
+        signed: bool,
+        v: Value,
+        op: Option<SyntaxKind>,
+        ty_span: Span,
+        span: Span,
+    ) -> E<Flow> {
         let mut n = match v {
             Value::Int(n) => n,
             Value::Bool(b) => i64::from(b),
@@ -7277,10 +7392,7 @@ impl<'t> Machine<'t> {
         // checked arithmetic as every other compound assignment.
         if let Some(op) = op {
             let bytes = self.raw_read_bytes(at, size, span, "a raw pointer read")?;
-            let mut cur: i64 = 0;
-            for (i, b) in bytes.iter().enumerate() {
-                cur |= (*b as i64) << (8 * i);
-            }
+            let cur = Self::raw_decode(&bytes, signed);
             n = match self.arith_binop(op, Value::Int(cur), Value::Int(n), span, ty_span)? {
                 Value::Int(r) => r,
                 _ => return self.refuse("raw write of a non-scalar", span),
