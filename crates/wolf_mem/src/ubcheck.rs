@@ -1886,6 +1886,27 @@ impl<'t> Machine<'t> {
 
 // ------------------------------------------------------- entry points --
 
+/// The assembly roster (kw05, `[abi.asm.machines]`): the routines the
+/// program's `wolf.pkg` lists under `asm`, so a call into one is refused
+/// naming assembly rather than C. Process-wide, set once by the driver
+/// before a run; the refusal is the same verdict either way — only the
+/// construct's name differs.
+static ASM_ROSTER: std::sync::RwLock<Vec<String>> = std::sync::RwLock::new(Vec::new());
+
+/// Name the assembly routines for later runs ([`ASM_ROSTER`]).
+pub fn set_asm_roster(names: Vec<String>) {
+    if let Ok(mut r) = ASM_ROSTER.write() {
+        *r = names;
+    }
+}
+
+fn on_asm_roster(name: &str) -> bool {
+    ASM_ROSTER
+        .read()
+        .map(|r| r.iter().any(|n| n == name))
+        .unwrap_or(false)
+}
+
 /// Execute the package's `main` under the UB machine. `Err(NotYet)` is
 /// the honest refusal (construct outside the executable surface, or
 /// budget exhaustion); the driver reports `unsupported`.
@@ -8970,6 +8991,19 @@ impl<'t> Machine<'t> {
         // program links; this machine has no C membrane, so the call is
         // refused by name — never modelled from its declared signature.
         if !name.starts_with("c.") {
+            // kw05 (`[abi.asm.machines]`): a routine the manifest's
+            // `asm` sources define is assembly, named as such.
+            let routine = name.rsplit('.').next().unwrap_or(name);
+            if on_asm_roster(routine) {
+                let construct: &'static str = Box::leak(
+                    format!(
+                        "a call into assembly `{routine}` (a routine wolf.pkg's `asm` sources \
+                         define; the checked machine has no assembly membrane)"
+                    )
+                    .into_boxed_str(),
+                );
+                return self.refuse(construct, e.span);
+            }
             return self.refuse(
                 "a call into C through a hand-declared `extern \"c\" fn` (the checked \
                  machine has no C membrane)",
