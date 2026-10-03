@@ -52,7 +52,7 @@ use wolf_ast::{
 };
 use wolf_mem::byteview::{Lend, Lender};
 use wolf_sema::check::{CallSig, CastKind, Dispatch};
-use wolf_sema::sig::{FnSig, ItemSig, SigTables};
+use wolf_sema::sig::{FnSig, ItemSig, Membrane, SigTables};
 use wolf_sema::types::{Prim, TyId, TyKind, TypeTable};
 use wolf_sema::{BodyResult, Fold, NotYet, Package, Typecheck, TypedBody};
 use wolf_span::Span;
@@ -141,6 +141,37 @@ fn lower_package_impl(
             if let ItemSig::Fn(f) = sig {
                 fns.entry(name.as_str()).or_default().push((m, f));
             }
+        }
+    }
+    // kw02 (`[abi.c.export]`): an export's WIR name is its bare C
+    // symbol, so it must not meet another export of the same name in
+    // another module, nor a root-module function (whose WIR name is
+    // bare too), nor `main` (the entry shim's symbol). Refused by name
+    // — two bodies under one symbol is worse than a refusal.
+    let mut export_names: Vec<(&str, Span)> = fns
+        .iter()
+        .flat_map(|(name, cands)| {
+            cands
+                .iter()
+                .filter(|(_, f)| f.membrane == Some(Membrane::Export))
+                .map(move |(_, f)| (*name, f.name_span))
+        })
+        .collect();
+    export_names.sort_by_key(|(n, sp)| (*n, sp.lo));
+    for (name, span) in &export_names {
+        let cands = &fns[name];
+        let clash = cands.len() > 1
+            && cands.iter().any(|(m, f)| {
+                f.name_span != *span
+                    && (f.membrane.is_some()
+                        || tc.sigs.module_names.get(*m).is_some_and(String::is_empty))
+            });
+        if clash || *name == "main" {
+            not_yet.push(refuse(
+                "two functions under one C symbol (an `export fn` shares its name with \
+                 another export, a root-module function or `main`)",
+                *span,
+            ));
         }
     }
     // s89: the byte-view lend verdicts, computed once for the package.
@@ -835,6 +866,22 @@ fn lower_body(
     // What CAN still refuse by name is a call site that cannot bind a
     // parameter, and an instance whose body reaches a type the
     // substitution did not close — both below, both named.
+    // kw02: an `export fn` is one C symbol, so it has one body — a
+    // generic or comptime one would silently export nothing.
+    if body.member.is_none() && fsig.membrane == Some(Membrane::Export) {
+        if !fsig.generics.is_empty() {
+            return Err(refuse(
+                "a generic `export fn` (a C symbol names one function, not a family)",
+                fsig.name_span,
+            ));
+        }
+        if fsig.comptime {
+            return Err(refuse(
+                "a `comptime` `export fn` (C calls it at run time)",
+                fsig.name_span,
+            ));
+        }
+    }
     if !fsig.generics.is_empty() && bindings.is_empty() {
         return Ok(None);
     }
@@ -878,7 +925,21 @@ fn lower_body(
     // s73: task bodies queued by spawn sites, synthesized post-pass.
     let mut pending: Vec<PendingTask<'_>> = Vec::new();
     let mut dyn_shims: Vec<DynShim> = Vec::new();
+    // kw02 (`[abi.c.export]`, wolf-lang#513): the plain body of an
+    // `export fn` (or an `extern "c" fn` with a body) is the C
+    // membrane — defined under its own name with the platform C
+    // convention and kept whether or not wolf code calls it (the
+    // backends and the mid-end's roots already honour the flag; until
+    // kw02 nothing above WIR set it). A specialized clone is internal.
+    let export = body.member.is_none()
+        && fsig.membrane == Some(Membrane::Export)
+        && key.is_plain()
+        && bindings.is_empty();
+    if export {
+        membrane_sig_check(sig_tbl, sigs, fsig)?;
+    }
     let mut b = FuncBuilder::new(module, wir_name, sig);
+    b.func.export = export;
     // s30: spans thread from the typed HIR into WIR (the lossless s07
     // chain) — the file once per function, then a per-statement span
     // cursor the builder stamps on every appended instruction.
@@ -1565,6 +1626,69 @@ fn refuse_named(text: String, span: Span) -> NotYet {
     refuse(leaked, span)
 }
 
+/// kw02: a function at the C membrane read as a value. A fn value is
+/// called by the wolf convention (`call.ind`); a C function pointer is
+/// wolf-lang#520's, not this lane's.
+const MEMBRANE_FN_VALUE: &str = "an `export`/`extern \"c\"` function as a value (fn values are wolf-convention; \
+     C function pointers are wolf-lang#520)";
+
+/// kw02 (`[abi.c.types]`): what crosses the C membrane by value —
+/// scalars (the sized integers, `int`/`uint` as 64-bit, `byte`,
+/// `bool`, `f32`, `f64`), raw pointers, and non-generic `#[repr(c)]`
+/// structs whose fields cross. Anything else is refused by name at the
+/// parameter or result that carries it (E1201, the error the clause
+/// names, is not built; a refusal is the honest stand-in, never a
+/// guessed layout).
+fn c_crossing(table: &TypeTable, sigs: &SigTables, ty: TyId, depth: u32) -> bool {
+    if depth > 16 {
+        return false;
+    }
+    match table.kind(ty) {
+        TyKind::Prim(p) => !matches!(p, Prim::Str | Prim::Char),
+        TyKind::Ptr(_) => true,
+        TyKind::Nominal { module, name, args } if args.is_empty() => {
+            match sigs.get(*module as usize, name) {
+                Some(ItemSig::Struct(ss)) if ss.repr_c && !ss.generic => ss
+                    .fields
+                    .iter()
+                    .all(|f| c_crossing(&sigs.table, sigs, f.ty, depth + 1)),
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
+/// kw02: the membrane check over one export or import signature —
+/// every parameter plain (no `mut`/`take`: C has no modes) and of a
+/// crossing type, the result a crossing type or unit.
+fn membrane_sig_check(table: &TypeTable, sigs: &SigTables, fsig: &FnSig) -> R<()> {
+    for p in &fsig.params {
+        if p.mode.is_some() {
+            return Err(refuse(
+                "a `mut`/`take` parameter at the C membrane (C passes values and pointers)",
+                p.span,
+            ));
+        }
+        if !c_crossing(table, sigs, p.ty, 0) {
+            return Err(refuse(
+                "a parameter type that does not cross the C membrane ([abi.c.types]: \
+                 scalars, raw pointers, #[repr(c)] structs)",
+                p.span,
+            ));
+        }
+    }
+    let unit = matches!(table.kind(fsig.ret), TyKind::Unit);
+    if !unit && !c_crossing(table, sigs, fsig.ret, 0) {
+        return Err(refuse(
+            "a result type that does not cross the C membrane ([abi.c.types]: scalars, \
+             raw pointers, #[repr(c)] structs; an error union never crosses)",
+            fsig.ret_span.unwrap_or(fsig.name_span),
+        ));
+    }
+    Ok(())
+}
+
 /// The two `wolf_rt::list::ListHdr` field offsets compiled code
 /// addresses directly (s75). The header is `#[repr(C)] { data: *mut
 /// u8, len: i64, cap: i64, elem: i64 }`, and these offsets are part
@@ -1797,6 +1921,13 @@ fn self_ty_key(table: &TypeTable, ty: TyId) -> Option<String> {
 }
 
 fn qualify(sigs: &SigTables, module: usize, name: &str) -> String {
+    // kw02 (`[abi.c.export]`): an `export fn` is one C symbol under its
+    // own name in every module — C has no module path to fold in.
+    if let Some(ItemSig::Fn(f)) = sigs.get(module, name)
+        && f.membrane == Some(Membrane::Export)
+    {
+        return name.to_string();
+    }
     match sigs.module_names.get(module).map(String::as_str) {
         Some("") | None => name.to_string(),
         Some(path) => format!("{path}.{name}"),
@@ -4795,6 +4926,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                                     e.span,
                                 ));
                             }
+                            if fsig.membrane.is_some() {
+                                return Err(refuse(MEMBRANE_FN_VALUE, e.span));
+                            }
                             if fsig.comptime {
                                 return Err(refuse_named(
                                     format!("a comptime fn as a runtime value (`{name}`)"),
@@ -5268,6 +5402,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         ),
                         e.span,
                     ));
+                }
+                if fsig.membrane.is_some() {
+                    return Err(refuse(MEMBRANE_FN_VALUE, e.span));
                 }
                 if fsig.comptime {
                     return Err(refuse_named(
@@ -10543,6 +10680,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// header/buffer disjointness — is D46's and predates this.
     fn lower_c_call(&mut self, d: CallExpr<'t>, cs: &CallSig, e: &'t GreenNode) -> R<Flow> {
         use crate::ir::Param;
+        if !cs.callee.starts_with("c.") {
+            return self.lower_extern_call(d, cs, e);
+        }
         let (param_tys, ret): (Vec<TypeId>, Option<TypeId>) = match cs.callee.as_str() {
             "c.malloc" => (vec![types::I64], Some(types::PTR)),
             "c.calloc" => (vec![types::I64, types::I64], Some(types::PTR)),
@@ -10590,6 +10730,110 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 ext
             }
         };
+        let (hdrs, bufs) = self.foreign_regions();
+        let mut formal_regions = HashMap::new();
+        formal_regions.insert(0u32, hdrs);
+        formal_regions.insert(1u32, bufs);
+        let results = self.b.ins_call_regions(ext, &args, &formal_regions);
+        Ok(Flow::Val(results.first().copied()))
+    }
+
+    /// kw02 (`[abi.c.import]`, wolf-lang#521): a call into a bodyless
+    /// `extern "c" fn`. The WIR callee is `c.<name>` — the `c.`
+    /// namespace is the membrane, so the backends declare the plain C
+    /// symbol under the platform C plan exactly as for the modelled
+    /// five — with the declared signature (checked by
+    /// [`membrane_sig_check`]) and the same two trailing FOREIGN region
+    /// tokens, so a load through a pointer the callee wrote cannot
+    /// float across the call.
+    fn lower_extern_call(&mut self, d: CallExpr<'t>, cs: &CallSig, e: &'t GreenNode) -> R<Flow> {
+        use crate::ir::Param;
+        let Some(cands) = self.fns.get(cs.callee.as_str()) else {
+            return Err(refuse("calls into unresolvable bodies", e.span));
+        };
+        let hits: Vec<&(usize, &FnSig)> = if cands.len() == 1 {
+            cands.iter().collect()
+        } else {
+            cands
+                .iter()
+                .filter(|(_, f)| Some(f.name_span) == cs.decl_span)
+                .collect()
+        };
+        let &[&(_, fsig)] = hits.as_slice() else {
+            return Err(refuse(
+                "a same-named callee without a unique declaration locus",
+                e.span,
+            ));
+        };
+        membrane_sig_check(&self.sigs.table, self.sigs, fsig)?;
+        let symbol = format!("c.{}", cs.callee.rsplit('.').next().unwrap_or(&cs.callee));
+        let mut params = Vec::with_capacity(fsig.params.len() + 2);
+        for p in &fsig.params {
+            let Some(ty) = wir_ty(
+                &mut self.b.module.types,
+                &self.sigs.table,
+                self.sigs,
+                p.ty,
+                p.span,
+            )?
+            else {
+                return Err(refuse("unit-typed parameters", p.span));
+            };
+            // C widens a narrow argument to 32 bits at the call, by the
+            // argument's signedness — which only the sema type knows
+            // (WIR's `i8` is both `i8` and `u8`).
+            let mode = match self.sigs.table.kind(p.ty) {
+                TyKind::Prim(Prim::I8 | Prim::I16) => Mode::Sext,
+                TyKind::Prim(Prim::U8 | Prim::U16 | Prim::Bool | Prim::Byte) => Mode::Zext,
+                _ => Mode::Val,
+            };
+            params.push(Param { ty, mode });
+        }
+        for formal in 0..2u32 {
+            let tok = self.b.module.types.mem(RegionId::new(formal));
+            params.push(Param {
+                ty: tok,
+                mode: Mode::Val,
+            });
+        }
+        let results: Vec<TypeId> = wir_ty(
+            &mut self.b.module.types,
+            &self.sigs.table,
+            self.sigs,
+            fsig.ret,
+            e.span,
+        )?
+        .into_iter()
+        .collect();
+        let ext = match self.callees.get(&symbol) {
+            Some(&ext) => {
+                let have = &self.b.module.sigs[self.b.func.ext_funcs[ext].sig];
+                if have.params != params || have.results != results {
+                    return Err(refuse(
+                        "two declarations of one C symbol with different signatures",
+                        e.span,
+                    ));
+                }
+                ext
+            }
+            None => {
+                let sig = self.b.module.make_sig(params, results);
+                let ext = self.b.func.import_func(symbol.clone(), sig);
+                self.callees.insert(symbol, ext);
+                ext
+            }
+        };
+        let mut args = Vec::new();
+        for a in d.args().into_iter().flat_map(|l| l.args()) {
+            let Some(vexpr) = Arg::value(a) else { continue };
+            let Some(v) = flow_val!(self.lower_expr(vexpr)) else {
+                return Err(refuse("unit-typed arguments", vexpr.span));
+            };
+            args.push(v);
+        }
+        if args.len() != fsig.params.len() {
+            return Err(refuse("a C call with the wrong arity", e.span));
+        }
         let (hdrs, bufs) = self.foreign_regions();
         let mut formal_regions = HashMap::new();
         formal_regions.insert(0u32, hdrs);
