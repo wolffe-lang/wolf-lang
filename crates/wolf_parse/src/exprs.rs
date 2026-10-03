@@ -1727,8 +1727,15 @@ fn match_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
         }
         let before = p.pos();
         let diags_before = p.diags.len();
+        let damage_before = p.damage;
         match_arm(p, ctx);
-        if p.diags.len() == diags_before {
+        // Only a CLEAN arm ends the fold: no report and no damage. An arm
+        // that is wreckage reports nothing while the fold is on — the
+        // stray `)` a broken `s.spawn(…)` arm leaves behind is an error
+        // node with its report folded away — and counting its silence as
+        // health un-folded the run on the very next broken arm (s203:
+        // `grammar/match_arm_at_binding.lu`'s budget-1000 case).
+        if p.diags.len() == diags_before && p.damage == damage_before {
             p.arm_error_reported = false;
         }
         if p.pos() == before {
@@ -1861,7 +1868,8 @@ fn closure(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
     // on the `->`: a description of where the parse stopped, not of
     // the mistake (wolf-lang#157, ch04's row). Say the rule, consume
     // the stray annotation so the body still parses, and report once.
-    if params_ok && p.at_punct(Punct::Arrow) {
+    let typed = params_ok && p.at_punct(Punct::Arrow);
+    if typed {
         let arrow = p.current_span();
         let e = p.start();
         p.bump(); // `->`
@@ -1888,7 +1896,11 @@ fn closure(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
         // One report per truncated closure: a missing parameter list
         // was already diagnosed above, and a body starting with an
         // assignment operator is better described by E0208's site.
-        if params_ok && !is_assign_op(p.current()) {
+        // And a return type with no body after it is a function TYPE
+        // written where a value goes (`f(g: fn() -> int)` read as a call
+        // — s203's budget-1000 `recv_claim_arg_closure.lu` case): the
+        // report above already said what a function value is.
+        if params_ok && !typed && !is_assign_op(p.current()) {
             p.error(codes::EXPECTED_TOKEN, p.here(), "expected the closure body");
         }
         p.missing();
@@ -2116,8 +2128,10 @@ fn select_expr(p: &mut Parser<'_>, ctx: Ctx) -> CompletedMarker {
         }
         let before = p.pos();
         let diags_before = p.diags.len();
+        let damage_before = p.damage;
         select_arm(p, ctx);
-        if p.diags.len() == diags_before {
+        // Only a clean arm ends the fold (see `match_expr`).
+        if p.diags.len() == diags_before && p.damage == damage_before {
             p.arm_error_reported = false;
         }
         if p.pos() == before {
