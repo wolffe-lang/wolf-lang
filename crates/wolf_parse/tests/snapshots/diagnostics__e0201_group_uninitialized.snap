@@ -16,7 +16,18 @@ Diagnostic {
         },
         label: "",
     },
-    secondary: [],
+    secondary: [
+        LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 8,
+                hi: 9,
+            },
+            label: "nor has this one",
+        },
+    ],
     notes: [],
     suggestions: [],
 }

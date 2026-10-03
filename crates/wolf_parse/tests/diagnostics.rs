@@ -208,7 +208,8 @@ fn e0201_binding_group_teach_notes() {
         codes::EXPECTED_TOKEN,
     );
     // A group with no initializer anywhere keeps the production's
-    // plain letter — no teach-note.
+    // plain letter — no teach-note — said once for the group, with
+    // every other valueless binder a secondary label (s203).
     snap(
         "e0201_group_uninitialized",
         "var i, c\n",
