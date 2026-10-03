@@ -3510,6 +3510,34 @@ impl<'t> Lowerer<'t> {
                         let site = self.alloc_site(rendered, SiteKind::Lit, e.span);
                         return Ok(Val::site(site, e.span));
                     }
+                    // s207 (wolf-lang#540): "a `str`'s bytes are
+                    // immutable and the copy shares them"
+                    // (`[mem.tier0.move.3]`) — native and release lower
+                    // `copy s` as `s`, and lupin answers the same — so
+                    // the copy names the bytes `s` names and carries
+                    // the sites a plain read of `s` carries, except a
+                    // parameter's pseudo-site: a parameter's bytes
+                    // outlive this frame, so they can never escape a
+                    // region in it, and E1004's fix-it ("`copy` the
+                    // value into its container's region") keeps the
+                    // meaning it had. Until s207 the copy carried no
+                    // site at all, so `region scratch { let s = "re" +
+                    // "gions"; let t = copy s; t }` printed from freed
+                    // bytes on all three tiers while lupin traps
+                    // `region-fault`.
+                    if self.is_str_expr(operand.span) {
+                        let mut v = Val::none();
+                        v.sites = self
+                            .val_of_place(place, operand.span)
+                            .sites
+                            .into_iter()
+                            .filter(|s| self.sites[s.0 as usize].kind != SiteKind::Param)
+                            .collect();
+                        if !v.sites.is_empty() {
+                            v.origin = Some(e.span);
+                        }
+                        return Ok(v);
+                    }
                     Ok(Val::none())
                 } else {
                     self.eval_value(operand)
