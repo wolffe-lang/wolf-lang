@@ -9,14 +9,17 @@ pattern handles the value half, and the match must cover both. A `?`
 inside a `defer` or `errdefer` is refused (ruling #19,
 `[type.row.defer]`, new E0611) where native and release overflowed the
 compiler's stack, and a block's `errdefer` runs when the block's value
-is an error (ruling #20). Release builds are reproducible again. The
-pairing moves to lupin 0.1.44, whose spec pin moves to v0.2.20 and
-which carries every mirror this release's gates pinned lupin 0.1.43's
-answers on by version. Three lanes and 49 commits: s195, s196, s197.
+is an error (ruling #20). An unannotated binding's literal takes
+`i32` at the binding, as lupin always answered, and three native and
+release compiler crashes are fixed. Release builds are reproducible
+again. The pairing moves to lupin 0.1.44, whose spec pin moves to
+v0.2.20 and which carries every mirror this release's gates pinned
+lupin 0.1.43's answers on by version. Four lanes and 80 commits: s195, s196, s197,
+s202.
 
 ### Read this before you bump the pin
 
-**Two programs gave a wrong answer with no diagnostic on 0.2.20.**
+**Three programs gave a wrong answer with no diagnostic on 0.2.20.**
 Each is now refused or answers the ruled bytes on every lane:
 
 - `let b = { errdefer print("errdefer blk"); defer print("defer blk");
@@ -28,15 +31,25 @@ Each is now refused or answers the ruled bytes on every lane:
   dropped the `?`'s error, so the function answered `1` (#498); native
   and release overflowed the compiler's stack on the same program.
   E0611 on every lane now.
+- `let big = 5000000000` then `take_int(big)` printed `5000000001` on
+  checked, native and release: a later `int` use typed the literal
+  (#458). The literal takes `i32` at the binding now, so it is E0415,
+  which is lupin's answer.
 
 **Programs that compiled are now refused.** A `?` anywhere inside a
 deferred expression (E0611). s196 found no `?` under a defer in any
-downstream.
+downstream. An unannotated binding whose literal (or term of
+literals) does not fit `i32` (E0415); s202 found no boreutils or lobo
+build that moved, and one corpus row now spells `let i: int`.
 
-**Programs that were refused now compile.** A `match` whose scrutinee
-has type `T ! {row}`: `match look(m, k) { none => -1, v => v }`
-(`unsupported` on every wolfgang lane through 0.2.20); a tag that is
-also a variant of the value type is E0816, never guessed.
+**Programs that were refused now compile.** A `!T` bound without `?`
+whose row is empty, read in a hole or a `match` (a compiler panic on
+native and release since 0.2.14, #393); any `str` as an assert
+message (#398); a loop holding an inlined region root on release
+(#425). A `match` whose scrutinee has type `T ! {row}`: `match
+look(m, k) { none => -1, v => v }` (`unsupported` on every wolfgang
+lane through 0.2.20); a tag that is also a variant of the value type
+is E0816, never guessed.
 
 **Release builds are reproducible.** With the mid-end on, three
 release builds of one program by one compiler gave three different
@@ -120,6 +133,8 @@ and none stays pinned.
   Such a loop keeps its checks; it did not compile before. Witnesses
   `corpus/memory/versioned_loop_inlined_root.lu` and
   `versioned_loop_cross_module/`, gate `versioned_loop_root_lanes.rs`.
+
+### Release IR is reproducible across builds (s195, #503)
 
 - **Release IR is reproducible across builds (s195, #503).** The mid-end walked a natural loop's block set in `HashSet` order, so the versioner's guard chain came out in a per-process order and three release builds of lobo were three binaries; the set is ordered now, `release_determinism.rs` builds a fixed corpus set three times and asserts byte identity (IR and binary), and the macOS native gauntlet runs as three shards (`cargo xtask ci --shard`).
 
