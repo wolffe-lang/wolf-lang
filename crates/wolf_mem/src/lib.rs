@@ -510,7 +510,7 @@ fn unsafe_sig_check(pkg: &Package, sigs: &SigTables, diags: &mut Vec<Diagnostic>
                 .is_some_and(|i| i.vis != wolf_sema::Vis::Private);
             match sig {
                 // `[mem.unsafe.sig]`: the two places a `*T` may stand.
-                // PLANT (kw02): E1302 back on every signature — the gates must go red
+                ItemSig::Fn(f) if f.membrane.is_some() || !exported => {}
                 ItemSig::Fn(f) => check_fn(name, f, diags),
                 ItemSig::Struct(ss) if exported => {
                     for f in &ss.fields {
