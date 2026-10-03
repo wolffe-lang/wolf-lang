@@ -526,6 +526,7 @@
     "type.numlit.adopt": "10-types.md",
     "type.numlit.ambig": "10-types.md",
     "type.numlit.cast": "10-types.md",
+    "type.numlit.cast.narrow": "10-types.md",
     "type.numlit.cast.trunc": "10-types.md",
     "type.numlit.cast.widen": "10-types.md",
     "type.numlit.cast.wrap": "10-types.md",
