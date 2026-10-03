@@ -441,7 +441,7 @@ impl<'a> Parser<'a> {
 
     /// Is terminator insertion suppressed at the current position (the
     /// innermost consumed delimiter is `(` or `[`)?
-    fn term_suppressed(&self) -> bool {
+    pub(crate) fn term_suppressed(&self) -> bool {
         matches!(self.frames.last(), Some(Punct::LParen | Punct::LBracket))
     }
 

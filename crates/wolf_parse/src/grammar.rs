@@ -328,6 +328,17 @@ pub(crate) fn fn_item(p: &mut Parser<'_>, m: Marker) {
         } else if p.at(TokenKind::Term) {
             p.bump();
         }
+    } else if p.at_decl_start() && p.term_suppressed() {
+        // The bodyless form whose line end an EARLIER unclosed `(`/`[`
+        // withheld (`[gram.lex.newline]`): `extern "c" fn a(x: i8,`
+        // leaves every following line in a paren frame, so a run of
+        // bodyless `extern "c" fn` declarations after it loses its
+        // terminators. The header is whole and the next declaration
+        // starts here; the miss is the earlier wreck's, reported once
+        // (folded) — never a Missing body in a declaration the wreck
+        // did not touch (kw02; the blast-radius property found it on
+        // `corpus/membrane/extern_libc.lu`).
+        p.expected_line_end("function header");
     } else if params_ok && !p.at_eof() {
         // Header was fine but the body is missing before the next
         // declaration (same line, no TERM). Folded when an unclosed
