@@ -120,6 +120,34 @@ pub struct FnSig {
     /// verifier enforces it (`[ct.taint]`). `None` = ordinary
     /// function, and the tier costs nothing.
     pub consttime: Option<CtSig>,
+    /// kw02 — which side of the C membrane this function stands on
+    /// (`[abi.c.export]`, `[abi.c.import]`): `None` for an ordinary
+    /// wolf function.
+    pub membrane: Option<Membrane>,
+}
+
+/// The two sides of the C membrane a function item can stand on
+/// (`[abi.c.seams]`; kw02, wolf-lang#513 and #521).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Membrane {
+    /// `export fn f(…) { … }`, or `extern "c" fn f(…) { … }` with a
+    /// body: a wolf function C calls — one global symbol under its own
+    /// name, the C convention.
+    Export,
+    /// `extern "c" fn f(…)` with no body: a C function wolf calls.
+    /// A call is a raw-tier operation (E1301), like `c.malloc`.
+    Import,
+}
+
+impl Membrane {
+    /// The side a fn declaration stands on, from its spelling.
+    pub fn of(d: FnDecl<'_>) -> Option<Membrane> {
+        match (d.extern_abi().is_some(), d.is_export(), d.body().is_some()) {
+            (true, _, false) => Some(Membrane::Import),
+            (true, _, true) | (false, true, _) => Some(Membrane::Export),
+            (false, false, _) => None,
+        }
+    }
 }
 
 /// The parsed `#[consttime]` contract on one function ([ct.attr]):
@@ -164,6 +192,10 @@ pub struct StructSig {
     pub generics: Vec<String>,
     pub fields: Vec<FieldSig>,
     pub name_span: Span,
+    /// `#[repr(c)]` is written on the item (`[abi.layout.c]`): the one
+    /// struct shape that crosses the C membrane by value
+    /// (`[abi.c.types]`; read by lowering, kw02).
+    pub repr_c: bool,
 }
 
 /// A `const`/module-level `let`/`var` item's elaborated signature.
@@ -492,6 +524,7 @@ impl<'a> Lower<'a> {
                     generics,
                     fields,
                     name_span: item.name_span,
+                    repr_c: repr_c_attr(node, |sp| self.text(file, sp)),
                 })
             }
             SyntaxKind::EnumDecl => {
@@ -546,6 +579,7 @@ impl<'a> Lower<'a> {
                             generics,
                             fields,
                             name_span: item.name_span,
+                            repr_c: repr_c_attr(node, |sp| self.text(file, sp)),
                         })
                     }
                     Some(SyntaxKind::EnumDef) => {
@@ -791,6 +825,7 @@ impl<'a> Lower<'a> {
             comptime: d.is_comptime(),
             trusted: trusted_attr(node, |sp| self.text(file, sp)),
             consttime,
+            membrane: Membrane::of(d),
         }
     }
 
@@ -2114,6 +2149,28 @@ fn generic_names(lower: &Lower<'_>, file: usize, node: &GreenNode) -> Vec<String
 /// empty for the bare form — or `None` when the item is not trusted.
 /// Shared by signature elaboration, the `wolfi` roster, and the audit
 /// surface, so the three never disagree.
+/// Is `#[repr(c)]` written on this item? (kw02: the membrane reads
+/// it; attrs.rs has already refused every other representation.)
+pub(crate) fn repr_c_attr(node: &GreenNode, text: impl Fn(Span) -> String) -> bool {
+    node.nodes()
+        .filter_map(wolf_ast::Attribute::cast)
+        .flat_map(|attr| attr.items())
+        .filter(|item| {
+            item.path()
+                .is_some_and(|p| text(p.syntax().span).trim() == "repr")
+        })
+        .any(|item| {
+            item.input()
+                .filter(|inp| inp.child_token(SyntaxKind::LParen).is_some())
+                .is_some_and(|inp| {
+                    inp.nodes().filter_map(wolf_ast::AttrItem::cast).any(|a| {
+                        a.path()
+                            .is_some_and(|p| text(p.syntax().span).trim() == "c")
+                    })
+                })
+        })
+}
+
 pub(crate) fn trusted_attr(node: &GreenNode, text: impl Fn(Span) -> String) -> Option<String> {
     for attr in node.nodes().filter_map(wolf_ast::Attribute::cast) {
         for item in attr.items() {

@@ -111,6 +111,7 @@ pub fn derive_eq(
         comptime: false,
         trusted: None,
         consttime: None,
+        membrane: None,
     };
     let impl_def = ImplDef {
         module,

@@ -6944,6 +6944,7 @@ impl<'a> Checker<'a> {
             comptime: false,
             trusted: None,
             consttime: None,
+            membrane: None,
         };
         self.dispatch_method(
             mname,
@@ -6999,6 +7000,7 @@ impl<'a> Checker<'a> {
             comptime: false,
             trusted: None,
             consttime: None,
+            membrane: None,
         };
         self.dispatch.push((
             e.span,
@@ -7219,6 +7221,7 @@ impl<'a> Checker<'a> {
             comptime: false,
             trusted: None,
             consttime: None,
+            membrane: None,
         };
         // E1101 rides on `spawn`'s argument: while the task closure
         // checks, assignments to bindings below this depth are
@@ -7440,6 +7443,7 @@ impl<'a> Checker<'a> {
             comptime: false,
             trusted: None,
             consttime: None,
+            membrane: None,
         };
         self.dispatch_method(
             mname,
@@ -7517,6 +7521,7 @@ impl<'a> Checker<'a> {
             comptime: false,
             trusted: None,
             consttime: None,
+            membrane: None,
         };
         self.dispatch_method(
             mname,
@@ -8434,7 +8439,10 @@ impl<'a> Checker<'a> {
                 has_self: false,
                 ctor: false,
                 params: sig.params.clone(),
-                c_call: false,
+                // kw02 (`[abi.c.import]`): a call into a bodyless
+                // `extern "c" fn` is a call into imported C — the same
+                // raw-tier operation as `c.malloc` (E1301).
+                c_call: sig.membrane == Some(crate::sig::Membrane::Import),
             },
         ));
         // s14 instantiation: each generic parameter becomes a fresh
