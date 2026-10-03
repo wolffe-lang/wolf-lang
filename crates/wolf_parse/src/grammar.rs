@@ -851,14 +851,10 @@ fn group_report(p: &mut Parser<'_>, kw: Keyword, shapes: &[BinderShape]) {
             shapes[deferred[0]].eq_site,
             "this binding has no value — expected `=` and an initializer",
         );
-        p.push_diag(d);
         for &i in &deferred[1..] {
-            p.error(
-                codes::EXPECTED_TOKEN,
-                shapes[i].eq_site,
-                "this binding has no value — expected `=` and an initializer",
-            );
+            d = d.with_secondary(shapes[i].eq_site, "nor has this one");
         }
+        p.push_diag(d);
         return;
     };
     if deferred.iter().any(|&i| i > first_init) {
