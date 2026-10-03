@@ -11,8 +11,10 @@
   already honoured. Now `export fn f` (and `extern "c" fn f` with a
   body) is the global symbol `f` under the target's C plan on both
   tiers, kept whether or not wolf calls it, also from a child module
-  (`[abi.c.export]`). A wolf call into an export crosses under the same
-  plan, in or out of its object.
+  (`[abi.c.export]`); a narrow or `bool` result is widened by its
+  signedness for the C caller (WIR `export sext fn` / `export zext fn`).
+  A wolf call into an export crosses under the same plan, in or out of
+  its object.
 - **A hand-declared `extern "c" fn` is callable.** A call was refused
   at codegen ("hand-declared externs beyond the modelled c.* set").
   It now lowers to the plain symbol with the declared prototype, inside
