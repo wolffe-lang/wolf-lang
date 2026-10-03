@@ -1,0 +1,25 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.tier0.move.3
+//!
+//! s207 (wolf-lang#540) — `copy` of a `str` shares its bytes: "a
+//! `str`'s bytes are immutable and the copy shares them"
+//! (`[mem.tier0.move.3]`), and native and release lower `copy s` as
+//! `s`. So `t` names the bytes `s` built in `scratch`, and returning it
+//! is the same E1010 as returning `s` (`region_str_concat_return.lu`).
+//! Before s207 the mem tier gave `copy s` no site, and this program
+//! printed `[regions]` from freed bytes on all three tiers; lupin traps
+//! it `region-fault` (0.1.44 and later).
+
+fn build() -> str {
+    region scratch {
+        let s = "re" + "gions"
+        let t = copy s
+        t
+    }
+}
+
+fn main() -> !int {
+    print("[{build()}]")
+    0
+}

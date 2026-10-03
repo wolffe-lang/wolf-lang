@@ -1,0 +1,24 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.str.view, mem.tier0.move.3
+//!
+//! s207 (wolf-lang#540) — a `for` piece copied inside its region is
+//! still the receiver's bytes (`copy` of a `str` shares them), so
+//! returning the copy is E1010. Ran to `[here]` before s207; is68's
+//! lupin traps it.
+
+fn build() -> str {
+    region scratch {
+        let s = "re" + "gions here"
+        var last = ""
+        for w in s.words() {
+            last = copy w
+        }
+        last
+    }
+}
+
+fn main() -> !int {
+    print("[{build()}]")
+    0
+}
