@@ -8,7 +8,7 @@
 //! refused later, at `mem`, for the module `var`), the two arch-gated
 //! definitions of `cfg_target_arch` collided (E0302), and the
 //! freestanding-gated code of `cfg_target_freestanding` was resolved
-//! (E0301). lupin 0.1.43 reads no attribute either: it runs every
+//! (E0301). lupin 0.1.43 and 0.1.44 read no attribute either: they run every
 //! refused row, and each parting is pinned below by version as
 //! pre-mirror (the lupin half is wolf-interp#174); a newer lupin
 //! must answer what the compiler answers.
@@ -208,12 +208,20 @@ fn every_lane(row: &str, want: Want<'_>, lupin_pre_mirror: &[Pin<'_>]) {
     }
 }
 
-/// lupin 0.1.43 runs a refused row to `exit(0)` with no output.
-const RUNS: &[Pin<'static>] = &[Pin {
-    version: "0.1.43",
-    verdict: "exit(0)",
-    stdout: "",
-}];
+/// lupin 0.1.43 and 0.1.44 (the pairing since 0.2.21) run a refused
+/// row to `exit(0)` with no output; measured, `head-4859ec3a-rows-lupin044.log`.
+const RUNS: &[Pin<'static>] = &[
+    Pin {
+        version: "0.1.43",
+        verdict: "exit(0)",
+        stdout: "",
+    },
+    Pin {
+        version: "0.1.44",
+        verdict: "exit(0)",
+        stdout: "",
+    },
+];
 
 fn refused(row: &str, codes: &[&str]) {
     let verdict = format!("fail({})", codes[0]);
@@ -290,11 +298,18 @@ fn cfg_keeps_the_definition_for_this_target_only() {
             codes: &[],
             stdout: "64\n",
         },
-        &[Pin {
-            version: "0.1.43",
-            verdict: "fail(E0302)",
-            stdout: "",
-        }],
+        &[
+            Pin {
+                version: "0.1.43",
+                verdict: "fail(E0302)",
+                stdout: "",
+            },
+            Pin {
+                version: "0.1.44",
+                verdict: "fail(E0302)",
+                stdout: "",
+            },
+        ],
     );
 }
 
@@ -308,11 +323,18 @@ fn cfg_drops_what_another_target_gates_before_resolution() {
             codes: &[],
             stdout: "hosted\n1\n",
         },
-        &[Pin {
-            version: "0.1.43",
-            verdict: "unsupported",
-            stdout: "",
-        }],
+        &[
+            Pin {
+                version: "0.1.43",
+                verdict: "unsupported",
+                stdout: "",
+            },
+            Pin {
+                version: "0.1.44",
+                verdict: "unsupported",
+                stdout: "",
+            },
+        ],
     );
 }
 
@@ -326,10 +348,17 @@ fn the_implemented_attributes_still_compile() {
             codes: &[],
             stdout: "3\n7\n",
         },
-        &[Pin {
-            version: "0.1.43",
-            verdict: "unsupported",
-            stdout: "",
-        }],
+        &[
+            Pin {
+                version: "0.1.43",
+                verdict: "unsupported",
+                stdout: "",
+            },
+            Pin {
+                version: "0.1.44",
+                verdict: "unsupported",
+                stdout: "",
+            },
+        ],
     );
 }
