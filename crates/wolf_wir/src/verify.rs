@@ -610,6 +610,28 @@ impl<'a> Verifier<'a> {
                     return Err(self.type_err(inst, "float→int conversion produces an integer"));
                 }
             }
+            Opcode::PtrToInt => {
+                // kw06: `*T as int`, `addr`, `expose` — a pointer in, its
+                // address out as one machine word.
+                self.expect_counts(inst, 1, 1)?;
+                if self.f.value_ty(args[0]) != crate::types::PTR {
+                    return Err(self.type_err(inst, "ptr.to_int needs a ptr operand"));
+                }
+                if self.f.value_ty(results[0]) != crate::types::I64 {
+                    return Err(self.type_err(inst, "ptr.to_int produces an i64"));
+                }
+            }
+            Opcode::PtrFromInt => {
+                // kw06: `int as *T`, `with_exposed` — an address in, a
+                // pointer with exposed provenance out.
+                self.expect_counts(inst, 1, 1)?;
+                if self.f.value_ty(args[0]) != crate::types::I64 {
+                    return Err(self.type_err(inst, "ptr.from_int needs an i64 operand"));
+                }
+                if self.f.value_ty(results[0]) != crate::types::PTR {
+                    return Err(self.type_err(inst, "ptr.from_int produces a ptr"));
+                }
+            }
             Opcode::PtrOff => {
                 self.expect_counts(inst, 2, 1)?;
                 if self.f.value_ty(args[0]) != crate::types::PTR {

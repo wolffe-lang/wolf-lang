@@ -1081,6 +1081,8 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
         ("fneg", Opcode::Fneg),
         ("fma", Opcode::Fma),
         ("ptr.off", Opcode::PtrOff),
+        ("ptr.to_int", Opcode::PtrToInt),
+        ("ptr.from_int", Opcode::PtrFromInt),
         ("agg.make", Opcode::AggMake),
         ("agg.get", Opcode::AggGet),
         ("data.addr", Opcode::DataAddr),
@@ -1400,6 +1402,17 @@ fn parse_inst(
                 return line.fail(format!("`{mname}` takes exactly 1 operand"));
             }
             vec![mn.ty.expect("typed mnemonic")]
+        }
+        Opcode::PtrToInt | Opcode::PtrFromInt => {
+            args = parse_val_list(line, values, func)?;
+            if args.len() != 1 {
+                return line.fail(format!("`{mname}` takes exactly 1 operand"));
+            }
+            if mn.op == Opcode::PtrToInt {
+                vec![types::I64]
+            } else {
+                vec![types::PTR]
+            }
         }
         Opcode::PtrOff => {
             // ptr.off %p, %i, SCALE

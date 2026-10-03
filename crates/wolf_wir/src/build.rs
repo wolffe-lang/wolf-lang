@@ -1761,6 +1761,8 @@ impl<'m> FuncBuilder<'m> {
                 | Opcode::FtosiChk
                 | Opcode::FtouiChk
                 | Opcode::PtrOff
+                | Opcode::PtrToInt
+                | Opcode::PtrFromInt
                 | Opcode::Load
                 | Opcode::AggMake
                 | Opcode::AggGet

@@ -320,6 +320,8 @@ pub(crate) fn is_gvn_pure(op: Opcode) -> bool {
             | Opcode::Zext
             | Opcode::Itrunc
             | Opcode::PtrOff
+            | Opcode::PtrToInt
+            | Opcode::PtrFromInt
             | Opcode::AggMake
             | Opcode::AggGet
             | Opcode::DataAddr
@@ -369,6 +371,8 @@ pub(crate) fn is_removable(op: Opcode) -> bool {
             | Opcode::Zext
             | Opcode::Itrunc
             | Opcode::PtrOff
+            | Opcode::PtrToInt
+            | Opcode::PtrFromInt
             | Opcode::AggMake
             | Opcode::AggGet
             | Opcode::DataAddr

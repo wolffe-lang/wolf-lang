@@ -699,3 +699,30 @@ fn zext_from_bool_is_the_bridge_and_sext_from_bool_is_not() {
         ErrClass::Type,
     );
 }
+
+/// kw06 (`[mem.prov.expose]`'s lowering sentence): the two bridges
+/// between a pointer and its address. `ptr.to_int` takes a `ptr` and
+/// yields an `i64`; `ptr.from_int` the reverse. Both verify, print back
+/// byte-identically, and refuse the other's operand type.
+#[test]
+fn ptr_int_bridges_verify_and_round_trip() {
+    let src = "fn @f(ptr) -> ptr {\nb0(%p: ptr):\n  %a = ptr.to_int %p\n  %k = iconst.i64 8\n  \
+               %b = iadd.wrap %a, %k\n  %q = ptr.from_int %b\n  ret %q\n}\n";
+    let m = wolf_wir::parse_module(src).expect("green input must parse");
+    verify_module(&m).expect("ptr.to_int and ptr.from_int verify");
+    let once = wolf_wir::print_module(&m);
+    assert!(
+        once.contains("ptr.to_int %") && once.contains("ptr.from_int %"),
+        "both mnemonics print: {once}"
+    );
+    let m2 = wolf_wir::parse_module(&once).expect("the print parses");
+    assert_eq!(once, wolf_wir::print_module(&m2), "print is a fixed point");
+    expect_reject(
+        "fn @f(i64) -> i64 {\nb0(%a: i64):\n  %b = ptr.to_int %a\n  ret %b\n}\n",
+        ErrClass::Type,
+    );
+    expect_reject(
+        "fn @f(ptr) -> ptr {\nb0(%p: ptr):\n  %q = ptr.from_int %p\n  ret %q\n}\n",
+        ErrClass::Type,
+    );
+}

@@ -354,6 +354,16 @@ pub enum Opcode {
     // ---- memory --------------------------------------------------------
     /// `%r = ptr.off %p, %i, S` — pointer p + i*S bytes (S a positive imm).
     PtrOff,
+    /// `%r = ptr.to_int %p` — the pointer's address as an `i64` (kw06,
+    /// `[mem.prov.expose]`'s lowering sentence): `*T as int`, `p.addr()`
+    /// and `p.expose()`. Pure. A pointer read here has escaped as far as
+    /// the mid-end's region analysis is concerned — its address is data.
+    PtrToInt,
+    /// `%r = ptr.from_int %a` — the pointer at the `i64` address `a`, with
+    /// exposed (wildcard) provenance (kw06): `int as *T` and
+    /// `p.with_exposed(a)`. Pure. On the freestanding target this is how
+    /// a kernel names a device register (`[mem.prov.device]`).
+    PtrFromInt,
     /// `%r = load.T %p, %m` — load T from p; READS mem token m (not consumed).
     Load,
     /// `%m2 = store.T %v, %p, %m` — store v to p; CONSUMES m, produces m2.
@@ -609,6 +619,8 @@ impl Opcode {
             Opcode::FtosiChk => "ftosi.chk",
             Opcode::FtouiChk => "ftoui.chk",
             Opcode::PtrOff => "ptr.off",
+            Opcode::PtrToInt => "ptr.to_int",
+            Opcode::PtrFromInt => "ptr.from_int",
             Opcode::Load => "load",
             Opcode::Store => "store",
             Opcode::AggMake => "agg.make",
