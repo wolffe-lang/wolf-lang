@@ -1,0 +1,9 @@
+/// The area of a `w` by `h` rectangle, exported to C as `kx_area`.
+pub export fn kx_area(w: i64, h: i64) -> i64 {
+    w * h
+}
+
+/// The perimeter of a `w` by `h` rectangle (wolf callers only).
+pub fn perimeter(w: i64, h: i64) -> i64 {
+    2 * (w + h)
+}

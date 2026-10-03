@@ -1,0 +1,13 @@
+//! check: fail(E1301)
+//! phase: typecheck
+//! conforms: abi.c.import, mem.unsafe.scope
+//! A call into C through a hand-declared `extern "c" fn` is a raw-tier
+//! operation, as `c.malloc` is: it needs an `unsafe` block (E1301).
+//! Before kw02 the call type-checked as an ordinary one and the
+//! compiled tiers refused it at codegen.
+extern "c" fn llabs(n: i64) -> i64
+
+fn main() -> int {
+    let v = llabs(-42)
+    if v == 42 { 0 } else { 1 }
+}

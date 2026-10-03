@@ -1,0 +1,29 @@
+//! check: run(exit=0, stdout="8 34\n")
+//! phase: run
+//! conforms: abi.c.import, mem.unsafe.sig, abi.c.types
+//! wolf calls C by the C ABI through hand-declared externs (wolf-lang#521):
+//! the platform C library's own `strlen` and `llabs`, a raw pointer
+//! crossing the membrane (wolf-lang#514). The checked machine and lupin
+//! have no C membrane and refuse the calls by name.
+import c "stdlib.h"
+
+extern "c" fn strlen(s: *u8) -> u64
+extern "c" fn llabs(n: i64) -> i64
+
+fn main() -> int {
+    // # Safety: a zeroed 16-byte buffer with 8 non-NUL bytes, freed
+    // once; llabs has no preconditions.
+    unsafe {
+        let z = c.calloc(1, 16) as *u8
+        var j = 0
+        while j < 8 {
+            z[j] = 109
+            j += 1
+        }
+        let n = strlen(z) as int
+        let a = llabs(-34) as int
+        c.free(z)
+        print("{n} {a}")
+        n + a - 42
+    }
+}

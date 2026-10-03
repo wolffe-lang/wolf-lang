@@ -1,0 +1,37 @@
+//! check: run(exit=0, stdout="42\n")
+//! phase: run
+//! conforms: mem.unsafe.sig
+//! K9(b) = B (STATUS #31; wolf-lang#514): a raw pointer may stand in
+//! the signature of a module-private function — every caller is in the
+//! same module, the audit granule. Passed by value it is a copy of the
+//! pointer and says nothing about the pointee (`[mem.unsafe.raw.1]`):
+//! `poke` writes through it. Before kw02 this was E1302 on every
+//! machine; the checked machine also froze the pointee at the call, so
+//! the write was UB row P2 there while the compiled tiers ran it.
+import c "stdlib.h"
+
+fn poke(p: *u8, i: int, v: u8) {
+    // # Safety: the caller passes a live buffer of at least i + 1 bytes.
+    unsafe {
+        p[i] = v
+    }
+}
+
+fn peek(p: *u8, i: int) -> int {
+    // # Safety: as for poke.
+    unsafe {
+        p[i] as int
+    }
+}
+
+fn main() -> int {
+    // # Safety: 8 zeroed bytes, index 2 stays inside; freed once.
+    unsafe {
+        let p = c.calloc(1, 8) as *u8
+        poke(p, 2, 40)
+        let v = peek(p, 2) + 2
+        c.free(p)
+        print("{v}")
+        v - 42
+    }
+}

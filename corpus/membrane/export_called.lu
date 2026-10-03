@@ -1,0 +1,18 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: abi.c.export, abi.c.seams
+//! kw00's probe (`f1_export.lu`): both spellings of a C-callable wolf
+//! function, called from wolf too. Each is one global symbol under its
+//! own name with the C convention, on both compiling tiers (wolf-lang#513:
+//! before kw02 native mangled both and release dropped both).
+export fn kw_x() -> i64 {
+    41
+}
+
+extern "c" fn kw_e() -> i32 {
+    42
+}
+
+fn main() -> int {
+    kw_x() as int + kw_e() as int - 83
+}

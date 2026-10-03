@@ -1,0 +1,11 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: abi.c.export
+//! An `export fn` in a child module is one C symbol under its own name
+//! (`kx_area`, no module path), and wolf code calls it like any `pub`
+//! function.
+use geo
+
+fn main() -> int {
+    geo.kx_area(6, 7) as int - 42 + geo.perimeter(1, 2) as int - 6
+}

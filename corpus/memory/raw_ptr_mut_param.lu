@@ -1,0 +1,31 @@
+//! check: run(exit=0, stdout="42\n")
+//! phase: run
+//! conforms: mem.unsafe.sig, mem.unsafe.raw.1
+//! A module-private function takes a raw pointer by `mut`: the caller's
+//! pointer VARIABLE is lent (call-by-reference-result), and the mode
+//! says nothing about the pointee. `retarget` points `p` at `b`, so the
+//! caller reads 41 through it. Before kw02 the checked machine passed a
+//! retagged copy, never wrote it back, and printed 2.
+import c "stdlib.h"
+
+fn retarget(mut p: *u8, q: *u8) {
+    p = q
+}
+
+fn main() -> int {
+    // # Safety: two 8-byte zeroed buffers, one byte stored and read in
+    // each; both freed once.
+    unsafe {
+        let a = c.calloc(1, 8) as *u8
+        let b = c.calloc(1, 8) as *u8
+        a[0] = 1
+        b[0] = 41
+        var p = a
+        retarget(mut p, b)
+        let v = p[0] as int + a[0] as int
+        c.free(a)
+        c.free(b)
+        print("{v}")
+        v - 42
+    }
+}
