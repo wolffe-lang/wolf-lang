@@ -1875,7 +1875,36 @@ impl<'a, 'b> Tx<'a, 'b> {
                     return Err(ice("call without callee"));
                 };
                 let callee = self.f.ext_funcs[ef].clone();
-                self.lower_call(&callee.name, callee.sig, &args, &results)?;
+                if let Some((store, width)) = wolf_wir::volatile_intrinsic(&callee.name) {
+                    // kw07 (`[mem.unsafe.volatile.2]`): one load or store
+                    // of the width, in place. This tier runs Cranelift
+                    // at opt level `none` and no WIR mid-end, so the
+                    // instruction is emitted in program order and kept;
+                    // the flags claim alignment (the clause's) and NOT
+                    // `notrap` — a device address may fault.
+                    let p = self.scalar(args[0])?;
+                    let flags = MemFlagsData::new().with_aligned();
+                    let mut rest = &results[..];
+                    if store {
+                        let v = self.scalar(args[1])?;
+                        self.b.ins().store(flags, v, p, 0);
+                    } else {
+                        let ty = match width {
+                            1 => ctypes::I8,
+                            2 => ctypes::I16,
+                            4 => ctypes::I32,
+                            _ => ctypes::I64,
+                        };
+                        let r = self.b.ins().load(ty, flags, p, 0);
+                        self.vals.insert(results[0], Repr::Scalar(r));
+                        rest = &results[1..];
+                    }
+                    for &tok in rest {
+                        self.vals.insert(tok, Repr::Token);
+                    }
+                } else {
+                    self.lower_call(&callee.name, callee.sig, &args, &results)?;
+                }
             }
             Opcode::CallInd => {
                 let Aux::Sig(sig) = data.aux else {
