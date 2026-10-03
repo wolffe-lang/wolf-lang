@@ -1047,7 +1047,10 @@ fn compile_native(
         .filter(|d| d.primary.span.file == entry_id && wolf_diag::phase_rank(d.code) <= 1)
         .cloned()
         .collect();
-    if front.iter().any(|d| d.severity == wolf_diag::Severity::Error) {
+    if front
+        .iter()
+        .any(|d| d.severity == wolf_diag::Severity::Error)
+    {
         gate(sources, &mut pending, front, true)?;
     }
     let mut resolve_diags = res.diagnostics.clone();

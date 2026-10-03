@@ -90,7 +90,10 @@ fn screen(entry: &Path, release: bool) -> Option<String> {
         return Some(format!("fail({})", &code[..end]));
     }
     if lane_exit::environment_refusal(&out, "wolf run") {
-        eprintln!("SKIP: environment cannot link for `wolf run`: {}", stderr.trim());
+        eprintln!(
+            "SKIP: environment cannot link for `wolf run`: {}",
+            stderr.trim()
+        );
         return None;
     }
     Some(format!(

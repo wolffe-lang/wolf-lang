@@ -373,7 +373,13 @@ pub fn sort_diagnostics(diags: &mut [Diagnostic]) {
 
 fn report_order(d: &Diagnostic) -> (wolf_span::FileId, u32, u8, u32, &'static str) {
     let span = d.primary.span;
-    (span.file, span.lo, phase_rank(d.code), span.hi, d.code.as_str())
+    (
+        span.file,
+        span.lo,
+        phase_rank(d.code),
+        span.hi,
+        d.code.as_str(),
+    )
 }
 
 /// The diagnostic a refusal carries: the first ERROR in

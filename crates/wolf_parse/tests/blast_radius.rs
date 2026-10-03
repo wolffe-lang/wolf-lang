@@ -732,8 +732,8 @@ fn violations(
         s.split_whitespace()
             .filter(|w| {
                 [
-                    "fn", "let", "var", "const", "type", "struct", "enum", "trait", "impl",
-                    "use", "import", "pub", "extern", "export", "comptime",
+                    "fn", "let", "var", "const", "type", "struct", "enum", "trait", "impl", "use",
+                    "import", "pub", "extern", "export", "comptime",
                 ]
                 .contains(w)
             })
@@ -766,9 +766,7 @@ fn violations(
     // structural as replacing the `:`).
     let in_generics = |node: &GreenNode| {
         fn hit(n: &GreenNode, lo: u32, hi: u32) -> bool {
-            if n.kind == wolf_ast::SyntaxKind::GenericParamList
-                && lo < n.span.hi
-                && hi > n.span.lo
+            if n.kind == wolf_ast::SyntaxKind::GenericParamList && lo < n.span.hi && hi > n.span.lo
             {
                 return true;
             }
