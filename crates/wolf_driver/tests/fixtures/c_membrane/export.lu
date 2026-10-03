@@ -1,0 +1,140 @@
+//! member: false
+//! kw02 (wolf-lang#513, #514): C calls wolf by the C ABI. `main` calls
+//! `kw_c_main` in `export_harness.c`, which calls every `export fn`
+//! below by its C prototype and checks each value against C's own
+//! computation of the same expression; `kx_unused` is called by C only.
+//! Built `--emit=obj` and linked with the C half by `c_membrane_link.rs`.
+
+#[repr(c)]
+struct Big {
+    a: i8,
+    b: i64,
+    c: i16,
+    d: f64,
+    e: u8,
+}
+
+#[repr(c)]
+struct Mix {
+    i: i32,
+    f: f32,
+}
+
+#[repr(c)]
+struct Two {
+    x: f64,
+    y: f64,
+}
+
+#[repr(c)]
+struct C3 {
+    a: u8,
+    b: u32,
+    c: u8,
+}
+
+extern "c" fn kw_c_main() -> i32
+
+export fn kx_ints(a: i8, b: u8, c: i16, d: u16, e: i32, f: u32, g: i64, h: u64) -> i64 {
+    a as i64 + 2 * (b as i64) + 3 * (c as i64) + 4 * (d as i64) + 5 * (e as i64) +
+        6 * (f as i64) + 7 * g + 8 * (h as i64)
+}
+
+export fn kx_floats(a: f32, b: f64, c: f32, d: f64, e: f32, f: f64, g: f32, h: f64, i: f64) -> f64 {
+    b + 2.0 * d + 3.0 * f + 4.0 * h + 5.0 * i
+}
+
+export fn kx_floats32(a: f32, b: f64, c: f32, d: f64, e: f32, f: f64, g: f32, h: f64, i: f64) -> f32 {
+    a + 2.0 * c + 3.0 * e + 4.0 * g
+}
+
+export fn kx_mixed(a: i64, x: f64, b: i32, y: f32, c: u8, z: f64) -> f64 {
+    (a as f64) * x + (b as f64) + (c as f64) * z
+}
+
+export fn kx_mixed32(a: i64, x: f64, b: i32, y: f32, c: u8, z: f64) -> f32 {
+    y * 2.0
+}
+
+export fn kx_neg8(x: i8) -> i8 {
+    -x
+}
+
+export fn kx_inc16(x: u16) -> u16 {
+    x + 1
+}
+
+export fn kx_half(x: f32) -> f32 {
+    x / 2.0
+}
+
+export fn kx_pos(x: i64) -> bool {
+    x > 0
+}
+
+export fn kx_u64(x: u64) -> u64 {
+    x * 3
+}
+
+export fn kx_big_sum(r: Big) -> i64 {
+    r.a as i64 + 2 * r.b + 3 * (r.c as i64) + 5 * (r.e as i64)
+}
+
+export fn kx_big_d(r: Big) -> f64 {
+    r.d * 2.0
+}
+
+export fn kx_big_make(x: i64) -> Big {
+    Big { a: -7, b: x, c: -300, d: 4.5, e: 200 }
+}
+
+export fn kx_mix_swap(m: Mix) -> Mix {
+    Mix { i: m.i + 1, f: m.f * 2.0 }
+}
+
+export fn kx_two_dot(t: Two, u: Two) -> f64 {
+    t.x * u.x + t.y * u.y
+}
+
+export fn kx_two_make(x: f64) -> Two {
+    Two { x: x, y: x + 0.25 }
+}
+
+export fn kx_c3_make(a: u8) -> C3 {
+    C3 { a: a, b: 3735928559, c: a + 1 }
+}
+
+export fn kx_c3_sum(c3: C3) -> i64 {
+    c3.a as i64 + 2 * (c3.b as i64) + 3 * (c3.c as i64)
+}
+
+export fn kx_big_ptr(p: *Big) -> i64 {
+    // # Safety: C passes one live `struct Big`; read once, then written once.
+    unsafe {
+        let r = p[0]
+        p[0] = Big { a: r.a + 1, b: r.b * 2, c: r.c - 1, d: r.d + 1.0, e: r.e + 2 }
+        r.b
+    }
+}
+
+export fn kx_strlen(s: *u8) -> i64 {
+    var n = 0
+    // # Safety: C passes a NUL-terminated string.
+    unsafe {
+        while s[n] != 0 {
+            n += 1
+        }
+    }
+    n as i64
+}
+
+export fn kx_unused(x: i64) -> i64 {
+    x + 1
+}
+
+fn main() -> int {
+    // # Safety: kw_c_main is harness.c's driver; it calls back into the exports above.
+    unsafe {
+        kw_c_main() as int
+    }
+}

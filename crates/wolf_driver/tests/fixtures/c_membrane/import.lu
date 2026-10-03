@@ -1,0 +1,124 @@
+//! member: false
+//! kw02 (wolf-lang#521, #514): wolf calls C by the C ABI. Each bodyless
+//! `extern "c" fn` is defined in `import_callee.c`, linked beside this
+//! program's objects by `c_membrane_link.rs`; two C callees write
+//! through wolf pointers and wolf reads them back.
+import c "stdlib.h"
+
+#[repr(c)]
+struct Big {
+    a: i8,
+    b: i64,
+    c: i16,
+    d: f64,
+    e: u8,
+}
+
+#[repr(c)]
+struct Mix {
+    i: i32,
+    f: f32,
+}
+
+#[repr(c)]
+struct Two {
+    x: f64,
+    y: f64,
+}
+
+#[repr(c)]
+struct C3 {
+    a: u8,
+    b: u32,
+    c: u8,
+}
+
+extern "c" fn kc_ints(a: i8, b: u8, c: i16, d: u16, e: i32, f: u32, g: i64, h: u64) -> i64
+extern "c" fn kc_floats(a: f32, b: f64, c: f32, d: f64, e: f32, f: f64, g: f32, h: f64, i: f64) -> f64
+extern "c" fn kc_neg8(x: i8) -> i8
+extern "c" fn kc_pos(x: i64) -> bool
+extern "c" fn kc_big_make(x: i64) -> Big
+extern "c" fn kc_big_sum(r: Big) -> i64
+extern "c" fn kc_mix_make(i: i32, f: f32) -> Mix
+extern "c" fn kc_two_make(x: f64) -> Two
+extern "c" fn kc_two_dot(t: Two, u: Two) -> f64
+extern "c" fn kc_c3_make(a: u8) -> C3
+extern "c" fn kc_fill(p: *u8, n: i64)
+extern "c" fn kc_big_write(p: *Big, x: i64)
+extern "c" fn kc_strlen(s: *u8) -> i64
+extern "c" fn kc_nothing()
+
+fn main() -> int {
+    var bad = 0
+    // # Safety: every kc_ function is callee.c's, with these prototypes;
+    // the two calloc'd buffers are large enough for what C writes, and
+    // are freed once.
+    unsafe {
+        kc_nothing()
+        let i = kc_ints(-5, 250, -300, 60000, -70000, 4000000000, -5000000000, 600000000000)
+        print("ints {i}")
+        let f = kc_floats(0.5, 1.25, -2.0, 3.5, 0.75, -1.5, 8.0, 0.125, 1024.0)
+        if f != 9278.75 {
+            bad += 1
+        }
+        let n = kc_neg8(-100)
+        print("neg8 {n as int}")
+        if kc_pos(7) && !kc_pos(-7) {
+            print("pos ok")
+        } else {
+            bad += 1
+        }
+        let m = kc_big_make(99)
+        print("big_make {m.a as int} {m.b} {m.c as int} {m.e as int}")
+        if m.d != 4.5 {
+            bad += 1
+        }
+        let s = kc_big_sum(Big { a: -7, b: 1234567890123, c: -300, d: 4.5, e: 200 })
+        print("big_sum {s}")
+        let x = kc_mix_make(41, 1.5)
+        print("mix {x.i as int}")
+        if x.f != 3.0 {
+            bad += 1
+        }
+        let t = kc_two_make(3.0)
+        if t.x != 3.0 || t.y != 3.25 {
+            bad += 1
+        }
+        let dot = kc_two_dot(Two { x: 1.5, y: -2.0 }, Two { x: 4.0, y: 0.25 })
+        if dot != 5.5 {
+            bad += 1
+        }
+        let c3 = kc_c3_make(17)
+        print("c3 {c3.a as int} {c3.b as int} {c3.c as int}")
+        let p = c.calloc(1, 64) as *u8
+        kc_fill(p, 16)
+        var sum = 0
+        var k = 0
+        while k < 16 {
+            sum += p[k] as int
+            k += 1
+        }
+        print("fill {sum} {p[15] as int}")
+        let q = c.calloc(1, 64) as *Big
+        kc_big_write(q, 77)
+        let w = q[0]
+        print("big_write {w.a as int} {w.b} {w.c as int} {w.e as int}")
+        if w.d != 0.5 {
+            bad += 1
+        }
+        let z = c.calloc(1, 16) as *u8
+        var j = 0
+        var ch: u8 = 97
+        while j < 8 {
+            z[j] = ch
+            ch += 1
+            j += 1
+        }
+        print("strlen {kc_strlen(z)}")
+        c.free(z)
+        c.free(q as *u8)
+        c.free(p)
+    }
+    print("x2 float-and-bool misses {bad}")
+    bad
+}
