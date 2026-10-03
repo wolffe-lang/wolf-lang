@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="200 -1 4294967295\n")
+//! phase: run
+//! conforms: mem.prov.expose, type.numlit.cast.narrow
+//!
+//! kw06 (K9(a)): the integer side of the casts. `N as *T` widens `N` by
+//! its own signedness and never traps (`-1 as i32` is the all-ones
+//! address, `u32::MAX` is not); `*T as N` is the address's bits for a
+//! 64-bit `N` and the address as `uint` under `[type.numlit.cast.narrow]`
+//! for a narrower one, so `200` fits a `u8`. No pointer here is accessed.
+//! lupin 0.1.45 forgets the address of a pointer no allocation owns and
+//! prints `0 0 0` (wolf-interp#184).
+
+fn main() -> int {
+    // # Safety: no pointer is accessed; only addresses are read.
+    unsafe {
+        let z = 200 as *u8
+        let a = z as u8
+        let n: i32 = -1
+        let q = n as *u8
+        let m: u32 = 4294967295
+        let r = m as *u8
+        print("{a} {q as int} {r as int}")
+        0
+    }
+}

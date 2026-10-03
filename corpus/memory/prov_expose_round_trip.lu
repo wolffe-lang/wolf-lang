@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="9\n")
+//! phase: run
+//! conforms: mem.prov.expose
+//!
+//! kw06 (K9(a)): the method spelling of the exposed round trip, kw00's
+//! `f9_exposed.lu` with an observation. At trunk 8e36bc1a native and
+//! release refused `expose` ("a method call without an elaborated
+//! impl"); lupin 0.1.45 has no `expose` (wolf-interp#184).
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: q is p's own exposed address plus 2, inside 8 bytes.
+    unsafe {
+        let p = c.calloc(1, 8) as *u8
+        let n = p.expose()
+        let q = p.with_exposed(n + 2)
+        q[0] = 9
+        let v = p[2] as int
+        c.free(p)
+        print("{v}")
+        v - 9
+    }
+}

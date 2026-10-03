@@ -1,0 +1,22 @@
+//! check: run(exit=0, stdout="true false\n")
+//! phase: run
+//! conforms: mem.prov.expose, mem.unsafe.raw.1
+//!
+//! kw06 (K9(a)): `0 as *u8` is the null pointer and `is_null` says so;
+//! a live allocation is not null. At trunk 8e36bc1a native and release
+//! refused the cast; the checked machine and lupin 0.1.45 ran it.
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: z is never accessed; p is freed once.
+    unsafe {
+        let z = 0 as *u8
+        let p = c.calloc(1, 8) as *u8
+        let a = z.is_null()
+        let b = p.is_null()
+        c.free(p)
+        print("{a} {b}")
+        0
+    }
+}

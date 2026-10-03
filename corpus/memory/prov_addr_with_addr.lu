@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="5 11\n")
+//! phase: run
+//! conforms: mem.prov.expose
+//!
+//! kw06 (K9(a)): `with_addr` keeps the receiver's provenance — no
+//! exposure, no angelic resolution — so the write through `q` is a
+//! write into `p`'s allocation at offset 5. The compiled tiers lower it
+//! as an offset from `p`. At trunk 8e36bc1a native and release refused
+//! the method; lupin 0.1.45 has no `with_addr` (wolf-interp#184).
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: q keeps p's provenance at offset 5 of 8 bytes.
+    unsafe {
+        let p = c.calloc(1, 8) as *u8
+        let q = p.with_addr(p.addr() + 5)
+        q[0] = 11
+        let d = q.addr() - p.addr()
+        let v = p[5] as int
+        c.free(p)
+        print("{d} {v}")
+        v - 11
+    }
+}

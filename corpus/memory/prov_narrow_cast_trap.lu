@@ -1,0 +1,18 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: mem.prov.expose, type.numlit.cast.narrow
+//!
+//! kw06 (K9(a)): `*T as u8` of an address above 255 traps `overflow` —
+//! the address as `uint` under `[type.numlit.cast.narrow]`, on every
+//! wolfgang tier. At trunk 8e36bc1a the checked machine handed back the
+//! whole address under a `u8` type and exited 44 (300 mod 256); native
+//! and release refused the cast. lupin 0.1.45 exits 0 (wolf-interp#184).
+
+fn main() -> int {
+    // # Safety: z is never accessed; only its address is read.
+    unsafe {
+        let z = 300 as *u8
+        let a = z as u8
+        a as int
+    }
+}

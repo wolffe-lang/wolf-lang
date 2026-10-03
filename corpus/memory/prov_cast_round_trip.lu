@@ -1,0 +1,28 @@
+//! check: run(exit=0, stdout="3 7\n")
+//! phase: run
+//! conforms: mem.prov.expose, mem.unsafe.raw.1
+//!
+//! kw06 (K9(a), STATUS #31): an address round-trips through `int` into
+//! its own allocation. `p as int` exposes `p`'s tag, so `(n + 3) as *u8`
+//! resolves into the same 8 bytes and the write lands at `p[3]`. At
+//! trunk 8e36bc1a native and release refused the cast by name ("raw
+//! casts that change the machine shape"); the checked machine and lupin
+//! 0.1.45 ran it. The printed difference, not an address, is the
+//! observation: the checked machine's addresses are its own.
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: 8 zeroed bytes; q is p's own address plus 3, inside.
+    unsafe {
+        let p = c.calloc(1, 8) as *u8
+        let n = p as int
+        let q = (n + 3) as *u8
+        q[0] = 7
+        let m = q as int - n
+        let v = p[3] as int
+        c.free(p)
+        print("{m} {v}")
+        v - 7
+    }
+}
