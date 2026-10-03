@@ -1,0 +1,16 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.numlit.cast.narrow, arith.checked
+//!
+//! An unsigned value above the signed target's maximum does not fit it
+//! (`[type.numlit.cast.narrow]`): `128 as u8 as i8` traps. Until kw03
+//! native and release printed `-128`, the bits read as signed, where
+//! the checked machine and lupin trapped. The same rail is D56's
+//! `wrapping[u64] as int` (`[type.numlit.cast.wrap]`).
+
+fn main() -> int {
+    let b: u8 = 128
+    let s = b as i8
+    print("{s}")
+    0
+}

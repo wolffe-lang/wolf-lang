@@ -1,0 +1,16 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.numlit.cast.narrow, arith.checked
+//!
+//! A change of sign is a narrowing cast at any width
+//! (`[type.numlit.cast.narrow]`): `-1` is not a `u64`, so `v as u64`
+//! traps. Until kw03 native and release reinterpreted the bits and
+//! printed `-1` (a silent wrong answer: the checked machine and lupin
+//! trapped). The bit reinterpretation is spelled `v as wrapping[u64]`.
+
+fn main() -> int {
+    let v: int = 0 - 1
+    let u = v as u64
+    print("{u == 0}")
+    0
+}

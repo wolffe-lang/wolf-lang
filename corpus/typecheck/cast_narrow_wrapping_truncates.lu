@@ -1,0 +1,30 @@
+//! check: run(exit=0, stdout="44 255 4294967295 -56 127 255 0")
+//! phase: run
+//! conforms: type.numlit.cast.narrow, type.numlit.cast.wrap
+//!
+//! Truncation is spelled through the wrapping family
+//! (`[type.numlit.cast.narrow]`): the cast INTO `wrapping[T]` masks to
+//! the width and never traps (#131), and the cast back OUT keeps the
+//! held value, which by then fits. Signed wrapping widths read their
+//! bits as signed: `200 as wrapping[i8] as i8` is `-56`. Until kw03 the
+//! checked machine range-checked the mask instead of the value, so the
+//! signed rows trapped there while native, release and lupin kept them.
+
+fn main() -> int {
+    let a: int = 300
+    let b: int = 0 - 1
+    let c: i64 = 0 - 1
+    let d: int = 200
+    let e: int = 0 - 129
+    let f: i16 = 0 - 1
+    let g: u32 = 65536
+    let a8 = a as wrapping[u8] as u8
+    let b8 = b as wrapping[u8] as u8
+    let c32 = c as wrapping[u32] as u32
+    let d8 = d as wrapping[i8] as i8
+    let e8 = e as wrapping[i8] as i8
+    let f8 = f as wrapping[u8] as u8
+    let g16 = g as wrapping[u16] as u16
+    print("{a8} {b8} {c32} {d8} {e8} {f8} {g16}")
+    0
+}

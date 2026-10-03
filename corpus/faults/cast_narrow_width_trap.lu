@@ -1,0 +1,19 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.numlit.cast.narrow, arith.checked
+//!
+//! A narrowing integer cast keeps an in-range value and TRAPS when the
+//! target cannot hold it (`[type.numlit.cast.narrow]`, K12,
+//! wolf-lang#533). kw00's `f9_narrow.lu`: `n + 64` fits `u8` and is
+//! kept; `n + 299` does not and traps. The value comes from the run
+//! (`env_args().len`) so no tier can decide it at compile time. Until
+//! kw03 native and release refused the program ("narrowing numeric
+//! casts (range-check semantics)"); the checked machine and lupin
+//! trapped, as now every machine does.
+
+fn main() -> int {
+    let n = env_args().len
+    let a = (n + 64) as u8
+    let b = (n + 299) as u8
+    a as int + b as int
+}

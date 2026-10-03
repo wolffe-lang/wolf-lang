@@ -1,0 +1,23 @@
+//! check: run(exit=0, stdout="200 -1 -128 65535 4294967295 127 0 32767")
+//! phase: run
+//! conforms: type.numlit.cast.narrow
+//!
+//! A narrowing integer cast keeps an in-range value unchanged
+//! (`[type.numlit.cast.narrow]`, K12, wolf-lang#533): a narrower width
+//! at each end of the target's range, and a change of sign where the
+//! value has none to lose. M-KW's port write `b as int as u8` is the
+//! first shape. Until kw03 native and release refused every one of
+//! these but the sign changes.
+
+fn main() -> int {
+    let a: int = 200
+    let b: int = 0 - 1
+    let c: i32 = 0 - 128
+    let d: u64 = 65535
+    let e: i64 = 4294967295
+    let f: u16 = 127
+    let g: i8 = 0
+    let h: u32 = 32767
+    print("{a as u8} {b as i16} {c as i8} {d as u16} {e as u32} {f as i8} {g as u64} {h as i16}")
+    0
+}
