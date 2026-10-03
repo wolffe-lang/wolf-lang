@@ -231,7 +231,11 @@ fn stray_backtick_is_e0107() {
         &corpus("negative/first_stray_backtick.lu"),
         "fail(E0107)",
         "lex",
-        &[("0.1.43", "fail(E0101)"), ("0.1.44", "fail(E0101)")],
+        &[
+            ("0.1.43", "fail(E0101)"),
+            ("0.1.44", "fail(E0101)"),
+            ("0.1.45", "fail(E0101)"),
+        ],
     );
 }
 
@@ -243,7 +247,11 @@ fn keyword_where_a_pattern_starts_is_e0207() {
         &corpus("negative/first_keyword_pattern.lu"),
         "fail(E0207)",
         "parse",
-        &[("0.1.43", "fail(E0201)"), ("0.1.44", "fail(E0201)")],
+        &[
+            ("0.1.43", "fail(E0201)"),
+            ("0.1.44", "fail(E0201)"),
+            ("0.1.45", "fail(E0201)"),
+        ],
     );
 }
 
@@ -255,7 +263,11 @@ fn unclosed_row_brace_is_earlier_than_the_keyword() {
         &fixture("row_brace_unclosed.lu"),
         "fail(E0202)",
         "parse",
-        &[("0.1.43", "fail(E0008)"), ("0.1.44", "fail(E0008)")],
+        &[
+            ("0.1.43", "fail(E0008)"),
+            ("0.1.44", "fail(E0008)"),
+            ("0.1.45", "fail(E0008)"),
+        ],
     );
 }
 
@@ -267,7 +279,11 @@ fn toplevel_union_is_e0203() {
         &fixture("union_toplevel.lu"),
         "fail(E0203)",
         "parse",
-        &[("0.1.43", "fail(E0201)"), ("0.1.44", "fail(E0201)")],
+        &[
+            ("0.1.43", "fail(E0201)"),
+            ("0.1.44", "fail(E0201)"),
+            ("0.1.45", "fail(E0201)"),
+        ],
     );
 }
 
@@ -279,7 +295,11 @@ fn parse_error_before_a_lex_error_is_first() {
         &corpus("negative/first_parse_before_lex.lu"),
         "fail(E0207)",
         "parse",
-        &[("0.1.43", "fail(E0102)"), ("0.1.44", "fail(E0102)")],
+        &[
+            ("0.1.43", "fail(E0102)"),
+            ("0.1.44", "fail(E0102)"),
+            ("0.1.45", "fail(E0102)"),
+        ],
     );
 }
 
@@ -292,7 +312,11 @@ fn boundary_before_a_lex_error_is_first() {
         &corpus("negative/first_boundary_before_lex.lu"),
         "fail(E0202)",
         "parse",
-        &[("0.1.43", "fail(E0102)"), ("0.1.44", "fail(E0102)")],
+        &[
+            ("0.1.43", "fail(E0102)"),
+            ("0.1.44", "fail(E0102)"),
+            ("0.1.45", "fail(E0102)"),
+        ],
     );
 }
 
@@ -305,7 +329,11 @@ fn parse_error_stops_before_resolve() {
         &corpus("negative/first_parse_before_resolve.lu"),
         "fail(E0207)",
         "parse",
-        &[("0.1.43", "fail(E0201)"), ("0.1.44", "fail(E0201)")],
+        &[
+            ("0.1.43", "fail(E0201)"),
+            ("0.1.44", "fail(E0201)"),
+            ("0.1.45", "fail(E0201)"),
+        ],
     );
 }
 
