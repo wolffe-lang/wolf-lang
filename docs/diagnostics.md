@@ -1911,19 +1911,23 @@ proof obligation. Wrap the operation in an `unsafe` block — the rules
 inside are *simpler* than the safe tier's, not stricter — and state
 the invariant the block maintains in a `# Safety:` comment.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__unsafe_raw_outside.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1301_prov_outside.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1301_raw_outside.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__extern_c_outside_unsafe.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__unsafe_raw_outside.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1301_prov_outside.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1301_raw_outside.snap
 
 ## E1302 — a raw pointer type cannot cross this boundary
 
-Unsafety never appears in types crossing function boundaries: every
-function signature is fully safe, and there are no `unsafe fn`s — the
-proof obligation is discharged at the `unsafe` block, and the module
-is the audit granule. A `*T` in a parameter or return type, or in an
+Unsafety never appears in types crossing a module's boundary: there are
+no `unsafe fn`s — the proof obligation is discharged at the `unsafe`
+block, and the module is the audit granule. A `*T` in the parameter or
+return type of a `pub` function, an impl or trait method, or in an
 exported type's fields, would silently spread the raw tier through
-every caller's audit surface. Keep the pointer inside: pass a `handle`
-(revalidated at every access) or a region value instead, or hold the
-`*T` in a module-private field where the module's own invariants —
-and its `unsafe` blocks — can vouch for it.
+every caller's audit surface. Two places are inside the granule and
+take a `*T` freely: the signature of a module-private function (every
+caller is in the same module) and a function at the C membrane
+(`export fn`, `extern "c" fn` — the pointer is C's there anyway).
+Elsewhere keep the pointer inside: pass a `handle` (revalidated at
+every access) or a region value instead, or hold the `*T` in a
+module-private field where the module's own invariants — and its
+`unsafe` blocks — can vouch for it.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__unsafe_sig.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1302_ptr_in_signature.snap
 
