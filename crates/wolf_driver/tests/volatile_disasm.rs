@@ -475,7 +475,10 @@ mod linux_x86_64 {
         // The poll reads on every iteration.
         let pl = &funcs["vr_poll"];
         let loads: Vec<Access> = pl.accesses();
-        if loads.is_empty() || !loads.iter().all(|a| !a.store && a.width == 4 && pl.in_loop(a.at))
+        if loads.is_empty()
+            || !loads
+                .iter()
+                .all(|a| !a.store && a.width == 4 && pl.in_loop(a.at))
         {
             failures.push(format!(
                 "vr_poll: want 4-byte loads, every one inside the loop; got {loads:?}, loops \
@@ -585,10 +588,17 @@ fn the_instrument_reads_objdump_intel_syntax() {
     let ext: BTreeMap<String, (u64, u64)> = [("vw_twice".to_string(), (0x50, 0x24))].into();
     let funcs = parse_objdump(dis, &ext);
     let f = &funcs["vw_twice"];
-    let acc: Vec<(u64, bool, u32)> = f.accesses().iter().map(|a| (a.at, a.store, a.width)).collect();
+    let acc: Vec<(u64, bool, u32)> = f
+        .accesses()
+        .iter()
+        .map(|a| (a.at, a.store, a.width))
+        .collect();
     // The frame store, the rip load and the pool junk at 0x70 are not
     // accesses through the pointer.
-    assert_eq!(acc, vec![(0x50, true, 4), (0x5a, false, 2), (0x5e, false, 4)]);
+    assert_eq!(
+        acc,
+        vec![(0x50, true, 4), (0x5a, false, 2), (0x5e, false, 4)]
+    );
     assert_eq!(f.loops(), vec![(0x5a, 0x66)]);
     assert!(f.in_loop(0x5e) && !f.in_loop(0x50));
 }
