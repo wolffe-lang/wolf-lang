@@ -484,13 +484,21 @@ memory/nested_fn_read_param_write.lu: not mem-clean (pre-wir rungs own it)
 memory/oob_bounds.lu: lowers
 memory/pool_accessors.lu: lowers
 memory/pool_place_write.lu: lowers
+memory/prov_addr_with_addr.lu: lowers
+memory/prov_cast_round_trip.lu: lowers
+memory/prov_expose_round_trip.lu: lowers
 memory/prov_holy_grail.lu: lowers
+memory/prov_is_null.lu: lowers
+memory/prov_narrow_cast.lu: lowers
+memory/prov_narrow_cast_trap.lu: lowers
 memory/prov_two_phase.lu: lowers
 memory/push_copies_element.lu: lowers
 memory/push_grow_guarded_index.lu: lowers
 memory/push_grow_nested_guarded_index.lu: lowers
 memory/push_take_moves.lu: not mem-clean (pre-wir rungs own it)
 memory/raw_compound_assign.lu: lowers
+memory/raw_deref.lu: lowers
+memory/raw_deref_signed.lu: lowers
 memory/raw_ptr_mut_param.lu: lowers
 memory/raw_ptr_private_sig.lu: lowers
 memory/raw_repr_c_layout.lu: lowers
