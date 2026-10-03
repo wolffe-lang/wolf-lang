@@ -4367,6 +4367,17 @@ impl<'a> Checker<'a> {
             // slice is never a place — E0416 (s148, #293), not
             // conservatism.
             SyntaxKind::BracketApply => self.bracket_place_type(place),
+            // kw06: `*p = v` writes the pointee, as `p[0] = v` does.
+            SyntaxKind::PrefixExpr
+                if PrefixExpr::cast(place)
+                    .and_then(|d| d.op())
+                    .is_some_and(|t| t.kind == SyntaxKind::Star) =>
+            {
+                match PrefixExpr::cast(place).and_then(|d| d.operand()) {
+                    Some(operand) => self.deref_type(operand),
+                    None => Ok(self.error_ty()),
+                }
+            }
             // The conservatism ledger's `assignment through this
             // place`, narrowed at s148 (#293) to what sema does not
             // type as a place yet: a tuple on the left (`(a, b) = …`,
@@ -4377,6 +4388,26 @@ impl<'a> Checker<'a> {
                 construct: "assignment through this place",
                 span: place.span,
             }),
+        }
+    }
+
+    /// kw06: the type `*p` reads or writes — the pointee of a `*T`.
+    /// Any other operand is E0409, the bad-operand family's code
+    /// (wolf has no references to dereference: `&` is not a pointer).
+    fn deref_type(&mut self, operand: &GreenNode) -> R<TyId> {
+        let t = self.synth_expr(operand)?;
+        match self.kind_of(t) {
+            TyKind::Ptr(elem) => Ok(elem),
+            TyKind::Error | TyKind::Never => Ok(self.error_ty()),
+            _ => {
+                self.report_bad_operand(
+                    operand.span,
+                    "*",
+                    "a raw pointer `*T` (`[mem.unsafe.raw.1]`)",
+                    t,
+                );
+                Ok(self.error_ty())
+            }
         }
     }
 
@@ -5264,10 +5295,10 @@ impl<'a> Checker<'a> {
                 construct: "borrow expressions",
                 span: e.span,
             }),
-            Some(SyntaxKind::Star) => Err(NotYet {
-                construct: "raw-pointer dereference (unsafe tier)",
-                span: e.span,
-            }),
+            // kw06 (`[mem.unsafe.raw.1]`): `*p` is the pointee of a
+            // raw pointer, `p[0]` spelled as a dereference; wolf_mem
+            // gates it to `unsafe` (E1301), as it gates `p[i]`.
+            Some(SyntaxKind::Star) => self.deref_type(operand),
             // s21: prefix `shared` builds the Tier-2 RC cell from an
             // owned value ([mem.shared.rc.1]); the cell's type wraps
             // the payload's.
