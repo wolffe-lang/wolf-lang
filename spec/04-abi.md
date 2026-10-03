@@ -250,6 +250,75 @@ AAPCS64, win64, Apple arm64 deltas).
   use this ABI; they terminate through the fault path
   (`[abi.c.panic]` at boundaries).
 
+## §5 Targets `[abi.target]`
+
+- `[abi.target]` A build has one target, named by an LLVM-style triple:
+  a hosted target (the host the compiler runs on, one of the
+  `[abi.c.targets]` matrix) or the freestanding `x86_64-unknown-none`.
+  It is a fact about the build, never the source (K1, STATUS #31):
+  `wolf build --target x86_64-unknown-none`, or `target:
+  "x86_64-unknown-none"` in the root `wolf.pkg` (`[pkg.manifest.schema]`;
+  the flag wins); with neither, the host. `cfg(target = "…")`
+  (`[gram.item.attr.cfg]`) reads the build's target, so one source file
+  keeps a hosted item and a freestanding item side by side. A triple
+  that is neither the host's nor `x86_64-unknown-none` is a tool error
+  naming both (no tier cross-compiles to another hosted target yet).
+  The checked machine and lupin run no target but the host:
+  `conform-run --target x86_64-unknown-none` is `unsupported` with the
+  construct `the freestanding target x86_64-unknown-none` on every rung,
+  never run.
+- `[abi.target.none]` On the freestanding target the compiler links
+  nothing and emits objects only (`--emit=obj`, or the IR and WIR
+  dumps); `bin` and `wolf run` are refused by name, as are `--checked`
+  and `--profile-gen`, which are the hosted runtime's. The object has no
+  `main` shim, no runtime library, no ambient-region allocation, and
+  imports only the hook list (`[abi.target.none.hooks]`) and the
+  program's own `extern "c"` declarations. A construct that needs more
+  is refused BY NAME at the construct, on both compiling tiers alike,
+  before any backend runs: `` `print` needs the hosted runtime (target
+  x86_64-unknown-none) `` — and likewise `env_args`, `read_line`, a `str`
+  comparison, `spawn`, channels and the rest of the runtime's surface.
+  The refusal reads the lowered program before the optimizer, so a
+  construct the release tier would fold away is refused there too.
+- `[abi.target.entry]` On the freestanding target the entry is whatever
+  `export fn` the boot code calls (`[abi.c.export]`: one global symbol
+  under its own name, the C convention, kept by every tier). `main` is
+  an ordinary function there, mangled like any other.
+- `[abi.target.none.hooks]` A freestanding object imports at most (a)
+  `wolf_trap(kind: i32, file: *u8, file_len: i64, line: i64, col: i64)`,
+  the one trap hook (K8(a)): every trap of both tiers calls it with the
+  kind numbered as `[conf.trap.set]`'s runtime lists it (overflow 1,
+  div-zero 2, bounds 3, …) and the trap's site — the source path bytes
+  and the 1-based line and column — or `(null, 0, 0, 0)` where the tier
+  has no site; it must not return, and the compiler emits `ud2` after
+  the call; (b) `memcpy`, `memmove`, `memset` and `memcmp` with C's
+  meaning, which a tier may emit for an aggregate copy; (c) the
+  program's own `extern "c"` declarations. The program supplies (a) and
+  (b), in wolf (`export fn`) or assembly. The hosted runtime defines
+  `wolf_trap` as the report-and-exit every hosted trap takes; hosted
+  code keeps calling the runtime's own reporters, so no hosted program
+  changes.
+- `[abi.target.none.alloc]` No allocating construct compiles for the
+  freestanding target (K8(b) = A): `List`, `Map`, `Pool`, string
+  interpolation, a capturing closure, `region` and a boxed channel
+  payload are each refused by name (`` `List` allocates, and target
+  x86_64-unknown-none has no allocator ``). An allocator hook lifts this
+  in its own lane (KWC kw12).
+- `[abi.target.none.codegen]` Code generated for `x86_64-unknown-none`
+  uses no red zone, no x87/MMX/SSE/AVX register and no stack protector,
+  keeps frame pointers, and is position-independent under the small
+  code model (K10(a) = A: it links in the -2 GiB higher half and loads
+  anywhere). The release tier emits the triple
+  `x86_64-unknown-none-elf`, and `noredzone`, `"frame-pointer"="all"`
+  and `"target-features"="-mmx,-sse,-sse2,-sse3,-ssse3,-sse4.1,-sse4.2,-avx,-avx2,+soft-float"`
+  on every function; the native tier's frames never use the red zone
+  and its integer code uses no vector register (proven by disassembly
+  on every object the gate builds). A floating-point value of any type
+  is refused by name on this target (K10(b) = A). Witness for the whole
+  section: `crates/wolf_driver/tests/freestanding_target.rs`, which
+  links both tiers' objects with an assembly boot stub and trap hook,
+  no libc and no runtime, and runs them.
+
 ---
 
 Cross-references: no-unwinding invariant `[abi.native.nounwind]` ⇄
