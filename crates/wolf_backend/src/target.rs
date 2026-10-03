@@ -343,6 +343,22 @@ mod tests {
                 "`fs_open`",
                 RefusalClass::HostedRuntime,
             ),
+            // s199 (#426): positional I/O is hosted surface by family.
+            (
+                "__wolf_rt_fs_seek",
+                "`fs_seek`",
+                RefusalClass::HostedRuntime,
+            ),
+            (
+                "__wolf_rt_fs_tell",
+                "`fs_tell`",
+                RefusalClass::HostedRuntime,
+            ),
+            (
+                "__wolf_rt_fs_read_at",
+                "`fs_read_at`",
+                RefusalClass::HostedRuntime,
+            ),
             (
                 "__wolf_rt_read_line",
                 "`read_line`",
