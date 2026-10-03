@@ -625,7 +625,8 @@ impl<'a> Parser<'a> {
     /// opener and say where a wreck ends, a different question.
     pub(crate) fn push_diag(&mut self, d: Diagnostic) {
         let boundary = |c: Code| c == crate::codes::UNCLOSED_DELIMITER;
-        if !boundary(d.code)
+        if false
+            && !boundary(d.code)
             && self
                 .diags
                 .iter()
