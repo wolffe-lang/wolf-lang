@@ -786,13 +786,32 @@ fn e1301_provenance_op_and_cast_outside_unsafe() {
 
 #[test]
 fn e1302_ptr_in_signature() {
-    // [mem.unsafe.scope]: no `unsafe fn`s — a `*T` parameter, return,
-    // or exported field is the boundary error.
+    // [mem.unsafe.scope] / [mem.unsafe.sig]: no `unsafe fn`s — a `*T`
+    // parameter or return on a `pub` fn or on a method, or an exported
+    // field, is the boundary error (K9(b) = B, kw02).
     snap(
         "e1302_ptr_in_signature",
-        "fn peek(p: *u8) -> int { 0 }\n\
-         fn mint() -> *u8 { mint() }\n\
+        "pub fn peek(p: *u8) -> int { 0 }\n\
+         pub fn mint() -> *u8 { mint() }\n\
          pub struct Held { raw: *u8 }\n\
+         struct Cell { n: int }\n\
+         impl Cell {\n    fn at(self, p: *u8) -> int { 0 }\n}\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
+
+#[test]
+fn e1302_private_and_membrane_signatures_are_allowed() {
+    // [mem.unsafe.sig] (K9(b) = B, STATUS #31; #32 R1; wolf-lang#514):
+    // a module-private fn and both sides of the C membrane take `*T`.
+    snap(
+        "clean_private_and_membrane_ptr_sigs",
+        "fn poke(p: *u8, v: u8) { }\n\
+         fn mint(p: *u8) -> *u8 { p }\n\
+         export fn kx_len(s: *u8) -> i64 { 0 }\n\
+         pub export fn kx_back(p: *u8) -> *u8 { p }\n\
+         extern \"c\" fn kc_fill(p: *u8, n: i64)\n\
+         extern \"c\" fn kc_at(p: *u8) -> *u8 { p }\n\
          fn main() -> !int { 0 }\n",
     );
 }
