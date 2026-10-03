@@ -266,6 +266,19 @@ fn an_element_of_a_region_built_list_held_outside_is_refused() {
     );
 }
 
+/// `copy` of a `str` shares its bytes (`[mem.tier0.move.3]`), so the
+/// copy of a region-built `str`, or of a piece of one, still names the
+/// region. Red at trunk dfcc2f13: `exit(0)` on all three tiers. lupin
+/// 0.1.44 traps the first and runs the second (the piece).
+#[test]
+fn a_copied_str_still_names_its_region() {
+    refused_everywhere(&corpus("memory/region_str_copy_return.lu"), &[]);
+    refused_everywhere(
+        &corpus("memory/region_str_view_for_copy.lu"),
+        PRE_VIEW_TRAP_LUPIN,
+    );
+}
+
 /// The legal side: pieces of a parameter, a literal, a literal local
 /// and a string built outside the region; pieces used inside; an `int`
 /// drawn from a piece; a `List[int]` element. Every lane runs it, lupin
