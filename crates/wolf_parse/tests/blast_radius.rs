@@ -224,7 +224,10 @@ fn intact_between(node: &GreenNode, lo: u32, hi: u32) -> Option<&GreenNode> {
 /// Ruling #27's partition (module docs): the added cascade diagnostics,
 /// ordered by offset, cut wherever an intact construct lies wholly
 /// between the end of the site so far and the next diagnostic.
-fn wreck_sites<'d>(root: &GreenNode, added: &[&'d wolf_diag::Diagnostic]) -> Vec<Vec<&'d wolf_diag::Diagnostic>> {
+fn wreck_sites<'d>(
+    root: &GreenNode,
+    added: &[&'d wolf_diag::Diagnostic],
+) -> Vec<Vec<&'d wolf_diag::Diagnostic>> {
     let mut sorted = added.to_vec();
     sorted.sort_by_key(|d| (d.primary.span.lo, d.primary.span.hi));
     let mut sites: Vec<Vec<&wolf_diag::Diagnostic>> = Vec::new();
@@ -265,8 +268,9 @@ fn added_diagnostics<'d>(
             None
         };
         let at = moved.and_then(|(lo, hi)| {
-            left.iter()
-                .position(|d| d.code == b.code && d.primary.span.lo == lo && d.primary.span.hi == hi)
+            left.iter().position(|d| {
+                d.code == b.code && d.primary.span.lo == lo && d.primary.span.hi == hi
+            })
         });
         match at {
             Some(i) => {
@@ -296,7 +300,12 @@ fn render_sites(sites: &[Vec<&wolf_diag::Diagnostic>]) -> String {
         .map(|(i, s)| {
             let ds: Vec<String> = s
                 .iter()
-                .map(|d| format!("{} {}..{} {}", d.code, d.primary.span.lo, d.primary.span.hi, d.message))
+                .map(|d| {
+                    format!(
+                        "{} {}..{} {}",
+                        d.code, d.primary.span.lo, d.primary.span.hi, d.message
+                    )
+                })
                 .collect();
             format!("site {} ({}): [{}]", i + 1, s.len(), ds.join("; "))
         })
@@ -897,7 +906,9 @@ fn pinned_case(
     len: usize,
     text: &[u8],
 ) -> (wolf_parse::Parse, Vec<Vec<wolf_diag::Diagnostic>>) {
-    let f = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../corpus").join(rel);
+    let f = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../corpus")
+        .join(rel);
     let src = std::fs::read(&f).unwrap_or_else(|e| panic!("read {rel}: {e}"));
     let lo = src
         .windows(probe.len())
@@ -953,10 +964,18 @@ fn scope_read_as_match_is_two_wreck_sites() {
         b" match ",
     );
     let total: usize = sites.iter().map(Vec::len).sum();
-    assert_eq!(total, 4, "four cascade diagnostics: {:?}", parse.diagnostics);
+    assert_eq!(
+        total, 4,
+        "four cascade diagnostics: {:?}",
+        parse.diagnostics
+    );
     assert_eq!(sites.len(), 2, "two wreck sites: {sites:?}");
     for site in &sites {
-        assert_eq!(site.len(), 2, "each site is one spawn line's two reports: {site:?}");
+        assert_eq!(
+            site.len(),
+            2,
+            "each site is one spawn line's two reports: {site:?}"
+        );
         assert!(site.len() <= 3, "each site within the tight bound");
     }
     // The construct that separates them is the first arm's own statement.
@@ -965,7 +984,11 @@ fn scope_read_as_match_is_two_wreck_sites() {
         sites[1][0].primary.span.lo,
     );
     let between = intact_between(&parse.root, a, b).expect("an intact construct between the sites");
-    assert_eq!(between.kind, wolf_ast::SyntaxKind::ExprStmt, "it is `bump(mut n)`");
+    assert_eq!(
+        between.kind,
+        wolf_ast::SyntaxKind::ExprStmt,
+        "it is `bump(mut n)`"
+    );
 }
 
 /// wolf-lang#544, the nightly red since `abf4e5cf`: `memory/
@@ -1004,7 +1027,11 @@ fn struct_body_read_as_let_is_one_wreck_site_within_the_bound() {
     // And the reading above stays true: the closing `}` is one report.
     let brace = sites[0].iter().map(|d| d.primary.span.lo).max().unwrap();
     assert_eq!(
-        parse.diagnostics.iter().filter(|d| d.primary.span.lo == brace).count(),
+        parse
+            .diagnostics
+            .iter()
+            .filter(|d| d.primary.span.lo == brace)
+            .count(),
         1,
         "the stray `}}` is reported once: {:?}",
         parse.diagnostics
