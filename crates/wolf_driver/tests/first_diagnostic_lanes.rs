@@ -15,8 +15,8 @@
 //!
 //! lupin answers with its first lex error, else its parser's one error.
 //! Where it parts, the gate pins its answer by version (s180's design):
-//! a newer lupin that still parts goes red by name. The parts are filed
-//! as wolf-interp issues; this lane did not change lupin.
+//! a newer lupin that still parts goes red by name. Every part is filed
+//! as wolf-interp#175; this lane did not change lupin.
 
 mod lane_exit;
 
@@ -149,8 +149,8 @@ fn corpus(name: &str) -> PathBuf {
     p
 }
 
-/// lupin releases known to part on a row, with what they answer. Each
-/// names the wolf-interp issue that mirrors the row.
+/// lupin releases known to part on a row, with what they answer
+/// (wolf-interp#175 mirrors every one).
 type PreMirror<'a> = &'a [(&'a str, &'a str)];
 
 /// Every wolfgang lane refuses `entry` with `want` (`fail(E…)`) at
@@ -211,7 +211,7 @@ fn same_offset_lex_before_parse() {
 
 /// #377 class 2 (22): a Markdown fence. E0107 everywhere on wolfgang;
 /// lupin's E0101 is the wrong code for a stray character
-/// (wolf-interp issue filed by s203).
+/// (wolf-interp#175).
 #[test]
 fn stray_backtick_is_e0107() {
     every_lane_refuses(
