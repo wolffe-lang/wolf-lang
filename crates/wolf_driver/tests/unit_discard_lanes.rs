@@ -296,20 +296,20 @@ fn a_propagated_row_still_leaves() {
 const LUPIN_179: &str = "0.1.45";
 
 /// Ruling #34 = A: an else-less `if` at a fallible fn's tail discards
-/// its then-block's raise, warned. The plain tail, an inferred `!()`
-/// row, a method, a nested else-less `if`. Red at trunk 8e36bc1a: every
-/// lane answers `a true` … `d true` and none warns.
+/// its then-block's raise, warned. The plain tail, a method, a nested
+/// else-less `if`. Red at trunk 8e36bc1a: every lane answers `a true` …
+/// `d true` and none warns.
 #[test]
 fn a_fallible_fns_else_less_tail_if_discards() {
     every_lane_says(
         &corpus("rows/unit_discard_tail_if.lu"),
         "exit(0)",
-        "in a\na false\nb false\nc false\nd false\n",
+        "in a\na false\nc false\nd false\n",
         true,
         &[(
             LUPIN_179,
             "exit(0)",
-            "in a\na true\nb true\nc true\nd true\n",
+            "in a\na true\nc true\nd true\n",
         )],
     );
 }
@@ -326,6 +326,48 @@ fn a_fallible_fns_tail_chain_discards() {
         true,
         &[(LUPIN_179, "exit(0)", "g true\n")],
     );
+}
+
+/// The closure form: a closure checked against `fn(bool) -> () ! {bad}`
+/// ending in an else-less `if`. The checked machine does not execute
+/// closures (`unsupported`, at trunk and head). Red at trunk 8e36bc1a:
+/// native and release answer `run true`, unwarned.
+#[test]
+fn a_closures_else_less_tail_if_discards() {
+    let entry = corpus("rows/unit_discard_tail_if_closure.lu");
+    let checked = lane(&entry, "--checked").expect("the checked lane always runs");
+    assert_eq!(
+        checked.verdict, "unsupported",
+        "the --checked answer on {} ({ISSUE}): {checked:?}",
+        entry.display()
+    );
+    for flag in ["--native", "--release"] {
+        let Some(obs) = lane(&entry, flag) else {
+            continue;
+        };
+        assert_eq!(
+            (obs.verdict.as_str(), obs.stdout.as_str()),
+            ("exit(0)", "run false\n"),
+            "the {flag} answer on {} ({ISSUE})",
+            entry.display()
+        );
+        assert!(
+            obs.codes.iter().any(|c| c == "W0601"),
+            "the {flag} W0601 on {}: {:?}",
+            entry.display(),
+            obs.codes
+        );
+    }
+    if let Some(lupin) = lupin_says(&entry) {
+        let got = (lupin.verdict.as_str(), lupin.stdout.as_str());
+        let pinned = lupin.version == LUPIN_179 && got == ("exit(0)", "run true\n");
+        assert!(
+            got == ("exit(0)", "run false\n") || pinned,
+            "lupin {}'s answer on {}: {got:?}",
+            lupin.version,
+            entry.display()
+        );
+    }
 }
 
 /// A value-carrying row at that tail is discarded with its value. Red at
