@@ -735,3 +735,16 @@ fn an_index_store_keeps_its_take() {
         "fn main() {\n    xs[0] = take v\n    m[\"k\"] = take v\n    xs[1] = v\n}\n",
     );
 }
+
+// ------------------------------------------------ statement attributes ----
+
+/// kw01: an attribute on an assignment statement prefixes it on its
+/// own line, as on any other statement. It used to be read as the
+/// assignment's place, and the file fell back unformatted.
+#[test]
+fn an_attribute_on_an_assignment_keeps_its_line() {
+    check(
+        "fn main() -> int {\n    var n = 1\n    #[cfg(target = \"x86_64-unknown-none\")]\n    n = n + 1\n    #[index(1)]\n    n += 2\n    n\n}\n",
+        "fn main() -> int {\n    var n = 1\n    #[cfg(target = \"x86_64-unknown-none\")]\n    n = n + 1\n    #[index(1)]\n    n += 2\n    n\n}\n",
+    );
+}
