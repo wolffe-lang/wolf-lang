@@ -7898,13 +7898,13 @@ impl<'t> Machine<'t> {
                 let Some(place) = found!(self.place_of(inner)) else {
                     return self.refuse("`mut` of a non-place in checked execution", v.span);
                 };
-                // Raw-pointer arguments retag at parameter entry
-                // (their tag travels in the value).
-                let cur = self.read_place(&place, inner.span)?;
-                if let Value::Ptr(p) = cur {
-                    let child = self.retag(p, TagState::Active, inner.span)?;
-                    return Ok(Flow::Val(Value::Ptr(child)));
-                }
+                // kw02: a raw pointer lent by `mut` is the caller's
+                // pointer VARIABLE (call-by-reference-result, what the
+                // compiled tiers lower); the mode says nothing about
+                // the pointee ([mem.unsafe.raw.1]). Before `[mem.unsafe.sig]`
+                // no `*T` parameter type-checked and this machine
+                // passed a retagged copy, so a callee's `p = q` never
+                // reached the caller.
                 Ok(Flow::Val(Value::Ref(place)))
             }
             Some(wolf_ast::ParamMode::Take) => {
@@ -7916,15 +7916,15 @@ impl<'t> Machine<'t> {
             }
             _ => {
                 if let Some(place) = found!(self.place_of(inner)) {
-                    let cur = self.read_place(&place, inner.span)?;
-                    if let Value::Ptr(p) = cur {
-                        // `read` retag: a Frozen child, protected for
-                        // the call ([mem.prov.tag]); writes through it
-                        // inside the callee are P2.
-                        let child = self.retag(p, TagState::Frozen, inner.span)?;
-                        return Ok(Flow::Val(Value::Ptr(child)));
-                    }
-                    return Ok(Flow::Val(cur));
+                    // kw02: a raw pointer passed by value is a copy of
+                    // the pointer and nothing more — raw pointers carry
+                    // no aliasing assumptions ([mem.unsafe.raw.1]) and
+                    // the compiled tiers give a `*T` parameter no
+                    // `readonly`/`noalias`. Before `[mem.unsafe.sig]`
+                    // this path froze the pointee, so a module-private
+                    // `fn poke(p: *u8)` writing through `p` was P2 here
+                    // and ran natively.
+                    return Ok(Flow::Val(self.read_place(&place, inner.span)?));
                 }
                 self.eval_arg_value(inner)
             }
@@ -7946,21 +7946,6 @@ impl<'t> Machine<'t> {
             Flow::Err(v, false) => Flow::Val(v),
             other => other,
         })
-    }
-
-    fn retag(&mut self, p: PtrVal, state: TagState, span: Span) -> E<PtrVal> {
-        let Some(aid) = p.alloc else {
-            return Ok(p);
-        };
-        let child = self.allocs[aid].tags.len() as u32;
-        self.allocs[aid].tags.push(Tag {
-            parent: Some(p.tag),
-            state,
-            protected: 0,
-            exposed: false,
-            origin: span,
-        });
-        Ok(PtrVal { tag: child, ..p })
     }
 
     /// `send`, `recv` and `close` (#342, `[conc.chan]`). This machine
@@ -8805,6 +8790,16 @@ impl<'t> Machine<'t> {
     }
 
     fn eval_c_call(&mut self, name: &str, e: &'t GreenNode) -> E<Flow> {
+        // kw02 (`[abi.c.import]`): a bodyless `extern "c" fn` is C the
+        // program links; this machine has no C membrane, so the call is
+        // refused by name — never modelled from its declared signature.
+        if !name.starts_with("c.") {
+            return self.refuse(
+                "a call into C through a hand-declared `extern \"c\" fn` (the checked \
+                 machine has no C membrane)",
+                e.span,
+            );
+        }
         let d = CallExpr::cast(e).expect("kind");
         let mut args = Vec::new();
         for a in d.args().into_iter().flat_map(|l| l.args()) {
