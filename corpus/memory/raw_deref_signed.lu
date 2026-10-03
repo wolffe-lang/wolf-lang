@@ -1,0 +1,28 @@
+//! check: run(exit=0, stdout="-5 -6 -4\n")
+//! phase: run
+//! conforms: mem.prov.expose, mem.unsafe.raw.1
+//!
+//! kw06 and wolf-lang#561: a read through a `*i32` is the pointee's
+//! signed value, by `*s` and by `s[i]`, and a compound write reads it
+//! signed too. At trunk 8e36bc1a the checked machine zero-extended
+//! every raw read (`s[1]` holding -6 read back 4294967290) while native,
+//! release and lupin 0.1.45 read -6; `*s` was refused on every wolfgang
+//! tier.
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: s is a live 8-byte allocation, freed once.
+    unsafe {
+        let s = c.calloc(1, 8) as *i32
+        *s = -5
+        let a = *s
+        s[1] = -6
+        let b = s[1]
+        s[1] += 2
+        let d = s[1]
+        c.free(s as *u8)
+        print("{a} {b} {d}")
+        0
+    }
+}

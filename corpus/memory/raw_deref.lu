@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="7 7\n")
+//! phase: run
+//! conforms: mem.prov.expose, mem.unsafe.raw.1, gram.expr.assign
+//!
+//! kw06 (K9(a)): prefix `*p` is `p[0]` — a read, a write, and a compound
+//! write at the pointee's type. kw00's `f9_deref.lu` with an
+//! observation. At trunk 8e36bc1a every wolfgang tier refused `*p = 5`
+//! ("assignment through this place"); lupin 0.1.45 ran it.
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: p is a live 8-byte allocation, freed once.
+    unsafe {
+        let p = c.calloc(1, 8) as *u8
+        *p = 5
+        *p += 2
+        let a = *p as int
+        let b = p[0] as int
+        c.free(p)
+        print("{a} {b}")
+        a - 7
+    }
+}
