@@ -1,0 +1,229 @@
+// kw07 (`[mem.unsafe.volatile.2]`): the disassembly gate's functions.
+// Every function is an `export fn` (kw02): an unmangled global that
+// `--release` keeps, so `volatile_disasm.rs` finds each one by name in
+// the object and counts its memory accesses through the pointer
+// argument. `ord_*` are the controls: the same shape spelled with the
+// ordinary raw access `p[0]`, which the optimizer is free to fold — the
+// gate proves the release tier DOES fold them, so the volatile rows
+// beside them prove something.
+
+export fn vr_u8(p: *u8) -> u8 {
+    // # Safety: the caller passes a live, aligned `*u8`.
+    unsafe {
+        p.read_volatile()
+    }
+}
+
+export fn vw_u8(p: *u8, v: u8) {
+    // # Safety: as vr_u8.
+    unsafe {
+        p.write_volatile(v)
+    }
+}
+
+export fn vr_u16(p: *u16) -> u16 {
+    // # Safety: the caller passes a live, aligned `*u16`.
+    unsafe {
+        p.read_volatile()
+    }
+}
+
+export fn vw_u16(p: *u16, v: u16) {
+    // # Safety: as vr_u16.
+    unsafe {
+        p.write_volatile(v)
+    }
+}
+
+export fn vr_u32(p: *u32) -> u32 {
+    // # Safety: the caller passes a live, aligned `*u32`.
+    unsafe {
+        p.read_volatile()
+    }
+}
+
+export fn vw_u32(p: *u32, v: u32) {
+    // # Safety: as vr_u32.
+    unsafe {
+        p.write_volatile(v)
+    }
+}
+
+export fn vr_u64(p: *u64) -> u64 {
+    // # Safety: the caller passes a live, aligned `*u64`.
+    unsafe {
+        p.read_volatile()
+    }
+}
+
+export fn vw_u64(p: *u64, v: u64) {
+    // # Safety: as vr_u64.
+    unsafe {
+        p.write_volatile(v)
+    }
+}
+
+export fn vr_i8(p: *i8) -> i8 {
+    // # Safety: the caller passes a live, aligned `*i8`.
+    unsafe {
+        p.read_volatile()
+    }
+}
+
+export fn vw_i8(p: *i8, v: i8) {
+    // # Safety: as vr_i8.
+    unsafe {
+        p.write_volatile(v)
+    }
+}
+
+export fn vr_i16(p: *i16) -> i16 {
+    // # Safety: the caller passes a live, aligned `*i16`.
+    unsafe {
+        p.read_volatile()
+    }
+}
+
+export fn vw_i16(p: *i16, v: i16) {
+    // # Safety: as vr_i16.
+    unsafe {
+        p.write_volatile(v)
+    }
+}
+
+export fn vr_i32(p: *i32) -> i32 {
+    // # Safety: the caller passes a live, aligned `*i32`.
+    unsafe {
+        p.read_volatile()
+    }
+}
+
+export fn vw_i32(p: *i32, v: i32) {
+    // # Safety: as vr_i32.
+    unsafe {
+        p.write_volatile(v)
+    }
+}
+
+export fn vr_i64(p: *i64) -> i64 {
+    // # Safety: the caller passes a live, aligned `*i64`.
+    unsafe {
+        p.read_volatile()
+    }
+}
+
+export fn vw_i64(p: *i64, v: i64) {
+    // # Safety: as vr_i64.
+    unsafe {
+        p.write_volatile(v)
+    }
+}
+
+export fn vr_byte(p: *byte) -> byte {
+    // # Safety: the caller passes a live `*byte`.
+    unsafe {
+        p.read_volatile()
+    }
+}
+
+export fn vw_byte(p: *byte, v: byte) {
+    // # Safety: as vr_byte.
+    unsafe {
+        p.write_volatile(v)
+    }
+}
+
+// Two writes of one value: both happen (never merged, never elided).
+export fn vw_twice(p: *u32) {
+    // # Safety: a live, aligned `*u32`.
+    unsafe {
+        p.write_volatile(7)
+        p.write_volatile(7)
+    }
+}
+
+export fn ord_w_twice(p: *u32) {
+    // # Safety: as vw_twice.
+    unsafe {
+        p[0] = 7
+        p[0] = 7
+    }
+}
+
+// Two reads whose values are summed: both happen (never CSE'd).
+export fn vr_twice(p: *u32) -> u64 {
+    // # Safety: a live, aligned `*u32`.
+    unsafe {
+        p.read_volatile() as u64 + p.read_volatile() as u64
+    }
+}
+
+export fn ord_r_twice(p: *u32) -> u64 {
+    // # Safety: as vr_twice.
+    unsafe {
+        p[0] as u64 + p[0] as u64
+    }
+}
+
+// A read whose value is dropped still reads.
+export fn vr_unused(p: *u32) {
+    // # Safety: a live, aligned `*u32`.
+    unsafe {
+        let _ = p.read_volatile()
+    }
+}
+
+// Order: three stores, p then q then p, in program order.
+export fn vw_order(p: *u32, q: *u32) {
+    // # Safety: two live, aligned `*u32`s.
+    unsafe {
+        p.write_volatile(17)
+        q.write_volatile(34)
+        p.write_volatile(51)
+    }
+}
+
+// The loop the optimizer folds for an ordinary access: a hundred
+// stores to one address collapse to the last one. Volatile, every
+// iteration stores.
+export fn vw_loop(p: *u32) {
+    var i: u32 = 0
+    while i < 100 {
+        // # Safety: a live, aligned `*u32`.
+        unsafe {
+            p.write_volatile(i)
+        }
+        i = i + 1
+    }
+}
+
+export fn ord_w_loop(p: *u32) {
+    var i: u32 = 0
+    while i < 100 {
+        // # Safety: as vw_loop.
+        unsafe {
+            p[0] = i
+        }
+        i = i + 1
+    }
+}
+
+// A poll: the ordinary read is loop-invariant and hoisted; the
+// volatile read happens on every iteration.
+export fn vr_poll(p: *u32) -> u32 {
+    var n: u32 = 0
+    // # Safety: a live, aligned `*u32`.
+    while unsafe { p.read_volatile() } == 0 {
+        n = n + 1
+    }
+    n
+}
+
+export fn ord_r_poll(p: *u32) -> u32 {
+    var n: u32 = 0
+    // # Safety: as vr_poll.
+    while unsafe { p[0] } == 0 {
+        n = n + 1
+    }
+    n
+}
