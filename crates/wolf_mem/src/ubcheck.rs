@@ -1802,7 +1802,7 @@ impl<'t> Machine<'t> {
             "a volatile read"
         };
         let size = prim_size(pointee);
-        if p.alloc.is_some() && p.addr % size != 0 {
+        if p.alloc.is_some() && !p.addr.is_multiple_of(size) {
             let tag_span = p.alloc.map(|a| self.allocs[a].span).unwrap_or(span);
             return self.ub(
                 UbRow::L3,
