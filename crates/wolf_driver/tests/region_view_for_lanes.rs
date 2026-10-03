@@ -138,13 +138,15 @@ fn corpus(rel: &str) -> PathBuf {
 }
 
 /// lupin releases that predate wolf-interp#126 (is68): they run every
-/// view escape to `exit(0)`. is68's own build reports the same
-/// version and traps, so a pinned version may answer either.
-const PRE_VIEW_TRAP_LUPIN: &[&str] = &["0.1.44"];
+/// view escape to `exit(0)`. is68's own build reported the same
+/// version and trapped, so a pinned version may answer either. Emptied
+/// at the 0.1.45 pairing (r27): 0.1.45 carries is68 and traps every one.
+const PRE_VIEW_TRAP_LUPIN: &[&str] = &[];
 
 /// lupin releases that run a `return` out of a region block
-/// (wolf-interp#178): is68 included.
-const PRE_RETURN_TRAP_LUPIN: &[&str] = &["0.1.44"];
+/// (wolf-interp#178): is68 included. 0.1.45 (the 0.2.22 pairing, r27)
+/// still runs it, measured; kept with its issue.
+const PRE_RETURN_TRAP_LUPIN: &[&str] = &["0.1.44", "0.1.45"];
 
 const RULED_LUPIN: &str = "trap(region-fault)";
 
