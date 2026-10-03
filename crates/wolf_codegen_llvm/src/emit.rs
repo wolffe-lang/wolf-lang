@@ -2261,6 +2261,22 @@ impl<'a> Fx<'a> {
                 self.vals.insert(results[0], Repr::Scalar(t));
             }
 
+            // kw06 (`[mem.prov.expose]`): `ptrtoint` exposes the
+            // pointer's provenance and `inttoptr` takes exposed
+            // provenance — LLVM's own reading of the two casts.
+            Opcode::PtrToInt => {
+                let a = self.op(args[0])?;
+                let t = self.tmp();
+                self.line(format!("  {t} = ptrtoint ptr {a} to i64"));
+                self.vals.insert(results[0], Repr::Scalar(t));
+            }
+            Opcode::PtrFromInt => {
+                let a = self.op(args[0])?;
+                let t = self.tmp();
+                self.line(format!("  {t} = inttoptr i64 {a} to ptr"));
+                self.vals.insert(results[0], Repr::Scalar(t));
+            }
+
             // ---- memory ----
             Opcode::PtrOff => {
                 let Aux::Scale(scale) = data.aux else {
