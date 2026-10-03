@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+### Volatile access: `p.read_volatile()` / `p.write_volatile(v)` (kw07, ruling #31 K3 = B)
+
+- **Two methods on `*T`.** `p.read_volatile()` yields the `T` at `p`;
+  `p.write_volatile(v)` stores `v` there. Before, no volatile spelling
+  existed and `[mem.unsafe.raw.3]` promised "std intrinsics" nothing
+  defined; every machine answered `unsupported`. The pointee is one of
+  `u8`…`u64`, `i8`…`i64` or `byte` (`[mem.unsafe.volatile.1]`); any
+  other — `int`, `uint`, `bool`, a float, an aggregate — is the new
+  **E1307**. Both are raw-tier accesses: E1301 outside `unsafe`.
+- **One access per call, in the object.** Each call is exactly one
+  load or store of the pointee's width, aligned, never elided, split,
+  merged or reordered against another volatile access
+  (`[mem.unsafe.volatile.2]`), on native and release, hosted and
+  `x86_64-unknown-none`. The access lowers to a width-named intrinsic
+  call on the raw-buffer token, so the WIR mid-end treats it as an
+  opaque effect, and both backends expand it in place to one
+  instruction (LLVM `load volatile`/`store volatile`); nothing is
+  imported. `volatile_disasm.rs` counts the instructions, with
+  release-tier controls that prove the ordinary spelling of each shape
+  IS folded (a hundred-store loop becomes one store; a poll's load is
+  hoisted).
+- **The machines.** On an allocation a volatile access is an ordinary
+  access of the width (`[mem.unsafe.volatile.3]`): the checked machine
+  runs it under the same rows as `p[0]`, and a misaligned address is
+  the new §7 row **L3** (licenses O11: one aligned access, no check).
+  lupin 0.1.45 has no volatile surface; its half is wolf-interp#185,
+  pinned by version in `volatile_lanes.rs`.
+- Hosted programs that use neither method compile byte-for-byte as
+  before. Anchors 570 → 574.
 ### Integers and pointers (kw06, ruling #31 K9(a) and K9(c))
 
 - **The casts and the provenance methods lower.** `int as *T`, `*T as
