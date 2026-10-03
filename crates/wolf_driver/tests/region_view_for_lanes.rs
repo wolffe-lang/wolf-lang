@@ -257,13 +257,11 @@ fn a_piece_returned_from_inside_the_loop_is_refused() {
 }
 
 /// Not a view: the elements of a list a call built in the region. Red
-/// at trunk dfcc2f13.
+/// at trunk dfcc2f13. lupin 0.1.44 already traps it, so nothing is
+/// pinned.
 #[test]
 fn an_element_of_a_region_built_list_held_outside_is_refused() {
-    refused_everywhere(
-        &corpus("memory/region_str_list_for_held.lu"),
-        PRE_VIEW_TRAP_LUPIN,
-    );
+    refused_everywhere(&corpus("memory/region_str_list_for_held.lu"), &[]);
 }
 
 /// `copy` of a `str` shares its bytes (`[mem.tier0.move.3]`), so the
