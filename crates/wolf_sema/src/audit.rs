@@ -214,3 +214,54 @@ pub fn manifest_check(pkg: &Package, manifest: Option<&str>) -> Vec<Diagnostic> 
     }
     diags
 }
+
+/// The assembly roster rule (kw05, `[abi.asm.roster]`): on the
+/// freestanding target, when the root manifest lists `asm` sources,
+/// every call through a bodyless `extern "c" fn` must reach a routine
+/// one of them makes global (`roster`, the `.globl` names) or one of
+/// the target's hooks (`hooks`). E1306 per call that does not, at the
+/// call, naming the routine. A call through the `import c` namespace
+/// (`c.malloc`) is not a hand-declared extern and is not judged here.
+pub fn asm_roster_check(
+    tc: &crate::Typecheck,
+    roster: &[String],
+    hooks: &[&str],
+    listed: &[String],
+) -> Vec<Diagnostic> {
+    let mut diags = Vec::new();
+    for outcome in &tc.bodies {
+        let crate::check::BodyResult::Checked(body) = &outcome.result else {
+            continue;
+        };
+        for (span, call) in &body.calls {
+            if !call.c_call || call.callee.starts_with("c.") {
+                continue;
+            }
+            let name = call.callee.rsplit('.').next().unwrap_or(&call.callee);
+            if roster.iter().any(|r| r == name) || hooks.contains(&name) {
+                continue;
+            }
+            let mut d = Diagnostic::error(
+                codes::E1306,
+                *span,
+                format!(
+                    "`{name}` is called through `extern \"c\"`, but no assembly source the \
+                     manifest lists defines it"
+                ),
+            )
+            .with_label("a call into a routine off the assembly roster")
+            .with_note(format!(
+                "the roster is the `.globl` names of `wolf.pkg`'s `asm` sources ({}); on \
+                 target x86_64-unknown-none every hand-declared extern a module calls is on it \
+                 or is a hook ({})",
+                listed.join(", "),
+                hooks.join(", ")
+            ));
+            if let Some(decl) = call.decl_span {
+                d = d.with_secondary(decl, "declared here");
+            }
+            diags.push(d);
+        }
+    }
+    diags
+}

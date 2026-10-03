@@ -1972,6 +1972,20 @@ every access.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__unsafe_door_misuse.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1305_door_misuse.snap
 
+## E1306 — this call reaches a routine no listed assembly source defines
+
+On the freestanding target (`x86_64-unknown-none`), a package whose
+`wolf.pkg` lists assembly sources (`asm: ["boot/io.S"]`) has declared
+its assembly roster: the routines those files make global with
+`.globl`. A call through a bodyless `extern "c" fn` is a call into that
+roster, or into one of the target's hooks (`wolf_trap`, `memcpy`,
+`memmove`, `memset`, `memcmp`). Anything else is assembly or C the
+manifest does not account for, and the roster exists so that a kernel's
+unsafe ring is visible in one file. List the source that defines the
+routine under `asm`, add its `.globl` there, or remove the call.
+
+Fixtures: crates/wolf_sema/tests/snapshots/audit_surface__audit_e1306_off_roster.snap
+
 ## E1401 — undefined behavior detected by the checked-build UB machine
 
 The `--checked` execution machine (the miri-lite UB checker) ran this

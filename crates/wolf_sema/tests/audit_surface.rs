@@ -111,3 +111,35 @@ fn trusted_roster_rides_both_interface_hashes() {
     assert!(roster3.is_empty());
     assert_ne!(e1, e3, "dropping the mark is an interface change too");
 }
+
+/// kw05 (`[abi.asm.roster]`): the kernel's two hand-declared externs,
+/// one on the roster of its listed assembly and one off it.
+const ASM_KERNEL: &str = "extern \"c\" fn kw_outb(port: u16, v: u8)\n\
+     extern \"c\" fn kw_missing() -> i64\n\
+     \n\
+     export fn kmain() -> i64 {\n    \
+         // # Safety: both are the boot path's assembly.\n    \
+         unsafe { kw_outb(1016, 75 as u8) }\n    \
+         unsafe { kw_missing() }\n\
+     }\n";
+
+#[test]
+fn e1306_a_call_off_the_assembly_roster() {
+    let res = resolve(&[(&[], "main.lu", ASM_KERNEL)]);
+    let tc = wolf_sema::typecheck_package(&res);
+    assert!(!tc.has_errors(), "{:?}", tc.diagnostics);
+    let hooks = ["wolf_trap", "memcpy", "memmove", "memset", "memcmp"];
+    let listed = ["boot/io.S".to_string()];
+    // Both on the roster: nothing to say.
+    let full = ["kw_outb".to_string(), "kw_missing".to_string()];
+    assert!(audit::asm_roster_check(&tc, &full, &hooks, &listed).is_empty());
+    // One off it: one E1306 at the call, naming the routine.
+    let diags = audit::asm_roster_check(&tc, &["kw_outb".to_string()], &hooks, &listed);
+    assert_eq!(diags.len(), 1, "{diags:?}");
+    let mut sources = Sources::new();
+    for u in &res.package.files {
+        sources.add(u.raw.file, u.raw.display.clone(), &u.raw.src);
+    }
+    let rendered = render_human(&diags[0], &sources, &RenderOptions::default());
+    insta::assert_snapshot!("audit_e1306_off_roster", rendered);
+}

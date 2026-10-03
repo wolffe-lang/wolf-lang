@@ -1,0 +1,16 @@
+---
+source: crates/wolf_sema/tests/audit_surface.rs
+expression: rendered
+---
+error[E1306]: `kw_missing` is called through `extern "c"`, but no assembly source the manifest lists defines it
+ --> mem:///main.lu:7:14
+  |
+2 | extern "c" fn kw_missing() -> i64
+  |               ---------- declared here
+...
+7 |     unsafe { kw_missing() }
+  |              ^^^^^^^^^^^^ a call into a routine off the assembly roster
+  |
+  = note: the roster is the `.globl` names of `wolf.pkg`'s `asm` sources (boot/io.S); on target
+    x86_64-unknown-none every hand-declared extern a module calls is on it or is a hook
+    (wolf_trap, memcpy, memmove, memset, memcmp)

@@ -1891,6 +1891,18 @@ through a checked `handle`, which re-validates its generation at
 every access.
 "#);
 
+code!(E1306, "this call reaches a routine no listed assembly source defines", r#"
+On the freestanding target (`x86_64-unknown-none`), a package whose
+`wolf.pkg` lists assembly sources (`asm: ["boot/io.S"]`) has declared
+its assembly roster: the routines those files make global with
+`.globl`. A call through a bodyless `extern "c" fn` is a call into that
+roster, or into one of the target's hooks (`wolf_trap`, `memcpy`,
+`memmove`, `memset`, `memcmp`). Anything else is assembly or C the
+manifest does not account for, and the roster exists so that a kernel's
+unsafe ring is visible in one file. List the source that defines the
+routine under `asm`, add its `.globl` there, or remove the call.
+"#);
+
 // ------------------------------------------------------------------------
 // E14xx — the checked-execution family (s23): verdicts of the miri-lite
 // UB machine, reported when `--checked` runs a program dynamically.
