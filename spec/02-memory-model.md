@@ -1014,8 +1014,37 @@ Simpler than the safe tier, not stricter (anti-Stacked-Borrows lesson).
 - `[mem.unsafe.raw.2]` `assume noalias p, q` asserts the pointed-to
   ranges do not overlap for the assertion's scope. A false assertion is
   UB (§7/P5) — the only *assertion-created* UB in the language.
-- `[mem.unsafe.raw.3]` Volatile reads/writes (std intrinsics) are
-  side-effecting and never elided/reordered against each other.
+- `[mem.unsafe.raw.3]` Volatile reads and writes are the two methods
+  `[mem.unsafe.volatile]` defines on `*T`, not intrinsics: they are
+  side-effecting, and never elided, split, merged or reordered against
+  each other (K3 = B, STATUS #31).
+- `[mem.unsafe.volatile]` `p.read_volatile()` yields the `T` at `p`;
+  `p.write_volatile(v)` stores `v: T` there and yields unit. Both are
+  raw-tier operations (E1301 outside `unsafe`). Ordinary raw accesses
+  (`p[i]`) stay free for the optimizer to merge, drop or move
+  (`[mem.unsafe.raw.1]`); these two are the spelling for memory whose
+  every access is observable — a device register, a boot protocol's
+  response written by firmware.
+  - `[mem.unsafe.volatile.1]` The pointee `T` is a fixed-width integer
+    (`u8`, `u16`, `u32`, `u64`, `i8`, `i16`, `i32`, `i64`) or `byte`.
+    Any other pointee — `int`, `uint`, `bool`, a float, an aggregate —
+    is E1307: its width is not one machine access, or its value set is
+    restricted (T1).
+  - `[mem.unsafe.volatile.2]` Each call is **exactly one** access of
+    `T`'s width at `p`, aligned: never elided (a read whose value is
+    unused still reads; two writes of one value both write), never
+    split into narrower accesses, never merged with a neighbour, and
+    never reordered against another volatile access. Ordering against
+    ordinary accesses and against other threads is not promised here
+    (that is F5's atomics and fences). The compiled tiers prove it in
+    the object: one load or store instruction of the width per call
+    (`volatile_disasm.rs`).
+  - `[mem.unsafe.volatile.3]` On an allocation the access is an
+    ordinary access of `T`'s width: the checked machine and lupin run
+    it under the same rows as `p[0]` (P1–P4, L1, L2, T1). An address
+    that is not a multiple of `T`'s size is UB row L3. An address no
+    allocation owns is row L2 there (device memory is
+    `[mem.prov.device]`'s, F9).
 - `[mem.unsafe.door]` Exactly two doors re-enter the safe world:
   1. `borrow r from ptr` — produces a region-scoped reference from a raw
      pointer. Obligation: `ptr` addresses a live allocation wholly inside
@@ -1138,6 +1167,7 @@ Detection legend: **S** static checker (s18–s23) · **O** is04 oracle ·
 | P6 | False discharge of a re-entry door (`borrow r from ptr` obligations, forged handle index laundering) | O6: safe-tier code after the door keeps **all** safe-tier entitlements (O1–O4) — the door is where trust concentrates, so safe code never re-checks | O, Q |
 | L1 | Read of uninitialized or moved-from memory via raw pointers | O7: moves lower to memcpy-and-forget; dead-store elimination on moved-from places; no zero-init of locals | O, Q |
 | L2 | Deref of a dangling raw pointer (freed C allocation, escaped stack address) | O8: escape analysis / stack promotion (`[mem.region.promote.1]`) without conservatively pinning addresses | O, Q |
+| L3 | A volatile access (`[mem.unsafe.volatile]`) through an address that is not a multiple of the pointee's size | O11: each volatile call is one aligned machine access of its width — no split into narrower accesses, no alignment check, the instruction a device register expects | O |
 | T1 | Producing an invalid value of a restricted type in unsafe code (bool ∉ {0,1}, out-of-range enum discriminant, non-UTF-8 `str` bytes) | O9: niche packing (`Option[handle T]` is one word); match jump tables without default arms; UTF-8 fast paths without re-validation | O |
 | T2 | Torn write producing a partially-updated wide value observed through another tag | O10: layout freedom — field reorder, no address identity for value fields outside `#[repr(c)]` (I9); wide stores split freely | O |
 | C1 | Data race on non-atomic memory reachable only from unsafe/FFI code (safe code cannot race — spec 03) | Licensing pairing lives in spec 03 §(DRF-SC): sync-free stretches permit store motion/combining | O (schedule-bounded), race detector |
