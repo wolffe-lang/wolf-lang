@@ -498,16 +498,48 @@ mod linux_x86_64 {
             "{}: stores below %rsp (red zone): {below:?}",
             obj.display()
         );
+        // `objdump -dr` prints a relocation after the instruction it
+        // patches. It names `wolf_trap` on the call itself (the release
+        // tier's `call` + PLT32) or on the load of the hook's GOT slot
+        // (`mov …(%rip),%rax` then `call *%rax`, the native tier's PIC
+        // form): either way the hook's call is found, and the
+        // instruction after it must be `ud2`.
+        let code: Vec<&str> = insns
+            .iter()
+            .copied()
+            .filter(|l| !l.contains("R_X86_64"))
+            .collect();
+        let check = |call: usize| {
+            let next = code.get(call + 1).copied().unwrap_or("");
+            assert!(
+                next.contains("ud2"),
+                "{}: `wolf_trap` must not return — ud2 follows `{}`; got `{next}`",
+                obj.display(),
+                code[call].trim()
+            );
+        };
         let mut calls = 0;
-        for (i, l) in insns.iter().enumerate() {
-            if l.contains("R_X86_64") && l.contains("wolf_trap") {
+        let mut pending = false;
+        let mut at: Option<usize> = None;
+        for l in &insns {
+            if l.contains("R_X86_64") {
+                if l.contains("wolf_trap") {
+                    match at {
+                        Some(i) if code[i].contains("call") => {
+                            check(i);
+                            calls += 1;
+                        }
+                        _ => pending = true,
+                    }
+                }
+                continue;
+            }
+            let i = at.map_or(0, |i| i + 1);
+            at = Some(i);
+            if pending && l.contains("call") {
+                check(i);
                 calls += 1;
-                let next = insns.get(i + 1).copied().unwrap_or("");
-                assert!(
-                    next.contains("ud2"),
-                    "{}: `wolf_trap` must not return — ud2 follows the call; got `{next}`",
-                    obj.display()
-                );
+                pending = false;
             }
         }
         let (undef, _) = symbols(obj);
