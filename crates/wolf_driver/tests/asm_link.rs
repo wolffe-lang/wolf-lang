@@ -229,6 +229,23 @@ fn hosted_package(case: &str) -> PathBuf {
     )
 }
 
+/// The hosted rows link against `libwolf_rt.a`, which `cargo test` does
+/// not build on its own (the staticlib is no dependency of the binary).
+#[cfg(any(
+    all(target_os = "linux", target_arch = "x86_64"),
+    all(target_os = "macos", target_arch = "aarch64")
+))]
+fn ensure_rt_staticlib() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let status = Command::new(env!("CARGO"))
+            .args(["build", "-p", "wolf_rt"])
+            .status()
+            .expect("cargo builds wolf_rt");
+        assert!(status.success(), "wolf_rt staticlib build failed");
+    });
+}
+
 /// Row 4: a hosted build hands the listed object to its link.
 #[cfg(any(
     all(target_os = "linux", target_arch = "x86_64"),
@@ -236,6 +253,7 @@ fn hosted_package(case: &str) -> PathBuf {
 ))]
 #[test]
 fn a_hosted_program_links_its_listed_assembly_on_both_tiers() {
+    ensure_rt_staticlib();
     for tier in ["native", "release"] {
         let dir = hosted_package(&format!("hosted_{tier}"));
         let mut args = vec!["build", "main.lu", "-o", "seven"];
