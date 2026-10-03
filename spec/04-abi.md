@@ -130,8 +130,10 @@ AAPCS64, win64, Apple arm64 deltas).
   named exactly `f` (no module path — an export in a child module is
   still `f`; C has no modules), defined under the target's C plan
   (`[abi.c.targets]`), and kept by every tier whether or not wolf code
-  calls it. A wolf call to it crosses under the same C plan, in or out
-  of its object. An export is one function: a generic or `comptime`
+  calls it. A narrow integer or `bool` result is widened to 32 bits by
+  its signedness before it returns (the Apple arm64 callers C compilers
+  emit rely on it). A wolf call to it crosses under the same C plan, in
+  or out of its object. An export is one function: a generic or `comptime`
   `export fn`, an export read as a fn value (fn values are
   wolf-convention; C function pointers are wolf-lang#520's), a
   `mut`/`take` parameter, and a second function under the same symbol
