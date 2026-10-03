@@ -11,9 +11,10 @@
 //! machines with no C membrane — the checked machine and lupin — refuse a
 //! call into hand-declared C by name rather than model it.
 //!
-//! lupin 0.1.44 (the 0.2.21 pairing) still applies E1302 to every
-//! signature and has no C ABI; each parting is pinned below by version as
-//! pre-mirror (lupin's half is wolf-interp#181). A newer lupin must
+//! lupin 0.1.44 (the 0.2.21 pairing) and 0.1.45 (the 0.2.22 pairing,
+//! r27, measured) still apply E1302 to every signature and have no C
+//! ABI; each parting is pinned below by version as pre-mirror (lupin's
+//! half is wolf-interp#181). A newer lupin must
 //! answer what the compiler answers.
 
 mod lane_exit;
@@ -235,11 +236,17 @@ fn every_machine(
 }
 
 /// lupin 0.1.44 applies E1302 to every signature (measured,
-/// `rows-trunk.log`; unchanged by this lane).
-const E1302_044: &[Pin<'static>] = &[Pin {
-    version: "0.1.44",
-    verdict: "fail(E1302)",
-}];
+/// `rows-trunk.log`; unchanged by this lane); so does 0.1.45 (r27).
+const E1302_044: &[Pin<'static>] = &[
+    Pin {
+        version: "0.1.44",
+        verdict: "fail(E1302)",
+    },
+    Pin {
+        version: "0.1.45",
+        verdict: "fail(E1302)",
+    },
+];
 
 /// `[mem.unsafe.sig]`: a module-private fn takes `*T` and writes through it.
 #[test]
@@ -293,10 +300,16 @@ fn a_call_into_hand_declared_c_needs_unsafe() {
         e1301,
         e1301,
         e1301,
-        &[Pin {
-            version: "0.1.44",
-            verdict: "unsupported",
-        }],
+        &[
+            Pin {
+                version: "0.1.44",
+                verdict: "unsupported",
+            },
+            Pin {
+                version: "0.1.45",
+                verdict: "unsupported",
+            },
+        ],
     );
 }
 
