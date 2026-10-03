@@ -507,7 +507,14 @@ pub(crate) fn sig_info(
             ParamPass::Token => params.push(Slot::Token),
             ParamPass::Direct(ty) => {
                 let t = scalar_clif_ty(m, *ty).expect("scalar param");
-                clif.params.push(AbiParam::new(t));
+                // kw02: a narrow C argument is extended by the caller
+                // (`Mode::Sext`/`Zext`, set only on `c.*` imports).
+                let ap = match p.mode {
+                    wolf_wir::ir::Mode::Sext => AbiParam::new(t).sext(),
+                    wolf_wir::ir::Mode::Zext => AbiParam::new(t).uext(),
+                    _ => AbiParam::new(t),
+                };
+                clif.params.push(ap);
                 params.push(Slot::Direct(t));
             }
             ParamPass::Split(units) => {
@@ -2207,6 +2214,13 @@ impl<'a, 'b> Tx<'a, 'b> {
         Ok(self.b.ins().select(o, clamp, r))
     }
 
+    /// Is `callee` one of this program's `export fn`s (kw02)? The
+    /// convention is the callee's, so a wolf call into an export
+    /// executes the C plan.
+    fn callee_is_export(&self, callee: &str) -> bool {
+        self.m.funcs.values().any(|f| f.export && f.name == callee)
+    }
+
     /// Lower one call, executing the callee's ABI plan: tokens erased,
     /// small aggregates in registers, big ones through memory, error
     /// unions per `[abi.err.repr]`. The convention is the callee's:
@@ -2225,9 +2239,34 @@ impl<'a, 'b> Tx<'a, 'b> {
         let (fref, conv) = if let Some(&(fr, conv)) = self.fref_cache.get(callee) {
             (fr, conv)
         } else if let Some(entry) = self.funcs.get(callee) {
+            // kw02: a wolf call into an `export fn` crosses under the
+            // C plan its definition was declared with (`[abi.c.export]`).
+            let conv = if self.callee_is_export(callee) {
+                Conv::C
+            } else {
+                Conv::Wolf
+            };
             let fr = self.om.declare_func_in_func(entry.fid, self.b.func);
-            self.fref_cache.insert(callee.to_string(), (fr, Conv::Wolf));
-            (fr, Conv::Wolf)
+            self.fref_cache.insert(callee.to_string(), (fr, conv));
+            (fr, conv)
+        } else if self.callee_is_export(callee) {
+            // kw02: an `export fn` defined in another of this program's
+            // objects is imported by its plain symbol under the C plan.
+            let si_c = sig_info(self.m, sig, Conv::C, cc)?;
+            let fid = match self.imports.get(callee) {
+                Some(&fid) => fid,
+                None => {
+                    let fid = self
+                        .om
+                        .declare_function(callee, cranelift_module::Linkage::Import, &si_c.clif)
+                        .map_err(|e| ice(e.to_string()))?;
+                    self.imports.insert(callee.to_string(), fid);
+                    fid
+                }
+            };
+            let fr = self.om.declare_func_in_func(fid, self.b.func);
+            self.fref_cache.insert(callee.to_string(), (fr, Conv::C));
+            (fr, Conv::C)
         } else if let Some(symbol) = abi::c_import_symbol(callee) {
             // The explicit membrane (D19): the WIR name's `c.`
             // namespace IS the seam; the linker symbol is the plain C

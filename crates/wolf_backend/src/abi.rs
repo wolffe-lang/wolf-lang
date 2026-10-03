@@ -653,13 +653,20 @@ fn plan_sig_sysv(types: &TypeInterner, sig: &SigData, conv: Conv) -> SigPlan {
     }
 }
 
-/// The libc import subset the WIR lowerer emits today (the is04
-/// modelled set, s22 — native truth lands at s29): WIR callee name →
-/// unmangled C symbol. Hand-declared `extern "c"` beyond this set is
-/// c10's header-importer territory.
+/// A WIR callee in the `c.` namespace → its unmangled C symbol. The
+/// lowerer emits two kinds: the modelled five of `import c` (s22, the
+/// is04 set — native truth since s29) and, since kw02
+/// (`[abi.c.import]`, wolf-lang#521), every bodyless `extern "c" fn`
+/// the program declares, under its declared prototype. The namespace
+/// IS the membrane: a name without `c.`, or one that is not a C
+/// identifier, is never a C symbol.
 pub fn c_import_symbol(callee: &str) -> Option<&str> {
     let name = callee.strip_prefix("c.")?;
-    matches!(name, "malloc" | "calloc" | "free" | "memset" | "memcpy").then_some(name)
+    let mut chars = name.chars();
+    let head = chars.next()?;
+    ((head.is_ascii_alphabetic() || head == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_'))
+    .then_some(name)
 }
 
 #[cfg(test)]
@@ -1044,21 +1051,31 @@ mod tests {
     }
 
     #[test]
-    fn c_import_set_is_exactly_the_modelled_five() {
+    fn the_c_namespace_is_the_membrane() {
         for (callee, sym) in [
             ("c.malloc", "malloc"),
             ("c.calloc", "calloc"),
             ("c.free", "free"),
             ("c.memset", "memset"),
             ("c.memcpy", "memcpy"),
+            // kw02: a hand-declared `extern "c" fn`.
+            ("c.labs", "labs"),
+            ("c.kw_outb", "kw_outb"),
+            ("c._start2", "_start2"),
         ] {
             assert_eq!(c_import_symbol(callee), Some(sym));
         }
-        assert_eq!(c_import_symbol("c.printf"), None, "varargs are c10's");
         assert_eq!(
             c_import_symbol("malloc"),
             None,
             "the namespace is the membrane"
         );
+        for not_c in ["c.", "c.9lives", "c.geo.area", "c.a-b", "c.Point.show"] {
+            assert_eq!(
+                c_import_symbol(not_c),
+                None,
+                "{not_c} is not a C identifier"
+            );
+        }
     }
 }

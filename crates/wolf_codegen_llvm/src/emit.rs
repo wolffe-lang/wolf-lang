@@ -508,10 +508,16 @@ pub(crate) fn sig_info(
                     match p.mode {
                         Mode::Mut => " noalias noundef",
                         Mode::Read => " noalias readonly noundef",
-                        Mode::Val | Mode::Take => "",
+                        Mode::Val | Mode::Take | Mode::Sext | Mode::Zext => "",
                     }
                 } else {
-                    ""
+                    // kw02: a narrow C argument's extension is the ABI,
+                    // not a fact — it survives `strip_facts`.
+                    match p.mode {
+                        Mode::Sext => " signext",
+                        Mode::Zext => " zeroext",
+                        _ => "",
+                    }
                 };
                 ll_params.push(format!("{t}{attrs}"));
                 params.push(Slot::Direct(t));
@@ -2900,6 +2906,10 @@ impl<'a> Fx<'a> {
             (sym.to_string(), Conv::C)
         } else if callee.starts_with("__wolf_rt_") {
             (callee.to_string(), Conv::Wolf)
+        } else if self.m.funcs.values().any(|f| f.export && f.name == callee) {
+            // kw02: an `export fn` outside this subset — its plain
+            // symbol, under the C plan it was defined with.
+            (callee.to_string(), Conv::C)
         } else if self.m.funcs.values().any(|f| f.name == callee) {
             (wolf_backend::mangle(self.m, callee, sig), Conv::Wolf)
         } else {
@@ -2965,10 +2975,20 @@ impl<'a> Fx<'a> {
             }
         }
         let mut cargs: Vec<String> = first_args;
-        for (&av, slot) in args.iter().zip(si.params.iter()) {
+        let pmodes: Vec<Mode> = self.m.sigs[sig].params.iter().map(|p| p.mode).collect();
+        for (i, (&av, slot)) in args.iter().zip(si.params.iter()).enumerate() {
             match slot {
                 Slot::Token => {}
-                Slot::Direct(ty) => cargs.push(format!("{ty} {}", self.op(av)?)),
+                Slot::Direct(ty) => {
+                    // kw02: the narrow C argument's extension, at the
+                    // call site as on the declaration.
+                    let ext = match pmodes.get(i) {
+                        Some(Mode::Sext) => " signext",
+                        Some(Mode::Zext) => " zeroext",
+                        _ => "",
+                    };
+                    cargs.push(format!("{ty}{ext} {}", self.op(av)?))
+                }
                 Slot::Split(units) => {
                     let units = units.clone();
                     let base = self.addr(av)?;
