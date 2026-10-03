@@ -149,6 +149,16 @@ fn corpus(name: &str) -> PathBuf {
     p
 }
 
+/// A driver fixture: a witness whose own recovery is no program, kept
+/// out of the corpus's program-wide properties.
+fn fixture(name: &str) -> PathBuf {
+    let p = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/first_diagnostic")
+        .join(name);
+    assert!(p.is_file(), "fixture missing: {}", p.display());
+    p
+}
+
 /// lupin releases known to part on a row, with what they answer
 /// (wolf-interp#175 mirrors every one).
 type PreMirror<'a> = &'a [(&'a str, &'a str)];
@@ -239,7 +249,7 @@ fn keyword_where_a_pattern_starts_is_e0207() {
 #[test]
 fn unclosed_row_brace_is_earlier_than_the_keyword() {
     every_lane_refuses(
-        &corpus("negative/first_row_brace_unclosed.lu"),
+        &fixture("row_brace_unclosed.lu"),
         "fail(E0202)",
         "parse",
         &[("0.1.43", "fail(E0008)"), ("0.1.44", "fail(E0008)")],

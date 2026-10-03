@@ -165,10 +165,12 @@ ritual moves, on each tier.
   `wolf_diag::first_error` is the one place that picks. A boundary
   (E0202) sits at its opener, so an unclosed `(` before an unterminated
   string inside it is first.
-- Witnesses: nine rows `corpus/rows/negative/first_*.lu` and
-  `corpus/rows/first_list_literal_sum.lu` — #377's five classes, kw00's
+- Witnesses: eight rows `corpus/rows/negative/first_*.lu` and
+  `corpus/rows/first_list_literal_sum.lu` — #377's classes, kw00's
   top-level `union`, and the parse-before-lex, boundary-before-lex and
-  parse-before-resolve shapes; `first_diagnostic_lanes.rs` asserts the
+  parse-before-resolve shapes — and one driver fixture (#377's error-row
+  class, whose own recovery is no program); `first_diagnostic_lanes.rs`
+  asserts the
   checked, native and release records and both `wolf run` screens, and
   pins lupin 0.1.43/0.1.44 by version where it parts. The two
   `exit(0)`-vs-E0201 programs were lupin 0.1.36 without list literals

@@ -2,6 +2,11 @@
 //! phase: lex
 //! conforms: proto.record.first, gram.type.row
 //!
+//! A driver fixture, not a corpus row: its own recovery turns the body
+//! into top-level declarations, and the corpus-wide properties (the
+//! formatter's full format, the blast radius's untouched declarations)
+//! hold for programs whose baseline is a program.
+//!
 //! s203 (wolf-lang#377 class 4, ruling #28) — `-> int ! {` meant as
 //! "fallible, then the body", read as an error row: the row's `{` meets
 //! `var` on the next line and is never closed. E0202 at that `{` starts
@@ -10,8 +15,7 @@
 //! and 0.1.44 stop at the keyword, pinned pre-mirror by version.
 
 fn evaluate(n: int) -> int ! {
-    var stack
-    stack = n
+    var stack = n
     stack
 }
 
