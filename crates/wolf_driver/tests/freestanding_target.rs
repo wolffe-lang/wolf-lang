@@ -4,10 +4,11 @@
 //! `[abi.target.none.hooks]`, `[abi.target.none.alloc]`,
 //! `[abi.target.none.codegen]`).
 //!
-//! The gate is M-KW's step 2 (kw00 report §3e) on two kernels under
-//! `fixtures/freestanding/`: `kmain.lu` (M-KW's kernel without kw03's
-//! narrowing cast) and `kmain_trap.lu` (one overflowing addition of a
-//! value from outside). On each object, native and release:
+//! The gate is M-KW's step 2 (kw00 report §3e) on three kernels under
+//! `fixtures/freestanding/`: `kmain.lu` (M-KW's kernel, kw03's
+//! `b as int as u8` included), `kmain_trap.lu` (one overflowing
+//! addition of a value from outside) and `kmain_wide.lu` (aggregates by
+//! value). On each object, native and release:
 //!
 //! 1. `nm -u` is a subset of the hook list (`wolf_trap`, `memcpy`,
 //!    `memmove`, `memset`, `memcmp`) plus the program's own `extern`

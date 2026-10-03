@@ -1,17 +1,16 @@
-// kw04: M-KW's kernel (kw00 §3e step 1) without kw03's narrowing cast:
-// `kw_outb` takes the `byte` the loop yields (zero-extended at the C
-// membrane, as a `u8` is) where M-KW's `pax_outb` takes `b as int as
-// u8`. `kw_outb` is the gate's port write (rt_stub.S writes the byte to
+// kw04: M-KW's kernel (kw00 §3e step 1), cast and all (`b as int as
+// u8` is kw03's range-checked narrowing). `kw_outb` stands for
+// `pax_outb`: the gate's port write (rt_stub.S writes the byte to
 // stdout, user space having no port I/O); the boot stub (start.S) exits
-// with `kmain`'s result.
-extern "c" fn kw_outb(port: u16, v: byte)
+// with `kmain`'s result where M-KW calls `pax_exit`.
+extern "c" fn kw_outb(port: u16, v: u8)
 
 export fn kmain() -> i64 {
     let msg = "KWC\n"
     for b in msg.bytes() {
         // # Safety: kw_outb is rt_stub.S's port write; 0x3f8 is COM1.
         unsafe {
-            kw_outb(1016, b)
+            kw_outb(1016, b as int as u8)
         }
     }
     33

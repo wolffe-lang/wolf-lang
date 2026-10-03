@@ -2,7 +2,7 @@
 // operand comes from outside (`kw_big` is rt_stub.S's i64::MAX), so no
 // tier can fold the check away: the trap reaches `wolf_trap` with its
 // site on both tiers, and the stub exits with the site's line.
-extern "c" fn kw_outb(port: u16, v: byte)
+extern "c" fn kw_outb(port: u16, v: u8)
 extern "c" fn kw_big() -> i64
 
 export fn kmain() -> i64 {
@@ -13,7 +13,7 @@ export fn kmain() -> i64 {
     for b in msg.bytes() {
         // # Safety: kw_outb is rt_stub.S's port write; 0x3f8 is COM1.
         unsafe {
-            kw_outb(1016, b)
+            kw_outb(1016, b as int as u8)
         }
     }
     m
