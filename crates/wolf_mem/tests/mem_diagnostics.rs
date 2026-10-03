@@ -766,6 +766,22 @@ fn e1301_raw_ops_outside_unsafe() {
 }
 
 #[test]
+fn e1301_volatile_outside_unsafe() {
+    // kw07 (`[mem.unsafe.volatile]`): a volatile read or write is an
+    // access through the pointer, ring-gated like `p[0]`.
+    snap(
+        "e1301_volatile_outside",
+        "fn peek(p: *u32) -> u32 {\n    \
+             p.read_volatile()\n\
+         }\n\
+         fn poke(p: *u32) {\n    \
+             p.write_volatile(1)\n\
+         }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
+
+#[test]
 fn e1301_provenance_op_and_cast_outside_unsafe() {
     // Strict-provenance ops and non-identity pointer casts are
     // ring-gated too; holding/copying the pointer itself stays free
