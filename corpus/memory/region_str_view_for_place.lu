@@ -1,0 +1,26 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.str.view
+//!
+//! s207 (wolf-lang#540) — the pieces held in a local first: a `for`
+//! over a PLACE carries the place's sites into its binding, the same
+//! sites `ps[i]` carries. E1010; ran to `[regions]` before s207.
+
+fn build() -> str {
+    region scratch {
+        let s = "re" + "gions,here"
+        let ps = s.split(",")
+        var first = ""
+        for p in ps {
+            if first.len == 0 {
+                first = p
+            }
+        }
+        first
+    }
+}
+
+fn main() -> !int {
+    print("[{build()}]")
+    0
+}

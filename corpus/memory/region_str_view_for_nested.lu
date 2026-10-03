@@ -1,0 +1,26 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.str.view
+//!
+//! s207 (wolf-lang#540) — a view of a piece of a piece: `l` is a
+//! `lines()` piece of `s`, `w` a `words()` piece of `l`, and `w.trim()`
+//! a view of `w`. Each carries `s`'s sites down the chain. E1010; ran
+//! to `[there]` before s207.
+
+fn build() -> str {
+    region scratch {
+        let s = "re" + "gions here\nand there "
+        var last = ""
+        for l in s.lines() {
+            for w in l.words() {
+                last = w.trim()
+            }
+        }
+        last
+    }
+}
+
+fn main() -> !int {
+    print("[{build()}]")
+    0
+}

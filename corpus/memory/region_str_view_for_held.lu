@@ -1,0 +1,19 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.str.view
+//!
+//! s207 (wolf-lang#540) — a `words()` piece held by a binding declared
+//! outside the region (`keep = w`) and read after the region is freed.
+//! E1010 on every tier; ran to `[here]` before s207.
+
+fn main() -> !int {
+    var keep = ""
+    region scratch {
+        let s = "re" + "gions here"
+        for w in s.words() {
+            keep = w
+        }
+    }
+    print("[{keep}]")
+    0
+}

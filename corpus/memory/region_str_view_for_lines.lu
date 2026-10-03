@@ -1,0 +1,24 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.str.view
+//!
+//! s207 (wolf-lang#540) — a `lines()` piece returned out of its
+//! region. E1010; ran to `[regions]` before s207.
+
+fn build() -> str {
+    region scratch {
+        let s = "re" + "gions\nhere"
+        var first = ""
+        for l in s.lines() {
+            if first.len == 0 {
+                first = l
+            }
+        }
+        first
+    }
+}
+
+fn main() -> !int {
+    print("[{build()}]")
+    0
+}

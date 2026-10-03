@@ -1,0 +1,27 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.str.view
+//!
+//! s207 (wolf-lang#540) — a piece bound by a `for` over `words()`
+//! carries its receiver's sites, exactly as `s.split(",")[0]` does
+//! (`region_str_view_return.lu`'s extension, s171): the loop binding
+//! names bytes in `scratch`, so `last` returned out of the region is
+//! E1010. Before s207 the binding carried no site and this program
+//! printed `[here]` from freed bytes on checked, native and release;
+//! lupin traps it `region-fault` (wolf-interp#126, is68).
+
+fn build() -> str {
+    region scratch {
+        let s = "re" + "gions here"
+        var last = ""
+        for w in s.words() {
+            last = w
+        }
+        last
+    }
+}
+
+fn main() -> !int {
+    print("[{build()}]")
+    0
+}

@@ -1,0 +1,24 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.str.view
+//!
+//! s207 (wolf-lang#540) — `return w` from inside the loop: returned
+//! from the frame that owns the region. E1010; ran to `[regions]`
+//! before s207 on all three tiers and on lupin, whose `return` out of a
+//! region does not trap (`return s.trim()` direct is E1010 on the
+//! compiler and runs on lupin too).
+
+fn build() -> str {
+    region scratch {
+        let s = "re" + "gions here"
+        for w in s.words() {
+            return w
+        }
+    }
+    "none"
+}
+
+fn main() -> !int {
+    print("[{build()}]")
+    0
+}

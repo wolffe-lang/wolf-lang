@@ -1,0 +1,75 @@
+//! check: run(exit=0, stdout="regions\nhere\n2\n[here] [here] [gions] [here] [11] [7]\n")
+//! phase: run
+//! conforms: mem.region.escape, mem.str.view
+//!
+//! s207 (wolf-lang#540), the legal side: a `for` piece names its
+//! receiver's bytes and nothing else. Used inside the region it is
+//! free; taken of a parameter, of a literal, of a literal local, or of a
+//! `str` built OUTSIDE the region, it may outlive the region, because
+//! its bytes do. The `List` a `split`/`words`/`lines` call allocates is
+//! not where a piece's bytes live, so it pins nothing. An `int` drawn
+//! from a piece, or an element of a `List[int]`, carries no site. If
+//! this file ever starts refusing, the rule has become "a for binding
+//! is radioactive" rather than "a piece lives where its receiver's
+//! bytes live". lupin agrees on every line.
+
+fn last_word(t: str) -> str {
+    region scratch {
+        var last = ""
+        for w in t.words() {
+            last = w
+        }
+        last
+    }
+}
+
+fn last_lit() -> str {
+    region scratch {
+        var last = ""
+        for w in "re gions here".words() {
+            last = w
+        }
+        last
+    }
+}
+
+fn last_local() -> str {
+    region scratch {
+        let s = "re,gions"
+        var last = ""
+        for p in s.split(",") {
+            last = p
+        }
+        last
+    }
+}
+
+fn main() -> !int {
+    region scratch {
+        let s = "re" + "gions here"
+        var n = 0
+        for w in s.words() {
+            print(w)
+            n += 1
+        }
+        print("{n}")
+    }
+    let outer = "re" + "gions here"
+    var keep = ""
+    var total = 0
+    var k = 0
+    region scratch {
+        for w in outer.words() {
+            keep = w
+            total += w.len
+        }
+        let xs = List[int]()
+        (mut xs).push(4)
+        (mut xs).push(7)
+        for x in xs {
+            k = x
+        }
+    }
+    print("[{last_word(outer)}] [{last_lit()}] [{last_local()}] [{keep}] [{total}] [{k}]")
+    0
+}

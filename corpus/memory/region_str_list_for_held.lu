@@ -1,0 +1,27 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.str.view
+//!
+//! s207 (wolf-lang#540) — not a view at all: a `for` over a list a
+//! call built in the region. `mk()` allocates in its caller's ambient
+//! region (`[mem.region.create.3]`), so the list and the string pushed
+//! into it live in `scratch`, and the element held by `keep` outlives
+//! them. The loop binding carries the iterable's sites, the same rule
+//! as the pieces. E1010; ran to `[regions]` before s207.
+
+fn mk() -> List[str] {
+    var o = List[str]()
+    (mut o).push("re" + "gions")
+    o
+}
+
+fn main() -> !int {
+    var keep = ""
+    region scratch {
+        for w in mk() {
+            keep = w
+        }
+    }
+    print("[{keep}]")
+    0
+}
