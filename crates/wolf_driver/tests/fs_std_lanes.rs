@@ -50,9 +50,10 @@ fn wolf() -> &'static str {
 /// says the last released version (the mirror's own branch reports
 /// `0.1.44` at its own commit before a release), so the commit is what
 /// holds that build to the ruled answers. 0.1.44's archive (r26,
-/// release sha256 e44aae06…) reports `ba47627`, measured.
-const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] =
-    &[("0.1.43", Some("6d6cde5")), ("0.1.44", Some("ba47627"))];
+/// release sha256 e44aae06…) reported `ba47627`, measured. Emptied at
+/// the 0.1.45 pairing (r27): 0.1.45 carries the mirror (wolf-interp#171)
+/// and takes the ruled answer on every case.
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[];
 
 fn pre_mirror(lupin: &Obs) -> bool {
     PRE_MIRROR_LUPIN
