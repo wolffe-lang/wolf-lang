@@ -1,0 +1,17 @@
+// kw05: kw04's kernel calling one routine the manifest's `asm` sources
+// do not define (`kw_missing`): on the freestanding target that call is
+// E1306, the roster's refusal ([abi.asm.roster]).
+extern "c" fn kw_outb(port: u16, v: u8)
+extern "c" fn kw_missing() -> i64
+
+export fn kmain() -> i64 {
+    let msg = "KWC\n"
+    for b in msg.bytes() {
+        // # Safety: kw_outb is rt_stub.S's port write.
+        unsafe {
+            kw_outb(1016, b as int as u8)
+        }
+    }
+    // # Safety: none can be given — no listed source defines it.
+    unsafe { kw_missing() }
+}

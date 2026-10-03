@@ -1,0 +1,10 @@
+// kw05: a hosted program reaching an assembly routine through a bodyless
+// `extern "c" fn` ([abi.asm.link]). The routine is the host's own
+// `seven_*.S`, listed under `asm` in the gate's wolf.pkg; it returns 7.
+extern "c" fn kw_seven() -> i64
+
+fn main() -> int {
+    // # Safety: kw_seven is the listed assembly routine; it reads nothing.
+    let n = unsafe { kw_seven() }
+    n as int
+}
