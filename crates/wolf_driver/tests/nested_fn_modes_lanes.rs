@@ -16,8 +16,12 @@
 //!
 //! The checked executor refuses every nested fn by name (the #12
 //! family, `typecheck/nested_fn_value.lu`), so the running row is
-//! `unsupported` there; lupin 0.1.42 declines a nested fn with a moded
-//! parameter (`unsupported`) and runs the modeless ones.
+//! `unsupported` there; lupin 0.1.42 through 0.1.44 declined a nested fn
+//! with a moded parameter (`unsupported`) and ran the modeless ones.
+//! lupin 0.1.45 (is68, wolf-interp#169; the 0.2.22 pairing, r27) holds a
+//! nested fn to its declared modes as a module fn: the spelled call runs
+//! with the compiler's bytes, the omitted `mut` is E1007, and the
+//! moved-out parameter traps `use-after-move` at the caller's read.
 
 mod lane_exit;
 
@@ -218,7 +222,7 @@ fn only(entry: &Path, code: &str) {
 fn a_nested_fn_mut_parameter_spelled_mut_runs() {
     let entry = corpus("nested_fn_mut_param.lu");
     wolfgang(&entry, verdict("unsupported"), runs("4 42 2 9 7 5\n4\n"));
-    oracle(&entry, verdict("unsupported"));
+    oracle(&entry, runs("4 42 2 9 7 5\n4\n"));
 }
 
 /// `f(xs)` against `fn f(mut xs: …)`.
@@ -228,7 +232,7 @@ fn a_nested_fn_mut_parameter_without_mut_is_e1007() {
     let e = verdict("fail(E1007)");
     wolfgang(&entry, e, e);
     only(&entry, "E1007");
-    oracle(&entry, verdict("unsupported"));
+    oracle(&entry, e);
 }
 
 /// #464's rule at the nested fn's own exit.
@@ -238,7 +242,9 @@ fn a_nested_fn_mut_parameter_left_moved_out_is_e1001() {
     let e = verdict("fail(E1001)");
     wolfgang(&entry, e, e);
     only(&entry, "E1001");
-    oracle(&entry, verdict("unsupported"));
+    // lupin traps the moved-out parameter at the caller's read, the
+    // dynamic counterpart of the compiler's E1001.
+    oracle(&entry, verdict("trap(use-after-move)"));
 }
 
 /// A write through a nested fn's `read` parameter.
