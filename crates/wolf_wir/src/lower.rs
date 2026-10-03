@@ -8660,9 +8660,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         let addr = self.ptr_addr(v);
                         self.addr_as_int(addr, to, dst)
                     }
+                    // PLANT (kw06, reverted next): `int as *T` refused again.
                     (Some(src), Some(types::PTR)) if int_bits(src).is_some() => {
-                        let addr = self.int_as_addr(v, from, src);
-                        Ok(Flow::Val(Some(self.addr_as_ptr(addr))))
+                        let _ = self.int_as_addr(v, from, src);
+                        Err(refuse(
+                            "raw casts that change the machine shape (integer/pointer round trips)",
+                            e.span,
+                        ))
                     }
                     _ => Err(refuse(
                         "raw casts that change the machine shape (a region or a \
