@@ -123,6 +123,14 @@ pub enum ReleaseTarget {
     LinuxX64,
     /// macOS/aarch64 (AAPCS64 + Apple deltas): the s127 target.
     MacosArm64,
+    /// kw04 (`[abi.target.none]`, `[abi.target.none.codegen]`): the
+    /// freestanding `x86_64-unknown-none`, emitted from any host with a
+    /// clang — never [`ReleaseTarget::host`]. ELF, the SysV C plan,
+    /// small PIC; every function `noredzone`, frame pointers kept, and
+    /// no MMX/SSE/AVX (`+soft-float`). The datalayout is the x86-64 ELF
+    /// one, which is the linux string (re-derived from clang 23's own
+    /// emission for `x86_64-unknown-none-elf` on kasumi, kw04).
+    X86_64None,
 }
 
 impl ReleaseTarget {
@@ -147,13 +155,14 @@ impl ReleaseTarget {
         match self {
             ReleaseTarget::LinuxX64 => "x86_64-unknown-linux-gnu",
             ReleaseTarget::MacosArm64 => "arm64-apple-macosx",
+            ReleaseTarget::X86_64None => "x86_64-unknown-none-elf",
         }
     }
 
     /// The `target datalayout` header line's value (provenance above).
     pub fn datalayout(self) -> &'static str {
         match self {
-            ReleaseTarget::LinuxX64 => {
+            ReleaseTarget::LinuxX64 | ReleaseTarget::X86_64None => {
                 "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-i128:128-f80:128-n8:16:32:64-S128"
             }
             ReleaseTarget::MacosArm64 => {
@@ -166,7 +175,9 @@ impl ReleaseTarget {
     /// against ([`wolf_backend::abi::CTarget`]).
     pub(crate) fn ctarget(self) -> wolf_backend::abi::CTarget {
         match self {
-            ReleaseTarget::LinuxX64 => wolf_backend::abi::CTarget::SysvX64,
+            ReleaseTarget::LinuxX64 | ReleaseTarget::X86_64None => {
+                wolf_backend::abi::CTarget::SysvX64
+            }
             ReleaseTarget::MacosArm64 => wolf_backend::abi::CTarget::AppleArm64,
         }
     }

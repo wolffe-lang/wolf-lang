@@ -138,6 +138,12 @@ enum ScopeClass {
 /// blocks, one for one, or they are not here at all.
 pub type BranchWeights = std::sync::Arc<BTreeMap<String, Vec<u64>>>;
 
+/// The function attributes every define carries on the freestanding
+/// target (kw04, `[abi.target.none.codegen]`): `noredzone`, frame
+/// pointers kept, and the no-MMX/SSE/AVX feature set with soft float.
+pub const FREESTANDING_FN_ATTRS: &str = " noredzone \"frame-pointer\"=\"all\" \
+     \"target-features\"=\"-mmx,-sse,-sse2,-sse3,-ssse3,-sse4.1,-sse4.2,-avx,-avx2,+soft-float\"";
+
 /// How the emitter treats the proven-fact channels.
 #[derive(Clone, Debug, Default)]
 pub struct EmitOptions {
@@ -1469,9 +1475,29 @@ impl<'a> Fx<'a> {
         self.cx.decls.entry(symbol.to_string()).or_insert(line);
     }
 
+    /// The freestanding target (kw04, `[abi.target.none]`).
+    fn freestanding(&self) -> bool {
+        self.cx.opts.target == Some(crate::ReleaseTarget::X86_64None)
+    }
+
+    /// The defensive twin of the driver's by-name refusal
+    /// (`wolf_backend::target::freestanding_refusal`): no runtime symbol
+    /// reaches a freestanding object, whatever the caller skipped.
+    fn refuse_runtime(&self, name: &str) -> Result<(), BackendError> {
+        if self.freestanding() {
+            let (construct, _) = wolf_backend::target::runtime_construct(name);
+            return Err(BackendError::Unsupported(format!(
+                "{construct} needs the hosted runtime (target {})",
+                wolf_backend::target::FREESTANDING
+            )));
+        }
+        Ok(())
+    }
+
     /// The built-in runtime shims this backend itself emits calls to
     /// (everything else arrives as ordinary WIR calls with real sigs).
     fn rt_builtin(&mut self, name: &str) -> Result<(), BackendError> {
+        self.refuse_runtime(name)?;
         let strip = self.cx.opts.strip_facts;
         let line = match name {
             "__wolf_rt_trap" => {
@@ -1559,6 +1585,32 @@ impl<'a> Fx<'a> {
         code: i32,
         site: Option<(u64, u64)>,
     ) -> Result<String, BackendError> {
+        if self.freestanding() {
+            // kw04 (K8(a), `[abi.target.none.hooks]`): the one hook,
+            // with the site when there is one and (null, 0, 0, 0)
+            // otherwise; `llvm.trap` (`ud2`) after it, because the
+            // program supplies the hook and it must not return. The
+            // declaration is deliberately NOT `noreturn`: LLVM deletes
+            // whatever follows a `noreturn` call, `ud2` included (kasumi,
+            // kw04 evidence/gate-wip-w5.log), and the `ud2` is the
+            // guarantee when a program's hook does return.
+            let hook = wolf_backend::target::TRAP_HOOK;
+            self.ensure_decl(
+                hook,
+                format!("declare void @{hook}(i32, ptr, i64, i64, i64) cold nounwind"),
+            );
+            self.intrinsic("declare void @llvm.trap() cold noreturn nounwind");
+            let args = match site {
+                Some((line, col)) => {
+                    let (sym, len) = self.site_file_global()?;
+                    format!("ptr @\"{sym}\", i64 {len}, i64 {line}, i64 {col}")
+                }
+                None => "ptr null, i64 0, i64 0, i64 0".to_string(),
+            };
+            return Ok(format!(
+                "  call void @{hook}(i32 {code}, {args})\n  call void @llvm.trap()"
+            ));
+        }
         match site {
             Some((line, col)) => {
                 self.rt_builtin("__wolf_rt_trap_at")?;
@@ -2905,6 +2957,7 @@ impl<'a> Fx<'a> {
         } else if let Some(sym) = abi::c_import_symbol(callee) {
             (sym.to_string(), Conv::C)
         } else if callee.starts_with("__wolf_rt_") {
+            self.refuse_runtime(callee)?;
             (callee.to_string(), Conv::Wolf)
         } else if self.m.funcs.values().any(|f| f.export && f.name == callee) {
             // kw02: an `export fn` outside this subset — its plain
@@ -3154,9 +3207,18 @@ impl<'a> Fx<'a> {
             (true, Mode::Zext, 1) => "zeroext ",
             _ => "",
         };
+        // kw04 (`[abi.target.none.codegen]`): kernel code generation on
+        // the freestanding target — no red zone (an interrupt lands on
+        // the same stack), frame pointers kept, and no MMX/SSE/AVX
+        // state (K10: floats are refused, so nothing needs it).
+        let target_attrs = if self.cx.opts.target == Some(crate::ReleaseTarget::X86_64None) {
+            FREESTANDING_FN_ATTRS
+        } else {
+            ""
+        };
         let _ = writeln!(
             out,
-            "define {linkage}{ret_ext}{} @\"{symbol}\"({}) nounwind{noinline} {{",
+            "define {linkage}{ret_ext}{} @\"{symbol}\"({}) nounwind{noinline}{target_attrs} {{",
             si.ret_ty(),
             named.join(", ")
         );

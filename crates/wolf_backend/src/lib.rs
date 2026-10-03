@@ -19,6 +19,7 @@
 pub mod abi;
 pub mod dwarf;
 pub mod layout;
+pub mod target;
 
 use wolf_wir::ir::{FuncId, Function, Module, SigId};
 

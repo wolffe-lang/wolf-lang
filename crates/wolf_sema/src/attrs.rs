@@ -33,7 +33,8 @@ use crate::graph::Package;
 
 /// The target triples a `cfg(target = "…")` predicate may name: the
 /// hosted matrix `[abi.c.targets]` names, and the freestanding target
-/// K1 rules (`x86_64-unknown-none`, no build selects it until kw04).
+/// K1 rules (`x86_64-unknown-none`, selected by `--target` or the
+/// manifest's `target`, kw04).
 pub const KNOWN_TARGETS: &[&str] = &[
     "x86_64-unknown-linux-gnu",
     "aarch64-unknown-linux-gnu",
@@ -43,6 +44,9 @@ pub const KNOWN_TARGETS: &[&str] = &[
     "x86_64-unknown-none",
 ];
 
+/// The freestanding target (K1, kw04, spec/04 `[abi.target.none]`).
+pub const FREESTANDING_TARGET: &str = "x86_64-unknown-none";
+
 /// The architectures — a triple's first component — a predicate may
 /// name instead of a whole triple.
 pub const KNOWN_ARCHES: &[&str] = &["x86_64", "aarch64"];
@@ -51,9 +55,8 @@ pub const KNOWN_ARCHES: &[&str] = &["x86_64", "aarch64"];
 const IMPLEMENTED: &str = "`trusted`, `consttime`, `allow`, `index`, `budget`, `repr(c)` and \
                            `cfg(target = \"…\")`";
 
-/// The build's target triple. Until `--target` exists (K1, kw04) the
-/// build's target is the host the compiler runs on — the same answer
-/// for the checked machine, the native tier and the release tier.
+/// The host's target triple: the build's target unless `--target` or
+/// the manifest's `target` named another ([`build_target`], kw04).
 pub fn host_target() -> String {
     let arch = std::env::consts::ARCH;
     match std::env::consts::OS {
@@ -63,6 +66,45 @@ pub fn host_target() -> String {
         "windows" if cfg!(target_env = "gnu") => format!("{arch}-pc-windows-gnu"),
         "windows" => format!("{arch}-pc-windows-msvc"),
         os => format!("{arch}-unknown-{os}"),
+    }
+}
+
+thread_local! {
+    /// The target this thread's build selected (`--target`, or the
+    /// manifest's `target`), when it is not the host (kw04, K1).
+    static BUILD_TARGET: std::cell::RefCell<Option<String>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// The build's target triple (`[abi.target]`): the one `--target` or the
+/// manifest's `target` selected for the build running on this thread,
+/// else the host. `cfg(target = "…")` reads THIS — so one source file
+/// keeps a hosted item and a freestanding item side by side, and each
+/// build sees its own. The checked machine and the conform-run rungs
+/// never select a target: they read the host.
+pub fn build_target() -> String {
+    BUILD_TARGET
+        .with(|t| t.borrow().clone())
+        .unwrap_or_else(host_target)
+}
+
+/// Select `triple` as the build target for this thread until the
+/// returned guard drops (the driver holds it across the front end).
+pub fn enter_build_target(triple: &str) -> BuildTargetScope {
+    let prev = BUILD_TARGET.with(|t| t.replace(Some(triple.to_string())));
+    BuildTargetScope { prev }
+}
+
+/// Restores the previous build target on drop ([`enter_build_target`]).
+#[must_use = "the target holds only while the scope lives"]
+pub struct BuildTargetScope {
+    prev: Option<String>,
+}
+
+impl Drop for BuildTargetScope {
+    fn drop(&mut self) {
+        let prev = self.prev.take();
+        BUILD_TARGET.with(|t| *t.borrow_mut() = prev);
     }
 }
 
@@ -436,7 +478,7 @@ fn walk(node: &GreenNode, src: &[u8], target: &str, diags: &mut Vec<Diagnostic>)
 
 /// E0817 and E0818 over every file of `pkg` (after [`strip_cfg`]).
 pub fn check(pkg: &Package) -> Vec<Diagnostic> {
-    let target = host_target();
+    let target = build_target();
     let mut diags = Vec::new();
     for unit in &pkg.files {
         walk(&unit.parse.root, &unit.raw.src, &target, &mut diags);
@@ -457,6 +499,21 @@ mod tests {
         assert!(!target_matches("x86_64-unknown-none", t));
         assert!(!target_matches("x86", t));
         assert!(target_matches("aarch64", "aarch64-apple-darwin"));
+    }
+
+    #[test]
+    fn the_build_target_is_the_host_until_a_build_selects_one() {
+        assert_eq!(build_target(), host_target());
+        {
+            let _t = enter_build_target("x86_64-unknown-none");
+            assert_eq!(build_target(), "x86_64-unknown-none");
+            {
+                let _h = enter_build_target("x86_64-unknown-linux-gnu");
+                assert_eq!(build_target(), "x86_64-unknown-linux-gnu");
+            }
+            assert_eq!(build_target(), "x86_64-unknown-none");
+        }
+        assert_eq!(build_target(), host_target());
     }
 
     #[test]

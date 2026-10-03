@@ -2,6 +2,46 @@
 
 ## Unreleased
 
+### The freestanding target: `--target x86_64-unknown-none` (kw04, ruling #31 K1, K8(a), K10)
+
+- **A kernel object, with no `main` shim and no runtime.** `--target`
+  was an unknown flag, and every object carried the C-entry `main` shim
+  and imported the runtime's trap reporters. Now `wolf build --target
+  x86_64-unknown-none --emit=obj` (or `target: "x86_64-unknown-none"`
+  in the root `wolf.pkg`) builds an object for a boot stub to link, on
+  both tiers and from any host: the entry is an `export fn`, `main` is
+  an ordinary function, and the object imports only the hook list —
+  `wolf_trap` and `memcpy`/`memmove`/`memset`/`memcmp` — plus the
+  program's own `extern "c"` declarations (`[abi.target]`,
+  `[abi.target.none]`, `[abi.target.entry]`, `[abi.target.none.hooks]`).
+- **One trap hook, with the site, on both tiers.** On the target every
+  trap calls `wolf_trap(kind, file, file_len, line, col)`, which the
+  program supplies and which must not return (`ud2` follows the call);
+  the native tier had called `__wolf_rt_trap_at` and the release tier
+  `__wolf_rt_trap` or `__wolf_rt_trap_at`. On a hosted target
+  `wolf_trap` is the runtime's own report-and-exit: a program that
+  imports it links it as a link-time alias of `__wolf_rt_trap_at`.
+  Compiled into `libwolf_rt.a` it moved every hosted binary (debug info
+  and LLVM's `.llvm.<hash>` names), so hosted binaries that do not
+  import it are byte-identical to 0.2.21's.
+- **Kernel code generation.** The release tier emits
+  `x86_64-unknown-none-elf` with `noredzone`, `"frame-pointer"="all"`
+  and no MMX/SSE/AVX (`+soft-float`) on every function; the native
+  tier emits ELF under the SysV plan with frame pointers, and both are
+  small PIC (`[abi.target.none.codegen]`). The gate disassembles every
+  object (no `xmm`/`ymm`, no store below `%rsp`, `ud2` after every hook
+  call) and links both tiers with an assembly boot stub — no libc, no
+  runtime — and runs them.
+- **Refused by name, before any backend:** everything that needs the
+  hosted runtime (`` `print` needs the hosted runtime (target
+  x86_64-unknown-none) ``, `env_args`, a `str` comparison, `spawn`, …),
+  every allocating construct (`List`, `Map`, `Pool`, string
+  interpolation, a capturing closure, `region`; `[abi.target.none.alloc]`)
+  and every float. `--emit=bin`, `wolf run`, `--checked` and
+  `--profile-gen` refuse the target by name; `conform-run --target
+  x86_64-unknown-none` is `unsupported` on every rung, never run.
+- `cfg(target = "…")` reads the build's target; anchors 558 → 564.
+
 ### The narrowing cast: keep the value or trap (kw03, #533, ruling #31 K12)
 
 - **An integer cast keeps the value, and traps `overflow` when the

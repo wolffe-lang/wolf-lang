@@ -825,7 +825,7 @@ pub fn load_package(
 /// by the attribute check (E0817), beside every other attribute.
 fn parse_unit(file: wolf_span::FileId, src: &[u8]) -> wolf_parse::Parse {
     let mut parse = wolf_parse::parse_file(file, src);
-    crate::attrs::strip_cfg(&mut parse.root, src, &crate::attrs::host_target());
+    crate::attrs::strip_cfg(&mut parse.root, src, &crate::attrs::build_target());
     parse
 }
 

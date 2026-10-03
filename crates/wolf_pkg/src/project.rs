@@ -60,6 +60,10 @@ pub struct Project {
     /// A dependency named `std` with a `path` source: the std facade,
     /// served through the loader's std slot (`use std.…`).
     pub std_root: Option<PathBuf>,
+    /// The ROOT manifest's `target` (kw04, `[abi.target]`): the build's
+    /// target when `--target` does not name one. A dependency's
+    /// `target` says nothing about the build that consumes it.
+    pub target: Option<(String, Span)>,
     pub manifests: Vec<ManifestSource>,
     pub diagnostics: Vec<Diagnostic>,
 }
@@ -186,6 +190,7 @@ fn resolve_with_root(
     mut project: Project,
 ) -> Project {
     let root_span = root_manifest.span;
+    project.target = root_manifest.target.clone();
     project.pkgs.push(ResolvedPkg {
         alias: String::new(),
         name: root_manifest.name.clone(),

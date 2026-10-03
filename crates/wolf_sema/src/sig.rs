@@ -361,6 +361,12 @@ pub fn build_sigs(pkg: &Package) -> SigTables {
 /// numerics stay #32's open spec question; this rules only the shapes.
 /// Runs after row sealing so `-> !T` inferred rows are concrete.
 fn check_entry_sig(sigs: &mut SigTables) {
+    // kw04 (`[abi.target.entry]`): on the freestanding target `main` is
+    // an ordinary function — the entry is the `export fn` the boot code
+    // calls — so no process hands it anything and no shape applies.
+    if crate::attrs::build_target() == crate::attrs::FREESTANDING_TARGET {
+        return;
+    }
     let Some(ItemSig::Fn(f)) = sigs.get(0, "main") else {
         return;
     };

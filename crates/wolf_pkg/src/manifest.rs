@@ -135,6 +135,10 @@ pub struct Manifest {
     /// exclusion is a hard refusal naming the excluder; MVS-side
     /// skip-and-pick-next arrives with the registry transport (c15).
     pub exclude: Vec<Excluded>,
+    /// `target: "x86_64-unknown-none"` (kw04, spec/04 `[abi.target]`):
+    /// the build's target, as `--target` names it (the flag wins). The
+    /// driver validates the triple; the manifest only carries it.
+    pub target: Option<(String, Span)>,
 }
 
 /// One `exclude:` entry.
@@ -914,6 +918,7 @@ pub fn parse_opts(
         deps_span: None,
         replace: Vec::new(),
         exclude: Vec::new(),
+        target: None,
     };
     for e in &entries {
         match e.key.as_str() {
@@ -942,6 +947,11 @@ pub fn parse_opts(
             "wolf" => {
                 if let Some((s, _)) = expect_str("wolf", &e.value, &mut diags) {
                     m.wolf_min = Some(s);
+                }
+            }
+            "target" => {
+                if let Some((s, sp)) = expect_str("target", &e.value, &mut diags) {
+                    m.target = Some((s, sp));
                 }
             }
             "fingerprint" => match &e.value {

@@ -77,7 +77,7 @@ pub const COMMANDS: &[Cmd] = &[
             "[--verbose] [--checked] [--release] [--codegen-report]",
             "[--profile-gen[=<dir>]] [--profile=<file.wprof>] [--std-root <dir>]",
             "[--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings]",
-            "[--error-limit=N]",
+            "[--error-limit=N] [--target x86_64-unknown-none]",
         ],
         about: "\
 The entry file's directory is the package (D32): every plain `.lu` file
@@ -85,7 +85,13 @@ beside it is part of the same module. Two tiers compile the same source
 — the default is the compiler's own fast backend, and `--release` goes
 through LLVM. A construct the pipeline cannot yet handle is REFUSED by
 name, with the deepest phase that completed; nothing is silently
-interpreted instead.",
+interpreted instead.
+
+`--target x86_64-unknown-none` (or `target: \"x86_64-unknown-none\"` in
+`wolf.pkg`) builds a freestanding object for a kernel: `--emit=obj`
+only, no `main` shim and no runtime library; the entry is an `export
+fn`, a trap calls the program's `wolf_trap`, and anything that needs the
+hosted runtime, allocates, or uses a float is refused by name.",
     },
     Cmd {
         name: "run",

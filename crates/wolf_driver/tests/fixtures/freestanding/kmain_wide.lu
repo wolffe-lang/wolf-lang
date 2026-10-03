@@ -1,0 +1,25 @@
+// kw04: aggregates by value and whole-struct copies — the code where a
+// hosted release build may reach for SSE moves and a frame may spill
+// (kw00 F10) — on the freestanding target. Nothing here may touch an
+// xmm register or store below %rsp; an aggregate copy may import only
+// the mem functions ([abi.target.none.hooks]).
+struct Wide {
+    a: i64,
+    b: i64,
+    c: i64,
+    d: i64,
+    e: i64,
+    f: i64,
+    g: i64,
+    h: i64,
+}
+
+fn pick(w: Wide, k: i64) -> i64 {
+    if k == 0 { w.a } else if k == 1 { w.d } else { w.h }
+}
+
+export fn kmain(n: i64) -> i64 {
+    let w = Wide { a: n, b: n + 1, c: n + 2, d: n + 3, e: n + 4, f: n + 5, g: n + 6, h: n + 7 }
+    let v = copy w
+    pick(v, n % 3) + pick(w, (n + 1) % 3)
+}
