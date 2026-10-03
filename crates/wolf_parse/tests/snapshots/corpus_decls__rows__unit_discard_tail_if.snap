@@ -2,11 +2,10 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 884..926 name=boom body=Block
-FnDecl 928..997 name=a body=Block
-FnDecl 999..1043 name=b body=Block
-StructDecl 1045..1064 name=S fields=1
-ImplDecl 1066..1146 path=S
-  FnDecl 1079..1144 name=c body=Block
-FnDecl 1148..1220 name=d body=Block
-FnDecl 1222..1606 name=main body=Block
+FnDecl 1107..1149 name=boom body=Block
+FnDecl 1151..1220 name=a body=Block
+StructDecl 1222..1241 name=S fields=1
+ImplDecl 1243..1323 path=S
+  FnDecl 1256..1321 name=c body=Block
+FnDecl 1325..1397 name=d body=Block
+FnDecl 1399..1701 name=main body=Block
