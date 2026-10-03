@@ -874,3 +874,14 @@ fn error_set_alias_parses_in_a_block_too() {
     walk(&root, &mut found);
     assert_eq!(found, 1);
 }
+
+/// s203: recovery stops at a declaration that begins a line at the item
+/// floor (`Parser::at_sibling_decl`), but a CLEAN program that continues
+/// a type onto such a line is untouched — `fn (` begins a function type,
+/// never an item, and a path continued past a line-ending `.` still
+/// reads its segment.
+#[test]
+fn a_type_or_path_continued_onto_a_column_zero_line_is_clean() {
+    clean("type F =\nfn(int) -> int\n\nfn main() -> !int {\n    0\n}\n");
+    clean("use std.\nfs\n");
+}

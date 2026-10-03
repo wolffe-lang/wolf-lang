@@ -373,7 +373,11 @@ impl<'a> Parser<'a> {
         let leads = self.src[line..lo as usize]
             .iter()
             .all(|b| matches!(b, b' ' | b'\t'));
-        leads && self.at_decl_start() && self.line_indent(lo) <= floor
+        // `fn (` begins a function TYPE or value, never an item — the
+        // same lookahead the top level uses — so `type F =` continued
+        // onto a line that starts `fn(int) -> int` is still a type.
+        let fn_type = self.at_kw(Keyword::Fn) && self.nth(1) == TokenKind::Punct(Punct::LParen);
+        leads && !fn_type && self.at_decl_start() && self.line_indent(lo) <= floor
     }
 
     // ------------------------------------------------------ consumption --
