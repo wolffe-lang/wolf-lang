@@ -1,0 +1,32 @@
+// kw06 (K9(a), `[mem.prov.device]`): a kernel that names its device by
+// address. 0xb8000 is the VGA text buffer on a PC; under the gate the
+// link places one page there (dev_window.S, `--section-start`), so the
+// same object runs as a user-space process with no libc. Every spelling
+// of the bridge reaches the window: `N as *u16`, prefix `*p`, `p[i]`,
+// `with_addr`, `expose`/`with_exposed`, `*T as int`. `kw_outb` is
+// rt_stub.S's port write (one byte to stdout).
+extern "c" fn kw_outb(port: u16, v: u8)
+
+export fn kmain() -> i64 {
+    var r = 0
+    // # Safety: 0xb8000 is the VGA text buffer on a PC (a page the
+    // gate's link maps); four 16-bit cells, all inside it.
+    unsafe {
+        let vga = 0xb8000 as *u16
+        *vga = 0x0f4b
+        vga[1] = 0x0f57
+        let c = vga.with_addr(vga.addr() + 4)
+        *c = 0x0f43
+        let n = vga.expose()
+        let nl = vga.with_exposed(n + 6)
+        *nl = 0x0f0a
+        var i = 0
+        while i < 4 {
+            kw_outb(1016, (vga[i] & 255) as u8)
+            i += 1
+        }
+        let span = nl as int - vga as int
+        r = (*vga >> 8) as int * 2 + span - 3
+    }
+    r as i64
+}
