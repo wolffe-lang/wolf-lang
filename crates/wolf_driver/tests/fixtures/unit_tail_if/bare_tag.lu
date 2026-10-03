@@ -1,0 +1,18 @@
+// s208 (ruling #34 = A): a bare tag as the then-block's tail of an
+// else-less `if` that ends a fallible function. The then-block is a unit
+// context, so `bad` there is the same construct it is in the statement
+// form (`if c { bad }` followed by more code): the compiler declines it
+// ("an error-row tag outside `!T` context"), and lupin discards it. The
+// spelling that raises is `return bad`. Until s208 this raised on all
+// four machines.
+
+fn g(c: bool) -> () ! {bad} {
+    if c { bad }
+}
+
+fn main() -> !int {
+    var raised = false
+    g(true) else |_| { raised = true }
+    print("g {raised}")
+    0
+}

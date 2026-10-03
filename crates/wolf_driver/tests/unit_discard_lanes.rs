@@ -11,6 +11,14 @@
 //! operand of a `return` in one" — also stopped native and release with
 //! an internal error; it lowers as the discard now.
 //!
+//! s208 (ruling #34 = A, #541 part 2): an else-less `if` that is itself
+//! the tail of a fallible fn is the same unit context — its then-block's
+//! raise is discarded, warned, on every machine. Until s208 all four
+//! handed the raise to the caller with no W0601 (and, for an else-if
+//! chain, native and release discarded while checked and lupin raised).
+//! lupin 0.1.45, the pairing, answers the old way; its mirror is
+//! wolf-interp#179, pinned below by version.
+//!
 //! Why a driver test beside the corpus rows (s171's lesson, wave 45):
 //! `cargo xtask corpus` runs every entry on the NATIVE lane only, and
 //! native was right; the defect was on the checked lane.
@@ -281,4 +289,99 @@ fn a_propagated_row_still_leaves() {
         false,
         &[],
     );
+}
+
+/// lupin's mirror of ruling #34 is wolf-interp#179; 0.1.45 (the 0.2.22
+/// pairing) predates it and hands the raise on, measured by s208.
+const LUPIN_179: &str = "0.1.45";
+
+/// Ruling #34 = A: an else-less `if` at a fallible fn's tail discards
+/// its then-block's raise, warned. The plain tail, an inferred `!()`
+/// row, a method, a nested else-less `if`. Red at trunk 8e36bc1a: every
+/// lane answers `a true` … `d true` and none warns.
+#[test]
+fn a_fallible_fns_else_less_tail_if_discards() {
+    every_lane_says(
+        &corpus("rows/unit_discard_tail_if.lu"),
+        "exit(0)",
+        "in a\na false\nb false\nc false\nd false\n",
+        true,
+        &[(
+            LUPIN_179,
+            "exit(0)",
+            "in a\na true\nb true\nc true\nd true\n",
+        )],
+    );
+}
+
+/// The same tail as an else-if chain with no final `else`. Red at trunk
+/// 8e36bc1a: checked answers `g true` (native and release `g false`), no
+/// lane warns.
+#[test]
+fn a_fallible_fns_tail_chain_discards() {
+    every_lane_says(
+        &corpus("rows/unit_discard_tail_if_chain.lu"),
+        "exit(0)",
+        "g false\n",
+        true,
+        &[(LUPIN_179, "exit(0)", "g true\n")],
+    );
+}
+
+/// A value-carrying row at that tail is discarded with its value. Red at
+/// trunk 8e36bc1a: E0401 on all three lanes.
+#[test]
+fn a_fallible_fns_tail_if_discards_a_value_row() {
+    every_lane_says(
+        &corpus("rows/unit_discard_tail_if_value_row.lu"),
+        "exit(0)",
+        "g false\n",
+        true,
+        &[(LUPIN_179, "exit(0)", "g true\n")],
+    );
+}
+
+/// The control: `?`, `return bad`, an `else`, and a `?` statement before
+/// the tail all still leave or handle, unwarned (wolf-std's `move_file`,
+/// `std/fs/fs.lu:609`, is `a`'s shape). Green at trunk 8e36bc1a, and it
+/// must stay green.
+#[test]
+fn a_consumed_row_at_a_fallible_tail_if_still_leaves() {
+    every_lane_says(
+        &corpus("rows/unit_discard_tail_if_leaves.lu"),
+        "exit(0)",
+        "fine\nfine\na true\nb true\nhandled\nc false\nd true\n",
+        false,
+        &[],
+    );
+}
+
+/// A bare tag as that then-block's tail is the construct it is in a
+/// statement `if`: the compiler declines it by name (`unsupported`, "an
+/// error-row tag outside `!T` context") and lupin discards it. Red at
+/// trunk 8e36bc1a: every lane raised (`g true`).
+#[test]
+fn a_bare_tag_at_a_fallible_tail_if_is_the_statement_construct() {
+    let entry = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/unit_tail_if/bare_tag.lu");
+    for flag in ["--checked", "--native", "--release"] {
+        let Some(obs) = lane(&entry, flag) else {
+            assert_ne!(flag, "--checked", "the checked lane always runs");
+            continue;
+        };
+        assert_eq!(
+            obs.verdict, "unsupported",
+            "the {flag} answer on {} ({ISSUE}): {obs:?}",
+            entry.display()
+        );
+    }
+    if let Some(lupin) = lupin_says(&entry) {
+        let got = (lupin.verdict.as_str(), lupin.stdout.as_str());
+        let pinned = lupin.version == LUPIN_179 && got == ("exit(0)", "g true\n");
+        assert!(
+            got == ("exit(0)", "g false\n") || pinned,
+            "lupin {}'s answer on {}: {got:?}",
+            lupin.version,
+            entry.display()
+        );
+    }
 }
