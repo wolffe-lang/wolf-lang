@@ -1,0 +1,12 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 799..857 name=C3 attrs=1 fields=3
+StructDecl 859..925 name=P3 attrs=1 fields=3
+StructDecl 927..992 name=Gdtr attrs=1 fields=2
+StructDecl 994..1042 name=A16 attrs=1 fields=1
+StructDecl 1044..1112 name=Outer attrs=1 fields=3
+StructDecl 1114..1175 name=PNest attrs=1 fields=3
+StructDecl 1177..1228 name=Page attrs=1 fields=1
+FnDecl 1230..2738 name=main body=Block

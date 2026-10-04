@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 512..560 name=Three attrs=1 fields=1
+StructDecl 562..609 name=Zero attrs=1 fields=1
+StructDecl 611..665 name=Bare attrs=1 fields=2
+StructDecl 667..734 name=Both attrs=1 fields=2
+FnDecl 736..931 name=main body=Block

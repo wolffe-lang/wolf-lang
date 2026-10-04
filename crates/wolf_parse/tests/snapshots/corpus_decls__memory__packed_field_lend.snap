@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 444..509 name=Gdtr attrs=1 fields=2
+FnDecl 511..545 name=bump body=Block
+FnDecl 547..651 name=main body=Block
