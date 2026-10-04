@@ -527,7 +527,7 @@ Methods are looked up separately from fields: if you meant to *call*
 something, the parentheses matter — `p.len` is a field access,
 `p.len()` is a method call.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__struct_pattern_unknown_field.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__methods__method_non_std_receiver.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__methods__method_take.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__methods__method_unknown.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__methods__method_wrong_receiver.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__field_typo.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0403_unknown_method.snap, crates/wolf_sema/tests/snapshots/struct_pattern_diagnostics__e0403_pattern_unknown_field.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0403_field_typo.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0403_range_unknown_member.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__struct_pattern_unknown_field.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__methods__method_non_std_receiver.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__methods__method_take.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__methods__method_unknown.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__methods__method_wrong_receiver.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__field_typo.snap, crates/wolf_sema/tests/snapshots/layout_diagnostics__e0403_offset_of_unknown_field.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e0403_unknown_method.snap, crates/wolf_sema/tests/snapshots/struct_pattern_diagnostics__e0403_pattern_unknown_field.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0403_field_typo.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0403_range_unknown_member.snap
 
 ## E0404 — this would be an infinite type
 
@@ -1288,7 +1288,7 @@ against them starts compiling without change. Until then, compute
 from the primitive widths, or defer the computation to a later phase
 that has layout in hand.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__size_of_layout.snap, crates/wolf_sema/tests/snapshots/ctfe_diagnostics__e0708_layout.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__size_of_layout.snap, crates/wolf_sema/tests/snapshots/ctfe_diagnostics__e0708_layout.snap, crates/wolf_sema/tests/snapshots/layout_diagnostics__e0708_align_offset_native.snap, crates/wolf_sema/tests/snapshots/layout_diagnostics__e0708_native_field.snap
 
 ## E0709 — invalid comptime budget attribute
 
@@ -1553,9 +1553,8 @@ kept. This code fires for:
 - a name wolf does not know (`#[frobnicate]`);
 - a known attribute nothing implements yet, named with the lane that
   owns it: the performance contracts `noalloc`, `nopanic`, `inplace`,
-  `bounded_stack` (no checker exists), `repr(packed)`, `repr(align(N))`
-  and `repr(transparent)` (the exact-layout lane), `thread_local`,
-  `section` and `link_section`;
+  `bounded_stack` (no checker exists), `repr(transparent)` and
+  `repr(packed(N))`, `thread_local`, `section` and `link_section`;
 - an implemented attribute where it means nothing (`#[repr(c)]` on a
   function, `#[consttime]` on a struct);
 - a `cfg` the compiler cannot decide: the one predicate is
@@ -1565,8 +1564,10 @@ kept. This code fires for:
   code ([gram.item.attr.cfg]).
 
 The attributes implemented are `trusted`, `consttime`, `allow`, `index`,
-`budget`, `repr(c)` and `cfg(target = "…")`. Delete the attribute, or
-move it to where it applies.
+`budget`, `repr(c)`, `repr(c, packed)`, `repr(c, align(N))` and
+`cfg(target = "…")`. Delete the attribute, or move it to where it
+applies. A representation that is implemented but cannot be laid out
+as written (`align(3)`, `packed` without `c`) is E0820.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_contract_unimplemented.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_misplaced.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_repr_bogus.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_repr_unimplemented.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_section.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_thread_local.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_unknown.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__cfg_predicate_unknown.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__cfg_target_unknown.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_cfg_unix.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_cfg_unknown_target.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_misplaced.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_noalloc.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_repr_args.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_unknown.snap
 
@@ -1583,6 +1584,46 @@ the C convention, and returns with `iretq` (KWC F7). Write `extern "c"`
 for a C-callable function, or no `extern` for an ordinary one.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__extern_abi_interrupt.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0818_x86_interrupt.snap
+
+## E0819 — a field of a packed struct is lent
+
+A `#[repr(c, packed)]` struct has alignment 1 and no padding
+([abi.layout.packed]), so its fields sit at whatever offset the bytes
+before them leave: a `u64` after a `u16` is at offset 2. Reading or
+writing such a field is fine — the compiler copies it with an access
+that does not assume alignment. Lending it is not: a `mut` argument or
+receiver, or an aggregate passed by `read`, hands the callee the
+field's ADDRESS, and the callee's code assumes that address is aligned
+for the field's type. On a strict-alignment machine that is a fault; on
+the others it is a silent wrong assumption the optimizer may act on.
+
+Copy the field out, lend the copy, and write it back:
+
+    var base = d.base
+    bump(mut base)
+    d.base = base
+
+Fixtures: crates/wolf_sema/tests/snapshots/layout_diagnostics__e0819_mut_arg.snap, crates/wolf_sema/tests/snapshots/layout_diagnostics__e0819_nested.snap
+
+## E0820 — a representation that cannot be laid out
+
+`#[repr(c, packed)]` and `#[repr(c, align(N))]` are implemented
+([abi.layout.packed], [abi.layout.align]), but only in the shapes C
+gives a meaning:
+
+- `align(N)` takes a power of two from 1 to 2^28 (gcc's ceiling; a
+  larger or non-power alignment has no C layout to agree with);
+- `packed` and `align(N)` are spelled beside `c` — the layout they
+  modify is the C one, so `#[repr(packed)]` alone is refused with the
+  fix `#[repr(c, packed)]`;
+- a struct is packed or aligned, not both (alignment 1 and alignment N
+  at once);
+- a generic struct is not packed or aligned (its layout would change
+  with each instantiation's field types, and the queries could not
+  answer it);
+- each representation is named once.
+
+Fixtures: crates/wolf_sema/tests/snapshots/attr_diagnostics__e0820_align_values.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0820_combinations.snap
 
 ## E1001 — this value was moved away (or never given one) before this use
 
