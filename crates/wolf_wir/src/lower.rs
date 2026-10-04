@@ -2106,6 +2106,18 @@ fn build_statics(pkg: &Package, tc: &Typecheck, module: &mut Module) -> Statics 
     out
 }
 
+/// kw09: module state's layout — a scalar, aligned to its size (the
+/// data declaration's `align`, `build_statics`), so every access is a
+/// full-width aligned one.
+fn static_lay(wty: TypeId) -> RawLay {
+    let size = scalar_size(wty).unwrap_or(1);
+    RawLay {
+        size,
+        align: size,
+        fields: Vec::new(),
+    }
+}
+
 /// kw09: a scalar's initial bytes, little-endian at its C size — the
 /// two's-complement bits of an integer (an unsigned one above
 /// `i64::MAX` included), `0`/`1` for a `bool`, the IEEE bits of a
@@ -14938,8 +14950,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 };
                 let addr = self.b.ins_data_addr(idx);
                 let region = self.foreign_buf_region();
+                let lay = static_lay(wty);
                 Ok(Some(Flow::Val(Some(
-                    self.load_c(wty, addr, region, e.span)?,
+                    self.load_c(wty, &lay, lay.align, addr, region, e.span)?,
                 ))))
             }
             (_, None, Some(f)) => Ok(Some(self.lower_fold(&f, e)?)),
@@ -14976,13 +14989,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         let addr = self.b.ins_data_addr(idx);
         let region = self.foreign_buf_region();
+        let lay = static_lay(wty);
         let val = if op == SyntaxKind::Eq {
             val
         } else {
             let Some(bin) = Self::compound_bin(op) else {
                 return Err(refuse("this compound assignment operator", span));
             };
-            let cur = self.load_c(wty, addr, region, span)?;
+            let cur = self.load_c(wty, &lay, lay.align, addr, region, span)?;
             let wrapping = matches!(self.sigs.table.kind(ty), TyKind::Wrapping(_));
             let unsigned = sema_unsigned(&self.sigs.table, ty);
             match self.arith(bin, cur, val, wrapping, unsigned, wty, span)? {
@@ -14990,7 +15004,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 None => return Ok(Flow::Diverged),
             }
         };
-        self.store_c(val, addr, region, vexpr.span)?;
+        self.store_c(val, &lay, lay.align, addr, region, vexpr.span)?;
         Ok(Flow::Val(None))
     }
 
