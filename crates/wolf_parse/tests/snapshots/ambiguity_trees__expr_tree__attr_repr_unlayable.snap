@@ -1,0 +1,293 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+expression: out
+---
+== tree ==
+SourceFile 512..932
+  StructDecl 512..560
+    Attribute 512..532
+      PoundBracket 512..514 "#["
+      AttrItem 514..531
+        Path 514..518
+          Ident 514..518 "repr"
+        AttrInput 518..531
+          LParen 518..519 "("
+          AttrItem 519..520
+            Path 519..520
+              Ident 519..520 "c"
+          Comma 520..521 ","
+          AttrItem 522..530
+            Path 522..527
+              Ident 522..527 "align"
+            AttrInput 527..530
+              LParen 527..528 "("
+              Int 528..529 "3"
+              RParen 529..530 ")"
+          RParen 530..531 ")"
+      RBracket 531..532 "]"
+    StructKw 533..539 "struct"
+    Ident 540..545 "Three"
+    LBrace 546..547 "{"
+    StructField 552..558
+      Ident 552..553 "a"
+      Colon 553..554 ":"
+      PathType 555..557
+        Path 555..557
+          Ident 555..557 "u8"
+      Comma 557..558 ","
+    RBrace 559..560 "}"
+  Term 560..561 "\n"
+  StructDecl 562..609
+    Attribute 562..582
+      PoundBracket 562..564 "#["
+      AttrItem 564..581
+        Path 564..568
+          Ident 564..568 "repr"
+        AttrInput 568..581
+          LParen 568..569 "("
+          AttrItem 569..570
+            Path 569..570
+              Ident 569..570 "c"
+          Comma 570..571 ","
+          AttrItem 572..580
+            Path 572..577
+              Ident 572..577 "align"
+            AttrInput 577..580
+              LParen 577..578 "("
+              Int 578..579 "0"
+              RParen 579..580 ")"
+          RParen 580..581 ")"
+      RBracket 581..582 "]"
+    StructKw 583..589 "struct"
+    Ident 590..594 "Zero"
+    LBrace 595..596 "{"
+    StructField 601..607
+      Ident 601..602 "a"
+      Colon 602..603 ":"
+      PathType 604..606
+        Path 604..606
+          Ident 604..606 "u8"
+      Comma 606..607 ","
+    RBrace 608..609 "}"
+  Term 609..610 "\n"
+  StructDecl 611..665
+    Attribute 611..626
+      PoundBracket 611..613 "#["
+      AttrItem 613..625
+        Path 613..617
+          Ident 613..617 "repr"
+        AttrInput 617..625
+          LParen 617..618 "("
+          AttrItem 618..624
+            Path 618..624
+              Ident 618..624 "packed"
+          RParen 624..625 ")"
+      RBracket 625..626 "]"
+    StructKw 627..633 "struct"
+    Ident 634..638 "Bare"
+    LBrace 639..640 "{"
+    StructField 645..651
+      Ident 645..646 "a"
+      Colon 646..647 ":"
+      PathType 648..650
+        Path 648..650
+          Ident 648..650 "u8"
+      Comma 650..651 ","
+    StructField 656..663
+      Ident 656..657 "b"
+      Colon 657..658 ":"
+      PathType 659..662
+        Path 659..662
+          Ident 659..662 "u32"
+      Comma 662..663 ","
+    RBrace 664..665 "}"
+  Term 665..666 "\n"
+  StructDecl 667..734
+    Attribute 667..695
+      PoundBracket 667..669 "#["
+      AttrItem 669..694
+        Path 669..673
+          Ident 669..673 "repr"
+        AttrInput 673..694
+          LParen 673..674 "("
+          AttrItem 674..675
+            Path 674..675
+              Ident 674..675 "c"
+          Comma 675..676 ","
+          AttrItem 677..683
+            Path 677..683
+              Ident 677..683 "packed"
+          Comma 683..684 ","
+          AttrItem 685..693
+            Path 685..690
+              Ident 685..690 "align"
+            AttrInput 690..693
+              LParen 690..691 "("
+              Int 691..692 "8"
+              RParen 692..693 ")"
+          RParen 693..694 ")"
+      RBracket 694..695 "]"
+    StructKw 696..702 "struct"
+    Ident 703..707 "Both"
+    LBrace 708..709 "{"
+    StructField 714..720
+      Ident 714..715 "a"
+      Colon 715..716 ":"
+      PathType 717..719
+        Path 717..719
+          Ident 717..719 "u8"
+      Comma 719..720 ","
+    StructField 725..732
+      Ident 725..726 "b"
+      Colon 726..727 ":"
+      PathType 728..731
+        Path 728..731
+          Ident 728..731 "u32"
+      Comma 731..732 ","
+    RBrace 733..734 "}"
+  Term 734..735 "\n"
+  FnDecl 736..931
+    FnKw 736..738 "fn"
+    Ident 739..743 "main"
+    ParamList 743..745
+      LParen 743..744 "("
+      RParen 744..745 ")"
+    RetType 746..752
+      Arrow 746..748 "->"
+      PathType 749..752
+        Path 749..752
+          Ident 749..752 "int"
+    Block 753..931
+      LBrace 753..754 "{"
+      LetDecl 759..782
+        LetKw 759..762 "let"
+        IdentPat 763..764
+          Ident 763..764 "t"
+        Eq 765..766 "="
+        StructLit 767..781
+          PathExpr 767..772
+            Ident 767..772 "Three"
+          LBrace 773..774 "{"
+          FieldInit 775..779
+            Ident 775..776 "a"
+            Colon 776..777 ":"
+            LiteralExpr 778..779
+              Int 778..779 "1"
+          RBrace 780..781 "}"
+        Term 781..782 "\n"
+      LetDecl 786..808
+        LetKw 786..789 "let"
+        IdentPat 790..791
+          Ident 790..791 "z"
+        Eq 792..793 "="
+        StructLit 794..807
+          PathExpr 794..798
+            Ident 794..798 "Zero"
+          LBrace 799..800 "{"
+          FieldInit 801..805
+            Ident 801..802 "a"
+            Colon 802..803 ":"
+            LiteralExpr 804..805
+              Int 804..805 "1"
+          RBrace 806..807 "}"
+        Term 807..808 "\n"
+      LetDecl 812..840
+        LetKw 812..815 "let"
+        IdentPat 816..817
+          Ident 816..817 "b"
+        Eq 818..819 "="
+        StructLit 820..839
+          PathExpr 820..824
+            Ident 820..824 "Bare"
+          LBrace 825..826 "{"
+          FieldInit 827..831
+            Ident 827..828 "a"
+            Colon 828..829 ":"
+            LiteralExpr 830..831
+              Int 830..831 "1"
+          Comma 831..832 ","
+          FieldInit 833..837
+            Ident 833..834 "b"
+            Colon 834..835 ":"
+            LiteralExpr 836..837
+              Int 836..837 "2"
+          RBrace 838..839 "}"
+        Term 839..840 "\n"
+      LetDecl 844..872
+        LetKw 844..847 "let"
+        IdentPat 848..849
+          Ident 848..849 "o"
+        Eq 850..851 "="
+        StructLit 852..871
+          PathExpr 852..856
+            Ident 852..856 "Both"
+          LBrace 857..858 "{"
+          FieldInit 859..863
+            Ident 859..860 "a"
+            Colon 860..861 ":"
+            LiteralExpr 862..863
+              Int 862..863 "1"
+          Comma 863..864 ","
+          FieldInit 865..869
+            Ident 865..866 "b"
+            Colon 866..867 ":"
+            LiteralExpr 868..869
+              Int 868..869 "2"
+          RBrace 870..871 "}"
+        Term 871..872 "\n"
+      ExprStmt 876..930
+        BinExpr 876..929
+          BinExpr 876..925
+            BinExpr 876..912
+              BinExpr 876..899
+                CastExpr 876..886
+                  MemberExpr 876..879
+                    PathExpr 876..877
+                      Ident 876..877 "t"
+                    Dot 877..878 "."
+                    Ident 878..879 "a"
+                  AsKw 880..882 "as"
+                  PathType 883..886
+                    Path 883..886
+                      Ident 883..886 "int"
+                Plus 887..888 "+"
+                CastExpr 889..899
+                  MemberExpr 889..892
+                    PathExpr 889..890
+                      Ident 889..890 "z"
+                    Dot 890..891 "."
+                    Ident 891..892 "a"
+                  AsKw 893..895 "as"
+                  PathType 896..899
+                    Path 896..899
+                      Ident 896..899 "int"
+              Plus 900..901 "+"
+              CastExpr 902..912
+                MemberExpr 902..905
+                  PathExpr 902..903
+                    Ident 902..903 "b"
+                  Dot 903..904 "."
+                  Ident 904..905 "a"
+                AsKw 906..908 "as"
+                PathType 909..912
+                  Path 909..912
+                    Ident 909..912 "int"
+            Plus 913..914 "+"
+            CastExpr 915..925
+              MemberExpr 915..918
+                PathExpr 915..916
+                  Ident 915..916 "o"
+                Dot 916..917 "."
+                Ident 917..918 "a"
+              AsKw 919..921 "as"
+              PathType 922..925
+                Path 922..925
+                  Ident 922..925 "int"
+          Minus 926..927 "-"
+          LiteralExpr 928..929
+            Int 928..929 "4"
+        Term 929..930 "\n"
+      RBrace 930..931 "}"
+  Term 931..932 "\n"
+  Eof 932..932 ""
+== diagnostics ==
