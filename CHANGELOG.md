@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### Interrupts (kw10, ruling #31 K7 = B)
+
+- **`[abi.interrupt]`**: wolf has no interrupt calling convention, and
+  the clause now says how an interrupt reaches wolf instead. An
+  assembly trampoline the root `wolf.pkg` lists pushes a zero for the
+  vectors whose CPU pushes no error code (every vector but 8, 10-14,
+  17, 21, 29 and 30), pushes the vector, saves the fifteen general
+  registers and calls an `export fn h(f: *Frame)` under the C
+  convention; the frame is a `#[repr(c)]` struct of 22 `u64`s
+  (`size_of` 176, `rip` at 136); when `h` returns, the trampoline
+  restores the registers and returns with `iretq`. The IDT is data the
+  program builds in a `.bss` table assembly reserves and wolf names
+  with `extern "c" let`. No compiler change: kw02's `export fn`, kw05's
+  `asm`, kw08's layout and kw09's `extern "c" let` already compose into
+  it. Witness: `freestanding_interrupt.rs`, an image QEMU boots (`-kernel`,
+  the PVH entry) whose IDT wolf fills; `int3` returns, `ud2` and a `#GP`
+  with error code 0x1234 are resumed past, on both tiers. The linux CI
+  job installs QEMU for it and sets `WOLF_INTERRUPT_REQUIRE_QEMU=1`.
+  Anchors 585 → 586.
+- Filed on the way: wolf-lang#577 (a store to a field of a raw element,
+  `f[0].rip = v`, is refused on native, release and checked: a handler
+  writes the word at `offset_of(Frame, rip) / 8` instead) and #579 (a
+  `pub const` read from another module is refused on native, release
+  and checked).
+
 ### Module state and linker control (kw09, ruling #31 K11 = A and K6)
 
 - **Module `const`, `let` and `var` compile.** Before, every one was
