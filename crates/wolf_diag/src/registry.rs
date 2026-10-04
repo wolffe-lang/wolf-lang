@@ -1234,14 +1234,17 @@ decision procedure it cannot bound. Rewrite both sides into the same
 "#);
 
 code!(E0708, "layout is unresolved until codegen", r#"
-Sizes and offsets are decided when codegen lays types out, not
-by the type checker — so `size_of` at comptime answers only for
-fixed-width primitives today, and `typeinfo` describes fields without
-offsets. This is a staging rule, not a permanent refusal: when layout
-lands, the same intrinsics answer for aggregates, and code written
-against them starts compiling without change. Until then, compute
-from the primitive widths, or defer the computation to a later phase
-that has layout in hand.
+`size_of`, `align_of` and `offset_of` answer at comptime for the types
+whose layout a clause fixes: the fixed-width scalars, and every
+`#[repr(c)]` struct — plain, `packed` or `align(N)` — whose fields have
+such a layout too ([abi.layout.query]). Every other type has the native
+layout, which the code generator chooses ([abi.native.layout]) and may
+change between versions: a struct without `#[repr(c)]`, a `#[repr(c)]`
+struct with such a field, an enum, a tuple, `str`, a container. Asking
+for its size, alignment or a field's offset is this error. Mark the
+struct `#[repr(c)]` when its layout matters to the program — that is
+the promise the queries read — and `typeinfo` still describes any
+type's fields, without offsets.
 "#);
 
 code!(E0709, "invalid comptime budget attribute", r#"
