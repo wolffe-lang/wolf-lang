@@ -1,0 +1,28 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.static, mem.static.1, mem.static.3
+//!
+//! kw09 (K11 = A, STATUS #31; wolf-lang#560, #529): a module `const` or
+//! `let` with a comptime initializer is immutable data, read in safe
+//! code (`[mem.static.1]`). Initializers are evaluated at compile time
+//! (`[mem.static.3]`), so they name each other in either order — `TWICE`
+//! reads `ONE`, declared after it. Before kw09
+//! native and release refused every one (`item-initializer lowering
+//! (globals)`) and the checked machine refused the reads (`module items
+//! in checked execution`); lupin ran them.
+
+const LIMIT: int = 5
+let TWICE: int = LIMIT * 2 + ONE
+let ONE: int = 1
+let MASK: int = (1 << 12) - 1
+let READY: bool = LIMIT > 3
+let HALF: f64 = 2.5
+let NAME: str = "kw09"
+let NEG: i8 = -7
+let TOP: u8 = 255
+const BIG: u64 = 4294967296
+
+fn main() {
+    print("{LIMIT} {TWICE} {MASK} {READY} {HALF} {NAME}")
+    print("{NEG} {TOP} {BIG}")
+}

@@ -1,0 +1,43 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.static, mem.static.2, mem.static.3, mem.unsafe.scope
+//!
+//! kw09 (K11 = A, STATUS #31): a module `var` is writable data that
+//! lives for the whole run (`[mem.static.2]`), read and written inside
+//! `unsafe` — here across calls, in a loop whose condition reads the
+//! state a callee writes (an optimizer that kept the first read would
+//! never leave the loop), with every compound operator form and the
+//! narrow widths. `ticks` starts all-zero (`.bss`), the rest do not
+//! (`.data`). Before kw09 native and release refused the items and the
+//! checked machine refused the writes; lupin ran them.
+
+var ticks: int = 0
+var base: int = 4
+var level: i32 = -1
+var hits: u8 = 199
+var on: bool = false
+
+fn tick() {
+    // # Safety: one thread; nothing else touches the counters.
+    unsafe {
+        ticks += 1
+        base = base + ticks
+        hits += 1
+        on = !on
+    }
+}
+
+fn main() {
+    var calls = 0
+    // # Safety: as in `tick`.
+    unsafe {
+        while ticks < 3 {
+            tick()
+            calls += 1
+        }
+        let before = ticks
+        tick()
+        level *= -40
+        print("{ticks} {base} {calls} {ticks - before} {level} {hits} {on}")
+    }
+}
