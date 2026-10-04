@@ -12,9 +12,13 @@
 //! checked machine refused the writes; lupin ran them.
 
 var ticks: int = 0
+
 var base: int = 4
+
 var level: i32 = -1
+
 var hits: u8 = 199
+
 var on: bool = false
 
 fn tick() {

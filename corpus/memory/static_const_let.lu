@@ -12,14 +12,23 @@
 //! in checked execution`); lupin ran them.
 
 const LIMIT: int = 5
+
 let TWICE: int = LIMIT * 2 + ONE
+
 let ONE: int = 1
+
 let MASK: int = (1 << 12) - 1
+
 let READY: bool = LIMIT > 3
+
 let HALF: f64 = 2.5
+
 let NAME: str = "kw09"
+
 let NEG: i8 = -7
+
 let TOP: u8 = 255
+
 const BIG: u64 = 4294967296
 
 fn main() {

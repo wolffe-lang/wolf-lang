@@ -7,6 +7,7 @@
 //! `B` each depend on the other, and each is E0705.
 
 let A: int = B + 1
+
 let B: int = A * 2
 
 fn main() -> int {

@@ -8,6 +8,7 @@
 //! for a program to depend on. lupin runs it.
 
 var seed: int = 7
+
 let start: int = seed + 1
 
 fn main() -> int {
