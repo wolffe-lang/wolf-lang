@@ -36,9 +36,16 @@ pub enum Intrinsic {
     TypeBuild,
     /// `implements(T, Trait)` → bool.
     Implements,
-    /// `size_of(T)` → int for primitives; unresolved-until-codegen
-    /// (E0708) for everything c05 has not laid out.
+    /// `size_of(T)` → int for scalars and `#[repr(c)]` structs (the
+    /// clause's layout, kw08 `[abi.layout.query]`); E0708 for every
+    /// native-layout type.
     SizeOf,
+    /// `align_of(T)` → int, the same domain as `size_of` (kw08).
+    AlignOf,
+    /// `offset_of(T, field)` → int: a `#[repr(c)]` struct's field
+    /// offset (kw08). The second argument is a field NAME, never
+    /// evaluated or resolved.
+    OffsetOf,
     /// `assert(cond)` — the one comptime assertion (E0710 on failure).
     Assert,
 }
@@ -119,6 +126,8 @@ pub fn intrinsic(name: &str) -> Option<Intrinsic> {
         "typebuild" => Intrinsic::TypeBuild,
         "implements" => Intrinsic::Implements,
         "size_of" => Intrinsic::SizeOf,
+        "align_of" => Intrinsic::AlignOf,
+        "offset_of" => Intrinsic::OffsetOf,
         "assert" => Intrinsic::Assert,
         _ => return None,
     })
@@ -278,22 +287,47 @@ impl<'a> Engine<'a> {
                 };
                 self.build_type(d)
             }
-            Intrinsic::SizeOf => {
+            Intrinsic::SizeOf | Intrinsic::AlignOf => {
+                let name = if i == Intrinsic::SizeOf {
+                    "size_of"
+                } else {
+                    "align_of"
+                };
                 let Some(ct) = self.type_arg(args) else {
                     return Err(FaultKind::NotComptime {
-                        what: "`size_of` needs a type value".to_string(),
+                        what: format!("`{name}` needs a type value"),
                     });
                 };
-                match ct {
-                    CtType::Prim(p) => match prim_size(p) {
-                        Some(n) => Ok(self.arena.int(n, Prim::Int)),
-                        None => Err(FaultKind::Layout {
-                            what: format!("`{}`", p.name()),
-                        }),
-                    },
-                    CtType::Unit => Ok(self.arena.int(0, Prim::Int)),
-                    other => Err(FaultKind::Layout {
-                        what: format!("`{}`", other.render()),
+                // `()` is zero bytes at alignment 1 (s16's answer for
+                // the size, kept).
+                if ct == CtType::Unit {
+                    let n = if i == Intrinsic::SizeOf { 0 } else { 1 };
+                    return Ok(self.arena.int(n, Prim::Int));
+                }
+                let l = self.ct_layout(&ct)?;
+                let n = if i == Intrinsic::SizeOf { l.size } else { l.align };
+                Ok(self.arena.int(n as i128, Prim::Int))
+            }
+            Intrinsic::OffsetOf => {
+                let Some(ct) = self.type_arg(args) else {
+                    return Err(FaultKind::NotComptime {
+                        what: "`offset_of` needs a type value".to_string(),
+                    });
+                };
+                let field = match args.get(1).map(|&a| self.arena.kind(a)) {
+                    Some(ValueKind::Str(s)) => s.clone(),
+                    _ => {
+                        return Err(FaultKind::NotComptime {
+                            what: "`offset_of` needs a field name".to_string(),
+                        });
+                    }
+                };
+                let l = self.ct_layout(&ct)?;
+                match l.field(&field) {
+                    Some(f) => Ok(self.arena.int(f.offset as i128, Prim::Int)),
+                    None => Err(FaultKind::NoField {
+                        ty: ct.render(),
+                        field,
                     }),
                 }
             }
@@ -301,6 +335,29 @@ impl<'a> Engine<'a> {
                 construct: "`implements` outside its call form",
             }),
         }
+    }
+
+    /// The clause's layout of a comptime type value (`[abi.layout.query]`,
+    /// kw08): a scalar's, or a `#[repr(c)]` struct's; E0708 otherwise.
+    fn ct_layout(&self, ct: &CtType) -> Result<crate::layout::CLayout, FaultKind> {
+        let res = match ct {
+            CtType::Prim(p) => crate::layout::prim_size(*p)
+                .map(|n| crate::layout::CLayout {
+                    size: n,
+                    align: n,
+                    fields: Vec::new(),
+                })
+                .ok_or_else(|| crate::layout::NoCLayout {
+                    what: format!("`{}`", p.name()),
+                }),
+            CtType::Nominal { module, name } => {
+                crate::layout::struct_c_layout(self.sigs, *module as usize, name)
+            }
+            other => Err(crate::layout::NoCLayout {
+                what: format!("`{}`", other.render()),
+            }),
+        };
+        res.map_err(|e| FaultKind::Layout { what: e.what })
     }
 
     fn type_arg(&self, args: &[ValId]) -> Option<CtType> {
@@ -526,15 +583,3 @@ impl<'a> Engine<'a> {
     }
 }
 
-/// The size in bytes of a primitive whose layout is already fixed by
-/// spec 02 (str is not — its representation is c05's).
-fn prim_size(p: Prim) -> Option<i128> {
-    Some(match p {
-        Prim::Bool | Prim::Byte | Prim::I8 | Prim::U8 => 1,
-        Prim::I16 | Prim::U16 => 2,
-        // `char` is 4 bytes (D58: a 32-bit scalar, i32-shaped in WIR).
-        Prim::I32 | Prim::U32 | Prim::F32 | Prim::Char => 4,
-        Prim::I64 | Prim::U64 | Prim::Int | Prim::Uint | Prim::F64 => 8,
-        Prim::Str => return None,
-    })
-}

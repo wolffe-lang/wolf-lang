@@ -211,6 +211,7 @@ pub(crate) mod exhaust;
 pub mod fmtspec;
 pub mod graph;
 pub mod interface;
+pub mod layout;
 pub(crate) mod letcheck;
 pub mod lints;
 pub mod origin;

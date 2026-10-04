@@ -8365,9 +8365,53 @@ impl<'a> Checker<'a> {
                 let meta = self.lo.table.intern(TyKind::Meta(MetaTy::TypeInfo));
                 self.call_fixed(name, &[type_ty], meta, e, args)
             }
-            I::SizeOf => {
+            I::SizeOf | I::AlignOf => {
                 self.note_comptime_call(e.span);
                 self.call_fixed(name, &[type_ty], int_, e, args)
+            }
+            I::OffsetOf => {
+                // kw08 (`[abi.layout.query]`): `offset_of(T, field)` —
+                // a type value, then a field NAME (never an
+                // expression; the resolver leaves it alone). Whether
+                // `T` has the field is the evaluator's question (E0403
+                // there), since `T` is a comptime value.
+                self.note_comptime_call(e.span);
+                let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
+                if arg_nodes.len() != 2 {
+                    self.wrong_arg_count(name, e.span, None, 2, arg_nodes.len());
+                    return Ok(int_);
+                }
+                if let Some(v) = Arg::value(arg_nodes[0]) {
+                    let exp = Expect {
+                        ty: type_ty,
+                        reason: Reason::ArgOfCall {
+                            callee: name.to_string(),
+                            index: 0,
+                        },
+                        because: None,
+                    };
+                    self.check_expr(v, &exp)?;
+                }
+                let named = Arg::value(arg_nodes[1])
+                    .filter(|v| v.kind == SyntaxKind::PathExpr)
+                    .and_then(|v| PathExpr::cast(v).and_then(|p| p.ident()))
+                    .is_some()
+                    && arg_nodes[1].mode().is_none();
+                if !named {
+                    self.diags.push(
+                        Diagnostic::error(
+                            codes::E0403,
+                            arg_nodes[1].syntax().span,
+                            "`offset_of` takes a field name as its second argument".to_string(),
+                        )
+                        .with_label("not a field name")
+                        .with_note(
+                            "write the field as it is declared: `offset_of(Gdtr, base)` \
+                             ([abi.layout.query]).",
+                        ),
+                    );
+                }
+                Ok(int_)
             }
             I::TypeBuild => {
                 // The descriptor is a comptime aggregate; its shape is

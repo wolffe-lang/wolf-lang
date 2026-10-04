@@ -50,6 +50,9 @@ pub const PRELUDE: &[&str] = &[
     "typebuild",
     "implements",
     "size_of",
+    // kw08 (`[abi.layout.query]`): the other two layout queries.
+    "align_of",
+    "offset_of",
     // assertions ([conf.trap.map]: the one user-raised trap; at
     // comptime a failure is E0710)
     "assert",

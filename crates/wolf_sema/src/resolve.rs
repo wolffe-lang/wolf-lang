@@ -1064,10 +1064,25 @@ impl Resolver<'_> {
                 let rows = (node.kind == SyntaxKind::CallExpr)
                     .then(|| self.callee_param_rows(node))
                     .flatten();
+                let field_named = self.is_offset_of_call(node);
                 for n in node.nodes() {
                     if is_expr_kind(n.kind) {
                         self.resolve_expr(n);
                     } else if let Some(args) = ArgList::cast(n) {
+                        if field_named {
+                            // kw08 (`[abi.layout.query]`): `offset_of(T,
+                            // field)`'s second argument names a field of
+                            // `T`, not a binding — resolve `T` only.
+                            for (i, a) in args.args().enumerate() {
+                                match Arg::value(a) {
+                                    Some(v) if i == 1 && v.kind == SyntaxKind::PathExpr => {}
+                                    Some(v) if is_type_kind(v.kind) => self.resolve_type(v),
+                                    Some(v) => self.resolve_expr(v),
+                                    None => {}
+                                }
+                            }
+                            continue;
+                        }
                         self.resolve_args(args, rows.as_deref());
                     }
                 }
@@ -1221,6 +1236,26 @@ impl Resolver<'_> {
             // blocks, which are expressions).
             _ => self.resolve_child_exprs(node),
         }
+    }
+
+    /// Is `call` the prelude's `offset_of` (a bare callee no local,
+    /// import or module item shadows)?
+    fn is_offset_of_call(&self, call: &GreenNode) -> bool {
+        if call.kind != SyntaxKind::CallExpr {
+            return false;
+        }
+        let Some(t) = CallExpr::cast(call)
+            .and_then(|c| c.callee())
+            .and_then(PathExpr::cast)
+            .and_then(|p| p.ident())
+        else {
+            return false;
+        };
+        let name = self.text(t.span);
+        name == "offset_of"
+            && !self.in_scope(&name)
+            && self.binding_index(&name).is_none()
+            && self.pkg.tables[self.module].get(&name).is_none()
     }
 
     fn resolve_args(&mut self, args: ArgList<'_>, rows: Option<&[BTreeSet<String>]>) {

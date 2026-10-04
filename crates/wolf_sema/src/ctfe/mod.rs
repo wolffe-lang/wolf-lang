@@ -402,15 +402,23 @@ fn fault_to_diag(f: &Fault, _budget: Budget, fix_at: Span) -> Diagnostic {
         FaultKind::Layout { what } => Diagnostic::error(
             codes::E0708,
             f.span,
-            format!("the size of {what} is not resolved until codegen lays it out"),
+            format!("the layout of {what} is not resolved until codegen lays it out"),
         )
         .with_label("unresolved until codegen")
         .with_note(
-            "layout (sizes, offsets) is decided by the code generator, not the \
-             type checker; comptime answers for fixed-width primitives, whose \
-             widths the type alone settles, and cannot answer for an aggregate \
-             until the layout that decides its offsets exists.",
+            "`size_of`, `align_of` and `offset_of` answer at comptime for scalars, \
+             raw pointers and `#[repr(c)]` structs, whose layout the clause fixes \
+             ([abi.layout.query]); any other type has the native layout, which the \
+             code generator chooses ([abi.native.layout]) — mark the struct \
+             `#[repr(c)]` to make its layout a fact.",
         ),
+        FaultKind::NoField { ty, field } => Diagnostic::error(
+            codes::E0403,
+            f.span,
+            format!("`{ty}` has no field named `{field}`"),
+        )
+        .with_label("`offset_of` names a field of its struct")
+        .with_note("`offset_of(T, field)` takes the name of one of `T`'s fields ([abi.layout.query])."),
         FaultKind::AssertFailed { msg } => {
             let message = match msg {
                 Some(m) => format!("this comptime assertion failed: {m}"),

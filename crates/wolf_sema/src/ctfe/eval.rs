@@ -106,8 +106,12 @@ pub enum FaultKind {
         ty: String,
         detail: String,
     },
-    /// Layout is c05's: `size_of`/offsets on non-trivial types (E0708).
+    /// A layout query on a type with no comptime layout (E0708):
+    /// anything but a scalar or a `#[repr(c)]` struct (kw08,
+    /// `[abi.layout.query]`).
     Layout { what: String },
+    /// `offset_of(T, f)` where the struct `T` has no field `f` (E0403).
+    NoField { ty: String, field: String },
     /// A comptime `assert` failed (E0710). The message is `assert`'s
     /// optional second argument when it evaluated to a string.
     AssertFailed { msg: Option<String> },
@@ -1419,7 +1423,20 @@ impl<'a> Engine<'a> {
                     prepared.push(Step::Eval(base));
                 }
                 let recv = usize::from(matches!(&callee, Callee::Method { .. }));
-                for v in &arg_nodes {
+                // `offset_of(T, field)` (kw08): the second argument is
+                // a field NAME, pushed as its text — never evaluated
+                // (no binding of that name need exist).
+                let field_arg = matches!(callee, Callee::Intrinsic(Intrinsic::OffsetOf));
+                for (k, v) in arg_nodes.iter().enumerate() {
+                    if field_arg && k == 1 {
+                        let Some(t) = PathExpr::cast(v).and_then(|p| p.ident()) else {
+                            gap!(v.span, "an `offset_of` field that is not a name");
+                        };
+                        let n = self.text(file, t.span);
+                        let sv = self.arena.str_(n);
+                        prepared.push(Step::PushVal(sv));
+                        continue;
+                    }
                     if is_type_kind(v.kind) {
                         match self.type_node_value(module, file, v) {
                             Some(ct) => {
