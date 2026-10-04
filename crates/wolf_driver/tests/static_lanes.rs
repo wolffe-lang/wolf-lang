@@ -389,7 +389,8 @@ fn the_books_usage_text_at_module_level() {
         std::fs::create_dir_all(dir).expect("mkdir");
         std::fs::write(dir.join("main.lu"), format!("{decl}{USAGE}{MAIN}")).expect("write");
     }
-    let text = runs("usage: wordcount TEXT\nCount the words in TEXT and report the most frequent.\n\n");
+    let text =
+        runs("usage: wordcount TEXT\nCount the words in TEXT and report the most frequent.\n\n");
     let typed = typed.join("main.lu");
     if let Some(obs) = lane(&typed, "--checked") {
         assert_obs("the CHECKED lane", "the book's typed USAGE", &obs, text);
@@ -411,7 +412,12 @@ fn the_books_usage_text_at_module_level() {
         ub: ("", ""),
     };
     if let Some(obs) = lane(&untyped, "--checked") {
-        assert_obs("the CHECKED lane", "the book's untyped USAGE", &obs, declined);
+        assert_obs(
+            "the CHECKED lane",
+            "the book's untyped USAGE",
+            &obs,
+            declined,
+        );
     }
     for flag in ["--native", "--release"] {
         if let Some(obs) = lane(&untyped, flag) {
