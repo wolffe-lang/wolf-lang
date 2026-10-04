@@ -163,7 +163,7 @@ vocabulary.
      two indices are equal at run time — `xs[i]` against `xs[k + 1]`
      with `k = i - 1`.
 
-  **Where the machines stand (wolf 0.2.22; lupin 0.1.45).** wolfgang makes moves element-granular: items
+  **Where the machines stand (wolf 0.2.23; lupin 0.1.46).** wolfgang makes moves element-granular: items
   1(a)–(c) hold for a moved element, item 3 holds (wolf-lang#460, where
   any index store revived a moved sibling and native aliased it, is
   fixed), and R3 holds for a store through the same plain local of a
@@ -182,7 +182,7 @@ vocabulary.
   lend of `m[k]` is a typing question (the read is `V ! {none}`,
   `[mem.map.absent]`, E0401 today) that this clause does not answer.
   lupin separates elements at run time and is the oracle for which
-  element a move empties and for the exclusivity trap; at 0.1.45 every
+  element a move empties and for the exclusivity trap; at 0.1.46 every
   read of a moved element traps (wolffe-lang/wolf-interp#141), a whole
   read of a place holding a moved part traps (wolffe-lang/wolf-interp#143),
   a non-`Copy` value read out of a `Map` moves out of it
@@ -601,10 +601,10 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   them answering with a verdict — **zero rows moved**, and wolf-lang's
   own suite stayed at 2,305 tests green.
   Witnesses `corpus/memory/region_str_view_return.lu` and its legal
-  companion `corpus/memory/region_str_view_inside.lu`. **lupin does not
-  yet follow**: 0.1.37 runs the refused shape to `exit(0)`, so the
-  wolf-interp mirror is filed and the differ will carry the row until
-  it lands.)
+  companion `corpus/memory/region_str_view_inside.lu`. **lupin
+  follows since 0.1.45** (wolffe-lang/wolf-interp#126, is68): it traps
+  `region-fault` at the escape, the dynamic counterpart of the refusal,
+  where 0.1.37 through 0.1.44 ran the refused shape to `exit(0)`.)
   (Extended 2026-10-03 by s207 for wolf-lang#540. **A `for` binding
   carries its iterable's sites.** s171 named "the pieces of
   `split`/`words`/`lines`" and the compiler refused a piece reached by
