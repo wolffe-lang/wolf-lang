@@ -1,0 +1,14 @@
+//! check: fail(E0705)
+//! phase: resolve
+//! conforms: mem.static.3, comptime
+//!
+//! kw09 (`[mem.static.3]`): an initializer may name another module item
+//! before or after it, but not one that needs its own value — `A` and
+//! `B` each depend on the other, and each is E0705.
+
+let A: int = B + 1
+let B: int = A * 2
+
+fn main() -> int {
+    A - B
+}

@@ -1,0 +1,15 @@
+//! check: fail(E1301)
+//! phase: typecheck
+//! conforms: mem.static.2, mem.unsafe.scope, mem.codes
+//!
+//! kw09 (K11 = A): a module `var` is shared by every task, so every
+//! read and every write of it is raw-tier — E1301 outside `unsafe`, one
+//! per site (`[mem.static.2]`). Before kw09 the write passed `mem` and
+//! was refused later for an unrelated reason; lupin runs it.
+
+var ticks: int = 0
+
+fn main() -> int {
+    ticks = ticks + 1          // E1301 twice: the write and the read
+    ticks                      // E1301: a read
+}

@@ -1,0 +1,15 @@
+//! check: fail(E0705)
+//! phase: resolve
+//! conforms: mem.static.3, comptime
+//!
+//! kw09 (`[mem.static.3]`): every module initializer is evaluated at
+//! compile time, so one that reads a module `var` — whose value changes
+//! at run time — is E0705. There is no initialization order at run time
+//! for a program to depend on. lupin runs it.
+
+var seed: int = 7
+let start: int = seed + 1
+
+fn main() -> int {
+    start - 8
+}

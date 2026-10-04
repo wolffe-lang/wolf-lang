@@ -1,0 +1,18 @@
+//! check: run(exit=0)
+//! phase: mem
+//! conforms: mem.static.3
+//!
+//! kw09 (`[mem.static.3]`): module state holds the integers, `byte`,
+//! `bool` and the floats at this cut (and `str` in a `const` or `let`).
+//! A `List` is not static data yet — it is refused by name on every
+//! machine (`module state of a type that is not static data`), never
+//! initialized at some run-time moment the program cannot see. kw00's
+//! `f11_static.lu` GDT table; lupin runs it. A kernel's table lives in
+//! `.bss` reserved by assembly, named with `extern "c" let`
+//! (`[abi.link.extern]`).
+
+let gdt: List[int] = [0, 0x00af9a000000ffff, 0x00cf92000000ffff]
+
+fn main() -> int {
+    gdt.len - 3
+}
