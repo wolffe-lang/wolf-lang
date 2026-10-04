@@ -402,7 +402,7 @@ when the name is an enum's VARIANT used as a bare value: `Less` under
 arm the bare variant name is fine — the scrutinee's type says which
 enum.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__first_parse_before_resolve.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__tag_undeclared_arg.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__op_eq_no_trait.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__method_home_no_std.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__variant_bare_value.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_all_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_item_in_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_member.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_no_module.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_standalone_sibling.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_group_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_item_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_typo.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0301_operator_no_trait.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0301_bare_variant_two_homes.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0301_bare_variant_value.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__align_of_layout.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__offset_of_layout.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__first_parse_before_resolve.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__negative__tag_undeclared_arg.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__traits__op_eq_no_trait.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__method_home_no_std.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__typecheck__variant_bare_value.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_all_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_item_in_standalone.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_member.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_no_module.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_standalone_sibling.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_group_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_std_item_no_std_root.snap, crates/wolf_sema/tests/snapshots/diagnostics__e0301_typo.snap, crates/wolf_sema/tests/snapshots/trait_diagnostics__e0301_operator_no_trait.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0301_bare_variant_two_homes.snap, crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0301_bare_variant_value.snap
 
 ## E0302 — the same name is defined twice in one module
 
@@ -1279,16 +1279,19 @@ Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__norm_witne
 
 ## E0708 — layout is unresolved until codegen
 
-Sizes and offsets are decided when codegen lays types out, not
-by the type checker — so `size_of` at comptime answers only for
-fixed-width primitives today, and `typeinfo` describes fields without
-offsets. This is a staging rule, not a permanent refusal: when layout
-lands, the same intrinsics answer for aggregates, and code written
-against them starts compiling without change. Until then, compute
-from the primitive widths, or defer the computation to a later phase
-that has layout in hand.
+`size_of`, `align_of` and `offset_of` answer at comptime for the types
+whose layout a clause fixes: the fixed-width scalars, and every
+`#[repr(c)]` struct — plain, `packed` or `align(N)` — whose fields have
+such a layout too ([abi.layout.query]). Every other type has the native
+layout, which the code generator chooses ([abi.native.layout]) and may
+change between versions: a struct without `#[repr(c)]`, a `#[repr(c)]`
+struct with such a field, an enum, a tuple, `str`, a container. Asking
+for its size, alignment or a field's offset is this error. Mark the
+struct `#[repr(c)]` when its layout matters to the program — that is
+the promise the queries read — and `typeinfo` still describes any
+type's fields, without offsets.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__size_of_layout.snap, crates/wolf_sema/tests/snapshots/ctfe_diagnostics__e0708_layout.snap, crates/wolf_sema/tests/snapshots/layout_diagnostics__e0708_align_offset_native.snap, crates/wolf_sema/tests/snapshots/layout_diagnostics__e0708_native_field.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__align_of_layout.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__offset_of_layout.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__size_of_layout.snap, crates/wolf_sema/tests/snapshots/ctfe_diagnostics__e0708_layout.snap, crates/wolf_sema/tests/snapshots/layout_diagnostics__e0708_align_offset_native.snap, crates/wolf_sema/tests/snapshots/layout_diagnostics__e0708_native_field.snap
 
 ## E0709 — invalid comptime budget attribute
 
@@ -1569,7 +1572,7 @@ The attributes implemented are `trusted`, `consttime`, `allow`, `index`,
 applies. A representation that is implemented but cannot be laid out
 as written (`align(3)`, `packed` without `c`) is E0820.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_contract_unimplemented.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_misplaced.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_repr_bogus.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_repr_unimplemented.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_section.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_thread_local.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_unknown.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__cfg_predicate_unknown.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__cfg_target_unknown.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_cfg_unix.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_cfg_unknown_target.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_misplaced.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_noalloc.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_repr_args.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_unknown.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_contract_unimplemented.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_misplaced.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_repr_bogus.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_repr_unimplemented.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_section.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_thread_local.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_unknown.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__cfg_predicate_unknown.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__cfg_target_unknown.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__packed_field_lend.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__packed_fields_at_offset_of.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_cfg_unix.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_cfg_unknown_target.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_misplaced.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_noalloc.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_repr_args.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0817_unknown.snap
 
 ## E0818 — an `extern` ABI string other than `c`
 
@@ -1603,7 +1606,7 @@ Copy the field out, lend the copy, and write it back:
     bump(mut base)
     d.base = base
 
-Fixtures: crates/wolf_sema/tests/snapshots/layout_diagnostics__e0819_mut_arg.snap, crates/wolf_sema/tests/snapshots/layout_diagnostics__e0819_nested.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__packed_field_lend.snap, crates/wolf_sema/tests/snapshots/layout_diagnostics__e0819_mut_arg.snap, crates/wolf_sema/tests/snapshots/layout_diagnostics__e0819_nested.snap
 
 ## E0820 — a representation that cannot be laid out
 
@@ -1623,7 +1626,7 @@ gives a meaning:
   answer it);
 - each representation is named once.
 
-Fixtures: crates/wolf_sema/tests/snapshots/attr_diagnostics__e0820_align_values.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0820_combinations.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_repr_unlayable.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0820_align_values.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0820_combinations.snap
 
 ## E1001 — this value was moved away (or never given one) before this use
 
