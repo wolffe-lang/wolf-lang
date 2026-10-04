@@ -1787,7 +1787,7 @@ impl<'t> Machine<'t> {
     /// after one more: the address must be a multiple of the width
     /// (row L3; allocations are placed at `ALLOC_STRIDE` multiples, so
     /// the address alone decides it). Signed pointees read back
-    /// sign-extended, `byte` as a byte.
+    /// sign-extended (kw06's [`Self::raw_read_at`]), `byte` as a byte.
     fn volatile_access(
         &mut self,
         p: PtrVal,
@@ -1814,33 +1814,23 @@ impl<'t> Machine<'t> {
                 tag_span,
             );
         }
+        // The access itself is kw06's raw read/write at `p` — the same
+        // rows, the same sign extension (#561) — with `byte` carried as
+        // a byte both ways.
+        let signed = matches!(pointee, Prim::I8 | Prim::I16 | Prim::I32 | Prim::I64);
         match value {
             Some(v) => {
-                let n = match v {
-                    Value::Int(n) => n,
-                    Value::Byte(b) => i64::from(b),
-                    _ => return self.refuse("a volatile write of a non-integer", span),
+                let v = match v {
+                    Value::Byte(b) => Value::Int(i64::from(b)),
+                    other => other,
                 };
-                let data: Vec<u8> = (0..size).map(|i| ((n >> (8 * i)) & 0xff) as u8).collect();
-                self.raw_write_bytes(p, &data, span, opdesc)?;
-                Ok(Flow::Val(Value::Unit))
+                self.raw_write_at(p, size, signed, v, None, span, span)
             }
-            None => {
+            None if pointee == Prim::Byte => {
                 let bytes = self.raw_read_bytes(p, size, span, opdesc)?;
-                let mut n: i64 = 0;
-                for (i, b) in bytes.iter().enumerate() {
-                    n |= (*b as i64) << (8 * i);
-                }
-                if pointee == Prim::Byte {
-                    return Ok(Flow::Val(Value::Byte(n as u8)));
-                }
-                let signed = matches!(pointee, Prim::I8 | Prim::I16 | Prim::I32);
-                if signed {
-                    let shift = 64 - 8 * size as u32;
-                    n = (n << shift) >> shift;
-                }
-                Ok(Flow::Val(Value::Int(n)))
+                Ok(Flow::Val(Value::Byte(bytes[0])))
             }
+            None => self.raw_read_at(p, size, signed, span),
         }
     }
 
