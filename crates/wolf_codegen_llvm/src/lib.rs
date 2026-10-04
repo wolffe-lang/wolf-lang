@@ -94,9 +94,7 @@ mod emit;
 pub mod fuzzgen;
 
 use std::collections::{HashMap, HashSet};
-use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use wolf_backend::{
     Backend, BackendError, Capabilities, DebugSink, DwarfFidelity, Linkage, ObjectProduct,
@@ -517,10 +515,16 @@ impl Backend for LlvmBackend {
 
     fn finish(self: Box<Self>) -> Result<ObjectProduct, BackendError> {
         let ir = self.module_ir();
-        let tmp = std::env::temp_dir();
-        let dir = scratch_dir(&tmp, &SCRATCH_SEQ).map_err(|e| {
-            BackendError::Internal(format!("create a dir in {}: {e}", tmp.display()))
-        })?;
+        let dir = std::env::temp_dir().join(format!(
+            "wolf-llvm-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| BackendError::Internal(format!("create {}: {e}", dir.display())))?;
         let ll = dir.join("wolf.ll");
         let obj = dir.join("wolf.o");
         std::fs::write(&ll, &ir)
@@ -568,35 +572,6 @@ impl Backend for LlvmBackend {
     }
 }
 
-/// The process's scratch-directory sequence (wolf-lang#583).
-static SCRATCH_SEQ: AtomicU64 = AtomicU64::new(0);
-
-/// A directory under `base` that this call alone owns: named by the pid
-/// and the next number in `seq`, and made with `create_dir`, which
-/// fails on a name that exists, so a leftover from an earlier process
-/// with the same pid is stepped over, never shared.
-///
-/// wolf-lang#583 (s210): the driver finishes units in parallel in one
-/// process (`units.par_iter()`), and 0.2.23 named this directory by pid
-/// and wall-clock nanos with `create_dir_all`. On macOS the clock is
-/// microsecond-grained, so two units could share a directory. The
-/// first to finish then deleted the other's `wolf.o` (an ICE), or one
-/// unit's object was built from the other's IR.
-fn scratch_dir(base: &Path, seq: &AtomicU64) -> std::io::Result<PathBuf> {
-    let pid = std::process::id();
-    loop {
-        let dir = base.join(format!(
-            "wolf-llvm-{pid}-{}",
-            seq.fetch_add(1, Ordering::Relaxed)
-        ));
-        match std::fs::create_dir(&dir) {
-            Ok(()) => return Ok(dir),
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(e) => return Err(e),
-        }
-    }
-}
-
 /// Render bytes for a data global.
 fn data_const(bytes: &[u8]) -> String {
     if bytes.is_empty() {
@@ -617,62 +592,4 @@ fn data_const(bytes: &[u8]) -> String {
     }
     s.push('"');
     s
-}
-
-#[cfg(test)]
-mod scratch_tests {
-    use super::scratch_dir;
-    use std::collections::HashSet;
-    use std::sync::atomic::AtomicU64;
-    use std::sync::{Arc, Barrier};
-
-    fn fresh_base(tag: &str) -> std::path::PathBuf {
-        let base = std::env::temp_dir().join(format!("wolf-s210-{tag}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&base);
-        std::fs::create_dir_all(&base).expect("the test's base dir");
-        base
-    }
-
-    /// The forced collision (wolf-lang#583): the names the sequence
-    /// hands out next already exist, as an earlier process with this
-    /// pid would have left them. `scratch_dir` steps over both and makes
-    /// a new one; 0.2.23's `create_dir_all` returned the existing
-    /// directory to the caller as if it were fresh.
-    #[test]
-    fn an_existing_name_is_stepped_over_never_shared() {
-        let base = fresh_base("collide");
-        let pid = std::process::id();
-        for n in 0..2 {
-            std::fs::create_dir(base.join(format!("wolf-llvm-{pid}-{n}"))).expect("plant");
-        }
-        let seq = AtomicU64::new(0);
-        let dir = scratch_dir(&base, &seq).expect("a fresh dir");
-        assert_eq!(dir, base.join(format!("wolf-llvm-{pid}-2")));
-        assert!(std::fs::read_dir(&dir).expect("made").next().is_none());
-        std::fs::remove_dir_all(&base).expect("cleanup");
-    }
-
-    /// Many threads at a barrier, one sequence: every caller gets its own
-    /// directory, whatever the clock's grain.
-    #[test]
-    fn concurrent_callers_get_distinct_dirs() {
-        let base = fresh_base("race");
-        let seq = Arc::new(AtomicU64::new(0));
-        let barrier = Arc::new(Barrier::new(32));
-        let threads: Vec<_> = (0..32)
-            .map(|_| {
-                let (base, seq, barrier) = (base.clone(), seq.clone(), barrier.clone());
-                std::thread::spawn(move || {
-                    barrier.wait();
-                    scratch_dir(&base, &seq).expect("a dir")
-                })
-            })
-            .collect();
-        let dirs: HashSet<_> = threads
-            .into_iter()
-            .map(|t| t.join().expect("thread"))
-            .collect();
-        assert_eq!(dirs.len(), 32, "two callers shared a directory");
-        std::fs::remove_dir_all(&base).expect("cleanup");
-    }
 }

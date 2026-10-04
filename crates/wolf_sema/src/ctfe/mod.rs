@@ -102,9 +102,6 @@ pub fn run_package(pkg: &Package, sigs: &SigTables, outcomes: &[BodyOutcome]) ->
     let mut pass = CtfePass::default();
     let mut engine = Engine::new(pkg, sigs, outcomes);
     let mut seen: HashSet<(u32, u32, u32)> = HashSet::new();
-    // Bodies whose comptime call site already reported a fault: the
-    // module-state loop below must not evaluate them again (#584).
-    let mut faulted: HashSet<usize> = HashSet::new();
     for (oi, o) in outcomes.iter().enumerate() {
         let BodyResult::Checked(tb) = &o.result else {
             continue;
@@ -153,10 +150,7 @@ pub fn run_package(pkg: &Package, sigs: &SigTables, outcomes: &[BodyOutcome]) ->
                         construct,
                         span: f.span,
                     }),
-                    _ => {
-                        pass.diagnostics.push(fault_to_diag(&f, budget, fix_at));
-                        faulted.insert(oi);
-                    }
+                    _ => pass.diagnostics.push(fault_to_diag(&f, budget, fix_at)),
                 },
             }
         }
@@ -166,12 +160,9 @@ pub fn run_package(pkg: &Package, sigs: &SigTables, outcomes: &[BodyOutcome]) ->
     // state has no run-time initialization order. A fault is the same
     // E07xx a comptime call site reports; an engine gap stays honest
     // (`unsupported`). Items without a declared type (E0407 already
-    // spoke) and `extern "c" let` (no initializer) are skipped, and so
-    // is an initializer whose own comptime call site already faulted:
-    // evaluating it again re-reports that one fault (wolf-lang#584,
-    // s210 — 0.2.23 printed every such E07xx twice).
-    for (oi, o) in outcomes.iter().enumerate() {
-        if o.body.member.is_some() || faulted.contains(&oi) {
+    // spoke) and `extern "c" let` (no initializer) are skipped.
+    for o in outcomes {
+        if o.body.member.is_some() {
             continue;
         }
         let BodyResult::Checked(_) = &o.result else {
