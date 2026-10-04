@@ -16,9 +16,9 @@
 //! raise is discarded, warned, on every machine. Until s208 all four
 //! handed the raise to the caller with no W0601 (and, for an else-if
 //! chain, native and release discarded while checked and lupin raised).
-//! lupin 0.1.45, the pairing, answers the old way; its mirror is
-//! wolf-interp trunk `8d820316` (#186, for #179), pinned below by version
-//! until a release carries it.
+//! lupin 0.1.45 answered the old way; its mirror is wolf-interp
+//! `8d820316` (#186, for #179), which lupin 0.1.46 (the 0.2.23 pairing,
+//! r28) carries, so the version pins are dropped.
 //!
 //! Why a driver test beside the corpus rows (s171's lesson, wave 45):
 //! `cargo xtask corpus` runs every entry on the NATIVE lane only, and
@@ -234,8 +234,9 @@ fn a_unit_main_whose_tail_raises_exits_zero() {
 
 /// An else-less `if`'s value is `()` whether its tail succeeds or
 /// raises. Red at trunk dfcc2f13: checked prints `3 none`. lupin 0.1.44
-/// prints `3 none` and is68's `() none` (wolf-interp#179); 0.1.45 (the
-/// 0.2.22 pairing, r27) prints `() none`, measured, kept with its issue.
+/// printed `3 none` and is68's `() none` (wolf-interp#179); 0.1.45 (the
+/// 0.2.22 pairing, r27) printed `() none`. The pin was dropped at the
+/// 0.1.46 pairing (r28): 0.1.46 carries s208's mirror and prints `() ()`.
 #[test]
 fn an_else_less_if_is_unit_valued_whatever_its_tail() {
     every_lane_says(
@@ -243,11 +244,7 @@ fn an_else_less_if_is_unit_valued_whatever_its_tail() {
         "exit(0)",
         "() ()\n",
         true,
-        &[
-            ("0.1.44", "exit(0)", "3 none\n"),
-            ("0.1.44", "exit(0)", "() none\n"),
-            ("0.1.45", "exit(0)", "() none\n"),
-        ],
+        &[],
     );
 }
 
@@ -292,12 +289,10 @@ fn a_propagated_row_still_leaves() {
     );
 }
 
-/// lupin's mirror of ruling #34 is wolf-interp trunk `8d820316` (#186,
-/// for wolf-interp#179); 0.1.45 (the 0.2.22 pairing) predates it and hands
-/// the raise on, measured by s208. Every test here takes the ruled answer
-/// from any lupin, and the old one only from this version: the pin drops
-/// at the pairing that carries `8d820316`.
-const LUPIN_179: &str = "0.1.45";
+// lupin's mirror of ruling #34 is wolf-interp `8d820316` (#186, for
+// wolf-interp#179). 0.1.45 predated it and handed the raise on, pinned
+// here as `LUPIN_179` by s208; the pin dropped at the 0.1.46 pairing
+// (r28), which carries the mirror. Every test takes the ruled answer.
 
 /// Ruling #34 = A: an else-less `if` at a fallible fn's tail discards
 /// its then-block's raise, warned. The plain tail, a method, a nested
@@ -310,7 +305,7 @@ fn a_fallible_fns_else_less_tail_if_discards() {
         "exit(0)",
         "in a\na false\nc false\nd false\n",
         true,
-        &[(LUPIN_179, "exit(0)", "in a\na true\nc true\nd true\n")],
+        &[],
     );
 }
 
@@ -324,7 +319,7 @@ fn a_fallible_fns_tail_chain_discards() {
         "exit(0)",
         "g false\n",
         true,
-        &[(LUPIN_179, "exit(0)", "g true\n")],
+        &[],
     );
 }
 
@@ -361,10 +356,10 @@ fn a_closures_else_less_tail_if_discards() {
     }
     if let Some(lupin) = lupin_says(&entry) {
         let got = (lupin.verdict.as_str(), lupin.stdout.as_str());
-        let pinned = lupin.version == LUPIN_179 && got == ("exit(0)", "run true\n");
-        assert!(
-            got == ("exit(0)", "run false\n") || pinned,
-            "lupin {}'s answer on {}: {got:?}",
+        assert_eq!(
+            got,
+            ("exit(0)", "run false\n"),
+            "lupin {}'s answer on {}",
             lupin.version,
             entry.display()
         );
@@ -380,7 +375,7 @@ fn a_fallible_fns_tail_if_discards_a_value_row() {
         "exit(0)",
         "g false\n",
         true,
-        &[(LUPIN_179, "exit(0)", "g true\n")],
+        &[],
     );
 }
 
@@ -421,10 +416,10 @@ fn a_bare_tag_at_a_fallible_tail_if_is_the_statement_construct() {
     }
     if let Some(lupin) = lupin_says(&entry) {
         let got = (lupin.verdict.as_str(), lupin.stdout.as_str());
-        let pinned = lupin.version == LUPIN_179 && got == ("exit(0)", "g true\n");
-        assert!(
-            got == ("exit(0)", "g false\n") || pinned,
-            "lupin {}'s answer on {}: {got:?}",
+        assert_eq!(
+            got,
+            ("exit(0)", "g false\n"),
+            "lupin {}'s answer on {}",
             lupin.version,
             entry.display()
         );
