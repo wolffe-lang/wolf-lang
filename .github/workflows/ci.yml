@@ -203,7 +203,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --workspace
-      - run: cargo test --workspace --no-fail-fast
+      - run: cargo test --workspace
       # s60a: the windows native rung. The clif gate is open on this
       # host, so the corpus runs natively here — `lane-coverage` is the
       # windows floor line (259/255/0/274/0 at the s60a bring-up with 21
