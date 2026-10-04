@@ -2976,10 +2976,12 @@ impl<'a> Fx<'a> {
         let mut rest = results;
         if store {
             let v = self.op(args[1])?;
-            self.line(format!("  store {ty} {v}, ptr {p}, align {width}"));
+            self.line(format!("  store volatile {ty} {v}, ptr {p}, align {width}"));
         } else {
             let t = self.tmp();
-            self.line(format!("  {t} = load {ty}, ptr {p}, align {width}"));
+            self.line(format!(
+                "  {t} = load volatile {ty}, ptr {p}, align {width}"
+            ));
             let (&r, tail) = results
                 .split_first()
                 .ok_or_else(|| ice("a volatile load without a result"))?;
