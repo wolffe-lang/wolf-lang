@@ -20,6 +20,7 @@
     "abi.err.row": "04-abi.md",
     "abi.err.trace": "04-abi.md",
     "abi.err.trap": "04-abi.md",
+    "abi.interrupt": "04-abi.md",
     "abi.layout.align": "04-abi.md",
     "abi.layout.c": "04-abi.md",
     "abi.layout.packed": "04-abi.md",
