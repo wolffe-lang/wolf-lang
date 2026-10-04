@@ -283,3 +283,43 @@ fn c_membrane_widening_round_trips() {
         (true, wolf_wir::Mode::Val)
     );
 }
+
+/// kw08 (`[abi.layout.packed]`): a load or store may state an
+/// alignment below its type's natural one — a packed field through a
+/// raw pointer. The immediate round-trips byte-identically and
+/// verifies; a plain access prints no immediate.
+#[test]
+fn an_under_aligned_access_round_trips() {
+    let src = "fn @packed(ptr) -> i64 {\n\
+               b0(%0: ptr):\n\
+               \x20\x20%1: mem.r0 = region.foreign 1\n\
+               \x20\x20%2 = iconst.i64 2\n\
+               \x20\x20%3 = ptr.off %0, %2, 1\n\
+               \x20\x20%4 = load.i64 %3, %1, 1\n\
+               \x20\x20%5 = load.i16 %0, %1\n\
+               \x20\x20%6 = store.i64 %4, %3, %1, 2\n\
+               \x20\x20ret %4\n\
+               }\n";
+    let m = wolf_wir::parse_module(src).expect("under-aligned accesses parse");
+    verify_module(&m).expect("under-aligned accesses verify");
+    assert_eq!(wolf_wir::print_module(&m), src, "byte-identical round trip");
+}
+
+/// kw08: the stated alignment is 1, 2 or 4 — never 0, never a natural
+/// alignment (that is the plain access), never a non-power.
+#[test]
+fn an_under_aligned_access_states_a_real_alignment() {
+    for bad in ["0", "3", "8"] {
+        let src = format!(
+            "fn @packed(ptr) -> i64 {{\n\
+             b0(%0: ptr):\n\
+             \x20\x20%1: mem.r0 = region.foreign 1\n\
+             \x20\x20%2 = load.i64 %0, %1, {bad}\n\
+             \x20\x20ret %2\n\
+             }}\n"
+        );
+        let m = wolf_wir::parse_module(&src).expect("parses");
+        let err = verify_module(&m).expect_err("the verifier refuses the alignment");
+        assert!(err.msg.contains("alignment of 1, 2 or 4"), "{bad}: {}", err.msg);
+    }
+}
