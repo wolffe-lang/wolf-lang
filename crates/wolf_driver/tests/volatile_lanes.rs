@@ -333,24 +333,18 @@ fn a_volatile_read_after_free_is_row_p1() {
 }
 
 /// `[mem.unsafe.volatile.3]`: a misaligned address is row L3, clause
-/// `mem.unsafe.volatile`. The compiled tiers refuse `with_addr` by name
-/// until kw06 lowers it (F9).
+/// `mem.unsafe.volatile`. The compiled tiers compile and run it (O11:
+/// one aligned access, no check — undefined); `with_addr` lowers there
+/// since kw06 (F9).
 #[test]
 fn a_misaligned_volatile_read_is_row_l3() {
     let l3 = ub("L3", "mem.unsafe.volatile");
-    let refused = Want {
-        verdict: "unsupported",
-        codes: &[],
-        stdout: "",
-        named: "a method call without an elaborated impl",
-        ub: ("", ""),
-    };
     // lupin 0.1.45 stops one call earlier, at `with_addr` (its half is
     // wolf-interp#184, kw06's); the mirror needs both issues.
     every_machine(
         "volatile_ub_misaligned.lu",
         l3,
-        Some(refused),
+        None,
         l3,
         &[Pin {
             version: "0.1.45",
