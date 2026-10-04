@@ -128,7 +128,8 @@ fn a_misaligned_row_still_claims_the_natural_alignment() {
         "the misaligned *u32 read is a `load i32 … align 4`: {got:?}"
     );
     assert!(
-        got.iter().all(|a| a.ends_with(" align 4") || !a.contains(" i32 ")),
+        got.iter()
+            .all(|a| a.ends_with(" align 4") || !a.contains(" i32 ")),
         "no i32 access weakened below its natural alignment: {got:?}"
     );
 }
