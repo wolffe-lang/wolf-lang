@@ -122,7 +122,7 @@ AAPCS64, win64, Apple arm64 deltas).
   other `S` is **E0818**, naming it (K7, STATUS #31 — wolf-lang#524).
   In particular wolf has no interrupt calling convention: an interrupt
   or exception enters through an assembly trampoline that calls an
-  `export fn` with the C convention (KWC F7); before the rule
+  `export fn` with the C convention (`[abi.interrupt]`); before the rule
   `extern "x86-interrupt" fn` compiled as an ordinary function
   returning with `ret`.
 - `[abi.c.export]` `export fn f(…) { … }`, and `extern "c" fn f(…)`
@@ -469,6 +469,56 @@ AAPCS64, win64, Apple arm64 deltas).
   reaches an `extern "c" let` through it). Each module item is defined
   in exactly one of a build's objects, global, under its mangled name;
   the others refer to it.
+
+## §8 Interrupts `[abi.interrupt]`
+
+- `[abi.interrupt]` Wolf has no interrupt calling convention (K7 = B,
+  STATUS #31): no ABI string names one (E0818, `[abi.c.seams]`) and no
+  function wolf compiles returns with `iretq`. An interrupt or
+  exception enters through an assembly trampoline the root `wolf.pkg`
+  lists (`[abi.asm.link]`) and reaches wolf as an ordinary `export fn`
+  under the C convention (`[abi.c.export]`). On `x86_64-unknown-none`
+  the trampoline keeps this contract with its handler:
+  (1) the CPU has aligned the stack to 16 bytes and pushed SS, RSP,
+  RFLAGS, CS and RIP, and an error code for the vectors that carry one
+  — 8, 10, 11, 12, 13, 14, 17 and 21 (Intel SDM vol. 3A §6.13 and Table
+  6-1) and 29 and 30 (AMD64 APM vol. 2 §8.2, Table 8-1); for every
+  other vector the trampoline pushes a zero in its place, so every
+  frame has one shape, and then it pushes the vector number;
+  (2) it pushes the fifteen general registers, %rax first and %r15
+  last, and passes the frame's address as the handler's one argument
+  (%rdi), with %rsp 16-aligned at the call and the direction flag clear
+  (the psABI's state at a function's entry); (3) the frame is a
+  `#[repr(c)]` struct of 22 `u64` fields, lowest address first: `r15
+  r14 r13 r12 r11 r10 r9 r8 rbp rdi rsi rdx rcx rbx rax vector error
+  rip cs rflags rsp ss`, so `size_of` is 176 and `offset_of` is 120 for
+  `vector`, 128 for `error` and 136 for `rip` (`[abi.layout.query]`);
+  (4) the handler is `export fn h(f: *Frame)` and may rewrite the frame
+  through `f` — resuming past a faulting instruction is a store to its
+  `rip`; when `h` returns, the trampoline reloads the registers from
+  the frame, drops the vector and the error code and returns with
+  `iretq` (SDM vol. 3A §6.14.2–§6.14.3, APM vol. 2 §8.9). No x87, SSE or
+  AVX state is saved, because the freestanding target generates none,
+  and an interrupt taken in kernel code overwrites nothing live below
+  %rsp, because it keeps no red zone (`[abi.target.none.codegen]`).
+  The interrupt descriptor table is data the program builds: its
+  16-byte gates live in a table assembly reserves in `.bss` and wolf
+  names with `extern "c" let` (module state holds scalars only,
+  `[mem.static.3]`), filled through that pointer and loaded by a `lidt`
+  routine on the roster (`[abi.asm.roster]`). A handler that must not
+  return ends in a halting routine. The checked machine and lupin have
+  no interrupts and refuse the freestanding program as a whole
+  (`[abi.target]`); a handler's body is ordinary wolf and runs hosted on
+  a frame in memory. **Not yet:** a store to a field of a raw element,
+  `f[0].rip = v`, is refused on both compiling tiers and the checked
+  machine (`assignment through this place shape`, wolf-lang#577), so a
+  handler writes the word at `offset_of(Frame, rip) / 8` through `f as
+  *u64`. Witness: `crates/wolf_driver/tests/freestanding_interrupt.rs`,
+  an image QEMU boots whose IDT wolf builds: an `int3` (a trap) returns,
+  and a `ud2` and a `#GP` with error code 0x1234 (faults) are resumed
+  past the instruction, on both tiers, the frame's layout read back
+  from `size_of` and `offset_of`; PAX's kernel routes all 32
+  exceptions and its timer this way (wolffe-lang/pax, kw10).
 
 ---
 
