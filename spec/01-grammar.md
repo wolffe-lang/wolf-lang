@@ -290,7 +290,7 @@ unit  ::= inner_doc* inner_attribute* item*
 item  ::= attribute* visibility? bare_item
 bare_item ::= fn_item | let_item | var_item | type_item | trait_item
             | impl_item | use_item | import_c_item | const_item
-            | error_item
+            | error_item | extern_let_item
 visibility ::= 'pub' ('(' 'pkg' ')')?
 ```
 
@@ -352,10 +352,16 @@ let_item ::= 'let' binder (',' binder)* TERM
 var_item ::= 'var' binder (',' binder)* TERM
 binder ::= pattern (':' type)? '=' expr
 const_item ::= 'const' IDENT (':' type)? '=' expr TERM
+extern_let_item ::= 'extern' STRING 'let' IDENT ':' type TERM
 ```
 
 `let` immutable, `var` mutable, `const` comptime-evaluated. Item-level and
-statement-level share the grammar. `let (a, b) = pair` destructures.
+statement-level share the grammar. `let (a, b) = pair` destructures. At
+item level every initializer is comptime-evaluated (module state,
+`[mem.static.3]`). `extern "c" let NAME: *T` names a symbol the link
+defines, with no initializer (`[abi.link.extern]`, kw09); the parser
+also reads `var`/`const` and an initializer there, so the checker
+refuses each by name (E0819).
 
 **A `let` binding's FIELDS are as immutable as the binding** (s154,
 wolf-lang#331): `let r = Row{…}` then `r.cents = 5` is E0410 at the
