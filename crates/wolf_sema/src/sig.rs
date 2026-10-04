@@ -220,6 +220,23 @@ pub enum GlobalKind {
     Extern,
 }
 
+/// kw09 (`[mem.static.3]`): is `ty` a type module state holds at this
+/// cut — static data whose initial bytes the compiler can emit? The
+/// integers, `byte`, `bool` and the floats for every form, and `str`
+/// for a `const` or `let` (its literal; a `var` of `str` would store a
+/// region's view in state every task shares). Anything else is
+/// refused by name where the item is executed or lowered.
+pub fn is_static_data(table: &TypeTable, ty: TyId, kind: GlobalKind) -> bool {
+    match table.kind(ty) {
+        TyKind::Prim(p) => match p {
+            Prim::Str => kind != GlobalKind::Var,
+            Prim::Char => false,
+            _ => true,
+        },
+        _ => false,
+    }
+}
+
 /// A `const`/module-level `let`/`var` item's elaborated signature.
 #[derive(Debug, Clone)]
 pub struct GlobalSig {

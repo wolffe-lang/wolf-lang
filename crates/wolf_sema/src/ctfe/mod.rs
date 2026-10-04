@@ -171,7 +171,14 @@ pub fn run_package(pkg: &Package, sigs: &SigTables, outcomes: &[BodyOutcome]) ->
         let Some(crate::sig::ItemSig::Global(g)) = sigs.get(o.body.module, &o.body.name) else {
             continue;
         };
-        if g.ty.is_none() || g.kind == crate::sig::GlobalKind::Extern {
+        if g.kind == crate::sig::GlobalKind::Extern {
+            continue;
+        }
+        // A type that is not static data yet is the executing tiers'
+        // refusal, by name; evaluating its initializer would only turn
+        // that refusal into an unrelated comptime fault.
+        let Some(ty) = g.ty else { continue };
+        if !crate::sig::is_static_data(&sigs.table, ty, g.kind) {
             continue;
         }
         let Some(node) = pkg.files[o.body.file]

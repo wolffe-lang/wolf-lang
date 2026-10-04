@@ -247,7 +247,7 @@ pub use resolve::{
 };
 pub use sig::{
     BoundRef, GenericSig, GlobalKind, GlobalSig, ItemSig, Membrane, SigTables, build_sigs,
-    module_bindings,
+    is_static_data, module_bindings,
 };
 pub use traits::{DynReport, ImplDef, TraitDef, TraitRef};
 pub use typecheck::{BodyOutcome, Typecheck, typecheck_package, typecheck_package_with};
