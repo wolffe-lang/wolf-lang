@@ -539,6 +539,9 @@ struct Parser {
     /// Signatures visible to `call` sites, by name (decls + parsed fns).
     known_sigs: HashMap<String, SigId>,
     fn_names: HashMap<String, ()>,
+    /// kw09: a `section "…"` prefix read ahead of the function header
+    /// it places (`section ".x" fn @f…`).
+    pending_section: Option<String>,
 }
 
 /// Parse a whole module. Deterministic errors with line/col positions.
@@ -548,6 +551,7 @@ pub fn parse_module(src: &str) -> Result<Module, ParseError> {
         module: Module::new(),
         known_sigs: HashMap::new(),
         fn_names: HashMap::new(),
+        pending_section: None,
     };
     let mut i = 0usize;
     while i < toks.len() {
@@ -590,6 +594,76 @@ pub fn parse_module(src: &str) -> Result<Module, ParseError> {
                     _ => return line.fail("expected `@name` after `data`"),
                 };
                 line.expect(Tok::Eq)?;
+                // kw09: module state — `= extern`, or `= let|var
+                // "bytes" align N [section "x"]`.
+                if let Some(Tok::Ident(k)) = line.peek()
+                    && matches!(k.as_str(), "let" | "var" | "extern")
+                {
+                    let kind = match k.as_str() {
+                        "let" => crate::ir::StaticKind::Let,
+                        "var" => crate::ir::StaticKind::Var,
+                        _ => crate::ir::StaticKind::Extern,
+                    };
+                    line.next();
+                    let mut bytes = Vec::new();
+                    let mut align = 1u32;
+                    let mut section = None;
+                    if kind != crate::ir::StaticKind::Extern {
+                        bytes = match line.peek() {
+                            Some(Tok::Str(b)) => {
+                                let b = b.clone();
+                                line.next();
+                                b
+                            }
+                            _ => return line.fail("expected the state's bytes after `let`/`var`"),
+                        };
+                        match line.peek() {
+                            Some(Tok::Ident(a)) if a == "align" => {
+                                line.next();
+                            }
+                            _ => return line.fail("expected `align N` after the bytes"),
+                        }
+                        align = match line.peek() {
+                            Some(Tok::Num(n)) => {
+                                let Ok(v) = n.parse::<u32>() else {
+                                    return line.fail(format!("bad alignment `{n}`"));
+                                };
+                                line.next();
+                                v
+                            }
+                            _ => return line.fail("expected the alignment after `align`"),
+                        };
+                        if let Some(Tok::Ident(sk)) = line.peek()
+                            && sk == "section"
+                        {
+                            line.next();
+                            section = match line.peek() {
+                                Some(Tok::Str(b)) => {
+                                    let b = String::from_utf8_lossy(b).into_owned();
+                                    line.next();
+                                    Some(b)
+                                }
+                                _ => return line.fail("expected a section name after `section`"),
+                            };
+                        }
+                    }
+                    line.expect_end()?;
+                    if p.module.data.iter().any(|d| d.name == name) {
+                        return line.fail(format!("data `@{name}` is declared twice"));
+                    }
+                    p.module.data.push(crate::ir::DataDecl {
+                        name,
+                        bytes,
+                        funcs: Vec::new(),
+                        stat: Some(crate::ir::StaticData {
+                            kind,
+                            align,
+                            section,
+                        }),
+                    });
+                    i = end;
+                    continue;
+                }
                 // s98: `data @name = fns [@a, @b]` — a vtable (fn-
                 // pointer slots); otherwise `= "bytes"` (s31 blobs).
                 let (bytes, funcs) = match line.peek() {
@@ -630,10 +704,22 @@ pub fn parse_module(src: &str) -> Result<Module, ParseError> {
                 if p.module.data.iter().any(|d| d.name == name) {
                     return line.fail(format!("data `@{name}` is declared twice"));
                 }
-                p.module
-                    .data
-                    .push(crate::ir::DataDecl { name, bytes, funcs });
+                p.module.data.push(crate::ir::DataDecl {
+                    name,
+                    bytes,
+                    funcs,
+                    stat: None,
+                });
                 i = end;
+            }
+            // kw09: `section ".x"` places the function header after it.
+            Tok::Ident(kw) if kw == "section" => {
+                let Some((Tok::Str(b), ..)) = toks.get(i + 1) else {
+                    let (l, c) = (toks[i].1, toks[i].2);
+                    return err(l, c, "expected a section name after `section`");
+                };
+                p.pending_section = Some(String::from_utf8_lossy(b).into_owned());
+                i += 2;
             }
             Tok::Ident(kw) if kw == "fn" || kw == "consttime" => {
                 i = parse_function(&toks, i, &mut p, None)?;
@@ -938,6 +1024,7 @@ fn parse_function(
     };
 
     let mut func = Function::new(name.clone(), sig);
+    func.section = p.pending_section.take();
     func.export = export.is_some();
     func.ret_ext = export.unwrap_or(Mode::Val);
     if let Some(secret) = consttime {
