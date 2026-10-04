@@ -189,7 +189,11 @@ AAPCS64, win64, Apple arm64 deltas).
   anywhere, the size the sum of the fields' — gcc's and clang's
   `__attribute__((packed))`. A packed struct as a field of another
   struct is placed at alignment 1; a struct field inside a packed
-  struct sits at whatever offset the bytes before it leave. Through a
+  struct sits at whatever offset the bytes before it leave — except an
+  `align(N)` struct, which a packed struct may not hold, directly or
+  inside a field (E0820): gcc and clang on SysV and Apple targets pack
+  it at the next byte, the MSVC ABI keeps its alignment, and wolf does
+  not pick one. Through a
   raw pointer the fields are loaded and stored with the alignment their
   offset guarantees (`align 1` for a `u64` at offset 2), never the
   natural one, so no tier assumes an aligned address it does not have.
