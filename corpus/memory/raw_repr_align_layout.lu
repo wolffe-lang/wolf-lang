@@ -62,37 +62,37 @@ fn main() -> int {
         let a = c.calloc(1, 128) as *A16
         a[0] = A16 { x: 1 }
         a[1] = A16 { x: 2 }
-        let aq = a as *u8
-        var as = List[int]()
-        var ai = 0
-        while ai < 128 {
-            (mut as).push(aq[ai] as int)
-            ai += 1
+        let a_bytes = a as *u8
+        var a_list = List[int]()
+        var a_at = 0
+        while a_at < 128 {
+            (mut a_list).push(a_bytes[a_at] as int)
+            a_at += 1
         }
-        print("A16{nz(as)}")
+        print("A16{nz(a_list)}")
         c.free(a as *u8)
         let o = c.calloc(1, 128) as *Outer
         o[0] = Outer { tag: 7, inner: A16 { x: 9 }, z: 513 }
         o[1] = Outer { tag: 1, inner: A16 { x: 2 }, z: 3 }
-        let oq = o as *u8
-        var os = List[int]()
-        var oi = 0
-        while oi < 128 {
-            (mut os).push(oq[oi] as int)
-            oi += 1
+        let o_bytes = o as *u8
+        var o_list = List[int]()
+        var o_at = 0
+        while o_at < 128 {
+            (mut o_list).push(o_bytes[o_at] as int)
+            o_at += 1
         }
-        print("Outer{nz(os)}")
+        print("Outer{nz(o_list)}")
         let n = c.calloc(1, 128) as *PNest
         n[0] = PNest { a: 5, p: P3 { a: 6, b: 258, c: 7 }, z: 772 }
         n[1] = PNest { a: 1, p: P3 { a: 2, b: 3, c: 4 }, z: 5 }
-        let nq = n as *u8
-        var ns = List[int]()
-        var ni = 0
-        while ni < 128 {
-            (mut ns).push(nq[ni] as int)
-            ni += 1
+        let n_bytes = n as *u8
+        var n_list = List[int]()
+        var n_at = 0
+        while n_at < 128 {
+            (mut n_list).push(n_bytes[n_at] as int)
+            n_at += 1
         }
-        print("PNest{nz(ns)}")
+        print("PNest{nz(n_list)}")
         let ov = o[1]
         print("{ov.tag as int} {ov.inner.x as int} {ov.z as int}")
         let nv = n[1]

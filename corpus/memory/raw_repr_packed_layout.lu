@@ -65,6 +65,8 @@ fn main() -> int {
         print("{v.a as int} {v.b as int} {v.c as int}")
         c.free(q)
     }
+    // # Safety: 32 zeroed bytes from calloc; one 10-byte element and
+    // its bytes stay inside them; freed once.
     unsafe {
         let g = c.calloc(1, 32) as *Gdtr
         g[0] = Gdtr { limit: 255, base: 4096 }
