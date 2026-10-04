@@ -88,6 +88,9 @@ pub enum UbRow {
     /// kw07: a volatile access through a misaligned address
     /// (`[mem.unsafe.volatile.3]`).
     L3,
+    /// s209 (ruling #36 = A): an ordinary raw access through an
+    /// address not aligned to its pointee (`[mem.unsafe.raw.4]`).
+    L4,
     T1,
 }
 
@@ -103,6 +106,7 @@ impl UbRow {
             UbRow::L1 => "L1",
             UbRow::L2 => "L2",
             UbRow::L3 => "L3",
+            UbRow::L4 => "L4",
             UbRow::T1 => "T1",
         }
     }
@@ -117,6 +121,7 @@ impl UbRow {
             UbRow::P6 => "mem.unsafe.door",
             UbRow::L2 => "mem.unsafe.raw.1",
             UbRow::L3 => "mem.unsafe.volatile",
+            UbRow::L4 => "mem.unsafe.raw.4",
             UbRow::P3 | UbRow::L1 | UbRow::T1 => "mem.ub",
         }
     }
@@ -160,6 +165,10 @@ impl UbRow {
             UbRow::L3 => {
                 "O11: each volatile call is one aligned machine access of its \
                           width — no split into narrower accesses, no alignment check"
+            }
+            UbRow::L4 => {
+                "O12: every ordinary raw access is emitted at the pointee's natural \
+                          alignment — no alignment check, no split into narrower accesses"
             }
             UbRow::T1 => {
                 "O9: niche packing; match jump tables without default arms; \
@@ -7487,9 +7496,46 @@ impl<'t> Machine<'t> {
         self.raw_read_at(at, size, signed, e.span)
     }
 
+    /// s209 (`[mem.unsafe.raw.4]`, ruling #36 = A): an ordinary raw
+    /// access whose pointee is `align`-aligned must sit at a multiple
+    /// of `align`, or it is row L4. Asked before the row-ordered check
+    /// and only of a pointer with an allocation, as L3 is
+    /// (allocations are placed at `ALLOC_STRIDE` multiples, so the
+    /// address alone decides it); a dangling pointer stays L2.
+    fn raw_align_check(&mut self, at: PtrVal, align: u64, write: bool, span: Span) -> E<()> {
+        if align > 1 && at.alloc.is_some() && !at.addr.is_multiple_of(align) {
+            let opdesc = if write {
+                "a raw pointer write"
+            } else {
+                "a raw pointer read"
+            };
+            let tag_span = at.alloc.map(|a| self.allocs[a].span).unwrap_or(span);
+            return self.ub(
+                UbRow::L4,
+                format!(
+                    "{opdesc} of a {align}-aligned pointee at address {:#x}, which is not a \
+                     multiple of {align}",
+                    at.addr
+                ),
+                span,
+                tag_span,
+            );
+        }
+        Ok(())
+    }
+
     /// One raw read of `size` bytes at `at`, as the value the access
-    /// at `span` is typed.
+    /// at `span` is typed. A scalar pointee's alignment is its size
+    /// (`[abi.layout.query]`), so `size` is also the alignment the
+    /// access needs (row L4).
     fn raw_read_at(&mut self, at: PtrVal, size: u64, signed: bool, span: Span) -> E<Flow> {
+        self.raw_align_check(at, size, false, span)?;
+        self.raw_read_value(at, size, signed, span)
+    }
+
+    /// The read itself, once the address is known to be one the access
+    /// may use: a scalar of `size` bytes at `at`, typed as `span` is.
+    fn raw_read_value(&mut self, at: PtrVal, size: u64, signed: bool, span: Span) -> E<Flow> {
         let bytes = self.raw_read_bytes(at, size, span, "a raw pointer read")?;
         let n = Self::raw_decode(&bytes, signed);
         // T1 — a restricted type produced from raw bytes must be a
@@ -7586,6 +7632,9 @@ impl<'t> Machine<'t> {
             Value::Bool(b) => i64::from(b),
             _ => return self.refuse("raw write of a non-scalar", span),
         };
+        // s209: a scalar pointee's alignment is its size (row L4); a
+        // compound assignment is one access, asked once, as a write.
+        self.raw_align_check(at, size, true, span)?;
         // wolf-lang#542's checked half: the operator is the statement's
         // (it was always `+`, so `p[0] *= 31` added), with the same
         // checked arithmetic as every other compound assignment.
