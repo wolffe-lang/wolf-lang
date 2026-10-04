@@ -1022,7 +1022,8 @@ Simpler than the safe tier, not stricter (anti-Stacked-Borrows lesson).
 - `[mem.unsafe.raw.1]` Raw pointers `*T` carry **no aliasing assumptions**:
   the implementation treats them like C `char*` unless an `assume noalias`
   assertion says otherwise. Arithmetic, casts, and copies of raw pointers
-  are unrestricted.
+  are unrestricted. Alignment is not: an access through `*T` is at `T`'s
+  alignment (`[mem.unsafe.raw.4]`, UB row L4).
 - `[mem.unsafe.raw.2]` `assume noalias p, q` asserts the pointed-to
   ranges do not overlap for the assertion's scope. A false assertion is
   UB (§7/P5) — the only *assertion-created* UB in the language.
@@ -1030,6 +1031,23 @@ Simpler than the safe tier, not stricter (anti-Stacked-Borrows lesson).
   `[mem.unsafe.volatile]` defines on `*T`, not intrinsics: they are
   side-effecting, and never elided, split, merged or reordered against
   each other (K3 = B, STATUS #31).
+- `[mem.unsafe.raw.4]` An ordinary raw access — `p[i]`, `*p`, their
+  compound assignments, a field read through `p[i].f` — of pointee `T`
+  is at an address that is a multiple of `T`'s alignment (`align_of(T)`,
+  `[abi.layout.query]`: a scalar's is its size, a `#[repr(c)]` struct's
+  its strictest field's, a `#[repr(c, packed)]` struct's 1). An access
+  at any other address is UB row L4 (ruling #36 = A, wolf-lang#574):
+  the compiled tiers emit every ordinary raw access at the pointee's
+  natural alignment, with no check and no split (O12), and the checked
+  machine and lupin report the row. A packed struct's field is not
+  this row — the struct's alignment is 1, and the compiled tiers load
+  and store each field with the alignment its offset guarantees
+  (`[abi.layout.packed]`). Misaligned data is read byte by byte, or
+  through a packed struct. The volatile spelling's own row is L3
+  (`[mem.unsafe.volatile.3]`). Witnesses:
+  `memory/raw_ub_misaligned_u32_read.lu` and its five siblings,
+  `memory/raw_ub_misaligned_repr_c_field.lu`,
+  `memory/raw_aligned_control.lu`, `memory/packed_field_raw_read.lu`.
 - `[mem.unsafe.volatile]` `p.read_volatile()` yields the `T` at `p`;
   `p.write_volatile(v)` stores `v: T` there and yields unit. Both are
   raw-tier operations (E1301 outside `unsafe`). Ordinary raw accesses
@@ -1218,6 +1236,7 @@ Detection legend: **S** static checker (s18–s23) · **O** is04 oracle ·
 | L1 | Read of uninitialized or moved-from memory via raw pointers | O7: moves lower to memcpy-and-forget; dead-store elimination on moved-from places; no zero-init of locals | O, Q |
 | L2 | Deref of a dangling raw pointer (freed C allocation, escaped stack address) | O8: escape analysis / stack promotion (`[mem.region.promote.1]`) without conservatively pinning addresses | O, Q |
 | L3 | A volatile access (`[mem.unsafe.volatile]`) through an address that is not a multiple of the pointee's size | O11: each volatile call is one aligned machine access of its width — no split into narrower accesses, no alignment check, the instruction a device register expects | O |
+| L4 | An ordinary raw access (`[mem.unsafe.raw.4]`) through an address that is not a multiple of the pointee's alignment | O12: every ordinary raw access is emitted at the pointee's natural alignment (`align N` on the release tier's loads and stores, an aligned access on native) — no alignment check, no split into narrower accesses, aligned instructions and vector forms chosen freely | O |
 | T1 | Producing an invalid value of a restricted type in unsafe code (bool ∉ {0,1}, out-of-range enum discriminant, non-UTF-8 `str` bytes) | O9: niche packing (`Option[handle T]` is one word); match jump tables without default arms; UTF-8 fast paths without re-validation | O |
 | T2 | Torn write producing a partially-updated wide value observed through another tag | O10: layout freedom — field reorder, no address identity for value fields outside `#[repr(c)]` (I9); wide stores split freely | O |
 | C1 | Data race on non-atomic memory reachable only from unsafe/FFI code (safe code cannot race — spec 03) | Licensing pairing lives in spec 03 §(DRF-SC): sync-free stretches permit store motion/combining | O (schedule-bounded), race detector |
