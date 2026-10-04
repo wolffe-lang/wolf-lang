@@ -1206,6 +1206,15 @@ or a self-referential `const` cannot cross into comptime position —
 the evaluator will not guess at a value the program has not produced
 yet. Bind the value with `const`, pass a literal, or move the
 computation to runtime if the input genuinely arrives at runtime.
+
+Module state is initialized the same way ([mem.static.3]): every
+module-level `const`, `let` and `var` initializer is evaluated at
+compile time, so its value is part of the image and no initialization
+order exists to observe. An initializer that calls a runtime function,
+reads a module `var` (its value changes at run time), or depends on
+itself is this error. Compute the value from literals, `const`s,
+`let`s and comptime calls, or assign the `var` at the start of the
+program, inside `unsafe`.
 "#);
 
 code!(E0706, "comptime arithmetic faulted", r#"
@@ -1479,9 +1488,12 @@ kept. This code fires for:
 - a known attribute nothing implements yet, named with the lane that
   owns it: the performance contracts `noalloc`, `nopanic`, `inplace`,
   `bounded_stack` (no checker exists), `repr(transparent)` and
-  `repr(packed(N))`, `thread_local`, `section` and `link_section`;
+  `repr(packed(N))`, and `thread_local`;
+- `link_section`, Rust's spelling of `section` ([abi.link.section]);
 - an implemented attribute where it means nothing (`#[repr(c)]` on a
-  function, `#[consttime]` on a struct);
+  function, `#[consttime]` on a struct, `#[section]` on a `const`, which
+  has no storage) or written wrong (`#[section]` takes one string, a
+  section name of printable ASCII with no space, quote or comma);
 - a `cfg` the compiler cannot decide: the one predicate is
   `target = "…"`, naming a target triple (`x86_64-unknown-linux-gnu`) or
   an architecture (`x86_64`), and a name that matches no target is
@@ -1489,10 +1501,11 @@ kept. This code fires for:
   code ([gram.item.attr.cfg]).
 
 The attributes implemented are `trusted`, `consttime`, `allow`, `index`,
-`budget`, `repr(c)`, `repr(c, packed)`, `repr(c, align(N))` and
-`cfg(target = "…")`. Delete the attribute, or move it to where it
-applies. A representation that is implemented but cannot be laid out
-as written (`align(3)`, `packed` without `c`) is E0820.
+`budget`, `repr(c)`, `repr(c, packed)`, `repr(c, align(N))`,
+`section(".name")` and `cfg(target = "…")`. Delete the attribute, or
+move it to where it applies. A representation that is implemented but
+cannot be laid out as written (`align(3)`, `packed` without `c`) is
+E0820.
 "#);
 
 code!(E0818, "an `extern` ABI string other than `c`", r#"
@@ -1545,6 +1558,19 @@ gives a meaning:
   field: gcc and clang on SysV and Apple targets place it at the next
   byte, while the MSVC ABI keeps its alignment, so there is no one C
   layout to agree with.
+"#);
+
+code!(E0821, "`extern \"c\" let` names a link-time symbol: a module item of type `*T`, no initializer", r#"
+`extern "c" let NAME: *T` declares that the symbol `NAME` is defined
+when the program is linked — by a linker script (`__kernel_end`), an
+assembly label, or the C library — and its value is that symbol's
+ADDRESS as a raw pointer ([abi.link.extern]). Three shapes are refused:
+a type that is not a raw pointer (the declaration names an address, not
+the value stored there — read the value through the pointer, inside
+`unsafe`), an initializer (the linker supplies the symbol; wolf supplies
+nothing), and the form anywhere but a module's top level. Write
+`extern "c" let __kernel_end: *u8` at the top of the module and read
+through it with `p[0]` or `p.read_volatile()` in an `unsafe` block.
 "#);
 
 // ------------------------------------------------------------------------
@@ -1877,7 +1903,9 @@ the safe tier cannot contain are the raw tier's *operations* — reading
 or writing through a pointer, pointer casts, provenance operations
 (`addr`, `with_addr`, `expose`, `with_exposed`), volatile reads and
 writes (`read_volatile`, `write_volatile`), `assume noalias`,
-`borrow … from …`, and calls into imported C. Each of those can reach
+`borrow … from …`, calls into imported C, and every read or write of a
+module-level `var` ([mem.static.2]: it is shared by every task, and the
+safe tier's data-race freedom does not reach it). Each of those can reach
 behavior the safe tier's guarantees do not cover, so each one lives
 inside the `unsafe { }` ring, where the enclosing module carries the
 proof obligation. Wrap the operation in an `unsafe` block — the rules
