@@ -245,6 +245,23 @@ pub trait Backend {
         linkage: Linkage,
     ) -> Result<(), BackendError>;
 
+    /// kw09 (`[mem.static]`): define module state — `module.data[idx]`,
+    /// a `let` (read-only) or `var` (writable) declaration — in this
+    /// object under its own symbol, its `#[section]` honoured. Exactly
+    /// one object of a build defines each; the others import it on
+    /// `data.addr`. Call it before any `define_function`, so a
+    /// reference in this object finds the definition.
+    fn define_static(
+        &mut self,
+        _module: &Module,
+        _idx: u32,
+        _linkage: Linkage,
+    ) -> Result<(), BackendError> {
+        Err(BackendError::Unsupported(
+            "module state on this backend".to_string(),
+        ))
+    }
+
     /// Hand finished DWARF sections (built by the caller's
     /// [`dwarf::DwarfBuilder`] from this backend's `DebugSink` stream)
     /// to the backend for embedding in the object, before `finish`.
@@ -257,6 +274,17 @@ pub trait Backend {
 
     /// Finish the module: all declared functions must be defined.
     fn finish(self: Box<Self>) -> Result<ObjectProduct, BackendError>;
+}
+
+/// kw09 (`[abi.link.section]`): `#[section]` on an object format other
+/// than ELF — Mach-O names a section `segment,section` and COFF groups
+/// by `$` — refused by name on both tiers until a lane rules those
+/// spellings.
+pub fn section_unsupported(format: &str) -> BackendError {
+    BackendError::Unsupported(format!(
+        "section placement on a {format} target (`#[section]` places ELF sections at this \
+         cut, [abi.link.section])"
+    ))
 }
 
 /// Symbol mangling v1 (s28, revised s30 for issue #26): `_W` + the
