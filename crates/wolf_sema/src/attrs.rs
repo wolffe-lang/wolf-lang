@@ -53,7 +53,8 @@ pub const KNOWN_ARCHES: &[&str] = &["x86_64", "aarch64"];
 
 /// The attributes this compiler implements, for the E0817 note.
 const IMPLEMENTED: &str = "`trusted`, `consttime`, `allow`, `index`, `budget`, `repr(c)`, \
-                           `repr(c, packed)`, `repr(c, align(N))` and `cfg(target = \"…\")`";
+                           `repr(c, packed)`, `repr(c, align(N))`, `section(\".name\")` and \
+                           `cfg(target = \"…\")`";
 
 /// The largest `align(N)` (`[abi.layout.align]`): 2^28, gcc's ceiling
 /// (gcc 16.2.1 refuses `aligned(1u << 29)`; clang accepts more). A
@@ -294,15 +295,67 @@ fn is_fn(kind: SyntaxKind) -> bool {
     kind == SyntaxKind::FnDecl
 }
 
+/// kw09 (`[abi.link.section]`): the section a `#[section(".name")]`
+/// item names, when it is well formed — exactly one string argument
+/// whose contents are a non-empty run of printable ASCII with no
+/// space, quote, comma or backslash. `None` for anything else.
+fn section_arg(item: &wolf_ast::AttrItem<'_>, src: &[u8]) -> Option<String> {
+    let inp = item.input()?;
+    inp.child_token(SyntaxKind::LParen)?;
+    let lits: Vec<&GreenNode> = inp.nodes().collect();
+    let [lit] = lits.as_slice() else { return None };
+    if lit.kind != SyntaxKind::StringLit {
+        return None;
+    }
+    // Nothing but the parentheses beside the one string.
+    if inp
+        .tokens()
+        .any(|t| !matches!(t.kind, SyntaxKind::LParen | SyntaxKind::RParen))
+    {
+        return None;
+    }
+    let raw = text(src, lit.span);
+    let name = raw.strip_prefix('"')?.strip_suffix('"')?;
+    let ok = !name.is_empty()
+        && name
+            .bytes()
+            .all(|b| (0x21..=0x7e).contains(&b) && !matches!(b, b'"' | b',' | b'\\'));
+    ok.then(|| name.to_string())
+}
+
+/// kw09 (`[abi.link.section]`): the section `node` (a function or a
+/// module `let`/`var`) is placed in, read from its `#[section(…)]`.
+/// `None` when it carries none (or a malformed one, which [`check`]
+/// refuses as E0817 before any lowering runs).
+pub fn section_of(node: &GreenNode, src: &[u8]) -> Option<String> {
+    node.nodes()
+        .filter_map(wolf_ast::Attribute::cast)
+        .flat_map(|a| a.items())
+        .find(|item| item_name(item, src) == "section")
+        .and_then(|item| section_arg(&item, src))
+}
+
+/// Does `node` carry a `#[section]` at all (well formed or not)? The
+/// checked machine refuses the program by name either way.
+pub fn has_section(node: &GreenNode, src: &[u8]) -> bool {
+    node.nodes()
+        .filter_map(wolf_ast::Attribute::cast)
+        .flat_map(|a| a.items())
+        .any(|item| item_name(&item, src) == "section")
+}
+
 /// One attribute item on a node of `kind`: implemented and in place,
-/// or one E0817.
+/// or one E0817. `top` is true for a module's own items (a node whose
+/// parent is the source file).
 fn check_item(
     item: &wolf_ast::AttrItem<'_>,
-    kind: SyntaxKind,
+    node: &GreenNode,
+    top: bool,
     src: &[u8],
     target: &str,
     diags: &mut Vec<Diagnostic>,
 ) {
+    let kind = node.kind;
     let name = item_name(item, src);
     let span = item.syntax().span;
     let misplaced = |diags: &mut Vec<Diagnostic>, wants: &str| {
@@ -362,11 +415,43 @@ fn check_item(
             name.clone(),
             "thread-local storage is ruled (STATUS #32 R4) and waits on its own lane",
         ),
-        "section" | "link_section" => not_yet(
-            diags,
-            name.clone(),
-            "section placement is `#[section(\".x\")]` under KWC's K6 (kw09)",
-        ),
+        // kw09 (`[abi.link.section]`, K6): a function, or a module
+        // `let`/`var` — the two things with code or storage. A `const`
+        // is its value (`[mem.static.1]`), and an `extern "c" let` is
+        // the linker's symbol, placed by whoever defines it.
+        "section" => {
+            let placeable = is_fn(kind)
+                || (top
+                    && matches!(kind, SyntaxKind::LetDecl | SyntaxKind::VarDecl)
+                    && !wolf_ast::is_extern_binding(node));
+            if !placeable {
+                let wants = if kind == SyntaxKind::ConstDecl {
+                    "a function or a module `let`/`var` — a `const` is its value and has no \
+                     storage to place"
+                } else {
+                    "a function or a module `let`/`var`"
+                };
+                misplaced(diags, wants);
+            } else if section_arg(item, src).is_none() {
+                diags.push(e0817(
+                    span,
+                    "`section` takes one section name: `#[section(\".name\")]`".to_string(),
+                    "not a section name",
+                    "a section name is one string of printable ASCII with no space, quote, \
+                     comma or backslash ([abi.link.section])."
+                        .to_string(),
+                ));
+            }
+        }
+        "link_section" => diags.push(e0817(
+            span,
+            "`link_section` is not an attribute wolf knows — the spelling is `section`".to_string(),
+            "Rust's spelling",
+            format!(
+                "section placement is `#[section(\".name\")]` ([abi.link.section], K6). \
+                 {IMPLEMENTED} are the attributes this compiler implements."
+            ),
+        )),
         _ => diags.push(e0817(
             span,
             format!("`{name}` is not an attribute wolf knows"),
@@ -556,10 +641,64 @@ fn check_repr_set(node: &GreenNode, src: &[u8], diags: &mut Vec<Diagnostic>) {
     }
 }
 
+/// E0819 (kw09, `[abi.link.extern]`): an `extern "c"` binding is a
+/// module-level `let` with no initializer. Its TYPE (a raw pointer) is
+/// checked where types are lowered (`sig.rs`).
+fn check_extern_binding(node: &GreenNode, top: bool, diags: &mut Vec<Diagnostic>) {
+    if !wolf_ast::is_extern_binding(node) {
+        return;
+    }
+    let e0819 = |span: Span, message: &str, label: &str| {
+        Diagnostic::error(codes::E0819, span, message.to_string())
+            .with_label(label.to_string())
+            .with_note(
+                "`extern \"c\" let NAME: *T` names a symbol the link defines; its value is the \
+                 symbol's address ([abi.link.extern])."
+                    .to_string(),
+            )
+    };
+    let kw_span = node
+        .tokens()
+        .find(|t| {
+            matches!(
+                t.kind,
+                SyntaxKind::LetKw | SyntaxKind::VarKw | SyntaxKind::ConstKw
+            )
+        })
+        .map(|t| t.span)
+        .unwrap_or(node.span);
+    if node.kind != SyntaxKind::LetDecl {
+        diags.push(e0819(
+            kw_span,
+            "a link-time symbol is declared with `extern \"c\" let`",
+            "only `let` names a link-time symbol",
+        ));
+        return;
+    }
+    if !top {
+        diags.push(e0819(
+            node.span,
+            "`extern \"c\" let` declares a module item — it cannot appear inside a body",
+            "not at a module's top level",
+        ));
+        return;
+    }
+    if let Some(init) = node.nodes().find(|n| wolf_ast::is_expr_kind(n.kind)) {
+        diags.push(e0819(
+            init.span,
+            "an `extern \"c\" let` has no initializer — the link defines the symbol",
+            "the linker supplies this",
+        ));
+    }
+}
+
 /// E0818: an `extern "S"` whose ABI string is not `"c"`.
 fn check_abi(node: &GreenNode, src: &[u8], diags: &mut Vec<Diagnostic>) {
-    let Some(d) = FnDecl::cast(node) else { return };
-    let Some(abi) = d.extern_abi() else { return };
+    let abi = match FnDecl::cast(node) {
+        Some(d) => d.extern_abi(),
+        None => wolf_ast::binding_extern_abi(node),
+    };
+    let Some(abi) = abi else { return };
     let value = string_value(abi.syntax(), src);
     if value == "c" {
         return;
@@ -582,16 +721,18 @@ fn check_abi(node: &GreenNode, src: &[u8], diags: &mut Vec<Diagnostic>) {
     );
 }
 
-fn walk(node: &GreenNode, src: &[u8], target: &str, diags: &mut Vec<Diagnostic>) {
+fn walk(node: &GreenNode, top: bool, src: &[u8], target: &str, diags: &mut Vec<Diagnostic>) {
     for attr in node.nodes().filter_map(wolf_ast::Attribute::cast) {
         for item in attr.items() {
-            check_item(&item, node.kind, src, target, diags);
+            check_item(&item, node, top, src, target, diags);
         }
     }
     check_repr_set(node, src, diags);
     check_abi(node, src, diags);
+    check_extern_binding(node, top, diags);
+    let children_top = node.kind == SyntaxKind::SourceFile;
     for child in node.nodes() {
-        walk(child, src, target, diags);
+        walk(child, children_top, src, target, diags);
     }
 }
 
@@ -600,7 +741,7 @@ pub fn check(pkg: &Package) -> Vec<Diagnostic> {
     let target = build_target();
     let mut diags = Vec::new();
     for unit in &pkg.files {
-        walk(&unit.parse.root, &unit.raw.src, &target, &mut diags);
+        walk(&unit.parse.root, false, &unit.raw.src, &target, &mut diags);
     }
     diags
 }
