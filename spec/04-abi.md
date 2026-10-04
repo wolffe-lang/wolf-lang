@@ -178,16 +178,65 @@ AAPCS64, win64, Apple arm64 deltas).
   (`[abi.native.layout]`). Padding is never read or written. The
   checked machine and the reference interpreter refuse a
   whole-aggregate raw load or store by name (they have no byte-level
-  aggregate) rather than model a layout. `packed`, `align(N)`,
-  `transparent` and the comptime `size_of` / `align_of` / `offset_of`
-  are KWC F4's later half: E0817 and E0708 until then. Witnesses:
-  `memory/raw_repr_c_layout.lu`, and `repr_c_raw_layout.rs`, which
-  holds a C compiler to both directions on both compiling tiers.
+  aggregate) rather than model a layout; a field read or written as a
+  scalar at its `offset_of` (`[abi.layout.query]`) is an ordinary raw
+  access every machine runs. `transparent` is refused by name (E0817)
+  until a lane rules it. Witnesses: `memory/raw_repr_c_layout.lu`, and
+  `repr_c_raw_layout.rs`, which holds gcc and clang to both directions
+  on both compiling tiers.
+- `[abi.layout.packed]` `#[repr(c, packed)]` (K4, kw08) is the C
+  layout with every field at the next byte: alignment 1, no padding
+  anywhere, the size the sum of the fields' — gcc's and clang's
+  `__attribute__((packed))`. A packed struct as a field of another
+  struct is placed at alignment 1; a struct field inside a packed
+  struct sits at whatever offset the bytes before it leave. Through a
+  raw pointer the fields are loaded and stored with the alignment their
+  offset guarantees (`align 1` for a `u64` at offset 2), never the
+  natural one, so no tier assumes an aligned address it does not have.
+  A packed field may be read and written but **not lent**: a `mut`
+  argument or receiver, or an aggregate passed or received `read`,
+  hands the callee the field's address, which may be misaligned for its
+  type, so it is a compile error naming the field (E0819); copy the
+  field out, lend the copy, write it back. Witnesses:
+  `memory/raw_repr_packed_layout.lu`, `memory/packed_field_lend.lu`.
+- `[abi.layout.align]` `#[repr(c, align(N))]` (K4, kw08), `N` a power
+  of two from 1 to 2^28 (gcc's ceiling), is the C layout with the
+  struct's alignment raised to at least `N` and its size rounded up to
+  that alignment — gcc's and clang's `__attribute__((aligned(N)))`. As
+  a field it lands on the next multiple of its alignment and raises its
+  container's. `packed` and `align(N)` are spelled beside `c` (the
+  layout they modify is the C one); a struct is not both; neither
+  applies to a generic struct; any of these, or an `N` that is not such
+  a power, is E0820. A packed or aligned struct does not cross the C
+  membrane **by value** (`[abi.c.types]`): its psABI classification
+  differs per target and is not lowered, so the compiling tiers refuse
+  the parameter or result by name; a pointer to it crosses. A local, a
+  value's field and a `List` element keep wolf's own layout
+  (`[abi.native.layout]`): no address of one exists, so its bytes are
+  never observed. Witness: `memory/raw_repr_align_layout.lu`.
+- `[abi.layout.query]` `size_of(T)`, `align_of(T)` and
+  `offset_of(T, field)` (K4, kw08) answer at compile time for every
+  scalar and every `#[repr(c)]` struct — packed and aligned included —
+  from this clause's layout, never codegen's: a scalar is its natural
+  size and alignment (a raw pointer field is 8, aligned 8), a struct's
+  numbers are `[abi.layout.c]`'s as `packed` and `align(N)` modify
+  them. `offset_of`'s second argument is a field name, not an
+  expression; a name the struct lacks is E0403. Every other type — a
+  struct without `#[repr(c)]` or one with a native-layout field, an
+  enum, a tuple, `str`, a container — has the native layout, which
+  `[abi.native.layout]` leaves free, so a query on it is E0708. The
+  answers are comptime folds, identical on every machine; the compiling
+  tiers' raw accesses use the same layout, and `repr_c_raw_layout.rs`
+  holds each number to what gcc and clang print for `sizeof`,
+  `_Alignof` and `offsetof`. Witnesses: `comptime/layout_query_repr_c.lu`,
+  `comptime/size_of_layout.lu`, `comptime/align_of_layout.lu`,
+  `comptime/offset_of_layout.lu`, `memory/packed_fields_at_offset_of.lu`.
 - `[abi.c.types]` Only repr(c)-compatible types cross a membrane by
   value: scalars (the sized integers, `int`/`uint` as 64-bit, `byte`,
   `bool`, `f32`, `f64`), raw pointers (`*T` stands in a membrane
   signature by `[mem.unsafe.sig]`), and non-generic `#[repr(c)]`
-  aggregates whose fields cross. Anything else — `str`, a container, a
+  aggregates whose fields cross and which are neither packed nor
+  aligned (`[abi.layout.align]`). Anything else — `str`, a container, a
   struct without `#[repr(c)]`, an error union (`[abi.err.row]`) — is a
   compile error with a fix-it naming the nearest compatible shape
   (E1201). E1201 is not built yet: until it is, the compiling tiers

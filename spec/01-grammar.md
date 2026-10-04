@@ -523,18 +523,22 @@ nothing. The implemented attributes and their positions:
 | `#[index(0)]`, `#[index(1)]` | any attributed node | the origin marker (`[gram.attr.index]`) |
 | `#[budget(fuel = N, heap = N, depth = N)]` | a statement or an item | the comptime evaluation budget at that site (E0709) |
 | `#[repr(c)]` | a struct | the C layout (spec/04 `[abi.layout.c]`) |
+| `#[repr(c, packed)]` | a struct | the C layout, alignment 1 and no padding (spec/04 `[abi.layout.packed]`) |
+| `#[repr(c, align(N))]` | a struct | the C layout aligned to at least `N` (spec/04 `[abi.layout.align]`) |
 | `#[cfg(target = "…")]` | an item, a statement, a field | conditional compilation (`[gram.item.attr.cfg]`) |
 
 Everything else is E0817: a name wolf does not know; a known attribute
 nothing implements yet — the performance contracts `#[noalloc]`,
 `#[inplace]`, `#[nopanic]`, `#[bounded_stack]` (named at v1, no
-checker exists, wolf-lang#180), `repr(packed)`, `repr(align(N))` and
-`repr(transparent)` (KWC F4's later half), `#[thread_local]` (STATUS
-#32 R4), `#[section(…)]` / `#[link_section(…)]` (KWC K6) — each
-refused by name until the lane that implements it; and an implemented
-attribute in a position where nothing reads it (`#[repr(c)]` on a
-function). A refused attribute takes no effect. The inner form
-`#![…]` keeps its own rule (E0813, below).
+checker exists, wolf-lang#180), `repr(transparent)` and a packing
+bound `repr(packed(N))`, `#[thread_local]` (STATUS #32 R4),
+`#[section(…)]` / `#[link_section(…)]` (KWC K6) — each refused by
+name until the lane that implements it; and an implemented attribute
+in a position where nothing reads it (`#[repr(c)]` on a function). A
+representation that is implemented but cannot be laid out as written
+(`align(3)`, `packed` without `c`) is E0820 (spec/04
+`[abi.layout.align]`). A refused attribute takes no effect. The inner
+form `#![…]` keeps its own rule (E0813, below).
 
 **Conditional compilation** `[gram.item.attr.cfg]`: `#[cfg(target =
 "S")]` keeps the node it is written on when `S` names the build's
