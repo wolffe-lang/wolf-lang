@@ -16,7 +16,9 @@
 //! lupin answers with its first lex error, else its parser's one error.
 //! Where it parts, the gate pins its answer by version (s180's design):
 //! a newer lupin that still parts goes red by name. Every part is filed
-//! as wolf-interp#175; this lane did not change lupin.
+//! as wolf-interp#175; this lane did not change lupin. 0.1.46 (the
+//! 0.2.23 pairing, r28) carries is70's mirror of #175 and answers every
+//! row as the compiler does: the seven pins are dropped.
 
 mod lane_exit;
 
@@ -231,11 +233,7 @@ fn stray_backtick_is_e0107() {
         &corpus("negative/first_stray_backtick.lu"),
         "fail(E0107)",
         "lex",
-        &[
-            ("0.1.43", "fail(E0101)"),
-            ("0.1.44", "fail(E0101)"),
-            ("0.1.45", "fail(E0101)"),
-        ],
+        &[],
     );
 }
 
@@ -247,11 +245,7 @@ fn keyword_where_a_pattern_starts_is_e0207() {
         &corpus("negative/first_keyword_pattern.lu"),
         "fail(E0207)",
         "parse",
-        &[
-            ("0.1.43", "fail(E0201)"),
-            ("0.1.44", "fail(E0201)"),
-            ("0.1.45", "fail(E0201)"),
-        ],
+        &[],
     );
 }
 
@@ -263,11 +257,7 @@ fn unclosed_row_brace_is_earlier_than_the_keyword() {
         &fixture("row_brace_unclosed.lu"),
         "fail(E0202)",
         "parse",
-        &[
-            ("0.1.43", "fail(E0008)"),
-            ("0.1.44", "fail(E0008)"),
-            ("0.1.45", "fail(E0008)"),
-        ],
+        &[],
     );
 }
 
@@ -275,16 +265,7 @@ fn unclosed_row_brace_is_earlier_than_the_keyword() {
 /// E0201 at the same span and phase.
 #[test]
 fn toplevel_union_is_e0203() {
-    every_lane_refuses(
-        &fixture("union_toplevel.lu"),
-        "fail(E0203)",
-        "parse",
-        &[
-            ("0.1.43", "fail(E0201)"),
-            ("0.1.44", "fail(E0201)"),
-            ("0.1.45", "fail(E0201)"),
-        ],
-    );
+    every_lane_refuses(&fixture("union_toplevel.lu"), "fail(E0203)", "parse", &[]);
 }
 
 /// A parse error before a lex error. Red at trunk 12a56b22 on all three
@@ -295,11 +276,7 @@ fn parse_error_before_a_lex_error_is_first() {
         &corpus("negative/first_parse_before_lex.lu"),
         "fail(E0207)",
         "parse",
-        &[
-            ("0.1.43", "fail(E0102)"),
-            ("0.1.44", "fail(E0102)"),
-            ("0.1.45", "fail(E0102)"),
-        ],
+        &[],
     );
 }
 
@@ -312,11 +289,7 @@ fn boundary_before_a_lex_error_is_first() {
         &corpus("negative/first_boundary_before_lex.lu"),
         "fail(E0202)",
         "parse",
-        &[
-            ("0.1.43", "fail(E0102)"),
-            ("0.1.44", "fail(E0102)"),
-            ("0.1.45", "fail(E0102)"),
-        ],
+        &[],
     );
 }
 
@@ -329,11 +302,7 @@ fn parse_error_stops_before_resolve() {
         &corpus("negative/first_parse_before_resolve.lu"),
         "fail(E0207)",
         "parse",
-        &[
-            ("0.1.43", "fail(E0201)"),
-            ("0.1.44", "fail(E0201)"),
-            ("0.1.45", "fail(E0201)"),
-        ],
+        &[],
     );
 }
 
