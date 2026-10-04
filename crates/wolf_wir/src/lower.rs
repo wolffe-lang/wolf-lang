@@ -17186,24 +17186,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// walk and the checked executor's decoder (#54: str match arms
     /// compare these bytes at runtime).
     fn cooked_str_lit(&self, s: &'t GreenNode) -> Vec<u8> {
-        let raw = self.text(s.span);
-        let bytes = raw.as_bytes();
-        if bytes.starts_with(b"\"\"\"") {
-            let inner = &bytes[3..bytes.len().saturating_sub(3).max(3)];
-            return decode_escapes(&dedent_multiline(inner));
-        }
-        // Raw literal (#76): the whole opening delimiter — `r"`,
-        // `r#"`, … — strips, and the bytes between the fences ARE the
-        // value ([gram.lex.str.raw]: no escapes, no interpolation).
-        if let Some(inner) = raw_str_inner(bytes) {
-            return inner.to_vec();
-        }
-        let inner = if bytes.len() >= 2 {
-            &bytes[1..bytes.len() - 1]
-        } else {
-            bytes
-        };
-        decode_escapes(inner)
+        cook_hole_free(self.text(s.span).as_bytes())
     }
 
     /// Decode one string episode into literal chunks and interpolation
@@ -22768,6 +22751,29 @@ fn raw_str_inner(bytes: &[u8]) -> Option<&[u8]> {
     Some(&bytes[start..end])
 }
 
+/// A hole-free literal's runtime bytes from its source text: quote
+/// strip, the shared escape set, `"""` dedent, the raw fence. The comptime
+/// engine's cooker (`wolf_sema::strlit::cook`) is pinned to this one by
+/// `strlit_parity` below (s210, wolf-lang#585).
+fn cook_hole_free(bytes: &[u8]) -> Vec<u8> {
+    if bytes.starts_with(b"\"\"\"") {
+        let inner = &bytes[3..bytes.len().saturating_sub(3).max(3)];
+        return decode_escapes(&dedent_multiline(inner));
+    }
+    // Raw literal (#76): the whole opening delimiter — `r"`,
+    // `r#"`, … — strips, and the bytes between the fences ARE the
+    // value ([gram.lex.str.raw]: no escapes, no interpolation).
+    if let Some(inner) = raw_str_inner(bytes) {
+        return inner.to_vec();
+    }
+    let inner = if bytes.len() >= 2 {
+        &bytes[1..bytes.len() - 1]
+    } else {
+        bytes
+    };
+    decode_escapes(inner)
+}
+
 /// Dedent a `"""` string's inner bytes by the closing delimiter's
 /// column (D26). Byte-identical with the checked executor's
 /// implementation (wolf_mem::ubcheck).
@@ -22959,5 +22965,38 @@ mod c_layout_tests {
         assert_eq!(align_at(1, 0), 1);
         assert_eq!(align_at(1, 5), 1);
         assert_eq!(align_at(16, 2), 2);
+    }
+}
+
+#[cfg(test)]
+mod strlit_parity {
+    /// s210 (wolf-lang#585): the comptime engine and the lowering cook
+    /// one value from one literal. At 0.2.23 the engine's own decoder
+    /// kept a `"""` literal's quotes and indentation, a raw literal's
+    /// fence, code-point escapes and doubled braces as source text.
+    #[test]
+    fn the_engine_and_the_lowering_cook_one_value() {
+        let rows = [
+            "\"plain\"",
+            "\"tab\\there\\n\"",
+            "\"q\\\"q\\\\\"",
+            "\"\"\"\n    two\n      lines\n    \"\"\"",
+            "\"\"\"\r\n  a\r\n  \"\"\"",
+            "\"\"\"one line\"\"\"",
+            "\"\"\"\n  \\tx\n  \"\"\"",
+            "\"\"\"\n  ragged\n no\n  \"\"\"",
+            "r\"a\\nb\"",
+            "r#\"say \"hi\"\"#",
+            "\"\\u{41}\\x42\\u{1F43A}\"",
+            "\"{{x}}\"",
+            "\"\"",
+        ];
+        for raw in rows {
+            assert_eq!(
+                wolf_sema::strlit::cook(raw).as_bytes(),
+                super::cook_hole_free(raw.as_bytes()).as_slice(),
+                "the engine and the lowering part on {raw}"
+            );
+        }
     }
 }
