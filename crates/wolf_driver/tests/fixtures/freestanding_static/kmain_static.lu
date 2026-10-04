@@ -1,0 +1,57 @@
+// kw09 (`[mem.static]`, `[abi.link]`): a kernel that keeps module state
+// and names link-time symbols. The entry is placed in `.text.boot`, which
+// the gate's linker script puts first in the image; `ticks` is zero
+// (`.bss`), `boots` is not (`.data`); `placed` and `MAGIC` sit in sections
+// of their own; `COM1` is a `const` and has no storage at all.
+// `__kw_image_end` is the script's symbol at the end of the image and
+// `kw_table` a table `table.S` reserves in `.bss` — the two shapes
+// `extern "c" let` names. `kw_outb` is rt_stub.S's port write.
+extern "c" fn kw_outb(port: u16, v: u8)
+
+extern "c" let __kw_image_end: *u8
+
+extern "c" let kw_table: *u64
+
+const COM1: u16 = 1016
+
+let BANNER_LEN: int = 4
+
+var ticks: int = 0
+
+var boots: int = 2
+
+#[section(".data.kw")]
+var placed: int = 5
+
+#[section(".rodata.kw")]
+let MAGIC: int = 9
+
+fn emit(b: int) {
+    // # Safety: kw_outb is rt_stub.S's port write; COM1 is the port.
+    unsafe {
+        kw_outb(COM1, b as u8)
+    }
+}
+
+#[section(".text.boot")]
+export fn kmain() -> i64 {
+    emit(75)
+    emit(87)
+    emit(67)
+    emit(10)
+    var r = 0
+    // # Safety: one CPU and nothing else running; kw_table holds eight
+    // u64 slots (table.S), and the image ends at __kw_image_end.
+    unsafe {
+        ticks += BANNER_LEN
+        boots += 1
+        placed += ticks
+        kw_table[0] = 11
+        kw_table[1] = kw_table[0] + 22
+        r = placed + MAGIC + boots + kw_table[1] as int
+        if __kw_image_end.addr() > kw_table.addr() {
+            r += 1
+        }
+    }
+    r as i64
+}

@@ -1,0 +1,33 @@
+// kw09 (`[abi.link.section]`, `[mem.static]`): placement on a hosted
+// target. `kw_hot` is an export (every tier keeps it) in its own text
+// section; `placed` and `MAGIC` sit in sections of their own; `zero` is
+// `.bss`, `start` is `.data`, `PLAIN` is `.rodata`, and `LIMIT`, a
+// `const`, has no storage. On an ELF host it builds and runs; on Mach-O
+// and COFF hosts `#[section]` is refused by name on both tiers.
+#[section(".text.kwhot")]
+export fn kw_hot(x: i64) -> i64 {
+    x * 2 + 1
+}
+
+#[section(".data.kw")]
+var placed: int = 5
+
+#[section(".rodata.kw")]
+let MAGIC: int = 9
+
+var zero: int = 0
+
+var start: int = 3
+
+let PLAIN: int = 7
+
+const LIMIT: int = 100
+
+fn main() {
+    // # Safety: one thread.
+    unsafe {
+        placed += MAGIC + zero + start + PLAIN
+        zero = LIMIT
+        print("{placed} {zero}")
+    }
+}
