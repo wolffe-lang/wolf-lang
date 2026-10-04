@@ -38,6 +38,13 @@
 //! disassembly needs an x86-64 linux host's `objdump` and compiles only
 //! there; the object rows run on every host.
 
+// The disassembly half compiles only on the x86-64 linux host; its
+// helpers are unused elsewhere (the macOS and windows clippy lanes).
+#![cfg_attr(
+    not(all(target_os = "linux", target_arch = "x86_64")),
+    allow(dead_code, unused_imports)
+)]
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -294,10 +301,6 @@ impl Func {
 /// function's code (objdump prints the alignment padding after a
 /// function under its name, and zero padding decodes as
 /// `add BYTE PTR [rax],al`).
-#[cfg_attr(
-    not(all(target_os = "linux", target_arch = "x86_64")),
-    allow(dead_code)
-)]
 fn extents(obj: &Path) -> BTreeMap<String, (u64, u64)> {
     use object::{Object, ObjectSymbol};
     let bytes = std::fs::read(obj).expect("read object");
