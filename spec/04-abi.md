@@ -196,7 +196,9 @@ AAPCS64, win64, Apple arm64 deltas).
   not pick one. Through a
   raw pointer the fields are loaded and stored with the alignment their
   offset guarantees (`align 1` for a `u64` at offset 2), never the
-  natural one, so no tier assumes an aligned address it does not have.
+  natural one, so no tier assumes an aligned address it does not have,
+  and a packed field access is never UB row L4 (`[mem.unsafe.raw.4]`:
+  the struct's alignment, 1, is the one the access needs).
   A packed field may be read and written but **not lent**: a `mut`
   argument or receiver, or an aggregate passed or received `read`,
   hands the callee the field's address, which may be misaligned for its
