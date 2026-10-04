@@ -16,7 +16,11 @@
 //! but one: is68's wide scalar pass (#138) types the freestanding-gated
 //! code `cfg_target_freestanding.lu` keeps, so 0.1.45 answers
 //! `fail(E0401)` there where 0.1.44 declined it `unsupported` — the same
-//! unread `cfg`, reached one pass sooner.
+//! unread `cfg`, reached one pass sooner. 0.1.46 (the 0.2.23 pairing,
+//! r28) carries is70's mirror (#174): every refused row and both `cfg`
+//! rows answer the compiler's column, so their pins are dropped; the
+//! control `attr_implemented_set.lu` stays `unsupported` (lupin declines
+//! its `comptime fn`) and is carried to 0.1.46.
 //!
 //! Why a driver gate beside the corpus rows: `cargo xtask corpus` reads
 //! a row on its default lane only, and the rule is "on every machine".
@@ -213,26 +217,6 @@ fn every_lane(row: &str, want: Want<'_>, lupin_pre_mirror: &[Pin<'_>]) {
     }
 }
 
-/// lupin 0.1.43 and 0.1.44 (the pairing since 0.2.21) run a refused
-/// row to `exit(0)` with no output; measured, `head-4859ec3a-rows-lupin044.log`.
-const RUNS: &[Pin<'static>] = &[
-    Pin {
-        version: "0.1.43",
-        verdict: "exit(0)",
-        stdout: "",
-    },
-    Pin {
-        version: "0.1.44",
-        verdict: "exit(0)",
-        stdout: "",
-    },
-    Pin {
-        version: "0.1.45",
-        verdict: "exit(0)",
-        stdout: "",
-    },
-];
-
 fn refused(row: &str, codes: &[&str]) {
     let verdict = format!("fail({})", codes[0]);
     every_lane(
@@ -242,7 +226,7 @@ fn refused(row: &str, codes: &[&str]) {
             codes,
             stdout: "",
         },
-        RUNS,
+        &[],
     );
 }
 
@@ -311,23 +295,7 @@ fn cfg_keeps_the_definition_for_this_target_only() {
             codes: &[],
             stdout: "64\n",
         },
-        &[
-            Pin {
-                version: "0.1.43",
-                verdict: "fail(E0302)",
-                stdout: "",
-            },
-            Pin {
-                version: "0.1.44",
-                verdict: "fail(E0302)",
-                stdout: "",
-            },
-            Pin {
-                version: "0.1.45",
-                verdict: "fail(E0302)",
-                stdout: "",
-            },
-        ],
+        &[],
     );
 }
 
@@ -341,27 +309,12 @@ fn cfg_drops_what_another_target_gates_before_resolution() {
             codes: &[],
             stdout: "hosted\n1\n",
         },
-        &[
-            Pin {
-                version: "0.1.43",
-                verdict: "unsupported",
-                stdout: "",
-            },
-            Pin {
-                version: "0.1.44",
-                verdict: "unsupported",
-                stdout: "",
-            },
-            Pin {
-                version: "0.1.45",
-                verdict: "fail(E0401)",
-                stdout: "",
-            },
-        ],
+        &[],
     );
 }
 
-/// The control: the implemented set compiles and runs unchanged.
+/// The control: the implemented set compiles and runs unchanged. lupin
+/// declines its `comptime fn` (`unsupported`), 0.1.46 included.
 #[test]
 fn the_implemented_attributes_still_compile() {
     every_lane(
@@ -384,6 +337,11 @@ fn the_implemented_attributes_still_compile() {
             },
             Pin {
                 version: "0.1.45",
+                verdict: "unsupported",
+                stdout: "",
+            },
+            Pin {
+                version: "0.1.46",
                 verdict: "unsupported",
                 stdout: "",
             },
