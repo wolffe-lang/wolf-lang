@@ -1464,6 +1464,17 @@ impl<'a> Fx<'a> {
         if self.cx.opts.strip_facts { 1 } else { natural }
     }
 
+    /// A WIR load/store's alignment: its stated one when it carries an
+    /// alignment below natural (kw08, a packed field,
+    /// `[abi.layout.packed]` — never more than the address has), else
+    /// [`Self::align_of`].
+    fn access_align(&self, natural: u32, aux: Aux) -> u32 {
+        match aux {
+            Aux::Int(a) if (a as u32) < natural => (a as u32).max(1),
+            _ => self.align_of(natural),
+        }
+    }
+
     // ---- runtime + external declarations ----------------------------------
 
     /// Ensure a `declare` exists for `symbol` (skipped when defined in
@@ -2337,7 +2348,7 @@ impl<'a> Fx<'a> {
                     let t = self.tmp();
                     self.line(format!(
                         "  {t} = load {ty}, ptr {p}, align {}{range}{meta}",
-                        self.align_of(natural_align(ty))
+                        self.access_align(natural_align(ty), data.aux)
                     ));
                     self.vals.insert(results[0], Repr::Scalar(t));
                 }
@@ -2355,7 +2366,7 @@ impl<'a> Fx<'a> {
                     let v = self.op(args[0])?;
                     self.line(format!(
                         "  store {ty} {v}, ptr {p}, align {}{scopes}",
-                        self.align_of(natural_align(ty))
+                        self.access_align(natural_align(ty), data.aux)
                     ));
                 }
                 self.vals.insert(results[0], Repr::Token);
