@@ -7508,7 +7508,7 @@ impl<'t> Machine<'t> {
     /// (allocations are placed at `ALLOC_STRIDE` multiples, so the
     /// address alone decides it); a dangling pointer stays L2.
     fn raw_align_check(&mut self, at: PtrVal, align: u64, write: bool, span: Span) -> E<()> {
-        if align > 8 && at.alloc.is_some() && !at.addr.is_multiple_of(align) {
+        if align > 1 && at.alloc.is_some() && !at.addr.is_multiple_of(align) {
             let opdesc = if write {
                 "a raw pointer write"
             } else {
