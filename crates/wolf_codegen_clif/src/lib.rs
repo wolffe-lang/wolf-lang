@@ -102,6 +102,14 @@ pub struct ClifBackend {
     fb_ctx: FunctionBuilderContext,
     /// The build's target (kw04): the host, or `x86_64-unknown-none`.
     target: wolf_backend::target::Target,
+    /// kw09 (`[abi.link.section]`): every function is emitted in its
+    /// own text section (Cranelift's `.text.subsection`), so a placed
+    /// function's section can be renamed in the finished ELF object.
+    /// Set only for an object that holds a placed function — every
+    /// other object is laid out exactly as before.
+    per_function_sections: bool,
+    /// kw09: (object symbol, section name) for each placed function.
+    fn_sections: Vec<(String, String)>,
 }
 
 impl ClifBackend {
@@ -124,6 +132,18 @@ impl ClifBackend {
     /// this backend runs (the gate disassembles every object to prove
     /// both).
     pub fn for_target(target: wolf_backend::target::Target) -> Result<ClifBackend, BackendError> {
+        Self::for_target_with(target, false)
+    }
+
+    /// [`ClifBackend::for_target`] for an object that may place
+    /// functions in named sections (kw09, `[abi.link.section]`):
+    /// `per_function_sections` gives each function its own section so a
+    /// placed one can be renamed at `finish`. The driver passes `true`
+    /// exactly when the object's functions carry a `#[section]`.
+    pub fn for_target_with(
+        target: wolf_backend::target::Target,
+        per_function_sections: bool,
+    ) -> Result<ClifBackend, BackendError> {
         let triple = if target.is_freestanding() {
             "x86_64-unknown-none-elf"
                 .parse::<target_lexicon::Triple>()
@@ -180,6 +200,7 @@ impl ClifBackend {
         // PC-relative .eh_frame via gimli CFI is an s31/s58 follow-up;
         // wolf itself has no unwinding semantics (D30).
         builder.unwind_info(false);
+        builder.per_function_section(per_function_sections);
         Ok(ClifBackend {
             module: ObjectModule::new(builder),
             funcs: HashMap::new(),
@@ -194,12 +215,25 @@ impl ClifBackend {
             debug_sections: Vec::new(),
             fb_ctx: FunctionBuilderContext::new(),
             target,
+            per_function_sections,
+            fn_sections: Vec::new(),
         })
     }
 
     /// The CLIF text of every function defined so far (snapshots).
     pub fn clif_texts(&self) -> &[(String, String)] {
         &self.clif_texts
+    }
+
+    /// The object format's name when it is not ELF (kw09: section
+    /// placement is ELF's at this cut).
+    fn non_elf_format(&self) -> Option<&'static str> {
+        match self.module.isa().triple().binary_format {
+            target_lexicon::BinaryFormat::Elf => None,
+            target_lexicon::BinaryFormat::Macho => Some("Mach-O"),
+            target_lexicon::BinaryFormat::Coff => Some("COFF"),
+            _ => Some("non-ELF"),
+        }
     }
 }
 
@@ -242,6 +276,22 @@ impl Backend for ClifBackend {
         let mut si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv())?;
         if let Some(f) = module.funcs.get(id).filter(|f| f.export) {
             si = translate::with_ret_ext(si, f.ret_ext);
+        }
+        // kw09 (`[abi.link.section]`): a placed definition needs its
+        // own section, on an ELF object.
+        if linkage != Linkage::Import
+            && let Some(sec) = module.funcs.get(id).and_then(|f| f.section.clone())
+        {
+            if let Some(format) = self.non_elf_format() {
+                return Err(wolf_backend::section_unsupported(format));
+            }
+            if !self.per_function_sections {
+                return Err(BackendError::Internal(format!(
+                    "`{name}` is placed in `{sec}` but this object was built without \
+                     per-function sections"
+                )));
+            }
+            self.fn_sections.push((symbol.to_string(), sec));
         }
         let fid = self
             .module
@@ -383,6 +433,59 @@ impl Backend for ClifBackend {
             .map_err(|e| BackendError::Internal(e.to_string()))?;
         self.symbols.push(SymbolInfo {
             name: name.to_string(),
+            linkage,
+            is_function: false,
+        });
+        Ok(())
+    }
+
+    fn define_static(
+        &mut self,
+        module: &WirModule,
+        idx: u32,
+        linkage: Linkage,
+    ) -> Result<(), BackendError> {
+        let Some(d) = module.data.get(idx as usize) else {
+            return Err(BackendError::Internal(format!("module state {idx} missing")));
+        };
+        let Some(st) = d.stat.as_ref().filter(|_| d.is_defined_static()) else {
+            return Err(BackendError::Internal(format!(
+                "`{}` is not module state with a definition",
+                d.name
+            )));
+        };
+        if st.section.is_some()
+            && let Some(format) = self.non_elf_format()
+        {
+            return Err(wolf_backend::section_unsupported(format));
+        }
+        let writable = st.kind == wolf_wir::ir::StaticKind::Var;
+        let did = self
+            .module
+            .declare_data(&d.name, clif_linkage(linkage), writable, false)
+            .map_err(|e| BackendError::Internal(e.to_string()))?;
+        let mut desc = DataDescription::new();
+        match &st.section {
+            // `[mem.static.2]`: an all-zero `var` is zero-fill (`.bss`).
+            None if writable && d.bytes.iter().all(|&b| b == 0) => {
+                desc.define_zeroinit(d.bytes.len());
+            }
+            None => desc.define(d.bytes.clone().into_boxed_slice()),
+            // A placed item carries real bytes: zero-fill in a named
+            // section would need the section's own NOBITS kind, and
+            // cranelift-object gives a custom section its data kind.
+            Some(sec) => {
+                desc.define(d.bytes.clone().into_boxed_slice());
+                desc.set_segment_section("", sec, 0);
+            }
+        }
+        desc.set_align(u64::from(st.align.max(1)));
+        self.module
+            .define_data(did, &desc)
+            .map_err(|e| BackendError::Internal(e.to_string()))?;
+        self.data_ids.insert(idx, did);
+        self.symbols.push(SymbolInfo {
+            name: d.name.clone(),
             linkage,
             is_function: false,
         });
@@ -544,6 +647,9 @@ impl Backend for ClifBackend {
         if !macho_patches.is_empty() {
             patch_macho_debug(&mut bytes, &macho_patches)?;
         }
+        if !self.fn_sections.is_empty() {
+            place_elf_functions(&mut bytes, &self.fn_sections)?;
+        }
         Ok(ObjectProduct {
             bytes,
             symbols: self.symbols,
@@ -608,6 +714,75 @@ fn patch_macho_debug(bytes: &mut [u8], patches: &[DebugPatch]) -> Result<(), Bac
         let le = value.to_le_bytes();
         bytes[at..at + size as usize].copy_from_slice(&le[..size as usize]);
     }
+    Ok(())
+}
+
+/// kw09 (`[abi.link.section]`): rename each placed function's own text
+/// section (and its relocation section) in the finished ELF64 object.
+/// Every function sits alone in a `.text.subsection` (the backend was
+/// built with per-function sections), so renaming that section places
+/// exactly that function. The section-name table is rewritten whole —
+/// the old names plus the new ones — at the end of the file, and the
+/// table's header points there; nothing else in the file moves.
+fn place_elf_functions(bytes: &mut Vec<u8>, placed: &[(String, String)]) -> Result<(), BackendError> {
+    use object::read::{Object as _, ObjectSymbol as _};
+    let ice = |m: String| BackendError::Internal(m);
+    let mut renames: Vec<(usize, String)> = Vec::new();
+    {
+        let file = object::read::elf::ElfFile64::<object::Endianness, _>::parse(&bytes[..])
+            .map_err(|e| ice(format!("re-parse emitted ELF: {e}")))?;
+        for (symbol, sec) in placed {
+            let sym = file
+                .symbols()
+                .find(|s| s.name_bytes().ok() == Some(symbol.as_bytes()))
+                .ok_or_else(|| ice(format!("emitted object lost `{symbol}`")))?;
+            let Some(index) = sym.section_index() else {
+                return Err(ice(format!("`{symbol}` has no section")));
+            };
+            renames.push((index.0, sec.clone()));
+        }
+    }
+    let rd16 = |b: &[u8], at: usize| u16::from_le_bytes([b[at], b[at + 1]]) as usize;
+    let rd32 = |b: &[u8], at: usize| u32::from_le_bytes(b[at..at + 4].try_into().unwrap());
+    let rd64 = |b: &[u8], at: usize| u64::from_le_bytes(b[at..at + 8].try_into().unwrap()) as usize;
+    if bytes.len() < 64 || &bytes[..4] != b"\x7fELF" || bytes[4] != 2 || bytes[5] != 1 {
+        return Err(ice("section placement expects a little-endian ELF64 object".into()));
+    }
+    let shoff = rd64(bytes, 0x28);
+    let shentsize = rd16(bytes, 0x3a);
+    let shnum = rd16(bytes, 0x3c);
+    let shstrndx = rd16(bytes, 0x3e);
+    let hdr = |i: usize| shoff + i * shentsize;
+    let str_off = rd64(bytes, hdr(shstrndx) + 24);
+    let str_size = rd64(bytes, hdr(shstrndx) + 32);
+    let mut table = bytes[str_off..str_off + str_size].to_vec();
+    let name_at = |table: &mut Vec<u8>, name: &str| -> u32 {
+        let at = table.len() as u32;
+        table.extend_from_slice(name.as_bytes());
+        table.push(0);
+        at
+    };
+    let mut writes: Vec<(usize, u32)> = Vec::new();
+    for (index, sec) in &renames {
+        let at = name_at(&mut table, sec);
+        writes.push((hdr(*index), at));
+        // The relocation section that applies to it (`SHT_RELA` = 4,
+        // `sh_info` = the section it relocates).
+        for i in 0..shnum {
+            if rd32(bytes, hdr(i) + 4) == 4 && rd32(bytes, hdr(i) + 44) as usize == *index {
+                let at = name_at(&mut table, &format!(".rela{sec}"));
+                writes.push((hdr(i), at));
+            }
+        }
+    }
+    let new_off = bytes.len();
+    bytes.extend_from_slice(&table);
+    for (h, at) in writes {
+        bytes[h..h + 4].copy_from_slice(&at.to_le_bytes());
+    }
+    let sh = hdr(shstrndx);
+    bytes[sh + 24..sh + 32].copy_from_slice(&(new_off as u64).to_le_bytes());
+    bytes[sh + 32..sh + 40].copy_from_slice(&(table.len() as u64).to_le_bytes());
     Ok(())
 }
 
@@ -769,7 +944,7 @@ pub fn compile_module(
     debug: &mut dyn DebugSink,
 ) -> Result<(), BackendError> {
     let all: Vec<FuncId> = m.funcs.keys().collect();
-    compile_selected(backend, m, &all, entry_shim, true, false, debug)
+    compile_selected(backend, m, &all, entry_shim, true, true, false, debug)
 }
 
 /// [`compile_module`] restricted to a subset of the module's functions
@@ -779,12 +954,18 @@ pub fn compile_module(
 /// mangled names — see the translator's callee fallback), `Local` in a
 /// single-object build. The trap-info table is emitted only where
 /// `trap_table` (exactly one object per executable — the entry one).
+/// kw09 (`[mem.static]`): module state — every `let`/`var` data
+/// declaration, read here or not — is defined only where
+/// `statics_here` (exactly one object per build), under the same
+/// linkage as wolf functions; every other object imports what it reads.
+#[allow(clippy::too_many_arguments)]
 pub fn compile_selected(
     backend: &mut dyn Backend,
     m: &WirModule,
     funcs: &[FuncId],
     entry_shim: Option<FuncId>,
     trap_table_here: bool,
+    statics_here: bool,
     cross_module: bool,
     debug: &mut dyn DebugSink,
 ) -> Result<(), BackendError> {
@@ -793,6 +974,13 @@ pub fn compile_selected(
     } else {
         Linkage::Local
     };
+    if statics_here {
+        for (idx, d) in m.data.iter().enumerate() {
+            if d.is_defined_static() {
+                backend.define_static(m, idx as u32, wolf_linkage)?;
+            }
+        }
+    }
     for &id in funcs {
         let f = &m.funcs[id];
         let (symbol, linkage) = if Some(id) == entry_shim {

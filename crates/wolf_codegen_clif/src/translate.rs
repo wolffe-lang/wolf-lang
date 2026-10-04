@@ -1823,6 +1823,23 @@ impl<'a, 'b> Tx<'a, 'b> {
                 };
                 let did = match self.data_ids.get(&idx) {
                     Some(&did) => did,
+                    // kw09 (`[mem.static]`, `[abi.link.extern]`): module
+                    // state another object defines, or a link-time
+                    // symbol — imported under its own name. (The
+                    // defining object registered its definition first.)
+                    None if self.m.data.get(idx as usize).is_some_and(|d| d.stat.is_some()) => {
+                        let d = &self.m.data[idx as usize];
+                        let writable = d
+                            .stat
+                            .as_ref()
+                            .is_some_and(|st| st.kind == wolf_wir::ir::StaticKind::Var);
+                        let did = self
+                            .om
+                            .declare_data(&d.name, cranelift_module::Linkage::Import, writable, false)
+                            .map_err(|e| ice(e.to_string()))?;
+                        self.data_ids.insert(idx, did);
+                        did
+                    }
                     None => {
                         let d = self
                             .m
