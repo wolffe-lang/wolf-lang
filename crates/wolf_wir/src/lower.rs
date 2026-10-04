@@ -14936,7 +14936,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 };
                 let addr = self.b.ins_data_addr(idx);
                 let region = self.foreign_buf_region();
-                Ok(Some(Flow::Val(Some(self.load_c(wty, addr, region, e.span)?))))
+                Ok(Some(Flow::Val(Some(
+                    self.load_c(wty, addr, region, e.span)?,
+                ))))
             }
             (_, None, Some(f)) => Ok(Some(self.lower_fold(&f, e)?)),
             _ => Err(refuse(NOT_STATIC_DATA, e.span)),

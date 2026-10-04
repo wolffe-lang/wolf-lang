@@ -203,13 +203,13 @@ pub fn run_package(pkg: &Package, sigs: &SigTables, outcomes: &[BodyOutcome]) ->
                     construct,
                     span: f.span,
                 }),
-                _ => pass.diagnostics.push(
-                    fault_to_diag(&f, budget, fix_at).with_note(format!(
+                _ => pass
+                    .diagnostics
+                    .push(fault_to_diag(&f, budget, fix_at).with_note(format!(
                         "`{}` is module state: its initializer is evaluated at compile time \
                          and its value is part of the image ([mem.static.3]).",
                         o.body.name
-                    )),
-                ),
+                    ))),
             },
         }
     }

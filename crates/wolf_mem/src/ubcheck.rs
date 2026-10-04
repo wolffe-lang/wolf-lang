@@ -2114,7 +2114,8 @@ fn run_checked_fn_here(
         for sig in module.values() {
             if let ItemSig::Global(g) = sig
                 && g.kind != wolf_sema::GlobalKind::Extern
-                && g.ty.is_some_and(|t| !wolf_sema::is_static_data(&tc.sigs.table, t, g.kind))
+                && g.ty
+                    .is_some_and(|t| !wolf_sema::is_static_data(&tc.sigs.table, t, g.kind))
             {
                 return Err(NotYet {
                     construct: "module state of a type that is not static data ([mem.static.3])",
@@ -2317,9 +2318,8 @@ impl<'t> Machine<'t> {
             let Some(ItemSig::Global(g)) = tc.sigs.get(*module, name) else {
                 continue;
             };
-            let is_byte = g
-                .ty
-                .is_some_and(|t| matches!(tc.sigs.table.kind(t), TyKind::Prim(Prim::Byte)));
+            let is_byte =
+                g.ty.is_some_and(|t| matches!(tc.sigs.table.kind(t), TyKind::Prim(Prim::Byte)));
             let v = match fold {
                 Fold::Unit => Value::Unit,
                 Fold::Bool(b) => Value::Bool(*b),
@@ -2328,7 +2328,8 @@ impl<'t> Machine<'t> {
                 Fold::Float(f) => Value::F64(*f),
                 Fold::Str(st) => Value::Str(st.clone()),
             };
-            m.static_slots.insert((*module, name.clone()), m.statics.len());
+            m.static_slots
+                .insert((*module, name.clone()), m.statics.len());
             m.statics.push(v);
         }
         // The run's root region: `main`'s caller (never freed, never

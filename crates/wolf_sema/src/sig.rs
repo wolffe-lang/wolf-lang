@@ -716,7 +716,10 @@ impl<'a> Lower<'a> {
                     && let Some(t) = ty
                     && !matches!(self.table.kind(t), TyKind::Ptr(_) | TyKind::Error)
                 {
-                    let span = owner.and_then(|b| b.ty).map(|n| n.span).unwrap_or(node.span);
+                    let span = owner
+                        .and_then(|b| b.ty)
+                        .map(|n| n.span)
+                        .unwrap_or(node.span);
                     self.diags.push(
                         Diagnostic::error(
                             codes::E0819,

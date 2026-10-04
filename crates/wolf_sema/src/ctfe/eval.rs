@@ -1719,8 +1719,7 @@ impl<'a> Engine<'a> {
                                     ),
                                 }));
                             }
-                            if nod.kind != SyntaxKind::ConstDecl
-                                && nod.kind != SyntaxKind::LetDecl
+                            if nod.kind != SyntaxKind::ConstDecl && nod.kind != SyntaxKind::LetDecl
                             {
                                 return Ok(fault(FaultKind::NotComptime {
                                     what: format!(

@@ -1827,7 +1827,12 @@ impl<'a, 'b> Tx<'a, 'b> {
                     // state another object defines, or a link-time
                     // symbol — imported under its own name. (The
                     // defining object registered its definition first.)
-                    None if self.m.data.get(idx as usize).is_some_and(|d| d.stat.is_some()) => {
+                    None if self
+                        .m
+                        .data
+                        .get(idx as usize)
+                        .is_some_and(|d| d.stat.is_some()) =>
+                    {
                         let d = &self.m.data[idx as usize];
                         let writable = d
                             .stat
@@ -1835,7 +1840,12 @@ impl<'a, 'b> Tx<'a, 'b> {
                             .is_some_and(|st| st.kind == wolf_wir::ir::StaticKind::Var);
                         let did = self
                             .om
-                            .declare_data(&d.name, cranelift_module::Linkage::Import, writable, false)
+                            .declare_data(
+                                &d.name,
+                                cranelift_module::Linkage::Import,
+                                writable,
+                                false,
+                            )
                             .map_err(|e| ice(e.to_string()))?;
                         self.data_ids.insert(idx, did);
                         did

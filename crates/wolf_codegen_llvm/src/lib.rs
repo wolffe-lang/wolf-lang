@@ -431,7 +431,9 @@ impl Backend for LlvmBackend {
         linkage: Linkage,
     ) -> Result<(), BackendError> {
         let Some(d) = module.data.get(idx as usize) else {
-            return Err(BackendError::Internal(format!("module state {idx} missing")));
+            return Err(BackendError::Internal(format!(
+                "module state {idx} missing"
+            )));
         };
         let Some(st) = d.stat.as_ref().filter(|_| d.is_defined_static()) else {
             return Err(BackendError::Internal(format!(

@@ -236,7 +236,11 @@ fn a_hosted_program_places_or_is_refused_by_name() {
                 "{tier}: an ELF host builds the placed program: {stderr}"
             );
             let run = Command::new(&exe).output().expect("run");
-            assert_eq!(text(&run.stdout), "24 100\n", "{tier}: the program's answer");
+            assert_eq!(
+                text(&run.stdout),
+                "24 100\n",
+                "{tier}: the program's answer"
+            );
             assert_eq!(run.status.code(), Some(0), "{tier}: exit status");
         } else {
             let format = if cfg!(target_os = "macos") {
@@ -362,9 +366,17 @@ mod linux_x86_64 {
                 "{tier}: kmain is placed at .text.boot's start ({:#x})",
                 boot.address()
             );
-            assert_eq!(boot.address(), 0x400000, "{tier}: .text.boot is the image's first");
+            assert_eq!(
+                boot.address(),
+                0x400000,
+                "{tier}: .text.boot is the image's first"
+            );
             let out = tool(exe.to_str().unwrap(), &[]);
-            assert_eq!(text(&out.stdout), "KWC\n", "{tier}: the kernel's port writes");
+            assert_eq!(
+                text(&out.stdout),
+                "KWC\n",
+                "{tier}: the kernel's port writes"
+            );
             // placed 5+4, MAGIC 9, boots 2+1, kw_table[1] 33, and the
             // image's end lies past the table: 9 + 9 + 3 + 33 + 1.
             assert_eq!(

@@ -446,7 +446,9 @@ impl Backend for ClifBackend {
         linkage: Linkage,
     ) -> Result<(), BackendError> {
         let Some(d) = module.data.get(idx as usize) else {
-            return Err(BackendError::Internal(format!("module state {idx} missing")));
+            return Err(BackendError::Internal(format!(
+                "module state {idx} missing"
+            )));
         };
         let Some(st) = d.stat.as_ref().filter(|_| d.is_defined_static()) else {
             return Err(BackendError::Internal(format!(
@@ -724,7 +726,10 @@ fn patch_macho_debug(bytes: &mut [u8], patches: &[DebugPatch]) -> Result<(), Bac
 /// exactly that function. The section-name table is rewritten whole —
 /// the old names plus the new ones — at the end of the file, and the
 /// table's header points there; nothing else in the file moves.
-fn place_elf_functions(bytes: &mut Vec<u8>, placed: &[(String, String)]) -> Result<(), BackendError> {
+fn place_elf_functions(
+    bytes: &mut Vec<u8>,
+    placed: &[(String, String)],
+) -> Result<(), BackendError> {
     use object::read::{Object as _, ObjectSymbol as _};
     let ice = |m: String| BackendError::Internal(m);
     let mut renames: Vec<(usize, String)> = Vec::new();
@@ -746,7 +751,9 @@ fn place_elf_functions(bytes: &mut Vec<u8>, placed: &[(String, String)]) -> Resu
     let rd32 = |b: &[u8], at: usize| u32::from_le_bytes(b[at..at + 4].try_into().unwrap());
     let rd64 = |b: &[u8], at: usize| u64::from_le_bytes(b[at..at + 8].try_into().unwrap()) as usize;
     if bytes.len() < 64 || &bytes[..4] != b"\x7fELF" || bytes[4] != 2 || bytes[5] != 1 {
-        return Err(ice("section placement expects a little-endian ELF64 object".into()));
+        return Err(ice(
+            "section placement expects a little-endian ELF64 object".into(),
+        ));
     }
     let shoff = rd64(bytes, 0x28);
     let shentsize = rd16(bytes, 0x3a);
