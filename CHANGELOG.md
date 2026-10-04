@@ -20,7 +20,7 @@
   clause's layout, for scalars and `#[repr(c)]` structs
   (`[abi.layout.query]`). A native-layout type stays E0708; an
   `offset_of` field the struct lacks is E0403.
-- **Proven against C.** `repr_c_raw_layout.rs` holds seven layouts to
+- **Proven against C.** `repr_c_raw_layout.rs` holds six layouts to
   gcc and clang in both directions on native and release, and wolf's
   three queries to C's `sizeof`, `_Alignof` and `offsetof`.
 - **New codes.** **E0819**: a packed field is lent (a `mut` argument
@@ -28,8 +28,10 @@
   misaligned; copy it out instead. **E0820**: a representation that
   cannot be laid out — `align(N)` with `N` not a power of two up to
   2^28, `packed` or `align` without `c`, both at once, on a generic
-  struct, named twice. `repr(transparent)` and `repr(packed(N))` stay
-  E0817.
+  struct, named twice, or an aligned struct held inside a packed one
+  (the C compilers disagree there: MSVC-ABI clang keeps the alignment,
+  SysV gcc and clang do not). `repr(transparent)` and
+  `repr(packed(N))` stay E0817.
 - **The membrane.** A packed or aligned struct by value at the C
   membrane is refused by name on the compiling tiers (its psABI
   passing is not lowered); a pointer to one crosses.
