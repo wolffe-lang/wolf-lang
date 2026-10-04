@@ -20,12 +20,13 @@
 //! address under a `u8` (`300 as *u8 as u8` exited 44); the kernel did
 //! not build on either tier.
 //!
-//! lupin 0.1.45 (the 0.2.22 pairing) has no `addr`/`with_addr`/
-//! `expose`/`with_exposed` and forgets the address of an integer-made
-//! pointer no allocation owns (wolf-interp#184), and answers
-//! `--target` with a usage error and no record (wolf-interp#182). Each
-//! parting is pinned below by version; a newer lupin must answer the
-//! compiler's column.
+//! lupin 0.1.45 (the 0.2.22 pairing) had no `addr`/`with_addr`/
+//! `expose`/`with_exposed`, forgot the address of an integer-made
+//! pointer no allocation owns, ran `*p` outside `unsafe`
+//! (wolf-interp#184) and answered `--target` with a usage error and no
+//! record (wolf-interp#182), each pinned by version. 0.1.46 (the 0.2.23
+//! pairing, r28) carries is70's mirror of both and answers the
+//! compiler's column on every row: the seven pins are dropped.
 
 mod lane_exit;
 
@@ -165,17 +166,6 @@ fn lupin_says(entry: &Path) -> Option<Obs> {
     Some(parse_obs(&out.stdout, &out.stderr, "lupin's observation"))
 }
 
-/// lupin's version, asked of the binary (a run with no record has none).
-fn lupin_version() -> Option<String> {
-    let lupin = sibling_lupin()?;
-    let out = Command::new(&lupin)
-        .arg("--version")
-        .output()
-        .expect("lupin --version");
-    let text = String::from_utf8_lossy(&out.stdout).into_owned();
-    text.split_whitespace().nth(1).map(str::to_string)
-}
-
 fn corpus(rel: &str) -> PathBuf {
     let p = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../corpus")
@@ -225,13 +215,6 @@ const OVERFLOW: Want<'static> = Want {
     named: "",
 };
 
-/// lupin's measured answer where it parts (pre-mirror).
-struct Pin<'a> {
-    version: &'a str,
-    verdict: &'a str,
-    stdout: &'a str,
-}
-
 fn assert_obs(who: &str, row: &str, obs: &Obs, want: Want<'_>) {
     assert_eq!(
         obs.verdict, want.verdict,
@@ -251,9 +234,9 @@ fn assert_obs(who: &str, row: &str, obs: &Obs, want: Want<'_>) {
     }
 }
 
-/// The three wolfgang lanes answer `wolfgang`; lupin answers `lupin_want`
-/// unless its version is pinned pre-mirror (wolf-interp#184).
-fn every_machine(entry: &Path, row: &str, wolfgang: Want<'_>, lupin_pre_mirror: &[Pin<'_>]) {
+/// The three wolfgang lanes and lupin answer `wolfgang` (lupin's mirror,
+/// wolf-interp#184, is in 0.1.46).
+fn every_machine(entry: &Path, row: &str, wolfgang: Want<'_>) {
     for flag in ["--checked", "--native", "--release"] {
         let Some(obs) = lane(entry, flag) else {
             continue;
@@ -268,106 +251,61 @@ fn every_machine(entry: &Path, row: &str, wolfgang: Want<'_>, lupin_pre_mirror: 
     let Some(lupin) = lupin_says(entry) else {
         return;
     };
-    match lupin_pre_mirror.iter().find(|p| p.version == lupin.version) {
-        Some(pin) => {
-            assert_eq!(
-                lupin.verdict, pin.verdict,
-                "lupin {} (pre-mirror, wolf-interp#184) on {row}",
-                lupin.version
-            );
-            assert_eq!(
-                lupin.stdout, pin.stdout,
-                "lupin {}'s stdout (pre-mirror, wolf-interp#184) on {row}",
-                lupin.version
-            );
-        }
-        None => assert_obs(
-            &format!("lupin {} (the mirror is wolf-interp#184)", lupin.version),
-            row,
-            &lupin,
-            wolfgang,
-        ),
-    }
+    assert_obs(
+        &format!("lupin {} (the mirror is wolf-interp#184)", lupin.version),
+        row,
+        &lupin,
+        wolfgang,
+    );
 }
 
-fn row(rel: &str, wolfgang: Want<'_>, pins: &[Pin<'_>]) {
-    every_machine(&corpus(rel), rel, wolfgang, pins);
+fn row(rel: &str, wolfgang: Want<'_>) {
+    every_machine(&corpus(rel), rel, wolfgang);
 }
-
-/// lupin 0.1.45 has no provenance methods (wolf-interp#184).
-const NO_METHOD_045: &[Pin<'static>] = &[Pin {
-    version: "0.1.45",
-    verdict: "unsupported",
-    stdout: "",
-}];
 
 #[test]
 fn an_address_round_trips_through_int_into_its_allocation() {
-    row("memory/prov_cast_round_trip.lu", runs("3 7\n"), &[]);
+    row("memory/prov_cast_round_trip.lu", runs("3 7\n"));
 }
 
 #[test]
 fn expose_and_with_exposed_round_trip() {
-    row(
-        "memory/prov_expose_round_trip.lu",
-        runs("9\n"),
-        NO_METHOD_045,
-    );
+    row("memory/prov_expose_round_trip.lu", runs("9\n"));
 }
 
 #[test]
 fn with_addr_keeps_the_receivers_provenance() {
-    row(
-        "memory/prov_addr_with_addr.lu",
-        runs("5 11\n"),
-        NO_METHOD_045,
-    );
+    row("memory/prov_addr_with_addr.lu", runs("5 11\n"));
 }
 
 #[test]
 fn zero_is_the_null_pointer() {
-    row("memory/prov_is_null.lu", runs("true false\n"), &[]);
+    row("memory/prov_is_null.lu", runs("true false\n"));
 }
 
 /// The integer side: widening by the source's signedness, narrowing
-/// as `uint`. lupin 0.1.45 prints `0 0 0` (wolf-interp#184).
+/// as `uint`. lupin 0.1.45 printed `0 0 0` (wolf-interp#184).
 #[test]
 fn the_integer_side_widens_by_its_sign_and_narrows_as_uint() {
-    row(
-        "memory/prov_narrow_cast.lu",
-        runs("200 -1 4294967295\n"),
-        &[Pin {
-            version: "0.1.45",
-            verdict: "exit(0)",
-            stdout: "0 0 0\n",
-        }],
-    );
+    row("memory/prov_narrow_cast.lu", runs("200 -1 4294967295\n"));
 }
 
 /// `300 as *u8 as u8` traps; at trunk the checked machine exited 44.
 #[test]
 fn a_pointer_cast_to_a_narrower_integer_traps_out_of_range() {
-    row(
-        "memory/prov_narrow_cast_trap.lu",
-        OVERFLOW,
-        &[Pin {
-            version: "0.1.45",
-            verdict: "exit(0)",
-            stdout: "",
-        }],
-    );
+    row("memory/prov_narrow_cast_trap.lu", OVERFLOW);
 }
 
 #[test]
 fn prefix_deref_reads_writes_and_compounds() {
-    row("memory/raw_deref.lu", runs("7 7\n"), &[]);
+    row("memory/raw_deref.lu", runs("7 7\n"));
 }
 
 /// wolf-lang#561: a signed pointee reads back signed on the checked
 /// machine too, by `*s`, by `s[i]`, and inside `s[i] += v`.
 #[test]
 fn a_signed_pointee_reads_back_signed() {
-    row("memory/raw_deref_signed.lu", runs("-5 -6 -4\n"), &[]);
+    row("memory/raw_deref_signed.lu", runs("-5 -6 -4\n"));
 }
 
 /// kw00's probes, as they stand at head.
@@ -381,7 +319,7 @@ fn kw00s_f9_probes() {
          let q = p.with_exposed(n)\n        q[0] = 5\n        a = p[0] as int\n        \
          c.free(p)\n    }\n    a - 5\n}\n",
     );
-    every_machine(&exposed, "f9_exposed", runs(""), NO_METHOD_045);
+    every_machine(&exposed, "f9_exposed", runs(""));
     let deref = program(
         "f9_deref",
         "import c \"stdlib.h\"\n\nfn main() -> int {\n    var a = 0\n    \
@@ -389,11 +327,11 @@ fn kw00s_f9_probes() {
          let p = c.malloc(8) as *u8\n        *p = 5\n        a = *p as int\n        \
          c.free(p)\n    }\n    a - 5\n}\n",
     );
-    every_machine(&deref, "f9_deref", runs(""), &[]);
+    every_machine(&deref, "f9_deref", runs(""));
 }
 
 /// The ring: `*p` outside `unsafe` is E1301 on every machine. lupin
-/// 0.1.45 gates `p[0]` but runs `*p` there (wolf-interp#184, item 3).
+/// 0.1.45 gated `p[0]` but ran `*p` there (wolf-interp#184, item 3).
 #[test]
 fn a_dereference_outside_unsafe_is_e1301() {
     let p = program(
@@ -409,14 +347,9 @@ fn a_dereference_outside_unsafe_is_e1301() {
         assert_eq!(obs.verdict, "fail(E1301)", "{flag}: {obs:?}");
     }
     if let Some(l) = lupin_says(&p) {
-        let want = if l.version == "0.1.45" {
-            "exit(0)"
-        } else {
-            "fail(E1301)"
-        };
         assert_eq!(
-            l.verdict, want,
-            "lupin {} (0.1.45 pre-mirror, wolf-interp#184): {l:?}",
+            l.verdict, "fail(E1301)",
+            "lupin {} (the mirror is wolf-interp#184): {l:?}",
             l.version
         );
     }
@@ -470,8 +403,8 @@ fn foreign_memory_on_a_hosted_target_is_ub_row_l2() {
 /// `[mem.prov.device]`, freestanding: the platform's meaning, which no
 /// machine here models. Every wolfgang rung refuses the program by
 /// naming the target before any access — never `ub` — and lupin must
-/// do the same; 0.1.45 answers `--target` with a usage error and no
-/// record, pinned by version (wolf-interp#182).
+/// do the same; 0.1.45 answered `--target` with a usage error and no
+/// record, pinned by version until the 0.1.46 pairing (wolf-interp#182).
 #[test]
 fn foreign_memory_on_the_freestanding_target_is_refused_by_name_never_ub() {
     let p = program("device_freestanding", DEVICE_HOSTED);
@@ -488,19 +421,6 @@ fn foreign_memory_on_the_freestanding_target_is_refused_by_name_never_ub() {
     let Some(out) = lupin_raw(&p, &["--target", "x86_64-unknown-none"]) else {
         return;
     };
-    let version = lupin_version().unwrap_or_default();
-    if version == "0.1.45" {
-        assert_eq!(
-            out.status.code(),
-            Some(2),
-            "lupin 0.1.45 (pre-mirror, wolf-interp#182) refuses `--target` as a usage error"
-        );
-        assert!(
-            out.stdout.is_empty(),
-            "lupin 0.1.45 (pre-mirror, wolf-interp#182) writes no record"
-        );
-        return;
-    }
     let l = parse_obs(&out.stdout, &out.stderr, "lupin's --target observation");
     assert_eq!(
         l.verdict, "unsupported",
