@@ -598,6 +598,17 @@ pub(crate) fn sig_info(
     })
 }
 
+/// A WIR load/store's memory flags: `trusted` (no trap, aligned)
+/// unless the access carries an alignment below its natural one (kw08,
+/// a packed field, `[abi.layout.packed]`), where the `aligned` promise
+/// is dropped so Cranelift never assumes it.
+fn access_flags(aux: wolf_wir::ir::Aux) -> MemFlagsData {
+    match aux {
+        wolf_wir::ir::Aux::Int(_) => MemFlagsData::new().with_notrap(),
+        _ => MemFlagsData::trusted(),
+    }
+}
+
 /// How a WIR value exists in CLIF.
 #[derive(Clone, Copy, Debug)]
 enum Repr {
@@ -1680,7 +1691,7 @@ impl<'a, 'b> Tx<'a, 'b> {
                 } else {
                     let ty =
                         scalar_clif_ty(self.m, rty).ok_or_else(|| ice("load of token type"))?;
-                    let r = self.b.ins().load(ty, MemFlagsData::trusted(), p, 0);
+                    let r = self.b.ins().load(ty, access_flags(data.aux), p, 0);
                     self.vals.insert(results[0], Repr::Scalar(r));
                 }
             }
@@ -1693,7 +1704,7 @@ impl<'a, 'b> Tx<'a, 'b> {
                     self.copy_bytes(p, src, size);
                 } else {
                     let v = self.scalar(args[0])?;
-                    self.b.ins().store(MemFlagsData::trusted(), v, p, 0);
+                    self.b.ins().store(access_flags(data.aux), v, p, 0);
                 }
                 // The successor token.
                 self.vals.insert(results[0], Repr::Token);
