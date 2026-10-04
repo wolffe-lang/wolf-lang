@@ -1,0 +1,30 @@
+//! check: run(exit=trap(ub))
+//! phase: wir
+//! conforms: mem.unsafe.raw.4, mem.ub, abi.layout.c
+//!
+//! s209 (ruling #36 = A): the packed row's contrast. A plain
+//! `#[repr(c)]` `{u32, u64}` has alignment 8, so an element of it at
+//! an address 4 past an 8-aligned one is row L4 (`[mem.unsafe.raw.4]`)
+//! when `s[0].b` reads through it — the struct's alignment is the one
+//! the access needs, and the compiled tiers load the field with
+//! `align 8`. At trunk 8edac3ee the checked machine refused the field
+//! read by name; native and release ran it.
+
+import c "stdlib.h"
+
+#[repr(c)]
+struct Pair {
+    a: u32,
+    b: u64,
+}
+
+fn main() -> int {
+    // # Safety: DELIBERATELY UNSOUND — the misaligned element is the row.
+    unsafe {
+        let p = c.calloc(1, 32) as *Pair
+        let s = p.with_addr(p.addr() + 4)
+        let v = s[0].b  // UB L4: address % 8 == 4
+        c.free(p as *u8)
+        v as int
+    }
+}

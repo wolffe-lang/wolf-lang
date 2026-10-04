@@ -1,0 +1,41 @@
+//! check: run(exit=0, stdout="packed 255 4096 1 512\n")
+//! phase: run
+//! conforms: mem.unsafe.raw.4, abi.layout.packed
+//!
+//! s209 (ruling #36 = A): a packed struct's fields read through a raw
+//! element, `g[i].f`, are never row L4 (`[mem.unsafe.raw.4]`,
+//! `[abi.layout.packed]`). A packed `{u16, u64}` has alignment 1 and
+//! size 10, so `g[0].base` is a `u64` at offset 2 and `g[1].base` one at
+//! offset 12: misaligned for a `u64`, defined for the field, which the
+//! compiled tiers load with `align 1`. The bytes are written one at a
+//! time. At trunk 8edac3ee native and release answered this; the
+//! checked machine refused the field read ("member access outside the
+//! modelled surface").
+
+import c "stdlib.h"
+
+#[repr(c, packed)]
+struct Gdtr {
+    limit: u16,
+    base: u64,
+}
+
+fn main() -> int {
+    // # Safety: 32 zeroed bytes from calloc; two 10-byte elements
+    // inside them; freed once.
+    unsafe {
+        let q = c.calloc(1, 32) as *u8
+        q[0] = 255
+        q[3] = 16
+        q[10] = 1
+        q[13] = 2
+        let g = q as *Gdtr
+        let l = g[0].limit as int
+        let b = g[0].base as int
+        let l1 = g[1].limit as int
+        let b1 = g[1].base as int
+        c.free(q)
+        print("packed {l} {b} {l1} {b1}")
+        0
+    }
+}
