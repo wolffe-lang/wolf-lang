@@ -1,0 +1,62 @@
+// s209 (`[mem.unsafe.raw.4]`, O12): the release IR gate's functions.
+// Every ordinary raw access is emitted at its pointee's natural
+// alignment; a packed field at the alignment its offset guarantees.
+
+import c "stdlib.h"
+
+#[repr(c, packed)]
+struct Gdtr {
+    limit: u16,
+    base: u64,
+}
+
+fn ld_u16(p: *u16, i: int) -> int {
+    // # Safety: the caller passes an allocation with `i` in bounds.
+    unsafe { p[i] as int }
+}
+
+fn ld_u32(p: *u32, i: int) -> int {
+    // # Safety: the caller passes an allocation with `i` in bounds.
+    unsafe { p[i] as int }
+}
+
+fn ld_u64(p: *u64, i: int) -> int {
+    // # Safety: the caller passes an allocation with `i` in bounds.
+    unsafe { p[i] as int }
+}
+
+fn st_u16(p: *u16, i: int, v: int) {
+    // # Safety: the caller passes an allocation with `i` in bounds.
+    unsafe { p[i] = v as u16 }
+}
+
+fn st_u32(p: *u32, i: int, v: int) {
+    // # Safety: the caller passes an allocation with `i` in bounds.
+    unsafe { p[i] = v as u32 }
+}
+
+fn st_u64(p: *u64, i: int, v: int) {
+    // # Safety: the caller passes an allocation with `i` in bounds.
+    unsafe { *p = v as u64 }
+}
+
+fn ld_packed_base(g: *Gdtr, i: int) -> int {
+    // # Safety: the caller passes an allocation with `i` in bounds.
+    unsafe { g[i].base as int }
+}
+
+fn main() -> int {
+    // # Safety: 64 zeroed bytes; every access below is aligned and in
+    // bounds; freed once.
+    unsafe {
+        let q = c.calloc(1, 64) as *u8
+        st_u16(q as *u16, 1, 513)
+        st_u32(q as *u32, 2, 77)
+        st_u64((q as *u64).with_addr(q.addr() + 16), 0, 4096)
+        let s = ld_u16(q as *u16, 1) + ld_u32(q as *u32, 2) + ld_u64(q as *u64, 2)
+        let b = ld_packed_base(q as *Gdtr, 0)
+        c.free(q)
+        print("{s} {b}")
+        0
+    }
+}
