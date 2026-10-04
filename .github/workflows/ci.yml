@@ -37,6 +37,10 @@ jobs:
       # tracer that is missing here is a broken job, never a quiet skip
       # — the same asymmetry the pairing gate above uses.
       WOLF_SYSCALL_REQUIRE_STRACE: "1"
+      # kw10 ([abi.interrupt]): the interrupt witness boots an image under
+      # QEMU (freestanding_interrupt.rs). QEMU is installed below, so a
+      # missing one here is a broken job, never a quiet skip.
+      WOLF_INTERRUPT_REQUIRE_QEMU: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -46,8 +50,9 @@ jobs:
       - name: install native toolchain (gdb for debug-check, lld for the link
           probe, clang for the s41 release tier — system LLVM is a NAMED
           toolchain requirement per D33, never a build script; strace is the
-          s149 syscall counter's instrument, the one lobo's ws27 counted with)
-        run: sudo apt-get update && sudo apt-get install -y gdb lld clang strace
+          s149 syscall counter's instrument, the one lobo's ws27 counted with;
+          qemu boots kw10's interrupt witness)
+        run: sudo apt-get update && sudo apt-get install -y gdb lld clang strace qemu-system-x86
       - name: the sibling lupin that PAIRING names, from its own release page
         env:
           GH_TOKEN: ${{ github.token }}
