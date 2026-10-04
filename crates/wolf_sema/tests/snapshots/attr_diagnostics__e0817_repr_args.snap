@@ -1,23 +1,23 @@
 ---
 source: crates/wolf_sema/tests/attr_diagnostics.rs
-expression: "render_attrs(\"#[repr(c, packed), repr(bogus)]\\nstruct P {\\n    a: u8,\\n    b: u32,\\n}\\n\")"
+expression: "render_attrs(\"#[repr(c, transparent), repr(bogus)]\\nstruct P {\\n    a: u8,\\n    b: u32,\\n}\\n\")"
 ---
-error[E0817]: `repr(packed)` is not implemented yet
+error[E0817]: `repr(transparent)` is not implemented yet
  --> mem:///main.lu:1:11
   |
-1 | #[repr(c, packed), repr(bogus)]
-  |           ^^^^^^ known, but nothing implements it
+1 | #[repr(c, transparent), repr(bogus)]
+  |           ^^^^^^^^^^^ known, but nothing implements it
   |
-  = note: the one representation implemented is `#[repr(c)]` ([abi.layout.c]); `packed`,
-    `align(N)` and `transparent` are KWC F4's later half (kw08) and are refused by name
-    until then, never ignored.
+  = note: `#[repr(transparent)]` (a struct laid out as its one field) has no lane yet: it is
+    refused by name until one rules it, never ignored. The representations implemented are
+    `c`, `c, packed` and `c, align(N)` ([abi.layout.c]).
 
 error[E0817]: `repr(bogus)` is not a representation wolf knows
- --> mem:///main.lu:1:25
+ --> mem:///main.lu:1:30
   |
-1 | #[repr(c, packed), repr(bogus)]
-  |                         ^^^^^ unknown representation
+1 | #[repr(c, transparent), repr(bogus)]
+  |                              ^^^^^ unknown representation
   |
-  = note: the one representation implemented is `#[repr(c)]` ([abi.layout.c]); `packed`,
-    `align(N)` and `transparent` are KWC F4's later half (kw08) and are refused by name
-    until then, never ignored.
+  = note: the representations are `#[repr(c)]` ([abi.layout.c]), `#[repr(c, packed)]`
+    ([abi.layout.packed]) and `#[repr(c, align(N))]` ([abi.layout.align]); `transparent` is
+    known and not implemented.

@@ -1,0 +1,15 @@
+---
+source: crates/wolf_sema/tests/layout_diagnostics.rs
+expression: "render_tc(\"struct Vec2 {\\n    x: f64,\\n    y: f64,\\n}\\n\\n\\\n             #[repr(c)]\\nstruct Wrap {\\n    tag: u8,\\n    v: Vec2,\\n}\\n\\n\\\n             fn main() -> !int {\\n    const S = size_of(Wrap)\\n    if S == 24 { 0 } else { 1 }\\n}\\n\")"
+---
+error[E0708]: the layout of `Vec2` (the field `Wrap.v`) is not resolved until codegen lays it out
+  --> mem:///main.lu:13:15
+   |
+13 |     const S = size_of(Wrap)
+   |               ^^^^^^^^^^^^^ unresolved until codegen
+   |               ------------- while evaluating `main`, entered here
+   |
+   = note: `size_of`, `align_of` and `offset_of` answer at comptime for scalars and `#[repr(c)]`
+     structs, whose layout the clause fixes ([abi.layout.query]); any other type has the
+     native layout, which the code generator chooses ([abi.native.layout]) — mark the struct
+     `#[repr(c)]` to make its layout a fact.

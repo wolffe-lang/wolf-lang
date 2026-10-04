@@ -1,0 +1,39 @@
+---
+source: crates/wolf_sema/tests/attr_diagnostics.rs
+expression: "render_attrs(\"#[repr(c, align(3))]\\nstruct A {\\n    x: u8,\\n}\\n\\n\\\n             #[repr(c, align(0))]\\nstruct B {\\n    x: u8,\\n}\\n\\n\\\n             #[repr(c, align(536870912))]\\nstruct C {\\n    x: u8,\\n}\\n\\n\\\n             #[repr(c, align(\\\"8\\\"))]\\nstruct D {\\n    x: u8,\\n}\\n\")"
+---
+error[E0820]: `align(3)` is not a power of two from 1 to 2^28
+ --> mem:///main.lu:1:11
+  |
+1 | #[repr(c, align(3))]
+  |           ^^^^^^^^ no C layout has this alignment
+  |
+  = note: `align(N)` takes one integer, a power of two from 1 to 2^28 ([abi.layout.align]; 2^28 is
+    gcc's ceiling, so both C compilers agree on every alignment wolf accepts).
+
+error[E0820]: `align(0)` is not a power of two from 1 to 2^28
+ --> mem:///main.lu:6:11
+  |
+6 | #[repr(c, align(0))]
+  |           ^^^^^^^^ no C layout has this alignment
+  |
+  = note: `align(N)` takes one integer, a power of two from 1 to 2^28 ([abi.layout.align]; 2^28 is
+    gcc's ceiling, so both C compilers agree on every alignment wolf accepts).
+
+error[E0820]: `align(536870912)` is not a power of two from 1 to 2^28
+  --> mem:///main.lu:11:11
+   |
+11 | #[repr(c, align(536870912))]
+   |           ^^^^^^^^^^^^^^^^ no C layout has this alignment
+   |
+   = note: `align(N)` takes one integer, a power of two from 1 to 2^28 ([abi.layout.align]; 2^28 is
+     gcc's ceiling, so both C compilers agree on every alignment wolf accepts).
+
+error[E0820]: `repr(align("8"))` does not name an alignment
+  --> mem:///main.lu:16:11
+   |
+16 | #[repr(c, align("8"))]
+   |           ^^^^^^^^^^ no C layout has this alignment
+   |
+   = note: `align(N)` takes one integer, a power of two from 1 to 2^28 ([abi.layout.align]; 2^28 is
+     gcc's ceiling, so both C compilers agree on every alignment wolf accepts).

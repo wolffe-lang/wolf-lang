@@ -1,0 +1,12 @@
+---
+source: crates/wolf_sema/tests/layout_diagnostics.rs
+expression: "render_tc(&format!(\"{GDTR}fn main() -> !int {{\\n    const O = offset_of(Gdtr, bse)\\n    \\\n             if O == 2 {{ 0 }} else {{ 1 }}\\n}}\\n\"))"
+---
+error[E0403]: `Gdtr` has no field named `bse`
+ --> mem:///main.lu:8:15
+  |
+8 |     const O = offset_of(Gdtr, bse)
+  |               ^^^^^^^^^^^^^^^^^^^^ `offset_of` names a field of its struct
+  |               -------------------- while evaluating `main`, entered here
+  |
+  = note: `offset_of(T, field)` takes the name of one of `T`'s fields ([abi.layout.query]).

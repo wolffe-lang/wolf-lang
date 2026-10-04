@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/layout_diagnostics.rs
+expression: "render_tc(&format!(\"{GDTR}fn bump(mut x: u64) {{\\n    x += 1\\n}}\\n\\n\\\n             fn main() -> int {{\\n    var d = Gdtr {{ limit: 7, base: 41 }}\\n    \\\n             bump(mut d.base)\\n    d.base as int - 42\\n}}\\n\"))"
+---
+error[E0819]: `d.base` runs through `base`, a field of the packed struct `Gdtr`, so it cannot be lent
+  --> mem:///main.lu:13:14
+   |
+13 |     bump(mut d.base)
+   |              ^^^^^^ a `mut` claim lends its address
+   |
+   = note: `Gdtr` is `#[repr(c, packed)]`: its fields sit at any byte offset, so a field's address
+     need not be aligned for its type ([abi.layout.packed]). A packed field may be read and
+     written; to lend one, copy it into a local, lend the local, and write it back.

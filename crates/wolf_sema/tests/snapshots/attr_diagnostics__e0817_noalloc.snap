@@ -11,5 +11,5 @@ error[E0817]: `noalloc` is not implemented yet
   = note: an attribute nothing implements would compile and mean nothing, so it is refused by name
     ([gram.item.attr], K13); the performance contracts (I15) have no checker yet
     (wolf-lang#180), and an unchecked promise is worse than none. The attributes this
-    compiler implements: `trusted`, `consttime`, `allow`, `index`, `budget`, `repr(c)` and
-    `cfg(target = "…")`.
+    compiler implements: `trusted`, `consttime`, `allow`, `index`, `budget`, `repr(c)`,
+    `repr(c, packed)`, `repr(c, align(N))` and `cfg(target = "…")`.

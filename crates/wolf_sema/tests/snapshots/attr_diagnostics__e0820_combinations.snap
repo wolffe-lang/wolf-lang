@@ -1,0 +1,47 @@
+---
+source: crates/wolf_sema/tests/attr_diagnostics.rs
+expression: "render_attrs(\"#[repr(packed)]\\nstruct A {\\n    x: u8,\\n}\\n\\n\\\n             #[repr(c, packed, align(8))]\\nstruct B {\\n    x: u8,\\n}\\n\\n\\\n             #[repr(c, packed)]\\nstruct C[T] {\\n    x: T,\\n}\\n\\n\\\n             #[repr(c, c)]\\nstruct D {\\n    x: u8,\\n}\\n\\n\\\n             #[repr(align(8))]\\nstruct E {\\n    x: u8,\\n}\\n\")"
+---
+error[E0820]: `packed` modifies the C layout, so it is spelled beside `c`
+ --> mem:///main.lu:1:8
+  |
+1 | #[repr(packed)]
+  |        ^^^^^^ this representation cannot be laid out
+  |
+  = note: write `#[repr(c, packed)]`: the layout `packed` changes is the C one ([abi.layout.c]); a
+    native-layout struct has no fixed offsets to pack or align.
+
+error[E0820]: a struct is packed or aligned, not both
+ --> mem:///main.lu:6:8
+  |
+6 | #[repr(c, packed, align(8))]
+  |        ^ this representation cannot be laid out
+  |
+  = note: `packed` is alignment 1 and `align(N)` is alignment N; one struct cannot be both
+    ([abi.layout.packed], [abi.layout.align]). Pack the struct, or align it.
+
+error[E0820]: a generic struct cannot be packed or aligned
+  --> mem:///main.lu:11:8
+   |
+11 | #[repr(c, packed)]
+   |        ^ this representation cannot be laid out
+   |
+   = note: its layout would change with each instantiation's field types, so no query could answer
+     it ([abi.layout.query]); declare a concrete struct.
+
+error[E0820]: `c` is named twice in this struct's representation
+  --> mem:///main.lu:16:8
+   |
+16 | #[repr(c, c)]
+   |        ^ this representation cannot be laid out
+   |
+   = note: each representation is named once ([abi.layout.c])
+
+error[E0820]: `align(N)` modifies the C layout, so it is spelled beside `c`
+  --> mem:///main.lu:21:8
+   |
+21 | #[repr(align(8))]
+   |        ^^^^^^^^ this representation cannot be laid out
+   |
+   = note: write `#[repr(c, align(N))]`: the layout `align(N)` changes is the C one
+     ([abi.layout.c]); a native-layout struct has no fixed offsets to pack or align.

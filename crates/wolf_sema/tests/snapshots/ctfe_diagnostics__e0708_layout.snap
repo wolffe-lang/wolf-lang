@@ -2,13 +2,14 @@
 source: crates/wolf_sema/tests/ctfe_diagnostics.rs
 expression: render_ctfe(src)
 ---
-error[E0708]: the size of `Vec2` is not resolved until codegen lays it out
+error[E0708]: the layout of `Vec2` is not resolved until codegen lays it out
  --> mem:///main.lu:7:15
   |
 7 |     const S = size_of(Vec2)
   |               ^^^^^^^^^^^^^ unresolved until codegen
   |               ------------- while evaluating `main`, entered here
   |
-  = note: layout (sizes, offsets) is decided by the code generator, not the type checker; comptime
-    answers for fixed-width primitives, whose widths the type alone settles, and cannot
-    answer for an aggregate until the layout that decides its offsets exists.
+  = note: `size_of`, `align_of` and `offset_of` answer at comptime for scalars and `#[repr(c)]`
+    structs, whose layout the clause fixes ([abi.layout.query]); any other type has the
+    native layout, which the code generator chooses ([abi.native.layout]) — mark the struct
+    `#[repr(c)]` to make its layout a fact.

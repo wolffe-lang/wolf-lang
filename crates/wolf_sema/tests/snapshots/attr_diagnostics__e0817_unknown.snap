@@ -9,5 +9,5 @@ error[E0817]: `frobnicate` is not an attribute wolf knows
   |   ^^^^^^^^^^^^^^^ unknown attribute
   |
   = note: the attribute set is closed ([gram.item.attr]): `trusted`, `consttime`, `allow`,
-    `index`, `budget`, `repr(c)` and `cfg(target = "…")`. A name outside it is refused,
-    never ignored.
+    `index`, `budget`, `repr(c)`, `repr(c, packed)`, `repr(c, align(N))` and `cfg(target =
+    "…")`. A name outside it is refused, never ignored.

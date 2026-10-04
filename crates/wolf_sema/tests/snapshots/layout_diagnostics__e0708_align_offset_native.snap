@@ -1,0 +1,27 @@
+---
+source: crates/wolf_sema/tests/layout_diagnostics.rs
+expression: "render_tc(\"struct Vec2 {\\n    x: f64,\\n    y: f64,\\n}\\n\\n\\\n             fn main() -> !int {\\n    const A = align_of(Vec2)\\n    \\\n             const O = offset_of(Vec2, y)\\n    if A + O == 16 { 0 } else { 1 }\\n}\\n\")"
+---
+error[E0708]: the layout of `Vec2` is not resolved until codegen lays it out
+ --> mem:///main.lu:7:15
+  |
+7 |     const A = align_of(Vec2)
+  |               ^^^^^^^^^^^^^^ unresolved until codegen
+  |               -------------- while evaluating `main`, entered here
+  |
+  = note: `size_of`, `align_of` and `offset_of` answer at comptime for scalars and `#[repr(c)]`
+    structs, whose layout the clause fixes ([abi.layout.query]); any other type has the
+    native layout, which the code generator chooses ([abi.native.layout]) — mark the struct
+    `#[repr(c)]` to make its layout a fact.
+
+error[E0708]: the layout of `Vec2` is not resolved until codegen lays it out
+ --> mem:///main.lu:8:15
+  |
+8 |     const O = offset_of(Vec2, y)
+  |               ^^^^^^^^^^^^^^^^^^ unresolved until codegen
+  |               ------------------ while evaluating `main`, entered here
+  |
+  = note: `size_of`, `align_of` and `offset_of` answer at comptime for scalars and `#[repr(c)]`
+    structs, whose layout the clause fixes ([abi.layout.query]); any other type has the
+    native layout, which the code generator chooses ([abi.native.layout]) — mark the struct
+    `#[repr(c)]` to make its layout a fact.

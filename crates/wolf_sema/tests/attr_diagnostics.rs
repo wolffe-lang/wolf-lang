@@ -50,11 +50,57 @@ fn e0817_contract_not_implemented() {
     );
 }
 
+/// kw01 wrote this with `packed`, which kw08 implemented; `transparent`
+/// is the known representation still refused.
 #[test]
 fn e0817_repr_arguments() {
     insta::assert_snapshot!(
         "e0817_repr_args",
-        render_attrs("#[repr(c, packed), repr(bogus)]\nstruct P {\n    a: u8,\n    b: u32,\n}\n")
+        render_attrs(
+            "#[repr(c, transparent), repr(bogus)]\nstruct P {\n    a: u8,\n    b: u32,\n}\n"
+        )
+    );
+}
+
+/// kw08: `packed` and `align(N)` are implemented; nothing to refuse.
+#[test]
+fn packed_and_aligned_reprs_are_accepted() {
+    let out = render_attrs(
+        "#[repr(c, packed)]\nstruct P {\n    a: u8,\n    b: u32,\n}\n\n\
+         #[repr(c, align(4096))]\nstruct Page {\n    e: u64,\n}\n\n\
+         #[repr(c)]\n#[repr(align(0x10))]\nstruct A {\n    x: u32,\n}\n",
+    );
+    assert_eq!(out, "", "kw08's shapes are representations: {out}");
+}
+
+/// kw08 (E0820): an alignment that is not a power of two, zero, or past
+/// gcc's 2^28 ceiling; a non-integer alignment.
+#[test]
+fn e0820_alignment_values() {
+    insta::assert_snapshot!(
+        "e0820_align_values",
+        render_attrs(
+            "#[repr(c, align(3))]\nstruct A {\n    x: u8,\n}\n\n\
+             #[repr(c, align(0))]\nstruct B {\n    x: u8,\n}\n\n\
+             #[repr(c, align(536870912))]\nstruct C {\n    x: u8,\n}\n\n\
+             #[repr(c, align(\"8\"))]\nstruct D {\n    x: u8,\n}\n"
+        )
+    );
+}
+
+/// kw08 (E0820): how representations combine — `packed`/`align`
+/// without `c`, both at once, on a generic struct, named twice.
+#[test]
+fn e0820_combinations() {
+    insta::assert_snapshot!(
+        "e0820_combinations",
+        render_attrs(
+            "#[repr(packed)]\nstruct A {\n    x: u8,\n}\n\n\
+             #[repr(c, packed, align(8))]\nstruct B {\n    x: u8,\n}\n\n\
+             #[repr(c, packed)]\nstruct C[T] {\n    x: T,\n}\n\n\
+             #[repr(c, c)]\nstruct D {\n    x: u8,\n}\n\n\
+             #[repr(align(8))]\nstruct E {\n    x: u8,\n}\n"
+        )
     );
 }
 

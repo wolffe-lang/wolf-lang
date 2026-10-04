@@ -1,0 +1,23 @@
+---
+source: crates/wolf_sema/tests/layout_diagnostics.rs
+expression: "render_tc(\"#[repr(c)]\\nstruct In {\\n    x: u32,\\n    y: u32,\\n}\\n\\n\\\n             #[repr(c, packed)]\\nstruct Out {\\n    tag: u8,\\n    inner: In,\\n}\\n\\n\\\n             fn bump(mut x: u32) {\\n    x += 1\\n}\\n\\n\\\n             fn sum(v: In) -> int {\\n    v.x as int + v.y as int\\n}\\n\\n\\\n             fn main() -> int {\\n    var o = Out { tag: 1, inner: In { x: 2, y: 3 } }\\n    \\\n             bump(mut o.inner.x)\\n    sum(o.inner) - 6\\n}\\n\")"
+---
+error[E0819]: `o.inner.x` runs through `inner`, a field of the packed struct `Out`, so it cannot be lent
+  --> mem:///main.lu:23:14
+   |
+23 |     bump(mut o.inner.x)
+   |              ^^^^^^^^^ a `mut` claim lends its address
+   |
+   = note: `Out` is `#[repr(c, packed)]`: its fields sit at any byte offset, so a field's address
+     need not be aligned for its type ([abi.layout.packed]). A packed field may be read and
+     written; to lend one, copy it into a local, lend the local, and write it back.
+
+error[E0819]: `o.inner` runs through `inner`, a field of the packed struct `Out`, so it cannot be lent
+  --> mem:///main.lu:24:9
+   |
+24 |     sum(o.inner) - 6
+   |         ^^^^^^^ a `read` lend of an aggregate passes its address
+   |
+   = note: `Out` is `#[repr(c, packed)]`: its fields sit at any byte offset, so a field's address
+     need not be aligned for its type ([abi.layout.packed]). A packed field may be read and
+     written; to lend one, copy it into a local, lend the local, and write it back.
