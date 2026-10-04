@@ -350,6 +350,67 @@ fn const_and_let_are_immutable_data_read_in_safe_code() {
     );
 }
 
+/// `[mem.static.3]` (wolf-lang#585, s210): a module `let`/`const`
+/// initialized by a string literal holds the literal's value, the bytes
+/// the same literal has inside a fn: the `"""` dedent, the raw fence,
+/// code-point escapes and doubled braces. At 0.2.23 (8edac3ee) the
+/// comptime engine cooked module initializers with its own decoder and
+/// all three compiler machines printed the raw literal text (kasumi
+/// `~/lanes/s210/probes/585-trunk.log`); lupin was right.
+#[test]
+fn a_module_string_literal_holds_its_value() {
+    const OUT: &str = "two\n  lines\n\nusage: tool [-n]\n  -n  dry run\n\n\
+                       true 12 31\na\\nb\n4 AB 2 {x} 3\n";
+    every_machine(
+        "memory/static_str_literals.lu",
+        runs(OUT),
+        Some(runs(OUT)),
+        runs(OUT),
+        NO_PIN,
+    );
+}
+
+/// The same decoder fed s71's fold table (wolf-lang#585, s210): a
+/// comptime fn's `"""` result, folded into a run-time call site, printed
+/// the raw literal on all three compiler machines in every release since
+/// v0.1.0. lupin refuses a `comptime fn` by name (the engine is the
+/// compiler's, s16), so the compiler machines answer alone here.
+#[test]
+fn a_comptime_fold_of_a_multiline_string_is_its_value() {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("static_lanes_str_fold");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let entry = dir.join("main.lu");
+    std::fs::write(
+        &entry,
+        "comptime fn banner() -> str {\n    \"\"\"\n    hi\n      there\n    \"\"\"\n}\n\
+         fn main() -> !int {\n    let s = banner()\n    print(s)\n    0\n}\n",
+    )
+    .expect("write the fold program");
+    let want = runs("hi\n  there\n\n");
+    if let Some(obs) = lane(&entry, "--checked") {
+        assert_obs("the CHECKED lane", "the str fold", &obs, want);
+    }
+    for flag in ["--native", "--release"] {
+        if let Some(obs) = lane(&entry, flag) {
+            assert_obs(flag, "the str fold", &obs, want);
+        }
+    }
+    if let Some(lupin) = lupin_says(&entry) {
+        assert_eq!(
+            lupin.verdict, "unsupported",
+            "lupin {} refuses a comptime fn by name",
+            lupin.version
+        );
+        assert!(
+            lupin.unsupported.contains("comptime fn"),
+            "lupin {} names the comptime fn: {:?}",
+            lupin.version,
+            lupin.unsupported
+        );
+    }
+}
+
 /// `[mem.static.2]`: a `var` is memory every later read sees — across
 /// calls, and in a loop whose condition reads what a callee writes.
 #[test]
