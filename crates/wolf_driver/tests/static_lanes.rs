@@ -370,6 +370,59 @@ fn a_module_string_literal_holds_its_value() {
     );
 }
 
+/// wolf-book ch06's capstone (`e7772338`, `book/ch06.md:808`) opens with
+/// a module `let USAGE = """…"""` under a lupin-run fence (wolf-lang#585,
+/// s210). Typed, it is #585's shape: 0.2.23 printed the raw literal on
+/// all three compiler machines and lupin the dedented text (kasumi
+/// `~/lanes/s210/evidence/585-book.log`). Untyped, as the book writes it,
+/// the compiler machines still decline it by name, at 0.2.23 and here.
+#[test]
+fn the_books_usage_text_at_module_level() {
+    const USAGE: &str = "\"\"\"\n    usage: wordcount TEXT\n    \
+                         Count the words in TEXT and report the most frequent.\n    \"\"\"\n";
+    const MAIN: &str = "\nfn main() -> !int {\n    print(USAGE)\n    0\n}\n";
+    let base = Path::new(env!("CARGO_TARGET_TMPDIR")).join("static_lanes_book_usage");
+    let _ = std::fs::remove_dir_all(&base);
+    let typed = base.join("typed");
+    let untyped = base.join("untyped");
+    for (dir, decl) in [(&typed, "let USAGE: str = "), (&untyped, "let USAGE = ")] {
+        std::fs::create_dir_all(dir).expect("mkdir");
+        std::fs::write(dir.join("main.lu"), format!("{decl}{USAGE}{MAIN}")).expect("write");
+    }
+    let text = runs("usage: wordcount TEXT\nCount the words in TEXT and report the most frequent.\n\n");
+    let typed = typed.join("main.lu");
+    if let Some(obs) = lane(&typed, "--checked") {
+        assert_obs("the CHECKED lane", "the book's typed USAGE", &obs, text);
+    }
+    for flag in ["--native", "--release"] {
+        if let Some(obs) = lane(&typed, flag) {
+            assert_obs(flag, "the book's typed USAGE", &obs, text);
+        }
+    }
+    if let Some(lupin) = lupin_says(&typed) {
+        assert_obs("lupin", "the book's typed USAGE", &lupin, text);
+    }
+    let untyped = untyped.join("main.lu");
+    let declined = Want {
+        verdict: "unsupported",
+        codes: &[],
+        stdout: "",
+        named: "an item without a declared type",
+        ub: ("", ""),
+    };
+    if let Some(obs) = lane(&untyped, "--checked") {
+        assert_obs("the CHECKED lane", "the book's untyped USAGE", &obs, declined);
+    }
+    for flag in ["--native", "--release"] {
+        if let Some(obs) = lane(&untyped, flag) {
+            assert_obs(flag, "the book's untyped USAGE", &obs, declined);
+        }
+    }
+    if let Some(lupin) = lupin_says(&untyped) {
+        assert_obs("lupin", "the book's untyped USAGE", &lupin, text);
+    }
+}
+
 /// The same decoder fed s71's fold table (wolf-lang#585, s210): a
 /// comptime fn's `"""` result, folded into a run-time call site, printed
 /// the raw literal on all three compiler machines in every release since
