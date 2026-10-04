@@ -1,0 +1,25 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1301]: the module `var` `ticks` is read or written only in an `unsafe` block
+ --> mem:///main.lu:5:5
+  |
+5 |     ticks = ticks + STEP
+  |     ^^^^^ module state in safe code
+  |
+  = note: a module `var` is shared by every task, and the safe tier's data-race freedom does not
+    reach it ([mem.static.2]). Access it inside `unsafe { }` and state what keeps it
+    race-free — one thread, or a lock you hold — in a `# Safety:` comment; a module `let` or
+    `const` reads freely.
+
+error[E1301]: the module `var` `ticks` is read or written only in an `unsafe` block
+ --> mem:///main.lu:5:13
+  |
+5 |     ticks = ticks + STEP
+  |             ^^^^^ module state in safe code
+  |
+  = note: a module `var` is shared by every task, and the safe tier's data-race freedom does not
+    reach it ([mem.static.2]). Access it inside `unsafe { }` and state what keeps it
+    race-free — one thread, or a lock you hold — in a `# Safety:` comment; a module `let` or
+    `const` reads freely.

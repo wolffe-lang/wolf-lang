@@ -782,6 +782,27 @@ fn e1301_volatile_outside_unsafe() {
 }
 
 #[test]
+fn e1301_module_var_outside_unsafe() {
+    // kw09 (`[mem.static.2]`, K11 = A): every read and write of a module
+    // `var` is raw-tier — one E1301 per site; a `let` and a `const` read
+    // freely, and a local that shadows the `var` is just a local.
+    snap(
+        "e1301_module_var_outside",
+        "var ticks: int = 0\n\
+         let STEP: int = 1\n\
+         const MAX: int = 9\n\
+         fn bump() {\n    \
+             ticks = ticks + STEP\n\
+         }\n\
+         fn shadow() -> int {\n    \
+             let ticks = MAX\n    \
+             ticks\n\
+         }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
+
+#[test]
 fn e1301_provenance_op_and_cast_outside_unsafe() {
     // Strict-provenance ops and non-identity pointer casts are
     // ring-gated too; holding/copying the pointer itself stays free
