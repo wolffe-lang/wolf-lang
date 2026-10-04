@@ -12791,9 +12791,6 @@ impl<'a> Checker<'a> {
     /// The place is walked through every member step: a field INSIDE a
     /// packed field is just as misplaced.
     fn check_packed_lends(&mut self, node: &GreenNode) {
-        if std::env::var_os("WOLF_KW08_PLANT_NEVER").is_none() {
-            return;
-        }
         let types_by_span: HashMap<Span, TyId> = self.exprs.iter().copied().collect();
         // (the lent place, a `mut` claim?)
         let mut lends: Vec<(&GreenNode, bool)> = Vec::new();

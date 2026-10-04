@@ -144,7 +144,7 @@ fn struct_layout(
         let l = layout_in(sigs, &sigs.table, f.ty, depth + 1).map_err(|e| NoCLayout {
             what: format!("{} (the field `{name}.{}`)", e.what, f.name),
         })?;
-        if !(ss.packed && std::env::var_os("WOLF_KW08_PLANT_NEVER").is_some()) {
+        if !ss.packed {
             off = off.div_ceil(l.align) * l.align;
             align = align.max(l.align);
         }
