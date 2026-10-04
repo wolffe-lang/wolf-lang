@@ -940,6 +940,9 @@ struct ModUnit {
     comps: KeyComps,
     /// This unit carries the entry shim + trap table.
     is_entry: bool,
+    /// kw09 (`[mem.static]`, `[abi.link.script]`): this unit's object
+    /// defines the program's module state — exactly one per build.
+    statics_here: bool,
 }
 
 /// The rebuild key's components (each a sha256 hex): toolchain/ABI/
@@ -1367,6 +1370,7 @@ fn compile_native(
             &all,
             shim,
             shim.is_some(),
+            true,
             false,
             &mut wolf_backend::NullDebugSink,
         )
@@ -1565,6 +1569,7 @@ fn compile_native(
                 funcs,
                 key,
                 comps,
+                statics_here: false,
             });
         }
         // The entry shim must land in exactly one object (none on the
@@ -1634,7 +1639,31 @@ fn compile_native(
             key,
             comps,
             is_entry,
+            statics_here: false,
         });
+    }
+    // kw09 (`[mem.static]`, `[abi.link.script]`): module state is defined
+    // in exactly one object — the entry unit's, else the first — and
+    // imported by the rest. That object's codegen input grows by the
+    // state it defines, so its key folds that text in; a program with no
+    // module state keys every object exactly as before.
+    let statics_text = wolf_wir::print_statics(&module);
+    if !statics_text.is_empty()
+        && let Some(owner) = units
+            .iter()
+            .position(|u| u.is_entry)
+            .or_else(|| (!units.is_empty()).then_some(0))
+    {
+        let u = &mut units[owner];
+        u.statics_here = true;
+        u.comps.wir = sha256_hex(format!("{}\nstatics:\n{statics_text}", u.comps.wir).as_bytes());
+        u.key = sha256_hex(
+            format!(
+                "{}\n{}\n{}\n{}\n{}\n{}",
+                u.comps.env, u.name, u.comps.src, u.comps.deps, u.comps.wir, u.comps.sum
+            )
+            .as_bytes(),
+        );
     }
 
     // The cache root (`.lu-cache/`, D7): `--no-cache` bypasses reads
@@ -1990,7 +2019,11 @@ fn compile_unit(
                 .map_err(refuse)?,
         )
     } else {
-        Box::new(wolf_codegen_clif::ClifBackend::for_target(target).map_err(refuse)?)
+        // kw09 (`[abi.link.section]`): per-function sections only for an
+        // object that places a function — every other object is laid
+        // out exactly as before.
+        let placed = u.funcs.iter().any(|&f| module.funcs[f].section.is_some());
+        Box::new(wolf_codegen_clif::ClifBackend::for_target_with(target, placed).map_err(refuse)?)
     };
     // The unit's source files as plain data — display path + line
     // starts — for two consumers with one truth: the trap-site
@@ -2046,6 +2079,7 @@ fn compile_unit(
         &u.funcs,
         if u.is_entry { shim } else { None },
         u.is_entry,
+        u.statics_here,
         true,
         sink,
     )
