@@ -2979,9 +2979,7 @@ impl<'a> Fx<'a> {
             self.line(format!("  store {ty} {v}, ptr {p}, align {width}"));
         } else {
             let t = self.tmp();
-            self.line(format!(
-                "  {t} = load {ty}, ptr {p}, align {width}"
-            ));
+            self.line(format!("  {t} = load {ty}, ptr {p}, align {width}"));
             let (&r, tail) = results
                 .split_first()
                 .ok_or_else(|| ice("a volatile load without a result"))?;
