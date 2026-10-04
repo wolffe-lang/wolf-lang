@@ -15004,7 +15004,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 None => return Ok(Flow::Diverged),
             }
         };
-        self.store_c(val, &lay, lay.align, addr, region, vexpr.span)?;
+        // PLANT (kw09, reverted next): the store is dropped — static_var
+        // and static_lanes must go red in CI.
+        let _ = (val, &lay, addr, region);
         Ok(Flow::Val(None))
     }
 
