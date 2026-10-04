@@ -1084,6 +1084,44 @@ Simpler than the safe tier, not stricter (anti-Stacked-Borrows lesson).
   `memory/raw_ptr_private_sig.lu`, `memory/raw_ptr_mut_param.lu`,
   `memory/unsafe_sig.lu` (the `pub` control).
 
+### Module state `[mem.static]`
+
+- `[mem.static]` A module-level `const`, `let` or `var` is **module
+  state**: one value for the whole run of the program, shared by every
+  task. Its type is written (E0407) and its initializer is evaluated at
+  compile time (`.3`). K11 = A (STATUS #31): reading a `const` or `let`
+  is safe; every access to a `var` is raw-tier.
+  - `[mem.static.1]` A `const` or a `let` is immutable data, read in
+    safe code; assigning to either is E0410. A `const` is its value — it
+    has no storage, and each read is the value itself. A `let` is
+    immutable data in the image's read-only data (`.rodata`), or in the
+    section `#[section]` names (`[abi.link.section]`); a `str` `let` is
+    its literal, like a `const`.
+  - `[mem.static.2]` A `var` lives in the image's writable data: `.data`,
+    or `.bss` when its initial value is all zero bytes, or the section
+    `#[section]` names. Every read and every write of it — plain,
+    compound, or as a `mut` argument — is a raw-tier operation, E1301
+    outside `unsafe`: spec 03's data-race freedom is a property of the
+    safe tier, and a module `var` is shared by every task. The program
+    keeps its own discipline (one thread, or its own lock in the unsafe
+    ring). On the checked machine and lupin a `var` is ordinary memory:
+    a write is seen by every later read, across calls.
+  - `[mem.static.3]` Initialization is at compile time, so there is no
+    initialization order to observe: the comptime engine (`[comptime]`)
+    evaluates every module initializer and the result is the image's
+    initial bytes (a `let`/`var`) or the value (a `const`). An
+    initializer that is not comptime-known — a call to a runtime
+    function, ambient IO, a read of a `var` — is **E0705**, as is an
+    initializer that depends on itself; an initializer may name any
+    other `const` or `let` of its module, before or after it. The types
+    module state holds at this cut are the integers, `byte`, `bool` and
+    the floats (and `str` for a `const` or `let`); any other type (a
+    `List`, a struct) is refused by name, `unsupported`: it is not
+    static data yet (a fixed-size array is a separate type question; a
+    table a kernel needs lives in `.bss` reserved by assembly and named
+    with `extern "c" let`, `[abi.link.extern]`). Witnesses:
+    `memory/static_*.lu`.
+
 ## §6 Provenance `[mem.prov]`
 
 Machine style: Stacked Borrows lineage
