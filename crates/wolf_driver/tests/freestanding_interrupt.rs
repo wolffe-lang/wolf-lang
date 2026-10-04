@@ -40,7 +40,6 @@
 //! A failed build FAILS here, whatever its exit status (wolf-lang#550).
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
 
 /// The frame's fields, lowest address first ([abi.interrupt] (3)).
 const FRAME: [&str; 22] = [
@@ -48,6 +47,11 @@ const FRAME: [&str; 22] = [
     "rax", "vector", "error", "rip", "cs", "rflags", "rsp", "ss",
 ];
 
+/// The witness's line on COM1 (row 3, x86-64 linux only).
+#[cfg_attr(
+    not(all(target_os = "linux", target_arch = "x86_64")),
+    allow(dead_code)
+)]
 const SERIAL: &str = "KWI frame 176 rip 136 vectors 3 6 13 error 0x1234 cs 0x8 ok";
 
 fn fixture(name: &str) -> PathBuf {
@@ -136,6 +140,7 @@ fn the_clause_the_frame_and_the_trampoline_agree() {
 #[cfg(unix)]
 mod objects {
     use super::*;
+    use std::process::{Command, Output};
 
     pub const TARGET: &str = "x86_64-unknown-none";
 
@@ -285,6 +290,7 @@ mod objects {
 mod image {
     use super::objects::{build, package};
     use super::*;
+    use std::process::{Command, Output};
     use std::time::{Duration, Instant};
 
     fn tool(name: &str, args: &[&str]) -> Output {
