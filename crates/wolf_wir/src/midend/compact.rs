@@ -39,6 +39,8 @@ pub(crate) fn compact(f: &Function) -> CompactOut {
     nf.src_file = f.src_file;
     // c28: the constant-time contract survives every pass ([ct.attr.carry]).
     nf.consttime = f.consttime.clone();
+    // kw09 [abi.link.section]: so does the function's placement.
+    nf.section = f.section.clone();
     // Callee table: copied wholesale so `ExtFunc` ids stay stable and
     // `Aux::Callee` payloads copy verbatim.
     for ef in f.ext_funcs.values() {
