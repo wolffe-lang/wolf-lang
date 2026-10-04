@@ -1,0 +1,8 @@
+// kw10 witness: the trampolines and the IDT's storage are assembly
+// listed here ([abi.asm.link]); boot.S is the consuming build's and is
+// not listed (K6(b)).
+pkg {
+    name: "kw10/interrupt"
+    version: "0.0.1"
+    asm: ["isr.S"]
+}
