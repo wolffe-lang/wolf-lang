@@ -245,7 +245,10 @@ pub use origin::{OriginMap, OriginScan, scan_origins};
 pub use resolve::{
     NameRef, RefTarget, Resolution, SINGLE_THREAD_ENV, resolve_package, resolve_package_with,
 };
-pub use sig::{BoundRef, GenericSig, ItemSig, Membrane, SigTables, build_sigs, module_bindings};
+pub use sig::{
+    BoundRef, GenericSig, GlobalKind, GlobalSig, ItemSig, Membrane, SigTables, build_sigs,
+    module_bindings,
+};
 pub use traits::{DynReport, ImplDef, TraitDef, TraitRef};
 pub use typecheck::{BodyOutcome, Typecheck, typecheck_package, typecheck_package_with};
 pub use types::{MetaTy, Prim, TyId, TyKind, TypeTable};

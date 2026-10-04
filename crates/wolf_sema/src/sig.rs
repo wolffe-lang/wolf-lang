@@ -205,9 +205,26 @@ pub struct StructSig {
     pub align: Option<u64>,
 }
 
+/// Which module-state form a [`GlobalSig`] is (`[mem.static]`,
+/// `[abi.link.extern]`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GlobalKind {
+    /// `const`: its value; no storage (`[mem.static.1]`).
+    Const,
+    /// module `let`: immutable data in `.rodata` (`[mem.static.1]`).
+    Let,
+    /// module `var`: writable data, raw-tier access (`[mem.static.2]`).
+    Var,
+    /// `extern "c" let NAME: *T`: a link-time symbol's address
+    /// (`[abi.link.extern]`, kw09).
+    Extern,
+}
+
 /// A `const`/module-level `let`/`var` item's elaborated signature.
 #[derive(Debug, Clone)]
 pub struct GlobalSig {
+    /// The form (kw09): what lowering emits and which tier reads it.
+    pub kind: GlobalKind,
     /// `None` when the annotation is missing (reported as E0407; uses
     /// of the item are then NotYetCheckable, never guessed).
     pub ty: Option<TyId>,
@@ -639,6 +656,7 @@ impl<'a> Lower<'a> {
                     self.missing_annotation(item, node, ItemKind::Const);
                 }
                 ItemSig::Global(GlobalSig {
+                    kind: GlobalKind::Const,
                     ty,
                     name_span: item.name_span,
                     let_kw: None,
@@ -665,7 +683,43 @@ impl<'a> Lower<'a> {
                     .then(|| node.tokens().find(|t| t.kind == SyntaxKind::LetKw))
                     .flatten()
                     .map(|t| t.span);
+                let kind = if wolf_ast::is_extern_binding(node) {
+                    GlobalKind::Extern
+                } else if node.kind == SyntaxKind::VarDecl {
+                    GlobalKind::Var
+                } else {
+                    GlobalKind::Let
+                };
+                // E0819 (kw09, `[abi.link.extern]`): the symbol's value
+                // is its address, so the type is a raw pointer. The
+                // other E0819 shapes (an initializer, a `var`, a body
+                // position) are `attrs::check`'s, read from the syntax.
+                if kind == GlobalKind::Extern
+                    && node.kind == SyntaxKind::LetDecl
+                    && let Some(t) = ty
+                    && !matches!(self.table.kind(t), TyKind::Ptr(_) | TyKind::Error)
+                {
+                    let span = owner.and_then(|b| b.ty).map(|n| n.span).unwrap_or(node.span);
+                    self.diags.push(
+                        Diagnostic::error(
+                            codes::E0819,
+                            span,
+                            format!(
+                                "`extern \"c\" let {}` names a link-time symbol, so its type is a \
+                                 raw pointer — its value is the symbol's address",
+                                item.name
+                            ),
+                        )
+                        .with_label("not a raw pointer type")
+                        .with_note(
+                            "write `extern \"c\" let NAME: *T` and read the value through the \
+                             pointer inside `unsafe` ([abi.link.extern])."
+                                .to_string(),
+                        ),
+                    );
+                }
                 ItemSig::Global(GlobalSig {
+                    kind,
                     ty,
                     name_span: item.name_span,
                     let_kw,
