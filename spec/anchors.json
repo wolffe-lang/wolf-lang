@@ -407,6 +407,7 @@
     "mem.unsafe.raw.1": "02-memory-model.md",
     "mem.unsafe.raw.2": "02-memory-model.md",
     "mem.unsafe.raw.3": "02-memory-model.md",
+    "mem.unsafe.raw.4": "02-memory-model.md",
     "mem.unsafe.scope": "02-memory-model.md",
     "mem.unsafe.sig": "02-memory-model.md",
     "mem.unsafe.volatile": "02-memory-model.md",
