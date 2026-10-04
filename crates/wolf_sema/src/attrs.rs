@@ -455,7 +455,7 @@ fn check_repr(
                 "`#[repr(transparent)]` (a struct laid out as its one field) has no lane yet: \
                  it is refused by name until one rules it, never ignored. The \
                  representations implemented are `c`, `c, packed` and `c, align(N)` \
-                 ([abi.layout])."
+                 ([abi.layout.c])."
                     .to_string(),
             ),
             "packed" => (
@@ -522,7 +522,7 @@ fn check_repr_set(node: &GreenNode, src: &[u8], diags: &mut Vec<Diagnostic>) {
     {
         Some((
             format!("`{name}` is named twice in this struct's representation"),
-            "each representation is named once ([abi.layout])".to_string(),
+            "each representation is named once ([abi.layout.c])".to_string(),
         ))
     } else if packed > 0 && align > 0 {
         Some((

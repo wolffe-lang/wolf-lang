@@ -406,11 +406,11 @@ fn fault_to_diag(f: &Fault, _budget: Budget, fix_at: Span) -> Diagnostic {
         )
         .with_label("unresolved until codegen")
         .with_note(
-            "`size_of`, `align_of` and `offset_of` answer at comptime for scalars, \
-             raw pointers and `#[repr(c)]` structs, whose layout the clause fixes \
-             ([abi.layout.query]); any other type has the native layout, which the \
-             code generator chooses ([abi.native.layout]) — mark the struct \
-             `#[repr(c)]` to make its layout a fact.",
+            "`size_of`, `align_of` and `offset_of` answer at comptime for scalars and \
+             `#[repr(c)]` structs, whose layout the clause fixes ([abi.layout.query]); \
+             any other type has the native layout, which the code generator chooses \
+             ([abi.native.layout]) — mark the struct `#[repr(c)]` to make its layout a \
+             fact.",
         ),
         FaultKind::NoField { ty, field } => Diagnostic::error(
             codes::E0403,
