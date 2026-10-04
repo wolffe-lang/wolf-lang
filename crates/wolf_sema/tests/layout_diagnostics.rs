@@ -71,7 +71,10 @@ fn a_copied_packed_field_may_be_lent_and_a_scalar_read() {
          var b = d.base\n    bump(mut b)\n    d.base = b\n    \
          twice(d.base) as int - 84\n}}\n"
     ));
-    assert_eq!(out, "", "the copy-out shape and a scalar read are not lends: {out}");
+    assert_eq!(
+        out, "",
+        "the copy-out shape and a scalar read are not lends: {out}"
+    );
 }
 
 #[test]
@@ -146,5 +149,8 @@ fn the_queries_answer_the_c_layout() {
     // read, not skipped.
     let wrong = src.replace("assert(size_of(P3) == 6)", "assert(size_of(P3) == 12)");
     let out = render_tc(&wrong);
-    assert!(out.contains("E0710"), "a wrong layout number must fail: {out}");
+    assert!(
+        out.contains("E0710"),
+        "a wrong layout number must fail: {out}"
+    );
 }

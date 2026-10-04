@@ -305,7 +305,11 @@ impl<'a> Engine<'a> {
                     return Ok(self.arena.int(n, Prim::Int));
                 }
                 let l = self.ct_layout(&ct)?;
-                let n = if i == Intrinsic::SizeOf { l.size } else { l.align };
+                let n = if i == Intrinsic::SizeOf {
+                    l.size
+                } else {
+                    l.align
+                };
                 Ok(self.arena.int(n as i128, Prim::Int))
             }
             Intrinsic::OffsetOf => {
@@ -582,4 +586,3 @@ impl<'a> Engine<'a> {
         Ok(self.arena.ty(CtType::Synth { fields }))
     }
 }
-

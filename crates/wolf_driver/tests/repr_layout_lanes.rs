@@ -351,7 +351,13 @@ fn packed_fields_at_offset_of_run_on_every_machine() {
 #[test]
 fn a_packed_field_is_never_lent() {
     let e = fails("fail(E0819)", &["E0819"]);
-    every_machine("memory/packed_field_lend.lu", e, Some(e), e, READS_NO_ATTRIBUTE);
+    every_machine(
+        "memory/packed_field_lend.lu",
+        e,
+        Some(e),
+        e,
+        READS_NO_ATTRIBUTE,
+    );
 }
 
 /// `[abi.layout.align]`: a representation that cannot be laid out is

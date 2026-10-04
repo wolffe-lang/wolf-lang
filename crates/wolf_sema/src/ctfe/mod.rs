@@ -418,7 +418,9 @@ fn fault_to_diag(f: &Fault, _budget: Budget, fix_at: Span) -> Diagnostic {
             format!("`{ty}` has no field named `{field}`"),
         )
         .with_label("`offset_of` names a field of its struct")
-        .with_note("`offset_of(T, field)` takes the name of one of `T`'s fields ([abi.layout.query])."),
+        .with_note(
+            "`offset_of(T, field)` takes the name of one of `T`'s fields ([abi.layout.query]).",
+        ),
         FaultKind::AssertFailed { msg } => {
             let message = match msg {
                 Some(m) => format!("this comptime assertion failed: {m}"),

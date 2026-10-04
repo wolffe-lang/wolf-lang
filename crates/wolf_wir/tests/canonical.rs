@@ -320,6 +320,10 @@ fn an_under_aligned_access_states_a_real_alignment() {
         );
         let m = wolf_wir::parse_module(&src).expect("parses");
         let err = verify_module(&m).expect_err("the verifier refuses the alignment");
-        assert!(err.msg.contains("alignment of 1, 2 or 4"), "{bad}: {}", err.msg);
+        assert!(
+            err.msg.contains("alignment of 1, 2 or 4"),
+            "{bad}: {}",
+            err.msg
+        );
     }
 }

@@ -429,13 +429,10 @@ fn check_repr(
                     got => diags.push(e0820(
                         rspan,
                         match got {
-                            Some(n) => format!(
-                                "`align({n})` is not a power of two from 1 to 2^28"
-                            ),
-                            None => format!(
-                                "`repr({})` does not name an alignment",
-                                text(src, rspan)
-                            ),
+                            Some(n) => format!("`align({n})` is not a power of two from 1 to 2^28"),
+                            None => {
+                                format!("`repr({})` does not name an alignment", text(src, rspan))
+                            }
                         },
                         "no C layout has this alignment",
                         "`align(N)` takes one integer, a power of two from 1 to 2^28 \
@@ -516,10 +513,7 @@ fn check_repr_set(node: &GreenNode, src: &[u8], diags: &mut Vec<Diagnostic>) {
         .nodes()
         .find_map(wolf_ast::GenericParamList::cast)
         .is_some_and(|g| g.params().next().is_some());
-    let refusal = if let Some(name) = ["c", "packed", "align"]
-        .into_iter()
-        .find(|n| count(n) > 1)
-    {
+    let refusal = if let Some(name) = ["c", "packed", "align"].into_iter().find(|n| count(n) > 1) {
         Some((
             format!("`{name}` is named twice in this struct's representation"),
             "each representation is named once ([abi.layout.c])".to_string(),

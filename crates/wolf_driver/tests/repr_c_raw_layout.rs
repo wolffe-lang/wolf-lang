@@ -564,7 +564,15 @@ fn kw08_c_src() -> String {
         let ffmt: Vec<&str> = sh
             .fields
             .iter()
-            .map(|f| if *f == "d" { "%g" } else if *f == "h" { "%lld" } else { "%llu" })
+            .map(|f| {
+                if *f == "d" {
+                    "%g"
+                } else if *f == "h" {
+                    "%lld"
+                } else {
+                    "%llu"
+                }
+            })
             .collect();
         s.push_str(&ffmt.join(" "));
         s.push_str("\\n\"");
@@ -675,15 +683,22 @@ fn c_compilers() -> Vec<String> {
         ccs.push(cc);
     }
     for cc in ["gcc", "clang"] {
-        let found = Command::new(cc).arg("--version").output().is_ok_and(|o| o.status.success());
+        let found = Command::new(cc)
+            .arg("--version")
+            .output()
+            .is_ok_and(|o| o.status.success());
         if found {
             if !ccs.iter().any(|c| c == cc) {
                 ccs.push(cc.to_string());
             }
         } else if cfg!(target_os = "linux") {
-            panic!("no `{cc}` on this linux host: kw08's witness holds every layout to gcc AND clang");
+            panic!(
+                "no `{cc}` on this linux host: kw08's witness holds every layout to gcc AND clang"
+            );
         } else {
-            eprintln!("SKIP: no `{cc}` on this host — the layouts are held to the other compiler only");
+            eprintln!(
+                "SKIP: no `{cc}` on this host — the layouts are held to the other compiler only"
+            );
         }
     }
     if ccs.is_empty() && cfg!(windows) {
@@ -718,7 +733,10 @@ fn kw08_c_program(cc: &str, tag: &str) -> PathBuf {
 }
 
 fn c_says(exe: &Path, args: &[&str]) -> String {
-    let out = Command::new(exe).args(args).output().expect("the C half runs");
+    let out = Command::new(exe)
+        .args(args)
+        .output()
+        .expect("the C half runs");
     assert!(
         out.status.success(),
         "the C half {args:?} exited {:?}: {}",
@@ -754,7 +772,11 @@ fn c_reads_every_packed_and_aligned_layout_wolf_wrote() {
             );
             let mut lines = stdout.lines();
             let header = lines.next().unwrap_or_default().to_string();
-            let bytes: Vec<&str> = lines.next().unwrap_or_default().split_whitespace().collect();
+            let bytes: Vec<&str> = lines
+                .next()
+                .unwrap_or_default()
+                .split_whitespace()
+                .collect();
             for (cc, exe) in &exes {
                 let mut args = vec!["read", sh.name];
                 args.extend(bytes.iter().copied());

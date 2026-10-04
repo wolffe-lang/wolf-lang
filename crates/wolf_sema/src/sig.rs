@@ -2215,16 +2215,16 @@ pub(crate) fn repr_args<'a>(
 
 /// The integer an `align(N)` argument carries, if it carries exactly
 /// one integer literal (decimal, `0x`, `0o`, `0b`, `_` separators).
-pub(crate) fn align_arg(item: &wolf_ast::AttrItem<'_>, text: &impl Fn(Span) -> String) -> Option<u64> {
+pub(crate) fn align_arg(
+    item: &wolf_ast::AttrItem<'_>,
+    text: &impl Fn(Span) -> String,
+) -> Option<u64> {
     let inp = item.input()?;
     inp.child_token(SyntaxKind::LParen)?;
     if inp.nodes().next().is_some() {
         return None;
     }
-    let ints: Vec<_> = inp
-        .tokens()
-        .filter(|t| t.kind == SyntaxKind::Int)
-        .collect();
+    let ints: Vec<_> = inp.tokens().filter(|t| t.kind == SyntaxKind::Int).collect();
     let [one] = ints[..] else { return None };
     let raw = text(one.span).replace('_', "");
     let raw = raw.trim();

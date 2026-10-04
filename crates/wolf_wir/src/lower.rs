@@ -1674,7 +1674,12 @@ fn c_crossing(table: &TypeTable, sigs: &SigTables, ty: TyId, depth: u32) -> bool
 /// aligned ones), and no plan here is proven against a C compiler for
 /// it — so it is refused by name, never classified by guess. A pointer
 /// to it crosses (`*T`), which is how a kernel hands `lgdt` its GDTR.
-fn layout_modified_struct(table: &TypeTable, sigs: &SigTables, ty: TyId, depth: u32) -> Option<String> {
+fn layout_modified_struct(
+    table: &TypeTable,
+    sigs: &SigTables,
+    ty: TyId,
+    depth: u32,
+) -> Option<String> {
     if depth > 16 {
         return None;
     }
@@ -2600,7 +2605,6 @@ fn flat_offsets(it: &types::TypeInterner, fields: &[TypeId]) -> Option<Vec<u64>>
     }
     Some(out)
 }
-
 
 /// A raw pointee's layout, mirroring its WIR type — a scalar, or an
 /// aggregate whose `fields` are its WIR fields in order, each at its
@@ -14280,7 +14284,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 };
                 let p = self.raw_elem_addr(base, idx, lay.size);
                 let region = self.foreign_buf_region();
-                Ok(Flow::Val(Some(self.load_c(ewty, &lay, lay.align, p, region, e.span)?)))
+                Ok(Flow::Val(Some(
+                    self.load_c(ewty, &lay, lay.align, p, region, e.span)?,
+                )))
             }
             _ => Err(refuse(
                 "indexing outside str/List/Pool and raw pointers (a map read answers a row, \
@@ -14726,7 +14732,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Err(refuse("a valueless raw pointer", operand.span));
         };
         let region = self.foreign_buf_region();
-        Ok(Flow::Val(Some(self.load_c(ewty, &lay, lay.align, p, region, e.span)?)))
+        Ok(Flow::Val(Some(
+            self.load_c(ewty, &lay, lay.align, p, region, e.span)?,
+        )))
     }
 
     /// kw06: `*p = v` / `*p op= v` — `p[0]`'s store. The pointer runs
