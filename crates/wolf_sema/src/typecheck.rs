@@ -57,6 +57,12 @@ pub struct Typecheck {
     /// a passing package wrong because such a package never reaches
     /// the mem rung.
     pub proc_entries: BTreeSet<(usize, String)>,
+    /// kw09 (`[mem.static.3]`): each module `const`/`let`/`var`'s
+    /// compile-time value, keyed by (module, item name) — what the
+    /// checked machine starts module state at, and what both compiling
+    /// tiers emit as the item's initial bytes (or inline, for a
+    /// `const`).
+    pub statics: std::collections::BTreeMap<(usize, String), crate::ctfe::Fold>,
 }
 
 impl Typecheck {
@@ -134,6 +140,7 @@ pub fn typecheck_package_with(pkg: &Package, single_thread: bool) -> Typecheck {
             tb.comptime_folds.push((span, fold));
         }
     }
+    let statics = ctfe_pass.statics.into_iter().collect();
     wolf_diag::sort_diagnostics(&mut diagnostics);
     // Note-grouping (the teach note renders once per code, not once per
     // spawn) is NOT done here any more: stripping notes from the
@@ -148,6 +155,7 @@ pub fn typecheck_package_with(pkg: &Package, single_thread: bool) -> Typecheck {
         diagnostics,
         not_yet,
         ctfe: ctfe_pass.stats,
+        statics,
     }
 }
 

@@ -31,7 +31,7 @@ use wolf_span::Span;
 
 use crate::check::{BodyResult, TypedBody};
 use crate::graph::{BindTarget, Package};
-use crate::sig::{ItemSig, SigTables, bindings_for};
+use crate::sig::{GlobalKind, ItemSig, SigTables, bindings_for};
 use crate::traits::TraitRef;
 use crate::typecheck::BodyOutcome;
 use crate::types::{Prim, TyId, TyKind};
@@ -385,6 +385,86 @@ impl<'a> Engine<'a> {
         let out = self.run(&mut frames, &mut root, budget);
         if out.is_ok() {
             self.stats.evals += 1;
+        }
+        out
+    }
+
+    /// kw09 (`[mem.static.3]`): evaluate a module item's initializer —
+    /// a `const`, `let` or `var` — at compile time. Its value is the
+    /// image's initial bytes (or, for a `const`, the value itself), so
+    /// module state has no run-time initialization order. A fault
+    /// leaves no half-evaluated slot behind: a later reference
+    /// re-evaluates rather than reading "depends on itself".
+    pub fn evaluate_global(
+        &mut self,
+        module: usize,
+        name: &str,
+        budget: Budget,
+    ) -> Result<ValId, Fault> {
+        let key = (module, name.to_string());
+        if let Some(GlobalSlot::Done(v)) = self.globals.get(&key) {
+            return Ok(*v);
+        }
+        let Some(cb) = self.bodies.get(&key) else {
+            return Err(Fault {
+                kind: FaultKind::EngineGap {
+                    construct: "a module item whose initializer did not check",
+                },
+                span: self.nowhere(),
+                frames: Vec::new(),
+            });
+        };
+        let (gfile, gdecl) = (cb.file, cb.decl);
+        let Some(nod) = self.item_node(gfile, gdecl) else {
+            return Err(Fault {
+                kind: FaultKind::EngineGap {
+                    construct: "a global outside the item table",
+                },
+                span: self.nowhere(),
+                frames: Vec::new(),
+            });
+        };
+        let Some(init) = nod.nodes().find(|x| is_expr_kind(x.kind)) else {
+            return Err(Fault {
+                kind: FaultKind::NotComptime {
+                    what: format!("`{name}` has no initializer"),
+                },
+                span: nod.span,
+                frames: Vec::new(),
+            });
+        };
+        let kw = match nod.kind {
+            SyntaxKind::ConstDecl => "const",
+            SyntaxKind::VarDecl => "var",
+            _ => "let",
+        };
+        self.globals.insert(key.clone(), GlobalSlot::InProgress);
+        let mut frames = vec![Frame {
+            module,
+            file: gfile,
+            body: key,
+            fn_name: format!("{kw} {name}"),
+            call_span: init.span,
+            scopes: vec![Vec::new()],
+            stack: Vec::new(),
+            work: vec![Step::Eval(init)],
+            done: Done::Global {
+                module,
+                name: name.to_string(),
+            },
+        }];
+        let mut root = RootCtx {
+            consts: HashMap::new(),
+            values: HashMap::new(),
+            in_progress: Vec::new(),
+            runtime_locals: Vec::new(),
+        };
+        let out = self.run(&mut frames, &mut root, budget);
+        match out {
+            Ok(_) => self.stats.evals += 1,
+            Err(_) => self
+                .globals
+                .retain(|_, slot| !matches!(slot, GlobalSlot::InProgress)),
         }
         out
     }
@@ -1582,6 +1662,22 @@ impl<'a> Engine<'a> {
                     });
                     PathVal::Value(v)
                 }
+                // kw09: decided by the item's form BEFORE the slot is
+                // read — `evaluate_global` fills a `var`'s slot with its
+                // initial value, which a comptime reader must not see.
+                Some(ItemSig::Global(g)) if g.kind == GlobalKind::Var => {
+                    fault(FaultKind::NotComptime {
+                        what: format!("`{n}` is a module `var` — its value changes at run time"),
+                    })
+                }
+                Some(ItemSig::Global(g)) if g.kind == GlobalKind::Extern => {
+                    fault(FaultKind::NotComptime {
+                        what: format!(
+                            "`{n}` is a link-time symbol — its address is fixed by the link, \
+                             not at compile time"
+                        ),
+                    })
+                }
                 Some(ItemSig::Global(_)) => {
                     match self.globals.get(&(m, n.clone())) {
                         Some(GlobalSlot::Done(v)) => PathVal::Value(*v),
@@ -1603,11 +1699,33 @@ impl<'a> Engine<'a> {
                                     construct: "a global outside the item table",
                                 }));
                             };
-                            if nod.kind != SyntaxKind::ConstDecl {
+                            // kw09 (`[mem.static.3]`): a module `let`
+                            // is comptime-known like a `const` — its
+                            // initializer IS comptime. A `var`'s value
+                            // changes at run time, and an `extern "c"
+                            // let` is an address only the link knows.
+                            if wolf_ast::is_extern_binding(nod) {
                                 return Ok(fault(FaultKind::NotComptime {
                                     what: format!(
-                                        "`{n}` is a runtime global — only `const` items are \
-                                         comptime-known"
+                                        "`{n}` is a link-time symbol — its address is fixed by \
+                                         the link, not at compile time"
+                                    ),
+                                }));
+                            }
+                            if nod.kind == SyntaxKind::VarDecl {
+                                return Ok(fault(FaultKind::NotComptime {
+                                    what: format!(
+                                        "`{n}` is a module `var` — its value changes at run time"
+                                    ),
+                                }));
+                            }
+                            if nod.kind != SyntaxKind::ConstDecl
+                                && nod.kind != SyntaxKind::LetDecl
+                            {
+                                return Ok(fault(FaultKind::NotComptime {
+                                    what: format!(
+                                        "`{n}` is a runtime global — only `const` and `let` \
+                                         items are comptime-known"
                                     ),
                                 }));
                             }

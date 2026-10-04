@@ -54,6 +54,12 @@ pub struct CtfePass {
     /// [`crate::check::TypedBody::comptime_folds`] so both executing
     /// lanes materialize the fold as an ordinary constant.
     pub folds: Vec<(usize, Span, Fold)>,
+    /// kw09 (`[mem.static.3]`): every module `const`/`let`/`var` whose
+    /// initializer evaluated to a value with a runtime shape, keyed by
+    /// (module, item name). A comptime-known value without one (an
+    /// aggregate) is absent: the executing lanes refuse that item by
+    /// name.
+    pub statics: Vec<((usize, String), Fold)>,
 }
 
 /// A lane-neutral folded comptime constant (s71): the value a comptime
@@ -147,6 +153,57 @@ pub fn run_package(pkg: &Package, sigs: &SigTables, outcomes: &[BodyOutcome]) ->
                     _ => pass.diagnostics.push(fault_to_diag(&f, budget, fix_at)),
                 },
             }
+        }
+    }
+    // kw09 (`[mem.static.3]`): every module initializer evaluates at
+    // compile time — the value is the image's initial bytes, so module
+    // state has no run-time initialization order. A fault is the same
+    // E07xx a comptime call site reports; an engine gap stays honest
+    // (`unsupported`). Items without a declared type (E0407 already
+    // spoke) and `extern "c" let` (no initializer) are skipped.
+    for o in outcomes {
+        if o.body.member.is_some() {
+            continue;
+        }
+        let BodyResult::Checked(_) = &o.result else {
+            continue;
+        };
+        let Some(crate::sig::ItemSig::Global(g)) = sigs.get(o.body.module, &o.body.name) else {
+            continue;
+        };
+        if g.ty.is_none() || g.kind == crate::sig::GlobalKind::Extern {
+            continue;
+        }
+        let Some(node) = pkg.files[o.body.file]
+            .parse
+            .root
+            .nodes()
+            .filter(|n| n.kind.is_item())
+            .nth(o.body.decl)
+        else {
+            continue;
+        };
+        let fix_at = Span::new(node.span.file, node.span.lo, node.span.lo);
+        let budget = Budget::default();
+        match engine.evaluate_global(o.body.module, &o.body.name, budget) {
+            Ok(v) => {
+                if let Some(f) = fold_of(&engine.arena, v) {
+                    pass.statics.push(((o.body.module, o.body.name.clone()), f));
+                }
+            }
+            Err(f) => match f.kind {
+                FaultKind::EngineGap { construct } => pass.not_yet.push(NotYet {
+                    construct,
+                    span: f.span,
+                }),
+                _ => pass.diagnostics.push(
+                    fault_to_diag(&f, budget, fix_at).with_note(format!(
+                        "`{}` is module state: its initializer is evaluated at compile time \
+                         and its value is part of the image ([mem.static.3]).",
+                        o.body.name
+                    )),
+                ),
+            },
         }
     }
     pass.stats = engine.stats;
