@@ -7142,6 +7142,11 @@ impl<'t> Machine<'t> {
             let m = MemberExpr::cast(e).expect("kind");
             if let (Some(base), Some(member)) = (m.base(), m.member()) {
                 let field = self.text(member.span);
+                // s209: `p[i].f` through a raw pointer to a `#[repr(c)]`
+                // struct reads the field's bytes at the clause's layout.
+                if let Some(lay) = self.raw_struct_pointee(base) {
+                    return self.raw_field_read(base, &lay, &field, e.span);
+                }
                 // `s.bytes().len` reads the view (#232; s153, #308):
                 // the receiver's byte count, nothing minted.
                 let bv = match found!(self.eval_bytes_view(base)) {
@@ -7553,6 +7558,85 @@ impl<'t> Machine<'t> {
             return Ok(Flow::Val(Value::Bool(n == 1)));
         }
         Ok(Flow::Val(Value::Int(n)))
+    }
+
+    /// s209: the clause layout (`[abi.layout.c]`, `.packed`, `.align`)
+    /// of the struct a raw element `p[i]` names, when `p` is a `*S`
+    /// whose `S` has one.
+    fn raw_struct_pointee(&self, elem: &'t GreenNode) -> Option<wolf_sema::layout::CLayout> {
+        if elem.kind != SyntaxKind::BracketApply {
+            return None;
+        }
+        let recv = BracketApply::cast(elem)?.callee()?;
+        let Some(TyKind::Ptr(t)) = self.expr_ty(recv.span) else {
+            return None;
+        };
+        let TyKind::Nominal { module, name, .. } = self.ctx().tb.table.kind(*t) else {
+            return None;
+        };
+        let lay = wolf_sema::layout::struct_c_layout(&self.tc.sigs, *module as usize, name).ok()?;
+        (!lay.fields.is_empty()).then_some(lay)
+    }
+
+    /// s209 (`[mem.unsafe.raw.4]`, `[abi.layout.packed]`): `p[i].f`, a
+    /// scalar field read through a raw element of a `#[repr(c)]`
+    /// struct. The element starts `i * size_of(S)` past `p`, and it is
+    /// the STRUCT that must be aligned (row L4): `align_of(S)`, which
+    /// is 1 for a packed struct, so a packed `u64` at offset 2 is an
+    /// ordinary defined read, as the compiled tiers' `align 1` load is.
+    /// The field itself then sits at the offset the layout gives it,
+    /// which the struct's alignment already makes aligned for a plain
+    /// `#[repr(c)]` struct.
+    fn raw_field_read(
+        &mut self,
+        elem: &'t GreenNode,
+        lay: &wolf_sema::layout::CLayout,
+        field: &str,
+        span: Span,
+    ) -> E<Flow> {
+        let Some(f) = lay.field(field) else {
+            return self.refuse("field access outside the modelled surface", span);
+        };
+        let scalar = matches!(
+            self.expr_ty(span),
+            Some(TyKind::Prim(
+                Prim::Bool
+                    | Prim::Byte
+                    | Prim::U8
+                    | Prim::U16
+                    | Prim::U32
+                    | Prim::U64
+                    | Prim::Uint
+                    | Prim::I8
+                    | Prim::I16
+                    | Prim::I32
+                    | Prim::I64
+                    | Prim::Int
+            ))
+        );
+        if !scalar || !f.layout.fields.is_empty() {
+            return self.refuse("a raw read of a field that is not an integer", span);
+        }
+        let signed = matches!(
+            self.expr_ty(span),
+            Some(TyKind::Prim(
+                Prim::I8 | Prim::I16 | Prim::I32 | Prim::I64 | Prim::Int
+            ))
+        );
+        let (p, idx) = self.raw_index_parts(elem)?;
+        let step = idx.wrapping_mul(lay.size as i64);
+        let base = PtrVal {
+            offset: p.offset + step,
+            addr: p.addr.wrapping_add(step as u64),
+            ..p
+        };
+        self.raw_align_check(base, lay.align, false, span)?;
+        let at = PtrVal {
+            offset: base.offset + f.offset as i64,
+            addr: base.addr.wrapping_add(f.offset),
+            ..base
+        };
+        self.raw_read_value(at, f.layout.size, signed, span)
     }
 
     /// kw06: the pointer a prefix `*p` reads or writes through — `p`
