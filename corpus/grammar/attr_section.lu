@@ -1,17 +1,22 @@
 //! check: fail(E0817)
 //! phase: resolve
-//! conforms: gram.item.attr
+//! conforms: gram.item.attr, abi.link.section
 //!
-//! kw01 (K13; K6 — wolf-lang#519): `#[section(".text.boot")]` is ruled
-//! (K6) and not implemented (kw09). Before kw01 the function landed in
-//! `.text` with no diagnostic (kw00's `f6_section.lu`): a kernel's boot
-//! path would have been linked wherever the linker liked.
+//! kw01 (K13; K6 — wolf-lang#519), kw09: `#[section(".name")]` places a
+//! function or a module `let`/`var` (`[abi.link.section]`, kw09). It
+//! means nothing on a `const` — a `const` is its value and has no
+//! storage — and Rust's `link_section` is not wolf's spelling, so both
+//! are E0817, never ignored. Before kw01 every one was accepted and the
+//! function landed in `.text` (kw00's `f6_section.lu`).
 
-#[section(".text.boot")]
+#[section(".rodata.kw")]
+const LIMIT: int = 5
+
+#[link_section(".text.boot")]
 fn boot() -> int {
     1
 }
 
 fn main() -> int {
-    boot() - 1
+    boot() + LIMIT - 6
 }
