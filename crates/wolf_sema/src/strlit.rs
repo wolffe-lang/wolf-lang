@@ -158,10 +158,7 @@ mod tests {
             ("\"plain\"", "plain"),
             ("\"tab\\there\\n\"", "tab\there\n"),
             ("\"q\\\"q\\\\\"", "q\"q\\"),
-            (
-                "\"\"\"\n    two\n      lines\n    \"\"\"",
-                "two\n  lines\n",
-            ),
+            ("\"\"\"\n    two\n      lines\n    \"\"\"", "two\n  lines\n"),
             ("\"\"\"\r\n  a\r\n  \"\"\"", "a\r\n"),
             ("\"\"\"one line\"\"\"", "one line"),
             ("\"\"\"\n  \\tx\n  \"\"\"", "\tx\n"),

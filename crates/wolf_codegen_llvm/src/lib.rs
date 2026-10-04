@@ -518,8 +518,9 @@ impl Backend for LlvmBackend {
     fn finish(self: Box<Self>) -> Result<ObjectProduct, BackendError> {
         let ir = self.module_ir();
         let tmp = std::env::temp_dir();
-        let dir = scratch_dir(&tmp, &SCRATCH_SEQ)
-            .map_err(|e| BackendError::Internal(format!("create a dir in {}: {e}", tmp.display())))?;
+        let dir = scratch_dir(&tmp, &SCRATCH_SEQ).map_err(|e| {
+            BackendError::Internal(format!("create a dir in {}: {e}", tmp.display()))
+        })?;
         let ll = dir.join("wolf.ll");
         let obj = dir.join("wolf.o");
         std::fs::write(&ll, &ir)
@@ -584,7 +585,10 @@ static SCRATCH_SEQ: AtomicU64 = AtomicU64::new(0);
 fn scratch_dir(base: &Path, seq: &AtomicU64) -> std::io::Result<PathBuf> {
     let pid = std::process::id();
     loop {
-        let dir = base.join(format!("wolf-llvm-{pid}-{}", seq.fetch_add(1, Ordering::Relaxed)));
+        let dir = base.join(format!(
+            "wolf-llvm-{pid}-{}",
+            seq.fetch_add(1, Ordering::Relaxed)
+        ));
         match std::fs::create_dir(&dir) {
             Ok(()) => return Ok(dir),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
@@ -664,7 +668,10 @@ mod scratch_tests {
                 })
             })
             .collect();
-        let dirs: HashSet<_> = threads.into_iter().map(|t| t.join().expect("thread")).collect();
+        let dirs: HashSet<_> = threads
+            .into_iter()
+            .map(|t| t.join().expect("thread"))
+            .collect();
         assert_eq!(dirs.len(), 32, "two callers shared a directory");
         std::fs::remove_dir_all(&base).expect("cleanup");
     }

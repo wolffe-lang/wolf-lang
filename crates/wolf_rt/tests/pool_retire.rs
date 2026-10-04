@@ -64,8 +64,7 @@ fn a_task_spawned_after_the_extras_idle_still_runs() {
         eprintln!(
             "pool_retire: target {target}, {} blocked; late task ran={} after {waited:?}; \
              (target, running, unblocked) at the deadline = {seen:?}",
-            blocked,
-            ran_in_time
+            blocked, ran_in_time
         );
     })
     .expect("the scope joins once the gate opens");
