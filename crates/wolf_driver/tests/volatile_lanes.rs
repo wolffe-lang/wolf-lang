@@ -14,7 +14,8 @@
 //! lupin 0.1.45 (the 0.2.22 pairing) has no volatile surface; each row's
 //! parting is pinned below by that version as pre-mirror (lupin's half is
 //! wolf-interp#185). A newer lupin must answer what the clause
-//! says.
+//! says. 0.1.46 (the 0.2.23 pairing, r28) is still pre-mirror (#185
+//! open) and answers the same, measured; its pins are carried.
 
 mod lane_exit;
 
@@ -200,12 +201,20 @@ struct Pin<'a> {
 }
 
 /// lupin 0.1.45 has no volatile method: every row is `unsupported`,
-/// by name (measured at trunk and head, `rows-*.log`).
-const PRE_MIRROR: &[Pin<'static>] = &[Pin {
-    version: "0.1.45",
-    verdict: "unsupported",
-    named: "_volatile`",
-}];
+/// by name (measured at trunk and head, `rows-*.log`). 0.1.46 (the
+/// 0.2.23 pairing, r28) answers the same, measured; kept with its issue.
+const PRE_MIRROR: &[Pin<'static>] = &[
+    Pin {
+        version: "0.1.45",
+        verdict: "unsupported",
+        named: "_volatile`",
+    },
+    Pin {
+        version: "0.1.46",
+        verdict: "unsupported",
+        named: "_volatile`",
+    },
+];
 
 fn assert_obs(who: &str, row: &str, obs: &Obs, want: Want<'_>) {
     assert_eq!(
@@ -340,16 +349,25 @@ fn a_volatile_read_after_free_is_row_p1() {
 fn a_misaligned_volatile_read_is_row_l3() {
     let l3 = ub("L3", "mem.unsafe.volatile");
     // lupin 0.1.45 stops one call earlier, at `with_addr` (its half is
-    // wolf-interp#184, kw06's); the mirror needs both issues.
+    // wolf-interp#184, kw06's); the mirror needs both issues. 0.1.46
+    // carries #184's mirror and reaches the volatile call: still
+    // `unsupported`, now naming `read_volatile` (#185; ruled at r28).
     every_machine(
         "volatile_ub_misaligned.lu",
         l3,
         None,
         l3,
-        &[Pin {
-            version: "0.1.45",
-            verdict: "unsupported",
-            named: "`with_addr`",
-        }],
+        &[
+            Pin {
+                version: "0.1.45",
+                verdict: "unsupported",
+                named: "`with_addr`",
+            },
+            Pin {
+                version: "0.1.46",
+                verdict: "unsupported",
+                named: "`read_volatile`",
+            },
+        ],
     );
 }
