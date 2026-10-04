@@ -4,16 +4,16 @@
 //! the survey collects both, in source order, with a clean statement
 //! lowered between them to prove the lens continued.
 //!
-//! The refusing construct is a module-STATE read (`var` item — a
-//! `let` would constant-fold at the use site): the c06 residue s95
-//! left named, after fn-value reads started lowering (the fixture's
-//! previous construct — updated with the sprint).
+//! The refusing construct is a read of module state whose type is not
+//! static data yet (`[mem.static.3]`): kw09 lowered scalar module state,
+//! so the fixture's previous construct (a scalar `var` read, s95's c06
+//! residue) now compiles — updated with the sprint.
 
-var base: int = 1
+let base: List[int] = List[int]()
 
 fn main() -> !int {
-    let a = base
+    let a = base.len
     print("between")
-    let b = base
+    let b = base.len
     if a + b == 0 { 1 } else { 0 }
 }
