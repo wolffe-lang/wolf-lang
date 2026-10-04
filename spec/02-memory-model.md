@@ -1107,8 +1107,8 @@ Simpler than the safe tier, not stricter (anti-Stacked-Borrows lesson).
     ring). On the checked machine and lupin a `var` is ordinary memory:
     a write is seen by every later read, across calls.
   - `[mem.static.3]` Initialization is at compile time, so there is no
-    initialization order to observe: the comptime engine (`[comptime]`)
-    evaluates every module initializer and the result is the image's
+    initialization order to observe: the comptime engine (D29/D33, the
+    evaluator `const` items already used) evaluates every module initializer and the result is the image's
     initial bytes (a `let`/`var`) or the value (a `const`). An
     initializer that is not comptime-known — a call to a runtime
     function, ambient IO, a read of a `var` — is **E0705**, as is an
