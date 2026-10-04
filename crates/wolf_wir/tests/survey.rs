@@ -105,10 +105,13 @@ fn the_survey_collects_what_fail_fast_masks() {
         "expected the masked second reason, got {in_main:#?}"
     );
     // The first is the ledger's reason for `main`, exactly.
+    // The item's own refusal (its declaration) comes first in body
+    // order; `main`'s read is the last.
     let ledger_main = build
         .not_yet
         .iter()
-        .find(|n| n.construct.contains("module-item reads"))
+        .rev()
+        .find(|n| n.construct.contains("not static data"))
         .expect("main's ledger reason");
     assert_eq!(in_main[0].construct, ledger_main.construct);
     assert_eq!(in_main[0].span, ledger_main.span);
