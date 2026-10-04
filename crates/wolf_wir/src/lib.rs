@@ -148,7 +148,7 @@ pub use ir::{
 pub use lower::{Build, SurveyReason, lower_package, lower_package_survey};
 pub use ops::{FloatCc, IntCc, Opcode};
 pub use parse::{ParseError, parse_module};
-pub use print::{block_order, print_module, print_selected};
+pub use print::{block_order, print_module, print_selected, print_statics};
 pub use profile::{Profile, ProfileError, WPROF_VERSION};
 pub use types::{RegionId, TypeData, TypeId, TypeInterner};
 pub use verify::{

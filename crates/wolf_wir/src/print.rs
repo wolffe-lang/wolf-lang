@@ -397,7 +397,18 @@ pub(crate) fn print_function(m: &Module, f: &Function) -> String {
                 .join(", ")
         ),
     };
-    writeln!(out, "{export}{ct}fn @{}{} {{", f.name, render_sig(m, f.sig)).unwrap();
+    // kw09 [abi.link.section]: the placement is canonical text.
+    let section = match &f.section {
+        None => String::new(),
+        Some(sec) => format!("section \"{}\" ", escape_bytes(sec.as_bytes())),
+    };
+    writeln!(
+        out,
+        "{section}{export}{ct}fn @{}{} {{",
+        f.name,
+        render_sig(m, f.sig)
+    )
+    .unwrap();
     // Facts, sorted by rendered line — deterministic and diff-stable.
     let mut fact_lines: Vec<String> = f.facts.values().map(|fd| render_fact(&canon, fd)).collect();
     fact_lines.sort();
@@ -445,6 +456,43 @@ pub(crate) fn escape_bytes(bytes: &[u8]) -> String {
     s
 }
 
+/// kw09: one module-state declaration's canonical line —
+/// `data @sym = let|var "bytes" align N [section ".x"]` or
+/// `data @sym = extern`.
+fn render_static(d: &crate::ir::DataDecl, st: &crate::ir::StaticData) -> String {
+    if st.kind == crate::ir::StaticKind::Extern {
+        return format!("data @{} = extern", d.name);
+    }
+    let mut line = format!(
+        "data @{} = {} \"{}\" align {}",
+        d.name,
+        st.kind.keyword(),
+        escape_bytes(&d.bytes),
+        st.align
+    );
+    if let Some(sec) = &st.section {
+        write!(line, " section \"{}\"", escape_bytes(sec.as_bytes())).unwrap();
+    }
+    line
+}
+
+/// Every module-state declaration a build DEFINES (`let`/`var`), one
+/// canonical line each, in definition order (kw09). The object that
+/// defines them folds this text into its cache key: the other objects
+/// only import them, so their printed WIR names what they read, while
+/// this text is what the defining object emits.
+pub fn print_statics(m: &Module) -> String {
+    let mut out = String::new();
+    for d in &m.data {
+        if let Some(st) = &d.stat
+            && d.is_defined_static()
+        {
+            writeln!(out, "{}", render_static(d, st)).unwrap();
+        }
+    }
+    out
+}
+
 /// Print a module in canonical form: `decl`s (every declared or called
 /// name, sorted), then `data` declarations in definition order, then
 /// functions in definition order, blank-line separated.
@@ -485,7 +533,9 @@ pub fn print_selected(m: &Module, funcs: &[crate::ir::FuncId]) -> String {
         if !used_data.contains(&(i as u32)) {
             continue;
         }
-        if d.funcs.is_empty() {
+        if let Some(st) = &d.stat {
+            writeln!(out, "{}", render_static(d, st)).unwrap();
+        } else if d.funcs.is_empty() {
             writeln!(out, "data @{} = \"{}\"", d.name, escape_bytes(&d.bytes)).unwrap();
         } else {
             // s98: a vtable — fn-pointer slots, content in the dump so
