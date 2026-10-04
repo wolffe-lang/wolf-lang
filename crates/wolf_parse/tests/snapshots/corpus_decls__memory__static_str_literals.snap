@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+LetDecl 772..821 pat=MULTI init=StringExpr
+ConstDecl 822..893 name=BANNER init=StringExpr
+LetDecl 894..917 pat=RAW init=StringExpr
+LetDecl 918..949 pat=POINTS init=StringExpr
+ConstDecl 950..978 name=BRACES init=StringExpr
+FnDecl 979..1217 name=main body=Block

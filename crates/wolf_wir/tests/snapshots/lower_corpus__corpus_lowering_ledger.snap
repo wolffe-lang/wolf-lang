@@ -602,6 +602,7 @@ memory/static_const_let.lu: lowers
 memory/static_init_cycle.lu: not mem-clean (pre-wir rungs own it)
 memory/static_init_not_comptime.lu: not mem-clean (pre-wir rungs own it)
 memory/static_list_let.lu: refused — module state of a type that is not static data ([mem.static.3]); module state of a type that is not static data ([mem.static.3])
+memory/static_str_literals.lu: lowers
 memory/static_var.lu: lowers
 memory/static_var_outside_unsafe.lu: not mem-clean (pre-wir rungs own it)
 memory/store_rhs_first_list.lu: lowers
