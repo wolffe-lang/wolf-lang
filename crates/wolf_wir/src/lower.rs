@@ -1666,10 +1666,51 @@ fn c_crossing(table: &TypeTable, sigs: &SigTables, ty: TyId, depth: u32) -> bool
     }
 }
 
+/// kw08: the `#[repr(c, packed)]` or `#[repr(c, align(N))]` struct a
+/// by-value membrane type is or contains, by name. Such a struct does
+/// not cross by value: its psABI classification differs per target
+/// (SysV sends a struct with an unaligned field to memory; AAPCS64
+/// passes any composite up to 16 bytes in registers and pairs 16-byte
+/// aligned ones), and no plan here is proven against a C compiler for
+/// it — so it is refused by name, never classified by guess. A pointer
+/// to it crosses (`*T`), which is how a kernel hands `lgdt` its GDTR.
+fn layout_modified_struct(table: &TypeTable, sigs: &SigTables, ty: TyId, depth: u32) -> Option<String> {
+    if depth > 16 {
+        return None;
+    }
+    let (ftable, ss) = concrete_struct(table, sigs, ty, 0)?;
+    if ss.packed || ss.align.is_some() {
+        if let TyKind::Nominal { name, .. } = table.kind(ty) {
+            return Some(name.clone());
+        }
+        return Some(wolf_sema::types::render(table, ty, &|_| Err("_")));
+    }
+    ss.fields
+        .iter()
+        .find_map(|f| layout_modified_struct(ftable, sigs, f.ty, depth + 1))
+}
+
 /// kw02: the membrane check over one export or import signature —
 /// every parameter plain (no `mut`/`take`: C has no modes) and of a
 /// crossing type, the result a crossing type or unit.
 fn membrane_sig_check(table: &TypeTable, sigs: &SigTables, fsig: &FnSig) -> R<()> {
+    let by_value = |ty: TyId, span: Span| -> R<()> {
+        match layout_modified_struct(table, sigs, ty, 0) {
+            Some(name) => Err(refuse_named(
+                format!(
+                    "a packed or aligned struct by value at the C membrane (`{name}`: \
+                     [abi.layout.packed]/[abi.layout.align] lay it out, but its by-value \
+                     passing is not lowered; pass a `*{name}`)"
+                ),
+                span,
+            )),
+            None => Ok(()),
+        }
+    };
+    for p in &fsig.params {
+        by_value(p.ty, p.span)?;
+    }
+    by_value(fsig.ret, fsig.ret_span.unwrap_or(fsig.name_span))?;
     for p in &fsig.params {
         if p.mode.is_some() {
             return Err(refuse(
@@ -2560,43 +2601,122 @@ fn flat_offsets(it: &types::TypeInterner, fields: &[TypeId]) -> Option<Vec<u64>>
     Some(out)
 }
 
-/// `[abi.layout.c]` (K4, wolf-lang#523): the psABI's C layout of a
-/// flat type — every scalar at its natural alignment (its size), an
-/// aggregate aligned to its strictest field, fields in declaration
-/// order each at the next offset its alignment allows, the size
-/// rounded up to the alignment. This is the layout a raw pointee has:
-/// what C reads at `p[i]` is what wolf wrote there, field for field,
-/// and `p[i]`'s stride is the C `sizeof`. x86-64 SysV and AAPCS64
-/// agree on every scalar WIR has, so one rule serves both release
-/// targets. Before kw01 the raw tier used [`flat_offsets`]' packed
-/// spill layout here (`{u8, u32, u8}` at 0 1 5, stride 6; C has 0 4 8,
-/// size 12).
-fn c_layout(it: &types::TypeInterner, t: TypeId) -> Option<(u64, u64)> {
-    if let Some(s) = scalar_size(t) {
-        return Some((s, s));
+
+/// A raw pointee's layout, mirroring its WIR type — a scalar, or an
+/// aggregate whose `fields` are its WIR fields in order, each at its
+/// byte offset.
+///
+/// `[abi.layout.c]` (K4, wolf-lang#523, kw01): the psABI's C layout —
+/// every scalar at its natural alignment (its size), an aggregate
+/// aligned to its strictest field, fields in declaration order each at
+/// the next offset its alignment allows, the size rounded up to the
+/// alignment. What C reads at `p[i]` is what wolf wrote there, field
+/// for field, and `p[i]`'s stride is the C `sizeof`. x86-64 SysV and
+/// AAPCS64 agree on every scalar WIR has, so one rule serves both
+/// release targets. Before kw01 the raw tier used [`flat_offsets`]'
+/// packed spill layout here (`{u8, u32, u8}` at 0 1 5, stride 6; C has
+/// 0 4 8, size 12).
+///
+/// kw08 (`[abi.layout.packed]`, `[abi.layout.align]`): a
+/// `#[repr(c, packed)]` struct places every field at the next byte
+/// with alignment 1, and `#[repr(c, align(N))]` raises the alignment to
+/// at least N and rounds the size to it — the rule `wolf_sema::layout`
+/// gives the comptime queries, so a program's `size_of`/`offset_of` is
+/// what its raw pointer reads and writes. A type with no sema struct
+/// behind it (a tuple, an enum's tag and slots, a generic) takes the C
+/// rule, a fact of this version for a native-layout type.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct RawLay {
+    size: u64,
+    align: u64,
+    fields: Vec<(u64, RawLay)>,
+}
+
+/// The struct signature behind a sema type, when it is a concrete
+/// struct (directly, or through a `distinct` item or wrapper).
+fn concrete_struct<'s>(
+    table: &'s TypeTable,
+    sigs: &'s SigTables,
+    t: TyId,
+    depth: u32,
+) -> Option<(&'s TypeTable, &'s wolf_sema::sig::StructSig)> {
+    if depth > 32 {
+        return None;
     }
-    match it.get(t) {
-        types::TypeData::Agg(fields) => {
-            let (_, size, align) = c_offsets(it, &fields.clone())?;
-            Some((size, align))
+    match table.kind(t) {
+        TyKind::Nominal { module, name, args } if args.is_empty() => {
+            match sigs.get(*module as usize, name) {
+                Some(ItemSig::Struct(ss)) if !ss.generic => Some((&sigs.table, ss)),
+                Some(ItemSig::Distinct { base, .. }) => {
+                    concrete_struct(&sigs.table, sigs, *base, depth + 1)
+                }
+                _ => None,
+            }
         }
+        TyKind::Distinct(inner) => concrete_struct(table, sigs, *inner, depth + 1),
         _ => None,
     }
 }
 
-/// Each field's C offset, and the aggregate's C size and alignment.
-fn c_offsets(it: &types::TypeInterner, fields: &[TypeId]) -> Option<(Vec<u64>, u64, u64)> {
-    let mut out = Vec::with_capacity(fields.len());
+/// [`RawLay`] of WIR type `w`, whose sema type (when known) is `sema`.
+fn raw_lay(
+    it: &types::TypeInterner,
+    sema: Option<(&TypeTable, &SigTables, TyId)>,
+    w: TypeId,
+    depth: u32,
+) -> Option<RawLay> {
+    if let Some(s) = scalar_size(w) {
+        return Some(RawLay {
+            size: s,
+            align: s,
+            fields: Vec::new(),
+        });
+    }
+    if depth > 32 {
+        return None;
+    }
+    let types::TypeData::Agg(wf) = it.get(w) else {
+        return None;
+    };
+    let wf = wf.clone();
+    let ss = sema
+        .and_then(|(table, sigs, t)| {
+            concrete_struct(table, sigs, t, 0).map(|(ftable, ss)| (ftable, sigs, ss))
+        })
+        .filter(|(_, _, ss)| ss.fields.len() == wf.len());
+    let (packed, align_attr) = ss.map_or((false, None), |(_, _, ss)| (ss.packed, ss.align));
+    let mut fields = Vec::with_capacity(wf.len());
     let mut off = 0u64;
     let mut align = 1u64;
-    for &f in fields {
-        let (fs, fa) = c_layout(it, f)?;
-        off = off.div_ceil(fa) * fa;
-        out.push(off);
-        off += fs;
-        align = align.max(fa);
+    for (k, &fw) in wf.iter().enumerate() {
+        let fsema = ss.map(|(ftable, sigs, ss)| (ftable, sigs, ss.fields[k].ty));
+        let l = raw_lay(it, fsema, fw, depth + 1)?;
+        if !packed {
+            off = off.div_ceil(l.align) * l.align;
+            align = align.max(l.align);
+        }
+        let size = l.size;
+        fields.push((off, l));
+        off += size;
     }
-    Some((out, off.div_ceil(align) * align, align))
+    if let Some(n) = align_attr {
+        align = align.max(n);
+    }
+    Some(RawLay {
+        size: off.div_ceil(align) * align,
+        align,
+        fields,
+    })
+}
+
+/// The alignment an address `off` bytes past one aligned to `base` is
+/// guaranteed to have.
+fn align_at(base: u64, off: u64) -> u64 {
+    if off == 0 {
+        base
+    } else {
+        base.min(off & off.wrapping_neg())
+    }
 }
 
 fn types_is_int(t: TypeId) -> bool {
@@ -14136,7 +14256,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // unsafe tier's whole bargain.
             TyKind::Ptr(elem) => {
                 let elem = *elem;
-                let (ewty, size) = self.raw_pointee(elem, e.span)?;
+                let (ewty, lay) = self.raw_pointee(elem, e.span)?;
                 let Some(base) = flow_val!(self.lower_expr(recv)) else {
                     return Err(refuse("a valueless raw pointer", recv.span));
                 };
@@ -14158,9 +14278,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 } else {
                     idx
                 };
-                let p = self.raw_elem_addr(base, idx, size);
+                let p = self.raw_elem_addr(base, idx, lay.size);
                 let region = self.foreign_buf_region();
-                Ok(Flow::Val(Some(self.load_c(ewty, p, region, e.span)?)))
+                Ok(Flow::Val(Some(self.load_c(ewty, &lay, lay.align, p, region, e.span)?)))
             }
             _ => Err(refuse(
                 "indexing outside str/List/Pool and raw pointers (a map read answers a row, \
@@ -14558,17 +14678,24 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// pair `p[i]` needs. `*u8` is one byte per step, `*i64` eight;
     /// the arithmetic is the C one and the bound is the programmer's,
     /// which is what `unsafe` means here.
-    fn raw_pointee(&mut self, elem: TyId, span: Span) -> R<(TypeId, u64)> {
+    fn raw_pointee(&mut self, elem: TyId, span: Span) -> R<(TypeId, RawLay)> {
         let Some(ewty) = wir_ty(&mut self.b.module.types, self.table, self.sigs, elem, span)?
         else {
             return Err(refuse("raw pointers to unit types", span));
         };
         // `[abi.layout.c]`: the stride is the C `sizeof`, tail padding
-        // included (wolf-lang#523).
-        let Some((size, _)) = c_layout(&self.b.module.types, ewty) else {
+        // included (wolf-lang#523); kw08: packed and align(N) structs
+        // at the clause's layout (`[abi.layout.packed]`,
+        // `[abi.layout.align]`).
+        let Some(lay) = raw_lay(
+            &self.b.module.types,
+            Some((self.table, self.sigs, elem)),
+            ewty,
+            0,
+        ) else {
             return Err(refuse("raw pointers to types without a flat layout", span));
         };
-        Ok((ewty, size))
+        Ok((ewty, lay))
     }
 
     /// `p + i * size` — the address one raw index step reaches. NO
@@ -14594,12 +14721,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// kw06: `*p` read — `p[0]`'s load (`[mem.unsafe.raw.1]`).
     fn lower_deref_read(&mut self, operand: &'t GreenNode, e: &'t GreenNode) -> R<Flow> {
         let elem = self.deref_pointee(operand, e.span)?;
-        let (ewty, _) = self.raw_pointee(elem, e.span)?;
+        let (ewty, lay) = self.raw_pointee(elem, e.span)?;
         let Some(p) = flow_val!(self.lower_expr(operand)) else {
             return Err(refuse("a valueless raw pointer", operand.span));
         };
         let region = self.foreign_buf_region();
-        Ok(Flow::Val(Some(self.load_c(ewty, p, region, e.span)?)))
+        Ok(Flow::Val(Some(self.load_c(ewty, &lay, lay.align, p, region, e.span)?)))
     }
 
     /// kw06: `*p = v` / `*p op= v` — `p[0]`'s store. The pointer runs
@@ -14613,7 +14740,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         span: Span,
     ) -> R<Flow> {
         let elem = self.deref_pointee(operand, span)?;
-        let (ewty, _) = self.raw_pointee(elem, span)?;
+        let (ewty, lay) = self.raw_pointee(elem, span)?;
         let op = d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq);
         let Some(p) = flow_val!(self.lower_expr(operand)) else {
             return Err(refuse("a valueless raw pointer", operand.span));
@@ -14631,7 +14758,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let Some(bin) = Self::compound_bin(op) else {
                 return Err(refuse("this compound assignment operator", span));
             };
-            let cur = self.load_c(ewty, p, region, span)?;
+            let cur = self.load_c(ewty, &lay, lay.align, p, region, span)?;
             let wrapping = matches!(self.table.kind(elem), TyKind::Wrapping(_));
             let unsigned = sema_unsigned(self.table, elem);
             match self.arith(bin, cur, val, wrapping, unsigned, ewty, span)? {
@@ -14639,7 +14766,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 None => return Ok(Flow::Diverged),
             }
         };
-        self.store_c(val, p, region, vexpr.span)?;
+        self.store_c(val, &lay, lay.align, p, region, vexpr.span)?;
         Ok(Flow::Val(None))
     }
 
@@ -14796,8 +14923,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         mname: &str,
         e: &'t GreenNode,
     ) -> R<Flow> {
-        let (ewty, size) = self.raw_pointee(elem, e.span)?;
-        let Some((load, store)) = crate::volatile_intrinsics(size) else {
+        let (ewty, lay) = self.raw_pointee(elem, e.span)?;
+        let Some((load, store)) = crate::volatile_intrinsics(lay.size) else {
             return Err(refuse(
                 "a volatile access of a pointee that is not one integer access",
                 e.span,
@@ -15106,7 +15233,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // one store, no bound (`[mem.unsafe.raw.1]`).
         if let TyKind::Ptr(elem) = self.table.kind(self.strip_sema(base_sema)) {
             let elem = *elem;
-            let (ewty, size) = self.raw_pointee(elem, span)?;
+            let (ewty, lay) = self.raw_pointee(elem, span)?;
             let op = d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq);
             let Some(base) = flow_val!(self.lower_expr(recv)) else {
                 return Err(refuse("a valueless raw pointer", recv.span));
@@ -15135,7 +15262,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let Some(val) = flow_val!(self.lower_expr(vexpr)) else {
                 return Err(refuse("a unit-typed raw payload", vexpr.span));
             };
-            let p = self.raw_elem_addr(base, idx, size);
+            let p = self.raw_elem_addr(base, idx, lay.size);
             let region = self.foreign_buf_region();
             // `p[i] op= v` (wolf-lang#542): read-modify-write at the
             // pointee's type, the List form's rule (#55). Before kw01
@@ -15146,7 +15273,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let Some(bin) = Self::compound_bin(op) else {
                     return Err(refuse("this compound assignment operator", span));
                 };
-                let cur = self.load_c(ewty, p, region, span)?;
+                let cur = self.load_c(ewty, &lay, lay.align, p, region, span)?;
                 let wrapping = matches!(self.table.kind(elem), TyKind::Wrapping(_));
                 let unsigned = sema_unsigned(self.table, elem);
                 match self.arith(bin, cur, val, wrapping, unsigned, ewty, span)? {
@@ -15154,7 +15281,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     None => return Ok(Flow::Diverged),
                 }
             };
-            self.store_c(val, p, region, vexpr.span)?;
+            self.store_c(val, &lay, lay.align, p, region, vexpr.span)?;
             return Ok(Flow::Val(None));
         }
         let TyKind::List(elem) = self.table.kind(self.strip_sema(base_sema)) else {
@@ -21935,48 +22062,79 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         Ok(self.b.ins(Opcode::AggMake, &parts, &[ty], Aux::None).one())
     }
 
-    /// Load a raw pointee at the C layout (`[abi.layout.c]`): a
-    /// scalar directly, an aggregate field-wise at its C offsets. The
-    /// padding is never read.
-    fn load_c(&mut self, ty: TypeId, ptr: Value, region: RegionId, span: Span) -> R<Value> {
-        if scalar_size(ty).is_some() {
-            return Ok(self.b.ins_load(ty, ptr, region));
+    /// Load a raw pointee at its layout (`[abi.layout.c]`, kw08's
+    /// packed and aligned structs): a scalar directly, an aggregate
+    /// field-wise at `lay`'s offsets. `known` is the alignment the
+    /// address is guaranteed (the pointee's own at the root, as in C);
+    /// a scalar whose natural alignment exceeds it — a packed field —
+    /// loads with that alignment stated, so no backend assumes more.
+    /// The padding is never read.
+    fn load_c(
+        &mut self,
+        ty: TypeId,
+        lay: &RawLay,
+        known: u64,
+        ptr: Value,
+        region: RegionId,
+        span: Span,
+    ) -> R<Value> {
+        if let Some(nat) = scalar_size(ty) {
+            return Ok(if known < nat {
+                self.b.ins_load_under(ty, ptr, region, known)
+            } else {
+                self.b.ins_load(ty, ptr, region)
+            });
         }
         let types::TypeData::Agg(fields) = self.b.module.types.get(ty).clone() else {
             return Err(refuse("loading a non-flat type", span));
         };
-        let Some((offs, _, _)) = c_offsets(&self.b.module.types, &fields) else {
+        if fields.len() != lay.fields.len() {
             return Err(refuse("loading a non-flat aggregate", span));
-        };
+        }
         let mut parts = Vec::with_capacity(fields.len());
         for (k, &fty) in fields.iter().enumerate() {
-            let addr = self.field_addr(ptr, offs[k]);
-            parts.push(self.load_c(fty, addr, region, span)?);
+            let (off, ref fl) = lay.fields[k];
+            let addr = self.field_addr(ptr, off);
+            parts.push(self.load_c(fty, fl, align_at(known, off), addr, region, span)?);
         }
         Ok(self.b.ins(Opcode::AggMake, &parts, &[ty], Aux::None).one())
     }
 
-    /// [`Lowerer::load_c`]'s write twin: the fields at their C offsets;
-    /// the padding is never written.
-    fn store_c(&mut self, val: Value, ptr: Value, region: RegionId, span: Span) -> R<()> {
+    /// [`Lowerer::load_c`]'s write twin: the fields at `lay`'s offsets,
+    /// a packed field with its alignment stated; the padding is never
+    /// written.
+    fn store_c(
+        &mut self,
+        val: Value,
+        lay: &RawLay,
+        known: u64,
+        ptr: Value,
+        region: RegionId,
+        span: Span,
+    ) -> R<()> {
         let ty = self.b.func.value_ty(val);
-        if scalar_size(ty).is_some() {
-            self.b.ins_store(val, ptr, region);
+        if let Some(nat) = scalar_size(ty) {
+            if known < nat {
+                self.b.ins_store_under(val, ptr, region, known);
+            } else {
+                self.b.ins_store(val, ptr, region);
+            }
             return Ok(());
         }
         let types::TypeData::Agg(fields) = self.b.module.types.get(ty).clone() else {
             return Err(refuse("storing a non-flat type", span));
         };
-        let Some((offs, _, _)) = c_offsets(&self.b.module.types, &fields) else {
+        if fields.len() != lay.fields.len() {
             return Err(refuse("storing a non-flat aggregate", span));
-        };
+        }
         for (k, &fty) in fields.iter().enumerate() {
             let part = self
                 .b
                 .ins(Opcode::AggGet, &[val], &[fty], Aux::Int(k as i64))
                 .one();
-            let addr = self.field_addr(ptr, offs[k]);
-            self.store_c(part, addr, region, span)?;
+            let (off, ref fl) = lay.fields[k];
+            let addr = self.field_addr(ptr, off);
+            self.store_c(part, fl, align_at(known, off), addr, region, span)?;
         }
         Ok(())
     }
@@ -22469,6 +22627,10 @@ fn wrap_bits(v: u64, bits: u32) -> i64 {
 mod c_layout_tests {
     use super::*;
 
+    fn offs(l: &RawLay) -> Vec<u64> {
+        l.fields.iter().map(|(o, _)| *o).collect()
+    }
+
     /// `[abi.layout.c]` against the psABI's answers (wolf-lang#523's
     /// shapes): `{u8, u32, u8}` is 0 4 8 / size 12 / align 4, and the
     /// packed spill layout the raw tier used before kw01 is 0 1 5.
@@ -22477,18 +22639,33 @@ mod c_layout_tests {
         let mut it = types::TypeInterner::new();
         let c3 = it.intern(types::TypeData::Agg(vec![types::I8, types::I32, types::I8]));
         let fields = vec![types::I8, types::I32, types::I8];
-        assert_eq!(c_offsets(&it, &fields), Some((vec![0, 4, 8], 12, 4)));
-        assert_eq!(c_layout(&it, c3), Some((12, 4)));
+        let l = raw_lay(&it, None, c3, 0).expect("flat");
+        assert_eq!((offs(&l), l.size, l.align), (vec![0, 4, 8], 12, 4));
         assert_eq!(flat_offsets(&it, &fields), Some(vec![0, 1, 5]));
         // A nested aggregate aligns to its strictest field; a trailing
         // byte rounds the size up to the alignment.
         let inner = it.intern(types::TypeData::Agg(vec![types::I8, types::I64]));
-        assert_eq!(c_layout(&it, inner), Some((16, 8)));
-        let outer = vec![types::I8, inner, types::I16];
-        assert_eq!(c_offsets(&it, &outer), Some((vec![0, 8, 24], 32, 8)));
+        let li = raw_lay(&it, None, inner, 0).expect("flat");
+        assert_eq!((li.size, li.align), (16, 8));
+        let outer = it.intern(types::TypeData::Agg(vec![types::I8, inner, types::I16]));
+        let lo = raw_lay(&it, None, outer, 0).expect("flat");
+        assert_eq!((offs(&lo), lo.size, lo.align), (vec![0, 8, 24], 32, 8));
         // Scalars are unchanged: a `*u8` still steps one byte.
-        assert_eq!(c_layout(&it, types::I8), Some((1, 1)));
-        assert_eq!(c_layout(&it, types::PTR), Some((8, 8)));
-        assert_eq!(c_layout(&it, types::BOOL), Some((1, 1)));
+        for (t, n) in [(types::I8, 1), (types::PTR, 8), (types::BOOL, 1)] {
+            let l = raw_lay(&it, None, t, 0).expect("scalar");
+            assert_eq!((l.size, l.align), (n, n));
+        }
+    }
+
+    /// kw08: the alignment a field access may assume — the base's,
+    /// cut to the lowest set bit of the offset.
+    #[test]
+    fn a_field_is_as_aligned_as_its_offset_allows() {
+        assert_eq!(align_at(8, 0), 8);
+        assert_eq!(align_at(8, 4), 4);
+        assert_eq!(align_at(8, 16), 8);
+        assert_eq!(align_at(1, 0), 1);
+        assert_eq!(align_at(1, 5), 1);
+        assert_eq!(align_at(16, 2), 2);
     }
 }
