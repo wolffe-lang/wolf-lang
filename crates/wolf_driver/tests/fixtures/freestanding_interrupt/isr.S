@@ -56,7 +56,7 @@ kw_isr\v:
 
         .text
         ISR_NOERR 3
-        ISR_NOERR 6
+        ISR_ERR 6
         ISR_ERR 13
 
         .globl kw_isr_common
