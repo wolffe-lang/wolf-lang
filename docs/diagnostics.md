@@ -1624,9 +1624,13 @@ gives a meaning:
 - a generic struct is not packed or aligned (its layout would change
   with each instantiation's field types, and the queries could not
   answer it);
-- each representation is named once.
+- each representation is named once;
+- a packed struct does not hold an aligned one, directly or inside a
+  field: gcc and clang on SysV and Apple targets place it at the next
+  byte, while the MSVC ABI keeps its alignment, so there is no one C
+  layout to agree with.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_repr_unlayable.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0820_align_values.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0820_combinations.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__grammar__attr_repr_unlayable.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0820_align_values.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0820_combinations.snap, crates/wolf_sema/tests/snapshots/layout_diagnostics__e0820_aligned_in_packed.snap
 
 ## E1001 — this value was moved away (or never given one) before this use
 

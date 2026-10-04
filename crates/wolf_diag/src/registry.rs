@@ -1540,7 +1540,11 @@ gives a meaning:
 - a generic struct is not packed or aligned (its layout would change
   with each instantiation's field types, and the queries could not
   answer it);
-- each representation is named once.
+- each representation is named once;
+- a packed struct does not hold an aligned one, directly or inside a
+  field: gcc and clang on SysV and Apple targets place it at the next
+  byte, while the MSVC ABI keeps its alignment, so there is no one C
+  layout to agree with.
 "#);
 
 // ------------------------------------------------------------------------
