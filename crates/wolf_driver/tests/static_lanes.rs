@@ -20,7 +20,10 @@
 //! parts on every refusal; each parting is pinned below by that version
 //! as pre-mirror (lupin's half is wolf-interp#190, which also records
 //! 0.1.45's stack overflow on an initializer cycle). A newer lupin must
-//! answer what the clauses say.
+//! answer what the clauses say. 0.1.46 (the 0.2.23 pairing, r28) is
+//! still pre-mirror (#190 open) and answers the corpus rows as 0.1.45
+//! did, measured; its closed attribute set (is70) refuses the hosted
+//! `#[section]` program E0817 where 0.1.45 ran it (ruled at r28).
 
 mod lane_exit;
 
@@ -313,13 +316,22 @@ fn every_machine(
     }
 }
 
-/// lupin 0.1.45's measured answer where it parts (rows-*.log).
-const fn pin(verdict: &'static str, named: &'static str) -> [Pin<'static>; 1] {
-    [Pin {
-        version: "0.1.45",
-        verdict,
-        named,
-    }]
+/// lupin 0.1.45's measured answer where it parts (rows-*.log); 0.1.46
+/// (the 0.2.23 pairing, r28) answers every one of these rows the same,
+/// measured.
+const fn pin(verdict: &'static str, named: &'static str) -> [Pin<'static>; 2] {
+    [
+        Pin {
+            version: "0.1.45",
+            verdict,
+            named,
+        },
+        Pin {
+            version: "0.1.46",
+            verdict,
+            named,
+        },
+    ]
 }
 
 const NO_PIN: &[Pin<'static>] = &[];
@@ -479,6 +491,15 @@ fn the_checked_machine_refuses_section_placement_by_name() {
                 (lupin.verdict.as_str(), lupin.stdout.as_str()),
                 ("exit(0)", "24 100\n"),
                 "lupin 0.1.45 (pre-mirror, {LUPIN_ISSUE}) runs the placed program"
+            );
+        } else if lupin.version == "0.1.46" {
+            // is70's closed attribute set refuses each `#[section]` by
+            // name, E0817 — the same missing mirror, a stricter symptom
+            // (measured; ruled at r28).
+            assert_eq!(
+                (lupin.verdict.as_str(), lupin.codes.join(",").as_str()),
+                ("fail(E0817)", "E0817"),
+                "lupin 0.1.46 (pre-mirror, {LUPIN_ISSUE}) refuses the placed program E0817"
             );
         } else {
             assert_eq!(
