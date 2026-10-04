@@ -165,6 +165,80 @@ fn struct_layout(
     })
 }
 
+/// The `#[repr(c, align(N))]` struct `ty` is or holds at any depth, by
+/// name.
+fn aligned_inside(sigs: &SigTables, table: &TypeTable, ty: TyId, depth: u32) -> Option<String> {
+    if depth > 32 {
+        return None;
+    }
+    match table.kind(ty) {
+        TyKind::Wrapping(inner) | TyKind::Distinct(inner) => {
+            aligned_inside(sigs, table, *inner, depth + 1)
+        }
+        TyKind::Nominal { module, name, args } if args.is_empty() => {
+            match sigs.get(*module as usize, name) {
+                Some(ItemSig::Struct(ss)) if !ss.generic => {
+                    if ss.align.is_some() {
+                        return Some(name.clone());
+                    }
+                    ss.fields
+                        .iter()
+                        .find_map(|f| aligned_inside(sigs, &sigs.table, f.ty, depth + 1))
+                }
+                Some(ItemSig::Distinct { base, .. }) => {
+                    aligned_inside(sigs, &sigs.table, *base, depth + 1)
+                }
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+/// E0820 (kw08, `[abi.layout.packed]`): a packed struct's field may not
+/// be, or hold, an `align(N)` struct. The C compilers disagree on that
+/// layout by target: gcc and clang on SysV and Apple targets place the
+/// aligned member at the next byte (`struct { u8; A16; u8 }` packed is
+/// size 18, the member at 1), while clang for the MSVC ABI keeps its
+/// alignment (size 48, the member at 16; CI run 37177942003, windows) —
+/// so no layout is "the C one", and the shape is refused by name rather
+/// than laid out to agree with half the targets.
+pub fn check_aligned_in_packed(sigs: &SigTables) -> Vec<wolf_diag::Diagnostic> {
+    let mut out = Vec::new();
+    for items in &sigs.modules {
+        for (name, sig) in items {
+            let ItemSig::Struct(ss) = sig else { continue };
+            if !ss.packed {
+                continue;
+            }
+            for f in &ss.fields {
+                let Some(inner) = aligned_inside(sigs, &sigs.table, f.ty, 0) else {
+                    continue;
+                };
+                out.push(
+                    wolf_diag::Diagnostic::error(
+                        wolf_diag::codes::E0820,
+                        f.span,
+                        format!(
+                            "the packed struct `{name}` holds the aligned struct `{inner}` in \
+                             its field `{}`",
+                            f.name
+                        ),
+                    )
+                    .with_label("no single C layout for this field")
+                    .with_note(
+                        "C compilers disagree on an aligned struct inside a packed one: gcc \
+                         and clang on SysV and Apple targets place it at the next byte, the \
+                         MSVC ABI keeps its alignment ([abi.layout.packed]). Pack the outer \
+                         struct without the aligned one inside it, or drop `packed`.",
+                    ),
+                );
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

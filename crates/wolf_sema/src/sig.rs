@@ -351,6 +351,10 @@ pub fn build_sigs(pkg: &Package) -> SigTables {
     // program's entry, and its shape is a property of the declaration
     // — ruled here, not at some backend's shim.
     check_entry_sig(&mut sigs);
+    // kw08 (`[abi.layout.packed]`): an aligned struct inside a packed
+    // one has no single C layout (E0820) — a whole-signature question.
+    let packed = crate::layout::check_aligned_in_packed(&sigs);
+    sigs.diagnostics.extend(packed);
     wolf_diag::sort_diagnostics(&mut sigs.diagnostics);
     sigs
 }
