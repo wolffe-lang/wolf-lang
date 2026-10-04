@@ -833,6 +833,9 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
             // value the decided type cannot hold is the front end's
             // rejection, never lowering's [const-range] ICE (#151).
             c.check_literal_fit(node);
+            // kw08 (`[abi.layout.packed]`): a packed field is never
+            // lent (E0819) — once types are final.
+            c.check_packed_lends(node);
             // Cascade suppression: diagnostics inside parse-wrecked
             // regions stay quiet (the s10 contract).
             let mut sink = wolf_diag::Diagnostics::new();
@@ -12779,6 +12782,124 @@ impl<'a> Checker<'a> {
     /// so `-2147483648` fits `i32` while a bare `2147483648` does not;
     /// a `wrapping[…]` type wraps its arithmetic, never its literals,
     /// so it is checked at its scalar's width.
+    /// E0819 (kw08, `[abi.layout.packed]`): a field of a
+    /// `#[repr(c, packed)]` struct may be read and written but never
+    /// lent. A `mut` argument or receiver hands the callee the field's
+    /// address, and so does an aggregate passed or received `read`; in
+    /// a packed struct that address need not be aligned for the
+    /// field's type. Scalars passed `read` are copies, so they pass.
+    /// The place is walked through every member step: a field INSIDE a
+    /// packed field is just as misplaced.
+    fn check_packed_lends(&mut self, node: &GreenNode) {
+        let types_by_span: HashMap<Span, TyId> = self.exprs.iter().copied().collect();
+        // (the lent place, a `mut` claim?)
+        let mut lends: Vec<(&GreenNode, bool)> = Vec::new();
+        for n in crate::wave::descendants(node) {
+            if n.kind != SyntaxKind::CallExpr {
+                continue;
+            }
+            let Some(d) = CallExpr::cast(n) else { continue };
+            for a in d.args().into_iter().flat_map(|l| l.args()) {
+                let Some(v) = Arg::value(a) else { continue };
+                match a.mode() {
+                    Some(wolf_ast::ParamMode::Mut) => lends.push((v, true)),
+                    Some(wolf_ast::ParamMode::Take) => {}
+                    None => lends.push((v, false)),
+                }
+            }
+            // A method call's receiver: `(mut d.f).m()` or `d.f.m()`.
+            if let Some(callee) = d.callee()
+                && callee.kind == SyntaxKind::MemberExpr
+                && let Some(recv) = MemberExpr::cast(callee).and_then(|m| m.base())
+            {
+                match ParenExpr::cast(recv).and_then(|p| p.mode().map(|m| (p, m))) {
+                    Some((p, wolf_ast::ParamMode::Mut)) => {
+                        if let Some(inner) = p.expr() {
+                            lends.push((inner, true));
+                        }
+                    }
+                    Some(_) => {}
+                    None => lends.push((recv, false)),
+                }
+            }
+        }
+        for (place, claim) in lends {
+            // A `read` lend of a scalar is a copy: only aggregates.
+            if !claim {
+                let Some(&t) = types_by_span.get(&place.span) else {
+                    continue;
+                };
+                let t = zonk(&mut self.lo.table, &self.vars, t);
+                if !matches!(
+                    self.lo.table.kind(t),
+                    TyKind::Nominal { .. } | TyKind::Tuple(_)
+                ) {
+                    continue;
+                }
+            }
+            let Some((owner, field)) = self.packed_step(place, &types_by_span) else {
+                continue;
+            };
+            let place_text = self.text(place.span);
+            let how = if claim {
+                "a `mut` claim lends its address"
+            } else {
+                "a `read` lend of an aggregate passes its address"
+            };
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E0819,
+                    place.span,
+                    format!(
+                        "`{place_text}` runs through `{field}`, a field of the packed struct \
+                         `{owner}`, so it cannot be lent"
+                    ),
+                )
+                .with_label(how)
+                .with_note(format!(
+                    "`{owner}` is `#[repr(c, packed)]`: its fields sit at any byte offset, so \
+                     a field's address need not be aligned for its type \
+                     ([abi.layout.packed]). A packed field may be read and written; to lend \
+                     one, copy it into a local, lend the local, and write it back."
+                )),
+            );
+        }
+    }
+
+    /// The first member step of `place` whose base is a packed struct:
+    /// (the struct's name, the field's name).
+    fn packed_step(
+        &mut self,
+        place: &GreenNode,
+        types_by_span: &HashMap<Span, TyId>,
+    ) -> Option<(String, String)> {
+        let mut cur = place;
+        let mut found = None;
+        for _ in 0..64 {
+            match cur.kind {
+                SyntaxKind::MemberExpr => {
+                    let d = MemberExpr::cast(cur)?;
+                    let base = d.base()?;
+                    if let Some(&bt) = types_by_span.get(&base.span) {
+                        let bt = zonk(&mut self.lo.table, &self.vars, bt);
+                        if let TyKind::Nominal { module, name, .. } = self.lo.table.kind(bt)
+                            && let Some(ItemSig::Struct(ss)) = self.sigs.get(*module as usize, name)
+                            && ss.packed
+                        {
+                            let field = d.member().map(|t| self.text(t.span)).unwrap_or_default();
+                            found = Some((name.clone(), field));
+                        }
+                    }
+                    cur = base;
+                }
+                SyntaxKind::ParenExpr => cur = ParenExpr::cast(cur)?.expr()?,
+                SyntaxKind::BracketApply => cur = BracketApply::cast(cur)?.callee()?,
+                _ => break,
+            }
+        }
+        found
+    }
+
     fn check_literal_fit(&mut self, node: &GreenNode) {
         use std::collections::HashSet;
         let types_by_span: HashMap<Span, TyId> = self.exprs.iter().copied().collect();
