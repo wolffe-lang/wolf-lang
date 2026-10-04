@@ -1,13 +1,14 @@
 //! check: run(exit=trap(ub))
-//! phase: mem
+//! phase: wir
 //! conforms: mem.unsafe.volatile.3, mem.ub
 //!
 //! kw07: a volatile access at an address that is not a multiple of the
 //! pointee's size is §7 row L3 (`[mem.unsafe.volatile.3]`): the checked
 //! machine traps `ub` with x-ub-row L3, clause mem.unsafe.volatile. The
 //! licensed optimization is O11 — the compiled tiers emit one aligned
-//! access and no check. `with_addr` does not lower on native and release
-//! before kw06 (F9), so `mem` is the deepest phase here.
+//! access and no check, so what they do here is undefined: they compile
+//! and run it (`with_addr` lowers since kw06), and `wir` is the deepest
+//! phase this header can promise, as for `volatile_ub_uaf.lu`.
 
 import c "stdlib.h"
 
