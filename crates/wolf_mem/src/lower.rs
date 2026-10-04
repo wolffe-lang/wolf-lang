@@ -453,6 +453,9 @@ pub(crate) struct Lowerer<'t> {
     /// `unsafe { }` nesting depth: the ring the raw-tier operations
     /// demand (E1301 outside; `[mem.unsafe.scope]`).
     unsafe_depth: usize,
+    /// kw09: module-`var` sites already reported E1301 (by span), so a
+    /// place resolved twice reports once.
+    static_sites: std::collections::HashSet<(u32, u32)>,
     /// span → (source ty, target ty, kind), from [`TypedBody::casts`]
     /// — raw pointer bridges gate on the ring and emit expose facts.
     casts: HashMap<Span, (TyId, TyId, CastKind)>,
@@ -2077,6 +2080,17 @@ impl<'t> Lowerer<'t> {
                 // mode agreement and same-call exclusivity; moves are
                 // not tracked on module state (later campaign).
                 if let Some(ItemSig::Global(g)) = self.sigs.get(self.module, &name) {
+                    // kw09 (`[mem.static.2]`, K11 = A): every read and
+                    // write of a module `var` is raw-tier — it is
+                    // shared by every task, and the safe tier's
+                    // data-race freedom does not reach it. One report
+                    // per site (a place is resolved more than once).
+                    if g.kind == wolf_sema::GlobalKind::Var
+                        && !self.in_unsafe()
+                        && self.static_sites.insert((e.span.lo, e.span.hi))
+                    {
+                        self.require_unsafe(&format!("the module `var` `{name}`"), e.span);
+                    }
                     let ty = g.ty.map(|id| Ty {
                         table: &self.sigs.table,
                         id,
@@ -6063,6 +6077,7 @@ impl<'t> Lowerer<'t> {
             region_field: HashMap::new(),
             iter_claims: Vec::new(),
             unsafe_depth: 0,
+            static_sites: std::collections::HashSet::new(),
             loans: Vec::new(),
             unclaimed_pairs: Vec::new(),
             deferred_depth: 0,
