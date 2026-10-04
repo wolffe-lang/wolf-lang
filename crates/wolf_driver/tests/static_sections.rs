@@ -143,13 +143,13 @@ fn placements(obj: &Path) -> BTreeMap<String, String> {
 }
 
 /// The section of the one symbol named `name`, or of the one module
-/// item whose mangled name starts `_W<name>$s` (`[abi.link.script]`:
+/// item whose mangled name starts `_W<name>.s` (`[abi.link.script]`:
 /// module state is defined under its mangled name).
 fn section_of<'a>(syms: &'a BTreeMap<String, String>, name: &str) -> Option<&'a str> {
     if let Some(s) = syms.get(name) {
         return Some(s);
     }
-    let prefix = format!("_W{name}$s");
+    let prefix = format!("_W{name}.s");
     let hits: Vec<&String> = syms.keys().filter(|k| k.starts_with(&prefix)).collect();
     assert!(hits.len() <= 1, "`{name}` is defined once: {hits:?}");
     hits.first().map(|k| syms[*k].as_str())

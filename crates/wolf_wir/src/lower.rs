@@ -2125,9 +2125,11 @@ fn static_bytes(wty: TypeId, f: &Fold) -> Option<Vec<u8>> {
 }
 
 /// kw09: a module item's linker symbol — `_W` + its qualified name +
-/// `$s` + a 15-hex FNV-1a hash of the name and its WIR type, so it
+/// `.s` + a 15-hex FNV-1a hash of the name and its WIR type, so it
 /// never meets a function's `_W…$<hash>` (a different shape) or a C
-/// name, and two modules' items of one name stay apart.
+/// name, and two modules' items of one name stay apart. Only WIR name
+/// characters (`[A-Za-z0-9_.]`): the symbol is the data's WIR name, and
+/// the canonical dump must parse back.
 fn static_symbol(qname: &str, ty: &str) -> String {
     let mut h: u64 = 0xcbf2_9ce4_8422_2325;
     for &b in b"wolf-static-0"
@@ -2139,7 +2141,7 @@ fn static_symbol(qname: &str, ty: &str) -> String {
         h ^= u64::from(b);
         h = h.wrapping_mul(0x0000_0100_0000_01b3);
     }
-    format!("_W{qname}$s{:015x}", h >> 4)
+    format!("_W{qname}.s{:015x}", h >> 4)
 }
 
 fn qualify(sigs: &SigTables, module: usize, name: &str) -> String {
