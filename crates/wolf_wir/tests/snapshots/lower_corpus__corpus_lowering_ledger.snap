@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
+assertion_line: 362
 expression: "lines.join(\"\\n\")"
 ---
 comptime/align_of_layout.lu: not mem-clean (pre-wir rungs own it)
@@ -290,6 +291,8 @@ lints/tag_name_collision.lu: lowers
 lints/take_returned.lu: lowers
 membrane/export_called.lu: lowers
 membrane/export_child.lu: lowers
+membrane/extern_let_image.lu: lowers
+membrane/extern_let_not_ptr.lu: not mem-clean (pre-wir rungs own it)
 membrane/extern_libc.lu: lowers
 memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/byte_list_ledger.lu: lowers
@@ -595,6 +598,12 @@ memory/region_value_pass.lu: lowers
 memory/region_value_return.lu: lowers
 memory/shared_cycle.lu: not mem-clean (pre-wir rungs own it)
 memory/shared_ok.lu: refused — shared-cell surface lowering (rc.* receivers)
+memory/static_const_let.lu: lowers
+memory/static_init_cycle.lu: not mem-clean (pre-wir rungs own it)
+memory/static_init_not_comptime.lu: not mem-clean (pre-wir rungs own it)
+memory/static_list_let.lu: refused — module state of a type that is not static data ([mem.static.3]); module state of a type that is not static data ([mem.static.3])
+memory/static_var.lu: lowers
+memory/static_var_outside_unsafe.lu: not mem-clean (pre-wir rungs own it)
 memory/store_rhs_first_list.lu: lowers
 memory/store_rhs_first_map.lu: lowers
 memory/store_rhs_first_pool.lu: lowers
