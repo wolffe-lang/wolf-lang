@@ -17,7 +17,8 @@
 //! handed the raise to the caller with no W0601 (and, for an else-if
 //! chain, native and release discarded while checked and lupin raised).
 //! lupin 0.1.45, the pairing, answers the old way; its mirror is
-//! wolf-interp#179, pinned below by version.
+//! wolf-interp trunk `8d820316` (#186, for #179), pinned below by version
+//! until a release carries it.
 //!
 //! Why a driver test beside the corpus rows (s171's lesson, wave 45):
 //! `cargo xtask corpus` runs every entry on the NATIVE lane only, and
@@ -291,8 +292,11 @@ fn a_propagated_row_still_leaves() {
     );
 }
 
-/// lupin's mirror of ruling #34 is wolf-interp#179; 0.1.45 (the 0.2.22
-/// pairing) predates it and hands the raise on, measured by s208.
+/// lupin's mirror of ruling #34 is wolf-interp trunk `8d820316` (#186,
+/// for wolf-interp#179); 0.1.45 (the 0.2.22 pairing) predates it and hands
+/// the raise on, measured by s208. Every test here takes the ruled answer
+/// from any lupin, and the old one only from this version: the pin drops
+/// at the pairing that carries `8d820316`.
 const LUPIN_179: &str = "0.1.45";
 
 /// Ruling #34 = A: an else-less `if` at a fallible fn's tail discards
