@@ -1,0 +1,42 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.static.3, gram.lex.str.multi, gram.lex.str.raw, gram.lex.str.escape
+//!
+//! s210 (wolf-lang#585): a module `let` or `const` initialized by a
+//! string literal holds the literal's VALUE, exactly as the same
+//! literal bound inside a fn does: a `"""` string dedented by its
+//! closing delimiter's column, a raw string's bytes between its
+//! fences, `\u{…}` and `\x…` decoded, `{{`/`}}` as one brace. At 0.2.23
+//! the comptime engine cooked module initializers with its own
+//! decoder, which knew none of the four: all three compiler machines
+//! printed the `"""` literal with its quotes and indentation, `r"a\nb"`
+//! with its fence, the escapes and the doubled braces raw. lupin was
+//! right throughout.
+
+let MULTI: str = """
+    two
+      lines
+    """
+
+const BANNER: str = """
+    usage: tool [-n]
+      -n  dry run
+    """
+
+let RAW: str = r"a\nb"
+
+let POINTS: str = "\u{41}\x42"
+
+const BRACES: str = "{{x}}"
+
+fn main() {
+    let local: str = """
+    two
+      lines
+    """
+    print(MULTI)
+    print(BANNER)
+    print("{MULTI == local} {MULTI.len} {BANNER.len}")
+    print(RAW)
+    print("{RAW.len} {POINTS} {POINTS.len} {BRACES} {BRACES.len}")
+}
