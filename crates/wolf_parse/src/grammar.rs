@@ -230,10 +230,12 @@ fn decl_keyword_typo(p: &Parser<'_>) -> Option<wolf_diag::Diagnostic> {
 
 pub(crate) fn fn_item(p: &mut Parser<'_>, m: Marker) {
     // fn_qual* : 'comptime' | 'extern' STRING | 'export'
+    let mut saw_extern = false;
     loop {
         match p.current() {
             TokenKind::Kw(Keyword::Comptime | Keyword::Export) => p.bump(),
             TokenKind::Kw(Keyword::Extern) => {
+                saw_extern = true;
                 p.bump();
                 if p.at_str_begin() {
                     string_lit(p);
@@ -247,6 +249,21 @@ pub(crate) fn fn_item(p: &mut Parser<'_>, m: Marker) {
                 }
             }
             _ => break,
+        }
+    }
+    // kw09 `[abi.link.extern]`: `extern "c" let NAME: *T` — a bodyless
+    // binding the linker defines. `var` and `const` parse the same way
+    // so sema refuses them by name (E0819) instead of a parse cascade.
+    if saw_extern {
+        for (kw, kind) in [
+            (Keyword::Let, SyntaxKind::LetDecl),
+            (Keyword::Var, SyntaxKind::VarDecl),
+            (Keyword::Const, SyntaxKind::ConstDecl),
+        ] {
+            if p.at_kw(kw) {
+                extern_binding_item(p, m, kind);
+                return;
+            }
         }
     }
     let fn_ok = p.at_kw(Keyword::Fn);
@@ -981,6 +998,38 @@ pub(crate) fn binding_item(p: &mut Parser<'_>, m: Marker, kw: Keyword, kind: Syn
         // The initializer expression stops only at TERM / `}` / EOF or
         // an unconsumable token — the latter means junk on this line.
         p.expected_line_end("initializer");
+        p.recover_until(true, |k| k == TokenKind::Term);
+        if p.at(TokenKind::Term) {
+            p.bump();
+        }
+    }
+    m.complete(p, kind);
+}
+
+/// kw09 `[abi.link.extern]`: the binding after `extern "c"` — one
+/// binder, an ascription, and NO initializer (the linker supplies the
+/// symbol). An initializer is still parsed, so sema reports the shape
+/// by name (E0819) rather than the parser reporting stray tokens.
+fn extern_binding_item(p: &mut Parser<'_>, m: Marker, kind: SyntaxKind) {
+    p.bump(); // let/var/const
+    if kind == SyntaxKind::ConstDecl {
+        name_token(p, "constant");
+    } else if pattern(p).is_none() {
+        p.error(codes::EXPECTED_PATTERN, p.here(), "expected a pattern");
+        p.missing();
+    }
+    if p.at_punct(Punct::Colon) {
+        p.bump();
+        type_required(p);
+    }
+    if p.at_punct(Punct::Eq) {
+        p.bump();
+        crate::exprs::expr_required(p);
+    }
+    if p.at(TokenKind::Term) {
+        p.bump();
+    } else if !p.at_eof() && !p.at_punct(Punct::RBrace) {
+        p.expected_line_end("declaration");
         p.recover_until(true, |k| k == TokenKind::Term);
         if p.at(TokenKind::Term) {
             p.bump();
