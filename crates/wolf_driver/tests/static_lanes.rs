@@ -411,6 +411,59 @@ fn a_comptime_fold_of_a_multiline_string_is_its_value() {
     }
 }
 
+/// `[mem.static.3]` (wolf-lang#584, s210): a failed comptime `assert`
+/// under a module `const` is ONE fault and one record. 0.2.23 reported
+/// it twice: once from the call-site pass, again from kw09's
+/// module-state evaluation of the same initializer (kasumi
+/// `~/lanes/s210/evidence/584-gate-trunk.log`). The program is
+/// wolf-book's ch18 s2. lupin refuses a `comptime fn` by name.
+#[test]
+fn a_failed_comptime_assert_under_a_module_const_is_one_record() {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("static_lanes_assert_once");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let entry = dir.join("main.lu");
+    std::fs::write(
+        &entry,
+        "comptime fn shard_mask(shards: int) -> int {\n    var mask = 1\n    \
+         while mask < shards {\n        mask = mask * 2\n    }\n    mask - 1\n}\n\n\
+         comptime fn expect_mask(shards: int, want: int) -> bool {\n    \
+         assert(shard_mask(shards) == want)\n    true\n}\n\n\
+         const SIXTEEN_SHARDS: bool = expect_mask(16, 14)\n\n\
+         fn main() -> !int {\n    0\n}\n",
+    )
+    .expect("write the assert program");
+    ensure_rt_staticlib();
+    for flag in ["--checked", "--native", "--release"] {
+        let out = Command::new(wolf())
+            .arg("conform-run")
+            .arg(&entry)
+            .arg(flag)
+            .arg("--json")
+            .output()
+            .expect("wolf runs");
+        let rec: serde_json::Value =
+            serde_json::from_slice(&out.stdout).expect("the record parses");
+        let codes: Vec<&str> = rec["diagnostics"]
+            .as_array()
+            .map(|ds| ds.iter().filter_map(|d| d["code"].as_str()).collect())
+            .unwrap_or_default();
+        assert_eq!(
+            (rec["verdict"].as_str().unwrap_or(""), codes),
+            ("fail(E0710)", vec!["E0710"]),
+            "{flag}: one fault, one record"
+        );
+    }
+    if let Some(lupin) = lupin_says(&entry) {
+        assert_eq!(
+            lupin.verdict, "unsupported",
+            "lupin {} refuses a comptime fn by name",
+            lupin.version
+        );
+        assert!(lupin.unsupported.contains("comptime fn"));
+    }
+}
+
 /// `[mem.static.2]`: a `var` is memory every later read sees — across
 /// calls, and in a loop whose condition reads what a callee writes.
 #[test]
