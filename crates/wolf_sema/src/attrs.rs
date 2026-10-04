@@ -424,14 +424,19 @@ fn check_item(
                 || (top
                     && matches!(kind, SyntaxKind::LetDecl | SyntaxKind::VarDecl)
                     && !wolf_ast::is_extern_binding(node));
-            if !placeable {
-                let wants = if kind == SyntaxKind::ConstDecl {
-                    "a function or a module `let`/`var` — a `const` is its value and has no \
+            if kind == SyntaxKind::ConstDecl {
+                diags.push(e0817(
+                    span,
+                    "`section` means nothing on a `const` — a `const` is its value and has no \
                      storage to place"
-                } else {
-                    "a function or a module `let`/`var`"
-                };
-                misplaced(diags, wants);
+                        .to_string(),
+                    "a `const` has no storage",
+                    "a `const` is its value at every read ([mem.static.1]); to place the value \
+                     in a section, declare it a module `let`, or delete the attribute."
+                        .to_string(),
+                ));
+            } else if !placeable {
+                misplaced(diags, "a function or a module `let`/`var`");
             } else if section_arg(item, src).is_none() {
                 diags.push(e0817(
                     span,
