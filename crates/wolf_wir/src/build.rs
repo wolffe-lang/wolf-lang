@@ -1003,6 +1003,39 @@ impl<'m> FuncBuilder<'m> {
         self.ins(Opcode::Load, &[addr, tok], &[ty], Aux::None).one()
     }
 
+    /// [`Builder::ins_load`] for an address whose guaranteed alignment
+    /// is `align`, below the scalar's natural one (kw08: a field of a
+    /// `#[repr(c, packed)]` raw pointee, `[abi.layout.packed]`). The
+    /// alignment rides the load as its immediate (`load.T %p, %m, 1`),
+    /// and the backends emit an access that does not assume more. No
+    /// forwarding: such loads are rare and stay literal.
+    pub fn ins_load_under(
+        &mut self,
+        ty: TypeId,
+        addr: Value,
+        region: RegionId,
+        align: u64,
+    ) -> Value {
+        let tok = self.use_mem(region);
+        self.ins(Opcode::Load, &[addr, tok], &[ty], Aux::Int(align as i64))
+            .one()
+    }
+
+    /// [`Builder::ins_store`]'s twin of [`Builder::ins_load_under`].
+    pub fn ins_store_under(&mut self, val: Value, addr: Value, region: RegionId, align: u64) {
+        let tok = self.use_mem(region);
+        let tok_ty = self.func.values[tok].ty;
+        let out = self
+            .ins(
+                Opcode::Store,
+                &[val, addr, tok],
+                &[tok_ty],
+                Aux::Int(align as i64),
+            )
+            .one();
+        self.def_mem(region, out);
+    }
+
     /// `store.T val, addr` through region `r`'s token chain (consumes
     /// the current token, defines the successor).
     pub fn ins_store(&mut self, val: Value, addr: Value, region: RegionId) {

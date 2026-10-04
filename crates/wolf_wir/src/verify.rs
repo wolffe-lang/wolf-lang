@@ -330,6 +330,19 @@ impl<'a> Verifier<'a> {
         self.fail(ErrClass::Type, format!("{}: {msg}", self.at_inst(inst)))
     }
 
+    /// kw08: a load/store's immediate, when present, is a guaranteed
+    /// alignment below natural — a power of two from 1 to 4.
+    fn check_under_align(&self, inst: Inst, aux: Aux) -> VResult {
+        match aux {
+            Aux::None => Ok(()),
+            Aux::Int(a) if (1..=4).contains(&a) && (a as u64).is_power_of_two() => Ok(()),
+            _ => Err(self.type_err(
+                inst,
+                "a load/store immediate is an alignment of 1, 2 or 4 bytes",
+            )),
+        }
+    }
+
     fn expect_counts(&self, inst: Inst, nargs: usize, nresults: usize) -> VResult {
         let a = self.args(inst).len();
         let r = self.results(inst).len();
@@ -659,6 +672,7 @@ impl<'a> Verifier<'a> {
                 if types.is_token(rty) || matches!(types.get(rty), TypeData::Agg(_)) {
                     return Err(self.type_err(inst, "load result must be a scalar"));
                 }
+                self.check_under_align(inst, data.aux)?;
             }
             Opcode::Store => {
                 self.expect_counts(inst, 3, 1)?;
@@ -677,6 +691,7 @@ impl<'a> Verifier<'a> {
                         self.type_err(inst, "store result must be the successor of its mem token")
                     );
                 }
+                self.check_under_align(inst, data.aux)?;
             }
             Opcode::AggMake => {
                 if results.len() != 1 {

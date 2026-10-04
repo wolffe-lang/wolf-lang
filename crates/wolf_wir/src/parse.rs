@@ -1431,12 +1431,22 @@ fn parse_inst(
             if args.len() != 2 {
                 return line.fail("`load` takes a pointer and a mem token");
             }
+            // kw08: an optional trailing immediate is the access's
+            // guaranteed alignment, below the type's natural one.
+            if let Some(Tok::Num(_)) = line.peek() {
+                let lex = line.num()?;
+                aux = Aux::Int(parse_u64(line, &lex)? as i64);
+            }
             vec![mn.ty.expect("typed mnemonic")]
         }
         Opcode::Store => {
             args = parse_val_list(line, values, func)?;
             if args.len() != 3 {
                 return line.fail("`store` takes a value, a pointer, and a mem token");
+            }
+            if let Some(Tok::Num(_)) = line.peek() {
+                let lex = line.num()?;
+                aux = Aux::Int(parse_u64(line, &lex)? as i64);
             }
             let sty = mn.ty.expect("typed mnemonic");
             if func.value_ty(args[0]) != sty {
