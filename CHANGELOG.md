@@ -1,5 +1,33 @@
 # Changelog
 
+## Unreleased
+
+### A misaligned raw access is UB row L4 (s209, ruling #36 = A, #574)
+
+- **The machines disagreed, and release could miscompile.** A `*u16`,
+  `*u32` or `*u64` read or write at an address that is not a multiple of
+  the pointee's alignment (`p.with_addr(p.addr() + 1)`, then `q[0]`)
+  ran as defined on the checked machine and lupin, while release emitted
+  `load i32 … align 4` (UB to LLVM) and native marked the access
+  aligned. It is now §7 row **L4** (`[mem.unsafe.raw.4]`; licenses O12:
+  every ordinary raw access at its natural alignment, no check, no
+  split). The checked machine reports it as it reports L3, before the
+  provenance rows and only for a pointer with an allocation; a dangling
+  pointer stays L2. `[mem.unsafe.raw.1]` names it.
+- **Native and release do not move.** No backend file changed; hosted
+  binaries are byte-identical. `raw_align_ir.rs` holds the release IR to
+  `align 2/4/8` on every raw access and `align 1` on a packed field.
+- **Packed fields stay defined.** Through a raw element it is the
+  struct's alignment that is asked: 1 for `#[repr(c, packed)]`, so a
+  `u64` field at offset 2 is an ordinary read (`[abi.layout.packed]`);
+  a plain `#[repr(c)]` element at a misaligned address is L4. The
+  checked machine now reads a scalar field through a raw element
+  (`g[i].f`) at the clause layout; it refused that read by name before.
+- Read misaligned data byte by byte, or through a packed struct.
+  lupin 0.1.46 still runs the access as defined; its half is
+  wolf-interp#192, pinned by version in `raw_align_lanes.rs`. Anchors
+  586 → 587.
+
 ## 0.2.23 — 2026-10-04
 
 THE TWENTY-THIRD. A wolf kernel can now own its machine. Integers and
