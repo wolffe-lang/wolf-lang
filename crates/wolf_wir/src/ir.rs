@@ -267,6 +267,11 @@ pub struct Function {
     /// over marked functions; the mid-end treats them as inlining
     /// boundaries ([ct.attr.barrier]).
     pub consttime: Option<CtContract>,
+    /// kw09 (`[abi.link.section]`): the object section the function's
+    /// code is placed in, from `#[section(".name")]`; `None` is the
+    /// target's text section. Canonical and hash-bearing: textually
+    /// `section ".name" fn @name…`.
+    pub section: Option<String>,
     pub blocks: PrimaryMap<Block, BlockData>,
     pub insts: PrimaryMap<Inst, InstData>,
     pub values: PrimaryMap<Value, ValueData>,
@@ -303,6 +308,7 @@ impl Function {
             export: false,
             ret_ext: Mode::Val,
             consttime: None,
+            section: None,
             blocks: PrimaryMap::new(),
             insts: PrimaryMap::new(),
             values: PrimaryMap::new(),
@@ -473,6 +479,55 @@ pub struct DataDecl {
     /// `data @name = fns (@a, @b)`, so the slots ride the D8 hash by
     /// content like everything else.
     pub funcs: Vec<String>,
+    /// kw09 (`[mem.static]`, `[abi.link.extern]`): `Some` when this
+    /// declaration is MODULE STATE or a link-time symbol rather than a
+    /// literal pool. Its `name` is then the linker symbol itself (no
+    /// `_W.` prefix): a module item's mangled name, defined in exactly
+    /// one object of a build and imported by the rest, or an `extern
+    /// "c" let`'s plain name, always imported. Printed as `data @name =
+    /// let|var "…" align N [section ".x"]` or `data @name = extern`.
+    pub stat: Option<StaticData>,
+}
+
+/// Which module-state form a [`DataDecl`] is (kw09).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum StaticKind {
+    /// A module `let`: read-only data (`.rodata`).
+    Let,
+    /// A module `var`: writable data (`.data`, `.bss` when all zero).
+    Var,
+    /// `extern "c" let`: a symbol the link defines; no bytes here.
+    Extern,
+}
+
+impl StaticKind {
+    pub fn keyword(self) -> &'static str {
+        match self {
+            StaticKind::Let => "let",
+            StaticKind::Var => "var",
+            StaticKind::Extern => "extern",
+        }
+    }
+}
+
+/// Module state's link facts (kw09, see [`DataDecl::stat`]).
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct StaticData {
+    pub kind: StaticKind,
+    /// The bytes' alignment (the scalar's size).
+    pub align: u32,
+    /// `#[section(".name")]`, when written (`[abi.link.section]`).
+    pub section: Option<String>,
+}
+
+impl DataDecl {
+    /// Module state with a definition (a `let` or a `var`): exactly
+    /// one object of a build defines it (kw09).
+    pub fn is_defined_static(&self) -> bool {
+        self.stat
+            .as_ref()
+            .is_some_and(|s| s.kind != StaticKind::Extern)
+    }
 }
 
 /// A module: the type interner, interned signatures, external decls,
@@ -524,7 +579,7 @@ impl Module {
         if let Some(i) = self
             .data
             .iter()
-            .position(|d| d.bytes == bytes && d.funcs.is_empty())
+            .position(|d| d.bytes == bytes && d.funcs.is_empty() && d.stat.is_none())
         {
             return i as u32;
         }
@@ -533,6 +588,27 @@ impl Module {
             name,
             bytes: bytes.to_vec(),
             funcs: Vec::new(),
+            stat: None,
+        });
+        (self.data.len() - 1) as u32
+    }
+
+    /// kw09: declare module state or a link-time symbol under its
+    /// linker `symbol`; one declaration per symbol (two `extern "c"
+    /// let` of one name share it). Returns its `Aux::Data` index.
+    pub fn intern_static(&mut self, symbol: &str, bytes: Vec<u8>, stat: StaticData) -> u32 {
+        if let Some(i) = self
+            .data
+            .iter()
+            .position(|d| d.stat.is_some() && d.name == symbol)
+        {
+            return i as u32;
+        }
+        self.data.push(DataDecl {
+            name: symbol.to_string(),
+            bytes,
+            funcs: Vec::new(),
+            stat: Some(stat),
         });
         (self.data.len() - 1) as u32
     }
@@ -549,6 +625,7 @@ impl Module {
             name: name_hint.to_string(),
             bytes: Vec::new(),
             funcs: funcs.to_vec(),
+            stat: None,
         });
         ((self.data.len() - 1) as u32, true)
     }
