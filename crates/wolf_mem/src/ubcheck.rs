@@ -2107,6 +2107,22 @@ fn run_checked_fn_here(
     if let Some(nyc) = link_refusal(pkg) {
         return Err(nyc);
     }
+    // kw09 (`[mem.static.3]`): module state of a type that is not
+    // static data yet has no value here, read or not — refused by
+    // name, as both compiling tiers refuse it.
+    for module in &tc.sigs.modules {
+        for sig in module.values() {
+            if let ItemSig::Global(g) = sig
+                && g.kind != wolf_sema::GlobalKind::Extern
+                && g.ty.is_some_and(|t| !wolf_sema::is_static_data(&tc.sigs.table, t, g.kind))
+            {
+                return Err(NotYet {
+                    construct: "module state of a type that is not static data ([mem.static.3])",
+                    span: g.name_span,
+                });
+            }
+        }
+    }
     let mut m = Machine::new(pkg, tc);
     m.budget = budget;
     m.stdin = stdin.to_string();
