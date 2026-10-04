@@ -1,0 +1,61 @@
+//! check: run(exit=0, stdout="header ok\n")
+//! phase: run
+//! conforms: abi.link.extern, mem.unsafe.raw.1
+//!
+//! kw09 (K6, STATUS #31): `extern "c" let NAME: *T` names a symbol the
+//! link defines; its value is the symbol's address (`[abi.link.extern]`).
+//! Every hosted link defines one at the image's own header — ELF's
+//! `__ehdr_start`, Mach-O's `__mh_execute_header`, PE's `__ImageBase` —
+//! so each host's declaration is chosen by `cfg(target)` and the program
+//! reads the header's first byte through it. The checked machine and
+//! lupin model no link and refuse the program by name.
+
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+extern "c" let __ehdr_start: *u8
+
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn header() -> *u8 {
+    __ehdr_start
+}
+
+#[cfg(target = "x86_64-unknown-linux-gnu")]
+fn magic() -> int {
+    127
+}
+
+#[cfg(target = "aarch64-apple-darwin")]
+extern "c" let _mh_execute_header: *u8
+
+#[cfg(target = "aarch64-apple-darwin")]
+fn header() -> *u8 {
+    _mh_execute_header
+}
+
+#[cfg(target = "aarch64-apple-darwin")]
+fn magic() -> int {
+    207
+}
+
+#[cfg(target = "x86_64-pc-windows-msvc")]
+extern "c" let __ImageBase: *u8
+
+#[cfg(target = "x86_64-pc-windows-msvc")]
+fn header() -> *u8 {
+    __ImageBase
+}
+
+#[cfg(target = "x86_64-pc-windows-msvc")]
+fn magic() -> int {
+    77
+}
+
+fn main() {
+    let p = header()
+    // # Safety: the image's own header, mapped read-only for the run.
+    let first = unsafe { p[0] as int }
+    if first == magic() {
+        print("header ok")
+    } else {
+        print("header byte {first}")
+    }
+}

@@ -1,0 +1,14 @@
+//! check: fail(E0819)
+//! phase: resolve
+//! conforms: abi.link.extern
+//!
+//! kw09 (`[abi.link.extern]`): an `extern "c" let` names a symbol's
+//! ADDRESS, so its type is a raw pointer; `int` is E0819. Read the value
+//! through the pointer, inside `unsafe`. lupin 0.1.45 has no grammar for
+//! the form (E0201).
+
+extern "c" let __kernel_end: int
+
+fn main() -> int {
+    0
+}
