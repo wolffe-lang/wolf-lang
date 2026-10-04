@@ -26,7 +26,12 @@
 //!   backward branch's range, where the release control `ord_w_loop`
 //!   has no loop at all and one store — the fold;
 //! - `vr_poll` (`while p.read_volatile() == 0`): a load inside the loop,
-//!   where the release control `ord_r_poll` reads once, before it.
+//!   where the release control `ord_r_poll` reads once, before it;
+//! - the device register (kw06, `0xb8000 as *u16`): `vdev_read` one
+//!   2-byte load, `vdev_kick` two stores where the release control
+//!   `ord_dev_kick` has one, `vdev_poll` a load inside the loop — the
+//!   store count kw06's `int_ptr_lanes` leaves unasserted. LLVM spells
+//!   the absolute address `ds:0xb8004`; that is an access too.
 //!
 //! The controls make the loop and merge rows mean something: a row is
 //! only evidence if the ordinary spelling of the same shape IS folded
@@ -81,6 +86,10 @@ fn exported() -> Vec<String> {
         "ord_w_loop",
         "vr_poll",
         "ord_r_poll",
+        "vdev_read",
+        "vdev_kick",
+        "ord_dev_kick",
+        "vdev_poll",
     ] {
         v.push(f.to_string());
     }
@@ -215,26 +224,30 @@ impl Insn {
             return None;
         }
         let (width, rest) = [
-            ("BYTE PTR [", 1u32),
-            ("WORD PTR [", 2),
-            ("DWORD PTR [", 4),
-            ("QWORD PTR [", 8),
+            ("BYTE PTR ", 1u32),
+            ("WORD PTR ", 2),
+            ("DWORD PTR ", 4),
+            ("QWORD PTR ", 8),
         ]
         .iter()
         .filter_map(|(k, w)| {
             // `DWORD PTR` contains `WORD PTR`; find the longest match.
             let i = self.ops.find(k)?;
-            if *k == "WORD PTR [" && i > 0 && self.ops[..i].ends_with('D') {
-                return None;
-            }
-            if *k == "WORD PTR [" && i > 0 && self.ops[..i].ends_with('Q') {
+            if *k == "WORD PTR " && i > 0 && matches!(self.ops[..i].chars().last(), Some('D' | 'Q'))
+            {
                 return None;
             }
             Some((*w, &self.ops[i + k.len()..]))
         })
         .next()?;
-        let base = rest.split([']', '+', '-', '*']).next().unwrap_or("").trim();
-        if matches!(base, "rsp" | "rbp" | "rip") || base.is_empty() {
+        // `[base+…]` through a register, or `ds:0xb8000` — an absolute
+        // address (kw06's device register, as LLVM spells it).
+        if let Some(r) = rest.strip_prefix('[') {
+            let base = r.split([']', '+', '-', '*']).next().unwrap_or("").trim();
+            if matches!(base, "rsp" | "rbp" | "rip") || base.is_empty() {
+                return None;
+            }
+        } else if !rest.starts_with("ds:") {
             return None;
         }
         let store = self.mnemonic == "mov"
@@ -242,7 +255,7 @@ impl Insn {
                 .ops
                 .split(',')
                 .next()
-                .is_some_and(|d| d.contains("PTR ["));
+                .is_some_and(|d| d.contains(" PTR "));
         Some(Access {
             at: self.at,
             store,
@@ -492,6 +505,40 @@ mod linux_x86_64 {
         }
     }
 
+    /// kw06's device address (`0xb8000 as *u16`, `[mem.prov.device]`):
+    /// the same one-access promise through an integer-made pointer —
+    /// the store count kw06's `int_ptr_lanes` leaves to this gate.
+    fn device_rows(funcs: &BTreeMap<String, Func>, failures: &mut Vec<String>) {
+        assert_accesses(
+            funcs,
+            "vdev_read",
+            &[(false, 2)],
+            "one 2-byte load of the device register",
+            failures,
+        );
+        assert_accesses(
+            funcs,
+            "vdev_kick",
+            &[(true, 4), (true, 4)],
+            "two writes to a device register are two stores",
+            failures,
+        );
+        let pl = &funcs["vdev_poll"];
+        let loads = pl.accesses();
+        if loads.is_empty()
+            || !loads
+                .iter()
+                .all(|a| !a.store && a.width == 4 && pl.in_loop(a.at))
+        {
+            failures.push(format!(
+                "vdev_poll: want 4-byte loads of the device register, every one inside the \
+                 loop; got {loads:?}, loops {:?}\n{}",
+                pl.loops(),
+                pl.listing()
+            ));
+        }
+    }
+
     /// The release tier's controls: the ordinary spelling of each shape
     /// IS folded, so the volatile rows beside them are evidence.
     fn release_controls(funcs: &BTreeMap<String, Func>, failures: &mut Vec<String>) {
@@ -507,6 +554,13 @@ mod linux_x86_64 {
             "ord_r_twice",
             &[(false, 4)],
             "the control: two ordinary reads CSE",
+            failures,
+        );
+        assert_accesses(
+            funcs,
+            "ord_dev_kick",
+            &[(true, 4)],
+            "the control: two ordinary stores to the device address merge",
             failures,
         );
         let lp = &funcs["ord_w_loop"];
@@ -536,6 +590,7 @@ mod linux_x86_64 {
         let funcs = disassemble(&obj);
         let mut failures = Vec::new();
         volatile_rows(&funcs, &mut failures);
+        device_rows(&funcs, &mut failures);
         if tier == "release" {
             release_controls(&funcs, &mut failures);
         }
@@ -583,6 +638,7 @@ fn the_instrument_reads_objdump_intel_syntax() {
   66:\tjne    5a <vw_twice+0xa>
   67:\tdata16 cs nop WORD PTR [rax+rax*1+0x0]
   68:\tmov    BYTE PTR [rbp-0x8],al
+  69:\tmov    DWORD PTR ds:0xb8004,0x1
   6c:\tret
   70:\tadd    BYTE PTR [rax],al
   74:\tadd    BYTE PTR [rax],al
@@ -597,10 +653,15 @@ fn the_instrument_reads_objdump_intel_syntax() {
         .map(|a| (a.at, a.store, a.width))
         .collect();
     // The frame store, the rip load and the pool junk at 0x70 are not
-    // accesses through the pointer.
+    // accesses through the pointer; the absolute `ds:` store is.
     assert_eq!(
         acc,
-        vec![(0x50, true, 4), (0x5a, false, 2), (0x5e, false, 4)]
+        vec![
+            (0x50, true, 4),
+            (0x5a, false, 2),
+            (0x5e, false, 4),
+            (0x69, true, 4)
+        ]
     );
     assert_eq!(f.loops(), vec![(0x5a, 0x66)]);
     assert!(f.in_loop(0x5e) && !f.in_loop(0x50));

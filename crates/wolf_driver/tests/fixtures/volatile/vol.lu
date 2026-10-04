@@ -227,3 +227,43 @@ export fn ord_r_poll(p: *u32) -> u32 {
     }
     n
 }
+
+// kw06's device address (F9, `[mem.prov.device]`): a register named by
+// its address, as a kernel names one. 0xb8000 is the VGA text buffer,
+// kw06's device window. Nothing here runs; the gate reads the object.
+export fn vdev_read() -> u16 {
+    // # Safety: 0xb8000 is the VGA text buffer (kw06's device window).
+    unsafe {
+        let r = 0xb8000 as *u16
+        r.read_volatile()
+    }
+}
+
+// Two writes of one value to a device register: both reach it.
+export fn vdev_kick() {
+    // # Safety: 0xb8004 is inside kw06's device window, 4-aligned.
+    unsafe {
+        let r = 0xb8004 as *u32
+        r.write_volatile(1)
+        r.write_volatile(1)
+    }
+}
+
+export fn ord_dev_kick() {
+    // # Safety: as vdev_kick.
+    unsafe {
+        let r = 0xb8004 as *u32
+        r[0] = 1
+        r[0] = 1
+    }
+}
+
+// A status poll on a device register: read on every iteration.
+export fn vdev_poll() -> u32 {
+    var n: u32 = 0
+    // # Safety: 0xb8008 is inside kw06's device window, 4-aligned.
+    while unsafe { (0xb8008 as *u32).read_volatile() } == 0 {
+        n = n + 1
+    }
+    n
+}
