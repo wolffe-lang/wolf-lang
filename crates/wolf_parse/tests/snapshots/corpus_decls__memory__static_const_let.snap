@@ -1,0 +1,15 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ConstDecl 621..642 name=LIMIT init=LiteralExpr
+LetDecl 643..676 pat=TWICE init=BinExpr
+LetDecl 677..694 pat=ONE init=LiteralExpr
+LetDecl 695..725 pat=MASK init=BinExpr
+LetDecl 726..754 pat=READY init=BinExpr
+LetDecl 755..775 pat=HALF init=LiteralExpr
+LetDecl 776..799 pat=NAME init=StringExpr
+LetDecl 800..817 pat=NEG init=PrefixExpr
+LetDecl 818..836 pat=TOP init=LiteralExpr
+ConstDecl 837..865 name=BIG init=LiteralExpr
+FnDecl 866..968 name=main body=Block

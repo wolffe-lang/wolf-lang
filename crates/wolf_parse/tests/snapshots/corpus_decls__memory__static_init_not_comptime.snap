@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+VarDecl 351..369 pat=seed init=LiteralExpr
+LetDecl 370..396 pat=start init=BinExpr
+FnDecl 397..431 name=main body=Block

@@ -1,0 +1,14 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+LetDecl 605..682 pat=__ehdr_start attrs=1
+FnDecl 683..766 name=header attrs=1 body=Block
+FnDecl 768..841 name=magic attrs=1 body=Block
+LetDecl 843..922 pat=_mh_execute_header attrs=1
+FnDecl 923..1008 name=header attrs=1 body=Block
+FnDecl 1010..1079 name=magic attrs=1 body=Block
+LetDecl 1081..1155 pat=__ImageBase attrs=1
+FnDecl 1156..1236 name=header attrs=1 body=Block
+FnDecl 1238..1308 name=magic attrs=1 body=Block
+FnDecl 1310..1563 name=main body=Block

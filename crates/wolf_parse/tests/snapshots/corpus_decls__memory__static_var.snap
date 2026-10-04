@@ -1,0 +1,11 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+VarDecl 664..683 pat=ticks init=LiteralExpr
+VarDecl 684..702 pat=base init=LiteralExpr
+VarDecl 703..723 pat=level init=PrefixExpr
+VarDecl 724..743 pat=hits init=LiteralExpr
+VarDecl 744..765 pat=on init=LiteralExpr
+FnDecl 766..944 name=tick body=Block
+FnDecl 946..1245 name=main body=Block

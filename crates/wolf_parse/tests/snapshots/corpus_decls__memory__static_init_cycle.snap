@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+LetDecl 283..302 pat=A init=BinExpr
+LetDecl 303..322 pat=B init=BinExpr
+FnDecl 323..353 name=main body=Block

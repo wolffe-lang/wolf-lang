@@ -2,5 +2,6 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 354..405 name=boot attrs=1 body=Block
-FnDecl 407..442 name=main body=Block
+ConstDecl 512..558 name=LIMIT attrs=1 init=LiteralExpr
+FnDecl 559..615 name=boot attrs=1 body=Block
+FnDecl 617..660 name=main body=Block

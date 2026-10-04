@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+LetDecl 585..650 pat=gdt init=ListLit
+FnDecl 651..687 name=main body=Block

@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+LetDecl 316..349 pat=__kernel_end
+FnDecl 350..376 name=main body=Block
