@@ -1187,7 +1187,7 @@ impl<'a> Engine<'a> {
                     }
                     return Ok(None);
                 }
-                let v = self.arena.str_(unquote(&raw));
+                let v = self.arena.str_(crate::strlit::cook(&raw));
                 frames.last_mut().expect("frame").stack.push(v);
             }
             SyntaxKind::PathExpr => {
@@ -2427,35 +2427,6 @@ fn splice_interp(
         i += 1;
     }
     Ok(String::from_utf8_lossy(&out).into_owned())
-}
-
-fn unquote(raw: &str) -> String {
-    let inner = raw
-        .strip_prefix('"')
-        .and_then(|s| s.strip_suffix('"'))
-        .unwrap_or(raw);
-    let mut out = String::with_capacity(inner.len());
-    let mut chars = inner.chars();
-    while let Some(c) = chars.next() {
-        if c != '\\' {
-            out.push(c);
-            continue;
-        }
-        match chars.next() {
-            Some('n') => out.push('\n'),
-            Some('t') => out.push('\t'),
-            Some('r') => out.push('\r'),
-            Some('\\') => out.push('\\'),
-            Some('"') => out.push('"'),
-            Some('0') => out.push('\0'),
-            Some(other) => {
-                out.push('\\');
-                out.push(other);
-            }
-            None => out.push('\\'),
-        }
-    }
-    out
 }
 
 /// The single-identifier name of a binding pattern, if it is one.

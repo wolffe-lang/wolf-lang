@@ -220,6 +220,7 @@ pub mod resolve;
 pub mod rewrite;
 pub mod rows;
 pub mod sig;
+pub mod strlit;
 pub mod traits;
 pub mod typecheck;
 pub mod types;
