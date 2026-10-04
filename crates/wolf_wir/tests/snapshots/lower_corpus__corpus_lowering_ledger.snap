@@ -2,6 +2,7 @@
 source: crates/wolf_wir/tests/lower_corpus.rs
 expression: "lines.join(\"\\n\")"
 ---
+comptime/align_of_layout.lu: not mem-clean (pre-wir rungs own it)
 comptime/assert_static.lu: not mem-clean (pre-wir rungs own it)
 comptime/budget_zero.lu: not mem-clean (pre-wir rungs own it)
 comptime/depth_spiral.lu: not mem-clean (pre-wir rungs own it)
@@ -9,8 +10,10 @@ comptime/derive_eq.lu: lowers
 comptime/fold_reaches_lane.lu: lowers
 comptime/fuel_loop.lu: not mem-clean (pre-wir rungs own it)
 comptime/heap_flood.lu: not mem-clean (pre-wir rungs own it)
+comptime/layout_query_repr_c.lu: lowers
 comptime/norm_linear.lu: refused — a generic application left opaque by the checker (`Buf[2 + 2]`: const-generic values and generic aliases do not elaborate yet)
 comptime/norm_witness.lu: not mem-clean (pre-wir rungs own it)
+comptime/offset_of_layout.lu: not mem-clean (pre-wir rungs own it)
 comptime/overflow_i32.lu: not mem-clean (pre-wir rungs own it)
 comptime/reflect_fields.lu: lowers
 comptime/runtime_arg.lu: not mem-clean (pre-wir rungs own it)
@@ -139,6 +142,7 @@ grammar/attr_implemented_set.lu: lowers
 grammar/attr_misplaced.lu: not mem-clean (pre-wir rungs own it)
 grammar/attr_repr_bogus.lu: not mem-clean (pre-wir rungs own it)
 grammar/attr_repr_unimplemented.lu: not mem-clean (pre-wir rungs own it)
+grammar/attr_repr_unlayable.lu: not mem-clean (pre-wir rungs own it)
 grammar/attr_section.lu: not mem-clean (pre-wir rungs own it)
 grammar/attr_thread_local.lu: not mem-clean (pre-wir rungs own it)
 grammar/attr_unknown.lu: not mem-clean (pre-wir rungs own it)
@@ -482,6 +486,8 @@ memory/nested_fn_mut_param.lu: lowers
 memory/nested_fn_read_param_return.lu: not mem-clean (pre-wir rungs own it)
 memory/nested_fn_read_param_write.lu: not mem-clean (pre-wir rungs own it)
 memory/oob_bounds.lu: lowers
+memory/packed_field_lend.lu: not mem-clean (pre-wir rungs own it)
+memory/packed_fields_at_offset_of.lu: lowers
 memory/pool_accessors.lu: lowers
 memory/pool_place_write.lu: lowers
 memory/prov_addr_with_addr.lu: lowers
@@ -501,7 +507,9 @@ memory/raw_deref.lu: lowers
 memory/raw_deref_signed.lu: lowers
 memory/raw_ptr_mut_param.lu: lowers
 memory/raw_ptr_private_sig.lu: lowers
+memory/raw_repr_align_layout.lu: lowers
 memory/raw_repr_c_layout.lu: lowers
+memory/raw_repr_packed_layout.lu: lowers
 memory/read_param_escape_field.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_generic.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_local.lu: not mem-clean (pre-wir rungs own it)
