@@ -475,19 +475,6 @@ const SHAPES: &[Shape] = &[
         want: "5 6 258 7 772\n1 2 4294967295 4 5\n",
     },
     Shape {
-        name: "PA",
-        wolf_decl: "#[repr(c, packed)]\nstruct PA {\n    a: u8,\n    b: A16,\n    c: u8,\n}\n",
-        c_decl: "struct __attribute__((packed)) PA { uint8_t a; struct A16 b; uint8_t c; };\n",
-        wolf_vals: [
-            "PA { a: 1, b: A16 { x: 305419896 }, c: 2 }",
-            "PA { a: 3, b: A16 { x: 4 }, c: 5 }",
-        ],
-        c_vals: ["{1, {305419896u}, 2}", "{3, {4}, 5}"],
-        fields: &["a", "b.x", "c"],
-        offsets: &["a", "b", "c"],
-        want: "1 305419896 2\n3 4 5\n",
-    },
-    Shape {
         name: "Pf",
         wolf_decl: "#[repr(c, packed)]\nstruct Pf {\n    t: u8,\n    d: f64,\n    h: i16,\n}\n",
         c_decl: "struct __attribute__((packed)) Pf { uint8_t t; double d; int16_t h; };\n",
@@ -888,5 +875,39 @@ fn a_packed_struct_by_value_at_the_membrane_is_refused_by_name() {
             continue;
         };
         assert_eq!(verdict, "exit(0)", "a `*P3` crosses on {flag}: {stderr}");
+    }
+}
+
+/// An aligned struct inside a packed one is E0820 on every machine: the
+/// C compilers disagree on its layout by target. Measured in CI run
+/// 37177942003 (windows-latest): clang for the MSVC ABI laid
+/// `struct __attribute__((packed)) PA { uint8_t a; struct A16 b; uint8_t
+/// c; }` out at size 48 with `b` at 16, where gcc and clang on SysV
+/// (kasumi, `c-layouts-aligned-in-packed.log`) put `b` at 1, size 18.
+#[test]
+fn an_aligned_struct_inside_a_packed_one_is_refused_on_every_machine() {
+    ensure_rt_staticlib();
+    let dir = scratch("kw08-aligned-in-packed");
+    let prog = write_prog(
+        &dir,
+        &format!(
+            "{A16_W}\n#[repr(c, packed)]\nstruct PA {{\n    a: u8,\n    b: A16,\n    c: u8,\n}}\n\n\
+             #[repr(c)]\nstruct Holds {{\n    t: u8,\n    a: A16,\n}}\n\n\
+             #[repr(c, packed)]\nstruct Deep {{\n    t: u8,\n    h: Holds,\n}}\n\n\
+             fn main() -> int {{\n    let p = PA {{ a: 1, b: A16 {{ x: 2 }}, c: 3 }}\n    \
+             let d = Deep {{ t: 1, h: Holds {{ t: 2, a: A16 {{ x: 3 }} }} }}\n    \
+             p.a as int + d.t as int - 2\n}}\n"
+        ),
+    );
+    for flag in ["--checked", "--native", "--release"] {
+        let Some((verdict, _, stderr)) = lane(&prog, flag) else {
+            continue;
+        };
+        assert_eq!(verdict, "fail(E0820)", "the {flag} lane: {stderr}");
+        assert!(
+            stderr.contains("`PA` holds the aligned struct `A16`")
+                && stderr.contains("`Deep` holds the aligned struct `A16`"),
+            "the {flag} lane names both packed structs, the deep one too: {stderr}"
+        );
     }
 }
