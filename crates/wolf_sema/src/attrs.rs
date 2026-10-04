@@ -52,8 +52,13 @@ pub const FREESTANDING_TARGET: &str = "x86_64-unknown-none";
 pub const KNOWN_ARCHES: &[&str] = &["x86_64", "aarch64"];
 
 /// The attributes this compiler implements, for the E0817 note.
-const IMPLEMENTED: &str = "`trusted`, `consttime`, `allow`, `index`, `budget`, `repr(c)` and \
-                           `cfg(target = \"…\")`";
+const IMPLEMENTED: &str = "`trusted`, `consttime`, `allow`, `index`, `budget`, `repr(c)`, \
+                           `repr(c, packed)`, `repr(c, align(N))` and `cfg(target = \"…\")`";
+
+/// The largest `align(N)` (`[abi.layout.align]`): 2^28, gcc's ceiling
+/// (gcc 16.2.1 refuses `aligned(1u << 29)`; clang accepts more). A
+/// layout only one C compiler can agree with is not the C layout.
+pub const MAX_ALIGN: u64 = 1 << 28;
 
 /// The host's target triple: the build's target unless `--target` or
 /// the manifest's `target` named another ([`build_target`], kw04).
@@ -374,9 +379,14 @@ fn check_item(
     }
 }
 
-/// `#[repr(c)]` on a struct is the one representation implemented
-/// (`[abi.layout.c]`); `packed`, `align(N)` and `transparent` are
-/// KWC F4's later half (kw08).
+/// `#[repr(…)]`'s arguments, one at a time (kw01; kw08 implements
+/// `packed` and `align(N)`, `[abi.layout.packed]`/`[abi.layout.align]`).
+/// `c`, bare `packed` and `align(N)` with N a power of two up to
+/// [`MAX_ALIGN`] are representations; `transparent` and `packed(N)`
+/// are known and unimplemented (E0817, naming their future); anything
+/// else is unknown (E0817). An `align` whose argument is not such a
+/// power is E0820. How the arguments combine on one struct is
+/// [`check_repr_set`]'s.
 fn check_repr(
     item: &wolf_ast::AttrItem<'_>,
     kind: SyntaxKind,
@@ -390,8 +400,8 @@ fn check_repr(
             span,
             "`repr` needs a representation: `repr(c)`".to_string(),
             "no representation named",
-            "the one representation implemented is `#[repr(c)]` on a struct \
-             ([abi.layout.c])."
+            "the representations implemented are `#[repr(c)]`, `#[repr(c, packed)]` and \
+             `#[repr(c, align(N))]` on a struct ([abi.layout.c])."
                 .to_string(),
         ));
         return;
@@ -407,16 +417,54 @@ fn check_repr(
         ));
         return;
     }
+    let text_of = |sp: Span| text(src, sp);
     for r in reprs {
         let rname = item_name(&r, src);
         let rspan = r.syntax().span;
-        if rname == "c" && r.input().is_none() {
-            continue;
+        match rname.as_str() {
+            "c" | "packed" if r.input().is_none() => continue,
+            "align" => {
+                match crate::sig::align_arg(&r, &text_of) {
+                    Some(n) if n.is_power_of_two() && n <= MAX_ALIGN => {}
+                    got => diags.push(e0820(
+                        rspan,
+                        match got {
+                            Some(n) => format!(
+                                "`align({n})` is not a power of two from 1 to 2^28"
+                            ),
+                            None => format!(
+                                "`repr({})` does not name an alignment",
+                                text(src, rspan)
+                            ),
+                        },
+                        "no C layout has this alignment",
+                        "`align(N)` takes one integer, a power of two from 1 to 2^28 \
+                         ([abi.layout.align]; 2^28 is gcc's ceiling, so both C compilers \
+                         agree on every alignment wolf accepts)."
+                            .to_string(),
+                    )),
+                }
+                continue;
+            }
+            _ => {}
         }
-        let (message, label) = match rname.as_str() {
-            "packed" | "align" | "transparent" => (
+        let (message, label, note) = match rname.as_str() {
+            "transparent" => (
                 format!("`repr({})` is not implemented yet", text(src, rspan)),
                 "known, but nothing implements it",
+                "`#[repr(transparent)]` (a struct laid out as its one field) has no lane yet: \
+                 it is refused by name until one rules it, never ignored. The \
+                 representations implemented are `c`, `c, packed` and `c, align(N)` \
+                 ([abi.layout])."
+                    .to_string(),
+            ),
+            "packed" => (
+                format!("`repr({})` is not implemented", text(src, rspan)),
+                "known, but nothing implements this form",
+                "`packed` takes no argument: alignment 1, no padding ([abi.layout.packed]). \
+                 A packing bound (`packed(N)`) is not implemented, and is refused by name \
+                 rather than read as `packed`."
+                    .to_string(),
             ),
             _ => (
                 format!(
@@ -424,16 +472,92 @@ fn check_repr(
                     text(src, rspan)
                 ),
                 "unknown representation",
+                "the representations are `#[repr(c)]` ([abi.layout.c]), `#[repr(c, \
+                 packed)]` ([abi.layout.packed]) and `#[repr(c, align(N))]` \
+                 ([abi.layout.align]); `transparent` is known and not implemented."
+                    .to_string(),
             ),
         };
-        diags.push(e0817(
-            rspan,
-            message,
-            label,
-            "the one representation implemented is `#[repr(c)]` ([abi.layout.c]); \
-             `packed`, `align(N)` and `transparent` are KWC F4's later half (kw08) and are \
-             refused by name until then, never ignored."
+        diags.push(e0817(rspan, message, label, note));
+    }
+}
+
+fn e0820(span: Span, message: String, label: &str, note: String) -> Diagnostic {
+    Diagnostic::error(codes::E0820, span, message)
+        .with_label(label.to_string())
+        .with_note(note)
+}
+
+/// How a struct's representations combine (kw08, E0820): `packed` and
+/// `align(N)` modify the C layout, so each needs `c`; a struct is not
+/// both packed and aligned; neither applies to a generic struct; each
+/// is named once. One diagnostic per struct, at its first `repr`.
+fn check_repr_set(node: &GreenNode, src: &[u8], diags: &mut Vec<Diagnostic>) {
+    if node.kind != SyntaxKind::StructDecl {
+        return;
+    }
+    let text_of = |sp: Span| text(src, sp);
+    let reprs = crate::sig::repr_args(node, &text_of);
+    let Some((_, first)) = reprs.first() else {
+        return;
+    };
+    let at = first.syntax().span;
+    // Only the shapes that ARE representations count: `packed(3)` and
+    // `c(…)` were refused one by one already ([`check_repr`]), and
+    // counting them here would refuse the same text twice.
+    let count = |n: &str| {
+        reprs
+            .iter()
+            .filter(|(name, a)| name == n && (n == "align" || a.input().is_none()))
+            .count()
+    };
+    let (c, packed, align) = (count("c"), count("packed"), count("align"));
+    let generic = node
+        .nodes()
+        .find_map(wolf_ast::GenericParamList::cast)
+        .is_some_and(|g| g.params().next().is_some());
+    let refusal = if let Some(name) = ["c", "packed", "align"]
+        .into_iter()
+        .find(|n| count(n) > 1)
+    {
+        Some((
+            format!("`{name}` is named twice in this struct's representation"),
+            "each representation is named once ([abi.layout])".to_string(),
+        ))
+    } else if packed > 0 && align > 0 {
+        Some((
+            "a struct is packed or aligned, not both".to_string(),
+            "`packed` is alignment 1 and `align(N)` is alignment N; one struct cannot \
+             be both ([abi.layout.packed], [abi.layout.align]). Pack the struct, or \
+             align it."
                 .to_string(),
+        ))
+    } else if (packed > 0 || align > 0) && c == 0 {
+        let what = if packed > 0 { "packed" } else { "align(N)" };
+        Some((
+            format!("`{what}` modifies the C layout, so it is spelled beside `c`"),
+            format!(
+                "write `#[repr(c, {what})]`: the layout `{what}` changes is the C one \
+                 ([abi.layout.c]); a native-layout struct has no fixed offsets to pack or \
+                 align."
+            ),
+        ))
+    } else if (packed > 0 || align > 0) && generic {
+        Some((
+            "a generic struct cannot be packed or aligned".to_string(),
+            "its layout would change with each instantiation's field types, so no \
+             query could answer it ([abi.layout.query]); declare a concrete struct."
+                .to_string(),
+        ))
+    } else {
+        None
+    };
+    if let Some((message, note)) = refusal {
+        diags.push(e0820(
+            at,
+            message,
+            "this representation cannot be laid out",
+            note,
         ));
     }
 }
@@ -470,6 +594,7 @@ fn walk(node: &GreenNode, src: &[u8], target: &str, diags: &mut Vec<Diagnostic>)
             check_item(&item, node.kind, src, target, diags);
         }
     }
+    check_repr_set(node, src, diags);
     check_abi(node, src, diags);
     for child in node.nodes() {
         walk(child, src, target, diags);

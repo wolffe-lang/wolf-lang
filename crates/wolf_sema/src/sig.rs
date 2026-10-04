@@ -196,6 +196,13 @@ pub struct StructSig {
     /// struct shape that crosses the C membrane by value
     /// (`[abi.c.types]`; read by lowering, kw02).
     pub repr_c: bool,
+    /// `#[repr(c, packed)]` (`[abi.layout.packed]`, kw08): alignment 1,
+    /// no padding. Never set without `repr_c` (E0820 refuses that).
+    pub packed: bool,
+    /// `#[repr(c, align(N))]` (`[abi.layout.align]`, kw08): the
+    /// struct's alignment is at least `N`, a power of two (E0820
+    /// refuses any other). Never set beside `packed`.
+    pub align: Option<u64>,
 }
 
 /// A `const`/module-level `let`/`var` item's elaborated signature.
@@ -525,12 +532,15 @@ impl<'a> Lower<'a> {
                         span: f.name().map(|t| t.span).unwrap_or(node.span),
                     })
                     .collect();
+                let repr = repr_attr(node, |sp| self.text(file, sp));
                 ItemSig::Struct(StructSig {
                     generic: !generics.is_empty(),
                     generics,
                     fields,
                     name_span: item.name_span,
-                    repr_c: repr_c_attr(node, |sp| self.text(file, sp)),
+                    repr_c: repr.c,
+                    packed: repr.packed,
+                    align: repr.align,
                 })
             }
             SyntaxKind::EnumDecl => {
@@ -580,12 +590,15 @@ impl<'a> Lower<'a> {
                                 span: f.name().map(|t| t.span).unwrap_or(node.span),
                             })
                             .collect();
+                        let repr = repr_attr(node, |sp| self.text(file, sp));
                         ItemSig::Struct(StructSig {
                             generic,
                             generics,
                             fields,
                             name_span: item.name_span,
-                            repr_c: repr_c_attr(node, |sp| self.text(file, sp)),
+                            repr_c: repr.c,
+                            packed: repr.packed,
+                            align: repr.align,
                         })
                     }
                     Some(SyntaxKind::EnumDef) => {
@@ -2155,9 +2168,24 @@ fn generic_names(lower: &Lower<'_>, file: usize, node: &GreenNode) -> Vec<String
 /// empty for the bare form — or `None` when the item is not trusted.
 /// Shared by signature elaboration, the `wolfi` roster, and the audit
 /// surface, so the three never disagree.
-/// Is `#[repr(c)]` written on this item? (kw02: the membrane reads
-/// it; attrs.rs has already refused every other representation.)
-pub(crate) fn repr_c_attr(node: &GreenNode, text: impl Fn(Span) -> String) -> bool {
+/// What `#[repr(…)]` on an item says (kw02 read `c`; kw08 adds
+/// `packed` and `align(N)`). attrs.rs has already refused every other
+/// representation and every shape that cannot be laid out (E0817,
+/// E0820), so a program that reaches lowering only ever carries the
+/// three shapes `[abi.layout]` defines.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ReprAttr {
+    pub c: bool,
+    pub packed: bool,
+    pub align: Option<u64>,
+}
+
+/// Every `repr` argument on `node`, across all its `repr` attributes,
+/// as (name, the argument item).
+pub(crate) fn repr_args<'a>(
+    node: &'a GreenNode,
+    text: &impl Fn(Span) -> String,
+) -> Vec<(String, wolf_ast::AttrItem<'a>)> {
     node.nodes()
         .filter_map(wolf_ast::Attribute::cast)
         .flat_map(|attr| attr.items())
@@ -2165,16 +2193,64 @@ pub(crate) fn repr_c_attr(node: &GreenNode, text: impl Fn(Span) -> String) -> bo
             item.path()
                 .is_some_and(|p| text(p.syntax().span).trim() == "repr")
         })
-        .any(|item| {
+        .flat_map(|item| {
             item.input()
                 .filter(|inp| inp.child_token(SyntaxKind::LParen).is_some())
-                .is_some_and(|inp| {
-                    inp.nodes().filter_map(wolf_ast::AttrItem::cast).any(|a| {
-                        a.path()
-                            .is_some_and(|p| text(p.syntax().span).trim() == "c")
-                    })
+                .map(|inp| {
+                    inp.nodes()
+                        .filter_map(wolf_ast::AttrItem::cast)
+                        .collect::<Vec<_>>()
                 })
+                .unwrap_or_default()
         })
+        .map(|a| {
+            let name = a
+                .path()
+                .map(|p| text(p.syntax().span).trim().to_string())
+                .unwrap_or_default();
+            (name, a)
+        })
+        .collect()
+}
+
+/// The integer an `align(N)` argument carries, if it carries exactly
+/// one integer literal (decimal, `0x`, `0o`, `0b`, `_` separators).
+pub(crate) fn align_arg(item: &wolf_ast::AttrItem<'_>, text: &impl Fn(Span) -> String) -> Option<u64> {
+    let inp = item.input()?;
+    inp.child_token(SyntaxKind::LParen)?;
+    if inp.nodes().next().is_some() {
+        return None;
+    }
+    let ints: Vec<_> = inp
+        .tokens()
+        .filter(|t| t.kind == SyntaxKind::Int)
+        .collect();
+    let [one] = ints[..] else { return None };
+    let raw = text(one.span).replace('_', "");
+    let raw = raw.trim();
+    let (digits, radix) = if let Some(h) = raw.strip_prefix("0x") {
+        (h, 16)
+    } else if let Some(o) = raw.strip_prefix("0o") {
+        (o, 8)
+    } else if let Some(b) = raw.strip_prefix("0b") {
+        (b, 2)
+    } else {
+        (raw, 10)
+    };
+    u64::from_str_radix(digits, radix).ok()
+}
+
+pub(crate) fn repr_attr(node: &GreenNode, text: impl Fn(Span) -> String) -> ReprAttr {
+    let mut r = ReprAttr::default();
+    for (name, item) in repr_args(node, &text) {
+        match name.as_str() {
+            "c" if item.input().is_none() => r.c = true,
+            "packed" if item.input().is_none() => r.packed = true,
+            "align" => r.align = align_arg(&item, &text),
+            _ => {}
+        }
+    }
+    r
 }
 
 pub(crate) fn trusted_attr(node: &GreenNode, text: impl Fn(Span) -> String) -> Option<String> {
