@@ -1,0 +1,28 @@
+//! check: run(exit=trap(ub))
+//! phase: wir
+//! conforms: mem.unsafe.raw.4, mem.ub
+//!
+//! s209 (ruling #36 = A, wolf-lang#574): a `*u16` write through
+//! `q[0] = v` at an address that is not a multiple of the pointee's
+//! alignment (2) is §7 row L4 (`[mem.unsafe.raw.4]`): the checked
+//! machine traps `ub` with x-ub-row L4, clause mem.unsafe.raw.4. The
+//! licensed optimization is O12 — the compiled tiers emit the access at
+//! its natural alignment (`align 2`) with no check, so what they do
+//! here is undefined: they compile and run it, and `wir` is the deepest
+//! phase this header can promise. At trunk 8edac3ee every machine,
+//! lupin 0.1.46 too, ran it as defined.
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: DELIBERATELY UNSOUND — the misaligned access is the row.
+    unsafe {
+        let p = c.calloc(1, 16) as *u16
+        let q = p.with_addr(p.addr() + 1)
+        q[0] = 7  // UB L4: address % 2 == 1
+        let b = p as *u8
+        let v = b[1] as int
+        c.free(b)
+        v - 7
+    }
+}
