@@ -37,7 +37,10 @@ fn fixture(name: &str) -> PathBuf {
     p
 }
 
-#[cfg_attr(not(all(target_os = "linux", target_arch = "x86_64")), allow(dead_code))]
+#[cfg_attr(
+    not(all(target_os = "linux", target_arch = "x86_64")),
+    allow(dead_code)
+)]
 fn freestanding(name: &str) -> PathBuf {
     let p = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/freestanding")
@@ -192,7 +195,10 @@ const KERNEL: &[(&str, Option<&str>)] = &[
     ("kw_table", Some("*UND*")),
 ];
 
-#[cfg_attr(not(all(target_os = "linux", target_arch = "x86_64")), allow(dead_code))]
+#[cfg_attr(
+    not(all(target_os = "linux", target_arch = "x86_64")),
+    allow(dead_code)
+)]
 const HOSTED: &[(&str, Option<&str>)] = &[
     ("kw_hot", Some(".text.kwhot")),
     ("placed", Some(".data.kw")),
