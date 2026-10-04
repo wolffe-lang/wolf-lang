@@ -490,6 +490,7 @@ memory/nested_fn_read_param_return.lu: not mem-clean (pre-wir rungs own it)
 memory/nested_fn_read_param_write.lu: not mem-clean (pre-wir rungs own it)
 memory/oob_bounds.lu: lowers
 memory/packed_field_lend.lu: not mem-clean (pre-wir rungs own it)
+memory/packed_field_raw_read.lu: lowers
 memory/packed_fields_at_offset_of.lu: lowers
 memory/pool_accessors.lu: lowers
 memory/pool_place_write.lu: lowers
@@ -505,6 +506,7 @@ memory/push_copies_element.lu: lowers
 memory/push_grow_guarded_index.lu: lowers
 memory/push_grow_nested_guarded_index.lu: lowers
 memory/push_take_moves.lu: not mem-clean (pre-wir rungs own it)
+memory/raw_aligned_control.lu: lowers
 memory/raw_compound_assign.lu: lowers
 memory/raw_deref.lu: lowers
 memory/raw_deref_signed.lu: lowers
@@ -513,6 +515,13 @@ memory/raw_ptr_private_sig.lu: lowers
 memory/raw_repr_align_layout.lu: lowers
 memory/raw_repr_c_layout.lu: lowers
 memory/raw_repr_packed_layout.lu: lowers
+memory/raw_ub_misaligned_repr_c_field.lu: lowers
+memory/raw_ub_misaligned_u16_read.lu: lowers
+memory/raw_ub_misaligned_u16_write.lu: lowers
+memory/raw_ub_misaligned_u32_read.lu: lowers
+memory/raw_ub_misaligned_u32_write.lu: lowers
+memory/raw_ub_misaligned_u64_read.lu: lowers
+memory/raw_ub_misaligned_u64_write.lu: lowers
 memory/read_param_escape_field.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_generic.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_local.lu: not mem-clean (pre-wir rungs own it)
