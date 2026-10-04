@@ -428,6 +428,48 @@ AAPCS64, win64, Apple arm64 deltas).
   which has none). **Not yet implemented**: until then every machine
   answers an `asm` block `unsupported` by name.
 
+## §7 Linker control `[abi.link]`
+
+- `[abi.link.section]` `#[section(".name")]` on a function or on a
+  module `let`/`var` (`[mem.static]`) places its code or data in the
+  object section `.name`, on both compiling tiers, hosted and
+  freestanding (K6(a), STATUS #31). The name is one string of printable
+  ASCII with no space, quote or comma; anything else, a second argument,
+  and the attribute on a `const` (which has no storage) or any other
+  position are E0817. Section names are the object format's: this cut
+  places sections in ELF objects (the linux hosts and
+  `x86_64-unknown-none`); on a Mach-O or COFF target `#[section]` is
+  refused by name on both tiers (`section placement on a Mach-O
+  target`). Module state is emitted whether or not anything reads it,
+  so a placed `let`/`var` is in its section; an `export fn` is kept by
+  every tier, and a placed function that is not exported lands in its
+  section wherever a tier emits it (the release tier may inline it and
+  drop the body). `link_section`, Rust's spelling, is E0817 naming
+  `section`. The checked machine and lupin have no image: a program
+  with `#[section]` is `unsupported` there with the construct `section
+  placement`, never run as if the attribute were absent. Witness:
+  `crates/wolf_driver/tests/static_sections.rs` (the sections by
+  `objdump`, both tiers, hosted and freestanding).
+- `[abi.link.extern]` `extern "c" let NAME: *T`, a module item with no
+  initializer, declares that the symbol `NAME` is defined at link time —
+  by a linker script (`__kernel_end`), an assembly label, or the C
+  library. Its value is the symbol's **address**, as a `*T`: naming it
+  is free and safe, and using the pointer is raw-tier like any `*T`
+  (`[mem.unsafe.raw]`). A type that is not a raw pointer, an
+  initializer, or the form anywhere but a module's top level is
+  **E0819**. The checked machine and lupin model no link: a program that
+  names one is `unsupported` with the construct `the link-time symbol
+  NAME`.
+- `[abi.link.script]` The link of a freestanding image is the consuming
+  build's (K6(b) = A): wolf emits objects (`--emit=obj`, with any listed
+  assembly beside them, `[abi.asm.link]`), and the image's linker
+  script, boot header and link line belong to the build that consumes
+  them. A script places module state's sections (`.rodata`, `.data`,
+  `.bss`, and every `#[section]` name) and `.got` (the native tier
+  reaches an `extern "c" let` through it). Each module item is defined
+  in exactly one of a build's objects, global, under its mangled name;
+  the others refer to it.
+
 ---
 
 Cross-references: no-unwinding invariant `[abi.native.nounwind]` ⇄
