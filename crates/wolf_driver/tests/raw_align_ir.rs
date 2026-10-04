@@ -15,7 +15,11 @@
 //! The second row is the corpus's own misaligned `*u32` read: its IR
 //! still says `align 4` — the address is wrong, not the claim.
 //!
-//! A failed build fails the gate; there is no skip in this file.
+//! A failed build fails the gate. The one exception is a host the
+//! release tier does not target (windows today: the tier is linux
+//! x86-64 and macOS aarch64, s41 + s127): there the build must be
+//! refused BY NAME, which the gate asserts before it skips loudly; any
+//! other failure, and any refusal on linux or macOS, is red.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -25,8 +29,9 @@ fn wolf() -> &'static str {
 }
 
 /// `src` alone in a scratch directory (D32: a directory is one module),
-/// built `--release --emit=llvm-ir`; the IR's text.
-fn release_ir(case: &str, src: &Path) -> String {
+/// built `--release --emit=llvm-ir`; the IR's text. `None` only on a
+/// host outside the release tier's matrix, after its refusal is read.
+fn release_ir(case: &str, src: &Path) -> Option<String> {
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join("raw_align_ir")
         .join(case);
@@ -43,15 +48,29 @@ fn release_ir(case: &str, src: &Path) -> String {
         .arg(&ll)
         .output()
         .expect("wolf runs");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let off_matrix = !(cfg!(all(target_os = "linux", target_arch = "x86_64"))
+        || cfg!(all(target_os = "macos", target_arch = "aarch64")));
+    if off_matrix && !out.status.success() {
+        assert!(
+            stderr.contains("this host cannot run the release tier"),
+            "off the release tier's matrix the build must be refused by name: {stderr}"
+        );
+        eprintln!(
+            "SKIP: the release tier does not target this host: {}",
+            stderr.trim()
+        );
+        return None;
+    }
     assert!(
         out.status.success() && ll.is_file(),
         "wolf build {} --release --emit=llvm-ir must succeed (exit {:?}) — a refusal is the \
          gate failing, never a skip:\n{}",
         src.display(),
         out.status.code(),
-        String::from_utf8_lossy(&out.stderr)
+        stderr
     );
-    std::fs::read_to_string(&ll).expect("read the IR")
+    Some(std::fs::read_to_string(&ll).expect("read the IR"))
 }
 
 /// Every `load`/`store` of an `i16`, `i32` or `i64` in the IR, as
@@ -91,7 +110,9 @@ fn fixture() -> PathBuf {
 /// alignment, the packed `u64` field at `align 1`, nothing else.
 #[test]
 fn release_ir_keeps_the_natural_alignment_of_every_raw_access() {
-    let ir = release_ir("fixture", &fixture());
+    let Some(ir) = release_ir("fixture", &fixture()) else {
+        return;
+    };
     let mut want: Vec<String> = [
         "store i16 align 2",
         "store i32 align 4",
@@ -121,7 +142,9 @@ fn a_misaligned_row_still_claims_the_natural_alignment() {
     let row = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../corpus/memory/raw_ub_misaligned_u32_read.lu");
     assert!(row.is_file(), "corpus row missing: {}", row.display());
-    let ir = release_ir("misaligned_u32_read", &row);
+    let Some(ir) = release_ir("misaligned_u32_read", &row) else {
+        return;
+    };
     let got = accesses(&ir);
     assert!(
         got.iter().any(|a| a == "load i32 align 4"),
