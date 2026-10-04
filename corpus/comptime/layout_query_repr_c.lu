@@ -1,0 +1,103 @@
+//! check: run(exit=0, stdout="C3 12 4 0 4 8\nP3 6 1 0 1 5\nGdtr 10 1 0 2\nA16 16 16 0\nOuter 48 16 0 16 32\nPNest 10 2 0 1 8\nPage 4096 4096\nscalars 1 2 8 8 1 8\n")
+//! phase: run
+//! conforms: abi.layout.query, abi.layout.c, abi.layout.packed, abi.layout.align, comptime.layout
+//!
+//! kw08 (K4, STATUS #31): `size_of(T)`, `align_of(T)` and
+//! `offset_of(T, field)` answer at compile time for every `#[repr(c)]`
+//! type, from the clause's layout rather than codegen's. Every number
+//! here is what gcc 16.2.1 and clang 23.1.1 print for `sizeof`,
+//! `_Alignof` and `offsetof` on the same declarations (kasumi,
+//! `c-layouts-kasumi.log`; `repr_c_raw_layout.rs` asks them on every
+//! CI host). At trunk eb955c3b `size_of` of a struct was E0708 and
+//! `align_of` / `offset_of` did not exist.
+
+#[repr(c)]
+struct C3 {
+    a: u8,
+    b: u32,
+    c: u8,
+}
+
+#[repr(c, packed)]
+struct P3 {
+    a: u8,
+    b: u32,
+    c: u8,
+}
+
+#[repr(c, packed)]
+struct Gdtr {
+    limit: u16,
+    base: u64,
+}
+
+#[repr(c, align(16))]
+struct A16 {
+    x: u32,
+}
+
+#[repr(c)]
+struct Outer {
+    tag: u8,
+    inner: A16,
+    z: u16,
+}
+
+#[repr(c)]
+struct PNest {
+    a: u8,
+    p: P3,
+    z: u16,
+}
+
+#[repr(c, align(4096))]
+struct Page {
+    e: u64,
+}
+
+fn main() -> int {
+    const C3S = size_of(C3)
+    const C3A = align_of(C3)
+    const C3_OA = offset_of(C3, a)
+    const C3_OB = offset_of(C3, b)
+    const C3_OC = offset_of(C3, c)
+    print("C3 {C3S} {C3A} {C3_OA} {C3_OB} {C3_OC}")
+    const P3S = size_of(P3)
+    const P3A = align_of(P3)
+    const P3_OA = offset_of(P3, a)
+    const P3_OB = offset_of(P3, b)
+    const P3_OC = offset_of(P3, c)
+    print("P3 {P3S} {P3A} {P3_OA} {P3_OB} {P3_OC}")
+    const GS = size_of(Gdtr)
+    const GA = align_of(Gdtr)
+    const G_OL = offset_of(Gdtr, limit)
+    const G_OB = offset_of(Gdtr, base)
+    print("Gdtr {GS} {GA} {G_OL} {G_OB}")
+    const AS = size_of(A16)
+    const AA = align_of(A16)
+    const A_OX = offset_of(A16, x)
+    print("A16 {AS} {AA} {A_OX}")
+    const OS = size_of(Outer)
+    const OA = align_of(Outer)
+    const O_OT = offset_of(Outer, tag)
+    const O_OI = offset_of(Outer, inner)
+    const O_OZ = offset_of(Outer, z)
+    print("Outer {OS} {OA} {O_OT} {O_OI} {O_OZ}")
+    const NS = size_of(PNest)
+    const NA = align_of(PNest)
+    const N_OA = offset_of(PNest, a)
+    const N_OP = offset_of(PNest, p)
+    const N_OZ = offset_of(PNest, z)
+    print("PNest {NS} {NA} {N_OA} {N_OP} {N_OZ}")
+    const PS = size_of(Page)
+    const PA = align_of(Page)
+    print("Page {PS} {PA}")
+    const B = size_of(u8)
+    const H = align_of(u16)
+    const I = size_of(int)
+    const F = align_of(f64)
+    const Z = align_of(bool)
+    const U = align_of(u64)
+    print("scalars {B} {H} {I} {F} {Z} {U}")
+    0
+}

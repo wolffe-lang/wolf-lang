@@ -1,0 +1,86 @@
+//! check: run(exit=0, stdout="1 2 0 0 0 3 4 5 0 0 0 6\n17 3735928559 34\n255 0 0 16 0 0 0 0 0 0\n255 1048576\n")
+//! phase: run
+//! conforms: abi.layout.packed, abi.layout.c, mem.unsafe.raw.1
+//!
+//! kw08 (K4, STATUS #31): `#[repr(c, packed)]` is alignment 1 and no
+//! padding through a raw pointer. `{u8, u32, u8}` is offsets 0 1 5,
+//! size 6, so `p[1]` starts at byte 6 (C3 under plain `#[repr(c)]` is
+//! 0 4 8, size 12); a GDTR-shaped `{u16, u64}` is offsets 0 2, size 10.
+//! The second and fourth lines read each struct back from the bytes C
+//! lays down. At trunk eb955c3b `packed` was E0817 on every compiling
+//! machine. The checked machine and lupin refuse the whole-aggregate
+//! store by name (a raw write of a non-scalar); `repr_c_raw_layout.rs`
+//! holds gcc and clang to both directions on both compiling tiers.
+
+import c "stdlib.h"
+
+#[repr(c, packed)]
+struct P3 {
+    a: u8,
+    b: u32,
+    c: u8,
+}
+
+#[repr(c, packed)]
+struct Gdtr {
+    limit: u16,
+    base: u64,
+}
+
+fn spaced(xs: List[int]) -> str {
+    var s = ""
+    for x in xs {
+        if s.len > 0 {
+            s = s + " "
+        }
+        s = s + "{x}"
+    }
+    s
+}
+
+fn main() -> int {
+    // # Safety: each buffer is 32 zeroed bytes from calloc; every
+    // access (two 6-byte elements, one 10-byte element, their bytes)
+    // stays inside it, and each is freed exactly once.
+    unsafe {
+        let p = c.calloc(1, 32) as *P3
+        p[0] = P3 { a: 1, b: 2, c: 3 }
+        p[1] = P3 { a: 4, b: 5, c: 6 }
+        let q = p as *u8
+        var xs = List[int]()
+        var i = 0
+        while i < 12 {
+            (mut xs).push(q[i] as int)
+            i += 1
+        }
+        print(spaced(xs))
+        // C's image of { 0x11, 0xdeadbeef, 0x22 }: no padding anywhere.
+        q[0] = 17
+        q[1] = 239
+        q[2] = 190
+        q[3] = 173
+        q[4] = 222
+        q[5] = 34
+        let v = p[0]
+        print("{v.a as int} {v.b as int} {v.c as int}")
+        c.free(q)
+    }
+    unsafe {
+        let g = c.calloc(1, 32) as *Gdtr
+        g[0] = Gdtr { limit: 255, base: 4096 }
+        let q = g as *u8
+        var ys = List[int]()
+        var j = 0
+        while j < 10 {
+            (mut ys).push(q[j] as int)
+            j += 1
+        }
+        print(spaced(ys))
+        q[4] = 16
+        q[3] = 0
+        let d = g[0]
+        print("{d.limit as int} {d.base as int}")
+        c.free(q)
+    }
+    0
+}

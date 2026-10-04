@@ -1,0 +1,104 @@
+//! check: run(exit=0, stdout="A16 0:1 16:2\nOuter 0:7 16:9 32:1 33:2 48:1 64:2 80:3\nPNest 0:5 1:6 2:2 3:1 6:7 8:4 9:3 10:1 11:2 12:3 16:4 18:5\n1 2 3\n1 2 3 4 5\n")
+//! phase: run
+//! conforms: abi.layout.align, abi.layout.packed, abi.layout.c, mem.unsafe.raw.1
+//!
+//! kw08 (K4, STATUS #31): `#[repr(c, align(16))]` raises a struct's
+//! alignment to 16 and rounds its size to it, so `{u32}` steps 16
+//! bytes; as a field it lands on the next multiple of 16 and makes its
+//! container 16-aligned (`{u8, A16, u16}` is offsets 0 16 32, size 48).
+//! A packed struct as a field is placed at alignment 1 (`{u8, P3,
+//! u16}` is offsets 0 1 8, size 10, alignment 2). Each line names the
+//! non-zero bytes two stores through `*T` left in a zeroed buffer; the
+//! last two read the second element back. C's answers for the same
+//! declarations (gcc and clang) are `repr_c_raw_layout.rs`'s. At trunk
+//! eb955c3b `align(N)` and `packed` were E0817.
+
+import c "stdlib.h"
+
+#[repr(c, align(16))]
+struct A16 {
+    x: u32,
+}
+
+#[repr(c)]
+struct Outer {
+    tag: u8,
+    inner: A16,
+    z: u16,
+}
+
+#[repr(c, packed)]
+struct P3 {
+    a: u8,
+    b: u32,
+    c: u8,
+}
+
+#[repr(c)]
+struct PNest {
+    a: u8,
+    p: P3,
+    z: u16,
+}
+
+// The non-zero bytes of a 128-byte image, as ` offset:value`.
+fn nz(xs: List[int]) -> str {
+    var s = ""
+    var i = 0
+    for b in xs {
+        if b != 0 {
+            s = s + " {i}:{b}"
+        }
+        i += 1
+    }
+    s
+}
+
+fn main() -> int {
+    // # Safety: each buffer is 128 zeroed bytes from calloc; two
+    // elements of at most 48 bytes and the byte scan stay inside it;
+    // each is freed exactly once.
+    unsafe {
+        let a = c.calloc(1, 128) as *A16
+        a[0] = A16 { x: 1 }
+        a[1] = A16 { x: 2 }
+        let aq = a as *u8
+        var as = List[int]()
+        var ai = 0
+        while ai < 128 {
+            (mut as).push(aq[ai] as int)
+            ai += 1
+        }
+        print("A16{nz(as)}")
+        c.free(a as *u8)
+        let o = c.calloc(1, 128) as *Outer
+        o[0] = Outer { tag: 7, inner: A16 { x: 9 }, z: 513 }
+        o[1] = Outer { tag: 1, inner: A16 { x: 2 }, z: 3 }
+        let oq = o as *u8
+        var os = List[int]()
+        var oi = 0
+        while oi < 128 {
+            (mut os).push(oq[oi] as int)
+            oi += 1
+        }
+        print("Outer{nz(os)}")
+        let n = c.calloc(1, 128) as *PNest
+        n[0] = PNest { a: 5, p: P3 { a: 6, b: 258, c: 7 }, z: 772 }
+        n[1] = PNest { a: 1, p: P3 { a: 2, b: 3, c: 4 }, z: 5 }
+        let nq = n as *u8
+        var ns = List[int]()
+        var ni = 0
+        while ni < 128 {
+            (mut ns).push(nq[ni] as int)
+            ni += 1
+        }
+        print("PNest{nz(ns)}")
+        let ov = o[1]
+        print("{ov.tag as int} {ov.inner.x as int} {ov.z as int}")
+        let nv = n[1]
+        print("{nv.a as int} {nv.p.a as int} {nv.p.b as int} {nv.p.c as int} {nv.z as int}")
+        c.free(o as *u8)
+        c.free(n as *u8)
+    }
+    0
+}

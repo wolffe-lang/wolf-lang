@@ -1,0 +1,19 @@
+//! check: fail(E0708)
+//! phase: resolve
+//! conforms: abi.layout.query, abi.native.layout, comptime.layout
+//!
+//! kw08 (K4): `align_of` answers for `#[repr(c)]` types only. A struct
+//! without it has the native layout, which `[abi.native.layout]` leaves
+//! free, so its alignment is not a comptime fact: E0708, as `size_of`
+//! of the same struct is (`size_of_layout.lu`). At trunk eb955c3b
+//! `align_of` did not exist (E0301).
+
+struct Vec2 {
+    x: f64,
+    y: f64,
+}
+
+fn main() -> !int {
+    const A = align_of(Vec2)
+    if A == 8 { 0 } else { 1 }
+}

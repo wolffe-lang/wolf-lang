@@ -1,0 +1,26 @@
+//! check: fail(E0819)
+//! phase: resolve
+//! conforms: abi.layout.packed
+//!
+//! kw08 (K4): a packed field may be read and written, never lent. A
+//! `mut` claim lowers to the field's address, and in a packed struct
+//! that address may be misaligned for the field's type, so `bump(mut
+//! d.base)` is refused, naming the field. The fix copies the field out,
+//! claims the copy, and writes it back. At trunk eb955c3b `packed` was
+//! E0817.
+
+#[repr(c, packed)]
+struct Gdtr {
+    limit: u16,
+    base: u64,
+}
+
+fn bump(mut x: u64) {
+    x += 1
+}
+
+fn main() -> int {
+    var d = Gdtr { limit: 7, base: 41 }
+    bump(mut d.base)
+    d.base as int - 42
+}

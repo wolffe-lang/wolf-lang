@@ -1,0 +1,40 @@
+//! check: fail(E0820)
+//! phase: resolve
+//! conforms: gram.item.attr, abi.layout.align, abi.layout.packed
+//!
+//! kw08 (K4): a representation that cannot be laid out is refused by
+//! name, one diagnostic per struct: an alignment that is not a power of
+//! two, an alignment of zero, `packed` without `c` (the clause is
+//! `#[repr(c, packed)]`), and `packed` beside `align(N)` (alignment 1
+//! and alignment N at once). At trunk eb955c3b each was E0817 (not
+//! implemented); none is a layout C or wolf has.
+
+#[repr(c, align(3))]
+struct Three {
+    a: u8,
+}
+
+#[repr(c, align(0))]
+struct Zero {
+    a: u8,
+}
+
+#[repr(packed)]
+struct Bare {
+    a: u8,
+    b: u32,
+}
+
+#[repr(c, packed, align(8))]
+struct Both {
+    a: u8,
+    b: u32,
+}
+
+fn main() -> int {
+    let t = Three { a: 1 }
+    let z = Zero { a: 1 }
+    let b = Bare { a: 1, b: 2 }
+    let o = Both { a: 1, b: 2 }
+    t.a as int + z.a as int + b.a as int + o.a as int - 4
+}

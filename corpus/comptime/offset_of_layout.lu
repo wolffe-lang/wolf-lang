@@ -1,0 +1,18 @@
+//! check: fail(E0708)
+//! phase: resolve
+//! conforms: abi.layout.query, abi.native.layout, comptime.layout
+//!
+//! kw08 (K4): `offset_of` answers for `#[repr(c)]` types only; a
+//! native-layout struct's field offsets are codegen's to choose
+//! (`[abi.native.layout]`), so asking is E0708. At trunk eb955c3b
+//! `offset_of` did not exist (E0301).
+
+struct Vec2 {
+    x: f64,
+    y: f64,
+}
+
+fn main() -> !int {
+    const O = offset_of(Vec2, y)
+    if O == 8 { 0 } else { 1 }
+}

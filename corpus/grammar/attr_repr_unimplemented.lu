@@ -2,13 +2,13 @@
 //! phase: resolve
 //! conforms: gram.item.attr, abi.layout.c
 //!
-//! kw01 (K13, K4 — wolf-lang#519): `#[repr(c, packed)]` asks for a
-//! layout nothing implements yet (KWC F4's later half, kw08). lc00 saw
-//! it accepted with no effect: a C caller passing a packed struct read
-//! `0x0` for `0xdeadbeef`. `c` alone is implemented; `packed` is
-//! refused by name.
+//! kw01 (K13, K4 — wolf-lang#519): a representation nothing implements
+//! is refused by name, never ignored. kw01 wrote this row with
+//! `#[repr(c, packed)]`, which kw08 implemented (`[abi.layout.packed]`);
+//! `transparent` is the one known representation still unimplemented,
+//! so the row asks for it instead. `c` alone is implemented.
 
-#[repr(c, packed)]
+#[repr(c, transparent)]
 struct P {
     a: u8,
     b: u32,

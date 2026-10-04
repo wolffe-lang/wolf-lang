@@ -1,0 +1,78 @@
+//! check: run(exit=0, stdout="10 0 2\n255 0 0 16 0 0 0 0 0 0\n255 4096\n")
+//! phase: run
+//! conforms: abi.layout.query, abi.layout.packed, mem.unsafe.raw.1
+//!
+//! kw08 (K4): a packed struct's fields are scalar raw accesses at
+//! `offset_of`, which every machine models — the checked machine too,
+//! which refuses a whole-aggregate raw store by name. A GDTR is written
+//! byte by byte at its fields' offsets (0 and 2, size 10: the layout
+//! `lgdt` reads) and read back the same way. At trunk eb955c3b `packed`
+//! was E0817 and `offset_of` did not exist.
+
+import c "stdlib.h"
+
+#[repr(c, packed)]
+struct Gdtr {
+    limit: u16,
+    base: u64,
+}
+
+// The little-endian bytes of `v`, `width` of them.
+fn le_bytes(v: int, width: int) -> List[int] {
+    var out = List[int]()
+    var x = v
+    var i = 0
+    while i < width {
+        (mut out).push(x % 256)
+        x = x / 256
+        i += 1
+    }
+    out
+}
+
+fn main() -> int {
+    const SIZE = size_of(Gdtr)
+    const LIMIT = offset_of(Gdtr, limit)
+    const BASE = offset_of(Gdtr, base)
+    print("{SIZE} {LIMIT} {BASE}")
+    // # Safety: 16 zeroed bytes from calloc; every access is inside the
+    // struct's 10 bytes; freed once.
+    unsafe {
+        let q = c.calloc(1, 16) as *u8
+        var k = 0
+        for b in le_bytes(255, 2) {
+            q[LIMIT + k] = b as u8
+            k += 1
+        }
+        k = 0
+        for b in le_bytes(4096, 8) {
+            q[BASE + k] = b as u8
+            k += 1
+        }
+        var s = ""
+        var i = 0
+        while i < SIZE {
+            if i > 0 {
+                s = s + " "
+            }
+            s = s + "{q[i] as int}"
+            i += 1
+        }
+        print(s)
+        var limit = 0
+        var base = 0
+        k = 2
+        while k > 0 {
+            k -= 1
+            limit = limit * 256 + q[LIMIT + k] as int
+        }
+        k = 8
+        while k > 0 {
+            k -= 1
+            base = base * 256 + q[BASE + k] as int
+        }
+        print("{limit} {base}")
+        c.free(q)
+    }
+    0
+}
