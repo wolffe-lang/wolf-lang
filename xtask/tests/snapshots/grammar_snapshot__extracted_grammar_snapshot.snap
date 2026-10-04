@@ -43,7 +43,7 @@ unit  ::= inner_doc* inner_attribute* item*
 item  ::= attribute* visibility? bare_item
 bare_item ::= fn_item | let_item | var_item | type_item | trait_item
             | impl_item | use_item | import_c_item | const_item
-            | error_item
+            | error_item | extern_let_item
 visibility ::= 'pub' ('(' 'pkg' ')')?
 
 use_item ::= 'use' path ( '.' '{' IDENT (',' IDENT)* ','? '}' )? ('as' IDENT)? TERM
@@ -67,6 +67,7 @@ let_item ::= 'let' binder (',' binder)* TERM
 var_item ::= 'var' binder (',' binder)* TERM
 binder ::= pattern (':' type)? '=' expr
 const_item ::= 'const' IDENT (':' type)? '=' expr TERM
+extern_let_item ::= 'extern' STRING 'let' IDENT ':' type TERM
 
 type_item   ::= 'type' IDENT generics? '=' type_def TERM?
 type_def    ::= struct_def | enum_def | type   /* `distinct T` via prefix_type_kw */
