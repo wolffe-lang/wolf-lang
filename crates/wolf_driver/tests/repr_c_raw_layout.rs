@@ -379,3 +379,492 @@ fn a_raw_compound_assignment_applies_its_operator_on_every_lane() {
         );
     }
 }
+
+// ---------------------------------------------------------------------
+// kw08 (K4 — `[abi.layout.packed]`, `[abi.layout.align]`,
+// `[abi.layout.query]`): every packed and aligned layout, held to gcc
+// AND clang in both directions on both compiling tiers, and wolf's
+// comptime `size_of` / `align_of` / `offset_of` held to C's `sizeof` /
+// `_Alignof` / `offsetof`. At trunk 9bf6a5d5 every wolf half was E0817
+// (`packed`, `align(N)` refused by name) or E0301 (no `align_of`,
+// `offset_of`), so every shape below was red.
+// ---------------------------------------------------------------------
+
+/// One layout under test: its wolf and C declarations (every shape's
+/// dependencies included), two element values in each language, the
+/// fields printed (a nested one by path) and the top-level fields whose
+/// offsets are asked.
+struct Shape {
+    name: &'static str,
+    wolf_decl: &'static str,
+    c_decl: &'static str,
+    wolf_vals: [&'static str; 2],
+    c_vals: [&'static str; 2],
+    fields: &'static [&'static str],
+    offsets: &'static [&'static str],
+    /// The fields' values, one line per element, as both sides print.
+    want: &'static str,
+}
+
+const A16_W: &str = "#[repr(c, align(16))]\nstruct A16 {\n    x: u32,\n}\n";
+const A16_C: &str = "struct __attribute__((aligned(16))) A16 { uint32_t x; };\n";
+const P3_W: &str = "#[repr(c, packed)]\nstruct P3 {\n    a: u8,\n    b: u32,\n    c: u8,\n}\n";
+const P3_C: &str = "struct __attribute__((packed)) P3 { uint8_t a; uint32_t b; uint8_t c; };\n";
+
+const SHAPES: &[Shape] = &[
+    Shape {
+        name: "P3",
+        wolf_decl: P3_W,
+        c_decl: P3_C,
+        wolf_vals: [
+            "P3 { a: 17, b: 3735928559, c: 34 }",
+            "P3 { a: 68, b: 7, c: 85 }",
+        ],
+        c_vals: ["{17, 3735928559u, 34}", "{68, 7, 85}"],
+        fields: &["a", "b", "c"],
+        offsets: &["a", "b", "c"],
+        want: "17 3735928559 34\n68 7 85\n",
+    },
+    Shape {
+        name: "Gdtr",
+        wolf_decl: "#[repr(c, packed)]\nstruct Gdtr {\n    limit: u16,\n    base: u64,\n}\n",
+        c_decl: "struct __attribute__((packed)) Gdtr { uint16_t limit; uint64_t base; };\n",
+        wolf_vals: [
+            "Gdtr { limit: 4095, base: 1311768467463790320 }",
+            "Gdtr { limit: 7, base: 4096 }",
+        ],
+        c_vals: ["{4095, 1311768467463790320ull}", "{7, 4096}"],
+        fields: &["limit", "base"],
+        offsets: &["limit", "base"],
+        want: "4095 1311768467463790320\n7 4096\n",
+    },
+    Shape {
+        name: "A16",
+        wolf_decl: A16_W,
+        c_decl: A16_C,
+        wolf_vals: ["A16 { x: 3735928559 }", "A16 { x: 9 }"],
+        c_vals: ["{3735928559u}", "{9}"],
+        fields: &["x"],
+        offsets: &["x"],
+        want: "3735928559\n9\n",
+    },
+    Shape {
+        name: "Outer",
+        wolf_decl: "#[repr(c)]\nstruct Outer {\n    tag: u8,\n    inner: A16,\n    z: u16,\n}\n",
+        c_decl: "struct Outer { uint8_t tag; struct A16 inner; uint16_t z; };\n",
+        wolf_vals: [
+            "Outer { tag: 7, inner: A16 { x: 9 }, z: 513 }",
+            "Outer { tag: 1, inner: A16 { x: 65537 }, z: 3 }",
+        ],
+        c_vals: ["{7, {9}, 513}", "{1, {65537}, 3}"],
+        fields: &["tag", "inner.x", "z"],
+        offsets: &["tag", "inner", "z"],
+        want: "7 9 513\n1 65537 3\n",
+    },
+    Shape {
+        name: "PNest",
+        wolf_decl: "#[repr(c)]\nstruct PNest {\n    a: u8,\n    p: P3,\n    z: u16,\n}\n",
+        c_decl: "struct PNest { uint8_t a; struct P3 p; uint16_t z; };\n",
+        wolf_vals: [
+            "PNest { a: 5, p: P3 { a: 6, b: 258, c: 7 }, z: 772 }",
+            "PNest { a: 1, p: P3 { a: 2, b: 4294967295, c: 4 }, z: 5 }",
+        ],
+        c_vals: ["{5, {6, 258, 7}, 772}", "{1, {2, 4294967295u, 4}, 5}"],
+        fields: &["a", "p.a", "p.b", "p.c", "z"],
+        offsets: &["a", "p", "z"],
+        want: "5 6 258 7 772\n1 2 4294967295 4 5\n",
+    },
+    Shape {
+        name: "PA",
+        wolf_decl: "#[repr(c, packed)]\nstruct PA {\n    a: u8,\n    b: A16,\n    c: u8,\n}\n",
+        c_decl: "struct __attribute__((packed)) PA { uint8_t a; struct A16 b; uint8_t c; };\n",
+        wolf_vals: [
+            "PA { a: 1, b: A16 { x: 305419896 }, c: 2 }",
+            "PA { a: 3, b: A16 { x: 4 }, c: 5 }",
+        ],
+        c_vals: ["{1, {305419896u}, 2}", "{3, {4}, 5}"],
+        fields: &["a", "b.x", "c"],
+        offsets: &["a", "b", "c"],
+        want: "1 305419896 2\n3 4 5\n",
+    },
+    Shape {
+        name: "Pf",
+        wolf_decl: "#[repr(c, packed)]\nstruct Pf {\n    t: u8,\n    d: f64,\n    h: i16,\n}\n",
+        c_decl: "struct __attribute__((packed)) Pf { uint8_t t; double d; int16_t h; };\n",
+        wolf_vals: [
+            "Pf { t: 9, d: 2.5, h: -2 }",
+            "Pf { t: 1, d: -0.125, h: 300 }",
+        ],
+        c_vals: ["{9, 2.5, -2}", "{1, -0.125, 300}"],
+        fields: &["t", "d", "h"],
+        offsets: &["t", "d", "h"],
+        want: "9 2.5 -2\n1 -0.125 300\n",
+    },
+];
+
+/// Every declaration the shapes need, in dependency order, once.
+fn all_decls(pick: impl Fn(&Shape) -> &'static str, base: [&'static str; 2]) -> String {
+    let mut out = String::new();
+    for d in base {
+        out.push_str(d);
+        out.push('\n');
+    }
+    for s in SHAPES {
+        let d = pick(s);
+        if !base.contains(&d) {
+            out.push_str(d);
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// The C half for every shape: `write NAME` prints the bytes of two
+/// elements (statically initialized, so padding is zero); `read NAME
+/// b0 b1 …` copies the bytes into two elements and prints `sizeof`,
+/// `_Alignof`, the asked offsets, then each element's fields.
+fn kw08_c_src() -> String {
+    let mut s = String::from(
+        "#include <stddef.h>\n#include <stdint.h>\n#include <stdio.h>\n#include <stdlib.h>\n\
+         #include <string.h>\n\n",
+    );
+    s.push_str(&all_decls(|sh| sh.c_decl, [A16_C, P3_C]));
+    s.push_str(
+        "static int bytes_in(int argc, char **argv, unsigned char *buf, size_t n) {\n    \
+         if ((size_t)(argc - 3) != n) { printf(\"expected %zu bytes, got %d\\n\", n, argc - 3); return 0; }\n    \
+         for (size_t i = 0; i < n; i++) buf[i] = (unsigned char)strtoul(argv[i + 3], 0, 10);\n    \
+         return 1;\n}\n\n\
+         static void bytes_out(const void *p, size_t n) {\n    \
+         const unsigned char *q = (const unsigned char *)p;\n    \
+         for (size_t i = 0; i < n; i++) printf(\"%s%u\", i ? \" \" : \"\", q[i]);\n    \
+         printf(\"\\n\");\n}\n\n\
+         int main(int argc, char **argv) {\n    if (argc < 3) return 2;\n    \
+         int w = strcmp(argv[1], \"write\") == 0;\n",
+    );
+    for sh in SHAPES {
+        let n = sh.name;
+        s.push_str(&format!(
+            "    if (strcmp(argv[2], \"{n}\") == 0) {{\n        \
+             static const struct {n} init[2] = {{{}, {}}};\n        \
+             struct {n} v[2];\n        \
+             if (w) {{ memcpy(v, init, sizeof v); bytes_out(v, sizeof v); return 0; }}\n        \
+             unsigned char buf[sizeof v];\n        \
+             if (!bytes_in(argc, argv, buf, sizeof buf)) return 3;\n        \
+             memcpy(v, buf, sizeof v);\n        \
+             printf(\"sizeof=%zu align=%zu off=",
+            sh.c_vals[0], sh.c_vals[1]
+        ));
+        let fmt: Vec<&str> = sh.offsets.iter().map(|_| "%zu").collect();
+        s.push_str(&fmt.join(","));
+        s.push_str(&format!("\\n\", sizeof(struct {n}), _Alignof(struct {n})"));
+        for o in sh.offsets {
+            s.push_str(&format!(", offsetof(struct {n}, {o})"));
+        }
+        s.push_str(");\n        for (int k = 0; k < 2; k++) printf(\"");
+        let ffmt: Vec<&str> = sh
+            .fields
+            .iter()
+            .map(|f| if *f == "d" { "%g" } else if *f == "h" { "%lld" } else { "%llu" })
+            .collect();
+        s.push_str(&ffmt.join(" "));
+        s.push_str("\\n\"");
+        for f in sh.fields {
+            let cast = if *f == "d" {
+                "(double)"
+            } else if *f == "h" {
+                "(long long)"
+            } else {
+                "(unsigned long long)"
+            };
+            s.push_str(&format!(", {cast}v[k].{f}"));
+        }
+        s.push_str(");\n        return 0;\n    }\n");
+    }
+    s.push_str("    return 4;\n}\n");
+    s
+}
+
+/// The wolf declarations every shape program carries.
+fn wolf_decls() -> String {
+    all_decls(|sh| sh.wolf_decl, [A16_W, P3_W])
+}
+
+/// How a field interpolates on the wolf side: integers through `int`
+/// (every value here fits), the float as itself.
+fn wolf_field(var: &str, f: &str) -> String {
+    if f == "d" {
+        format!("{{{var}.{f}}}")
+    } else {
+        format!("{{{var}.{f} as int}}")
+    }
+}
+
+/// Direction 1's wolf half for one shape: the comptime queries in C's
+/// header format, then two stores through `*T` and their bytes.
+fn kw08_writer(sh: &Shape) -> String {
+    let n = sh.name;
+    let offs: Vec<String> = sh
+        .offsets
+        .iter()
+        .map(|o| format!("{{offset_of({n}, {o})}}"))
+        .collect();
+    format!(
+        "import c \"stdlib.h\"\n\n{}\nfn main() -> int {{\n    \
+         print(\"sizeof={{size_of({n})}} align={{align_of({n})}} off={}\")\n    \
+         // # Safety: 256 zeroed bytes; two elements of at most 48 bytes and their bytes stay inside; freed once.\n    \
+         unsafe {{\n        \
+         let p = c.calloc(1, 256) as *{n}\n        \
+         p[0] = {}\n        \
+         p[1] = {}\n        \
+         let q = p as *u8\n        \
+         var i = 0\n        \
+         var s = \"\"\n        \
+         while i < 2 * size_of({n}) {{\n            \
+         if i > 0 {{\n                s = s + \" \"\n            }}\n            \
+         s = s + \"{{q[i] as int}}\"\n            \
+         i += 1\n        \
+         }}\n        \
+         print(s)\n        \
+         c.free(q)\n    \
+         }}\n    \
+         0\n}}\n",
+        wolf_decls(),
+        offs.join(","),
+        sh.wolf_vals[0],
+        sh.wolf_vals[1],
+    )
+}
+
+/// Direction 2's wolf half for one shape: C's bytes laid down through
+/// `*u8`, both elements loaded through `*T`, their fields printed.
+fn kw08_reader(sh: &Shape, bytes: &[u8]) -> String {
+    let n = sh.name;
+    let stores: String = bytes
+        .iter()
+        .enumerate()
+        .map(|(i, b)| format!("        q[{i}] = {b}\n"))
+        .collect();
+    let line = |v: &str| -> String {
+        let parts: Vec<String> = sh.fields.iter().map(|f| wolf_field(v, f)).collect();
+        format!("        print(\"{}\")\n", parts.join(" "))
+    };
+    format!(
+        "import c \"stdlib.h\"\n\n{}\nfn main() -> int {{\n    \
+         // # Safety: 256 zeroed bytes; C's image and two element loads stay inside; freed once.\n    \
+         unsafe {{\n        \
+         let q = c.calloc(1, 256) as *u8\n\
+         {stores}        \
+         let p = q as *{n}\n        \
+         let v = p[0]\n        \
+         let w = p[1]\n\
+         {}{}        \
+         c.free(q)\n    \
+         }}\n    \
+         0\n}}\n",
+        wolf_decls(),
+        line("v"),
+        line("w"),
+    )
+}
+
+/// The C compilers this host holds the layouts to: gcc and clang (both
+/// required on linux, where CI and kasumi carry both), plus `$CC`.
+fn c_compilers() -> Vec<String> {
+    let mut ccs: Vec<String> = Vec::new();
+    if let Ok(cc) = std::env::var("CC") {
+        ccs.push(cc);
+    }
+    for cc in ["gcc", "clang"] {
+        let found = Command::new(cc).arg("--version").output().is_ok_and(|o| o.status.success());
+        if found {
+            if !ccs.iter().any(|c| c == cc) {
+                ccs.push(cc.to_string());
+            }
+        } else if cfg!(target_os = "linux") {
+            panic!("no `{cc}` on this linux host: kw08's witness holds every layout to gcc AND clang");
+        } else {
+            eprintln!("SKIP: no `{cc}` on this host — the layouts are held to the other compiler only");
+        }
+    }
+    if ccs.is_empty() && cfg!(windows) {
+        eprintln!("SKIP: no C compiler on this host — the kw08 layout witness needs one");
+    }
+    assert!(
+        !ccs.is_empty() || cfg!(windows),
+        "no C compiler: the kw08 layout witness needs gcc or clang"
+    );
+    ccs
+}
+
+/// The kw08 C half compiled by `cc` into its own directory.
+fn kw08_c_program(cc: &str, tag: &str) -> PathBuf {
+    let dir = scratch(&format!("kw08-c-{tag}-{}", cc.replace(['/', '\\'], "_")));
+    let src = dir.join("shapes.c");
+    std::fs::write(&src, kw08_c_src()).expect("write shapes.c");
+    let exe = dir.join("shapes");
+    let out = Command::new(cc)
+        .arg("-std=c11")
+        .arg(&src)
+        .arg("-o")
+        .arg(&exe)
+        .output()
+        .unwrap_or_else(|e| panic!("{cc} runs: {e}"));
+    assert!(
+        out.status.success(),
+        "{cc} failed on the kw08 C half: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    exe
+}
+
+fn c_says(exe: &Path, args: &[&str]) -> String {
+    let out = Command::new(exe).args(args).output().expect("the C half runs");
+    assert!(
+        out.status.success(),
+        "the C half {args:?} exited {:?}: {}",
+        out.status,
+        String::from_utf8_lossy(&out.stdout)
+    );
+    String::from_utf8_lossy(&out.stdout).replace("\r\n", "\n")
+}
+
+/// Direction 1, every shape, both tiers, gcc and clang: C reads the
+/// bytes wolf stored through `*T` as the same values, and C's
+/// `sizeof`/`_Alignof`/`offsetof` are wolf's comptime answers.
+#[test]
+fn c_reads_every_packed_and_aligned_layout_wolf_wrote() {
+    ensure_rt_staticlib();
+    let ccs = c_compilers();
+    let exes: Vec<(String, PathBuf)> = ccs
+        .iter()
+        .map(|cc| (cc.clone(), kw08_c_program(cc, "read")))
+        .collect();
+    let mut checked = 0;
+    for sh in SHAPES {
+        let dir = scratch(&format!("kw08-w-{}", sh.name));
+        let prog = write_prog(&dir, &kw08_writer(sh));
+        for flag in ["--native", "--release"] {
+            let Some((verdict, stdout, stderr)) = lane(&prog, flag) else {
+                continue;
+            };
+            assert_eq!(
+                verdict, "exit(0)",
+                "the {flag} lane runs {}'s writer: {stderr}",
+                sh.name
+            );
+            let mut lines = stdout.lines();
+            let header = lines.next().unwrap_or_default().to_string();
+            let bytes: Vec<&str> = lines.next().unwrap_or_default().split_whitespace().collect();
+            for (cc, exe) in &exes {
+                let mut args = vec!["read", sh.name];
+                args.extend(bytes.iter().copied());
+                let said = c_says(exe, &args);
+                assert_eq!(
+                    said,
+                    format!("{header}\n{}", sh.want),
+                    "{cc} reading {}'s two elements as wolf's {flag} lane stored them \
+                     (first line: C's sizeof/_Alignof/offsetof against wolf's size_of/\
+                     align_of/offset_of); wolf printed {stdout:?}",
+                    sh.name
+                );
+                checked += 1;
+            }
+        }
+    }
+    eprintln!("kw08: {checked} (shape, tier, compiler) rows held, wolf writes and C reads");
+}
+
+/// Direction 2, every shape, both tiers, gcc and clang: wolf loads
+/// through `*T` exactly the values C laid down.
+#[test]
+fn wolf_reads_every_packed_and_aligned_layout_c_wrote() {
+    ensure_rt_staticlib();
+    let ccs = c_compilers();
+    let mut checked = 0;
+    for cc in &ccs {
+        let exe = kw08_c_program(cc, "write");
+        for sh in SHAPES {
+            let image: Vec<u8> = c_says(&exe, &["write", sh.name])
+                .split_whitespace()
+                .map(|b| b.parse().expect("a byte"))
+                .collect();
+            let dir = scratch(&format!(
+                "kw08-r-{}-{}",
+                sh.name,
+                cc.replace(['/', '\\'], "_")
+            ));
+            let prog = write_prog(&dir, &kw08_reader(sh, &image));
+            for flag in ["--native", "--release"] {
+                let Some((verdict, stdout, stderr)) = lane(&prog, flag) else {
+                    continue;
+                };
+                assert_eq!(
+                    verdict, "exit(0)",
+                    "the {flag} lane runs {}'s reader: {stderr}",
+                    sh.name
+                );
+                assert_eq!(
+                    stdout, sh.want,
+                    "the {flag} lane loading {}'s two elements from {cc}'s image {image:?}",
+                    sh.name
+                );
+                checked += 1;
+            }
+        }
+    }
+    eprintln!("kw08: {checked} (shape, tier, compiler) rows held, C writes and wolf reads");
+}
+
+/// The checked machine refuses a whole packed or aligned aggregate
+/// through a raw pointer by name, as it does a plain `#[repr(c)]` one.
+#[test]
+fn the_checked_machine_refuses_a_packed_aggregate_store_by_name() {
+    let sh = &SHAPES[0];
+    let dir = scratch("kw08-checked");
+    let prog = write_prog(&dir, &kw08_writer(sh));
+    let (verdict, _, stderr) = lane(&prog, "--checked").expect("the checked lane always runs");
+    assert_eq!(verdict, "unsupported", "{stderr}");
+    assert!(stderr.contains("raw write of a non-scalar"), "{stderr}");
+}
+
+/// The membrane (`[abi.c.types]`, `[abi.layout.align]`): a packed or
+/// aligned struct by value is refused by name on both compiling tiers;
+/// a pointer to one crosses.
+#[test]
+fn a_packed_struct_by_value_at_the_membrane_is_refused_by_name() {
+    ensure_rt_staticlib();
+    let dir = scratch("kw08-membrane");
+    let by_value = write_prog(
+        &dir,
+        &format!(
+            "{P3_W}\nexport fn first(p: P3) -> u8 {{\n    p.a\n}}\n\n\
+             fn main() -> int {{\n    0\n}}\n"
+        ),
+    );
+    for flag in ["--native", "--release"] {
+        let Some((verdict, _, stderr)) = lane(&by_value, flag) else {
+            continue;
+        };
+        assert_eq!(verdict, "unsupported", "the {flag} lane: {stderr}");
+        assert!(
+            stderr.contains("packed or aligned struct by value") && stderr.contains("`P3`"),
+            "the {flag} lane names the struct: {stderr}"
+        );
+    }
+    let dir = scratch("kw08-membrane-ptr");
+    let by_ptr = write_prog(
+        &dir,
+        &format!(
+            "{P3_W}\nexport fn first(p: *P3) -> u8 {{\n    \
+             // # Safety: the C caller passes a live P3.\n    \
+             unsafe {{\n        p[0].a\n    }}\n}}\n\n\
+             fn main() -> int {{\n    0\n}}\n"
+        ),
+    );
+    for flag in ["--native", "--release"] {
+        let Some((verdict, _, stderr)) = lane(&by_ptr, flag) else {
+            continue;
+        };
+        assert_eq!(verdict, "exit(0)", "a `*P3` crosses on {flag}: {stderr}");
+    }
+}
