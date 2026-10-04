@@ -45,8 +45,9 @@ pub use ast::{
     RegionValue, RetType, ReturnExpr, RowEntry, ScopeExpr, SelectArm, SelectExpr, SpawnExpr,
     StringExpr, StringLit, StructDecl, StructDef, StructField, StructLit, StructPat, TraitDecl,
     TryExpr, TupleExpr, TupleType, TypeArgList, TypeBound, TypeDecl, UnsafeBlock, UseDecl,
-    UseGroup, VarDecl, ViewSet, Visibility, WhenExpr, WhileExpr, binding_binders, is_expr_kind,
-    is_pattern_kind, is_stmt_kind, is_type_kind,
+    UseGroup, VarDecl, ViewSet, Visibility, WhenExpr, WhileExpr, binding_binders,
+    binding_extern_abi, is_expr_kind, is_extern_binding, is_pattern_kind, is_stmt_kind,
+    is_type_kind,
 };
 pub use dump::dump_decls;
 pub use green::{Child, GreenNode, GreenToken};

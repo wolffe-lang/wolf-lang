@@ -498,6 +498,28 @@ macro_rules! binding_accessors {
 binding_accessors!(LetDecl);
 binding_accessors!(VarDecl);
 
+/// kw09 `[abi.link.extern]`: the ABI string of an `extern "…" let`
+/// (or the `var`/`const` spellings sema refuses) — `None` for an
+/// ordinary binding.
+pub fn binding_extern_abi(node: &GreenNode) -> Option<StringLit<'_>> {
+    if !matches!(
+        node.kind,
+        SyntaxKind::LetDecl | SyntaxKind::VarDecl | SyntaxKind::ConstDecl
+    ) {
+        return None;
+    }
+    node.child_token(SyntaxKind::ExternKw)?;
+    node.nodes().find_map(StringLit::cast)
+}
+
+/// Is `node` an `extern "…" let`/`var`/`const` declaration?
+pub fn is_extern_binding(node: &GreenNode) -> bool {
+    matches!(
+        node.kind,
+        SyntaxKind::LetDecl | SyntaxKind::VarDecl | SyntaxKind::ConstDecl
+    ) && node.child_token(SyntaxKind::ExternKw).is_some()
+}
+
 ast_node!(
     /// `const` item `[gram.item.let]`.
     ConstDecl
