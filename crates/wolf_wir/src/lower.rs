@@ -14657,6 +14657,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         &mut self,
         d: CallExpr<'t>,
         recv_place: &'t GreenNode,
+        elem: TyId,
         mname: &str,
         e: &'t GreenNode,
     ) -> R<Flow> {
@@ -14707,6 +14708,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 };
                 Ok(Flow::Val(Some(self.addr_as_ptr(a))))
             }
+            // kw07 (`[mem.unsafe.volatile]`): one access each.
+            "read_volatile" | "write_volatile" => self.lower_volatile(p, arg, elem, mname, e),
             _ => Err(refuse("this raw-pointer method", e.span)),
         }
     }
@@ -14787,8 +14790,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// passes is entitled to optimize.
     fn lower_volatile(
         &mut self,
-        d: CallExpr<'t>,
-        recv_place: &'t GreenNode,
+        ptr: Value,
+        arg: Option<&'t GreenNode>,
         elem: TyId,
         mname: &str,
         e: &'t GreenNode,
@@ -14799,9 +14802,6 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 "a volatile access of a pointee that is not one integer access",
                 e.span,
             ));
-        };
-        let Some(ptr) = flow_val!(self.lower_expr(recv_place)) else {
-            return Err(refuse("a valueless raw pointer", recv_place.span));
         };
         let region = self.foreign_buf_region();
         let tok = self.b.module.types.mem(RegionId::new(0));
@@ -14818,13 +14818,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let r = self.b.ins_call_regions(ext, &[ptr], &formal);
             return Ok(Flow::Val(r.first().copied()));
         }
-        let vx = d
-            .args()
-            .into_iter()
-            .flat_map(|l| l.args())
-            .filter_map(Arg::value)
-            .next()
-            .ok_or_else(|| refuse("a volatile write without a value", e.span))?;
+        let vx = arg.ok_or_else(|| refuse("a volatile write without a value", e.span))?;
         let Some(val) = flow_val!(self.lower_expr(vx)) else {
             return Err(refuse("a unit-typed volatile payload", vx.span));
         };
@@ -18710,14 +18704,6 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     let (k, v) = (*k, *v);
                     return self.lower_map_method(d, recv_place, k, v, &mname, e);
                 }
-                // kw07 (`[mem.unsafe.volatile]`): the two volatile
-                // methods on a raw pointer lower to one access each.
-                TyKind::Ptr(elem)
-                    if matches!(mname.as_str(), "read_volatile" | "write_volatile") =>
-                {
-                    let elem = *elem;
-                    return self.lower_volatile(d, recv_place, elem, &mname, e);
-                }
                 // s173: and the `Pool` receiver. `Pool` has no home
                 // module (`[type.method.home]`'s table is closed), so
                 // there is no impl this could be routed to instead.
@@ -18743,8 +18729,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 // kw06: the raw-pointer surface (`[mem.unsafe.raw]`,
                 // `[mem.prov.expose]`) is builtin, never an impl.
-                TyKind::Ptr(_) => {
-                    return self.lower_ptr_method(d, recv_place, &mname, e);
+                TyKind::Ptr(elem) => {
+                    let elem = *elem;
+                    return self.lower_ptr_method(d, recv_place, elem, &mname, e);
                 }
                 _ => {}
             }
