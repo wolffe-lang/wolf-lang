@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+### Module state and linker control (kw09, ruling #31 K11 = A and K6)
+
+- **Module `const`, `let` and `var` compile.** Before, every one was
+  `unsupported` on native and release ("item-initializer lowering
+  (globals)") and on the checked machine (wolf-lang#560, #529). Every
+  module initializer is now evaluated at compile time
+  (`[mem.static.3]`): the value is part of the image, so there is no
+  initialization order to observe; an initializer that reads a `var`,
+  calls into run-time code or needs its own value is **E0705**. A
+  `const` is its value (no storage); a `let` is read-only data in
+  `.rodata`; a `var` is writable data in `.data`, or `.bss` when its
+  initial bytes are all zero. Module state holds the integers, `byte`,
+  `bool` and the floats (and `str` in a `const` or `let`); any other
+  type is refused by name (`module state of a type that is not static
+  data`).
+- **A `var` is raw-tier** (`[mem.static.2]`, K11 = A): every read and
+  write of it outside `unsafe` is E1301, one per site; `let` and
+  `const` read freely. The compiled tiers read and write it through
+  the raw-buffer region, so another function's write is never cached
+  across a call. Each module item is defined in exactly one object of
+  a build, global, under its mangled name, and imported by the others.
+- **`#[section(".name")]`** (`[abi.link.section]`, K6) places a
+  function or a module `let`/`var` in that object section, on both
+  tiers, hosted (ELF) and `x86_64-unknown-none`. On a `const` it is
+  E0817 (no storage), as is Rust's `link_section`. Mach-O and COFF
+  hosts refuse it by name (`section placement on a Mach-O target`).
+  The native tier gives each function its own section only in an
+  object that places one, and renames the placed one in the ELF.
+- **`extern "c" let NAME: *T`** (`[abi.link.extern]`) names a symbol
+  the link defines — a linker-script symbol, an assembly label — and
+  its value is the symbol's address. A non-pointer type, an
+  initializer, `var`/`const`, or a body position is the new **E0821**.
+  `[abi.link.script]`: the consuming build links the image.
+- **The machines.** The checked machine runs module state as ordinary
+  memory started at its comptime value, and refuses `#[section]`
+  (`section placement`) and `extern "c" let` (`a link-time symbol`) by
+  name. lupin 0.1.45 parts on every refusal and overflows its stack on
+  an initializer cycle; its half is wolf-interp#190, pinned by version
+  in `static_lanes.rs`. `static_sections.rs` reads every placement
+  from the objects and links a kernel with its script on both tiers.
+- Hosted programs with no module state compile byte-for-byte as before.
+  Anchors 577 → 585.
 ### Exact layout: `packed`, `align(N)`, `size_of` / `align_of` / `offset_of` (kw08, ruling #31 K4)
 
 - **`#[repr(c, packed)]` and `#[repr(c, align(N))]`.** Both were E0817
