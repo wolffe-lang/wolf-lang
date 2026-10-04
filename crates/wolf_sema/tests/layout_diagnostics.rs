@@ -154,3 +154,19 @@ fn the_queries_answer_the_c_layout() {
         "a wrong layout number must fail: {out}"
     );
 }
+
+/// E0820 (kw08): a packed struct holding an aligned one, directly or
+/// inside a field — the C compilers disagree on that layout by target.
+#[test]
+fn e0820_an_aligned_struct_inside_a_packed_one() {
+    insta::assert_snapshot!(
+        "e0820_aligned_in_packed",
+        render_tc(
+            "#[repr(c, align(16))]\nstruct A16 {\n    x: u32,\n}\n\n\
+             #[repr(c)]\nstruct Holds {\n    t: u8,\n    a: A16,\n}\n\n\
+             #[repr(c, packed)]\nstruct PA {\n    a: u8,\n    b: A16,\n}\n\n\
+             #[repr(c, packed)]\nstruct Deep {\n    t: u8,\n    h: Holds,\n}\n\n\
+             fn main() -> int {\n    0\n}\n"
+        )
+    );
+}

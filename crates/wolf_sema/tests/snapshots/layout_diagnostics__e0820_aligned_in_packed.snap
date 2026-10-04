@@ -1,0 +1,25 @@
+---
+source: crates/wolf_sema/tests/layout_diagnostics.rs
+expression: "render_tc(\"#[repr(c, align(16))]\\nstruct A16 {\\n    x: u32,\\n}\\n\\n\\\n             #[repr(c)]\\nstruct Holds {\\n    t: u8,\\n    a: A16,\\n}\\n\\n\\\n             #[repr(c, packed)]\\nstruct PA {\\n    a: u8,\\n    b: A16,\\n}\\n\\n\\\n             #[repr(c, packed)]\\nstruct Deep {\\n    t: u8,\\n    h: Holds,\\n}\\n\\n\\\n             fn main() -> int {\\n    0\\n}\\n\")"
+---
+error[E0820]: the packed struct `PA` holds the aligned struct `A16` in its field `b`
+  --> mem:///main.lu:15:5
+   |
+15 |     b: A16,
+   |     ^ no single C layout for this field
+   |
+   = note: C compilers disagree on an aligned struct inside a packed one: gcc and clang on SysV and
+     Apple targets place it at the next byte, the MSVC ABI keeps its alignment
+     ([abi.layout.packed]). Pack the outer struct without the aligned one inside it, or drop
+     `packed`.
+
+error[E0820]: the packed struct `Deep` holds the aligned struct `A16` in its field `h`
+  --> mem:///main.lu:21:5
+   |
+21 |     h: Holds,
+   |     ^ no single C layout for this field
+   |
+   = note: C compilers disagree on an aligned struct inside a packed one: gcc and clang on SysV and
+     Apple targets place it at the next byte, the MSVC ABI keeps its alignment
+     ([abi.layout.packed]). Pack the outer struct without the aligned one inside it, or drop
+     `packed`.
