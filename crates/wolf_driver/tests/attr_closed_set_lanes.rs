@@ -267,9 +267,12 @@ fn every_item_of_a_bogus_repr_line_is_refused() {
     refused("grammar/attr_repr_bogus.lu", &["E0817", "E0817", "E0817"]);
 }
 
+/// kw09 implemented `#[section]` (`[abi.link.section]`, K6); what stays
+/// E0817 is the attribute on a `const` (no storage) and Rust's
+/// `link_section` spelling.
 #[test]
-fn a_section_is_refused_until_it_is_implemented() {
-    refused("grammar/attr_section.lu", &["E0817"]);
+fn a_section_on_a_const_and_link_section_are_refused() {
+    refused("grammar/attr_section.lu", &["E0817", "E0817"]);
 }
 
 #[test]
