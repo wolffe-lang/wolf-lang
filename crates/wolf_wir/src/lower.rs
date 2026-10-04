@@ -2688,7 +2688,10 @@ fn raw_lay(
             concrete_struct(table, sigs, t, 0).map(|(ftable, ss)| (ftable, sigs, ss))
         })
         .filter(|(_, _, ss)| ss.fields.len() == wf.len());
-    let (packed, align_attr) = ss.map_or((false, None), |(_, _, ss)| (ss.packed, ss.align));
+    let plant = std::env::var_os("WOLF_KW08_PLANT_NEVER").is_some();
+    let (packed, align_attr) = ss.map_or((false, None), |(_, _, ss)| {
+        (ss.packed && plant, ss.align.filter(|_| plant))
+    });
     let mut fields = Vec::with_capacity(wf.len());
     let mut off = 0u64;
     let mut align = 1u64;
