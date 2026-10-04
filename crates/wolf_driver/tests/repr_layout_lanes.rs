@@ -15,6 +15,10 @@
 //! (wolf-interp#174) and has no layout query: each row's parting is
 //! pinned below by that version as pre-mirror (lupin's half is
 //! wolf-interp#188). A newer lupin must answer what the clauses say.
+//! 0.1.46 (the 0.2.23 pairing, r28) is still pre-mirror (#188 open):
+//! its pins are carried, six of the nine rows with the verdict changed
+//! to E0817 (its closed attribute set refuses `packed` and `align` by
+//! name; ruled at r28).
 
 mod lane_exit;
 
@@ -191,22 +195,60 @@ struct Pin<'a> {
 
 /// lupin 0.1.45's measured answers (`rows-*.log`): no query resolves,
 /// no attribute is read, and a whole-aggregate raw store is refused by
-/// name.
-const NO_QUERY: &[Pin<'static>] = &[Pin {
-    version: "0.1.45",
-    verdict: "unsupported",
-    named: "does not resolve",
-}];
-const READS_NO_ATTRIBUTE: &[Pin<'static>] = &[Pin {
-    version: "0.1.45",
-    verdict: "exit(0)",
-    named: "",
-}];
-const NO_AGGREGATE_STORE: &[Pin<'static>] = &[Pin {
-    version: "0.1.45",
-    verdict: "unsupported",
-    named: "a raw store writes an integer-shaped pointee",
-}];
+/// name. 0.1.46 (the 0.2.23 pairing, r28) still resolves no query, but
+/// its closed attribute set (is70, wolf-interp#174) refuses
+/// `repr(c, packed)` and `repr(c, align(N))` by name, E0817, before it
+/// reaches a query or a store — the same missing mirror, a stricter
+/// symptom; measured, carried with the verdict changed (ruled at r28).
+const NO_QUERY: &[Pin<'static>] = &[
+    Pin {
+        version: "0.1.45",
+        verdict: "unsupported",
+        named: "does not resolve",
+    },
+    Pin {
+        version: "0.1.46",
+        verdict: "unsupported",
+        named: "does not resolve",
+    },
+];
+/// A row whose packed or aligned struct 0.1.45 met only at a query.
+const NO_QUERY_045_E0817_046: &[Pin<'static>] = &[
+    Pin {
+        version: "0.1.45",
+        verdict: "unsupported",
+        named: "does not resolve",
+    },
+    Pin {
+        version: "0.1.46",
+        verdict: "fail(E0817)",
+        named: "",
+    },
+];
+const READS_NO_ATTRIBUTE: &[Pin<'static>] = &[
+    Pin {
+        version: "0.1.45",
+        verdict: "exit(0)",
+        named: "",
+    },
+    Pin {
+        version: "0.1.46",
+        verdict: "fail(E0817)",
+        named: "",
+    },
+];
+const NO_AGGREGATE_STORE: &[Pin<'static>] = &[
+    Pin {
+        version: "0.1.45",
+        verdict: "unsupported",
+        named: "a raw store writes an integer-shaped pointee",
+    },
+    Pin {
+        version: "0.1.46",
+        verdict: "fail(E0817)",
+        named: "",
+    },
+];
 
 const fn refused(named: &str) -> Want<'_> {
     Want {
@@ -314,7 +356,7 @@ fn the_queries_answer_the_c_layout_on_every_machine() {
         runs(OUT),
         Some(runs(OUT)),
         runs(OUT),
-        NO_QUERY,
+        NO_QUERY_045_E0817_046,
     );
 }
 
@@ -343,7 +385,7 @@ fn packed_fields_at_offset_of_run_on_every_machine() {
         runs(OUT),
         Some(runs(OUT)),
         runs(OUT),
-        NO_QUERY,
+        NO_QUERY_045_E0817_046,
     );
 }
 
