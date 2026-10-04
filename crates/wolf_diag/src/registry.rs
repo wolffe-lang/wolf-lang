@@ -1475,9 +1475,8 @@ kept. This code fires for:
 - a name wolf does not know (`#[frobnicate]`);
 - a known attribute nothing implements yet, named with the lane that
   owns it: the performance contracts `noalloc`, `nopanic`, `inplace`,
-  `bounded_stack` (no checker exists), `repr(packed)`, `repr(align(N))`
-  and `repr(transparent)` (the exact-layout lane), `thread_local`,
-  `section` and `link_section`;
+  `bounded_stack` (no checker exists), `repr(transparent)` and
+  `repr(packed(N))`, `thread_local`, `section` and `link_section`;
 - an implemented attribute where it means nothing (`#[repr(c)]` on a
   function, `#[consttime]` on a struct);
 - a `cfg` the compiler cannot decide: the one predicate is
@@ -1487,8 +1486,10 @@ kept. This code fires for:
   code ([gram.item.attr.cfg]).
 
 The attributes implemented are `trusted`, `consttime`, `allow`, `index`,
-`budget`, `repr(c)` and `cfg(target = "…")`. Delete the attribute, or
-move it to where it applies.
+`budget`, `repr(c)`, `repr(c, packed)`, `repr(c, align(N))` and
+`cfg(target = "…")`. Delete the attribute, or move it to where it
+applies. A representation that is implemented but cannot be laid out
+as written (`align(3)`, `packed` without `c`) is E0820.
 "#);
 
 code!(E0818, "an `extern` ABI string other than `c`", r#"
@@ -1501,6 +1502,42 @@ Wolf has no interrupt calling convention: an interrupt enters through an
 assembly trampoline that saves the registers, calls an `export fn` with
 the C convention, and returns with `iretq` (KWC F7). Write `extern "c"`
 for a C-callable function, or no `extern` for an ordinary one.
+"#);
+
+code!(E0819, "a field of a packed struct is lent", r#"
+A `#[repr(c, packed)]` struct has alignment 1 and no padding
+([abi.layout.packed]), so its fields sit at whatever offset the bytes
+before them leave: a `u64` after a `u16` is at offset 2. Reading or
+writing such a field is fine — the compiler copies it with an access
+that does not assume alignment. Lending it is not: a `mut` argument or
+receiver, or an aggregate passed by `read`, hands the callee the
+field's ADDRESS, and the callee's code assumes that address is aligned
+for the field's type. On a strict-alignment machine that is a fault; on
+the others it is a silent wrong assumption the optimizer may act on.
+
+Copy the field out, lend the copy, and write it back:
+
+    var base = d.base
+    bump(mut base)
+    d.base = base
+"#);
+
+code!(E0820, "a representation that cannot be laid out", r#"
+`#[repr(c, packed)]` and `#[repr(c, align(N))]` are implemented
+([abi.layout.packed], [abi.layout.align]), but only in the shapes C
+gives a meaning:
+
+- `align(N)` takes a power of two from 1 to 2^28 (gcc's ceiling; a
+  larger or non-power alignment has no C layout to agree with);
+- `packed` and `align(N)` are spelled beside `c` — the layout they
+  modify is the C one, so `#[repr(packed)]` alone is refused with the
+  fix `#[repr(c, packed)]`;
+- a struct is packed or aligned, not both (alignment 1 and alignment N
+  at once);
+- a generic struct is not packed or aligned (its layout would change
+  with each instantiation's field types, and the queries could not
+  answer it);
+- each representation is named once.
 "#);
 
 // ------------------------------------------------------------------------
