@@ -12,10 +12,11 @@
 //! call into hand-declared C by name rather than model it.
 //!
 //! lupin 0.1.44 (the 0.2.21 pairing) and 0.1.45 (the 0.2.22 pairing,
-//! r27, measured) still apply E1302 to every signature and have no C
-//! ABI; each parting is pinned below by version as pre-mirror (lupin's
-//! half is wolf-interp#181). A newer lupin must
-//! answer what the compiler answers.
+//! r27) applied E1302 to every signature and had no C ABI, each parting
+//! pinned by version. 0.1.46 (the 0.2.23 pairing, r28) carries is70's
+//! mirror (wolf-interp#181) and answers what the compiler answers on
+//! every row: the four pins are dropped, and lupin is held to its
+//! column like every other machine.
 
 mod lane_exit;
 
@@ -169,12 +170,6 @@ const NO_C_MEMBRANE: Want<'static> = Want {
     named: "hand-declared `extern \"c\" fn`",
 };
 
-/// lupin's measured answer where it parts (pre-mirror).
-struct Pin<'a> {
-    version: &'a str,
-    verdict: &'a str,
-}
-
 fn assert_obs(who: &str, row: &str, obs: &Obs, want: Want<'_>) {
     assert_eq!(
         obs.verdict, want.verdict,
@@ -194,13 +189,7 @@ fn assert_obs(who: &str, row: &str, obs: &Obs, want: Want<'_>) {
     }
 }
 
-fn every_machine(
-    row: &str,
-    checked: Want<'_>,
-    compiled: Want<'_>,
-    lupin_want: Want<'_>,
-    lupin_pre_mirror: &[Pin<'_>],
-) {
+fn every_machine(row: &str, checked: Want<'_>, compiled: Want<'_>, lupin_want: Want<'_>) {
     let entry = corpus(row);
     for (flag, want) in [
         ("--checked", checked),
@@ -220,33 +209,13 @@ fn every_machine(
     let Some(lupin) = lupin_says(&entry) else {
         return;
     };
-    match lupin_pre_mirror.iter().find(|p| p.version == lupin.version) {
-        Some(pin) => assert_eq!(
-            lupin.verdict, pin.verdict,
-            "lupin {} (pre-mirror, wolf-interp#181) on {row}",
-            lupin.version
-        ),
-        None => assert_obs(
-            &format!("lupin {} (the mirror is wolf-interp#181)", lupin.version),
-            row,
-            &lupin,
-            lupin_want,
-        ),
-    }
+    assert_obs(
+        &format!("lupin {} (the mirror is wolf-interp#181)", lupin.version),
+        row,
+        &lupin,
+        lupin_want,
+    );
 }
-
-/// lupin 0.1.44 applies E1302 to every signature (measured,
-/// `rows-trunk.log`; unchanged by this lane); so does 0.1.45 (r27).
-const E1302_044: &[Pin<'static>] = &[
-    Pin {
-        version: "0.1.44",
-        verdict: "fail(E1302)",
-    },
-    Pin {
-        version: "0.1.45",
-        verdict: "fail(E1302)",
-    },
-];
 
 /// `[mem.unsafe.sig]`: a module-private fn takes `*T` and writes through it.
 #[test]
@@ -256,7 +225,6 @@ fn a_private_signature_carries_a_raw_pointer() {
         runs("42\n"),
         runs("42\n"),
         runs("42\n"),
-        E1302_044,
     );
 }
 
@@ -268,12 +236,11 @@ fn a_mut_raw_pointer_parameter_is_the_callers_variable() {
         runs("42\n"),
         runs("42\n"),
         runs("42\n"),
-        E1302_044,
     );
 }
 
 /// The control: a `pub` signature still refuses `*T` everywhere, lupin
-/// included (no pin).
+/// included.
 #[test]
 fn a_pub_signature_still_refuses_a_raw_pointer() {
     let e1302 = Want {
@@ -282,11 +249,12 @@ fn a_pub_signature_still_refuses_a_raw_pointer() {
         stdout: "",
         named: "",
     };
-    every_machine("memory/unsafe_sig.lu", e1302, e1302, e1302, &[]);
+    every_machine("memory/unsafe_sig.lu", e1302, e1302, e1302);
 }
 
 /// `[abi.c.import]`: a hand-declared C call outside `unsafe` is E1301.
-/// lupin 0.1.44 refuses the bodyless declaration by name before it looks.
+/// lupin 0.1.44 and 0.1.45 refused the bodyless declaration by name
+/// before they looked (pinned until the 0.1.46 pairing, r28).
 #[test]
 fn a_call_into_hand_declared_c_needs_unsafe() {
     let e1301 = Want {
@@ -295,22 +263,7 @@ fn a_call_into_hand_declared_c_needs_unsafe() {
         stdout: "",
         named: "",
     };
-    every_machine(
-        "memory/extern_c_outside_unsafe.lu",
-        e1301,
-        e1301,
-        e1301,
-        &[
-            Pin {
-                version: "0.1.44",
-                verdict: "unsupported",
-            },
-            Pin {
-                version: "0.1.45",
-                verdict: "unsupported",
-            },
-        ],
-    );
+    every_machine("memory/extern_c_outside_unsafe.lu", e1301, e1301, e1301);
 }
 
 /// `[abi.c.import]`: libc's own `strlen` and `llabs` through
@@ -328,7 +281,6 @@ fn wolf_reaches_the_c_library_through_hand_declared_externs() {
         NO_C_MEMBRANE,
         runs("8 34\n"),
         lupin_refuses,
-        E1302_044,
     );
 }
 
@@ -336,25 +288,13 @@ fn wolf_reaches_the_c_library_through_hand_declared_externs() {
 /// every machine; the symbol is the gate `c_membrane_link.rs`'s.
 #[test]
 fn an_export_called_from_wolf_runs_everywhere() {
-    every_machine(
-        "membrane/export_called.lu",
-        runs(""),
-        runs(""),
-        runs(""),
-        &[],
-    );
+    every_machine("membrane/export_called.lu", runs(""), runs(""), runs(""));
 }
 
 /// `[abi.c.export]`: an export in a child module.
 #[test]
 fn an_export_in_a_child_module_runs_everywhere() {
-    every_machine(
-        "membrane/export_child.lu",
-        runs(""),
-        runs(""),
-        runs(""),
-        &[],
-    );
+    every_machine("membrane/export_child.lu", runs(""), runs(""), runs(""));
 }
 
 fn scratch(name: &str) -> PathBuf {
