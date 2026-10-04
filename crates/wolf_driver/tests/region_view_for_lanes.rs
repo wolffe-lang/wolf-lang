@@ -145,8 +145,9 @@ const PRE_VIEW_TRAP_LUPIN: &[&str] = &[];
 
 /// lupin releases that run a `return` out of a region block
 /// (wolf-interp#178): is68 included. 0.1.45 (the 0.2.22 pairing, r27)
-/// still runs it, measured; kept with its issue.
-const PRE_RETURN_TRAP_LUPIN: &[&str] = &["0.1.44", "0.1.45"];
+/// still ran it. Emptied at the 0.1.46 pairing (r28): 0.1.46 carries
+/// is70's mirror of #178 and traps it.
+const PRE_RETURN_TRAP_LUPIN: &[&str] = &[];
 
 const RULED_LUPIN: &str = "trap(region-fault)";
 
