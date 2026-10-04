@@ -809,7 +809,7 @@ mod tests {
         let mut root = parse.root;
         strip_cfg(&mut root, src.as_bytes(), target);
         let mut diags = Vec::new();
-        walk(&root, src.as_bytes(), target, &mut diags);
+        walk(&root, false, src.as_bytes(), target, &mut diags);
         (String::from_utf8(root.text(src.as_bytes())).unwrap(), diags)
     }
 
