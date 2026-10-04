@@ -689,6 +689,21 @@ pub(crate) struct Fx<'a> {
 
 /// Emit one WIR function as an LLVM `define`.
 #[allow(clippy::too_many_arguments)]
+/// kw09: a section name as an LLVM string body — every byte outside
+/// printable ASCII, and `"` and `\\`, as `\\XX` (sema admits only
+/// printable ASCII without either, so this is belt and braces).
+pub(crate) fn llvm_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for b in s.bytes() {
+        if (0x20..=0x7e).contains(&b) && b != b'"' && b != b'\\' {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("\\{b:02X}"));
+        }
+    }
+    out
+}
+
 pub(crate) fn emit_function(
     cx: &mut ModuleCx,
     m: &WModule,
@@ -2481,6 +2496,34 @@ impl<'a> Fx<'a> {
                     .data
                     .get(idx as usize)
                     .ok_or_else(|| ice("data.addr names missing data"))?;
+                // kw09 (`[mem.static]`, `[abi.link.extern]`): module
+                // state is defined by exactly one object of the build
+                // (`LlvmBackend::define_static`); every other reference
+                // declares it external — as does every `extern "c"
+                // let`, whose symbol the link defines.
+                if let Some(st) = &d.stat {
+                    let sym = d.name.clone();
+                    if !self.defined.contains(&sym) && self.cx.global_names.insert(sym.clone()) {
+                        let line = if st.kind == wolf_wir::ir::StaticKind::Extern {
+                            format!("@\"{sym}\" = external global i8, align 1")
+                        } else {
+                            let kw = if st.kind == wolf_wir::ir::StaticKind::Var {
+                                "global"
+                            } else {
+                                "constant"
+                            };
+                            format!(
+                                "@\"{sym}\" = external {kw} [{} x i8], align {}",
+                                d.bytes.len().max(1),
+                                st.align
+                            )
+                        };
+                        self.cx.globals.push(line);
+                    }
+                    self.vals
+                        .insert(results[0], Repr::Scalar(format!("@\"{sym}\"")));
+                    return Ok(());
+                }
                 let sym = format!("_W.{}", d.name);
                 if self.cx.global_names.insert(sym.clone()) {
                     let line = if d.funcs.is_empty() {
@@ -3283,9 +3326,15 @@ impl<'a> Fx<'a> {
         } else {
             ""
         };
+        // kw09 (`[abi.link.section]`): the function's code in its named
+        // section (an ELF target; `LlvmBackend` refused the rest).
+        let section = match &self.f.section {
+            Some(sec) => format!(" section \"{}\"", llvm_escape(sec)),
+            None => String::new(),
+        };
         let _ = writeln!(
             out,
-            "define {linkage}{ret_ext}{} @\"{symbol}\"({}) nounwind{noinline}{target_attrs} {{",
+            "define {linkage}{ret_ext}{} @\"{symbol}\"({}) nounwind{noinline}{target_attrs}{section} {{",
             si.ret_ty(),
             named.join(", ")
         );

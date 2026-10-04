@@ -399,6 +399,9 @@ impl Backend for LlvmBackend {
             )));
         };
         let symbol = entry.symbol.clone();
+        if func.section.is_some() && self.target == ReleaseTarget::MacosArm64 {
+            return Err(wolf_backend::section_unsupported("Mach-O"));
+        }
         let linkage = if self
             .symbols
             .iter()
@@ -418,6 +421,64 @@ impl Backend for LlvmBackend {
             &self.defined,
         )?;
         self.func_irs.push((func.name.clone(), ir));
+        Ok(())
+    }
+
+    fn define_static(
+        &mut self,
+        module: &WirModule,
+        idx: u32,
+        linkage: Linkage,
+    ) -> Result<(), BackendError> {
+        let Some(d) = module.data.get(idx as usize) else {
+            return Err(BackendError::Internal(format!("module state {idx} missing")));
+        };
+        let Some(st) = d.stat.as_ref().filter(|_| d.is_defined_static()) else {
+            return Err(BackendError::Internal(format!(
+                "`{}` is not module state with a definition",
+                d.name
+            )));
+        };
+        if st.section.is_some() && self.target == ReleaseTarget::MacosArm64 {
+            return Err(wolf_backend::section_unsupported("Mach-O"));
+        }
+        let vis = match linkage {
+            Linkage::Export => "",
+            Linkage::Local => "internal ",
+            Linkage::Import => {
+                return Err(BackendError::Internal(
+                    "define_static with Import linkage".to_string(),
+                ));
+            }
+        };
+        let kw = if st.kind == wolf_wir::ir::StaticKind::Var {
+            "global"
+        } else {
+            "constant"
+        };
+        // An all-zero `var` is `zeroinitializer`, which LLVM places in
+        // `.bss` ([mem.static.2]); a constant stays read-only data.
+        let init = if d.bytes.iter().all(|&b| b == 0) {
+            "zeroinitializer".to_string()
+        } else {
+            data_const(&d.bytes)
+        };
+        let section = match &st.section {
+            Some(sec) => format!(", section \"{}\"", emit::llvm_escape(sec)),
+            None => String::new(),
+        };
+        self.data_globals.push(format!(
+            "@\"{}\" = {vis}{kw} [{} x i8] {init}{section}, align {}",
+            d.name,
+            d.bytes.len().max(1),
+            st.align
+        ));
+        self.defined.insert(d.name.clone());
+        self.symbols.push(SymbolInfo {
+            name: d.name.clone(),
+            linkage,
+            is_function: false,
+        });
         Ok(())
     }
 
