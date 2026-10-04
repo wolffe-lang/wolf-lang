@@ -1,6 +1,123 @@
 # Changelog
 
-## Unreleased
+## 0.2.23 — 2026-10-04
+
+THE TWENTY-THIRD. A wolf kernel can now own its machine. Integers and
+pointers convert both ways, and `*p` reads and writes a raw pointer
+(`[mem.prov.expose]`). Foreign memory is the platform's on the
+freestanding target. `p.read_volatile()` and `p.write_volatile(v)` are
+one access each, never elided (E1307). `#[repr(c, packed)]` and
+`#[repr(c, align(N))]` lay out as C does, and `size_of`, `align_of` and
+`offset_of` answer at comptime (E0819, E0820). Module `const`, `let` and
+`var` compile as image data, a `var` is raw-tier, and
+`#[section(".name")]` and `extern "c" let` place code and name linker
+symbols (E0705, E0821). `[abi.interrupt]` says how an interrupt reaches
+an `export fn` through an assembly trampoline. Ruling #34 makes an
+else-less `if` at a fallible fn's tail discard its raise, warned, on
+every machine. The pairing moves to lupin 0.1.46, whose spec pin moves to
+v0.2.22: it closes eight of the lupin gaps the PAX lanes filed. Six lanes
+and 187 commits (kw06, kw07, s208, kw08, kw09, kw10), then r28's 13: 200
+since v0.2.22.
+
+### Read this before you bump the pin
+
+**Three programs gave a wrong answer with no diagnostic on 0.2.22.**
+Each now answers the ruled bytes on its lane:
+
+- `fn g(c: bool) -> () ! {bad} { if c { boom() } }` handed `boom`'s raise
+  to `g`'s caller on every machine, with no W0601 (ruling #34). It is the
+  warned discard now, and `g` returns `()`. An else-if chain with no
+  final `else` at that tail split the machines (native and release
+  discarded, checked raised); all discard now.
+- The checked machine read a signed raw pointee unsigned: a `*i32`
+  holding -6 read 4294967290 (#561).
+- The checked machine gave `*T as u8` the whole address under a `u8`
+  (`300 as *u8 as u8` exited 44). It traps `overflow` now.
+
+**Programs that compiled are now refused.** Every read or write of a
+module `var` outside `unsafe` is E1301. A module initializer that reads a
+`var`, calls run-time code or needs its own value is E0705. A volatile
+access through a pointee that is not one fixed-width integer or `byte`
+is E1307. A packed field that is lent is E0819. A representation that
+cannot be laid out is E0820. A non-pointer `extern "c" let` is E0821.
+A bare tag as the then-block's tail of an else-less `if` at a fallible
+fn's tail (`if c { bad }`) is `unsupported` by name; write `return bad`.
+
+**Programs that were refused now compile.** `int as *T`, `*T as int`,
+`addr`, `with_addr`, `expose`, `with_exposed` and `is_null` on native and
+release, and prefix `*p` on all three tiers (it was `unsupported` or
+refused at resolve). Module `const`, `let` and `var`, which were
+`unsupported` everywhere. `size_of(T)` for a `#[repr(c)]` struct, which
+was E0708. `extern "c" let`, which was E0201 at parse. The volatile
+methods. Hosted programs that use none of this build byte-for-byte as
+before.
+
+### The pairing: lupin 0.1.46
+
+`PAIRING` names **lupin 0.1.46 at pin `8e36bc1`** (wolf-interp release
+403040421; the linux x86-64 archive's sha256 `d13a0379…`), whose spec pin
+is this compiler's v0.2.22 tag. It carries is70 (wolffe-lang/wolf-interp
+#174, #175, #178, #179's `errdefer` half, #180, #181, #182, #184) and
+s208's mirror of ruling #34 (#179's `if` half). The ritual (#87, with
+#281's control against the 0.1.45 archive, same corpus, same release
+`wolf`) **moved 11 ledger counts on the checked tier and 14 on native**:
+
+- **Toward agreement.** `grammar/cfg_target_arch.lu` and
+  `cfg_target_freestanding.lu` (Verdict → agreement: lupin reads `cfg`,
+  #174); `memory/prov_addr_with_addr.lu` and `prov_expose_round_trip.lu`
+  (unsupported → agreement) and `prov_narrow_cast_trap.lu` (Verdict →
+  agreement), #184; `memory/raw_ptr_private_sig.lu` and
+  `raw_ptr_mut_param.lu` (Verdict → agreement, #181);
+  `memory/region_str_view_for_return.lu` (completeness → agreement, #178);
+  `memory/extern_c_outside_unsafe.lu` (unsupported + completeness →
+  completeness).
+- **Into a hard divergence, ruled**: `comptime/layout_query_repr_c.lu` and
+  `memory/packed_fields_at_offset_of.lu` on both tiers, and
+  `memory/raw_repr_packed_layout.lu` and `raw_repr_align_layout.lu` on
+  native (the checked machine declines those two, so they sit below its
+  ledger). lupin's closed attribute set refuses `repr(c, packed)` and
+  `repr(c, align(N))` by name, E0817, where 0.1.45 declined later. Its
+  mirror of kw08 is still open (#188).
+- `membrane/extern_libc.lu` moves Verdict → unsupported on native: lupin
+  declines the bodyless C declaration by name where 0.1.45 said E1302.
+
+Below the ledger on both tiers, B's verdict or bytes moved:
+- the eleven `grammar/attr_*`, `cfg_*` and `extern_abi_interrupt.lu` rows
+  (`exit(0)` → E0817/E0818);
+- the five `rows/negative/first_*` codes (#175);
+- `errdefer_infallible.lu` (→ E0607, #179);
+- `unit_discard_if_value.lu` and the four `unit_discard_tail_if*` rows
+  (ruling #34);
+- `prov_narrow_cast.lu`'s stdout;
+- `packed_field_lend.lu` (→ E0817).
+
+The counts:
+- **Checked:** 585 → 593 agreements, completeness 233 → 232, hard
+  divergences 22 → 19, soundness 0.
+- **Native:** 627 → 635, 233 → 232, 28 → 26, soundness 1 (still
+  `memory/unsafe_ub_uaf.lu`).
+
+**Dropped, 37 cases.** The gates no longer pin lupin's answer for them:
+- `attr_closed_set_lanes.rs` 12 (#174)
+- `c_membrane_lanes.rs` 4 (#181)
+- `first_diagnostic_lanes.rs` 7 (#175)
+- `region_view_for_lanes.rs`'s `PRE_RETURN_TRAP_LUPIN` 1 (#178)
+- `unit_discard_lanes.rs` 6: the else-less-`if` value pin, and s208's five `LUPIN_179` cases (#179)
+- `int_ptr_lanes.rs` 7 (#184, #182)
+
+Against the published 0.1.45, exactly those thirty-seven tests go red.
+
+**Kept, 23 cases, each carried to 0.1.46** and each naming its open lupin issue:
+- `attr_closed_set_lanes.rs`'s control `attr_implemented_set.lu` 1 (lupin declines its `comptime fn`)
+- `volatile_lanes.rs` 6 (#185). The L3 row now names `read_volatile` where 0.1.45 stopped at `with_addr`.
+- `repr_layout_lanes.rs` 9 (#188)
+- `static_lanes.rs` 7 (#190)
+
+**Kept, verdict changed, 7 of those** (ruled at r28), each now E0817, refused by name:
+- `repr_layout`'s `layout_query_repr_c.lu`, `packed_fields_at_offset_of.lu`, `packed_field_lend.lu`, `attr_repr_unlayable.lu`, `raw_repr_packed_layout.lu` and `raw_repr_align_layout.lu`
+- `static`'s hosted `#[section]` program
+
+None is widened.
 
 ### Interrupts (kw10, ruling #31 K7 = B)
 
@@ -215,7 +332,9 @@ handle an open answers is 3**. A refusal carries one code on every lane
 (`[proto.record.first]`), and the blast-radius property counts wreck
 sites. The pairing moves to lupin 0.1.45, whose spec pin moves to
 v0.2.21 and which heals the one parting 0.2.21 shipped pinned. Eight
-lanes and 209 commits: s203, kw01, kw02, s207, kw03, s199, kw04, kw05.
+lanes and 209 commits (s203, kw01, kw02, s207, kw03, s199, kw04, kw05),
+then r27's 13: 222 since v0.2.21 (this line said 209 until r28 counted
+from history).
 
 ### Read this before you bump the pin
 
