@@ -646,7 +646,7 @@ fn check_repr_set(node: &GreenNode, src: &[u8], diags: &mut Vec<Diagnostic>) {
     }
 }
 
-/// E0819 (kw09, `[abi.link.extern]`): an `extern "c"` binding is a
+/// E0821 (kw09, `[abi.link.extern]`): an `extern "c"` binding is a
 /// module-level `let` with no initializer. Its TYPE (a raw pointer) is
 /// checked where types are lowered (`sig.rs`).
 fn check_extern_binding(node: &GreenNode, top: bool, diags: &mut Vec<Diagnostic>) {
@@ -654,7 +654,7 @@ fn check_extern_binding(node: &GreenNode, top: bool, diags: &mut Vec<Diagnostic>
         return;
     }
     let e0819 = |span: Span, message: &str, label: &str| {
-        Diagnostic::error(codes::E0819, span, message.to_string())
+        Diagnostic::error(codes::E0821, span, message.to_string())
             .with_label(label.to_string())
             .with_note(
                 "`extern \"c\" let NAME: *T` names a symbol the link defines; its value is the \

@@ -152,11 +152,11 @@ fn e0817_section_shapes() {
     );
 }
 
-/// kw09 (`[abi.link.extern]`): E0819's syntactic shapes (attrs) and its
+/// kw09 (`[abi.link.extern]`): E0821's syntactic shapes (attrs) and its
 /// type (signatures) — an initializer, a `var`, a body position, a
 /// non-pointer type.
 #[test]
-fn e0819_extern_let_shapes() {
+fn e0821_extern_let_shapes() {
     let src = "extern \"c\" let A: *u8 = 0 as *u8\n\n\
                extern \"c\" var B: *u8\n\n\
                extern \"c\" let C: int\n\n\
@@ -165,7 +165,7 @@ fn e0819_extern_let_shapes() {
     // The signature pass carries the attribute check's diagnostics too.
     let sigs = wolf_sema::build_sigs(&res.package);
     let all: Vec<&wolf_diag::Diagnostic> = sigs.diagnostics.iter().collect();
-    insta::assert_snapshot!("e0819_extern_let_shapes", render(&res, &all));
+    insta::assert_snapshot!("e0821_extern_let_shapes", render(&res, &all));
 }
 
 #[test]

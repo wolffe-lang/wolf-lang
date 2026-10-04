@@ -432,10 +432,10 @@ fn an_extern_let_is_the_symbols_address() {
     );
 }
 
-/// `[abi.link.extern]`: a non-pointer type is E0819.
+/// `[abi.link.extern]`: a non-pointer type is E0821.
 #[test]
 fn an_extern_let_of_a_non_pointer_is_e0819() {
-    let e = fails("fail(E0819)", &["E0819"]);
+    let e = fails("fail(E0821)", &["E0821"]);
     every_machine(
         "membrane/extern_let_not_ptr.lu",
         e,

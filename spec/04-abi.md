@@ -457,7 +457,7 @@ AAPCS64, win64, Apple arm64 deltas).
   is free and safe, and using the pointer is raw-tier like any `*T`
   (`[mem.unsafe.raw.1]`). A type that is not a raw pointer, an
   initializer, or the form anywhere but a module's top level is
-  **E0819**. The checked machine and lupin model no link: a program that
+  **E0821**. The checked machine and lupin model no link: a program that
   names one is `unsupported` with the construct `the link-time symbol
   NAME`.
 - `[abi.link.script]` The link of a freestanding image is the consuming

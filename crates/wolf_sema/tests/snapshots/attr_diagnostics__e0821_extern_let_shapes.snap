@@ -2,7 +2,7 @@
 source: crates/wolf_sema/tests/attr_diagnostics.rs
 expression: "render(&res, &all)"
 ---
-error[E0819]: an `extern "c" let` has no initializer — the link defines the symbol
+error[E0821]: an `extern "c" let` has no initializer — the link defines the symbol
  --> mem:///main.lu:1:25
   |
 1 | extern "c" let A: *u8 = 0 as *u8
@@ -11,7 +11,7 @@ error[E0819]: an `extern "c" let` has no initializer — the link defines the sy
   = note: `extern "c" let NAME: *T` names a symbol the link defines; its value is the symbol's
     address ([abi.link.extern]).
 
-error[E0819]: a link-time symbol is declared with `extern "c" let`
+error[E0821]: a link-time symbol is declared with `extern "c" let`
  --> mem:///main.lu:3:12
   |
 3 | extern "c" var B: *u8
@@ -20,7 +20,7 @@ error[E0819]: a link-time symbol is declared with `extern "c" let`
   = note: `extern "c" let NAME: *T` names a symbol the link defines; its value is the symbol's
     address ([abi.link.extern]).
 
-error[E0819]: `extern "c" let C` names a link-time symbol, so its type is a raw pointer — its value is the symbol's address
+error[E0821]: `extern "c" let C` names a link-time symbol, so its type is a raw pointer — its value is the symbol's address
  --> mem:///main.lu:5:19
   |
 5 | extern "c" let C: int
@@ -29,7 +29,7 @@ error[E0819]: `extern "c" let C` names a link-time symbol, so its type is a raw 
   = note: write `extern "c" let NAME: *T` and read the value through the pointer inside `unsafe`
     ([abi.link.extern]).
 
-error[E0819]: `extern "c" let` declares a module item — it cannot appear inside a body
+error[E0821]: `extern "c" let` declares a module item — it cannot appear inside a body
  --> mem:///main.lu:8:5
   |
 8 |     extern "c" let D: *u8

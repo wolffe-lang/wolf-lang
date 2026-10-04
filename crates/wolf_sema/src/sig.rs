@@ -707,9 +707,9 @@ impl<'a> Lower<'a> {
                 } else {
                     GlobalKind::Let
                 };
-                // E0819 (kw09, `[abi.link.extern]`): the symbol's value
+                // E0821 (kw09, `[abi.link.extern]`): the symbol's value
                 // is its address, so the type is a raw pointer. The
-                // other E0819 shapes (an initializer, a `var`, a body
+                // other E0821 shapes (an initializer, a `var`, a body
                 // position) are `attrs::check`'s, read from the syntax.
                 if kind == GlobalKind::Extern
                     && node.kind == SyntaxKind::LetDecl
@@ -722,7 +722,7 @@ impl<'a> Lower<'a> {
                         .unwrap_or(node.span);
                     self.diags.push(
                         Diagnostic::error(
-                            codes::E0819,
+                            codes::E0821,
                             span,
                             format!(
                                 "`extern \"c\" let {}` names a link-time symbol, so its type is a \

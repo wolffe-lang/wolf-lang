@@ -361,7 +361,7 @@ item level every initializer is comptime-evaluated (module state,
 `[mem.static.3]`). `extern "c" let NAME: *T` names a symbol the link
 defines, with no initializer (`[abi.link.extern]`, kw09); the parser
 also reads `var`/`const` and an initializer there, so the checker
-refuses each by name (E0819).
+refuses each by name (E0821).
 
 **A `let` binding's FIELDS are as immutable as the binding** (s154,
 wolf-lang#331): `let r = Row{…}` then `r.cents = 5` is E0410 at the

@@ -253,7 +253,7 @@ pub(crate) fn fn_item(p: &mut Parser<'_>, m: Marker) {
     }
     // kw09 `[abi.link.extern]`: `extern "c" let NAME: *T` — a bodyless
     // binding the linker defines. `var` and `const` parse the same way
-    // so sema refuses them by name (E0819) instead of a parse cascade.
+    // so sema refuses them by name (E0821) instead of a parse cascade.
     if saw_extern {
         for (kw, kind) in [
             (Keyword::Let, SyntaxKind::LetDecl),
@@ -1009,7 +1009,7 @@ pub(crate) fn binding_item(p: &mut Parser<'_>, m: Marker, kw: Keyword, kind: Syn
 /// kw09 `[abi.link.extern]`: the binding after `extern "c"` — one
 /// binder, an ascription, and NO initializer (the linker supplies the
 /// symbol). An initializer is still parsed, so sema reports the shape
-/// by name (E0819) rather than the parser reporting stray tokens.
+/// by name (E0821) rather than the parser reporting stray tokens.
 fn extern_binding_item(p: &mut Parser<'_>, m: Marker, kind: SyntaxKind) {
     p.bump(); // let/var/const
     if kind == SyntaxKind::ConstDecl {
