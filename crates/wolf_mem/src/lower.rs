@@ -2089,7 +2089,21 @@ impl<'t> Lowerer<'t> {
                         && !self.in_unsafe()
                         && self.static_sites.insert((e.span.lo, e.span.hi))
                     {
-                        self.require_unsafe(&format!("the module `var` `{name}`"), e.span);
+                        self.diags.push(
+                            Diagnostic::error(
+                                codes::E1301,
+                                e.span,
+                                format!("the module `var` `{name}` is read or written only in an `unsafe` block"),
+                            )
+                            .with_label("module state in safe code")
+                            .with_note(
+                                "a module `var` is shared by every task, and the safe tier's \
+                                 data-race freedom does not reach it ([mem.static.2]). Access it \
+                                 inside `unsafe { }` and state what keeps it race-free — one \
+                                 thread, or a lock you hold — in a `# Safety:` comment; a module \
+                                 `let` or `const` reads freely.",
+                            ),
+                        );
                     }
                     let ty = g.ty.map(|id| Ty {
                         table: &self.sigs.table,
