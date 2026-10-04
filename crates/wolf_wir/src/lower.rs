@@ -133,6 +133,11 @@ fn lower_package_impl(
     let mut module = Module::new();
     let mut not_yet = Vec::new();
     let mut stats = Stats::default();
+    // kw09 (`[mem.static]`): module state is DATA, declared once for the
+    // package before any body lowers (a program with none declares
+    // nothing, so its WIR — and its literal pools' names — are as
+    // before).
+    let statics = build_statics(pkg, tc, &mut module);
     // Callee resolution: fn name → its unique (module, sig); names
     // declared in more than one module refuse at the call site.
     let mut fns: HashMap<&str, Vec<(usize, &FnSig)>> = HashMap::new();
@@ -260,6 +265,7 @@ fn lower_package_impl(
             &plain,
             &[],
             &mut specs,
+            &statics,
             sink,
         );
         if let Some(out) = survey.as_deref_mut() {
@@ -366,6 +372,7 @@ fn lower_package_impl(
             &req.key,
             &req.bindings,
             &mut specs,
+            &statics,
             sink,
         );
         if let Some(out) = survey.as_deref_mut() {
@@ -711,6 +718,7 @@ fn lower_body(
     key: &SpecKey,
     bindings: &[(String, Bound)],
     specs: &mut Vec<SpecRequest>,
+    statics: &Statics,
     mut survey: Option<&mut Vec<NotYet>>,
 ) -> R<Option<Stats>> {
     let view_mask = key.mask;
@@ -728,8 +736,20 @@ fn lower_body(
         None => {
             match node.kind {
                 SyntaxKind::FnDecl => {}
+                // kw09 (`[mem.static]`): module state is data
+                // (`build_statics`), never a body. What has no static
+                // value is refused by name.
                 SyntaxKind::LetDecl | SyntaxKind::VarDecl | SyntaxKind::ConstDecl => {
-                    return Err(refuse("item-initializer lowering (globals)", span));
+                    return match statics.get(&(body.module, body.name.clone())) {
+                        Some(e)
+                            if e.kind == wolf_sema::GlobalKind::Extern
+                                || e.data.is_some()
+                                || e.fold.is_some() =>
+                        {
+                            Ok(None)
+                        }
+                        _ => Err(refuse(NOT_STATIC_DATA, span)),
+                    };
                 }
                 _ => return Ok(None),
             }
@@ -940,6 +960,9 @@ fn lower_body(
     }
     let mut b = FuncBuilder::new(module, wir_name, sig);
     b.func.export = export;
+    // kw09 (`[abi.link.section]`): `#[section(".name")]` places the
+    // function's code; the backends emit it there.
+    b.func.section = wolf_sema::attrs::section_of(fn_node, &pkg.files[body.file].raw.src);
     if export {
         b.func.ret_ext = match sig_tbl.kind(fsig.ret) {
             TyKind::Prim(Prim::I8 | Prim::I16) => Mode::Sext,
@@ -991,6 +1014,8 @@ fn lower_body(
         pending_specs: specs,
         pending_dyn_shims: &mut dyn_shims,
         survey: survey.as_deref_mut(),
+        statics,
+        body_module: body.module,
         b: &mut b,
     };
     match lowerer.lower_fn(fsig, block, view_mask) {
@@ -1033,6 +1058,7 @@ fn lower_body(
                 lender,
                 specs,
                 &mut dyn_shims,
+                statics,
                 survey.as_deref_mut(),
             ) {
                 Ok(s) => stats.add(s),
@@ -1088,6 +1114,7 @@ fn lower_task_body<'t>(
     lender: &'t Lender<'t>,
     specs: &mut Vec<SpecRequest>,
     dyn_shims: &mut Vec<DynShim>,
+    statics: &Statics,
     survey: Option<&mut Vec<NotYet>>,
 ) -> R<Stats> {
     let closure = task.closure.expect("closure task");
@@ -1133,6 +1160,8 @@ fn lower_task_body<'t>(
         pending_specs: specs,
         pending_dyn_shims: dyn_shims,
         survey,
+        statics,
+        body_module: body.module,
         b: &mut b,
     };
     // The fallible shape: the body's result is an eu when the closure
@@ -1971,6 +2000,146 @@ fn self_ty_key(table: &TypeTable, ty: TyId) -> Option<String> {
         TyKind::Prim(p) => Some(p.name().to_string()),
         _ => None,
     }
+}
+
+/// kw09: the refusal for module state with no static value — a type
+/// that is not static data yet (`[mem.static.3]`).
+const NOT_STATIC_DATA: &str = "module state of a type that is not static data ([mem.static.3])";
+
+/// kw09 (`[mem.static]`, `[abi.link.extern]`): one module item's
+/// lowering facts.
+#[derive(Debug)]
+struct StaticEntry {
+    kind: wolf_sema::GlobalKind,
+    /// The compile-time value (a `const`, `let` or `var` of static
+    /// type); `None` when it has none.
+    fold: Option<Fold>,
+    /// The `Aux::Data` index: a `let`/`var`'s storage, or an `extern
+    /// "c" let`'s symbol. `None` for a `const` and a `str` `let`, which
+    /// lower as their value.
+    data: Option<u32>,
+    /// The declared type (the signature table's).
+    ty: Option<TyId>,
+}
+
+/// The package's module state, by (module, item name).
+type Statics = HashMap<(usize, String), StaticEntry>;
+
+/// kw09: declare every module item's storage in `module` — a `let` as
+/// read-only data, a `var` as writable data, each under its own
+/// mangled symbol and `#[section]`; an `extern "c" let` as an imported
+/// symbol under its own name. Deterministic: modules in order, items
+/// by name.
+fn build_statics(pkg: &Package, tc: &Typecheck, module: &mut Module) -> Statics {
+    use crate::ir::{StaticData, StaticKind};
+    use wolf_sema::GlobalKind;
+    let mut out = HashMap::new();
+    for (m, items) in tc.sigs.modules.iter().enumerate() {
+        for (name, sig) in items {
+            let ItemSig::Global(g) = sig else { continue };
+            let fold = tc.statics.get(&(m, name.clone())).cloned();
+            let item = pkg.tables.get(m).and_then(|t| t.get(name));
+            let mut data = None;
+            match g.kind {
+                GlobalKind::Extern => {
+                    data = Some(module.intern_static(
+                        name,
+                        Vec::new(),
+                        StaticData {
+                            kind: StaticKind::Extern,
+                            align: 1,
+                            section: None,
+                        },
+                    ));
+                }
+                GlobalKind::Let | GlobalKind::Var => {
+                    let stored = g.ty.filter(|&t| {
+                        wolf_sema::is_static_data(&tc.sigs.table, t, g.kind)
+                            && !matches!(tc.sigs.table.kind(t), TyKind::Prim(Prim::Str))
+                    });
+                    if let (Some(ty), Some(f)) = (stored, fold.as_ref())
+                        && let Ok(Some(wty)) =
+                            wir_ty(&mut module.types, &tc.sigs.table, &tc.sigs, ty, g.name_span)
+                        && let Some(bytes) = static_bytes(wty, f)
+                    {
+                        let section = item.and_then(|it| {
+                            let unit = &pkg.files[it.file];
+                            unit.parse
+                                .root
+                                .nodes()
+                                .filter(|n| n.kind.is_item())
+                                .nth(it.decl)
+                                .and_then(|n| wolf_sema::attrs::section_of(n, &unit.raw.src))
+                        });
+                        let qname = qualify(&tc.sigs, m, name);
+                        let symbol = static_symbol(&qname, &module.types.display(wty));
+                        let kind = if g.kind == GlobalKind::Var {
+                            StaticKind::Var
+                        } else {
+                            StaticKind::Let
+                        };
+                        let align = bytes.len() as u32;
+                        data = Some(module.intern_static(
+                            &symbol,
+                            bytes,
+                            StaticData {
+                                kind,
+                                align,
+                                section,
+                            },
+                        ));
+                    }
+                }
+                GlobalKind::Const => {}
+            }
+            out.insert(
+                (m, name.clone()),
+                StaticEntry {
+                    kind: g.kind,
+                    fold,
+                    data,
+                    ty: g.ty,
+                },
+            );
+        }
+    }
+    out
+}
+
+/// kw09: a scalar's initial bytes, little-endian at its C size — the
+/// two's-complement bits of an integer (an unsigned one above
+/// `i64::MAX` included), `0`/`1` for a `bool`, the IEEE bits of a
+/// float. `None` for anything else.
+fn static_bytes(wty: TypeId, f: &Fold) -> Option<Vec<u8>> {
+    let size = scalar_size(wty)? as usize;
+    let word: u64 = match (f, wty) {
+        (Fold::Bool(b), types::BOOL) => u64::from(*b),
+        (Fold::Int(v), _) if wty != types::BOOL && wty != types::F32 && wty != types::F64 => {
+            *v as u64
+        }
+        (Fold::Float(v), types::F32) => u64::from((*v as f32).to_bits()),
+        (Fold::Float(v), types::F64) => v.to_bits(),
+        _ => return None,
+    };
+    Some(word.to_le_bytes()[..size].to_vec())
+}
+
+/// kw09: a module item's linker symbol — `_W` + its qualified name +
+/// `$s` + a 15-hex FNV-1a hash of the name and its WIR type, so it
+/// never meets a function's `_W…$<hash>` (a different shape) or a C
+/// name, and two modules' items of one name stay apart.
+fn static_symbol(qname: &str, ty: &str) -> String {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for &b in b"wolf-static-0"
+        .iter()
+        .chain(qname.as_bytes())
+        .chain(b":")
+        .chain(ty.as_bytes())
+    {
+        h ^= u64::from(b);
+        h = h.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    format!("_W{qname}$s{:015x}", h >> 4)
 }
 
 fn qualify(sigs: &SigTables, module: usize, name: &str) -> String {
@@ -3365,6 +3534,12 @@ struct Lowerer<'t, 'b, 'm> {
     /// statement-level refusal is recorded here and lowering continues
     /// with the next statement instead of aborting the body.
     survey: Option<&'b mut Vec<NotYet>>,
+    /// kw09 (`[mem.static]`): the package's module state, by (module,
+    /// item name) — what a bare name no local binds may read or write.
+    statics: &'b Statics,
+    /// The package module this body belongs to (kw09: its module state
+    /// is what a bare name reaches).
+    body_module: usize,
     b: &'b mut FuncBuilder<'m>,
 }
 
@@ -4674,6 +4849,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let bind = match self.lookup(&name) {
             Some(b) => b,
             None => {
+                // kw09 (`[mem.static.2]`): a module `var` is a store
+                // through its data address (mem already demanded the
+                // ring).
+                if let Some(e) = self.statics.get(&(self.body_module, name.clone()))
+                    && e.kind == wolf_sema::GlobalKind::Var
+                    && let (Some(idx), Some(ty)) = (e.data, e.ty)
+                {
+                    return self.lower_static_assign(d, idx, ty, stmt.span);
+                }
                 return Err(refuse(
                     "assignment to a non-local name (globals)",
                     place.span,
@@ -5035,6 +5219,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             let id = self.b.module.tag_id(&name);
                             let tag = self.b.iconst(types::I64, id);
                             return Ok(Flow::Val(Some(self.b.ins_eu_make_err(eu, tag, &[]))));
+                        }
+                        // kw09 (`[mem.static]`): module state.
+                        if let Some(flow) = self.lower_static_read(&name, e)? {
+                            return Ok(flow);
                         }
                         // s95: a module-level FN read as a VALUE —
                         // `func.addr` (s86 built the emission for task
@@ -9424,7 +9612,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
 
     /// Materialize a folded comptime value (s71) as ordinary constants
     /// at the call site's checked type — the fold reaches the lane.
-    fn lower_fold(&mut self, f: &'t Fold, e: &'t GreenNode) -> R<Flow> {
+    fn lower_fold(&mut self, f: &Fold, e: &'t GreenNode) -> R<Flow> {
         match f {
             Fold::Unit => Ok(Flow::Val(None)),
             Fold::Bool(b) => Ok(Flow::Val(Some(self.b.bconst(*b)))),
@@ -14722,6 +14910,84 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             TyKind::Ptr(elem) => Ok(*elem),
             _ => Err(refuse("a dereference of a non-pointer", span)),
         }
+    }
+
+    /// kw09 (`[mem.static]`, `[abi.link.extern]`): a bare name read as
+    /// this module's state. `None` when the name is no module item (a
+    /// fn value or a tag — the caller's other readings). A `const` and a
+    /// `str` `let` are their value; a `let`/`var` is one load of its
+    /// data through the raw-buffer region, whose availability every call
+    /// kills (memopt's foreign rule — another function may write a
+    /// `var`); an `extern "c" let` is the symbol's address.
+    fn lower_static_read(&mut self, name: &str, e: &'t GreenNode) -> R<Option<Flow>> {
+        let Some(entry) = self.statics.get(&(self.body_module, name.to_string())) else {
+            return Ok(None);
+        };
+        match (entry.kind, entry.data, entry.fold.clone()) {
+            (wolf_sema::GlobalKind::Extern, Some(idx), _) => {
+                Ok(Some(Flow::Val(Some(self.b.ins_data_addr(idx)))))
+            }
+            (_, Some(idx), _) => {
+                let Some(sema) = self.expr_sema_ty(e.span) else {
+                    return Err(refuse("a module item read without a recorded type", e.span));
+                };
+                let Some(wty) = self.wir_value_ty(sema, e.span)? else {
+                    return Err(refuse(NOT_STATIC_DATA, e.span));
+                };
+                let addr = self.b.ins_data_addr(idx);
+                let region = self.foreign_buf_region();
+                Ok(Some(Flow::Val(Some(self.load_c(wty, addr, region, e.span)?))))
+            }
+            (_, None, Some(f)) => Ok(Some(self.lower_fold(&f, e)?)),
+            _ => Err(refuse(NOT_STATIC_DATA, e.span)),
+        }
+    }
+
+    /// kw09 (`[mem.static.2]`): `v = x` / `v op= x` on a module `var` —
+    /// a store through its data address, a compound operator reading the
+    /// state at its own type first (the `*p op= v` shape).
+    fn lower_static_assign(
+        &mut self,
+        d: AssignStmt<'t>,
+        idx: u32,
+        ty: TyId,
+        span: Span,
+    ) -> R<Flow> {
+        let Some(wty) = wir_ty(
+            &mut self.b.module.types,
+            &self.sigs.table,
+            self.sigs,
+            ty,
+            span,
+        )?
+        else {
+            return Err(refuse(NOT_STATIC_DATA, span));
+        };
+        let op = d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq);
+        let Some(vexpr) = d.value() else {
+            return Err(refuse("a module `var` write without a value", span));
+        };
+        let Some(val) = flow_val!(self.lower_expr(vexpr)) else {
+            return Err(refuse("a unit-typed module `var`", vexpr.span));
+        };
+        let addr = self.b.ins_data_addr(idx);
+        let region = self.foreign_buf_region();
+        let val = if op == SyntaxKind::Eq {
+            val
+        } else {
+            let Some(bin) = Self::compound_bin(op) else {
+                return Err(refuse("this compound assignment operator", span));
+            };
+            let cur = self.load_c(wty, addr, region, span)?;
+            let wrapping = matches!(self.sigs.table.kind(ty), TyKind::Wrapping(_));
+            let unsigned = sema_unsigned(&self.sigs.table, ty);
+            match self.arith(bin, cur, val, wrapping, unsigned, wty, span)? {
+                Some(v) => v,
+                None => return Ok(Flow::Diverged),
+            }
+        };
+        self.store_c(val, addr, region, vexpr.span)?;
+        Ok(Flow::Val(None))
     }
 
     /// kw06: `*p` read — `p[0]`'s load (`[mem.unsafe.raw.1]`).
