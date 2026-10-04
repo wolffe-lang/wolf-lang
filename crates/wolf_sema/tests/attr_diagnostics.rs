@@ -138,11 +138,44 @@ fn e0818_abi_string() {
     );
 }
 
+/// kw09 (`[abi.link.section]`): what `#[section]` still refuses — a
+/// `const` (no storage), a name that is not one, and Rust's spelling.
+#[test]
+fn e0817_section_shapes() {
+    insta::assert_snapshot!(
+        "e0817_section_shapes",
+        render_attrs(
+            "#[section(\".rodata.kw\")]\nconst LIMIT: int = 5\n\n\
+             #[section(\"a b\")]\nvar v: int = 0\n\n\
+             #[link_section(\".text.boot\")]\nfn boot() -> int {\n    1\n}\n"
+        )
+    );
+}
+
+/// kw09 (`[abi.link.extern]`): E0819's syntactic shapes (attrs) and its
+/// type (signatures) — an initializer, a `var`, a body position, a
+/// non-pointer type.
+#[test]
+fn e0819_extern_let_shapes() {
+    let src = "extern \"c\" let A: *u8 = 0 as *u8\n\n\
+               extern \"c\" var B: *u8\n\n\
+               extern \"c\" let C: int\n\n\
+               fn f() -> int {\n    extern \"c\" let D: *u8\n    1\n}\n";
+    let res = resolve(src);
+    // The signature pass carries the attribute check's diagnostics too.
+    let sigs = wolf_sema::build_sigs(&res.package);
+    let all: Vec<&wolf_diag::Diagnostic> = sigs.diagnostics.iter().collect();
+    insta::assert_snapshot!("e0819_extern_let_shapes", render(&res, &all));
+}
+
 #[test]
 fn the_implemented_set_is_silent() {
     let src = "#[repr(c)]\nstruct P {\n    a: u8,\n}\n\n#[consttime]\nfn f(k: int) -> int {\n    k\n}\n\n\
                #[allow(w1301)]\nfn g() -> int {\n    #[index(1)]\n    let x = 1\n    x\n}\n\n\
                extern \"c\" fn h() -> i32 {\n    1\n}\n\n\
+               #[section(\".text.boot\")]\nexport fn kmain() -> i64 {\n    1\n}\n\n\
+               #[section(\".data.kw\")]\nvar placed: int = 0\n\n\
+               extern \"c\" let __kernel_end: *u8\n\n\
                #[cfg(target = \"x86_64\")]\nfn a() -> int {\n    1\n}\n\n\
                #[cfg(target = \"aarch64\")]\nfn a() -> int {\n    2\n}\n";
     assert_eq!(render_attrs(src), "");
