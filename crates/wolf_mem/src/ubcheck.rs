@@ -1255,7 +1255,18 @@ struct Machine<'t> {
     mem_used: u64,
     budget: Budget,
     in_defer: bool,
+    /// kw09 (`[mem.static]`): module state as ordinary memory — one
+    /// slot per module `const`/`let`/`var` with a static value, started
+    /// at its compile-time value. A [`Place`] whose frame is
+    /// [`STATIC_FRAME`] names slot `local` here.
+    statics: Vec<Value>,
+    /// (module, item name) → its slot in [`Machine::statics`].
+    static_slots: HashMap<(usize, String), usize>,
 }
+
+/// The frame index a module-state [`Place`] carries (kw09): no call
+/// frame owns module state, so its places name [`Machine::statics`].
+const STATIC_FRAME: usize = usize::MAX;
 
 // The ubiquitous helpers.
 impl<'t> Machine<'t> {
@@ -2089,6 +2100,13 @@ fn run_checked_fn_here(
     entry: &str,
 ) -> Result<RunOutcome, NotYet> {
     let root_span = pkg.files[0].parse.root.span;
+    // kw09 (`[abi.link.section]`, `[abi.link.extern]`): this machine
+    // has no image and no link, so a program that places a section or
+    // names a link-time symbol is refused by name — never run as if the
+    // attribute or the symbol were absent.
+    if let Some(nyc) = link_refusal(pkg) {
+        return Err(nyc);
+    }
     let mut m = Machine::new(pkg, tc);
     m.budget = budget;
     m.stdin = stdin.to_string();
@@ -2161,6 +2179,39 @@ fn run_checked_fn_here(
             stderr: m.stderr,
         }),
     }
+}
+
+/// kw09: the first `#[section]` or `extern "c" let` in the package,
+/// as the refusal the checked machine answers (see
+/// [`run_checked_fn_here`]).
+fn link_refusal(pkg: &Package) -> Option<NotYet> {
+    fn walk(node: &GreenNode, src: &[u8]) -> Option<NotYet> {
+        for child in node.nodes() {
+            if matches!(
+                child.kind,
+                SyntaxKind::FnDecl | SyntaxKind::LetDecl | SyntaxKind::VarDecl
+            ) && wolf_sema::attrs::has_section(child, src)
+            {
+                return Some(NotYet {
+                    construct: "section placement",
+                    span: child.span,
+                });
+            }
+            if wolf_ast::is_extern_binding(child) {
+                return Some(NotYet {
+                    construct: "a link-time symbol (`extern \"c\" let`)",
+                    span: child.span,
+                });
+            }
+            if let Some(n) = walk(child, src) {
+                return Some(n);
+            }
+        }
+        None
+    }
+    pkg.files
+        .iter()
+        .find_map(|f| walk(&f.parse.root, &f.raw.src))
 }
 
 /// Cross-check a finding against the s22 attribution facts: the
@@ -2241,7 +2292,29 @@ impl<'t> Machine<'t> {
             mem_used: 0,
             budget: Budget::default(),
             in_defer: false,
+            statics: Vec::new(),
+            static_slots: HashMap::new(),
         };
+        // kw09 (`[mem.static.3]`): module state starts at the value
+        // the comptime engine computed; a `byte` item is a byte.
+        for ((module, name), fold) in &tc.statics {
+            let Some(ItemSig::Global(g)) = tc.sigs.get(*module, name) else {
+                continue;
+            };
+            let is_byte = g
+                .ty
+                .is_some_and(|t| matches!(tc.sigs.table.kind(t), TyKind::Prim(Prim::Byte)));
+            let v = match fold {
+                Fold::Unit => Value::Unit,
+                Fold::Bool(b) => Value::Bool(*b),
+                Fold::Int(n) if is_byte => Value::Byte(*n as u8),
+                Fold::Int(n) => Value::Int(*n as i64),
+                Fold::Float(f) => Value::F64(*f),
+                Fold::Str(st) => Value::Str(st.clone()),
+            };
+            m.static_slots.insert((*module, name.clone()), m.statics.len());
+            m.statics.push(v);
+        }
         // The run's root region: `main`'s caller (never freed, never
         // capped — the process root is outside `[mem.region.cap.1]`).
         m.regions.push(DynRegion {
@@ -2557,7 +2630,7 @@ impl<'t> Machine<'t> {
                         local,
                         path: Vec::new(),
                     })),
-                    None => Ok(Found::Not),
+                    None => self.static_place(&name, e.span),
                 }
             }
             SyntaxKind::ParenExpr => match ParenExpr::cast(e).and_then(|p| p.expr()) {
@@ -2670,8 +2743,41 @@ impl<'t> Machine<'t> {
         }
     }
 
+    /// kw09 (`[mem.static]`): a bare name no local binds, read as the
+    /// current module's state. `Found::Not` when the name is no module
+    /// item (a fn value, a tag — the callers' other readings); a module
+    /// item with no static value is refused by name, as is a link-time
+    /// symbol, which this machine has no link to resolve.
+    fn static_place(&mut self, name: &str, span: Span) -> E<Found<Place>> {
+        let Some(frame) = self.frames.last() else {
+            return Ok(Found::Not);
+        };
+        let module = self.tc.bodies[frame.body].body.module;
+        let Some(ItemSig::Global(g)) = self.tc.sigs.get(module, name) else {
+            return Ok(Found::Not);
+        };
+        if g.kind == wolf_sema::GlobalKind::Extern {
+            return self.refuse("a link-time symbol (`extern \"c\" let`)", span);
+        }
+        match self.static_slots.get(&(module, name.to_string())) {
+            Some(&local) => Ok(Found::At(Place {
+                frame: STATIC_FRAME,
+                local,
+                path: Vec::new(),
+            })),
+            None => self.refuse(
+                "module state whose value is not static data ([mem.static.3])",
+                span,
+            ),
+        }
+    }
+
     /// Read through a place (bounds and generation checks fire here).
     fn read_place(&mut self, place: &Place, span: Span) -> E<Value> {
+        if place.frame == STATIC_FRAME {
+            let root = self.statics[place.local].clone();
+            return self.walk_read(root, &place.path, span);
+        }
         let root = self.frames[place.frame].locals[place.local].clone();
         // A `mut` parameter aliases the caller's place.
         if let Value::Ref(inner) = root {
@@ -2784,6 +2890,15 @@ impl<'t> Machine<'t> {
 
     /// Write through a place.
     fn write_place(&mut self, place: &Place, v: Value, span: Span) -> E<()> {
+        if place.frame == STATIC_FRAME {
+            // Module state holds scalars only (`[mem.static.3]`), so a
+            // write is the whole slot.
+            if !place.path.is_empty() {
+                return self.refuse("a write into part of module state", span);
+            }
+            self.statics[place.local] = v;
+            return Ok(());
+        }
         let root = self.frames[place.frame].locals[place.local].clone();
         if let Value::Ref(inner) = root {
             let mut chained = inner.clone();
@@ -2886,6 +3001,10 @@ impl<'t> Machine<'t> {
     /// guaranteed no later use).
     fn take_value(&mut self, place: &Place, span: Span) -> E<Value> {
         let v = self.read_place(place, span)?;
+        if place.frame == STATIC_FRAME {
+            // Module state is scalar: every read copies.
+            return Ok(v);
+        }
         if !v.is_copy() && place.path.is_empty() {
             // Whole-local move: mark the slot.
             let root = &mut self.frames[place.frame].locals[place.local];
