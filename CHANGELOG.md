@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+### Exact layout: `packed`, `align(N)`, `size_of` / `align_of` / `offset_of` (kw08, ruling #31 K4)
+
+- **`#[repr(c, packed)]` and `#[repr(c, align(N))]`.** Both were E0817
+  ("not implemented yet"). A packed struct is the C layout with every
+  field at the next byte: alignment 1, no padding
+  (`[abi.layout.packed]`); an aligned one has its alignment raised to
+  at least `N` and its size rounded to it (`[abi.layout.align]`). They
+  hold through a raw pointer at any depth — a packed struct as a field,
+  an aligned one inside a packed one — and the stride of `p[i]` is the
+  C `sizeof`. A packed field is loaded and stored with the alignment
+  its offset guarantees (`align 1` on release, no `aligned` flag on
+  native), never its natural one.
+- **The queries.** `size_of(T)` answers for every `#[repr(c)]` struct
+  (it was E0708 for any struct), and `align_of(T)` and
+  `offset_of(T, field)` are new; all three answer at comptime from the
+  clause's layout, for scalars and `#[repr(c)]` structs
+  (`[abi.layout.query]`). A native-layout type stays E0708; an
+  `offset_of` field the struct lacks is E0403.
+- **Proven against C.** `repr_c_raw_layout.rs` holds seven layouts to
+  gcc and clang in both directions on native and release, and wolf's
+  three queries to C's `sizeof`, `_Alignof` and `offsetof`.
+- **New codes.** **E0819**: a packed field is lent (a `mut` argument
+  or receiver, or an aggregate passed `read`) — its address may be
+  misaligned; copy it out instead. **E0820**: a representation that
+  cannot be laid out — `align(N)` with `N` not a power of two up to
+  2^28, `packed` or `align` without `c`, both at once, on a generic
+  struct, named twice. `repr(transparent)` and `repr(packed(N))` stay
+  E0817.
+- **The membrane.** A packed or aligned struct by value at the C
+  membrane is refused by name on the compiling tiers (its psABI
+  passing is not lowered); a pointer to one crosses.
+- The checked machine still refuses a whole-aggregate raw store or
+  load by name; a packed field read or written as a scalar at its
+  `offset_of` runs on every machine. lupin 0.1.45 has neither the
+  attributes nor the queries: its half is wolf-interp#188, pinned by
+  version in `repr_layout_lanes.rs`. Hosted programs that use none of
+  this build byte-for-byte as before. Anchors 574 → 577.
+
 ### Volatile access: `p.read_volatile()` / `p.write_volatile(v)` (kw07, ruling #31 K3 = B)
 
 - **Two methods on `*T`.** `p.read_volatile()` yields the `T` at `p`;
