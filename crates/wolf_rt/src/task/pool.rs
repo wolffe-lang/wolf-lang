@@ -457,9 +457,20 @@ fn worker_main(p: &'static Pool, slot: usize, extra: bool) {
             std::thread::park_timeout(std::time::Duration::from_millis(50));
             let mut idle = p.idle.lock().unwrap();
             let still_idle = idle.iter().position(|&w| w == slot);
+            // Retire only out of SURPLUS unblocked parallelism, and take
+            // the unblocked count down in the same step (wolf-lang#570,
+            // s210). 0.2.23 retired while `running > target`, and
+            // `running` counts blocked workers: with `target` workers
+            // blocked, every idle extra left the pool, nothing was left
+            // to run new work, and nothing compensates on spawn. A
+            // spawned proc then never ran. The compare-and-swap keeps a
+            // concurrent `blocking` entry's own decrement and
+            // compensation decision consistent with this one.
             if let Some(pos) = still_idle
                 && !have_visible_work(p)
-                && p.running.load(SeqCst) > p.target
+                && p.unblocked
+                    .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+                    .is_ok()
             {
                 // Retire lazily: leave the pool.
                 idle.remove(pos);
@@ -468,7 +479,6 @@ fn worker_main(p: &'static Pool, slot: usize, extra: bool) {
                 *p.slots[slot].thread.lock().unwrap() = None;
                 p.slots[slot].occupied.store(false, SeqCst);
                 p.running.fetch_sub(1, SeqCst);
-                p.unblocked.fetch_sub(1, SeqCst);
                 return;
             }
         } else {
