@@ -95,9 +95,10 @@ fn main() -> ExitCode {
         Some("fmt-lu") => fmt_lu(),
         Some("peel") => peel_cmd(&args[1..]),
         Some("audit-surface") => audit_surface(),
+        Some("prelude-diff") => prelude_diff_cmd(&args[1..]),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci [--shard <name>] [--plan]|deps-check|corpus|peel|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|release-notes|spec-extract|conformance|differ|lane-coverage|print-gate|diag-catalog|doc-catalog|fmt-lu|audit-surface|midend-rate>"
+                "usage: cargo xtask <ci [--shard <name>] [--plan]|deps-check|corpus|peel|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|release-notes|spec-extract|conformance|differ|lane-coverage|print-gate|diag-catalog|doc-catalog|fmt-lu|audit-surface|midend-rate|prelude-diff>"
             );
             eprintln!(
                 "       cargo xtask release-notes <TAG> [--out FILE]\n\
@@ -106,6 +107,11 @@ fn main() -> ExitCode {
             );
             eprintln!(
                 "       cargo xtask lane-coverage [--json]   (the [proto.cmp.coverage] gate)"
+            );
+            eprintln!(
+                "       cargo xtask prelude-diff <tagA> <tagB> [--markdown]\n\
+                 \x20                        (prelude names added/removed between two revisions —\n\
+                 \x20                        the CHANGELOG's bump-the-pin list, #586)"
             );
             eprintln!(
                 "       cargo xtask peel [FILTER] [--all]    (reasons BEHIND the lowering ledger's\n                                             refusals — the contract-author's lens)"
@@ -5231,6 +5237,39 @@ fn max_rss_kb(cmd: &str, args: &[&str]) -> Option<f64> {
 
 /// Enforce the locked crate dependency direction (s00): each workspace
 /// crate may depend only on the workspace crates in its allowlist.
+/// `cargo xtask prelude-diff <tagA> <tagB> [--markdown]` (s212, #586):
+/// the prelude names `tagB` adds and removes against `tagA`, read from
+/// each revision's `spec/prelude.json` (or its `prelude.rs` tables when
+/// it predates that file). `--markdown` prints the paragraph the
+/// CHANGELOG's "Read this before you bump the pin" carries. Exit 0 with
+/// a report (an empty diff is a report too); 2 on a usage error or an
+/// unreadable revision.
+fn prelude_diff_cmd(args: &[String]) -> ExitCode {
+    let markdown = args.iter().any(|a| a == "--markdown");
+    let revs: Vec<&String> = args.iter().filter(|a| *a != "--markdown").collect();
+    let [ra, rb] = revs.as_slice() else {
+        eprintln!("usage: cargo xtask prelude-diff <tagA> <tagB> [--markdown]");
+        return ExitCode::from(2);
+    };
+    let here = Path::new(".");
+    let lists = xtask::prelude::at_rev(here, ra)
+        .and_then(|a| xtask::prelude::at_rev(here, rb).map(|b| (a, b)));
+    let (a, b) = match lists {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("prelude-diff: {e}");
+            return ExitCode::from(2);
+        }
+    };
+    let d = xtask::prelude::diff(&a, &b);
+    if markdown {
+        print!("{}", xtask::prelude::render_markdown(ra, rb, &d));
+    } else {
+        print!("{}", xtask::prelude::render_text(ra, &a, rb, &b, &d));
+    }
+    ExitCode::SUCCESS
+}
+
 fn deps_check() -> ExitCode {
     // crate -> workspace crates it MAY depend on. wolf_driver is the top and
     // unrestricted; xtask may not depend on workspace crates at all.
