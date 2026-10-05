@@ -755,8 +755,13 @@ impl<'a> Parser<'a> {
             }
             // Depth-independent: a sibling-level item keyword ends
             // recovery even inside a brace that claims to contain it.
+            // So does a sibling-level attribute opener: `#[…]` is the
+            // first token of the declaration it decorates, and a stop
+            // at the keyword alone fed the attribute to the wreck above
+            // it — `const LIMIT: int { 5` ate the next item's column-0
+            // `#[link_section(…)]` and that `fn` lost its start (s211).
             if let Some(floor) = sibling_floor
-                && self.at_decl_keyword()
+                && self.at_decl_start()
                 && self.line_indent(self.current_span().lo) <= floor
             {
                 break;
