@@ -239,8 +239,10 @@ fn the_hosted_runtime_defines_the_trap_hook() {
 }
 
 /// `[abi.target.none]`: every construct that needs the hosted runtime,
-/// every allocating construct, and every float is refused BY NAME at
-/// the construct, on both tiers, before any backend runs.
+/// every allocating construct the freestanding runtime does not carry,
+/// and every float is refused BY NAME at the construct, on both tiers,
+/// before any backend runs. (kw12 moved `List`, `Map`, interpolation, a
+/// capturing closure and `region` to compiled: `freestanding_alloc.rs`.)
 #[test]
 fn hosted_allocating_and_float_constructs_are_refused_by_name() {
     // (case, a helper item or "", the body of `fn work() -> int` that
@@ -272,20 +274,6 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "hosted runtime",
         ),
         (
-            "list",
-            "",
-            "var xs = [1, 2]\n    (mut xs).push(3)\n    xs.len",
-            "`List`",
-            "allocates",
-        ),
-        (
-            "map",
-            "",
-            "var m = Map[str, int]()\n    m[\"a\"] = 1\n    0",
-            "`Map`",
-            "allocates",
-        ),
-        (
             "pool",
             "",
             "var p = Pool[int]()\n    0",
@@ -293,31 +281,19 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "allocates",
         ),
         (
-            "interpolation",
-            "",
-            "let n = 5\n    let s = \"n={n}\"\n    s.len",
-            "string interpolation",
-            "allocates",
-        ),
-        (
-            "closure",
-            "",
-            "let k = 3\n    let f = fn(x) x + k\n    f(1)",
-            "a capturing closure",
-            "allocates",
-        ),
-        (
-            "region",
-            "",
-            "var n = 0\n    region scratch {\n        n = 1\n    }\n    n",
-            "`region`",
-            "allocates",
-        ),
-        (
             "spawn",
             "",
             "scope s {\n        s.spawn(fn() { })\n    }\n    0",
             "`spawn`",
+            "hosted runtime",
+        ),
+        // kw12: no scheduler in the freestanding runtime — a proc stays
+        // refused by name, as `spawn` does.
+        (
+            "proc",
+            "fn worker() {\n}\n\n",
+            "let w = spawn proc worker()\n    0",
+            "`spawn proc`",
             "hosted runtime",
         ),
         // s199's positional I/O (#426): host builtins like any other.
