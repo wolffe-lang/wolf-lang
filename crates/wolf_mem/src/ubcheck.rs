@@ -1854,6 +1854,83 @@ impl<'t> Machine<'t> {
         }
     }
 
+    /// kw11 (`[conc.mm.atomic.raw.5]`): an atomic operation on an
+    /// allocation, run as `seq_cst` whatever its order — this machine
+    /// interleaves whole operations, so every outcome it produces is
+    /// one the hardware may produce, and the weaker-order outcomes it
+    /// cannot produce are named in the clause as outside its reach. The
+    /// access is kw06's raw read/write at `p` (rows P1–P4, L1, L2, T1;
+    /// a misaligned address is row L4, `[conc.mm.atomic.raw.4]`); a
+    /// read-modify-write reads, computes and writes in one step, its
+    /// arithmetic wrapping at the width (`[conc.mm.atomic.raw]`), and
+    /// yields the old value; a CAS writes only on a match and yields
+    /// `(old, matched)`.
+    fn atomic_access(
+        &mut self,
+        op: wolf_ast::atomic::AtomicOp,
+        p: PtrVal,
+        pointee: Prim,
+        args: &[Value],
+        span: Span,
+    ) -> E<Flow> {
+        use wolf_ast::atomic::AtomicOp;
+        let size = prim_size(pointee);
+        let signed = matches!(pointee, Prim::I8 | Prim::I16 | Prim::I32 | Prim::I64);
+        let int = |v: Option<&Value>| match v {
+            Some(Value::Int(n)) => Some(*n),
+            _ => None,
+        };
+        if op == AtomicOp::Store {
+            let Some(v) = args.first().cloned() else {
+                return self.refuse("an atomic store without its value", span);
+            };
+            return self.raw_write_at(p, size, signed, v, None, span, span);
+        }
+        let Flow::Val(Value::Int(old)) = self.raw_read_at(p, size, signed, span)? else {
+            return self.refuse("an atomic read of a non-integer", span);
+        };
+        let mask: u64 = if size >= 8 {
+            u64::MAX
+        } else {
+            (1u64 << (8 * size)) - 1
+        };
+        let new = match op {
+            AtomicOp::Load => return Ok(Flow::Val(Value::Int(old))),
+            AtomicOp::Cas => {
+                let (Some(expected), Some(new)) = (int(args.first()), int(args.get(1))) else {
+                    return self.refuse("a compare-and-swap without its operands", span);
+                };
+                let matched = (old as u64 ^ expected as u64) & mask == 0;
+                if matched {
+                    self.raw_write_at(p, size, signed, Value::Int(new), None, span, span)?;
+                }
+                return Ok(Flow::Val(Value::Struct {
+                    fields: vec![
+                        ("0".to_string(), Value::Int(old)),
+                        ("1".to_string(), Value::Bool(matched)),
+                    ],
+                }));
+            }
+            _ => {
+                let Some(v) = int(args.first()) else {
+                    return self.refuse("an atomic operation without its value", span);
+                };
+                match op {
+                    AtomicOp::Swap => v,
+                    AtomicOp::Add => old.wrapping_add(v),
+                    AtomicOp::Sub => old.wrapping_sub(v),
+                    AtomicOp::And => old & v,
+                    AtomicOp::Or => old | v,
+                    _ => old ^ v,
+                }
+            }
+        };
+        // raw_write_at stores the low `size` bytes: the wrap at the
+        // width is the truncation.
+        self.raw_write_at(p, size, signed, Value::Int(new), None, span, span)?;
+        Ok(Flow::Val(Value::Int(old)))
+    }
+
     fn raw_read_bytes(&mut self, p: PtrVal, len: u64, span: Span, opdesc: &str) -> E<Vec<u8>> {
         self.mem_access(p, len, false, span, opdesc)?;
         let a = &self.allocs[p.alloc.expect("checked")];
@@ -8179,6 +8256,10 @@ impl<'t> Machine<'t> {
             d.callee().map(|c| self.text(c.span)).unwrap_or_default()
         };
         match callee_name.as_str() {
+            // kw11 (`[conc.mm.fence]`): one task at a time, every
+            // operation whole — every fence is already in force here;
+            // the operand is a mark, never evaluated.
+            "fence" => return Ok(Flow::Val(Value::Unit)),
             "print" | "print_raw" | "eprint" | "eprint_raw" => {
                 let mut out = String::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
@@ -8700,8 +8781,16 @@ impl<'t> Machine<'t> {
             let Value::Ptr(p) = pv else {
                 return self.refuse("pointer op on a non-pointer", e.span);
             };
+            // kw11: an atomic operation's order operands are marks
+            // (`[conc.mm.atomic.order]`), never evaluated; this
+            // machine runs every order as seq_cst
+            // (`[conc.mm.atomic.raw.5]`), so it does not read them.
+            let atomic = wolf_ast::atomic::AtomicOp::from_method(method);
             let mut arg_vals = Vec::new();
-            for a in args.into_iter().flat_map(|l| l.args()) {
+            for (i, a) in args.into_iter().flat_map(|l| l.args()).enumerate() {
+                if atomic.is_some_and(|op| op.order_slots().contains(&i)) {
+                    continue;
+                }
                 if let Some(v) = Arg::value(a) {
                     arg_vals.push(val!(self.eval(v)));
                 }
@@ -8752,6 +8841,17 @@ impl<'t> Machine<'t> {
                         _ => return self.refuse("a volatile access of a non-scalar", e.span),
                     };
                     self.volatile_access(p, pointee, arg_vals.first().cloned(), e.span)
+                }
+                _ if atomic.is_some() => {
+                    let Some(TyKind::Ptr(t)) = &recv_ty else {
+                        unreachable!("matched above")
+                    };
+                    let pointee = match self.ctx().tb.table.kind(*t) {
+                        TyKind::Prim(p) => *p,
+                        _ => return self.refuse("an atomic operation on a non-scalar", e.span),
+                    };
+                    let op = atomic.expect("guarded");
+                    self.atomic_access(op, p, pointee, &arg_vals, e.span)
                 }
                 _ => self.refuse("this pointer method", e.span),
             };
