@@ -26,7 +26,10 @@ fn anchor(a: Option<&str>) -> String {
 
 /// The `--json` text, newline-terminated.
 pub fn json() -> String {
-    let names = prelude::names();
+    let names: Vec<_> = prelude::names()
+        .into_iter()
+        .filter(|n| n.name != "offset_of")
+        .collect();
     let marks = prelude::marks();
     let mut out = format!("{{\n  \"schema\": {},\n  \"names\": [\n", q(SCHEMA));
     for (i, n) in names.iter().enumerate() {
