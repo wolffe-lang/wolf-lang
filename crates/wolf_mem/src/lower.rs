@@ -4556,6 +4556,32 @@ impl<'t> Lowerer<'t> {
         if surface.c_call {
             self.require_unsafe(&format!("the C call `{}`", surface.callee), e.span);
         }
+        // kw11 (`[conc.mm.fence]`): the ambient `fence(o)` — sema
+        // recorded no call surface for it, exactly where the name is
+        // the builtin's. Every order but `seq_cst` is raw-tier (E1301:
+        // a weaker fence is reasoned about only beside raw accesses);
+        // the operand is a mark, never evaluated.
+        if cs.is_none()
+            && let Some(callee) = d.callee()
+            && callee.kind == SyntaxKind::PathExpr
+            && self.text(callee.span) == "fence"
+        {
+            let arg = d
+                .args()
+                .into_iter()
+                .flat_map(|a| a.args())
+                .find_map(Arg::value);
+            let o = arg.map(|a| wolf_ast::atomic::order_operand(a, |s| self.text(s)));
+            if !matches!(
+                o,
+                Some(wolf_ast::atomic::OrderOperand::Mark(
+                    wolf_ast::atomic::Order::SeqCst
+                ))
+            ) {
+                self.require_unsafe("a fence weaker than `Order.seq_cst`", e.span);
+            }
+            return Ok(Val::none());
+        }
         // Sites whose data the callee receives by `take`/`mut`: it
         // may embed them in the result (the conservative carry).
         let mut carry: Vec<SiteId> = Vec::new();
@@ -4567,6 +4593,9 @@ impl<'t> Lowerer<'t> {
         // The receiver, when the resolved callee takes `self` and the
         // call site spells `recv.method(…)`.
         let mut receiver_done = false;
+        // kw11: the argument slots that are order operands (marks,
+        // never evaluated) when this is an atomic operation on `*T`.
+        let mut atomic_orders: &[usize] = &[];
         // s150 (`[conc.chan.payload]`): `ch.send(v)` — the payload
         // leaves this frame for a receiver, so it is demanded to
         // outlive the frame exactly as a returned value is.
@@ -4675,6 +4704,29 @@ impl<'t> Lowerer<'t> {
                     self.push(Stmt::RawRead { ptr, span: e.span });
                 }
             }
+            // kw11 (`[conc.mm.atomic.raw]`): an atomic operation is an
+            // ACCESS through the pointer — ring-gated like `p[i]` and
+            // recorded as the raw read and/or write it is, so the
+            // dynamic rows (P1–P4, L1, L2, and L4 for a misaligned
+            // address) are attributed to it.
+            if matches!(
+                self.expr_ty(recv_expr.span).map(|t| t.kind().clone()),
+                Some(TyKind::Ptr(_))
+            ) && let Some(op) = wolf_ast::atomic::AtomicOp::from_method(&cs.callee)
+            {
+                self.require_unsafe(&format!("the atomic operation `{}`", cs.callee), e.span);
+                let ptr = self.text(recv_expr.span);
+                if op.reads() {
+                    self.push(Stmt::RawRead {
+                        ptr: ptr.clone(),
+                        span: e.span,
+                    });
+                }
+                if op.writes() {
+                    self.push(Stmt::RawWrite { ptr, span: e.span });
+                }
+                atomic_orders = op.order_slots();
+            }
             receiver_done = true;
         }
         // A constructor's callee is a type head (`Node`, or the s21
@@ -4716,6 +4768,9 @@ impl<'t> Lowerer<'t> {
             .extend(arg_muts.iter().map(|&(_, s)| s));
         for (i, arg) in args.iter().enumerate() {
             let Some(v) = Arg::value(*arg) else { continue };
+            if atomic_orders.contains(&i) {
+                continue;
+            }
             let site_mode = Arg::mode(*arg);
             let declared = cs.and_then(|c| c.params.get(i + offset));
             match (cs, declared) {
