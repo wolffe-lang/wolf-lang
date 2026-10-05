@@ -31,7 +31,10 @@
   store, a CAS failure order stronger than its success order or a
   release one, `fence(Order.relaxed)`, an operand that is not a mark,
   `Order` as a value). E1301 names atomics and every fence but
-  `fence(Order.seq_cst)`. `fence` joins the prelude.
+  `fence(Order.seq_cst)`. **New prelude names:** `fence` (`cargo xtask
+  prelude-diff v0.2.23 HEAD`); a module that declares its own `fence`
+  now draws W0304. `Order` is no prelude name (an order operand is a
+  mark), so a program's own `Order` type is untouched.
 - lupin 0.1.46 answers `unsupported`; its half is wolf-interp#194,
   pinned by version in `atomic_lanes.rs`. The safe `std.sync`
   `Atomic[T]` is a later layer. Anchors 587 → 595.
