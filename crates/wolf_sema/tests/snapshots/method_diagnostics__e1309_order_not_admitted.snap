@@ -1,0 +1,40 @@
+---
+source: crates/wolf_sema/tests/method_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E1309]: `atomic_load` does not admit `Order.release`
+ --> mem:///main.lu:4:31
+  |
+4 |         let a = p.atomic_load(Order.release)
+  |                               ^^^^^^^^^^^^^ not admitted here
+  |
+  = note: a load has no release half: its orders are `Order.relaxed`, `Order.acquire` and
+    `Order.seq_cst` ([conc.mm.atomic.raw.2])
+
+error[E1309]: the failure order `Order.acquire` is stronger than the success order `Order.release`
+ --> mem:///main.lu:5:51
+  |
+5 |         let b = p.atomic_cas(0, 1, Order.release, Order.acquire)
+  |                                                   ^^^^^^^^^^^^^ not admitted here
+  |
+  = note: a failed compare-and-swap is a load, so its order is `Order.relaxed`, `Order.acquire` or
+    `Order.seq_cst`, and no stronger than the success order's load half
+    ([conc.mm.atomic.raw.2])
+
+error[E1309]: `fence` does not admit `Order.relaxed`
+ --> mem:///main.lu:6:15
+  |
+6 |         fence(Order.relaxed)
+  |               ^^^^^^^^^^^^^ not admitted here
+  |
+  = note: a relaxed fence orders nothing: a fence is `Order.acquire`, `Order.release`,
+    `Order.acq_rel` or `Order.seq_cst` ([conc.mm.fence])
+
+error[E1309]: `Order` has no mark `sequential`
+ --> mem:///main.lu:7:32
+  |
+7 |         p.atomic_swap(a, Order.sequential)
+  |                                ^^^^^^^^^^ not one of the five marks
+  |
+  = note: an atomic operation's order is one of `Order.relaxed`, `Order.acquire`, `Order.release`,
+    `Order.acq_rel` or `Order.seq_cst` ([conc.mm.atomic.order])

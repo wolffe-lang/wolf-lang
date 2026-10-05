@@ -242,3 +242,47 @@ fn e1307_volatile_pointee_not_one_access() {
          fn main() -> !int { 0 }\n",
     );
 }
+
+// ---------------------------------------------------------- E1308 -----
+
+#[test]
+fn e1308_atomic_pointee_not_a_fixed_width_integer() {
+    // kw11 (`[conc.mm.atomic.raw.1]`): an atomic operation is one
+    // indivisible operation with integer arithmetic, so the pointee is
+    // one of the eight fixed-width integers. `*int` (the platform
+    // integer) and `*byte` (no arithmetic) are each E1308 on the method.
+    snap_one(
+        "e1308_atomic_pointee",
+        "fn count(p: *int) -> int {\n    \
+             // # Safety: the caller passes a live `*int`.\n    \
+             unsafe { p.atomic_add(1, Order.seq_cst) }\n\
+         }\n\
+         fn flag(p: *byte) -> byte {\n    \
+             // # Safety: the caller passes a live `*byte`.\n    \
+             unsafe { p.atomic_load(Order.acquire) }\n\
+         }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
+
+// ---------------------------------------------------------- E1309 -----
+
+#[test]
+fn e1309_order_not_admitted() {
+    // kw11 (`[conc.mm.atomic.raw.2]`, `[conc.mm.fence]`): a load with a
+    // release order, a CAS whose failure order is stronger than its
+    // success order, a relaxed fence, and an order that is not a mark.
+    snap_one(
+        "e1309_order_not_admitted",
+        "fn f(p: *u64) -> u64 {\n    \
+             // # Safety: the caller passes a live, aligned `*u64`.\n    \
+             unsafe {\n        \
+                 let a = p.atomic_load(Order.release)\n        \
+                 let b = p.atomic_cas(0, 1, Order.release, Order.acquire)\n        \
+                 fence(Order.relaxed)\n        \
+                 p.atomic_swap(a, Order.sequential)\n    \
+             }\n\
+         }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
