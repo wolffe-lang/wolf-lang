@@ -1,0 +1,29 @@
+[package]
+name = "wolf_rt_none"
+version.workspace = true
+edition.workspace = true
+license = "GPL-3.0-or-later WITH GCC-exception-3.1"
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+# kw12 (K8(b) = B, spec/04 `[abi.target.none.alloc]`): the `no_std` half
+# of the region runtime, for the freestanding target. The freestanding
+# link takes it as `libwolf_rt_none.a`, built for x86_64-unknown-none by
+# `cargo xtask rt-none` (`cargo rustc --target x86_64-unknown-none
+# --crate-type staticlib`); a host build is an rlib, which is what the
+# integration tests link. It never joins the hosted runtime:
+# `libwolf_rt.a` is not touched, so no hosted binary moves (kw04's
+# lesson: one symbol added there moved all 56 downstream binaries).
+#
+# D15 holds harder here: no dependency at all, not even `wolf_span`.
+#
+# The list and map families are the HOSTED runtime's own source
+# (`#[path]` into `wolf_rt/src`), compiled a second time without std;
+# only the region, the root arena and the strbuf are this crate's.
+#
+# `test = false`: the shared files carry `#[cfg(test)]` modules written
+# against the hosted crate; this crate's tests are `tests/*.rs`.
+[lib]
+test = false
+doctest = false

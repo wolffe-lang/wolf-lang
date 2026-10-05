@@ -1276,6 +1276,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "wolf_rt_none"
+version = "0.2.23"
+
+[[package]]
 name = "wolf_sema"
 version = "0.2.23"
 dependencies = [
