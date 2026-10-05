@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+### Atomics and fences on raw pointers (kw11, ruling K5 = A)
+
+- **A kernel can share a word between cpus.** On a `*T` with a
+  fixed-width integer pointee, inside `unsafe`: `p.atomic_load(o)`,
+  `p.atomic_store(v, o)`, `p.atomic_swap(v, o)`, `p.atomic_add`,
+  `atomic_sub`, `atomic_and`, `atomic_or`, `atomic_xor` (each the old
+  value, the arithmetic wrapping at the width) and
+  `p.atomic_cas(expected, new, success, failure) -> (T, bool)`; and the
+  builtin `fence(o)` (`[conc.mm.atomic.raw]`, `[conc.mm.fence]`). The
+  order is a mark of the closed builtin enum `Order` — `Order.relaxed`,
+  `.acquire`, `.release`, `.acq_rel`, `.seq_cst` — written at the call
+  (`[conc.mm.atomic.order]`).
+- **Native runs every order as `seq_cst`** (Cranelift's atomics are
+  sequentially consistent); **release passes each order to LLVM**. Each
+  call is its instruction in place, hosted and freestanding, with
+  nothing imported: `atomic_disasm.rs` reads every operation, width and
+  order on x86-64 (`lock xadd`, `lock cmpxchg`, `xchg`, `mfence`) and
+  aarch64. Four tasks' `atomic_add`s and CAS loops count exactly on 1,
+  4 and all cpus (`atomic_witness.rs`).
+- **The checked machine runs every order as `seq_cst`**, one task (it
+  runs no task concurrency); the weaker-order outcomes it cannot
+  produce are named in `[conc.mm.atomic.raw.5]`. A misaligned atomic
+  address is row L4.
+- New codes: **E1308** (an atomic operation on a pointee that is not a
+  fixed-width integer: `int`, `uint`, `byte`, `bool`, …) and **E1309**
+  (an order the operation does not admit — a release load, an acquire
+  store, a CAS failure order stronger than its success order or a
+  release one, `fence(Order.relaxed)`, an operand that is not a mark,
+  `Order` as a value). E1301 names atomics and every fence but
+  `fence(Order.seq_cst)`. `fence` joins the prelude.
+- lupin 0.1.46 answers `unsupported`; its half is wolf-interp#194,
+  pinned by version in `atomic_lanes.rs`. The safe `std.sync`
+  `Atomic[T]` is a later layer. Anchors 587 → 594.
+
 ### A kernel can allocate: the allocator hook (kw12, K8(b) = B)
 
 - **On `x86_64-unknown-none`, `List`, `Map`, string interpolation, a
