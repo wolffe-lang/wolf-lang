@@ -958,6 +958,12 @@ const SWEEP_1000: &[(&str, usize)] = &[
     ("conc/proc_cap_fault_join.lu", 451),
     ("conc/proc_cap_fault_join.lu", 897),
     ("ct/membrane.lu", 909),
+    // s211's budget-1000 sweep at trunk `a3465f87`: `const LIMIT: int
+    // = 5` with its `=` replaced by `{` (two iterations roll the same
+    // mutation) let the const's recovery eat the NEXT item's column-0
+    // `#[link_section(…)]` under the `{` shield.
+    ("grammar/attr_section.lu", 498),
+    ("grammar/attr_section.lu", 930),
     ("grammar/index_origin_bad.lu", 642),
     ("grammar/index_origin_closure.lu", 367),
     ("grammar/match_arm_at_binding.lu", 442),
