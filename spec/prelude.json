@@ -11,6 +11,7 @@
     {"name": "Pool", "kind": "type", "anchor": "mem.shared.handle", "w0304": true},
     {"name": "Mutex", "kind": "type", "anchor": "conc.mm.hb.mutex", "w0304": true},
     {"name": "channel", "kind": "type", "anchor": "conc.chan.type", "w0304": true},
+    {"name": "fence", "kind": "function", "anchor": "conc.mm.fence", "w0304": true},
     {"name": "Scope", "kind": "type", "anchor": "conc.proc.handle", "w0304": true},
     {"name": "Proc", "kind": "type", "anchor": "conc.proc.handle", "w0304": true},
     {"name": "range", "kind": "type", "anchor": "type.range.name", "w0304": false},
