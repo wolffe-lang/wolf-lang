@@ -1,0 +1,57 @@
+// kw12 (`[abi.target.none.hooks]`, K8(b)): the program-supplied allocator
+// pair, in wolf. A bump allocator over `heap.S`'s 1 MiB block that never
+// reuses memory; `wolf_free` only keeps the books, so the kernel can say
+// whether the runtime handed back every block it took for a region.
+extern "c" let kw_heap: *u8
+
+let HEAP_SIZE: uint = 1048576
+
+var heap_used: uint = 0
+
+var hook_allocs: int = 0
+
+var hook_frees: int = 0
+
+var outstanding: int = 0
+
+var bad_frees: int = 0
+
+export fn wolf_alloc(size: int, align: int) -> *u8 {
+    // # Safety: one CPU and nothing else running; kw_heap is heap.S's
+    // block of HEAP_SIZE bytes, and the bump never passes its end.
+    unsafe {
+        let base = kw_heap.addr()
+        let a = align as uint
+        let n = size as uint
+        let start = (base + heap_used + a - 1) / a * a
+        if start + n > base + HEAP_SIZE {
+            return 0 as *u8
+        }
+        heap_used = start + n - base
+        hook_allocs += 1
+        outstanding += size
+        kw_heap.with_addr(start)
+    }
+}
+
+export fn wolf_free(p: *u8, size: int, align: int) {
+    // # Safety: one CPU; only the books move.
+    unsafe {
+        let base = kw_heap.addr()
+        let at = p.addr()
+        if at < base || at + size as uint > base + heap_used || at % align as uint != 0 {
+            bad_frees += 1
+        }
+        hook_frees += 1
+        outstanding -= size
+    }
+}
+
+fn outstanding_bytes() -> int {
+    var o = 0
+    // # Safety: one CPU.
+    unsafe {
+        o = outstanding
+    }
+    o
+}

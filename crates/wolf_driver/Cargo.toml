@@ -43,7 +43,9 @@ rayon.workspace = true
 [dev-dependencies]
 # s30 debug tests: parse the built executable's ELF sections to assert
 # .debug_* presence (the ledger's readelf-style check, tool-free).
-object = { version = "0.39", default-features = false, features = ["read_core", "elf", "std"] }
+# kw12: `archive` reads the freestanding runtime's members
+# (freestanding_alloc.rs), tool-free on every host.
+object = { version = "0.39", default-features = false, features = ["read_core", "elf", "archive", "std"] }
 
 # s60a: the windows link step's MSVC/SDK discovery — the same crate
 # rustc's own `cc` uses to find `link.exe` and the import libraries

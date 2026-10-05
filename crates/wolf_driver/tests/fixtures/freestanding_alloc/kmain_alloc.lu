@@ -1,0 +1,45 @@
+// kw12: the freestanding half of the witness. `report.lu`'s lines,
+// written byte by byte to the port (`kw_outb`, rt_stub.S), then two
+// lines only a kernel can print: a region's blocks all came back
+// through `wolf_free`, and the hook's books.
+extern "c" fn kw_outb(port: u16, v: u8)
+
+fn emit_line(s: str) {
+    for b in s.bytes() {
+        // # Safety: kw_outb is rt_stub.S's port write; 0x3f8 is COM1.
+        unsafe {
+            kw_outb(1016, b as int as u8)
+        }
+    }
+    // # Safety: as above.
+    unsafe {
+        kw_outb(1016, 10)
+    }
+}
+
+export fn kmain() -> i64 {
+    for l in report_lines() {
+        emit_line(l)
+    }
+    let before = outstanding_bytes()
+    region scratch {
+        var ys = List[int]()
+        for i in 0..5000 {
+            (mut ys).push(i)
+        }
+        emit_line("in scratch {ys.len}")
+    }
+    let after = outstanding_bytes()
+    emit_line("scratch returned every block={before == after}")
+    var allocs = 0
+    var frees = 0
+    var bad = 0
+    // # Safety: one CPU.
+    unsafe {
+        allocs = hook_allocs
+        frees = hook_frees
+        bad = bad_frees
+    }
+    emit_line("hooks frees>0={frees > 0} frees<allocs={frees < allocs} bad={bad}")
+    33
+}

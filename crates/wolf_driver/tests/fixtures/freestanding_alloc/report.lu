@@ -1,0 +1,69 @@
+// kw12 (`[abi.target.none.alloc]`): one report, two targets. Every line
+// allocates — a `List`, interpolation with format specs, a `Map`, a
+// capturing closure, a `region` — and the same lines are built by the
+// hosted runtime (`host_main.lu`, printed) and by the freestanding
+// runtime over a bump allocator written in wolf (`kmain_alloc.lu`,
+// written to the port). The gate compares the bytes.
+
+fn list_line() -> str {
+    var xs = List[int]()
+    for i in 1..11 {
+        (mut xs).push(i * i)
+    }
+    var sum = 0
+    for x in xs {
+        sum += x
+    }
+    let last = (mut xs).pop() else 0
+    "list n={xs.len} sum={sum} last={last}"
+}
+
+fn spec_line(n: int) -> str {
+    let neg = 0 - n
+    let c = 'é'
+    "specs [{n:>8}] [{n:<6}] [{n:08}] [{neg:06}] [{n:+}] [{n:x}] [{n:X}] [{n:b}] [{n:o}] [{"ab":*^7}] [{true:>6}] [{c}] [{c:>3}]"
+}
+
+fn map_line() -> str {
+    var m = Map[str, int]()
+    m["wolf"] = 1
+    m["pax"] = 2
+    m["wolf"] = 3
+    let w = m["wolf"] else 0
+    let p = m["pax"] else 0
+    let z = m["zzz"] else 99
+    "map wolf={w} pax={p} zzz={z} n={m.len}"
+}
+
+fn closure_line() -> str {
+    let k = 7
+    let f = fn(x) x * k
+    "closure {f(6)}"
+}
+
+fn region_line() -> str {
+    var kept = 0
+    var total = 0
+    region scratch {
+        var ys = List[int]()
+        for i in 0..1000 {
+            (mut ys).push(i)
+        }
+        for y in ys {
+            total += y
+        }
+        let tag = "kept {ys.len}"
+        kept = tag.len
+    }
+    "region total={total} tag-len={kept}"
+}
+
+fn report_lines() -> List[str] {
+    var out = List[str]()
+    (mut out).push(list_line())
+    (mut out).push(spec_line(385))
+    (mut out).push(map_line())
+    (mut out).push(closure_line())
+    (mut out).push(region_line())
+    out
+}

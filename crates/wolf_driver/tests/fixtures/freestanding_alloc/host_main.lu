@@ -1,0 +1,8 @@
+// kw12: the hosted half of the witness — `report.lu`'s lines through
+// the hosted runtime.
+fn main() -> int {
+    for l in report_lines() {
+        print(l)
+    }
+    0
+}

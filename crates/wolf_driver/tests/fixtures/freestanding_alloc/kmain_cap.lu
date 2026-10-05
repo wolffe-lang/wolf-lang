@@ -1,0 +1,12 @@
+// kw12: a runtime fault on the freestanding target. The region's budget
+// is breached inside the runtime (`region_alloc`), which traps
+// `alloc-contract` (kind 9) through the program's one hook, site-less.
+export fn kmain() -> i64 {
+    region tight(cap: 64) {
+        var ys = List[int]()
+        for i in 0..100 {
+            (mut ys).push(i)
+        }
+    }
+    33
+}
