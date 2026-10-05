@@ -3511,10 +3511,10 @@ fn float_cc(cc: FloatCc) -> &'static str {
 fn llvm_order(o: wolf_wir::Order) -> &'static str {
     use wolf_wir::Order;
     match o {
-        Order::Relaxed => "seq_cst",
-        Order::Acquire => "seq_cst",
-        Order::Release => "seq_cst",
-        Order::AcqRel => "seq_cst",
+        Order::Relaxed => "monotonic",
+        Order::Acquire => "acquire",
+        Order::Release => "release",
+        Order::AcqRel => "acq_rel",
         Order::SeqCst => "seq_cst",
     }
 }
