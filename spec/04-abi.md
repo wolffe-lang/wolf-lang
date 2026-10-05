@@ -326,9 +326,10 @@ AAPCS64, win64, Apple arm64 deltas).
   nothing and emits objects only (`--emit=obj`, or the IR and WIR
   dumps); `bin` and `wolf run` are refused by name, as are `--checked`
   and `--profile-gen`, which are the hosted runtime's. The object has no
-  `main` shim, no runtime library, no ambient-region allocation, and
-  imports only the hook list (`[abi.target.none.hooks]`) and the
-  program's own `extern "c"` declarations. A construct that needs more
+  `main` shim and no hosted runtime, and imports only the hook list
+  (`[abi.target.none.hooks]`), the freestanding runtime's symbols when
+  it allocates (`[abi.target.none.alloc]`), and the program's own
+  `extern "c"` declarations. A construct that needs more
   is refused BY NAME at the construct, on both compiling tiers alike,
   before any backend runs: `` `print` needs the hosted runtime (target
   x86_64-unknown-none) `` — and likewise `env_args`, `read_line`, a `str`
@@ -348,20 +349,54 @@ AAPCS64, win64, Apple arm64 deltas).
   has no site; it must not return, and the compiler emits `ud2` after
   the call; (b) `memcpy`, `memmove`, `memset` and `memcmp` with C's
   meaning, which a tier may emit for an aggregate copy; (c) the
-  program's own `extern "c"` declarations. The program supplies (a) and
-  (b), in wolf (`export fn`) or assembly. On a hosted target
+  program's own `extern "c"` declarations; (d) for a program that
+  allocates, the allocator pair `wolf_alloc(size: i64, align: i64) ->
+  *u8` and `wolf_free(p: *u8, size: i64, align: i64)` (K8(b) = B),
+  which only the freestanding runtime calls (`[abi.target.none.alloc]`).
+  The program supplies (a), (b) and (d), in wolf (`export fn`) or
+  assembly; the freestanding runtime defines (b) as weak symbols, so a
+  program that defines its own wins at the link. On a hosted target
   `wolf_trap` is the runtime's own report-and-exit: a hosted program
   that imports it (a freestanding module's logic under a hosted test,
   say) links it as an alias of the runtime's sited reporter. The alias
   is made at the link and only for a program that imports the hook,
   and hosted code keeps calling the runtime's own reporters, so no
   other hosted program changes by a byte.
-- `[abi.target.none.alloc]` No allocating construct compiles for the
-  freestanding target (K8(b) = A): `List`, `Map`, `Pool`, string
-  interpolation, a capturing closure, `region` and a boxed channel
-  payload are each refused by name (`` `List` allocates, and target
-  x86_64-unknown-none has no allocator ``). An allocator hook lifts this
-  in its own lane (KWC kw12).
+- `[abi.target.none.alloc]` On the freestanding target `List`, `Map`,
+  string interpolation (every hole but a float, which is refused as the
+  float it is), a capturing closure and `region` (its budget, its ledger
+  and `live_region_bytes` included) compile as on a hosted target, with
+  the same meaning, against the freestanding runtime: the `no_std`
+  build of the region runtime, shipped beside `wolf` as
+  `libwolf_rt_none.a` (the same ELF archive from every host). It defines
+  the hosted runtime's symbols for those constructs, with their
+  signatures and layouts, and imports exactly `wolf_alloc`, `wolf_free`
+  and `wolf_trap`. A build whose object calls into it writes the archive
+  beside the object, `K.rt-none.a` for `-o K.o`; the boot code's link
+  takes it after the object. The hook contract: `wolf_alloc` returns
+  `size` writable bytes, not necessarily zeroed, at a multiple of
+  `align` (a power of two; this runtime asks for 16, with `size` a
+  positive multiple of 16), and must not return null — a null is
+  `alloc-contract` through `wolf_trap`, and running out is the hook's
+  own policy; `wolf_free` is called exactly once per block the runtime
+  is done with, with the `size` and `align` it was allocated with,
+  never with null — a region's chunks and header when the region is
+  freed, an interpolation's build buffer when it finishes. A block
+  allocated outside every `region` (the process root) is never freed.
+  The runtime keeps one ambient-region slot and takes no lock: the
+  target has no threads, and a program that runs wolf code on several
+  CPUs must not allocate from two at once. A fault inside the runtime (a
+  breached budget, a negative size) reaches `wolf_trap` with its kind
+  and no site, `(null, 0, 0, 0)`. Still refused by name, as constructs
+  the freestanding runtime does not carry: `Pool`, `freeze`, a boxed
+  channel payload, and — with no scheduler — `spawn`, `spawn proc`
+  (`Proc`), channels and `par` (`` `Pool` allocates, and the
+  freestanding runtime (libwolf_rt_none.a) does not carry it (target
+  x86_64-unknown-none) ``). Witness:
+  `crates/wolf_driver/tests/freestanding_alloc.rs`, which builds one
+  report through the hosted runtime and through this one over a bump
+  allocator written in wolf, linked `-nostdlib`, and compares the
+  bytes.
 - `[abi.target.none.codegen]` Code generated for `x86_64-unknown-none`
   uses no red zone, no x87/MMX/SSE/AVX register and no stack protector,
   keeps frame pointers, and is position-independent under the small
