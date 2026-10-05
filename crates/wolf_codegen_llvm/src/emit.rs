@@ -1508,9 +1508,10 @@ impl<'a> Fx<'a> {
 
     /// The defensive twin of the driver's by-name refusal
     /// (`wolf_backend::target::freestanding_refusal`): no runtime symbol
-    /// reaches a freestanding object, whatever the caller skipped.
+    /// the freestanding runtime (kw12, `libwolf_rt_none.a`) does not
+    /// define reaches a freestanding object, whatever the caller skipped.
     fn refuse_runtime(&self, name: &str) -> Result<(), BackendError> {
-        if self.freestanding() {
+        if self.freestanding() && !wolf_backend::target::none_rt_provides(name) {
             let (construct, _) = wolf_backend::target::runtime_construct(name);
             return Err(BackendError::Unsupported(format!(
                 "{construct} needs the hosted runtime (target {})",

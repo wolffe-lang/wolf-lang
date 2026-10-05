@@ -1159,11 +1159,12 @@ impl<'a, 'b> Tx<'a, 'b> {
         if let Some(&(fr, _)) = self.fref_cache.get(name) {
             return Ok(fr);
         }
-        if self.freestanding {
+        if self.freestanding && !wolf_backend::target::none_rt_provides(name) {
             // The driver refuses these by name before any backend runs
             // (`wolf_backend::target::freestanding_refusal`); this is
-            // the defensive twin, so no runtime symbol can reach a
-            // freestanding object whatever the caller skipped.
+            // the defensive twin, so no runtime symbol the freestanding
+            // runtime (kw12, `libwolf_rt_none.a`) does not define can
+            // reach a freestanding object whatever the caller skipped.
             let (construct, _) = wolf_backend::target::runtime_construct(name);
             return Err(BackendError::Unsupported(format!(
                 "{construct} needs the hosted runtime (target {})",
