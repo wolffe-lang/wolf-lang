@@ -589,8 +589,18 @@ fn expr_bp_inner(p: &mut Parser<'_>, min_bp: u8, ctx: Ctx) -> Option<CompletedMa
                 // over a blank line and swallow the `fn` beginning the
                 // NEXT declaration — the rest of the file became one
                 // member access. Same-line keyword members still parse.
-                let steals_item =
-                    p.at_toplevel_decl_start() && p.crosses_line(dot_hi, p.current_span().lo);
+                //
+                // `let`/`var`/`const`/`type`/`export` are not in that
+                // set — they open block statements too — so a `.` at the
+                // end of a module-level initializer took the NEXT
+                // module-level `let` as its member and swallowed the
+                // declaration (wolf-lang#589: `let A: int = B + .` over
+                // `let B: int = A * 2`). A declaration keyword that leads
+                // its line at or left of the item floor is a sibling of
+                // this item by s203's own test, never its member.
+                let steals_item = (p.at_toplevel_decl_start()
+                    && p.crosses_line(dot_hi, p.current_span().lo))
+                    || p.at_sibling_decl();
                 match p.current() {
                     _ if steals_item => {
                         p.error(
