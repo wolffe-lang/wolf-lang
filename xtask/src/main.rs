@@ -5082,13 +5082,17 @@ fn dist() -> ExitCode {
     // looks for it when a freestanding object allocates. Staged when the
     // toolchain can build it; every CI and release job sets
     // WOLF_RT_NONE_REQUIRE=1, so a shipped archive always carries it.
-    match rt_none() {
+    let staged_none = match rt_none() {
         Ok(Some(lib)) => {
             std::fs::copy(&lib, stage.join("libwolf_rt_none.a")).expect("stage rt-none");
+            true
         }
-        Ok(None) => eprintln!("dist: SKIP libwolf_rt_none.a (no {NONE_TARGET} target)"),
+        Ok(None) => {
+            eprintln!("dist: SKIP libwolf_rt_none.a (no {NONE_TARGET} target)");
+            false
+        }
         Err(()) => return ExitCode::FAILURE,
-    }
+    };
     // Flatten: the archive is a flat directory, so a nested source path
     // stages under its file name (copying to stage/crates/... panicked
     // on the missing parents — dist only runs on tags, so nothing caught
@@ -5155,6 +5159,47 @@ fn dist() -> ExitCode {
         return ExitCode::FAILURE;
     }
     let unpacked_wolf = smoke.join(&name).join(exe);
+    // kw12: the unpacked `wolf` finds the freestanding runtime beside
+    // itself — an allocating kernel builds, and its object gets the
+    // archive beside it — with nothing from target/ in reach.
+    if staged_none {
+        std::fs::write(
+            smoke.join("k_alloc.lu"),
+            "export fn kmain() -> int {\n    var xs = List[int]()\n    (mut xs).push(7)\n    \
+             xs.len\n}\n",
+        )
+        .expect("write k_alloc.lu");
+        let wolf_abs = std::path::absolute(&unpacked_wolf).expect("absolute wolf path");
+        let built = Command::new(&wolf_abs)
+            .current_dir(smoke)
+            .args([
+                "build",
+                "k_alloc.lu",
+                "--target",
+                NONE_TARGET,
+                "--emit=obj",
+                "-o",
+                "k.o",
+            ])
+            .env_remove("WOLF_RT_NONE_LIB")
+            .output();
+        let ok = built.as_ref().map(|o| o.status.success()).unwrap_or(false);
+        if !ok || !smoke.join("k.rt-none.a").is_file() {
+            eprintln!(
+                "dist: smoke — the unpacked `{}` could not build an allocating {NONE_TARGET} \
+                 object with its runtime beside it: {}",
+                exe,
+                built
+                    .as_ref()
+                    .map(|o| String::from_utf8_lossy(&o.stderr).into_owned())
+                    .unwrap_or_else(|e| e.to_string())
+            );
+            return ExitCode::FAILURE;
+        }
+        eprintln!(
+            "dist: smoke — an allocating {NONE_TARGET} object built from the unpacked archive"
+        );
+    }
     let hello = smoke.join(format!("hello{}", std::env::consts::EXE_SUFFIX));
     let build = Command::new(&unpacked_wolf)
         .args(["build", "corpus/hello.lu", "-o"])
