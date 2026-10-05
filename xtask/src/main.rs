@@ -215,7 +215,14 @@ const CI_STEPS: &[(&str, &[&str])] = &[
 const CI_SHARDS: &[(&str, &[&str])] = &[
     (
         "build",
-        &["fmt", "clippy", "rt-none", "test", "fuzz-check", "deps-check"],
+        &[
+            "fmt",
+            "clippy",
+            "rt-none",
+            "test",
+            "fuzz-check",
+            "deps-check",
+        ],
     ),
     (
         "gates",
@@ -4941,7 +4948,14 @@ fn rt_none() -> Result<Option<PathBuf>, ()> {
     let rustc = std::env::var("RUSTC").unwrap_or_else(|_| "rustc".to_string());
     let probe = Command::new(rustc)
         .args(flags.split_whitespace())
-        .args(["--edition", "2024", "--crate-type", "lib", "--emit", "metadata"])
+        .args([
+            "--edition",
+            "2024",
+            "--crate-type",
+            "lib",
+            "--emit",
+            "metadata",
+        ])
         .args(["--target", NONE_TARGET, "--out-dir"])
         .arg(&probe_dir)
         .arg(&probe_src)
@@ -4950,7 +4964,13 @@ fn rt_none() -> Result<Option<PathBuf>, ()> {
     if !target_ok {
         let why = probe
             .as_ref()
-            .map(|o| String::from_utf8_lossy(&o.stderr).lines().next().unwrap_or("").to_string())
+            .map(|o| {
+                String::from_utf8_lossy(&o.stderr)
+                    .lines()
+                    .next()
+                    .unwrap_or("")
+                    .to_string()
+            })
             .unwrap_or_else(|e| e.to_string());
         if require {
             eprintln!(
@@ -4974,7 +4994,10 @@ fn rt_none() -> Result<Option<PathBuf>, ()> {
         .unwrap_or(false);
     let lib = tdir.join(NONE_TARGET).join("release/libwolf_rt_none.a");
     if !ok || !lib.is_file() {
-        eprintln!("rt-none: FAILED — the {NONE_TARGET} build of wolf_rt_none did not produce {}", lib.display());
+        eprintln!(
+            "rt-none: FAILED — the {NONE_TARGET} build of wolf_rt_none did not produce {}",
+            lib.display()
+        );
         return Err(());
     }
     eprintln!("rt-none: {}", lib.display());
