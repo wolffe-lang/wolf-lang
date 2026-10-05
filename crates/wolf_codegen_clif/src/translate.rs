@@ -1941,6 +1941,15 @@ impl<'a, 'b> Tx<'a, 'b> {
                     for &tok in rest {
                         self.vals.insert(tok, Repr::Token);
                     }
+                } else if let Some(a) = wolf_wir::atomic_intrinsic(&callee.name) {
+                    self.lower_atomic(a, &args, &results)?;
+                } else if wolf_wir::fence_intrinsic(&callee.name).is_some() {
+                    // kw11 (`[conc.mm.fence]`): Cranelift's one fence is
+                    // sequentially consistent, so every order is it.
+                    self.b.ins().fence();
+                    for &tok in &results {
+                        self.vals.insert(tok, Repr::Token);
+                    }
                 } else {
                     self.lower_call(&callee.name, callee.sig, &args, &results)?;
                 }
@@ -2402,6 +2411,67 @@ impl<'a, 'b> Tx<'a, 'b> {
     /// executes the C plan.
     fn callee_is_export(&self, callee: &str) -> bool {
         self.m.funcs.values().any(|f| f.export && f.name == callee)
+    }
+
+    /// kw11 (`[conc.mm.atomic.raw.3]`): one atomic intrinsic, in
+    /// place. Cranelift's atomic instructions are sequentially
+    /// consistent (its IR reference), so this tier implements every
+    /// order by the strongest — correct for each, since seq_cst admits
+    /// no outcome a weaker order forbids. The flags claim the
+    /// alignment `[conc.mm.atomic.raw.4]` requires and not `notrap`.
+    fn lower_atomic(
+        &mut self,
+        a: wolf_wir::AtomicIntrinsic,
+        args: &[wolf_wir::ir::Value],
+        results: &[wolf_wir::ir::Value],
+    ) -> Result<(), BackendError> {
+        use cranelift_codegen::ir::AtomicRmwOp;
+        use wolf_wir::AtomicOp;
+        let ty = match a.width {
+            1 => ctypes::I8,
+            2 => ctypes::I16,
+            4 => ctypes::I32,
+            _ => ctypes::I64,
+        };
+        let flags = MemFlagsData::new().with_aligned();
+        let p = self.scalar(args[0])?;
+        let mut rest = results;
+        let out = match a.op {
+            AtomicOp::Load => Some(self.b.ins().atomic_load(ty, flags, p)),
+            AtomicOp::Store => {
+                let v = self.scalar(args[1])?;
+                self.b.ins().atomic_store(flags, v, p);
+                None
+            }
+            AtomicOp::Cas => {
+                let e = self.scalar(args[1])?;
+                let n = self.scalar(args[2])?;
+                Some(self.b.ins().atomic_cas(flags, p, e, n))
+            }
+            op => {
+                let v = self.scalar(args[1])?;
+                let rmw = match op {
+                    AtomicOp::Swap => AtomicRmwOp::Xchg,
+                    AtomicOp::Add => AtomicRmwOp::Add,
+                    AtomicOp::Sub => AtomicRmwOp::Sub,
+                    AtomicOp::And => AtomicRmwOp::And,
+                    AtomicOp::Or => AtomicRmwOp::Or,
+                    _ => AtomicRmwOp::Xor,
+                };
+                Some(self.b.ins().atomic_rmw(ty, flags, rmw, p, v))
+            }
+        };
+        if let Some(r) = out {
+            let (&first, tail) = results
+                .split_first()
+                .ok_or_else(|| ice("an atomic operation without a result"))?;
+            self.vals.insert(first, Repr::Scalar(r));
+            rest = tail;
+        }
+        for &tok in rest {
+            self.vals.insert(tok, Repr::Token);
+        }
+        Ok(())
     }
 
     /// Lower one call, executing the callee's ABI plan: tokens erased,
