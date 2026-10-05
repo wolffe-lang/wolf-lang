@@ -12,10 +12,17 @@
 //! the target value itself, and [`freestanding_refusal`] — the scan
 //! that refuses, BY NAME and before any backend runs, every construct a
 //! freestanding object could not carry: one that needs the hosted
-//! runtime, one that allocates (`[abi.target.none.alloc]`, K8(b) = A),
-//! and every float (`[abi.target.none.codegen]`, K10(b) = A). The scan
-//! reads the lowered WIR, so it is complete by construction: anything
-//! that would import a runtime symbol is a call to one there.
+//! runtime, one that allocates outside the freestanding runtime
+//! (`[abi.target.none.alloc]`), and every float
+//! (`[abi.target.none.codegen]`, K10(b) = A). The scan reads the
+//! lowered WIR, so it is complete by construction: anything that would
+//! import a runtime symbol is a call to one there.
+//!
+//! kw12 (K8(b) = B): the allocating constructs a kernel needs — `List`,
+//! `Map`, string interpolation, a capturing closure and `region` —
+//! compile against [`NONE_RT_SYMBOLS`], which the `no_std` runtime
+//! archive [`NONE_RT_LIB`] defines over the program's allocator hooks
+//! ([`ALLOC_HOOKS`]). Every other runtime symbol is still refused.
 
 use wolf_wir::ir::{Aux, Function, Module, ValueDef};
 use wolf_wir::ops::Opcode;
@@ -35,6 +42,61 @@ pub const TRAP_HOOK: &str = "wolf_trap";
 /// meaning (`[abi.target.none.hooks]` (b)): every freestanding
 /// toolchain's floor, and what a backend may emit for an aggregate copy.
 pub const MEM_HOOKS: [&str; 4] = ["memcpy", "memmove", "memset", "memcmp"];
+
+/// The allocator hooks (`[abi.target.none.hooks]` (d), K8(b) = B, kw12):
+/// `wolf_alloc(size: i64, align: i64) -> *u8` and `wolf_free(p: *u8,
+/// size: i64, align: i64)`. The program supplies them; only the
+/// freestanding runtime archive ([`NONE_RT_LIB`]) imports them.
+pub const ALLOC_HOOKS: [&str; 2] = ["wolf_alloc", "wolf_free"];
+
+/// The freestanding runtime archive (kw12, `[abi.target.none.alloc]`):
+/// the `no_std` build of the region runtime (crate `wolf_rt_none`), the
+/// same file name on every host. A freestanding build whose object
+/// imports any of [`NONE_RT_SYMBOLS`] writes it beside the object.
+pub const NONE_RT_LIB: &str = "libwolf_rt_none.a";
+
+/// The runtime symbols [`NONE_RT_LIB`] defines — the hosted runtime's
+/// names, signatures and layouts for `List`, `Map`, string interpolation
+/// (every hole but `f64`), a capturing closure and `region`. A call to
+/// one of these is admitted on the freestanding target; a call to any
+/// other runtime symbol is refused by name.
+pub const NONE_RT_SYMBOLS: &[&str] = &[
+    "__wolf_rt_region_new",
+    "__wolf_rt_region_alloc",
+    "__wolf_rt_region_free",
+    "__wolf_rt_region_set_cap",
+    "__wolf_rt_region_bytes",
+    "__wolf_rt_live_region_bytes",
+    "__wolf_rt_region_ambient_enter",
+    "__wolf_rt_region_ambient_leave",
+    "__wolf_rt_closure_alloc",
+    "__wolf_rt_list_new",
+    "__wolf_rt_list_push",
+    "__wolf_rt_list_pop",
+    "__wolf_rt_list_read",
+    "__wolf_rt_list_write",
+    "__wolf_rt_list_len",
+    "__wolf_rt_list_clear",
+    "__wolf_rt_list_copy",
+    "__wolf_rt_map_new",
+    "__wolf_rt_map_get",
+    "__wolf_rt_map_set",
+    "__wolf_rt_map_remove",
+    "__wolf_rt_map_pairs",
+    "__wolf_rt_map_copy",
+    "__wolf_rt_map_clear",
+    "__wolf_rt_strbuf_new",
+    "__wolf_rt_strbuf_str",
+    "__wolf_rt_strbuf_i64",
+    "__wolf_rt_strbuf_bool",
+    "__wolf_rt_strbuf_char",
+    "__wolf_rt_strbuf_finish",
+];
+
+/// Does the freestanding runtime define `symbol`?
+pub fn none_rt_provides(symbol: &str) -> bool {
+    NONE_RT_SYMBOLS.contains(&symbol)
+}
 
 /// The build's target.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Hash)]
@@ -74,7 +136,8 @@ impl Target {
 pub enum RefusalClass {
     /// It calls into the hosted runtime (`[abi.target.none]`).
     HostedRuntime,
-    /// It allocates (`[abi.target.none.alloc]`, K8(b) = A).
+    /// It allocates, and the freestanding runtime does not carry it
+    /// (`[abi.target.none.alloc]`).
     Allocates,
     /// It computes with a float (`[abi.target.none.codegen]`, K10(b) = A).
     Float,
@@ -100,8 +163,8 @@ impl Refusal {
                 self.construct
             ),
             RefusalClass::Allocates => format!(
-                "{} allocates, and target {FREESTANDING} has no allocator (K8(b): \
-                 allocation waits for an allocator hook)",
+                "{} allocates, and the freestanding runtime ({NONE_RT_LIB}) does not carry \
+                 it (target {FREESTANDING})",
                 self.construct
             ),
             RefusalClass::Float => format!(
@@ -126,6 +189,9 @@ pub fn runtime_construct(symbol: &str) -> (String, RefusalClass) {
         ("stream output (`write`)".into(), HostedRuntime)
     } else if s == "read_line" {
         ("`read_line`".into(), HostedRuntime)
+    } else if s == "strbuf_f64" {
+        // Reached only if no float value was refused first (K10(b)).
+        ("`f64`".into(), RefusalClass::Float)
     } else if has("strbuf_") {
         ("string interpolation".into(), Allocates)
     } else if s == "str_eq" || s == "str_cmp" {
@@ -189,6 +255,23 @@ fn first_span(f: &Function) -> Option<(u32, u32)> {
         .map(|sp| (sp.lo, sp.hi))
 }
 
+/// Does the lowered `m` call into the freestanding runtime — a region op,
+/// or a call to one of [`NONE_RT_SYMBOLS`]? (kw12: such an object links
+/// [`NONE_RT_LIB`]; one that does not imports exactly the hook list.)
+pub fn uses_none_rt(m: &Module) -> bool {
+    m.funcs.values().any(|f| {
+        f.ext_funcs.values().any(|e| none_rt_provides(&e.name))
+            || f.layout.iter().any(|&b| {
+                f.blocks[b].insts.iter().any(|&i| {
+                    matches!(
+                        f.insts[i].op,
+                        Opcode::RegionNew | Opcode::RegionAlloc | Opcode::RegionFree
+                    )
+                })
+            })
+    })
+}
+
 /// The first construct in `m` the freestanding target cannot carry, in
 /// function order and, within a function, instruction order; `None`
 /// when the module is freestanding-clean. Run on the LOWERED module,
@@ -211,7 +294,7 @@ fn function_refusal(m: &Module, f: &Function) -> Option<Refusal> {
             match (data.op, data.aux) {
                 (Opcode::Call, Aux::Callee(ext)) => {
                     let name = &f.ext_funcs[ext].name;
-                    if name.starts_with("__wolf_rt_") {
+                    if name.starts_with("__wolf_rt_") && !none_rt_provides(name) {
                         let (construct, class) = runtime_construct(name);
                         return Some(Refusal {
                             construct,
@@ -220,13 +303,8 @@ fn function_refusal(m: &Module, f: &Function) -> Option<Refusal> {
                         });
                     }
                 }
-                (Opcode::RegionNew | Opcode::RegionAlloc | Opcode::RegionFree, _) => {
-                    return Some(Refusal {
-                        construct: "`region`".into(),
-                        class: RefusalClass::Allocates,
-                        span: at(inst),
-                    });
-                }
+                // `region` (kw12): the freestanding runtime carries the
+                // region family, so the three region ops lower as hosted.
                 (Opcode::SyncFreeze, _) => {
                     return Some(Refusal {
                         construct: "`freeze`".into(),
@@ -375,6 +453,46 @@ mod tests {
         }
     }
 
+    /// kw12: the freestanding runtime's symbols are the allocating
+    /// families' and nothing else — no scheduler, no I/O, no `Pool`, no
+    /// float hole.
+    #[test]
+    fn the_freestanding_runtime_carries_the_allocating_families_only() {
+        for s in NONE_RT_SYMBOLS {
+            let (name, class) = runtime_construct(s);
+            assert_eq!(class, RefusalClass::Allocates, "{s}");
+            assert!(
+                [
+                    "`List`",
+                    "`Map`",
+                    "string interpolation",
+                    "a capturing closure",
+                    "`region`"
+                ]
+                .contains(&name.as_str()),
+                "{s}: {name}"
+            );
+            assert!(none_rt_provides(s));
+        }
+        for s in [
+            "__wolf_rt_pool_new",
+            "__wolf_rt_region_freeze",
+            "__wolf_rt_strbuf_f64",
+            "__wolf_rt_scope_spawn",
+            "__wolf_rt_proc_spawn",
+            "__wolf_rt_print_str",
+            "__wolf_rt_str_eq",
+            "__wolf_rt_trap_at",
+        ] {
+            assert!(!none_rt_provides(s), "{s}");
+        }
+        assert_eq!(
+            runtime_construct("__wolf_rt_strbuf_f64"),
+            ("`f64`".to_string(), RefusalClass::Float)
+        );
+        assert_eq!(ALLOC_HOOKS, ["wolf_alloc", "wolf_free"]);
+    }
+
     #[test]
     fn the_message_names_the_construct_and_the_target() {
         let r = Refusal {
@@ -384,6 +502,7 @@ mod tests {
         };
         let m = r.message();
         assert!(m.starts_with("`List` allocates"), "{m}");
+        assert!(m.contains(NONE_RT_LIB), "{m}");
         assert!(m.contains("target x86_64-unknown-none"), "{m}");
         let f = Refusal {
             construct: "`f64`".into(),
