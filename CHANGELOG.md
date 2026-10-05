@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+### The prelude's names, as data (s212, ruling #39 = B, #586)
+
+- **`wolf prelude [--json]`** prints every name a program uses without an
+  import: 123 names (17 `builtin_type`, 8 `type`, 84 `function`, 8
+  `intrinsic`, 6 `provisional`) and the 17 builtin marks, the row tags
+  the host builtins declare. Each name comes with its kind, the spec
+  anchor that defines it, and whether a module that declares it draws
+  W0304. The rows are the checker's own tables, which resolution and
+  W0304 read, so the list cannot drift. The schema is `wolf-prelude/0`
+  (`docs/prelude-json.md`). `spec/prelude.json` is the same output,
+  committed beside `anchors.json`, and a test reds when the two part.
+  30 names have no defining clause yet (the print family, `min`, `zip`,
+  four reflection intrinsics, the six stand-ins, and the numeric scalars,
+  `bool` and `wrapping`). Their anchor is `null`, so the gap is visible.
+- **`cargo xtask prelude-diff <tagA> <tagB> [--markdown]`** lists the
+  names a release adds and removes. It reads `spec/prelude.json` at each
+  tag, or the tag's `prelude.rs` tables before that file existed.
+  `--markdown` prints the "Read this before you bump the pin" paragraph.
+  The two releases that went unannounced: `v0.2.22..v0.2.23` adds
+  `align_of` and `offset_of`. `size_of` is not new; 0.2.15 already
+  warned on a module's `fn size_of`. `v0.2.15..v0.2.16` adds `Scope` and
+  `Proc`.
+- No compiled program changes; the tables gained columns, and no name
+  was added or removed.
+
 ### A misaligned raw access is UB row L4 (s209, ruling #36 = A, #574)
 
 - **The machines disagreed, and release could miscompile.** A `*u16`,
