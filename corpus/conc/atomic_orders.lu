@@ -1,0 +1,88 @@
+//! check: run(exit=0, stdout="load 5 5 5\nstore 1 2 3\nswap 3 4 5 6 7\nadd 8 9 10 11 12\nsub 13 12 11 10 9\nand 8 8 8 8 8\nor 8 9 9 9 9\nxor 9 8 9 8 9\ncas 8 true 9 true 10 true 11 true 12 true 13 true 14 true 15 true 16 true\ncas 17 false 17 false\n")
+//! phase: run
+//! conforms: conc.mm.atomic.order, conc.mm.atomic.raw.2, conc.mm.atomic.raw.5
+//!
+//! kw11 (K5 = A): every order each operation admits
+//! (`[conc.mm.atomic.raw.2]`) on one `*u64` — a load's three, a
+//! store's three, all five for each read-modify-write, and the nine
+//! admitted (success, failure) pairs of a compare-and-swap. On one task
+//! every order answers what `seq_cst` answers; the checked machine runs
+//! each as `seq_cst` (`[conc.mm.atomic.raw.5]`), the native tier
+//! compiles each to Cranelift's sequentially consistent atomics, and the
+//! release tier passes each to LLVM as written (`atomic_disasm.rs`
+//! shows the instructions differ where the hardware has weaker forms).
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: one live, zeroed 8-byte allocation, aligned, one task.
+    unsafe {
+        let m = c.calloc(1, 8)
+        let p = m as *u64
+        p.atomic_store(5, Order.seq_cst)
+        let l1 = p.atomic_load(Order.relaxed)
+        let l2 = p.atomic_load(Order.acquire)
+        let l3 = p.atomic_load(Order.seq_cst)
+        print("load {l1} {l2} {l3}")
+        p.atomic_store(1, Order.relaxed)
+        let s1 = p.atomic_load(Order.seq_cst)
+        p.atomic_store(2, Order.release)
+        let s2 = p.atomic_load(Order.seq_cst)
+        p.atomic_store(3, Order.seq_cst)
+        let s3 = p.atomic_load(Order.seq_cst)
+        print("store {s1} {s2} {s3}")
+        let w1 = p.atomic_swap(4, Order.relaxed)
+        let w2 = p.atomic_swap(5, Order.acquire)
+        let w3 = p.atomic_swap(6, Order.release)
+        let w4 = p.atomic_swap(7, Order.acq_rel)
+        let w5 = p.atomic_swap(8, Order.seq_cst)
+        print("swap {w1} {w2} {w3} {w4} {w5}")
+        let a1 = p.atomic_add(1, Order.relaxed)
+        let a2 = p.atomic_add(1, Order.acquire)
+        let a3 = p.atomic_add(1, Order.release)
+        let a4 = p.atomic_add(1, Order.acq_rel)
+        let a5 = p.atomic_add(1, Order.seq_cst)
+        print("add {a1} {a2} {a3} {a4} {a5}")
+        let b1 = p.atomic_sub(1, Order.relaxed)
+        let b2 = p.atomic_sub(1, Order.acquire)
+        let b3 = p.atomic_sub(1, Order.release)
+        let b4 = p.atomic_sub(1, Order.acq_rel)
+        let b5 = p.atomic_sub(1, Order.seq_cst)
+        print("sub {b1} {b2} {b3} {b4} {b5}")
+        let n1 = p.atomic_and(12, Order.relaxed)
+        let n2 = p.atomic_and(12, Order.acquire)
+        let n3 = p.atomic_and(12, Order.release)
+        let n4 = p.atomic_and(12, Order.acq_rel)
+        let n5 = p.atomic_and(12, Order.seq_cst)
+        print("and {n1} {n2} {n3} {n4} {n5}")
+        let o1 = p.atomic_or(1, Order.relaxed)
+        let o2 = p.atomic_or(1, Order.acquire)
+        let o3 = p.atomic_or(1, Order.release)
+        let o4 = p.atomic_or(1, Order.acq_rel)
+        let o5 = p.atomic_or(1, Order.seq_cst)
+        print("or {o1} {o2} {o3} {o4} {o5}")
+        let x1 = p.atomic_xor(1, Order.relaxed)
+        let x2 = p.atomic_xor(1, Order.acquire)
+        let x3 = p.atomic_xor(1, Order.release)
+        let x4 = p.atomic_xor(1, Order.acq_rel)
+        let x5 = p.atomic_xor(1, Order.seq_cst)
+        print("xor {x1} {x2} {x3} {x4} {x5}")
+        let (c1, k1) = p.atomic_cas(8, 9, Order.relaxed, Order.relaxed)
+        let (c2, k2) = p.atomic_cas(9, 10, Order.acquire, Order.relaxed)
+        let (c3, k3) = p.atomic_cas(10, 11, Order.acquire, Order.acquire)
+        let (c4, k4) = p.atomic_cas(11, 12, Order.release, Order.relaxed)
+        let (c5, k5) = p.atomic_cas(12, 13, Order.acq_rel, Order.relaxed)
+        let (c6, k6) = p.atomic_cas(13, 14, Order.acq_rel, Order.acquire)
+        let (c7, k7) = p.atomic_cas(14, 15, Order.seq_cst, Order.relaxed)
+        let (c8, k8) = p.atomic_cas(15, 16, Order.seq_cst, Order.acquire)
+        let (c9, k9) = p.atomic_cas(16, 17, Order.seq_cst, Order.seq_cst)
+        print(
+            "cas {c1} {k1} {c2} {k2} {c3} {k3} {c4} {k4} {c5} {k5} {c6} {k6} {c7} {k7} {c8} {k8} {c9} {k9}",
+        )
+        let (f1, j1) = p.atomic_cas(0, 1, Order.relaxed, Order.relaxed)
+        let (f2, j2) = p.atomic_cas(0, 1, Order.seq_cst, Order.seq_cst)
+        print("cas {f1} {j1} {f2} {j2}")
+        c.free(m)
+    }
+    0
+}

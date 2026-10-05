@@ -1,0 +1,38 @@
+//! check: run(exit=0, stdout="42 7\n")
+//! phase: run
+//! conforms: conc.mm.fence
+//!
+//! kw11 (K5 = A): `fence(o)` for every order it admits
+//! (`[conc.mm.fence]`): `acquire`, `release` and `acq_rel` inside
+//! `unsafe`, `seq_cst` also outside it — the one fence the safe tier may
+//! spell, because it promises nothing a safe program could misuse. Beside
+//! relaxed stores and loads on one task each fence changes nothing a
+//! single task observes; what each fence compiles to is
+//! `atomic_disasm.rs`'s.
+
+import c "stdlib.h"
+
+fn main() -> int {
+    fence(Order.seq_cst)
+    var out = 0
+    // # Safety: one live, zeroed 16-byte allocation, two aligned u64
+    // words, one task.
+    unsafe {
+        let m = c.calloc(2, 8)
+        let data = m as *u64
+        let flag = data.with_addr(data.addr() + 8)
+        data.atomic_store(42, Order.relaxed)
+        fence(Order.release)
+        flag.atomic_store(1, Order.relaxed)
+        if flag.atomic_load(Order.relaxed) == 1 {
+            fence(Order.acquire)
+            out = data.atomic_load(Order.relaxed) as int
+        }
+        fence(Order.acq_rel)
+        fence(Order.seq_cst)
+        c.free(m)
+    }
+    fence(Order.seq_cst)
+    print("{out} 7")
+    0
+}

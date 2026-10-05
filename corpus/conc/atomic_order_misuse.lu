@@ -1,0 +1,30 @@
+//! check: fail(E1309)
+//! phase: typecheck
+//! conforms: conc.mm.atomic.order, conc.mm.atomic.raw.2, conc.mm.fence
+//!
+//! kw11 (K5 = A): the orders an operation does not admit
+//! (`[conc.mm.atomic.raw.2]`, `[conc.mm.fence]`) and an order that is
+//! not a mark written at the call (`[conc.mm.atomic.order]`) — each
+//! E1309: a load with no release half to give, a store with no acquire
+//! half, a compare-and-swap whose failure order is stronger than its
+//! success order or is a release order, a relaxed fence, an order that
+//! comes from a variable, a misspelt mark, and `Order` used as a value.
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: one live 8-byte allocation, aligned, one task.
+    unsafe {
+        let p = c.calloc(1, 8) as *u64
+        let a = p.atomic_load(Order.release)                    // E1309
+        p.atomic_store(1, Order.acquire)                        // E1309
+        let b = p.atomic_cas(0, 1, Order.relaxed, Order.acquire)   // E1309: stronger
+        let d = p.atomic_cas(0, 1, Order.seq_cst, Order.release)   // E1309: a release failure
+        fence(Order.relaxed)                                    // E1309
+        let o = Order.seq_cst                                   // E1309: a value
+        let e = p.atomic_load(o)                                // E1309: not a mark
+        let f = p.atomic_add(1, Order.sequential)               // E1309: no such mark
+        c.free(p as *u8)
+    }
+    0
+}

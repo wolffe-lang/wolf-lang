@@ -1,0 +1,21 @@
+//! check: run(exit=trap(ub))
+//! phase: wir
+//! conforms: conc.mm.atomic.raw.5, mem.ub
+//!
+//! kw11 (K5 = A): on an allocation an atomic operation is an access of
+//! the pointee's width (`[conc.mm.atomic.raw.5]`), so a freed allocation
+//! is row P1 for it as it is for `p[0]`: the checked machine traps `ub`
+//! with x-ub-row P1. The compiled tiers compile it; what they do is
+//! undefined, so `wir` is the deepest phase this header promises.
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: DELIBERATELY UNSOUND — the use after free is the row.
+    unsafe {
+        let p = c.calloc(1, 8) as *u32
+        c.free(p as *u8)
+        let v = p.atomic_load(Order.acquire)  // UB P1: the allocation is freed
+        v as int
+    }
+}

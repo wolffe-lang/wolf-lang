@@ -1,0 +1,18 @@
+//! check: fail(E1301)
+//! phase: mem
+//! conforms: conc.mm.atomic.raw, conc.mm.fence, mem.unsafe.ring
+//!
+//! kw11 (K5 = A): an atomic operation is a raw-tier access through a
+//! pointer and needs the `unsafe` ring (E1301), as `p[i]` does; a fence
+//! needs it for every order but `seq_cst` (`[conc.mm.fence]`). The
+//! `seq_cst` fence on the first line of `main` is accepted.
+
+fn peek(p: *u64) -> u64 {
+    p.atomic_load(Order.seq_cst)   // ERROR E1301: an atomic load outside `unsafe`
+}
+
+fn main() -> int {
+    fence(Order.seq_cst)
+    fence(Order.acquire)   // ERROR E1301: a fence weaker than seq_cst outside `unsafe`
+    0
+}

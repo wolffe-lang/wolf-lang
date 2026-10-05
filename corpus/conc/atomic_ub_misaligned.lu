@@ -1,0 +1,24 @@
+//! check: run(exit=trap(ub))
+//! phase: wir
+//! conforms: conc.mm.atomic.raw.4, mem.unsafe.raw.4, mem.ub
+//!
+//! kw11 (K5 = A): an atomic operation at an address that is not a
+//! multiple of the pointee's size is §7 row L4
+//! (`[conc.mm.atomic.raw.4]`, s209's row, its text widened to atomics):
+//! the checked machine traps `ub` with x-ub-row L4. The compiled tiers
+//! emit one aligned atomic instruction and no check, so what they do here
+//! is undefined (x86-64 runs a split lock; aarch64 faults): they compile
+//! it, and `wir` is the deepest phase this header can promise.
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: DELIBERATELY UNSOUND — the misaligned add is the row.
+    unsafe {
+        let p = c.calloc(2, 8) as *u64
+        let q = p.with_addr(p.addr() + 4)
+        let v = q.atomic_add(1, Order.seq_cst)  // UB L4: address % 8 == 4
+        c.free(p as *u8)
+        v as int
+    }
+}

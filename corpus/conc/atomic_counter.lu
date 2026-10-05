@@ -1,0 +1,72 @@
+//! check: run(exit=0, stdout="400000 100000\n")
+//! phase: run
+//! conforms: conc.mm.atomic.raw, conc.mm.atomic.raw.3, conc.task.scope
+//!
+//! kw11 (K5 = A): the concurrency witness. Four scope tasks each add 1
+//! to one shared `*u64` 100000 times with `atomic_add` (relaxed: the
+//! count needs atomicity, not ordering), then four more each add 1 25000
+//! times through a compare-and-swap loop (acq_rel on success, relaxed on
+//! failure, the old value retried) on a second word. The counts are
+//! exact on every cpu set — `atomic_witness.rs` runs this program under
+//! all cores, `taskset -c 0-3` and `taskset -c 0`; the plain-increment
+//! twin, `atomic_race_plain.lu`, is a data race and asserts nothing. The
+//! checked machine refuses tasks by name (C1 deferred), so on it this is
+//! `unsupported`, not a count.
+
+import c "stdlib.h"
+
+fn bump(p: *u64, k: int) {
+    var i = 0
+    while i < k {
+        // # Safety: `p` is the live, aligned word `main` allocated and
+        // frees only after every task joined.
+        unsafe {
+            p.atomic_add(1, Order.relaxed)
+        }
+        i = i + 1
+    }
+}
+
+fn bump_cas(p: *u64, k: int) {
+    var i = 0
+    while i < k {
+        // # Safety: as `bump`.
+        unsafe {
+            var cur = p.atomic_load(Order.relaxed)
+            loop {
+                let (seen, ok) = p.atomic_cas(cur, cur + 1, Order.acq_rel, Order.relaxed)
+                if ok {
+                    break
+                }
+                cur = seen
+            }
+        }
+        i = i + 1
+    }
+}
+
+fn main() -> int {
+    // # Safety: one live, zeroed 16-byte allocation — two aligned u64
+    // words — shared by the tasks of two scopes and freed after both
+    // joined.
+    unsafe {
+        let m = c.calloc(2, 8)
+        let a = m as *u64
+        let b = a.with_addr(a.addr() + 8)
+        scope s {
+            for t in 0..4 {
+                s.spawn(fn() { bump(a, 100000) })
+            }
+        }
+        scope s2 {
+            for t in 0..4 {
+                s2.spawn(fn() { bump_cas(b, 25000) })
+            }
+        }
+        let x = a.atomic_load(Order.seq_cst)
+        let y = b.atomic_load(Order.seq_cst)
+        print("{x} {y}")
+        c.free(m)
+    }
+    0
+}

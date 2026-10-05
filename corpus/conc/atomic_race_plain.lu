@@ -1,0 +1,43 @@
+//! check: pass
+//! phase: wir
+//! conforms: conc.mm.race.1, conc.mm.atomic.raw
+//!
+//! kw11: `atomic_counter.lu`'s first loop with a plain `p[0] = p[0] + 1`
+//! in place of `atomic_add`. Four tasks write one word with no
+//! happens-before between them: a data race on non-atomic memory, UB
+//! (`[conc.mm.race.1]`), so this header promises only that it compiles.
+//! `atomic_witness.rs` runs it on the compiled tiers and reports the
+//! count without asserting it (at trunk a3465f87 four tasks of 1000 gave
+//! 3733 natively); lupin 0.1.46 answers trap(race) (`[conc.mm.race.3]`).
+
+import c "stdlib.h"
+
+fn bump(p: *u64, k: int) {
+    var i = 0
+    while i < k {
+        // # Safety: DELIBERATELY UNSOUND — the unsynchronised write is
+        // the race this file exists to show.
+        unsafe {
+            p[0] = p[0] + 1
+        }
+        i = i + 1
+    }
+}
+
+fn main() -> int {
+    // # Safety: one live, zeroed 8-byte allocation, freed after the
+    // scope joined; the tasks race on it by design.
+    unsafe {
+        let m = c.calloc(1, 8)
+        let a = m as *u64
+        scope s {
+            for t in 0..4 {
+                s.spawn(fn() { bump(a, 100000) })
+            }
+        }
+        let x = a[0]
+        print("{x}")
+        c.free(m)
+    }
+    0
+}

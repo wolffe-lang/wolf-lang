@@ -1,0 +1,23 @@
+//! check: fail(E1308)
+//! phase: typecheck
+//! conforms: conc.mm.atomic.raw.1
+//!
+//! kw11 (K5 = A): an atomic operation needs a fixed-width integer
+//! pointee (`[conc.mm.atomic.raw.1]`): `int` and `uint` name the
+//! platform's integer rather than a width, `byte` has no arithmetic and
+//! `bool` a restricted value set. Each is E1308 on the method.
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: one live 8-byte allocation, aligned, one task.
+    unsafe {
+        let m = c.calloc(1, 8)
+        let a = (m as *int).atomic_load(Order.seq_cst)     // E1308: `*int`
+        let b = (m as *uint).atomic_add(1, Order.seq_cst)  // E1308: `*uint`
+        let d = (m as *byte).atomic_swap(1 as byte, Order.seq_cst)  // E1308: `*byte`
+        (m as *bool).atomic_store(true, Order.seq_cst)     // E1308: `*bool`
+        c.free(m)
+    }
+    0
+}

@@ -1,0 +1,132 @@
+//! check: run(exit=0, stdout="u8 250 4 240 0 48 33 7 true 9 false 9\nu16 65530 4 65520 0 48 33 7 true 9 false 9\nu32 4294967290 4 4294967280 0 48 33 7 true 9 false 9\nu64 4611686018427387904 4611686018427387914 4611686018427387894 6 54 39 7 true 9 false 9\ni8 122 -124 112 0 48 33 7 true 9 false 9\ni16 32762 -32764 32752 0 48 33 7 true 9 false 9\ni32 2147483642 -2147483644 2147483632 0 48 33 7 true 9 false 9\ni64 9223372036854775802 -9223372036854775804 9223372036854775792 0 48 33 7 true 9 false 9\n")
+//! phase: run
+//! conforms: conc.mm.atomic.raw, conc.mm.atomic.raw.1, conc.mm.atomic.raw.5
+//!
+//! kw11 (K5 = A, STATUS #31): every atomic operation on every pointee
+//! `[conc.mm.atomic.raw.1]` admits, through one zeroed 8-byte allocation,
+//! at `Order.seq_cst`. Each line runs store, add, sub, and, or, xor,
+//! swap, a compare-and-swap that matches and one that does not, then a
+//! load; each read-modify-write yields the OLD value, and the arithmetic
+//! wraps at the width (`u8` 250 + 10 is 4; `i8` 122 + 10 is -124 and
+//! -124 - 20 is 112). The `u64` line stays below 2^63 (wolf-lang#551).
+//! Before kw11 every machine answered fail(E0301) (`fence`, `Order`
+//! unresolved); lupin 0.1.46 answers `unsupported` (pinned by version,
+//! wolf-interp#194).
+
+import c "stdlib.h"
+
+fn main() -> int {
+    // # Safety: one live, zeroed 8-byte allocation from calloc; every
+    // access below is at its offset 0, aligned for every width, by one
+    // task; the word is zeroed between widths; freed once at the end.
+    unsafe {
+        let m = c.calloc(1, 8)
+        let pu64 = m as *u64
+        let pu8 = m as *u8
+        pu8.atomic_store(250, Order.seq_cst)
+        let u81 = pu8.atomic_add(10, Order.seq_cst)
+        let u82 = pu8.atomic_sub(20, Order.seq_cst)
+        let u83 = pu8.atomic_and(15, Order.seq_cst)
+        let u84 = pu8.atomic_or(48, Order.seq_cst)
+        let u85 = pu8.atomic_xor(17, Order.seq_cst)
+        let u86 = pu8.atomic_swap(7, Order.seq_cst)
+        let (u87, u8k7) = pu8.atomic_cas(7, 9, Order.seq_cst, Order.seq_cst)
+        let (u88, u8k8) = pu8.atomic_cas(7, 1, Order.seq_cst, Order.seq_cst)
+        let u89 = pu8.atomic_load(Order.seq_cst)
+        print("u8 {u81} {u82} {u83} {u84} {u85} {u86} {u87} {u8k7} {u88} {u8k8} {u89}")
+        pu64.atomic_store(0, Order.seq_cst)
+        let pu16 = m as *u16
+        pu16.atomic_store(65530, Order.seq_cst)
+        let u161 = pu16.atomic_add(10, Order.seq_cst)
+        let u162 = pu16.atomic_sub(20, Order.seq_cst)
+        let u163 = pu16.atomic_and(15, Order.seq_cst)
+        let u164 = pu16.atomic_or(48, Order.seq_cst)
+        let u165 = pu16.atomic_xor(17, Order.seq_cst)
+        let u166 = pu16.atomic_swap(7, Order.seq_cst)
+        let (u167, u16k7) = pu16.atomic_cas(7, 9, Order.seq_cst, Order.seq_cst)
+        let (u168, u16k8) = pu16.atomic_cas(7, 1, Order.seq_cst, Order.seq_cst)
+        let u169 = pu16.atomic_load(Order.seq_cst)
+        print("u16 {u161} {u162} {u163} {u164} {u165} {u166} {u167} {u16k7} {u168} {u16k8} {u169}")
+        pu64.atomic_store(0, Order.seq_cst)
+        let pu32 = m as *u32
+        pu32.atomic_store(4294967290, Order.seq_cst)
+        let u321 = pu32.atomic_add(10, Order.seq_cst)
+        let u322 = pu32.atomic_sub(20, Order.seq_cst)
+        let u323 = pu32.atomic_and(15, Order.seq_cst)
+        let u324 = pu32.atomic_or(48, Order.seq_cst)
+        let u325 = pu32.atomic_xor(17, Order.seq_cst)
+        let u326 = pu32.atomic_swap(7, Order.seq_cst)
+        let (u327, u32k7) = pu32.atomic_cas(7, 9, Order.seq_cst, Order.seq_cst)
+        let (u328, u32k8) = pu32.atomic_cas(7, 1, Order.seq_cst, Order.seq_cst)
+        let u329 = pu32.atomic_load(Order.seq_cst)
+        print("u32 {u321} {u322} {u323} {u324} {u325} {u326} {u327} {u32k7} {u328} {u32k8} {u329}")
+        pu64.atomic_store(0, Order.seq_cst)
+        let pu64 = m as *u64
+        pu64.atomic_store(4611686018427387904, Order.seq_cst)
+        let u641 = pu64.atomic_add(10, Order.seq_cst)
+        let u642 = pu64.atomic_sub(20, Order.seq_cst)
+        let u643 = pu64.atomic_and(15, Order.seq_cst)
+        let u644 = pu64.atomic_or(48, Order.seq_cst)
+        let u645 = pu64.atomic_xor(17, Order.seq_cst)
+        let u646 = pu64.atomic_swap(7, Order.seq_cst)
+        let (u647, u64k7) = pu64.atomic_cas(7, 9, Order.seq_cst, Order.seq_cst)
+        let (u648, u64k8) = pu64.atomic_cas(7, 1, Order.seq_cst, Order.seq_cst)
+        let u649 = pu64.atomic_load(Order.seq_cst)
+        print("u64 {u641} {u642} {u643} {u644} {u645} {u646} {u647} {u64k7} {u648} {u64k8} {u649}")
+        pu64.atomic_store(0, Order.seq_cst)
+        let pi8 = m as *i8
+        pi8.atomic_store(122, Order.seq_cst)
+        let i81 = pi8.atomic_add(10, Order.seq_cst)
+        let i82 = pi8.atomic_sub(20, Order.seq_cst)
+        let i83 = pi8.atomic_and(15, Order.seq_cst)
+        let i84 = pi8.atomic_or(48, Order.seq_cst)
+        let i85 = pi8.atomic_xor(17, Order.seq_cst)
+        let i86 = pi8.atomic_swap(7, Order.seq_cst)
+        let (i87, i8k7) = pi8.atomic_cas(7, 9, Order.seq_cst, Order.seq_cst)
+        let (i88, i8k8) = pi8.atomic_cas(7, 1, Order.seq_cst, Order.seq_cst)
+        let i89 = pi8.atomic_load(Order.seq_cst)
+        print("i8 {i81} {i82} {i83} {i84} {i85} {i86} {i87} {i8k7} {i88} {i8k8} {i89}")
+        pu64.atomic_store(0, Order.seq_cst)
+        let pi16 = m as *i16
+        pi16.atomic_store(32762, Order.seq_cst)
+        let i161 = pi16.atomic_add(10, Order.seq_cst)
+        let i162 = pi16.atomic_sub(20, Order.seq_cst)
+        let i163 = pi16.atomic_and(15, Order.seq_cst)
+        let i164 = pi16.atomic_or(48, Order.seq_cst)
+        let i165 = pi16.atomic_xor(17, Order.seq_cst)
+        let i166 = pi16.atomic_swap(7, Order.seq_cst)
+        let (i167, i16k7) = pi16.atomic_cas(7, 9, Order.seq_cst, Order.seq_cst)
+        let (i168, i16k8) = pi16.atomic_cas(7, 1, Order.seq_cst, Order.seq_cst)
+        let i169 = pi16.atomic_load(Order.seq_cst)
+        print("i16 {i161} {i162} {i163} {i164} {i165} {i166} {i167} {i16k7} {i168} {i16k8} {i169}")
+        pu64.atomic_store(0, Order.seq_cst)
+        let pi32 = m as *i32
+        pi32.atomic_store(2147483642, Order.seq_cst)
+        let i321 = pi32.atomic_add(10, Order.seq_cst)
+        let i322 = pi32.atomic_sub(20, Order.seq_cst)
+        let i323 = pi32.atomic_and(15, Order.seq_cst)
+        let i324 = pi32.atomic_or(48, Order.seq_cst)
+        let i325 = pi32.atomic_xor(17, Order.seq_cst)
+        let i326 = pi32.atomic_swap(7, Order.seq_cst)
+        let (i327, i32k7) = pi32.atomic_cas(7, 9, Order.seq_cst, Order.seq_cst)
+        let (i328, i32k8) = pi32.atomic_cas(7, 1, Order.seq_cst, Order.seq_cst)
+        let i329 = pi32.atomic_load(Order.seq_cst)
+        print("i32 {i321} {i322} {i323} {i324} {i325} {i326} {i327} {i32k7} {i328} {i32k8} {i329}")
+        pu64.atomic_store(0, Order.seq_cst)
+        let pi64 = m as *i64
+        pi64.atomic_store(9223372036854775802, Order.seq_cst)
+        let i641 = pi64.atomic_add(10, Order.seq_cst)
+        let i642 = pi64.atomic_sub(20, Order.seq_cst)
+        let i643 = pi64.atomic_and(15, Order.seq_cst)
+        let i644 = pi64.atomic_or(48, Order.seq_cst)
+        let i645 = pi64.atomic_xor(17, Order.seq_cst)
+        let i646 = pi64.atomic_swap(7, Order.seq_cst)
+        let (i647, i64k7) = pi64.atomic_cas(7, 9, Order.seq_cst, Order.seq_cst)
+        let (i648, i64k8) = pi64.atomic_cas(7, 1, Order.seq_cst, Order.seq_cst)
+        let i649 = pi64.atomic_load(Order.seq_cst)
+        print("i64 {i641} {i642} {i643} {i644} {i645} {i646} {i647} {i64k7} {i648} {i64k8} {i649}")
+        pu64.atomic_store(0, Order.seq_cst)
+        c.free(m)
+    }
+    0
+}
