@@ -1,0 +1,410 @@
+//! The std/prelude stub tables (s12).
+//!
+//! Until the real standard library lands (s05 surface, s51 packaging),
+//! resolution needs *names only*: the prelude makes a small ambient set
+//! resolvable without imports (D31), and a tiny `std` module tree backs
+//! `use std.…`. No types, no signatures — those arrive with the actual
+//! std. These tables are deliberately one obvious const each, so the
+//! whole stub inventory is reviewable at a glance.
+
+/// Ambient prelude names (D31): resolvable in every file with no import.
+///
+/// The trailing group are provisional stand-ins that the s02 corpus
+/// programs call as if they were std (`worker()`, `acquire()`, …); they
+/// retire the moment the real std surface (s05) replaces them — keeping
+/// the corpus resolving cleanly is what the stub is *for* this sprint.
+pub const PRELUDE: &[&str] = &[
+    // io (s38: stderr writers mirror print; `read_line` is the stdin
+    // read — checked lane only until native str materialization lands)
+    "print",
+    "print_raw",
+    "eprint",
+    "eprint_raw",
+    "read_line",
+    // collections & sync (report 07, D13–D16 surface)
+    "List",
+    "Map",
+    "Pool",
+    "Mutex",
+    "channel",
+    // the concurrency handle types (s170, wolf-lang#316; BACKLOG B21
+    // rules the spelling): `Scope` is `scope name { … }`'s handle and
+    // `Proc[T]` is `spawn proc f(…)`'s, T being the completion value
+    // the join collects (wolf-lang#110). Named here — not admitted as
+    // the lowercase keywords in type position the way `region` is —
+    // so `[conc.task.scope]`'s handle-as-parameter is writable:
+    // `fn f(s: Scope)`, `fn g(p: Proc[int])`. `sig.rs` types them.
+    "Scope",
+    "Proc",
+    // s158 (`[type.range]`, wolf-lang#24): `range[int]` / `range[char]`
+    // — the type of `a..b`. A prelude NAME, like `List`, not a
+    // `BUILTIN_TYPES` prim: it takes an argument.
+    "range",
+    // small helpers the corpus leans on
+    "min",
+    "zip",
+    // comptime reflection intrinsics (D29, s16 — the explicit
+    // allowlist; `reflect` is the s02 corpus spelling of `typeinfo`)
+    "reflect",
+    "typeinfo",
+    "typebuild",
+    "implements",
+    "size_of",
+    // kw08 (`[abi.layout.query]`): the other two layout queries.
+    "align_of",
+    "offset_of",
+    // assertions ([conf.trap.map]: the one user-raised trap; at
+    // comptime a failure is E0710)
+    "assert",
+    // ambient host surfaces (s16 sandbox probes; callable at runtime,
+    // categorically refused at comptime — D33). Retire with s05's
+    // real std surface like the stand-ins below.
+    "read_text",
+    "net_fetch",
+    "env_var",
+    "clock_ms",
+    "random_seed",
+    // the fs builtin tier (s38, D30 payload-less rows at v0; I13: all
+    // tagged `fs` in the sandbox table). std.fs (stdc02) DELEGATES to
+    // these — the builtin spelling is not the std API.
+    "fs_read_text",
+    "fs_write_text",
+    "fs_open",
+    "fs_create",
+    "fs_read",
+    "fs_write",
+    "fs_close",
+    "fs_remove",
+    "fs_exists",
+    // the s90 additions (wolf-lang#51/#52): the same `fs` capability,
+    // the same D30 rows. `fs_open_mode` gives the family the open
+    // MODE it never had (so `append_text` appends instead of
+    // read-concat-writing); the `_bytes`/`_chunk` pairs make
+    // `copy_file`/`move_file` byte operations; `fs_read_dir` is the
+    // listing std shipped without; `fs_rename` promises the move but
+    // NOT atomicity (see `wolf_rt::fs`), and the create/metadata
+    // entries let a writer make the directory it is about to write
+    // into and ask WHAT exists.
+    "fs_open_mode",
+    "fs_read_bytes",
+    "fs_write_bytes",
+    "fs_read_chunk",
+    "fs_write_chunk",
+    "fs_read_dir",
+    "fs_create_dir",
+    "fs_create_dir_all",
+    "fs_remove_dir",
+    "fs_remove_dir_all",
+    "fs_rename",
+    "fs_is_file",
+    "fs_is_dir",
+    "fs_size",
+    "fs_modified_ms",
+    // s142 (#261): the stat on an open handle, `[os.fs.fstat]`.
+    "fs_fstat",
+    // s199 (#426): the handle's offset — `[os.fs.seek]`,
+    // `[os.fs.tell]`, `[os.fs.read_at]`.
+    "fs_seek",
+    "fs_tell",
+    "fs_read_at",
+    // the net builtin tier (s39, blocking TCP v0 on the checked lane;
+    // D30 rows {refused, timeout, closed, io}; I13: all tagged `net`
+    // in the sandbox table). std.net (stdc02+) DELEGATES to these —
+    // the builtin spelling is not the std API; the s35 reactor owns
+    // the real async story.
+    "net_listen",
+    "net_port",
+    "net_accept",
+    "net_connect",
+    "net_read",
+    "net_write",
+    // s115 (#137): the byte twins — `List[int]` in/out, no UTF-8 gate,
+    // so a server carries a binary body (`fs_read_bytes`/`fs_write_bytes`
+    // for the socket). The str variants stay for text.
+    "net_read_bytes",
+    "net_write_bytes",
+    // s141 (#254): the gathered write — every part of a
+    // `List[List[byte]]` in one syscall, `net_write`'s rows —
+    // `[os.net.writev]`; and the one socket option a stream takes
+    // after acquisition, `[os.net.nodelay]`.
+    "net_writev",
+    "net_writev_head",
+    "net_nodelay",
+    // s136 (#227): the unix-domain pair, `[os.net.unix]`.
+    "net_listen_unix",
+    "net_connect_unix",
+    // s137 (#234/#235): listener options (`reuse_port`, backlog —
+    // `[os.net.listen.opts]`) and the adopt half of descriptor
+    // inheritance (`[os.proc.inherit]`).
+    "net_listen_with",
+    "net_adopt_listener",
+    // s137 (#127): readiness over a set, `[os.net.wait]` — the
+    // primitive a spawn-free serving loop blocks on.
+    "net_wait",
+    "net_close",
+    // s106 (#45's builtin half): the per-socket deadline budget that
+    // makes the `timeout` tag reachable — declared with the family
+    // since s39, armable since the s35 reactor, crossed here.
+    "net_deadline",
+    // the os/env builtin tier (s40, capability-first per I13: the env
+    // family + `os_cwd` carry `env`, the process trio + `os_exit`
+    // carry `exec` in the sandbox table). std.os/std.env/std.process
+    // (stdc02+) DELEGATE to these — the builtin spelling is not the
+    // std API. `os_spawn` is argv-array ONLY: no shell-string spawn
+    // exists anywhere, by construction (injection off the table).
+    "env_args",
+    "env_get",
+    "env_set",
+    "env_vars",
+    "os_cwd",
+    // s90 (wolf-lang#69): the running executable's path. `env`-tagged
+    // with `os_cwd` — it READS process context and changes nothing —
+    // even though its reason to exist is std.process's rig, which
+    // spawns the test binary as its own child.
+    "os_exe",
+    // s137 (#233, `[os.cpus]`): the schedulable core count — a
+    // machine-state read, `env`-tagged with `os_cwd`/`os_exe`.
+    "os_cpus",
+    "os_exit",
+    "os_spawn",
+    // s137 (#235, `[os.proc.inherit]`): the spawn that hands
+    // descriptors to its child — `exec`-tagged with the trio.
+    "os_spawn_with",
+    "os_wait",
+    "os_kill",
+    // signal RECEPTION (s114, wolf-lang#126): the receive side of the
+    // process-signal world (`os_kill` is send-to-child). By MEANING —
+    // a bitmask set of reload/terminate/quit/upgrade, mapped to
+    // platform signals at the runtime boundary. `os_signal_raise` is
+    // the send-to-self companion (the deterministic loopback). `exec`-
+    // tagged with the process family; comptime-refused.
+    "os_signal_listen",
+    "os_signal_wait",
+    "os_signal_raise",
+    // the OS random source (s118, wolf-lang#143): `os_random(n)` mints
+    // n bytes of OS-provided entropy as a `List[int]` — the ONLY
+    // sanctioned source of cryptographic material ([os.random.sole]).
+    // No error row: failure TRAPS ([os.random.trap], never a
+    // fallback). `random_seed` above stays what it is — a typed
+    // PRNG-seed convenience, NOT an entropy API (the issue's own
+    // ruling); nothing lowers it and nothing here changes that.
+    "os_random",
+    // the time builtin tier (s40, determinism-first per X12: every
+    // entry is Clock-tagged and comptime-refused; the ms-integer
+    // spellings are the builtin ABI — Instant/SystemTime/Duration
+    // typing is the std facade's, where unit confusion becomes a
+    // compile error). Virtualization under --schedules/--replay rides
+    // the s36 clock-hook seam as it widens.
+    "time_now_ms",
+    "time_unix_ms",
+    "time_sleep_ms",
+    // the json builtin tier (s40, nursery-first per D31: std.x.json
+    // wraps these as its query kernels). PURE — no capability tag, no
+    // sandbox category; the comptime engine still refuses them (no
+    // json evaluator in the D33 allowlist at v0).
+    "json_valid",
+    "json_get",
+    "json_type",
+    "json_len",
+    // the str-construction border (s81, wolf-lang#58). `s.bytes()` is a
+    // byte VIEW (s77) and there was no byte SOURCE: nothing anywhere
+    // turned bytes back into a `str`, which is what blocked wolf-std's
+    // `bytes.to_str`. This is the ONLY entry that builds a `str` from
+    // arbitrary numbers, and it VALIDATES — its failure is the `utf8`
+    // row, never a trap and never a cast. PURE (no capability, no
+    // sandbox category), like the json family.
+    "str_from_utf8",
+    // the region accounting queries (s131, wolf-lang#187): the ledger
+    // wolf_rt already keeps, surfaced. `region_bytes(r)` answers a
+    // named region's charge; `live_region_bytes()` the process-wide
+    // live-region total. PURE (no capability, no sandbox category) —
+    // they read the memory model's own state, not an ambient OS
+    // surface; the comptime engine refuses them with the rest (no
+    // region machine in the D33 sandbox).
+    "region_bytes",
+    "live_region_bytes",
+    // provisional corpus stand-ins (retire with s05's real std surface)
+    "acquire",
+    "release",
+    "build_config",
+    "build_batch",
+    "worker",
+    "sleeper",
+];
+
+/// Built-in type names, resolvable everywhere in type (and expression)
+/// position. Closed set for now; the real inventory is spec 02's.
+pub const BUILTIN_TYPES: &[&str] = &[
+    "bool", "str", "byte", "char", "int", "uint", "i8", "i16", "i32", "i64", "u8", "u16", "u32",
+    "u64", "f32", "f64", "wrapping",
+];
+
+/// `[type.method.home]` (s166, wolf-lang#390) — the home module of each
+/// std data type, as `std.<name>`, beside the builtin method names
+/// `[type.method.resolve]` step (1) answers on that type. The loader's
+/// pre-scan ([`crate::graph`]) loads a home module only when a method
+/// call names one of its `pub fn`s that is NOT in this list, so a
+/// program whose method calls are all builtins never loads std for them.
+pub const HOME_MODULES: &[(&str, &[&str])] = &[
+    (
+        "list",
+        &[
+            "push", "pop", "get", "first", "last", "is_empty", "count", "clear", "par",
+        ],
+    ),
+    ("map", &["count", "is_empty", "clear", "pairs"]),
+    (
+        "str",
+        &[
+            "is_empty",
+            "get",
+            "bytes",
+            "chars",
+            "starts_with",
+            "ends_with",
+            "contains",
+            "find",
+            "rfind",
+            "count",
+            "split",
+            "words",
+            "lines",
+            "trim",
+            "trim_start",
+            "trim_end",
+            "lower",
+            "upper",
+            "strip_prefix",
+            "strip_suffix",
+            "repeat",
+            "replace",
+            "to_int",
+        ],
+    ),
+    ("range", &[]),
+];
+
+/// One stub std module: its dotted path and its item names.
+#[derive(Clone, Copy, Debug)]
+pub struct StdModule {
+    pub path: &'static [&'static str],
+    pub items: &'static [&'static str],
+}
+
+/// The `std` stub tree behind `use std.…` — names only, no types.
+///
+/// Subordinated by F-0001: this table answers only when no std root is
+/// configured (`--std-root` / `WOLF_STD`). With a root, `use std.X`
+/// loads `<std-root>/X/` through the ordinary module machinery
+/// ([`crate::graph`]) and this table is never consulted.
+pub const STD_MODULES: &[StdModule] = &[
+    StdModule {
+        path: &["std"],
+        items: &["fs"],
+    },
+    StdModule {
+        path: &["std", "fs"],
+        items: &["read_text"],
+    },
+];
+
+/// Find a std module by exact dotted path segments.
+pub fn std_module(path: &[&str]) -> Option<usize> {
+    STD_MODULES.iter().position(|m| m.path == path)
+}
+
+/// Is `name` an ambient prelude name?
+pub fn in_prelude(name: &str) -> bool {
+    PRELUDE.contains(&name)
+}
+
+/// The provisional corpus stand-ins at the tail of [`PRELUDE`]: names
+/// that exist precisely so early corpus programs can define them, and
+/// that retire with the real std surface. Shadowing one is expected,
+/// not hazardous, so the W0304 lint exempts them.
+pub const PRELUDE_PROVISIONAL: &[&str] = &[
+    "acquire",
+    "release",
+    "build_config",
+    "build_batch",
+    "worker",
+    "sleeper",
+];
+
+/// Prelude names that exist ONLY in type position (s158): `range` is
+/// the type of `a..b` (`[type.range]`) and has no expression form at
+/// all — there is no `range(…)` constructor, the values are spelled
+/// `a..b`. A declaration named `range` therefore shadows nothing a
+/// program can spell, and W0304 exempts it.
+///
+/// This is the line between it and `List`: `List[int]()` IS an
+/// expression, so a module that declares its own `List` really does
+/// sever itself from the container, and the lint is right to say so.
+/// `var range = true` severs nothing, and two of the corpus's own
+/// `os_random` witnesses spell it (the word is too ordinary to tax).
+pub const PRELUDE_TYPE_ONLY: &[&str] = &["range"];
+
+/// Would declaring `name` silently shadow an ambient name worth
+/// keeping (W0304)? True for every prelude name except the
+/// provisional stand-ins and the type-position-only names, and for
+/// every built-in type name.
+pub fn shadow_hazard(name: &str) -> bool {
+    (in_prelude(name) && !PRELUDE_PROVISIONAL.contains(&name) && !PRELUDE_TYPE_ONLY.contains(&name))
+        || is_builtin_type(name)
+}
+
+/// Is `name` a built-in type name?
+pub fn is_builtin_type(name: &str) -> bool {
+    BUILTIN_TYPES.contains(&name)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn std_lookup_by_segments() {
+        assert_eq!(std_module(&["std"]), Some(0));
+        let fs = std_module(&["std", "fs"]).expect("std.fs registered");
+        assert!(STD_MODULES[fs].items.contains(&"read_text"));
+        assert_eq!(std_module(&["std", "net"]), None);
+    }
+
+    #[test]
+    fn prelude_and_builtins_answer() {
+        assert!(in_prelude("print"));
+        assert!(!in_prelude("frobnicate"));
+        assert!(is_builtin_type("i32"));
+        assert!(is_builtin_type("wrapping"));
+        assert!(!is_builtin_type("List")); // List is prelude, not builtin
+    }
+
+    /// s170 (wolf-lang#316, B21): the two conc handle types are
+    /// PRELUDE names, not builtin scalars — resolvable with no import
+    /// and elaborated by `sig.rs`, exactly as `channel`/`List` are.
+    /// Shadowing one is a hazard (they are not provisional stand-ins).
+    #[test]
+    fn conc_handle_types_are_prelude_names() {
+        assert!(in_prelude("Scope"));
+        assert!(in_prelude("Proc"));
+        assert!(!is_builtin_type("Scope"));
+        assert!(!is_builtin_type("Proc"));
+        assert!(shadow_hazard("Scope"));
+        assert!(shadow_hazard("Proc"));
+    }
+
+    /// s158 (`[type.range]`): `range` resolves as a type name, and
+    /// shadowing it is NOT a W0304 hazard — it has no expression form,
+    /// so a `var range = true` severs nothing. `List` is the contrast:
+    /// `List[int]()` is an expression, and shadowing it really does
+    /// cut the module off from the container.
+    #[test]
+    fn range_is_a_type_position_prelude_name() {
+        assert!(in_prelude("range"));
+        assert!(!is_builtin_type("range"));
+        assert!(!shadow_hazard("range"));
+        assert!(shadow_hazard("List"));
+        assert!(shadow_hazard("print"));
+        assert!(!shadow_hazard("worker")); // provisional stand-in
+    }
+}
