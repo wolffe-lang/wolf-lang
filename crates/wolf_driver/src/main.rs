@@ -1182,6 +1182,9 @@ fn compile_native(
             reason,
         });
     }
+    // kw12: read on the same lowered module the scan read (a call the
+    // mid-end later folds away still ships the archive; harmless).
+    let needs_none_rt = target.is_freestanding() && wolf_backend::target::uses_none_rt(&module);
     // c28 [ct.taint.verify], first run: the constructed WIR. Refusals
     // here are the deterministic, well-spanned ones a crypto author
     // sees; the second run after the mid-end is the fail-closed
@@ -1842,6 +1845,32 @@ fn compile_native(
             asm::assemble(spelled, src, &obj, target).map_err(BuildStop::Environment)?;
             if opts.verbose {
                 eprintln!("wolf build: assembled {spelled} -> {}", obj.display());
+            }
+        }
+        // kw12 (`[abi.target.none.alloc]`): an object that calls into the
+        // freestanding runtime gets the runtime's `no_std` archive beside
+        // it, `K.rt-none.a`, for the boot code's link. An object that
+        // allocates nothing gets none, and imports exactly what it did.
+        if needs_none_rt {
+            let lib = find_none_rt_lib().ok_or_else(|| {
+                BuildStop::Environment(format!(
+                    "{} not found next to the `wolf` binary — this program allocates on \
+                     target {} and links the freestanding runtime (build it with `cargo \
+                     xtask rt-none`, or point WOLF_RT_NONE_LIB at it)",
+                    wolf_backend::target::NONE_RT_LIB,
+                    wolf_backend::target::FREESTANDING
+                ))
+            })?;
+            let dst = out.with_extension("rt-none.a");
+            std::fs::copy(&lib, &dst).map_err(|e| {
+                BuildStop::Environment(format!("copy {} -> {}: {e}", lib.display(), dst.display()))
+            })?;
+            if opts.verbose {
+                eprintln!(
+                    "wolf build: freestanding runtime {} -> {}",
+                    lib.display(),
+                    dst.display()
+                );
             }
         }
         return Ok(());
@@ -2546,6 +2575,32 @@ fn find_rt_lib() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let p = exe.parent()?.join(RT_LIB_NAME);
     p.is_file().then_some(p)
+}
+
+/// Locate the freestanding runtime archive (kw12,
+/// [`wolf_backend::target::NONE_RT_LIB`]): `WOLF_RT_NONE_LIB` wins;
+/// otherwise next to the running `wolf` binary (the dist archive is
+/// flat); otherwise where `cargo xtask rt-none` builds it in a checkout,
+/// `target/x86_64-unknown-none/release/` beside the `wolf` binary's
+/// `target/<profile>/`.
+fn find_none_rt_lib() -> Option<PathBuf> {
+    let name = wolf_backend::target::NONE_RT_LIB;
+    if let Some(p) = std::env::var_os("WOLF_RT_NONE_LIB").filter(|v| !v.is_empty()) {
+        let p = PathBuf::from(p);
+        return p.is_file().then_some(p);
+    }
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    let beside = dir.join(name);
+    if beside.is_file() {
+        return Some(beside);
+    }
+    let built = dir
+        .parent()?
+        .join(wolf_backend::target::FREESTANDING)
+        .join("release")
+        .join(name);
+    built.is_file().then_some(built)
 }
 
 /// Parsed `wolf build`/`wolf run` command line.
