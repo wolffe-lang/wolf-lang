@@ -217,6 +217,23 @@ pub fn fence_intrinsic(name: &str) -> Option<Order> {
     Order::from_mark(name.strip_prefix(FENCE_PREFIX)?)
 }
 
+pub use ct::{CtSink, CtViolation, check_module as ct_check_module};
+pub use facts::{DerefSize, FactData, FactId, FactKind, Just, Theorem};
+pub use hash::sha256_hex;
+pub use ir::{
+    Aux, Block, BlockCall, CtContract, DataDecl, ExtFunc, ExtFuncData, FuncId, Function, Inst,
+    InstData, Mode, Module, Param, SigData, SigId, Value, ValueData, ValueDef,
+};
+pub use lower::{Build, SurveyReason, lower_package, lower_package_survey};
+pub use ops::{FloatCc, IntCc, Opcode};
+pub use parse::{ParseError, parse_module};
+pub use print::{block_order, print_module, print_selected, print_statics};
+pub use profile::{Profile, ProfileError, WPROF_VERSION};
+pub use types::{RegionId, TypeData, TypeId, TypeInterner};
+pub use verify::{
+    ErrClass, Invalidation, PassCtx, VerifyError, run_pass, verify_function, verify_module,
+};
+
 #[cfg(test)]
 mod atomic_intrinsic_tests {
     use super::*;
@@ -248,20 +265,3 @@ mod atomic_intrinsic_tests {
         assert_eq!(atomic_intrinsic("wolf.volatile.load.i8"), None);
     }
 }
-
-pub use ct::{CtSink, CtViolation, check_module as ct_check_module};
-pub use facts::{DerefSize, FactData, FactId, FactKind, Just, Theorem};
-pub use hash::sha256_hex;
-pub use ir::{
-    Aux, Block, BlockCall, CtContract, DataDecl, ExtFunc, ExtFuncData, FuncId, Function, Inst,
-    InstData, Mode, Module, Param, SigData, SigId, Value, ValueData, ValueDef,
-};
-pub use lower::{Build, SurveyReason, lower_package, lower_package_survey};
-pub use ops::{FloatCc, IntCc, Opcode};
-pub use parse::{ParseError, parse_module};
-pub use print::{block_order, print_module, print_selected, print_statics};
-pub use profile::{Profile, ProfileError, WPROF_VERSION};
-pub use types::{RegionId, TypeData, TypeId, TypeInterner};
-pub use verify::{
-    ErrClass, Invalidation, PassCtx, VerifyError, run_pass, verify_function, verify_module,
-};
