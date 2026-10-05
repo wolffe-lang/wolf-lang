@@ -41,21 +41,31 @@
 // `crate::str::ambient_alloc`, which this crate defines below with the
 // hosted signatures. Helpers the hosted crate's other modules use (byte
 // minting for fs/net, `par`'s raw parts) have no caller here.
+//
+// Every module is `cfg(not(test))`: the shared files carry unit tests
+// written against the HOSTED crate, and `clippy --all-targets` compiles
+// the lib-test target even with `test = false`. This crate's tests are
+// `tests/*.rs`, which link the ordinary build.
+#[cfg(not(test))]
 #[allow(dead_code)]
 #[path = "../../wolf_rt/src/list.rs"]
 pub mod list;
+#[cfg(not(test))]
 #[allow(dead_code)]
 #[path = "../../wolf_rt/src/map.rs"]
 pub mod map;
 
+#[cfg(not(test))]
 mod fmt;
+#[cfg(not(test))]
 pub mod native;
+#[cfg(not(test))]
 pub mod str;
 
 /// A runtime-internal panic is a runtime bug: the kernel gets a trap
 /// (`ub`), never an unwind. Only on the freestanding target — a host
 /// build links std's handler (the integration tests).
-#[cfg(target_os = "none")]
+#[cfg(all(target_os = "none", not(test)))]
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo<'_>) -> ! {
     native::trap(native::trap_code::UB)
