@@ -2567,6 +2567,14 @@ impl<'a> Fx<'a> {
                 let callee = self.f.ext_funcs[ef].clone();
                 if let Some((store, width)) = wolf_wir::volatile_intrinsic(&callee.name) {
                     self.lower_volatile(store, width, &args, &results)?;
+                } else if let Some(a) = wolf_wir::atomic_intrinsic(&callee.name) {
+                    self.lower_atomic(a, &args, &results)?;
+                } else if let Some(o) = wolf_wir::fence_intrinsic(&callee.name) {
+                    // kw11 (`[conc.mm.fence]`): the order, mapped.
+                    self.line(format!("  fence {}", llvm_order(o)));
+                    for &tok in &results {
+                        self.vals.insert(tok, Repr::Token);
+                    }
                 } else {
                     self.lower_call(&callee.name, callee.sig, &args, &results)?;
                 }
@@ -3049,6 +3057,78 @@ impl<'a> Fx<'a> {
         Ok(())
     }
 
+    /// kw11 (`[conc.mm.atomic.raw.3]`): one atomic intrinsic as the
+    /// LLVM atomic instruction of the width at its natural alignment,
+    /// with the order mapped (`relaxed` is LLVM's `monotonic`); no
+    /// alias-scope metadata, nothing declared. A CAS yields its old
+    /// value (WIR computes the `bool`).
+    fn lower_atomic(
+        &mut self,
+        a: wolf_wir::AtomicIntrinsic,
+        args: &[WValue],
+        results: &[WValue],
+    ) -> Result<(), BackendError> {
+        use wolf_wir::AtomicOp;
+        let ty = format!("i{}", a.width * 8);
+        let w = a.width;
+        let ord = llvm_order(a.order);
+        let p = self.op(args[0])?;
+        let mut rest = results;
+        let out = match a.op {
+            AtomicOp::Load => {
+                let t = self.tmp();
+                self.line(format!(
+                    "  {t} = load atomic {ty}, ptr {p} {ord}, align {w}"
+                ));
+                Some(t)
+            }
+            AtomicOp::Store => {
+                let v = self.op(args[1])?;
+                self.line(format!("  store atomic {ty} {v}, ptr {p} {ord}, align {w}"));
+                None
+            }
+            AtomicOp::Cas => {
+                let e = self.op(args[1])?;
+                let n = self.op(args[2])?;
+                let fail = llvm_order(a.failure.unwrap_or(a.order));
+                let pair = self.tmp();
+                self.line(format!(
+                    "  {pair} = cmpxchg ptr {p}, {ty} {e}, {ty} {n} {ord} {fail}, align {w}"
+                ));
+                let t = self.tmp();
+                self.line(format!("  {t} = extractvalue {{ {ty}, i1 }} {pair}, 0"));
+                Some(t)
+            }
+            op => {
+                let v = self.op(args[1])?;
+                let name = match op {
+                    AtomicOp::Swap => "xchg",
+                    AtomicOp::Add => "add",
+                    AtomicOp::Sub => "sub",
+                    AtomicOp::And => "and",
+                    AtomicOp::Or => "or",
+                    _ => "xor",
+                };
+                let t = self.tmp();
+                self.line(format!(
+                    "  {t} = atomicrmw {name} ptr {p}, {ty} {v} {ord}, align {w}"
+                ));
+                Some(t)
+            }
+        };
+        if let Some(t) = out {
+            let (&r, tail) = results
+                .split_first()
+                .ok_or_else(|| ice("an atomic operation without a result"))?;
+            self.vals.insert(r, Repr::Scalar(t));
+            rest = tail;
+        }
+        for &tok in rest {
+            self.vals.insert(tok, Repr::Token);
+        }
+        Ok(())
+    }
+
     /// Lower one call, executing the callee's ABI plan (tokens erased,
     /// small aggregates in registers, big ones through memory, error
     /// unions per `[abi.err.repr]`).
@@ -3424,6 +3504,18 @@ fn float_cc(cc: FloatCc) -> &'static str {
         FloatCc::Le => "ole",
         FloatCc::Gt => "ogt",
         FloatCc::Ge => "oge",
+    }
+}
+
+/// kw11: an `Order` mark as LLVM's ordering keyword.
+fn llvm_order(o: wolf_wir::Order) -> &'static str {
+    use wolf_wir::Order;
+    match o {
+        Order::Relaxed => "monotonic",
+        Order::Acquire => "acquire",
+        Order::Release => "release",
+        Order::AcqRel => "acq_rel",
+        Order::SeqCst => "seq_cst",
     }
 }
 
