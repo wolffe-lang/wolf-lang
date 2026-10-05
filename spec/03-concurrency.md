@@ -50,12 +50,108 @@ premise by construction.
 ### Atomics `[conc.mm.atomic]`
 
 - `[conc.mm.atomic.sc]` `std.sync` atomics are sequentially consistent
-  by default.
+  by default. The safe `std.sync` `Atomic[T]` is a later layer over the
+  raw operations below (K5 = A, STATUS #31): it is not ruled yet, and
+  nothing here implements it.
 - `[conc.mm.atomic.relaxed]` Relaxed and acquire/release orderings exist
   only in the unsafe tier (Boehm's measurement: the fully-fenced cost is
   small; the reasoning cost of weak orderings is not). Their semantics
   follow the happens-before edges they document; no out-of-thin-air
-  values in any execution.
+  values in any execution. The orders are `[conc.mm.atomic.order]`'s
+  marks; the operations that take them are `[conc.mm.atomic.raw]` and
+  `[conc.mm.fence]`.
+- `[conc.mm.atomic.order]` `Order` is a closed builtin enum of five
+  lowercase marks, C++20's set without `consume`: `relaxed`, `acquire`,
+  `release`, `acq_rel`, `seq_cst`. A mark is written `Order.<mark>`,
+  and only as the **order operand** of an atomic operation or a fence:
+  the operand is a mark, not an expression, so the order is known where
+  the operation is compiled (it chooses the instruction) and means the
+  builtin whatever else `Order` names in scope. Anything else in an
+  order operand — a variable, a call, an unknown mark — and `Order`
+  used as a value anywhere else are E1309. An `Order` value is not
+  ruled; the `Atomic[T]` layer may widen this. The marks carry the
+  happens-before edges C++20 gives them: a `release` (or stronger)
+  write that an `acquire` (or stronger) read reads from makes every
+  access program-ordered before the write happen before every access
+  program-ordered after the read; `relaxed` orders nothing but the
+  location's own modification order; `seq_cst` operations also fall in
+  one total order consistent with every location's.
+- `[conc.mm.atomic.raw]` On a raw pointer `p: *T`, inside `unsafe`
+  (E1301 elsewhere), nine methods are each one indivisible operation on
+  the `T` at `p`, ordered by its order operand(s) `o`:
+  `p.atomic_load(o) -> T`; `p.atomic_store(v, o)`;
+  `p.atomic_swap(v, o) -> T`; `p.atomic_add(v, o)`, `atomic_sub`,
+  `atomic_and`, `atomic_or`, `atomic_xor` (each `-> T`, the value
+  before the operation); and `p.atomic_cas(expected, new, success,
+  failure) -> (T, bool)`, which writes `new` if and only if the value
+  at `p` equals `expected`, and yields the value it read and whether it
+  wrote. The read-modify-writes' arithmetic wraps at the width (two's
+  complement; an atomic instruction cannot trap `overflow`). Operands
+  evaluate left to right after the receiver (`[mem.model.order]`). An
+  atomic operation is an access through `p` for every `[mem.ub]` row
+  (`[mem.unsafe.raw.1]`), and two atomic accesses to one location never
+  race (`[conc.mm.race.1]` is about non-atomic memory).
+  - `[conc.mm.atomic.raw.1]` `T` is a fixed-width integer: `u8`, `u16`,
+    `u32`, `u64`, `i8`, `i16`, `i32`, `i64`. Any other pointee — `int`
+    and `uint` (the platform's integer, not a width), `byte` (no
+    arithmetic), `bool`, a float, an aggregate — is E1308.
+  - `[conc.mm.atomic.raw.2]` Each operation admits the orders that mean
+    something for it, and any other is E1309: a load has no release
+    half (`relaxed`, `acquire`, `seq_cst`); a store has no acquire half
+    (`relaxed`, `release`, `seq_cst`); a read-modify-write admits all
+    five; a compare-and-swap's success order is any of the five, and
+    its failure order — the order of the load a failed exchange is — is
+    `relaxed`, `acquire` (when the success order acquires: `acquire`,
+    `acq_rel`, `seq_cst`) or `seq_cst` (when the success order is
+    `seq_cst`), never stronger than the success order and never a
+    release order.
+  - `[conc.mm.atomic.raw.3]` The compiled tiers emit each call as the
+    atomic instruction(s) of `T`'s width at `p`, in place, importing
+    nothing, hosted and freestanding (`[abi.target]`), and never split,
+    elided, merged or moved across another raw access. The native tier
+    implements **every order as `seq_cst`**: Cranelift's atomic
+    instructions are sequentially consistent, and the strongest order
+    is a correct implementation of each weaker one (it admits no
+    outcome a weaker order forbids). The release tier passes each order
+    to LLVM as written (`relaxed` is LLVM's `monotonic`). What each
+    lowers to on x86-64 and aarch64 is proven in the object by
+    `atomic_disasm.rs` (on x86-64 a load is a plain `mov`, a
+    read-modify-write a `lock`-prefixed instruction or `lock cmpxchg`
+    loop; on aarch64 an exclusive pair or an LSE instruction).
+  - `[conc.mm.atomic.raw.4]` `p` is a multiple of `T`'s size. An atomic
+    operation at any other address is UB row L4 (`[mem.unsafe.raw.4]`):
+    the instruction is emitted with no alignment check (x86-64 runs a
+    split lock, aarch64 faults), and the checked machine and lupin
+    report the row.
+  - `[conc.mm.atomic.raw.5]` The checked machine and lupin are
+    interleaving machines: they run every order as `seq_cst`, each
+    operation whole, so every outcome they produce is one the hardware
+    may produce. **Outside their reach** are the outcomes only a weaker
+    order allows — a `relaxed` or acquire/release program's
+    store-buffering (both of two tasks reading the other's old value),
+    load-buffering and independent-reads-of-independent-writes outcomes
+    — so a program whose correctness rests on those outcomes never
+    arising is not checked by them: the checked machine is a subset of
+    the hardware's behaviours, never a superset. The checked machine
+    also runs no task at all (structured concurrency there is C1,
+    deferred, and refused by name), so its atomics are single-task.
+    Witnesses: `conc/atomic_widths.lu`, `conc/atomic_orders.lu`,
+    `conc/atomic_counter.lu` (exact counts on every cpu set,
+    `atomic_witness.rs`).
+- `[conc.mm.fence]` `fence(o)` is a builtin (`[conc.mm.atomic.order]`'s
+  operand; `fence(Order.relaxed)` orders nothing and is E1309). An
+  `acquire` fence after a load gives that load acquire semantics
+  against everything program-ordered after the fence; a `release` fence
+  before a store gives that store release semantics; `acq_rel` is both;
+  a `seq_cst` fence is both and takes part in the `seq_cst` total
+  order. `fence(Order.seq_cst)` is safe to write anywhere; every weaker
+  fence is reasoned about only beside raw accesses and needs `unsafe`
+  (E1301). The compiled tiers order every raw access against it (the
+  native tier emits a full fence for every order; the release tier
+  passes the order to LLVM, which emits nothing on x86-64 for the
+  weaker three); the checked machine and lupin, which run one operation
+  at a time, treat every fence as already in force. Witness:
+  `conc/atomic_fence.lu`.
 
 ### Races in unsafe/FFI `[conc.mm.race]`
 
