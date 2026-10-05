@@ -28,6 +28,7 @@
 //! disturbing losslessness.
 
 mod ast;
+pub mod atomic;
 mod dump;
 mod green;
 mod kind;
