@@ -9859,6 +9859,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if cs.is_none() {
             match callee_text.as_str() {
                 "assert" => return self.lower_assert(d),
+                "fence" => return self.lower_fence(d, e),
                 "print" | "print_raw" | "eprint" | "eprint_raw" => {
                     let stream = if callee_text.starts_with('e') { 2 } else { 1 };
                     return self.lower_print(d, callee_text.ends_with("print"), stream);
@@ -15129,6 +15130,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             // kw07 (`[mem.unsafe.volatile]`): one access each.
             "read_volatile" | "write_volatile" => self.lower_volatile(p, arg, elem, mname, e),
+            // kw11 (`[conc.mm.atomic.raw]`): one atomic operation each.
+            m if crate::AtomicOp::from_method(m).is_some() => {
+                let op = crate::AtomicOp::from_method(m).expect("matched");
+                self.lower_atomic(op, p, d, elem, e)
+            }
             _ => Err(refuse("this raw-pointer method", e.span)),
         }
     }
@@ -15251,6 +15257,160 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         ];
         let ext = self.rt_import(store, params, Vec::new());
         self.b.ins_call_regions(ext, &[ptr, val], &formal);
+        Ok(Flow::Val(None))
+    }
+
+    /// kw11: an order operand's mark. Sema refused every operand that
+    /// is not one (E1309), so a miss here is a refusal, never a guess.
+    fn order_mark(&self, a: Option<&'t GreenNode>, span: Span) -> R<crate::Order> {
+        match a.map(|a| wolf_ast::atomic::order_operand(a, |s| self.text(s))) {
+            Some(wolf_ast::atomic::OrderOperand::Mark(o)) => Ok(o),
+            _ => Err(refuse("an atomic order that is not an `Order` mark", span)),
+        }
+    }
+
+    /// kw11: import (once) the intrinsic `name`, its arguments the
+    /// values then the raw-buffer token, and call it on that token.
+    fn call_token_intrinsic(
+        &mut self,
+        name: String,
+        vals: &[Value],
+        val_tys: Vec<TypeId>,
+        results: Vec<TypeId>,
+    ) -> Vec<Value> {
+        let region = self.foreign_buf_region();
+        let tok = self.b.module.types.mem(RegionId::new(0));
+        let formal: HashMap<u32, RegionId> = [(0u32, region)].into_iter().collect();
+        let ext = match self.callees.get(&name) {
+            Some(&ext) => ext,
+            None => {
+                let mut params: Vec<Param> = val_tys.into_iter().map(Param::val).collect();
+                params.push(Param {
+                    ty: tok,
+                    mode: Mode::Val,
+                });
+                let sig = self.b.module.make_sig(params, results);
+                let ext = self.b.func.import_func(name.clone(), sig);
+                self.callees.insert(name, ext);
+                ext
+            }
+        };
+        self.b.ins_call_regions(ext, vals, &formal)
+    }
+
+    /// kw11 (`[conc.mm.atomic.raw]`, K5 = A): `p.atomic_<op>(…)`.
+    ///
+    /// kw07's shape: a call to an order-named intrinsic
+    /// ([`crate::ATOMIC_PREFIX`]) threaded on the raw-buffer token, so
+    /// it is ordered against every raw access by the token spine and
+    /// every mid-end pass keeps it whole (DCE, memopt, licm, sink and
+    /// the inliner all leave a call alone). The backends expand it in
+    /// place: Cranelift with every order as its sequentially
+    /// consistent atomics, LLVM with the order mapped. The operands
+    /// evaluate left to right after the receiver (`[mem.model.order]`);
+    /// a CAS's `bool` is `old == expected`, computed here, and the
+    /// pair is built as any `(T, bool)` is.
+    fn lower_atomic(
+        &mut self,
+        op: crate::AtomicOp,
+        ptr: Value,
+        d: CallExpr<'t>,
+        elem: TyId,
+        e: &'t GreenNode,
+    ) -> R<Flow> {
+        use crate::AtomicOp;
+        let (ewty, lay) = self.raw_pointee(elem, e.span)?;
+        if !matches!(lay.size, 1 | 2 | 4 | 8) {
+            return Err(refuse(
+                "an atomic operation on a pointee that is not one integer access",
+                e.span,
+            ));
+        }
+        let args: Vec<&'t GreenNode> = d
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .filter_map(Arg::value)
+            .collect();
+        let order = self.order_mark(args.get(op.order_slots()[0]).copied(), e.span)?;
+        let failure = if op == AtomicOp::Cas {
+            Some(self.order_mark(args.get(3).copied(), e.span)?)
+        } else {
+            None
+        };
+        let mut vals = vec![ptr];
+        for i in 0..op.value_args() {
+            let a = args
+                .get(i)
+                .copied()
+                .ok_or_else(|| refuse("an atomic operation without its value", e.span))?;
+            let Some(v) = flow_val!(self.lower_expr(a)) else {
+                return Err(refuse("a unit-typed atomic operand", a.span));
+            };
+            vals.push(v);
+        }
+        let name = crate::AtomicIntrinsic {
+            op,
+            width: lay.size as u32,
+            order,
+            failure,
+        }
+        .name();
+        let mut val_tys = vec![types::PTR];
+        val_tys.extend(std::iter::repeat_n(ewty, op.value_args()));
+        let results = if op == AtomicOp::Store {
+            Vec::new()
+        } else {
+            vec![ewty]
+        };
+        let r = self.call_token_intrinsic(name, &vals, val_tys, results);
+        match op {
+            AtomicOp::Store => Ok(Flow::Val(None)),
+            AtomicOp::Cas => {
+                let old = r[0];
+                let ok = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[old, vals[1]],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let Some(sema_ty) = self.expr_sema_ty(e.span) else {
+                    return Err(refuse("a compare-and-swap without a recorded type", e.span));
+                };
+                let Some(wty) = wir_ty(
+                    &mut self.b.module.types,
+                    self.table,
+                    self.sigs,
+                    sema_ty,
+                    e.span,
+                )?
+                else {
+                    return Err(refuse("a compare-and-swap without a pair type", e.span));
+                };
+                Ok(Flow::Val(Some(
+                    self.b
+                        .ins(Opcode::AggMake, &[old, ok], &[wty], Aux::None)
+                        .one(),
+                )))
+            }
+            _ => Ok(Flow::Val(r.first().copied())),
+        }
+    }
+
+    /// kw11 (`[conc.mm.fence]`): `fence(o)` — a call to the order-named
+    /// fence intrinsic on the raw-buffer token, so no raw access moves
+    /// across it in the mid-end; the backends emit the fence itself.
+    fn lower_fence(&mut self, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {
+        let a = d
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .find_map(Arg::value);
+        let o = self.order_mark(a, e.span)?;
+        self.call_token_intrinsic(crate::fence_intrinsic_name(o), &[], Vec::new(), Vec::new());
         Ok(Flow::Val(None))
     }
 
