@@ -1,6 +1,6 @@
 //! check: fail(E1301)
 //! phase: typecheck
-//! conforms: conc.mm.atomic.raw, conc.mm.fence, mem.unsafe.ring
+//! conforms: conc.mm.atomic.raw, conc.mm.fence, mem.unsafe.scope
 //!
 //! kw11 (K5 = A): an atomic operation is a raw-tier access through a
 //! pointer and needs the `unsafe` ring (E1301), as `p[i]` does; a fence
