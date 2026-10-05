@@ -131,6 +131,10 @@ pub const PRELUDE: &[Ambient] = &[
     ty("Pool", Some("mem.shared.handle")),
     ty("Mutex", Some("conc.mm.hb.mutex")),
     ty("channel", Some("conc.chan.type")),
+    // kw11 (`[conc.mm.fence]`, K5 = A): the fence builtin. Its order
+    // operand's `Order` is no prelude name: an order operand is a mark,
+    // not an expression (`[conc.mm.atomic.order]`).
+    fun("fence", Some("conc.mm.fence")),
     // the concurrency handle types (s170, wolf-lang#316; BACKLOG B21
     // rules the spelling): `Scope` is `scope name { … }`'s handle and
     // `Proc[T]` is `spawn proc f(…)`'s, T being the completion value

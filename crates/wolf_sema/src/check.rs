@@ -7521,6 +7521,258 @@ impl<'a> Checker<'a> {
         )
     }
 
+    /// `[conc.mm.atomic.raw.1]`: the pointees an atomic operation may
+    /// name — the eight fixed-width integers, each one indivisible
+    /// machine operation with integer arithmetic. `int`/`uint` (the
+    /// platform's integer, not a width), `byte` (no arithmetic),
+    /// `bool` (T1), floats and aggregates are E1308.
+    fn atomic_pointee(&self, t: TyId) -> bool {
+        self.volatile_pointee(t) && !matches!(self.kind_of(t), TyKind::Prim(Prim::Byte))
+    }
+
+    /// kw11 (`[conc.mm.atomic.order]`): read one order operand. The
+    /// operand is a MARK, not an expression — `Order.<mark>` whatever
+    /// else `Order` names here — so it is never synthesized; anything
+    /// else in the slot is E1309. `None` after a reported error.
+    fn order_operand(&mut self, v: &GreenNode, what: &str) -> Option<wolf_ast::atomic::Order> {
+        use wolf_ast::atomic::{OrderOperand, order_operand};
+        let marks = "`Order.relaxed`, `Order.acquire`, `Order.release`, `Order.acq_rel` \
+                     or `Order.seq_cst`";
+        match order_operand(v, |s| self.text(s)) {
+            OrderOperand::Mark(o) => Some(o),
+            OrderOperand::UnknownMark(sp) => {
+                let got = self.text(sp);
+                self.diags.push(
+                    Diagnostic::error(codes::E1309, sp, format!("`Order` has no mark `{got}`"))
+                        .with_label("not one of the five marks")
+                        .with_note(format!("{what} is one of {marks} ([conc.mm.atomic.order])")),
+                );
+                None
+            }
+            OrderOperand::NotAMark => {
+                self.diags.push(
+                    Diagnostic::error(
+                        codes::E1309,
+                        v.span,
+                        format!("{what} must be written as an `Order` mark at the call"),
+                    )
+                    .with_label("not an `Order.<mark>`")
+                    .with_note(format!(
+                        "the order chooses the instruction, so it is known where the \
+                         operation is compiled: write {marks} here — an order is not a \
+                         value that can come from a variable ([conc.mm.atomic.order])"
+                    )),
+                );
+                None
+            }
+        }
+    }
+
+    /// E1309 for an order the operation does not admit.
+    fn order_refused(&mut self, span: Span, msg: String, note: &str) {
+        self.diags.push(
+            Diagnostic::error(codes::E1309, span, msg)
+                .with_label("not admitted here")
+                .with_note(note.to_string()),
+        );
+    }
+
+    /// kw11 (K5 = A, `[conc.mm.atomic.raw]`): `p.atomic_load(o)`,
+    /// `p.atomic_store(v, o)`, `p.atomic_swap/add/sub/and/or/xor(v, o)`
+    /// (the old value) and `p.atomic_cas(expected, new, success,
+    /// failure) -> (T, bool)`. The value operands check against the
+    /// pointee; the order operands are marks (E1309), each one the
+    /// operation admits (`[conc.mm.atomic.raw.2]`); the pointee is a
+    /// fixed-width integer (E1308). wolf_mem rings the call (E1301).
+    #[allow(clippy::too_many_arguments)]
+    fn atomic_method_call(
+        &mut self,
+        op: wolf_ast::atomic::AtomicOp,
+        base: &GreenNode,
+        recv_ty: TyId,
+        recv_mode: Option<wolf_ast::ParamMode>,
+        member_span: Span,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        use wolf_ast::atomic::{AtomicOp, Order, cas_failure_admitted};
+        let mname = op.method();
+        let TyKind::Ptr(pointee) = self.kind_of(recv_ty) else {
+            unreachable!("atomic_method_call on a non-pointer receiver")
+        };
+        if !self.atomic_pointee(pointee) {
+            let shown = self.show(pointee);
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E1308,
+                    member_span,
+                    format!(
+                        "`{mname}` needs a fixed-width integer pointee, and this pointer's \
+                         is `{shown}`"
+                    ),
+                )
+                .with_label(format!("a `*{shown}` here"))
+                .with_note(
+                    "an atomic operation is one indivisible machine operation on the \
+                     pointee ([conc.mm.atomic.raw.1]): u8, u16, u32, u64, i8, i16, i32 or \
+                     i64 — cast the pointer to the width the shared word is (`p as *u64`)",
+                ),
+            );
+        }
+        let p = |name: &str, ty: TyId| ParamSig {
+            name: name.to_string(),
+            ty,
+            span: member_span,
+            mode: None,
+            view: None,
+            store: false,
+        };
+        let unit = self.lo.table.unit();
+        let bool_ = self.lo.table.prim(Prim::Bool);
+        let mut params = vec![p("self", recv_ty)];
+        let value_names: &[&str] = match op {
+            AtomicOp::Load => &[],
+            AtomicOp::Cas => &["expected", "new"],
+            _ => &["value"],
+        };
+        for n in value_names {
+            params.push(p(n, pointee));
+        }
+        let order_names: &[&str] = if op == AtomicOp::Cas {
+            &["success", "failure"]
+        } else {
+            &["order"]
+        };
+        for n in order_names {
+            params.push(p(n, unit));
+        }
+        let ret = match op {
+            AtomicOp::Store => unit,
+            AtomicOp::Cas => self.lo.table.intern(TyKind::Tuple(vec![pointee, bool_])),
+            _ => pointee,
+        };
+        self.dispatch.push((
+            e.span,
+            Dispatch::Inherent {
+                ty: self.show(recv_ty),
+                method: mname.to_string(),
+            },
+        ));
+        self.calls.push((
+            e.span,
+            CallSig {
+                callee: mname.to_string(),
+                decl_span: Some(member_span),
+                has_self: true,
+                ctor: false,
+                params: params.clone(),
+                c_call: false,
+            },
+        ));
+        self.receiver_mode_law(base, recv_mode, None, mname, member_span);
+        let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
+        let wants = params.len() - 1;
+        if arg_nodes.len() != wants {
+            self.wrong_arg_count(mname, e.span, Some(member_span), wants, arg_nodes.len());
+        }
+        let mut orders: Vec<(Option<Order>, Span)> = Vec::new();
+        for (i, arg) in arg_nodes.iter().enumerate() {
+            let Some(v) = Arg::value(*arg) else { continue };
+            if i < op.value_args() {
+                let exp = Expect {
+                    ty: pointee,
+                    reason: Reason::ArgOfCall {
+                        callee: mname.to_string(),
+                        index: i,
+                    },
+                    because: Some(member_span),
+                };
+                self.check_expr(v, &exp)?;
+            } else if op.order_slots().contains(&i) {
+                let what = if op == AtomicOp::Cas {
+                    if i == 2 {
+                        "a compare-and-swap's success order"
+                    } else {
+                        "a compare-and-swap's failure order"
+                    }
+                } else {
+                    "an atomic operation's order"
+                };
+                let o = self.order_operand(v, what);
+                orders.push((o, v.span));
+            } else {
+                self.synth_expr(v)?;
+            }
+        }
+        // `[conc.mm.atomic.raw.2]`: the orders each operation admits.
+        if let Some(&(Some(o), sp)) = orders.first()
+            && !op.admits(o)
+        {
+            let why = if op == AtomicOp::Load {
+                "a load has no release half: its orders are `Order.relaxed`, \
+                 `Order.acquire` and `Order.seq_cst` ([conc.mm.atomic.raw.2])"
+            } else {
+                "a store has no acquire half: its orders are `Order.relaxed`, \
+                 `Order.release` and `Order.seq_cst` ([conc.mm.atomic.raw.2])"
+            };
+            self.order_refused(
+                sp,
+                format!("`{mname}` does not admit `Order.{}`", o.mark()),
+                why,
+            );
+        }
+        if op == AtomicOp::Cas
+            && let [(Some(succ), _), (Some(fail), fsp)] = orders[..]
+            && !cas_failure_admitted(succ, fail)
+        {
+            let msg = if matches!(fail, Order::Release | Order::AcqRel) {
+                format!(
+                    "a compare-and-swap's failure order cannot be `Order.{}`",
+                    fail.mark()
+                )
+            } else {
+                format!(
+                    "the failure order `Order.{}` is stronger than the success order \
+                     `Order.{}`",
+                    fail.mark(),
+                    succ.mark()
+                )
+            };
+            self.order_refused(
+                fsp,
+                msg,
+                "a failed compare-and-swap is a load, so its order is `Order.relaxed`, \
+                 `Order.acquire` or `Order.seq_cst`, and no stronger than the success \
+                 order's load half ([conc.mm.atomic.raw.2])",
+            );
+        }
+        Ok(self.normalize(ret))
+    }
+
+    /// kw11 (`[conc.mm.fence]`): `fence(o)` — a builtin, unit-typed;
+    /// every order but `relaxed` (E1309). wolf_mem rings every order
+    /// but `seq_cst` (E1301).
+    fn call_fence(&mut self, e: &GreenNode, args: Option<ArgList<'_>>) -> R<TyId> {
+        let unit = self.lo.table.unit();
+        let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
+        if arg_nodes.len() != 1 {
+            self.wrong_arg_count("fence", e.span, None, 1, arg_nodes.len());
+            return Ok(unit);
+        }
+        if let Some(v) = Arg::value(arg_nodes[0])
+            && let Some(o) = self.order_operand(v, "a fence's order")
+            && !wolf_ast::atomic::fence_admits(o)
+        {
+            self.order_refused(
+                v.span,
+                "`fence` does not admit `Order.relaxed`".to_string(),
+                "a relaxed fence orders nothing: a fence is `Order.acquire`, \
+                 `Order.release`, `Order.acq_rel` or `Order.seq_cst` ([conc.mm.fence])",
+            );
+        }
+        Ok(unit)
+    }
+
     /// s22 — the builtin method surface of `*T` ([mem.unsafe.raw],
     /// spec/02 §6). The strict-provenance ops exist so unsafe code can
     /// be written *without* wildcard provenance (RFC 3559's shape):
@@ -7595,11 +7847,17 @@ impl<'a> Checker<'a> {
                     (vec![p("self", recv_ty), p("value", pointee)], unit)
                 }
             }
+            // kw11 (K5 = A, `[conc.mm.atomic.raw]`): the nine atomic
+            // operations, each with its order operand(s).
+            m if wolf_ast::atomic::AtomicOp::from_method(m).is_some() => {
+                let op = wolf_ast::atomic::AtomicOp::from_method(m).expect("matched");
+                return self.atomic_method_call(op, base, recv_ty, recv_mode, member_span, e, args);
+            }
             _ => {
                 return Err(NotYet {
                     construct: "this raw-pointer operation (the surface is \
                                 is_null/addr/with_addr/expose/with_exposed/read_volatile/\
-                                write_volatile)",
+                                write_volatile/atomic_*)",
                     span: e.span,
                 });
             }
@@ -7688,6 +7946,10 @@ impl<'a> Checker<'a> {
                     // one implementation.
                     if let Some((module, item)) = self.named_fn_target(&name) {
                         return self.call_named(&item, module, callee.span, e, d.args());
+                    }
+                    // kw11 (`[conc.mm.fence]`): the fence builtin.
+                    if name == "fence" {
+                        return self.call_fence(e, d.args());
                     }
                     // print/print_raw builtin signature; the stderr
                     // writers type identically (s38 io v0).
@@ -10181,6 +10443,31 @@ impl<'a> Checker<'a> {
                 self.expect_unify(base.span, bt, &exp);
                 return Ok(int_);
             }
+        }
+        // kw11 (`[conc.mm.atomic.order]`): `Order.<mark>` is an order
+        // operand's mark, read by the operation that takes it and
+        // never synthesized there; anywhere else — where `Order` names
+        // nothing in scope — it is E1309 (an `Order` value is not
+        // ruled).
+        if self.type_target(d).is_none()
+            && self.lookup_local("Order").is_none()
+            && wolf_ast::atomic::is_order_path(e, |s| self.text(s))
+        {
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E1309,
+                    e.span,
+                    "an `Order` mark is written only as an atomic operation's or a \
+                     fence's order operand",
+                )
+                .with_label("an `Order` used as a value")
+                .with_note(
+                    "`Order.relaxed` … `Order.seq_cst` choose an instruction where the \
+                     operation is compiled; they are not values to store or pass \
+                     ([conc.mm.atomic.order])",
+                ),
+            );
+            return Ok(self.error_ty());
         }
         // `Type.Member` in value position (s17): enum variant values.
         if let Some((module, tyname)) = self.type_target(d)
