@@ -1,0 +1,836 @@
+// kw11 (`[conc.mm.atomic.raw.3]`, `[conc.mm.fence]`): the disassembly
+// gate's functions, generated (one per row). Every function is an
+// `export fn` (kw02): an unmangled global that `--release` keeps, so
+// `atomic_disasm.rs` finds each by name and reads its instructions.
+// `a_<op>_<T>_<order>` is one atomic operation through the pointer
+// argument; `f_<order>` one fence; `spin_*` the scheduler's two loops
+// (a spin on an acquire load, a test-and-set lock).
+
+export fn a_load_u8_seq_cst(p: *u8, v: u8) -> u8 {
+    // # Safety: the caller passes a live `*u8` aligned to its size.
+    unsafe {
+        p.atomic_load(Order.seq_cst)
+    }
+}
+
+export fn a_store_u8_seq_cst(p: *u8, v: u8) {
+    // # Safety: the caller passes a live `*u8` aligned to its size.
+    unsafe {
+        p.atomic_store(v, Order.seq_cst)
+    }
+}
+
+export fn a_swap_u8_seq_cst(p: *u8, v: u8) -> u8 {
+    // # Safety: the caller passes a live `*u8` aligned to its size.
+    unsafe {
+        p.atomic_swap(v, Order.seq_cst)
+    }
+}
+
+export fn a_add_u8_seq_cst(p: *u8, v: u8) -> u8 {
+    // # Safety: the caller passes a live `*u8` aligned to its size.
+    unsafe {
+        p.atomic_add(v, Order.seq_cst)
+    }
+}
+
+export fn a_sub_u8_seq_cst(p: *u8, v: u8) -> u8 {
+    // # Safety: the caller passes a live `*u8` aligned to its size.
+    unsafe {
+        p.atomic_sub(v, Order.seq_cst)
+    }
+}
+
+export fn a_and_u8_seq_cst(p: *u8, v: u8) -> u8 {
+    // # Safety: the caller passes a live `*u8` aligned to its size.
+    unsafe {
+        p.atomic_and(v, Order.seq_cst)
+    }
+}
+
+export fn a_or_u8_seq_cst(p: *u8, v: u8) -> u8 {
+    // # Safety: the caller passes a live `*u8` aligned to its size.
+    unsafe {
+        p.atomic_or(v, Order.seq_cst)
+    }
+}
+
+export fn a_xor_u8_seq_cst(p: *u8, v: u8) -> u8 {
+    // # Safety: the caller passes a live `*u8` aligned to its size.
+    unsafe {
+        p.atomic_xor(v, Order.seq_cst)
+    }
+}
+
+export fn a_cas_u8_seq_cst_seq_cst(p: *u8, v: u8) -> u8 {
+    // # Safety: the caller passes a live `*u8` aligned to its size.
+    unsafe {
+        let (old, ok) = p.atomic_cas(v, v + 1, Order.seq_cst, Order.seq_cst)
+        old
+    }
+}
+
+export fn a_load_u16_seq_cst(p: *u16, v: u16) -> u16 {
+    // # Safety: the caller passes a live `*u16` aligned to its size.
+    unsafe {
+        p.atomic_load(Order.seq_cst)
+    }
+}
+
+export fn a_store_u16_seq_cst(p: *u16, v: u16) {
+    // # Safety: the caller passes a live `*u16` aligned to its size.
+    unsafe {
+        p.atomic_store(v, Order.seq_cst)
+    }
+}
+
+export fn a_swap_u16_seq_cst(p: *u16, v: u16) -> u16 {
+    // # Safety: the caller passes a live `*u16` aligned to its size.
+    unsafe {
+        p.atomic_swap(v, Order.seq_cst)
+    }
+}
+
+export fn a_add_u16_seq_cst(p: *u16, v: u16) -> u16 {
+    // # Safety: the caller passes a live `*u16` aligned to its size.
+    unsafe {
+        p.atomic_add(v, Order.seq_cst)
+    }
+}
+
+export fn a_sub_u16_seq_cst(p: *u16, v: u16) -> u16 {
+    // # Safety: the caller passes a live `*u16` aligned to its size.
+    unsafe {
+        p.atomic_sub(v, Order.seq_cst)
+    }
+}
+
+export fn a_and_u16_seq_cst(p: *u16, v: u16) -> u16 {
+    // # Safety: the caller passes a live `*u16` aligned to its size.
+    unsafe {
+        p.atomic_and(v, Order.seq_cst)
+    }
+}
+
+export fn a_or_u16_seq_cst(p: *u16, v: u16) -> u16 {
+    // # Safety: the caller passes a live `*u16` aligned to its size.
+    unsafe {
+        p.atomic_or(v, Order.seq_cst)
+    }
+}
+
+export fn a_xor_u16_seq_cst(p: *u16, v: u16) -> u16 {
+    // # Safety: the caller passes a live `*u16` aligned to its size.
+    unsafe {
+        p.atomic_xor(v, Order.seq_cst)
+    }
+}
+
+export fn a_cas_u16_seq_cst_seq_cst(p: *u16, v: u16) -> u16 {
+    // # Safety: the caller passes a live `*u16` aligned to its size.
+    unsafe {
+        let (old, ok) = p.atomic_cas(v, v + 1, Order.seq_cst, Order.seq_cst)
+        old
+    }
+}
+
+export fn a_load_u32_seq_cst(p: *u32, v: u32) -> u32 {
+    // # Safety: the caller passes a live `*u32` aligned to its size.
+    unsafe {
+        p.atomic_load(Order.seq_cst)
+    }
+}
+
+export fn a_store_u32_seq_cst(p: *u32, v: u32) {
+    // # Safety: the caller passes a live `*u32` aligned to its size.
+    unsafe {
+        p.atomic_store(v, Order.seq_cst)
+    }
+}
+
+export fn a_swap_u32_seq_cst(p: *u32, v: u32) -> u32 {
+    // # Safety: the caller passes a live `*u32` aligned to its size.
+    unsafe {
+        p.atomic_swap(v, Order.seq_cst)
+    }
+}
+
+export fn a_add_u32_seq_cst(p: *u32, v: u32) -> u32 {
+    // # Safety: the caller passes a live `*u32` aligned to its size.
+    unsafe {
+        p.atomic_add(v, Order.seq_cst)
+    }
+}
+
+export fn a_sub_u32_seq_cst(p: *u32, v: u32) -> u32 {
+    // # Safety: the caller passes a live `*u32` aligned to its size.
+    unsafe {
+        p.atomic_sub(v, Order.seq_cst)
+    }
+}
+
+export fn a_and_u32_seq_cst(p: *u32, v: u32) -> u32 {
+    // # Safety: the caller passes a live `*u32` aligned to its size.
+    unsafe {
+        p.atomic_and(v, Order.seq_cst)
+    }
+}
+
+export fn a_or_u32_seq_cst(p: *u32, v: u32) -> u32 {
+    // # Safety: the caller passes a live `*u32` aligned to its size.
+    unsafe {
+        p.atomic_or(v, Order.seq_cst)
+    }
+}
+
+export fn a_xor_u32_seq_cst(p: *u32, v: u32) -> u32 {
+    // # Safety: the caller passes a live `*u32` aligned to its size.
+    unsafe {
+        p.atomic_xor(v, Order.seq_cst)
+    }
+}
+
+export fn a_cas_u32_seq_cst_seq_cst(p: *u32, v: u32) -> u32 {
+    // # Safety: the caller passes a live `*u32` aligned to its size.
+    unsafe {
+        let (old, ok) = p.atomic_cas(v, v + 1, Order.seq_cst, Order.seq_cst)
+        old
+    }
+}
+
+export fn a_load_u64_seq_cst(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_load(Order.seq_cst)
+    }
+}
+
+export fn a_store_u64_seq_cst(p: *u64, v: u64) {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_store(v, Order.seq_cst)
+    }
+}
+
+export fn a_swap_u64_seq_cst(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_swap(v, Order.seq_cst)
+    }
+}
+
+export fn a_add_u64_seq_cst(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_add(v, Order.seq_cst)
+    }
+}
+
+export fn a_sub_u64_seq_cst(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_sub(v, Order.seq_cst)
+    }
+}
+
+export fn a_and_u64_seq_cst(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_and(v, Order.seq_cst)
+    }
+}
+
+export fn a_or_u64_seq_cst(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_or(v, Order.seq_cst)
+    }
+}
+
+export fn a_xor_u64_seq_cst(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_xor(v, Order.seq_cst)
+    }
+}
+
+export fn a_cas_u64_seq_cst_seq_cst(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        let (old, ok) = p.atomic_cas(v, v + 1, Order.seq_cst, Order.seq_cst)
+        old
+    }
+}
+
+export fn a_load_i8_seq_cst(p: *i8, v: i8) -> i8 {
+    // # Safety: the caller passes a live `*i8` aligned to its size.
+    unsafe {
+        p.atomic_load(Order.seq_cst)
+    }
+}
+
+export fn a_store_i8_seq_cst(p: *i8, v: i8) {
+    // # Safety: the caller passes a live `*i8` aligned to its size.
+    unsafe {
+        p.atomic_store(v, Order.seq_cst)
+    }
+}
+
+export fn a_swap_i8_seq_cst(p: *i8, v: i8) -> i8 {
+    // # Safety: the caller passes a live `*i8` aligned to its size.
+    unsafe {
+        p.atomic_swap(v, Order.seq_cst)
+    }
+}
+
+export fn a_add_i8_seq_cst(p: *i8, v: i8) -> i8 {
+    // # Safety: the caller passes a live `*i8` aligned to its size.
+    unsafe {
+        p.atomic_add(v, Order.seq_cst)
+    }
+}
+
+export fn a_sub_i8_seq_cst(p: *i8, v: i8) -> i8 {
+    // # Safety: the caller passes a live `*i8` aligned to its size.
+    unsafe {
+        p.atomic_sub(v, Order.seq_cst)
+    }
+}
+
+export fn a_and_i8_seq_cst(p: *i8, v: i8) -> i8 {
+    // # Safety: the caller passes a live `*i8` aligned to its size.
+    unsafe {
+        p.atomic_and(v, Order.seq_cst)
+    }
+}
+
+export fn a_or_i8_seq_cst(p: *i8, v: i8) -> i8 {
+    // # Safety: the caller passes a live `*i8` aligned to its size.
+    unsafe {
+        p.atomic_or(v, Order.seq_cst)
+    }
+}
+
+export fn a_xor_i8_seq_cst(p: *i8, v: i8) -> i8 {
+    // # Safety: the caller passes a live `*i8` aligned to its size.
+    unsafe {
+        p.atomic_xor(v, Order.seq_cst)
+    }
+}
+
+export fn a_cas_i8_seq_cst_seq_cst(p: *i8, v: i8) -> i8 {
+    // # Safety: the caller passes a live `*i8` aligned to its size.
+    unsafe {
+        let (old, ok) = p.atomic_cas(v, v + 1, Order.seq_cst, Order.seq_cst)
+        old
+    }
+}
+
+export fn a_load_i16_seq_cst(p: *i16, v: i16) -> i16 {
+    // # Safety: the caller passes a live `*i16` aligned to its size.
+    unsafe {
+        p.atomic_load(Order.seq_cst)
+    }
+}
+
+export fn a_store_i16_seq_cst(p: *i16, v: i16) {
+    // # Safety: the caller passes a live `*i16` aligned to its size.
+    unsafe {
+        p.atomic_store(v, Order.seq_cst)
+    }
+}
+
+export fn a_swap_i16_seq_cst(p: *i16, v: i16) -> i16 {
+    // # Safety: the caller passes a live `*i16` aligned to its size.
+    unsafe {
+        p.atomic_swap(v, Order.seq_cst)
+    }
+}
+
+export fn a_add_i16_seq_cst(p: *i16, v: i16) -> i16 {
+    // # Safety: the caller passes a live `*i16` aligned to its size.
+    unsafe {
+        p.atomic_add(v, Order.seq_cst)
+    }
+}
+
+export fn a_sub_i16_seq_cst(p: *i16, v: i16) -> i16 {
+    // # Safety: the caller passes a live `*i16` aligned to its size.
+    unsafe {
+        p.atomic_sub(v, Order.seq_cst)
+    }
+}
+
+export fn a_and_i16_seq_cst(p: *i16, v: i16) -> i16 {
+    // # Safety: the caller passes a live `*i16` aligned to its size.
+    unsafe {
+        p.atomic_and(v, Order.seq_cst)
+    }
+}
+
+export fn a_or_i16_seq_cst(p: *i16, v: i16) -> i16 {
+    // # Safety: the caller passes a live `*i16` aligned to its size.
+    unsafe {
+        p.atomic_or(v, Order.seq_cst)
+    }
+}
+
+export fn a_xor_i16_seq_cst(p: *i16, v: i16) -> i16 {
+    // # Safety: the caller passes a live `*i16` aligned to its size.
+    unsafe {
+        p.atomic_xor(v, Order.seq_cst)
+    }
+}
+
+export fn a_cas_i16_seq_cst_seq_cst(p: *i16, v: i16) -> i16 {
+    // # Safety: the caller passes a live `*i16` aligned to its size.
+    unsafe {
+        let (old, ok) = p.atomic_cas(v, v + 1, Order.seq_cst, Order.seq_cst)
+        old
+    }
+}
+
+export fn a_load_i32_seq_cst(p: *i32, v: i32) -> i32 {
+    // # Safety: the caller passes a live `*i32` aligned to its size.
+    unsafe {
+        p.atomic_load(Order.seq_cst)
+    }
+}
+
+export fn a_store_i32_seq_cst(p: *i32, v: i32) {
+    // # Safety: the caller passes a live `*i32` aligned to its size.
+    unsafe {
+        p.atomic_store(v, Order.seq_cst)
+    }
+}
+
+export fn a_swap_i32_seq_cst(p: *i32, v: i32) -> i32 {
+    // # Safety: the caller passes a live `*i32` aligned to its size.
+    unsafe {
+        p.atomic_swap(v, Order.seq_cst)
+    }
+}
+
+export fn a_add_i32_seq_cst(p: *i32, v: i32) -> i32 {
+    // # Safety: the caller passes a live `*i32` aligned to its size.
+    unsafe {
+        p.atomic_add(v, Order.seq_cst)
+    }
+}
+
+export fn a_sub_i32_seq_cst(p: *i32, v: i32) -> i32 {
+    // # Safety: the caller passes a live `*i32` aligned to its size.
+    unsafe {
+        p.atomic_sub(v, Order.seq_cst)
+    }
+}
+
+export fn a_and_i32_seq_cst(p: *i32, v: i32) -> i32 {
+    // # Safety: the caller passes a live `*i32` aligned to its size.
+    unsafe {
+        p.atomic_and(v, Order.seq_cst)
+    }
+}
+
+export fn a_or_i32_seq_cst(p: *i32, v: i32) -> i32 {
+    // # Safety: the caller passes a live `*i32` aligned to its size.
+    unsafe {
+        p.atomic_or(v, Order.seq_cst)
+    }
+}
+
+export fn a_xor_i32_seq_cst(p: *i32, v: i32) -> i32 {
+    // # Safety: the caller passes a live `*i32` aligned to its size.
+    unsafe {
+        p.atomic_xor(v, Order.seq_cst)
+    }
+}
+
+export fn a_cas_i32_seq_cst_seq_cst(p: *i32, v: i32) -> i32 {
+    // # Safety: the caller passes a live `*i32` aligned to its size.
+    unsafe {
+        let (old, ok) = p.atomic_cas(v, v + 1, Order.seq_cst, Order.seq_cst)
+        old
+    }
+}
+
+export fn a_load_i64_seq_cst(p: *i64, v: i64) -> i64 {
+    // # Safety: the caller passes a live `*i64` aligned to its size.
+    unsafe {
+        p.atomic_load(Order.seq_cst)
+    }
+}
+
+export fn a_store_i64_seq_cst(p: *i64, v: i64) {
+    // # Safety: the caller passes a live `*i64` aligned to its size.
+    unsafe {
+        p.atomic_store(v, Order.seq_cst)
+    }
+}
+
+export fn a_swap_i64_seq_cst(p: *i64, v: i64) -> i64 {
+    // # Safety: the caller passes a live `*i64` aligned to its size.
+    unsafe {
+        p.atomic_swap(v, Order.seq_cst)
+    }
+}
+
+export fn a_add_i64_seq_cst(p: *i64, v: i64) -> i64 {
+    // # Safety: the caller passes a live `*i64` aligned to its size.
+    unsafe {
+        p.atomic_add(v, Order.seq_cst)
+    }
+}
+
+export fn a_sub_i64_seq_cst(p: *i64, v: i64) -> i64 {
+    // # Safety: the caller passes a live `*i64` aligned to its size.
+    unsafe {
+        p.atomic_sub(v, Order.seq_cst)
+    }
+}
+
+export fn a_and_i64_seq_cst(p: *i64, v: i64) -> i64 {
+    // # Safety: the caller passes a live `*i64` aligned to its size.
+    unsafe {
+        p.atomic_and(v, Order.seq_cst)
+    }
+}
+
+export fn a_or_i64_seq_cst(p: *i64, v: i64) -> i64 {
+    // # Safety: the caller passes a live `*i64` aligned to its size.
+    unsafe {
+        p.atomic_or(v, Order.seq_cst)
+    }
+}
+
+export fn a_xor_i64_seq_cst(p: *i64, v: i64) -> i64 {
+    // # Safety: the caller passes a live `*i64` aligned to its size.
+    unsafe {
+        p.atomic_xor(v, Order.seq_cst)
+    }
+}
+
+export fn a_cas_i64_seq_cst_seq_cst(p: *i64, v: i64) -> i64 {
+    // # Safety: the caller passes a live `*i64` aligned to its size.
+    unsafe {
+        let (old, ok) = p.atomic_cas(v, v + 1, Order.seq_cst, Order.seq_cst)
+        old
+    }
+}
+
+export fn a_load_u64_relaxed(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_load(Order.relaxed)
+    }
+}
+
+export fn a_load_u64_acquire(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_load(Order.acquire)
+    }
+}
+
+export fn a_store_u64_relaxed(p: *u64, v: u64) {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_store(v, Order.relaxed)
+    }
+}
+
+export fn a_store_u64_release(p: *u64, v: u64) {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_store(v, Order.release)
+    }
+}
+
+export fn a_swap_u64_relaxed(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_swap(v, Order.relaxed)
+    }
+}
+
+export fn a_swap_u64_acquire(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_swap(v, Order.acquire)
+    }
+}
+
+export fn a_swap_u64_release(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_swap(v, Order.release)
+    }
+}
+
+export fn a_swap_u64_acq_rel(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_swap(v, Order.acq_rel)
+    }
+}
+
+export fn a_add_u64_relaxed(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_add(v, Order.relaxed)
+    }
+}
+
+export fn a_add_u64_acquire(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_add(v, Order.acquire)
+    }
+}
+
+export fn a_add_u64_release(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_add(v, Order.release)
+    }
+}
+
+export fn a_add_u64_acq_rel(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_add(v, Order.acq_rel)
+    }
+}
+
+export fn a_sub_u64_relaxed(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_sub(v, Order.relaxed)
+    }
+}
+
+export fn a_sub_u64_acquire(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_sub(v, Order.acquire)
+    }
+}
+
+export fn a_sub_u64_release(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_sub(v, Order.release)
+    }
+}
+
+export fn a_sub_u64_acq_rel(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_sub(v, Order.acq_rel)
+    }
+}
+
+export fn a_and_u64_relaxed(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_and(v, Order.relaxed)
+    }
+}
+
+export fn a_and_u64_acquire(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_and(v, Order.acquire)
+    }
+}
+
+export fn a_and_u64_release(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_and(v, Order.release)
+    }
+}
+
+export fn a_and_u64_acq_rel(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_and(v, Order.acq_rel)
+    }
+}
+
+export fn a_or_u64_relaxed(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_or(v, Order.relaxed)
+    }
+}
+
+export fn a_or_u64_acquire(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_or(v, Order.acquire)
+    }
+}
+
+export fn a_or_u64_release(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_or(v, Order.release)
+    }
+}
+
+export fn a_or_u64_acq_rel(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_or(v, Order.acq_rel)
+    }
+}
+
+export fn a_xor_u64_relaxed(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_xor(v, Order.relaxed)
+    }
+}
+
+export fn a_xor_u64_acquire(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_xor(v, Order.acquire)
+    }
+}
+
+export fn a_xor_u64_release(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_xor(v, Order.release)
+    }
+}
+
+export fn a_xor_u64_acq_rel(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        p.atomic_xor(v, Order.acq_rel)
+    }
+}
+
+export fn a_cas_u64_relaxed_relaxed(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        let (old, ok) = p.atomic_cas(v, v + 1, Order.relaxed, Order.relaxed)
+        old
+    }
+}
+
+export fn a_cas_u64_acquire_relaxed(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        let (old, ok) = p.atomic_cas(v, v + 1, Order.acquire, Order.relaxed)
+        old
+    }
+}
+
+export fn a_cas_u64_acquire_acquire(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        let (old, ok) = p.atomic_cas(v, v + 1, Order.acquire, Order.acquire)
+        old
+    }
+}
+
+export fn a_cas_u64_release_relaxed(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        let (old, ok) = p.atomic_cas(v, v + 1, Order.release, Order.relaxed)
+        old
+    }
+}
+
+export fn a_cas_u64_acq_rel_relaxed(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        let (old, ok) = p.atomic_cas(v, v + 1, Order.acq_rel, Order.relaxed)
+        old
+    }
+}
+
+export fn a_cas_u64_acq_rel_acquire(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        let (old, ok) = p.atomic_cas(v, v + 1, Order.acq_rel, Order.acquire)
+        old
+    }
+}
+
+export fn a_cas_u64_seq_cst_relaxed(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        let (old, ok) = p.atomic_cas(v, v + 1, Order.seq_cst, Order.relaxed)
+        old
+    }
+}
+
+export fn a_cas_u64_seq_cst_acquire(p: *u64, v: u64) -> u64 {
+    // # Safety: the caller passes a live `*u64` aligned to its size.
+    unsafe {
+        let (old, ok) = p.atomic_cas(v, v + 1, Order.seq_cst, Order.acquire)
+        old
+    }
+}
+
+export fn f_acquire() {
+    // # Safety: a fence touches no memory.
+    unsafe {
+        fence(Order.acquire)
+    }
+}
+
+export fn f_release() {
+    // # Safety: a fence touches no memory.
+    unsafe {
+        fence(Order.release)
+    }
+}
+
+export fn f_acq_rel() {
+    // # Safety: a fence touches no memory.
+    unsafe {
+        fence(Order.acq_rel)
+    }
+}
+
+export fn f_seq_cst() {
+    // # Safety: a fence touches no memory.
+    unsafe {
+        fence(Order.seq_cst)
+    }
+}
+
+export fn spin_acquire(p: *u32) -> u32 {
+    // # Safety: the caller passes a live, aligned `*u32` another task
+    // sets.
+    unsafe {
+        while p.atomic_load(Order.acquire) == 0 {
+        }
+        p.atomic_load(Order.relaxed)
+    }
+}
+
+export fn spin_lock(p: *u32) {
+    // # Safety: the caller passes a live, aligned lock word.
+    unsafe {
+        loop {
+            let (old, ok) = p.atomic_cas(0, 1, Order.acquire, Order.relaxed)
+            if ok {
+                break
+            }
+        }
+    }
+}
+
+export fn spin_unlock(p: *u32) {
+    // # Safety: as spin_lock; the caller holds the lock.
+    unsafe {
+        p.atomic_store(0, Order.release)
+    }
+}

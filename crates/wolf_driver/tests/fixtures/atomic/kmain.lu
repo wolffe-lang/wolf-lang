@@ -1,0 +1,5 @@
+// kw11: the freestanding entry beside atom.lu, built with
+// `--target x86_64-unknown-none` (kw04).
+export fn kmain() -> i64 {
+    0
+}

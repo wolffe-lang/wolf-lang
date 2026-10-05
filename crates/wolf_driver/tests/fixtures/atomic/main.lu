@@ -1,0 +1,5 @@
+// kw11: the hosted entry beside atom.lu (D32: one directory, one
+// module), so `--emit=obj` on the hosted target has its `main`.
+fn main() -> int {
+    0
+}
