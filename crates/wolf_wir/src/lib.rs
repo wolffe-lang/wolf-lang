@@ -138,6 +138,117 @@ pub fn volatile_intrinsic(name: &str) -> Option<(bool, u32)> {
     Some((store, width))
 }
 
+/// kw11 (`[conc.mm.atomic.raw]`, `[conc.mm.fence]`): the atomic and
+/// fence intrinsics, in kw07's shape. An atomic operation is a
+/// token-threaded `call` to `wolf.atomic.<op>.i<bits>.<order>` (a CAS
+/// carries its failure order too: `….<success>.<failure>`), a fence a
+/// call to `wolf.fence.<order>`; every mid-end pass treats the call as
+/// the opaque effect it is, and the backends expand it in place to the
+/// instruction(s) — nothing is imported. The order travels in the name
+/// because it is a compile-time mark (`[conc.mm.atomic.order]`).
+pub const ATOMIC_PREFIX: &str = "wolf.atomic.";
+pub const FENCE_PREFIX: &str = "wolf.fence.";
+
+pub use wolf_ast::atomic::{AtomicOp, Order};
+
+/// One decoded atomic intrinsic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AtomicIntrinsic {
+    pub op: AtomicOp,
+    /// The access width in bytes (1, 2, 4, 8).
+    pub width: u32,
+    pub order: Order,
+    /// A CAS's failure order; `None` for every other operation.
+    pub failure: Option<Order>,
+}
+
+impl AtomicIntrinsic {
+    /// The intrinsic's callee name.
+    pub fn name(&self) -> String {
+        let mut n = format!(
+            "{ATOMIC_PREFIX}{}.i{}.{}",
+            self.op.short(),
+            self.width * 8,
+            self.order.mark()
+        );
+        if let Some(f) = self.failure {
+            n.push('.');
+            n.push_str(f.mark());
+        }
+        n
+    }
+}
+
+/// Decode an atomic intrinsic's callee name; `None` for any other.
+pub fn atomic_intrinsic(name: &str) -> Option<AtomicIntrinsic> {
+    let rest = name.strip_prefix(ATOMIC_PREFIX)?;
+    let mut parts = rest.split('.');
+    let op = AtomicOp::from_short(parts.next()?)?;
+    let width = match parts.next()? {
+        "i8" => 1,
+        "i16" => 2,
+        "i32" => 4,
+        "i64" => 8,
+        _ => return None,
+    };
+    let order = Order::from_mark(parts.next()?)?;
+    let failure = match parts.next() {
+        Some(f) => Some(Order::from_mark(f)?),
+        None => None,
+    };
+    if parts.next().is_some() || failure.is_some() != (op == AtomicOp::Cas) {
+        return None;
+    }
+    Some(AtomicIntrinsic {
+        op,
+        width,
+        order,
+        failure,
+    })
+}
+
+/// The fence intrinsic's callee name for `o`.
+pub fn fence_intrinsic_name(o: Order) -> String {
+    format!("{FENCE_PREFIX}{}", o.mark())
+}
+
+/// Decode a fence intrinsic's callee name; `None` for any other.
+pub fn fence_intrinsic(name: &str) -> Option<Order> {
+    Order::from_mark(name.strip_prefix(FENCE_PREFIX)?)
+}
+
+#[cfg(test)]
+mod atomic_intrinsic_tests {
+    use super::*;
+
+    #[test]
+    fn every_intrinsic_round_trips() {
+        for op in AtomicOp::ALL {
+            for width in [1, 2, 4, 8] {
+                for order in Order::ALL {
+                    let failure = (op == AtomicOp::Cas).then_some(Order::Relaxed);
+                    let i = AtomicIntrinsic {
+                        op,
+                        width,
+                        order,
+                        failure,
+                    };
+                    assert_eq!(atomic_intrinsic(&i.name()), Some(i), "{}", i.name());
+                }
+            }
+        }
+        for o in Order::ALL {
+            assert_eq!(fence_intrinsic(&fence_intrinsic_name(o)), Some(o));
+        }
+        assert_eq!(atomic_intrinsic("wolf.atomic.cas.i64.seq_cst"), None);
+        assert_eq!(
+            atomic_intrinsic("wolf.atomic.add.i64.seq_cst.relaxed"),
+            None
+        );
+        assert_eq!(atomic_intrinsic("wolf.volatile.load.i8"), None);
+    }
+}
+
 pub use ct::{CtSink, CtViolation, check_module as ct_check_module};
 pub use facts::{DerefSize, FactData, FactId, FactKind, Just, Theorem};
 pub use hash::sha256_hex;
