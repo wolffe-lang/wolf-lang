@@ -782,6 +782,24 @@ fn e1301_volatile_outside_unsafe() {
 }
 
 #[test]
+fn e1301_atomic_outside_unsafe() {
+    // kw11 (`[conc.mm.atomic.raw]`, `[conc.mm.fence]`): an atomic
+    // operation is an access through the pointer, ring-gated like `p[0]`;
+    // a fence is ring-gated for every order but `seq_cst`.
+    snap(
+        "e1301_atomic_outside",
+        "fn grab(p: *u32) -> u32 {\n    \
+             p.atomic_swap(1, Order.acquire)\n\
+         }\n\
+         fn publish() {\n    \
+             fence(Order.seq_cst)\n    \
+             fence(Order.release)\n\
+         }\n\
+         fn main() -> !int { 0 }\n",
+    );
+}
+
+#[test]
 fn e1301_module_var_outside_unsafe() {
     // kw09 (`[mem.static.2]`, K11 = A): every read and write of a module
     // `var` is raw-tier — one E1301 per site; a `let` and a `const` read

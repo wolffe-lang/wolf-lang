@@ -1,0 +1,23 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1301]: the atomic operation `atomic_swap` needs an `unsafe` block
+ --> mem:///main.lu:2:5
+  |
+2 |     p.atomic_swap(1, Order.acquire)
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ raw-tier operation in safe code
+  |
+  = note: raw pointers are inert data anywhere — only the tier's operations need the ring. Wrap
+    this in `unsafe { }` and state the invariant in a `# Safety:` comment; the rules inside
+    are simpler than the safe tier's, not stricter.
+
+error[E1301]: a fence weaker than `Order.seq_cst` needs an `unsafe` block
+ --> mem:///main.lu:6:5
+  |
+6 |     fence(Order.release)
+  |     ^^^^^^^^^^^^^^^^^^^^ raw-tier operation in safe code
+  |
+  = note: raw pointers are inert data anywhere — only the tier's operations need the ring. Wrap
+    this in `unsafe { }` and state the invariant in a `# Safety:` comment; the rules inside
+    are simpler than the safe tier's, not stricter.
