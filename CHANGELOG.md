@@ -34,7 +34,7 @@
   `fence(Order.seq_cst)`. `fence` joins the prelude.
 - lupin 0.1.46 answers `unsupported`; its half is wolf-interp#194,
   pinned by version in `atomic_lanes.rs`. The safe `std.sync`
-  `Atomic[T]` is a later layer. Anchors 587 → 594.
+  `Atomic[T]` is a later layer. Anchors 587 → 595.
 
 ### A kernel can allocate: the allocator hook (kw12, K8(b) = B)
 
