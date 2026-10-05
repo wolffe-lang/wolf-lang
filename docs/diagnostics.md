@@ -1980,7 +1980,9 @@ and passing them is free in safe code (creation is not a use). What
 the safe tier cannot contain are the raw tier's *operations* — reading
 or writing through a pointer, pointer casts, provenance operations
 (`addr`, `with_addr`, `expose`, `with_exposed`), volatile reads and
-writes (`read_volatile`, `write_volatile`), `assume noalias`,
+writes (`read_volatile`, `write_volatile`), atomic operations
+(`atomic_load`, `atomic_cas`, …) and every `fence` but
+`fence(Order.seq_cst)`, `assume noalias`,
 `borrow … from …`, calls into imported C, and every read or write of a
 module-level `var` ([mem.static.2]: it is shared by every task, and the
 safe tier's data-race freedom does not reach it). Each of those can reach
@@ -1990,7 +1992,7 @@ proof obligation. Wrap the operation in an `unsafe` block — the rules
 inside are *simpler* than the safe tier's, not stricter — and state
 the invariant the block maintains in a `# Safety:` comment.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__extern_c_outside_unsafe.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__static_var_outside_unsafe.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__unsafe_raw_outside.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__volatile_outside_unsafe.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1301_module_var_outside.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1301_prov_outside.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1301_raw_outside.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1301_volatile_outside.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__atomic_outside_unsafe.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__extern_c_outside_unsafe.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__static_var_outside_unsafe.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__unsafe_raw_outside.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__volatile_outside_unsafe.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1301_atomic_outside.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1301_module_var_outside.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1301_prov_outside.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1301_raw_outside.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1301_volatile_outside.snap
 
 ## E1302 — a raw pointer type cannot cross this boundary
 
@@ -2079,6 +2081,42 @@ fixed-width type the hardware defines (`p as *u32`), and convert the
 value after the read.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__volatile_pointee_bool.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__volatile_pointee_int.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e1307_volatile_pointee.snap
+
+## E1308 — an atomic operation needs a fixed-width integer pointee
+
+`p.atomic_load(o)`, `p.atomic_store(v, o)`, `p.atomic_swap(v, o)`, the
+read-modify-writes `atomic_add`/`sub`/`and`/`or`/`xor` and
+`p.atomic_cas(expected, new, success, failure)` are each one indivisible
+machine operation on the pointee — a `lock`-prefixed instruction on
+x86-64, an exclusive pair or an LSE instruction on aarch64. That has a
+meaning only for a pointee the hardware can update in one step and that
+has integer arithmetic: `u8`, `u16`, `u32`, `u64`, `i8`, `i16`, `i32` or
+`i64`. `int` and `uint` name the platform's integer rather than a width;
+`byte` has no arithmetic; a `bool` has a restricted value set; a float
+or an aggregate is not one integer operation on every target. Point the
+`*T` at the fixed-width integer the shared word is (`p as *u64`).
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__atomic_pointee.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e1308_atomic_pointee.snap
+
+## E1309 — this order is not one the atomic operation admits
+
+An atomic operation's order operand is one of the five marks of the
+builtin enum `Order`, written at the call: `Order.relaxed`,
+`Order.acquire`, `Order.release`, `Order.acq_rel` or `Order.seq_cst`.
+It is not an expression — the order must be known where the operation
+is compiled, because it chooses the instruction — so a variable, a
+call or `Order` used as a value anywhere else is refused. Each
+operation admits the orders that mean something for it: a load has no
+release half (`release`, `acq_rel` are refused), a store no acquire half
+(`acquire`, `acq_rel`), and a compare-and-swap's failure order is a
+load's order that is no stronger than its success order (`relaxed`
+always; `acquire` under an acquiring success; `seq_cst` only under a
+`seq_cst` success). `fence(Order.relaxed)` orders nothing and is
+refused. Pick the order the protocol needs; `Order.seq_cst` is always
+admitted and is what the compiled native tier and both checking
+machines run every order as.
+
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__conc__atomic_order_misuse.snap, crates/wolf_sema/tests/snapshots/method_diagnostics__e1309_order_not_admitted.snap
 
 ## E1401 — undefined behavior detected by the checked-build UB machine
 
