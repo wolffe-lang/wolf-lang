@@ -46,7 +46,9 @@ pub extern "C" fn wolf_alloc(size: i64, align: i64) -> *mut u8 {
     // SAFETY: non-zero size.
     let p = unsafe { std::alloc::alloc(layout) };
     assert!(!p.is_null());
-    LIVE.lock().unwrap().insert(p as usize, (size, align));
+    LIVE.lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .insert(p as usize, (size, align));
     p
 }
 
@@ -59,13 +61,19 @@ pub extern "C" fn wolf_alloc(size: i64, align: i64) -> *mut u8 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wolf_free(p: *mut u8, size: i64, align: i64) {
     assert!(!p.is_null(), "wolf_free(null)");
-    let got = LIVE.lock().unwrap().remove(&(p as usize));
+    let got = LIVE
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .remove(&(p as usize));
     assert_eq!(
         got,
         Some((size, align)),
         "wolf_free({p:?}, {size}, {align}) must name a live block by its own size and align"
     );
-    FREES.lock().unwrap().push((p as usize, size, align));
+    FREES
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .push((p as usize, size, align));
     let layout = Layout::from_size_align(size as usize, align as usize).unwrap();
     // SAFETY: allocated above with this layout.
     unsafe { std::alloc::dealloc(p, layout) };
@@ -79,7 +87,7 @@ pub extern "C" fn wolf_trap(kind: i32, _file: *const u8, _len: i64, _line: i64, 
 }
 
 fn live() -> BTreeMap<usize, (i64, i64)> {
-    LIVE.lock().unwrap().clone()
+    LIVE.lock().unwrap_or_else(|p| p.into_inner()).clone()
 }
 
 /// Build a str by interpolation: `pieces` appended in order.
@@ -94,7 +102,7 @@ fn interpolate(f: impl FnOnce(i64)) -> Vec<u8> {
 
 #[test]
 fn a_region_hands_every_block_back_by_its_own_size() {
-    let _g = SERIAL.lock().unwrap();
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     let before = live();
     let live_before = __wolf_rt_live_region_bytes();
     let r = __wolf_rt_region_new();
@@ -130,7 +138,7 @@ fn a_region_hands_every_block_back_by_its_own_size() {
 
 #[test]
 fn the_ledger_and_the_cap_are_the_hosted_ones() {
-    let _g = SERIAL.lock().unwrap();
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     let r = __wolf_rt_region_new();
     unsafe {
         __wolf_rt_region_set_cap(r, 96);
@@ -155,8 +163,8 @@ fn the_ledger_and_the_cap_are_the_hosted_ones() {
 
 #[test]
 fn root_allocations_are_never_freed_and_a_finish_frees_its_buffer() {
-    let _g = SERIAL.lock().unwrap();
-    FREES.lock().unwrap().clear();
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
+    FREES.lock().unwrap_or_else(|p| p.into_inner()).clear();
     let before = live();
     let s = interpolate(|h| unsafe {
         // 50 bytes fit the first 64-byte buffer; 150 more outgrow it.
@@ -177,14 +185,14 @@ fn root_allocations_are_never_freed_and_a_finish_frees_its_buffer() {
         .collect();
     assert_eq!(new.len(), 1, "one live block, the str's root copy: {new:?}");
     assert_eq!(*new[0].1, (208, 16));
-    let frees = FREES.lock().unwrap().clone();
+    let frees = FREES.lock().unwrap_or_else(|p| p.into_inner()).clone();
     let sizes: Vec<i64> = frees.iter().map(|f| f.1).collect();
     assert_eq!(sizes, vec![64, 208, 32], "old buffer, final buffer, header");
 }
 
 #[test]
 fn holes_render_as_the_hosted_runtime_renders_them() {
-    let _g = SERIAL.lock().unwrap();
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     // Packed specs, `wolf_rt::io::unpack`'s layout.
     let width = |w: i64| (1 << 12) | (w << 16);
     let right = 3 << 8;
@@ -264,7 +272,7 @@ fn holes_render_as_the_hosted_runtime_renders_them() {
 
 #[test]
 fn lists_and_maps_are_the_hosted_families() {
-    let _g = SERIAL.lock().unwrap();
+    let _g = SERIAL.lock().unwrap_or_else(|p| p.into_inner());
     unsafe {
         let xs = __wolf_rt_list_new(8);
         for v in [3i64, 1, 4] {
