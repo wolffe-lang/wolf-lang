@@ -40,18 +40,6 @@ use std::sync::OnceLock;
 
 use wolf_backend::target::{ALLOC_HOOKS, FREESTANDING as TARGET, MEM_HOOKS, NONE_RT_SYMBOLS};
 
-/// The report's lines, as the hosted runtime prints them.
-const REPORT: &str = "list n=9 sum=385 last=100\n\
-specs [     385] [385   ] [00000385] [-00385] [+385] [181] [a87] [A87] [110000001] [601] [**ab***] [  true] [é] [ é]\n\
-map wolf=3 pax=2 zzz=99 n=2\n\
-closure 42\n\
-region total=499500 tag-len=9\n";
-
-/// What only the kernel prints after the report.
-const KERNEL_TAIL: &str = "in scratch 5000\n\
-scratch returned every block=true\n\
-hooks frees>0=true frees<allocs=true bad=0\n";
-
 fn wolf() -> &'static str {
     env!("CARGO_BIN_EXE_wolf")
 }
@@ -374,6 +362,18 @@ fn the_runtime_archive_leaves_only_the_hooks_undefined() {
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 mod linux_x86_64 {
     use super::*;
+
+    /// The report's lines, as the hosted runtime prints them.
+    const REPORT: &str = "list n=9 sum=385 last=100\n\
+specs [     385] [385   ] [00000385] [-00385] [+385] [181] [a87] [A87] [110000001] [601] [**ab***] [  true] [é] [ é]\n\
+map wolf=3 pax=2 zzz=99 n=2\n\
+closure 42\n\
+region total=499500 tag-len=9\n";
+
+    /// What only the kernel prints after the report.
+    const KERNEL_TAIL: &str = "in scratch 5000\n\
+scratch returned every block=true\n\
+hooks frees>0=true frees<allocs=true bad=0\n";
 
     fn tool(name: &str, args: &[&str]) -> Output {
         Command::new(name)
