@@ -970,6 +970,11 @@ const SWEEP_1000: &[(&str, usize)] = &[
     // one more: `pub struct Ring {` with `{` and `pub` swapped reads the
     // field lines as a stray block's broken statements.
     ("memory/versioned_loop_cross_module/ring/ring.lu", 83),
+    // wolf-lang#589, the nightly's budget-300 red since kw09 added the
+    // file: the `1` of `let A: int = B + 1` replaced with `.` let the
+    // dangling `.` take the next line's `let` as a member name and
+    // swallow `let B: int = A * 2` whole.
+    ("memory/static_init_cycle.lu", 219),
     ("net/inherit_listener.lu", 361),
     ("rows/negative/error_alias_cycle.lu", 976),
     ("typecheck/cast_set.lu", 344),
