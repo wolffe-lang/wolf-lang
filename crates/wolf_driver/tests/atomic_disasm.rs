@@ -237,7 +237,11 @@ fn addresses(obj: &Path) -> Vec<(String, u64)> {
         .filter(|s| !s.is_undefined())
         .filter_map(|s| {
             let n = s.name().ok()?;
-            let n = if macho { n.strip_prefix('_').unwrap_or(n) } else { n };
+            let n = if macho {
+                n.strip_prefix('_').unwrap_or(n)
+            } else {
+                n
+            };
             Some((n.to_string(), s.address()))
         })
         .collect()
