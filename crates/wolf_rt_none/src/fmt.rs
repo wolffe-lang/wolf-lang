@@ -85,7 +85,7 @@ fn digits(mut mag: u64, base: u64, upper: bool, buf: &mut [u8; 72]) -> usize {
     let table: &[u8; 16] = if upper {
         b"0123456789ABCDEF"
     } else {
-        b"0123456789ABCDEF"
+        b"0123456789abcdef"
     };
     let mut i = buf.len();
     loop {
