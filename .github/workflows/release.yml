@@ -98,10 +98,16 @@ jobs:
         # 22.04 LTS at all. The `run-gate` job below measures the floor.
         os: [ubuntu-22.04, ubuntu-22.04-arm, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    # kw12: every archive ships libwolf_rt_none.a (the freestanding
+    # runtime), so a toolchain that cannot build it fails the release.
+    env:
+      WOLF_RT_NONE_REQUIRE: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: the freestanding runtime's target (kw12, libwolf_rt_none.a)
+        run: rustup target add x86_64-unknown-none
       - name: build archive
         run: cargo xtask dist
       # By release id, never by tag (#226). `--clobber` by hand: a same-named

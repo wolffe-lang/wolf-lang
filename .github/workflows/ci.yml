@@ -41,12 +41,18 @@ jobs:
       # QEMU (freestanding_interrupt.rs). QEMU is installed below, so a
       # missing one here is a broken job, never a quiet skip.
       WOLF_INTERRUPT_REQUIRE_QEMU: "1"
+      # kw12 ([abi.target.none.alloc]): the freestanding runtime archive is
+      # built for x86_64-unknown-none (added below), so a skipped archive
+      # here is a broken job, never a quiet skip.
+      WOLF_RT_NONE_REQUIRE: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: the freestanding runtime's target (kw12, libwolf_rt_none.a)
+        run: rustup target add x86_64-unknown-none
       - name: install native toolchain (gdb for debug-check, lld for the link
           probe, clang for the s41 release tier — system LLVM is a NAMED
           toolchain requirement per D33, never a build script; strace is the
@@ -146,6 +152,8 @@ jobs:
     name: native gauntlet (macOS aarch64, ${{ matrix.shard }})
     runs-on: macos-latest
     timeout-minutes: ${{ matrix.timeout }}
+    env:
+      WOLF_RT_NONE_REQUIRE: "1"
     strategy:
       fail-fast: false
       matrix:
@@ -166,6 +174,8 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: the freestanding runtime's target (kw12, libwolf_rt_none.a)
+        run: rustup target add x86_64-unknown-none
       - name: clang version floor (the release tier requires >= 15)
         run: clang --version
       - name: the shard key, for the whole gauntlet
@@ -198,10 +208,14 @@ jobs:
         os: [macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      WOLF_RT_NONE_REQUIRE: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: the freestanding runtime's target (kw12, libwolf_rt_none.a)
+        run: rustup target add x86_64-unknown-none
       - run: cargo build --workspace
       - run: cargo test --workspace
       # s60a: the windows native rung. The clif gate is open on this
