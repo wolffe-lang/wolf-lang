@@ -84,6 +84,10 @@ fn main() -> ExitCode {
         Some("fuzz-smoke") => fuzz_smoke(),
         Some("fmt-fuzz") => fmt_fuzz(&args[1..]),
         Some("dist") => dist(),
+        Some("rt-none") => match rt_none() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(()) => ExitCode::FAILURE,
+        },
         Some("release-notes") => release_notes_cmd(&args[1..]),
         Some("spec-extract") => spec_extract(args.iter().any(|a| a == "--check")),
         Some("conformance") => conformance_cmd(&args[1..]),
@@ -153,6 +157,11 @@ const CI_STEPS: &[(&str, &[&str])] = &[
             "warnings",
         ],
     ),
+    // kw12: the freestanding runtime archive, before the tests that link
+    // it (`freestanding_alloc`). A toolchain without the
+    // x86_64-unknown-none target skips LOUDLY, unless
+    // WOLF_RT_NONE_REQUIRE=1 (every CI job sets it).
+    ("rt-none", &["xtask", "rt-none"]),
     ("test", &["test", "--workspace"]),
     // `fuzz/` is deliberately NOT a workspace member (it needs
     // nightly to *build*), so `--workspace` never type-checks it and
@@ -206,7 +215,7 @@ const CI_STEPS: &[(&str, &[&str])] = &[
 const CI_SHARDS: &[(&str, &[&str])] = &[
     (
         "build",
-        &["fmt", "clippy", "test", "fuzz-check", "deps-check"],
+        &["fmt", "clippy", "rt-none", "test", "fuzz-check", "deps-check"],
     ),
     (
         "gates",
@@ -4903,6 +4912,75 @@ fn prune_dist(dir: &Path, host: &str) {
     }
 }
 
+/// The freestanding target the `no_std` runtime is built for (kw12).
+const NONE_TARGET: &str = "x86_64-unknown-none";
+
+/// `cargo xtask rt-none` (kw12, `[abi.target.none.alloc]`): build the
+/// freestanding runtime archive, `libwolf_rt_none.a` — crate
+/// `wolf_rt_none` as a staticlib for x86_64-unknown-none, release — at
+/// `target/x86_64-unknown-none/release/`, where the driver finds it from
+/// a checkout's `wolf`. `Ok(Some(path))` when built; `Ok(None)` when the
+/// toolchain has no x86_64-unknown-none target (`rustup target add
+/// x86_64-unknown-none`) — a LOUD skip, and a failure under
+/// `WOLF_RT_NONE_REQUIRE=1`. Whether the target exists is probed
+/// separately (a one-line `no_std` crate), so a compile error in the
+/// runtime is never mistaken for an absent target.
+fn rt_none() -> Result<Option<PathBuf>, ()> {
+    let require = std::env::var("WOLF_RT_NONE_REQUIRE").as_deref() == Ok("1");
+    // The target's rustflags (a lane may point `--sysroot` at a private
+    // copy of the target's rust-std) apply to the probe as to the build.
+    let flags = std::env::var("CARGO_TARGET_X86_64_UNKNOWN_NONE_RUSTFLAGS").unwrap_or_default();
+    let tdir = std::env::var_os("CARGO_TARGET_DIR")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("target"));
+    let probe_dir = tdir.join("rt-none-probe");
+    let _ = std::fs::create_dir_all(&probe_dir);
+    let probe_src = probe_dir.join("probe.rs");
+    std::fs::write(&probe_src, "#![no_std]\npub fn probe() {}\n").expect("write probe");
+    let rustc = std::env::var("RUSTC").unwrap_or_else(|_| "rustc".to_string());
+    let probe = Command::new(rustc)
+        .args(flags.split_whitespace())
+        .args(["--edition", "2024", "--crate-type", "lib", "--emit", "metadata"])
+        .args(["--target", NONE_TARGET, "--out-dir"])
+        .arg(&probe_dir)
+        .arg(&probe_src)
+        .output();
+    let target_ok = probe.as_ref().map(|o| o.status.success()).unwrap_or(false);
+    if !target_ok {
+        let why = probe
+            .as_ref()
+            .map(|o| String::from_utf8_lossy(&o.stderr).lines().next().unwrap_or("").to_string())
+            .unwrap_or_else(|e| e.to_string());
+        if require {
+            eprintln!(
+                "rt-none: FAILED — WOLF_RT_NONE_REQUIRE=1 and this toolchain cannot build \
+                 `no_std` for {NONE_TARGET} ({why}); `rustup target add {NONE_TARGET}`"
+            );
+            return Err(());
+        }
+        eprintln!(
+            "rt-none: SKIP — this toolchain has no {NONE_TARGET} target ({why}); \
+             `rustup target add {NONE_TARGET}` builds libwolf_rt_none.a, and the \
+             freestanding allocation witnesses skip loudly without it"
+        );
+        return Ok(None);
+    }
+    let ok = Command::new("cargo")
+        .args(["rustc", "--quiet", "-p", "wolf_rt_none", "--release"])
+        .args(["--target", NONE_TARGET, "--crate-type", "staticlib"])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    let lib = tdir.join(NONE_TARGET).join("release/libwolf_rt_none.a");
+    if !ok || !lib.is_file() {
+        eprintln!("rt-none: FAILED — the {NONE_TARGET} build of wolf_rt_none did not produce {}", lib.display());
+        return Err(());
+    }
+    eprintln!("rt-none: {}", lib.display());
+    Ok(Some(lib))
+}
+
 fn dist() -> ExitCode {
     let host = rustc_host_triple();
     prune_dist(Path::new("target/dist"), &host);
@@ -4976,6 +5054,18 @@ fn dist() -> ExitCode {
         return ExitCode::FAILURE;
     }
     std::fs::copy(&worker, stage.join(worker_exe)).expect("stage importer worker");
+    // kw12: the freestanding runtime (`[abi.target.none.alloc]`) — the
+    // same ELF archive on every host, beside `wolf`, where the driver
+    // looks for it when a freestanding object allocates. Staged when the
+    // toolchain can build it; every CI and release job sets
+    // WOLF_RT_NONE_REQUIRE=1, so a shipped archive always carries it.
+    match rt_none() {
+        Ok(Some(lib)) => {
+            std::fs::copy(&lib, stage.join("libwolf_rt_none.a")).expect("stage rt-none");
+        }
+        Ok(None) => eprintln!("dist: SKIP libwolf_rt_none.a (no {NONE_TARGET} target)"),
+        Err(()) => return ExitCode::FAILURE,
+    }
     // Flatten: the archive is a flat directory, so a nested source path
     // stages under its file name (copying to stage/crates/... panicked
     // on the missing parents — dist only runs on tags, so nothing caught
@@ -5404,6 +5494,10 @@ fn deps_check() -> ExitCode {
         ),
         // wolf_rt links into user programs: dependency-thin by law (D15).
         ("wolf_rt", Some(&["wolf_span"][..])),
+        // kw12: the freestanding runtime links into kernels — no
+        // workspace dependency at all (it shares wolf_rt's list/map
+        // SOURCE by `#[path]`, never the crate).
+        ("wolf_rt_none", Some(&[][..])),
         ("wolf_driver", None), // top of the graph: unrestricted
         ("xtask", Some(&[][..])),
     ]);
