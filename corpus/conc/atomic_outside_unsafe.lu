@@ -1,5 +1,5 @@
 //! check: fail(E1301)
-//! phase: mem
+//! phase: typecheck
 //! conforms: conc.mm.atomic.raw, conc.mm.fence, mem.unsafe.ring
 //!
 //! kw11 (K5 = A): an atomic operation is a raw-tier access through a

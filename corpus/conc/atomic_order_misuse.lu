@@ -1,5 +1,5 @@
 //! check: fail(E1309)
-//! phase: typecheck
+//! phase: resolve
 //! conforms: conc.mm.atomic.order, conc.mm.atomic.raw.2, conc.mm.fence
 //!
 //! kw11 (K5 = A): the orders an operation does not admit

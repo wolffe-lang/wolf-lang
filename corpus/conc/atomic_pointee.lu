@@ -1,5 +1,5 @@
 //! check: fail(E1308)
-//! phase: typecheck
+//! phase: resolve
 //! conforms: conc.mm.atomic.raw.1
 //!
 //! kw11 (K5 = A): an atomic operation needs a fixed-width integer
