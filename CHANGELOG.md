@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### A kernel can allocate: the allocator hook (kw12, K8(b) = B)
+
+- **On `x86_64-unknown-none`, `List`, `Map`, string interpolation, a
+  capturing closure and `region` now compile**, on both tiers, with
+  their hosted meaning (`[abi.target.none.alloc]`). They were refused
+  by name ("`List` allocates, and target x86_64-unknown-none has no
+  allocator").
+- **The program supplies the allocator**: `wolf_alloc(size, align) ->
+  *u8` and `wolf_free(p, size, align)`, in wolf or assembly
+  (`[abi.target.none.hooks]` (d)). The runtime always asks for 16-byte
+  alignment. It frees a region's blocks when the region ends, and an
+  interpolation's buffer when it finishes. It never frees the process
+  root. A null from the hook traps `alloc-contract`.
+- **The freestanding runtime is `libwolf_rt_none.a`**: the `no_std`
+  build of the region runtime (crate `wolf_rt_none`). It shares the
+  hosted list and map source. It ships beside `wolf` in every archive,
+  and a build that allocates writes it beside its object as
+  `K.rt-none.a`. Its members leave only `wolf_alloc`, `wolf_free` and
+  `wolf_trap` undefined; its C memory functions are weak.
+  `cargo xtask rt-none` builds it. A toolchain without the
+  x86_64-unknown-none target (`rustup target add x86_64-unknown-none`)
+  skips loudly, and CI requires it (`WOLF_RT_NONE_REQUIRE=1`).
+- **Still refused by name**: `Pool`, `freeze`, boxed channel payloads,
+  `spawn`, `spawn proc`, channels, `par`, and float holes.
+- **Hosted programs do not move.** `libwolf_rt.a` is untouched, and
+  downstream binaries are byte-identical.
+- **Witness**: `freestanding_alloc.rs`. One report is built through
+  the hosted runtime and through a kernel over a bump allocator written
+  in wolf, linked `-nostdlib`. The bytes are equal on both tiers.
+
 ### The prelude's names, as data (s212, ruling #39 = B, #586)
 
 - **`wolf prelude [--json]`** prints every name a program uses without an
