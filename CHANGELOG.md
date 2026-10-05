@@ -27,6 +27,25 @@
 - No compiled program changes; the tables gained columns, and no name
   was added or removed.
 
+### The nightly's blast-radius property is green again (s211, #589)
+
+- **A dangling `.` no longer swallows the next declaration.** A `.` at
+  the end of a module-level initializer took the next line's `let` as a
+  keyword member name (`let A: int = B + .` over `let B: int = A * 2`),
+  so `B` vanished into `A`'s initializer. A declaration keyword that
+  leads its line at or left of the item's column is now a sibling, never
+  a member, as `fn`/`struct`/`pub` already were across a line break. A
+  keyword member continued onto a new line at the item's own column
+  (`x.\nlet`) is refused where it was accepted; members on the same
+  line, and indented continuation lines, parse as before.
+- **Recovery stops at a sibling's attribute, not only its keyword.**
+  Under an unclosed `{`, a column-0 `#[…]` was eaten by the wreck above
+  it and the decorated item lost its start (found at budget 1000 on
+  `grammar/attr_section.lu`).
+- The property holds at budget 300 and 1000 over the whole corpus; no
+  bound moved. Three mutations pinned in `SWEEP_1000`. Hosted binaries
+  are byte-identical.
+
 ### A misaligned raw access is UB row L4 (s209, ruling #36 = A, #574)
 
 - **The machines disagreed, and release could miscompile.** A `*u16`,
