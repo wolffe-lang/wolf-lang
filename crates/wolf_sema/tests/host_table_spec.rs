@@ -24,7 +24,8 @@ fn compiler_table() -> Vec<String> {
     let unresolved = |_: u32| -> Result<TyId, &'static str> { Err("_") };
     PRELUDE
         .iter()
-        .filter_map(|name| {
+        .filter_map(|a| {
+            let name = a.name;
             let (params, ret) = host_builtin_sig(&mut t, name)?;
             let ps: Vec<String> = params.iter().map(|p| render(&t, *p, &unresolved)).collect();
             Some(format!(

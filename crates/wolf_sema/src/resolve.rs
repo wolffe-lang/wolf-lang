@@ -774,8 +774,8 @@ impl Resolver<'_> {
         }
         set.extend(self.bindings.iter().map(|b| b.name.clone()));
         set.extend(self.pkg.tables[self.module].names().map(str::to_string));
-        set.extend(prelude::PRELUDE.iter().map(|s| s.to_string()));
-        set.extend(prelude::BUILTIN_TYPES.iter().map(|s| s.to_string()));
+        set.extend(prelude::PRELUDE.iter().map(|a| a.name.to_string()));
+        set.extend(prelude::BUILTIN_TYPES.iter().map(|a| a.name.to_string()));
         set.into_iter().collect()
     }
 
