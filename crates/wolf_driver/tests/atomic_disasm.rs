@@ -334,6 +334,8 @@ fn parse_objdump(dis: &str) -> BTreeMap<String, Vec<Insn>> {
     out
 }
 
+// Each disassembling host constructs only its own architecture.
+#[allow(dead_code)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Arch {
     X86_64,
