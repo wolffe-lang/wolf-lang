@@ -20,8 +20,9 @@ fn list_line() -> str {
 
 fn spec_line(n: int) -> str {
     let neg = 0 - n
+    let h = n * 7
     let c = 'é'
-    "specs [{n:>8}] [{n:<6}] [{n:08}] [{neg:06}] [{n:+}] [{n:x}] [{n:X}] [{n:b}] [{n:o}] [{"ab":*^7}] [{true:>6}] [{c}] [{c:>3}]"
+    "specs [{n:>8}] [{n:<6}] [{n:08}] [{neg:06}] [{n:+}] [{n:x}] [{h:x}] [{h:X}] [{n:b}] [{n:o}] [{"ab":*^7}] [{true:>6}] [{c}] [{c:>3}]"
 }
 
 fn map_line() -> str {

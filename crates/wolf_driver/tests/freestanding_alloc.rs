@@ -42,7 +42,7 @@ use wolf_backend::target::{ALLOC_HOOKS, FREESTANDING as TARGET, MEM_HOOKS, NONE_
 
 /// The report's lines, as the hosted runtime prints them.
 const REPORT: &str = "list n=9 sum=385 last=100\n\
-specs [     385] [385   ] [00000385] [-00385] [+385] [181] [181] [110000001] [601] [**ab***] [  true] [é] [ é]\n\
+specs [     385] [385   ] [00000385] [-00385] [+385] [181] [a87] [A87] [110000001] [601] [**ab***] [  true] [é] [ é]\n\
 map wolf=3 pax=2 zzz=99 n=2\n\
 closure 42\n\
 region total=499500 tag-len=9\n";
