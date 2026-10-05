@@ -50,6 +50,12 @@ pub extern "C" fn wolf_alloc(size: i64, align: i64) -> *mut u8 {
     p
 }
 
+/// The program's `wolf_free`: checks the block against the books, then
+/// returns it to the host allocator.
+///
+/// # Safety
+///
+/// `p` is a live block this test's `wolf_alloc` returned for `size`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wolf_free(p: *mut u8, size: i64, align: i64) {
     assert!(!p.is_null(), "wolf_free(null)");
