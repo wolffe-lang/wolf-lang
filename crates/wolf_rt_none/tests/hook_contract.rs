@@ -37,7 +37,10 @@ static FREES: Mutex<Vec<(usize, i64, i64)>> = Mutex::new(Vec::new());
 
 #[unsafe(no_mangle)]
 pub extern "C" fn wolf_alloc(size: i64, align: i64) -> *mut u8 {
-    assert!(size > 0 && size % 16 == 0, "size {size}: a positive multiple of 16");
+    assert!(
+        size > 0 && size % 16 == 0,
+        "size {size}: a positive multiple of 16"
+    );
     assert_eq!(align, 16, "the runtime asks for 16");
     let layout = Layout::from_size_align(size as usize, align as usize).unwrap();
     // SAFETY: non-zero size.
