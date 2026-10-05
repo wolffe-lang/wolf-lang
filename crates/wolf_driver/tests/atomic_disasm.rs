@@ -227,6 +227,22 @@ fn symbols(obj: &Path) -> (Vec<String>, Vec<String>) {
     (defined, undefined)
 }
 
+/// Every defined symbol's address (Mach-O's leading `_` stripped).
+fn addresses(obj: &Path) -> Vec<(String, u64)> {
+    use object::{Object, ObjectSymbol};
+    let bytes = std::fs::read(obj).expect("read object");
+    let file = object::File::parse(&*bytes).expect("parse object");
+    let macho = file.format() == object::BinaryFormat::MachO;
+    file.symbols()
+        .filter(|s| !s.is_undefined())
+        .filter_map(|s| {
+            let n = s.name().ok()?;
+            let n = if macho { n.strip_prefix('_').unwrap_or(n) } else { n };
+            Some((n.to_string(), s.address()))
+        })
+        .collect()
+}
+
 fn check_object(obj: &Path, what: &str) {
     let (defined, undefined) = symbols(obj);
     let missing: Vec<String> = rows()
@@ -372,10 +388,29 @@ fn signature(arch: Arch, insns: &[Insn]) -> String {
     let ls = loops(insns);
     let in_loop = |at: u64| ls.iter().any(|&(lo, hi)| (lo..=hi).contains(&at));
     let mut toks = Vec::new();
+    // aarch64: a register an `adrp` just set holds a page address (a GOT
+    // or constant-pool load follows, on a trap path), never the pointer.
+    let mut paged: Vec<String> = Vec::new();
     for i in insns {
+        if arch == Arch::Aarch64 && i.mnemonic == "adrp" {
+            if let Some(r) = i.ops.split(',').next() {
+                paged.push(r.trim().to_string());
+            }
+            continue;
+        }
         let tok = match arch {
             Arch::X86_64 => x86_token(i),
-            Arch::Aarch64 => a64_token(i),
+            Arch::Aarch64 => {
+                let base = i
+                    .ops
+                    .split_once('[')
+                    .map(|(_, b)| b.split([',', ']']).next().unwrap_or("").trim().to_string());
+                if base.is_some_and(|b| paged.contains(&b)) {
+                    None
+                } else {
+                    a64_token(i)
+                }
+            }
         };
         if let Some(t) = tok {
             toks.push(if in_loop(i.at) { format!("{t}@L") } else { t });
@@ -468,7 +503,7 @@ fn expect(arch: Arch, tier: &str, r: &Row) -> String {
             "and" | "or" | "xor" => format!("ld:{w} lock cmpxchg:{w}@L"),
             "cas" => format!("lock cmpxchg:{w}"),
             "fence" if native => "mfence".into(),
-            "fence" if r.order == "seq_cst" => "lock or:4".into(),
+            "fence" if r.order == "seq_cst" => "lock or:4|mfence".into(),
             "fence" => String::new(),
             "spin_acquire" if native => "ld:4@L ld:4@L".into(),
             "spin_acquire" => "ld:4@L ld:4".into(),
@@ -488,7 +523,7 @@ fn expect(arch: Arch, tier: &str, r: &Row) -> String {
                     "load" => format!("ldar{s}"),
                     "store" => format!("stlr{s}"),
                     "fence" => "dmb ish".into(),
-                    "spin_acquire" => "ldar@L ldar".into(),
+                    "spin_acquire" => "ldar@L ldar@L".into(),
                     "spin_lock" => "ldaxr@L stlxr@L".into(),
                     "spin_unlock" => "stlr".into(),
                     _ => format!("ldaxr{s}@L stlxr{s}@L"),
@@ -548,7 +583,22 @@ fn assert_rows(arch: Arch, obj: &Path, tier: &str, what: &str) {
         .output()
         .unwrap_or_else(|e| panic!("`objdump` is part of this gate's host (no skip): {e}"));
     assert!(out.status.success(), "objdump: {}", text(&out.stderr));
-    let funcs = parse_objdump(&text(&out.stdout));
+    let mut funcs = parse_objdump(&text(&out.stdout));
+    // llvm-objdump names the first function in a Mach-O `__text` by the
+    // section's temporary label (`ltmp0`) when both sit at one address:
+    // find each row's code by its symbol's address too.
+    for (name, at) in addresses(obj) {
+        if funcs.contains_key(&name) {
+            continue;
+        }
+        let hit = funcs
+            .values()
+            .find(|v| v.first().is_some_and(|i| i.at == at))
+            .cloned();
+        if let Some(v) = hit {
+            funcs.insert(name, v);
+        }
+    }
     let mut failures = Vec::new();
     for r in rows() {
         let Some(insns) = funcs.get(&r.name) else {
@@ -556,9 +606,12 @@ fn assert_rows(arch: Arch, obj: &Path, tier: &str, what: &str) {
             continue;
         };
         let got = signature(arch, insns);
+        // `a|b`: either is the clause's instruction (LLVM 18 spells a
+        // seq_cst fence `mfence`, LLVM 23 `lock or [rsp]`, both full
+        // fences).
         let want = expect(arch, tier, &r);
         eprintln!("REPORT {what} {:<28} {got}", r.name);
-        if got != want {
+        if !want.split('|').any(|w| w == got) {
             let listing: Vec<String> = insns
                 .iter()
                 .map(|i| format!("    {:x}: {} {}", i.at, i.mnemonic, i.ops))
