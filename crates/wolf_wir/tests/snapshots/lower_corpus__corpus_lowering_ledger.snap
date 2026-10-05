@@ -30,6 +30,16 @@ comptime/sandbox_os_random.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_random.lu: not mem-clean (pre-wir rungs own it)
 comptime/size_of_layout.lu: not mem-clean (pre-wir rungs own it)
 comptime.lu: lowers
+conc/atomic_counter.lu: lowers
+conc/atomic_fence.lu: lowers
+conc/atomic_order_misuse.lu: not mem-clean (pre-wir rungs own it)
+conc/atomic_orders.lu: lowers
+conc/atomic_outside_unsafe.lu: not mem-clean (pre-wir rungs own it)
+conc/atomic_pointee.lu: not mem-clean (pre-wir rungs own it)
+conc/atomic_race_plain.lu: lowers
+conc/atomic_ub_misaligned.lu: lowers
+conc/atomic_ub_uaf.lu: lowers
+conc/atomic_widths.lu: lowers
 conc/cancel_sibling.lu: lowers
 conc/capture_mut_arg.lu: not mem-clean (pre-wir rungs own it)
 conc/capture_mut_lend.lu: not mem-clean (pre-wir rungs own it)
