@@ -9,10 +9,13 @@
 //! rows it reaches.
 //!
 //! Measured at trunk a3465f87 (kasumi, `~/lanes/kw11/evidence/
-//! rows-trunk-a3465f87.log`): every row was fail(E0301) on the three
-//! wolfgang machines (`fence` and `Order` unresolved) except the racy
-//! counter, which compiles there; lupin 0.1.46 answered `unsupported`
-//! ("`Order.seq_cst` does not resolve").
+//! rows-trunk-a3465f87.log` 07e83269…): on the three wolfgang machines
+//! every row that spells `fence` was fail(E0301) ("nothing named `fence`
+//! is in scope") and every other row `unsupported` ("this raw-pointer
+//! operation", the resolver deferring `Order` as a candidate tag) — except
+//! the racy counter, which has no atomic and ran (105556 natively);
+//! lupin 0.1.46 answered `unsupported` ("`Order.seq_cst` does not
+//! resolve") and trap(race) on the racy counter.
 //!
 //! lupin 0.1.46 (the 0.2.23 pairing) has no atomic surface; each row's
 //! parting is pinned below by that version as pre-mirror (lupin's half

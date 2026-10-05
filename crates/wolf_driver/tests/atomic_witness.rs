@@ -17,9 +17,9 @@
 //! and the gate says so. The checked machine runs no task (C1) and is
 //! `atomic_lanes.rs`'s.
 //!
-//! At trunk a3465f87 neither program built (fail(E0301): `Order` and
-//! `fence`); the plain twin's shape (k4_scope_fn.lu, four tasks of 1000)
-//! gave 3733 natively and 4000 on release.
+//! At trunk a3465f87 the counter did not build (`unsupported` — "this
+//! raw-pointer operation"); the plain twin built and ran (105556 natively,
+//! 400000 on release, `rows-trunk-a3465f87.log`).
 
 mod lane_exit;
 

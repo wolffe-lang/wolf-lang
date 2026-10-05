@@ -26,8 +26,9 @@
 //! could need (`__atomic_*`, `__sync_*`, `__aarch64_*` outline helpers,
 //! a `wolf.` intrinsic name): the instructions are in place.
 //!
-//! At trunk a3465f87 every build here failed (fail(E0301): `fence` and
-//! `Order` unresolved), so every row was red. A failed build FAILS the
+//! At trunk a3465f87 every build here failed (exit 2: four E0301
+//! "nothing named `fence` is in scope"; without the fences, `unsupported`
+//! "this raw-pointer operation"), so every row was red. A failed build FAILS the
 //! gate; there is no skip in this file (wolf-lang#550).
 
 #![cfg_attr(
