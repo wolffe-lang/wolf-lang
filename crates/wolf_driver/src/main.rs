@@ -22,6 +22,7 @@ mod doc_cmd;
 mod doctest_cmd;
 mod help;
 mod pkg_cmd;
+mod prelude_cmd;
 mod profile_cmd;
 mod record_files;
 mod script_cmd;
@@ -197,6 +198,8 @@ fn main() {
         Some("conform-run") => conform_run(&args[1..]),
         Some("interface") => interface(&args[1..]),
         Some("audit-surface") => audit_surface(&args[1..]),
+        // s212 (ruling #39 = B): the ambient names as data.
+        Some("prelude") => emit(&prelude_cmd::prelude(&args[1..])),
         // c10: the C header importer (s46). Runs a worker process; the
         // compiler never links a C frontend.
         Some("c-import") => cimport_cmd::c_import(&args[1..]),

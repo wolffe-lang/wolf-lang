@@ -282,6 +282,20 @@ inline C and assembly. Greppable and diffable on purpose — this is the
 report a reviewer reads before trusting a dependency.",
     },
     Cmd {
+        name: "prelude",
+        group: Group::Tool,
+        summary: "every name a program uses without an import",
+        usage: &["prelude [--json]"],
+        about: "\
+Types, functions, comptime intrinsics and the builtin marks (the row
+tags the host builtins declare), each with its kind and the spec anchor
+that defines it, and whether declaring the name in a module draws W0304
+(fatal under `--deny-warnings`). The rows are the checker's own table.
+`--json` prints schema `wolf-prelude/0` (docs/prelude-json.md); the same
+text is committed as `spec/prelude.json`, and `cargo xtask prelude-diff
+<tagA> <tagB>` lists what a release adds.",
+    },
+    Cmd {
         name: "profile",
         group: Group::Tool,
         summary: "read and merge profile-guided-optimization data",
