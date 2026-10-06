@@ -5275,8 +5275,30 @@ impl<'a> Checker<'a> {
                 let bool_ = self.lo.table.prim(Prim::Bool);
                 if let Some(n) = self.rigid_name(t) {
                     self.golden_rule_op(operand.span, &n, "!", None);
-                } else if unify(&mut self.lo.table, &mut self.vars, t, bool_).is_err() {
-                    self.report_bad_operand(operand.span, "!", "`bool`", t);
+                    return Ok(bool_);
+                }
+                // s213 (wolf-lang#575, `[type.int.not]`, ruling owed):
+                // `!` on an integer is the bitwise complement, at the
+                // operand's own type — a literal adopts the type its
+                // context expects first, as `-` does. A `byte` widens
+                // to `int` first (`[type.byte.op]`: every bitwise
+                // operator does). `bool` keeps logical not.
+                if matches!(self.kind_of(t), TyKind::Prim(Prim::Byte)) {
+                    return Ok(self.lo.table.prim(Prim::Int));
+                }
+                let integral = match self.kind_of(t) {
+                    TyKind::Prim(p) => p.is_integer(),
+                    TyKind::Wrapping(_) => true,
+                    TyKind::Var(v) => {
+                        matches!(self.vars.kind_of(v), NumKind::Integer | NumKind::IntFrozen)
+                    }
+                    _ => false,
+                };
+                if integral {
+                    return Ok(t);
+                }
+                if unify(&mut self.lo.table, &mut self.vars, t, bool_).is_err() {
+                    self.report_bad_operand(operand.span, "!", "`bool` and the integer types", t);
                 }
                 Ok(bool_)
             }
