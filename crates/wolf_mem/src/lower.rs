@@ -2054,6 +2054,79 @@ impl<'t> Lowerer<'t> {
         }
     }
 
+    /// s213 (wolf-lang#579): `base.member` where `base` names an
+    /// imported module (no local shadows it) and `member` one of its
+    /// module items — the (module, item) pair.
+    fn qualified_item(
+        &self,
+        base: &'t GreenNode,
+        member: &wolf_ast::GreenToken,
+    ) -> Option<(usize, String)> {
+        if base.kind != SyntaxKind::PathExpr {
+            return None;
+        }
+        let bname = self.text(PathExpr::cast(base)?.ident()?.span);
+        if self.lookup(&bname).is_some() {
+            return None;
+        }
+        let target = wolf_sema::module_bindings(self.pkg, self.module, self.file)
+            .into_iter()
+            .find(|(n, _)| *n == bname)
+            .map(|(_, m)| m)?;
+        let mname = self.text(member.span);
+        matches!(self.sigs.get(target, &mname), Some(ItemSig::Global(_))).then_some((target, mname))
+    }
+
+    /// A module item's place: `name` in `module` (this module's bare
+    /// name, or the module a qualified `m.X` names — s213).
+    fn global_place(
+        &mut self,
+        module: usize,
+        name: String,
+        e: &'t GreenNode,
+    ) -> Option<(PlaceId, Option<Ty<'t>>)> {
+        let Some(ItemSig::Global(g)) = self.sigs.get(module, &name) else {
+            return None;
+        };
+        // kw09 (`[mem.static.2]`, K11 = A): every read and
+        // write of a module `var` is raw-tier — it is
+        // shared by every task, and the safe tier's
+        // data-race freedom does not reach it. One report
+        // per site (a place is resolved more than once).
+        if g.kind == wolf_sema::GlobalKind::Var
+            && !self.in_unsafe()
+            && self.static_sites.insert((e.span.lo, e.span.hi))
+        {
+            self.diags.push(
+                Diagnostic::error(
+                    codes::E1301,
+                    e.span,
+                    format!(
+                        "the module `var` `{name}` is read or written only in an `unsafe` block"
+                    ),
+                )
+                .with_label("module state in safe code")
+                .with_note(
+                    "a module `var` is shared by every task, and the safe tier's \
+                         data-race freedom does not reach it ([mem.static.2]). Access it \
+                         inside `unsafe { }` and state what keeps it race-free — one \
+                         thread, or a lock you hold — in a `# Safety:` comment; a module \
+                         `let` or `const` reads freely.",
+                ),
+            );
+        }
+        let ty = g.ty.map(|id| Ty {
+            table: &self.sigs.table,
+            id,
+        });
+        let place = Place {
+            base: Base::Global(module as u32, name),
+            proj: Vec::new(),
+        };
+        let copy = ty.map(|t| is_copy(t, 0)).unwrap_or(false);
+        Some((self.places.intern(place, copy), ty))
+    }
+
     /// Resolve an expression to a place, if it names one. Interns the
     /// place *and its field siblings at every projection step*, so the
     /// move analysis can expand partial re-initializations over the
@@ -2079,49 +2152,19 @@ impl<'t> Lowerer<'t> {
                 // A module-level `let`/`var`/`const` item: a place for
                 // mode agreement and same-call exclusivity; moves are
                 // not tracked on module state (later campaign).
-                if let Some(ItemSig::Global(g)) = self.sigs.get(self.module, &name) {
-                    // kw09 (`[mem.static.2]`, K11 = A): every read and
-                    // write of a module `var` is raw-tier — it is
-                    // shared by every task, and the safe tier's
-                    // data-race freedom does not reach it. One report
-                    // per site (a place is resolved more than once).
-                    if g.kind == wolf_sema::GlobalKind::Var
-                        && !self.in_unsafe()
-                        && self.static_sites.insert((e.span.lo, e.span.hi))
-                    {
-                        self.diags.push(
-                            Diagnostic::error(
-                                codes::E1301,
-                                e.span,
-                                format!("the module `var` `{name}` is read or written only in an `unsafe` block"),
-                            )
-                            .with_label("module state in safe code")
-                            .with_note(
-                                "a module `var` is shared by every task, and the safe tier's \
-                                 data-race freedom does not reach it ([mem.static.2]). Access it \
-                                 inside `unsafe { }` and state what keeps it race-free — one \
-                                 thread, or a lock you hold — in a `# Safety:` comment; a module \
-                                 `let` or `const` reads freely.",
-                            ),
-                        );
-                    }
-                    let ty = g.ty.map(|id| Ty {
-                        table: &self.sigs.table,
-                        id,
-                    });
-                    let place = Place {
-                        base: Base::Global(self.module as u32, name),
-                        proj: Vec::new(),
-                    };
-                    let copy = ty.map(|t| is_copy(t, 0)).unwrap_or(false);
-                    return Some((self.places.intern(place, copy), ty));
-                }
-                None
+                self.global_place(self.module, name, e)
             }
             SyntaxKind::MemberExpr => {
                 let m = MemberExpr::cast(e)?;
                 let base = m.base()?;
                 let member = m.member()?;
+                // s213 (wolf-lang#579): `m.X`, another module's item read
+                // through its module's name, is that item's place — the
+                // ring a `var` needs and exclusivity reach it as they
+                // reach the bare name in its own module.
+                if let Some((target, mname)) = self.qualified_item(base, member) {
+                    return self.global_place(target, mname, e);
+                }
                 let (base_id, base_ty) = self.as_place(base)?;
                 let fname = self.text(member.span);
                 let base_place = self.places.get(base_id).clone();
