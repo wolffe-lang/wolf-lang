@@ -8,7 +8,8 @@
 //      threads the foreign tokens, so 0.2.24 was already right),
 //   8  assembly calling back into wolf to write the `var` (a guard, the
 //      same way),
-//   16 a recursive wolf writer, which no tier inlines.
+//   16 a recursive wolf writer to a depth the caller is given, which no
+//      tier inlines or folds.
 // The three `export fn`s are the shapes the gate reads in the object
 // with `objdump`: after the call, the storage is loaded again. At wolf
 // 0.2.24 (294d626d) `s214_var_after_wolf_call` returned the caller's
@@ -50,12 +51,12 @@ fn bump_deep(n: int) {
     }
 }
 
-export fn s214_var_after_wolf_call() -> i64 {
+export fn s214_var_after_wolf_call(depth: int) -> i64 {
     var r = 0
     // # Safety: one CPU.
     unsafe {
         v = 0
-        bump_deep(2)
+        bump_deep(depth)
         r = v
     }
     r as i64
@@ -111,7 +112,7 @@ export fn kmain() -> i64 {
     if s214_var_after_callback() == 42 {
         bits += 8
     }
-    if s214_var_after_wolf_call() == 99 {
+    if s214_var_after_wolf_call(2) == 99 {
         bits += 16
     }
     bits as i64

@@ -372,8 +372,8 @@ mod linux_x86_64 {
     }
 
     /// The kernel object for one tier, in its own directory.
-    fn kernel_obj(tier: &str) -> (PathBuf, PathBuf) {
-        let dir = scratch(&format!("kernel-{tier}"));
+    fn kernel_obj(case: &str, tier: &str) -> (PathBuf, PathBuf) {
+        let dir = scratch(&format!("{case}-{tier}"));
         let src = dir.join("kmain_stale.lu");
         std::fs::copy(fixture("kernel/kmain_stale.lu"), &src).expect("copy the kernel");
         let obj = dir.join("kmain_stale.o");
@@ -405,7 +405,7 @@ mod linux_x86_64 {
     fn the_freestanding_kernel_reads_every_callees_write_on_both_tiers() {
         let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
         for tier in ["native", "release"] {
-            let (dir, obj) = kernel_obj(tier);
+            let (dir, obj) = kernel_obj("kernel-run", tier);
             let mut objs = vec![obj];
             for src in [
                 sibling_fixture("freestanding", "start.S"),
@@ -512,7 +512,7 @@ mod linux_x86_64 {
     #[test]
     fn the_object_loads_the_storage_again_after_the_call_on_both_tiers() {
         for tier in ["native", "release"] {
-            let (_, obj) = kernel_obj(tier);
+            let (_, obj) = kernel_obj("kernel-objdump", tier);
             let d = tool(
                 "objdump",
                 &["-dr", "--no-show-raw-insn", obj.to_str().unwrap()],
