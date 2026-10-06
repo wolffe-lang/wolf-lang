@@ -546,6 +546,9 @@ fn run_task(task: Box<Task>) {
         body,
     } = *task;
     super::stack::set_fault_label(&name);
+    // s200 (#407, `[os.fs.error]`): workers are reused, and `os_error()` is
+    // the TASK's — a task starts with no code, never its predecessor's.
+    crate::fs::os_error_clear();
     scope.child_state(id, TaskState::Running);
     // det (s36): a tracked task joins the det domain and waits for
     // its first grant before the body runs; the wait routes through
