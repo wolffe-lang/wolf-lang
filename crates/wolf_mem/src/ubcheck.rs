@@ -4779,7 +4779,11 @@ impl<'t> Machine<'t> {
                 let v = val!(self.eval(operand));
                 match v {
                     Value::Bool(b) => Ok(Flow::Val(Value::Bool(!b))),
-                    _ => self.refuse("`!` outside booleans", e.span),
+                    // s213 (wolf-lang#575, `[type.int.not]`): a byte
+                    // widens to `int` first (`[type.byte.op]`).
+                    Value::Byte(b) => Ok(Flow::Val(Value::Int(!i64::from(b)))),
+                    Value::Int(n) => self.int_complement(n, operand.span, e.span),
+                    _ => self.refuse("`!` outside booleans and integers", e.span),
                 }
             }
             _ => self.eval(operand),
@@ -5123,18 +5127,23 @@ impl<'t> Machine<'t> {
                     };
                     return Ok(Value::Int(out & mask));
                 }
-                // Bitwise/shift on CHECKED (non-wrapping) integers has
-                // no ruled checked-tier semantics yet — the honest
-                // refusal, never a silent identity.
-                if matches!(
-                    op,
-                    SyntaxKind::Amp
-                        | SyntaxKind::Pipe
-                        | SyntaxKind::Caret
-                        | SyntaxKind::Shl
-                        | SyntaxKind::Shr
-                ) {
-                    return self.refuse("this operator in checked execution", span);
+                // s213 (wolf-lang#575): `&`, `|` and `^` on CHECKED
+                // (non-wrapping) integers are total and closed over
+                // every range this machine holds — a signed width's
+                // two's-complement bits stay sign-extended, an unsigned
+                // width's stay in `0..=max` — so they are the bits'
+                // own answer, as on every other machine (the mask
+                // idiom `x & !m` needs them). Shifts can leave the
+                // width and still have no ruled checked-tier semantics
+                // — the honest refusal, never a silent identity.
+                match op {
+                    SyntaxKind::Amp => return Ok(Value::Int(a & b)),
+                    SyntaxKind::Pipe => return Ok(Value::Int(a | b)),
+                    SyntaxKind::Caret => return Ok(Value::Int(a ^ b)),
+                    SyntaxKind::Shl | SyntaxKind::Shr => {
+                        return self.refuse("this operator in checked execution", span);
+                    }
+                    _ => {}
                 }
                 let out = match op {
                     SyntaxKind::Plus => a.checked_add(b),
@@ -5187,6 +5196,41 @@ impl<'t> Machine<'t> {
                 Ok(Value::Str(a))
             }
             _ => self.refuse("arithmetic outside integers", span),
+        }
+    }
+
+    /// s213 (wolf-lang#575, `[type.int.not]`): `!n`, the bitwise
+    /// complement at the operand's type — total, never a trap. A
+    /// signed width's complement is `-n - 1` (its range is symmetric
+    /// about that map); an unsigned width's is `max - n`; a
+    /// `wrapping[T]` is the complement masked to its width. A
+    /// `u64`/`uint` complement lands in the upper half this machine
+    /// does not hold (`prim_range`), so it is refused by name, as the
+    /// literal that spells such a value is.
+    fn int_complement(&mut self, n: i64, operand: Span, span: Span) -> E<Flow> {
+        if let Some((mask, _, _)) = self.wrapping_width(operand) {
+            return Ok(Flow::Val(Value::Int(!n & mask)));
+        }
+        let prim = {
+            let ctx = self.ctx();
+            ctx.expr_tys
+                .get(&operand)
+                .and_then(|id| match ctx.tb.table.kind(*id) {
+                    TyKind::Prim(p) => Some(*p),
+                    _ => None,
+                })
+        };
+        match prim {
+            Some(Prim::U64 | Prim::Uint) => self.refuse(
+                "a `u64`/`uint` complement (its value lies past i64::MAX, outside this \
+                 machine's range)",
+                span,
+            ),
+            Some(p @ (Prim::U8 | Prim::U16 | Prim::U32)) => {
+                let (_, hi) = prim_range(p).expect("a narrow unsigned width");
+                Ok(Flow::Val(Value::Int(hi - n)))
+            }
+            _ => Ok(Flow::Val(Value::Int(!n))),
         }
     }
 
