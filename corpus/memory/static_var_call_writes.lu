@@ -1,0 +1,52 @@
+//! check: run(exit=0, stdout="99 99 1\n")
+//! phase: run
+//! conforms: mem.static, mem.static.2, mem.unsafe.scope
+//!
+//! s214 (wolf-lang#598, P0): a module `var` written by a callee is read
+//! back after the call (`[mem.static.2]`: a write is seen by every later
+//! read, across calls). The first block is the issue's witness verbatim
+//! — store, call a writer, read; the second reads, calls a writer, and
+//! reads again. At wolf 0.2.24 (294d626d) native and release printed
+//! `0 0 0`: the WIR builder forwarded the caller's own store, and
+//! hash-consed the second read into the first, across a call that
+//! consumed none of the module state's tokens. The checked machine and
+//! lupin 0.1.47 printed what this row says.
+
+var v: int = 0
+
+fn bump() {
+    // # Safety: one thread.
+    unsafe {
+        v = 99
+    }
+}
+
+fn reset() {
+    // # Safety: one thread.
+    unsafe {
+        v = 1
+    }
+}
+
+fn main() -> int {
+    var b = 0
+    // # Safety: one thread.
+    unsafe {
+        v = 0
+    }
+    bump()
+    // # Safety: one thread.
+    unsafe {
+        b = v
+    }
+    var before = 0
+    var after = 0
+    // # Safety: one thread.
+    unsafe {
+        before = v
+        reset()
+        after = v
+    }
+    print("{b} {before} {after}")
+    0
+}

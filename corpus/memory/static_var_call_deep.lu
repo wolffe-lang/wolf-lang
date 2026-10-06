@@ -1,0 +1,49 @@
+//! check: run(exit=0, stdout="42 42 7 42\n")
+//! phase: run
+//! conforms: mem.static, mem.static.2, mem.unsafe.scope
+//!
+//! s214 (wolf-lang#598, P0): every call clobbers the module state its
+//! callee may write, however the write is reached — two calls deep
+//! (`outer` calls `inner`), by a direct writer, and through a fn value
+//! (`call.ind`, no callee the caller can name). Each read after a call
+//! is the callee's write. At wolf 0.2.24 (294d626d) native and release
+//! printed `0 0 0 1`; the checked machine and lupin 0.1.47 printed what
+//! this row says.
+
+var v: int = 0
+
+fn inner() {
+    // # Safety: one thread.
+    unsafe {
+        v = 42
+    }
+}
+
+fn outer() {
+    inner()
+}
+
+fn set7() {
+    // # Safety: one thread.
+    unsafe {
+        v = 7
+    }
+}
+
+fn main() -> int {
+    // # Safety: one thread.
+    unsafe {
+        v = 0
+        outer()
+        let a = v
+        let x = v
+        set7()
+        let y = v
+        let f = inner
+        v = 1
+        f()
+        let z = v
+        print("{a} {x} {y} {z}")
+    }
+    0
+}
