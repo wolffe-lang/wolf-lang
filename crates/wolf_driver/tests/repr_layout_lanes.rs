@@ -18,7 +18,8 @@
 //! 0.1.46 (the 0.2.23 pairing, r28) is still pre-mirror (#188 open):
 //! its pins are carried, six of the nine rows with the verdict changed
 //! to E0817 (its closed attribute set refuses `packed` and `align` by
-//! name; ruled at r28).
+//! name; ruled at r28). 0.1.47 (the 0.2.24 pairing, r29) answers as
+//! 0.1.46 did on all nine, measured; the pins are carried.
 
 mod lane_exit;
 
@@ -211,6 +212,11 @@ const NO_QUERY: &[Pin<'static>] = &[
         verdict: "unsupported",
         named: "does not resolve",
     },
+    Pin {
+        version: "0.1.47",
+        verdict: "unsupported",
+        named: "does not resolve",
+    },
 ];
 /// A row whose packed or aligned struct 0.1.45 met only at a query.
 const NO_QUERY_045_E0817_046: &[Pin<'static>] = &[
@@ -221,6 +227,11 @@ const NO_QUERY_045_E0817_046: &[Pin<'static>] = &[
     },
     Pin {
         version: "0.1.46",
+        verdict: "fail(E0817)",
+        named: "",
+    },
+    Pin {
+        version: "0.1.47",
         verdict: "fail(E0817)",
         named: "",
     },
@@ -236,6 +247,11 @@ const READS_NO_ATTRIBUTE: &[Pin<'static>] = &[
         verdict: "fail(E0817)",
         named: "",
     },
+    Pin {
+        version: "0.1.47",
+        verdict: "fail(E0817)",
+        named: "",
+    },
 ];
 const NO_AGGREGATE_STORE: &[Pin<'static>] = &[
     Pin {
@@ -245,6 +261,11 @@ const NO_AGGREGATE_STORE: &[Pin<'static>] = &[
     },
     Pin {
         version: "0.1.46",
+        verdict: "fail(E0817)",
+        named: "",
+    },
+    Pin {
+        version: "0.1.47",
         verdict: "fail(E0817)",
         named: "",
     },
