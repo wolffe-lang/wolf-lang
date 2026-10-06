@@ -1818,6 +1818,17 @@ impl<'a> Engine<'a> {
                         "`str_from_utf8` at comptime (the engine models no \
                          `List` values; growing the D33 allowlist is a design \
                          decision, not a convenience)"
+                    } else if name == "bytes_find" || name == "bytes_count" {
+                        // s200 (#411): `str_from_utf8`'s gap, the same list.
+                        "the byte scan at comptime (the engine models no \
+                         `List` values; growing the D33 allowlist is a design \
+                         decision, not a convenience)"
+                    } else if name == "os_error" || name == "os_error_text" {
+                        // s200 (#407): no fs call runs at comptime to
+                        // leave a code, and the text is the host's table.
+                        "`os_error` at comptime (no fs call runs in the \
+                         sandbox to leave a code, and the message text is \
+                         the host's)"
                     } else {
                         "json builtins at comptime (no json evaluator in the \
                          D33 allowlist at v0)"

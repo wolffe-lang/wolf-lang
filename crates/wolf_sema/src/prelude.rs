@@ -215,6 +215,8 @@ pub const PRELUDE: &[Ambient] = &[
     host("fs_seek"),
     host("fs_tell"),
     host("fs_read_at"),
+    // s200 (#417): the fused chunk copy, `[os.fs.copy]`.
+    host("fs_copy_chunk"),
     // the net builtin tier (s39, blocking TCP v0 on the checked lane;
     // D30 rows {refused, timeout, closed, io}; I13: all tagged `net`
     // in the sandbox table). std.net (stdc02+) DELEGATES to these —
@@ -297,6 +299,12 @@ pub const PRELUDE: &[Ambient] = &[
     // PRNG-seed convenience, NOT an entropy API (the issue's own
     // ruling); nothing lowers it and nothing here changes that.
     host("os_random"),
+    // s200 (#407, `[os.fs.error]`): the host's number for the task's most
+    // recent fallible fs-family call, and its text. Beside the row,
+    // never on it. PURE (no capability): they read what the program's
+    // own calls left, no ambient surface.
+    host("os_error"),
+    host("os_error_text"),
     // the time builtin tier (s40, determinism-first per X12: every
     // entry is Clock-tagged and comptime-refused; the ms-integer
     // spellings are the builtin ABI — Instant/SystemTime/Duration
@@ -322,6 +330,11 @@ pub const PRELUDE: &[Ambient] = &[
     // row, never a trap and never a cast. PURE (no capability, no
     // sandbox category), like the json family.
     host("str_from_utf8"),
+    // s200 (#411, `[mem.list.bytes]`): the bulk byte scan over a
+    // `List[byte]` — `str`'s `find` and `count` for bytes, lowered to
+    // the runtime's vectorised loops. PURE (no capability).
+    host("bytes_find"),
+    host("bytes_count"),
     // the region accounting queries (s131, wolf-lang#187): the ledger
     // wolf_rt already keeps, surfaced. `region_bytes(r)` answers a
     // named region's charge; `live_region_bytes()` the process-wide

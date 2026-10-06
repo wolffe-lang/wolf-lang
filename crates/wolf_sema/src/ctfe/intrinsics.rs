@@ -152,7 +152,10 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         | "fs_read_bytes" | "fs_write_bytes" | "fs_read_chunk" | "fs_write_chunk"
         | "fs_read_dir" | "fs_create_dir" | "fs_create_dir_all" | "fs_remove_dir"
         | "fs_remove_dir_all" | "fs_rename" | "fs_is_file" | "fs_is_dir" | "fs_size"
-        | "fs_modified_ms" | "fs_fstat" | "fs_seek" | "fs_tell" | "fs_read_at" => {
+        | "fs_modified_ms" | "fs_fstat" | "fs_seek" | "fs_tell" | "fs_read_at"
+        // s200 (#417): the fused chunk copy moves bytes between two
+        // handles — `fs`, with the family.
+        | "fs_copy_chunk" => {
             SandboxCategory::Fs
         }
         // The s39 net builtin tier: every entry point carries the
@@ -210,6 +213,13 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
 /// capability — and stay comptime-refused with the rest: the D33
 /// sandbox models no region machine, and a comptime "bytes charged"
 /// would be a bit-identical lie on every host.)
+/// (s200 adds the byte scan, wolf-lang#411 — arithmetic over a byte
+/// sequence, `str_from_utf8`'s shelf exactly — and `os_error` /
+/// `os_error_text`, #407: they read what the program's own fs calls
+/// left on its task, or the host's message table, and reach no ambient
+/// surface a capability names. All four stay comptime-refused: the
+/// sandbox models no `List`, and a comptime fs call cannot exist to
+/// leave a code.)
 pub fn pure_builtin(name: &str) -> bool {
     matches!(
         name,
@@ -220,6 +230,10 @@ pub fn pure_builtin(name: &str) -> bool {
             | "str_from_utf8"
             | "region_bytes"
             | "live_region_bytes"
+            | "bytes_find"
+            | "bytes_count"
+            | "os_error"
+            | "os_error_text"
     )
 }
 
