@@ -1032,7 +1032,8 @@ Simpler than the safe tier, not stricter (anti-Stacked-Borrows lesson).
   side-effecting, and never elided, split, merged or reordered against
   each other (K3 = B, STATUS #31).
 - `[mem.unsafe.raw.4]` An ordinary raw access — `p[i]`, `*p`, their
-  compound assignments, a field read through `p[i].f` — of pointee `T`
+  compound assignments, a field read or store through `p[i].f` or
+  `(*p).f` (`.5`) — of pointee `T`
   is at an address that is a multiple of `T`'s alignment (`align_of(T)`,
   `[abi.layout.query]`: a scalar's is its size, a `#[repr(c)]` struct's
   its strictest field's, a `#[repr(c, packed)]` struct's 1). An access
@@ -1049,6 +1050,26 @@ Simpler than the safe tier, not stricter (anti-Stacked-Borrows lesson).
   `memory/raw_ub_misaligned_u32_read.lu` and its five siblings,
   `memory/raw_ub_misaligned_repr_c_field.lu`,
   `memory/raw_aligned_control.lu`, `memory/packed_field_raw_read.lu`.
+- `[mem.unsafe.raw.5]` A field of a raw element is a place in the
+  pointee's memory: `p[i].f`, `(*p).f` and a nested path `p[i].a.b`
+  read the field's bytes, and `p[i].f = v` / `p[i].f op= v` store them,
+  at the offset the struct's layout gives the field (`[abi.layout.c]`,
+  `[abi.layout.packed]`, `[abi.layout.align]`) — one access of the
+  field's width; the other fields' bytes and the padding are not
+  touched. The store is a raw write (`.1`, E1301 outside `unsafe`): the
+  pointer, then the index, run before the right-hand side
+  (`[mem.model.place.rhs]`), and a compound operator reads the field
+  at its own type first. Row L4 (`.4`) is asked of the element — the
+  struct's alignment at `p + i * size_of(S)` — so a packed struct's
+  `u64` field at offset 2 is an ordinary defined access, and a plain
+  `#[repr(c)]` element at a misaligned address is L4 whichever field
+  is named. The checked machine models an integer-shaped (or `bool`)
+  field; any other field type is refused by name there. (wolf-lang#577,
+  s213: an interrupt handler rewriting its frame's saved `rip`.)
+  Witnesses: `memory/raw_field_store.lu`, `memory/raw_field_store_compound.lu`,
+  `memory/raw_field_store_nested.lu`, `memory/raw_field_store_packed.lu`,
+  `memory/raw_field_store_outside_unsafe.lu` (`fail(E1301)`),
+  `memory/raw_ub_misaligned_repr_c_field_store.lu`.
 - `[mem.unsafe.volatile]` `p.read_volatile()` yields the `T` at `p`;
   `p.write_volatile(v)` stores `v: T` there and yields unit. Both are
   raw-tier operations (E1301 outside `unsafe`). Ordinary raw accesses
