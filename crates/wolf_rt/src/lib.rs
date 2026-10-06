@@ -6,6 +6,8 @@
 //! `cargo xtask deps-check` enforces it. Deterministic-scheduler hooks
 //! (s36) are part of this crate's v1 spec surface.
 
+// s200 (#411): the bulk byte scan over a `List[byte]`, `[mem.list.bytes]`.
+pub mod bytes;
 pub mod fs;
 pub mod io;
 // The s107 json query kernels (c26's last crossing): the HAND MIRROR
