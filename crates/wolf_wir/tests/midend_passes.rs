@@ -556,6 +556,60 @@ fn rangeopt_band_carries_the_operand_bound() {
     );
 }
 
+/// wolf-lang#600 (s214): a logical shift reads its operand as unsigned
+/// bits, so `x >> s` reaches `(2^bits - 1) >> s`. At 0.2.24 the bound was
+/// the SIGNED maximum shifted — `x >> 63` was [0, 0] and `x >> 39`
+/// [0, 2^24 - 1] — and the branch on the top half was deleted.
+fn shift_probe(ty: &str, sh: i64, cc: &str, k: i64) -> String {
+    format!(
+        "fn @probe({ty}) -> i64 {{\n\
+         b0(%0: {ty}):\n  \
+         %1 = iconst.{ty} {sh}\n  \
+         %2 = lshr %0, %1\n  \
+         %3 = iconst.{ty} {k}\n  \
+         %4 = icmp.{cc} %2, %3\n  \
+         br %4, b1, b2\n\
+         b1:\n  \
+         %5 = iconst.i64 1\n  \
+         ret %5\n\
+         b2:\n  \
+         %6 = iconst.i64 0\n  \
+         ret %6\n\
+         }}\n"
+    )
+}
+
+#[test]
+fn rangeopt_keeps_a_branch_on_the_top_half_of_a_logical_shift() {
+    for (ty, sh, cc, k) in [
+        ("i64", 63, "eq", 1),
+        ("i64", 39, "eq", 33554304),
+        ("i64", 39, "eq", 33554431),
+        ("i64", 39, "sge", 16777216),
+        ("i64", 1, "eq", 9223372036854775807),
+        ("i8", 4, "eq", 15),
+    ] {
+        let (out, _) = one_pass(&shift_probe(ty, sh, cc, k), "rangeopt");
+        assert!(
+            out.contains("br "),
+            "{ty} x >> {sh} {cc} {k} is reachable — the branch stays (#600):\n{out}"
+        );
+    }
+}
+
+/// The bound is still a bound: past the width's unsigned maximum the
+/// test is decided, as before.
+#[test]
+fn rangeopt_still_decides_a_shift_past_its_unsigned_maximum() {
+    for (ty, sh, cc, k) in [("i64", 63, "eq", 2), ("i64", 39, "sge", 33554432), ("i8", 4, "eq", 16)] {
+        let (out, _) = one_pass(&shift_probe(ty, sh, cc, k), "rangeopt");
+        assert!(
+            !out.contains("br "),
+            "{ty} x >> {sh} {cc} {k} cannot hold — decided:\n{out}"
+        );
+    }
+}
+
 /// The other half of the same rule, kept honest across #98: a bounds
 /// test nothing relates to the guard is never folded IN PLACE. Here
 /// the loop runs to `%0` and the index is tested against a DIFFERENT
