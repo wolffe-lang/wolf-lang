@@ -1,5 +1,59 @@
 # Changelog
 
+## Unreleased
+
+### The kernel's papercuts (s213, #572, #575, #577, #579)
+
+Two of the four need the maintainer's ruling on a spelling before this
+merges (#572 `-> never`, #575 `!` on integers); both are implemented as
+proposed, and the PR carries the options.
+
+- **`m.K` reads another module's `pub const` (#579).** A `pub const`,
+  `pub let` or `pub var` read through its module's name after `use m`
+  is the item, exactly as the bare name inside its own module
+  (`[mem.static.4]`). Native and release refused it ("a member access
+  without a recorded type"), the checked machine refused it ("module
+  items in checked execution"); lupin already ran the `const` and `let`
+  reads. A `var` so named is raw-tier, read or written (`m.V = x`,
+  `m.V op= x`) only inside `unsafe`: E1301 outside it, which the
+  compiling machines never reached before.
+- **`p[i].f = v` stores a field of a raw element (#577).** Plain,
+  compound (`p[i].f += 1`), nested (`p[0].inner.y = 5`) and through a
+  dereference (`(*p).f = v`), at the field's `[abi.layout.c]` offset,
+  touching no other byte (`[mem.unsafe.raw.5]`). Every compiling machine
+  refused it ("assignment through this place shape"), outside `unsafe`
+  too, where it is now E1301. The checked machine asks row L4 of the
+  ELEMENT, as s209's read does: a packed struct's `u64` at offset 2 is
+  defined, a plain `#[repr(c)]` element at a misaligned address is L4
+  whichever field is named. The checked machine now also reads
+  `(*p).f` and nested paths. A whole-aggregate raw store (`p[0] =
+  Pair { … }`) is still refused by the checked machine (unchanged).
+- **`!` on an integer is its bitwise complement (#575, ruling owed).**
+  `x & !0xfff`, `(x + 0xfff) & !0xfff`, `e & !bit` and `const MASK:
+  u32 = !0xfff` work at the operand's own width (`[type.int.not]`); a
+  `byte` widens to `int` first (`[type.byte.op]`). It was E0409. The
+  checked machine now also runs `&`, `|` and `^` on plain (checked)
+  integers — total over every range it holds — where it refused them;
+  shifts stay refused there. A `u64`/`uint` complement lies past the
+  checked machine's range and is refused by name, as such a literal is.
+- **`-> never` declares a function that never returns (#572, ruling
+  owed).** `never` is a built-in type name, written as a return type
+  (`[type.fn.never]`); a call to such a function is bottom, so `bad =>
+  die("…")` fits an arm that wants an `int`, and a bodyless
+  `extern "c" fn abort() -> never` crosses the membrane as `void`. A
+  `-> never` body that can reach its end, or holds a `return`, is
+  E0401. The bottom type now renders as `never` (it rendered as `!`,
+  which no diagnostic snapshot printed). `never` is exempt from W0304,
+  as `range` is: wolf-std's tests bind a local named `never`.
+- **New prelude name:** `never` (`builtin_type`, `w0304: false`).
+- lupin 0.1.47 parts on the `var`, field-store, complement and `never`
+  rows; its half is wolf-interp#200, pinned by version in
+  `papercut_lanes.rs`. Anchors 595 → 599. Found on the way and filed,
+  not fixed here: **#601** (a silent wrong answer on native and
+  release: a raw-pointer or module-`var` read after a call that writes
+  it returns the pre-call value) and #602 (the checked machine prints a
+  negative narrow signed `wrapping` value unsigned).
+
 ## 0.2.24 — 2026-10-06
 
 THE TWENTY-FOURTH. A kernel can share a word between cpus and can
