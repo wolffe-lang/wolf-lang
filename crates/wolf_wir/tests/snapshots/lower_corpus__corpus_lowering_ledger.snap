@@ -265,6 +265,7 @@ kernels/hot_header.lu: lowers
 kernels/hot_header_alias.lu: lowers
 kernels/hot_scale_versioned.lu: lowers
 kernels/hot_sum_reduce.lu: lowers
+kernels/lshr_top_bits.lu: lowers
 kernels/sha256_block.lu: lowers
 kernels/walk_twice.lu: lowers
 lints/allow_item.lu: lowers
@@ -520,6 +521,7 @@ memory/raw_aligned_control.lu: lowers
 memory/raw_compound_assign.lu: lowers
 memory/raw_deref.lu: lowers
 memory/raw_deref_signed.lu: lowers
+memory/raw_lshr_top_bits.lu: lowers
 memory/raw_ptr_mut_param.lu: lowers
 memory/raw_ptr_private_sig.lu: lowers
 memory/raw_repr_align_layout.lu: lowers
