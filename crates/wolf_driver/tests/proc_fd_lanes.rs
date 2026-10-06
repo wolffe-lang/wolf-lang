@@ -39,7 +39,7 @@ fn wolf() -> &'static str {
 /// The lupin releases that predate the mirror, with the commit each
 /// release archive reports (a development build of the mirror still
 /// says the last released version; the commit holds it apart).
-const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[("0.1.47", Some("8e36bc1"))];
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[("0.1.47", Some("b3228cb"))];
 
 fn pre_mirror(lupin: &Obs) -> bool {
     PRE_MIRROR_LUPIN
