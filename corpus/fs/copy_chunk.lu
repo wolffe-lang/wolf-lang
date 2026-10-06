@@ -1,0 +1,71 @@
+//! check: run(exit=0, stdout="total=20 same=true\nbefore\nthe quick brown fox\nafter zero=0\nat_end=eof closed=io forged_src=io forged_dst=io\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.copy, os.fs.std, err.union, err.propagate
+//!
+//! s200 (wolf-lang#417, `[os.fs.copy]`) — `fs_copy_chunk(src, dst, max)`:
+//! one transfer of at most `max` bytes from `src`'s offset to `dst`'s,
+//! both advancing, the bytes never passing through the program (on
+//! linux, never through user space: `copy_file_range`, `sendfile`,
+//! `splice`, the read/write loop last). HOW MANY bytes one call moves is
+//! the host's, so this file pins totals, never a split:
+//!
+//!   total / same     a 20-byte file copied 7 bytes at most per call to
+//!                    a new file: 20 moved, the copy byte-identical.
+//!   before / after   the same file onto descriptor 1, between `print`s:
+//!                    in program order with them, on every tier.
+//!   zero             a `max` of zero moves nothing and answers 0.
+//!   at_end           a source at its end is `eof`.
+//!   closed / forged  either handle closed or forged is `io`.
+
+fn copy_all(src: int, dst: int, max: int) -> int ! {io} {
+    var total = 0
+    loop {
+        let n = fs_copy_chunk(src, dst, max) else |e| match e {
+            eof => { break },
+            io => { return io },
+        }
+        total = total + n
+    }
+    total
+}
+
+fn copy_row(src: int, dst: int) -> str {
+    let n = fs_copy_chunk(src, dst, 4) else |e| {
+        return match e {
+            eof => "eof",
+            io => "io",
+        }
+    }
+    "moved {n}"
+}
+
+fn main() -> !int {
+    let a = "target/s200-copy-a.tmp"
+    let b = "target/s200-copy-b.tmp"
+    fs_write_text(a, "the quick brown fox\n")?
+    let src = fs_open(a)?
+    let dst = fs_create(b)?
+    let total = copy_all(src, dst, 7)?
+    fs_close(dst)?
+    let back = fs_read_text(b)?
+    print("total={total} same={back == "the quick brown fox\n"}")
+
+    let again = fs_open(a)?
+    print("before")
+    let shown = copy_all(again, 1, 1048576)?
+    let zero = fs_copy_chunk(again, 1, 0)?
+    print("after zero={zero}")
+
+    let at_end = copy_row(again, 1)
+    fs_close(src)?
+    let closed = copy_row(src, 1)
+    let forged_src = copy_row(999999, 1)
+    let forged_dst = copy_row(again, 999999)
+    print("at_end={at_end} closed={closed} forged_src={forged_src} forged_dst={forged_dst}")
+    fs_close(again)?
+
+    fs_remove(a)?
+    fs_remove(b)?
+    print("cleaned={!fs_exists(a) && !fs_exists(b) && shown == 20}")
+    0
+}

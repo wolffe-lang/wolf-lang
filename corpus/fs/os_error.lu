@@ -1,0 +1,64 @@
+//! check: run(exit=0, stdout="start=0\nmissing=2 text_nonempty=true kept=2\nsuccess=0 forged=0 at_eof=0\nzero_text=true negative_text=true\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.error, err.union, err.propagate
+//!
+//! s200 (wolf-lang#407, `[os.fs.error]`) — the host's number beside the
+//! row. A row says which RESPONSE a failure wants; `os_error()` says
+//! WHY, for a reader: the host's error number for the task's most recent
+//! fallible fs call, 0 when it succeeded or failed before the host was
+//! asked. The relations, on every tier-1 host:
+//!
+//!   start          no fs call yet: 0.
+//!   missing        opening a path that does not exist: 2 — `ENOENT`
+//!                  on linux and macOS, `ERROR_FILE_NOT_FOUND` on
+//!                  windows, the same number by coincidence of history.
+//!   text_nonempty  the host has a message for it (its words differ by
+//!                  host, so this file pins only that there are some).
+//!   kept           a `print` and a total predicate (`fs_exists`) do
+//!                  not touch the number.
+//!   success        a call that succeeds clears it.
+//!   forged / eof   a failure decided before the host — a forged
+//!                  handle, the end of a file — is 0: the row is the
+//!                  implementation's, there is no host number to give.
+//!   zero / negative_text   `os_error_text` of 0 or below is "".
+
+fn open_code(path: str) -> int {
+    let fd = fs_open(path) else |e| {
+        return os_error()
+    }
+    fs_close(fd) else |e| {
+        return 0 - 1
+    }
+    os_error()
+}
+
+fn main() -> !int {
+    print("start={os_error()}")
+    let missing = open_code("target/s200-no-such-file.tmp")
+    let text = os_error_text(missing)
+    let exists = fs_exists("target/s200-no-such-file.tmp")
+    print("missing={missing} text_nonempty={text.len > 0} kept={os_error()}")
+
+    let path = "target/s200-os-error.tmp"
+    fs_write_text(path, "x")?
+    let success = os_error()
+    let forged = fs_read_chunk(999999, 4) else |e| {
+        List[byte]()
+    }
+    let forged_code = os_error()
+    let fd = fs_open(path)?
+    let first = fs_read_chunk(fd, 8)?
+    let eof_row = fs_read_chunk(fd, 8) else |e| {
+        List[byte]()
+    }
+    let at_eof = os_error()
+    fs_close(fd)?
+    print("success={success} forged={forged_code} at_eof={at_eof}")
+    print("zero_text={os_error_text(0) == ""} negative_text={os_error_text(0 - 7) == ""}")
+
+    fs_remove(path)?
+    print(
+        "cleaned={!fs_exists(path) && !exists && first.len == 1 && forged.len + eof_row.len == 0}",
+    )
+    0
+}
