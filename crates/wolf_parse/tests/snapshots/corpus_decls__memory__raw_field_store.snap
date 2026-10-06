@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ImportCDecl 636..656 header="stdlib.h"
+StructDecl 657..707 name=Pair attrs=1 fields=2
+FnDecl 709..1046 name=main body=Block

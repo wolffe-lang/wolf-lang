@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ConstDecl 366..395 name=LOW_CLEAR init=PrefixExpr
+FnDecl 396..536 name=main body=Block

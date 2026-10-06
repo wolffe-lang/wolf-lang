@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 529..540 path=limits
+FnDecl 541..612 name=main body=Block

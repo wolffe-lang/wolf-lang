@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 456..487 name=abort extern
+FnDecl 488..568 name=pick body=Block
+FnDecl 570..711 name=main body=Block

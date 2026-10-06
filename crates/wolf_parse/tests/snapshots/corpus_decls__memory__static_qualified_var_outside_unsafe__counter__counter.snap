@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+VarDecl 111..135 pat=COUNT pub init=LiteralExpr
+FnDecl 173..259 name=read pub body=Block
