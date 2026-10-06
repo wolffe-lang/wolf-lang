@@ -1002,7 +1002,7 @@ impl<'a> RangeCx<'a> {
                     if sh == 0 {
                         tb
                     } else {
-                        (0, tb.1 >> sh)
+                        (0, ((1i128 << bits) - 1) >> sh)
                     }
                 }
                 _ => tb,
