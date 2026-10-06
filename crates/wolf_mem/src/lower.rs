@@ -4036,6 +4036,12 @@ impl<'t> Lowerer<'t> {
         if callee.kind == SyntaxKind::PathExpr && self.text(callee.span) == "str_from_utf8" {
             return self.is_str_or_str_row(e.span);
         }
+        // s200 (#407, `[os.fs.error]`): `os_error_text(code) -> str` mints
+        // the host's message in the ambient region — the same kind of
+        // site, with no row to hide it.
+        if callee.kind == SyntaxKind::PathExpr && self.text(callee.span) == "os_error_text" {
+            return self.is_str_or_str_row(e.span);
+        }
         if !self.is_str_expr(e.span) {
             return false;
         }
