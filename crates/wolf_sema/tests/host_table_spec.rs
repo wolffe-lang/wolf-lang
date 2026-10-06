@@ -53,7 +53,7 @@ fn the_spec_host_table_is_the_checker_table() {
     );
     assert_eq!(
         compiler.len(),
-        78,
+        83,
         "the host builtin count moved — say so in [os.host.sigs]"
     );
 }

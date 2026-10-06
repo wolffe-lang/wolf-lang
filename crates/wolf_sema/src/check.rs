@@ -13690,6 +13690,14 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             rowed(table, int_, &["invalid", "io", "unseekable"]),
         ),
         "fs_tell" => (vec![int_], rowed(table, int_, &["io", "unseekable"])),
+        // s200 (#417, `[os.fs.copy]`): `fs_read_chunk` then
+        // `fs_write_chunk` fused — at most `max` bytes from `src`'s
+        // offset to `dst`'s, both advancing, the count answered; the
+        // host moves them where it can (linux `copy_file_range`,
+        // `sendfile`, `splice`), the read/write loop by name elsewhere.
+        // The rows are the chunk pair's: `eof` at the end of `src`, `io`
+        // otherwise (a closed or forged handle included).
+        "fs_copy_chunk" => (vec![int_, int_, int_], rowed(table, int_, &["eof", "io"])),
         "fs_read_at" => {
             let list_byte = byte_list(table);
             (
@@ -13949,6 +13957,28 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             (vec![region_], int_)
         }
         "live_region_bytes" => (Vec::new(), int_),
+        // s200 (#407, `[os.fs.error]`): the host's number for the task's
+        // most recent fallible fs-family call (0 when it succeeded or
+        // failed before the host), and the host's text for a number.
+        // Beside the row, never on it: a payload on the lowercase `io`
+        // breaks W0603's pact and every `io` arm downstream. No row —
+        // neither can fail.
+        "os_error" => (Vec::new(), int_),
+        "os_error_text" => (vec![int_], str_),
+        // s200 (#411, `[mem.list.bytes]`): the bulk byte scan, pure.
+        // `find` and `count` are `str`'s words for the same questions;
+        // a byte list answers them through the runtime's vectorised
+        // loops. Absence is `none`, as `xs.get(i)` answers it.
+        "bytes_find" => {
+            let list_byte = byte_list(table);
+            let byte_ = table.prim(Prim::Byte);
+            (vec![list_byte, byte_, int_], rowed(table, int_, &["none"]))
+        }
+        "bytes_count" => {
+            let list_byte = byte_list(table);
+            let byte_ = table.prim(Prim::Byte);
+            (vec![list_byte, byte_], int_)
+        }
         _ => return None,
     };
     Some(sig)
