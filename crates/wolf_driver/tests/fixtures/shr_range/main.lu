@@ -1,0 +1,18 @@
+// s214 (wolf-lang#600): the issue's hosted witness, verbatim. `rd.S`
+// returns 0xffffc04000001000, a value no compiler pass can see; the
+// gate lists it under `asm:` in a scratch wolf.pkg. Release at 0.2.24
+// printed only the first line.
+extern "c" fn rd() -> u64
+
+fn main() {
+    // # Safety: rd.S returns a constant in %rax and touches nothing else.
+    let a = unsafe { rd() }
+    let s = a >> 39
+    print("a >> 39 is {s == 33554304}")
+    if a >> 39 == 33554304 {
+        print("branch taken: a >> 39 == 33554304")
+    }
+    if a >> 63 == 1 {
+        print("branch taken: a >> 63 == 1")
+    }
+}
