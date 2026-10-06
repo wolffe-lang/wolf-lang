@@ -3521,6 +3521,26 @@ impl<'t> Machine<'t> {
             let ty_span = d.value().map(|x| x.span).unwrap_or(place_expr.span);
             return self.raw_index_write(place_expr, (p, idx), v, op, ty_span, stmt.span);
         }
+        // s213 (wolf-lang#577): `p[i].f = v`, `(*p).f = v` and nested
+        // paths — the element's operands (pointer, then index) run
+        // before the right-hand side (`[mem.model.place.rhs]`); row L4
+        // is asked on the struct's alignment at the element, then the
+        // field's bytes are written at its offset.
+        if place_expr.kind == SyntaxKind::MemberExpr
+            && let Some((elem, path, lay)) = self.raw_field_path(place_expr)
+        {
+            let base = self.raw_field_elem(elem, &lay)?;
+            let v = match d.value() {
+                Some(e) => val!(self.eval(e)),
+                None => Value::Unit,
+            };
+            let op = d.op().map(|t| t.kind).filter(|_| compound);
+            let ty_span = d.value().map(|x| x.span).unwrap_or(place_expr.span);
+            let prim = self.raw_field_prim(elem, &path);
+            let (at, size) = self.raw_field_at(base, &lay, &path, prim, true, stmt.span)?;
+            let signed = Self::raw_field_signed(prim);
+            return self.raw_write_unchecked(at, size, signed, v, op, ty_span, stmt.span);
+        }
         // kw06: `*p = v` / `*p op= v` — the raw tier's write at offset
         // zero. The pointer runs before the right-hand side, as the
         // index form's operands do (`[mem.model.place.rhs]`).
@@ -7538,9 +7558,10 @@ impl<'t> Machine<'t> {
             if let (Some(base), Some(member)) = (m.base(), m.member()) {
                 let field = self.text(member.span);
                 // s209: `p[i].f` through a raw pointer to a `#[repr(c)]`
-                // struct reads the field's bytes at the clause's layout.
-                if let Some(lay) = self.raw_struct_pointee(base) {
-                    return self.raw_field_read(base, &lay, &field, e.span);
+                // struct reads the field's bytes at the clause's layout
+                // (s213: `(*p).f` and nested paths too).
+                if self.raw_field_path(e).is_some() {
+                    return Ok(self.raw_field_read(e)?.expect("a raw field path"));
                 }
                 // `s.bytes().len` reads the view (#232; s153, #308):
                 // the receiver's byte count, nothing minted.
@@ -7956,14 +7977,21 @@ impl<'t> Machine<'t> {
     }
 
     /// s209: the clause layout (`[abi.layout.c]`, `.packed`, `.align`)
-    /// of the struct a raw element `p[i]` names, when `p` is a `*S`
-    /// whose `S` has one.
+    /// of the struct a raw element names — `p[i]`, or (s213) `*p` —
+    /// when `p` is a `*S` whose `S` has one.
     fn raw_struct_pointee(&self, elem: &'t GreenNode) -> Option<wolf_sema::layout::CLayout> {
-        if elem.kind != SyntaxKind::BracketApply {
-            return None;
-        }
-        let recv = BracketApply::cast(elem)?.callee()?;
-        let Some(TyKind::Ptr(t)) = self.expr_ty(recv.span) else {
+        let ptr = match elem.kind {
+            SyntaxKind::BracketApply => BracketApply::cast(elem)?.callee()?,
+            SyntaxKind::PrefixExpr => {
+                let pre = PrefixExpr::cast(elem)?;
+                if !pre.op().is_some_and(|t| t.kind == SyntaxKind::Star) {
+                    return None;
+                }
+                pre.operand()?
+            }
+            _ => return None,
+        };
+        let Some(TyKind::Ptr(t)) = self.expr_ty(ptr.span) else {
             return None;
         };
         let TyKind::Nominal { module, name, .. } = self.ctx().tb.table.kind(*t) else {
@@ -7973,28 +8001,121 @@ impl<'t> Machine<'t> {
         (!lay.fields.is_empty()).then_some(lay)
     }
 
-    /// s209 (`[mem.unsafe.raw.4]`, `[abi.layout.packed]`): `p[i].f`, a
-    /// scalar field read through a raw element of a `#[repr(c)]`
-    /// struct. The element starts `i * size_of(S)` past `p`, and it is
-    /// the STRUCT that must be aligned (row L4): `align_of(S)`, which
-    /// is 1 for a packed struct, so a packed `u64` at offset 2 is an
-    /// ordinary defined read, as the compiled tiers' `align 1` load is.
-    /// The field itself then sits at the offset the layout gives it,
-    /// which the struct's alignment already makes aligned for a plain
-    /// `#[repr(c)]` struct.
-    fn raw_field_read(
+    /// The scalar a raw field path ends at, read from the struct
+    /// signatures (an assignment's place carries no recorded type of
+    /// its own): `None` when the leaf is not a primitive.
+    fn raw_field_prim(&self, elem: &'t GreenNode, path: &[String]) -> Option<Prim> {
+        let ptr = match elem.kind {
+            SyntaxKind::BracketApply => BracketApply::cast(elem)?.callee()?,
+            _ => PrefixExpr::cast(elem)?.operand()?,
+        };
+        let Some(TyKind::Ptr(t)) = self.expr_ty(ptr.span) else {
+            return None;
+        };
+        let (mut module, mut name) = match self.ctx().tb.table.kind(*t) {
+            TyKind::Nominal { module, name, .. } => (*module as usize, name.clone()),
+            _ => return None,
+        };
+        let table = &self.tc.sigs.table;
+        for (i, f) in path.iter().enumerate() {
+            let Some(ItemSig::Struct(ss)) = self.tc.sigs.get(module, &name) else {
+                return None;
+            };
+            let fty = ss.fields.iter().find(|x| &x.name == f)?.ty;
+            match table.kind(fty) {
+                TyKind::Prim(p) if i + 1 == path.len() => return Some(*p),
+                TyKind::Nominal {
+                    module: m, name: n, ..
+                } if i + 1 < path.len() => {
+                    (module, name) = (*m as usize, n.clone());
+                }
+                _ => return None,
+            }
+        }
+        None
+    }
+
+    /// s213 (wolf-lang#577): a field path rooted at a raw element —
+    /// `p[i].f`, `(*p).f`, `p[i].a.b` — as (the element expression,
+    /// the field names root-outward, the element struct's layout).
+    #[allow(clippy::type_complexity)]
+    fn raw_field_path(
+        &self,
+        e: &'t GreenNode,
+    ) -> Option<(&'t GreenNode, Vec<String>, wolf_sema::layout::CLayout)> {
+        let mut path = Vec::new();
+        let mut cur = e;
+        loop {
+            match cur.kind {
+                SyntaxKind::MemberExpr => {
+                    let m = MemberExpr::cast(cur)?;
+                    path.push(self.text(m.member()?.span));
+                    cur = m.base()?;
+                }
+                SyntaxKind::ParenExpr => cur = ParenExpr::cast(cur)?.expr()?,
+                _ => break,
+            }
+        }
+        if path.is_empty() {
+            return None;
+        }
+        let lay = self.raw_struct_pointee(cur)?;
+        path.reverse();
+        Some((cur, path, lay))
+    }
+
+    /// The element a raw field path is rooted at: the pointer and the
+    /// index run (in that order, before any right-hand side —
+    /// wolf-lang#452), and the element's address is `p + i * size_of(S)`.
+    fn raw_field_elem(
         &mut self,
         elem: &'t GreenNode,
         lay: &wolf_sema::layout::CLayout,
-        field: &str,
-        span: Span,
-    ) -> E<Flow> {
-        let Some(f) = lay.field(field) else {
-            return self.refuse("field access outside the modelled surface", span);
+    ) -> E<PtrVal> {
+        let (p, idx) = if elem.kind == SyntaxKind::BracketApply {
+            self.raw_index_parts(elem)?
+        } else {
+            (self.raw_deref_ptr(elem)?, 0)
         };
+        let step = idx.wrapping_mul(lay.size as i64);
+        Ok(PtrVal {
+            offset: p.offset + step,
+            addr: p.addr.wrapping_add(step as u64),
+            ..p
+        })
+    }
+
+    /// s209 (`[mem.unsafe.raw.4]`, `[abi.layout.packed]`), s213: the
+    /// access to a field path at the element `base`. It is the STRUCT
+    /// that must be aligned (row L4): `align_of(S)`, which is 1 for a
+    /// packed struct, so a packed `u64` at offset 2 is an ordinary
+    /// defined access, as the compiled tiers' `align 1` load or store
+    /// is. The field then sits at the offset the layout gives it, which
+    /// the struct's alignment already makes aligned for a plain
+    /// `#[repr(c)]` struct. Only an integer-shaped field is modelled;
+    /// anything else is refused by name. Returns the field's address
+    /// and size.
+    fn raw_field_at(
+        &mut self,
+        base: PtrVal,
+        lay: &wolf_sema::layout::CLayout,
+        path: &[String],
+        prim: Option<Prim>,
+        write: bool,
+        span: Span,
+    ) -> E<(PtrVal, u64)> {
+        let mut off = 0u64;
+        let mut cur = lay;
+        for name in path {
+            let Some(f) = cur.field(name) else {
+                return self.refuse("field access outside the modelled surface", span);
+            };
+            off += f.offset;
+            cur = &f.layout;
+        }
         let scalar = matches!(
-            self.expr_ty(span),
-            Some(TyKind::Prim(
+            prim,
+            Some(
                 Prim::Bool
                     | Prim::Byte
                     | Prim::U8
@@ -8007,31 +8128,48 @@ impl<'t> Machine<'t> {
                     | Prim::I32
                     | Prim::I64
                     | Prim::Int
-            ))
+            )
         );
-        if !scalar || !f.layout.fields.is_empty() {
-            return self.refuse("a raw read of a field that is not an integer", span);
+        if !scalar || !cur.fields.is_empty() {
+            return self.refuse(
+                if write {
+                    "a raw write of a field that is not an integer"
+                } else {
+                    "a raw read of a field that is not an integer"
+                },
+                span,
+            );
         }
-        let signed = matches!(
-            self.expr_ty(span),
-            Some(TyKind::Prim(
-                Prim::I8 | Prim::I16 | Prim::I32 | Prim::I64 | Prim::Int
-            ))
-        );
-        let (p, idx) = self.raw_index_parts(elem)?;
-        let step = idx.wrapping_mul(lay.size as i64);
-        let base = PtrVal {
-            offset: p.offset + step,
-            addr: p.addr.wrapping_add(step as u64),
-            ..p
+        self.raw_align_check(base, lay.align, write, span)?;
+        Ok((
+            PtrVal {
+                offset: base.offset + off as i64,
+                addr: base.addr.wrapping_add(off),
+                ..base
+            },
+            cur.size,
+        ))
+    }
+
+    /// Whether a raw field path's scalar is a signed integer.
+    fn raw_field_signed(prim: Option<Prim>) -> bool {
+        matches!(
+            prim,
+            Some(Prim::I8 | Prim::I16 | Prim::I32 | Prim::I64 | Prim::Int)
+        )
+    }
+
+    /// s209: `p[i].f`, a scalar field read through a raw element of a
+    /// `#[repr(c)]` struct; s213: `(*p).f` and nested paths too.
+    fn raw_field_read(&mut self, e: &'t GreenNode) -> E<Option<Flow>> {
+        let Some((elem, path, lay)) = self.raw_field_path(e) else {
+            return Ok(None);
         };
-        self.raw_align_check(base, lay.align, false, span)?;
-        let at = PtrVal {
-            offset: base.offset + f.offset as i64,
-            addr: base.addr.wrapping_add(f.offset),
-            ..base
-        };
-        self.raw_read_value(at, f.layout.size, signed, span)
+        let prim = self.raw_field_prim(elem, &path);
+        let base = self.raw_field_elem(elem, &lay)?;
+        let (at, size) = self.raw_field_at(base, &lay, &path, prim, false, e.span)?;
+        self.raw_read_value(at, size, Self::raw_field_signed(prim), e.span)
+            .map(Some)
     }
 
     /// kw06: the pointer a prefix `*p` reads or writes through — `p`
@@ -8106,14 +8244,31 @@ impl<'t> Machine<'t> {
         ty_span: Span,
         span: Span,
     ) -> E<Flow> {
+        // s209: a scalar pointee's alignment is its size (row L4); a
+        // compound assignment is one access, asked once, as a write.
+        self.raw_align_check(at, size, true, span)?;
+        self.raw_write_unchecked(at, size, signed, v, op, ty_span, span)
+    }
+
+    /// [`Machine::raw_write_at`] once row L4 has been asked by the
+    /// caller — s213's field store asks it on the STRUCT's alignment at
+    /// the element, not on the field's size at the field.
+    #[allow(clippy::too_many_arguments)]
+    fn raw_write_unchecked(
+        &mut self,
+        at: PtrVal,
+        size: u64,
+        signed: bool,
+        v: Value,
+        op: Option<SyntaxKind>,
+        ty_span: Span,
+        span: Span,
+    ) -> E<Flow> {
         let mut n = match v {
             Value::Int(n) => n,
             Value::Bool(b) => i64::from(b),
             _ => return self.refuse("raw write of a non-scalar", span),
         };
-        // s209: a scalar pointee's alignment is its size (row L4); a
-        // compound assignment is one access, asked once, as a write.
-        self.raw_align_check(at, size, true, span)?;
         // wolf-lang#542's checked half: the operator is the statement's
         // (it was always `+`, so `p[0] *= 31` added), with the same
         // checked arithmetic as every other compound assignment.
