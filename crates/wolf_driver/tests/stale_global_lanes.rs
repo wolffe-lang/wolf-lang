@@ -238,7 +238,7 @@ fn a_raw_pointer_written_by_a_callee_is_read_after_the_call() {
 /// `extern "c" let` yet (wolf-interp#190) — both measured, never a skip.
 #[test]
 fn c_writes_between_two_wolf_reads_on_both_tiers() {
-    let src = fixture("extern_writer.lu");
+    let src = fixture("extern/extern_writer.lu");
     let checked = lane(&src, "--checked").expect("the checked machine always runs");
     assert_eq!(
         checked.verdict, "unsupported",
@@ -294,7 +294,7 @@ fn c_writes_between_two_wolf_reads_on_both_tiers() {
         let c_obj = dir.join("c_half.o");
         let r = Command::new(&cc)
             .args(["-c", "-O1"])
-            .arg(fixture("extern_writer.c"))
+            .arg(fixture("extern/extern_writer.c"))
             .arg("-o")
             .arg(&c_obj)
             .output()
@@ -367,7 +367,7 @@ mod linux_x86_64 {
     fn kernel_obj(tier: &str) -> (PathBuf, PathBuf) {
         let dir = scratch(&format!("kernel-{tier}"));
         let src = dir.join("kmain_stale.lu");
-        std::fs::copy(fixture("kmain_stale.lu"), &src).expect("copy the kernel");
+        std::fs::copy(fixture("kernel/kmain_stale.lu"), &src).expect("copy the kernel");
         let obj = dir.join("kmain_stale.o");
         let mut cmd = Command::new(wolf());
         cmd.current_dir(&dir).args([
@@ -402,7 +402,7 @@ mod linux_x86_64 {
             for src in [
                 sibling_fixture("freestanding", "start.S"),
                 sibling_fixture("freestanding", "rt_stub.S"),
-                fixture("stale.S"),
+                fixture("kernel/stale.S"),
             ] {
                 let o = dir.join(src.file_name().unwrap()).with_extension("o");
                 let r = tool(&cc, &["-c", src.to_str().unwrap(), "-o", o.to_str().unwrap()]);
@@ -439,7 +439,10 @@ mod linux_x86_64 {
     }
 
     /// The instructions of `func` after its call to `callee`, up to the
-    /// return, from `objdump -dr` (relocation lines name the callee).
+    /// return, from `objdump -dr`. The callee is named by a relocation:
+    /// on the call itself (`R_X86_64_PLT32`, release) or on the GOT load
+    /// the call goes through (`R_X86_64_GOTPCREL`, native) — the call is
+    /// the first `call` at or after that relocation.
     fn after_call(disasm: &str, func: &str, callee: &str) -> Vec<String> {
         let head = format!("<{func}>:");
         let body: Vec<&str> = disasm
@@ -449,9 +452,12 @@ mod linux_x86_64 {
             .take_while(|l| !l.trim().is_empty())
             .collect();
         assert!(!body.is_empty(), "{func} in the object:\n{disasm}");
-        let at = body
+        let named = body
             .iter()
-            .position(|l| l.contains("R_X86_64_PLT32") && l.contains(callee))
+            .position(|l| l.contains("R_X86_64") && l.contains(&format!("\t{callee}")))
+            .unwrap_or_else(|| panic!("{func} names {callee}:\n{}", body.join("\n")));
+        let at = (named.saturating_sub(1)..body.len())
+            .find(|&i| insn(body[i]).is_some_and(|(m, _)| m.starts_with("call")))
             .unwrap_or_else(|| panic!("{func} calls {callee}:\n{}", body.join("\n")));
         body[at + 1..]
             .iter()
