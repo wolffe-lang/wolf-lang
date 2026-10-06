@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+LetDecl 113..136 pat=WIDTH pub init=LiteralExpr
+LetDecl 151..177 pat=NAME pub init=StringExpr

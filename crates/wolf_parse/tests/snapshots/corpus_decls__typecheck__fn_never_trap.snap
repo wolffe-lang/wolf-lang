@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 428..490 name=die body=Block
+FnDecl 492..550 name=halt body=Block
+FnDecl 552..633 name=parse body=Block
+FnDecl 635..715 name=main body=Block

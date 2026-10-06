@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ConstDecl 100..125 name=WIDTH pub init=LiteralExpr
+FnDecl 161..196 name=width pub body=Block
