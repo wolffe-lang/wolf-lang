@@ -988,11 +988,22 @@ impl<'a> RangeCx<'a> {
                     _ => tb,
                 }
             }
+            // A logical shift reads its operand as UNSIGNED bits
+            // (wolf-lang#600): `x >> s` lies in [0, (2^bits - 1) >> s],
+            // whatever x's signed range says. `tb` is the SIGNED bound
+            // pair of the width, and `tb.1 >> s` halved the true maximum
+            // — `a >> 63` was [0, 0], so `a >> 63 == 1` was deleted. The
+            // bound reads no operand range, as before: `selfbound` admits
+            // Lshr on exactly that promise.
             Opcode::Lshr => match analysis::const_int(self.f, args[1]) {
                 Some(sh) if sh > 0 => {
                     let bits = self.view.types.int_bits(self.f.value_ty(v)).unwrap_or(64);
                     let sh = (sh as u32) & (bits - 1);
-                    if sh == 0 { tb } else { (0, tb.1 >> sh) }
+                    if sh == 0 {
+                        tb
+                    } else {
+                        (0, ((1i128 << bits) - 1) >> sh)
+                    }
                 }
                 _ => tb,
             },
