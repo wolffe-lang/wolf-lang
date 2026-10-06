@@ -1,0 +1,33 @@
+//! check: run(exit=0, stdout="3 42 0 -9\n")
+//! phase: run
+//! conforms: mem.unsafe.raw.5, mem.model.place.rhs, abi.layout.c
+//!
+//! s213 (wolf-lang#577): a compound store to a field of a raw element
+//! reads the field at its own type, then stores (`[mem.unsafe.raw.5]`):
+//! `p[1].b += 2` on a `u64` at offset 8, and a signed `i32` field
+//! decremented below zero. The `u32` field at offset 0 and the padding
+//! after it are not touched. At trunk 294d626d every compiling machine
+//! refused the store.
+
+import c "stdlib.h"
+
+#[repr(c)]
+struct Rec {
+    a: u32,
+    b: u64,
+    d: i32,
+}
+
+fn main() -> int {
+    // # Safety: two zeroed Recs (24 bytes each) from calloc; freed once.
+    unsafe {
+        let p = c.calloc(2, 24) as *Rec
+        p[1].b = 40
+        p[1].b += 2
+        p[1].a = 3
+        p[1].d -= 9
+        print("{p[1].a as int} {p[1].b as int} {p[0].b as int} {p[1].d}")
+        c.free(p as *u8)
+    }
+    0
+}

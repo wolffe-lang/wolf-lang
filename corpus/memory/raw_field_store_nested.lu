@@ -1,0 +1,38 @@
+//! check: run(exit=0, stdout="5 0 9 11\n")
+//! phase: run
+//! conforms: mem.unsafe.raw.5, abi.layout.c
+//!
+//! s213 (wolf-lang#577): a nested field path through a raw element,
+//! `p[0].inner.y = 5`, stores at the sum of the offsets
+//! (`[mem.unsafe.raw.5]`); the dereference spelling `(*p).tag = 9`
+//! names the element at index 0, and `(*p).tag += 2` reads it back
+//! first. At trunk 294d626d every compiling machine refused both
+//! stores.
+
+import c "stdlib.h"
+
+#[repr(c)]
+struct In {
+    x: u32,
+    y: u32,
+}
+
+#[repr(c)]
+struct Out {
+    tag: u64,
+    inner: In,
+}
+
+fn main() -> int {
+    // # Safety: one zeroed Out (16 bytes) from calloc; freed once.
+    unsafe {
+        let p = c.calloc(1, 16) as *Out
+        p[0].inner.y = 5
+        (*p).tag = 9
+        let nine = (*p).tag
+        (*p).tag += 2
+        print("{p[0].inner.y as int} {p[0].inner.x as int} {nine as int} {(*p).tag as int}")
+        c.free(p as *u8)
+    }
+    0
+}
