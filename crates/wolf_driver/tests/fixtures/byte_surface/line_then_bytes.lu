@@ -1,0 +1,23 @@
+//! member: false
+//! s200 (wolf-lang#405, `[os.fs.std]`): `read_line` reads ahead into a
+//! buffer the implementation holds; a byte read of descriptor 0 after it
+//! answers those buffered bytes first, so the two spellings never
+//! disagree about where input stands. Prints the first line, then the
+//! rest of the input as bytes, unchanged.
+
+fn main() -> int {
+    let first = read_line() else |e| {
+        return 2
+    }
+    print("line={first}")
+    loop {
+        let chunk = fs_read_chunk(0, 3) else |e| match e {
+            eof => { break },
+            io => { return 4 },
+        }
+        fs_write_chunk(1, chunk) else |e| {
+            return 3
+        }
+    }
+    0
+}
