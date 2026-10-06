@@ -1,0 +1,46 @@
+//! member: false
+//! s215 (`[os.proc.fds]`; pelt's H2) — a child that inherits an
+//! explicit descriptor 5: this program fills a pipe, hands its read
+//! end to the child AS 5 and the write end of a second pipe as 1, and
+//! `cat /dev/fd/5` copies one to the other. The number is the
+//! contract, as in a shell's `5<file`. lupin cannot place a descriptor
+//! above 2 (it admits no `unsafe`, and stable Rust has no safe call
+//! that does), so it refuses this program by name. Unix only.
+
+/// Every byte the pipe carries until its last writer closes, as text;
+/// a failure ends the read and is named in the text.
+fn drain(fd: int) -> str {
+    var out = ""
+    loop {
+        var stop = false
+        let chunk = fs_read(fd, 4096) else |e| {
+            stop = true
+            match e {
+                eof => "",
+                io => "<io>",
+                utf8 => "<utf8>",
+            }
+        }
+        out = out + chunk
+        if stop {
+            break
+        }
+    }
+    out
+}
+
+fn main() -> !int {
+    let (r5, w5) = os_pipe()?
+    fs_write(w5, "five\n")?
+    fs_close(w5)?
+    let (r, w) = os_pipe()?
+    let h = os_spawn_fds("cat", ["/dev/fd/5"], [5, r5, 1, w])?
+    fs_close(r5)?
+    fs_close(w)?
+    let out = drain(r)
+    fs_close(r)?
+    let code = os_wait(h)?
+    let got = out.trim()
+    print("fd5={got} code={code}")
+    0
+}

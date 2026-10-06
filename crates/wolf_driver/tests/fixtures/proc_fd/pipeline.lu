@@ -1,0 +1,47 @@
+//! member: false
+//! s215 (`[os.proc.fds]`, `[os.proc.pipe]`; pelt's H2) — a two-stage
+//! pipeline built from argv alone, the shape a shell writes as
+//! `printf 'a\nb\nc\n' | wc -l`: one pipe between the stages, a second
+//! one this program reads the last stage's output from. The parent
+//! closes its copies of every end it handed down, or `wc` would never
+//! see the end of its input. Not a corpus row: it runs host programs
+//! (`printf`, `wc`), so `proc_fd_lanes.rs` runs it on unix only.
+
+/// Every byte the pipe carries until its last writer closes, as text;
+/// a failure ends the read and is named in the text.
+fn drain(fd: int) -> str {
+    var out = ""
+    loop {
+        var stop = false
+        let chunk = fs_read(fd, 4096) else |e| {
+            stop = true
+            match e {
+                eof => "",
+                io => "<io>",
+                utf8 => "<utf8>",
+            }
+        }
+        out = out + chunk
+        if stop {
+            break
+        }
+    }
+    out
+}
+
+fn main() -> !int {
+    let (r1, w1) = os_pipe()?
+    let (r2, w2) = os_pipe()?
+    let first = os_spawn_fds("printf", ["a\nb\nc\n"], [1, w1])?
+    let second = os_spawn_fds("wc", ["-l"], [0, r1, 1, w2])?
+    fs_close(w1)?
+    fs_close(r1)?
+    fs_close(w2)?
+    let out = drain(r2)
+    fs_close(r2)?
+    let a = os_wait(first)?
+    let b = os_wait(second)?
+    let lines = out.trim()
+    print("lines={lines} printf={a} wc={b}")
+    0
+}

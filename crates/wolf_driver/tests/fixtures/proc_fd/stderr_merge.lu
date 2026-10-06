@@ -1,0 +1,52 @@
+//! member: false
+//! s215 (`[os.proc.fds]`; pelt's H2) — `2>&1` onto a pipe: the map
+//! names the SAME source for the child's 1 and 2, so what `ls` writes
+//! to its standard error arrives in the pipe this program reads. The
+//! control maps 1 alone: then the complaint goes to the inherited
+//! stderr and the pipe stays empty, which is what makes the first
+//! answer the map's doing. Unix only (`proc_fd_lanes.rs`).
+
+/// Every byte the pipe carries until its last writer closes, as text;
+/// a failure ends the read and is named in the text.
+fn drain(fd: int) -> str {
+    var out = ""
+    loop {
+        var stop = false
+        let chunk = fs_read(fd, 4096) else |e| {
+            stop = true
+            match e {
+                eof => "",
+                io => "<io>",
+                utf8 => "<utf8>",
+            }
+        }
+        out = out + chunk
+        if stop {
+            break
+        }
+    }
+    out
+}
+
+fn run(map_both: bool) -> str ! {unsupported, invalid, not_found, denied, signal, io} {
+    let (r, w) = os_pipe()?
+    var map = [1, w]
+    if map_both {
+        map = [1, w, 2, w]
+    }
+    let h = os_spawn_fds("ls", ["wolf-s215-no-such-path"], map)?
+    fs_close(w)?
+    let out = drain(r)
+    fs_close(r)?
+    let code = os_wait(h)?
+    let named = out.contains("wolf-s215-no-such-path")
+    "named={named} failed={code != 0}"
+}
+
+fn main() -> !int {
+    let both = run(true)?
+    let alone = run(false)?
+    print("merged {both}")
+    print("stdout_only {alone}")
+    0
+}
