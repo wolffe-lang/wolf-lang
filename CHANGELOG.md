@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased
+
+### A child's descriptors, a pipe, the working directory, isatty (s215)
+
+A wolf program can now build a shell's plumbing from argv alone: a
+pipeline, a redirection, `2>&1`, `N<file`, `cd`. Four host builtins
+(the host table is 82 lines, `RT_SYMBOLS` 168, the prelude 89
+functions):
+
+- **`os_spawn_fds(exe, args, map) -> int ! {denied, invalid, io,
+  not_found, unsupported}`** (`[os.proc.fds]`). `map` is a flat
+  `List[int]` of `(child fd, source)` pairs: a source is a handle of
+  this process (0..2 its standard streams, 3 and up an fs handle such as
+  a pipe end) or `-1` for "closed in the child". Unmapped descriptors
+  keep `[os.proc.spawn]`'s posture (0 the null device, 1 and 2
+  inherited, nothing else open). Refusals come in a fixed order and
+  none makes a child: the map's shape (`invalid`), the host (windows
+  answers `unsupported` to a non-empty map), the sources (`io`), then the
+  program. `os_spawn_with`'s listener set stays as it is: its sources are
+  net handles, a separate numbering space. `exec` at comptime.
+- **`os_pipe() -> (int, int) ! {io}`** (`[os.proc.pipe]`): the read and
+  write ends as fs handles, close-on-exec, served by every handle call.
+- **`os_chdir(path) -> () ! {denied, io, not_found}`** (`[os.fs.chdir]`,
+  wolf-std F-0067's ask): the write twin of `os_cwd`. The checked machine
+  keeps a machine-local directory, as it keeps `env_set`'s overlay, and
+  every fs path, unix-socket path, `os_cwd` and spawn follows it.
+- **`os_isatty(fd) -> bool ! {io}`** (`[os.fs.isatty]`): closed or forged
+  is `io`, never `false`.
+
+`os_pipe`, `os_chdir` and `os_isatty` are `io` at comptime. lupin 0.1.47
+resolves none of the names (pinned pre-mirror in `proc_fd_lanes.rs`);
+its mirror serves descriptors 0..2 and refuses a target above 2 or a
+close by name. Witnesses: `corpus/os/{pipe_round_trip,chdir_relative,
+spawn_fds_rows}.lu`, `corpus/comptime/sandbox_{spawn_fds,chdir}.lu`, and
+the unix gate `crates/wolf_driver/tests/proc_fd_lanes.rs` (a two-stage
+pipeline, `2>&1` onto a pipe, an explicit fd 5, no leaks, a child in the
+moved directory, `isatty` under a pipe and under `script(1)`).
+
 ## 0.2.25 — 2026-10-07
 
 THE TWENTY-FIFTH. Three silent wrong answers on the compiled tiers are
