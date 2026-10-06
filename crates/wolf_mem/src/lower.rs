@@ -2798,6 +2798,27 @@ impl<'t> Lowerer<'t> {
         Ok(())
     }
 
+    /// s213 (wolf-lang#577): the raw element a field path is rooted at
+    /// — `p[i]` through a raw pointer, or `*p` (through parens) — when
+    /// `e` is `root.f`, `root.f.g`, ….
+    fn raw_field_root(&self, e: &'t GreenNode) -> Option<&'t GreenNode> {
+        let mut cur = e;
+        let mut stepped = false;
+        loop {
+            match cur.kind {
+                SyntaxKind::MemberExpr => {
+                    cur = MemberExpr::cast(cur)?.base()?;
+                    stepped = true;
+                }
+                SyntaxKind::ParenExpr => cur = ParenExpr::cast(cur)?.expr()?,
+                _ if stepped && (self.is_raw_index(cur) || self.is_raw_deref(cur)) => {
+                    return Some(cur);
+                }
+                _ => return None,
+            }
+        }
+    }
+
     /// Is `e` a prefix `*p`? Sema types the operand as a raw pointer
     /// (anything else is its error), so the spelling decides.
     fn is_raw_deref(&self, e: &GreenNode) -> bool {
@@ -5903,6 +5924,26 @@ impl<'t> Lowerer<'t> {
                 self.raw_index(place_expr, false)?;
             }
             self.raw_index(place_expr, true)?;
+            return Ok(());
+        }
+        // s213 (wolf-lang#577): `p[i].f = v` / `(*p).f = v` (nested
+        // field paths too) — a raw-tier write of the element's bytes at
+        // the field (`[mem.unsafe.raw.1]`): the ring, the pointer's and
+        // the index's reads, and the attribution statement, exactly as
+        // `p[i] = v`; a compound operator also reads.
+        if let Some(root) = self.raw_field_root(place_expr) {
+            let compound = d.op().map(|t| t.kind != SyntaxKind::Eq).unwrap_or(false);
+            if self.is_raw_deref(root) {
+                if compound {
+                    self.raw_deref(root, false)?;
+                }
+                self.raw_deref(root, true)?;
+            } else {
+                if compound {
+                    self.raw_index(root, false)?;
+                }
+                self.raw_index(root, true)?;
+            }
             return Ok(());
         }
         let Some((place, _)) = self.as_place(place_expr) else {
