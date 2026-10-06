@@ -8,7 +8,7 @@
 //! the `io` category, refused at comptime with that category's reason.
 
 comptime fn helper() -> int {
-    os_chdir("/") else |_| { }
+    os_chdir("/") else |_| {}
     0
 }
 
