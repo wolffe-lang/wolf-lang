@@ -601,7 +601,11 @@ fn rangeopt_keeps_a_branch_on_the_top_half_of_a_logical_shift() {
 /// test is decided, as before.
 #[test]
 fn rangeopt_still_decides_a_shift_past_its_unsigned_maximum() {
-    for (ty, sh, cc, k) in [("i64", 63, "eq", 2), ("i64", 39, "sge", 33554432), ("i8", 4, "eq", 16)] {
+    for (ty, sh, cc, k) in [
+        ("i64", 63, "eq", 2),
+        ("i64", 39, "sge", 33554432),
+        ("i8", 4, "eq", 16),
+    ] {
         let (out, _) = one_pass(&shift_probe(ty, sh, cc, k), "rangeopt");
         assert!(
             !out.contains("br "),

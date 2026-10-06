@@ -217,7 +217,11 @@ fn every_machine_prints(row: &str, want: &str, checked_refusal: Option<&str>) {
 /// Row 1: wrapping integers, all four machines.
 #[test]
 fn a_branch_on_the_top_half_of_a_wrapping_shift_is_kept() {
-    every_machine_prints("kernels/lshr_top_bits.lu", "33554304 1 131071 15 31\n", None);
+    every_machine_prints(
+        "kernels/lshr_top_bits.lu",
+        "33554304 1 131071 15 31\n",
+        None,
+    );
 }
 
 /// Row 2: plain `u64` and `u8`.
@@ -252,7 +256,10 @@ fn the_issues_witness_takes_both_branches_on_both_tiers() {
         }
         let out = cmd.output().expect("wolf runs");
         assert_eq!(
-            (out.status.code(), String::from_utf8_lossy(&out.stdout).as_ref()),
+            (
+                out.status.code(),
+                String::from_utf8_lossy(&out.stdout).as_ref()
+            ),
             (
                 Some(0),
                 "a >> 39 is true\nbranch taken: a >> 39 == 33554304\n\
