@@ -15,7 +15,8 @@
 //! parting is pinned below by that version as pre-mirror (lupin's half is
 //! wolf-interp#185). A newer lupin must answer what the clause
 //! says. 0.1.46 (the 0.2.23 pairing, r28) is still pre-mirror (#185
-//! open) and answers the same, measured; its pins are carried.
+//! open) and answers the same, measured; its pins are carried. So is
+//! 0.1.47 (the 0.2.24 pairing, r29), measured.
 
 mod lane_exit;
 
@@ -214,6 +215,11 @@ const PRE_MIRROR: &[Pin<'static>] = &[
         verdict: "unsupported",
         named: "_volatile`",
     },
+    Pin {
+        version: "0.1.47",
+        verdict: "unsupported",
+        named: "_volatile`",
+    },
 ];
 
 fn assert_obs(who: &str, row: &str, obs: &Obs, want: Want<'_>) {
@@ -365,6 +371,11 @@ fn a_misaligned_volatile_read_is_row_l3() {
             },
             Pin {
                 version: "0.1.46",
+                verdict: "unsupported",
+                named: "`read_volatile`",
+            },
+            Pin {
+                version: "0.1.47",
                 verdict: "unsupported",
                 named: "`read_volatile`",
             },
