@@ -1,0 +1,26 @@
+//! member: false
+//! s200 (wolf-lang#411) micro-benchmark, the BUILTIN: the same count as
+//! `scalar_count.lu` through `bytes_count` (`[mem.list.bytes]`), one
+//! runtime call per 1 MiB chunk into the runtime's vectorised loop.
+
+fn main() -> int {
+    let args = env_args()
+    if args.len < 2 {
+        return 2
+    }
+    let fd = fs_open(args[1]) else |e| {
+        return 3
+    }
+    var lines = 0
+    loop {
+        region pass {
+            let chunk = fs_read_chunk(fd, 1048576) else |e| match e {
+                eof => { break },
+                io => { return 4 },
+            }
+            lines += bytes_count(chunk, 10 as byte)
+        }
+    }
+    print("{lines}")
+    0
+}
