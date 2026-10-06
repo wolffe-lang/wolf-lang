@@ -15,11 +15,17 @@
 //! was `unsupported` on the checked machine ("member access outside
 //! the modelled surface").
 //!
-//! lupin 0.1.46 runs the misaligned rows as defined; each L4 row's
-//! parting is pinned by that version as pre-mirror (lupin's half is
-//! wolf-interp#192). Its packed and repr(c) rows stop earlier, at
-//! wolf-interp#188 (no `packed`, no struct pointee). A newer lupin must
-//! answer what the clause says.
+//! lupin 0.1.46 ran the misaligned rows as defined, each L4 row pinned
+//! by that version as pre-mirror. 0.1.47 (the 0.2.24 pairing, r29)
+//! carries the mirror (wolf-interp#192): every L4 row is `ub(mem.ub)`,
+//! row L4, clause `mem.unsafe.raw.4`, measured. That pin is dropped, and
+//! lupin is held to the clause like every other machine. Its record
+//! carries no diagnostic on a `ub` verdict (`[proto.record.verdict]`:
+//! only a `fail` carries one), so lupin is held to the verdict, the row
+//! and the clause, not to the checked machine's E1401. Its packed and
+//! repr(c) rows stop earlier, at wolf-interp#188 (no `packed`, no struct
+//! pointee), pinned by version. A newer lupin must answer what the
+//! clause says.
 
 mod lane_exit;
 
@@ -194,16 +200,6 @@ struct Pin<'a> {
     named: &'a str,
 }
 
-/// lupin 0.1.46 (the 0.2.23 pairing) runs every misaligned access as
-/// defined — `with_addr` is mirrored since is70 (wolf-interp#184), the
-/// alignment row is not — so each L4 row exits 0 there, measured
-/// (`rows-trunk-archive.log`). Its half is wolf-interp#192.
-const DEFINED_PRE_MIRROR: &[Pin<'static>] = &[Pin {
-    version: "0.1.46",
-    verdict: "exit(0)",
-    named: "",
-}];
-
 fn assert_obs(who: &str, row: &str, obs: &Obs, want: Want<'_>) {
     assert_eq!(
         obs.verdict, want.verdict,
@@ -289,6 +285,10 @@ fn every_machine(
 
 const L4: Want<'static> = ub("L4", "mem.unsafe.raw.4");
 
+/// lupin's L4: the same verdict, row and clause, and no diagnostic (a
+/// `ub` record carries none on lupin; the checked machine adds E1401).
+const L4_LUPIN: Want<'static> = Want { codes: &[], ..L4 };
+
 /// `[mem.unsafe.raw.4]`: a `*u16`, `*u32` or `*u64` read or write one,
 /// two or four bytes past an aligned base (through `with_addr`; `q[0]`
 /// and `*q`) is row L4, clause `mem.unsafe.raw.4`. The compiled tiers
@@ -304,14 +304,15 @@ fn a_misaligned_ordinary_access_is_row_l4() {
         "raw_ub_misaligned_u64_read.lu",
         "raw_ub_misaligned_u64_write.lu",
     ] {
-        every_machine(row, L4, None, L4, DEFINED_PRE_MIRROR);
+        every_machine(row, L4, None, L4_LUPIN, &[]);
     }
 }
 
 /// `[mem.unsafe.raw.4]`: through a raw element it is the STRUCT's
 /// alignment that is asked — a plain `#[repr(c)]` `{u32, u64}` (8)
-/// four bytes past an aligned base is L4 at `s[0].b`. lupin 0.1.46 has
-/// no struct pointee (a `*Pair` reads as bytes, wolf-interp#188).
+/// four bytes past an aligned base is L4 at `s[0].b`. lupin 0.1.46 and
+/// 0.1.47 have no struct pointee (a `*Pair` reads as bytes,
+/// wolf-interp#188; measured on 0.1.47 at r29).
 #[test]
 fn a_misaligned_repr_c_element_is_row_l4() {
     every_machine(
@@ -319,11 +320,18 @@ fn a_misaligned_repr_c_element_is_row_l4() {
         L4,
         None,
         L4,
-        &[Pin {
-            version: "0.1.46",
-            verdict: "unsupported",
-            named: "has no member `b`",
-        }],
+        &[
+            Pin {
+                version: "0.1.46",
+                verdict: "unsupported",
+                named: "has no member `b`",
+            },
+            Pin {
+                version: "0.1.47",
+                verdict: "unsupported",
+                named: "has no member `b`",
+            },
+        ],
     );
 }
 
@@ -344,7 +352,7 @@ fn an_aligned_access_of_every_width_is_defined() {
 /// `[abi.layout.packed]`: a packed struct's alignment is 1, so its
 /// `u64` field at offset 2 (and 12, in the second element) read
 /// through `g[i].base` is defined on every machine — never L4. lupin
-/// 0.1.46 refuses `packed` by name (E0817, wolf-interp#188).
+/// 0.1.46 and 0.1.47 refuse `packed` by name (E0817, wolf-interp#188).
 #[test]
 fn a_packed_field_through_a_raw_element_is_defined() {
     const OUT: &str = "packed 255 4096 1 512\n";
@@ -353,10 +361,17 @@ fn a_packed_field_through_a_raw_element_is_defined() {
         runs(OUT),
         Some(runs(OUT)),
         runs(OUT),
-        &[Pin {
-            version: "0.1.46",
-            verdict: "fail(E0817)",
-            named: "",
-        }],
+        &[
+            Pin {
+                version: "0.1.46",
+                verdict: "fail(E0817)",
+                named: "",
+            },
+            Pin {
+                version: "0.1.47",
+                verdict: "fail(E0817)",
+                named: "",
+            },
+        ],
     );
 }
