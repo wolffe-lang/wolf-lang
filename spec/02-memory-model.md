@@ -1140,6 +1140,16 @@ Simpler than the safe tier, not stricter (anti-Stacked-Borrows lesson).
     table a kernel needs lives in `.bss` reserved by assembly and named
     with `extern "c" let`, `[abi.link.extern]`). Witnesses:
     `memory/static_*.lu`.
+  - `[mem.static.4]` A `pub` module item is read through its module's
+    name — `m.K` after `use m` — exactly as the bare name reads inside
+    its own module: a `const` is its value, a `let` its immutable data,
+    a `var` its writable data, read or (a `var`) written with `m.V = x`
+    / `m.V op= x` only inside `unsafe` (`.2`, E1301 outside it). A
+    module item that is not `pub` so named is E0304, as any private
+    member is. (wolf-lang#579, s213: pax's timer constants read by its
+    interrupt module.) Witnesses: `memory/static_qualified/`,
+    `memory/static_qualified_let/`, `memory/static_qualified_var/`,
+    `memory/static_qualified_var_outside_unsafe/` (`fail(E1301)`).
 
 ## §6 Provenance `[mem.prov]`
 
