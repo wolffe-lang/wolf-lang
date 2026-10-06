@@ -8552,6 +8552,25 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let Some(v) = v else {
                     return Err(refuse("`!` of a valueless expression", e.span));
                 };
+                // s213 (wolf-lang#575, `[type.int.not]`): `!` on an
+                // integer is the bitwise complement — `x ^ all-ones` at
+                // the operand's width, total, never a trap; a `byte`
+                // widens to `int` first (`[type.byte.op]`).
+                let v = self.widen_byte_operand(Some(operand), v);
+                let vty = self.b.func.value_ty(v);
+                if vty != types::BOOL {
+                    // All ones at the width (WIR integers carry no
+                    // sign; `-1` is every bit set).
+                    if self.b.module.types.int_bits(vty).is_none() {
+                        return Err(refuse("`!` of a non-integer value", e.span));
+                    }
+                    let ones = self.b.iconst(vty, -1);
+                    return Ok(Flow::Val(Some(
+                        self.b
+                            .ins(Opcode::Bxor, &[v, ones], &[vty], Aux::None)
+                            .one(),
+                    )));
+                }
                 if let Some(c) = self.b.as_bool_const(v) {
                     self.b.stats.fold += 1;
                     return Ok(Flow::Val(Some(self.b.bconst(!c))));
