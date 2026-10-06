@@ -1,0 +1,63 @@
+//! member: false
+//! s215 (`[os.proc.fds]`, `[os.proc.spawn]`) — no descriptor of this
+//! program leaks into a child it did not map: with a file, a pipe and a
+//! listener open here, the child `ls /dev/fd/` lists its own
+//! descriptors, and `proc_fd_lanes.rs` compares the list with a control
+//! — the same `ls` started by the test itself, which sees whatever the
+//! harness hands every child. A leak is a number on this side the
+//! control does not have. Unix only.
+
+/// Every byte the pipe carries until its last writer closes, as text;
+/// a failure ends the read and is named in the text.
+fn drain(fd: int) -> str {
+    var out = ""
+    loop {
+        var stop = false
+        let chunk = fs_read(fd, 4096) else |e| {
+            stop = true
+            match e {
+                eof => "",
+                io => "<io>",
+                utf8 => "<utf8>",
+            }
+        }
+        out = out + chunk
+        if stop {
+            break
+        }
+    }
+    out
+}
+
+fn main() -> !int {
+    let f = fs_open_mode("target/s215-leak.tmp", 3)?
+    let (pr, pw) = os_pipe()?
+    let l = net_listen("127.0.0.1:0")?
+    let (r, w) = os_pipe()?
+    let h = os_spawn_fds("ls", ["/dev/fd/"], [1, w])?
+    fs_close(w)?
+    let out = drain(r)
+    fs_close(r)?
+    let code = os_wait(h)?
+    var names = List[str]()
+    for line in out.lines() {
+        let t = line.trim()
+        if t.len > 0 {
+            (mut names).push(t)
+        }
+    }
+    var listing = ""
+    for n in names {
+        if listing.len > 0 {
+            listing = listing + ","
+        }
+        listing = listing + n
+    }
+    print("listing={listing} code={code}")
+    fs_close(f)?
+    fs_close(pr)?
+    fs_close(pw)?
+    net_close(l)?
+    fs_remove("target/s215-leak.tmp")?
+    0
+}

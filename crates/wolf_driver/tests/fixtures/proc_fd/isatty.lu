@@ -1,0 +1,17 @@
+//! member: false
+//! s215 (`[os.fs.isatty]`; pelt's H2) — whether descriptors 0 and 2 and
+//! a pipe end are terminals. `proc_fd_lanes.rs` runs it twice: with 0
+//! the null device and 2 a pipe (every answer false), and under
+//! `script(1)`, where 0 and 2 are the pseudo-terminal script made
+//! (true, true) and the pipe end is still a pipe (false).
+
+fn main() -> !int {
+    let (r, w) = os_pipe()?
+    let a = os_isatty(0)?
+    let b = os_isatty(2)?
+    let c = os_isatty(w)?
+    fs_close(r)?
+    fs_close(w)?
+    print("in={a} err={b} pipe={c}")
+    0
+}
