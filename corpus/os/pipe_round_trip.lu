@@ -45,7 +45,9 @@ fn main() -> !int {
     print("closed_tty={tty_row(r)} forged_tty={tty_row(999999)}")
     var after = "ok"
     fs_write(w, "late") else |e| match e {
-        io => after = "io",
+        io => {
+            after = "io"
+        },
     }
     print("write_after_close={after}")
     0
