@@ -63,7 +63,9 @@ fn parse_obs(bytes: &[u8], stderr: &[u8], what: &str) -> Obs {
     }
 }
 
-fn rt_staticlib() -> PathBuf {
+/// Build the runtime staticlib once (every lane needs it; its file
+/// name is the host's: `libwolf_rt.a`, or `wolf_rt.lib` on windows).
+fn ensure_rt_staticlib() {
     static ONCE: std::sync::Once = std::sync::Once::new();
     ONCE.call_once(|| {
         let status = Command::new(env!("CARGO"))
@@ -72,6 +74,15 @@ fn rt_staticlib() -> PathBuf {
             .expect("cargo builds wolf_rt");
         assert!(status.success(), "wolf_rt staticlib build failed");
     });
+}
+
+/// The unix runtime archive, for a link this gate does itself.
+#[cfg_attr(
+    not(all(target_os = "linux", target_arch = "x86_64")),
+    allow(dead_code)
+)]
+fn rt_staticlib() -> PathBuf {
+    ensure_rt_staticlib();
     let rt = Path::new(wolf())
         .parent()
         .expect("wolf has a directory")
@@ -83,7 +94,7 @@ fn rt_staticlib() -> PathBuf {
 /// One wolfgang lane; `None` is the s59 environment skip, named on
 /// stderr (never an ICE, never the checked machine).
 fn lane(entry: &Path, flag: &str) -> Option<Obs> {
-    rt_staticlib();
+    ensure_rt_staticlib();
     let out = Command::new(wolf())
         .arg("conform-run")
         .arg(entry)
