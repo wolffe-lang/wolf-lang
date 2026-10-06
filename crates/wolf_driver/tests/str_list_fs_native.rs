@@ -710,6 +710,13 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_fs_seek",
         "__wolf_rt_fs_tell",
         "__wolf_rt_fs_read_at",
+        // s215 (pelt's H2): the spawn with a descriptor map, the pipe,
+        // chdir and isatty — `[os.proc.fds]`, `[os.proc.pipe]`,
+        // `[os.fs.chdir]`, `[os.fs.isatty]`.
+        "__wolf_rt_os_spawn_fds",
+        "__wolf_rt_os_pipe",
+        "__wolf_rt_os_chdir",
+        "__wolf_rt_os_isatty",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -720,7 +727,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        164,
+        168,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
