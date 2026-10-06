@@ -4,11 +4,13 @@
 //! runtime call per 1 MiB chunk into the runtime's vectorised loop.
 
 fn main() -> int {
+    // The file is the last argument (`env_args` answers the arguments
+    // after the program's own name).
     let args = env_args()
-    if args.len < 2 {
+    if args.len < 1 {
         return 2
     }
-    let fd = fs_open(args[1]) else |e| {
+    let fd = fs_open(args[args.len - 1]) else |e| {
         return 3
     }
     var lines = 0
