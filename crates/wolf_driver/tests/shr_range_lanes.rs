@@ -250,10 +250,13 @@ fn the_issues_witness_takes_both_branches_on_both_tiers() {
     rt_staticlib();
     for tier in ["native", "release"] {
         let mut cmd = Command::new(wolf());
-        cmd.current_dir(&dir).args(["run", "main.lu"]);
+        // Flags before the file: what follows the file is the program's
+        // own argv under `wolf run`.
+        cmd.current_dir(&dir).arg("run");
         if tier == "release" {
             cmd.arg("--release");
         }
+        cmd.arg("main.lu");
         let out = cmd.output().expect("wolf runs");
         assert_eq!(
             (
