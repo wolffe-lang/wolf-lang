@@ -1,0 +1,23 @@
+//! check: fail(E1301)
+//! phase: typecheck
+//! conforms: mem.unsafe.raw.1, mem.unsafe.raw.5, mem.unsafe.scope, mem.codes
+//!
+//! s213 (wolf-lang#577): a store to a field of a raw element is a raw
+//! write (`[mem.unsafe.raw.5]`), so outside `unsafe` it is E1301, as
+//! `p[0] = v` is. At trunk 294d626d the compiling machines refused the
+//! store as `unsupported` before the ring was asked; lupin answered
+//! E1301.
+
+#[repr(c)]
+struct Pair {
+    a: u64,
+    b: u64,
+}
+
+fn poke(p: *Pair) {
+    p[0].b = 7
+}
+
+fn main() {
+    print("x")
+}

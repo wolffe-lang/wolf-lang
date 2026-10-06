@@ -1,0 +1,30 @@
+//! check: run(exit=trap(ub))
+//! phase: wir
+//! conforms: mem.unsafe.raw.4, mem.unsafe.raw.5, mem.ub, abi.layout.c
+//!
+//! s213 (wolf-lang#577; s209's question): a store through a raw element
+//! asks row L4 of the element, as the read does — a plain `#[repr(c)]`
+//! `{u32, u64}` has alignment 8, so `s[0].a = 1` at an address 4 past
+//! an 8-aligned one is L4 (`[mem.unsafe.raw.4]`), even though the
+//! `u32` field itself would sit at a 4-aligned address. The compiled
+//! tiers store with the struct's alignment and run it undefined. The
+//! read twin is `raw_ub_misaligned_repr_c_field.lu`.
+
+import c "stdlib.h"
+
+#[repr(c)]
+struct Pair {
+    a: u32,
+    b: u64,
+}
+
+fn main() -> int {
+    // # Safety: DELIBERATELY UNSOUND — the misaligned element is the row.
+    unsafe {
+        let p = c.calloc(1, 32) as *Pair
+        let s = p.with_addr(p.addr() + 4)
+        s[0].a = 1  // UB L4: address % 8 == 4
+        c.free(p as *u8)
+    }
+    0
+}

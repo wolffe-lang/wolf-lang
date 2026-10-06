@@ -1,0 +1,34 @@
+//! check: run(exit=0, stdout="65535 4096 1 512\n")
+//! phase: run
+//! conforms: mem.unsafe.raw.4, mem.unsafe.raw.5, abi.layout.packed
+//!
+//! s213 (wolf-lang#577): a packed struct's alignment is 1, so a store to
+//! its `u64` field at offset 2 (and 12, in the second element) through
+//! `g[i].base = v` is an ordinary defined access on every machine —
+//! never row L4 (`[mem.unsafe.raw.4]`, `[mem.unsafe.raw.5]`); a
+//! descriptor table's builder sets one field in place this way. s209's
+//! read twin is `packed_field_raw_read.lu`. At trunk 294d626d every
+//! compiling machine refused the store.
+
+import c "stdlib.h"
+
+#[repr(c, packed)]
+struct Gdtr {
+    limit: u16,
+    base: u64,
+}
+
+fn main() -> int {
+    // # Safety: two zeroed packed Gdtrs (10 bytes each) from calloc;
+    // freed once.
+    unsafe {
+        let g = c.calloc(2, 10) as *Gdtr
+        g[0].limit = 0xffff
+        g[0].base = 4096
+        g[1].limit = 1
+        g[1].base = 512
+        print("{g[0].limit as int} {g[0].base as int} {g[1].limit as int} {g[1].base as int}")
+        c.free(g as *u8)
+    }
+    0
+}
