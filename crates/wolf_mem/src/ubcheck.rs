@@ -1204,9 +1204,19 @@ struct Machine<'t> {
     /// The dynamic ambient-region stack; `[0]` is the run's root
     /// region (never freed while the run lives).
     ambient: Vec<usize>,
-    stdout: String,
-    /// What the program wrote through `eprint`/`eprint_raw` (s38).
-    stderr: String,
+    /// What the program wrote to standard output, as BYTES (s200,
+    /// wolf-lang#405: `fs_write_chunk(1, …)` writes octets that need not
+    /// be UTF-8). Decoded once, lossily, at the end of the run — the
+    /// decode the driver applies to a native child's stdout for the
+    /// record (`main.rs`), so the two tiers agree by construction.
+    stdout: Vec<u8>,
+    /// What the program wrote through `eprint`/`eprint_raw` (s38), and
+    /// since s200 through `fs_write*` on descriptor 2, as bytes.
+    stderr: Vec<u8>,
+    /// s200 (#407, `[os.fs.error]`): the host's number for the most recent
+    /// fallible fs-family call, 0 when it succeeded or failed before the
+    /// host. This machine is one task, so the word is the task's.
+    last_os_error: i64,
     /// The program's standard input (s38): a caller-supplied buffer,
     /// consumed by `read_line`. Conform-run supplies none — the
     /// checked lane's default stdin is empty, so `read_line` raises
@@ -2248,26 +2258,27 @@ fn run_checked_fn_here(
                 // the native `__wolf_rt_main_err` path) — the tag on
                 // stdout, exit 1.
                 Value::ErrTag { ref tag, .. } => {
-                    m.stdout.push_str(&format!("error: {tag}\n"));
+                    m.stdout
+                        .extend_from_slice(format!("error: {tag}\n").as_bytes());
                     1
                 }
                 _ => 0,
             };
             Ok(RunOutcome {
                 verdict: Verdict::Exit(code),
-                stdout: m.stdout,
-                stderr: m.stderr,
+                stdout: String::from_utf8_lossy(&m.stdout).into_owned(),
+                stderr: String::from_utf8_lossy(&m.stderr).into_owned(),
             })
         }
         Err(Stop::Trap(t)) => Ok(RunOutcome {
             verdict: Verdict::Trap(t),
-            stdout: m.stdout,
-            stderr: m.stderr,
+            stdout: String::from_utf8_lossy(&m.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&m.stderr).into_owned(),
         }),
         Err(Stop::Ub(f)) => Ok(RunOutcome {
             verdict: Verdict::Ub(f),
-            stdout: m.stdout,
-            stderr: m.stderr,
+            stdout: String::from_utf8_lossy(&m.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&m.stderr).into_owned(),
         }),
         Err(Stop::Refuse(nyc)) => Err(nyc),
         Err(Stop::Budget(what)) => Err(NotYet {
@@ -2278,8 +2289,8 @@ fn run_checked_fn_here(
         // is the verdict.
         Err(Stop::Exit(code)) => Ok(RunOutcome {
             verdict: Verdict::Exit(code),
-            stdout: m.stdout,
-            stderr: m.stderr,
+            stdout: String::from_utf8_lossy(&m.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&m.stderr).into_owned(),
         }),
     }
 }
@@ -2378,8 +2389,9 @@ impl<'t> Machine<'t> {
             cells: Vec::new(),
             frames: Vec::new(),
             ambient: Vec::new(),
-            stdout: String::new(),
-            stderr: String::new(),
+            stdout: Vec::new(),
+            stderr: Vec::new(),
+            last_os_error: 0,
             stdin: String::new(),
             stdin_pos: 0,
             files: Vec::new(),
@@ -5443,7 +5455,22 @@ impl<'t> Machine<'t> {
     /// are plain `int` fds into the machine's table; every operation
     /// on a closed or foreign fd is the `io` row, never a trap — a
     /// forged fd is a checkable condition, not a contract violation.
+    /// The fs family's entry: [`Self::io_fs_builtin_call`] with the
+    /// task's host code kept (s200, wolf-lang#407, `[os.fs.error]`) — every
+    /// fallible call clears it on entry, and a host refusal leaves its
+    /// number behind ([`fs_host_error`]); the total predicates
+    /// (`fs_exists`, `fs_is_file`, `fs_is_dir`) leave it alone.
     fn io_fs_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
+        if matches!(name, "fs_exists" | "fs_is_file" | "fs_is_dir") {
+            return self.io_fs_builtin_call(name, argv, span);
+        }
+        FS_HOST_ERROR.with(|c| c.set(0));
+        let r = self.io_fs_builtin_call(name, argv, span);
+        self.last_os_error = FS_HOST_ERROR.with(std::cell::Cell::get);
+        r
+    }
+
+    fn io_fs_builtin_call(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
         use std::io::{Read as _, Write as _};
         fn tag(t: &str) -> Flow {
             raise(Value::ErrTag {
@@ -5459,6 +5486,7 @@ impl<'t> Machine<'t> {
         // is a caller mistake the machine decides itself, before the
         // host is touched, exactly as the native runtime does.)
         fn errtag(e: &std::io::Error, declared: &[&str]) -> String {
+            fs_host_error(e);
             let t = match e.kind() {
                 std::io::ErrorKind::NotFound => "not_found",
                 std::io::ErrorKind::PermissionDenied => "denied",
@@ -5497,13 +5525,20 @@ impl<'t> Machine<'t> {
                 if self.stdin_pos >= self.stdin.len() {
                     return Ok(tag("eof"));
                 }
-                let rest = &self.stdin[self.stdin_pos..];
-                let (line, consumed) = match rest.find('\n') {
+                // Bytes, not chars: since s200 (#405) a byte read of
+                // descriptor 0 shares this buffer and may stop inside a
+                // scalar, so a line here can begin mid-sequence — the
+                // `utf8` row, as the native `read_line` answers it.
+                let rest = &self.stdin.as_bytes()[self.stdin_pos..];
+                let (line, consumed) = match rest.iter().position(|&b| b == b'\n') {
                     Some(i) => (&rest[..i], i + 1),
                     None => (rest, rest.len()),
                 };
-                let line = line.strip_suffix('\r').unwrap_or(line).to_string();
+                let line = line.strip_suffix(b"\r").unwrap_or(line).to_vec();
                 self.stdin_pos += consumed;
+                let Ok(line) = String::from_utf8(line) else {
+                    return Ok(tag("utf8"));
+                };
                 self.charge_mem(line.len() as u64)?;
                 Ok(Flow::Val(Value::Str(line)))
             }
@@ -5603,6 +5638,25 @@ impl<'t> Machine<'t> {
                 let (Some(fd), Some(max)) = (int_arg(0), int_arg(1)) else {
                     return self.refuse("this fs call shape", span);
                 };
+                // s200 (#405, `[os.fs.std]`): 0, 1 and 2 are the
+                // standard streams ([`Self::std_read`]).
+                if fs_is_std(fd) {
+                    if max <= 0 {
+                        return Ok(Flow::Val(Value::Str(String::new())));
+                    }
+                    return match self.std_read(fd, (max as u64).min(1 << 20) as usize) {
+                        None => Ok(tag("io")),
+                        Some(Err(e)) => Ok(tag(&errtag(&e, &["io"]))),
+                        Some(Ok(buf)) if buf.is_empty() => Ok(tag("eof")),
+                        Some(Ok(buf)) => {
+                            self.charge_mem(buf.len() as u64)?;
+                            match String::from_utf8(buf) {
+                                Ok(s) => Ok(Flow::Val(Value::Str(s))),
+                                Err(_) => Ok(tag("utf8")),
+                            }
+                        }
+                    };
+                }
                 let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| self.files.get_mut(i))
                 else {
                     return Ok(tag("io"));
@@ -5628,6 +5682,14 @@ impl<'t> Machine<'t> {
                 let (Some(fd), Some(s)) = (int_arg(0), str_arg(1)) else {
                     return self.refuse("this fs call shape", span);
                 };
+                // s200 (#405, `[os.fs.std]`): [`Self::std_write`].
+                if fs_is_std(fd) {
+                    return match self.std_write(fd, s.as_bytes()) {
+                        None => Ok(tag("io")),
+                        Some(Err(e)) => Ok(tag(&errtag(&e, &["io"]))),
+                        Some(Ok(())) => Ok(Flow::Val(Value::Unit)),
+                    };
+                }
                 let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| self.files.get_mut(i))
                 else {
                     return Ok(tag("io"));
@@ -5702,6 +5764,22 @@ impl<'t> Machine<'t> {
                 // shim checks in the same order — s90 aligned the two
                 // after finding `fs_read` disagreed with itself
                 // across the lanes at `max <= 0`.)
+                // s200 (#405, `[os.fs.std]`): 0, 1 and 2 are the
+                // standard streams ([`Self::std_read`]).
+                if fs_is_std(fd) {
+                    if max <= 0 {
+                        return Ok(Flow::Val(self.byte_list_value(&[], span)?));
+                    }
+                    return match self.std_read(fd, (max as u64).min(1 << 20) as usize) {
+                        None => Ok(tag("io")),
+                        Some(Err(e)) => Ok(tag(&errtag(&e, &["io"]))),
+                        Some(Ok(buf)) if buf.is_empty() => Ok(tag("eof")),
+                        Some(Ok(buf)) => {
+                            self.charge_mem(buf.len() as u64)?;
+                            Ok(Flow::Val(self.byte_list_value(&buf, span)?))
+                        }
+                    };
+                }
                 if !self.fd_open(fd) {
                     return Ok(tag("io"));
                 }
@@ -5735,6 +5813,14 @@ impl<'t> Machine<'t> {
                     Some(Err(())) => return Ok(tag("invalid")),
                     Some(Ok(b)) => b,
                 };
+                // s200 (#405, `[os.fs.std]`): [`Self::std_write`].
+                if fs_is_std(fd) {
+                    return match self.std_write(fd, &bytes) {
+                        None => Ok(tag("io")),
+                        Some(Err(e)) => Ok(tag(&errtag(&e, &["io"]))),
+                        Some(Ok(())) => Ok(Flow::Val(Value::Unit)),
+                    };
+                }
                 let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| self.files.get_mut(i))
                 else {
                     return Ok(tag("io"));
@@ -5954,11 +6040,14 @@ impl<'t> Machine<'t> {
                 let r = (&*f).seek(to);
                 drop(f);
                 match r {
-                    Err(e) => Ok(tag(match e.kind() {
-                        std::io::ErrorKind::NotSeekable => "unseekable",
-                        std::io::ErrorKind::InvalidInput if name == "fs_seek" => "invalid",
-                        _ => "io",
-                    })),
+                    Err(e) => {
+                        fs_host_error(&e);
+                        Ok(tag(match e.kind() {
+                            std::io::ErrorKind::NotSeekable => "unseekable",
+                            std::io::ErrorKind::InvalidInput if name == "fs_seek" => "invalid",
+                            _ => "io",
+                        }))
+                    }
                     Ok(at) => match i64::try_from(at) {
                         Ok(at) => Ok(Flow::Val(Value::Int(at))),
                         Err(_) => Ok(tag("io")),
@@ -5990,10 +6079,13 @@ impl<'t> Machine<'t> {
                 let r = fs_read_at_host(&f, &mut buf, off);
                 drop(f);
                 match r {
-                    Err(e) => Ok(tag(match e.kind() {
-                        std::io::ErrorKind::NotSeekable => "unseekable",
-                        _ => "io",
-                    })),
+                    Err(e) => {
+                        fs_host_error(&e);
+                        Ok(tag(match e.kind() {
+                            std::io::ErrorKind::NotSeekable => "unseekable",
+                            _ => "io",
+                        }))
+                    }
                     Ok(0) => Ok(tag("eof")),
                     Ok(n) => {
                         buf.truncate(n);
@@ -6002,7 +6094,153 @@ impl<'t> Machine<'t> {
                     }
                 }
             }
+            // s200 (#417, `[os.fs.copy]`): one transfer through this
+            // machine's own buffer — the observable bytes and offsets of
+            // the native rungs, without a kernel path (the host process
+            // is the checked program; its capture of 1 and 2 is the
+            // record's). The count per call may differ from a native
+            // rung's, which the clause leaves unpinned: at least one
+            // byte, at most `max`, `eof` at the end.
+            "fs_copy_chunk" => {
+                let (Some(src), Some(dst), Some(max)) = (int_arg(0), int_arg(1), int_arg(2)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                // Both handles first, then `max` — the family's order.
+                if !(fs_is_std(src) || self.fd_open(src)) || !(fs_is_std(dst) || self.fd_open(dst))
+                {
+                    return Ok(tag("io"));
+                }
+                if max <= 0 {
+                    return Ok(Flow::Val(Value::Int(0)));
+                }
+                let want = (max as u64).min(1 << 20) as usize;
+                let bytes = if fs_is_std(src) {
+                    match self.std_read(src, want) {
+                        None => return Ok(tag("io")),
+                        Some(Err(e)) => return Ok(tag(&errtag(&e, &["io"]))),
+                        Some(Ok(b)) => b,
+                    }
+                } else {
+                    let Some(Some(f)) = usize::try_from(src)
+                        .ok()
+                        .and_then(|i| self.files.get_mut(i))
+                    else {
+                        return Ok(tag("io"));
+                    };
+                    let mut buf = vec![0u8; want];
+                    match f.read(&mut buf) {
+                        Err(e) => return Ok(tag(&errtag(&e, &["io"]))),
+                        Ok(n) => {
+                            buf.truncate(n);
+                            buf
+                        }
+                    }
+                };
+                if bytes.is_empty() {
+                    return Ok(tag("eof"));
+                }
+                let wrote = if fs_is_std(dst) {
+                    self.std_write(dst, &bytes)
+                } else {
+                    usize::try_from(dst)
+                        .ok()
+                        .and_then(|i| self.files.get_mut(i))
+                        .and_then(Option::as_mut)
+                        .map(|f| f.write_all(&bytes))
+                };
+                match wrote {
+                    None => Ok(tag("io")),
+                    Some(Err(e)) => Ok(tag(&errtag(&e, &["io"]))),
+                    Some(Ok(())) => Ok(Flow::Val(Value::Int(bytes.len() as i64))),
+                }
+            }
             _ => self.refuse("this io/fs builtin", span),
+        }
+    }
+
+    /// s200 (#405, `[os.fs.std]`): one read of at most `want` bytes from
+    /// standard stream `fd`. Descriptor 0 is the input buffer a test
+    /// hands the machine when it hands one (`read_line`'s, shared, so
+    /// the two never disagree about where input stands), and the `wolf`
+    /// process's own descriptor 0 otherwise — every production caller
+    /// hands none, so `conform-run --checked` reads the real stream,
+    /// as `[os.fs.std]`'s offset calls already do. `None` is a stream
+    /// the process does not have (`io`); an interrupted read retries.
+    fn std_read(&mut self, fd: i64, want: usize) -> Option<std::io::Result<Vec<u8>>> {
+        use std::io::Read as _;
+        if fd == 0 && !self.stdin.is_empty() {
+            let rest = &self.stdin.as_bytes()[self.stdin_pos.min(self.stdin.len())..];
+            let n = rest.len().min(want);
+            let out = rest[..n].to_vec();
+            self.stdin_pos += n;
+            return Some(Ok(out));
+        }
+        let f = std_stream_dup(fd)?;
+        let mut buf = vec![0u8; want];
+        let mut g = &f;
+        loop {
+            match g.read(&mut buf) {
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(e) => return Some(Err(e)),
+                Ok(n) => {
+                    buf.truncate(n);
+                    return Some(Ok(buf));
+                }
+            }
+        }
+    }
+
+    /// s200 (#405, `[os.fs.std]`): write all of `bytes` to standard
+    /// stream `fd`. 1 and 2 are this machine's CAPTURE (the record's
+    /// stdout and the `eprint` channel), in program order with `print`
+    /// by construction; 0 is the `wolf` process's descriptor.
+    fn std_write(&mut self, fd: i64, bytes: &[u8]) -> Option<std::io::Result<()>> {
+        use std::io::Write as _;
+        match fd {
+            1 => {
+                self.stdout.extend_from_slice(bytes);
+                Some(Ok(()))
+            }
+            2 => {
+                self.stderr.extend_from_slice(bytes);
+                Some(Ok(()))
+            }
+            _ => {
+                let f = std_stream_dup(fd)?;
+                let mut g = &f;
+                Some(g.write_all(bytes))
+            }
+        }
+    }
+
+    /// s200 (#411, `[mem.list.bytes]`): `bytes_find(xs, b, from) -> int
+    /// ! {none}` and `bytes_count(xs, b) -> int` over this machine's
+    /// list — the native shims' answers element for element: `none` for
+    /// an absent byte or a `from` outside `0..len`.
+    fn byte_scan(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
+        let Some(Ok(xs)) = self.bytes_of(argv.first()) else {
+            return self.refuse("this byte-scan call shape", span);
+        };
+        let Some(Value::Byte(b)) = argv.get(1) else {
+            return self.refuse("this byte-scan call shape", span);
+        };
+        if name == "bytes_count" {
+            let n = xs.iter().filter(|&&x| x == *b).count();
+            return Ok(Flow::Val(Value::Int(n as i64)));
+        }
+        let Some(Value::Int(from)) = argv.get(2) else {
+            return self.refuse("this byte-scan call shape", span);
+        };
+        let hit = usize::try_from(*from)
+            .ok()
+            .filter(|&f| f < xs.len())
+            .and_then(|f| xs[f..].iter().position(|&x| x == *b).map(|i| f + i));
+        match hit {
+            Some(i) => Ok(Flow::Val(Value::Int(i as i64))),
+            None => Ok(raise(Value::ErrTag {
+                tag: "none".to_string(),
+                payload: Vec::new(),
+            })),
         }
     }
 
@@ -8277,9 +8515,9 @@ impl<'t> Machine<'t> {
                     out.push('\n');
                 }
                 if callee_name.starts_with('e') {
-                    self.stderr.push_str(&out);
+                    self.stderr.extend_from_slice(out.as_bytes());
                 } else {
-                    self.stdout.push_str(&out);
+                    self.stdout.extend_from_slice(out.as_bytes());
                 }
                 return Ok(Flow::Val(Value::Unit));
             }
@@ -8299,7 +8537,9 @@ impl<'t> Machine<'t> {
             // s142 (#261): the stat on an open handle.
             | "fs_fstat"
             // s199 (#426): the handle's offset.
-            | "fs_seek" | "fs_tell" | "fs_read_at" => {
+            | "fs_seek" | "fs_tell" | "fs_read_at"
+            // s200 (#417): the fused chunk copy.
+            | "fs_copy_chunk" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
@@ -8342,7 +8582,9 @@ impl<'t> Machine<'t> {
             | "os_spawn" | "os_spawn_with" | "os_wait" | "os_kill" | "os_signal_listen"
             | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
-            | "str_from_utf8" => {
+            | "str_from_utf8"
+            // s200 (#411, #407): the byte scan, and the task's host code.
+            | "bytes_find" | "bytes_count" | "os_error" | "os_error_text" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
@@ -8356,6 +8598,15 @@ impl<'t> Machine<'t> {
                 }
                 return match callee_name.as_str() {
                     "str_from_utf8" => self.str_from_utf8(argv, e.span),
+                    "bytes_find" | "bytes_count" => self.byte_scan(&callee_name, argv, e.span),
+                    "os_error" => Ok(Flow::Val(Value::Int(self.last_os_error))),
+                    "os_error_text" => {
+                        let Some(Value::Int(code)) = argv.first() else {
+                            return self.refuse("this `os_error_text` call shape", e.span);
+                        };
+                        let text = host_error_text(*code);
+                        Ok(Flow::Val(self.mint_str(text, e.span)?))
+                    }
                     n if n.starts_with("json_") => self.json_builtin(n, argv, e.span),
                     n if n.starts_with("time_") => self.time_builtin(n, argv, e.span),
                     n => self.os_builtin(n, argv, e.span),
@@ -10192,6 +10443,42 @@ impl std::ops::Deref for FsHandle<'_> {
             FsHandle::Table(f) => f,
         }
     }
+}
+
+/// s200 (#405): is `fd` one of the three standard streams?
+fn fs_is_std(fd: i64) -> bool {
+    (0..FS_FIRST_HANDLE as i64).contains(&fd)
+}
+
+thread_local! {
+    /// s200 (#407, `[os.fs.error]`): the host's number for the fs call in
+    /// flight — cleared by [`Machine::io_fs_builtin`] on entry, set by
+    /// [`fs_host_error`] when the host refuses, and copied into the
+    /// machine's word when the call returns. The machine runs on one
+    /// thread, so the transport cannot cross runs.
+    static FS_HOST_ERROR: std::cell::Cell<i64> = const { std::cell::Cell::new(0) };
+}
+
+/// Note the host's number for `e` (0 when std built the error itself).
+fn fs_host_error(e: &std::io::Error) {
+    FS_HOST_ERROR.with(|c| c.set(e.raw_os_error().map_or(0, i64::from)));
+}
+
+/// `os_error_text(code)`: `wolf_rt::fs::os_error_text`'s answer — std's
+/// rendering of the host's message without its ` (os error N)` suffix,
+/// "" for a code at or below zero or outside the host's `i32`. The
+/// runtime is not a dependency of this crate (D15), so the dozen lines
+/// are mirrored and the driver's parity test holds them equal.
+pub fn host_error_text(code: i64) -> String {
+    let Some(n) = i32::try_from(code).ok().filter(|n| *n > 0) else {
+        return String::new();
+    };
+    let full = std::io::Error::from_raw_os_error(n).to_string();
+    let suffix = format!(" (os error {n})");
+    full.strip_suffix(&suffix)
+        .unwrap_or(&full)
+        .trim_end()
+        .to_string()
 }
 
 /// Descriptor 0, 1 or 2, duplicated (`dup`; `DuplicateHandle`): the
