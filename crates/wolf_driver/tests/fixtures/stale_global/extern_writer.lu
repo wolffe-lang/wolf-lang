@@ -1,0 +1,39 @@
+//! member: false
+//! s214 (wolf-lang#598): storage behind `extern "c" let`, and a module
+//! `var`, written by C between two reads in wolf. `extern_writer.c`
+//! defines `s214_cell` and the two writers; `s214_call_back` writes the
+//! module var by calling back into `s214_bump`. Linked by
+//! `stale_global_lanes.rs` on both compiling tiers.
+
+extern "c" let s214_cell: *i64
+
+extern "c" fn s214_poke(v: i64)
+
+extern "c" fn s214_call_back()
+
+var v: int = 0
+
+export fn s214_bump() {
+    // # Safety: one thread.
+    unsafe {
+        v = 42
+    }
+}
+
+fn main() -> int {
+    // # Safety: one thread; s214_cell is extern_writer.c's one i64, and
+    // the two writers are its, with these prototypes.
+    unsafe {
+        s214_cell[0] = 0
+        s214_poke(99)
+        let a = s214_cell[0]
+        let x = s214_cell[0]
+        s214_poke(5)
+        let y = s214_cell[0]
+        v = 0
+        s214_call_back()
+        let b = v
+        print("{a} {x} {y} {b}")
+    }
+    0
+}
