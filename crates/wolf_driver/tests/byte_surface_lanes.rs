@@ -634,39 +634,56 @@ fn bytes_after_read_line_continue_where_it_stopped() {
 /// The host's number is the TASK's (`[os.fs.error]`): eight tasks fail fs
 /// calls side by side, the even ones with the host's `ENOENT` (2), the odd
 /// ones before the host (0), and each reads its own number back 300 times.
-/// Every machine counts 0 sightings of another task's number; the compiled
-/// tiers again under `taskset -c 0-3`, where the tasks really run at once
-/// (strict evidence, wolf-lang#571). Red at trunk: E0301 (`os_error`
-/// unknown); a process-wide word is the defect this would catch.
+/// The native and release binaries count 0 sightings of another task's
+/// number, also under `taskset -c 0-3`, where the tasks really run at once
+/// (strict evidence, wolf-lang#571); lupin, whose machine is one per task,
+/// agrees. The checked machine declines structured concurrency by name
+/// (C1 deferred), so it has one task and nothing to race: `unsupported`,
+/// asserted, never skipped. Red at trunk: E0301 (`os_error` unknown); a
+/// process-wide word is the defect this catches (seen red locally with the
+/// word made a process-wide atomic, the PR's evidence index).
 #[test]
 fn os_error_is_the_tasks_own() {
     let want: &[u8] = b"tasks=8 calls=2400 saw_another_tasks_number=0\n";
-    every_lane_with_stdin(
-        "os_error_tasks.lu",
-        Stdin::File(b""),
-        want,
-        None,
-        ("unsupported", ""),
+    let entry = fixture("os_error_tasks.lu");
+    let dir = scratch("os_error_tasks");
+    let (checked, _) =
+        conform(&entry, &dir, "--checked", Stdin::File(b"")).expect("the checked lane always runs");
+    assert_eq!(
+        checked.verdict, "unsupported",
+        "the checked machine declines structured concurrency by name"
     );
-    #[cfg(target_os = "linux")]
-    {
-        let entry = fixture("os_error_tasks.lu");
-        let dir = scratch("os_error_tasks_taskset");
-        for release in [false, true] {
-            let Some(exe) = build(&entry, &dir, release) else {
-                continue;
-            };
-            let mut cmd = Command::new("taskset");
-            cmd.arg("-c").arg("0-3").arg(&exe);
-            let ran = run_with(cmd, &dir, Stdin::File(b""), Stdout::Piped, "taskset");
-            assert_eq!(
-                (ran.out.status.code(), ran.stdout.as_slice()),
-                (Some(0), want),
-                "under taskset -c 0-3 ({}): {}",
-                if release { "release" } else { "native" },
-                String::from_utf8_lossy(&ran.out.stderr)
-            );
+    let mut runs: Vec<(&str, Command)> = Vec::new();
+    for release in [false, true] {
+        let Some(exe) = build(&entry, &dir, release) else {
+            continue;
+        };
+        let tier = if release { "release" } else { "native" };
+        runs.push((tier, Command::new(&exe)));
+        #[cfg(target_os = "linux")]
+        {
+            let mut pinned = Command::new("taskset");
+            pinned.arg("-c").arg("0-3").arg(&exe);
+            runs.push((tier, pinned));
         }
+    }
+    for (tier, cmd) in runs {
+        let shown = format!("{cmd:?}");
+        let ran = run_with(cmd, &dir, Stdin::File(b""), Stdout::Piped, tier);
+        assert_eq!(
+            (ran.out.status.code(), ran.stdout.as_slice()),
+            (Some(0), want),
+            "{tier}: {shown}: {}",
+            String::from_utf8_lossy(&ran.out.stderr)
+        );
+    }
+    if let Some((lupin, _)) = lupin_says(&entry, &dir, Stdin::File(b"")) {
+        lupin_agrees(
+            &lupin,
+            &String::from_utf8_lossy(want),
+            ("unsupported", ""),
+            "os_error_tasks.lu",
+        );
     }
 }
 
