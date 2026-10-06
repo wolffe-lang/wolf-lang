@@ -525,6 +525,7 @@ memory/raw_ptr_private_sig.lu: lowers
 memory/raw_repr_align_layout.lu: lowers
 memory/raw_repr_c_layout.lu: lowers
 memory/raw_repr_packed_layout.lu: lowers
+memory/raw_store_call_writes.lu: lowers
 memory/raw_ub_misaligned_repr_c_field.lu: lowers
 memory/raw_ub_misaligned_u16_read.lu: lowers
 memory/raw_ub_misaligned_u16_write.lu: lowers
@@ -623,6 +624,8 @@ memory/static_init_not_comptime.lu: not mem-clean (pre-wir rungs own it)
 memory/static_list_let.lu: refused — module state of a type that is not static data ([mem.static.3]); module state of a type that is not static data ([mem.static.3])
 memory/static_str_literals.lu: lowers
 memory/static_var.lu: lowers
+memory/static_var_call_deep.lu: lowers
+memory/static_var_call_writes.lu: lowers
 memory/static_var_outside_unsafe.lu: not mem-clean (pre-wir rungs own it)
 memory/store_rhs_first_list.lu: lowers
 memory/store_rhs_first_map.lu: lowers
