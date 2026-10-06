@@ -129,7 +129,8 @@
     {"name": "u64", "kind": "builtin_type", "anchor": null, "w0304": true},
     {"name": "f32", "kind": "builtin_type", "anchor": null, "w0304": true},
     {"name": "f64", "kind": "builtin_type", "anchor": null, "w0304": true},
-    {"name": "wrapping", "kind": "builtin_type", "anchor": null, "w0304": true}
+    {"name": "wrapping", "kind": "builtin_type", "anchor": null, "w0304": true},
+    {"name": "never", "kind": "builtin_type", "anchor": "type.fn.never", "w0304": false}
   ],
   "marks": [
     {"name": "closed", "anchor": "os.host.sigs", "by": ["net_read", "net_write", "net_read_bytes", "net_write_bytes", "net_writev", "net_writev_head"]},
