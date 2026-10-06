@@ -1,0 +1,10 @@
+//! member: true
+//! conforms: mem.static.4
+//!
+//! limits — a public `let` and a `str` `let`.
+
+/// The width.
+pub let WIDTH: u32 = 9
+
+/// The name.
+pub let NAME: str = "lim"

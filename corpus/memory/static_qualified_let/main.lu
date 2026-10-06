@@ -1,0 +1,18 @@
+//! check: run(exit=0, stdout="9 lim 18\n")
+//! phase: run
+//! conforms: mem.static, mem.static.1, mem.static.4
+//!
+//! s213 (wolf-lang#579): a `pub let` read through its module's name is
+//! the item's immutable data (`[mem.static.4]`) — a `u32` loaded from
+//! the image and a `str` that is its literal — in safe code. At trunk
+//! 294d626d every compiling machine refused the reads as it refused a
+//! `pub const`'s.
+
+use limits
+
+fn main() -> int {
+    let w: u32 = limits.WIDTH
+    let twice = limits.WIDTH * 2
+    print("{w} {limits.NAME} {twice}")
+    0
+}

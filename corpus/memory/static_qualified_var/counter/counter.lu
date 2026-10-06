@@ -1,0 +1,23 @@
+//! member: true
+//! conforms: mem.static.2
+//!
+//! counter — a public `var`, a write to it and a read of it.
+
+/// The count.
+pub var COUNT: int = 40
+
+/// Add two.
+pub fn bump() {
+    // # Safety: one thread.
+    unsafe {
+        COUNT += 2
+    }
+}
+
+/// The count, read through the bare name.
+pub fn read() -> int {
+    // # Safety: one thread.
+    unsafe {
+        COUNT
+    }
+}

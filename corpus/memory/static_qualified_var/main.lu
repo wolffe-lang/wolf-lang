@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="40 43 45\n")
+//! phase: run
+//! conforms: mem.static, mem.static.2, mem.static.4
+//!
+//! s213 (wolf-lang#579): a `pub var` read and written through its
+//! module's name is the module's writable data (`[mem.static.4]`):
+//! inside `unsafe`, a qualified write (`counter.COUNT += 3`) is seen by
+//! the next qualified read and by the module's own functions, and the
+//! module's own write is seen through them. At trunk 294d626d every
+//! compiling machine refused the qualified read. No qualified read
+//! follows a call that writes the `var`: on native and release such a
+//! read returns the pre-call value (wolf-lang#601, a separate defect of
+//! the bare name too).
+
+use counter
+
+fn main() -> int {
+    // # Safety: one thread; nothing else touches `counter.COUNT`.
+    unsafe {
+        let before = counter.COUNT
+        counter.COUNT += 3
+        let after = counter.COUNT
+        counter.bump()
+        print("{before} {after} {counter.read()}")
+    }
+    0
+}

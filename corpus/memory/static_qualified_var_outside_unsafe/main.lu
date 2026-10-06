@@ -1,0 +1,16 @@
+//! check: fail(E1301)
+//! phase: typecheck
+//! conforms: mem.static.2, mem.static.4, mem.unsafe.scope, mem.codes
+//!
+//! s213 (wolf-lang#579): a `pub var` read through its module's name is
+//! as raw-tier as the bare name in its own module — E1301 outside
+//! `unsafe` (`[mem.static.2]`, `[mem.static.4]`). At trunk 294d626d the
+//! compiling machines refused the read as `unsupported` before the ring
+//! was asked; lupin refused it by its own name.
+
+use counter
+
+fn main() -> int {
+    print("{counter.COUNT}")
+    0
+}
