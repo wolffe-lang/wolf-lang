@@ -525,6 +525,11 @@ memory/raw_aligned_control.lu: lowers
 memory/raw_compound_assign.lu: lowers
 memory/raw_deref.lu: lowers
 memory/raw_deref_signed.lu: lowers
+memory/raw_field_store.lu: lowers
+memory/raw_field_store_compound.lu: lowers
+memory/raw_field_store_nested.lu: lowers
+memory/raw_field_store_outside_unsafe.lu: not mem-clean (pre-wir rungs own it)
+memory/raw_field_store_packed.lu: lowers
 memory/raw_lshr_top_bits.lu: lowers
 memory/raw_ptr_mut_param.lu: lowers
 memory/raw_ptr_private_sig.lu: lowers
@@ -533,6 +538,7 @@ memory/raw_repr_c_layout.lu: lowers
 memory/raw_repr_packed_layout.lu: lowers
 memory/raw_store_call_writes.lu: lowers
 memory/raw_ub_misaligned_repr_c_field.lu: lowers
+memory/raw_ub_misaligned_repr_c_field_store.lu: lowers
 memory/raw_ub_misaligned_u16_read.lu: lowers
 memory/raw_ub_misaligned_u16_write.lu: lowers
 memory/raw_ub_misaligned_u32_read.lu: lowers
@@ -628,6 +634,10 @@ memory/static_const_let.lu: lowers
 memory/static_init_cycle.lu: not mem-clean (pre-wir rungs own it)
 memory/static_init_not_comptime.lu: not mem-clean (pre-wir rungs own it)
 memory/static_list_let.lu: refused — module state of a type that is not static data ([mem.static.3]); module state of a type that is not static data ([mem.static.3])
+memory/static_qualified/main.lu: lowers
+memory/static_qualified_let/main.lu: lowers
+memory/static_qualified_var/main.lu: lowers
+memory/static_qualified_var_outside_unsafe/main.lu: not mem-clean (pre-wir rungs own it)
 memory/static_str_literals.lu: lowers
 memory/static_var.lu: lowers
 memory/static_var_call_deep.lu: lowers
@@ -898,6 +908,11 @@ typecheck/coerce_no_widening.lu: not mem-clean (pre-wir rungs own it)
 typecheck/field_typo.lu: not mem-clean (pre-wir rungs own it)
 typecheck/float_nan_cmp.lu: lowers
 typecheck/float_rem.lu: lowers
+typecheck/fn_never_extern.lu: lowers
+typecheck/fn_never_handler_arm.lu: lowers
+typecheck/fn_never_reaches_end.lu: not mem-clean (pre-wir rungs own it)
+typecheck/fn_never_return.lu: not mem-clean (pre-wir rungs own it)
+typecheck/fn_never_trap.lu: lowers
 typecheck/fn_param_shadows_import/main.lu: lowers
 typecheck/fn_param_shadows_item.lu: lowers
 typecheck/fn_value_captured_int.lu: lowers
@@ -907,6 +922,10 @@ typecheck/fn_value_import/main.lu: lowers
 typecheck/generic_bind_once.lu: not mem-clean (pre-wir rungs own it)
 typecheck/generic_bind_scalar.lu: not mem-clean (pre-wir rungs own it)
 typecheck/if_branch.lu: not mem-clean (pre-wir rungs own it)
+typecheck/int_not_byte.lu: lowers
+typecheck/int_not_float.lu: not mem-clean (pre-wir rungs own it)
+typecheck/int_not_mask.lu: lowers
+typecheck/int_not_signed.lu: lowers
 typecheck/interp_spec_on_union.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_compound_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_field_assign.lu: not mem-clean (pre-wir rungs own it)
