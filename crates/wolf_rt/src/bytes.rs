@@ -6,65 +6,171 @@
 //! wolf loop over the elements cannot reach it: boreutils measured its
 //! scalar `wc -l` at 0.13x GNU on x86-64 (#411), and nothing in the
 //! language lets eight bytes enter one word. These two calls hand the
-//! scan to a loop written so the optimiser that builds this crate turns
-//! it into vector compares — SSE2 on x86-64, NEON on aarch64, the
-//! baseline of each target, so no runtime feature detection — on every
-//! tier that links the runtime (native and release alike).
+//! scan to the runtime, on every tier that links it (native and release
+//! alike).
 //!
-//! The loops are shaped for the vectoriser, not for a reader:
+//! The scans are written with the target's BASELINE vector instructions
+//! — SSE2 on x86-64, NEON on aarch64, both present on every CPU of the
+//! target, so nothing is detected at run time — and a scalar loop on
+//! every other architecture:
 //!
-//! - **count** sums byte-wide lanes for at most 255 rows of 32 bytes
-//!   before widening (a lane cannot overflow in 255 rows), so the hot
-//!   loop is one compare and one subtract per 16 bytes;
-//! - **find** asks "is it in this 32-byte block?" as an OR over the
-//!   block's compares, and only the block that answers yes is walked a
-//!   byte at a time.
+//! - **count** compares 16 bytes at a time and subtracts the all-ones
+//!   lanes from a byte-wide accumulator, which cannot overflow in 255
+//!   rounds; then it widens (`psadbw`; `uaddlv`) and starts again;
+//! - **find** compares 16 bytes at a time and asks the compare's mask
+//!   (`pmovmskb`; `umaxv`) whether any lane hit, and walks only the
+//!   16 bytes that answered yes.
+//!
+//! Intrinsics, and not a loop left to the optimiser, because the loop was
+//! tried first: written over 32-byte rows into a `[u8; 32]` accumulator,
+//! LLVM vectorised it ACROSS rows, gathering one byte per row with scalar
+//! loads (s200's first cut: 67.7 ms to count 256 MiB on kasumi, against
+//! 93.7 ms for the plain wolf loop; `bench/byte-scan/`). The crate tests
+//! hold every path to the scalar definition.
 
-/// Lanes per row in both scans.
-const LANES: usize = 32;
-
-/// Rows a byte-wide lane can count before it could wrap.
-const ROWS: usize = 255;
+/// Rounds a byte-wide lane can count before it could wrap.
+const ROUNDS: usize = 255;
 
 /// How many bytes of `xs` equal `b`.
 pub fn count(xs: &[u8], b: u8) -> usize {
+    #[cfg(target_arch = "x86_64")]
+    {
+        count_sse2(xs, b)
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        count_neon(xs, b)
+    }
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    {
+        count_scalar(xs, b)
+    }
+}
+
+/// The scalar definition: every architecture's fallback, and the tests'
+/// reference.
+pub fn count_scalar(xs: &[u8], b: u8) -> usize {
+    xs.iter().filter(|&&x| x == b).count()
+}
+
+#[cfg(target_arch = "x86_64")]
+fn count_sse2(xs: &[u8], b: u8) -> usize {
+    use core::arch::x86_64::{
+        _mm_cmpeq_epi8, _mm_cvtsi128_si64, _mm_loadu_si128, _mm_sad_epu8, _mm_set1_epi8,
+        _mm_setzero_si128, _mm_sub_epi8, _mm_unpackhi_epi64,
+    };
+    let mut rows = xs.chunks_exact(16);
     let mut total = 0usize;
-    let mut blocks = xs.chunks_exact(LANES * ROWS);
-    for block in &mut blocks {
-        let mut acc = [0u8; LANES];
-        for row in block.chunks_exact(LANES) {
-            for (a, &x) in acc.iter_mut().zip(row) {
-                *a += u8::from(x == b);
+    // SAFETY: SSE2 is part of the x86-64 baseline, and every load reads
+    // 16 bytes of a 16-byte chunk (unaligned loads).
+    unsafe {
+        let needle = _mm_set1_epi8(b as i8);
+        let zero = _mm_setzero_si128();
+        let mut acc = zero;
+        let mut rounds = 0;
+        for row in &mut rows {
+            let v = _mm_loadu_si128(row.as_ptr().cast());
+            acc = _mm_sub_epi8(acc, _mm_cmpeq_epi8(v, needle));
+            rounds += 1;
+            if rounds == ROUNDS {
+                let sums = _mm_sad_epu8(acc, zero);
+                total += _mm_cvtsi128_si64(sums) as usize
+                    + _mm_cvtsi128_si64(_mm_unpackhi_epi64(sums, sums)) as usize;
+                acc = zero;
+                rounds = 0;
             }
         }
-        total += acc.iter().map(|&a| usize::from(a)).sum::<usize>();
+        let sums = _mm_sad_epu8(acc, zero);
+        total += _mm_cvtsi128_si64(sums) as usize
+            + _mm_cvtsi128_si64(_mm_unpackhi_epi64(sums, sums)) as usize;
     }
-    let rest = blocks.remainder();
-    let mut rows = rest.chunks_exact(LANES);
-    let mut acc = [0u8; LANES];
-    for row in &mut rows {
-        for (a, &x) in acc.iter_mut().zip(row) {
-            *a += u8::from(x == b);
+    total + count_scalar(rows.remainder(), b)
+}
+
+#[cfg(target_arch = "aarch64")]
+fn count_neon(xs: &[u8], b: u8) -> usize {
+    use core::arch::aarch64::{vaddlvq_u8, vceqq_u8, vdupq_n_u8, vld1q_u8, vsubq_u8};
+    let mut rows = xs.chunks_exact(16);
+    let mut total = 0usize;
+    // SAFETY: NEON is part of the aarch64 baseline, and every load reads
+    // 16 bytes of a 16-byte chunk.
+    unsafe {
+        let needle = vdupq_n_u8(b);
+        let mut acc = vdupq_n_u8(0);
+        let mut rounds = 0;
+        for row in &mut rows {
+            let v = vld1q_u8(row.as_ptr());
+            acc = vsubq_u8(acc, vceqq_u8(v, needle));
+            rounds += 1;
+            if rounds == ROUNDS {
+                total += usize::from(vaddlvq_u8(acc));
+                acc = vdupq_n_u8(0);
+                rounds = 0;
+            }
         }
+        total += usize::from(vaddlvq_u8(acc));
     }
-    total += acc.iter().map(|&a| usize::from(a)).sum::<usize>();
-    total + rows.remainder().iter().filter(|&&x| x == b).count()
+    total + count_scalar(rows.remainder(), b)
 }
 
 /// The first index of `b` in `xs`, if any.
 pub fn find(xs: &[u8], b: u8) -> Option<usize> {
-    let mut rows = xs.chunks_exact(LANES);
-    let mut at = 0usize;
-    for row in &mut rows {
-        if row.iter().fold(false, |hit, &x| hit | (x == b)) {
-            return row.iter().position(|&x| x == b).map(|p| at + p);
-        }
-        at += LANES;
+    #[cfg(target_arch = "x86_64")]
+    {
+        find_sse2(xs, b)
     }
-    rows.remainder()
-        .iter()
-        .position(|&x| x == b)
-        .map(|p| at + p)
+    #[cfg(target_arch = "aarch64")]
+    {
+        find_neon(xs, b)
+    }
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
+    {
+        find_scalar(xs, b)
+    }
+}
+
+/// The scalar definition of [`find`].
+pub fn find_scalar(xs: &[u8], b: u8) -> Option<usize> {
+    xs.iter().position(|&x| x == b)
+}
+
+#[cfg(target_arch = "x86_64")]
+fn find_sse2(xs: &[u8], b: u8) -> Option<usize> {
+    use core::arch::x86_64::{_mm_cmpeq_epi8, _mm_loadu_si128, _mm_movemask_epi8, _mm_set1_epi8};
+    let mut rows = xs.chunks_exact(16);
+    let mut at = 0usize;
+    // SAFETY: as `count_sse2`.
+    unsafe {
+        let needle = _mm_set1_epi8(b as i8);
+        for row in &mut rows {
+            let v = _mm_loadu_si128(row.as_ptr().cast());
+            let mask = _mm_movemask_epi8(_mm_cmpeq_epi8(v, needle));
+            if mask != 0 {
+                return Some(at + mask.trailing_zeros() as usize);
+            }
+            at += 16;
+        }
+    }
+    find_scalar(rows.remainder(), b).map(|p| at + p)
+}
+
+#[cfg(target_arch = "aarch64")]
+fn find_neon(xs: &[u8], b: u8) -> Option<usize> {
+    use core::arch::aarch64::{vceqq_u8, vdupq_n_u8, vld1q_u8, vmaxvq_u8};
+    let mut rows = xs.chunks_exact(16);
+    let mut at = 0usize;
+    // SAFETY: as `count_neon`.
+    unsafe {
+        let needle = vdupq_n_u8(b);
+        for row in &mut rows {
+            let v = vld1q_u8(row.as_ptr());
+            if vmaxvq_u8(vceqq_u8(v, needle)) != 0 {
+                return find_scalar(row, b).map(|p| at + p);
+            }
+            at += 16;
+        }
+    }
+    find_scalar(rows.remainder(), b).map(|p| at + p)
 }
 
 /// `bytes_find(xs, b, from) -> int ! {none}`: the first index `i >=
@@ -118,8 +224,8 @@ mod tests {
             .collect()
     }
 
-    /// The scans against the obvious scalar loops, at every length
-    /// around the block edges (32, 255 * 32) and every alignment.
+    /// The scans against the scalar definitions, at every length around
+    /// the vector edges (16, 255 * 16) and at several alignments.
     #[test]
     fn the_scans_agree_with_the_scalar_loops() {
         for n in [
@@ -141,16 +247,16 @@ mod tests {
         }
     }
 
-    /// A lane that sees the byte in every one of its 255 rows reaches
-    /// 255 and no further — the block edge is where an off-by-one would
-    /// wrap.
+    /// A lane that sees the byte in every one of its 255 rounds reaches
+    /// 255 and no further — the widening edge is where an off-by-one
+    /// would wrap.
     #[test]
     fn a_block_of_nothing_but_the_byte_counts_every_one() {
         for n in [
-            LANES * ROWS - 1,
-            LANES * ROWS,
-            LANES * ROWS + 1,
-            3 * LANES * ROWS + 17,
+            16 * ROUNDS - 1,
+            16 * ROUNDS,
+            16 * ROUNDS + 1,
+            3 * 16 * ROUNDS + 17,
         ] {
             assert_eq!(count(&vec![b'\n'; n], b'\n'), n);
         }

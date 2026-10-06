@@ -1380,16 +1380,18 @@ adopt that design and give `for` its desugar.)
   bytes enter one word — so boreutils' `wc -l` stood at 0.13x GNU on
   x86-64 (#411). **The lowering, stated:** on the native and release
   tiers each call is one runtime call over the list's buffer, into a
-  loop written for the vectoriser of the compiler that builds the
-  runtime — a byte-wide lane per element for at most 255 rows of 32
-  before widening for `count`, an OR over a 32-byte block's compares
-  before the byte walk for `find` — so it runs as the target's baseline
-  vector compares (SSE2 on x86-64, NEON on aarch64), with no feature
-  detection at run time and no wider instruction set assumed. The
-  checked machine and lupin answer by the scalar definition above,
-  element for element. **The cost, stated:** one call; `count` reads
+  loop written in the target's BASELINE vector instructions — SSE2 on
+  x86-64, NEON on aarch64, present on every CPU of the target, so
+  nothing is detected at run time — and a scalar loop on every other
+  architecture: `count` compares 16 bytes at a time into a byte-wide
+  accumulator it widens every 255 rounds, `find` compares 16 bytes at a
+  time and walks only the 16 that hit. (A plain loop left to the
+  runtime's optimiser was measured first and vectorised across rows,
+  one gathered byte per row — 1.4x the wolf loop where the intrinsics
+  are 8x.) The checked machine and lupin answer by the scalar
+  definition above, element for element. **The cost, stated:** one call; `count` reads
   every byte once, `find` reads up to the hit (to the end of its
-  32-byte block). Witnesses: `corpus/memory/bytes_scan.lu` (the edges:
+  16-byte block). Witnesses: `corpus/memory/bytes_scan.lu` (the edges:
   empty, `from` at and past the end, negative, a hit at the last
   index, a count over a block boundary, a line split); the vectorised
   loops against the scalar ones on every length around their block
