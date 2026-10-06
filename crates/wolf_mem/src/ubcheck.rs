@@ -2754,6 +2754,14 @@ impl<'t> Machine<'t> {
                     return Ok(Found::Not);
                 };
                 let field = self.text(member.span);
+                // s213 (wolf-lang#579, `[mem.static]`): `m.K` — another
+                // module's item read (or, a `var`, written) through its
+                // module's name is that item's state.
+                if let Some(module) = self.bound_module(base)
+                    && let Some(ItemSig::Global(_)) = self.tc.sigs.get(module, &field)
+                {
+                    return self.static_place_in(module, &field, e.span);
+                }
                 match self.place_of(base)? {
                     Found::At(mut place) => {
                         place.path.push(PStep::Field(field));
@@ -2856,6 +2864,34 @@ impl<'t> Machine<'t> {
             return Ok(Found::Not);
         };
         let module = self.tc.bodies[frame.body].body.module;
+        self.static_place_in(module, name, span)
+    }
+
+    /// s213 (wolf-lang#579): the module an unshadowed bare name `m`
+    /// binds in the current file (`use m`), if any.
+    fn bound_module(&self, base: &'t GreenNode) -> Option<usize> {
+        if base.kind != SyntaxKind::PathExpr {
+            return None;
+        }
+        let bname = self.text(base.span);
+        if bname.contains('.') || self.lookup(&bname).is_some() {
+            return None;
+        }
+        let cur = &self.tc.bodies[self.frames.last()?.body].body;
+        let md = &self.pkg.modules[cur.module];
+        md.files
+            .iter()
+            .position(|&f| f == cur.file)
+            .and_then(|slot| md.bindings[slot].iter().find(|b| b.name == bname))
+            .and_then(|b| match b.target {
+                wolf_sema::BindTarget::PkgModule(m) => Some(m),
+                _ => None,
+            })
+    }
+
+    /// [`Machine::static_place`] for `module`'s state — the frame's own
+    /// module, or (s213, wolf-lang#579) the one a qualified `m.K` names.
+    fn static_place_in(&mut self, module: usize, name: &str, span: Span) -> E<Found<Place>> {
         let Some(ItemSig::Global(g)) = self.tc.sigs.get(module, name) else {
             return Ok(Found::Not);
         };
