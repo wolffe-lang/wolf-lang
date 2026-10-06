@@ -20,7 +20,8 @@
 //! r28) carries is70's mirror (#174): every refused row and both `cfg`
 //! rows answer the compiler's column, so their pins are dropped; the
 //! control `attr_implemented_set.lu` stays `unsupported` (lupin declines
-//! its `comptime fn`) and is carried to 0.1.46.
+//! its `comptime fn`) and is carried to 0.1.46, and to 0.1.47 (the
+//! 0.2.24 pairing, r29), measured.
 //!
 //! Why a driver gate beside the corpus rows: `cargo xtask corpus` reads
 //! a row on its default lane only, and the rule is "on every machine".
@@ -342,6 +343,11 @@ fn the_implemented_attributes_still_compile() {
             },
             Pin {
                 version: "0.1.46",
+                verdict: "unsupported",
+                stdout: "",
+            },
+            Pin {
+                version: "0.1.47",
                 verdict: "unsupported",
                 stdout: "",
             },
