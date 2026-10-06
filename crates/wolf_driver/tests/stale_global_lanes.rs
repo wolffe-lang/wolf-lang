@@ -269,14 +269,14 @@ fn c_writes_between_two_wolf_reads_on_both_tiers() {
     for tier in ["native", "release"] {
         let dir = scratch(&format!("extern-{tier}"));
         let mut cmd = Command::new(wolf());
-        cmd.arg("build")
-            .arg(&src)
-            .arg("--emit=obj")
-            .arg("-o")
-            .arg(dir.join("prog.o"));
+        cmd.arg("build");
         if tier == "release" {
             cmd.arg("--release");
         }
+        cmd.arg(&src)
+            .arg("--emit=obj")
+            .arg("-o")
+            .arg(dir.join("prog.o"));
         let out = cmd.output().expect("wolf runs");
         let stderr = String::from_utf8_lossy(&out.stderr);
         if lane_exit::environment_refusal(&out, &format!("wolf build ({tier})"))
@@ -379,8 +379,11 @@ mod linux_x86_64 {
         std::fs::copy(fixture("kernel/kmain_stale.lu"), &src).expect("copy the kernel");
         let obj = dir.join("kmain_stale.o");
         let mut cmd = Command::new(wolf());
-        cmd.current_dir(&dir).args([
-            "build",
+        cmd.current_dir(&dir).arg("build");
+        if tier == "release" {
+            cmd.arg("--release");
+        }
+        cmd.args([
             "kmain_stale.lu",
             "--no-cache",
             "--target",
@@ -389,9 +392,6 @@ mod linux_x86_64 {
             "-o",
             obj.to_str().unwrap(),
         ]);
-        if tier == "release" {
-            cmd.arg("--release");
-        }
         let out = cmd.output().expect("wolf runs");
         assert!(
             out.status.success() && obj.is_file(),
