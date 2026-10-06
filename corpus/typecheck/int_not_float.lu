@@ -1,0 +1,12 @@
+//! check: fail(E0409)
+//! phase: resolve
+//! conforms: type.int.not
+//!
+//! s213 (wolf-lang#575, ruling owed): `!` reads `bool` and the integer
+//! types (`[type.int.not]`); a float has no bits to complement in the
+//! language, so `!f` stays E0409, whose note now names both.
+
+fn main() {
+    let f = 1.5
+    print("{!f}")
+}

@@ -1,0 +1,18 @@
+//! check: run(exit=0, stdout="-6 127 0 -256 -1 -128\n")
+//! phase: run
+//! conforms: type.int.not
+//!
+//! s213 (wolf-lang#575, ruling owed): on a signed width `!x` is
+//! `-x - 1` — total, so `!i8::MIN`-shaped values never trap
+//! (`[type.int.not]`); an unannotated literal defaults to `int` first.
+//! At trunk 294d626d every compiling machine answered E0409.
+
+const LOW_CLEAR: i32 = !0xff
+
+fn main() {
+    let a = 5
+    let b: i8 = -128
+    let c: i8 = 127
+    let n: int = !a
+    print("{n} {!b} {!(-1)} {LOW_CLEAR} {!0} {!c}")
+}

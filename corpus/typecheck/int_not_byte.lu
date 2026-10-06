@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="-16 240 255\n")
+//! phase: run
+//! conforms: type.int.not, type.byte.op
+//!
+//! s213 (wolf-lang#575, ruling owed): a `byte` operand of `!` widens to
+//! `int` first, as every bitwise operator's does (`[type.byte.op]`), so
+//! `!b` is the `int` `-b - 1`; the octet's complement is spelled
+//! `(!b) as byte` (`[type.int.not]`). At trunk 294d626d every compiling
+//! machine answered E0409.
+
+fn main() {
+    let b = 15 as byte
+    let w = !b
+    let z = 0 as byte
+    print("{w} {(!b) as byte} {(!z) as byte}")
+}
