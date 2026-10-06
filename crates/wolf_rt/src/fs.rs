@@ -1058,6 +1058,38 @@ pub unsafe extern "C" fn __wolf_rt_read_line(out: i64) -> i64 {
     }
 }
 
+// ------------------ s215: the table's half of a child's descriptors --
+
+/// s215 (`[os.proc.pipe]`): put an already-open `File` in the table
+/// and answer its handle — the first is 3, as for an open. A pipe's
+/// two ends enter the table this way, so every handle call (`fs_read`,
+/// `fs_write`, the chunks, `fs_fstat`, `fs_close`) serves them.
+pub(crate) fn mint_file(f: File) -> i64 {
+    let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
+    if files.len() < FIRST_HANDLE {
+        files.resize_with(FIRST_HANDLE, || None);
+    }
+    files.push(Some(f));
+    (files.len() - 1) as i64
+}
+
+/// s215 (`[os.proc.fds]`): a descriptor of this process's own for the
+/// file `fd` names, held by the caller for as long as a spawn needs
+/// it: a duplicate (close-on-exec, as every runtime descriptor is), so
+/// a handle closed by another task while the child is being made can
+/// never let its number be reused under the map. 0..2 duplicate the
+/// standard streams. `None` is a closed or forged handle (`io`).
+pub(crate) fn dup_of(fd: i64) -> Option<File> {
+    with_handle(fd, |f| f.try_clone().ok()).flatten()
+}
+
+/// s215 (`[os.fs.isatty]`): whether the file `fd` names is a terminal;
+/// `None` is a closed or forged handle (`io`).
+pub(crate) fn is_terminal(fd: i64) -> Option<bool> {
+    use std::io::IsTerminal as _;
+    with_handle(fd, |f| f.is_terminal())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
