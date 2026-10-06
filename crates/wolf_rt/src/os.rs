@@ -379,6 +379,127 @@ impl ChildTable {
         }
     }
 
+    /// `os_spawn_fds(exe, args, map)` (s215, `[os.proc.fds]`): spawn
+    /// `exe` with `args` and the child's descriptors set up as `map`
+    /// says. Each entry is `(target, source)`: `source` an OS
+    /// descriptor of this process (already duplicated by the shim, so
+    /// it cannot be closed under the spawn) that the child receives AS
+    /// `target`, or `None` for "closed in the child". A target the map
+    /// does not name keeps the spawn posture of `[os.proc.spawn]`: 0
+    /// the null device, 1 and 2 inherited, nothing else open (every
+    /// runtime descriptor is close-on-exec). The map arrives validated
+    /// ([`map_of`]); this only places it.
+    ///
+    /// Mechanics (unix): stdio is INHERITED at the `Command` level so
+    /// that, inside the forked child, 0..2 are still this process's
+    /// own when the `pre_exec` hook reads them as sources. The hook
+    /// stages every source above the highest target (`F_DUPFD`, so a
+    /// source already sitting at some target number is read before
+    /// anything is written there), then `dup2`s each stage onto its
+    /// target — which clears close-on-exec on the target and only
+    /// there — closes each stage, closes the `None` targets, and last
+    /// opens the null device onto 0 when the map does not name 0. The
+    /// hook runs after `fork` in a multithreaded process, so it calls
+    /// only async-signal-safe functions on fixed arrays: the map is
+    /// bounded at [`MAX_FD_PAIRS`]. windows: a non-empty map is
+    /// `unsupported`, by name, with no child (a HANDLE is not a small
+    /// number a child can be handed at a position).
+    #[cfg_attr(not(unix), allow(unused_variables))]
+    pub fn spawn_fds(
+        &mut self,
+        exe: &str,
+        args: &[&str],
+        map: &[(InheritFd, Option<InheritFd>)],
+    ) -> Result<i64, ProcErr> {
+        if exe.is_empty() {
+            return Err("not_found");
+        }
+        if map.is_empty() {
+            return self.spawn_with(exe, args, &[]);
+        }
+        if map.len() > MAX_FD_PAIRS {
+            return Err("invalid");
+        }
+        #[cfg(not(unix))]
+        {
+            Err("unsupported")
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt as _;
+            let mut cmd = Command::new(exe);
+            cmd.args(args)
+                .stdin(Stdio::inherit())
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit());
+            let n = map.len();
+            let mut targets = [-1 as InheritFd; MAX_FD_PAIRS];
+            let mut sources = [-1 as InheritFd; MAX_FD_PAIRS];
+            let mut floor: InheritFd = 3;
+            let mut names_zero = false;
+            for (i, &(t, s)) in map.iter().enumerate() {
+                targets[i] = t;
+                sources[i] = s.unwrap_or(-1);
+                floor = floor.max(t + 1);
+                names_zero |= t == 0;
+            }
+            // SAFETY: the hook calls only async-signal-safe functions
+            // (`fcntl`, `dup2`, `close`, `open` on a static path) over
+            // fixed-size arrays — no allocation and no locks, which is
+            // the whole `pre_exec` contract in a process that holds
+            // other threads.
+            unsafe {
+                cmd.pre_exec(move || {
+                    let mut staged = [-1 as InheritFd; MAX_FD_PAIRS];
+                    for i in 0..n {
+                        if sources[i] >= 0 {
+                            let s = libc::fcntl(sources[i], libc::F_DUPFD_CLOEXEC, floor);
+                            if s < 0 {
+                                return Err(std::io::Error::last_os_error());
+                            }
+                            staged[i] = s;
+                        }
+                    }
+                    for i in 0..n {
+                        if staged[i] >= 0 {
+                            if libc::dup2(staged[i], targets[i]) < 0 {
+                                return Err(std::io::Error::last_os_error());
+                            }
+                            libc::close(staged[i]);
+                        } else {
+                            libc::close(targets[i]);
+                        }
+                    }
+                    if !names_zero {
+                        let null = libc::open(c"/dev/null".as_ptr(), libc::O_RDWR);
+                        if null < 0 {
+                            return Err(std::io::Error::last_os_error());
+                        }
+                        if null != 0 {
+                            if libc::dup2(null, 0) < 0 {
+                                return Err(std::io::Error::last_os_error());
+                            }
+                            libc::close(null);
+                        }
+                    }
+                    Ok(())
+                });
+            }
+            match cmd.spawn() {
+                Err(e) => Err(match e.kind() {
+                    std::io::ErrorKind::NotFound => "not_found",
+                    std::io::ErrorKind::PermissionDenied => "denied",
+                    _ => "io",
+                }),
+                Ok(child) => {
+                    let h = self.children.len() as i64;
+                    self.children.push(Some(child));
+                    Ok(h)
+                }
+            }
+        }
+    }
+
     /// Wait for the child and REAP it (the slot tombstones on any
     /// completed wait). The exit code, or `signal` for a child that
     /// died without one (unix); a forged or already-reaped handle is
@@ -446,6 +567,44 @@ pub mod proc_code {
     /// hand descriptors across a spawn (windows at this pin) — refused
     /// BY NAME, declared only by `os_spawn_with`.
     pub const UNSUPPORTED: i64 = 5;
+    /// s215 (`[os.proc.fds]`): a descriptor map that is not one — an
+    /// odd length, a target outside `0..=MAX_FD_TARGET`, a target named
+    /// twice, a source below -1, more than [`super::MAX_FD_PAIRS`]
+    /// pairs — decided before any handle is read or child made.
+    /// Declared only by `os_spawn_fds`.
+    pub const INVALID: i64 = 6;
+}
+
+/// The most `(target, source)` pairs one `os_spawn_fds` places (s215):
+/// the `pre_exec` hook keeps the map on the stack.
+pub const MAX_FD_PAIRS: usize = 64;
+
+/// The highest descriptor number a map may name in the child (s215).
+/// POSIX guarantees a process at least 20 descriptors and every tier-1
+/// unix allows far more; 255 is room for any shell's `N>&M` and keeps
+/// the staging floor small.
+pub const MAX_FD_TARGET: i64 = 255;
+
+/// `os_spawn_fds`'s map, read and checked before anything else happens
+/// (s215, `[os.proc.fds]`): the flat `[target, source, …]` list as
+/// `(target, source)` pairs, `source` `None` for `-1` (closed in the
+/// child). `Err("invalid")` for a list that is not a map: an odd
+/// length, a target outside `0..=MAX_FD_TARGET`, a repeated target, a
+/// source below `-1`, more than [`MAX_FD_PAIRS`] pairs. The checked
+/// machine's `os_spawn_fds` applies the same rules in the same order.
+pub fn map_of(flat: &[i64]) -> Result<Vec<(i64, Option<i64>)>, ProcErr> {
+    if !flat.len().is_multiple_of(2) || flat.len() / 2 > MAX_FD_PAIRS {
+        return Err("invalid");
+    }
+    let mut out: Vec<(i64, Option<i64>)> = Vec::with_capacity(flat.len() / 2);
+    for pair in flat.chunks_exact(2) {
+        let (t, s) = (pair[0], pair[1]);
+        if !(0..=MAX_FD_TARGET).contains(&t) || s < -1 || out.iter().any(|&(u, _)| u == t) {
+            return Err("invalid");
+        }
+        out.push((t, (s >= 0).then_some(s)));
+    }
+    Ok(out)
 }
 
 /// The process-wide child table behind the shim trio — the fs
@@ -463,6 +622,7 @@ fn proc_code_of_tag(tag: ProcErr) -> i64 {
         "denied" => proc_code::DENIED,
         "signal" => proc_code::SIGNAL,
         "unsupported" => proc_code::UNSUPPORTED,
+        "invalid" => proc_code::INVALID,
         _ => proc_code::IO,
     }
 }
@@ -499,6 +659,147 @@ pub unsafe extern "C" fn __wolf_rt_os_spawn_with(ep: i64, el: i64, args: i64, in
     match children().spawn_with(exe, &argv, &fds) {
         Ok(h) => h,
         Err(t) => -proc_code_of_tag(t),
+    }
+}
+
+/// `os_spawn_fds(exe: str, args: List[str], map: List[int]) -> int !
+/// {denied, invalid, io, not_found, unsupported}` (s215,
+/// `[os.proc.fds]`) — the child's handle (>= 0), or `-code`. The map is
+/// read in a fixed order, so a caller can tell from the code how far
+/// the call got: its SHAPE first (`invalid`, [`map_of`]), then the HOST
+/// (windows: a non-empty map is `unsupported`), then every SOURCE handle
+/// (`io` for a closed or forged one — each is duplicated here and held
+/// until the spawn returns), and only then the program (`not_found`,
+/// `denied`, `io`). Nothing before the last step makes a child.
+///
+/// # Safety
+///
+/// `ep`/`el` a valid str pair; `args` a live `List[str]` header; `map`
+/// a live `List[int]` header.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_spawn_fds(ep: i64, el: i64, args: i64, map: i64) -> i64 {
+    let exe = unsafe { view(ep, el) };
+    let Some(pairs) = (unsafe { crate::list::str_pair_elems(args) }) else {
+        return -proc_code::IO;
+    };
+    let argv: Vec<&str> = pairs.iter().map(|&[p, l]| unsafe { view(p, l) }).collect();
+    let Some(flat) = (unsafe { crate::list::i64_elems(map) }) else {
+        return -proc_code::IO;
+    };
+    let entries = match map_of(flat) {
+        Ok(m) => m,
+        Err(t) => return -proc_code_of_tag(t),
+    };
+    if cfg!(not(unix)) && !entries.is_empty() {
+        return -proc_code::UNSUPPORTED;
+    }
+    // Each source duplicated and HELD: the files live until the spawn
+    // returns, so the numbers the child's hook reads cannot be closed
+    // and reused by another task in between.
+    let mut held: Vec<std::fs::File> = Vec::with_capacity(entries.len());
+    let mut placed: Vec<(InheritFd, Option<InheritFd>)> = Vec::with_capacity(entries.len());
+    for &(t, s) in &entries {
+        let src = match s {
+            None => None,
+            Some(h) => match crate::fs::dup_of(h) {
+                None => return -proc_code::IO,
+                Some(f) => {
+                    let fd = raw_of(&f);
+                    held.push(f);
+                    Some(fd)
+                }
+            },
+        };
+        placed.push((t as InheritFd, src));
+    }
+    let r = children().spawn_fds(exe, &argv, &placed);
+    drop(held);
+    match r {
+        Ok(h) => h,
+        Err(t) => -proc_code_of_tag(t),
+    }
+}
+
+#[cfg(unix)]
+fn raw_of(f: &std::fs::File) -> InheritFd {
+    use std::os::fd::AsRawFd as _;
+    f.as_raw_fd()
+}
+
+#[cfg(not(unix))]
+fn raw_of(_f: &std::fs::File) -> InheritFd {
+    -1
+}
+
+/// `os_pipe() -> (int, int) ! {io}` (s215, `[os.proc.pipe]`) — a pipe's
+/// read end and write end, as two fs handles (3 and up), written
+/// through `out` (16 bytes) on code 0. Both ends are close-on-exec, as
+/// every runtime descriptor is: a child receives one only through an
+/// `os_spawn_fds` map. `io` (1) is a host that cannot make one (the
+/// descriptor limit).
+///
+/// # Safety
+///
+/// `out` must address 16 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_pipe(out: i64) -> i64 {
+    let Ok((r, w)) = std::io::pipe() else {
+        return 1;
+    };
+    #[cfg(unix)]
+    let (rf, wf) = (
+        std::fs::File::from(std::os::fd::OwnedFd::from(r)),
+        std::fs::File::from(std::os::fd::OwnedFd::from(w)),
+    );
+    #[cfg(windows)]
+    let (rf, wf) = (
+        std::fs::File::from(std::os::windows::io::OwnedHandle::from(r)),
+        std::fs::File::from(std::os::windows::io::OwnedHandle::from(w)),
+    );
+    let rh = crate::fs::mint_file(rf);
+    let wh = crate::fs::mint_file(wf);
+    unsafe { write_pair(out, rh, wh) };
+    0
+}
+
+/// `os_chdir(path) -> () ! {denied, io, not_found}` (s215,
+/// `[os.fs.chdir]`) — the process's working directory becomes `path`,
+/// resolved against the current one when relative. Codes: 0 ok, 1
+/// `not_found`, 2 `denied`, 3 `io` (a path that names a file, and every
+/// other host failure).
+///
+/// # Safety
+///
+/// A valid str pair.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_chdir(pp: i64, pl: i64) -> i64 {
+    let path = unsafe { view(pp, pl) };
+    match std::env::set_current_dir(path) {
+        Ok(()) => 0,
+        Err(e) => match e.kind() {
+            std::io::ErrorKind::NotFound => 1,
+            std::io::ErrorKind::PermissionDenied => 2,
+            _ => 3,
+        },
+    }
+}
+
+/// `os_isatty(fd) -> bool ! {io}` (s215, `[os.fs.isatty]`) — whether
+/// the handle names a terminal: 0..2 the standard streams, 3 and up
+/// the table. The answer (0 or 1) goes through `out` on code 0; a
+/// closed or forged handle is code 1 (`io`).
+///
+/// # Safety
+///
+/// `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_isatty(fd: i64, out: i64) -> i64 {
+    match crate::fs::is_terminal(fd) {
+        None => 1,
+        Some(t) => {
+            unsafe { write_word(out, i64::from(t)) };
+            0
+        }
     }
 }
 
@@ -946,5 +1247,221 @@ mod tests {
             },
             -proc_code::UNSUPPORTED
         );
+    }
+
+    // ---------------- s215: the child's descriptors ([os.proc.fds]) --
+
+    /// The map's shape is decided before anything is read: odd, out of
+    /// range, repeated, a source below -1 and too many pairs are each
+    /// `invalid`; -1 is "closed in the child".
+    #[test]
+    fn map_of_rows() {
+        assert_eq!(map_of(&[]), Ok(vec![]));
+        assert_eq!(map_of(&[1, 4, 2, -1]), Ok(vec![(1, Some(4)), (2, None)]));
+        assert_eq!(map_of(&[1]), Err("invalid"));
+        assert_eq!(map_of(&[256, 3]), Err("invalid"));
+        assert_eq!(map_of(&[-1, 3]), Err("invalid"));
+        assert_eq!(map_of(&[1, 3, 1, 4]), Err("invalid"));
+        assert_eq!(map_of(&[1, -2]), Err("invalid"));
+        let big: Vec<i64> = (0..(MAX_FD_PAIRS as i64 + 1))
+            .flat_map(|t| [t, 1])
+            .collect();
+        assert_eq!(map_of(&big), Err("invalid"));
+    }
+
+    fn pipe_pair() -> (i64, i64) {
+        let mut out = [0i64; 2];
+        assert_eq!(unsafe { __wolf_rt_os_pipe(out.as_mut_ptr() as i64) }, 0);
+        assert!(out[0] >= 3 && out[1] >= 3 && out[0] != out[1], "{out:?}");
+        (out[0], out[1])
+    }
+
+    fn read_all(h: i64) -> Vec<u8> {
+        let mut got = Vec::new();
+        loop {
+            let mut pair = [0i64; 2];
+            let rc = unsafe { crate::fs::__wolf_rt_fs_read(h, 4096, pair.as_mut_ptr() as i64) };
+            if rc != crate::fs::fs_code::OK {
+                assert_eq!(rc, crate::fs::fs_code::EOF, "read the pipe");
+                return got;
+            }
+            got.extend_from_slice(unsafe { view(pair[0], pair[1]) }.as_bytes());
+        }
+    }
+
+    fn spawn_fds_shim(exe: &str, args: &[&str], map: &[i64]) -> i64 {
+        let a = crate::list::new_list(16);
+        for x in args {
+            crate::list::push_str(a, x);
+        }
+        let m = crate::list::new_list(8);
+        for &x in map {
+            crate::list::push_int(m, x);
+        }
+        unsafe { __wolf_rt_os_spawn_fds(exe.as_ptr() as i64, exe.len() as i64, a as i64, m as i64) }
+    }
+
+    fn wait_code(h: i64) -> i64 {
+        let mut out = [0i64; 1];
+        assert_eq!(
+            unsafe { __wolf_rt_os_wait(h, out.as_mut_ptr() as i64) },
+            proc_code::OK
+        );
+        out[0]
+    }
+
+    /// A pipe's ends are fs handles: write one, close it, read the
+    /// other to its end; neither is a terminal; a forged handle is
+    /// `io` to `isatty`.
+    #[test]
+    fn pipe_round_trip_through_the_fs_table() {
+        let (r, w) = pipe_pair();
+        let msg = "howl\n";
+        assert_eq!(
+            unsafe { crate::fs::__wolf_rt_fs_write(w, msg.as_ptr() as i64, msg.len() as i64) },
+            crate::fs::fs_code::OK
+        );
+        let mut t = [7i64; 1];
+        assert_eq!(unsafe { __wolf_rt_os_isatty(w, t.as_mut_ptr() as i64) }, 0);
+        assert_eq!(t[0], 0, "a pipe is not a terminal");
+        assert_eq!(crate::fs::__wolf_rt_fs_close(w), crate::fs::fs_code::OK);
+        assert_eq!(read_all(r), msg.as_bytes());
+        assert_eq!(crate::fs::__wolf_rt_fs_close(r), crate::fs::fs_code::OK);
+        assert_eq!(
+            unsafe { __wolf_rt_os_isatty(r, t.as_mut_ptr() as i64) },
+            1,
+            "closed"
+        );
+        assert_eq!(
+            unsafe { __wolf_rt_os_isatty(999_999, t.as_mut_ptr() as i64) },
+            1
+        );
+    }
+
+    /// `os_chdir`'s rows that leave the directory alone (a test host is
+    /// threaded, so no test here moves it): a missing path is
+    /// `not_found`, a file is `io`.
+    #[test]
+    fn chdir_rows_that_do_not_move() {
+        let missing = "wolf-s215-no-such-directory/inner";
+        assert_eq!(
+            unsafe { __wolf_rt_os_chdir(missing.as_ptr() as i64, missing.len() as i64) },
+            1
+        );
+        let file = std::env::current_exe().expect("exe");
+        let f = file.to_str().expect("utf-8 exe path");
+        assert_eq!(
+            unsafe { __wolf_rt_os_chdir(f.as_ptr() as i64, f.len() as i64) },
+            3
+        );
+    }
+
+    /// The map's order of refusal, with no child made: shape, then
+    /// sources, then the program.
+    #[test]
+    fn spawn_fds_refuses_in_order() {
+        let ghost = "wolf-s215-no-such-program";
+        assert_eq!(spawn_fds_shim(ghost, &[], &[1]), -proc_code::INVALID);
+        assert_eq!(
+            spawn_fds_shim(ghost, &[], &[1, 999_999]),
+            if cfg!(unix) {
+                -proc_code::IO
+            } else {
+                -proc_code::UNSUPPORTED
+            }
+        );
+        assert_eq!(spawn_fds_shim(ghost, &[], &[]), -proc_code::NOT_FOUND);
+        assert_eq!(spawn_fds_shim("", &[], &[]), -proc_code::NOT_FOUND);
+    }
+
+    /// A child's stdout is a pipe this process reads.
+    #[cfg(unix)]
+    #[test]
+    fn spawn_fds_hands_the_child_a_pipe_as_stdout() {
+        let (r, w) = pipe_pair();
+        let h = spawn_fds_shim("/bin/sh", &["-c", "echo hi; echo err >&2"], &[1, w, 2, w]);
+        assert!(h >= 0, "spawn: {h}");
+        assert_eq!(crate::fs::__wolf_rt_fs_close(w), crate::fs::fs_code::OK);
+        assert_eq!(read_all(r), b"hi\nerr\n");
+        assert_eq!(wait_code(h), 0);
+        crate::fs::__wolf_rt_fs_close(r);
+    }
+
+    /// A descriptor above 2: the child reads 5, which this process
+    /// filled; and a closed entry is closed in the child.
+    #[cfg(unix)]
+    #[test]
+    fn spawn_fds_places_five_and_closes_two() {
+        let (r5, w5) = pipe_pair();
+        let msg = "five\n";
+        unsafe { crate::fs::__wolf_rt_fs_write(w5, msg.as_ptr() as i64, msg.len() as i64) };
+        crate::fs::__wolf_rt_fs_close(w5);
+        let (r, w) = pipe_pair();
+        let h = spawn_fds_shim("cat", &["/dev/fd/5"], &[5, r5, 1, w]);
+        assert!(h >= 0, "spawn: {h}");
+        crate::fs::__wolf_rt_fs_close(w);
+        crate::fs::__wolf_rt_fs_close(r5);
+        assert_eq!(read_all(r), b"five\n");
+        assert_eq!(wait_code(h), 0);
+        crate::fs::__wolf_rt_fs_close(r);
+        let (r, w) = pipe_pair();
+        let h = spawn_fds_shim(
+            "/bin/sh",
+            &["-c", "test -e /dev/fd/2 && echo open || echo closed"],
+            &[1, w, 2, -1],
+        );
+        assert!(h >= 0);
+        crate::fs::__wolf_rt_fs_close(w);
+        assert_eq!(read_all(r), b"closed\n");
+        assert_eq!(wait_code(h), 0);
+        crate::fs::__wolf_rt_fs_close(r);
+    }
+
+    /// No descriptor of this process reaches a child it did not map:
+    /// the child's `/dev/fd` lists exactly what a child of the test
+    /// host itself lists (the control: whatever the harness hands
+    /// down), with a file and a pipe open here.
+    #[cfg(unix)]
+    #[test]
+    fn spawn_fds_leaks_nothing() {
+        let control = std::process::Command::new("ls")
+            .arg("/dev/fd/")
+            .output()
+            .expect("ls runs");
+        let path = std::env::temp_dir().join(format!("wolf-s215-leak-{}", std::process::id()));
+        std::fs::write(&path, "x").expect("write");
+        let p = path.to_str().expect("utf-8");
+        let f = unsafe { crate::fs::__wolf_rt_fs_open(p.as_ptr() as i64, p.len() as i64, 0) };
+        assert!(f >= 3);
+        let (r, w) = pipe_pair();
+        let h = spawn_fds_shim("ls", &["/dev/fd/"], &[1, w]);
+        assert!(h >= 0);
+        crate::fs::__wolf_rt_fs_close(w);
+        let got = read_all(r);
+        assert_eq!(wait_code(h), 0);
+        assert_eq!(
+            String::from_utf8_lossy(&got),
+            String::from_utf8_lossy(&control.stdout)
+        );
+        crate::fs::__wolf_rt_fs_close(r);
+        crate::fs::__wolf_rt_fs_close(f);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// windows refuses a non-empty map by name, with no child; an empty
+    /// map is the plain spawn.
+    #[cfg(windows)]
+    #[test]
+    fn spawn_fds_refuses_a_map_by_name_on_windows() {
+        let (r, w) = pipe_pair();
+        assert_eq!(
+            spawn_fds_shim("cmd", &["/c", "exit 0"], &[1, w]),
+            -proc_code::UNSUPPORTED
+        );
+        let h = spawn_fds_shim("cmd", &["/c", "exit 3"], &[]);
+        assert!(h >= 0);
+        assert_eq!(wait_code(h), 3);
+        crate::fs::__wolf_rt_fs_close(r);
+        crate::fs::__wolf_rt_fs_close(w);
     }
 }
