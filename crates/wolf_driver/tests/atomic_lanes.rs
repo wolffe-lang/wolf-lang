@@ -207,11 +207,20 @@ struct Pin<'a> {
 /// lupin 0.1.46 (the 0.2.23 pairing) has no atomic surface: every row
 /// is `unsupported`, naming the first spelling it cannot resolve — an
 /// `Order` mark or `fence` (measured at kw11's head, `rows-*.log`).
-const PRE_MIRROR: &[Pin<'static>] = &[Pin {
-    version: "0.1.46",
-    verdict: "unsupported",
-    named: "does not resolve",
-}];
+/// 0.1.47 (the 0.2.24 pairing, r29) answers the same, measured; the pin
+/// is carried with its issue.
+const PRE_MIRROR: &[Pin<'static>] = &[
+    Pin {
+        version: "0.1.46",
+        verdict: "unsupported",
+        named: "does not resolve",
+    },
+    Pin {
+        version: "0.1.47",
+        verdict: "unsupported",
+        named: "does not resolve",
+    },
+];
 
 fn assert_obs(who: &str, row: &str, obs: &Obs, want: Want<'_>) {
     assert_eq!(
@@ -418,7 +427,7 @@ fn the_counter_is_exact_on_the_compiled_tiers() {
 /// `[conc.mm.race.1]`: the plain-increment twin is a data race. The
 /// compiled tiers compile and run it and nothing is asserted about the
 /// count; lupin may detect the race (`[conc.mm.race.3]`), and 0.1.46
-/// does.
+/// and 0.1.47 do.
 #[test]
 fn the_plain_counter_is_a_race_and_asserts_nothing() {
     let entry = corpus("atomic_race_plain.lu");
@@ -451,7 +460,11 @@ fn the_plain_counter_is_a_race_and_asserts_nothing() {
         lupin.version,
         lupin.verdict
     );
-    if lupin.version == "0.1.46" {
-        assert_eq!(lupin.verdict, "trap(race)", "lupin 0.1.46, measured");
+    if lupin.version == "0.1.46" || lupin.version == "0.1.47" {
+        assert_eq!(
+            lupin.verdict, "trap(race)",
+            "lupin {}, measured",
+            lupin.version
+        );
     }
 }
