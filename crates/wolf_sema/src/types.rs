@@ -519,7 +519,9 @@ pub fn render(
 ) -> String {
     match table.kind(id) {
         TyKind::Error => "<error>".to_string(),
-        TyKind::Never => "!".to_string(),
+        // s213 (wolf-lang#572): bottom renders as its spelling, so an
+        // interface or a diagnostic reads back as source would.
+        TyKind::Never => "never".to_string(),
         TyKind::Unit => "()".to_string(),
         TyKind::Prim(p) => p.name().to_string(),
         TyKind::Wrapping(t) => format!("wrapping[{}]", render(table, *t, resolve)),

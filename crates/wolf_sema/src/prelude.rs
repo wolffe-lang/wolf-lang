@@ -373,6 +373,9 @@ pub const BUILTIN_TYPES: &[Ambient] = &[
     prim("f32", None),
     prim("f64", None),
     prim("wrapping", None),
+    // s213 (wolf-lang#572, ruling owed): the bottom type, written as a
+    // fn's return type — the fn never returns.
+    prim("never", Some("type.fn.never")),
 ];
 
 /// `[type.method.home]` (s166, wolf-lang#390) — the home module of each
@@ -486,8 +489,15 @@ pub const PRELUDE_TYPE_ONLY: &[&str] = &["range"];
 /// every built-in type name.
 pub fn shadow_hazard(name: &str) -> bool {
     (in_prelude(name) && !PRELUDE_PROVISIONAL.contains(&name) && !PRELUDE_TYPE_ONLY.contains(&name))
-        || is_builtin_type(name)
+        || (is_builtin_type(name) && !BUILTIN_TYPE_ONLY.contains(&name))
 }
+
+/// Built-in type names with no expression form (s213): `never` is
+/// written only as a fn's return type (`[type.fn.never]`), so a
+/// binding named `never` shadows nothing a program can spell — W0304
+/// exempts it, as it exempts `range` (wolf-std's tests bind a local
+/// `never`).
+pub const BUILTIN_TYPE_ONLY: &[&str] = &["never"];
 
 /// Is `name` a built-in type name?
 pub fn is_builtin_type(name: &str) -> bool {

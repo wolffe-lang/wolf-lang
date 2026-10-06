@@ -1829,6 +1829,11 @@ impl<'a> Lower<'a> {
         {
             return self.table.prim(p);
         }
+        // s213 (wolf-lang#572, `[type.fn.never]`, ruling owed): the
+        // bottom type's name — a fn declared `-> never` never returns.
+        if segs.len() == 1 && !has_args && first == "never" {
+            return self.table.never();
+        }
 
         // Resolve the head: imports first (file-scoped), then module
         // items — mirroring the resolver's order.
