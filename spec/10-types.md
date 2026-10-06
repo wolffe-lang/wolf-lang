@@ -356,6 +356,26 @@ conversion, and its numeric arms are closed and total:
   byte > 100 as byte`); `<=>` yields `int`; `byte` against `int` is
   the ordinary type mismatch — widen the byte.
 
+- `[type.int.not]` **`!` on an integer is its bitwise complement.**
+  *(Proposed by s213 for wolf-lang#575; the spelling is a ruling owed —
+  options A `!` on integers, B a `~` operator, C a named function; A
+  is implemented.)* `!x` on every integer type (`int`, `uint`,
+  `i8`…`i64`, `u8`…`u64`, `wrapping[T]`) flips every bit of `x` at its
+  own width and has `x`'s type: `-x - 1` for a signed width, `max - x`
+  for an unsigned one (`!(0 as u32)` is `4294967295`). It is total —
+  never a trap, never a wrap to observe — and a literal operand adopts
+  the type its context expects first, as with `-`: `x & !0xfff` with
+  `x: u64` masks with `0xffff_ffff_ffff_f000`, and `const MASK: u32 =
+  !0xfff` folds at comptime. A `byte` operand widens to `int` first, as
+  every bitwise operator's does (`[type.byte.op]`): `!b` is `int`, and
+  `(!b) as byte` is the octet's complement. `!` on `bool` is logical
+  not, unchanged; on a float, a `char` or any other type it is E0409.
+  The checked machine holds no `u64`/`uint` value past `i64::MAX`, so a
+  complement there is refused by name, as the literal that spells such
+  a value is. Witnesses: `typecheck/int_not_mask.lu`,
+  `typecheck/int_not_signed.lu`, `typecheck/int_not_byte.lu`,
+  `typecheck/int_not_float.lu` (`fail(E0409)`).
+
 - `[type.byte.interp]` **`{b}` prints the number** — the decimal octet
   value, `0` through `255`, never a character: a byte is a quantity,
   and the character it might encode is `str`'s business
