@@ -26,11 +26,16 @@
 //!    (`raw_store_call_writes.lu`): `1 1 1`;
 //! 4. C writing `extern "c" let` storage, and C calling back into wolf
 //!    to write the `var`, between two wolf reads (unix; the C link is
-//!    `c_membrane_link.rs`'s);
+//!    `c_membrane_link.rs`'s). A GUARD, not a witness: right at 0.2.24,
+//!    because a call to an `extern "c" fn` already threads both foreign
+//!    tokens (`lower_extern_call`), so the token chain carried the
+//!    write. It stays so the fix can never be narrowed past it;
 //! 5. the freestanding kernel (`--target x86_64-unknown-none`, linked
-//!    with no libc and run; x86-64 linux), and its object read with
-//!    `objdump`: after the call into assembly the storage is loaded
-//!    again, on both tiers.
+//!    with no libc and run; x86-64 linux): native exited 12 at 0.2.24
+//!    (bits 1 and 2, the wolf writers, wrong), 31 is every shape; and
+//!    its object read with `objdump`: after a call to a recursive wolf
+//!    writer (never inlined) the `var` is loaded again on both tiers,
+//!    where 0.2.24 returned the caller's own store.
 //!
 //! Rows 1–3 run on all four machines; the checked machine and lupin
 //! were right before the fix and must stay so.
@@ -429,10 +434,10 @@ mod linux_x86_64 {
             let out = tool(exe.to_str().unwrap(), &[]);
             assert_eq!(
                 out.status.code(),
-                Some(15),
+                Some(31),
                 "{tier}: one bit per shape read right — 1 a wolf writer, 2 two calls \
-                 deep, 4 assembly writing s214_cell, 8 assembly calling back into wolf \
-                 (wolf-lang#598); stdout {:?}",
+                 deep, 4 assembly writing s214_cell, 8 assembly calling back into wolf, \
+                 16 a recursive wolf writer (wolf-lang#598); stdout {:?}",
                 text(&out.stdout)
             );
         }
@@ -497,6 +502,7 @@ mod linux_x86_64 {
             assert!(d.status.success(), "objdump: {}", text(&d.stderr));
             let disasm = text(&d.stdout);
             for (func, callee) in [
+                ("s214_var_after_wolf_call", "_Wbump_deep"),
                 ("s214_cell_after_call", "s214_poke"),
                 ("s214_var_after_callback", "s214_call_back"),
             ] {

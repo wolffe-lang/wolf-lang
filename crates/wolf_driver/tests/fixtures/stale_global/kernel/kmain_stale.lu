@@ -1,11 +1,18 @@
 // s214 (wolf-lang#598): the freestanding witness. A kernel that keeps
 // module state and storage `stale.S` reserves, written by callees
-// between two reads: a wolf writer (inlinable on release), one two
-// calls deep, an assembly writer of `s214_cell`, and an assembly
-// routine that calls back into wolf to write the `var`. `kmain`'s
-// result has one bit per shape read right; 15 is every shape. The two
-// `export fn`s are the shapes the gate reads in the object with
-// `objdump`: after the call into assembly, the storage is loaded again.
+// between two reads. `kmain`'s result has one bit per shape read right;
+// 31 is every shape:
+//   1  a wolf writer (inlined on release),
+//   2  a wolf writer two calls deep,
+//   4  assembly writing `s214_cell` (a guard: an `extern "c"` call
+//      threads the foreign tokens, so 0.2.24 was already right),
+//   8  assembly calling back into wolf to write the `var` (a guard, the
+//      same way),
+//   16 a recursive wolf writer, which no tier inlines.
+// The three `export fn`s are the shapes the gate reads in the object
+// with `objdump`: after the call, the storage is loaded again. At wolf
+// 0.2.24 (294d626d) `s214_var_after_wolf_call` returned the caller's
+// own 0 on both tiers, with no load after the call.
 extern "c" let s214_cell: *i64
 
 extern "c" fn s214_poke(v: i64)
@@ -30,6 +37,28 @@ fn inner() {
 
 fn outer() {
     inner()
+}
+
+fn bump_deep(n: int) {
+    if n > 0 {
+        bump_deep(n - 1)
+    } else {
+        // # Safety: one CPU.
+        unsafe {
+            v = 99
+        }
+    }
+}
+
+export fn s214_var_after_wolf_call() -> i64 {
+    var r = 0
+    // # Safety: one CPU.
+    unsafe {
+        v = 0
+        bump_deep(2)
+        r = v
+    }
+    r as i64
 }
 
 export fn s214_bump() {
@@ -81,6 +110,9 @@ export fn kmain() -> i64 {
     }
     if s214_var_after_callback() == 42 {
         bits += 8
+    }
+    if s214_var_after_wolf_call() == 99 {
+        bits += 16
     }
     bits as i64
 }
