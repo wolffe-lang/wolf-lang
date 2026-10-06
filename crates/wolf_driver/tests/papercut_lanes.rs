@@ -327,7 +327,11 @@ const NEEDS_BOOL: &str = "`!` needs a bool";
 #[test]
 fn a_pub_const_or_let_reads_through_its_module_name() {
     agree("memory/static_qualified/main.lu", runs("7 7\n"), &[]);
-    agree("memory/static_qualified_let/main.lu", runs("9 lim 18\n"), &[]);
+    agree(
+        "memory/static_qualified_let/main.lu",
+        runs("9 lim 18\n"),
+        &[],
+    );
 }
 
 /// `[mem.static.4]` (#579): a `pub var` read and written as
@@ -377,11 +381,7 @@ fn a_field_of_a_raw_element_is_stored_in_place() {
 /// outside `unsafe` (lupin already said so).
 #[test]
 fn a_raw_field_store_outside_unsafe_is_e1301() {
-    agree(
-        "memory/raw_field_store_outside_unsafe.lu",
-        E1301,
-        &[],
-    );
+    agree("memory/raw_field_store_outside_unsafe.lu", E1301, &[]);
 }
 
 /// `[mem.unsafe.raw.4]`/`.5` (#577, s209's question): the store asks
