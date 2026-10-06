@@ -1302,7 +1302,7 @@ impl<'a> Checker<'a> {
             reason: Reason::ReturnOfFn(body.name.clone()),
             because: Some(because),
         };
-        self.check_block(block, &exp)?;
+        self.check_fn_block(block, &exp)?;
         self.pop_scope();
         Ok(())
     }
@@ -1354,7 +1354,7 @@ impl<'a> Checker<'a> {
                     reason: Reason::ReturnOfFn(m.name.clone()),
                     because: Some(because),
                 };
-                self.check_block(block, &exp)?;
+                self.check_fn_block(block, &exp)?;
                 self.pop_scope();
                 Ok(())
             }
@@ -1486,7 +1486,7 @@ impl<'a> Checker<'a> {
             reason: Reason::ReturnOfFn(m.name.clone()),
             because: Some(because),
         };
-        self.check_block(block, &exp)?;
+        self.check_fn_block(block, &exp)?;
         self.pop_scope();
         Ok(())
     }
@@ -2891,6 +2891,39 @@ impl<'a> Checker<'a> {
         }
         self.pop_scope();
         Ok(())
+    }
+
+    /// A fn body against its declared result (`[type.fn.ret]`). s213
+    /// (wolf-lang#572, `[type.fn.never]`, ruling owed): under `-> never`
+    /// the body's value must itself be bottom — a call to a `never` fn,
+    /// `assert(false)`, a `loop` with no `break` — because the unifier
+    /// lets bottom meet every type in BOTH directions, so checking `()`
+    /// against `never` would pass; the body is synthesized and its type
+    /// asked instead.
+    fn check_fn_block(&mut self, b: Block<'_>, exp: &Expect) -> R<()> {
+        if !matches!(self.kind_of(exp.ty), TyKind::Never) {
+            return self.check_block(b, exp);
+        }
+        let t = self.synth_block(b)?;
+        if !matches!(self.kind_of(t), TyKind::Never | TyKind::Error) {
+            let span = self.block_value_span(b);
+            self.report_mismatch(span, t, exp);
+            self.note_never_reaches_end();
+        }
+        Ok(())
+    }
+
+    /// The note a `-> never` fn's E0401 carries (`[type.fn.never]`).
+    fn note_never_reaches_end(&mut self) {
+        if let Some(d) = self.diags.last_mut() {
+            d.notes.push(
+                "a fn declared `-> never` never returns ([type.fn.never]): its body \
+                 must not reach its end and holds no `return`. End it in a call to \
+                 another `never` fn, in `assert(false)`, or in a `loop` with no \
+                 `break`."
+                    .to_string(),
+            );
+        }
     }
 
     fn synth_block(&mut self, b: Block<'_>) -> R<TyId> {
@@ -12405,6 +12438,19 @@ impl<'a> Checker<'a> {
             reason: Reason::ReturnOfFn(name),
             because: Some(because),
         };
+        // s213 (wolf-lang#572, `[type.fn.never]`): a `-> never` fn has
+        // no `return` — the value's type (or `()`) is the mismatch.
+        if matches!(self.kind_of(ret), TyKind::Never) {
+            let t = match d.value() {
+                Some(v) => self.synth_expr(v)?,
+                None => self.lo.table.unit(),
+            };
+            if !matches!(self.kind_of(t), TyKind::Error) {
+                self.report_mismatch(e.span, t, &exp);
+                self.note_never_reaches_end();
+            }
+            return Ok(self.lo.table.never());
+        }
         match d.value() {
             Some(v) => self.check_expr(v, &exp)?,
             None => {
