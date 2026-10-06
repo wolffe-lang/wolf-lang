@@ -1,0 +1,17 @@
+//! check: fail(E0701)
+//! phase: resolve
+//! conforms: comptime.sandbox, comptime.sandbox.exec, os.proc.fds
+//!
+//! s215 (D33): the spawn with a descriptor map starts a program, so it
+//! joins `os_spawn`/`os_spawn_with` in the `exec` category — compiling
+//! a package must never run a program on the machine that compiles it.
+
+comptime fn helper() -> int {
+    let h = os_spawn_fds("true", List[str](), List[int]()) else |_| 0
+    h
+}
+
+fn main() -> !int {
+    const H = helper()
+    if H == 0 { 0 } else { 1 }
+}
