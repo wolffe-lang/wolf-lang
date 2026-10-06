@@ -1,0 +1,42 @@
+//! check: run(exit=0, stdout="33554304 1 131071 15 31\n")
+//! phase: run
+//! conforms: arith.wrapping
+//!
+//! s214 (wolf-lang#600, P0): a branch on the top half of a logical
+//! shift is taken when it holds. `a` is 0xffffc04000001000 and `b` is
+//! 240, each read back out of a List so the mid-end cannot see the
+//! value; `a >> 39` is 33554304, `a >> 63` is 1, `a >> 47` is 131071
+//! and `b >> 4` is 15, and every branch on them holds. At wolf 0.2.24
+//! (294d626d) release printed `... 0`: rangeopt bounded `x >> s` by the
+//! width's SIGNED maximum shifted (`a >> 63` in [0, 0], `a >> 39` below
+//! 2^24, `b >> 4` below 8) and deleted all five branches. The checked
+//! machine, native and lupin 0.1.47 printed what this row says.
+
+fn main() -> int {
+    let a0: wrapping[u64] = 0xffffc04000001000
+    var k = List[wrapping[u64]]()
+    (mut k).push(a0)
+    let a = k[0]
+    let b0: wrapping[u8] = 240
+    var bs = List[wrapping[u8]]()
+    (mut bs).push(b0)
+    let b = bs[0]
+    var hits = 0
+    if a >> 39 == 33554304 {
+        hits += 1
+    }
+    if a >> 63 == 1 {
+        hits += 2
+    }
+    if a >> 47 == 131071 {
+        hits += 4
+    }
+    if a >> 39 >= 16777216 {
+        hits += 8
+    }
+    if b >> 4 == 15 {
+        hits += 16
+    }
+    print("{a >> 39} {a >> 63} {a >> 47} {b >> 4} {hits}")
+    0
+}

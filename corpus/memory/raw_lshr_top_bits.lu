@@ -1,0 +1,58 @@
+//! check: run(exit=0, stdout="33554304 1 15 31\n")
+//! phase: run
+//! conforms: mem.unsafe.raw.1, mem.unsafe.scope
+//!
+//! s214 (wolf-lang#600, P0): the same top-half branches on a plain `u64`
+//! and `u8`, the shape a kernel writes (`if cr2 >> 39 == 0x1ffff80`,
+//! pax px06): eight bytes of a C allocation set by a callee, read back
+//! as one `u64` and as its top byte. At wolf 0.2.24 (294d626d) release
+//! printed `33554304 1 15 0` — every branch deleted by rangeopt's
+//! signed bound on `>>`. Native and lupin 0.1.47 printed what this row
+//! says; the checked machine refuses `>>` on a non-wrapping integer by
+//! name (it has no ruled checked-tier semantics yet).
+
+import c "stdlib.h"
+
+fn fill(p: *u8, n: int) {
+    if n > 0 {
+        fill(p, n - 1)
+    } else {
+        // # Safety: p addresses eight live bytes.
+        unsafe {
+            p[1] = 16
+            p[4] = 64
+            p[5] = 192
+            p[6] = 255
+            p[7] = 255
+        }
+    }
+}
+
+fn main() -> int {
+    // # Safety: one zeroed u64 from calloc, written by fill, freed once.
+    unsafe {
+        let p = c.calloc(1, 8) as *u64
+        fill(p as *u8, 2)
+        let a = p[0]
+        let top = (p as *u8)[7]
+        var hits = 0
+        if a >> 39 == 33554304 {
+            hits += 1
+        }
+        if a >> 63 == 1 {
+            hits += 2
+        }
+        if a >> 47 == 131071 {
+            hits += 4
+        }
+        if a >> 39 >= 16777216 {
+            hits += 8
+        }
+        if top >> 4 == 15 {
+            hits += 16
+        }
+        print("{a >> 39} {a >> 63} {top >> 4} {hits}")
+        c.free(p as *u8)
+    }
+    0
+}
