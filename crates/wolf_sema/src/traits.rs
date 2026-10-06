@@ -594,6 +594,10 @@ fn subject_type(
         if let Some(p) = Prim::from_name(n) {
             return lower.table.prim(p);
         }
+        // s213 (wolf-lang#572): the bottom type's name.
+        if n == "never" {
+            return lower.table.never();
+        }
     }
     match lower.resolve_type_head(module, file, segs) {
         TypeHead::Item { module: tm, name } => lower.named_item_type(tm, &name, file, path_node),
