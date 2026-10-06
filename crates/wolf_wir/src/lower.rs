@@ -4843,6 +4843,21 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Ok(Flow::Val(None));
         };
         self.check_capture_write(place, "writing")?;
+        // s213 (wolf-lang#579, `[mem.static.2]`): `m.V = x` on another
+        // module's `pub var` is its store, as the bare name is in its
+        // own module (mem already demanded the ring).
+        if let Some((smodule, sname)) = self.qualified_static(place)
+            && let Some(e) = self.statics.get(&(smodule, sname))
+            && e.kind == wolf_sema::GlobalKind::Var
+            && let (Some(idx), Some(ty)) = (e.data, e.ty)
+        {
+            return self.lower_static_assign(d, idx, ty, stmt.span);
+        }
+        // s213 (wolf-lang#577): a store to a field of a raw element,
+        // `p[i].f = v` / `(*p).f = v` (nested paths too).
+        if place.kind == SyntaxKind::MemberExpr && self.raw_field_root(place).is_some() {
+            return self.lower_raw_field_assign(d, place, stmt.span);
+        }
         if place.kind == SyntaxKind::MemberExpr {
             return self.lower_member_assign(d, place, stmt.span);
         }
@@ -5036,6 +5051,181 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// and a nested path or a container element stores at the address
     /// the walk produced — `a.b.c = v` and `xs[i].f = v`, which is the
     /// c06 residue "assignment through nested places" named.
+    /// s213 (wolf-lang#579): `m.X` where `m` names an imported module
+    /// (no local shadows it) and `X` is one of its module items — the
+    /// (module, item) pair the qualified place denotes.
+    fn qualified_static(&self, place: &'t GreenNode) -> Option<(usize, String)> {
+        let m = wolf_ast::MemberExpr::cast(place)?;
+        let base = m.base()?;
+        if base.kind != SyntaxKind::PathExpr {
+            return None;
+        }
+        let bname = self.text(wolf_ast::PathExpr::cast(base)?.ident()?.span);
+        if self.lookup(&bname).is_some() {
+            return None;
+        }
+        let module = *self.module_binds.get(&bname)?;
+        let mname = self.text(m.member()?.span);
+        matches!(self.sigs.get(module, &mname), Some(ItemSig::Global(_))).then_some((module, mname))
+    }
+
+    /// s213 (wolf-lang#577): the raw element a member chain is rooted
+    /// at — `p[i]` with `p` a raw pointer, or `*p` (through parens) —
+    /// when `place` is `root.f`, `root.f.g`, ….
+    fn raw_field_root(&self, place: &'t GreenNode) -> Option<&'t GreenNode> {
+        let mut cur = place;
+        let mut stepped = false;
+        loop {
+            match cur.kind {
+                SyntaxKind::MemberExpr => {
+                    cur = wolf_ast::MemberExpr::cast(cur)?.base()?;
+                    stepped = true;
+                }
+                SyntaxKind::ParenExpr => cur = ParenExpr::cast(cur)?.expr()?,
+                SyntaxKind::BracketApply => {
+                    let recv = BracketApply::cast(cur)?.callee()?;
+                    let t = self.expr_sema_ty(recv.span)?;
+                    return (stepped
+                        && matches!(self.table.kind(self.strip_sema(t)), TyKind::Ptr(_)))
+                    .then_some(cur);
+                }
+                SyntaxKind::PrefixExpr => {
+                    let pre = PrefixExpr::cast(cur)?;
+                    return (stepped && pre.op().is_some_and(|t| t.kind == SyntaxKind::Star))
+                        .then_some(cur);
+                }
+                _ => return None,
+            }
+        }
+    }
+
+    /// s213 (wolf-lang#577, `[mem.unsafe.raw.1]`): `p[i].f = v`,
+    /// `p[i].f op= v`, `(*p).f = v` and nested field paths — one store
+    /// at the field's offset in the pointee's C layout (`[abi.layout.c]`,
+    /// kw08's packed and aligned structs), the known alignment carried
+    /// down the path as `load_c`/`store_c` carry it. The pointer, then
+    /// the index, then the right-hand side (`[mem.model.place.rhs]`,
+    /// index first); a compound operator reads the field at its own
+    /// type first (wolf-lang#542's rule). No bound and no check: the
+    /// raw tier's, which is what `unsafe` means here.
+    fn lower_raw_field_assign(
+        &mut self,
+        d: AssignStmt<'t>,
+        place: &'t GreenNode,
+        span: Span,
+    ) -> R<Flow> {
+        let Some(root) = self.raw_field_root(place) else {
+            return Err(refuse("assignment through this place shape", span));
+        };
+        // The field path, root-outward.
+        let mut path: Vec<wolf_ast::MemberExpr<'t>> = Vec::new();
+        let mut cur = place;
+        while cur.span != root.span {
+            match cur.kind {
+                SyntaxKind::MemberExpr => {
+                    let m = wolf_ast::MemberExpr::cast(cur).expect("kind");
+                    path.push(m);
+                    cur = m.base().expect("raw_field_root walked it");
+                }
+                SyntaxKind::ParenExpr => {
+                    cur = ParenExpr::cast(cur).and_then(|p| p.expr()).expect("walked");
+                }
+                _ => return Err(refuse("assignment through this place shape", span)),
+            }
+        }
+        path.reverse();
+        // The element's address.
+        let (ptr_expr, ix) = if root.kind == SyntaxKind::BracketApply {
+            let b = BracketApply::cast(root).expect("kind");
+            let recv = b.callee().expect("raw_field_root read it");
+            let ix = b
+                .args()
+                .into_iter()
+                .flat_map(|l| l.args())
+                .filter_map(Arg::value)
+                .next()
+                .ok_or_else(|| refuse("a raw index without an operand", span))?;
+            (recv, Some(ix))
+        } else {
+            let operand = PrefixExpr::cast(root)
+                .and_then(|pre| pre.operand())
+                .ok_or_else(|| refuse("a dereference without an operand", span))?;
+            (operand, None)
+        };
+        let elem = self.deref_pointee(ptr_expr, span)?;
+        let (ewty, lay) = self.raw_pointee(elem, span)?;
+        let lay_align = lay.align;
+        let Some(base) = flow_val!(self.lower_expr(ptr_expr)) else {
+            return Err(refuse("a valueless raw pointer", ptr_expr.span));
+        };
+        let elem_ptr = match ix {
+            Some(ix) => {
+                let Some(idx) = flow_val!(self.lower_expr(ix)) else {
+                    return Err(refuse("a valueless raw index", ix.span));
+                };
+                let idx = if self.origin_at(root.span) == 1 {
+                    match self.shift_origin(idx) {
+                        Some(v) => v,
+                        None => return Ok(Flow::Diverged),
+                    }
+                } else {
+                    idx
+                };
+                self.raw_elem_addr(base, idx, lay.size)
+            }
+            None => base,
+        };
+        // Walk the fields: offset, layout and WIR type, each step's
+        // index read against the recorded type of its base (sema typed
+        // every link of the place).
+        let mut off = 0u64;
+        let mut flay = lay;
+        let mut fwty = ewty;
+        let (mut wrapping, mut unsigned) = (false, false);
+        for m in &path {
+            let Some(bsema) = m.base().and_then(|b| self.expr_sema_ty(b.span)) else {
+                return Err(refuse("a raw field store without a recorded type", span));
+            };
+            let (idx, w, u) = self.member_index(bsema, *m, span)?;
+            let types::TypeData::Agg(parts) = self.b.module.types.get(fwty).clone() else {
+                return Err(refuse("a raw field store into a non-aggregate", span));
+            };
+            let (Some(&next), Some((foff, sub))) = (parts.get(idx), flay.fields.get(idx).cloned())
+            else {
+                return Err(refuse("a raw field store outside the layout", span));
+            };
+            off += foff;
+            fwty = next;
+            flay = sub;
+            (wrapping, unsigned) = (w, u);
+        }
+        let root_align = lay_align;
+        let Some(vexpr) = d.value() else {
+            return Err(refuse("a field write without a value", span));
+        };
+        let Some(val) = flow_val!(self.lower_expr(vexpr)) else {
+            return Err(refuse("a unit-typed raw field", vexpr.span));
+        };
+        let fptr = self.field_addr(elem_ptr, off);
+        let known = align_at(root_align, off);
+        let region = self.foreign_buf_region();
+        let op = d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq);
+        let val = if op == SyntaxKind::Eq {
+            val
+        } else {
+            let Some(bin) = Self::compound_bin(op) else {
+                return Err(refuse("this compound assignment operator", span));
+            };
+            let cur = self.load_c(fwty, &flay, known, fptr, region, span)?;
+            match self.arith(bin, cur, val, wrapping, unsigned, fwty, span)? {
+                Some(v) => v,
+                None => return Ok(Flow::Diverged),
+            }
+        };
+        self.store_c(val, &flay, known, fptr, region, vexpr.span)?;
+        Ok(Flow::Val(None))
+    }
+
     fn lower_member_assign(
         &mut self,
         d: AssignStmt<'t>,
@@ -5778,6 +5968,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     }
                 };
                 return Ok(Flow::Val(Some(self.fn_value_named(&qname, ext, e.span))));
+            }
+            // s213 (wolf-lang#579, `[mem.static]`): `m.K` — a `pub`
+            // module item read through its module's name is the item,
+            // exactly as the bare name reads inside its own module.
+            if let Some(&smodule) = self.module_binds.get(&bname)
+                && let Some(ItemSig::Global(_)) = self.sigs.get(smodule, &mname)
+                && let Some(flow) = self.lower_static_read_in(smodule, &mname, e)?
+            {
+                return Ok(flow);
             }
             if let TyKind::Nominal { module, name, .. } = self.table.kind(whole).clone()
                 && let Some(ItemSig::Enum { variants, .. }) = self.sigs.get(module as usize, &name)
@@ -14935,7 +15134,21 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// kills (memopt's foreign rule — another function may write a
     /// `var`); an `extern "c" let` is the symbol's address.
     fn lower_static_read(&mut self, name: &str, e: &'t GreenNode) -> R<Option<Flow>> {
-        let Some(entry) = self.statics.get(&(self.body_module, name.to_string())) else {
+        self.lower_static_read_in(self.body_module, name, e)
+    }
+
+    /// s213 (wolf-lang#579): [`Lowerer::lower_static_read`] for the
+    /// state of `module` — the bare name's own module, or the module a
+    /// qualified read `m.K` names (`[mem.static]`: a `pub` item read
+    /// through its module is the item). Resolution already decided
+    /// visibility (a private item is E0304 before lowering).
+    fn lower_static_read_in(
+        &mut self,
+        module: usize,
+        name: &str,
+        e: &'t GreenNode,
+    ) -> R<Option<Flow>> {
+        let Some(entry) = self.statics.get(&(module, name.to_string())) else {
             return Ok(None);
         };
         match (entry.kind, entry.data, entry.fold.clone()) {
