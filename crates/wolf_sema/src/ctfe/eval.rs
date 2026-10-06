@@ -2299,6 +2299,18 @@ impl<'a> Engine<'a> {
                 }
             }
             (SyntaxKind::Not, ValueKind::Bool(b)) => Ok(self.arena.bool_(!b)),
+            // s213 (wolf-lang#575, `[type.int.not]`): the bitwise
+            // complement at the value's width — `-x - 1` for a signed
+            // one, `max - x` for an unsigned one; it never leaves the
+            // range, so it never faults. A `byte` widens to `int` first
+            // (`[type.byte.op]`).
+            (SyntaxKind::Not, ValueKind::Int { v: x, w }) => {
+                if w == Prim::Byte {
+                    return Ok(self.arena.int(-x - 1, Prim::Int));
+                }
+                let (lo, hi) = int_range(w);
+                Ok(self.arena.int(if lo < 0 { -x - 1 } else { hi - x }, w))
+            }
             _ => Err(FaultKind::EngineGap {
                 construct: "this prefix operator at comptime",
             }),
