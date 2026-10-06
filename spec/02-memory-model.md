@@ -1357,6 +1357,41 @@ adopt that design and give `for` its desugar.)
   interpreter's `pop` arm and one of its REPL tests, and the book's
   chapter 5 (one fence, one sentence — `pop` is not bounds-checked).
   Witness: `corpus/memory/list_pop_empty.lu`, both tiers.
+- `[mem.list.bytes]` **The bulk byte scan** (s200, wolf-lang#411).
+  **`bytes_find(xs: List[byte], b: byte, from: int) -> int ! {none}`**
+  answers the first index `i >= from` with `xs[i] == b`, and the
+  payload-free `none` when there is none — an absent byte, or a `from`
+  outside `0..xs.len` (`xs.get(i)`'s posture: absence is a row, never
+  a trap, and `from == xs.len` simply has nothing after it). **`bytes_count(xs:
+  List[byte], b: byte) -> int`** answers how many elements equal `b`.
+  The words are `str`'s (`s.find`, `s.count`) for the same questions
+  over bytes; they are free builtins because `List`'s `count` method is
+  its element count (`[mem.list.pop]`'s family) and a method that
+  answered differently for one element type would be a second meaning
+  of one name. Both READ `xs` (a lend, `[mem.tier0.mode.read]`) and
+  allocate nothing. **Why builtins and not a loop**: counting newlines
+  is the archetypal bulk byte operation (`wc -l`, a line splitter, a
+  tokenizer's skip), and a wolf `for b in xs` loop is one compare per
+  byte with no way to widen it — no reinterpreting view lets eight
+  bytes enter one word — so boreutils' `wc -l` stood at 0.13x GNU on
+  x86-64 (#411). **The lowering, stated:** on the native and release
+  tiers each call is one runtime call over the list's buffer, into a
+  loop written for the vectoriser of the compiler that builds the
+  runtime — a byte-wide lane per element for at most 255 rows of 32
+  before widening for `count`, an OR over a 32-byte block's compares
+  before the byte walk for `find` — so it runs as the target's baseline
+  vector compares (SSE2 on x86-64, NEON on aarch64), with no feature
+  detection at run time and no wider instruction set assumed. The
+  checked machine and lupin answer by the scalar definition above,
+  element for element. **The cost, stated:** one call; `count` reads
+  every byte once, `find` reads up to the hit (to the end of its
+  32-byte block). Witnesses: `corpus/memory/bytes_scan.lu` (the edges:
+  empty, `from` at and past the end, negative, a hit at the last
+  index, a count over a block boundary, a line split); the vectorised
+  loops against the scalar ones on every length around their block
+  edges, `wolf_rt::bytes`'s crate tests; the speed, the micro-benchmark
+  `bench/byte-scan/` measured in the s200 PR. (Written 2026-10-06,
+  s200 — wolf-lang#411.)
 - `[mem.map.absent]` **An absent-key `Map` read is the `none` row**
   (ruled 2026-09-11, s152 — wolf-lang#11, #154; the key protocol is
   `[type.map.key]`). `m[k]` is **`V ! {none}`**: a bound key answers
