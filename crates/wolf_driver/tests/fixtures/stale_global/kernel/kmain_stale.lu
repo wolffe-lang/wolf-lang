@@ -8,12 +8,13 @@
 //      threads the foreign tokens, so 0.2.24 was already right),
 //   8  assembly calling back into wolf to write the `var` (a guard, the
 //      same way),
-//   16 a recursive wolf writer to a depth the caller is given, which no
-//      tier inlines or folds.
+//   16 a doubly recursive wolf writer (`walk` counts its 2^n leaves into
+//      the `var`) to a depth the caller is given: no tier can fold it
+//      or inline it away, so the call stays and the read must load.
 // The three `export fn`s are the shapes the gate reads in the object
 // with `objdump`: after the call, the storage is loaded again. At wolf
 // 0.2.24 (294d626d) `s214_var_after_wolf_call` returned the caller's
-// own 0 on both tiers, with no load after the call.
+// own 0 with no load after the call.
 extern "c" let s214_cell: *i64
 
 extern "c" fn s214_poke(v: i64)
@@ -40,13 +41,14 @@ fn outer() {
     inner()
 }
 
-fn bump_deep(n: int) {
+fn walk(n: int) {
     if n > 0 {
-        bump_deep(n - 1)
+        walk(n - 1)
+        walk(n - 1)
     } else {
         // # Safety: one CPU.
         unsafe {
-            v = 99
+            v += 1
         }
     }
 }
@@ -56,7 +58,7 @@ export fn s214_var_after_wolf_call(depth: int) -> i64 {
     // # Safety: one CPU.
     unsafe {
         v = 0
-        bump_deep(depth)
+        walk(depth)
         r = v
     }
     r as i64
@@ -112,7 +114,7 @@ export fn kmain() -> i64 {
     if s214_var_after_callback() == 42 {
         bits += 8
     }
-    if s214_var_after_wolf_call(2) == 99 {
+    if s214_var_after_wolf_call(2) == 4 {
         bits += 16
     }
     bits as i64
