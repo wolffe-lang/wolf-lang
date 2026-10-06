@@ -1,5 +1,66 @@
 # Changelog
 
+## Unreleased
+
+### The byte surface: bytes on descriptors 0, 1 and 2, the byte scan, the copy the host makes, and the host's number (s200, #405, #411, #417, #407)
+
+**Read this before you bump the pin.** Five new prelude names, all
+`w0304: true` in `spec/prelude.json`: `fs_copy_chunk`, `os_error`,
+`os_error_text`, `bytes_find` and `bytes_count`. A module that declares
+one draws W0304, which `--deny-warnings` makes fatal: rename yours. A
+grep for a declaration of any of the five (`fn`, `let`, `var`, `const`)
+found none in wolf-std (`2f389a7`), boreutils (`2f15585`), lobo
+(`b4975f7`) or the book. **Four calls that answered `io` now answer
+data**: `fs_read`, `fs_read_chunk`, `fs_write` and `fs_write_chunk` on
+0, 1 and 2. A program that relied on `io` there to detect "not a
+handle" now reads its standard input or writes its standard output.
+No row changed anywhere.
+
+- **Bytes on the standard streams, through the descriptors themselves
+  (#405).** The four byte and text calls serve 0, 1 and 2
+  (`[os.fs.std]`): a read of 0 starts at the offset the process shares
+  with whoever started it and moves it, a pipe, socket or terminal is
+  read as what it is, and a write to 1 or 2 lands in program order with
+  `print` (the native tiers write the descriptor under `print`'s lock).
+  A closed descriptor is `io` (`EBADF`), never a silent success and
+  never a write into whatever file took the number. Bytes `read_line`
+  read ahead come first. `fs_close` on 0..2 stays `io`. The checked
+  machine reads descriptor 0 (or a test's input buffer) and writes 1
+  and 2 into its capture, now kept as bytes and decoded once at the
+  end, as the driver decodes a native child's stdout. This retires
+  the `/dev/stdin`/`/dev/stdout` reopen boreutils uses.
+- **`bytes_find(xs, b, from) -> int ! {none}` and `bytes_count(xs, b) ->
+  int` (#411, `[mem.list.bytes]`).** `str`'s `find` and `count` for a
+  `List[byte]`. On native and release each is one call into a runtime
+  loop the runtime's compiler vectorises (SSE2 on x86-64, NEON on
+  aarch64). `from` outside `0..len` is `none`. Free builtins, because
+  `List`'s `count` method is its length.
+- **`fs_copy_chunk(src, dst, max) -> int ! {eof, io}` (#417,
+  `[os.fs.copy]`).** `fs_read_chunk` then `fs_write_chunk` fused: at
+  most `max` bytes from `src`'s offset to `dst`'s, the count answered,
+  `eof` at the end. linux tries `copy_file_range`, `sendfile`, `splice`
+  and then a read/write loop, remembering the rung each pair settled
+  on; macOS, freebsd and windows run the loop, by name. A table handle
+  is duplicated for the call, so a copy that parks never holds the
+  handle table's lock. A socket destination stays open on #417.
+- **`os_error() -> int` and `os_error_text(code) -> str` (#407,
+  `[os.fs.error]`).** The host's error number for the task's most
+  recent fallible fs call (`errno`; `GetLastError` on windows), 0 when
+  it succeeded or failed before the host was asked, and the host's
+  words for a number ("No space left on device"). The number travels
+  BESIDE the row, never on it: a payload on `io` breaks W0603's pact
+  and every `io` arm downstream. The word is per task. The net and os
+  families do not set it yet.
+- The host table is 83 lines. Witnesses: `corpus/fs/std_write_bytes.lu`,
+  `corpus/fs/copy_chunk.lu`, `corpus/fs/os_error.lu`,
+  `corpus/memory/bytes_scan.lu`, the fixtures under
+  `crates/wolf_driver/tests/fixtures/byte_surface/`, and
+  `byte_surface_lanes.rs`, which runs them on checked, native, release
+  and lupin with standard input a file, a pipe and a shared offset, a
+  read-only stdout (`EBADF`) and `/dev/full` (`ENOSPC`). It pins lupin
+  0.1.47 by version and release commit until wolf-interp's mirror
+  ships. The micro-benchmark is `bench/byte-scan/`.
+
 ## 0.2.24 — 2026-10-06
 
 THE TWENTY-FOURTH. A kernel can share a word between cpus and can
