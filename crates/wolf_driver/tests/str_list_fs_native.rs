@@ -710,6 +710,13 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_fs_seek",
         "__wolf_rt_fs_tell",
         "__wolf_rt_fs_read_at",
+        // s200 (#417, #407, #411): the fused copy, the task's host code
+        // and its text, the byte scan.
+        "__wolf_rt_fs_copy_chunk",
+        "__wolf_rt_os_error",
+        "__wolf_rt_os_error_text",
+        "__wolf_rt_bytes_find",
+        "__wolf_rt_bytes_count",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -720,7 +727,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        164,
+        169,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

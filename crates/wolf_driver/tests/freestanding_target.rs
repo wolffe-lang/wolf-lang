@@ -318,6 +318,18 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`fs_read_at`",
             "hosted runtime",
         ),
+        // s200 (#417, #407): the fused copy and the task's host code —
+        // hosted runtime, each by its own name (the byte scan needs a
+        // `List`, which the target refuses first; target.rs's unit test
+        // names `bytes_find`).
+        (
+            "fs_copy_chunk",
+            "",
+            "let n = fs_copy_chunk(0, 1, 4) else |e| {\n        return 0\n    }\n    n",
+            "`fs_copy_chunk`",
+            "hosted runtime",
+        ),
+        ("os_error", "", "os_error()", "`os_error`", "hosted runtime"),
         (
             "float",
             "",

@@ -222,7 +222,7 @@ pub fn runtime_construct(symbol: &str) -> (String, RefusalClass) {
         ("`sync`/`when`".into(), HostedRuntime)
     } else if s == "main_err" {
         ("an error-union `main`".into(), HostedRuntime)
-    } else if ["env_", "os_", "time_", "fs_", "net_", "json_"]
+    } else if ["env_", "os_", "time_", "fs_", "net_", "json_", "bytes_"]
         .iter()
         .any(|p| has(p))
     {
@@ -440,6 +440,24 @@ mod tests {
             (
                 "__wolf_rt_read_line",
                 "`read_line`",
+                RefusalClass::HostedRuntime,
+            ),
+            // s200 (#417, #407, #411): the fused copy and the task's
+            // host code by the families they joined; the byte scan
+            // names itself (`bytes_`), never "the runtime operation".
+            (
+                "__wolf_rt_fs_copy_chunk",
+                "`fs_copy_chunk`",
+                RefusalClass::HostedRuntime,
+            ),
+            (
+                "__wolf_rt_os_error",
+                "`os_error`",
+                RefusalClass::HostedRuntime,
+            ),
+            (
+                "__wolf_rt_bytes_find",
+                "`bytes_find`",
                 RefusalClass::HostedRuntime,
             ),
             (
