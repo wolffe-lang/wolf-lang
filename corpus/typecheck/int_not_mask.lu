@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="73728 77824 4294892730 4294967295 4096 57344\n")
+//! phase: run
+//! conforms: type.int.not, type.numlit.adopt
+//!
+//! s213 (wolf-lang#575, ruling owed): `!` on an integer is its bitwise
+//! complement at the operand's own width (`[type.int.not]`) — the page
+//! table's idioms, align down `x & !0xfff` and align up
+//! `(x + 0xfff) & !0xfff`, with the literal adopting `u32` first; a
+//! `const` mask folds at comptime; clearing a flag is `e & !bit`. At
+//! trunk 294d626d every compiling machine answered E0409 ("`!` works on
+//! `bool`") and lupin refused it ("`!` needs a bool"). The rows stay
+//! at `u32`: a `u64` value past `i64::MAX` prints signed on the
+//! compiled tiers (the wolf-lang#538 family) and is out of the checked
+//! machine's range.
+
+const PAGE_MASK: u32 = !0xfff
+
+fn main() {
+    let x: u32 = 0x12345
+    let down = x & !0xfff
+    let up = (x + 0xfff) & !0xfff
+    let flags: u32 = 0xe000
+    let cleared = (flags | 0x1000) & !0x1000
+    print("{down} {up} {!x} {!(0 as u32)} {0x1fff & PAGE_MASK} {cleared}")
+}
