@@ -18,6 +18,7 @@ comptime/offset_of_layout.lu: not mem-clean (pre-wir rungs own it)
 comptime/overflow_i32.lu: not mem-clean (pre-wir rungs own it)
 comptime/reflect_fields.lu: lowers
 comptime/runtime_arg.lu: not mem-clean (pre-wir rungs own it)
+comptime/sandbox_chdir.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_clock.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_env.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_exec.lu: not mem-clean (pre-wir rungs own it)
@@ -28,6 +29,7 @@ comptime/sandbox_net.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_net_socket.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_os_random.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_random.lu: not mem-clean (pre-wir rungs own it)
+comptime/sandbox_spawn_fds.lu: not mem-clean (pre-wir rungs own it)
 comptime/size_of_layout.lu: not mem-clean (pre-wir rungs own it)
 comptime.lu: lowers
 conc/atomic_counter.lu: lowers
@@ -686,14 +688,17 @@ net/wait_readiness.lu: lowers
 net/writev_gather.lu: lowers
 net/writev_head_gather.lu: lowers
 os/args_cwd.lu: lowers
+os/chdir_relative.lu: lowers
 os/cpus.lu: lowers
 os/env_roundtrip.lu: lowers
 os/exit_code.lu: lowers
+os/pipe_round_trip.lu: lowers
 os/random_differs.lu: lowers
 os/random_edges.lu: lowers
 os/random_negative_trap.lu: lowers
 os/signal_loopback.lu: lowers
 os/signal_supervisor.lu: lowers
+os/spawn_fds_rows.lu: lowers
 os/spawn_rows.lu: lowers
 overflow.lu: lowers
 procs.lu: lowers
