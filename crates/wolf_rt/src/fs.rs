@@ -903,7 +903,7 @@ static STDIN_BUFFERED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomic
 
 /// Is `fd` one of the three standard streams?
 fn is_std(fd: i64) -> bool {
-    (0..FIRST_HANDLE as i64).contains(&fd) && fd >= FIRST_HANDLE as i64
+    (0..FIRST_HANDLE as i64).contains(&fd)
 }
 
 /// One read of at most `buf.len()` bytes from standard stream `fd`.
