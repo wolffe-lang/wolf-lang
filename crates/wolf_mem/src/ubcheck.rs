@@ -1244,6 +1244,15 @@ struct Machine<'t> {
     /// the real environment. Documented lane asymmetry: native
     /// `env_set` writes the compiled program's own environment.
     env_overlay: HashMap<String, String>,
+    /// s215 (`[os.fs.chdir]`): the machine-local working directory,
+    /// `env_overlay`'s twin and for its reason — the checked machine
+    /// runs inside threaded test hosts, where a real `chdir` would move
+    /// every other thread's relative paths. `None` until the program's
+    /// first `os_chdir`; then every relative path an fs or unix-socket
+    /// call takes resolves against it, `os_cwd` answers it, and a
+    /// spawned child starts in it. Always the canonical path (what the
+    /// host's `getcwd` would answer after the same change).
+    cwd: Option<std::path::PathBuf>,
     /// Signal RECEPTION (s114, #126): the checked machine models
     /// signals as a PURE IN-MACHINE queue (like `children`/
     /// `env_overlay`) — it never touches real OS signals, which would
@@ -2390,6 +2399,7 @@ impl<'t> Machine<'t> {
             signal_queue: std::collections::VecDeque::new(),
             args: Vec::new(),
             env_overlay: HashMap::new(),
+            cwd: None,
             t0: std::time::Instant::now(),
             steps: 0,
             mem_used: 0,
@@ -5492,6 +5502,10 @@ impl<'t> Machine<'t> {
                 _ => None,
             }
         };
+        // s215 (`[os.fs.chdir]`): a path argument, resolved against the
+        // machine-local working directory once the program has moved it.
+        let base = self.cwd.clone();
+        let path_arg = |i: usize| -> Option<String> { str_arg(i).map(|p| resolve_in(&base, p)) };
         match name {
             "read_line" => {
                 if self.stdin_pos >= self.stdin.len() {
@@ -5508,7 +5522,7 @@ impl<'t> Machine<'t> {
                 Ok(Flow::Val(Value::Str(line)))
             }
             "fs_read_text" => {
-                let Some(path) = str_arg(0) else {
+                let Some(path) = path_arg(0) else {
                     return self.refuse("this fs call shape", span);
                 };
                 match std::fs::read(&path) {
@@ -5523,7 +5537,7 @@ impl<'t> Machine<'t> {
                 }
             }
             "fs_write_text" => {
-                let (Some(path), Some(contents)) = (str_arg(0), str_arg(1)) else {
+                let (Some(path), Some(contents)) = (path_arg(0), str_arg(1)) else {
                     return self.refuse("this fs call shape", span);
                 };
                 match std::fs::write(&path, contents.as_bytes()) {
@@ -5538,7 +5552,7 @@ impl<'t> Machine<'t> {
             // append handle, which is what stops `std.fs.append_text`
             // reading the file it appends to.
             "fs_open" | "fs_create" | "fs_open_mode" => {
-                let Some(path) = str_arg(0) else {
+                let Some(path) = path_arg(0) else {
                     return self.refuse("this fs call shape", span);
                 };
                 let mode = match name {
@@ -5650,7 +5664,7 @@ impl<'t> Machine<'t> {
                 }
             }
             "fs_remove" => {
-                let Some(path) = str_arg(0) else {
+                let Some(path) = path_arg(0) else {
                     return self.refuse("this fs call shape", span);
                 };
                 match std::fs::remove_file(&path) {
@@ -5659,14 +5673,14 @@ impl<'t> Machine<'t> {
                 }
             }
             "fs_exists" => {
-                let Some(path) = str_arg(0) else {
+                let Some(path) = path_arg(0) else {
                     return self.refuse("this fs call shape", span);
                 };
                 Ok(Flow::Val(Value::Bool(std::path::Path::new(&path).exists())))
             }
             // --------------------------------- s90 (#51): bytes --
             "fs_read_bytes" => {
-                let Some(path) = str_arg(0) else {
+                let Some(path) = path_arg(0) else {
                     return self.refuse("this fs call shape", span);
                 };
                 match std::fs::read(&path) {
@@ -5680,7 +5694,7 @@ impl<'t> Machine<'t> {
                 }
             }
             "fs_write_bytes" => {
-                let Some(path) = str_arg(0) else {
+                let Some(path) = path_arg(0) else {
                     return self.refuse("this fs call shape", span);
                 };
                 let bytes = match self.bytes_of(argv.get(1)) {
@@ -5746,7 +5760,7 @@ impl<'t> Machine<'t> {
             }
             // ---------------------------- s90 (#51): directories --
             "fs_read_dir" => {
-                let Some(path) = str_arg(0) else {
+                let Some(path) = path_arg(0) else {
                     return self.refuse("this fs call shape", span);
                 };
                 let entries = match std::fs::read_dir(&path) {
@@ -5776,7 +5790,7 @@ impl<'t> Machine<'t> {
                 Ok(Flow::Val(Value::List(id)))
             }
             "fs_create_dir" | "fs_create_dir_all" => {
-                let Some(path) = str_arg(0) else {
+                let Some(path) = path_arg(0) else {
                     return self.refuse("this fs call shape", span);
                 };
                 let (r, declared): (_, &[&str]) = if name == "fs_create_dir" {
@@ -5793,7 +5807,7 @@ impl<'t> Machine<'t> {
                 }
             }
             "fs_remove_dir" | "fs_remove_dir_all" => {
-                let Some(path) = str_arg(0) else {
+                let Some(path) = path_arg(0) else {
                     return self.refuse("this fs call shape", span);
                 };
                 let r = if name == "fs_remove_dir" {
@@ -5808,7 +5822,7 @@ impl<'t> Machine<'t> {
             }
             // -------------------------------- s90 (#51): rename --
             "fs_rename" => {
-                let (Some(from), Some(to)) = (str_arg(0), str_arg(1)) else {
+                let (Some(from), Some(to)) = (path_arg(0), path_arg(1)) else {
                     return self.refuse("this fs call shape", span);
                 };
                 match std::fs::rename(&from, &to) {
@@ -5821,7 +5835,7 @@ impl<'t> Machine<'t> {
             }
             // ------------------------------ s90 (#51): metadata --
             "fs_is_file" | "fs_is_dir" => {
-                let Some(path) = str_arg(0) else {
+                let Some(path) = path_arg(0) else {
                     return self.refuse("this fs call shape", span);
                 };
                 // TOTAL like `fs_exists`: an unreadable path is
@@ -5839,7 +5853,7 @@ impl<'t> Machine<'t> {
                 Ok(Flow::Val(Value::Bool(yes)))
             }
             "fs_size" | "fs_modified_ms" => {
-                let Some(path) = str_arg(0) else {
+                let Some(path) = path_arg(0) else {
                     return self.refuse("this fs call shape", span);
                 };
                 let md = match std::fs::metadata(&path) {
@@ -6109,6 +6123,9 @@ impl<'t> Machine<'t> {
                 _ => None,
             }
         };
+        // s215: a unix-domain path resolves like an fs path.
+        let base = self.cwd.clone();
+        let path_arg = |i: usize| -> Option<String> { str_arg(i).map(|p| resolve_in(&base, p)) };
         match name {
             "net_listen" => {
                 let Some(addr) = str_arg(0) else {
@@ -6130,7 +6147,7 @@ impl<'t> Machine<'t> {
             // listens on); on a host the machine does not serve,
             // `unsupported`, by name — never a bare `io`.
             "net_listen_unix" => {
-                let Some(path) = str_arg(0) else {
+                let Some(path) = path_arg(0) else {
                     return self.refuse("this net call shape", span);
                 };
                 #[cfg(unix)]
@@ -6157,7 +6174,7 @@ impl<'t> Machine<'t> {
                 }
             }
             "net_connect_unix" => {
-                let Some(path) = str_arg(0) else {
+                let Some(path) = path_arg(0) else {
                     return self.refuse("this net call shape", span);
                 };
                 #[cfg(unix)]
@@ -6683,6 +6700,17 @@ impl<'t> Machine<'t> {
                 Err(_) => Ok(tag("io")),
                 Ok(n) => Ok(Flow::Val(Value::Int(n.get() as i64))),
             },
+            // s215: once the program has moved its working directory,
+            // the answer is the machine-local one (`[os.fs.chdir]`).
+            "os_cwd" if self.cwd.is_some() => {
+                let s = self
+                    .cwd
+                    .as_ref()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                self.charge_mem(s.len() as u64)?;
+                Ok(Flow::Val(Value::Str(s)))
+            }
             "os_cwd" => match std::env::current_dir() {
                 Err(_) => Ok(tag("io")),
                 Ok(p) => match p.to_str() {
@@ -6743,6 +6771,13 @@ impl<'t> Machine<'t> {
                     // named upstream ask).
                     .stdout(std::process::Stdio::inherit())
                     .stderr(std::process::Stdio::inherit())
+                    // s215: a child starts in the machine-local working
+                    // directory once the program has moved it.
+                    .current_dir(
+                        self.cwd
+                            .clone()
+                            .unwrap_or_else(|| std::path::PathBuf::from(".")),
+                    )
                     .spawn();
                 match spawned {
                     Err(e) => Ok(tag(match e.kind() {
@@ -6793,6 +6828,13 @@ impl<'t> Machine<'t> {
                     .stdin(std::process::Stdio::null())
                     .stdout(std::process::Stdio::inherit())
                     .stderr(std::process::Stdio::inherit())
+                    // s215: a child starts in the machine-local working
+                    // directory once the program has moved it.
+                    .current_dir(
+                        self.cwd
+                            .clone()
+                            .unwrap_or_else(|| std::path::PathBuf::from(".")),
+                    )
                     .spawn();
                 match spawned {
                     Err(e) => Ok(tag(match e.kind() {
@@ -6805,6 +6847,145 @@ impl<'t> Machine<'t> {
                         self.children.push(Some(child));
                         Ok(Flow::Val(Value::Int(h)))
                     }
+                }
+            }
+            // s215 (`[os.proc.fds]`, pelt's H2): the spawn with a
+            // descriptor map, SERVED here — unlike `os_spawn_with`'s net
+            // set. Every source is a handle of the machine's own fs table
+            // (a pipe end, a file the program opened) or one of 0..2, so
+            // what the child receives is exactly what the program made;
+            // nothing of the compiler's is handed over that the program
+            // did not name. The map's rules and their order are
+            // `wolf_rt::os`'s, entry for entry: shape (`invalid`), host
+            // (`unsupported` on windows), sources (`io`), program.
+            // Stated asymmetry, `[os.proc.spawn]`'s: 0..2 as SOURCES are
+            // the `wolf` process's own streams, and this machine's
+            // `print` stream is a buffer no child can enter.
+            "os_spawn_fds" => {
+                let (Some(exe), Some(Value::List(args_id)), Some(Value::List(map_id))) =
+                    (str_arg(0), argv.get(1), argv.get(2))
+                else {
+                    return self.refuse("this os call shape", span);
+                };
+                let mut flat = Vec::new();
+                for v in self.lists.get(*map_id).into_iter().flatten() {
+                    match v {
+                        Value::Int(n) => flat.push(*n),
+                        _ => return self.refuse("a non-int descriptor map element", span),
+                    }
+                }
+                let Some(entries) = fd_map_of(&flat) else {
+                    return Ok(tag("invalid"));
+                };
+                if cfg!(not(unix)) && !entries.is_empty() {
+                    return Ok(tag("unsupported"));
+                }
+                let mut placed = Vec::with_capacity(entries.len());
+                for &(t, s) in &entries {
+                    match s {
+                        None => placed.push((t, None)),
+                        Some(h) => match self.fs_handle(h).and_then(|f| f.try_clone().ok()) {
+                            None => return Ok(tag("io")),
+                            Some(f) => placed.push((t, Some(f))),
+                        },
+                    }
+                }
+                if exe.is_empty() {
+                    return Ok(tag("not_found"));
+                }
+                let mut words = Vec::new();
+                for v in self.lists.get(*args_id).into_iter().flatten() {
+                    match v {
+                        Value::Str(s) => words.push(s.clone()),
+                        _ => return self.refuse("a non-str argv element", span),
+                    }
+                }
+                match spawn_mapped(&exe, &words, &placed, self.cwd.as_deref()) {
+                    Err(e) => Ok(tag(match e.kind() {
+                        std::io::ErrorKind::NotFound => "not_found",
+                        std::io::ErrorKind::PermissionDenied => "denied",
+                        _ => "io",
+                    })),
+                    Ok(child) => {
+                        let h = self.children.len() as i64;
+                        self.children.push(Some(child));
+                        Ok(Flow::Val(Value::Int(h)))
+                    }
+                }
+            }
+            // s215 (`[os.proc.pipe]`): a real host pipe, both ends in the
+            // machine's fs table (close-on-exec, as std makes them), so
+            // the fs calls serve them and a map can hand either end to a
+            // child. The pair is a tuple: the positional Struct a tuple
+            // expression builds.
+            "os_pipe" => match std::io::pipe() {
+                Err(_) => Ok(tag("io")),
+                Ok((r, w)) => {
+                    #[cfg(unix)]
+                    let (rf, wf) = (
+                        std::fs::File::from(std::os::fd::OwnedFd::from(r)),
+                        std::fs::File::from(std::os::fd::OwnedFd::from(w)),
+                    );
+                    #[cfg(windows)]
+                    let (rf, wf) = (
+                        std::fs::File::from(std::os::windows::io::OwnedHandle::from(r)),
+                        std::fs::File::from(std::os::windows::io::OwnedHandle::from(w)),
+                    );
+                    if self.files.len() < FS_FIRST_HANDLE {
+                        self.files.resize_with(FS_FIRST_HANDLE, || None);
+                    }
+                    let rh = self.files.len() as i64;
+                    self.files.push(Some(rf));
+                    self.files.push(Some(wf));
+                    Ok(Flow::Val(Value::Struct {
+                        fields: vec![
+                            ("0".to_string(), Value::Int(rh)),
+                            ("1".to_string(), Value::Int(rh + 1)),
+                        ],
+                    }))
+                }
+            },
+            // s215 (`[os.fs.chdir]`): the machine-local working directory
+            // moves (see the `cwd` field for why it is not the host's).
+            // The host's answers are asked of the host: the target is
+            // resolved against the current one and canonicalized (the
+            // path `getcwd` would then report), must be a directory
+            // (`io` otherwise, as ENOTDIR is), and on unix must be
+            // searchable (`access(X_OK)`, chdir's own permission).
+            "os_chdir" => {
+                let Some(path) = str_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                let joined = resolve_in(&self.cwd, path);
+                let canon = match std::fs::canonicalize(&joined) {
+                    Err(e) => {
+                        return Ok(tag(match e.kind() {
+                            std::io::ErrorKind::NotFound => "not_found",
+                            std::io::ErrorKind::PermissionDenied => "denied",
+                            _ => "io",
+                        }));
+                    }
+                    Ok(c) => c,
+                };
+                if !canon.is_dir() {
+                    return Ok(tag("io"));
+                }
+                if !dir_searchable(&canon) {
+                    return Ok(tag("denied"));
+                }
+                self.cwd = Some(canon);
+                Ok(Flow::Val(Value::Unit))
+            }
+            // s215 (`[os.fs.isatty]`): asked of the host descriptor the
+            // handle names — for 0..2 the `wolf` process's own streams.
+            "os_isatty" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                use std::io::IsTerminal as _;
+                match self.fs_handle(fd) {
+                    None => Ok(tag("io")),
+                    Some(f) => Ok(Flow::Val(Value::Bool(f.is_terminal()))),
                 }
             }
             "os_wait" => {
@@ -8340,6 +8521,7 @@ impl<'t> Machine<'t> {
             "env_args" | "env_get" | "env_set" | "env_vars" | "os_cwd" | "os_exe" | "os_cpus"
             | "os_exit"
             | "os_spawn" | "os_spawn_with" | "os_wait" | "os_kill" | "os_signal_listen"
+            | "os_spawn_fds" | "os_pipe" | "os_chdir" | "os_isatty"
             | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
             | "str_from_utf8" => {
@@ -10176,6 +10358,163 @@ fn collect_binding_spans(pat: &GreenNode, out: &mut Vec<Span>) {
 /// s199 (#424, `[os.fs.std]`): the first number an open answers; 0, 1
 /// and 2 are the standard streams. `wolf_rt::fs::FIRST_HANDLE`'s twin.
 const FS_FIRST_HANDLE: usize = 3;
+
+/// s215 (`[os.fs.chdir]`): `p` as the checked machine's host call must
+/// see it — joined to the machine-local working directory when the
+/// program has moved it and `p` is relative, verbatim otherwise
+/// (`[os.fs.path]`: no other rewriting; an empty path stays empty, so it
+/// is `not_found` as the host says). A non-UTF-8 join is
+/// unreachable: the base came from a `str` the host canonicalized.
+fn resolve_in(base: &Option<std::path::PathBuf>, p: String) -> String {
+    match base {
+        Some(b) if !p.is_empty() && std::path::Path::new(&p).is_relative() => {
+            b.join(&p).to_string_lossy().into_owned()
+        }
+        _ => p,
+    }
+}
+
+/// s215 (`[os.proc.fds]`): `wolf_rt::os::map_of`'s twin — the flat
+/// `[target, source, …]` list as pairs, `None` for a list that is not a
+/// map (the `invalid` row): odd, a target outside `0..=255`, a repeated
+/// target, a source below -1, more than 64 pairs. A source of -1 is
+/// "closed in the child".
+fn fd_map_of(flat: &[i64]) -> Option<Vec<(i64, Option<i64>)>> {
+    if !flat.len().is_multiple_of(2) || flat.len() / 2 > 64 {
+        return None;
+    }
+    let mut out: Vec<(i64, Option<i64>)> = Vec::with_capacity(flat.len() / 2);
+    for pair in flat.chunks_exact(2) {
+        let (t, s) = (pair[0], pair[1]);
+        if !(0..=255).contains(&t) || s < -1 || out.iter().any(|&(u, _)| u == t) {
+            return None;
+        }
+        out.push((t, (s >= 0).then_some(s)));
+    }
+    Some(out)
+}
+
+/// s215: may this process enter `dir`? chdir needs search permission;
+/// unix asks `access(X_OK)`, elsewhere a directory is enterable.
+#[cfg(unix)]
+fn dir_searchable(dir: &std::path::Path) -> bool {
+    use std::os::unix::ffi::OsStrExt as _;
+    let Ok(c) = std::ffi::CString::new(dir.as_os_str().as_bytes()) else {
+        return false;
+    };
+    // SAFETY: a NUL-terminated path the call only reads.
+    unsafe { libc::access(c.as_ptr(), libc::X_OK) == 0 }
+}
+
+#[cfg(not(unix))]
+fn dir_searchable(_dir: &std::path::Path) -> bool {
+    true
+}
+
+/// s215 (`[os.proc.fds]`): spawn `exe` with `args` in `cwd` (the
+/// process's own when `None`) and the child's descriptors placed as
+/// `map` says — `wolf_rt::os::ChildTable::spawn_fds`'s mechanics,
+/// mirrored: stdio inherited at the `Command` level so 0..2 are still
+/// this process's inside the hook; every source staged above the
+/// highest target, `dup2`'d onto its target, the stage closed; `None`
+/// targets closed; the null device onto 0 when the map leaves 0 out.
+/// The hook is async-signal-safe (fixed arrays, no allocation).
+#[cfg(unix)]
+fn spawn_mapped(
+    exe: &str,
+    args: &[String],
+    map: &[(i64, Option<std::fs::File>)],
+    cwd: Option<&std::path::Path>,
+) -> std::io::Result<std::process::Child> {
+    use std::os::fd::AsRawFd as _;
+    use std::os::unix::process::CommandExt as _;
+    let mut cmd = std::process::Command::new(exe);
+    cmd.args(args)
+        .stdin(std::process::Stdio::inherit())
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit());
+    if let Some(d) = cwd {
+        cmd.current_dir(d);
+    }
+    if map.is_empty() {
+        cmd.stdin(std::process::Stdio::null());
+        return cmd.spawn();
+    }
+    const MAX: usize = 64;
+    let n = map.len();
+    let mut targets = [-1 as libc::c_int; MAX];
+    let mut sources = [-1 as libc::c_int; MAX];
+    let mut floor: libc::c_int = 3;
+    let mut names_zero = false;
+    for (i, (t, s)) in map.iter().enumerate() {
+        let t = *t as libc::c_int;
+        targets[i] = t;
+        sources[i] = s.as_ref().map_or(-1, |f| f.as_raw_fd());
+        floor = floor.max(t + 1);
+        names_zero |= t == 0;
+    }
+    // SAFETY: only async-signal-safe calls (`fcntl`, `dup2`, `close`,
+    // `open` on a static path) over fixed arrays — the `pre_exec`
+    // contract in a process that holds other threads.
+    unsafe {
+        cmd.pre_exec(move || {
+            let mut staged = [-1 as libc::c_int; MAX];
+            for i in 0..n {
+                if sources[i] >= 0 {
+                    let s = libc::fcntl(sources[i], libc::F_DUPFD_CLOEXEC, floor);
+                    if s < 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    staged[i] = s;
+                }
+            }
+            for i in 0..n {
+                if staged[i] >= 0 {
+                    if libc::dup2(staged[i], targets[i]) < 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    libc::close(staged[i]);
+                } else {
+                    libc::close(targets[i]);
+                }
+            }
+            if !names_zero {
+                let null = libc::open(c"/dev/null".as_ptr(), libc::O_RDWR);
+                if null < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                if null != 0 {
+                    if libc::dup2(null, 0) < 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    libc::close(null);
+                }
+            }
+            Ok(())
+        });
+    }
+    cmd.spawn()
+}
+
+/// s215: windows places no map (the caller answered `unsupported` for a
+/// non-empty one), so only the plain spawn arrives here.
+#[cfg(not(unix))]
+fn spawn_mapped(
+    exe: &str,
+    args: &[String],
+    _map: &[(i64, Option<std::fs::File>)],
+    cwd: Option<&std::path::Path>,
+) -> std::io::Result<std::process::Child> {
+    let mut cmd = std::process::Command::new(exe);
+    cmd.args(args)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit());
+    if let Some(d) = cwd {
+        cmd.current_dir(d);
+    }
+    cmd.spawn()
+}
 
 /// A file an fs call reads through: a standard stream duplicated for
 /// the call, or a slot of the machine's table.
