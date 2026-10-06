@@ -318,8 +318,7 @@ fn foreign_builder(m: &mut Module) -> (FuncBuilder<'_>, RegionId, wolf_wir::ir::
     (b, r, g)
 }
 
-fn finish_dump(m: &mut Module, b: FuncBuilder<'_>) -> String {
-    let f = b.finish();
+fn verified_dump(m: &mut Module, f: wolf_wir::ir::Function) -> String {
     verify_function(m, &f).unwrap();
     m.add_func(f);
     wolf_wir::print_module(m)
@@ -337,7 +336,8 @@ fn a_foreign_store_is_not_forwarded_across_a_call() {
     assert_ne!(after, zero, "the callee may have written p: reload");
     assert_eq!(b.stats.forward, 0);
     b.ins_ret(&[after]);
-    let dump = finish_dump(&mut m, b);
+    let f = b.finish();
+    let dump = verified_dump(&mut m, f);
     let call = dump.find("call @g").expect("the call");
     let load = dump.find("load.i64").expect("a load survives");
     assert!(call < load, "the load follows the call: {dump}");
@@ -355,7 +355,8 @@ fn a_foreign_load_is_not_reused_across_a_call() {
     assert_eq!(b.stats.gvn, 0);
     let sum = b.ins(Opcode::IaddWrap, &[before, after], &[I64], Aux::None).one();
     b.ins_ret(&[sum]);
-    let dump = finish_dump(&mut m, b);
+    let f = b.finish();
+    let dump = verified_dump(&mut m, f);
     assert_eq!(dump.matches("load.i64").count(), 2, "{dump}");
 }
 
@@ -372,7 +373,8 @@ fn a_call_through_a_fn_value_clobbers_too() {
     let after = b.ins_load(I64, p, r);
     assert_ne!(after, one, "call.ind may write p");
     b.ins_ret(&[after]);
-    let dump = finish_dump(&mut m, b);
+    let f = b.finish();
+    let dump = verified_dump(&mut m, f);
     assert_eq!(dump.matches("load.i64").count(), 1, "{dump}");
 }
 
@@ -390,7 +392,8 @@ fn without_a_call_foreign_forwarding_and_gvn_stay() {
     assert_eq!(d, seven, "no call between: forwarded");
     let sum = b.ins(Opcode::IaddWrap, &[a, d], &[I64], Aux::None).one();
     b.ins_ret(&[sum]);
-    let dump = finish_dump(&mut m, b);
+    let f = b.finish();
+    let dump = verified_dump(&mut m, f);
     assert_eq!(dump.matches("load.i64").count(), 1, "{dump}");
 }
 
@@ -411,7 +414,8 @@ fn a_lent_region_still_forwards_across_a_call() {
     let loaded = b.ins_load(I64, p, r0);
     assert_eq!(loaded, v, "the lent region forwards across the call");
     b.ins_ret(&[loaded]);
-    let dump = finish_dump(&mut m, b);
+    let f = b.finish();
+    let dump = verified_dump(&mut m, f);
     assert!(!dump.contains("load"), "{dump}");
 }
 
@@ -438,7 +442,8 @@ fn a_call_in_a_loop_body_clobbers_the_load_after_the_loop() {
     assert_ne!(before, after, "the body's call ran between them");
     let sum = b.ins(Opcode::IaddWrap, &[before, after], &[I64], Aux::None).one();
     b.ins_ret(&[sum]);
-    let dump = finish_dump(&mut m, b);
+    let f = b.finish();
+    let dump = verified_dump(&mut m, f);
     assert_eq!(dump.matches("load.i64").count(), 2, "{dump}");
 }
 
