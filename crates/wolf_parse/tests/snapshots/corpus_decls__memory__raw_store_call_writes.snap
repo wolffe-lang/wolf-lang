@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ImportCDecl 666..686 header="stdlib.h"
+FnDecl 687..794 name=poke body=Block
+FnDecl 796..1109 name=main body=Block
