@@ -298,6 +298,150 @@ fn loop_carried_token_becomes_a_block_param() {
     assert!(header_line.contains("i64"), "counter param too: {dump}");
 }
 
+// ------------------------------- a call clobbers foreign storage ----
+//
+// s214 (wolf-lang#598): module state, `extern "c" let` storage and every
+// raw pointer access ride the function's FOREIGN buffer region, whose
+// token a callee never consumes — it writes the same bytes under a root
+// of its own. So a store or load built before a call is never reused
+// after it: the load stays, and reads what the callee wrote. At 0.2.24
+// the builder forwarded the stored value across the call and hash-consed
+// the second load into the first (native and release printed 0 for 99).
+
+/// `(ptr) -> i64` with a foreign buffer root and a tokenless callee.
+fn foreign_builder(m: &mut Module) -> (FuncBuilder<'_>, RegionId, wolf_wir::ir::ExtFunc) {
+    let sig = m.make_sig(vec![Param::val(PTR)], vec![I64]);
+    let unit = m.make_sig(vec![], vec![]);
+    let mut b = FuncBuilder::new(m, "t", sig);
+    let r = b.ins_region_foreign(wolf_wir::ops::ForeignRole::Buffer);
+    let g = b.func.import_func("g", unit);
+    (b, r, g)
+}
+
+fn finish_dump(m: &mut Module, b: FuncBuilder<'_>) -> String {
+    let f = b.finish();
+    verify_function(m, &f).unwrap();
+    m.add_func(f);
+    wolf_wir::print_module(m)
+}
+
+#[test]
+fn a_foreign_store_is_not_forwarded_across_a_call() {
+    let mut m = Module::new();
+    let (mut b, r, g) = foreign_builder(&mut m);
+    let p = b.block_params(b.current_block())[0];
+    let zero = b.iconst(I64, 0);
+    b.ins_store(zero, p, r);
+    b.ins_call(g, &[]);
+    let after = b.ins_load(I64, p, r);
+    assert_ne!(after, zero, "the callee may have written p: reload");
+    assert_eq!(b.stats.forward, 0);
+    b.ins_ret(&[after]);
+    let dump = finish_dump(&mut m, b);
+    let call = dump.find("call @g").expect("the call");
+    let load = dump.find("load.i64").expect("a load survives");
+    assert!(call < load, "the load follows the call: {dump}");
+}
+
+#[test]
+fn a_foreign_load_is_not_reused_across_a_call() {
+    let mut m = Module::new();
+    let (mut b, r, g) = foreign_builder(&mut m);
+    let p = b.block_params(b.current_block())[0];
+    let before = b.ins_load(I64, p, r);
+    b.ins_call(g, &[]);
+    let after = b.ins_load(I64, p, r);
+    assert_ne!(before, after, "two loads, one each side of the call");
+    assert_eq!(b.stats.gvn, 0);
+    let sum = b.ins(Opcode::IaddWrap, &[before, after], &[I64], Aux::None).one();
+    b.ins_ret(&[sum]);
+    let dump = finish_dump(&mut m, b);
+    assert_eq!(dump.matches("load.i64").count(), 2, "{dump}");
+}
+
+#[test]
+fn a_call_through_a_fn_value_clobbers_too() {
+    let mut m = Module::new();
+    let (mut b, r, _) = foreign_builder(&mut m);
+    let p = b.block_params(b.current_block())[0];
+    let unit = b.module.make_sig(vec![], vec![]);
+    let fp = b.ins_load(PTR, p, r);
+    let one = b.iconst(I64, 1);
+    b.ins_store(one, p, r);
+    b.ins_call_ind(fp, unit, &[]);
+    let after = b.ins_load(I64, p, r);
+    assert_ne!(after, one, "call.ind may write p");
+    b.ins_ret(&[after]);
+    let dump = finish_dump(&mut m, b);
+    assert_eq!(dump.matches("load.i64").count(), 1, "{dump}");
+}
+
+#[test]
+fn without_a_call_foreign_forwarding_and_gvn_stay() {
+    let mut m = Module::new();
+    let (mut b, r, _) = foreign_builder(&mut m);
+    let p = b.block_params(b.current_block())[0];
+    let a = b.ins_load(I64, p, r);
+    let c = b.ins_load(I64, p, r);
+    assert_eq!(a, c, "no call between: one load");
+    let seven = b.iconst(I64, 7);
+    b.ins_store(seven, p, r);
+    let d = b.ins_load(I64, p, r);
+    assert_eq!(d, seven, "no call between: forwarded");
+    let sum = b.ins(Opcode::IaddWrap, &[a, d], &[I64], Aux::None).one();
+    b.ins_ret(&[sum]);
+    let dump = finish_dump(&mut m, b);
+    assert_eq!(dump.matches("load.i64").count(), 1, "{dump}");
+}
+
+/// A region the caller LENT (an entry `mem` param) is exhaustive: a call
+/// that does not take its token cannot reach it, so forwarding across
+/// the call stays — the token discipline's dividend is untouched.
+#[test]
+fn a_lent_region_still_forwards_across_a_call() {
+    let mut m = Module::new();
+    let unit = m.make_sig(vec![], vec![]);
+    let mut b = mem_builder(&mut m);
+    let g = b.func.import_func("g", unit);
+    let params = b.block_params(b.current_block());
+    let (p, v) = (params[0], params[1]);
+    let r0 = RegionId::new(0);
+    b.ins_store(v, p, r0);
+    b.ins_call(g, &[]);
+    let loaded = b.ins_load(I64, p, r0);
+    assert_eq!(loaded, v, "the lent region forwards across the call");
+    b.ins_ret(&[loaded]);
+    let dump = finish_dump(&mut m, b);
+    assert!(!dump.contains("load"), "{dump}");
+}
+
+/// The loop shape: a load before the loop, a call in its body, the same
+/// load after it. The body's call runs between them on the path through
+/// the loop, though no call sits between them in the preheader.
+#[test]
+fn a_call_in_a_loop_body_clobbers_the_load_after_the_loop() {
+    let mut m = Module::new();
+    let (mut b, r, g) = foreign_builder(&mut m);
+    let p = b.block_params(b.current_block())[0];
+    let before = b.ins_load(I64, p, r);
+    let header = b.create_block();
+    b.ins_jmp(header, &[]);
+    b.switch_to_block(header);
+    b.ins_call(g, &[]);
+    let flag = b.ins_load(BOOL, p, r);
+    let exit = b.create_block();
+    b.ins_br(flag, header, &[], exit, &[]);
+    b.seal_block(header);
+    b.seal_block(exit);
+    b.switch_to_block(exit);
+    let after = b.ins_load(I64, p, r);
+    assert_ne!(before, after, "the body's call ran between them");
+    let sum = b.ins(Opcode::IaddWrap, &[before, after], &[I64], Aux::None).one();
+    b.ins_ret(&[sum]);
+    let dump = finish_dump(&mut m, b);
+    assert_eq!(dump.matches("load.i64").count(), 2, "{dump}");
+}
+
 // ------------------------------------------- the s99-era identities ----
 
 /// `isub.wrap(iadd.chk(x, k), x)` IS `k` — exact because a live
