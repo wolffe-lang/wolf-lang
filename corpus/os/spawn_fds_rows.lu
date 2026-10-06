@@ -1,0 +1,44 @@
+//! check: run(exit=0, stdout="odd=invalid\nout_of_range=invalid\nnegative_target=invalid\nrepeated=invalid\nbad_source=invalid\nempty_exe=not_found\nno_program=not_found")
+//! phase: run
+//! conforms: os.proc.fds, err.union
+//!
+//! s215 (`[os.proc.fds]`; pelt's H2) — the descriptor map's rows that
+//! make no child, deterministic on every host. The map is a flat
+//! `List[int]` of (child fd, source) pairs and its SHAPE is decided
+//! before anything else is read: an odd length, a target outside
+//! 0..255, a target named twice and a source below -1 are each
+//! `invalid` — on windows too, where a well-formed non-empty map is
+//! `unsupported` instead. An EMPTY map is `os_spawn_with` with an empty
+//! set: an empty program name and a program no host has are both
+//! `not_found`. Nothing here is ever spawned (the live witnesses are
+//! `crates/wolf_driver/tests/proc_fd_lanes.rs`, unix).
+
+fn row(exe: str, map: List[int]) -> str {
+    let args = List[str]()
+    let h = os_spawn_fds(exe, args, map) else |e| {
+        return match e {
+            unsupported => "unsupported",
+            invalid => "invalid",
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+    }
+    let _code = os_wait(h) else |_| 0
+    "spawned"
+}
+
+fn main() -> !int {
+    let ghost = "wolf-s215-no-such-program"
+    print("odd={row(ghost, [1])}")
+    print("out_of_range={row(ghost, [256, 1])}")
+    print("negative_target={row(ghost, [0 - 1, 1])}")
+    print("repeated={row(ghost, [1, 1, 1, 2])}")
+    print("bad_source={row(ghost, [1, 0 - 2])}")
+    let none = List[int]()
+    let empty_exe = row("", copy none)
+    print("empty_exe={empty_exe}")
+    let no_program = row(ghost, none)
+    print("no_program={no_program}")
+    0
+}

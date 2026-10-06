@@ -1,0 +1,18 @@
+//! check: fail(E0701)
+//! phase: resolve
+//! conforms: comptime.sandbox, os.fs.chdir
+//!
+//! s215 (D33): `os_chdir` would move the COMPILER's working directory,
+//! `os_pipe` would make it a descriptor and `os_isatty` would probe its
+//! terminal — each acts on the machine that compiles, so all three are
+//! the `io` category, refused at comptime with that category's reason.
+
+comptime fn helper() -> int {
+    os_chdir("/") else |_| { }
+    0
+}
+
+fn main() -> !int {
+    const H = helper()
+    H
+}

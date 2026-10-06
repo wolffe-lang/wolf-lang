@@ -1,0 +1,50 @@
+//! check: run(exit=0, stdout="moved=true\nrelative_read=found\ncwd_ends_inner=true\nup_sees_inner=true\nback=true\nmissing=not_found\nonto_a_file=io\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.chdir, os.fs.path, err.union, err.propagate
+//!
+//! s215 (`[os.fs.chdir]`; wolf-std F-0067's ask; pelt's H2) — `cd`,
+//! then a relative open. After `os_chdir(dir)` a relative path names a
+//! file under `dir` (`[os.fs.path]`: relative paths resolve against the
+//! working directory), `os_cwd` answers the new directory, `..` walks
+//! back up, and changing back to the directory `os_cwd` answered first
+//! restores it exactly. A missing directory is `not_found`; a path that
+//! names a FILE is `io` (the host's ENOTDIR, which the row has no tag
+//! for). The row leaves the working directory where it found it.
+
+fn cd_row(path: str) -> str {
+    os_chdir(path) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    let start = os_cwd()?
+    fs_create_dir_all("target/s215-cd/inner")?
+    fs_write_text("target/s215-cd/inner/note.txt", "found")?
+    let moved = cd_row("target/s215-cd/inner") == "ok"
+    print("moved={moved}")
+    let text = fs_read_text("note.txt")?
+    print("relative_read={text}")
+    let here = os_cwd()?
+    let ends = here.ends_with("inner")
+    print("cwd_ends_inner={ends}")
+    os_chdir("..")?
+    let sees = fs_exists("inner/note.txt")
+    print("up_sees_inner={sees}")
+    os_chdir(start)?
+    let back = os_cwd()? == start
+    print("back={back}")
+    let missing = cd_row("target/s215-cd/no-such-dir")
+    print("missing={missing}")
+    let onto = cd_row("target/s215-cd/inner/note.txt")
+    print("onto_a_file={onto}")
+    fs_remove_dir_all("target/s215-cd")?
+    let gone = !fs_exists("target/s215-cd")
+    print("cleaned={gone}")
+    0
+}

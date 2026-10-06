@@ -1,0 +1,52 @@
+//! check: run(exit=0, stdout="ends_above_2=true distinct=true\nread=howl\nthen=eof\nwrite_end_tty=false read_end_tty=false\nclosed_tty=io forged_tty=io\nwrite_after_close=io")
+//! phase: run
+//! conforms: os.proc.pipe, os.fs.isatty, err.union, err.propagate
+//!
+//! s215 (`[os.proc.pipe]`, `[os.fs.isatty]`; pelt's H2) — a pipe made
+//! and used inside one process, with no child: the two ends are
+//! ordinary fs handles (3 and up, `[os.fs.std]`), so `fs_write` on the
+//! write end and `fs_read` on the read end move the bytes, closing the
+//! write end is what the reader sees as `eof`, and neither end is a
+//! terminal. A closed or forged handle is `io` to `os_isatty`, the
+//! family's rule, and so is a write to a closed end. Host-independent:
+//! nothing is spawned, so the row runs on every tier and every host.
+
+fn tty_row(fd: int) -> str {
+    let t = os_isatty(fd) else |e| {
+        return match e {
+            io => "io",
+        }
+    }
+    "{t}"
+}
+
+fn read_row(fd: int) -> str {
+    let s = fs_read(fd, 64) else |e| {
+        return match e {
+            eof => "eof",
+            io => "io",
+            utf8 => "utf8",
+        }
+    }
+    s
+}
+
+fn main() -> !int {
+    let (r, w) = os_pipe()?
+    print("ends_above_2={r > 2 && w > 2} distinct={r != w}")
+    fs_write(w, "howl")?
+    let wt = tty_row(w)
+    let rt = tty_row(r)
+    fs_close(w)?
+    print("read={read_row(r)}")
+    print("then={read_row(r)}")
+    print("write_end_tty={wt} read_end_tty={rt}")
+    fs_close(r)?
+    print("closed_tty={tty_row(r)} forged_tty={tty_row(999999)}")
+    var after = "ok"
+    fs_write(w, "late") else |e| match e {
+        io => after = "io",
+    }
+    print("write_after_close={after}")
+    0
+}
