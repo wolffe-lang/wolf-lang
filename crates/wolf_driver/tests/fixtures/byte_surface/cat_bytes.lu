@@ -1,0 +1,21 @@
+//! member: false
+//! s200 (wolf-lang#405, `[os.fs.std]`): standard input to standard
+//! output as bytes, through descriptors 0 and 1 themselves — the
+//! `cat` boreutils had to write by reopening `/dev/stdin` and
+//! `/dev/stdout`. Only calls that existed before s200, so the same file
+//! runs on a compiler that predates the fix and shows the defect: there
+//! the read of 0 answered `io` (exit 4) whatever the descriptor was.
+//! Not a corpus row: what it prints is what the harness wires to 0.
+
+fn main() -> int {
+    loop {
+        let chunk = fs_read_chunk(0, 65536) else |e| match e {
+            eof => { break },
+            io => { return 4 },
+        }
+        fs_write_chunk(1, chunk) else |e| {
+            return 3
+        }
+    }
+    0
+}

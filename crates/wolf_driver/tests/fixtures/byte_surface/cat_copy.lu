@@ -1,0 +1,20 @@
+//! member: false
+//! s200 (wolf-lang#417, `[os.fs.copy]`): `cat` as `fs_copy_chunk(0, 1,
+//! …)` until `eof` — on linux the bytes go from descriptor 0 to
+//! descriptor 1 without entering the program (`copy_file_range`,
+//! `sendfile` or `splice`, by what the two descriptors are). A failed
+//! copy says why on stderr and exits 3.
+
+fn main() -> int {
+    loop {
+        let _ = fs_copy_chunk(0, 1, 1073741824) else |e| match e {
+            eof => { break },
+            io => {
+                let code = os_error()
+                eprint("copy: {code} {os_error_text(code)}")
+                return 3
+            },
+        }
+    }
+    0
+}

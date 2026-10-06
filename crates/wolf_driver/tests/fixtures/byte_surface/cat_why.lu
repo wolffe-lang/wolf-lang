@@ -1,0 +1,24 @@
+//! member: false
+//! s200 (wolf-lang#405, #407; `[os.fs.std]`, `[os.fs.error]`):
+//! `cat_bytes.lu`, saying WHY a write failed — the host's number and its
+//! words on stderr, as GNU's `cat: write error: No space left on device`
+//! says it — and exiting 3. A failed read says why and exits 4.
+
+fn main() -> int {
+    loop {
+        let chunk = fs_read_chunk(0, 65536) else |e| match e {
+            eof => { break },
+            io => {
+                let code = os_error()
+                eprint("read: {code} {os_error_text(code)}")
+                return 4
+            },
+        }
+        fs_write_chunk(1, chunk) else |e| {
+            let code = os_error()
+            eprint("write: {code} {os_error_text(code)}")
+            return 3
+        }
+    }
+    0
+}
