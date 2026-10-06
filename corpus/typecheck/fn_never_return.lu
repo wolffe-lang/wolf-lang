@@ -1,0 +1,18 @@
+//! check: fail(E0401)
+//! phase: resolve
+//! conforms: type.fn.never, type.fn.ret
+//!
+//! s213 (wolf-lang#572, ruling owed): a `-> never` fn holds no `return`
+//! — the `return` is E0401, naming the declaration (`[type.fn.never]`),
+//! even though the body's tail is bottom.
+
+fn die(msg: str) -> never {
+    if msg == "" {
+        return
+    }
+    assert(false)
+}
+
+fn main() {
+    print("x")
+}
