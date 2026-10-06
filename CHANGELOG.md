@@ -32,8 +32,11 @@ No row changed anywhere.
 - **`bytes_find(xs, b, from) -> int ! {none}` and `bytes_count(xs, b) ->
   int` (#411, `[mem.list.bytes]`).** `str`'s `find` and `count` for a
   `List[byte]`. On native and release each is one call into a runtime
-  loop the runtime's compiler vectorises (SSE2 on x86-64, NEON on
-  aarch64). `from` outside `0..len` is `none`. Free builtins, because
+  loop in the target's baseline vector instructions (SSE2 on x86-64,
+  NEON on aarch64; scalar elsewhere): counting the newlines of 256 MiB
+  costs about 12 ms of CPU above the read on kasumi, against about
+  100 ms for a wolf `for b in chunk` loop (`bench/byte-scan/`). `from`
+  outside `0..len` is `none`. Free builtins, because
   `List`'s `count` method is its length.
 - **`fs_copy_chunk(src, dst, max) -> int ! {eof, io}` (#417,
   `[os.fs.copy]`).** `fs_read_chunk` then `fs_write_chunk` fused: at
