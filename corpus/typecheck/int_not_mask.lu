@@ -18,7 +18,7 @@ const PAGE_MASK: u32 = !0xfff
 fn main() {
     let x: u32 = 0x12345
     let down = x & !0xfff
-    let up = (x + 0xfff) & !0xfff
+    let up = x + 0xfff & !0xfff
     let flags: u32 = 0xe000
     let cleared = (flags | 0x1000) & !0x1000
     print("{down} {up} {!x} {!(0 as u32)} {0x1fff & PAGE_MASK} {cleared}")
