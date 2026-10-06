@@ -421,6 +421,66 @@ fn a_lent_region_still_forwards_across_a_call() {
     assert!(!dump.contains("load"), "{dump}");
 }
 
+/// A container LENT to the function is frozen for the call
+/// (`[mem.tier0.mode.read]`, the SB holy grail): a load inside it — the
+/// header's `len`, the data pointer, an element through that pointer —
+/// keeps its reuse across a call. `corpus/memory/prov_holy_grail.lu` is
+/// the source-level shape.
+#[test]
+fn a_load_inside_a_frozen_container_is_reused_across_a_call() {
+    let mut m = Module::new();
+    let sig = m.make_sig(vec![Param::val(PTR)], vec![I64]);
+    let unit = m.make_sig(vec![], vec![]);
+    let mut b = FuncBuilder::new(&mut m, "t", sig);
+    let hdrs = b.ins_region_foreign(wolf_wir::ops::ForeignRole::Header);
+    let bufs = b.ins_region_foreign(wolf_wir::ops::ForeignRole::Buffer);
+    let g = b.func.import_func("g", unit);
+    let xs = b.block_params(b.current_block())[0];
+    b.freeze_root(xs);
+    let eight = b.iconst(I64, 8);
+    let len_at = b.ins_ptr_off(xs, eight, 1);
+    let len = b.ins_load(I64, len_at, hdrs);
+    let data = b.ins_load(PTR, xs, hdrs);
+    let zero = b.iconst(I64, 0);
+    let at = b.ins_ptr_off(data, zero, 8);
+    let first = b.ins_load(I64, at, bufs);
+    b.ins_call(g, &[]);
+    assert_eq!(b.ins_load(I64, len_at, hdrs), len, "len, frozen");
+    let data2 = b.ins_load(PTR, xs, hdrs);
+    assert_eq!(data2, data, "the data pointer, frozen");
+    let at2 = b.ins_ptr_off(data2, zero, 8);
+    assert_eq!(b.ins_load(I64, at2, bufs), first, "the element, frozen");
+    let sum = b.ins(Opcode::IaddWrap, &[len, first], &[I64], Aux::None).one();
+    b.ins_ret(&[sum]);
+    let f = b.finish();
+    let dump = verified_dump(&mut m, f);
+    assert_eq!(dump.matches("= load").count(), 3, "{dump}");
+}
+
+/// The same chain from a parameter NOT frozen (a raw pointer, or a
+/// container taken or lent `mut`) reloads after the call.
+#[test]
+fn the_same_chain_from_an_unfrozen_parameter_reloads() {
+    let mut m = Module::new();
+    let sig = m.make_sig(vec![Param::val(PTR)], vec![I64]);
+    let unit = m.make_sig(vec![], vec![]);
+    let mut b = FuncBuilder::new(&mut m, "t", sig);
+    let hdrs = b.ins_region_foreign(wolf_wir::ops::ForeignRole::Header);
+    let g = b.func.import_func("g", unit);
+    let xs = b.block_params(b.current_block())[0];
+    let eight = b.iconst(I64, 8);
+    let len_at = b.ins_ptr_off(xs, eight, 1);
+    let len = b.ins_load(I64, len_at, hdrs);
+    b.ins_call(g, &[]);
+    let again = b.ins_load(I64, len_at, hdrs);
+    assert_ne!(again, len, "not frozen: the callee may have pushed");
+    let sum = b.ins(Opcode::IaddWrap, &[len, again], &[I64], Aux::None).one();
+    b.ins_ret(&[sum]);
+    let f = b.finish();
+    let dump = verified_dump(&mut m, f);
+    assert_eq!(dump.matches("= load").count(), 2, "{dump}");
+}
+
 /// The loop shape: a load before the loop, a call in its body, the same
 /// load after it. The body's call runs between them on the path through
 /// the loop, though no call sits between them in the preheader.
