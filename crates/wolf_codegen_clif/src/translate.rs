@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 164] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 169] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -209,6 +209,17 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 164] = [
     ("__wolf_rt_fs_seek", 4, true),
     ("__wolf_rt_fs_tell", 2, true),
     ("__wolf_rt_fs_read_at", 4, true),
+    // s200 (#417, `[os.fs.copy]`): the fused chunk copy (src, dst,
+    // max, out) — code out, the count through the slot.
+    ("__wolf_rt_fs_copy_chunk", 4, true),
+    // s200 (#407, `[os.fs.error]`): the task's host code, and its text as
+    // a str pair through the slot (code, out; no result).
+    ("__wolf_rt_os_error", 0, true),
+    ("__wolf_rt_os_error_text", 2, false),
+    // s200 (#411, `[mem.list.bytes]`): the byte scan — (hdr, byte,
+    // from) -> index or -1, and (hdr, byte) -> count.
+    ("__wolf_rt_bytes_find", 3, true),
+    ("__wolf_rt_bytes_count", 2, true),
     ("__wolf_rt_fs_rename", 4, true),
     ("__wolf_rt_read_line", 1, true),
     // The s106 net family (wolf_rt::net, #118's first crossing): fd

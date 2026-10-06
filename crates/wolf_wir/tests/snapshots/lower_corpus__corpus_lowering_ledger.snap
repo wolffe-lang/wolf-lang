@@ -130,13 +130,16 @@ faults/wrap_high_as_i32.lu: lowers
 faults/wrap_top_bit_as_int.lu: lowers
 ffi.lu: not mem-clean (pre-wir rungs own it)
 fs/bytes_dirs.lu: lowers
+fs/copy_chunk.lu: lowers
 fs/error_row.lu: lowers
 fs/fstat.lu: lowers
 fs/open_nonblock.lu: lowers
+fs/os_error.lu: lowers
 fs/read_at.lu: lowers
 fs/remove_dir_refused.lu: lowers
 fs/roundtrip.lu: lowers
 fs/seek_tell.lu: lowers
+fs/std_write_bytes.lu: lowers
 generics/box_method.lu: lowers
 generics/explicit_apply.lu: lowers
 generics/explicit_apply_arity.lu: not mem-clean (pre-wir rungs own it)
@@ -308,6 +311,7 @@ memory/borrow_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/byte_list_ledger.lu: lowers
 memory/byte_producers_ledger.lu: lowers
 memory/byte_view_escape.lu: not mem-clean (pre-wir rungs own it)
+memory/bytes_scan.lu: lowers
 memory/carried_quotient_nested.lu: lowers
 memory/carried_quotient_pair.lu: lowers
 memory/checked_unsigned.lu: lowers

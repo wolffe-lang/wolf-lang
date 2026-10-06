@@ -9739,6 +9739,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "fs_seek"
                 | "fs_tell"
                 | "fs_read_at"
+                // s200 (#417): the fused chunk copy.
+                | "fs_copy_chunk"
         ) {
             return self.lower_fs_builtin(&callee_text, d, e);
         }
@@ -9849,6 +9851,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // post.
         if callee_text == "str_from_utf8" {
             return self.lower_str_from_utf8(d, e);
+        }
+        // s200 (#411, `[mem.list.bytes]`): the bulk byte scan — one
+        // runtime call each, the loop the runtime's optimiser vectorises.
+        if matches!(callee_text.as_str(), "bytes_find" | "bytes_count") {
+            return self.lower_byte_scan(&callee_text, d, e);
+        }
+        // s200 (#407, `[os.fs.error]`): the task's host code and its text.
+        if matches!(callee_text.as_str(), "os_error" | "os_error_text") {
+            return self.lower_os_error(&callee_text, d, e);
         }
         // The region accounting queries (s131, #187): the ledger
         // `wolf_rt` already keeps, surfaced. One rt read each — no
@@ -12964,6 +12975,33 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
+            // s200 (#417, `[os.fs.copy]`): the count moved as one word
+            // through the slot, `fs_seek`'s shape with two handles.
+            "fs_copy_chunk" => {
+                let src = arg(0)?;
+                let dst = arg(1)?;
+                let max = arg(2)?;
+                let (region, slot) = self.rt_slot(8);
+                let rc = self
+                    .rt_call_slot(
+                        "__wolf_rt_fs_copy_chunk",
+                        &[src, dst, max],
+                        slot,
+                        region,
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let hit = zero_eq(self, rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let declared = self.row_tag_names(e.span);
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(types::I64, slot, region, e.span)?)),
+                    |z| Ok(z.fs_code_tag(rc, &declared)),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
             "fs_size" | "fs_modified_ms" => {
                 let s = arg(0)?;
                 let (p, l) = self.str_parts(s);
@@ -13841,6 +13879,94 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Ok(zelf.b.iconst(types::I64, id))
             },
         )?;
+        Ok(Flow::Val(Some(out)))
+    }
+
+    /// s200 (#411, `[mem.list.bytes]`): `bytes_find(xs, b, from) -> int
+    /// ! {none}` and `bytes_count(xs, b) -> int`. The list crosses as its
+    /// header through the foreign chain (the shim READS the caller's
+    /// buffer, `str_from_utf8`'s posture), the byte zero-extended to the
+    /// seam's `i64` (`[type.byte]`). `bytes_find` answers -1 for `none`.
+    fn lower_byte_scan(&mut self, name: &str, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {
+        let mut argv: Vec<Value> = Vec::new();
+        for a in d.args().into_iter().flat_map(|l| l.args()) {
+            let Some(vx) = Arg::value(a) else { continue };
+            match self.lower_expr(vx)? {
+                Flow::Val(Some(v)) => argv.push(v),
+                Flow::Val(None) => return Err(refuse("a unit-typed byte-scan argument", vx.span)),
+                Flow::Diverged => return Ok(Flow::Diverged),
+            }
+        }
+        let want = if name == "bytes_find" { 3 } else { 2 };
+        if argv.len() != want {
+            return Err(refuse("a byte scan with missing arguments", e.span));
+        }
+        let mut args = argv.clone();
+        if self.b.func.value_ty(args[1]) != types::I64 {
+            args[1] = self
+                .b
+                .ins(Opcode::Zext, &[args[1]], &[types::I64], Aux::None)
+                .one();
+        }
+        if name == "bytes_count" {
+            let n = self
+                .rt_call_foreign("__wolf_rt_bytes_count", &args, None, Some(types::I64))
+                .expect("count");
+            return Ok(Flow::Val(Some(n)));
+        }
+        let at = self
+            .rt_call_foreign("__wolf_rt_bytes_find", &args, None, Some(types::I64))
+            .expect("index");
+        let z = self.b.iconst(types::I64, 0);
+        let hit = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[at, z],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Sge),
+            )
+            .one();
+        let eu = self.eu_ty_of(e.span)?;
+        let out = self.eu_join(
+            eu,
+            hit,
+            |_| Ok(Some(at)),
+            |zelf| {
+                let id = zelf.b.module.tag_id("none");
+                Ok(zelf.b.iconst(types::I64, id))
+            },
+        )?;
+        Ok(Flow::Val(Some(out)))
+    }
+
+    /// s200 (#407, `[os.fs.error]`): `os_error() -> int` is one runtime
+    /// read of the task's word; `os_error_text(code) -> str` mints the
+    /// host's message in the ambient region and hands the pair back
+    /// through a slot (`os_cwd`'s shape, with no row — it cannot fail).
+    fn lower_os_error(&mut self, name: &str, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {
+        if name == "os_error" {
+            let v = self
+                .rt_call("__wolf_rt_os_error", &[], Some(types::I64))
+                .expect("code");
+            return Ok(Flow::Val(Some(v)));
+        }
+        let Some(cx) = d
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .find_map(Arg::value)
+        else {
+            return Err(refuse("`os_error_text` without its code", e.span));
+        };
+        let code = match self.lower_expr(cx)? {
+            Flow::Val(Some(v)) => v,
+            Flow::Val(None) => return Err(refuse("a unit-typed error code", cx.span)),
+            Flow::Diverged => return Ok(Flow::Diverged),
+        };
+        let (region, slot) = self.rt_slot(16);
+        self.rt_call_slot("__wolf_rt_os_error_text", &[code], slot, region, None);
+        let out = self.load_str_slot(slot, region, e.span)?;
         Ok(Flow::Val(Some(out)))
     }
 
