@@ -671,8 +671,8 @@ fn os_error_is_the_tasks_own() {
         let shown = format!("{cmd:?}");
         let ran = run_with(cmd, &dir, Stdin::File(b""), Stdout::Piped, tier);
         assert_eq!(
-            (ran.out.status.code(), ran.stdout.as_slice()),
-            (Some(0), want),
+            (ran.out.status.code(), String::from_utf8_lossy(&ran.stdout)),
+            (Some(0), String::from_utf8_lossy(want)),
             "{tier}: {shown}: {}",
             String::from_utf8_lossy(&ran.out.stderr)
         );
