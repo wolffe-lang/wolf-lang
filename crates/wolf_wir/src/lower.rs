@@ -3784,6 +3784,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             } else {
                 let val = entry_params[wir_idx];
                 wir_idx += 1;
+                // s214: a `List` LENT to this function (no mode word,
+                // `[mem.tier0.mode.read]`) is frozen for the call, so
+                // loads inside it keep their reuse across calls (the
+                // builder's `freeze_root`). `take` hands ownership over
+                // and a later `mut` loan may write it: not frozen.
+                if p.mode.is_none() && matches!(self.sig_table.kind(p.ty), TyKind::List(_)) {
+                    self.b.freeze_root(val);
+                }
                 let var = self.b.declare_var(wty);
                 if self.straight_line {
                     self.b.mark_single_block(var);

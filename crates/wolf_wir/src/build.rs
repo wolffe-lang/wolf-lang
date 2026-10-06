@@ -213,6 +213,15 @@ pub struct FuncBuilder<'m> {
     /// The epoch each foreign-token STORE was built in (the forwarding
     /// half of the rule above; loads carry theirs in their GVN key).
     store_epoch: HashMap<Inst, u32>,
+    /// The role of each region in [`Self::foreign`].
+    foreign_role: HashMap<u32, ForeignRole>,
+    /// s214: entry parameters whose container is FROZEN for the call —
+    /// a `List` lent to this function (`[mem.tier0.mode.read]`). No
+    /// call can write its header or elements while the loan lasts (the
+    /// SB "holy grail", §7/O2: a write through any other alias is UB),
+    /// so a load whose address chain roots at one keeps its reuse across
+    /// calls. Set by lowering ([`Self::freeze_root`]).
+    frozen: HashSet<Value>,
     pub stats: Stats,
 }
 
@@ -252,6 +261,8 @@ impl<'m> FuncBuilder<'m> {
             foreign: HashSet::new(),
             call_epoch: 0,
             store_epoch: HashMap::new(),
+            foreign_role: HashMap::new(),
+            frozen: HashSet::new(),
             stats: Stats::default(),
         };
         // Signature token params seed their chains; their regions are
@@ -1258,7 +1269,50 @@ impl<'m> FuncBuilder<'m> {
         let var = self.mem_var(r);
         self.defs.insert((var.0, entry.as_u32()), vals[0]);
         self.foreign.insert(r.as_u32());
+        self.foreign_role.insert(r.as_u32(), role);
         r
+    }
+
+    /// s214: `param` (an entry-block parameter) holds a container that
+    /// is frozen for the whole call — see [`Self::frozen`].
+    pub fn freeze_root(&mut self, param: Value) {
+        self.frozen.insert(param);
+    }
+
+    /// s214: does `addr` lie inside a frozen container? Its chain is
+    /// memopt's s102 discipline (`chain_root`): `ptr.off` hops and the
+    /// header→data load (a load through a foreign HEADER token), ending
+    /// at a frozen entry parameter. An element load is never a hop — a
+    /// container of views could launder a pointer to storage outside
+    /// the frozen graph.
+    fn frozen_addr(&self, mut addr: Value) -> bool {
+        if self.frozen.is_empty() {
+            return false;
+        }
+        for _ in 0..64 {
+            if self.frozen.contains(&addr) {
+                return true;
+            }
+            let ValueDef::Result(inst, 0) = self.func.values[addr].def else {
+                return false;
+            };
+            let args = self.func.vpool.get(self.func.insts[inst].args);
+            match self.func.insts[inst].op {
+                Opcode::PtrOff => addr = args[0],
+                Opcode::Load => {
+                    let TypeData::Mem(r) = self.module.types.get(self.func.values[args[1]].ty)
+                    else {
+                        return false;
+                    };
+                    if self.foreign_role.get(&r.as_u32()) != Some(&ForeignRole::Header) {
+                        return false;
+                    }
+                    addr = args[0];
+                }
+                _ => return false,
+            }
+        }
+        false
     }
 
     // ------------------------------------------- error unions (s27) ----
@@ -1907,9 +1961,13 @@ impl<'m> FuncBuilder<'m> {
         // same load only within one call epoch — see `call_epoch`.
         let epoch = match data.op {
             Opcode::Load => {
-                let tok = self.func.vpool.get(data.args)[1];
-                match self.module.types.get(self.func.values[tok].ty) {
-                    TypeData::Mem(r) if self.foreign.contains(&r.as_u32()) => self.call_epoch,
+                let a = self.func.vpool.get(data.args);
+                match self.module.types.get(self.func.values[a[1]].ty) {
+                    TypeData::Mem(r)
+                        if self.foreign.contains(&r.as_u32()) && !self.frozen_addr(a[0]) =>
+                    {
+                        self.call_epoch
+                    }
                     _ => 0,
                 }
             }
