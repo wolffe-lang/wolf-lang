@@ -139,6 +139,9 @@ struct GvnKey {
     ty: u32,
     args: Vec<u32>,
     aux: (u8, u64),
+    /// The call epoch a load through a FOREIGN token was built in (s214,
+    /// wolf-lang#598); 0 for every other op. See [`FuncBuilder::call_epoch`].
+    epoch: u32,
 }
 
 /// Per-block Braun bookkeeping.
@@ -191,6 +194,25 @@ pub struct FuncBuilder<'m> {
     /// from the signature are pre-claimed; `region.new`/`stack.alloc`
     /// mint from here — one token root per region, verified).
     next_region: u32,
+    /// s214 (wolf-lang#598): the regions this function roots with
+    /// `region.foreign` — module state, `extern "c" let` storage, raw
+    /// pointers and container storage. Their tokens are NOT exhaustive
+    /// (memopt's s80 rule): a callee writes the same bytes under a root
+    /// of its own while consuming none of this function's tokens, so a
+    /// call leaves the token current although the memory changed.
+    foreign: HashSet<u32>,
+    /// s214 (wolf-lang#598): how many calls have been appended so far.
+    /// Construction is a forward walk, so a call between two accesses
+    /// on any path from one to the other was appended between them
+    /// (a loop's back edge reaches a body only through its header,
+    /// whose tokens are placeholder params until the body is built and
+    /// the header sealed). A foreign-token store or load is reused —
+    /// store→load forwarding or load GVN — only within the epoch it
+    /// was built in: no call in between, so nothing wrote the bytes.
+    call_epoch: u32,
+    /// The epoch each foreign-token STORE was built in (the forwarding
+    /// half of the rule above; loads carry theirs in their GVN key).
+    store_epoch: HashMap<Inst, u32>,
     pub stats: Stats,
 }
 
@@ -227,6 +249,9 @@ impl<'m> FuncBuilder<'m> {
             mem_tokens: HashMap::new(),
             io_token: None,
             next_region: 0,
+            foreign: HashSet::new(),
+            call_epoch: 0,
+            store_epoch: HashMap::new(),
             stats: Stats::default(),
         };
         // Signature token params seed their chains; their regions are
@@ -904,6 +929,11 @@ impl<'m> FuncBuilder<'m> {
             };
             return InsOut::Vals(vec![out]);
         }
+        // A call may write any foreign storage (s214): what was built
+        // before it is no longer reusable after it.
+        if op.is_call() {
+            self.call_epoch += 1;
+        }
         // 4. GVN via hash-consing at insert.
         if let Some(key) = self.gvn_key(inst) {
             if let Some(&hit) = self.gvn.get(&key) {
@@ -989,10 +1019,16 @@ impl<'m> FuncBuilder<'m> {
     /// store→load forwarding: a load whose token was defined by a store
     /// to the same address value forwards the stored value (through the
     /// token chain, never an alias pass).
+    ///
+    /// A store through a FOREIGN token forwards only if no call was
+    /// built since it (s214, wolf-lang#598): the callee may have
+    /// written the bytes without consuming the token.
     pub fn ins_load(&mut self, ty: TypeId, addr: Value, region: RegionId) -> Value {
         let tok = self.use_mem(region);
         if let ValueDef::Result(inst, 0) = self.func.values[tok].def
             && self.func.insts[inst].op == Opcode::Store
+            && (!self.foreign.contains(&region.as_u32())
+                || self.store_epoch.get(&inst) == Some(&self.call_epoch))
         {
             let sargs = self.func.vpool.get(self.func.insts[inst].args);
             if sargs[1] == addr && self.func.values[sargs[0]].ty == ty {
@@ -1033,6 +1069,7 @@ impl<'m> FuncBuilder<'m> {
                 Aux::Int(align as i64),
             )
             .one();
+        self.note_store_epoch(region, out);
         self.def_mem(region, out);
     }
 
@@ -1044,7 +1081,18 @@ impl<'m> FuncBuilder<'m> {
         let out = self
             .ins(Opcode::Store, &[val, addr, tok], &[tok_ty], Aux::None)
             .one();
+        self.note_store_epoch(region, out);
         self.def_mem(region, out);
+    }
+
+    /// s214: remember the call epoch a foreign-token store was built in
+    /// (`out` is its successor token).
+    fn note_store_epoch(&mut self, region: RegionId, out: Value) {
+        if self.foreign.contains(&region.as_u32())
+            && let ValueDef::Result(inst, 0) = self.func.values[out].def
+        {
+            self.store_epoch.insert(inst, self.call_epoch);
+        }
     }
 
     /// `ptr.off base, index, scale`.
@@ -1209,6 +1257,7 @@ impl<'m> FuncBuilder<'m> {
         insts.insert(0, placed);
         let var = self.mem_var(r);
         self.defs.insert((var.0, entry.as_u32()), vals[0]);
+        self.foreign.insert(r.as_u32());
         r
     }
 
@@ -1854,11 +1903,24 @@ impl<'m> FuncBuilder<'m> {
                 return None;
             }
         };
+        // s214 (wolf-lang#598): a load through a foreign token is the
+        // same load only within one call epoch — see `call_epoch`.
+        let epoch = match data.op {
+            Opcode::Load => {
+                let tok = self.func.vpool.get(data.args)[1];
+                match self.module.types.get(self.func.values[tok].ty) {
+                    TypeData::Mem(r) if self.foreign.contains(&r.as_u32()) => self.call_epoch,
+                    _ => 0,
+                }
+            }
+            _ => 0,
+        };
         Some(GvnKey {
             op: data.op as u16,
             ty: self.func.values[results[0]].ty.as_u32(),
             args,
             aux,
+            epoch,
         })
     }
 }
