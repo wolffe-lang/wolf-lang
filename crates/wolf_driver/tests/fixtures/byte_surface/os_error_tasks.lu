@@ -1,0 +1,48 @@
+//! member: false
+//! s200 (wolf-lang#407, `[os.fs.error]`): the host's number is the TASK's.
+//! Eight tasks fail fs calls side by side, 300 times each: the even ones
+//! open a path that is not there (the host's `ENOENT`, 2 on every tier-1
+//! host), the odd ones read a forged handle (decided before the host, 0).
+//! Each reads `os_error()` right after its own failure and counts the
+//! times it saw another task's number. A process-wide word would be
+//! overwritten between a task's failure and its read whenever two tasks
+//! run at once; the task's word cannot be. Prints the total, which must
+//! be 0. Not a corpus row: a run on one core proves nothing, so the gate
+//! runs the compiled tiers under `taskset -c 0-3` as well.
+
+fn probe(k: int) -> int {
+    var wrong = 0
+    for i in 0..300 {
+        if k % 2 == 0 {
+            let fd = fs_open("target/s200-not-here-{k}.tmp") else |e| { 0 - 1 }
+            let code = os_error()
+            if fd != 0 - 1 || code != 2 {
+                wrong += 1
+            }
+        } else {
+            let got = fs_read_chunk(999999, 1) else |e| { List[byte]() }
+            let code = os_error()
+            if got.len != 0 || code != 0 {
+                wrong += 1
+            }
+        }
+    }
+    wrong
+}
+
+fn main() -> !int {
+    let results = channel[int](8)
+    scope s {
+        for k in 0..8 {
+            let kk = k
+            s.spawn(fn() { results.send(probe(kk)) })
+        }
+    }
+    var total = 0
+    for j in 0..8 {
+        let n = results.recv() else |_| { return 3 }
+        total += n
+    }
+    print("tasks=8 calls=2400 saw_another_tasks_number={total}")
+    0
+}

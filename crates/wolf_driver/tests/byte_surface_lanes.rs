@@ -631,6 +631,45 @@ fn bytes_after_read_line_continue_where_it_stopped() {
     }
 }
 
+/// The host's number is the TASK's (`[os.fs.error]`): eight tasks fail fs
+/// calls side by side, the even ones with the host's `ENOENT` (2), the odd
+/// ones before the host (0), and each reads its own number back 300 times.
+/// Every machine counts 0 sightings of another task's number; the compiled
+/// tiers again under `taskset -c 0-3`, where the tasks really run at once
+/// (strict evidence, wolf-lang#571). Red at trunk: E0301 (`os_error`
+/// unknown); a process-wide word is the defect this would catch.
+#[test]
+fn os_error_is_the_tasks_own() {
+    let want: &[u8] = b"tasks=8 calls=2400 saw_another_tasks_number=0\n";
+    every_lane_with_stdin(
+        "os_error_tasks.lu",
+        Stdin::File(b""),
+        want,
+        None,
+        ("unsupported", ""),
+    );
+    #[cfg(target_os = "linux")]
+    {
+        let entry = fixture("os_error_tasks.lu");
+        let dir = scratch("os_error_tasks_taskset");
+        for release in [false, true] {
+            let Some(exe) = build(&entry, &dir, release) else {
+                continue;
+            };
+            let mut cmd = Command::new("taskset");
+            cmd.arg("-c").arg("0-3").arg(&exe);
+            let ran = run_with(cmd, &dir, Stdin::File(b""), Stdout::Piped, "taskset");
+            assert_eq!(
+                (ran.out.status.code(), ran.stdout.as_slice()),
+                (Some(0), want),
+                "under taskset -c 0-3 ({}): {}",
+                if release { "release" } else { "native" },
+                String::from_utf8_lossy(&ran.out.stderr)
+            );
+        }
+    }
+}
+
 // ------------------------------------------- the host's refusals --
 
 /// A descriptor 1 that cannot be written is the host's `EBADF` (9 on
