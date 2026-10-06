@@ -1,0 +1,61 @@
+//! check: run(exit=0, stdout="count=3 first=2 next=5 adjacent=6 after=none\nat_len=none past=none negative=none absent=none\nempty_count=0 empty_find=none\nbig_count=2857 last=19998 tail=none lines=2857")
+//! phase: run
+//! conforms: mem.list.bytes, err.union
+//!
+//! s200 (wolf-lang#411, `[mem.list.bytes]`) — the bulk byte scan.
+//! `bytes_find(xs, b, from) -> int ! {none}` is the first index at or
+//! after `from` holding `b`; `bytes_count(xs, b)` is how many do. On the
+//! native and release tiers each is one runtime call into a loop the
+//! runtime's compiler vectorises; every machine answers the scalar
+//! definition, element for element. The edges this file pins:
+//!
+//!   count / first / next / adjacent / after   "ab\ncd\n\nefg": three
+//!                    newlines at 2, 5 and 6; nothing at or after 7.
+//!   at_len / past / negative   a `from` outside `0..len` is `none`,
+//!                    `xs.get`'s posture — absence is a row, not a trap.
+//!   absent           a byte that is not there is `none`.
+//!   empty_*          the empty list counts 0 and finds nothing.
+//!   big_* / lines    20000 bytes, a newline at every seventh: the
+//!                    count across the vector loop's block edges (32,
+//!                    and 255 rows of 32), the last hit at the last
+//!                    index that holds one, and a line split that walks
+//!                    `bytes_find` from hit to hit.
+
+fn find_row(xs: List[byte], b: byte, from: int) -> str {
+    let i = bytes_find(xs, b, from) else |e| {
+        return match e {
+            none => "none",
+        }
+    }
+    "{i}"
+}
+
+fn main() -> int {
+    let nl = 10 as byte
+    let text = "ab\ncd\n\nefg".bytes()
+    print(
+        "count={bytes_count(text, nl)} first={find_row(text, nl, 0)} next={find_row(text, nl, 3)} adjacent={find_row(text, nl, 6)} after={find_row(text, nl, 7)}",
+    )
+    print(
+        "at_len={find_row(text, nl, text.len)} past={find_row(text, nl, 99)} negative={find_row(text, nl, 0 - 1)} absent={find_row(text, 122 as byte, 0)}",
+    )
+    let empty = List[byte]()
+    print("empty_count={bytes_count(empty, nl)} empty_find={find_row(empty, nl, 0)}")
+
+    var big = List[byte]()
+    for i in 0..20000 {
+        let v = if i % 7 == 6 { 10 } else { 97 }
+        (mut big).push(v as byte)
+    }
+    var lines = 0
+    var at = 0
+    loop {
+        let hit = bytes_find(big, nl, at) else |e| { break }
+        lines = lines + 1
+        at = hit + 1
+    }
+    print(
+        "big_count={bytes_count(big, nl)} last={find_row(big, nl, 19998)} tail={find_row(big, nl, 19999)} lines={lines}",
+    )
+    0
+}

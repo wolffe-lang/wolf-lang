@@ -1,0 +1,38 @@
+//! check: run(exit=0, stdout="one\ntwo\nthree\nfour\nclose1=io close2=io")
+//! phase: run
+//! conforms: os.fs.std, err.union, err.propagate
+//!
+//! s200 (wolf-lang#405, `[os.fs.std]`) — bytes onto descriptor 1, the
+//! process's own standard output, with nothing reopened. Until s200 the
+//! byte calls answered `io` on 0, 1 and 2 (s199 served only the offset
+//! calls there), so the one route to a byte on stdout was reopening
+//! `/dev/stdout` — a fresh description on linux, an append for
+//! `1<> file`, and with descriptor 1 closed, the program's own input.
+//!
+//!   one / three        `print`s around the byte writes: a write to 1
+//!                      lands in program order with them on every tier.
+//!   two                `fs_write_chunk(1, …)`: a `List[byte]`.
+//!   four               `fs_write(1, …)`: the text twin.
+//!   close1 / close2    the implementation never closes a standard
+//!                      stream: `fs_close` on 1 and 2 stays `io`, and
+//!                      the lines after it still print.
+
+fn close_row(fd: int) -> str {
+    fs_close(fd) else |e| {
+        return match e {
+            io => "io",
+        }
+    }
+    "closed"
+}
+
+fn main() -> !int {
+    print("one")
+    fs_write_chunk(1, "two\n".bytes())?
+    print("three")
+    fs_write(1, "four\n")?
+    let close1 = close_row(1)
+    let close2 = close_row(2)
+    print("close1={close1} close2={close2}")
+    0
+}

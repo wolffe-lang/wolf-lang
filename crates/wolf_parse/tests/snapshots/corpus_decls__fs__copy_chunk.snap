@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 1128..1395 name=copy_all body=Block
+FnDecl 1397..1596 name=copy_row body=Block
+FnDecl 1598..2520 name=main body=Block
