@@ -5216,7 +5216,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(val) = flow_val!(self.lower_expr(vexpr)) else {
             return Err(refuse("a unit-typed raw field", vexpr.span));
         };
-        let fptr = self.field_addr(elem_ptr, off);
+        let fptr = self.field_addr(elem_ptr, off.min(0)); // PLANT (s213): the field offset dropped
         let known = align_at(root_align, off);
         let region = self.foreign_buf_region();
         let op = d.op().map(|t| t.kind).unwrap_or(SyntaxKind::Eq);
