@@ -737,6 +737,33 @@ is about it.)
   its frame and c05/#117 deferred closures as values; the chapter that
   teaches functions as values was the one the maintainer met it in.)
 
+- `[type.fn.never]` **A function declared `-> never` never returns.**
+  *(Proposed by s213 for wolf-lang#572; the spelling is a ruling owed —
+  options A `-> never`, B `-> !`, C `#[noreturn]`; A is implemented.)*
+  `never` is a built-in type name (`[type.byte]`'s kind of name, not a
+  keyword: `[gram.inv.kw]`'s closed set is unchanged), written only as
+  a function's return type — a body, a bodyless `extern "c" fn`
+  (`[abi.link.extern]`), a fn type. It is the bottom type the literal
+  `assert(false)`, `return`, `break`, `continue` and a `loop` with no
+  `break` already have: a **call** to such a function has type `never`
+  and therefore fits wherever a value is wanted — an `else` handler's
+  arm, a `match` arm, a `let` initializer — without a dead value after
+  it. The body of a `-> never` function must itself be bottom: its
+  value (`[type.fn.ret]`) is a call to another `never` function,
+  `assert(false)`, or a `loop` with no `break`, and it holds no
+  `return`; a body that can reach its end, or a `return`, is **E0401**
+  at the tail or at the `return`, naming the declaration. A bodyless
+  `extern "c" fn f() -> never` is the programmer's claim about the
+  foreign function (a `_Noreturn void` in C, `[abi.c.types]`: it
+  crosses as `void`); the compiled tiers emit the call and then the
+  unreachable trap, so a foreign function that does return stops the
+  program there (`trap(assert)`), never runs on with no value. A
+  binding named `never` shadows nothing a program can spell, so W0304
+  exempts it, as it exempts `range`. Witnesses:
+  `typecheck/fn_never_handler_arm.lu`, `typecheck/fn_never_extern.lu`,
+  `typecheck/fn_never_reaches_end.lu` (`fail(E0401)`),
+  `typecheck/fn_never_return.lu` (`fail(E0401)`).
+
 ## §8b Generic parameters `[type.generic]`
 
 (Appended 2026-09-15, s163 — wolf-lang#319, wolf-interp#84, wollf's
