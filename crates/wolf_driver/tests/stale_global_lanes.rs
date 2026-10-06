@@ -282,7 +282,10 @@ fn c_writes_between_two_wolf_reads_on_both_tiers() {
             && tier == "release"
             && stderr.contains("release tier targets")
         {
-            eprintln!("SKIP: the release tier refuses this host: {}", stderr.trim());
+            eprintln!(
+                "SKIP: the release tier refuses this host: {}",
+                stderr.trim()
+            );
             continue;
         }
         assert!(
@@ -410,8 +413,16 @@ mod linux_x86_64 {
                 fixture("kernel/stale.S"),
             ] {
                 let o = dir.join(src.file_name().unwrap()).with_extension("o");
-                let r = tool(&cc, &["-c", src.to_str().unwrap(), "-o", o.to_str().unwrap()]);
-                assert!(r.status.success(), "{cc} -c {}: {}", src.display(), text(&r.stderr));
+                let r = tool(
+                    &cc,
+                    &["-c", src.to_str().unwrap(), "-o", o.to_str().unwrap()],
+                );
+                assert!(
+                    r.status.success(),
+                    "{cc} -c {}: {}",
+                    src.display(),
+                    text(&r.stderr)
+                );
                 objs.push(o);
             }
             let exe = dir.join("kmain_stale.elf");
@@ -430,7 +441,11 @@ mod linux_x86_64 {
                 Ok(r) => r,
                 Err(_) => tool("ld", &argv),
             };
-            assert!(r.status.success(), "link the {tier} kernel: {}", text(&r.stderr));
+            assert!(
+                r.status.success(),
+                "link the {tier} kernel: {}",
+                text(&r.stderr)
+            );
             let out = tool(exe.to_str().unwrap(), &[]);
             assert_eq!(
                 out.status.code(),
@@ -498,7 +513,10 @@ mod linux_x86_64 {
     fn the_object_loads_the_storage_again_after_the_call_on_both_tiers() {
         for tier in ["native", "release"] {
             let (_, obj) = kernel_obj(tier);
-            let d = tool("objdump", &["-dr", "--no-show-raw-insn", obj.to_str().unwrap()]);
+            let d = tool(
+                "objdump",
+                &["-dr", "--no-show-raw-insn", obj.to_str().unwrap()],
+            );
             assert!(d.status.success(), "objdump: {}", text(&d.stderr));
             let disasm = text(&d.stdout);
             for (func, callee) in [

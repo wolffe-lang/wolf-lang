@@ -353,7 +353,9 @@ fn a_foreign_load_is_not_reused_across_a_call() {
     let after = b.ins_load(I64, p, r);
     assert_ne!(before, after, "two loads, one each side of the call");
     assert_eq!(b.stats.gvn, 0);
-    let sum = b.ins(Opcode::IaddWrap, &[before, after], &[I64], Aux::None).one();
+    let sum = b
+        .ins(Opcode::IaddWrap, &[before, after], &[I64], Aux::None)
+        .one();
     b.ins_ret(&[sum]);
     let f = b.finish();
     let dump = verified_dump(&mut m, f);
@@ -440,7 +442,9 @@ fn a_call_in_a_loop_body_clobbers_the_load_after_the_loop() {
     b.switch_to_block(exit);
     let after = b.ins_load(I64, p, r);
     assert_ne!(before, after, "the body's call ran between them");
-    let sum = b.ins(Opcode::IaddWrap, &[before, after], &[I64], Aux::None).one();
+    let sum = b
+        .ins(Opcode::IaddWrap, &[before, after], &[I64], Aux::None)
+        .one();
     b.ins_ret(&[sum]);
     let f = b.finish();
     let dump = verified_dump(&mut m, f);
