@@ -1,0 +1,17 @@
+//! check: run(exit=0, stdout="7 7\n")
+//! phase: run
+//! conforms: mem.static, mem.static.1, mem.static.4
+//!
+//! s213 (wolf-lang#579): a module's `pub const`, read from another
+//! module as `limits.WIDTH`, is its value (`[mem.static.4]`) — the
+//! issue's witness, plus the `pub fn` pax wrote beside each constant
+//! meanwhile. At trunk 294d626d native and release refused the read
+//! ("a member access without a recorded type") and the checked machine
+//! refused it ("module items in checked execution"); lupin ran it.
+
+use limits
+
+fn main() -> int {
+    print("{limits.WIDTH} {limits.width()}")
+    0
+}

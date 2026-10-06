@@ -1,0 +1,12 @@
+//! member: true
+//! conforms: mem.static.4
+//!
+//! limits — one public constant.
+
+/// The width.
+pub const WIDTH: int = 7
+
+/// The width, through a function.
+pub fn width() -> int {
+    WIDTH
+}
