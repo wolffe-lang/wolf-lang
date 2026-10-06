@@ -450,7 +450,9 @@ fn a_load_inside_a_frozen_container_is_reused_across_a_call() {
     assert_eq!(data2, data, "the data pointer, frozen");
     let at2 = b.ins_ptr_off(data2, zero, 8);
     assert_eq!(b.ins_load(I64, at2, bufs), first, "the element, frozen");
-    let sum = b.ins(Opcode::IaddWrap, &[len, first], &[I64], Aux::None).one();
+    let sum = b
+        .ins(Opcode::IaddWrap, &[len, first], &[I64], Aux::None)
+        .one();
     b.ins_ret(&[sum]);
     let f = b.finish();
     let dump = verified_dump(&mut m, f);
@@ -474,7 +476,9 @@ fn the_same_chain_from_an_unfrozen_parameter_reloads() {
     b.ins_call(g, &[]);
     let again = b.ins_load(I64, len_at, hdrs);
     assert_ne!(again, len, "not frozen: the callee may have pushed");
-    let sum = b.ins(Opcode::IaddWrap, &[len, again], &[I64], Aux::None).one();
+    let sum = b
+        .ins(Opcode::IaddWrap, &[len, again], &[I64], Aux::None)
+        .one();
     b.ins_ret(&[sum]);
     let f = b.finish();
     let dump = verified_dump(&mut m, f);
