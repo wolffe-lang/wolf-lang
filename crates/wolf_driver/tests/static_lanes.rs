@@ -24,6 +24,8 @@
 //! still pre-mirror (#190 open) and answers the corpus rows as 0.1.45
 //! did, measured; its closed attribute set (is70) refuses the hosted
 //! `#[section]` program E0817 where 0.1.45 ran it (ruled at r28).
+//! 0.1.47 (the 0.2.24 pairing, r29) is still pre-mirror (#190 open) and
+//! answers as 0.1.46 did, measured; its pins are carried.
 
 mod lane_exit;
 
@@ -317,9 +319,9 @@ fn every_machine(
 }
 
 /// lupin 0.1.45's measured answer where it parts (rows-*.log); 0.1.46
-/// (the 0.2.23 pairing, r28) answers every one of these rows the same,
-/// measured.
-const fn pin(verdict: &'static str, named: &'static str) -> [Pin<'static>; 2] {
+/// (the 0.2.23 pairing, r28) and 0.1.47 (the 0.2.24 pairing, r29)
+/// answer every one of these rows the same, measured.
+const fn pin(verdict: &'static str, named: &'static str) -> [Pin<'static>; 3] {
     [
         Pin {
             version: "0.1.45",
@@ -328,6 +330,11 @@ const fn pin(verdict: &'static str, named: &'static str) -> [Pin<'static>; 2] {
         },
         Pin {
             version: "0.1.46",
+            verdict,
+            named,
+        },
+        Pin {
+            version: "0.1.47",
             verdict,
             named,
         },
@@ -665,14 +672,15 @@ fn the_checked_machine_refuses_section_placement_by_name() {
                 ("exit(0)", "24 100\n"),
                 "lupin 0.1.45 (pre-mirror, {LUPIN_ISSUE}) runs the placed program"
             );
-        } else if lupin.version == "0.1.46" {
+        } else if lupin.version == "0.1.46" || lupin.version == "0.1.47" {
             // is70's closed attribute set refuses each `#[section]` by
             // name, E0817 — the same missing mirror, a stricter symptom
-            // (measured; ruled at r28).
+            // (measured; ruled at r28; 0.1.47 the same, measured at r29).
             assert_eq!(
                 (lupin.verdict.as_str(), lupin.codes.join(",").as_str()),
                 ("fail(E0817)", "E0817"),
-                "lupin 0.1.46 (pre-mirror, {LUPIN_ISSUE}) refuses the placed program E0817"
+                "lupin {} (pre-mirror, {LUPIN_ISSUE}) refuses the placed program E0817",
+                lupin.version
             );
         } else {
             assert_eq!(
