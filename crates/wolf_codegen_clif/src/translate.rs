@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 169] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 173] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -292,6 +292,14 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 169] = [
     // pair, the args `List[str]` header and the inherit `List[int]`
     // header (both read by the shim), the handle or the negated code.
     ("__wolf_rt_os_spawn_with", 4, true),
+    // s215 (pelt's H2): the spawn with a descriptor map (the exe pair,
+    // the args and map headers), the pipe (its two handles through a
+    // 16-byte out slot), chdir (a str pair) and isatty (handle in, the
+    // answer through an out word).
+    ("__wolf_rt_os_spawn_fds", 4, true),
+    ("__wolf_rt_os_pipe", 1, true),
+    ("__wolf_rt_os_chdir", 2, true),
+    ("__wolf_rt_os_isatty", 2, true),
     // s137/#233: the schedulable core count through a caller out
     // word, the `os_cwd` shape without the string — `[os.cpus]`.
     ("__wolf_rt_os_cpus", 1, true),

@@ -10065,6 +10065,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         ) {
             return self.lower_process_builtin(&callee_text, d, e);
         }
+        // s215 (`[os.proc.fds]`, `[os.proc.pipe]`, `[os.fs.chdir]`,
+        // `[os.fs.isatty]`; pelt's H2): the spawn with a descriptor map
+        // and the three calls beside it, natively — `wolf_rt::os`'s
+        // shims, codes to row tags, results through out slots.
+        if matches!(
+            callee_text.as_str(),
+            "os_spawn_fds" | "os_pipe" | "os_chdir" | "os_isatty"
+        ) {
+            return self.lower_proc_fd_builtin(&callee_text, d, e);
+        }
         // signal RECEPTION (s114, #126): the receive side, by MEANING.
         // `listen`/`raise` are `os_kill`-shaped (rc==0 ok else io);
         // `wait` is `os_spawn`-shaped (rc>=0 is the delivered meaning,
@@ -14262,6 +14272,181 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// `os_exit` calls the runtime exit and diverges (the block ends
     /// in an unreachable trap edge, the `[conf.trap.map]` residual
     /// spelling).
+    /// s215: `os_spawn_fds`, `os_pipe`, `os_chdir`, `os_isatty` —
+    /// `wolf_rt::os`'s shims. `os_spawn_fds` is `os_spawn_with`'s
+    /// lowering with the map's header in the inherit list's place and
+    /// one more code (`invalid`, 6); `os_pipe` loads its `(int, int)`
+    /// from a 16-byte slot as the tuple's own flat layout; `os_isatty`
+    /// turns its out word into the `bool`.
+    fn lower_proc_fd_builtin(&mut self, name: &str, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {
+        let mut argv: Vec<Value> = Vec::new();
+        for a in d.args().into_iter().flat_map(|l| l.args()) {
+            let Some(vx) = Arg::value(a) else { continue };
+            match self.lower_expr(vx)? {
+                Flow::Val(Some(v)) => argv.push(v),
+                Flow::Val(None) => return Err(refuse("unit-typed process arguments", vx.span)),
+                Flow::Diverged => return Ok(Flow::Diverged),
+            }
+        }
+        let arg = |i: usize| -> R<Value> {
+            argv.get(i)
+                .copied()
+                .ok_or_else(|| refuse("a process call with missing arguments", e.span))
+        };
+        let eu = self.eu_ty_of(e.span)?;
+        match name {
+            "os_spawn_fds" => {
+                let s = arg(0)?;
+                let (p, l) = self.str_parts(s);
+                let args_hdr = arg(1)?;
+                let map_hdr = arg(2)?;
+                let rc = self
+                    .rt_call_foreign(
+                        "__wolf_rt_os_spawn_fds",
+                        &[p, l, args_hdr, map_hdr],
+                        None,
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Sge),
+                    )
+                    .one();
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |_| Ok(Some(rc)),
+                    |zelf| {
+                        let zz = zelf.b.iconst(types::I64, 0);
+                        let code = zelf
+                            .b
+                            .ins(Opcode::IsubWrap, &[zz, rc], &[types::I64], Aux::None)
+                            .one();
+                        Ok(zelf.code_tag_chain(
+                            code,
+                            &[
+                                (1, "not_found"),
+                                (2, "denied"),
+                                (5, "unsupported"),
+                                (6, "invalid"),
+                            ],
+                            "io",
+                        ))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "os_pipe" => {
+                let Some(sema) = self.expr_sema_ty(e.span) else {
+                    return Err(refuse("a pipe without a recorded type", e.span));
+                };
+                let stripped = self.strip_sema(sema);
+                let TyKind::ErrUnion(ok, _) = self.table.kind(stripped).clone() else {
+                    return Err(refuse("a pipe without a union shape", e.span));
+                };
+                let Some(pair_ty) =
+                    wir_ty(&mut self.b.module.types, self.table, self.sigs, ok, e.span)?
+                else {
+                    return Err(refuse("a pipe without a pair type", e.span));
+                };
+                let (region, slot) = self.rt_slot(16);
+                let rc = self
+                    .rt_call_slot("__wolf_rt_os_pipe", &[], slot, region, Some(types::I64))
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(pair_ty, slot, region, e.span)?)),
+                    |z| {
+                        let id = z.b.module.tag_id("io");
+                        Ok(z.b.iconst(types::I64, id))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "os_chdir" => {
+                let s = arg(0)?;
+                let (p, l) = self.str_parts(s);
+                let rc = self
+                    .rt_call("__wolf_rt_os_chdir", &[p, l], Some(types::I64))
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |_| Ok(None),
+                    |z| Ok(z.code_tag_chain(rc, &[(1, "not_found"), (2, "denied")], "io")),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            "os_isatty" => {
+                let h = arg(0)?;
+                let (region, slot) = self.rt_slot(8);
+                let rc = self
+                    .rt_call_slot("__wolf_rt_os_isatty", &[h], slot, region, Some(types::I64))
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |zz| {
+                        let w = zz.load_flat(types::I64, slot, region, e.span)?;
+                        let zero = zz.b.iconst(types::I64, 0);
+                        Ok(Some(
+                            zz.b.ins(
+                                Opcode::Icmp,
+                                &[w, zero],
+                                &[types::BOOL],
+                                Aux::IntCc(IntCc::Ne),
+                            )
+                            .one(),
+                        ))
+                    },
+                    |zz| {
+                        let id = zz.b.module.tag_id("io");
+                        Ok(zz.b.iconst(types::I64, id))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            _ => Err(refuse("this process builtin", e.span)),
+        }
+    }
+
     fn lower_os_time_builtin(&mut self, name: &str, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {
         let mut argv: Vec<Value> = Vec::new();
         for a in d.args().into_iter().flat_map(|l| l.args()) {
