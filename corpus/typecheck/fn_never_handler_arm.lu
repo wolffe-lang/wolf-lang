@@ -1,0 +1,30 @@
+//! check: run(exit=0, stdout="1\n")
+//! phase: run
+//! conforms: type.fn.never, type.fn.ret
+//!
+//! s213 (wolf-lang#572, ruling owed): a call to a fn declared
+//! `-> never` is bottom, so it fits the `else` handler's arm where an
+//! `int` is wanted, with no dead value after it (`[type.fn.never]`) —
+//! the issue's witness with `die` declared `-> never`. At trunk
+//! 294d626d `-> never` named no type and the undeclared form was E0401
+//! on every compiling machine ("this is `()`, but the `else` fallback
+//! must produce `int`"); lupin ran the undeclared form.
+
+fn die(msg: str) -> never {
+    print(msg)
+    assert(false)
+}
+
+fn parse(x: int) -> int ! {bad} {
+    if x < 0 {
+        return bad
+    }
+    x
+}
+
+fn main() {
+    let v = parse(1) else |e| match e {
+        bad => { die("bad") },
+    }
+    print("{v}")
+}

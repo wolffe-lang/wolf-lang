@@ -1,0 +1,32 @@
+//! check: run(exit=trap(assert), stdout="bad\n")
+//! phase: run
+//! conforms: type.fn.never, conf.trap.assert
+//!
+//! s213 (wolf-lang#572, ruling owed): the handler arm takes the `never`
+//! call, which prints and stops at its `assert(false)` — the trap twin
+//! of `fn_never_handler_arm.lu`; nothing after the call runs
+//! (`[type.fn.never]`). A `loop` with no `break` is bottom too, so a
+//! halt loop is a `never` body.
+
+fn die(msg: str) -> never {
+    print(msg)
+    assert(false)
+}
+
+fn halt() -> never {
+    loop {
+        die("bad")
+    }
+}
+
+fn parse(x: int) -> int ! {bad} {
+    if x < 0 {
+        return bad
+    }
+    x
+}
+
+fn main() {
+    let v = parse(-1) else |_| halt()
+    print("unreachable {v}")
+}

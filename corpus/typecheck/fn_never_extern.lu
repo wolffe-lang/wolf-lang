@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="2\n")
+//! phase: run
+//! conforms: type.fn.never, abi.link.extern, abi.c.types
+//!
+//! s213 (wolf-lang#572, ruling owed): a bodyless `extern "c" fn`
+//! declared `-> never` is the programmer's claim about the foreign
+//! function — C's `_Noreturn void abort(void)` — so a call to it fits
+//! the handler where an `int` is wanted (`[type.fn.never]`); it crosses
+//! the membrane as `void`. The handler is not taken here.
+
+extern "c" fn abort() -> never
+
+fn pick(x: int) -> int ! {bad} {
+    if x < 0 {
+        return bad
+    }
+    x
+}
+
+fn main() {
+    // # Safety: `abort` takes no arguments and never returns.
+    let v = pick(2) else |_| unsafe { abort() }
+    print("{v}")
+}

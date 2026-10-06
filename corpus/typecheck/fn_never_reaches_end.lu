@@ -1,0 +1,16 @@
+//! check: fail(E0401)
+//! phase: resolve
+//! conforms: type.fn.never, type.fn.ret
+//!
+//! s213 (wolf-lang#572, ruling owed): a `-> never` body that can reach
+//! its end is E0401 at the tail (`[type.fn.never]`) — bottom meets
+//! every type in the unifier, so the body's own type is asked, never
+//! checked against `never`.
+
+fn die(msg: str) -> never {
+    print(msg)
+}
+
+fn main() {
+    print("x")
+}
