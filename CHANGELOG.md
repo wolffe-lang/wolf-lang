@@ -1,6 +1,107 @@
 # Changelog
 
-## Unreleased
+## 0.2.24 — 2026-10-06
+
+THE TWENTY-FOURTH. A kernel can share a word between cpus and can
+allocate. Atomics and fences work on raw pointers (`[conc.mm.atomic.*]`,
+`[conc.mm.fence]`, E1308, E1309). On `x86_64-unknown-none`, `List`,
+`Map`, interpolation, closures and `region` compile against an allocator
+the program supplies, and every archive ships the freestanding runtime
+`libwolf_rt_none.a` beside `wolf`. Ruling #36 makes a misaligned raw
+access UB row L4. A module string holds its value; it printed its own
+source on every compiler machine. `wolf prelude --json` publishes the
+names a program gets without an import, and `cargo xtask prelude-diff`
+lists the ones each release adds. The pairing moves to lupin 0.1.47,
+which mirrors row L4; its spec pin stays v0.2.22 (below). Six lanes and
+129 commits (s210, s209, s212, s211, kw12, kw11), then r29's 10: 139
+since v0.2.23.
+
+### Read this before you bump the pin
+
+**New prelude names** (`cargo xtask prelude-diff v0.2.23 v0.2.24 --markdown`,
+after `git fetch --tags`; run at the release head as `v0.2.23 HEAD`):
+
+> **New prelude names.** HEAD adds `fence` (`fence`: function, `[conc.mm.fence]`). A module that declares a function, type or binding named `fence` now draws W0304 (it shadows the ambient name), which `--deny-warnings` makes fatal: rename yours. (`cargo xtask prelude-diff v0.2.23 HEAD`)
+
+`fence` has `w0304: true` in `spec/prelude.json`. A grep for a
+declaration named `fence` (`fn`, `let`, `var`, `const`, `struct`,
+`enum`, `type`, `union`, `mut`) found none in wolf-std (`2f389a7`),
+boreutils (`2f15585`), lobo (`b4975f7`) or the book (`76143be`). lobo's
+19 uses of the word are comments and strings.
+
+**A program that parsed is now refused (s211, #589).** A keyword member
+name continued onto a new line at the item's own column is refused. In
+`let A: int = B + .` followed by `let B: int = A * 2`, the dangling `.`
+used to take the next line's `let` as a member name and swallowed `B`.
+A declaration keyword that starts its line at or left of the item's
+column is now always a sibling, never a member. A member on the same
+line, or on an indented continuation line, parses as before.
+
+**A silent wrong answer is fixed (s210, #585).** A module-level `let` or
+`const` string literal printed its source on checked, native and
+release: `"""` strings kept their quotes and indentation, raw strings
+kept their fence, and `\u{…}`, `\x…` and `{{`/`}}` printed raw. It now
+holds the same bytes as the same literal inside a fn. A program that
+printed such a string prints different bytes on 0.2.24.
+
+**Programs that compiled are now refused.** An atomic on a pointee that
+is not a fixed-width integer is E1308. An order the operation does not
+admit is E1309. E1301 covers atomics and every fence except
+`fence(Order.seq_cst)` outside `unsafe`.
+
+**Programs that were refused now compile.** `List`, `Map`,
+interpolation, capturing closures and `region` on
+`x86_64-unknown-none`, given `wolf_alloc`/`wolf_free` (kw12). The
+atomic methods and `fence` (kw11). Hosted programs that use none of
+this build byte-for-byte as before.
+
+**Packagers:** the archive has a new member, `libwolf_rt_none.a`. It
+installs beside `wolf` and `libwolf_rt.a`. `cargo xtask dist` builds it
+only with the `x86_64-unknown-none` target installed, and skips it
+loudly otherwise.
+
+### The pairing: lupin 0.1.47
+
+`PAIRING` names **lupin 0.1.47 at pin `8e36bc1`** (wolf-interp release
+404283632; the linux x86-64 archive's sha256 `0ddc4ff3…`). Its spec pin
+is still this compiler's v0.2.22 tag, two releases behind. The v0.2.23
+re-pin was measured and held back: on the v0.2.23 corpus lupin
+overflows its stack on `memory/static_init_cycle.lu` (wolf-interp#190),
+cannot parse `extern "c" let` (#190), answers E0817 on six layout rows
+(#188), and its fuzz test finds a two-diagnostic record (#196). 0.1.47
+carries s209's mirror of ruling #36 (row L4, wolf-interp#192) and
+nothing else.
+
+- **Dropped 6**: `raw_align_lanes`' L4 pins, one test over six rows. On
+  0.1.47 every L4 row answers `ub(mem.ub)`, `x-ub-row` L4, `x-ub-clause`
+  `mem.unsafe.raw.4`, at the checked machine's span. **A gate
+  correction rides with the drop:** s209's gate (`befed047`) held lupin
+  to the checked machine's E1401 diagnostic, but a lupin `ub` record
+  carries none (only a `fail` carries one; `int_ptr_lanes` already
+  holds lupin to verdict and row). lupin is now held to verdict, row
+  and clause.
+- **Kept 34**, each carried to 0.1.47 with its 0.1.46 verdict, measured
+  row by row, each naming its open issue:
+  - attr_closed_set's control, 1 (lupin declines its `comptime fn`);
+  - volatile, 6 (#185);
+  - repr_layout, 9 (#188);
+  - static, 7 (#190);
+  - raw_align's repr(c) element and packed field, 2 (#188);
+  - kw11's atomic rows, 9, plus the racy counter's `trap(race)` (#194).
+- **Widened 0.** The plant (the 0.1.47 lists against the published
+  0.1.46) is red only on the L4 test.
+- **The ritual** (#87, with #281's control against the 0.1.46 archive,
+  the same corpus and the same release `wolf`) **moved 6 ledger counts
+  on each tier**, all on `memory/raw_ub_misaligned_*` (u16/u32/u64,
+  read and write):
+  - checked: `Soundness → agreement`, agreements 595 → 601, hard
+    26 → 20;
+  - native: `agreement → SOUNDNESS`, agreements 643 → 637, SOUNDNESS
+    2 → 8, hard 28 → 34. This is the row's design: native runs the
+    misaligned access (`compiled: None` in the gate; O12 licenses it),
+    and lupin now names it UB, as the checked machine does.
+  - Nothing moved below the ledger. Native's standing SOUNDNESS pair
+    is `unsafe_ub_uaf.lu` and kw11's racy counter.
 
 ### Atomics and fences on raw pointers (kw11, ruling K5 = A)
 
@@ -136,8 +237,36 @@
   (`g[i].f`) at the clause layout; it refused that read by name before.
 - Read misaligned data byte by byte, or through a packed struct.
   lupin 0.1.46 still runs the access as defined; its half is
-  wolf-interp#192, pinned by version in `raw_align_lanes.rs`. Anchors
+  wolf-interp#192, which 0.1.47 ships (the pairing, above). Anchors
   586 → 587.
+
+### Module strings hold their value, a parallel build cannot share a scratch directory, and the pool no longer starves (s210, #585, #583, #570, #584)
+
+- **A silent wrong answer is fixed (#585).** A module `let` or `const`
+  initialized by a string literal printed the literal's source on all
+  three compiler machines. A `"""` string kept its quotes and indentation,
+  `r"a\nb"` kept its fence, and `\u{41}`, `\x42` and `{{`/`}}` printed
+  raw. The comptime engine decoded literals with its own unquoter, which
+  knew none of them. It now cooks every literal through the lowering's
+  cooker (`strlit::cook`), so a module string and the same literal in a
+  fn are the same bytes, and a comptime fn that returns a `"""` string
+  folds to its value. lupin was right throughout. Corpus row
+  `memory/static_str_literals.lu`; `strlit_parity` holds the two cookers
+  together. The untyped module `let` that wolf-book ch06 uses is still
+  declined by name.
+- **The release tier's scratch directory is per unit (#583).** Units
+  compile in parallel, and two could share `wolf-llvm-<pid>-<nanos>`,
+  which made an ICE on macOS. Each finish now owns a directory named by
+  pid and a process sequence, and creation steps over any existing name.
+  `parallel_finish` drives 16 units for 64 rounds at a barrier.
+- **The runtime pool no longer strands a spawned task (#570).** An idle
+  extra worker retired while the pool's running count, which includes
+  blocked workers, exceeded the target. Then nothing ran the next task.
+  An extra now retires only out of surplus unblocked workers, by CAS.
+  `pool_retire` was red at 0.2.23 on 7 of 9 runs across 1, 4 and 16 cpus.
+- **One fault, one record (#584).** A failed comptime `assert` under a
+  module `const` reported E0710 twice. The module-state loop now skips an
+  initializer whose call site already faulted.
 
 ## 0.2.23 — 2026-10-04
 
