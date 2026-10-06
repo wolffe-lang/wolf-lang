@@ -55,7 +55,7 @@ fn the_list_by_kind() {
     assert_eq!(
         got,
         [
-            ("builtin_type", 17),
+            ("builtin_type", 18),
             ("type", 8),
             ("function", 85),
             ("intrinsic", 8),
