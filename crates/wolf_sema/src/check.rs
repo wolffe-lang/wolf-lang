@@ -13962,6 +13962,40 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
                 rowed(table, int_, &["unsupported", "not_found", "denied", "io"]),
             )
         }
+        // s215 (`[os.proc.fds]`, pelt's H2): `os_spawn_with`'s shape
+        // with a DESCRIPTOR MAP — a flat list of (child fd, source)
+        // pairs, the source a handle of this process (0..2 its
+        // standard streams, 3 and up a table handle such as a pipe
+        // end) or -1 for "closed in the child". `invalid` is a list
+        // that is not a map, decided before anything is read;
+        // `unsupported` a host that places nothing (windows, by name).
+        "os_spawn_fds" => {
+            let list_str = table.intern(TyKind::List(str_));
+            let list_int = table.intern(TyKind::List(int_));
+            (
+                vec![str_, list_str, list_int],
+                rowed(
+                    table,
+                    int_,
+                    &["unsupported", "invalid", "not_found", "denied", "io"],
+                ),
+            )
+        }
+        // s215 (`[os.proc.pipe]`): a pipe's (read, write) ends as two
+        // fs handles, both close-on-exec.
+        "os_pipe" => {
+            let pair = table.intern(TyKind::Tuple(vec![int_, int_]));
+            (Vec::new(), rowed(table, pair, &["io"]))
+        }
+        // s215 (`[os.fs.chdir]`, wolf-std F-0067's ask): the write
+        // twin of `os_cwd`.
+        "os_chdir" => (
+            vec![str_],
+            rowed(table, unit, &["not_found", "denied", "io"]),
+        ),
+        // s215 (`[os.fs.isatty]`): whether a handle names a terminal;
+        // a closed or forged handle is `io`.
+        "os_isatty" => (vec![int_], rowed(table, bool_, &["io"])),
         "os_wait" => (vec![int_], rowed(table, int_, &["signal", "io"])),
         "os_kill" => (vec![int_], rowed(table, unit, &["io"])),
         // signal RECEPTION (s114, #126): the abstraction is by

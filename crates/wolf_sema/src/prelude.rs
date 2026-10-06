@@ -280,6 +280,14 @@ pub const PRELUDE: &[Ambient] = &[
     // s137 (#235, `[os.proc.inherit]`): the spawn that hands
     // descriptors to its child — `exec`-tagged with the trio.
     host("os_spawn_with"),
+    // s215 (pelt's H2): a spawn with a descriptor map (`exec`), and
+    // the three calls a shell's plumbing needs beside it — a pipe, the
+    // working directory's write half, and whether a handle is a
+    // terminal (`io`: they act on this process and start nothing).
+    host("os_spawn_fds"),
+    host("os_pipe"),
+    host("os_chdir"),
+    host("os_isatty"),
     host("os_wait"),
     host("os_kill"),
     // signal RECEPTION (s114, wolf-lang#126): the receive side of the
