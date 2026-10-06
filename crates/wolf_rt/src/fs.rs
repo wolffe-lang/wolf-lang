@@ -125,6 +125,7 @@ static FILES: Mutex<Vec<Option<File>>> = Mutex::new(Vec::new());
 pub const FIRST_HANDLE: usize = 3;
 
 fn code_of(e: &std::io::Error) -> i64 {
+    os_error_record(e);
     match e.kind() {
         std::io::ErrorKind::NotFound => fs_code::NOT_FOUND,
         std::io::ErrorKind::PermissionDenied => fs_code::DENIED,
@@ -132,6 +133,72 @@ fn code_of(e: &std::io::Error) -> i64 {
         std::io::ErrorKind::CrossesDevices => fs_code::CROSS_DEVICE,
         _ => fs_code::IO,
     }
+}
+
+// ------------- s200: the host's code beside the row (wolf-lang#407) --
+//
+// `[os.fs.error]`: a row says WHICH response a failure wants (`io`, …); the
+// host's own number says WHY, for a diagnostic. It travels beside the
+// row, never on it — a payload on the lowercase `io` would break the
+// W0603 pact and every `io` arm downstream — in one task-local word:
+// every fallible fs-family call clears it on entry and [`code_of`]
+// records the host's number when the host refuses, so after a call it
+// holds that call's errno (`GetLastError` on windows), or 0 when the
+// call succeeded or its failure was decided before the host (a forged
+// handle, a mode outside the set, `eof`). Tasks hold their worker
+// thread until they return (`task/pool.rs`), so a thread-local is
+// task-local for the life of one task, and `run_task` resets it.
+
+thread_local! {
+    static OS_ERROR: core::cell::Cell<i64> = const { core::cell::Cell::new(0) };
+}
+
+/// Clear the task's code: the entry of every fallible fs-family call,
+/// and the start of every task on a reused worker.
+pub fn os_error_clear() {
+    let _ = OS_ERROR.try_with(|c| c.set(0));
+}
+
+/// Record the host's number for `e` (0 when `e` carries none — an error
+/// std built itself).
+fn os_error_record(e: &std::io::Error) {
+    let code = e.raw_os_error().map_or(0, i64::from);
+    let _ = OS_ERROR.try_with(|c| c.set(code));
+}
+
+/// `os_error() -> int` (`[os.fs.error]`): the host's error number for the
+/// most recent fallible fs-family call on this task, or 0.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_error() -> i64 {
+    OS_ERROR.try_with(core::cell::Cell::get).unwrap_or(0)
+}
+
+/// The host's message for `code`, as std renders it without the
+/// ` (os error N)` suffix std appends: `strerror`'s text on unix,
+/// `FormatMessageW`'s on windows. Empty for a code at or below zero or
+/// outside the host's `i32`.
+pub fn os_error_text(code: i64) -> String {
+    let Some(n) = i32::try_from(code).ok().filter(|n| *n > 0) else {
+        return String::new();
+    };
+    let full = std::io::Error::from_raw_os_error(n).to_string();
+    let suffix = format!(" (os error {n})");
+    full.strip_suffix(&suffix)
+        .unwrap_or(&full)
+        .trim_end()
+        .to_string()
+}
+
+/// `os_error_text(code) -> str` (`[os.fs.error]`), the pair through `out`.
+///
+/// # Safety
+///
+/// `out` must address 16 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_error_text(code: i64, out: i64) {
+    let s = os_error_text(code);
+    let p = ambient_copy(s.as_bytes());
+    unsafe { write_pair(out, p as i64, s.len() as i64) };
 }
 
 /// A `SystemTime` as milliseconds from the Unix epoch, negative before
@@ -207,6 +274,7 @@ unsafe fn write_text(out: i64, bytes: Vec<u8>) -> i64 {
 /// A valid str pair; `out` must address 16 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_read_text(pp: i64, pl: i64, out: i64) -> i64 {
+    os_error_clear();
     let path = unsafe { view(pp, pl) };
     match std::fs::read(path) {
         Err(e) => code_of(&e),
@@ -221,6 +289,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_read_text(pp: i64, pl: i64, out: i64) -> i
 /// Both pairs must be valid str pairs.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_write_text(pp: i64, pl: i64, cp: i64, cl: i64) -> i64 {
+    os_error_clear();
     let (path, contents) = unsafe { (view(pp, pl), view(cp, cl)) };
     match std::fs::write(path, contents.as_bytes()) {
         Err(e) => code_of(&e),
@@ -242,6 +311,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_write_text(pp: i64, pl: i64, cp: i64, cl: 
 /// A valid str pair.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_open(pp: i64, pl: i64, mode: i64) -> i64 {
+    os_error_clear();
     let path = unsafe { view(pp, pl) };
     let mut o = std::fs::OpenOptions::new();
     let opts = match mode {
@@ -289,6 +359,25 @@ pub unsafe extern "C" fn __wolf_rt_fs_open(pp: i64, pl: i64, mode: i64) -> i64 {
 /// `out` must address 16 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_read(fd: i64, max: i64, out: i64) -> i64 {
+    os_error_clear();
+    // s200 (#405, `[os.fs.std]`): 0, 1 and 2 read the descriptor itself.
+    if is_std(fd) {
+        if max <= 0 {
+            let p = ambient_copy(b"");
+            unsafe { write_pair(out, p as i64, 0) };
+            return fs_code::OK;
+        }
+        let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
+        return match std_read(fd, &mut buf) {
+            None => fs_code::IO,
+            Some(Err(e)) => code_of(&e),
+            Some(Ok(0)) => fs_code::EOF,
+            Some(Ok(n)) => {
+                buf.truncate(n);
+                unsafe { write_text(out, buf) }
+            }
+        };
+    }
     // s90: the HANDLE is checked before the size. It used to be the
     // other way round here and the other way round again in the
     // checked lane, so `fs_read(closed_fd, 0)` was `ok("")` natively
@@ -321,7 +410,16 @@ pub unsafe extern "C" fn __wolf_rt_fs_read(fd: i64, max: i64, out: i64) -> i64 {
 /// A valid str pair.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_write(fd: i64, sp: i64, sl: i64) -> i64 {
+    os_error_clear();
     let s = unsafe { view(sp, sl) };
+    // s200 (#405, `[os.fs.std]`): 0, 1 and 2 write the descriptor itself.
+    if is_std(fd) {
+        return match std_write(fd, s.as_bytes()) {
+            None => fs_code::IO,
+            Some(Err(e)) => code_of(&e),
+            Some(Ok(())) => fs_code::OK,
+        };
+    }
     let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
     let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| files.get_mut(i)) else {
         return fs_code::IO;
@@ -336,6 +434,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_write(fd: i64, sp: i64, sl: i64) -> i64 {
 /// `io`.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_fs_close(fd: i64) -> i64 {
+    os_error_clear();
     let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
     match usize::try_from(fd).ok().and_then(|i| files.get_mut(i)) {
         Some(slot @ Some(_)) => {
@@ -353,6 +452,7 @@ pub extern "C" fn __wolf_rt_fs_close(fd: i64) -> i64 {
 /// A valid str pair.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_remove(pp: i64, pl: i64) -> i64 {
+    os_error_clear();
     let path = unsafe { view(pp, pl) };
     match std::fs::remove_file(path) {
         Err(e) => code_of(&e),
@@ -382,6 +482,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_exists(pp: i64, pl: i64) -> i64 {
 /// A valid str pair; `out` must address 8 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_read_bytes(pp: i64, pl: i64, out: i64) -> i64 {
+    os_error_clear();
     let path = unsafe { view(pp, pl) };
     match std::fs::read(path) {
         Err(e) => code_of(&e),
@@ -402,6 +503,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_read_bytes(pp: i64, pl: i64, out: i64) -> 
 /// A valid str pair; `hdr` a live `List[byte]` header.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_write_bytes(pp: i64, pl: i64, hdr: i64) -> i64 {
+    os_error_clear();
     let path = unsafe { view(pp, pl) };
     let Some(bytes) = (unsafe { byte_elems(hdr) }) else {
         return fs_code::INVALID;
@@ -423,6 +525,25 @@ pub unsafe extern "C" fn __wolf_rt_fs_write_bytes(pp: i64, pl: i64, hdr: i64) ->
 /// `out` must address 8 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_read_chunk(fd: i64, max: i64, out: i64) -> i64 {
+    os_error_clear();
+    // s200 (#405, `[os.fs.std]`): 0, 1 and 2 read the descriptor itself,
+    // outside the table lock (a pipe parks the read).
+    if is_std(fd) {
+        if max <= 0 {
+            unsafe { write_bytes_list(out, b"") };
+            return fs_code::OK;
+        }
+        let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
+        return match std_read(fd, &mut buf) {
+            None => fs_code::IO,
+            Some(Err(e)) => code_of(&e),
+            Some(Ok(0)) => fs_code::EOF,
+            Some(Ok(n)) => {
+                unsafe { write_bytes_list(out, &buf[..n]) };
+                fs_code::OK
+            }
+        };
+    }
     // Handle first, size second — `fs_read`'s order, on both lanes.
     let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
     let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| files.get_mut(i)) else {
@@ -457,9 +578,18 @@ pub unsafe extern "C" fn __wolf_rt_fs_read_chunk(fd: i64, max: i64, out: i64) ->
 /// `hdr` must be a live `List[byte]` header.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_write_chunk(fd: i64, hdr: i64) -> i64 {
+    os_error_clear();
     let Some(bytes) = (unsafe { byte_elems(hdr) }) else {
         return fs_code::INVALID;
     };
+    // s200 (#405, `[os.fs.std]`): 0, 1 and 2 write the descriptor itself.
+    if is_std(fd) {
+        return match std_write(fd, &bytes) {
+            None => fs_code::IO,
+            Some(Err(e)) => code_of(&e),
+            Some(Ok(())) => fs_code::OK,
+        };
+    }
     let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
     let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| files.get_mut(i)) else {
         return fs_code::IO;
@@ -499,6 +629,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_write_chunk(fd: i64, hdr: i64) -> i64 {
 /// A valid str pair; `out` must address 8 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_read_dir(pp: i64, pl: i64, out: i64) -> i64 {
+    os_error_clear();
     let path = unsafe { view(pp, pl) };
     let entries = match std::fs::read_dir(path) {
         Err(e) => return code_of(&e),
@@ -536,6 +667,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_read_dir(pp: i64, pl: i64, out: i64) -> i6
 /// A valid str pair.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_create_dir(pp: i64, pl: i64, all: i64) -> i64 {
+    os_error_clear();
     let path = unsafe { view(pp, pl) };
     let r = if all == 0 {
         std::fs::create_dir(path)
@@ -562,6 +694,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_create_dir(pp: i64, pl: i64, all: i64) -> 
 /// A valid str pair.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_remove_dir(pp: i64, pl: i64, all: i64) -> i64 {
+    os_error_clear();
     let path = unsafe { view(pp, pl) };
     let r = if all == 0 {
         std::fs::remove_dir(path)
@@ -608,6 +741,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_is(pp: i64, pl: i64, want: i64) -> i64 {
 /// A valid str pair; `out` must address 8 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_stat(pp: i64, pl: i64, which: i64, out: i64) -> i64 {
+    os_error_clear();
     let path = unsafe { view(pp, pl) };
     let md = match std::fs::metadata(path) {
         Err(e) => return code_of(&e),
@@ -663,6 +797,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_stat(pp: i64, pl: i64, which: i64, out: i6
 /// `out` must address 8 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_fstat(fd: i64, out: i64) -> i64 {
+    os_error_clear();
     // s199 (#424): 0, 1 and 2 are the standard streams (`[os.fs.std]`).
     // The fd table is released before the list is minted: allocation
     // is the ambient region's business (`fs_read_chunk`'s order).
@@ -753,11 +888,71 @@ fn with_handle<R>(fd: i64, f: impl FnOnce(&File) -> R) -> Option<R> {
     Some(f(file))
 }
 
+// ------------- s200: bytes on the standard streams (wolf-lang#405) --
+//
+// `[os.fs.std]`: `fs_read`, `fs_read_chunk`, `fs_write` and
+// `fs_write_chunk` serve 0, 1 and 2 as the descriptors themselves — the
+// offset the process shares with whoever started it, a pipe, a socket or
+// a terminal all accepted, nothing reopened. Never under the `FILES`
+// lock: a read of a pipe parks, and the table is every other handle's.
+
+/// Has `read_line` ever run? It reads through std's buffered stdin, which
+/// may hold bytes past the line it answered; once it has, a byte read of
+/// descriptor 0 goes through the same buffer so those bytes come first.
+static STDIN_BUFFERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Is `fd` one of the three standard streams?
+fn is_std(fd: i64) -> bool {
+    (0..FIRST_HANDLE as i64).contains(&fd)
+}
+
+/// One read of at most `buf.len()` bytes from standard stream `fd`.
+/// `None` is a stream the host does not hand the process (windows' null
+/// std handle) — the implementation's `io`, with no host code. An
+/// interrupted read is retried, never an `io`.
+fn std_read(fd: i64, buf: &mut [u8]) -> Option<std::io::Result<usize>> {
+    if fd == 0 && STDIN_BUFFERED.load(std::sync::atomic::Ordering::Relaxed) {
+        return Some(std::io::stdin().lock().read(buf));
+    }
+    let f = std_stream(fd)?;
+    let mut g: &File = &f;
+    loop {
+        match g.read(buf) {
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            r => return Some(r),
+        }
+    }
+}
+
+/// Write all of `bytes` to standard stream `fd`. 1 and 2 are written
+/// under std's own stream lock — the lock `print` takes — after a flush,
+/// so a write lands in program order with every `print` around it; the
+/// bytes go to the descriptor itself, so a closed descriptor or a closed
+/// pipe is the host's error (`EBADF`, `EPIPE`) and never a silent
+/// success. `None` as [`std_read`].
+fn std_write(fd: i64, bytes: &[u8]) -> Option<std::io::Result<()>> {
+    let f = std_stream(fd)?;
+    let mut g: &File = &f;
+    Some(match fd {
+        1 => {
+            let mut lock = std::io::stdout().lock();
+            let _ = lock.flush();
+            g.write_all(bytes)
+        }
+        2 => {
+            let _lock = std::io::stderr().lock();
+            g.write_all(bytes)
+        }
+        _ => g.write_all(bytes),
+    })
+}
+
 /// The code of a failed offset call: `unseekable` for `ESPIPE`
 /// (`ErrorKind::NotSeekable`), `invalid` for an offset the host refuses
 /// as out of range (`EINVAL`, a seek below zero), the family's mapping
 /// otherwise.
 fn seek_code(e: &std::io::Error) -> i64 {
+    os_error_record(e);
     match e.kind() {
         std::io::ErrorKind::NotSeekable => fs_code::UNSEEKABLE,
         std::io::ErrorKind::InvalidInput => fs_code::INVALID,
@@ -815,6 +1010,7 @@ fn windows_unseekable(f: &File) -> bool {
 /// `out` must address 8 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_seek(fd: i64, off: i64, whence: i64, out: i64) -> i64 {
+    os_error_clear();
     use std::io::{Seek as _, SeekFrom};
     let r = with_handle(fd, |f| {
         let to = match whence {
@@ -870,6 +1066,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_seek(fd: i64, off: i64, whence: i64, out: 
 /// `out` must address 8 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_tell(fd: i64, out: i64) -> i64 {
+    os_error_clear();
     use std::io::Seek as _;
     let r = with_handle(fd, |f| {
         #[cfg(windows)]
@@ -881,7 +1078,10 @@ pub unsafe extern "C" fn __wolf_rt_fs_tell(fd: i64, out: i64) -> i64 {
         // No `invalid` in this row: only `ESPIPE` is told apart.
         let mut g = f;
         g.stream_position().map_err(|e| match e.kind() {
-            std::io::ErrorKind::NotSeekable => fs_code::UNSEEKABLE,
+            std::io::ErrorKind::NotSeekable => {
+                os_error_record(&e);
+                fs_code::UNSEEKABLE
+            }
             _ => code_of(&e),
         })
     });
@@ -945,6 +1145,7 @@ fn read_at(f: &File, buf: &mut [u8], off: u64) -> std::io::Result<usize> {
 /// `out` must address 8 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_read_at(fd: i64, off: i64, max: i64, out: i64) -> i64 {
+    os_error_clear();
     let r = with_handle(fd, |f| {
         let Ok(off) = u64::try_from(off) else {
             return Err(fs_code::INVALID);
@@ -975,6 +1176,266 @@ pub unsafe extern "C" fn __wolf_rt_fs_read_at(fd: i64, off: i64, max: i64, out: 
         Some(Err(code)) => code,
         Some(Ok(bytes)) => {
             unsafe { write_bytes_list(out, &bytes) };
+            fs_code::OK
+        }
+    }
+}
+
+// ------------------------ s200: the kernel-side copy (wolf-lang#417) --
+//
+// `[os.fs.copy]`: `fs_copy_chunk(src, dst, max) -> int ! {eof, io}` is
+// `fs_read_chunk` then `fs_write_chunk` fused — one transfer of at most
+// `max` bytes from `src`'s offset to `dst`'s, both advancing — with the
+// bytes kept out of the program, and out of user space where the host
+// can. linux tries `copy_file_range`, `sendfile` and `splice` in that
+// order, each refusal of the PAIRING (`EINVAL`, `EXDEV`, `EBADF` for an
+// append handle, …) falling to the next and the last to the read/write
+// loop; the rung a pair settled on is remembered for the next call on
+// the same pair. Every other host is the read/write loop, by name.
+
+/// One side of a copy: a standard stream borrowed for the call, or a
+/// DUPLICATE of a table handle, so the copy (which may park on a pipe)
+/// never runs under the `FILES` lock. A duplicate shares its original's
+/// offset (`dup`; `DuplicateHandle`), so the original advances.
+enum Side {
+    Std(std::mem::ManuallyDrop<File>),
+    Dup(File),
+}
+
+impl std::ops::Deref for Side {
+    type Target = File;
+    fn deref(&self) -> &File {
+        match self {
+            Side::Std(f) => f,
+            Side::Dup(f) => f,
+        }
+    }
+}
+
+/// `fd` resolved for a copy: `Ok(None)` is a closed or forged handle (the
+/// implementation's `io`), `Err` the host refusing the duplicate.
+fn copy_side(fd: i64) -> std::io::Result<Option<Side>> {
+    if is_std(fd) {
+        return Ok(std_stream(fd).map(Side::Std));
+    }
+    let files = FILES.lock().unwrap_or_else(|p| p.into_inner());
+    let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| files.get(i)) else {
+        return Ok(None);
+    };
+    f.try_clone().map(|d| Some(Side::Dup(d)))
+}
+
+/// The most one call moves: under linux's per-call cap (`MAX_RW_COUNT`,
+/// just below 2 GiB), so a large `max` is never the host's `EINVAL`.
+const COPY_CLAMP: usize = 1 << 30;
+
+/// The read/write loop's buffer: bu01 swept `cat`'s read size and found
+/// the knee at 256 KiB (wolf-lang#417's body).
+const COPY_BUF_BYTES: usize = 256 << 10;
+
+/// The read/write rung, the last on every host.
+const RUNG_LOOP: u8 = 3;
+
+thread_local! {
+    /// The pair the last copy on this thread served, and the rung it
+    /// settled on: a pair that refused `copy_file_range` once is not
+    /// asked again on every chunk.
+    static COPY_RUNG: core::cell::Cell<(i64, i64, u8)> =
+        const { core::cell::Cell::new((-1, -1, 0)) };
+    /// The read/write rung's buffer, reused (a fresh 256 KiB is an
+    /// `mmap` and a fault per page on every call).
+    static COPY_BUF: core::cell::RefCell<Vec<u8>> = const { core::cell::RefCell::new(Vec::new()) };
+}
+
+/// One read of at most `n` bytes from `s` and a write of all of it to
+/// `d`: the rung every host has. Descriptor 0 reads through std's buffer
+/// once `read_line` has run ([`STDIN_BUFFERED`]).
+fn copy_loop(src_fd: i64, s: &File, d: &File, n: usize) -> std::io::Result<usize> {
+    COPY_BUF.with(|b| {
+        let mut buf = b.borrow_mut();
+        if buf.len() < COPY_BUF_BYTES {
+            buf.resize(COPY_BUF_BYTES, 0);
+        }
+        let want = &mut buf[..n.min(COPY_BUF_BYTES)];
+        let k = if src_fd == 0 && STDIN_BUFFERED.load(std::sync::atomic::Ordering::Relaxed) {
+            std::io::stdin().lock().read(want)?
+        } else {
+            let mut g = s;
+            loop {
+                match g.read(want) {
+                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                    r => break r?,
+                }
+            }
+        };
+        if k > 0 {
+            let mut w = d;
+            w.write_all(&want[..k])?;
+        }
+        Ok(k)
+    })
+}
+
+/// linux's kernel rungs: `copy_file_range` (0), `sendfile` (1),
+/// `splice` (2). Each call moves bytes between the two offsets without
+/// a user-space buffer, or reports that this PAIRING cannot be served
+/// that way ([`Rung::Refused`]) before anything moved.
+#[cfg(target_os = "linux")]
+mod kernel {
+    use std::fs::File;
+    use std::os::fd::AsRawFd as _;
+
+    pub(super) enum Rung {
+        Moved(usize),
+        Refused,
+        Failed(std::io::Error),
+    }
+
+    /// The errors that say "not this way for this pair", never "the
+    /// bytes could not be moved": a kind of file the call does not take
+    /// (`EINVAL`: a pipe, a terminal, `/dev/null` for `copy_file_range`),
+    /// two filesystems (`EXDEV`), an append handle (`EBADF` from
+    /// `copy_file_range`, `EINVAL` from `sendfile`), a kernel without the
+    /// call (`ENOSYS`, `EOPNOTSUPP`). A real closed handle refuses every
+    /// rung and the read/write rung answers its `EBADF`.
+    fn refusal(errno: i32) -> bool {
+        matches!(
+            errno,
+            libc::EINVAL
+                | libc::EXDEV
+                | libc::ENOSYS
+                | libc::EOPNOTSUPP
+                | libc::EBADF
+                | libc::ESPIPE
+                | libc::ETXTBSY
+                | libc::EPERM
+                | libc::EOVERFLOW
+                | libc::EISDIR
+        )
+    }
+
+    pub(super) fn rung(level: u8, s: &File, d: &File, n: usize) -> Rung {
+        let (si, di) = (s.as_raw_fd(), d.as_raw_fd());
+        loop {
+            // SAFETY: two live descriptors for the duration of the call,
+            // null offset pointers (both files' own offsets move), `n`
+            // below the per-call cap.
+            let rc = unsafe {
+                match level {
+                    0 => libc::copy_file_range(
+                        si,
+                        core::ptr::null_mut(),
+                        di,
+                        core::ptr::null_mut(),
+                        n,
+                        0,
+                    ),
+                    1 => libc::sendfile(di, si, core::ptr::null_mut(), n),
+                    _ => libc::splice(
+                        si,
+                        core::ptr::null_mut(),
+                        di,
+                        core::ptr::null_mut(),
+                        n,
+                        libc::SPLICE_F_MOVE,
+                    ),
+                }
+            };
+            if rc >= 0 {
+                return Rung::Moved(rc as usize);
+            }
+            let e = std::io::Error::last_os_error();
+            match e.raw_os_error() {
+                Some(libc::EINTR) => {}
+                Some(c) if refusal(c) => return Rung::Refused,
+                _ => return Rung::Failed(e),
+            }
+        }
+    }
+}
+
+/// One transfer of at most `n` bytes (`n > 0`). A write to 1 or 2 holds
+/// std's stream lock after a flush, as [`std_write`] does, so the copy
+/// lands in program order with `print`.
+fn copy_once(src_fd: i64, dst_fd: i64, s: &File, d: &File, n: usize) -> std::io::Result<usize> {
+    let _out = (dst_fd == 1).then(|| {
+        let mut l = std::io::stdout().lock();
+        let _ = l.flush();
+        l
+    });
+    let _err = (dst_fd == 2).then(|| std::io::stderr().lock());
+    #[cfg(target_os = "linux")]
+    {
+        let buffered = src_fd == 0 && STDIN_BUFFERED.load(std::sync::atomic::Ordering::Relaxed);
+        let (ps, pd, cached) = COPY_RUNG.with(core::cell::Cell::get);
+        let mut level = if buffered {
+            RUNG_LOOP
+        } else if (ps, pd) == (src_fd, dst_fd) {
+            cached
+        } else {
+            0
+        };
+        let remember = |level: u8| COPY_RUNG.with(|c| c.set((src_fd, dst_fd, level)));
+        while level < RUNG_LOOP {
+            match kernel::rung(level, s, d, n) {
+                // A kernel rung's 0 is end of input for a regular file,
+                // but a pseudo-file (`/proc`, sysfs) can report it with
+                // bytes still to read; the read/write rung confirms, and
+                // a pair that turns out to lie stays on that rung.
+                kernel::Rung::Moved(0) => {
+                    let k = copy_loop(src_fd, s, d, n)?;
+                    remember(if k > 0 { RUNG_LOOP } else { level });
+                    return Ok(k);
+                }
+                kernel::Rung::Moved(k) => {
+                    remember(level);
+                    return Ok(k);
+                }
+                kernel::Rung::Refused => level += 1,
+                kernel::Rung::Failed(e) => return Err(e),
+            }
+        }
+        remember(RUNG_LOOP);
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (dst_fd, &COPY_RUNG, RUNG_LOOP);
+    }
+    copy_loop(src_fd, s, d, n)
+}
+
+/// `fs_copy_chunk(src, dst, max) -> int ! {eof, io}` (`[os.fs.copy]`):
+/// the bytes moved, through `out`. The order is the family's: both
+/// handles first (closed or forged is `io`; 0, 1 and 2 are the standard
+/// streams), then `max` (at or below zero answers 0 without the host),
+/// the 1 GiB clamp, and zero bytes moved at a positive `max` is `eof`.
+///
+/// # Safety
+///
+/// `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_fs_copy_chunk(src: i64, dst: i64, max: i64, out: i64) -> i64 {
+    os_error_clear();
+    let s = match copy_side(src) {
+        Err(e) => return code_of(&e),
+        Ok(None) => return fs_code::IO,
+        Ok(Some(s)) => s,
+    };
+    let d = match copy_side(dst) {
+        Err(e) => return code_of(&e),
+        Ok(None) => return fs_code::IO,
+        Ok(Some(d)) => d,
+    };
+    if max <= 0 {
+        unsafe { write_word(out, 0) };
+        return fs_code::OK;
+    }
+    let n = (max as u64).min(COPY_CLAMP as u64) as usize;
+    match copy_once(src, dst, &s, &d, n) {
+        Err(e) => code_of(&e),
+        Ok(0) => fs_code::EOF,
+        Ok(k) => {
+            unsafe { write_word(out, k as i64) };
             fs_code::OK
         }
     }
@@ -1025,6 +1486,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_read_at(fd: i64, off: i64, max: i64, out: 
 /// Two valid str pairs.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_rename(fp: i64, fl: i64, tp: i64, tl: i64) -> i64 {
+    os_error_clear();
     let (from, to) = unsafe { (view(fp, fl), view(tp, tl)) };
     match std::fs::rename(from, to) {
         Err(e) => code_of(&e),
@@ -1041,10 +1503,17 @@ pub unsafe extern "C" fn __wolf_rt_fs_rename(fp: i64, fl: i64, tp: i64, tl: i64)
 /// `out` must address 16 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_read_line(out: i64) -> i64 {
+    os_error_clear();
     let mut line = Vec::new();
     let stdin = std::io::stdin();
+    // s200 (#405): from here on std's buffer may hold bytes past the
+    // line, so a byte read of descriptor 0 drains it first.
+    STDIN_BUFFERED.store(true, std::sync::atomic::Ordering::Relaxed);
     match stdin.lock().read_until(b'\n', &mut line) {
-        Err(_) => fs_code::IO,
+        Err(e) => {
+            os_error_record(&e);
+            fs_code::IO
+        }
         Ok(0) => fs_code::EOF,
         Ok(_) => {
             if line.last() == Some(&b'\n') {
@@ -1583,21 +2052,25 @@ mod tests {
     }
 
     /// s199 (#424, `[os.fs.std]`): 0, 1 and 2 are never a file's
-    /// handle — `fs_read`, `fs_write` and `fs_close` answer `io` there
-    /// (reading the streams is #405's), and an fs_fstat of each answers
+    /// handle — `fs_close` answers `io` there (the implementation never
+    /// closes a standard stream) — and an fs_fstat of each answers
     /// SOMETHING other than the old table miss whenever the test runner
-    /// gave the process that descriptor. What each one IS depends on
-    /// the runner, so the per-kind answers are the driver gate's
-    /// (`fs_std_lanes.rs`, stdin a file and a pipe).
+    /// gave the process that descriptor. Since s200 (#405) `fs_read` and
+    /// `fs_write` SERVE the three (until then they answered `io`): a
+    /// read of zero bytes and a write of none answer without touching
+    /// the host, whatever the runner wired. What each one IS, and the
+    /// bytes through them, are the driver gates' (`fs_std_lanes.rs`,
+    /// `byte_surface_lanes.rs`, stdin a file and a pipe).
     #[test]
     fn the_standard_streams_are_not_table_slots() {
         let mut w = [0i64; 2];
         let o = w.as_mut_ptr() as i64;
-        let (sp, sl) = pair_of("x");
+        let (sp, sl) = pair_of("");
         unsafe {
             for fd in 0..3 {
-                assert_eq!(__wolf_rt_fs_read(fd, 1, o), fs_code::IO, "read {fd}");
-                assert_eq!(__wolf_rt_fs_write(fd, sp, sl), fs_code::IO, "write {fd}");
+                assert_eq!(__wolf_rt_fs_read(fd, 0, o), fs_code::OK, "read {fd}");
+                assert_eq!(w[1], 0, "read {fd} answers the empty str");
+                assert_eq!(__wolf_rt_fs_write(fd, sp, sl), fs_code::OK, "write {fd}");
                 assert_eq!(__wolf_rt_fs_close(fd), fs_code::IO, "close {fd}");
             }
             #[cfg(unix)]
@@ -1691,6 +2164,154 @@ mod tests {
             unsafe { __wolf_rt_fs_rename(fp, fl, tp, tl) },
             fs_code::NOT_FOUND
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// s200 (#407, `[os.fs.error]`): the host's number for the last
+    /// fallible call, 0 after a success and after a failure decided
+    /// before the host; the text without std's suffix.
+    #[test]
+    fn os_error_is_the_last_calls_host_number() {
+        let dir = scratch("os-error");
+        let gone = dir.join("gone");
+        let g = gone.display().to_string();
+        let (gp, gl) = pair_of(&g);
+        let mut out = [0i64; 2];
+        let o = out.as_mut_ptr() as i64;
+        unsafe {
+            assert_eq!(__wolf_rt_fs_open(gp, gl, 0), -fs_code::NOT_FOUND);
+            #[cfg(unix)]
+            assert_eq!(__wolf_rt_os_error(), i64::from(libc::ENOENT));
+            #[cfg(windows)]
+            assert_eq!(__wolf_rt_os_error(), 2); // ERROR_FILE_NOT_FOUND
+            // A total predicate leaves it; a forged handle clears it.
+            assert_eq!(__wolf_rt_fs_exists(gp, gl), 0);
+            assert_ne!(__wolf_rt_os_error(), 0);
+            assert_eq!(__wolf_rt_fs_read_chunk(999_999, 4, o), fs_code::IO);
+            assert_eq!(__wolf_rt_os_error(), 0);
+            // A success clears it.
+            assert_eq!(__wolf_rt_fs_open(gp, gl, 0), -fs_code::NOT_FOUND);
+            let p = dir.join("here").display().to_string();
+            let (pp, pl) = pair_of(&p);
+            let fd = __wolf_rt_fs_open(pp, pl, 1);
+            assert!(fd >= FIRST_HANDLE as i64);
+            assert_eq!(__wolf_rt_os_error(), 0);
+            assert_eq!(__wolf_rt_fs_close(fd), fs_code::OK);
+            __wolf_rt_os_error_text(2, o);
+            assert!(!view(out[0], out[1]).is_empty());
+        }
+        assert_eq!(os_error_text(0), "");
+        assert_eq!(os_error_text(-4), "");
+        #[cfg(unix)]
+        assert_eq!(
+            os_error_text(i64::from(libc::ENOSPC)),
+            "No space left on device"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// s200 (#417, `[os.fs.copy]`): a file copied in chunks arrives
+    /// whole, both offsets advance, `eof` at the end, `max` 0 is 0, and
+    /// a forged handle is `io`.
+    #[test]
+    fn copy_chunk_moves_a_file() {
+        let dir = scratch("copy-chunk");
+        let a = dir.join("a").display().to_string();
+        let b = dir.join("b").display().to_string();
+        let bytes: Vec<u8> = (0..=255u8).cycle().take(300_000).collect();
+        std::fs::write(&a, &bytes).unwrap();
+        let (ap, al) = pair_of(&a);
+        let (bp, bl) = pair_of(&b);
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        unsafe {
+            let src = __wolf_rt_fs_open(ap, al, 0);
+            let dst = __wolf_rt_fs_open(bp, bl, 1);
+            let mut total = 0;
+            loop {
+                match __wolf_rt_fs_copy_chunk(src, dst, 100_000, o) {
+                    fs_code::OK => {
+                        assert!((1..=100_000).contains(&out[0]), "moved {}", out[0]);
+                        total += out[0];
+                    }
+                    fs_code::EOF => break,
+                    c => panic!("copy failed with code {c}"),
+                }
+            }
+            assert_eq!(total, 300_000);
+            assert_eq!(__wolf_rt_fs_copy_chunk(src, dst, 0, o), fs_code::OK);
+            assert_eq!(out[0], 0);
+            assert_eq!(__wolf_rt_fs_copy_chunk(999_999, dst, 4, o), fs_code::IO);
+            assert_eq!(__wolf_rt_fs_copy_chunk(src, 999_999, 4, o), fs_code::IO);
+            // The originals' offsets moved with their duplicates.
+            assert_eq!(__wolf_rt_fs_tell(src, o), fs_code::OK);
+            assert_eq!(out[0], 300_000);
+            assert_eq!(__wolf_rt_fs_close(src), fs_code::OK);
+            assert_eq!(__wolf_rt_fs_close(dst), fs_code::OK);
+        }
+        assert!(
+            std::fs::read(&b).unwrap() == bytes,
+            "the copy is byte-identical"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// s200 (#417): the rung each pairing settles on, on linux — a file
+    /// to a file is `copy_file_range` (0), a pipe to a file is `splice`
+    /// (2, after both earlier rungs refuse a pipe), and an append handle
+    /// refuses all three kernel rungs and lands on the loop (3). The
+    /// bytes arrive whatever the rung.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn copy_chunk_settles_on_the_rung_the_pairing_allows() {
+        use std::io::Write as _;
+        use std::os::fd::FromRawFd as _;
+        let dir = scratch("copy-rung");
+        let a = dir.join("a").display().to_string();
+        let b = dir.join("b").display().to_string();
+        let c = dir.join("c").display().to_string();
+        std::fs::write(&a, b"rung zero\n").unwrap();
+        std::fs::write(&c, b"").unwrap();
+        let (ap, al) = pair_of(&a);
+        let (bp, bl) = pair_of(&b);
+        let (cp, cl) = pair_of(&c);
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        let rung = || COPY_RUNG.with(core::cell::Cell::get).2;
+        unsafe {
+            let src = __wolf_rt_fs_open(ap, al, 0);
+            let dst = __wolf_rt_fs_open(bp, bl, 1);
+            assert_eq!(__wolf_rt_fs_copy_chunk(src, dst, 64, o), fs_code::OK);
+            assert_eq!(rung(), 0, "file to file is copy_file_range");
+            // A pipe into the table (the read end, adopted as a File).
+            let mut fds = [0i32; 2];
+            assert_eq!(libc::pipe(fds.as_mut_ptr()), 0);
+            let mut w = std::fs::File::from_raw_fd(fds[1]);
+            w.write_all(b"through a pipe\n").unwrap();
+            drop(w);
+            let rd = std::fs::File::from_raw_fd(fds[0]);
+            let pipe_fd = {
+                let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
+                if files.len() < FIRST_HANDLE {
+                    files.resize_with(FIRST_HANDLE, || None);
+                }
+                files.push(Some(rd));
+                (files.len() - 1) as i64
+            };
+            assert_eq!(__wolf_rt_fs_copy_chunk(pipe_fd, dst, 64, o), fs_code::OK);
+            assert_eq!(rung(), 2, "a pipe to a file is splice");
+            assert_eq!(__wolf_rt_fs_copy_chunk(pipe_fd, dst, 64, o), fs_code::EOF);
+            // An append destination: every kernel rung refuses it.
+            let app = __wolf_rt_fs_open(cp, cl, 2);
+            let src2 = __wolf_rt_fs_open(ap, al, 0);
+            assert_eq!(__wolf_rt_fs_copy_chunk(src2, app, 64, o), fs_code::OK);
+            assert_eq!(rung(), RUNG_LOOP, "an append handle is the read/write loop");
+            for fd in [src, dst, pipe_fd, app, src2] {
+                assert_eq!(__wolf_rt_fs_close(fd), fs_code::OK);
+            }
+        }
+        assert_eq!(std::fs::read(&b).unwrap(), b"rung zero\nthrough a pipe\n");
+        assert_eq!(std::fs::read(&c).unwrap(), b"rung zero\n");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
