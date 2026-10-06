@@ -1123,8 +1123,12 @@ Simpler than the safe tier, not stricter (anti-Stacked-Borrows lesson).
     outside `unsafe`: spec 03's data-race freedom is a property of the
     safe tier, and a module `var` is shared by every task. The program
     keeps its own discipline (one thread, or its own lock in the unsafe
-    ring). On the checked machine and lupin a `var` is ordinary memory:
-    a write is seen by every later read, across calls.
+    ring). On every machine a `var` is ordinary memory: a write is seen
+    by every later read, across calls. A call may write any module state
+    and any storage a raw pointer or an `extern "c" let` reaches, so no
+    value read or stored before a call stands for that memory after it
+    (s214, wolf-lang#598: native and release reused the caller's store
+    across a callee's write at 0.2.24).
   - `[mem.static.3]` Initialization is at compile time, so there is no
     initialization order to observe: the comptime engine (D29/D33, the
     evaluator `const` items already used) evaluates every module initializer and the result is the image's
