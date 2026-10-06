@@ -1760,7 +1760,9 @@ fn membrane_sig_check(table: &TypeTable, sigs: &SigTables, fsig: &FnSig) -> R<()
             ));
         }
     }
-    let unit = matches!(table.kind(fsig.ret), TyKind::Unit);
+    // s213 (wolf-lang#572, `[type.fn.never]`): `-> never` crosses as
+    // C's `void` (`_Noreturn void`): there is no value to pass back.
+    let unit = matches!(table.kind(fsig.ret), TyKind::Unit | TyKind::Never);
     if !unit && !c_crossing(table, sigs, fsig.ret, 0) {
         return Err(refuse(
             "a result type that does not cross the C membrane ([abi.c.types]: scalars, \
@@ -5506,7 +5508,22 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             SyntaxKind::IfExpr => self.lower_if(e, want),
             SyntaxKind::WhileExpr => self.lower_while(e),
             SyntaxKind::LoopExpr => self.lower_loop(e),
-            SyntaxKind::CallExpr => self.lower_call(e),
+            SyntaxKind::CallExpr => {
+                let flow = self.lower_call(e)?;
+                // s213 (wolf-lang#572, `[type.fn.never]`): a call sema
+                // typed bottom — to a fn declared `-> never` — does not
+                // return. The edge after it is sema-licensed
+                // unreachable (the `assert` trap kind's second job), so
+                // the flow diverges wherever a value was wanted.
+                if matches!(flow, Flow::Val(_))
+                    && let Some(t) = self.expr_sema_ty(e.span)
+                    && matches!(self.table.kind(t), TyKind::Never)
+                {
+                    self.b.ins_trap(TrapKind::Assert);
+                    return Ok(Flow::Diverged);
+                }
+                Ok(flow)
+            }
             SyntaxKind::ReturnExpr => {
                 let d = ReturnExpr::cast(e).expect("kind");
                 let v = match (d.value(), self.fn_eu) {
