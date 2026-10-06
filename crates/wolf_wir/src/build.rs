@@ -931,7 +931,7 @@ impl<'m> FuncBuilder<'m> {
         }
         // A call may write any foreign storage (s214): what was built
         // before it is no longer reusable after it.
-        if op == Opcode::CallInd {
+        if op.is_call() {
             self.call_epoch += 1;
         }
         // 4. GVN via hash-consing at insert.
