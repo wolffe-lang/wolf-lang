@@ -163,7 +163,7 @@ vocabulary.
      two indices are equal at run time — `xs[i]` against `xs[k + 1]`
      with `k = i - 1`.
 
-  **Where the machines stand (wolf 0.2.24; lupin 0.1.47).** wolfgang makes moves element-granular: items
+  **Where the machines stand (wolf 0.2.25; lupin 0.1.48).** wolfgang makes moves element-granular: items
   1(a)–(c) hold for a moved element, item 3 holds (wolf-lang#460, where
   any index store revived a moved sibling and native aliased it, is
   fixed), and R3 holds for a store through the same plain local of a
@@ -182,7 +182,7 @@ vocabulary.
   lend of `m[k]` is a typing question (the read is `V ! {none}`,
   `[mem.map.absent]`, E0401 today) that this clause does not answer.
   lupin separates elements at run time and is the oracle for which
-  element a move empties and for the exclusivity trap; at 0.1.47 every
+  element a move empties and for the exclusivity trap; at 0.1.48 every
   read of a moved element traps (wolffe-lang/wolf-interp#141), a whole
   read of a place holding a moved part traps (wolffe-lang/wolf-interp#143),
   a non-`Copy` value read out of a `Map` moves out of it
