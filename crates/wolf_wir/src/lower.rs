@@ -14930,13 +14930,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let sigs = self.sigs;
         let ty = strip_sema_in(table, ty);
         match table.kind(ty).clone() {
-            TyKind::Prim(Prim::Str) => {
-                let (sp, sl) = self.str_parts(v);
-                let one = self.b.iconst(types::I64, 1);
-                let (region, slot) = self.rt_slot(16);
-                self.rt_call_slot("__wolf_rt_str_repeat", &[sp, sl, one], slot, region, None);
-                self.load_str_slot(slot, region, span)
-            }
+            TyKind::Prim(Prim::Str) => Ok(v),
             TyKind::List(elem) => {
                 let out = self
                     .rt_call_foreign("__wolf_rt_list_copy", &[v], None, Some(types::PTR))
