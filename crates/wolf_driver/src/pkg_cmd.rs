@@ -7,6 +7,7 @@
 //! CLI, the ledger writes, and honest exits — 0 clean, 1 refusal or
 //! finding, 2 usage/environment.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use wolf_diag::{Diagnostic, HumanReporter, RenderOptions, Reporter, Sources};
@@ -590,7 +591,31 @@ pub fn audit(args: &[String]) {
         offline: false,
     };
     let project = resolve_or_die(&dir, &opts, "audit");
-    print!("{}", wolf_pkg::audit::render_tree(&project));
+    // s217 (wolf-lang#615): the audit reads the CODE, not only the
+    // manifests — the same derivation the build's E1504 reads, computed
+    // here from source, so `--ci` needs no build to have run.
+    let derived = derive_uses(&dir, &project);
+    print!(
+        "{}",
+        wolf_pkg::audit::render_audit(&project, derived.as_deref().map_err(String::as_str))
+    );
+    let mut undeclared = false;
+    match &derived {
+        Ok(uses) => {
+            for (u, _) in wolf_pkg::audit::undeclared(&project, uses) {
+                let p = &project.pkgs[u.owner];
+                let who = if u.owner == 0 { &p.name } else { &p.alias };
+                println!(
+                    "wolf audit: `{who}` reaches capability `{}` without declaring it ({} at {})",
+                    u.cap.as_str(),
+                    u.what(),
+                    u.at
+                );
+                undeclared = true;
+            }
+        }
+        Err(e) => println!("wolf audit: cannot derive capabilities from the code: {e}"),
+    }
     let acquired = match &lock {
         Some(lock) => report_cap_deltas(&project, lock, true),
         None => {
@@ -604,6 +629,31 @@ pub fn audit(args: &[String]) {
         eprintln!("wolf audit: capability acquisition detected — refusing (--ci)");
         std::process::exit(1);
     }
+    if ci && undeclared {
+        eprintln!("wolf audit: undeclared capability use — refusing (--ci)");
+        std::process::exit(1);
+    }
+    if ci && derived.is_err() {
+        eprintln!(
+            "wolf audit: the code could not be read, so nothing is vouched for — refusing (--ci)"
+        );
+        std::process::exit(1);
+    }
+}
+
+/// Load and resolve the package at `dir` the way its build would —
+/// `WOLF_STD` beats the manifest's `std` path dependency, the
+/// dependency aliases are loader roots — and derive every capability
+/// use from the code ([`cap_uses`]). Nothing is compiled.
+fn derive_uses(dir: &Path, project: &Project) -> Result<Vec<wolf_pkg::audit::CapUse>, String> {
+    let std_root = crate::effective_std_root(None)?.or_else(|| project.std_root.clone());
+    let mut sm = wolf_span::SourceMap::new();
+    let loader = wolf_sema::DiskLoader::from_dir(dir, &mut sm)
+        .with_std_root(std_root)
+        .with_dep_roots(project.dep_roots.clone());
+    let mut loader = loader;
+    let res = wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default())?;
+    Ok(cap_uses(project, &res))
 }
 
 // --------------------------------------------------------- tree / why ----
@@ -709,31 +759,218 @@ pub fn project_for_build(root: &Path, sm: &mut wolf_span::SourceMap) -> Option<P
     ))
 }
 
-/// The import-graph half of the I13 check, driver-side: build the
-/// module→imports table from the resolved package and ask wolf_pkg
-/// which packages use capabilities they never declared (E1504).
-pub fn capability_diagnostics(project: &Project, pkg: &wolf_sema::Package) -> Vec<Diagnostic> {
-    let module_imports: Vec<(String, Vec<String>)> = pkg
-        .modules
+/// The I13 check, driver-side: derive every capability use from the
+/// resolved code ([`cap_uses`]) and ask wolf_pkg which packages reach
+/// capabilities they never declared (E1504).
+pub fn capability_diagnostics(project: &Project, res: &wolf_sema::Resolution) -> Vec<Diagnostic> {
+    wolf_pkg::audit::capability_check_uses(project, &cap_uses(project, res))
+}
+
+/// The capability a sandbox category carries in a manifest (s217,
+/// wolf-lang#615). The ONE table of host builtins is the D33 sandbox
+/// table (`ctfe::intrinsics::host_stub`); this match only names each
+/// category's manifest word, and it is exhaustive on purpose: a new
+/// category cannot land without someone deciding what it costs.
+/// `Io` (stdio: `print`, `eprint`, `read_line`), `Clock` and `Random`
+/// have no capability name in the manifest grammar — charging them
+/// would need a new name, which is a ruling, not a lane's call.
+pub fn category_cap(c: wolf_sema::ctfe::SandboxCategory) -> Option<wolf_pkg::manifest::Cap> {
+    use wolf_pkg::manifest::Cap;
+    use wolf_sema::ctfe::SandboxCategory as S;
+    match c {
+        S::Fs => Some(Cap::Fs),
+        S::Net => Some(Cap::Net),
+        S::Env => Some(Cap::Env),
+        S::Exec => Some(Cap::Exec),
+        S::Ffi => Some(Cap::Ffi),
+        S::Io | S::Clock | S::Random => None,
+    }
+}
+
+/// The capability a prelude name reaches, if it is a host builtin in a
+/// capability-carrying sandbox category.
+pub fn builtin_cap(name: &str) -> Option<wolf_pkg::manifest::Cap> {
+    wolf_sema::ctfe::intrinsics::host_stub(name).and_then(category_cap)
+}
+
+/// `display:line:col` for a span in one of the package's files.
+fn site(pkg: &wolf_sema::Package, fi: usize, span: wolf_span::Span) -> String {
+    let unit = &pkg.files[fi];
+    let src = &unit.raw.src;
+    let lo = (span.lo as usize).min(src.len());
+    let before = &src[..lo];
+    let line = before.iter().filter(|&&b| b == b'\n').count() + 1;
+    let line_start = before
         .iter()
-        .map(|m| {
-            let mut targets: Vec<String> =
-                m.deps.iter().map(|&d| pkg.modules[d].dotted()).collect();
-            // `import c "header"` is not a module edge — it binds the
-            // contextual `c` namespace — so it has to be contributed
-            // here or the I13 graph would under-report the one import
-            // that leaves wolf's world entirely (s46).
-            if m.bindings
-                .iter()
-                .flatten()
-                .any(|b| b.target == wolf_sema::graph::BindTarget::CNamespace)
-            {
-                targets.push(wolf_pkg::audit::C_IMPORT_TARGET.to_string());
+        .rposition(|&b| b == b'\n')
+        .map_or(0, |i| i + 1);
+    let col = String::from_utf8_lossy(&src[line_start..lo])
+        .chars()
+        .count()
+        + 1;
+    // Slashes on every host, as the diagnostic renderer prints paths.
+    format!("{}:{line}:{col}", unit.raw.display.replace('\\', "/"))
+}
+
+/// A site in the package: (index into `Package::files`, span).
+type Site = Option<(usize, wolf_span::Span)>;
+
+/// One module's own reach: the capability, how, and where.
+type OwnReach = (wolf_pkg::manifest::Cap, wolf_pkg::audit::Reach, Site);
+
+/// Every place the resolved build's code reaches a capability (s217,
+/// wolf-lang#615) — the derivation both the build's E1504 and
+/// `wolf audit` read, so the two cannot disagree:
+///
+/// - **imports** the facade rule names (`use std.net`, `import c`),
+///   charged to the importing module's package, as since s51;
+/// - **host builtins**: every name the resolver bound to the prelude
+///   (`RefTarget::Prelude`) that the sandbox table puts in a
+///   capability-carrying category, anywhere in the package's own files
+///   — so a builtin in a helper counts however the package reaches the
+///   helper, and a fn the package declares under a builtin's name is the
+///   package's own item, never a capability;
+/// - **std modules**: a std module owns no capability of its own; what
+///   its code reaches (its builtins and facade imports, closed over the
+///   std modules it imports) is charged to the package whose module
+///   imports it. Until s217 std modules fell through to the ROOT
+///   package, so `use std.process` asked the root for `net` (its import)
+///   and never for `exec` (its `os_spawn`).
+pub fn cap_uses(project: &Project, res: &wolf_sema::Resolution) -> Vec<wolf_pkg::audit::CapUse> {
+    use wolf_pkg::audit::{CapUse, Reach, import_cap, owner_of};
+    use wolf_pkg::manifest::Cap;
+    use wolf_sema::graph::BindTarget;
+    let pkg = &res.package;
+    let is_std =
+        |m: usize| pkg.has_std_root && pkg.modules[m].path.first().is_some_and(|s| s == "std");
+    // The first site in module `m` that names `dep` (its `use` line).
+    let import_site = |m: usize, dep: usize| -> Site {
+        let md = &pkg.modules[m];
+        md.bindings
+            .iter()
+            .enumerate()
+            .find_map(|(k, file_bindings)| {
+                file_bindings.iter().find_map(|b| match &b.target {
+                    BindTarget::PkgModule(d) | BindTarget::Item { module: d, .. } if *d == dep => {
+                        Some((md.files[k], b.decl_span))
+                    }
+                    _ => None,
+                })
+            })
+    };
+    // One module's own reach: (cap, how, site) in source order.
+    let own_of = |m: usize| -> Vec<OwnReach> {
+        let md = &pkg.modules[m];
+        let mut v = Vec::new();
+        for &d in &md.deps {
+            let target = pkg.modules[d].dotted();
+            if let Some(cap) = import_cap(&target) {
+                v.push((cap, Reach::Import { target }, import_site(m, d)));
             }
-            (m.dotted(), targets)
-        })
-        .collect();
-    wolf_pkg::audit::capability_check(project, &module_imports)
+        }
+        for (k, file_bindings) in md.bindings.iter().enumerate() {
+            for b in file_bindings {
+                if b.target == BindTarget::CNamespace {
+                    let target = wolf_pkg::audit::C_IMPORT_TARGET.to_string();
+                    v.push((
+                        Cap::Ffi,
+                        Reach::Import { target },
+                        Some((md.files[k], b.decl_span)),
+                    ));
+                }
+            }
+        }
+        for &fi in &md.files {
+            for r in res.refs.get(fi).into_iter().flatten() {
+                if let wolf_sema::RefTarget::Prelude(name) = &r.target
+                    && let Some(cap) = builtin_cap(name)
+                {
+                    v.push((
+                        cap,
+                        Reach::Builtin { name: name.clone() },
+                        Some((fi, r.span)),
+                    ));
+                }
+            }
+        }
+        v
+    };
+    let own: Vec<Vec<OwnReach>> = (0..pkg.modules.len()).map(own_of).collect();
+    // Each std module's reach, closed over its std imports: cap → the
+    // first builtin (or facade import) that reaches it.
+    let mut std_reach: Vec<Option<BTreeMap<Cap, String>>> = vec![None; pkg.modules.len()];
+    fn close(
+        m: usize,
+        pkg: &wolf_sema::Package,
+        is_std: &dyn Fn(usize) -> bool,
+        own: &[Vec<OwnReach>],
+        memo: &mut [Option<BTreeMap<Cap, String>>],
+    ) -> BTreeMap<Cap, String> {
+        if let Some(done) = &memo[m] {
+            return done.clone();
+        }
+        // Cycle-closing edges are excluded from `deps`, so the std
+        // graph is a DAG; the placeholder only guards a malformed one.
+        memo[m] = Some(BTreeMap::new());
+        let mut acc: BTreeMap<Cap, String> = BTreeMap::new();
+        for (cap, how, _) in &own[m] {
+            let via = match how {
+                Reach::Import { target } => target,
+                Reach::Builtin { name } => name,
+                Reach::Std { via, .. } => via,
+            };
+            acc.entry(*cap).or_insert_with(|| via.clone());
+        }
+        for &d in &pkg.modules[m].deps {
+            if is_std(d) {
+                for (cap, via) in close(d, pkg, is_std, own, memo) {
+                    acc.entry(cap).or_insert(via);
+                }
+            }
+        }
+        memo[m] = Some(acc.clone());
+        acc
+    }
+    let mut out = Vec::new();
+    for m in 0..pkg.modules.len() {
+        let dotted = pkg.modules[m].dotted();
+        let Some(owner) = owner_of(project, &dotted, is_std(m)) else {
+            continue;
+        };
+        let at = |s: Site| s.map(|(fi, sp)| site(pkg, fi, sp));
+        for (cap, reach, s) in own[m].iter().cloned() {
+            out.push(CapUse {
+                owner,
+                cap,
+                module: dotted.clone(),
+                reach,
+                span: s.map(|(_, sp)| sp),
+                at: at(s).unwrap_or_else(|| "its imports".to_string()),
+            });
+        }
+        for &d in &pkg.modules[m].deps {
+            if !is_std(d) {
+                continue;
+            }
+            let s = import_site(m, d);
+            for (cap, via) in close(d, pkg, &is_std, &own, &mut std_reach) {
+                out.push(CapUse {
+                    owner,
+                    cap,
+                    module: dotted.clone(),
+                    reach: Reach::Std {
+                        module: pkg.modules[d].dotted(),
+                        via,
+                    },
+                    span: s.map(|(_, sp)| sp),
+                    // A home-module edge (`[type.method.home]`) has no
+                    // `use` line: the method call loaded it.
+                    at: at(s).unwrap_or_else(|| "a method call (its home module)".to_string()),
+                });
+            }
+        }
+    }
+    out
 }
 
 /// The static transparency log, when the environment names one:
@@ -923,7 +1160,7 @@ pub fn publish(args: &[String]) {
         sources.add(unit.raw.file, unit.raw.display.clone(), &unit.raw.src);
     }
     let mut diags = res.diagnostics.clone();
-    diags.extend(capability_diagnostics(project_ref, &res.package));
+    diags.extend(capability_diagnostics(project_ref, &res));
     if diags
         .iter()
         .any(|d| d.severity == wolf_diag::Severity::Error)
@@ -1053,5 +1290,55 @@ mod show_path_tests {
             show_path(Path::new("app/.wolf-publish/x.record")),
             "app/.wolf-publish/x.record"
         );
+    }
+}
+
+#[cfg(test)]
+mod builtin_cap_tests {
+    use super::builtin_cap;
+    use wolf_pkg::manifest::Cap;
+
+    /// The sandbox table decides; this only names the manifest word.
+    /// Every capability-carrying family is charged, by its first and
+    /// a later member (s217, wolf-lang#615).
+    #[test]
+    fn each_capability_family_is_charged_from_the_sandbox_table() {
+        for (name, cap) in [
+            ("read_text", Cap::Fs),
+            ("fs_read_text", Cap::Fs),
+            ("fs_read_at", Cap::Fs),
+            ("net_fetch", Cap::Net),
+            ("net_nodelay", Cap::Net),
+            ("env_var", Cap::Env),
+            ("os_cwd", Cap::Env),
+            ("os_cpus", Cap::Env),
+            ("os_spawn", Cap::Exec),
+            ("os_exit", Cap::Exec),
+            ("os_signal_listen", Cap::Exec),
+        ] {
+            assert_eq!(builtin_cap(name), Some(cap), "{name}");
+        }
+    }
+
+    /// Stdio, the clock and randomness have sandbox categories (they are
+    /// refused at comptime) but no capability name in the manifest; the
+    /// pure builtins and every non-builtin have neither.
+    #[test]
+    fn stdio_clock_random_and_pure_names_carry_no_capability() {
+        for name in [
+            "print",
+            "eprint",
+            "read_line",
+            "clock_ms",
+            "time_sleep_ms",
+            "random_seed",
+            "os_random",
+            "json_get",
+            "str_from_utf8",
+            "region_bytes",
+            "left",
+        ] {
+            assert_eq!(builtin_cap(name), None, "{name}");
+        }
     }
 }
