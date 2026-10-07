@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 510..574 name=Plan fields=3
+FnDecl 576..789 name=clobber body=Block
+FnDecl 791..982 name=plan body=Block
+FnDecl 984..1260 name=main body=Block
