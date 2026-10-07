@@ -1,0 +1,50 @@
+//! check: run(exit=0, stdout="plan-7 8 w7-0 w7-2 3 26890\n")
+//! phase: run
+//! conforms: mem.region.copyout
+//!
+//! s216 — the copy is deep: a struct holding a `List[str]`, a `str`
+//! view (`t.trim()` of a string built in the block) and an `int` leaves
+//! `scratch` as a copy in the enclosing region, every `str`'s bytes
+//! materialized there. `clobber()` then runs a region of its own that
+//! reuses the freed chunk, so a value still naming `scratch` would
+//! print `ZZZZ…` on native and release.
+
+struct Plan {
+    words: List[str],
+    name: str,
+    n: int,
+}
+
+fn clobber() -> int {
+    var t = 0
+    region other {
+        var k = 0
+        while k < 1000 {
+            let s = "ZZZZZZZZZZZZZZZZZZZZZZZZ{k}"
+            t += s.len
+            k += 1
+        }
+    }
+    t
+}
+
+fn plan(i: int) -> Plan {
+    var ws = List[str]()
+    var k = 0
+    while k < 3 {
+        (mut ws).push("w{i}-{k}")
+        k += 1
+    }
+    Plan { words: ws, name: "plan-" + "{i}", n: i }
+}
+
+fn main() -> !int {
+    let p = copy region scratch {
+        let q = plan(7)
+        let t = "  {q.name}  "
+        Plan { words: q.words, name: t.trim(), n: q.n + 1 }
+    }
+    let t = clobber()
+    print("{p.name} {p.n} {p.words[0]} {p.words[2]} {p.words.len} {t}")
+    0
+}

@@ -1,0 +1,50 @@
+//! check: run(exit=0, stdout="value-20 value-30 v1 3 4 (1, two) 26890\n")
+//! phase: run
+//! conforms: mem.region.copyout
+//!
+//! s216 — maps and tuples copy out too: a `Map[str, str]` whose keys
+//! and values were built in the block, a `Map[str, int]`, a `List[str]`
+//! and a `(int, str)` leave as copies in the enclosing region (each
+//! entry's key and value materialized), then `clobber()` reuses the
+//! freed chunk.
+
+struct Env {
+    vars: Map[str, str],
+    order: List[str],
+    hits: Map[str, int],
+    pair: (int, str),
+}
+
+fn clobber() -> int {
+    var t = 0
+    region other {
+        var k = 0
+        while k < 1000 {
+            let s = "ZZZZZZZZZZZZZZZZZZZZZZZZ{k}"
+            t += s.len
+            k += 1
+        }
+    }
+    t
+}
+
+fn main() -> !int {
+    let e = copy region scratch {
+        var vars = Map[str, str]()
+        var order = List[str]()
+        var hits = Map[str, int]()
+        var k = 0
+        while k < 4 {
+            let name = "v" + "{k}"
+            vars[name] = "value-{k * 10}"
+            (mut order).push(name)
+            hits["h{k}"] = k
+            k += 1
+        }
+        Env { vars: vars, order: order, hits: hits, pair: (1, "t" + "wo") }
+    }
+    let t = clobber()
+    let (a, b) = e.pair
+    print("{e.vars["v2"] else "?"} {e.vars["v3"] else "?"} {e.order[1]} {e.hits["h3"] else -1} {e.vars.len} ({a}, {b}) {t}")
+    0
+}

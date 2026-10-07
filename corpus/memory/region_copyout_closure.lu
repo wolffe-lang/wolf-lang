@@ -1,0 +1,16 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.copyout
+//!
+//! s216 — a fn value has no copy that is independent of what it
+//! captured (`s`, built in `scratch`): E1010 at the block.
+
+fn main() -> !int {
+    let f = copy region scratch {
+        let s = "x{1}"
+        let g = fn() { s.len }
+        g
+    }
+    print("{f()}")
+    0
+}

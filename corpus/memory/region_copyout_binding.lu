@@ -1,0 +1,17 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.copyout, mem.region.escape
+//!
+//! s216 — a binding declared outside the block that holds a value
+//! built inside it is not the block's value and is not copied: E1010,
+//! exactly as for `region { }`.
+
+fn main() -> !int {
+    var out = ""
+    let v = copy region scratch {
+        out = "built-" + "{7}"
+        5
+    }
+    print("{out} {v}")
+    0
+}
