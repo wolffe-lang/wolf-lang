@@ -3,14 +3,24 @@
 //! Every package declares its ambient-authority footprint; the audit
 //! surface renders the transitive tree, and upgrades that *acquire*
 //! authority are surfaced before the ledger changes (CI-enforceable).
-//! Enforcement's static half lives here too: a package whose modules
-//! import a capability-carrying std facade module without declaring
-//! the capability fails its build (E1504) — the tree is only
-//! trustworthy if it cannot silently under-report.
+//! Enforcement's static half lives here too: a package whose code
+//! reaches a capability it does not declare fails its build (E1504) —
+//! the tree is only trustworthy if it cannot silently under-report.
+//!
+//! What a package REACHES (s217, wolf-lang#615) is three things, each a
+//! [`CapUse`] the driver derives from the resolved code: an import of a
+//! capability-carrying std facade module or `import c` ([`Reach::Import`]);
+//! a prelude host builtin named anywhere in the package's own code — the
+//! sandbox table decides its capability ([`Reach::Builtin`]); and a std
+//! module the package imports whose own code reaches one
+//! ([`Reach::Std`]). Until s217 only the first counted, so a `caps=[]`
+//! dependency read the filesystem through `fs_read_text` with no
+//! diagnostic and `wolf audit` said `effective: []`.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use wolf_diag::{Diagnostic, codes};
+use wolf_span::Span;
 
 use crate::lock::Lock;
 use crate::manifest::Cap;
@@ -101,8 +111,8 @@ fn render_node(project: &Project, i: usize, prefix: &str, out: &mut String) {
     }
 }
 
-/// The effective transitive capability set: the union over every
-/// package in the build.
+/// The DECLARED transitive capability set: the union over every
+/// package's manifest. What the code reaches is [`effective_reached`].
 pub fn effective(project: &Project) -> BTreeSet<Cap> {
     project
         .pkgs
@@ -147,73 +157,272 @@ pub fn diff_against_lock(project: &Project, lock: &Lock) -> Vec<CapDelta> {
     out
 }
 
-/// The import-graph half of I13 enforcement. `module_imports` is the
-/// resolved build's module graph: (dotted module name, dotted names it
-/// imports). A module's owning package is the resolved package whose
-/// alias is the module's first segment (the root package otherwise);
-/// an import of `std.net`/`std.fs`/`std.env` requires the owner to
-/// declare the capability. Undeclared use is E1504 — an error, never
-/// a warning.
-pub fn capability_check(
-    project: &Project,
-    module_imports: &[(String, Vec<String>)],
-) -> Vec<Diagnostic> {
-    let by_alias: BTreeMap<&str, usize> = project
-        .pkgs
-        .iter()
-        .enumerate()
-        .skip(1)
-        .filter(|(_, p)| !p.is_std)
-        .map(|(i, p)| (p.alias.as_str(), i))
-        .collect();
-    // (owner package, capability) -> first importing (module, target).
-    let mut missing: BTreeMap<(usize, Cap), (String, String)> = BTreeMap::new();
+/// How a package reaches a capability (s217).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Reach {
+    /// An import the facade rule names: `use std.net` / `std.fs` /
+    /// `std.env`, or `import c` (→ `ffi`).
+    Import { target: String },
+    /// A prelude host builtin named in the package's own code; its
+    /// capability is the sandbox table's category for the name.
+    Builtin { name: String },
+    /// A std module the package imports reaches the capability through
+    /// its own code (`std.process` → `os_spawn`), `via` naming the first
+    /// builtin or facade import that does.
+    Std { module: String, via: String },
+}
+
+/// One site where a package's code reaches a capability.
+#[derive(Debug, Clone)]
+pub struct CapUse {
+    /// The package charged: an index into [`Project::pkgs`].
+    pub owner: usize,
+    pub cap: Cap,
+    /// The dotted module holding the site (`""` = the root module).
+    pub module: String,
+    pub reach: Reach,
+    /// The site itself (the builtin's name token, the `use` line), when
+    /// one is known.
+    pub span: Option<Span>,
+    /// The site as a reader finds it: `display:line:col`.
+    pub at: String,
+}
+
+impl CapUse {
+    /// "calls `fs_read_text`" — what the site does, for messages.
+    pub fn what(&self) -> String {
+        match &self.reach {
+            Reach::Import { target } => format!("imports `{target}`"),
+            Reach::Builtin { name } => format!("calls `{name}`"),
+            Reach::Std { module, via } => format!("uses `{module}`, which reaches `{via}`"),
+        }
+    }
+
+    fn rank(&self) -> u8 {
+        match self.reach {
+            Reach::Import { .. } => 0,
+            Reach::Std { .. } => 1,
+            Reach::Builtin { .. } => 2,
+        }
+    }
+}
+
+/// The package that owns a module, by the module's dotted path: the
+/// resolved package whose alias is the first segment, the root package
+/// otherwise. `None` for a std module (`std_module` — the caller knows
+/// whether `std.…` is the facade): std is charged to whoever imports
+/// it, never to itself or to the root.
+pub fn owner_of(project: &Project, dotted: &str, std_module: bool) -> Option<usize> {
+    if std_module {
+        return None;
+    }
+    let first = dotted.split('.').next().unwrap_or("");
+    Some(
+        project
+            .pkgs
+            .iter()
+            .enumerate()
+            .skip(1)
+            .find(|(_, p)| !p.is_std && p.alias == first)
+            .map_or(0, |(i, _)| i),
+    )
+}
+
+/// The import half alone, from a module→imports table: every import
+/// the facade rule names, charged to the module's owner, with no site.
+pub fn import_uses(project: &Project, module_imports: &[(String, Vec<String>)]) -> Vec<CapUse> {
+    let mut out = Vec::new();
     for (module, imports) in module_imports {
-        let first = module.split('.').next().unwrap_or("");
-        let owner = by_alias.get(first).copied().unwrap_or(0);
+        let std_module = module == "std" || module.starts_with("std.");
+        let Some(owner) = owner_of(project, module, std_module) else {
+            continue;
+        };
         for target in imports {
             let Some(cap) = import_cap(target) else {
                 continue;
             };
-            if project.pkgs[owner].caps.contains(&cap) {
-                continue;
-            }
-            missing
-                .entry((owner, cap))
-                .or_insert_with(|| (module.clone(), target.clone()));
+            out.push(CapUse {
+                owner,
+                cap,
+                module: module.clone(),
+                reach: Reach::Import {
+                    target: target.clone(),
+                },
+                span: None,
+                at: String::new(),
+            });
         }
     }
+    out
+}
+
+/// The import-graph half of I13 enforcement. `module_imports` is the
+/// resolved build's module graph: (dotted module name, dotted names it
+/// imports). An import of `std.net`/`std.fs`/`std.env` (or `import c`)
+/// requires the owner to declare the capability. Undeclared use is
+/// E1504 — an error, never a warning. The build calls
+/// [`capability_check_uses`] with the whole derivation.
+pub fn capability_check(
+    project: &Project,
+    module_imports: &[(String, Vec<String>)],
+) -> Vec<Diagnostic> {
+    capability_check_uses(project, &import_uses(project, module_imports))
+}
+
+/// Every (package, capability) its code reaches without declaring it:
+/// the first use of each (imports first, then std modules, then
+/// builtins; source order within a kind) and how many more there are.
+pub fn undeclared<'a>(project: &Project, uses: &'a [CapUse]) -> Vec<(&'a CapUse, usize)> {
+    let mut first: BTreeMap<(usize, Cap), (&CapUse, usize)> = BTreeMap::new();
+    for u in uses {
+        if project.pkgs[u.owner].caps.contains(&u.cap) {
+            continue;
+        }
+        first
+            .entry((u.owner, u.cap))
+            .and_modify(|(best, n)| {
+                *n += 1;
+                if u.rank() < best.rank() {
+                    *best = u;
+                }
+            })
+            .or_insert((u, 0));
+    }
+    first.into_values().collect()
+}
+
+/// I13 enforcement over the whole derivation (s217): one E1504 per
+/// (package, capability) reached without a declaration — at the
+/// manifest, where the fix goes, naming the site and what it reaches.
+pub fn capability_check_uses(project: &Project, uses: &[CapUse]) -> Vec<Diagnostic> {
     let mut diags = Vec::new();
-    for ((owner, cap), (module, target)) in missing {
-        let p = &project.pkgs[owner];
-        let where_ = if owner == 0 {
+    for (u, more) in undeclared(project, uses) {
+        let p = &project.pkgs[u.owner];
+        let where_ = if u.owner == 0 {
             "this package".to_string()
         } else {
             format!("dependency `{}`", p.alias)
         };
-        let module = if module.is_empty() {
+        let module = if u.module.is_empty() {
             "the root module".to_string()
         } else {
-            format!("module `{module}`")
+            format!("module `{}`", u.module)
         };
         let Some(span) = p.blame_span else { continue };
-        diags.push(
-            Diagnostic::error(
+        let cap = u.cap.as_str();
+        let mut d = match &u.reach {
+            Reach::Import { target } => Diagnostic::error(
                 codes::E1504,
                 span,
-                format!(
-                    "{where_} uses `{target}` but does not declare the `{}` capability",
-                    cap.as_str()
-                ),
+                format!("{where_} uses `{target}` but does not declare the `{cap}` capability"),
             )
             .with_label(format!("declared capabilities: {}", caps_str(&p.caps)))
             .with_note(format!(
-                "{module} imports `{target}`. Add `{}` to this package's \
+                "{module} imports `{target}`. Add `{cap}` to this package's \
                  `capabilities: [ … ]` (making the footprint visible to every \
-                 consumer running `wolf audit`, I13), or drop the import.",
-                cap.as_str()
+                 consumer running `wolf audit`, I13), or drop the import."
             )),
-        );
+            Reach::Builtin { name } => Diagnostic::error(
+                codes::E1504,
+                span,
+                format!("{where_} calls `{name}` but does not declare the `{cap}` capability"),
+            )
+            .with_label(format!("declared capabilities: {}", caps_str(&p.caps)))
+            .with_note(format!(
+                "{module} calls the host builtin `{name}` at {}, which reaches the \
+                 `{cap}` capability whether or not the package imports a std \
+                 module. Add `{cap}` to this package's `capabilities: [ … ]` \
+                 (making the footprint visible to every consumer running \
+                 `wolf audit`, I13), or stop calling it.",
+                u.at
+            )),
+            Reach::Std { module: m, via } => Diagnostic::error(
+                codes::E1504,
+                span,
+                format!("{where_} uses `{m}` but does not declare the `{cap}` capability"),
+            )
+            .with_label(format!("declared capabilities: {}", caps_str(&p.caps)))
+            .with_note(format!(
+                "{module} imports `{m}` at {}, and `{m}` reaches `{cap}` through \
+                 `{via}`. Add `{cap}` to this package's `capabilities: [ … ]` \
+                 (making the footprint visible to every consumer running \
+                 `wolf audit`, I13), or drop the import.",
+                u.at
+            )),
+        };
+        if let (Some(site), Reach::Builtin { name }) = (u.span, &u.reach) {
+            d = d.with_secondary(
+                site,
+                format!("`{name}` reaches the `{cap}` capability here"),
+            );
+        }
+        if more > 0 {
+            d = d.with_note(format!(
+                "{more} more site{} in the same package reach{} `{cap}`; `wolf audit` lists \
+                 the capability with its reason.",
+                if more == 1 { "" } else { "s" },
+                if more == 1 { "es" } else { "" },
+            ));
+        }
+        diags.push(d);
     }
     diags
+}
+
+/// What the code reaches, by capability: the union of every use.
+pub fn effective_reached(uses: &[CapUse]) -> BTreeSet<Cap> {
+    uses.iter().map(|u| u.cap).collect()
+}
+
+/// `wolf audit`'s report (s217): the tree, then `effective` — what the
+/// manifests declare united with what the code reaches — then one
+/// reason line per (capability, package). `derived` is `Err` when the
+/// code could not be loaded: the declared set is all the audit can say,
+/// and it says so.
+pub fn render_audit(project: &Project, derived: Result<&[CapUse], &str>) -> String {
+    let mut out = String::from("capability tree (I13)\n");
+    if project.pkgs.is_empty() {
+        return out;
+    }
+    render_node(project, 0, "", &mut out);
+    let uses: &[CapUse] = derived.unwrap_or(&[]);
+    let mut eff = effective(project);
+    eff.extend(effective_reached(uses));
+    let words: Vec<&str> = eff.iter().map(|c| c.as_str()).collect();
+    out.push_str(&format!("effective: [{}]\n", words.join(", ")));
+    for cap in &eff {
+        for (i, p) in project.pkgs.iter().enumerate() {
+            if p.is_std {
+                continue;
+            }
+            let declared = p.caps.contains(cap);
+            let mut sites = uses.iter().filter(|u| u.owner == i && u.cap == *cap);
+            let first = sites.clone().min_by_key(|u| u.rank());
+            let n = sites.by_ref().count();
+            if !declared && first.is_none() {
+                continue;
+            }
+            let who = if i == 0 {
+                format!("{} (root)", p.name)
+            } else {
+                p.alias.clone()
+            };
+            let more = if n > 1 {
+                format!(" (+{} more)", n - 1)
+            } else {
+                String::new()
+            };
+            let line = match (declared, first) {
+                (true, Some(u)) => format!("declared; {} at {}{more}", u.what(), u.at),
+                (true, None) if derived.is_ok() => {
+                    "declared (nothing in its code reaches it)".to_string()
+                }
+                (true, None) => "declared".to_string(),
+                (false, Some(u)) => format!("UNDECLARED: {} at {}{more}", u.what(), u.at),
+                (false, None) => unreachable!("filtered above"),
+            };
+            out.push_str(&format!("  {}: {who} — {line}\n", cap.as_str()));
+        }
+    }
+    out
 }
