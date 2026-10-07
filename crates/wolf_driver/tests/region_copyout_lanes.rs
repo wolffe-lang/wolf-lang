@@ -235,7 +235,7 @@ fn refused_everywhere(entry: &Path, lupin_pre_runs: bool) {
 /// (`copy` of a block) and, through #618, ran the block's value from
 /// freed bytes — printing the right answer by luck, so this row alone
 /// is not red there; with #618 fixed and no copy-out it is
-/// `fail(E1010)` (s216's 304c00b3), and the struct and map rows below,
+/// `fail(E1010)` (s216's e84d369e), and the struct and map rows below,
 /// whose values are non-`Copy`, are `fail(E1010)` at trunk itself.
 #[test]
 fn the_loop_keeps_each_turn_s_result() {
