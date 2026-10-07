@@ -327,6 +327,7 @@
     "mem.region.cap.1": "02-memory-model.md",
     "mem.region.cap.2": "02-memory-model.md",
     "mem.region.cap.3": "02-memory-model.md",
+    "mem.region.copyout": "02-memory-model.md",
     "mem.region.create": "02-memory-model.md",
     "mem.region.create.1": "02-memory-model.md",
     "mem.region.create.2": "02-memory-model.md",

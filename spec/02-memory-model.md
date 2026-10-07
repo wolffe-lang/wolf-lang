@@ -691,6 +691,93 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   not the `str`. Witnesses `corpus/memory/region_str_concat_return.lu`
   and `region_str_concat_send.lu`.)
 
+### Copy-out `[mem.region.copyout]`
+
+- `[mem.region.copyout]` **`copy region name? { … }`** — the region
+  block with the `copy` prefix. The block runs exactly as
+  `region name? { … }` does (`[mem.region.create.1]`; its region is
+  the body's ambient, `[mem.region.create.3]`). At its closing brace,
+  while the block's region is still live, the block's VALUE is copied
+  into the region that was ambient where the block was entered — a
+  deep copy in which every `str` the value reaches has its bytes
+  materialized there (not shared, as a plain `copy` of a `str` shares
+  them, `[mem.tier0.move.3]`), every `List` and `Map` gets a fresh
+  buffer there, and structs, tuples, enums and error rows are rebuilt
+  around their copied parts — and only then is the block's region
+  freed wholesale (`[mem.region.intra.2]`). The expression's value is
+  the copy. Nothing else changes: an outer binding, module state, a
+  channel or any other holder of a value built in the block is E1010
+  as for the plain block (`[mem.region.escape]`); a `return`, `break`
+  or `?` leaving the block hands out no copy and frees the region on
+  the way, so a value it carries out of the block is E1010 too. A
+  value whose type has a part no copy can make independent of the
+  region — a region value, a fn value, a `shared`/`weak` cell, a
+  channel, mutex, task scope or proc handle, a `Pool`, a raw pointer,
+  a trait object, an unresolved type parameter — is E1010 at the
+  block, naming the part. In every other respect the block is
+  `region { }`: a name, a strategy and a `cap:` budget are written and
+  mean what they mean there, the budget binding the block's own work
+  and not the copy, which is charged to the enclosing region.
+  **Why this is sound.** The value that leaves is a fresh allocation in
+  a region that outlives the block, made before the free; it shares no
+  byte with the dying region, so it carries none of the block's sites,
+  and the checked machine, native and release all free the region
+  after the copy and before the expression's value is used. A raw
+  pointer stashed into the block's region and read after the `}` is
+  `[mem.ub]` row P4 (`[mem.prov.region]`), as for any freed region.
+  **The cost, stated.** One deep copy of the block's value per
+  execution, in time and in bytes in the enclosing region —
+  proportional to the value, not to the work the block did — paid
+  only where the prefix is written; a scalar value costs nothing to
+  copy. Nothing changes for any program without the prefix.
+  **What it is for, and what it leaves.** A long-running loop — a
+  shell's command loop, a server's request loop, a kernel's event
+  loop — computes each turn in the block and keeps the turn's result:
+  #612's witness (twenty `str`s and a `List` per turn, one `str` kept
+  in a map) peaked at 27,656 KB at 20,000 turns and 53,020 KB at 40,000
+  with no region, and at 2,836 KB and 3,580 KB with the prefix (native;
+  release 2,984 and 3,528), on linux x86-64. What still grows is the
+  kept value itself: a superseded result is not freed by the region
+  that holds the loop's state (here the process root, which frees
+  nothing), about 33 bytes a turn in that witness; keeping a scalar,
+  the loop is flat. Bounding the state's own garbage — compacting it
+  into a fresh region and freeing the old — is a separate question.
+  The pattern the form asks of an interpreter is compute in the block,
+  commit outside it: a `mut` argument passed to a call inside the block
+  gains the call's site (D12), so the state is written after the copy,
+  not during the work.
+  **Ruling owed: the spelling** (s216, 2026-10-07, wolf-lang#612). The
+  problem: a `region` block frees a turn's temporaries, but every way
+  to hand its result to longer-lived state is E1010 — rightly, since
+  the result's bytes are in the dying region; `copy` inside the block
+  allocates in the dying region (and for a `str` shares the bytes,
+  ruling #35), a `List[byte]` declared outside grows in it, and the
+  one way past E1010 that existed was the unsound wolf-lang#618. Three
+  designs: (A, implemented) `copy region { … }`: no new token, keyword
+  or code; the second prefix that changes what a block's `}` does,
+  beside `freeze region { … }`; the copy is the block's VALUE only, so
+  a loop that keeps several things returns a struct of them. (B) a
+  materializing copy aimed at a named outer region from inside the
+  block, `copy v in outer` or `in outer { st.x = v }`: more general
+  (several writes, straight into state, mid-block) but it needs a name
+  for the region the block was entered from, which D12 leaves
+  anonymous, a second meaning for `copy` of a `str` in one position,
+  and an outer-region window open inside the block that the antichain
+  and edge rules (`[mem.region.multiopen]`, `[mem.region.edge]`) must
+  then police. (C) a per-iteration region on a loop
+  (`while c region { … }`): sugar that frees each pass but leaves the
+  result question exactly where it was (A or B is still needed), and
+  fixes a granularity an interpreter does not share (pelt's turn is a
+  COMMAND, nested inside loops of the interpreted script, not a wolf
+  loop pass). Recommendation A: the smallest surface that is sound by
+  construction, implemented on every machine with machinery they
+  already had (`freeze region`'s block, `copy`'s deep copy). A
+  different spelling of A (`region name copy { }`, a `keep` keyword) is
+  a rename of the same rule.
+  Witnesses `corpus/memory/region_copyout_*.lu` and the driver gate
+  `region_copyout_lanes.rs` (the bounded-memory rows read `VmHWM` at
+  20,000 and 40,000 turns, with the no-region control).
+
 ### Cross-region edges `[mem.region.edge]`
 
 Edge legality (source stores a reference to target):
