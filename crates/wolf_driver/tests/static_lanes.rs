@@ -25,7 +25,10 @@
 //! did, measured; its closed attribute set (is70) refuses the hosted
 //! `#[section]` program E0817 where 0.1.45 ran it (ruled at r28).
 //! 0.1.47 (the 0.2.24 pairing, r29) is still pre-mirror (#190 open) and
-//! answers as 0.1.46 did, measured; its pins are carried.
+//! answered as 0.1.46 did. 0.1.48 (the 0.2.25 pairing, r30) carries
+//! is73's mirror (#190 closed) and answers every row as the clauses say,
+//! measured unpinned; every pin dropped, and lupin is held to the same
+//! answer as the machines.
 
 mod lane_exit;
 
@@ -318,29 +321,6 @@ fn every_machine(
     }
 }
 
-/// lupin 0.1.45's measured answer where it parts (rows-*.log); 0.1.46
-/// (the 0.2.23 pairing, r28) and 0.1.47 (the 0.2.24 pairing, r29)
-/// answer every one of these rows the same, measured.
-const fn pin(verdict: &'static str, named: &'static str) -> [Pin<'static>; 3] {
-    [
-        Pin {
-            version: "0.1.45",
-            verdict,
-            named,
-        },
-        Pin {
-            version: "0.1.46",
-            verdict,
-            named,
-        },
-        Pin {
-            version: "0.1.47",
-            verdict,
-            named,
-        },
-    ]
-}
-
 const NO_PIN: &[Pin<'static>] = &[];
 
 /// `[mem.static.1]`, `[mem.static.3]` (wolf-lang#560): `const` and `let`
@@ -549,26 +529,14 @@ fn a_var_is_written_across_calls_inside_unsafe() {
 #[test]
 fn a_var_outside_unsafe_is_e1301_at_every_site() {
     let e = fails("fail(E1301)", &["E1301"]);
-    every_machine(
-        "memory/static_var_outside_unsafe.lu",
-        e,
-        Some(e),
-        e,
-        &pin("exit(1)", ""),
-    );
+    every_machine("memory/static_var_outside_unsafe.lu", e, Some(e), e, NO_PIN);
 }
 
 /// `[mem.static.3]`: an initializer that reads a `var` is E0705.
 #[test]
 fn a_run_time_initializer_is_e0705() {
     let e = fails("fail(E0705)", &["E0705"]);
-    every_machine(
-        "memory/static_init_not_comptime.lu",
-        e,
-        Some(e),
-        e,
-        &pin("exit(0)", ""),
-    );
+    every_machine("memory/static_init_not_comptime.lu", e, Some(e), e, NO_PIN);
 }
 
 /// `[mem.static.3]`: two initializers that need each other are each
@@ -576,13 +544,7 @@ fn a_run_time_initializer_is_e0705() {
 #[test]
 fn an_initializer_cycle_is_e0705() {
     let e = fails("fail(E0705)", &["E0705"]);
-    every_machine(
-        "memory/static_init_cycle.lu",
-        e,
-        Some(e),
-        e,
-        &pin("crash", "overflowed its stack"),
-    );
+    every_machine("memory/static_init_cycle.lu", e, Some(e), e, NO_PIN);
 }
 
 /// `[mem.static.3]`: a `List` is not static data yet — refused by name.
@@ -595,13 +557,7 @@ fn a_list_in_module_state_is_refused_by_name() {
         named: "module state of a type that is not static data",
         ub: ("", ""),
     };
-    every_machine(
-        "memory/static_list_let.lu",
-        u,
-        Some(u),
-        u,
-        &pin("exit(0)", ""),
-    );
+    every_machine("memory/static_list_let.lu", u, Some(u), u, NO_PIN);
 }
 
 /// `[abi.link.extern]`: the image's own header read through each host's
@@ -620,7 +576,7 @@ fn an_extern_let_is_the_symbols_address() {
         refused,
         Some(runs("header ok\n")),
         refused,
-        &pin("fail(E0201)", "E0201"),
+        NO_PIN,
     );
 }
 
@@ -628,13 +584,7 @@ fn an_extern_let_is_the_symbols_address() {
 #[test]
 fn an_extern_let_of_a_non_pointer_is_e0819() {
     let e = fails("fail(E0821)", &["E0821"]);
-    every_machine(
-        "membrane/extern_let_not_ptr.lu",
-        e,
-        Some(e),
-        e,
-        &pin("fail(E0201)", "E0201"),
-    );
+    every_machine("membrane/extern_let_not_ptr.lu", e, Some(e), e, NO_PIN);
 }
 
 /// `[abi.link.section]`: the checked machine has no image, so a program
@@ -666,29 +616,14 @@ fn the_checked_machine_refuses_section_placement_by_name() {
         },
     );
     if let Some(lupin) = lupin_says(&entry) {
-        if lupin.version == "0.1.45" {
-            assert_eq!(
-                (lupin.verdict.as_str(), lupin.stdout.as_str()),
-                ("exit(0)", "24 100\n"),
-                "lupin 0.1.45 (pre-mirror, {LUPIN_ISSUE}) runs the placed program"
-            );
-        } else if lupin.version == "0.1.46" || lupin.version == "0.1.47" {
-            // is70's closed attribute set refuses each `#[section]` by
-            // name, E0817 — the same missing mirror, a stricter symptom
-            // (measured; ruled at r28; 0.1.47 the same, measured at r29).
-            assert_eq!(
-                (lupin.verdict.as_str(), lupin.codes.join(",").as_str()),
-                ("fail(E0817)", "E0817"),
-                "lupin {} (pre-mirror, {LUPIN_ISSUE}) refuses the placed program E0817",
-                lupin.version
-            );
-        } else {
-            assert_eq!(
-                lupin.verdict, "unsupported",
-                "lupin {} (the mirror is {LUPIN_ISSUE}) refuses section placement",
-                lupin.version
-            );
-            assert!(lupin.unsupported.contains("section placement"));
-        }
+        // 0.1.45 ran the placed program and 0.1.46–0.1.47 refused it
+        // E0817 (pre-mirror); 0.1.48 (r30) declines it by name, as the
+        // checked machine does (is73, #190 closed). The pins dropped.
+        assert_eq!(
+            lupin.verdict, "unsupported",
+            "lupin {} (the mirror is {LUPIN_ISSUE}) refuses section placement",
+            lupin.version
+        );
+        assert!(lupin.unsupported.contains("section placement"));
     }
 }
