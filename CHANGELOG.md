@@ -83,9 +83,9 @@ kw11's `conc/atomic_race_plain.lu` is `check: pass`, and lupin's
   0.1.47) is red on exactly the sixteen dropped cases.
 - **The ritual** (#87, with #281's control against the 0.1.47 archive,
   the same corpus and the same release `wolf`):
-  - checked: **moved 8 ledger counts**. Agreements 601 → 603, hard
-    20 → 16, SOUNDNESS 0 → 0.
-  - native: **moved 11**. Agreements 637 → 639, hard 34 → 27,
+  - checked: **moved 8 ledger counts**. Agreements 605 → 607, hard
+    20 → 16, SOUNDNESS 0 → 0 (1007 files).
+  - native: **moved 11**. Agreements 642 → 644, hard 34 → 27,
     SOUNDNESS 8 → 8.
   - Every move is on is73's rows or #205's, toward agreement or a
     by-name decline. Nine checked files and six native moved below the
