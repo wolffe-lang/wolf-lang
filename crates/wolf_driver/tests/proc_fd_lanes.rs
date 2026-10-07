@@ -39,7 +39,10 @@ fn wolf() -> &'static str {
 /// The lupin releases that predate the mirror, with the commit each
 /// release archive reports (a development build of the mirror still
 /// says the last released version; the commit holds it apart).
-const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[("0.1.47", Some("b3228cb"))];
+/// 0.1.48 (r30, archive sha256 81cfd77a…) reports `531bf05` and predates
+/// the mirror too (wolf-interp#208 is unmerged at the rebase onto it).
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] =
+    &[("0.1.47", Some("b3228cb")), ("0.1.48", Some("531bf05"))];
 
 fn pre_mirror(lupin: &Obs) -> bool {
     PRE_MIRROR_LUPIN
