@@ -180,14 +180,15 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // per host — `env`, with the rest of the process-context reads.
         | "os_cpus" => SandboxCategory::Env,
         "os_spawn" | "os_spawn_with" | "os_wait" | "os_kill" | "os_exit" => SandboxCategory::Exec,
-        // s215: the spawn with a descriptor map starts a program —
-        // `exec` with the trio. The pipe, the directory change and the
-        // terminal question start nothing and touch no process table,
-        // but each ACTS on the machine that compiles (a descriptor
-        // made, the compiler's own directory moved, its terminal
-        // probed): `io`, whose reason is exactly that.
-        "os_spawn_fds" => SandboxCategory::Exec,
-        "os_pipe" | "os_chdir" | "os_isatty" => SandboxCategory::Io,
+        // s215, ruling #54: the spawn with a descriptor map starts a
+        // program and the pipe exists to plumb one — both `exec`, with
+        // the trio. The directory change moves process context that
+        // `os_cwd` reads — `env`, with it. The terminal question acts on
+        // the machine that compiles and starts nothing — `io`. (s217
+        // charges package capabilities from these categories.)
+        "os_spawn_fds" | "os_pipe" => SandboxCategory::Exec,
+        "os_chdir" => SandboxCategory::Env,
+        "os_isatty" => SandboxCategory::Io,
         // signal RECEPTION (s114, #126): process control, so `exec`
         // like the rest of the family — comptime-refused (you cannot
         // wait for an OS signal at compile time).
