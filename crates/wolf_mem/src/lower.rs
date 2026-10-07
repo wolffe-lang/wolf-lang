@@ -301,6 +301,10 @@ struct LoopFrame {
 }
 
 pub(crate) struct Lowerer<'t> {
+    /// s216 (wolf-lang#618): the NAME spans of the declared fns whose
+    /// `str` result is only ever static bytes (`crate::strres`): a call
+    /// to one mints no ambient site.
+    static_strs: Option<&'t std::collections::HashSet<Span>>,
     pkg: &'t Package,
     sigs: &'t SigTables,
     tb: &'t TypedBody,
@@ -4131,6 +4135,64 @@ impl<'t> Lowerer<'t> {
         }
     }
 
+    /// s216 (wolf-lang#618): the receiver's type of a method call
+    /// spelled `recv.m(…)` / `(mut recv).m(…)`.
+    fn expr_ty_of_receiver(&self, d: &CallExpr<'t>) -> Option<Ty<'_>> {
+        let base = MemberExpr::cast(d.callee()?)?.base()?;
+        let recv = match ParenExpr::cast(base).and_then(|p| p.expr()) {
+            Some(inner) => inner,
+            None => base,
+        };
+        self.expr_ty(recv.span)
+    }
+
+    /// s216 (wolf-lang#618): is this method call one of the builtin
+    /// surfaces — a receiver whose type sema dispatches to its own
+    /// tables (`[type.str]`, the prelude containers and cells, the
+    /// conc handles, the raw pointer), never to a declared method?
+    /// Mirrors `wolf_sema::check::method_call`'s dispatch.
+    fn recv_is_builtin(&self, d: &CallExpr<'t>) -> bool {
+        self.expr_ty_of_receiver(d).is_some_and(|t| {
+            matches!(
+                t.kind(),
+                TyKind::Prim(Prim::Str)
+                    | TyKind::Shared(_)
+                    | TyKind::Weak(_)
+                    | TyKind::List(_)
+                    | TyKind::Pool(_)
+                    | TyKind::Map(..)
+                    | TyKind::Chan(_)
+                    | TyKind::TaskScope
+                    | TyKind::Mutex(_)
+                    | TyKind::Proc(_)
+                    | TyKind::ExitReason
+                    | TyKind::Ptr(_)
+            )
+        })
+    }
+
+    /// s216 (wolf-lang#618): a call to a host builtin by its prelude
+    /// name — no declaration (sema records none for the prelude), no
+    /// receiver, and no local binding of that name in the way. A host
+    /// builtin's `str` lives in the process root arena or in static
+    /// data (`wolf_rt`'s `ambient_copy`), never in a region, so it is
+    /// no site; `str_from_utf8`, the one free producer that
+    /// materializes in the ambient region, is matched by
+    /// `is_materializing_str_call` first.
+    fn is_host_builtin_call(&self, d: &CallExpr<'t>, cs: Option<&CallSig>) -> bool {
+        if cs.is_some_and(|c| c.decl_span.is_some() || c.has_self) {
+            return false;
+        }
+        let Some(callee) = d.callee() else {
+            return false;
+        };
+        if callee.kind != SyntaxKind::PathExpr {
+            return false;
+        }
+        let name = self.text(callee.span);
+        self.lookup(&name).is_none() && wolf_sema::prelude::in_prelude(&name)
+    }
+
     /// Is the expression at `span` typed `str` (s153)?
     fn is_str_expr(&self, span: Span) -> bool {
         self.expr_ty(span)
@@ -4590,6 +4652,11 @@ impl<'t> Lowerer<'t> {
         // RECEIVER and never an argument — `s.strip_prefix(p)` views
         // `s`, so `p`'s sites must not attach to the result.
         let mut recv_sites: Vec<SiteId> = Vec::new();
+        // s216 (wolf-lang#618): the sites a `read` argument names, for
+        // a call whose `str` result may be a view of an argument's
+        // bytes (see `declared_str` below). Kept apart from `carry`,
+        // which feeds every non-`Copy` result as before.
+        let mut read_sites: Vec<SiteId> = Vec::new();
         // The receiver, when the resolved callee takes `self` and the
         // call site spells `recv.method(…)`.
         let mut receiver_done = false;
@@ -4790,6 +4857,7 @@ impl<'t> Lowerer<'t> {
                         site_mode,
                         &mut surface,
                         &mut carry,
+                        &mut read_sites,
                         &mut arg_muts,
                         chan_send,
                     )?;
@@ -4892,7 +4960,35 @@ impl<'t> Lowerer<'t> {
         // same site `+` mints (s153, #310) — `ret_heap` never saw it,
         // because `str` is `Copy`.
         let str_site = self.is_materializing_str_call(e);
-        let ret_alloc = ret_heap || str_site;
+        // s216 (wolf-lang#618, `[mem.region.escape]`): a call to a
+        // DECLARED callee — a module or std fn, an impl method, a fn
+        // value, a nested fn — whose result is a `str` (or a `str`
+        // behind a row). The callee builds in ITS caller's region,
+        // which is this frame's ambient at the call (D12,
+        // `[mem.region.create.3]`), so a built result is an ambient
+        // allocation here exactly as a non-`Copy` result is; and its
+        // result may instead be a view of bytes an argument or the
+        // receiver names, so those sites ride it too. `str` is `Copy`,
+        // so `ret_heap` never saw it: `region scratch { out = build(7) }`
+        // handed `out` freed bytes on checked, native and release while
+        // lupin traps `region-fault`. The builtins keep their own
+        // rules: the `str` surface above (views carry the receiver,
+        // the four producers are sites), a container's element read
+        // carries the receiver (below), and a host builtin's bytes are
+        // the process root's or static, never a region's.
+        let builtin_recv = receiver_done && self.recv_is_builtin(&d);
+        let static_callee = cs
+            .and_then(|c| c.decl_span)
+            .is_some_and(|ds| self.static_strs.is_some_and(|set| set.contains(&ds)));
+        let declared_str = !ret_heap
+            && !ret_region
+            && !str_site
+            && !static_callee
+            && !cs.is_some_and(|c| c.c_call)
+            && !builtin_recv
+            && !self.is_host_builtin_call(&d, cs)
+            && self.is_str_or_str_row(e.span);
+        let ret_alloc = ret_heap || str_site || declared_str;
         let mut out = Val::none();
         if ret_alloc || !mut_targets.is_empty() {
             let ty = if ret_alloc {
@@ -4920,7 +5016,26 @@ impl<'t> Lowerer<'t> {
                 // `str`: their bytes were copied into the new
                 // allocation, never shared ([mem.region.escape]).
                 if ret_heap {
-                    for s in carry {
+                    for s in carry.iter().copied() {
+                        if let Err(i) = out.sites.binary_search(&s) {
+                            out.sites.insert(i, s);
+                        }
+                    }
+                }
+                // s216 (#618): what a declared `str` result may view —
+                // a `take`/`mut` argument's data, a `read` argument's,
+                // the receiver's. A parameter's pseudo-site does not
+                // ride: its bytes outlive this frame and escape no
+                // region in it (s207's rule for `copy`).
+                if declared_str {
+                    let viewed: Vec<SiteId> = carry
+                        .iter()
+                        .chain(read_sites.iter())
+                        .chain(recv_sites.iter())
+                        .copied()
+                        .filter(|s| self.sites[s.0 as usize].kind != SiteKind::Param)
+                        .collect();
+                    for s in viewed {
                         if let Err(i) = out.sites.binary_search(&s) {
                             out.sites.insert(i, s);
                         }
@@ -4947,7 +5062,22 @@ impl<'t> Lowerer<'t> {
         // region had already freed — while `s` itself leaving was
         // E1010. The same bytes, one word narrower, and only one of
         // those two answers can be right.
-        if self.is_str_view_call(e) {
+        // s216 (#618): a builtin container method answering a `str`
+        // (`xs.get(i)`, `m.get(k)`, `xs.pop()`, `xs.last()`) hands back
+        // an ELEMENT, whose bytes live where the container's elements
+        // do — what `xs[i]` carries as a place read, the call carries
+        // as the receiver's sites.
+        let elem_str = builtin_recv
+            && !self.is_str_view_call(e)
+            && !str_site
+            && self.is_str_or_str_row(e.span)
+            && !self
+                .expr_ty_of_receiver(&d)
+                .is_some_and(|t| matches!(t.kind(), TyKind::Prim(Prim::Str)));
+        if elem_str {
+            recv_sites.extend(carry.iter().copied());
+        }
+        if self.is_str_view_call(e) || elem_str {
             for s in recv_sites {
                 if let Err(i) = out.sites.binary_search(&s) {
                     out.sites.insert(i, s);
@@ -5135,6 +5265,7 @@ impl<'t> Lowerer<'t> {
         site_mode: Option<ParamMode>,
         surface: &mut CallSurface,
         carry: &mut Vec<SiteId>,
+        read_sites: &mut Vec<SiteId>,
         arg_muts: &mut Vec<(PlaceId, Span)>,
         sent: bool,
     ) -> R<()> {
@@ -5179,6 +5310,7 @@ impl<'t> Lowerer<'t> {
                     own = Some(v.span);
                     self.emit_read(place, v.span);
                     self.mark_region_lent(place);
+                    read_sites.extend(self.sites_of_place(place).into_iter().map(|(s, _)| s));
                     if sent {
                         let mut pv = self.val_of_place(place, v.span);
                         pv.lent = self.lent_of_place(place, v.span);
@@ -5199,6 +5331,7 @@ impl<'t> Lowerer<'t> {
                     }
                 } else {
                     let av = self.eval_value(v)?;
+                    read_sites.extend(av.sites.iter().copied());
                     if sent {
                         self.demand_sent_outlives_frame(&av, v.span);
                     }
@@ -6078,6 +6211,12 @@ fn collect_binding_spans(pat: &GreenNode, out: &mut Vec<Span>) {
 impl<'t> Lowerer<'t> {
     // -------------------------------------------------- entry points --
 
+    /// s216 (wolf-lang#618): see [`Lowerer::static_strs`].
+    pub(crate) fn with_static_strs(mut self, set: &'t std::collections::HashSet<Span>) -> Self {
+        self.static_strs = Some(set);
+        self
+    }
+
     pub(crate) fn new(
         pkg: &'t Package,
         sigs: &'t SigTables,
@@ -6097,6 +6236,7 @@ impl<'t> Lowerer<'t> {
         // b0: entry, b1: exit.
         let blocks = vec![Block::default(), Block::default()];
         Lowerer {
+            static_strs: None,
             pkg,
             sigs,
             tb,
