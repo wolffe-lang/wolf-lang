@@ -1,0 +1,24 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.copyout, mem.region.escape
+//!
+//! s216 — only the block's own value at its closing brace is copied.
+//! A `return` from inside the block hands `s` to the caller past the
+//! `}` uncopied, so it is the plain block's E1010
+//! (`region_str_view_for_return.lu`), whatever the prefix says.
+
+fn f(c: bool) -> str {
+    let v = copy region scratch {
+        let s = "built-" + "{7}"
+        if c {
+            return s
+        }
+        s
+    }
+    v
+}
+
+fn main() -> !int {
+    print(f(false))
+    0
+}

@@ -1,0 +1,26 @@
+//! check: run(exit=trap(ub))
+//! phase: wir
+//! conforms: mem.region.copyout, mem.prov.region, mem.ub
+//!
+//! s216 — the block's region IS freed at the `}`: a raw pointer to its
+//! backing, stashed in an outer binding (a raw pointer is `Copy` and
+//! carries no site, so nothing refuses the stash), reads freed memory.
+//! That is `[mem.ub]` row P4 (`[mem.prov.region]`): the checked machine
+//! traps `ub` naming P4 at `q[0]`; the compiled tiers' behaviour is
+//! undefined, so `wir` is the deepest phase this header can promise.
+
+fn main() -> !int {
+    var out = 0
+    let keep = region()
+    // # Safety: none — this row exists to read a freed region.
+    unsafe {
+        var q = keep as *u8
+        let n = copy region scratch {
+            q = scratch as *u8
+            5
+        }
+        let v = q[0]
+        out = v as int + n
+    }
+    out
+}

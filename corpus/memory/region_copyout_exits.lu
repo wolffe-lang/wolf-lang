@@ -1,0 +1,50 @@
+//! check: run(exit=0, stdout="12 7 none\n")
+//! phase: run
+//! conforms: mem.region.copyout, mem.region.intra.2
+//!
+//! s216 — every way out of a `copy region` block other than its
+//! closing brace is the plain block's: `continue`, `break` and `?`
+//! free the region and leave WITHOUT a copy (nothing is handed out on
+//! those edges). The `int` they compute with carries no site.
+
+fn first_big(xs: List[int]) -> int ! {none} {
+    var i = 0
+    while i < xs.len {
+        if xs[i] > 100 {
+            return xs[i]
+        }
+        i += 1
+    }
+    none
+}
+
+fn probe() -> str ! {none} {
+    let v = copy region scratch {
+        let n = first_big([1, 2, 3])?
+        "big {n}"
+    }
+    v
+}
+
+fn main() -> !int {
+    var total = 0
+    var i = 0
+    while i < 10 {
+        let n = copy region scratch {
+            let s = "n{i}"
+            if i == 3 {
+                i += 1
+                continue
+            }
+            if i == 7 {
+                break
+            }
+            s.len
+        }
+        total += n
+        i += 1
+    }
+    let r = probe() else "none"
+    print("{total} {i} {r}")
+    0
+}

@@ -1,0 +1,17 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.copyout
+//!
+//! s216 — a value with no independent copy cannot be copied out: a
+//! channel is a handle to a runtime object the block's region holds.
+//! E1010 at the block names the part (`a runtime handle`). Regions,
+//! fn values, cells, pools, raw pointers and trait objects are refused
+//! the same way.
+
+fn main() -> !int {
+    let ch = copy region scratch {
+        channel[int](1)
+    }
+    print("made")
+    0
+}

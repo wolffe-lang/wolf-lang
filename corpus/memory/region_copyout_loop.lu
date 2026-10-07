@@ -1,0 +1,46 @@
+//! check: run(exit=0, stdout="piece 49 3-49 50\n")
+//! phase: run
+//! conforms: mem.region.copyout, mem.region.escape, mem.region.create.3
+//!
+//! s216 (wolf-lang#612) — `copy region { … }`: an interpreter-shaped
+//! loop keeps each turn's result and frees the rest. `build(i)` makes
+//! twenty `str`s and a `List` per turn inside `scratch`; at the `}` the
+//! block's value — one `str` — is copied into the region the block was
+//! entered from (`step`'s ambient, its caller's), and only then is
+//! `scratch` freed. The kept value is stored through the `mut`
+//! parameter's map outside the block, where the copy lives. The same
+//! store from INSIDE the block is E1010 (`region_str_call_index_store.lu`).
+
+struct St {
+    vals: Map[str, str],
+    n: int,
+}
+
+fn build(i: int) -> str {
+    var parts = List[str]()
+    var k = 0
+    while k < 20 {
+        (mut parts).push("piece {i} {k}")
+        k += 1
+    }
+    "{parts[3]}-{i}"
+}
+
+fn step(mut st: St, i: int) {
+    let v = copy region scratch {
+        build(i)
+    }
+    st.vals["x"] = v
+    st.n += 1
+}
+
+fn main() -> !int {
+    var st = St { vals: Map[str, str](), n: 0 }
+    var i = 0
+    while i < 50 {
+        step(mut st, i)
+        i += 1
+    }
+    print("{st.vals["x"] else "?"} {st.n}")
+    0
+}
