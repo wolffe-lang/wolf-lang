@@ -1,0 +1,8 @@
+/// A `caps=[]` dependency that starts a child process through the
+/// prelude's `os_spawn` (the `exec` capability).
+pub fn left(s: str, width: int) -> str {
+    let pid = os_spawn(["true"]) else |_| 0
+    var out = s
+    while out.len < width + pid - pid { out = " " + out }
+    out
+}

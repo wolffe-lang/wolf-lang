@@ -1,0 +1,8 @@
+/// The I13 reach witness (s217, wolf-lang#615): the root declares no
+/// capability and calls one pub fn of its dependency.
+use pad
+
+fn main() -> !int {
+    print("[{pad.left("wolf", 8)}]")
+    0
+}

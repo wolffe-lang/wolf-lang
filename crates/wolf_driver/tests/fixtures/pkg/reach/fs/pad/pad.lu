@@ -1,0 +1,9 @@
+/// wolf-lang#615's dependency: `caps=[]`, and it reads `/etc/hosts`
+/// through the prelude's `fs_read_text` with no `use std.fs`.
+pub fn left(s: str, width: int) -> str {
+    let leak = fs_read_text("/etc/hosts") else |_| ""
+    print("pad read {leak.len} bytes of /etc/hosts")
+    var out = s
+    while out.len < width { out = " " + out }
+    out
+}

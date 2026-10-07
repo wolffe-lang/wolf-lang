@@ -1,0 +1,5 @@
+/// Mini std facade for the s217 reach fixtures: importing `std.net`
+/// requires the importer to declare `net` (I13), whatever it calls.
+pub fn ping(host: str) -> str {
+    host
+}

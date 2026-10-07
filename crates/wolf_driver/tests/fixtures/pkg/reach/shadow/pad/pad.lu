@@ -1,0 +1,11 @@
+/// A `caps=[]` dependency that names its own fn `fs_read_text`: the
+/// resolver binds the call to the declaration, so no capability.
+pub fn left(s: str, width: int) -> str {
+    var out = fs_read_text(s)
+    while out.len < width { out = " " + out }
+    out
+}
+
+fn fs_read_text(s: str) -> str {
+    s
+}

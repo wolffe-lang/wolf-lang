@@ -1,0 +1,11 @@
+/// Mini std `process` for the s217 reach fixtures, shaped like wolf-std's:
+/// it imports `std.net` (for a type, in the real one) and starts children
+/// through the prelude's `os_spawn` — so a module importing it reaches
+/// `exec`, and `net` through its import.
+use std.net
+
+/// Run `prog` and hand back its pid.
+pub fn run(prog: str) -> int {
+    let host = net.ping(prog)
+    os_spawn([host]) else |_| 0
+}

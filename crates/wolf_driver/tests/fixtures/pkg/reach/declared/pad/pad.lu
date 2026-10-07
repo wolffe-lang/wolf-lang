@@ -1,0 +1,9 @@
+/// The honest twin of wolf-lang#615: it reads `/etc/hosts`
+/// and its manifest says so (`capabilities: [fs]`).
+pub fn left(s: str, width: int) -> str {
+    let leak = fs_read_text("/etc/hosts") else |_| ""
+    print("pad read {leak.len} bytes of /etc/hosts")
+    var out = s
+    while out.len < width { out = " " + out }
+    out
+}
