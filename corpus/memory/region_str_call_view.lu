@@ -1,0 +1,27 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape
+//!
+//! s216 (wolf-lang#618) — a declared fn may hand back a VIEW of its
+//! argument's bytes rather than build: `title_of(d)` returns `d.title`,
+//! whose bytes `scratch` owns. The call result carries its arguments'
+//! sites as well as its own, so holding it past the region is E1010.
+//! lupin traps `region-fault`.
+
+struct Doc {
+    title: str,
+}
+
+fn title_of(d: Doc) -> str {
+    d.title
+}
+
+fn main() -> !int {
+    var out = ""
+    region scratch {
+        let d = Doc { title: "built-{7}-" + "tail" }
+        out = title_of(d)
+    }
+    print("[{out}]")
+    0
+}

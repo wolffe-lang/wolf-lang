@@ -1,0 +1,42 @@
+//! check: run(exit=0, stdout="[Input/output error] [zero] [static]\n")
+//! phase: run
+//! conforms: mem.region.escape
+//!
+//! s216 (wolf-lang#618), the legal side. A declared fn whose every
+//! result is a string literal — a literal tail, a literal `return`, an
+//! `if`/`match` of literals, a call to such a fn — hands back static
+//! bytes, which outlive every region, so its call is no site and the
+//! result may leave the block. This is boreutils' `bore.io_error()`
+//! shape (`cat`'s `why = bore.io_error()` inside `region pass`), which
+//! the conservative rule alone refused.
+
+fn io_error() -> str {
+    "Input/output error"
+}
+
+fn which(n: int) -> str {
+    if n > 0 {
+        return io_error()
+    }
+    match n {
+        0 => "zero",
+        _ => io_error(),
+    }
+}
+
+fn label(b: bool) -> str {
+    if b { "static" } else { "dynamic" }
+}
+
+fn main() -> !int {
+    var out = ""
+    var w = ""
+    var l = ""
+    region scratch {
+        out = io_error()
+        w = which(0)
+        l = label(true)
+    }
+    print("[{out}] [{w}] [{l}]")
+    0
+}

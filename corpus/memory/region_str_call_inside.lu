@@ -1,0 +1,23 @@
+//! check: run(exit=0, stdout="built-1-tail\nbuilt-2-tail\n[built-3-tail]\n")
+//! phase: run
+//! conforms: mem.region.escape
+//!
+//! s216 (wolf-lang#618), the legal side. A call's `str` result used
+//! INSIDE the region that owns its bytes is what the region is for; a
+//! call made OUTSIDE any region builds in the caller's region and lives
+//! as long as it does. Neither is refused.
+
+fn build(i: int) -> str {
+    "built-{i}-" + "tail"
+}
+
+fn main() -> !int {
+    region scratch {
+        let a = build(1)
+        print(a)
+        print(build(2))
+    }
+    let kept = build(3)
+    print("[{kept}]")
+    0
+}

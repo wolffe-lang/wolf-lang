@@ -1,0 +1,27 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.create.3
+//!
+//! s216 (wolf-lang#618) — a call to a declared fn whose result is a
+//! `str` is an allocation in the caller's ambient region: the callee
+//! builds where its caller decides (`[mem.region.create.3]`, D12), so
+//! `build(i)` inside `scratch` builds its bytes there, and the block
+//! handing them out is the E1010 `region_str_concat_return.lu` is.
+//! Before s216 the mem tier minted a site only for a non-`Copy` result
+//! and the s160 builtins, so this printed from freed bytes on checked,
+//! native and release; lupin traps `region-fault`.
+
+fn build(i: int) -> str {
+    "built-{i}-" + "tail"
+}
+
+fn f(i: int) -> str {
+    region scratch {
+        build(i)
+    }
+}
+
+fn main() -> !int {
+    print("[{f(7)}]")
+    0
+}
