@@ -5293,7 +5293,7 @@ impl<'t> Lowerer<'t> {
             && !builtin_recv
             && !self.is_host_builtin_call(&d, cs)
             && self.is_str_or_str_row(e.span);
-        let ret_alloc = ret_heap || str_site;
+        let ret_alloc = ret_heap || str_site || declared_str;
         let mut out = Val::none();
         if ret_alloc || !mut_targets.is_empty() {
             let ty = if ret_alloc {
