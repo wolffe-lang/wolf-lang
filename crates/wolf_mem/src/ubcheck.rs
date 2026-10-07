@@ -6973,7 +6973,7 @@ impl<'t> Machine<'t> {
                 if !dir_searchable(&canon) {
                     return Ok(tag("denied"));
                 }
-                self.cwd = Some(canon);
+                self.cwd = Some(plain_path(canon));
                 Ok(Flow::Val(Value::Unit))
             }
             // s215 (`[os.fs.isatty]`): asked of the host descriptor the
@@ -10392,6 +10392,27 @@ fn fd_map_of(flat: &[i64]) -> Option<Vec<(i64, Option<i64>)>> {
         out.push((t, (s >= 0).then_some(s)));
     }
     Some(out)
+}
+
+/// s215: `canonicalize`'s answer as the host's `getcwd` spells it. On
+/// windows the call answers a verbatim path (`\\?\C:\…`, `\\?\UNC\…`)
+/// that `GetCurrentDirectory` never reports, so `os_cwd` after a change
+/// back to the first directory compared unequal (run 37555223637, windows
+/// job 112579792864: `back=false`); the prefix is dropped. Elsewhere the
+/// path is already the host's.
+fn plain_path(p: std::path::PathBuf) -> std::path::PathBuf {
+    if cfg!(windows) {
+        let s = p.to_string_lossy();
+        if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+            return std::path::PathBuf::from(format!(r"\\{rest}"));
+        }
+        if let Some(rest) = s.strip_prefix(r"\\?\")
+            && rest.as_bytes().get(1) == Some(&b':')
+        {
+            return std::path::PathBuf::from(rest);
+        }
+    }
+    p
 }
 
 /// s215: may this process enter `dir`? chdir needs search permission;
