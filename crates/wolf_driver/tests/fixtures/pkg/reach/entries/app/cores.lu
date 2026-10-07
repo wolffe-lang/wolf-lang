@@ -1,0 +1,9 @@
+//! member: false
+//! A standalone entry beside `quiet.lu` that reads the core count
+//! (`env`): the directory view leaves it out, the audit must not.
+
+fn main() -> !int {
+    let n = os_cpus() else |_| 1
+    print("{n}")
+    0
+}
