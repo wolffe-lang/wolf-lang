@@ -18,8 +18,10 @@
 //! 0.1.46 (the 0.2.23 pairing, r28) is still pre-mirror (#188 open):
 //! its pins are carried, six of the nine rows with the verdict changed
 //! to E0817 (its closed attribute set refuses `packed` and `align` by
-//! name; ruled at r28). 0.1.47 (the 0.2.24 pairing, r29) answers as
-//! 0.1.46 did on all nine, measured; the pins are carried.
+//! name; ruled at r28). 0.1.47 (the 0.2.24 pairing, r29) answered as
+//! 0.1.46 did on all nine. 0.1.48 (the 0.2.25 pairing, r30) carries
+//! is73's mirror (#188 closed) and answers all nine as the machines do,
+//! measured unpinned; every pin dropped.
 
 mod lane_exit;
 
@@ -194,82 +196,11 @@ struct Pin<'a> {
     named: &'a str,
 }
 
-/// lupin 0.1.45's measured answers (`rows-*.log`): no query resolves,
-/// no attribute is read, and a whole-aggregate raw store is refused by
-/// name. 0.1.46 (the 0.2.23 pairing, r28) still resolves no query, but
-/// its closed attribute set (is70, wolf-interp#174) refuses
-/// `repr(c, packed)` and `repr(c, align(N))` by name, E0817, before it
-/// reaches a query or a store — the same missing mirror, a stricter
-/// symptom; measured, carried with the verdict changed (ruled at r28).
-const NO_QUERY: &[Pin<'static>] = &[
-    Pin {
-        version: "0.1.45",
-        verdict: "unsupported",
-        named: "does not resolve",
-    },
-    Pin {
-        version: "0.1.46",
-        verdict: "unsupported",
-        named: "does not resolve",
-    },
-    Pin {
-        version: "0.1.47",
-        verdict: "unsupported",
-        named: "does not resolve",
-    },
-];
-/// A row whose packed or aligned struct 0.1.45 met only at a query.
-const NO_QUERY_045_E0817_046: &[Pin<'static>] = &[
-    Pin {
-        version: "0.1.45",
-        verdict: "unsupported",
-        named: "does not resolve",
-    },
-    Pin {
-        version: "0.1.46",
-        verdict: "fail(E0817)",
-        named: "",
-    },
-    Pin {
-        version: "0.1.47",
-        verdict: "fail(E0817)",
-        named: "",
-    },
-];
-const READS_NO_ATTRIBUTE: &[Pin<'static>] = &[
-    Pin {
-        version: "0.1.45",
-        verdict: "exit(0)",
-        named: "",
-    },
-    Pin {
-        version: "0.1.46",
-        verdict: "fail(E0817)",
-        named: "",
-    },
-    Pin {
-        version: "0.1.47",
-        verdict: "fail(E0817)",
-        named: "",
-    },
-];
-const NO_AGGREGATE_STORE: &[Pin<'static>] = &[
-    Pin {
-        version: "0.1.45",
-        verdict: "unsupported",
-        named: "a raw store writes an integer-shaped pointee",
-    },
-    Pin {
-        version: "0.1.46",
-        verdict: "fail(E0817)",
-        named: "",
-    },
-    Pin {
-        version: "0.1.47",
-        verdict: "fail(E0817)",
-        named: "",
-    },
-];
+/// Every row's pin dropped at the 0.1.48 pairing (r30): lupin answers
+/// as the machines do (is73, #188 closed). 0.1.45 resolved no query and
+/// read no attribute; 0.1.46 and 0.1.47 refused `packed` and `align(N)`
+/// E0817 (is70's closed set).
+const NO_PIN: &[Pin<'static>] = &[];
 
 const fn refused(named: &str) -> Want<'_> {
     Want {
@@ -377,7 +308,7 @@ fn the_queries_answer_the_c_layout_on_every_machine() {
         runs(OUT),
         Some(runs(OUT)),
         runs(OUT),
-        NO_QUERY_045_E0817_046,
+        NO_PIN,
     );
 }
 
@@ -391,7 +322,7 @@ fn a_native_layout_struct_has_no_comptime_layout() {
         "comptime/align_of_layout.lu",
         "comptime/offset_of_layout.lu",
     ] {
-        every_machine(row, e, Some(e), e, NO_QUERY);
+        every_machine(row, e, Some(e), e, NO_PIN);
     }
 }
 
@@ -406,7 +337,7 @@ fn packed_fields_at_offset_of_run_on_every_machine() {
         runs(OUT),
         Some(runs(OUT)),
         runs(OUT),
-        NO_QUERY_045_E0817_046,
+        NO_PIN,
     );
 }
 
@@ -414,13 +345,7 @@ fn packed_fields_at_offset_of_run_on_every_machine() {
 #[test]
 fn a_packed_field_is_never_lent() {
     let e = fails("fail(E0819)", &["E0819"]);
-    every_machine(
-        "memory/packed_field_lend.lu",
-        e,
-        Some(e),
-        e,
-        READS_NO_ATTRIBUTE,
-    );
+    every_machine("memory/packed_field_lend.lu", e, Some(e), e, NO_PIN);
 }
 
 /// `[abi.layout.align]`: a representation that cannot be laid out is
@@ -428,13 +353,7 @@ fn a_packed_field_is_never_lent() {
 #[test]
 fn an_unlayable_representation_is_e0820() {
     let e = fails("fail(E0820)", &["E0820"]);
-    every_machine(
-        "grammar/attr_repr_unlayable.lu",
-        e,
-        Some(e),
-        e,
-        READS_NO_ATTRIBUTE,
-    );
+    every_machine("grammar/attr_repr_unlayable.lu", e, Some(e), e, NO_PIN);
 }
 
 /// `[abi.layout.packed]`, `[abi.layout.align]` through a raw pointer:
@@ -457,7 +376,7 @@ fn packed_and_aligned_pointees_at_the_clause_layout() {
             refused("raw write of a non-scalar"),
             Some(runs(out)),
             refused("a raw store writes an integer-shaped pointee"),
-            NO_AGGREGATE_STORE,
+            NO_PIN,
         );
     }
 }
