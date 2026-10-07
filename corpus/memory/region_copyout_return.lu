@@ -5,7 +5,9 @@
 //! s216 — only the block's own value at its closing brace is copied.
 //! A `return` from inside the block hands `s` to the caller past the
 //! `}` uncopied, so it is the plain block's E1010
-//! (`region_str_view_for_return.lu`), whatever the prefix says.
+//! (`region_str_view_for_return.lu`), whatever the prefix says. `main`
+//! takes the `return`, so lupin's dynamic half (`region-fault`) is on
+//! the path it runs.
 
 fn f(c: bool) -> str {
     let v = copy region scratch {
