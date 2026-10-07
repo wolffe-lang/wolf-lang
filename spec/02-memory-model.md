@@ -646,6 +646,43 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   `region_str_list_for_held.lu`, `region_str_copy_return.lu`, and the
   legal companion
   `region_str_view_for_inside.lu`.)
+  (Extended 2026-10-07 by s216 for wolf-lang#618. **A call's `str`
+  result is a site.** The site list says "non-`Copy` call results",
+  and s160 added the materializing builtins by name; a call to a
+  DECLARED fn — a module or std fn, an impl method, a fn value, a
+  nested fn — whose result is a `str` was neither, because `str` is
+  `Copy`. But the callee builds where its caller decides
+  (`[mem.region.create.3]`, D12), so `build(i)` called inside
+  `region scratch { }` builds its bytes in `scratch`, and
+  `region scratch { out = build(7) }` handed `out` freed bytes on
+  checked, native and release (`ZZZZZZZZ0` and NUL bytes under a
+  region that reused the chunk) while lupin traps `region-fault`.
+  So such a call is a site in the ambient region of the call, exactly
+  as a non-`Copy` result is, and it also carries every argument's and
+  the receiver's sites, because the callee may hand back a view of
+  bytes they name (`fn title_of(d: Doc) -> str { d.title }`). The
+  builtins keep their own rules: the `[mem.str.view]` family carries
+  the receiver, the materializing producers are sites, a container
+  method answering an element (`xs.last()`, `m.get(k)`) carries the
+  receiver as `xs[i]` does, and a host builtin's `str` is no site,
+  because the runtime places it in the process root or static data.
+  **One precision rule:** a declared fn whose every result — its
+  tail and every `return` — is a string literal, an `if`/`match` or
+  block of such, or a call to such a fn, answers static bytes, and
+  its call is no site (boreutils' `bore.io_error()`, held past a
+  `region pass` in `cat`, is the measured case). **The cost,
+  stated.** Nothing at run time on any tier — a refusal. What is
+  refused that lupin runs: a fn that returns a parameter's bytes
+  (`fn pick(a: str, b: str) -> str`) called inside a region and held
+  past it; never unsound, sometimes strict. The repair is to make the
+  call outside the region or to copy the result out of it with
+  `copy region { }` (below). Measured before it landed, trunk compiler
+  against head, both tiers: boreutils' 27 utilities, lobo, wolf-std's
+  423 test files and pelt build with the same verdicts, diagnostics
+  and byte-identical binaries. Witnesses
+  `corpus/memory/region_str_call_*.lu`,
+  `region_str_elem_call_held.lu`, and the legal companions
+  `region_str_call_static.lu` and `region_str_call_inside.lu`.)
   (Ruled 2026-09-11 by s153 for wolf-lang#310: `region scratch { let s
   = "re" + "gions"; s }` returned from a function printed `regions`
   from freed bytes on wolf 0.2.10 and lupin 0.1.31 alike, with a W1001
