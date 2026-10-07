@@ -1730,7 +1730,11 @@ in the caller's region, aim the allocation at a longer-lived region
 explicitly (`let r = region()` … `in r { … }`), or widen the region
 block so it covers every use. Note that `copy` inside the block does
 not help — a copy is a fresh allocation in the *current* ambient
-region, which is still the dying one. For a value that genuinely must
+region, which is still the dying one. When it is the block's VALUE
+that must outlive it — a loop keeping each turn's result and freeing
+the rest — write `copy region { … }`: at the closing brace the value
+is copied into the region the block was entered from, and then the
+block's region is freed ([mem.region.copyout]). For a value that genuinely must
 outlive the region, `freeze` makes the whole region immortal and
 immutable and `shared` gives a counted escape — both are spellings
 this compiler takes today. A `str` built inside the block — by `+`, `+=`, or an

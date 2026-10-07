@@ -805,7 +805,9 @@ impl<'t> Lowerer<'t> {
         "to keep the value, allocate it where it must live: build it outside the \
          region block, or aim the allocation at a longer-lived region explicitly \
          (`let r = region()` … `in r { … }`); widening the region block to cover \
-         every use also works. Two keep-alive alternatives change the ownership \
+         every use also works. When the block's own value is what must outlive it, \
+         `copy region { … }` copies that value into the enclosing region before the \
+         free ([mem.region.copyout]). Two keep-alive alternatives change the ownership \
          instead: `freeze` the region (immutable forever) or make the value a \
          `shared` cell (reference-counted, never dangles)."
     }
