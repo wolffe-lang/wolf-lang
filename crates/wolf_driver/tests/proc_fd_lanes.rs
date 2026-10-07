@@ -57,13 +57,18 @@ struct Obs {
 
 fn parse_obs(bytes: &[u8], what: &str) -> Obs {
     // Under `script(1)` the record arrives with `\r\n` line ends and
-    // whatever the pseudo-terminal echoed first: the record is the one
-    // line that parses.
+    // whatever the pseudo-terminal echoed first — BSD `script` on macOS
+    // writes `^D` ahead of it when its input ends (run 37555223637, job
+    // 112579792734): the record is the line that parses from its first
+    // `{`.
     let text = String::from_utf8_lossy(bytes).replace('\r', "");
     let rec: serde_json::Value = text
         .lines()
         .rev()
-        .find_map(|l| serde_json::from_str(l.trim()).ok())
+        .find_map(|l| {
+            l.find('{')
+                .and_then(|i| serde_json::from_str(l[i..].trim()).ok())
+        })
         .unwrap_or_else(|| panic!("{what} record parses: {text}"));
     Obs {
         verdict: rec["verdict"].as_str().unwrap_or("").to_string(),
