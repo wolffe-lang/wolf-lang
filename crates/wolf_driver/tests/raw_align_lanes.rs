@@ -24,8 +24,11 @@
 //! only a `fail` carries one), so lupin is held to the verdict, the row
 //! and the clause, not to the checked machine's E1401. Its packed and
 //! repr(c) rows stop earlier, at wolf-interp#188 (no `packed`, no struct
-//! pointee), pinned by version. A newer lupin must answer what the
-//! clause says.
+//! pointee), pinned by version. 0.1.48 (the 0.2.25 pairing, r30) admits
+//! `packed` (is73) but still reads a struct element as bytes: both rows
+//! are pinned at 0.1.48 to wolf-interp#205 (the packed row's verdict
+//! changed, ruled at r30). A newer lupin must answer what the clause
+//! says.
 
 mod lane_exit;
 
@@ -193,11 +196,13 @@ const fn ub<'a>(row: &'a str, clause: &'a str) -> Want<'a> {
     }
 }
 
-/// lupin's measured answer where it parts (pre-mirror).
+/// lupin's measured answer where it parts (pre-mirror), and the issue
+/// that holds its mirror.
 struct Pin<'a> {
     version: &'a str,
     verdict: &'a str,
     named: &'a str,
+    issue: &'a str,
 }
 
 fn assert_obs(who: &str, row: &str, obs: &Obs, want: Want<'_>) {
@@ -263,8 +268,8 @@ fn every_machine(
         Some(pin) => {
             assert_eq!(
                 lupin.verdict, pin.verdict,
-                "lupin {} (pre-mirror, {LUPIN_ISSUE}) on {row}",
-                lupin.version
+                "lupin {} (pre-mirror, {}) on {row}",
+                lupin.version, pin.issue
             );
             assert!(
                 lupin.unsupported.contains(pin.named),
@@ -312,7 +317,9 @@ fn a_misaligned_ordinary_access_is_row_l4() {
 /// alignment that is asked — a plain `#[repr(c)]` `{u32, u64}` (8)
 /// four bytes past an aligned base is L4 at `s[0].b`. lupin 0.1.46 and
 /// 0.1.47 have no struct pointee (a `*Pair` reads as bytes,
-/// wolf-interp#188; measured on 0.1.47 at r29).
+/// wolf-interp#188; measured on 0.1.47 at r29). 0.1.48 (the 0.2.25
+/// pairing, r30) answers the same after is73 closed #188, measured; the
+/// pin is re-keyed to wolf-interp#205, which holds the struct pointee.
 #[test]
 fn a_misaligned_repr_c_element_is_row_l4() {
     every_machine(
@@ -325,11 +332,19 @@ fn a_misaligned_repr_c_element_is_row_l4() {
                 version: "0.1.46",
                 verdict: "unsupported",
                 named: "has no member `b`",
+                issue: "wolf-interp#188",
             },
             Pin {
                 version: "0.1.47",
                 verdict: "unsupported",
                 named: "has no member `b`",
+                issue: "wolf-interp#188",
+            },
+            Pin {
+                version: "0.1.48",
+                verdict: "unsupported",
+                named: "has no member `b`",
+                issue: "wolf-interp#205",
             },
         ],
     );
@@ -353,6 +368,10 @@ fn an_aligned_access_of_every_width_is_defined() {
 /// `u64` field at offset 2 (and 12, in the second element) read
 /// through `g[i].base` is defined on every machine — never L4. lupin
 /// 0.1.46 and 0.1.47 refuse `packed` by name (E0817, wolf-interp#188).
+/// 0.1.48 (the 0.2.25 pairing, r30) admits `packed` (is73, #188 closed)
+/// and then reads the `*Grid` element as bytes: `unsupported`, "has no
+/// member `limit`", measured. Kept with the verdict changed (ruled at
+/// r30), keyed to wolf-interp#205, the struct pointee.
 #[test]
 fn a_packed_field_through_a_raw_element_is_defined() {
     const OUT: &str = "packed 255 4096 1 512\n";
@@ -366,11 +385,19 @@ fn a_packed_field_through_a_raw_element_is_defined() {
                 version: "0.1.46",
                 verdict: "fail(E0817)",
                 named: "",
+                issue: "wolf-interp#188",
             },
             Pin {
                 version: "0.1.47",
                 verdict: "fail(E0817)",
                 named: "",
+                issue: "wolf-interp#188",
+            },
+            Pin {
+                version: "0.1.48",
+                verdict: "unsupported",
+                named: "has no member `limit`",
+                issue: "wolf-interp#205",
             },
         ],
     );
