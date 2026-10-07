@@ -485,6 +485,32 @@ fn the_same_chain_from_an_unfrozen_parameter_reloads() {
     assert_eq!(dump.matches("= load").count(), 2, "{dump}");
 }
 
+/// An INERT call (the print shims: they write no memory a program can
+/// name) keeps forwarding and load reuse; the next ordinary call does not.
+#[test]
+fn an_inert_call_keeps_forwarding_and_the_next_call_does_not() {
+    let mut m = Module::new();
+    let (mut b, r, g) = foreign_builder(&mut m);
+    let p = b.block_params(b.current_block())[0];
+    let unit = b.module.make_sig(vec![], vec![]);
+    let print = b.func.import_func("__wolf_rt_print_begin", unit);
+    let seven = b.iconst(I64, 7);
+    b.ins_store(seven, p, r);
+    b.ins_call_inert(print, &[]);
+    assert_eq!(
+        b.ins_load(I64, p, r),
+        seven,
+        "forwarded across the inert call"
+    );
+    b.ins_call(g, &[]);
+    let after = b.ins_load(I64, p, r);
+    assert_ne!(after, seven, "not across the ordinary one");
+    b.ins_ret(&[after]);
+    let f = b.finish();
+    let dump = verified_dump(&mut m, f);
+    assert_eq!(dump.matches("= load").count(), 1, "{dump}");
+}
+
 /// The loop shape: a load before the loop, a call in its body, the same
 /// load after it. The body's call runs between them on the path through
 /// the loop, though no call sits between them in the preheader.
