@@ -140,6 +140,7 @@ mod moves;
 pub mod place;
 pub mod regions;
 mod shared;
+mod strres;
 pub mod ubcheck;
 
 pub use facts::FnFacts;
@@ -167,6 +168,9 @@ pub struct MemCheck {
 /// [`wolf_sema::typecheck_package`] over the same `pkg`.
 pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
     let mut out = MemCheck::default();
+    // s216 (wolf-lang#618): the declared fns whose `str` result is only
+    // ever static bytes — their calls mint no ambient site.
+    let statics = strres::static_str_fns(pkg, tc);
     // s22: unsafety never crosses a signature ([mem.unsafe.scope],
     // E1302) — checked over the signature tables before any body runs.
     unsafe_sig_check(pkg, &tc.sigs, &mut out.diagnostics);
@@ -189,6 +193,7 @@ pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
             tb,
             &outcome.body,
             is_proc_entry(tc, &outcome.body),
+            &statics,
         ) {
             None => {}
             Some(Err(nyc)) => out.not_yet.push(nyc),
@@ -261,6 +266,7 @@ pub fn check_cfg(cfg: &cfg::Cfg) -> Vec<Diagnostic> {
 /// s01 IR-dump snapshot family).
 pub fn dump_package(pkg: &Package, tc: &Typecheck) -> String {
     let mut out = String::new();
+    let statics = strres::static_str_fns(pkg, tc);
     for outcome in &tc.bodies {
         let BodyResult::Checked(tb) = &outcome.result else {
             continue;
@@ -271,6 +277,7 @@ pub fn dump_package(pkg: &Package, tc: &Typecheck) -> String {
             tb,
             &outcome.body,
             is_proc_entry(tc, &outcome.body),
+            &statics,
         ) {
             out.push_str(&lowered.cfg.dump());
             out.push('\n');
@@ -283,6 +290,7 @@ pub fn dump_package(pkg: &Package, tc: &Typecheck) -> String {
 /// (the `--dump=regions` debug surface, snapshot-pinned).
 pub fn dump_regions_package(pkg: &Package, tc: &Typecheck) -> String {
     let mut out = String::new();
+    let statics = strres::static_str_fns(pkg, tc);
     for outcome in &tc.bodies {
         let BodyResult::Checked(tb) = &outcome.result else {
             continue;
@@ -293,6 +301,7 @@ pub fn dump_regions_package(pkg: &Package, tc: &Typecheck) -> String {
             tb,
             &outcome.body,
             is_proc_entry(tc, &outcome.body),
+            &statics,
         ) {
             out.push_str(&lowered.regions.render());
             out.push('\n');
@@ -325,6 +334,7 @@ fn lower_body(
     tb: &TypedBody,
     body: &BodyRef,
     proc_entry: bool,
+    statics: &std::collections::HashSet<wolf_span::Span>,
 ) -> Option<Result<Lowered, NotYet>> {
     let root = &pkg.files[body.file].parse.root;
     let node = root.nodes().filter(|n| n.kind.is_item()).nth(body.decl)?;
@@ -335,7 +345,8 @@ fn lower_body(
             (inner, Some(node))
         }
     };
-    let lowerer = lower::Lowerer::new(pkg, sigs, tb, body.module, body.file);
+    let lowerer =
+        lower::Lowerer::new(pkg, sigs, tb, body.module, body.file).with_static_strs(statics);
     match node.kind {
         SyntaxKind::FnDecl => {
             let d = wolf_ast::FnDecl::cast(node)?;
