@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 590..639 name=io_error body=Block
+FnDecl 641..781 name=which body=Block
+FnDecl 783..852 name=label body=Block
+FnDecl 854..1058 name=main body=Block
