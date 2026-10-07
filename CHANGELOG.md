@@ -33,7 +33,10 @@ functions):
 resolves none of the names (pinned pre-mirror in `proc_fd_lanes.rs`);
 its mirror serves descriptors 0..2 and refuses a target above 2 or a
 close by name. Witnesses: `corpus/os/{pipe_round_trip,chdir_relative,
-spawn_fds_rows}.lu`, `corpus/comptime/sandbox_{spawn_fds,chdir}.lu`, and
+spawn_fds_rows}.lu`, `corpus/comptime/sandbox_{chdir,pipe,isatty}.lu`
+(E0701), `sandbox_spawn_fds.lu` (a forward pin: the comptime engine
+cannot build its `List` arguments, so `crates/wolf_sema/tests/sandbox_s215.rs`
+pins its `exec` entry), and
 the unix gate `crates/wolf_driver/tests/proc_fd_lanes.rs` (a two-stage
 pipeline, `2>&1` onto a pipe, an explicit fd 5, no leaks, a child in the
 moved directory, `isatty` under a pipe and under `script(1)`).
