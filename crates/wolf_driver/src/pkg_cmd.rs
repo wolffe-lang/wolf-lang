@@ -641,19 +641,69 @@ pub fn audit(args: &[String]) {
     }
 }
 
-/// Load and resolve the package at `dir` the way its build would —
+/// Load and resolve the package at `dir` the way its builds would —
 /// `WOLF_STD` beats the manifest's `std` path dependency, the
 /// dependency aliases are loader roots — and derive every capability
 /// use from the code ([`cap_uses`]). Nothing is compiled.
+///
+/// A package root can hold standalone entries (D59: `//! member:
+/// false`, pax's `kmain_*.lu`), each its own build that the directory
+/// view leaves out; when the directory has any, every `.lu` file in it
+/// is also resolved as an entry and the uses are united, so the audit
+/// covers every program the manifest governs. `Err` only when no view
+/// of the directory loads at all.
 fn derive_uses(dir: &Path, project: &Project) -> Result<Vec<wolf_pkg::audit::CapUse>, String> {
+    use wolf_pkg::audit::CapUse;
     let std_root = crate::effective_std_root(None)?.or_else(|| project.std_root.clone());
-    let mut sm = wolf_span::SourceMap::new();
-    let loader = wolf_sema::DiskLoader::from_dir(dir, &mut sm)
-        .with_std_root(std_root)
-        .with_dep_roots(project.dep_roots.clone());
-    let mut loader = loader;
-    let res = wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default())?;
-    Ok(cap_uses(project, &res))
+    // One view: the uses, and whether the root module left standalone
+    // entries out.
+    let resolve = |entry: Option<&Path>| -> Result<(Vec<CapUse>, bool), String> {
+        let mut sm = wolf_span::SourceMap::new();
+        let loader = match entry {
+            Some(file) => wolf_sema::DiskLoader::from_entry(file, &mut sm)
+                .ok_or_else(|| format!("cannot open package around {}", show_path(file)))?,
+            None => wolf_sema::DiskLoader::from_dir(dir, &mut sm),
+        };
+        let mut loader = loader
+            .with_std_root(std_root.clone())
+            .with_dep_roots(project.dep_roots.clone());
+        let res = wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default())?;
+        let standalone = !res.package.modules[0].excluded.is_empty();
+        Ok((cap_uses(project, &res), standalone))
+    };
+    let whole = resolve(None);
+    let (mut uses, need_entries) = match &whole {
+        Ok((u, standalone)) => (u.clone(), *standalone),
+        Err(_) => (Vec::new(), true),
+    };
+    if need_entries {
+        let mut files: Vec<PathBuf> = std::fs::read_dir(dir)
+            .map_err(|e| format!("read {}: {e}", show_path(dir)))?
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.is_file() && p.extension().is_some_and(|x| x == "lu"))
+            .collect();
+        files.sort();
+        let mut loaded = whole.is_ok();
+        for f in &files {
+            let Ok((more, _)) = resolve(Some(f)) else {
+                continue;
+            };
+            loaded = true;
+            for u in more {
+                let dup = uses.iter().any(|v| {
+                    v.owner == u.owner && v.cap == u.cap && v.reach == u.reach && v.at == u.at
+                });
+                if !dup {
+                    uses.push(u);
+                }
+            }
+        }
+        if !loaded {
+            return whole.map(|(u, _)| u);
+        }
+    }
+    Ok(uses)
 }
 
 // --------------------------------------------------------- tree / why ----
