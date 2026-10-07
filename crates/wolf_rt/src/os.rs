@@ -461,13 +461,6 @@ impl ChildTable {
                         }
                     }
                     for i in 0..n {
-                        // PLANT (s215, reverted next): a target above 2 is
-                        // never placed — fd_five and the runtime's fd-5 test
-                        // must go red in CI.
-                        if staged[i] >= 0 && targets[i] > 2 {
-                            libc::close(staged[i]);
-                            continue;
-                        }
                         if staged[i] >= 0 {
                             if libc::dup2(staged[i], targets[i]) < 0 {
                                 return Err(std::io::Error::last_os_error());
