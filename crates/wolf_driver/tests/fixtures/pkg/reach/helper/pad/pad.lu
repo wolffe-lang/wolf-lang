@@ -1,0 +1,9 @@
+/// A `caps=[]` dependency whose pub fn reaches the filesystem only
+/// through its own helper, one module down.
+use pad.inner
+
+pub fn left(s: str, width: int) -> str {
+    var out = s
+    while out.len < width + inner.probe() { out = " " + out }
+    out
+}

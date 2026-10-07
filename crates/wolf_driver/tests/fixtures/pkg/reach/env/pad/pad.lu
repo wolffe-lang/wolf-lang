@@ -1,0 +1,8 @@
+/// A `caps=[]` dependency that reads the environment through the
+/// prelude's `env_get` (the `env` capability).
+pub fn left(s: str, width: int) -> str {
+    let home = env_get("HOME") else |_| ""
+    var out = s
+    while out.len < width + home.len - home.len { out = " " + out }
+    out
+}

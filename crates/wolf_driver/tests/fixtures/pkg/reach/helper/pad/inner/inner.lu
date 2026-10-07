@@ -1,0 +1,4 @@
+/// The helper: one call into the prelude's `fs_exists`.
+pub(pkg) fn probe() -> int {
+    if fs_exists("/etc/hosts") { 0 } else { 0 }
+}
