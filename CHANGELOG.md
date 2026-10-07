@@ -29,7 +29,8 @@ functions):
 - **`os_isatty(fd) -> bool ! {io}`** (`[os.fs.isatty]`): closed or forged
   is `io`, never `false`.
 
-`os_pipe`, `os_chdir` and `os_isatty` are `io` at comptime. lupin 0.1.47
+At comptime `os_spawn_fds` and `os_pipe` are `exec`, `os_chdir` is `env`
+and `os_isatty` is `io` (ruling #54; s217 charges capabilities from these). lupin 0.1.47
 resolves none of the names (pinned pre-mirror in `proc_fd_lanes.rs`);
 its mirror serves descriptors 0..2 and refuses a target above 2 or a
 close by name. Witnesses: `corpus/os/{pipe_round_trip,chdir_relative,
