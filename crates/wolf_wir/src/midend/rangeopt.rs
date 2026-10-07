@@ -999,7 +999,11 @@ impl<'a> RangeCx<'a> {
                 Some(sh) if sh > 0 => {
                     let bits = self.view.types.int_bits(self.f.value_ty(v)).unwrap_or(64);
                     let sh = (sh as u32) & (bits - 1);
-                    if sh == 0 { tb } else { (0, tb.1 >> sh) }
+                    if sh == 0 {
+                        tb
+                    } else {
+                        (0, ((1i128 << bits) - 1) >> sh)
+                    }
                 }
                 _ => tb,
             },
