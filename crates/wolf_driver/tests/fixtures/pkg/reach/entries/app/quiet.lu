@@ -1,0 +1,8 @@
+//! member: false
+//! A standalone entry (D59) that reaches nothing: pax's `kmain_*.lu`
+//! shape, several programs beside one manifest.
+
+fn main() -> !int {
+    print("quiet")
+    0
+}
