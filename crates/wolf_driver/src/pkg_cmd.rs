@@ -840,7 +840,10 @@ pub fn category_cap(c: wolf_sema::ctfe::SandboxCategory) -> Option<wolf_pkg::man
 /// The capability a prelude name reaches, if it is a host builtin in a
 /// capability-carrying sandbox category.
 pub fn builtin_cap(name: &str) -> Option<wolf_pkg::manifest::Cap> {
-    wolf_sema::ctfe::intrinsics::host_stub(name).and_then(category_cap)
+    // PLANT (s217, reverted next): the builtin half answers nothing —
+    // trunk's import-only I13. cap_reach and builtin_cap_tests must go red.
+    let _ = wolf_sema::ctfe::intrinsics::host_stub(name).and_then(category_cap);
+    None
 }
 
 /// `display:line:col` for a span in one of the package's files.
