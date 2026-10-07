@@ -3594,6 +3594,233 @@ impl<'t> Lowerer<'t> {
         Ok(val)
     }
 
+    /// `copy region name? { … }` (s216, `[mem.region.copyout]`,
+    /// wolf-lang#612): the block runs with its region ambient exactly as
+    /// `region { … }` does, and at the closing brace its VALUE is
+    /// deep-copied into the region that was ambient at the block's
+    /// entry — every `str` the value reaches materialized there — and
+    /// only then is the block's region freed. So the value that leaves
+    /// is a fresh allocation in the enclosing region and carries none of
+    /// the block's sites; everything ELSE the escape sweep refuses
+    /// stands unchanged (an outer binding, module state, a channel, a
+    /// `return` or `break` carrying a block value out — those leave by
+    /// other edges, uncopied). A value whose type the copy cannot make
+    /// independent — a region, a closure, a cell, a channel or other
+    /// runtime handle, a raw pointer, a trait object, an unresolved type
+    /// parameter — is E1010 at the block: it would still name the dying
+    /// region.
+    fn eval_copied_block(&mut self, e: &'t GreenNode, copy_span: Span) -> R<Val> {
+        let d = RegionBlock::cast(e).expect("kind");
+        if let Some(cap) = d.cap()
+            && let Some(v) = cap.value()
+        {
+            self.eval_value(v)?;
+        }
+        let strategy = self.parse_strategy(d.strategy());
+        let name_tok = d.name();
+        let name = name_tok
+            .map(|t| self.text(t.span))
+            .unwrap_or_else(|| "<region>".to_string());
+        let intro = name_tok.map(|t| t.span).unwrap_or(e.span);
+        let rid = self.new_region(&name, RegionKind::Scope, strategy, intro);
+        let outer_mark = self.locals.len();
+        self.push(Stmt::RegionOpen {
+            region: rid,
+            span: intro,
+        });
+        self.check_open_antichain(rid, intro);
+        self.open_stack.push((rid, intro));
+        self.ambient.push(rid);
+        self.push_scope();
+        if let Some(t) = name_tok {
+            let ty = self.local_tys.get(&t.span).map(|&id| Ty {
+                table: &self.tb.table,
+                id,
+            });
+            let local = self.declare(&name, t.span, ty);
+            let place = self.places.intern(
+                Place {
+                    base: Base::Local(local.0),
+                    proj: Vec::new(),
+                },
+                false,
+            );
+            self.push(Stmt::Init {
+                place,
+                span: t.span,
+            });
+            self.region_local.insert(local.0, Some(rid));
+        }
+        let inner = match d.body() {
+            Some(b) => self.walk_block(b, true)?,
+            None => Val::none(),
+        };
+        let close_span = end_span(e.span);
+        self.close_scope(close_span)?;
+        self.ambient.pop();
+        self.open_stack.pop();
+        // The copy: made while the block's region is still live, in the
+        // enclosing ambient (this frame's ambient again, after the pop).
+        let ty = self.expr_ty(copy_span);
+        let mut out = Val::none();
+        if let Some(t) = ty {
+            if let Some(what) = self.copy_out_refusal(t, 0) {
+                self.refuse_copy_out(rid, &what, copy_span, close_span);
+            } else if !is_copy(t, 0) || may_name_bytes(t) {
+                let rendered = self.rendered_expr_ty(copy_span);
+                let site = self.alloc_site(rendered, SiteKind::Lit, copy_span);
+                out = Val::site(site, copy_span);
+            }
+        }
+        // What is left of the block's own value is the original, which
+        // dies with the region and leaves by no edge: nothing of it is
+        // swept. Outer bindings still are.
+        let _ = inner;
+        if !self.moved_region[rid.0 as usize] {
+            let mut gone = Val::none();
+            self.sweep_region_close(rid, outer_mark, close_span, &mut gone);
+            self.push(Stmt::RegionClose {
+                region: rid,
+                span: close_span,
+            });
+        }
+        Ok(out)
+    }
+
+    /// s216 (`[mem.region.copyout]`): the first part of a type that
+    /// `copy region { … }` cannot copy out of its region — `None` when
+    /// the whole value can be made independent (scalars, `str`, ranges,
+    /// handles, `List`, `Map`, structs, tuples, enums, error rows and
+    /// distinct types over those). Struct fields and enum payloads are
+    /// read through the declaration, an applied generic's bare
+    /// parameter as its argument.
+    fn copy_out_refusal(&self, t: Ty<'t>, depth: u32) -> Option<String> {
+        self.copy_out_refusal_in(t, depth, &mut Vec::new())
+    }
+
+    fn copy_out_refusal_in(
+        &self,
+        t: Ty<'t>,
+        depth: u32,
+        seen: &mut Vec<(u32, String)>,
+    ) -> Option<String> {
+        if depth > 32 {
+            return Some("a type nested too deep to copy".to_string());
+        }
+        let at = |id: TyId| Ty { table: t.table, id };
+        let shown = || render(t.table, t.id, &|_| Err("_"));
+        match t.kind() {
+            TyKind::Error
+            | TyKind::Never
+            | TyKind::Unit
+            | TyKind::Prim(_)
+            | TyKind::Wrapping(_)
+            | TyKind::Range(_)
+            | TyKind::Handle(_)
+            | TyKind::ExitReason
+            | TyKind::InferredRow { .. }
+            | TyKind::OpenTail => None,
+            TyKind::Distinct(inner) => self.copy_out_refusal_in(at(*inner), depth + 1, seen),
+            TyKind::List(e) => self.copy_out_refusal_in(at(*e), depth + 1, seen),
+            TyKind::Map(k, v) => self
+                .copy_out_refusal_in(at(*k), depth + 1, seen)
+                .or_else(|| self.copy_out_refusal_in(at(*v), depth + 1, seen)),
+            TyKind::Tuple(items) => items
+                .iter()
+                .find_map(|&id| self.copy_out_refusal_in(at(id), depth + 1, seen)),
+            TyKind::ErrUnion(ok, row) => self
+                .copy_out_refusal_in(at(*ok), depth + 1, seen)
+                .or_else(|| self.copy_out_refusal_in(at(*row), depth + 1, seen)),
+            TyKind::Row { tags, .. } => tags
+                .iter()
+                .flat_map(|(_, ps)| ps.iter())
+                .find_map(|&id| self.copy_out_refusal_in(at(id), depth + 1, seen)),
+            TyKind::Nominal { module, name, args } => {
+                // A recursive type is answered by its first visit.
+                if seen.iter().any(|(m, n)| m == module && n == name) {
+                    return None;
+                }
+                seen.push((*module, name.clone()));
+                let member = |generics: &[String], fty: TyId| -> Ty<'t> {
+                    if let TyKind::Rigid(r) = self.sigs.table.kind(fty)
+                        && let Some(k) = generics.iter().position(|g| g == r)
+                        && k < args.len()
+                    {
+                        return at(args[k]);
+                    }
+                    Ty {
+                        table: &self.sigs.table,
+                        id: fty,
+                    }
+                };
+                match self.sigs.get(*module as usize, name) {
+                    Some(ItemSig::Struct(ss)) => ss.fields.iter().find_map(|f| {
+                        self.copy_out_refusal_in(member(&ss.generics, f.ty), depth + 1, seen)
+                    }),
+                    Some(ItemSig::Enum {
+                        generics, variants, ..
+                    }) => variants
+                        .iter()
+                        .flat_map(|v| v.payload.iter())
+                        .find_map(|&p| {
+                            self.copy_out_refusal_in(member(generics, p), depth + 1, seen)
+                        }),
+                    Some(ItemSig::Distinct { base, .. }) => self.copy_out_refusal_in(
+                        Ty {
+                            table: &self.sigs.table,
+                            id: *base,
+                        },
+                        depth + 1,
+                        seen,
+                    ),
+                    _ => None,
+                }
+            }
+            TyKind::RegionTy => Some("a region value".to_string()),
+            TyKind::Fn(..) => Some(format!("a fn value (`{}`)", shown())),
+            TyKind::Shared(_) | TyKind::Weak(_) => Some(format!("a cell (`{}`)", shown())),
+            TyKind::Chan(_) | TyKind::Mutex(_) | TyKind::TaskScope | TyKind::Proc(_) => {
+                Some(format!("a runtime handle (`{}`)", shown()))
+            }
+            TyKind::Pool(_) => Some(format!("a pool (`{}`)", shown())),
+            TyKind::Ptr(_) => Some(format!("a raw pointer (`{}`)", shown())),
+            _ => Some(format!("a value of type `{}`", shown())),
+        }
+    }
+
+    /// s216: E1010 for a `copy region { … }` whose value's type has a
+    /// part the copy cannot make independent of the dying region.
+    fn refuse_copy_out(&mut self, rid: RegionId, what: &str, copy_span: Span, close_span: Span) {
+        self.conflicted = true;
+        self.tainted_region[rid.0 as usize] = true;
+        let region = self.show_region(rid);
+        let mut d = Diagnostic::error(
+            codes::E1010,
+            copy_span,
+            format!(
+                "this block's value cannot be copied out of {region}: it holds {what}, which a \
+                 copy cannot make independent of the region it names"
+            ),
+        )
+        .with_label("`copy region { … }` copies its value into the enclosing region")
+        .with_secondary(
+            close_span,
+            "the region is freed here — anything still naming it would dangle",
+        );
+        if let Some((name, intro)) = self.region_span(rid) {
+            d = d.with_secondary(intro, format!("region `{name}` is created here"));
+        }
+        d = d.with_note(
+            "`copy region { … }` ([mem.region.copyout]) copies the block's value \
+             deep into the region the block was entered from: strings, lists, maps, \
+             structs, tuples, enums and error rows of them. A region, a closure, a \
+             `shared`/`weak` cell, a channel or other runtime handle, a raw pointer or \
+             a trait object has no such copy. Return plain data from the block and \
+             rebuild the handle outside it.",
+        );
+        self.diags.push(d);
+    }
+
     /// `: rc` / `: pool(T)` — parsed, carried; arena is the default
     /// (`[mem.region.create.1]`: strategy changes cost, never safety).
     fn parse_strategy(&self, strat: Option<&GreenNode>) -> Strategy {
@@ -3629,6 +3856,12 @@ impl<'t> Lowerer<'t> {
             // result.
             Some(SyntaxKind::Minus) if self.op_dispatches(e.span) => {
                 self.eval_op_dispatch(e, [Some(operand), None])
+            }
+            // s216 (`[mem.region.copyout]`, wolf-lang#612): `copy
+            // region { … }` — the block's value leaves as a copy made
+            // in the enclosing region before the free.
+            Some(SyntaxKind::CopyKw) if operand.kind == SyntaxKind::RegionBlock => {
+                self.eval_copied_block(operand, e.span)
             }
             Some(SyntaxKind::CopyKw) => {
                 // `copy x`: an independent value from any type —
