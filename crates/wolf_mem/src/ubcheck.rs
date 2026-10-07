@@ -10852,11 +10852,6 @@ const FS_FIRST_HANDLE: usize = 3;
 /// is `not_found` as the host says). A non-UTF-8 join is
 /// unreachable: the base came from a `str` the host canonicalized.
 fn resolve_in(base: &Option<std::path::PathBuf>, p: String) -> String {
-    // PLANT (s215, reverted next): the machine-local directory is ignored —
-    // proc_fd_lanes' chdir row must go red on the checked machine in CI.
-    if base.is_some() {
-        return p;
-    }
     match base {
         Some(b) if !p.is_empty() && std::path::Path::new(&p).is_relative() => {
             b.join(&p).to_string_lossy().into_owned()
