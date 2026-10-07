@@ -45,6 +45,8 @@ fn main() -> !int {
     }
     let t = clobber()
     let (a, b) = e.pair
-    print("{e.vars["v2"] else "?"} {e.vars["v3"] else "?"} {e.order[1]} {e.hits["h3"] else -1} {e.vars.len} ({a}, {b}) {t}")
+    print(
+        "{e.vars["v2"] else "?"} {e.vars["v3"] else "?"} {e.order[1]} {e.hits["h3"] else -1} {e.vars.len} ({a}, {b}) {t}",
+    )
     0
 }
