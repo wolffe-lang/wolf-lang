@@ -20,6 +20,8 @@
 //! lupin 0.1.46 (the 0.2.23 pairing) has no atomic surface; each row's
 //! parting is pinned below by that version as pre-mirror (lupin's half
 //! is wolf-interp#194). A newer lupin must answer what the clause says.
+//! 0.1.47 (r29) and 0.1.48 (the 0.2.25 pairing, r30; #194 still open)
+//! answer every row as 0.1.46 did, measured; the pins are carried.
 
 mod lane_exit;
 
@@ -207,8 +209,9 @@ struct Pin<'a> {
 /// lupin 0.1.46 (the 0.2.23 pairing) has no atomic surface: every row
 /// is `unsupported`, naming the first spelling it cannot resolve — an
 /// `Order` mark or `fence` (measured at kw11's head, `rows-*.log`).
-/// 0.1.47 (the 0.2.24 pairing, r29) answers the same, measured; the pin
-/// is carried with its issue.
+/// 0.1.47 (the 0.2.24 pairing, r29) and 0.1.48 (the 0.2.25 pairing,
+/// r30) answer the same, measured row by row; the pin is carried with its
+/// issue (wolf-interp#194, open).
 const PRE_MIRROR: &[Pin<'static>] = &[
     Pin {
         version: "0.1.46",
@@ -217,6 +220,11 @@ const PRE_MIRROR: &[Pin<'static>] = &[
     },
     Pin {
         version: "0.1.47",
+        verdict: "unsupported",
+        named: "does not resolve",
+    },
+    Pin {
+        version: "0.1.48",
         verdict: "unsupported",
         named: "does not resolve",
     },
@@ -426,8 +434,9 @@ fn the_counter_is_exact_on_the_compiled_tiers() {
 
 /// `[conc.mm.race.1]`: the plain-increment twin is a data race. The
 /// compiled tiers compile and run it and nothing is asserted about the
-/// count; lupin may detect the race (`[conc.mm.race.3]`), and 0.1.46
-/// and 0.1.47 do.
+/// count; lupin may detect the race (`[conc.mm.race.3]`), and 0.1.46,
+/// 0.1.47 and 0.1.48 do (measured at r30; lupin files the row's `pass`
+/// as DIV-2026-028, wolf-lang#603).
 #[test]
 fn the_plain_counter_is_a_race_and_asserts_nothing() {
     let entry = corpus("atomic_race_plain.lu");
@@ -460,7 +469,7 @@ fn the_plain_counter_is_a_race_and_asserts_nothing() {
         lupin.version,
         lupin.verdict
     );
-    if lupin.version == "0.1.46" || lupin.version == "0.1.47" {
+    if matches!(lupin.version.as_str(), "0.1.46" | "0.1.47" | "0.1.48") {
         assert_eq!(
             lupin.verdict, "trap(race)",
             "lupin {}, measured",
