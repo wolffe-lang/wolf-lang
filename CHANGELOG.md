@@ -1,5 +1,66 @@
 # Changelog
 
+## Unreleased
+
+### A package's capabilities are what its code reaches (s217, #615)
+
+I13 counted imports only. A dependency that declared `caps=[]` and
+called `fs_read_text` directly, with no `use std.fs`, built and ran, and
+`wolf audit` printed `effective: []`. `wolf audit --ci` also passed on an
+undeclared `use std.net`, which only the build refused. Now a package
+reaches a capability three ways, and E1504 refuses any it does not
+declare:
+
+- an import the facade rule names (`std.net`, `std.fs`, `std.env`,
+  `import c`), as before;
+- a prelude host builtin named anywhere in the package's own files. The
+  sandbox table (`ctfe::intrinsics::host_stub`) gives its capability:
+  the fs, net, env and exec families carry `fs`, `net`, `env`, `exec`.
+  Stdio, the clock and randomness carry nothing, because the manifest
+  has no word for them. A fn the package declares under a builtin's name
+  is its own;
+- a std module it imports, for what that module's code reaches, closed
+  over the std modules it imports in turn. Until now a std module's
+  imports were charged to the root package, so `use std.process` asked
+  for `net` and never for `exec`.
+
+The E1504 for a builtin names it and points at its call site. `wolf
+audit` resolves the code itself, with no build and no `wolf.sum`. It
+prints `effective` as every declared capability united with every
+reached one, then one reason line per capability and package (`` fs: pad —
+UNDECLARED: calls `fs_read_text` at pkg://pad/pad.lu:4:16 ``). `--ci`
+refuses an undeclared capability, and refuses when it cannot read the
+code. A directory of standalone entries (`//! member: false`) is
+audited entry by entry. `wolf tree` is unchanged. Witnesses:
+`crates/wolf_driver/tests/cap_reach.rs`.
+
+### Read this before you bump the pin
+
+**Packages that built are now refused (s217).** A package whose own
+files call a host builtin in the fs, net, env or exec family, or that
+imports a std module whose code does (`std.process` → `exec`, `std.os`
+→ `env`), must declare the capability. The fix is the word in
+`capabilities: [ … ]`; the E1504 names it. The census at wolf-std
+`2f389a7`, boreutils `2f15585`, lobo `9167cb5`, pax `94364ad`, pelt
+`f0014da` and the book `d0213d0` found **no build that changes**: only
+lobo, pax's kernel and the book's `samples/pkg` have a manifest beside
+the files they build, and none of them reaches an undeclared capability.
+
+**`wolf audit` prints more.** Under `effective:` there is now a reason
+line per capability, so a transcript with a non-empty set gains lines.
+The book has five: `pkg/acquired` in ch24 (two), solutions.md and
+exercises ch24 (`net: regex — declared (nothing in its code reaches
+it)`), and appendix E's `pkg/promote` (`` fs: local/tally (root) —
+declared; calls `fs_write_text` … ``). Transcripts with `effective: []`
+are byte-identical.
+
+**`wolf audit --ci` refuses where it passed.** It fails on an undeclared
+capability with no build, and on a manifest whose directory holds no
+wolf source. lobo is that case: `wolf.pkg` sits at the repository root
+and the program builds from `./src/main.lu`, so the manifest governs no
+build. Nothing in lobo runs `wolf audit` today. If lobo's manifest did
+govern `src/`, it would need `capabilities: [env, exec, fs, net]`.
+
 ## 0.2.25 — 2026-10-07
 
 THE TWENTY-FIFTH. Three silent wrong answers on the compiled tiers are
