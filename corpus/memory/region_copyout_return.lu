@@ -19,6 +19,6 @@ fn f(c: bool) -> str {
 }
 
 fn main() -> !int {
-    print(f(false))
+    print(f(true))
     0
 }

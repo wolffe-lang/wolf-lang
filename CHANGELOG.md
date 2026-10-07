@@ -1,5 +1,59 @@
 # Changelog
 
+## Unreleased
+
+### A loop can keep each turn's result and free the rest: `copy region { … }` (s216, #612; ruling owed on the spelling)
+
+- **`copy region name? { … }`** (`[mem.region.copyout]`). The block runs
+  as `region { … }` does; at its closing brace its VALUE is deep-copied
+  into the region it was entered from (every `str` it reaches
+  materialized there, every `List` and `Map` a fresh buffer), and then
+  the block's region is freed. A shell's command loop, a server's
+  request loop or a kernel's event loop computes a turn inside the block
+  and keeps only the result. #612's witness (twenty strings and a list
+  per turn, one string kept in a map) peaks at 27.6 MB at 20,000 turns
+  and 53.0 MB at 40,000 with no region, and at about 3 MB and 3.6 MB with
+  the prefix, on native and release alike; what still grows is the kept
+  string itself (about 33 bytes a turn here), because the region holding
+  the loop's state (the process root) frees nothing. Keeping a scalar,
+  the loop is flat.
+- **Every other escape is still E1010.** Only the block's own value at
+  its `}` is copied: an outer binding, a `return`, module state or a
+  channel holding something built in the block is refused as before, and
+  a value with no independent copy (a region, a fn value, a cell, a
+  channel or other handle, a pool, a raw pointer, a trait object) is
+  E1010 at the block, naming the part. A raw pointer into the freed
+  region read afterwards is row P4 on the checked machine.
+- **Cost:** one deep copy of the value per execution, in time and in
+  bytes in the enclosing region; nothing for a program without the
+  prefix. On native and release a `Map` is rebuilt entry by entry; an
+  enum or error-row payload holding a string or a container is refused
+  by name there (`unsupported`), as for a plain `copy`.
+- **Ruling owed: the spelling.** Implemented as recommended (option A,
+  no new token or keyword); the alternatives (a materializing
+  `copy v in outer`, a per-iteration loop region) and their costs are in
+  the clause.
+
+### A silent wrong answer is fixed: a call's `str` result left its region (s216, #618)
+
+- A call to a declared fn returning `str` carried no allocation site, so
+  `region scratch { out = build(7) }` handed `out` freed bytes on
+  checked, native and release (lupin traps `region-fault`); so did
+  #612's own `st.vals["x"] = copy v` witness, which #612 reported as
+  E1010 but which built at 0.2.24. Such a call is now a site in the
+  ambient region and carries its arguments' and receiver's sites
+  (`[mem.region.escape]`); a builtin container method's `str` element
+  (`xs.last()`) carries the receiver's.
+- **A program that compiled is now refused** where it held such a call's
+  result past the region the call was made in. A fn whose every result
+  is a string literal is exempt (its bytes are static), which keeps
+  boreutils' `cat` (`why = bore.io_error()` inside `region pass`)
+  building. Measured, trunk against head on both tiers: boreutils' 27
+  utilities, lobo, wolf-std's 423 test files and pelt build with the
+  same verdicts and byte-identical binaries. Still refused though lupin
+  runs it: a fn returning a parameter's bytes, called inside a region
+  and held past it.
+
 ## 0.2.25 — 2026-10-07
 
 THE TWENTY-FIFTH. Three silent wrong answers on the compiled tiers are
