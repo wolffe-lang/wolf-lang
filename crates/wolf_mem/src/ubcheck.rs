@@ -3995,6 +3995,108 @@ impl<'t> Machine<'t> {
         out
     }
 
+    /// `copy region name? { … }` (s216, `[mem.region.copyout]`): the
+    /// block runs as `region { … }` does; on the fall-through edge its
+    /// value is deep-copied with the ENCLOSING region ambient — every
+    /// list and map re-minted there, every `str` charged there — while
+    /// the block's region is still live, and only then is the region
+    /// freed. Every other edge (`return`, `?`, `break`) frees and
+    /// leaves exactly as the plain block does: the static tier already
+    /// refused what such an edge could carry out.
+    fn eval_copied_block(&mut self, e: &'t GreenNode) -> E<Flow> {
+        let d = RegionBlock::cast(e).expect("kind");
+        let cap = match self.eval_region_cap(d.cap())? {
+            Ok(c) => c,
+            Err(flow) => return Ok(flow),
+        };
+        let rid = self.regions.len();
+        self.regions.push(DynRegion {
+            live: true,
+            frozen: false,
+            backing: None,
+            span: e.span,
+            charged: 0,
+            cap,
+        });
+        self.ambient.push(rid);
+        self.push_scope();
+        if let Some(name) = d.name() {
+            let n = self.text(name.span);
+            self.declare(&n, Value::Region(rid));
+        }
+        let out = match d.body() {
+            Some(b) => self.eval_block(b, true),
+            None => Ok(Flow::Val(Value::Unit)),
+        };
+        match &out {
+            Ok(Flow::Err(..)) => self.close_scope(true)?,
+            _ => self.close_scope(false)?,
+        }
+        self.ambient.pop();
+        let out = match out {
+            Ok(Flow::Val(v)) => self.copy_out(v, e.span).map(Flow::Val),
+            other => other,
+        };
+        self.free_region(rid);
+        out
+    }
+
+    /// The copy `copy region { … }` makes (s216): `deep_copy`'s rule,
+    /// plus the parts a plain `copy` shares — a `str`'s bytes are
+    /// charged to the ambient region as a fresh materialization, and
+    /// enum, row and tuple payloads are copied too — so nothing in the
+    /// result is the dying region's.
+    fn copy_out(&mut self, v: Value, span: Span) -> E<Value> {
+        Ok(match v {
+            Value::Str(s) => {
+                self.charge_str(s.len() as u64, span)?;
+                Value::Str(s)
+            }
+            Value::List(id) => {
+                let elems = self.lists[id].clone();
+                let mut copied = Vec::with_capacity(elems.len());
+                for e in elems {
+                    copied.push(self.copy_out(e, span)?);
+                }
+                Value::List(self.mint_list(copied, span)?)
+            }
+            Value::Map(id) => {
+                let entries = self.maps[id].clone();
+                let nid = self.mint_map(span)?;
+                for (k, v) in entries {
+                    let cv = self.copy_out(v, span)?;
+                    self.map_insert(nid, k, cv, span)?;
+                }
+                Value::Map(nid)
+            }
+            Value::Struct { fields } => {
+                let mut out = Vec::with_capacity(fields.len());
+                for (n, fv) in fields {
+                    out.push((n, self.copy_out(fv, span)?));
+                }
+                Value::Struct { fields: out }
+            }
+            Value::Enum { variant, payload } => {
+                let mut out = Vec::with_capacity(payload.len());
+                for p in payload {
+                    out.push(self.copy_out(p, span)?);
+                }
+                Value::Enum {
+                    variant,
+                    payload: out,
+                }
+            }
+            Value::ErrTag { tag, payload } => {
+                let mut out = Vec::with_capacity(payload.len());
+                for p in payload {
+                    out.push(self.copy_out(p, span)?);
+                }
+                Value::ErrTag { tag, payload: out }
+            }
+            other => self.deep_copy(other, span)?,
+        })
+    }
+
     fn eval_if(&mut self, e: &'t GreenNode) -> E<Flow> {
         let d = IfExpr::cast(e).expect("kind");
         let cond = match d.condition() {
@@ -4640,6 +4742,12 @@ impl<'t> Machine<'t> {
         match d.op().map(|t| t.kind) {
             // kw06: `*p` reads through a raw pointer.
             Some(SyntaxKind::Star) => self.raw_deref_read(e),
+            // s216 (`[mem.region.copyout]`, wolf-lang#612): `copy
+            // region { … }` — the value is copied into the enclosing
+            // region before the block's region is freed.
+            Some(SyntaxKind::CopyKw) if operand.kind == SyntaxKind::RegionBlock => {
+                self.eval_copied_block(operand)
+            }
             Some(SyntaxKind::CopyKw) => {
                 // `copy x`: an independent deep duplicate.
                 let v = if let Some(place) = found!(self.place_of(operand)) {
