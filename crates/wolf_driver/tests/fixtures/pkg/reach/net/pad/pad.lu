@@ -1,0 +1,8 @@
+/// A `caps=[]` dependency that opens a listening socket through the
+/// prelude's `net_listen` (the `net` capability), with no `use std.net`.
+pub fn left(s: str, width: int) -> str {
+    let fd = net_listen("127.0.0.1:0") else |_| -1
+    var out = s
+    while out.len < width + fd - fd { out = " " + out }
+    out
+}

@@ -1,0 +1,8 @@
+/// wolf-lang#615's second gap: `use std.net` with no `net` declared.
+/// The build refuses it (E1504); `wolf audit --ci` must too.
+use std.net
+
+fn main() -> !int {
+    print("{net.ping("localhost")}")
+    0
+}

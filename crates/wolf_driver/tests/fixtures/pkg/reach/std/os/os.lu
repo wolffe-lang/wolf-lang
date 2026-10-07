@@ -1,0 +1,5 @@
+/// Mini std `os` for the s217 reach fixtures: wolf-std's `os.cpus`
+/// reads the core count through the prelude's `os_cpus` (`env`).
+pub fn cpus() -> int {
+    os_cpus() else |_| 1
+}

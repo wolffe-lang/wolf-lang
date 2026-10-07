@@ -1,0 +1,8 @@
+/// `use std.os` with nothing declared: `os.cpus` reads the core count
+/// (`env`), and no facade rule names `std.os`.
+use std.os
+
+fn main() -> !int {
+    print("{os.cpus()}")
+    0
+}

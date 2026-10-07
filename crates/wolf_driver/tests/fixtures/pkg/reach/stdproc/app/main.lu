@@ -1,0 +1,8 @@
+/// `use std.process` with nothing declared: the std module starts
+/// children (`exec`) and imports `std.net` (`net`).
+use std.process
+
+fn main() -> !int {
+    print("{process.run("true")}")
+    0
+}
