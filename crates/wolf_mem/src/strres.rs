@@ -91,11 +91,10 @@ pub(crate) fn static_str_fns(pkg: &Package, tc: &Typecheck) -> HashSet<Span> {
 
 fn fn_is_static(c: &Cand<'_>, set: &HashSet<Span>) -> bool {
     let mut results: Vec<&GreenNode> = Vec::new();
-    match c.body.trailing_expr() {
-        Some(t) => results.push(t),
-        // No tail: the result comes from `return`s alone (or the fn is
-        // unit, and no `str` call reaches it).
-        None => {}
+    // No tail: the result comes from `return`s alone (or the fn is unit,
+    // and no `str` call reaches it).
+    if let Some(t) = c.body.trailing_expr() {
+        results.push(t);
     }
     collect_returns(c.body.syntax(), &mut results);
     if results.is_empty() {
