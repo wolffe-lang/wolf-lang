@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
-assertion_line: 362
 expression: "lines.join(\"\\n\")"
 ---
 comptime/align_of_layout.lu: not mem-clean (pre-wir rungs own it)
@@ -577,6 +576,15 @@ memory/region_cap_boundary.lu: lowers
 memory/region_conflict_params.lu: not mem-clean (pre-wir rungs own it)
 memory/region_container_freeze_ok.lu: lowers
 memory/region_container_reclaim.lu: lowers
+memory/region_copyout_binding.lu: not mem-clean (pre-wir rungs own it)
+memory/region_copyout_closure.lu: not mem-clean (pre-wir rungs own it)
+memory/region_copyout_exits.lu: lowers
+memory/region_copyout_handle.lu: not mem-clean (pre-wir rungs own it)
+memory/region_copyout_loop.lu: lowers
+memory/region_copyout_map.lu: lowers
+memory/region_copyout_raw_ub.lu: lowers
+memory/region_copyout_return.lu: not mem-clean (pre-wir rungs own it)
+memory/region_copyout_struct.lu: lowers
 memory/region_escape_container.lu: not mem-clean (pre-wir rungs own it)
 memory/region_escape_local.lu: not mem-clean (pre-wir rungs own it)
 memory/region_freeze_ok.lu: lowers
@@ -591,10 +599,17 @@ memory/region_multiopen_ok.lu: lowers
 memory/region_multiopen_swap.lu: lowers
 memory/region_multiopen_values_ok.lu: lowers
 memory/region_open_ancestor.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_call_block_value.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_call_held.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_call_index_store.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_call_inside.lu: lowers
+memory/region_str_call_static.lu: lowers
+memory/region_str_call_view.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_charged.lu: lowers
 memory/region_str_concat_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_concat_send.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_copy_return.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_elem_call_held.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_field_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_from_utf8_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_list_for_held.lu: not mem-clean (pre-wir rungs own it)
