@@ -1,0 +1,15 @@
+//! check: fail(E0701)
+//! phase: resolve
+//! conforms: comptime.sandbox, os.fs.isatty
+//!
+//! s215 (D33): `os_isatty` would probe the COMPILER's terminal — the `io`
+//! category, refused at comptime with that category's reason.
+
+comptime fn helper() -> bool {
+    os_isatty(0) else |_| false
+}
+
+fn main() -> !int {
+    const T = helper()
+    if T { 1 } else { 0 }
+}
