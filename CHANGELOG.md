@@ -166,12 +166,14 @@ moved directory, `isatty` under a pipe and under `script(1)`).
   the block's region is freed. A shell's command loop, a server's
   request loop or a kernel's event loop computes a turn inside the block
   and keeps only the result. #612's witness (twenty strings and a list
-  per turn, one string kept in a map) peaks at 27.6 MB at 20,000 turns
-  and 53.0 MB at 40,000 with no region, and at about 3 MB and 3.6 MB with
-  the prefix, on native and release alike; what still grows is the kept
-  string itself (about 33 bytes a turn here), because the region holding
+  per turn, one string kept in a map) peaks at 27.8 MB at 20,000 turns
+  and 53.1 MB at 40,000 with no region, and at 2.9 MB and 3.6 MB with the
+  prefix, on native and release alike; what still grows is the kept
+  string itself (about 32 bytes a turn here), because the region holding
   the loop's state (the process root) frees nothing. Keeping a scalar,
-  the loop is flat.
+  the loop is flat. Applied to pelt's simple-command expansion in a
+  throwaway copy: 163 MB (empty directory) or 490 MB (24 files) at
+  20,000 turns down to 34 MB.
 - **Every other escape is still E1010.** Only the block's own value at
   its `}` is copied: an outer binding, a `return`, module state or a
   channel holding something built in the block is refused as before, and
