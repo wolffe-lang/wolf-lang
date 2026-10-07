@@ -5957,6 +5957,75 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         out
     }
 
+    /// `copy region name? { body }` (s216, `[mem.region.copyout]`,
+    /// wolf-lang#612): `region { }`'s create and ambient switch, but the
+    /// free and the ambient restore ride a WRAPPER scope rather than the
+    /// body's, so every early exit (`return`, `?`-err, `break`,
+    /// `continue`) still restores and frees in LIFO order while the
+    /// fall-through edge can run three steps in between: restore the
+    /// enclosing ambient, deep-copy the body's value into it
+    /// (`deep_copy_out`: every `str` materialized), and only then
+    /// free the block's region. The value the block hands out is the
+    /// copy; the original dies with its region.
+    fn lower_copied_block(&mut self, e: &'t GreenNode, copy_e: &'t GreenNode) -> R<Flow> {
+        let d = wolf_ast::RegionBlock::cast(e).expect("kind");
+        let Some(body) = d.body() else {
+            return Ok(Flow::Val(None));
+        };
+        let Some(ty) = self.expr_sema_ty(copy_e.span) else {
+            return Err(refuse(
+                "`copy region` of a value without a recorded type",
+                copy_e.span,
+            ));
+        };
+        let cap = self.lower_region_cap_value(d.cap())?;
+        let (region, handle) = self.b.ins_region_new();
+        self.emit_region_cap(handle, cap);
+        let ambient_prev = self.open_ambient(handle);
+        self.scopes.push(ScopeFrame {
+            region: Some((region, handle)),
+            ambient_prev,
+            ..ScopeFrame::default()
+        });
+        if let Some(name_tok) = d.name() {
+            let name = self.text(name_tok.span);
+            self.scopes.last_mut().expect("scope").binds.push((
+                name,
+                LocalBind::Region {
+                    region,
+                    handle,
+                    frozen: false,
+                    owned: true,
+                },
+            ));
+        }
+        let flow = match self.lower_block_in(body, true, None, None) {
+            Ok(f) => f,
+            Err(err) => {
+                self.scopes.pop();
+                return Err(err);
+            }
+        };
+        let v = match flow {
+            Flow::Diverged => {
+                self.scopes.pop();
+                return Ok(Flow::Diverged);
+            }
+            Flow::Val(v) => v,
+        };
+        if let Some(prev) = ambient_prev {
+            self.rt_call("__wolf_rt_region_ambient_leave", &[prev], None);
+        }
+        let table = self.table;
+        let copied = match v {
+            Some(v) => Some(self.deep_copy_out(v, table, ty, copy_e.span, 0)?),
+            None => None,
+        };
+        self.b.ins_region_free(region, handle);
+        self.scopes.pop();
+        Ok(Flow::Val(copied))
+    }
+
     /// `in r { body }` — open a region value for ambient placement
     /// ([mem.region.create.3]). s76 makes this REAL for containers: the
     /// body runs with `r` as the thread's ambient region, so a `List`
@@ -8383,6 +8452,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // second handle to the same storage and a write through the
             // "copy" landed in the original (the checked machine and
             // lupin always copied). `move` is still the operand.
+            // s216 (`[mem.region.copyout]`, wolf-lang#612): `copy region
+            // { … }` — the value leaves as a copy made in the enclosing
+            // region, then the block's region is freed.
+            Some(SyntaxKind::CopyKw) if operand.kind == SyntaxKind::RegionBlock => {
+                self.lower_copied_block(operand, e)
+            }
             Some(SyntaxKind::CopyKw) => {
                 let v = match self.lower_expr(operand)? {
                     Flow::Val(Some(v)) => v,
@@ -14764,6 +14839,224 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             },
             _ => Err(refuse(
                 "`copy` of this shape of heap value (a row payload, a Pool, a shared cell)",
+                span,
+            )),
+        }
+    }
+
+    /// s216 (`[mem.region.copyout]`): does a `copy region` copy of a
+    /// `ty` value have anything to rebuild — `copy_reaches_heap`, plus
+    /// every `str`, whose bytes a plain `copy` shares and this copy
+    /// must not.
+    fn copy_out_reaches(&self, table: &TypeTable, ty: TyId, depth: u32) -> bool {
+        if depth > 16 {
+            return true;
+        }
+        let ty = strip_sema_in(table, ty);
+        let sigs = self.sigs;
+        let field = |generics: &[String], args: &[TyId], fty: TyId| -> bool {
+            match sigs.table.kind(fty) {
+                TyKind::Rigid(r) => match generics.iter().position(|g| g == r) {
+                    Some(k) if k < args.len() => self.copy_out_reaches(table, args[k], depth + 1),
+                    _ => true,
+                },
+                _ if sig_mentions_rigid(&sigs.table, fty, 0) => true,
+                _ => self.copy_out_reaches(&sigs.table, fty, depth + 1),
+            }
+        };
+        match table.kind(ty) {
+            TyKind::Prim(Prim::Str) => true,
+            TyKind::List(_)
+            | TyKind::Map(..)
+            | TyKind::Pool(_)
+            | TyKind::Shared(_)
+            | TyKind::Weak(_) => true,
+            TyKind::Tuple(es) => es
+                .iter()
+                .any(|e| self.copy_out_reaches(table, *e, depth + 1)),
+            TyKind::ErrUnion(ok, row) => {
+                self.copy_out_reaches(table, *ok, depth + 1)
+                    || self.copy_out_reaches(table, *row, depth + 1)
+            }
+            TyKind::Row { tags, .. } => tags
+                .iter()
+                .flat_map(|(_, ps)| ps.iter())
+                .any(|p| self.copy_out_reaches(table, *p, depth + 1)),
+            TyKind::Nominal { module, name, args } => match sigs.get(*module as usize, name) {
+                Some(ItemSig::Struct(ss)) => {
+                    ss.fields.iter().any(|f| field(&ss.generics, args, f.ty))
+                }
+                Some(ItemSig::Enum {
+                    generics, variants, ..
+                }) => variants
+                    .iter()
+                    .flat_map(|v| v.payload.iter())
+                    .any(|&p| field(generics, args, p)),
+                Some(ItemSig::Distinct { base, .. }) => {
+                    self.copy_out_reaches(&sigs.table, *base, depth + 1)
+                }
+                _ => false,
+            },
+            TyKind::Distinct(inner) => self.copy_out_reaches(table, *inner, depth + 1),
+            TyKind::Rigid(_) | TyKind::Var(_) | TyKind::Proj(..) => true,
+            _ => false,
+        }
+    }
+
+    /// The copy `copy region { … }` hands out (s216,
+    /// `[mem.region.copyout]`), made with the ENCLOSING region ambient:
+    /// `deep_copy_in`'s rebuild, except that a `str` is materialized —
+    /// its bytes copied into the ambient region by the one-call
+    /// producer `__wolf_rt_str_repeat(s, 1)` (`s.repeat(1)` is `s`'s
+    /// bytes, fresh, through `write_owned`: no new runtime symbol) —
+    /// and a `List[str]` therefore copies element by element. The
+    /// shapes `deep_copy_in` refuses by name (a `Map` whose keys or
+    /// values must be rebuilt, an enum or row payload that must)
+    /// refuse here by name too, never share.
+    fn deep_copy_out(
+        &mut self,
+        v: Value,
+        table: &'t TypeTable,
+        ty: TyId,
+        span: Span,
+        depth: u32,
+    ) -> R<Value> {
+        if !self.copy_out_reaches(table, ty, 0) {
+            return Ok(v);
+        }
+        if depth > 16 {
+            return Err(refuse("`copy region` of a value nested this deep", span));
+        }
+        let sigs = self.sigs;
+        let ty = strip_sema_in(table, ty);
+        match table.kind(ty).clone() {
+            TyKind::Prim(Prim::Str) => {
+                let (sp, sl) = self.str_parts(v);
+                let one = self.b.iconst(types::I64, 1);
+                let (region, slot) = self.rt_slot(16);
+                self.rt_call_slot("__wolf_rt_str_repeat", &[sp, sl, one], slot, region, None);
+                self.load_str_slot(slot, region, span)
+            }
+            TyKind::List(elem) => {
+                let out = self
+                    .rt_call_foreign("__wolf_rt_list_copy", &[v], None, Some(types::PTR))
+                    .expect("hdr");
+                if self.copy_out_reaches(table, elem, 0) {
+                    let Some(ewty) = self.wir_ty_in(table, elem, span)? else {
+                        return Ok(out);
+                    };
+                    let n = self.list_len_of(out);
+                    self.count_loop(n, |z, i| {
+                        let x = z.list_load_at(out, i, ewty, span)?;
+                        let c = z.deep_copy_out(x, table, elem, span, depth + 1)?;
+                        z.list_store_at(out, i, c, span)
+                    })?;
+                }
+                Ok(out)
+            }
+            // A map header has the list header's prefix and its entries
+            // are `(K, V)` tuples at the entry stride (`wolf_rt::map`), so
+            // after `__wolf_rt_map_copy` each entry is loaded, copied out
+            // field by field, and stored back exactly as a list element
+            // is — a `str` key's bytes materialized like any `str`'s.
+            TyKind::Map(k, val) => {
+                let out = self
+                    .rt_call_foreign("__wolf_rt_map_copy", &[v], None, Some(types::PTR))
+                    .expect("hdr");
+                let kr = self.copy_out_reaches(table, k, 0);
+                let vr = self.copy_out_reaches(table, val, 0);
+                if kr || vr {
+                    let Some(kwt) = self.wir_ty_in(table, k, span)? else {
+                        return Err(refuse("unit-typed Map keys", span));
+                    };
+                    let Some(vwt) = self.wir_ty_in(table, val, span)? else {
+                        return Err(refuse("unit-typed Map values", span));
+                    };
+                    let pair = self
+                        .b
+                        .module
+                        .types
+                        .intern(types::TypeData::Agg(vec![kwt, vwt]));
+                    let n = self.list_len_of(out);
+                    self.count_loop(n, |z, i| {
+                        let e = z.list_load_at(out, i, pair, span)?;
+                        let mut kx = z.b.ins(Opcode::AggGet, &[e], &[kwt], Aux::Int(0)).one();
+                        let mut vx = z.b.ins(Opcode::AggGet, &[e], &[vwt], Aux::Int(1)).one();
+                        if kr {
+                            kx = z.deep_copy_out(kx, table, k, span, depth + 1)?;
+                        }
+                        if vr {
+                            vx = z.deep_copy_out(vx, table, val, span, depth + 1)?;
+                        }
+                        let ne =
+                            z.b.ins(Opcode::AggMake, &[kx, vx], &[pair], Aux::None)
+                                .one();
+                        z.list_store_at(out, i, ne, span)
+                    })?;
+                }
+                Ok(out)
+            }
+            TyKind::Tuple(es) => {
+                let wty = self.b.func.value_ty(v);
+                let mut parts = Vec::with_capacity(es.len());
+                for (i, e) in es.iter().enumerate() {
+                    let Some(ewt) = self.wir_ty_in(table, *e, span)? else {
+                        return Err(refuse("`copy region` of a tuple with a unit element", span));
+                    };
+                    let x = self
+                        .b
+                        .ins(Opcode::AggGet, &[v], &[ewt], Aux::Int(i as i64))
+                        .one();
+                    parts.push(self.deep_copy_out(x, table, *e, span, depth + 1)?);
+                }
+                Ok(self.b.ins(Opcode::AggMake, &parts, &[wty], Aux::None).one())
+            }
+            TyKind::Distinct(inner) => self.deep_copy_out(v, table, inner, span, depth + 1),
+            TyKind::Nominal { module, name, args } => match sigs.get(module as usize, &name) {
+                Some(ItemSig::Struct(ss)) => {
+                    let wty = self.b.func.value_ty(v);
+                    let mut parts = Vec::with_capacity(ss.fields.len());
+                    for (i, f) in ss.fields.iter().enumerate() {
+                        let (ftab, fty): (&'t TypeTable, TyId) = match sigs.table.kind(f.ty) {
+                            TyKind::Rigid(r) => match ss.generics.iter().position(|g| g == r) {
+                                Some(k) if k < args.len() => (table, args[k]),
+                                _ => {
+                                    return Err(refuse(
+                                        "`copy region` of this generic struct",
+                                        span,
+                                    ));
+                                }
+                            },
+                            _ if sig_mentions_rigid(&sigs.table, f.ty, 0) => {
+                                return Err(refuse(
+                                    "`copy region` of a generic struct whose field spells its parameter inside another type",
+                                    span,
+                                ));
+                            }
+                            _ => (&sigs.table, f.ty),
+                        };
+                        let Some(fwt) = self.wir_ty_in(ftab, fty, span)? else {
+                            return Err(refuse("unit-typed struct fields", span));
+                        };
+                        let x = self
+                            .b
+                            .ins(Opcode::AggGet, &[v], &[fwt], Aux::Int(i as i64))
+                            .one();
+                        parts.push(self.deep_copy_out(x, ftab, fty, span, depth + 1)?);
+                    }
+                    Ok(self.b.ins(Opcode::AggMake, &parts, &[wty], Aux::None).one())
+                }
+                Some(ItemSig::Distinct { base, .. }) => {
+                    let base = *base;
+                    self.deep_copy_out(v, &sigs.table, base, span, depth + 1)
+                }
+                _ => Err(refuse(
+                    "`copy region` of an enum whose payload is a string or reaches heap storage",
+                    span,
+                )),
+            },
+            _ => Err(refuse(
+                "`copy region` of this shape (a row payload, an error union, a Pool, a cell)",
                 span,
             )),
         }
