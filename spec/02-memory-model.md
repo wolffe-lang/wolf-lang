@@ -734,13 +734,17 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   shell's command loop, a server's request loop, a kernel's event
   loop — computes each turn in the block and keeps the turn's result:
   #612's witness (twenty `str`s and a `List` per turn, one `str` kept
-  in a map) peaked at 27,656 KB at 20,000 turns and 53,020 KB at 40,000
-  with no region, and at 2,836 KB and 3,580 KB with the prefix (native;
-  release 2,984 and 3,528), on linux x86-64. What still grows is the
-  kept value itself: a superseded result is not freed by the region
-  that holds the loop's state (here the process root, which frees
-  nothing), about 33 bytes a turn in that witness; keeping a scalar,
-  the loop is flat. Bounding the state's own garbage — compacting it
+  in a map) peaked at 27,784 KB at 20,000 turns and 53,124 KB at 40,000
+  with no region, and at 2,940 KB and 3,564 KB with the prefix (native;
+  release 27,680 and 53,032 against 2,952 and 3,608), on linux x86-64.
+  What still grows is the kept value itself: a superseded result is not
+  freed by the region that holds the loop's state (here the process
+  root, which frees nothing), about 32 bytes a turn in that witness;
+  keeping a scalar, the loop is flat (2,428 and 2,436 KB). pelt's
+  command loop, with a simple command's expansion, field splitting and
+  pathname expansion computed inside the block in a throwaway copy,
+  went from 163,072 KB (an empty directory) or 489,780 KB (24 files) at
+  20,000 turns to 34,376 KB in either, on release. Bounding the state's own garbage — compacting it
   into a fresh region and freeing the old — is a separate question.
   The pattern the form asks of an interpreter is compute in the block,
   commit outside it: a `mut` argument passed to a call inside the block
