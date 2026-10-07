@@ -1,0 +1,38 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.edge.elem
+//!
+//! s216 (wolf-lang#618) — wolf-lang#612's own first witness: the call
+//! result stored through a `mut` parameter's map from inside a region.
+//! #612 reported it E1010; at 0.2.24 it built and read freed bytes on
+//! checked, native and release (`copy v` shares a `str`'s bytes,
+//! ruling #35, so the copy is no repair). lupin traps `region-fault`.
+
+struct St {
+    vals: Map[str, str],
+    n: int,
+}
+
+fn build(i: int) -> str {
+    var parts = List[str]()
+    var k = 0
+    while k < 20 {
+        (mut parts).push("piece {i} {k}")
+        k += 1
+    }
+    "{parts[3]}-{i}"
+}
+
+fn step(mut st: St, i: int) {
+    region scratch {
+        let v = build(i)
+        st.vals["x"] = copy v
+    }
+}
+
+fn main() -> !int {
+    var st = St { vals: Map[str, str](), n: 0 }
+    step(mut st, 7)
+    print("[{st.vals["x"] else "?"}]")
+    0
+}

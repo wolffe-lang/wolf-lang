@@ -1,0 +1,20 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape
+//!
+//! s216 (wolf-lang#618) — a builtin container method answering a `str`
+//! element (`xs.last()`) hands back bytes the container's elements
+//! name, as `xs[i]` does. The call carries the receiver's sites; before
+//! s216 it carried none, and `out` printed freed bytes on checked,
+//! native and release. lupin traps `region-fault`.
+
+fn main() -> !int {
+    var out = ""
+    region scratch {
+        var xs = List[str]()
+        (mut xs).push("built-{7}-" + "tail")
+        out = xs.last() else "?"
+    }
+    print("[{out}]")
+    0
+}

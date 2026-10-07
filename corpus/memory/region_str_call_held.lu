@@ -1,0 +1,21 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.create.3
+//!
+//! s216 (wolf-lang#618) — the same call result held by a binding
+//! declared outside the region. Under a region that reuses the freed
+//! chunk, native and release printed `ZZZZZZZZ0` and NUL bytes at
+//! 0.2.24; lupin traps `region-fault`.
+
+fn build(i: int) -> str {
+    "built-{i}-" + "tail"
+}
+
+fn main() -> !int {
+    var out = ""
+    region scratch {
+        out = build(7)
+    }
+    print("[{out}]")
+    0
+}
