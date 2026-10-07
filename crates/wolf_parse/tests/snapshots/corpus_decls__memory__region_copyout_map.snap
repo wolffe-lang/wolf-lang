@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 428..536 name=Env fields=4
+FnDecl 538..751 name=clobber body=Block
+FnDecl 753..1394 name=main body=Block
