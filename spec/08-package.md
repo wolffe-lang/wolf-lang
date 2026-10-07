@@ -101,12 +101,28 @@ manifest that asks for build-time execution is refused (E1503).
 ## 8.5 Capabilities
 
 - `[pkg.caps]` Every package declares its capability set from
-  `[net, fs, exec, env, ffi, unsafe, comptime]` (I13). A package
-  whose modules reach a capability-carrying std facade without
-  declaring the capability fails its build (E1504) — an error, never
-  a warning. `wolf audit` renders the transitive capability tree and
-  diffs it across upgrades; `wolf audit --ci` exits non-zero on any
-  acquisition.
+  `[net, fs, exec, env, ffi, unsafe, comptime]` (I13). A package's
+  code REACHES a capability three ways, and any one it does not
+  declare fails its build (E1504) — an error, never a warning:
+  (1) an import of a capability-carrying std facade (`std.net`,
+  `std.fs`, `std.env`) or `import c` (`ffi`); (2) a prelude host
+  builtin (`[os.host.sigs]`) named anywhere in the package's own
+  files, whose capability is the D33 sandbox category the compiler
+  files it under (the fs, net, env and exec families carry `fs`,
+  `net`, `env`, `exec`; stdio, the clock and randomness carry none,
+  having no capability word) — a name the package declares itself
+  is its own item, never a builtin; (3) a
+  std module it imports, for what that module's own code reaches by
+  (1) and (2), closed over the std modules it imports in turn. A std
+  module is never charged itself, and a dependency is charged for
+  its own code only: a package's declaration covers what its files
+  reach, not what its dependencies' files reach. `wolf audit`
+  derives the same set from source, with no build: it prints the
+  transitive tree, `effective` (every declared capability united
+  with every reached one) and a reason per capability and package,
+  and diffs the declarations across upgrades; `wolf audit --ci`
+  exits non-zero on any acquisition, on any capability reached but
+  not declared, and when the code cannot be read.
 
 ## 8.6 The verb surface
 
