@@ -324,3 +324,36 @@ fn an_audit_that_cannot_read_the_code_vouches_for_nothing() {
         stderr(&out)
     );
 }
+
+#[test]
+fn the_audit_covers_every_standalone_entry_beside_the_manifest() {
+    // pax's shape: `kmain_*.lu` entries marked `member: false` beside
+    // one `wolf.pkg`. The directory view loads none of them, so the
+    // audit resolves each entry as its build would and unites them.
+    let dir = stage("entries");
+    let out = audit(&dir, true);
+    assert_eq!(out.status.code(), Some(1), "stderr:\n{}", stderr(&out));
+    let report = stdout(&out);
+    assert!(report.contains("effective: [env]\n"), "{report}");
+    assert!(
+        report.contains(
+            "  env: demo/entries (root) — UNDECLARED: calls `os_cpus` at app/cores.lu:6:13\n"
+        ),
+        "{report}"
+    );
+    let exe = dir.join(if cfg!(windows) { "q.exe" } else { "q.out" });
+    assert_builds(
+        &run_wolf(
+            &dir,
+            &["build", "app/quiet.lu", "-o", exe.to_str().unwrap()],
+        ),
+        "quiet",
+    );
+    assert_refused(
+        &run_wolf(
+            &dir,
+            &["build", "app/cores.lu", "-o", exe.to_str().unwrap()],
+        ),
+        "this package calls `os_cpus` but does not declare the `env` capability",
+    );
+}
