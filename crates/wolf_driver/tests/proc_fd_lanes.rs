@@ -519,8 +519,12 @@ fn isatty_is_true_under_a_pty() {
             &dir,
         );
         let got = String::from_utf8_lossy(&out.stdout).replace('\r', "");
+        // BSD `script` may echo `^D` and two backspaces onto the line the
+        // program prints first (run 37566774668, macOS job 112616181598:
+        // "^D\u{8}\u{8}in=true err=true pipe=false"), so a line ENDS with
+        // the answer.
         assert!(
-            got.lines().any(|l| format!("{l}\n") == want),
+            got.lines().any(|l| l.ends_with(want.trim_end())),
             "the {} binary under a pty printed {got:?}",
             if release { "release" } else { "native" }
         );
