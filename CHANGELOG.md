@@ -1,5 +1,118 @@
 # Changelog
 
+## 0.2.25 — 2026-10-07
+
+THE TWENTY-FIFTH. Three silent wrong answers on the compiled tiers are
+fixed (s214: wolf-lang#598, #600, #601), and the pairing moves to lupin
+0.1.48, which carries this compiler's v0.2.24 spec and corpus. lupin is
+no longer two releases behind, and sixteen gate pins drop. One lane, 39
+commits (s214), then r30's 10: 49 since v0.2.24.
+
+### Read this before you bump the pin
+
+**New prelude names:** none (`cargo xtask prelude-diff v0.2.24 HEAD
+--markdown`, after `git fetch --tags`, run at the release head). There
+is nothing to grep downstream.
+
+**Three silent wrong answers are fixed (s214).** A program that printed
+a wrong value on native or release now prints the value the checked
+machine and lupin always printed.
+- **#598.** On native and release, a store to a module `var`, to
+  `extern "c" let` storage or through any raw pointer was forwarded
+  across a call to a function that wrote it. The caller read its own
+  stale store: checked and lupin printed 99, both compiled tiers 0.
+- **#601.** The same family on loads: a raw-pointer or module-`var`
+  read after a call that writes the memory returned the pre-call value
+  (the builder's GVN joined foreign-region loads across calls).
+  Every call now clobbers that memory. A `List` lent to the function
+  stays frozen for the call, as `[mem.tier0.mode.read]` says, so its
+  loads keep their reuse. The print shims are inert calls and keep it
+  too. `[mem.static.2]` now says it on every machine: no value read or
+  stored before a call stands for that memory after it.
+- **#600.** On release, a branch on the top half of an unsigned shift
+  (`a >> 63 == 1`, `cr2 >> 39 == 0x1ffff80`) was deleted, because
+  rangeopt bounded `x >> s` by the signed maximum. It now uses the
+  width's unsigned maximum.
+
+Downstream binaries gain reloads after calls. No downstream test changed
+its answer.
+
+**One gate was overridden for this release (ruling #52).** The
+compile-track bench gate (D5) went red on one counter,
+`wir/compile/rust/wir_forward_hits`: −3.5%, 57 → 55 on the corpus,
+deterministic. The two lost hits are the forwards across a writing call
+that #598 was, so restoring them would restore the bug. The runtime cost
+is within noise (boreutils CPU −2.8% to +3.9%). The maintainer ruled a
+one-time exception: s214 merged over that one step, and the next
+nightly re-baselines. It is not a precedent.
+
+### The pairing: lupin 0.1.48
+
+`PAIRING` names **lupin 0.1.48 at pin `294d626`** (wolf-interp release
+405340127; the linux x86-64 archive's sha256 `81cfd77a…`). Its spec pin
+is this compiler's v0.2.24 tag. 0.1.48 carries is72 (`lupin
+--trace-places`, a JSON-lines trace of every place's state after each
+statement) and is73 (the re-pin blockers: module initializers, `extern
+"c" let`, `#[section]`, `packed`, `align(N)` and the layout queries,
+wolf-interp#190, #188). The re-pin filed one divergence, DIV-2026-028:
+kw11's `conc/atomic_race_plain.lu` is `check: pass`, and lupin's
+`trap(race)` is the detection `[conc.mm.race.3]` permits
+(wolf-lang#603).
+
+- **Dropped 16.** These rows now answer as the machines do on 0.1.48,
+  measured unpinned:
+  - `static_lanes`, 7 (#190): E0705 on both initializer rows (0.1.47
+    overflowed its stack on the cycle), E1301, E0821, and by-name
+    refusals for a `List` in module state, a link-time symbol and
+    section placement;
+  - `repr_layout_lanes`, 9 (#188): the layout queries' numbers, E0708,
+    E0819, E0820, and the packed and aligned rows.
+- **Kept.** Each is carried to 0.1.48 with its 0.1.47 verdict, measured
+  row by row and naming its open issue:
+  - attr_closed_set's control, 1 (lupin declines its `comptime fn`);
+  - volatile, 6 (#185);
+  - kw11's atomic rows, 9, plus the racy counter's `trap(race)` (#194).
+- **Re-keyed.** `raw_align_lanes`' repr(c) element keeps its verdict
+  (`unsupported`, "has no member `b`") and now names wolf-interp#205: a
+  raw pointer to a `#[repr(c)]` struct still reads its element as bytes.
+- **Kept, verdict changed** (ruled at r30). `raw_align_lanes`' packed
+  field was `fail(E0817)` while `packed` was refused (#188). On 0.1.48
+  `packed` is admitted, and the struct pointee is declined by name:
+  `unsupported`, "has no member `limit`" (#205).
+- **Widened 0.** The plant (the 0.1.48 lists against the published
+  0.1.47) is red on exactly the sixteen dropped cases.
+- **The ritual** (#87, with #281's control against the 0.1.47 archive,
+  the same corpus and the same release `wolf`):
+  - checked: **moved 8 ledger counts**. Agreements 601 → 603, hard
+    20 → 16, SOUNDNESS 0 → 0.
+  - native: **moved 11**. Agreements 637 → 639, hard 34 → 27,
+    SOUNDNESS 8 → 8.
+  - Every move is on is73's rows or #205's, toward agreement or a
+    by-name decline. Nine checked files and six native moved below the
+    ledger: fail-pinned rows whose lupin answer moved to the pinned code
+    (E0705, E0819, E0820, E0821, E1301), which reaches no count by
+    design.
+
+### Stale stores and loads across calls, and the shifted range (s214, #598, #601, #600)
+
+- The builder clobbers foreign storage at every call and `call.ind`:
+  module `var`s, `extern "c" let` storage and raw-pointer memory. No
+  store is forwarded and no load reused across one, in a loop body
+  either. Without a call, and for memory the fn owns, forwarding is
+  unchanged.
+- A `List` lent to the function is frozen for the call: its `len`, its
+  data pointer and its elements are reused across calls. The print shims
+  are inert calls.
+- rangeopt bounds a logical shift by the width's unsigned maximum.
+- New corpus rows (#598: the witness, a read-call-read, a writer two
+  calls deep and through a fn value, a callee writing through a raw
+  pointer; #600: top-half branches on `wrapping[u64]`/`wrapping[u8]` and
+  on a plain `u64`/`u8` from a C allocation). New gates:
+  `stale_global_lanes` (four machines, C writing `extern let` storage
+  and calling back, a freestanding kernel) and `shr_range_lanes` (four
+  machines and the issue's hosted witness behind listed assembly).
+  Plants were seen red in CI for #598 and #600, then reverted.
+
 ## 0.2.24 — 2026-10-06
 
 THE TWENTY-FOURTH. A kernel can share a word between cpus and can
