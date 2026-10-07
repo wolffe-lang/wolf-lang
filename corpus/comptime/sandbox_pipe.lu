@@ -1,9 +1,10 @@
 //! check: fail(E0701)
 //! phase: resolve
-//! conforms: comptime.sandbox, os.proc.pipe
+//! conforms: comptime.sandbox, comptime.sandbox.exec, os.proc.pipe
 //!
-//! s215 (D33): `os_pipe` would make the COMPILER a descriptor — the `io`
-//! category, refused at comptime with that category's reason.
+//! s215 (D33): `os_pipe` exists to plumb a child process — the `exec`
+//! category with the spawn family (ruling #54), refused at comptime with
+//! that category's reason.
 
 comptime fn helper() -> int {
     let p = os_pipe() else |_| { (0, 0) }
