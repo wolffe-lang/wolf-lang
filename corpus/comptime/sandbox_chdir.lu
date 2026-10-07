@@ -1,11 +1,10 @@
 //! check: fail(E0701)
 //! phase: resolve
-//! conforms: comptime.sandbox, os.fs.chdir
+//! conforms: comptime.sandbox, comptime.sandbox.env, os.fs.chdir
 //!
-//! s215 (D33): `os_chdir` would move the COMPILER's working directory,
-//! `os_pipe` would make it a descriptor and `os_isatty` would probe its
-//! terminal — each acts on the machine that compiles, so all three are
-//! the `io` category, refused at comptime with that category's reason.
+//! s215 (D33): `os_chdir` would move the COMPILER's working directory —
+//! the process context `os_cwd` reads, so it is the `env` category
+//! (ruling #54), refused at comptime with that category's reason.
 
 comptime fn helper() -> int {
     os_chdir("/") else |_| {}
