@@ -210,6 +210,9 @@ pub struct FuncBuilder<'m> {
     /// store→load forwarding or load GVN — only within the epoch it
     /// was built in: no call in between, so nothing wrote the bytes.
     call_epoch: u32,
+    /// s214: the next call is INERT — it writes no program-visible
+    /// memory, so it does not start a new epoch ([`Self::ins_call_inert`]).
+    inert_call: bool,
     /// The epoch each foreign-token STORE was built in (the forwarding
     /// half of the rule above; loads carry theirs in their GVN key).
     store_epoch: HashMap<Inst, u32>,
@@ -260,6 +263,7 @@ impl<'m> FuncBuilder<'m> {
             next_region: 0,
             foreign: HashSet::new(),
             call_epoch: 0,
+            inert_call: false,
             store_epoch: HashMap::new(),
             foreign_role: HashMap::new(),
             frozen: HashSet::new(),
@@ -942,7 +946,7 @@ impl<'m> FuncBuilder<'m> {
         }
         // A call may write any foreign storage (s214): what was built
         // before it is no longer reusable after it.
-        if op.is_call() {
+        if op.is_call() && !std::mem::take(&mut self.inert_call) {
             self.call_epoch += 1;
         }
         // 4. GVN via hash-consing at insert.
@@ -1373,6 +1377,19 @@ impl<'m> FuncBuilder<'m> {
     /// results.
     pub fn ins_call(&mut self, callee: ExtFunc, args: &[Value]) -> Vec<Value> {
         self.ins_call_regions(callee, args, &HashMap::new())
+    }
+
+    /// s214: [`Self::ins_call`] for a callee that writes NO memory a
+    /// program can name — it reads only its arguments (and the bytes an
+    /// argument pointer addresses), writes only state private to the
+    /// runtime, and calls no program code. Such a call does not clobber
+    /// foreign storage, so forwarding and load reuse ride across it.
+    /// Lowering vouches for the callee; the print shims are the set.
+    pub fn ins_call_inert(&mut self, callee: ExtFunc, args: &[Value]) -> Vec<Value> {
+        self.inert_call = true;
+        let out = self.ins_call(callee, args);
+        self.inert_call = false;
+        out
     }
 
     /// `ins_call` with region-polymorphic binding (s26): a callee sig's

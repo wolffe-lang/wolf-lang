@@ -18279,7 +18279,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 ext
             }
         };
-        self.b.ins_call(ext, args);
+        // s214: every shim this imports is INERT — `print_begin`/`_end`
+        // move the runtime's own thread-local line buffer and write the
+        // stream; `print_str`/`write_str` read the bytes they are given;
+        // the scalar `print_*`/`write_*` take no pointer. None writes
+        // memory a program can name or calls program code (hosted only:
+        // a freestanding object imports no print shim,
+        // `[abi.target.none.hooks]`), so a load after `print` may still
+        // reuse one before it.
+        self.b.ins_call_inert(ext, args);
     }
 
     /// The v0 print path (s31, s38): `print(x)`/`eprint(x)` lower to
