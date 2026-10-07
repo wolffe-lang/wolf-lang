@@ -1084,14 +1084,15 @@ fn compile_native(
     let mut resolve_diags = res.diagnostics.clone();
     resolve_diags.extend(scan.diagnostics.iter().cloned());
     gate(sources, &mut pending, resolve_diags, false)?;
-    // I13's import-graph half (s51): a package whose modules import a
-    // capability-carrying std facade module must declare the
-    // capability in its manifest — E1504, an error, never a warning.
+    // I13 (s51, s217): a package whose code reaches a capability — a
+    // std facade import, a host builtin from the sandbox table, a std
+    // module that reaches one — must declare it in its manifest —
+    // E1504, an error, never a warning.
     if let Some(project) = pkg_project {
         gate(
             sources,
             &mut pending,
-            pkg_cmd::capability_diagnostics(project, &res.package),
+            pkg_cmd::capability_diagnostics(project, &res),
             false,
         )?;
     }
