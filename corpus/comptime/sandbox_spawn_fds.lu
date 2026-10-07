@@ -1,10 +1,19 @@
 //! check: fail(E0701)
 //! phase: resolve
 //! conforms: comptime.sandbox, comptime.sandbox.exec, os.proc.fds
+//! forward: List construction at comptime
 //!
 //! s215 (D33): the spawn with a descriptor map starts a program, so it
 //! joins `os_spawn`/`os_spawn_with` in the `exec` category — compiling
 //! a package must never run a program on the machine that compiles it.
+//!
+//! A FORWARD PIN, not a rejection the compiler makes today: building the
+//! `List` arguments is outside the comptime engine (its values have no
+//! container with identity), so the engine declines the file at the list
+//! before the call's capability is asked — `os_spawn`'s own position, and
+//! the reason wolf-std witnesses `exec` at `os_kill`. The category itself
+//! is pinned by `crates/wolf_sema/tests/sandbox_s215.rs`; this row turns
+//! into the rule the day the engine holds a `List`.
 
 comptime fn helper() -> int {
     let h = os_spawn_fds("true", List[str](), List[int]()) else |_| 0
