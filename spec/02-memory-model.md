@@ -750,7 +750,8 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   commit outside it: a `mut` argument passed to a call inside the block
   gains the call's site (D12), so the state is written after the copy,
   not during the work.
-  **Ruling owed: the spelling** (s216, 2026-10-07, wolf-lang#612). The
+  **The spelling, ruled A** (s216, 2026-10-07, wolf-lang#612; ruling
+  #56, the maintainer, 2026-10-07). The
   problem: a `region` block frees a turn's temporaries, but every way
   to hand its result to longer-lived state is E1010 — rightly, since
   the result's bytes are in the dying region; `copy` inside the block
