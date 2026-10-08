@@ -1,0 +1,8 @@
+/// A `caps=[]` dependency that moves the working directory through the
+/// prelude's `os_chdir` (the `env` capability, ruling #54).
+pub fn left(s: str, width: int) -> str {
+    os_chdir(".") else |_| { return s }
+    var out = s
+    while out.len < width { out = " " + out }
+    out
+}
