@@ -157,7 +157,7 @@ the unix gate `crates/wolf_driver/tests/proc_fd_lanes.rs` (a two-stage
 pipeline, `2>&1` onto a pipe, an explicit fd 5, no leaks, a child in the
 moved directory, `isatty` under a pipe and under `script(1)`).
 
-### A loop can keep each turn's result and free the rest: `copy region { … }` (s216, #612; ruling owed on the spelling)
+### A loop can keep each turn's result and free the rest: `copy region { … }` (s216, #612; ruling #56 = A)
 
 - **`copy region name? { … }`** (`[mem.region.copyout]`). The block runs
   as `region { … }` does; at its closing brace its VALUE is deep-copied
@@ -186,8 +186,8 @@ moved directory, `isatty` under a pipe and under `script(1)`).
   prefix. On native and release a `Map` is rebuilt entry by entry; an
   enum or error-row payload holding a string or a container is refused
   by name there (`unsupported`), as for a plain `copy`.
-- **Ruling owed: the spelling.** Implemented as recommended (option A,
-  no new token or keyword); the alternatives (a materializing
+- **The spelling: ruling #56 = A** (the maintainer, 2026-10-07), as
+  implemented (no new token or keyword); the alternatives (a materializing
   `copy v in outer`, a per-iteration loop region) and their costs are in
   the clause.
 
