@@ -11,7 +11,8 @@
 //! The witnesses, red at trunk `85de08ff` (every build 0, every audit
 //! 0) and green here:
 //! - one host builtin per capability-carrying sandbox category (fs,
-//!   net, exec, env), each refused E1504 naming the builtin and its site;
+//!   net, exec, env), each refused E1504 naming the builtin and its site,
+//!   and s215's `os_chdir` (env) and `os_pipe` (exec) by ruling #54;
 //! - a builtin reached only through the dependency's own helper, one
 //!   module down;
 //! - `wolf audit --ci` failing on an undeclared capability with no
@@ -199,6 +200,20 @@ fn an_exec_builtin_in_a_caps_free_dependency_is_e1504() {
 #[test]
 fn an_env_builtin_in_a_caps_free_dependency_is_e1504() {
     builtin_witness("env", "env_get", "env", "pkg://pad/pad.lu:4:16");
+}
+
+/// Ruling #54: s215's `os_chdir` changes the process's environment, so
+/// it charges `env`.
+#[test]
+fn os_chdir_in_a_caps_free_dependency_is_e1504_for_env() {
+    builtin_witness("chdir", "os_chdir", "env", "pkg://pad/pad.lu:4:5");
+}
+
+/// Ruling #54: s215's `os_pipe` exists to wire children, so it charges
+/// `exec`.
+#[test]
+fn os_pipe_in_a_caps_free_dependency_is_e1504_for_exec() {
+    builtin_witness("pipe", "os_pipe", "exec", "pkg://pad/pad.lu:4:18");
 }
 
 #[test]
