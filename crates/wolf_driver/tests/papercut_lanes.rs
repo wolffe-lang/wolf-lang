@@ -21,11 +21,12 @@
 //! `unsafe` too; `!` on an integer was E0409; `-> never` named no type
 //! (E0301) and the undeclared form was E0401.
 //!
-//! lupin 0.1.47 (the 0.2.24 pairing) runs the `const` and `let` reads
-//! and the bodyless `extern "c" fn` row, and answers E1301 for the
-//! field store outside `unsafe`; it parts on every other row, each
-//! pinned below by that version as pre-mirror (lupin's half is
-//! wolf-interp#200). A newer lupin must answer what the clauses say.
+//! lupin 0.1.47 (the 0.2.24 pairing) and 0.1.48 (the 0.2.25 pairing,
+//! measured answering alike, r31) run the `const` and `let` reads
+//! and the bodyless `extern "c" fn` row, and answer E1301 for the
+//! field store outside `unsafe`; they part on every other row, each
+//! pinned below by version and release commit as pre-mirror (lupin's
+//! half is wolf-interp#200). A newer lupin must answer what the clauses say.
 
 mod lane_exit;
 
@@ -44,6 +45,7 @@ struct Obs {
     codes: Vec<String>,
     stdout: String,
     version: String,
+    commit: String,
     unsupported: String,
     ub_row: String,
     ub_clause: String,
@@ -73,6 +75,7 @@ fn parse_obs(bytes: &[u8], stderr: &[u8], what: &str) -> Obs {
         codes,
         stdout: s("stdout_inline"),
         version: s("impl_version"),
+        commit: s("commit"),
         unsupported,
         ub_row: s("x-ub-row"),
         ub_clause: s("x-ub-clause"),
@@ -193,9 +196,13 @@ const fn ub<'a>(row: &'a str, clause: &'a str) -> Want<'a> {
     }
 }
 
-/// lupin's measured answer where it parts (pre-mirror).
+/// lupin's measured answer where it parts (pre-mirror), keyed by
+/// version AND the commit its release archive reports, so a development
+/// build of the mirror (which still calls itself the last released
+/// version) is held to the ruled answers.
 struct Pin<'a> {
     version: &'a str,
+    commit: &'a str,
     verdict: &'a str,
     named: &'a str,
 }
@@ -259,7 +266,10 @@ fn every_machine(
     let Some(lupin) = lupin_says(&entry) else {
         return;
     };
-    match lupin_pre_mirror.iter().find(|p| p.version == lupin.version) {
+    match lupin_pre_mirror
+        .iter()
+        .find(|p| p.version == lupin.version && lupin.commit.starts_with(p.commit))
+    {
         Some(pin) => {
             assert_eq!(
                 lupin.verdict, pin.verdict,
@@ -305,18 +315,27 @@ const E0401: Want<'static> = fails("fail(E0401)", &["E0401"]);
 const E0409: Want<'static> = fails("fail(E0409)", &["E0409"]);
 const E1301: Want<'static> = fails("fail(E1301)", &["E1301"]);
 
-/// The same answer on all four machines, with lupin 0.1.47's parting
-/// (if any) pinned by version.
+/// The same answer on all four machines, with lupin 0.1.47's and
+/// 0.1.48's parting (if any) pinned by version and release commit.
 fn agree(row: &str, want: Want<'_>, pins: &[Pin<'_>]) {
     every_machine(row, want, Some(want), want, pins);
 }
 
-const fn pin<'a>(verdict: &'a str, named: &'a str) -> [Pin<'a>; 1] {
-    [Pin {
-        version: "0.1.47",
-        verdict,
-        named,
-    }]
+const fn pin<'a>(verdict: &'a str, named: &'a str) -> [Pin<'a>; 2] {
+    [
+        Pin {
+            version: "0.1.47",
+            commit: "b3228cb",
+            verdict,
+            named,
+        },
+        Pin {
+            version: "0.1.48",
+            commit: "531bf05",
+            verdict,
+            named,
+        },
+    ]
 }
 
 const NO_PLACE: &str = "does not denote a place";
