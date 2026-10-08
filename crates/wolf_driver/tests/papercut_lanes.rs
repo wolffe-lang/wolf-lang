@@ -7,9 +7,9 @@
 //! - `[mem.unsafe.raw.5]` (#577): `memory/raw_field_store*.lu` and
 //!   `memory/raw_ub_misaligned_repr_c_field_store.lu` — a store to a
 //!   field of a raw element, L4 asked of the element;
-//! - `[type.int.not]` (#575, ruling owed): `typecheck/int_not_*.lu` —
+//! - `[type.int.not]` (#575, ruling #51 = A): `typecheck/int_not_*.lu` —
 //!   `!` on an integer is its complement;
-//! - `[type.fn.never]` (#572, ruling owed): `typecheck/fn_never_*.lu` —
+//! - `[type.fn.never]` (#572, ruling #50 = A): `typecheck/fn_never_*.lu` —
 //!   a call to a `-> never` fn is bottom.
 //!
 //! Measured at trunk 294d626d = the v0.2.24 archive (kasumi,
@@ -399,7 +399,7 @@ fn a_misaligned_repr_c_element_store_is_row_l4() {
     );
 }
 
-/// `[type.int.not]` (#575, ruling owed): `!` on an integer is its
+/// `[type.int.not]` (#575, ruling #51 = A): `!` on an integer is its
 /// complement at the operand's width; a byte widens to `int`; a float
 /// stays E0409.
 #[test]
@@ -426,7 +426,7 @@ fn bang_on_an_integer_is_its_complement() {
     );
 }
 
-/// `[type.fn.never]` (#572, ruling owed): a call to a `-> never` fn is
+/// `[type.fn.never]` (#572, ruling #50 = A): a call to a `-> never` fn is
 /// bottom — the issue's witness runs, its trap twin stops at the
 /// callee's `assert(false)`, a bodyless `extern "c" fn` fits the
 /// handler; a reachable end or a `return` is E0401.
