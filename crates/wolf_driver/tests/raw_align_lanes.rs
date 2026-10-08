@@ -24,7 +24,7 @@
 //! only a `fail` carries one), so lupin is held to the verdict, the row
 //! and the clause, not to the checked machine's E1401. Its packed and
 //! repr(c) rows stop earlier, at wolf-interp#188 (no `packed`, no struct
-//! pointee), pinned by version. 0.1.48 (the 0.2.25 pairing, r30) admits
+//! pointee), pinned by version and release commit. 0.1.48 (the 0.2.25 pairing, r30) admits
 //! `packed` (is73) but still reads a struct element as bytes: both rows
 //! are pinned at 0.1.48 to wolf-interp#205 (the packed row's verdict
 //! changed, ruled at r30). A newer lupin must answer what the clause
@@ -47,6 +47,7 @@ struct Obs {
     codes: Vec<String>,
     stdout: String,
     version: String,
+    commit: String,
     unsupported: String,
     ub_row: String,
     ub_clause: String,
@@ -76,6 +77,7 @@ fn parse_obs(bytes: &[u8], stderr: &[u8], what: &str) -> Obs {
         codes,
         stdout: s("stdout_inline"),
         version: s("impl_version"),
+        commit: s("commit"),
         unsupported,
         ub_row: s("x-ub-row"),
         ub_clause: s("x-ub-clause"),
@@ -197,9 +199,13 @@ const fn ub<'a>(row: &'a str, clause: &'a str) -> Want<'a> {
 }
 
 /// lupin's measured answer where it parts (pre-mirror), and the issue
-/// that holds its mirror.
+/// that holds its mirror. Keyed by version AND the commit its release
+/// archive reports, so a development build carrying the mirror (which
+/// still calls itself the last released version) is held to the clause
+/// (r31: s213's struct pointee answers both rows at a dev 0.1.48).
 struct Pin<'a> {
     version: &'a str,
+    commit: &'a str,
     verdict: &'a str,
     named: &'a str,
     issue: &'a str,
@@ -264,7 +270,10 @@ fn every_machine(
     let Some(lupin) = lupin_says(&entry) else {
         return;
     };
-    match lupin_pre_mirror.iter().find(|p| p.version == lupin.version) {
+    match lupin_pre_mirror
+        .iter()
+        .find(|p| p.version == lupin.version && lupin.commit.starts_with(p.commit))
+    {
         Some(pin) => {
             assert_eq!(
                 lupin.verdict, pin.verdict,
@@ -330,18 +339,21 @@ fn a_misaligned_repr_c_element_is_row_l4() {
         &[
             Pin {
                 version: "0.1.46",
+                commit: "f9269e3",
                 verdict: "unsupported",
                 named: "has no member `b`",
                 issue: "wolf-interp#188",
             },
             Pin {
                 version: "0.1.47",
+                commit: "b3228cb",
                 verdict: "unsupported",
                 named: "has no member `b`",
                 issue: "wolf-interp#188",
             },
             Pin {
                 version: "0.1.48",
+                commit: "531bf05",
                 verdict: "unsupported",
                 named: "has no member `b`",
                 issue: "wolf-interp#205",
@@ -383,18 +395,21 @@ fn a_packed_field_through_a_raw_element_is_defined() {
         &[
             Pin {
                 version: "0.1.46",
+                commit: "f9269e3",
                 verdict: "fail(E0817)",
                 named: "",
                 issue: "wolf-interp#188",
             },
             Pin {
                 version: "0.1.47",
+                commit: "b3228cb",
                 verdict: "fail(E0817)",
                 named: "",
                 issue: "wolf-interp#188",
             },
             Pin {
                 version: "0.1.48",
+                commit: "531bf05",
                 verdict: "unsupported",
                 named: "has no member `limit`",
                 issue: "wolf-interp#205",
