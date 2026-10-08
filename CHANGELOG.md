@@ -108,12 +108,13 @@ Two of the four were spellings the maintainer ruled on 2026-10-07:
   which no diagnostic snapshot printed). `never` is exempt from W0304,
   as `range` is: wolf-std's tests bind a local named `never`.
 - **New prelude name:** `never` (`builtin_type`, `w0304: false`).
-- lupin 0.1.47 parts on the `var`, field-store, complement and `never`
-  rows; its half is wolf-interp#200, pinned by version in
-  `papercut_lanes.rs`. Anchors 595 → 599. Found on the way and filed,
-  not fixed here: **#601** (a silent wrong answer on native and
-  release: a raw-pointer or module-`var` read after a call that writes
-  it returns the pre-call value) and #602 (the checked machine prints a
+- lupin 0.1.47 and 0.1.48 part on the `var`, field-store, complement
+  and `never` rows; its half is wolf-interp#200, pinned by version and
+  release commit in `papercut_lanes.rs`. Anchors 595 → 599. Found on
+  the way and filed, not fixed here: **#601** (a silent wrong answer on
+  native and release: a raw-pointer or module-`var` read after a call
+  that writes it returns the pre-call value; since fixed by s214 in
+  0.2.25) and #602 (the checked machine prints a
   negative narrow signed `wrapping` value unsigned).
 
 ## 0.2.25 — 2026-10-07
