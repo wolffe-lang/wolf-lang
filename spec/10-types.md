@@ -357,9 +357,9 @@ conversion, and its numeric arms are closed and total:
   the ordinary type mismatch — widen the byte.
 
 - `[type.int.not]` **`!` on an integer is its bitwise complement.**
-  *(Proposed by s213 for wolf-lang#575; the spelling is a ruling owed —
-  options A `!` on integers, B a `~` operator, C a named function; A
-  is implemented.)* `!x` on every integer type (`int`, `uint`,
+  *(s213 for wolf-lang#575; ruled A by the maintainer 2026-10-07,
+  ruling #51: `!` on integers, over B a `~` operator and C a named
+  function.)* `!x` on every integer type (`int`, `uint`,
   `i8`…`i64`, `u8`…`u64`, `wrapping[T]`) flips every bit of `x` at its
   own width and has `x`'s type: `-x - 1` for a signed width, `max - x`
   for an unsigned one (`!(0 as u32)` is `4294967295`). It is total —
@@ -738,8 +738,8 @@ is about it.)
   teaches functions as values was the one the maintainer met it in.)
 
 - `[type.fn.never]` **A function declared `-> never` never returns.**
-  *(Proposed by s213 for wolf-lang#572; the spelling is a ruling owed —
-  options A `-> never`, B `-> !`, C `#[noreturn]`; A is implemented.)*
+  *(s213 for wolf-lang#572; ruled A by the maintainer 2026-10-07,
+  ruling #50: `-> never`, over B `-> !` and C `#[noreturn]`.)*
   `never` is a built-in type name (`[type.byte]`'s kind of name, not a
   keyword: `[gram.inv.kw]`'s closed set is unchanged), written only as
   a function's return type — a body, a bodyless `extern "c" fn`
