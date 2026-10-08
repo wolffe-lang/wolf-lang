@@ -335,7 +335,10 @@ fn a_misaligned_repr_c_element_is_row_l4() {
         "raw_ub_misaligned_repr_c_field.lu",
         L4,
         None,
-        L4,
+        // lupin's `ub` record carries no diagnostic, as on the other L4
+        // rows (wolf-lang#606); first reached by a lupin with s213's struct
+        // pointee (r31).
+        L4_LUPIN,
         &[
             Pin {
                 version: "0.1.46",
