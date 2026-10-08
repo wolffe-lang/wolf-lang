@@ -66,9 +66,9 @@ No row changed anywhere.
 
 ### The kernel's papercuts (s213, #572, #575, #577, #579)
 
-Two of the four need the maintainer's ruling on a spelling before this
-merges (#572 `-> never`, #575 `!` on integers); both are implemented as
-proposed, and the PR carries the options.
+Two of the four were spellings the maintainer ruled on 2026-10-07:
+`-> never` (#572, ruling #50 = A) and `!` on integers (#575, ruling #51
+= A), each as s213 implemented it.
 
 - **`m.K` reads another module's `pub const` (#579).** A `pub const`,
   `pub let` or `pub var` read through its module's name after `use m`
@@ -90,7 +90,7 @@ proposed, and the PR carries the options.
   whichever field is named. The checked machine now also reads
   `(*p).f` and nested paths. A whole-aggregate raw store (`p[0] =
   Pair { … }`) is still refused by the checked machine (unchanged).
-- **`!` on an integer is its bitwise complement (#575, ruling owed).**
+- **`!` on an integer is its bitwise complement (#575, ruling #51 = A).**
   `x & !0xfff`, `(x + 0xfff) & !0xfff`, `e & !bit` and `const MASK:
   u32 = !0xfff` work at the operand's own width (`[type.int.not]`); a
   `byte` widens to `int` first (`[type.byte.op]`). It was E0409. The
@@ -99,7 +99,7 @@ proposed, and the PR carries the options.
   shifts stay refused there. A `u64`/`uint` complement lies past the
   checked machine's range and is refused by name, as such a literal is.
 - **`-> never` declares a function that never returns (#572, ruling
-  owed).** `never` is a built-in type name, written as a return type
+  #50 = A).** `never` is a built-in type name, written as a return type
   (`[type.fn.never]`); a call to such a function is bottom, so `bad =>
   die("…")` fits an arm that wants an `int`, and a bodyless
   `extern "c" fn abort() -> never` crosses the membrane as `void`. A
