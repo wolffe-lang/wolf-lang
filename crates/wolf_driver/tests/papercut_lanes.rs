@@ -392,7 +392,23 @@ fn a_field_of_a_raw_element_is_stored_in_place() {
     agree(
         "memory/raw_field_store_packed.lu",
         runs("65535 4096 1 512\n"),
-        &pin("fail(E0817)", ""),
+        // 0.1.47 refused `packed` itself (E0817); 0.1.48 admits it (is73)
+        // and declines the field store as it does the unpacked rows (r31,
+        // measured).
+        &[
+            Pin {
+                version: "0.1.47",
+                commit: "b3228cb",
+                verdict: "fail(E0817)",
+                named: "",
+            },
+            Pin {
+                version: "0.1.48",
+                commit: "531bf05",
+                verdict: "unsupported",
+                named: NO_PLACE,
+            },
+        ],
     );
 }
 
