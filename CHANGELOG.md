@@ -61,8 +61,8 @@ No row changed anywhere.
   `byte_surface_lanes.rs`, which runs them on checked, native, release
   and lupin with standard input a file, a pipe and a shared offset, a
   read-only stdout (`EBADF`) and `/dev/full` (`ENOSPC`). It pins lupin
-  0.1.47 by version and release commit until wolf-interp's mirror
-  ships. The micro-benchmark is `bench/byte-scan/`.
+  0.1.47 and 0.1.48 by version and release commit until wolf-interp's
+  mirror ships. The micro-benchmark is `bench/byte-scan/`.
 
 ## 0.2.25 — 2026-10-07
 
