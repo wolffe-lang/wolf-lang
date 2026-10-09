@@ -14681,7 +14681,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             (6, "invalid"),
         ];
         let (sym, pairs): (&str, &[(i64, &str)]) = match name {
-            "os_signal_ignore" => ("__wolf_rt_os_signal_ignore", SIG),
+            "os_signal_ignore" => ("__wolf_rt_os_signal_default", SIG),
             "os_signal_default" => ("__wolf_rt_os_signal_default", SIG),
             "os_signal_poll" => ("__wolf_rt_os_signal_poll", SIG),
             "os_spawn_job" => ("__wolf_rt_os_spawn_job", PROC),
