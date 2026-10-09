@@ -193,6 +193,18 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // like the rest of the family — comptime-refused (you cannot
         // wait for an OS signal at compile time).
         "os_signal_listen" | "os_signal_wait" | "os_signal_raise" => SandboxCategory::Exec,
+        // s219 (ruling owed, with #54's reasoning): the dispositions and
+        // the poll are signal control, `exec` with the family; the job
+        // spawn, the child's pid and status, and handing the terminal's
+        // foreground to a group are process control, `exec`. This
+        // process's group is process context `os_cwd`-like, `env`. The
+        // terminal's mode and the question of whose turn it is act on a
+        // descriptor the program holds and start nothing, `io` with
+        // `os_isatty`.
+        "os_signal_ignore" | "os_signal_default" | "os_signal_poll" | "os_spawn_job"
+        | "os_proc_pid" | "os_wait_status" | "os_term_set_foreground" => SandboxCategory::Exec,
+        "os_pgid" => SandboxCategory::Env,
+        "os_term_foreground" | "os_term_mode" | "os_term_set_mode" => SandboxCategory::Io,
         // The s40 time builtin tier: every clock read and sleep is the
         // one Clock category (X12 — two identical builds must not
         // observe different times).
