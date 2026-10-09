@@ -60,6 +60,65 @@ negative narrow one).
   eighteen integer types (printed, ordered, combined) against an
   `i128` reference.
 
+### Ctrl-C: a program that survives SIGINT, process groups and the terminal (s219, #622)
+
+**Read this before you bump the pin.** Eleven new prelude names, all
+`w0304: true` in `spec/prelude.json`: `os_signal_ignore`,
+`os_signal_default`, `os_signal_poll`, `os_spawn_job`, `os_proc_pid`,
+`os_wait_status`, `os_pgid`, `os_term_foreground`,
+`os_term_set_foreground`, `os_term_mode` and `os_term_set_mode`. A
+module that declares one draws W0304 (fatal under `--deny-warnings`). No
+existing builtin's row changed. **Every spelling below is a ruling owed**
+(`[os.term.note]` R1–R8), implemented as recommended.
+
+- **Five new meanings** (`[os.signal.set]`): `INTERRUPT` 16 (`SIGINT`,
+  Ctrl-C), `SUSPEND` 32 (`SIGTSTP`), `BG_READ` 64 (`SIGTTIN`),
+  `BG_WRITE` 128 (`SIGTTOU`), `CHILD` 256 (`SIGCHLD`). `os_signal_listen`
+  takes them on unix; on windows a listen for one is `io`.
+- **A disposition: default, ignored or listened** (`[os.signal.disp]`).
+  `os_signal_ignore(set)` and `os_signal_default(set)` beside
+  `os_signal_listen(set)`; the last call wins; a child starts as `exec`
+  leaves it, so an ignored meaning stays ignored there and a listened
+  one is the default. No wolf code ever runs in a handler.
+- **`os_signal_poll(set) -> int ! {io}`** (`[os.signal.poll]`) takes a
+  delivered meaning without waiting, 0 when none has come: how a shell
+  learns after its read returns that Ctrl-C was typed.
+- **`os_spawn_job(exe, args, map, group, tty, defaults)`**
+  (`[os.proc.job]`): `os_spawn_fds` plus, in the child before `exec`, a
+  process group (-1 stay, 0 lead, > 0 join), the terminal's foreground
+  handed to it (`tcsetpgrp`, `SIGTTOU` blocked for the call) and the
+  meanings in `defaults` set back to default; the parent repeats the
+  group and the handoff.
+- **`os_proc_pid(h)` and `os_wait_status(h)`** (`[os.proc.status]`): a
+  child's pid, and how it ended — the exit code, or `-N` for a death by
+  signal N, so a shell can say `128 + N` (130 for Ctrl-C).
+- **The terminal** (`[os.term]`, `[os.term.mode]`): `os_pgid()`,
+  `os_term_foreground(fd)`, `os_term_set_foreground(fd, pgid)`, and the
+  mode as one int — canonical 1, echo 2, signals 4, `VMIN` in bits
+  8..15, `VTIME` in 16..23 — read by `os_term_mode(fd)` and set by
+  `os_term_set_mode(fd, mode)`; every other termios field is left as
+  found.
+- **Every machine.** Native and release share `wolf_rt` (`signal.rs`,
+  `os.rs`, the new `term.rs`). The checked machine now arms the host for
+  real when it listens (a handler that only sets an atomic bit) and uses
+  the host's `sigaction` for ignore and default, so a checked program
+  survives Ctrl-C exactly as a native one does. lupin mirrors the group
+  spawn, the pid, the status, the poll and every shape row, and refuses
+  the dispositions and the terminal by name (no `unsafe`, no std call;
+  R8). windows: `unsupported` by name for the dispositions, the job
+  options and the terminal.
+- **Witnesses** (`crates/wolf_driver/tests/ctrl_c_lanes.rs`): five rows
+  through a pseudo-terminal — an ignored INTERRUPT survives Ctrl-C, a
+  listened one is polled as 16, a child group handed the terminal dies
+  of Ctrl-C (-2) while its parent lives and takes the terminal back, raw
+  mode reads one key and restores — on checked, native and release (and
+  under `taskset -c 0-3`), with each program's SigBlk/SigIgn printed;
+  a control that dies of Ctrl-C; and `status.lu` with no terminal on
+  every machine, lupin included. pelt (a throwaway build, not pushed)
+  matches dash on its `ctrl_c_prompt` and `ctrl_c_child` sessions with
+  four calls added: a listen, a poll after the read, `os_wait_status`,
+  a poll after the wait.
+
 ## 0.2.26 — 2026-10-09
 
 THE TWENTY-SIXTH. Five compiler lanes, each with its lupin half, land
