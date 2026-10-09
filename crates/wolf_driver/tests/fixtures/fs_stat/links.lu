@@ -1,0 +1,82 @@
+//! member: false
+//! s218 (wolf-lang#625, `[os.fs.stat]`, `[os.fs.readlink]`) — a link
+//! against its target. The gate makes `t/a` (5 bytes), `t/d/`,
+//! `t/ln -> a`, `t/lnd -> d` and `t/dangling -> nope` before the run:
+//! `fs_lstat` answers each link itself (kind 3, its size the target's
+//! length), `fs_stat` what it names, a dangling link is `not_found` to
+//! `fs_stat` only, and `fs_read_link` hands the target back. Unix only
+//! (the gate makes the links).
+
+/// `kind=K size=S` of a record, or the row a call raised.
+fn lstat_text(p: str) -> str {
+    var row = ""
+    let r = fs_lstat(p) else |e| {
+        row = match e {
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+        List[int]()
+    }
+    if row != "" {
+        return row
+    }
+    "kind={r[0]} size={r[1]}"
+}
+
+fn stat_text(p: str) -> str {
+    var row = ""
+    let r = fs_stat(p) else |e| {
+        row = match e {
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+        List[int]()
+    }
+    if row != "" {
+        return row
+    }
+    if r[0] == 1 {
+        return "kind=1"
+    }
+    "kind={r[0]} size={r[1]}"
+}
+
+fn link_text(p: str) -> str {
+    var row = ""
+    let t = fs_read_link(p) else |e| {
+        row = match e {
+            not_found => "not_found",
+            denied => "denied",
+            invalid => "invalid",
+            io => "io",
+        }
+        List[byte]()
+    }
+    if row != "" {
+        return row
+    }
+    str_from_utf8(t) else "<bytes>"
+}
+
+fn main() -> !int {
+    for n in ["a", "ln", "lnd", "dangling"] {
+        let p = "t/" + n
+        let l = lstat_text(p)
+        let s = stat_text(p)
+        let k = link_text(p)
+        print("{n}: lstat {l} | stat {s} | link {k}")
+    }
+    let a = fs_lstat("t/a")?
+    let via = fs_stat("t/ln")?
+    let own = fs_lstat("t/ln")?
+    let same = a[9] == via[9] && a[10] == via[10]
+    let apart = own[10] != a[10]
+    print("stat(ln) is a: {same}; lstat(ln) is not a: {apart}")
+    let ml = lstat_text("t/nope")
+    let mk = link_text("t/nope")
+    let ak = link_text("t/a")
+    print("missing: lstat {ml} | link {mk}; a file: link {ak}")
+    0
+}

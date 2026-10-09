@@ -1,0 +1,82 @@
+//! member: false
+//! s218 (wolf-lang#625, #626) — the part of the record and the listing
+//! every tier-1 host answers, on files the program makes itself: a
+//! file's kind, size and modified_ms agree with `fs_fstat`'s words and
+//! `fs_size`/`fs_modified_ms`; stat and lstat agree on a file that is
+//! not a link; words 0..3 always answered; a directory is kind 1;
+//! `fs_read_link` of a file is `invalid`, of a missing path `not_found`;
+//! the listing holds exactly the two entries with their kinds.
+
+fn main() -> !int {
+    let dir = "target/s218-portable"
+    fs_remove_dir_all(dir) else |e| { }
+    fs_create_dir_all(dir + "/sub")?
+    let f = dir + "/f.txt"
+    fs_write_text(f, "wolves")?
+    let s = fs_stat(f)?
+    let l = fs_lstat(f)?
+    let fd = fs_open(f)?
+    let h = fs_fstat(fd)?
+    fs_close(fd)?
+    var same = s.len == l.len
+    var i = 0
+    while i < s.len {
+        if s[i] != l[i] {
+            same = false
+        }
+        i = i + 1
+    }
+    let size = fs_size(f)?
+    let ms = fs_modified_ms(f)?
+    print("words={s.len} kind={s[0]} size={s[1]} as_fstat={s[0] == h[0] && s[1] == h[1] && s[2] == h[2]}")
+    print("as_paths={s[1] == size && s[2] == ms} stat_is_lstat={same} have0123={s[3] % 16 == 15}")
+    let d = fs_stat(dir + "/sub")?
+    print("dir_kind={d[0]}")
+    var file_link = "ok"
+    fs_read_link(f) else |e| {
+        file_link = match e {
+            invalid => "invalid",
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+        List[byte]()
+    }
+    var gone_link = "ok"
+    fs_read_link(dir + "/nope") else |e| {
+        gone_link = match e {
+            invalid => "invalid",
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+        List[byte]()
+    }
+    var gone_stat = "ok"
+    fs_stat(dir + "/nope") else |e| {
+        gone_stat = match e {
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+        List[int]()
+    }
+    print("read_link(file)={file_link} read_link(missing)={gone_link} stat(missing)={gone_stat}")
+    let es = fs_read_dir_entries(dir)?
+    var seen_f = false
+    var seen_sub = false
+    for e in es {
+        let name = str_from_utf8(e[1..]) else "?"
+        let k = e[0] as int
+        if name == "f.txt" && k == 0 {
+            seen_f = true
+        }
+        if name == "sub" && k == 1 {
+            seen_sub = true
+        }
+    }
+    print("entries={es.len} file_kind0={seen_f} sub_kind1={seen_sub}")
+    fs_remove_dir_all(dir)?
+    print("cleaned={!fs_exists(dir)}")
+    0
+}

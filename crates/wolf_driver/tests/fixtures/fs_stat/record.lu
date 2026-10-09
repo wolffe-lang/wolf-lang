@@ -1,0 +1,26 @@
+//! member: false
+//! s218 (wolf-lang#625, #536, `[os.fs.stat]`) — the record's words for
+//! `t/a` (a regular file whose mtime the gate set to the nanosecond)
+//! and `t/ln` (a link to it, `fs_lstat`): one line each, words 0..19
+//! in order, which the gate compares with `stat(1)` on the host. Unix.
+
+fn line(r: List[int]) -> str {
+    var out = ""
+    var i = 0
+    for w in r {
+        if i > 0 {
+            out = out + " "
+        }
+        out = out + "{w}"
+        i = i + 1
+    }
+    out
+}
+
+fn main() -> !int {
+    let a = fs_stat("t/a")?
+    let ln = fs_lstat("t/ln")?
+    print("a {line(a)}")
+    print("ln {line(ln)}")
+    0
+}

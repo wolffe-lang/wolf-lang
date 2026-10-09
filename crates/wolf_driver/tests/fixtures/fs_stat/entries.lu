@@ -1,0 +1,48 @@
+//! member: false
+//! s218 (wolf-lang#626, `[os.fs.readdir]`) — `t/` in the host's own
+//! order with each entry's kind (a link is 3, never its target's), and,
+//! where the gate could make one (linux), `u/` holding a name that is
+//! not UTF-8: listed whole, its bytes in hex, where `fs_read_dir` fails
+//! the listing with `utf8`. One line per entry: `kind hex(name)`.
+
+fn hex(bs: List[byte]) -> str {
+    let digits = "0123456789abcdef"
+    var out = ""
+    for b in bs {
+        let n = b as int
+        let hi = n / 16
+        let lo = n % 16
+        out = out + digits[hi..hi + 1] + digits[lo..lo + 1]
+    }
+    out
+}
+
+fn list(dir: str) -> !int {
+    let es = fs_read_dir_entries(dir)?
+    print("{dir}: {es.len} entries")
+    for e in es {
+        let k = e[0] as int
+        let name = e[1..]
+        print("{k} {hex(name)}")
+    }
+    0
+}
+
+fn main() -> !int {
+    list("t")?
+    if fs_exists("u") {
+        list("u")?
+        var row = "listed"
+        fs_read_dir("u") else |e| {
+            row = match e {
+                utf8 => "utf8",
+                not_found => "not_found",
+                denied => "denied",
+                io => "io",
+            }
+            List[str]()
+        }
+        print("fs_read_dir(u): {row}")
+    }
+    0
+}
