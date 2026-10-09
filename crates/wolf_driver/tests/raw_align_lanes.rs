@@ -24,11 +24,10 @@
 //! only a `fail` carries one), so lupin is held to the verdict, the row
 //! and the clause, not to the checked machine's E1401. Its packed and
 //! repr(c) rows stop earlier, at wolf-interp#188 (no `packed`, no struct
-//! pointee), pinned by version and release commit. 0.1.48 (the 0.2.25 pairing, r30) admits
-//! `packed` (is73) but still reads a struct element as bytes: both rows
-//! are pinned at 0.1.48 to wolf-interp#205 (the packed row's verdict
-//! changed, ruled at r30). A newer lupin must answer what the clause
-//! says.
+//! pointee); 0.1.48 (the 0.2.25 pairing, r30) admits `packed` (is73) but
+//! still read a struct element as bytes (wolf-interp#205). 0.1.49 (the
+//! 0.2.26 pairing, r31) carries s213's struct pointee: both rows answer
+//! the clause and every pin is dropped.
 
 mod lane_exit;
 
@@ -322,13 +321,17 @@ fn a_misaligned_ordinary_access_is_row_l4() {
     }
 }
 
+/// Every pin dropped at the 0.1.49 pairing (r31): s213's struct pointee
+/// (wolf-interp#200) answers both rows wolf-interp#205 held, measured.
+const NO_PIN: &[Pin<'static>] = &[];
+
 /// `[mem.unsafe.raw.4]`: through a raw element it is the STRUCT's
 /// alignment that is asked — a plain `#[repr(c)]` `{u32, u64}` (8)
 /// four bytes past an aligned base is L4 at `s[0].b`. lupin 0.1.46 and
 /// 0.1.47 have no struct pointee (a `*Pair` reads as bytes,
 /// wolf-interp#188; measured on 0.1.47 at r29). 0.1.48 (the 0.2.25
 /// pairing, r30) answers the same after is73 closed #188, measured; the
-/// pin is re-keyed to wolf-interp#205, which holds the struct pointee.
+/// pin was re-keyed to wolf-interp#205; dropped at 0.1.49 (r31).
 #[test]
 fn a_misaligned_repr_c_element_is_row_l4() {
     every_machine(
@@ -339,29 +342,7 @@ fn a_misaligned_repr_c_element_is_row_l4() {
         // rows (wolf-lang#606); first reached by a lupin with s213's struct
         // pointee (r31).
         L4_LUPIN,
-        &[
-            Pin {
-                version: "0.1.46",
-                commit: "f9269e3",
-                verdict: "unsupported",
-                named: "has no member `b`",
-                issue: "wolf-interp#188",
-            },
-            Pin {
-                version: "0.1.47",
-                commit: "b3228cb",
-                verdict: "unsupported",
-                named: "has no member `b`",
-                issue: "wolf-interp#188",
-            },
-            Pin {
-                version: "0.1.48",
-                commit: "531bf05",
-                verdict: "unsupported",
-                named: "has no member `b`",
-                issue: "wolf-interp#205",
-            },
-        ],
+        NO_PIN,
     );
 }
 
@@ -386,7 +367,7 @@ fn an_aligned_access_of_every_width_is_defined() {
 /// 0.1.48 (the 0.2.25 pairing, r30) admits `packed` (is73, #188 closed)
 /// and then reads the `*Grid` element as bytes: `unsupported`, "has no
 /// member `limit`", measured. Kept with the verdict changed (ruled at
-/// r30), keyed to wolf-interp#205, the struct pointee.
+/// r30), keyed to wolf-interp#205; dropped at 0.1.49 (r31).
 #[test]
 fn a_packed_field_through_a_raw_element_is_defined() {
     const OUT: &str = "packed 255 4096 1 512\n";
@@ -395,28 +376,6 @@ fn a_packed_field_through_a_raw_element_is_defined() {
         runs(OUT),
         Some(runs(OUT)),
         runs(OUT),
-        &[
-            Pin {
-                version: "0.1.46",
-                commit: "f9269e3",
-                verdict: "fail(E0817)",
-                named: "",
-                issue: "wolf-interp#188",
-            },
-            Pin {
-                version: "0.1.47",
-                commit: "b3228cb",
-                verdict: "fail(E0817)",
-                named: "",
-                issue: "wolf-interp#188",
-            },
-            Pin {
-                version: "0.1.48",
-                commit: "531bf05",
-                verdict: "unsupported",
-                named: "has no member `limit`",
-                issue: "wolf-interp#205",
-            },
-        ],
+        NO_PIN,
     );
 }
