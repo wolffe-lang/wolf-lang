@@ -14007,6 +14007,50 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // itself is a value, never a trap.
         "os_signal_listen" | "os_signal_raise" => (vec![int_], rowed(table, unit, &["io"])),
         "os_signal_wait" => (vec![int_], rowed(table, int_, &["io"])),
+        // s219 (wolf-lang#622, `[os.signal.disp]`, `[os.signal.poll]`):
+        // a meaning's disposition set to ignored or to the host default
+        // (`unsupported` on windows, by name), and the non-blocking take
+        // of a queued meaning (0 = none yet). The set gains INTERRUPT=16,
+        // SUSPEND=32, BG_READ=64, BG_WRITE=128, CHILD=256.
+        "os_signal_ignore" | "os_signal_default" => {
+            (vec![int_], rowed(table, unit, &["unsupported", "io"]))
+        }
+        "os_signal_poll" => (vec![int_], rowed(table, int_, &["io"])),
+        // s219 (`[os.proc.job]`): `os_spawn_fds` plus the job-control
+        // trio done in the child before exec — a process group (-1
+        // stay, 0 lead, > 0 join), the terminal's foreground (a handle
+        // or -1) and the meanings set back to default.
+        "os_spawn_job" => {
+            let list_str = table.intern(TyKind::List(str_));
+            let list_int = table.intern(TyKind::List(int_));
+            (
+                vec![str_, list_str, list_int, int_, int_, int_],
+                rowed(
+                    table,
+                    int_,
+                    &["unsupported", "invalid", "not_found", "denied", "io"],
+                ),
+            )
+        }
+        // s219 (`[os.proc.status]`): a child's pid, and its status — an
+        // exit code, or -N for a death by signal N.
+        "os_proc_pid" => (vec![int_], rowed(table, int_, &["io"])),
+        "os_wait_status" => (vec![int_], rowed(table, int_, &["io"])),
+        // s219 (`[os.term]`): this process's group, the terminal's
+        // foreground group and its mode (canonical=1, echo=2, signals=4,
+        // vmin in bits 8..15, vtime in 16..23). windows: `unsupported`.
+        "os_pgid" => (Vec::new(), rowed(table, int_, &["unsupported"])),
+        "os_term_foreground" | "os_term_mode" => {
+            (vec![int_], rowed(table, int_, &["unsupported", "io"]))
+        }
+        "os_term_set_foreground" => (
+            vec![int_, int_],
+            rowed(table, unit, &["unsupported", "io"]),
+        ),
+        "os_term_set_mode" => (
+            vec![int_, int_],
+            rowed(table, unit, &["unsupported", "invalid", "io"]),
+        ),
         // the OS random source (s118, #143): exactly n OS-provided
         // entropy bytes as a `List[int]` (s115's byte carrier).
         // Deliberately NO error row — the one os-tier surface

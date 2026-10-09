@@ -299,6 +299,23 @@ pub const PRELUDE: &[Ambient] = &[
     host("os_signal_listen"),
     host("os_signal_wait"),
     host("os_signal_raise"),
+    // s219 (wolf-lang#622, pelt's H3): what a shell needs to survive
+    // Ctrl-C and run jobs — a meaning's disposition (ignore, default),
+    // the non-blocking take of a queued meaning, a spawn that places
+    // its child in a process group with the terminal, the child's pid
+    // and its status by signal number, and the terminal's foreground
+    // group and mode.
+    host("os_signal_ignore"),
+    host("os_signal_default"),
+    host("os_signal_poll"),
+    host("os_spawn_job"),
+    host("os_proc_pid"),
+    host("os_wait_status"),
+    host("os_pgid"),
+    host("os_term_foreground"),
+    host("os_term_set_foreground"),
+    host("os_term_mode"),
+    host("os_term_set_mode"),
     // the OS random source (s118, wolf-lang#143): `os_random(n)` mints
     // n bytes of OS-provided entropy as a `List[int]` — the ONLY
     // sanctioned source of cryptographic material ([os.random.sole]).
