@@ -61,6 +61,9 @@ pub(crate) mod poll;
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub mod signal;
 pub mod str;
+// s219 (wolf-lang#622): the controlling terminal — its foreground
+// process group and its mode (canonical, echo, signals, vmin/vtime).
+pub mod term;
 pub mod time;
 // The task layer opened on linux (s28's platform posture), crossed
 // to macOS at s59 (the stack plumbing — mmap/madvise/guard-fault
