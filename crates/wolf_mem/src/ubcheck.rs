@@ -4920,7 +4920,7 @@ impl<'t> Machine<'t> {
                     // s213 (wolf-lang#575, `[type.int.not]`): a byte
                     // widens to `int` first (`[type.byte.op]`).
                     Value::Byte(b) => Ok(Flow::Val(Value::Int(!i64::from(b)))),
-                    Value::Int(n) => self.int_complement(n, operand.span, e.span),
+                    Value::Int(n) => self.int_complement(n, operand.span),
                     _ => self.refuse("`!` outside booleans and integers", e.span),
                 }
             }
@@ -5057,6 +5057,21 @@ impl<'t> Machine<'t> {
                 Ok(Flow::Val(Value::Bool(eq == want)))
             }
             SyntaxKind::Lt | SyntaxKind::Gt | SyntaxKind::LtEq | SyntaxKind::GtEq => match (l, r) {
+                // s220 (wolf-lang#538, #551): a 64-bit unsigned operand
+                // is held as its bit pattern, so it orders as `u64` —
+                // the compiled tiers' `icmp u*`.
+                (Value::Int(a), Value::Int(b))
+                    if d.lhs().is_some_and(|l| self.wide_unsigned_at(l.span)) =>
+                {
+                    let (a, b) = (a as u64, b as u64);
+                    let out = match op {
+                        SyntaxKind::Lt => a < b,
+                        SyntaxKind::Gt => a > b,
+                        SyntaxKind::LtEq => a <= b,
+                        _ => a >= b,
+                    };
+                    Ok(Flow::Val(Value::Bool(out)))
+                }
                 (Value::Int(a), Value::Int(b)) => {
                     let out = match op {
                         SyntaxKind::Lt => a < b,
@@ -5224,17 +5239,32 @@ impl<'t> Machine<'t> {
                         SyntaxKind::Plus => a.wrapping_add(b),
                         SyntaxKind::Minus => a.wrapping_sub(b),
                         SyntaxKind::Star => a.wrapping_mul(b),
+                        // s220 (wolf-lang#538, `[type.wrap.div]`): the
+                        // VALUES divide. A `wrapping[u64]` above
+                        // `i64::MAX` is held as its bit pattern, so it
+                        // divides as `u64`; every narrower value is
+                        // held as itself (unsigned masked, signed
+                        // sign-extended), so `i64`'s division is the
+                        // width's, and `MIN / -1` wraps below.
                         SyntaxKind::Slash => {
                             if b == 0 {
                                 return self.trap("div-zero", "mem.ub.defined", span);
                             }
-                            a.wrapping_div(b)
+                            if unsigned && bits == 64 {
+                                ((a as u64) / (b as u64)) as i64
+                            } else {
+                                a.wrapping_div(b)
+                            }
                         }
                         SyntaxKind::Percent => {
                             if b == 0 {
                                 return self.trap("div-zero", "mem.ub.defined", span);
                             }
-                            a.wrapping_rem(b)
+                            if unsigned && bits == 64 {
+                                ((a as u64) % (b as u64)) as i64
+                            } else {
+                                a.wrapping_rem(b)
+                            }
                         }
                         // Bitwise/shift arms mirror the native rung
                         // (#130): band/bor/bxor on the width's bits;
@@ -5263,7 +5293,7 @@ impl<'t> Machine<'t> {
                         }
                         _ => a,
                     };
-                    return Ok(Value::Int(out & mask));
+                    return Ok(Value::Int(wrap_held(out, mask, bits, unsigned)));
                 }
                 // s213 (wolf-lang#575): `&`, `|` and `^` on CHECKED
                 // (non-wrapping) integers are total and closed over
@@ -5282,6 +5312,29 @@ impl<'t> Machine<'t> {
                         return self.refuse("this operator in checked execution", span);
                     }
                     _ => {}
+                }
+                // s220 (wolf-lang#551): a `u64`/`uint` is held as its bit
+                // pattern (the compiled tiers' register), so its checked
+                // arithmetic is `u64`'s: in range up to `2^64 - 1`,
+                // `overflow` past it or below 0, exactly X3's rails.
+                if self.wide_unsigned_at(ty_span) || self.wide_unsigned_at(span) {
+                    let (x, y) = (a as u64, b as u64);
+                    let out = match op {
+                        SyntaxKind::Plus => x.checked_add(y),
+                        SyntaxKind::Minus => x.checked_sub(y),
+                        SyntaxKind::Star => x.checked_mul(y),
+                        SyntaxKind::Slash | SyntaxKind::Percent => {
+                            if y == 0 {
+                                return self.trap("div-zero", "mem.ub.defined", span);
+                            }
+                            Some(if op == SyntaxKind::Slash { x / y } else { x % y })
+                        }
+                        _ => Some(x),
+                    };
+                    let Some(out) = out else {
+                        return self.trap("overflow", "mem.ub.defined", span);
+                    };
+                    return Ok(Value::Int(out as i64));
                 }
                 let out = match op {
                     SyntaxKind::Plus => a.checked_add(b),
@@ -5341,13 +5394,14 @@ impl<'t> Machine<'t> {
     /// complement at the operand's type — total, never a trap. A
     /// signed width's complement is `-n - 1` (its range is symmetric
     /// about that map); an unsigned width's is `max - n`; a
-    /// `wrapping[T]` is the complement masked to its width. A
-    /// `u64`/`uint` complement lands in the upper half this machine
-    /// does not hold (`prim_range`), so it is refused by name, as the
-    /// literal that spells such a value is.
-    fn int_complement(&mut self, n: i64, operand: Span, span: Span) -> E<Flow> {
-        if let Some((mask, _, _)) = self.wrapping_width(operand) {
-            return Ok(Flow::Val(Value::Int(!n & mask)));
+    /// `wrapping[T]` is the complement at its width, held as the
+    /// machine holds that width (`wrap_held`). A `u64`/`uint` is held
+    /// as its bit pattern (s220, wolf-lang#551), so its complement is
+    /// the pattern's; until s220 it lay past this machine's range and
+    /// was refused by name.
+    fn int_complement(&mut self, n: i64, operand: Span) -> E<Flow> {
+        if let Some((mask, bits, unsigned)) = self.wrapping_width(operand) {
+            return Ok(Flow::Val(Value::Int(wrap_held(!n, mask, bits, unsigned))));
         }
         let prim = {
             let ctx = self.ctx();
@@ -5359,11 +5413,9 @@ impl<'t> Machine<'t> {
                 })
         };
         match prim {
-            Some(Prim::U64 | Prim::Uint) => self.refuse(
-                "a `u64`/`uint` complement (its value lies past i64::MAX, outside this \
-                 machine's range)",
-                span,
-            ),
+            // s220 (wolf-lang#551): the complement of the held bit
+            // pattern is the complement of the `u64` value.
+            Some(Prim::U64 | Prim::Uint) => Ok(Flow::Val(Value::Int(!n))),
             Some(p @ (Prim::U8 | Prim::U16 | Prim::U32)) => {
                 let (_, hi) = prim_range(p).expect("a narrow unsigned width");
                 Ok(Flow::Val(Value::Int(hi - n)))
@@ -5403,6 +5455,35 @@ impl<'t> Machine<'t> {
             return prim_range(*p);
         }
         None
+    }
+
+    /// s220 (wolf-lang#551, #538): is the integer at `span` a 64-bit
+    /// unsigned one — `u64` or `uint`, through `wrapping` and
+    /// `distinct`? Such a value is held as its BIT PATTERN in the
+    /// machine's `i64` cell (the compiled tiers' register convention),
+    /// so a value above `i64::MAX` is a negative cell; every reader that
+    /// cares about magnitude (literal, arithmetic, order, render, cast)
+    /// reads it back as `u64`. Every other integer is held as its value.
+    fn wide_unsigned_at(&self, span: Span) -> bool {
+        let ctx = self.ctx();
+        ctx.expr_tys
+            .get(&span)
+            .is_some_and(|id| wide_unsigned(&ctx.tb.table, *id))
+    }
+
+    /// s220: the target range of an integer cast to the prim at `span`,
+    /// as `i128` so the whole of `u64` fits; `None` off the integer prims.
+    fn int_target_range(&self, span: Span) -> Option<(i128, i128)> {
+        let ctx = self.ctx();
+        let id = ctx.expr_tys.get(&span)?;
+        match ctx.tb.table.kind(*id) {
+            TyKind::Prim(Prim::U64 | Prim::Uint) => Some((0, i128::from(u64::MAX))),
+            TyKind::Prim(Prim::I64 | Prim::Int) => {
+                Some((i128::from(i64::MIN), i128::from(i64::MAX)))
+            }
+            TyKind::Prim(p) => prim_range(*p).map(|(lo, hi)| (i128::from(lo), i128::from(hi))),
+            _ => None,
+        }
     }
 
     fn literal(&mut self, e: &'t GreenNode) -> E<Value> {
@@ -5457,6 +5538,23 @@ impl<'t> Machine<'t> {
             }
             return Ok(Value::Int((v as i64) & mask));
         }
+        // A signed narrow WRAPPING literal is held as its value at the
+        // width (`wrap_held`, s220): the identity on every literal sema
+        // admits.
+        if let Some((mask, bits, false)) = self.wrapping_width(e.span)
+            && let Some(n) = parse_int_literal(&text)
+        {
+            return Ok(Value::Int(wrap_held(n, mask, bits, false)));
+        }
+        // s220 (wolf-lang#551): a `u64`/`uint` literal is admissible over
+        // the type's whole range and is held as its bit pattern
+        // (`wide_unsigned_at`); sema has already refused one past
+        // `2^64 - 1`.
+        if self.wide_unsigned_at(e.span)
+            && let Some(v) = parse_uint_literal(&text)
+        {
+            return Ok(Value::Int(v as i64));
+        }
         match parse_int_literal(&text) {
             Some(n) => Ok(Value::Int(n)),
             None => self.refuse("this literal shape in checked execution", e.span),
@@ -5486,7 +5584,10 @@ impl<'t> Machine<'t> {
                     };
                     let rendered = self.render(&hv, self.ctx().expr_tys.get(&hole.span).copied());
                     match i.format_spec() {
-                        Some(spec) => self.apply_format_spec(spec, &hv, rendered)?,
+                        Some(spec) => {
+                            let unsigned = self.wide_unsigned_at(hole.span);
+                            self.apply_format_spec(spec, &hv, unsigned, rendered)?
+                        }
                         None => rendered,
                     }
                 }
@@ -5598,6 +5699,7 @@ impl<'t> Machine<'t> {
         &mut self,
         spec: &'t GreenNode,
         val: &Value,
+        unsigned: bool,
         rendered: String,
     ) -> Result<String, Stop> {
         use wolf_sema::fmtspec::{self, FmtValue};
@@ -5631,14 +5733,13 @@ impl<'t> Machine<'t> {
                 FmtValue::Str(&char_buf)
             }
             Value::Bool(b) => FmtValue::Bool(*b),
-            // The checked machine models every integer as its value
-            // in `i64` (narrow prims range-trap on arithmetic), so
-            // rendering is signed here; the native lane's unsigned
-            // flag matters only beyond `i64::MAX`, which no checked
-            // value reaches.
+            // Every integer is held as its value except a 64-bit
+            // unsigned one, held as its bit pattern (s220,
+            // wolf-lang#551): the hole's type says which, exactly the
+            // native lane's PACK_UNSIGNED.
             Value::Int(n) => FmtValue::Int {
                 v: *n,
-                unsigned: false,
+                unsigned,
             },
             // `{b:x}` takes the integer spec surface (D72): the octet
             // widened, `ff` at most.
@@ -8708,7 +8809,13 @@ impl<'t> Machine<'t> {
                 // has decided since s38.
                 match (self.expr_ty(e.span), &v) {
                     (Some(TyKind::Prim(Prim::F64)), Value::Int(n)) => {
-                        return Ok(Flow::Val(Value::F64(*n as f64)));
+                        // s220: a `u64` cell is its bit pattern.
+                        let x = if self.wide_unsigned_at(inner.span) {
+                            *n as u64 as f64
+                        } else {
+                            *n as f64
+                        };
+                        return Ok(Flow::Val(Value::F64(x)));
                     }
                     (Some(TyKind::Prim(Prim::F64)), Value::F64(_)) => {
                         return Ok(Flow::Val(v));
@@ -8723,13 +8830,17 @@ impl<'t> Machine<'t> {
                         if let Some((lo, hi)) = int_cast_bounds(*p) {
                             // Truncate TOWARD ZERO, and trap on a value
                             // no integer of the target represents — NaN
-                            // and both infinities included. The upper
-                            // test is `>= hi + 1` because `i64::MAX as
-                            // f64` rounds UP to 2^63, and `t == 2^63`
-                            // is the first value that does not fit.
+                            // and both infinities included
+                            // (`int_cast_bounds`' edges, upper exclusive).
                             let t = x.trunc();
-                            if !t.is_finite() || t < lo as f64 || t >= (hi as f64) + 1.0 {
+                            if !t.is_finite() || t < lo || t >= hi {
                                 return self.trap("overflow", "mem.ub.defined", e.span);
+                            }
+                            // s220: a `u64`/`uint` target holds up to
+                            // `2^64 - 1` (`int_cast_bounds`), kept as
+                            // its bit pattern.
+                            if matches!(p, Prim::U64 | Prim::Uint) {
+                                return Ok(Flow::Val(Value::Int(t as u64 as i64)));
                             }
                             return Ok(Flow::Val(Value::Int(t as i64)));
                         }
@@ -8739,65 +8850,39 @@ impl<'t> Machine<'t> {
                 // Adapter/identity casts are value-preserving here;
                 // out-of-range narrowing traps (X3 posture).
                 if let Value::Int(n) = v {
-                    // The source's VALUE first. A sub-64 wrapping value
-                    // is stored masked non-negative (`arith_binop_at`'s
-                    // convention), so a signed one sign-extends from its
-                    // width before anything reads it: `wrapping[i8]`
-                    // holding 200 is -56. A `wrapping[u64]` with the top
-                    // bit set is stored as the negative `i64` pattern;
-                    // its value is above `i64::MAX`. Until kw03 the mask
-                    // was range-checked as if it were the value, so `v
-                    // as wrapping[i8] as i8` trapped whenever the
-                    // truncated value was negative — the spelling
-                    // `[type.numlit.cast.narrow]` gives truncation —
-                    // where native, release and lupin keep it.
-                    let n = match self.wrapping_width(inner.span) {
-                        Some((_, sbits, false)) if sbits < 64 => {
-                            let shift = 64 - sbits;
-                            (n << shift) >> shift
-                        }
-                        Some((_, 64, true)) if n < 0 => {
-                            // D56 (#135): above `i64::MAX` fits no
-                            // signed target and no narrower unsigned
-                            // one, so the cast TRAPS (overflow). Into
-                            // `u64`/`uint` the value is in range, and
-                            // this machine's `u64` holds only
-                            // `0..=i64::MAX` (wolf-lang#551): refused by
-                            // name, never a trap that is not the
-                            // program's.
-                            if self.wrapping_width(e.span).is_none()
-                                && matches!(self.prim_range(e.span), Some((0, i64::MAX)))
-                            {
-                                return self.refuse(
-                                    "a `u64` above `i64::MAX` in checked execution (wolf-lang#551)",
-                                    e.span,
-                                );
-                            }
-                            if self.wrapping_width(e.span).is_none() {
-                                return self.trap("overflow", "type.numlit.cast.narrow", e.span);
-                            }
-                            n
-                        }
-                        _ => n,
+                    // The source's VALUE first, as `i128` so the whole
+                    // of `u64` fits (s220, wolf-lang#551): a 64-bit
+                    // unsigned source is held as its bit pattern, every
+                    // other integer as its value — a signed narrow
+                    // wrapping value sign-extended (wolf-lang#553). Until
+                    // kw03 a signed wrapping value's stored mask was
+                    // range-checked as if it were the value, and until
+                    // s220 a `wrapping[u64]` above `i64::MAX` cast into
+                    // `u64`/`uint` was refused by name.
+                    let src: i128 = if self.wide_unsigned_at(inner.span) {
+                        i128::from(n as u64)
+                    } else {
+                        i128::from(n)
                     };
                     // A WRAPPING-typed cast target wraps at its width
-                    // (#131's checked twin): mask-to-width, the
-                    // native rung's `itrunc` — never a trap. The
-                    // masked storage convention keeps sub-64-bit
-                    // values non-negative, as `arith_binop_at` does.
-                    if let Some((mask, ..)) = self.wrapping_width(e.span) {
-                        return Ok(Flow::Val(Value::Int(n & mask)));
+                    // (#131's checked twin): the low bits, the native
+                    // rung's `itrunc` — never a trap — held as the
+                    // target's value (`wrap_held`).
+                    if let Some((mask, bits, unsigned)) = self.wrapping_width(e.span) {
+                        let low = wrap_held(src as i64, mask, bits, unsigned);
+                        return Ok(Flow::Val(Value::Int(low)));
                     }
                     // `[type.numlit.cast.narrow]` (K12, wolf-lang#533):
                     // an integer cast keeps the value or traps
                     // (overflow) when the target cannot hold it. D56's
                     // `wrapping[T] as int` is this rule's case.
-                    if let Some((lo, hi)) = self.prim_range(e.span)
-                        && (n < lo || n > hi)
+                    if let Some((lo, hi)) = self.int_target_range(e.span)
+                        && (src < lo || src > hi)
                     {
                         return self.trap("overflow", "type.numlit.cast.narrow", e.span);
                     }
-                    return Ok(Flow::Val(Value::Int(n)));
+                    // In range: the value, or a `u64`'s bit pattern.
+                    return Ok(Flow::Val(Value::Int(src as i64)));
                 }
                 Ok(Flow::Val(v))
             }
@@ -10714,6 +10799,11 @@ impl<'t> Machine<'t> {
         }
         let kind = ty.map(|t| table.kind(t));
         match v {
+            // s220 (wolf-lang#551, #538, `[type.interp.value]`): the value
+            // the type holds — a `u64`/`uint` cell is its bit pattern.
+            Value::Int(n) if matches!(kind, Some(TyKind::Prim(Prim::U64 | Prim::Uint))) => {
+                (*n as u64).to_string()
+            }
             Value::Int(n) => n.to_string(),
             Value::Bool(b) => b.to_string(),
             // The shortest round-trip decimal, `std.fmt.decimal.to_str`'s
@@ -10906,18 +10996,50 @@ fn prim_size(p: Prim) -> u64 {
     }
 }
 
-/// The integer domain a FLOAT may be truncated into, as `i64` edges.
-/// [`prim_range`] declines the 64-bit prims (they ride `i64`'s own
+/// The integer domain a FLOAT may be truncated into, as `[lo, hi)`
+/// float edges: the truncated value must satisfy `lo <= t < hi`.
+/// [`prim_range`] declines the 64-bit prims (they ride their own
 /// checked arithmetic and have no narrowing question), but the
 /// float→int trap of `[type.numlit.cast.trunc]` needs their edges by
-/// name — `1e300 as int` has to find one. `byte` and `char` are not
-/// float targets and keep their own cast arms.
-fn int_cast_bounds(p: Prim) -> Option<(i64, i64)> {
-    Some(match p {
-        Prim::I64 | Prim::Int => (i64::MIN, i64::MAX),
-        Prim::Byte | Prim::Char | Prim::Bool | Prim::Str | Prim::F32 | Prim::F64 => return None,
-        _ => return prim_range(p),
-    })
+/// name — `1e300 as int` has to find one. The upper edge is exclusive
+/// because `i64::MAX as f64` rounds UP to 2^63, and `t == 2^63` is the
+/// first value that does not fit; a `u64`/`uint` reaches 2^64 (s220,
+/// wolf-lang#551). `byte` and `char` are not float targets and keep
+/// their own cast arms.
+fn int_cast_bounds(p: Prim) -> Option<(f64, f64)> {
+    match p {
+        Prim::I64 | Prim::Int => Some((i64::MIN as f64, 9_223_372_036_854_775_808.0)),
+        Prim::U64 | Prim::Uint => Some((0.0, 18_446_744_073_709_551_616.0)),
+        Prim::Byte | Prim::Char | Prim::Bool | Prim::Str | Prim::F32 | Prim::F64 => None,
+        _ => prim_range(p).map(|(lo, hi)| (lo as f64, hi as f64 + 1.0)),
+    }
+}
+
+/// s220 (wolf-lang#551, #538): a 64-bit unsigned integer type — `u64` or
+/// `uint`, through `wrapping` and `distinct`. The checked machine holds
+/// such a value as its bit pattern in an `i64` cell.
+fn wide_unsigned(table: &TypeTable, mut id: TyId) -> bool {
+    for _ in 0..32 {
+        match table.kind(id) {
+            TyKind::Wrapping(i) | TyKind::Distinct(i) => id = *i,
+            _ => break,
+        }
+    }
+    matches!(table.kind(id), TyKind::Prim(Prim::U64 | Prim::Uint))
+}
+
+/// s220 (wolf-lang#553, #602): a wrapping result as this machine holds
+/// it — the low `bits` bits, read by the inner type's signedness. An
+/// unsigned narrow value is the mask (non-negative); a signed narrow one
+/// is sign-extended from its width, so `200 as wrapping[i8]` is held as
+/// -56, prints -56 and orders below 0; a 64-bit value is its bits.
+fn wrap_held(out: i64, mask: i64, bits: u32, unsigned: bool) -> i64 {
+    if unsigned || bits >= 64 {
+        out & mask
+    } else {
+        let sh = 64 - bits;
+        (out << sh) >> sh
+    }
 }
 
 fn prim_range(p: Prim) -> Option<(i64, i64)> {
@@ -10928,10 +11050,10 @@ fn prim_range(p: Prim) -> Option<(i64, i64)> {
         Prim::U8 | Prim::Byte => (0, 0xff),
         Prim::U16 => (0, 0xffff),
         Prim::U32 => (0, 0xffff_ffff),
-        // 64-bit prims ride i64's own checked arithmetic; uint's
-        // upper half is out of this machine's honest range.
-        Prim::I64 | Prim::Int => return None,
-        Prim::U64 | Prim::Uint => (0, i64::MAX),
+        // 64-bit prims ride their own checked arithmetic: `i64`'s, and
+        // `u64`'s over the bit pattern a `u64`/`uint` is held as (s220,
+        // wolf-lang#551; `wide_unsigned`).
+        Prim::I64 | Prim::Int | Prim::U64 | Prim::Uint => return None,
         // `char`'s domain is not an interval (the surrogate gap):
         // the IntToChar cast arm owns its check, never this table.
         Prim::Bool | Prim::Str | Prim::F32 | Prim::F64 | Prim::Char => return None,
