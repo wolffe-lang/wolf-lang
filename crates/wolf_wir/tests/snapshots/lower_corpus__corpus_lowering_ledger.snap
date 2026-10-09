@@ -115,6 +115,13 @@ faults/div_zero_rem.lu: lowers
 faults/exclusivity_nested_path.lu: not mem-clean (pre-wir rungs own it)
 faults/index_origin_min_overflow.lu: lowers
 faults/index_origin_zero.lu: lowers
+faults/int_truth_neg_u64_trap.lu: lowers
+faults/int_truth_neg_u8_trap.lu: lowers
+faults/int_truth_u64_add_trap.lu: lowers
+faults/int_truth_u64_cast_trap.lu: lowers
+faults/int_truth_uint_sub_trap.lu: lowers
+faults/int_truth_wrap_div_zero.lu: lowers
+faults/int_truth_wrap_rem_zero_signed.lu: lowers
 faults/list_slice_oob.lu: lowers
 faults/list_slice_reversed.lu: lowers
 faults/overflow_add.lu: lowers
@@ -948,6 +955,17 @@ typecheck/int_not_byte.lu: lowers
 typecheck/int_not_float.lu: not mem-clean (pre-wir rungs own it)
 typecheck/int_not_mask.lu: lowers
 typecheck/int_not_signed.lu: lowers
+typecheck/int_truth_signed_print.lu: lowers
+typecheck/int_truth_u64_arith.lu: lowers
+typecheck/int_truth_u64_cast.lu: lowers
+typecheck/int_truth_u64_not.lu: lowers
+typecheck/int_truth_unsigned_print.lu: lowers
+typecheck/int_truth_wrap_div_signed.lu: lowers
+typecheck/int_truth_wrap_div_unsigned.lu: lowers
+typecheck/int_truth_wrap_mul_wide.lu: lowers
+typecheck/int_truth_wrap_neg.lu: lowers
+typecheck/int_truth_wrap_signed.lu: lowers
+typecheck/int_truth_wrap_unsigned.lu: lowers
 typecheck/interp_spec_on_union.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_compound_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/let_field_assign.lu: not mem-clean (pre-wir rungs own it)
