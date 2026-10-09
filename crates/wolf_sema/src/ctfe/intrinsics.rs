@@ -155,7 +155,10 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         | "fs_modified_ms" | "fs_fstat" | "fs_seek" | "fs_tell" | "fs_read_at"
         // s200 (#417): the fused chunk copy moves bytes between two
         // handles — `fs`, with the family.
-        | "fs_copy_chunk" => {
+        | "fs_copy_chunk"
+        // s218 (#625, #626): the stat record, the link's target and the
+        // typed listing read the filesystem — `fs`, with the family.
+        | "fs_stat" | "fs_lstat" | "fs_read_link" | "fs_read_dir_entries" => {
             SandboxCategory::Fs
         }
         // The s39 net builtin tier: every entry point carries the

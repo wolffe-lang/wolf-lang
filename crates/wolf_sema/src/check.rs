@@ -13746,6 +13746,38 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
                 rowed(table, list_int, &["not_found", "denied", "io"]),
             )
         }
+        // s218 (#625, #536, `[os.fs.stat]`): the full record by path —
+        // 20 words, the first three `fs_fstat`'s — from ONE host call;
+        // `fs_stat` follows a final link, `fs_lstat` answers the link
+        // itself. The row set is `fs_size`'s.
+        "fs_stat" | "fs_lstat" => {
+            let list_int = table.intern(TyKind::List(int_));
+            (
+                vec![str_],
+                rowed(table, list_int, &["not_found", "denied", "io"]),
+            )
+        }
+        // s218 (#625, `[os.fs.readlink]`): the link's target as the
+        // host stored it — bytes, because a name need not be UTF-8.
+        // `invalid` is a path that is not a link.
+        "fs_read_link" => {
+            let list_byte = byte_list(table);
+            (
+                vec![str_],
+                rowed(table, list_byte, &["not_found", "denied", "invalid", "io"]),
+            )
+        }
+        // s218 (#626, `[os.fs.readdir]`): the directory in its own
+        // order, each entry `[kind] ++ name bytes`; no `utf8` row — a
+        // name is data, listed whatever its bytes.
+        "fs_read_dir_entries" => {
+            let list_byte = byte_list(table);
+            let entries = table.intern(TyKind::List(list_byte));
+            (
+                vec![str_],
+                rowed(table, entries, &["not_found", "denied", "io"]),
+            )
+        }
         // s199 (#426, `[os.fs.seek]`, `[os.fs.tell]`,
         // `[os.fs.read_at]`): the handle's offset. `unseekable` is a
         // pipe, fifo, socket or terminal (ESPIPE) — its own tag

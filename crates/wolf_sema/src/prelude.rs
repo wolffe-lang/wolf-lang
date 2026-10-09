@@ -210,6 +210,13 @@ pub const PRELUDE: &[Ambient] = &[
     host("fs_modified_ms"),
     // s142 (#261): the stat on an open handle, `[os.fs.fstat]`.
     host("fs_fstat"),
+    // s218 (#625, #626): the full stat record by path, following and
+    // not (`[os.fs.stat]`), the link's target (`[os.fs.readlink]`) and
+    // the unsorted typed listing (`[os.fs.readdir]`).
+    host("fs_stat"),
+    host("fs_lstat"),
+    host("fs_read_link"),
+    host("fs_read_dir_entries"),
     // s199 (#426): the handle's offset — `[os.fs.seek]`,
     // `[os.fs.tell]`, `[os.fs.read_at]`.
     host("fs_seek"),
