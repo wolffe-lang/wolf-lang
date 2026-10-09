@@ -417,6 +417,35 @@ impl ChildTable {
         if map.is_empty() {
             return self.spawn_with(exe, args, &[]);
         }
+        self.spawn_job(exe, args, map, &JobOpts::PLAIN)
+    }
+
+    /// `os_spawn_job(exe, args, map, group, tty, defaults)` (s219,
+    /// `[os.proc.job]`): [`ChildTable::spawn_fds`] with the three things
+    /// a job-control shell does between `fork` and `exec`, in this order
+    /// inside the child's hook, before the map is placed (so `tty` is
+    /// still this process's descriptor): join or lead a process group
+    /// (`setpgid(0, group)`; 0 leads a new one), make that group the
+    /// terminal's foreground (`tcsetpgrp` with `SIGTTOU` blocked for the
+    /// call, then the mask restored), and set every signal in `defaults`
+    /// back to the host default. The parent repeats `setpgid` and
+    /// `tcsetpgrp` after the spawn — the classic double call, so neither
+    /// side races the other; a failure there is ignored (the child may
+    /// already have exec'd or ended). A failure in the child's hook is
+    /// the spawn's error: `EPERM` from a group in another session is
+    /// `denied`, the rest `io`. windows: `unsupported` unless every
+    /// option is off.
+    #[cfg_attr(not(unix), allow(unused_variables))]
+    pub fn spawn_job(
+        &mut self,
+        exe: &str,
+        args: &[&str],
+        map: &[(InheritFd, Option<InheritFd>)],
+        opts: &JobOpts,
+    ) -> Result<i64, ProcErr> {
+        if exe.is_empty() {
+            return Err("not_found");
+        }
         if map.len() > MAX_FD_PAIRS {
             return Err("invalid");
         }
@@ -427,6 +456,9 @@ impl ChildTable {
         #[cfg(unix)]
         {
             use std::os::unix::process::CommandExt as _;
+            let group = opts.group as libc::pid_t;
+            let tty = opts.tty.unwrap_or(-1);
+            let defaults = opts.defaults;
             let mut cmd = Command::new(exe);
             cmd.args(args)
                 .stdin(Stdio::inherit())
@@ -450,6 +482,23 @@ impl ChildTable {
             // other threads.
             unsafe {
                 cmd.pre_exec(move || {
+                    if group >= 0 && libc::setpgid(0, group) < 0 {
+                        return Err(std::io::Error::last_os_error());
+                    }
+                    if tty >= 0 {
+                        let r = with_ttou_blocked(|| libc::tcsetpgrp(tty, libc::getpgrp()));
+                        if r < 0 {
+                            return Err(std::io::Error::last_os_error());
+                        }
+                    }
+                    for &sig in &defaults {
+                        if sig > 0 {
+                            let mut sa: libc::sigaction = std::mem::zeroed();
+                            sa.sa_sigaction = libc::SIG_DFL;
+                            libc::sigemptyset(&mut sa.sa_mask);
+                            libc::sigaction(sig, &sa, std::ptr::null_mut());
+                        }
+                    }
                     let mut staged = [-1 as InheritFd; MAX_FD_PAIRS];
                     for i in 0..n {
                         if sources[i] >= 0 {
@@ -492,10 +541,65 @@ impl ChildTable {
                     _ => "io",
                 }),
                 Ok(child) => {
+                    // The parent's half of the double call.
+                    let pid = child.id() as libc::pid_t;
+                    if group >= 0 {
+                        let pg = if group == 0 { pid } else { group };
+                        // SAFETY: plain syscalls on a child we own.
+                        unsafe {
+                            libc::setpgid(pid, pg);
+                            if tty >= 0 {
+                                with_ttou_blocked(|| libc::tcsetpgrp(tty, pg));
+                            }
+                        }
+                    }
                     let h = self.children.len() as i64;
                     self.children.push(Some(child));
                     Ok(h)
                 }
+            }
+        }
+    }
+
+    /// `os_proc_pid(h)` (s219): the child's OS process id — the group
+    /// id a job leader gives its group. `io` for a forged or reaped
+    /// handle.
+    pub fn pid(&self, h: i64) -> Result<i64, ProcErr> {
+        let Some(Some(child)) = usize::try_from(h).ok().and_then(|i| self.children.get(i)) else {
+            return Err("io");
+        };
+        Ok(i64::from(child.id()))
+    }
+
+    /// `os_wait_status(h)` (s219, `[os.proc.status]`): [`Self::wait`],
+    /// but a death by signal N answers `-N` instead of the `signal` row,
+    /// so a shell can say `128 + N`; an exit code is itself (0..255).
+    /// The two never collide.
+    pub fn wait_status(&mut self, h: i64) -> Result<i64, ProcErr> {
+        let Some(slot) = usize::try_from(h)
+            .ok()
+            .and_then(|i| self.children.get_mut(i))
+        else {
+            return Err("io");
+        };
+        let Some(child) = slot.as_mut() else {
+            return Err("io");
+        };
+        match child.wait() {
+            Err(_) => Err("io"),
+            Ok(status) => {
+                *slot = None;
+                if let Some(c) = status.code() {
+                    return Ok(i64::from(c));
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::unix::process::ExitStatusExt as _;
+                    if let Some(sig) = status.signal() {
+                        return Ok(-i64::from(sig));
+                    }
+                }
+                Err("io")
             }
         }
     }
@@ -540,6 +644,60 @@ impl ChildTable {
         };
         child.kill().map_err(|_| "io")
     }
+}
+
+/// What `os_spawn_job` asks of the child beyond its map (s219):
+/// `group` -1 stay in this process's group, 0 lead a new one, > 0 join
+/// that one; `tty` a descriptor whose terminal the child's group takes
+/// as foreground; `defaults` the signal numbers set back to default
+/// (0 slots unused).
+#[derive(Clone, Copy, Debug)]
+pub struct JobOpts {
+    pub group: i64,
+    pub tty: Option<InheritFd>,
+    pub defaults: [i32; 9],
+}
+
+impl JobOpts {
+    /// `os_spawn_fds`'s posture: no group, no terminal, no resets.
+    pub const PLAIN: JobOpts = JobOpts {
+        group: -1,
+        tty: None,
+        defaults: [0; 9],
+    };
+}
+
+/// Run `f` with `SIGTTOU` blocked on the calling thread, then restore
+/// the thread's mask (s219): a process outside the terminal's
+/// foreground group may change the foreground or the mode only while
+/// it blocks or ignores `SIGTTOU` (XBD 11.1.4), and blocking for the
+/// call, on this thread only, changes nothing anyone else can see.
+/// Async-signal-safe (`pthread_sigmask` and `f`'s own calls), so the
+/// spawn hook uses it too.
+#[cfg(unix)]
+pub(crate) fn with_ttou_blocked(f: impl FnOnce() -> libc::c_int) -> libc::c_int {
+    // SAFETY: zeroed sigsets filled by sigemptyset/sigaddset.
+    unsafe {
+        let mut set: libc::sigset_t = std::mem::zeroed();
+        let mut old: libc::sigset_t = std::mem::zeroed();
+        libc::sigemptyset(&mut set);
+        libc::sigaddset(&mut set, libc::SIGTTOU);
+        libc::pthread_sigmask(libc::SIG_BLOCK, &set, &mut old);
+        let r = f();
+        let e = *errno_loc();
+        libc::pthread_sigmask(libc::SIG_SETMASK, &old, std::ptr::null_mut());
+        *errno_loc() = e;
+        r
+    }
+}
+
+#[cfg(all(unix, target_os = "linux"))]
+unsafe fn errno_loc() -> *mut libc::c_int {
+    unsafe { libc::__errno_location() }
+}
+#[cfg(all(unix, not(target_os = "linux")))]
+unsafe fn errno_loc() -> *mut libc::c_int {
+    unsafe { libc::__error() }
 }
 
 /// The OS descriptor type an inherit set carries (s137): a unix fd; on
@@ -717,6 +875,137 @@ pub unsafe extern "C" fn __wolf_rt_os_spawn_fds(ep: i64, el: i64, args: i64, map
     match r {
         Ok(h) => h,
         Err(t) => -proc_code_of_tag(t),
+    }
+}
+
+/// `os_spawn_job(exe: str, args: List[str], map: List[int], group: int,
+/// tty: int, defaults: int) -> int ! {denied, invalid, io, not_found,
+/// unsupported}` (s219, `[os.proc.job]`) — the child's handle (>= 0),
+/// or `-code`. Read in a fixed order, as `os_spawn_fds` reads its map:
+/// the SHAPE (`invalid`: a bad map, `group` below -1, `tty` below -1,
+/// a `defaults` bit outside the meanings), then the HOST (windows: any
+/// option on, or a non-empty map, is `unsupported`), then the `tty`
+/// handle (`io` unless it is an open terminal) and every map source
+/// (`io`), and only then the program. With every option off this is
+/// `os_spawn_fds`.
+///
+/// # Safety
+///
+/// `ep`/`el` a valid str pair; `args` a live `List[str]` header; `map`
+/// a live `List[int]` header.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_spawn_job(
+    ep: i64,
+    el: i64,
+    args: i64,
+    map: i64,
+    group: i64,
+    tty: i64,
+    defaults: i64,
+) -> i64 {
+    let exe = unsafe { view(ep, el) };
+    let Some(pairs) = (unsafe { crate::list::str_pair_elems(args) }) else {
+        return -proc_code::IO;
+    };
+    let argv: Vec<&str> = pairs.iter().map(|&[p, l]| unsafe { view(p, l) }).collect();
+    let Some(flat) = (unsafe { crate::list::i64_elems(map) }) else {
+        return -proc_code::IO;
+    };
+    let entries = match map_of(flat) {
+        Ok(m) => m,
+        Err(t) => return -proc_code_of_tag(t),
+    };
+    if group < -1 || tty < -1 || defaults < 0 || defaults & !SIGNAL_MEANINGS != 0 {
+        return -proc_code::INVALID;
+    }
+    let plain = group == -1 && tty == -1 && defaults == 0;
+    if cfg!(not(unix)) && !(plain && entries.is_empty()) {
+        return -proc_code::UNSUPPORTED;
+    }
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    let sigs = crate::signal::signals_of(defaults);
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    let sigs = {
+        if defaults != 0 {
+            return -proc_code::UNSUPPORTED;
+        }
+        [0i32; 9]
+    };
+    let mut held: Vec<std::fs::File> = Vec::with_capacity(entries.len() + 1);
+    let mut tty_fd: Option<InheritFd> = None;
+    if tty >= 0 {
+        if crate::fs::is_terminal(tty) != Some(true) {
+            return -proc_code::IO;
+        }
+        match crate::fs::dup_of(tty) {
+            None => return -proc_code::IO,
+            Some(f) => {
+                tty_fd = Some(raw_of(&f));
+                held.push(f);
+            }
+        }
+    }
+    let mut placed: Vec<(InheritFd, Option<InheritFd>)> = Vec::with_capacity(entries.len());
+    for &(t, s) in &entries {
+        let src = match s {
+            None => None,
+            Some(h) => match crate::fs::dup_of(h) {
+                None => return -proc_code::IO,
+                Some(f) => {
+                    let fd = raw_of(&f);
+                    held.push(f);
+                    Some(fd)
+                }
+            },
+        };
+        placed.push((t as InheritFd, src));
+    }
+    let opts = JobOpts {
+        group,
+        tty: tty_fd,
+        defaults: sigs,
+    };
+    let r = if plain {
+        children().spawn_fds(exe, &argv, &placed)
+    } else {
+        children().spawn_job(exe, &argv, &placed, &opts)
+    };
+    drop(held);
+    match r {
+        Ok(h) => h,
+        Err(t) => -proc_code_of_tag(t),
+    }
+}
+
+/// The meaning bits a spawn's `defaults` may name (s219) — the signal
+/// module's `ALL`, restated here because that module is platform-gated.
+const SIGNAL_MEANINGS: i64 = 511;
+
+/// `os_proc_pid(h) -> int ! {io}` (s219) — the child's process id (> 0)
+/// or `-IO`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_proc_pid(h: i64) -> i64 {
+    match children().pid(h) {
+        Ok(p) => p,
+        Err(t) => -proc_code_of_tag(t),
+    }
+}
+
+/// `os_wait_status(h) -> int ! {io}` (s219, `[os.proc.status]`) — waits
+/// and REAPS as `os_wait` does; the status (an exit code, or `-N` for a
+/// death by signal N) through `out` on code 0.
+///
+/// # Safety
+///
+/// `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_wait_status(h: i64, out: i64) -> i64 {
+    match children().wait_status(h) {
+        Ok(st) => {
+            unsafe { write_word(out, st) };
+            proc_code::OK
+        }
+        Err(t) => proc_code_of_tag(t),
     }
 }
 
@@ -1463,5 +1752,134 @@ mod tests {
         assert_eq!(wait_code(h), 3);
         crate::fs::__wolf_rt_fs_close(r);
         crate::fs::__wolf_rt_fs_close(w);
+    }
+
+    fn spawn_job_shim(
+        exe: &str,
+        args: &[&str],
+        map: &[i64],
+        group: i64,
+        tty: i64,
+        defaults: i64,
+    ) -> i64 {
+        let a = crate::list::new_list(16);
+        for x in args {
+            crate::list::push_str(a, x);
+        }
+        let m = crate::list::new_list(8);
+        for &x in map {
+            crate::list::push_int(m, x);
+        }
+        unsafe {
+            __wolf_rt_os_spawn_job(
+                exe.as_ptr() as i64,
+                exe.len() as i64,
+                a as i64,
+                m as i64,
+                group,
+                tty,
+                defaults,
+            )
+        }
+    }
+
+    fn wait_status_of(h: i64) -> i64 {
+        let mut out = [0i64; 1];
+        assert_eq!(
+            unsafe { __wolf_rt_os_wait_status(h, out.as_mut_ptr() as i64) },
+            proc_code::OK
+        );
+        out[0]
+    }
+
+    /// s219 (`[os.proc.job]`): the shape is read first — a group below
+    /// -1, a tty below -1, a defaults bit outside the nine meanings are
+    /// `invalid` with no child made.
+    #[test]
+    fn spawn_job_shape_is_invalid_first() {
+        assert_eq!(
+            spawn_job_shim("true", &[], &[], -2, -1, 0),
+            -proc_code::INVALID
+        );
+        assert_eq!(
+            spawn_job_shim("true", &[], &[], -1, -2, 0),
+            -proc_code::INVALID
+        );
+        assert_eq!(
+            spawn_job_shim("true", &[], &[], -1, -1, 512),
+            -proc_code::INVALID
+        );
+        assert_eq!(
+            spawn_job_shim("true", &[], &[1], -1, -1, 0),
+            -proc_code::INVALID
+        );
+    }
+
+    /// s219 (`[os.proc.status]`): an exit code is itself, a death by
+    /// signal N is -N, and the handle is reaped (a second wait is `io`).
+    #[cfg(unix)]
+    #[test]
+    fn wait_status_carries_the_signal_number() {
+        let h = spawn_job_shim("false", &[], &[], -1, -1, 0);
+        assert!(h >= 0);
+        assert_eq!(wait_status_of(h), 1);
+        let h = spawn_job_shim("sleep", &["30"], &[], -1, -1, 0);
+        assert!(h >= 0);
+        assert_eq!(__wolf_rt_os_kill(h), proc_code::OK);
+        assert_eq!(wait_status_of(h), -i64::from(libc::SIGKILL));
+        let mut out = [0i64; 1];
+        assert_eq!(
+            unsafe { __wolf_rt_os_wait_status(h, out.as_mut_ptr() as i64) },
+            proc_code::IO
+        );
+    }
+
+    /// s219: group 0 makes the child the leader of a new group (its
+    /// group id is its pid, not ours); a later child joins it by id;
+    /// os_proc_pid answers the pid and is `io` for a forged handle.
+    #[cfg(unix)]
+    #[test]
+    fn spawn_job_leads_and_joins_a_group() {
+        let a = spawn_job_shim("sleep", &["30"], &[], 0, -1, 0);
+        assert!(a >= 0);
+        let pa = __wolf_rt_os_proc_pid(a);
+        assert!(pa > 0);
+        let b = spawn_job_shim("sleep", &["30"], &[], pa, -1, 0);
+        assert!(b >= 0);
+        let pb = __wolf_rt_os_proc_pid(b);
+        // SAFETY: plain getpgid on our own children.
+        unsafe {
+            assert_eq!(i64::from(libc::getpgid(pa as libc::pid_t)), pa);
+            assert_eq!(i64::from(libc::getpgid(pb as libc::pid_t)), pa);
+            assert_ne!(i64::from(libc::getpgrp()), pa);
+        }
+        for h in [a, b] {
+            assert_eq!(__wolf_rt_os_kill(h), proc_code::OK);
+            assert_eq!(wait_status_of(h), -i64::from(libc::SIGKILL));
+        }
+        assert_eq!(__wolf_rt_os_proc_pid(1_000_000), -proc_code::IO);
+    }
+
+    /// s219: joining a group that does not exist is the hook's EPERM,
+    /// `denied`, with no child left behind.
+    #[cfg(unix)]
+    #[test]
+    fn spawn_job_into_a_missing_group_is_denied() {
+        // pid 1's group belongs to another session.
+        assert_eq!(
+            spawn_job_shim("true", &[], &[], 1, -1, 0),
+            -proc_code::DENIED
+        );
+    }
+
+    /// s219: a tty that is not a terminal is `io` before any child.
+    #[cfg(unix)]
+    #[test]
+    fn spawn_job_tty_must_be_a_terminal() {
+        let p = std::env::temp_dir().join(format!("wolf-rt-job-{}", std::process::id()));
+        std::fs::write(&p, b"x").unwrap();
+        let h = crate::fs::mint_file(std::fs::File::open(&p).unwrap());
+        assert_eq!(spawn_job_shim("true", &[], &[], 0, h, 0), -proc_code::IO);
+        let _ = std::fs::remove_file(&p);
     }
 }
