@@ -338,7 +338,9 @@ fn the_int_truth_rows_answer_on_four_machines() {
         "seven trap rows"
     );
     assert_eq!(
-        jobs.iter().filter(|j| j.lupin_pins.contains(&PIN_INT_NOT)).count(),
+        jobs.iter()
+            .filter(|j| j.lupin_pins.contains(&PIN_INT_NOT))
+            .count(),
         2,
         "two rows use `!`"
     );
@@ -486,7 +488,10 @@ fn hex(v: i128) -> String {
 /// holds every value of every signed width.
 fn bind(t: &IntTy, i: usize, v: i128) -> String {
     if t.wrapping && t.signed {
-        format!("    let s{i}: int = {v}\n    let v{i} = s{i} as {}\n", t.name())
+        format!(
+            "    let s{i}: int = {v}\n    let v{i} = s{i} as {}\n",
+            t.name()
+        )
     } else {
         format!("    let v{i}: {} = {v}\n", t.name())
     }
@@ -521,7 +526,10 @@ fn program(t: &IntTy, vals: &[i128]) -> (String, String, usize) {
             // Two 64-bit values can overflow `i128` only past every
             // range; the wrapping reduction reads the low bits, which
             // `wrapping_mul` keeps.
-            ("*", Some(a.checked_mul(b).unwrap_or_else(|| a.wrapping_mul(b)))),
+            (
+                "*",
+                Some(a.checked_mul(b).unwrap_or_else(|| a.wrapping_mul(b))),
+            ),
             ("/", (b != 0).then(|| a / b)),
             ("%", (b != 0).then(|| a % b)),
         ];
@@ -554,7 +562,10 @@ fn program(t: &IntTy, vals: &[i128]) -> (String, String, usize) {
     }
     // The same values built into a `str` (`[type.interp.value]`: the
     // same bytes printed or materialized).
-    src.push_str(&format!("    let s = \"{}\"\n    print(s)\n}}\n", lines[0].0));
+    src.push_str(&format!(
+        "    let s = \"{}\"\n    print(s)\n}}\n",
+        lines[0].0
+    ));
     want.push_str(&lines[0].1);
     want.push('\n');
     holes += vals.len();
@@ -609,7 +620,11 @@ fn random_integers_print_and_compute_alike_on_four_machines() {
                 dir,
                 file: "prog.lu".to_string(),
                 want: Want::Out(want),
-                lupin_pins: if wide { PINS_WIDE_MUL.to_vec() } else { Vec::new() },
+                lupin_pins: if wide {
+                    PINS_WIDE_MUL.to_vec()
+                } else {
+                    Vec::new()
+                },
             });
         }
     }
@@ -652,7 +667,10 @@ fn the_reference_answers_the_issues_witnesses() {
     assert_eq!(w_i8.wrap(200), -56, "#553");
     assert_eq!(w_i8.wrap(-128 / -1), -128, "MIN / -1 wraps");
     assert_eq!(w_u64.wrap(-1), i128::from(u64::MAX), "#538");
-    assert_eq!(w_u64.wrap(i128::from(u64::MAX) / 10), 1_844_674_407_370_955_161);
+    assert_eq!(
+        w_u64.wrap(i128::from(u64::MAX) / 10),
+        1_844_674_407_370_955_161
+    );
     assert_eq!(hex(-56), "-38");
     assert_eq!(hex(i128::from(u64::MAX)), "ffffffffffffffff");
     let t = types();

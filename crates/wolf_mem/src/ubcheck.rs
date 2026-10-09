@@ -5347,7 +5347,11 @@ impl<'t> Machine<'t> {
                             if y == 0 {
                                 return self.trap("div-zero", "mem.ub.defined", span);
                             }
-                            Some(if op == SyntaxKind::Slash { x / y } else { x % y })
+                            Some(if op == SyntaxKind::Slash {
+                                x / y
+                            } else {
+                                x % y
+                            })
                         }
                         _ => Some(x),
                     };
@@ -5777,10 +5781,7 @@ impl<'t> Machine<'t> {
             // unsigned one, held as its bit pattern (s220,
             // wolf-lang#551): the hole's type says which, exactly the
             // native lane's PACK_UNSIGNED.
-            Value::Int(n) => FmtValue::Int {
-                v: *n,
-                unsigned,
-            },
+            Value::Int(n) => FmtValue::Int { v: *n, unsigned },
             // `{b:x}` takes the integer spec surface (D72): the octet
             // widened, `ff` at most.
             Value::Byte(b) => FmtValue::Int {
