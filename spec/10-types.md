@@ -238,6 +238,38 @@ conversion, and its numeric arms are closed and total:
   had a hole in it. Witness: `corpus/typecheck/float_rem.lu`, both
   tiers.
 
+## §3c Wrapping division and negation `[type.wrap.div]`
+
+`/` and `%` on a `wrapping[T]` divide the **values** the operands hold,
+truncating toward zero as the checked division does: `wrapping[u64]`'s
+`(2^64 - 1) / 10` is `1844674407370955161` and its `% 10` is `5`;
+`wrapping[i8]`'s `-7 / 2` is `-3` and `-7 % 2` is `-1`. An unsigned
+quotient or remainder never leaves its width; a signed one leaves it at
+one point only, `MIN / -1`, which **wraps to `MIN`** (and `MIN % -1` is
+`0`), the family's two's-complement meaning. A zero divisor is still the
+`div-zero` trap (`[mem.ub]`'s table): wrapping names what happens past
+the width, and a zero divisor has no quotient at any width. Negation
+wraps the same way: `-x` on a `wrapping[T]` is `0 - x` at the width, so
+`-MIN` is `MIN` and `-(5 as wrapping[u8])` is `251`. On a plain unsigned
+type `-x` is `0 - x` in that type, X3's checked subtraction: `0` for
+`x == 0` and the `overflow` trap for every other `x`. **The cost,
+stated:** an unsigned wrapping `/` or `%` is the unsigned divide; a
+signed one adds a compare and a branch around the divide when the
+divisor is not a constant (a constant divisor other than `-1` is the
+plain divide, and `-1` is the negation). (Written 2026-10-09 by s220
+for wolf-lang#538, where native and release refused every wrapping
+`/` and `%` ("no idiv.wrap op"), the checked machine divided a
+`wrapping[u64]` as signed (`u64::MAX / 10` was `0`) and a negative
+`wrapping[i8]` as its mask, and lupin computed the answers above. The
+clause writes down lupin's answer; it is not a new meaning. Negation
+was found by the same lane: `-MIN` trapped at a wrapping type on
+native and release, and `-x` on a `u8` printed `251` there and `-5` on
+the checked machine where lupin trapped.) Witnesses:
+`typecheck/int_truth_wrap_div_unsigned.lu`,
+`typecheck/int_truth_wrap_div_signed.lu`,
+`typecheck/int_truth_wrap_neg.lu`, `faults/int_truth_wrap_div_zero.lu`,
+`faults/int_truth_neg_u8_trap.lu`, `faults/int_truth_neg_u64_trap.lu`.
+
 ## §4 The `char` type `[type.char]`
 
 - `[type.char]` **`char` is a Unicode scalar value** (D58, s121): its
@@ -370,9 +402,9 @@ conversion, and its numeric arms are closed and total:
   every bitwise operator's does (`[type.byte.op]`): `!b` is `int`, and
   `(!b) as byte` is the octet's complement. `!` on `bool` is logical
   not, unchanged; on a float, a `char` or any other type it is E0409.
-  The checked machine holds no `u64`/`uint` value past `i64::MAX`, so a
-  complement there is refused by name, as the literal that spells such
-  a value is. Witnesses: `typecheck/int_not_mask.lu`,
+  Every machine answers it at every width; the checked machine refused
+  a `u64`/`uint` complement by name until s220 (wolf-lang#551), when it
+  learned to hold the type's upper half. Witnesses: `typecheck/int_not_mask.lu`,
   `typecheck/int_not_signed.lu`, `typecheck/int_not_byte.lu`,
   `typecheck/int_not_float.lu` (`fail(E0409)`).
 
@@ -401,6 +433,20 @@ values that have none.)
   what `print("{x}")` writes). A `str` inside a composite renders as
   its bytes, unquoted — `Doc { title: regions, words: 900 }`, not
   `"regions"`; interpolation is for reading, not for round-tripping.
+  **An integer hole renders the value its type holds**, in decimal
+  with a `-` only on a negative value: a `u64`, `uint` or
+  `wrapping[u64]` at `2^64 - 1` prints `18446744073709551615` (never
+  `-1`), and a signed `wrapping[i8]` holding `-56` prints `-56` (never
+  its bit pattern `200`). The radix kinds of `[type.interp.spec]` render
+  the same value (`{x:x}` of that `u64` is `ffffffffffffffff`). This is
+  the `Display` of the value, not a new rendering: the reference
+  interpreter has always printed it, and until s220 (wolf-lang#551,
+  #538, #553) native and release printed a 64-bit unsigned value above
+  `i64::MAX` as its signed bits in a spec-less hole, and the checked
+  machine printed a negative signed narrow `wrapping` value as its
+  unsigned mask. Witnesses: `typecheck/int_truth_*.lu` and
+  `crates/wolf_driver/tests/int_truth_lanes.rs`, which also prints
+  seeded random values of all eighteen integer types on four machines.
   A format spec (`{x:>8}`) is defined on the primitive holes
   (`[type.char.interp]`'s `str` surface, the integer surface, the
   float surface) and on nothing composite: a spec on a composite is a
