@@ -21,7 +21,11 @@
 //! parting is pinned below by that version as pre-mirror (lupin's half
 //! is wolf-interp#194). A newer lupin must answer what the clause says.
 //! 0.1.47 (r29) and 0.1.48 (the 0.2.25 pairing, r30; #194 still open)
-//! answer every row as 0.1.46 did, measured; the pins are carried.
+//! answered every row as 0.1.46 did, measured. 0.1.49 (the 0.2.26
+//! pairing, r31) carries is74's mirror: the pins are dropped, and on the
+//! UB rows lupin is held to the verdict, row and clause, its `ub` record
+//! carrying no diagnostic (wolf-lang#606). It still traps `race` on the
+//! plain counter, measured, so that check names 0.1.49 too.
 
 mod lane_exit;
 
@@ -199,6 +203,12 @@ const fn ub<'a>(row: &'a str, clause: &'a str) -> Want<'a> {
     }
 }
 
+/// lupin's answer on a UB row: the same verdict, row and clause, and no
+/// diagnostic — a `ub` record carries none (wolf-lang#606).
+const fn lupin_ub(want: Want<'_>) -> Want<'_> {
+    Want { codes: &[], ..want }
+}
+
 /// lupin's measured answer where it parts (pre-mirror).
 struct Pin<'a> {
     version: &'a str,
@@ -210,25 +220,9 @@ struct Pin<'a> {
 /// is `unsupported`, naming the first spelling it cannot resolve — an
 /// `Order` mark or `fence` (measured at kw11's head, `rows-*.log`).
 /// 0.1.47 (the 0.2.24 pairing, r29) and 0.1.48 (the 0.2.25 pairing,
-/// r30) answer the same, measured row by row; the pin is carried with its
-/// issue (wolf-interp#194, open).
-const PRE_MIRROR: &[Pin<'static>] = &[
-    Pin {
-        version: "0.1.46",
-        verdict: "unsupported",
-        named: "does not resolve",
-    },
-    Pin {
-        version: "0.1.47",
-        verdict: "unsupported",
-        named: "does not resolve",
-    },
-    Pin {
-        version: "0.1.48",
-        verdict: "unsupported",
-        named: "does not resolve",
-    },
-];
+/// r30) answered the same, measured row by row. 0.1.49 (the 0.2.26
+/// pairing, r31) carries is74's mirror (#194): every pin is dropped.
+const PRE_MIRROR: &[Pin<'static>] = &[];
 
 fn assert_obs(who: &str, row: &str, obs: &Obs, want: Want<'_>) {
     assert_eq!(
@@ -398,7 +392,7 @@ fn an_order_the_operation_does_not_admit_is_e1309() {
 #[test]
 fn a_misaligned_atomic_is_row_l4() {
     let l4 = ub("L4", "mem.unsafe.raw.4");
-    every_machine("atomic_ub_misaligned.lu", l4, None, l4, PRE_MIRROR);
+    every_machine("atomic_ub_misaligned.lu", l4, None, lupin_ub(l4), PRE_MIRROR);
 }
 
 /// `[conc.mm.atomic.raw.5]`: on an allocation an atomic operation is an
@@ -406,7 +400,7 @@ fn a_misaligned_atomic_is_row_l4() {
 #[test]
 fn an_atomic_load_after_free_is_row_p1() {
     let p1 = ub("P1", "mem.prov.state");
-    every_machine("atomic_ub_uaf.lu", p1, None, p1, PRE_MIRROR);
+    every_machine("atomic_ub_uaf.lu", p1, None, lupin_ub(p1), PRE_MIRROR);
 }
 
 /// `[conc.mm.atomic.raw]` under contention: four tasks' `atomic_add`s
@@ -469,7 +463,10 @@ fn the_plain_counter_is_a_race_and_asserts_nothing() {
         lupin.version,
         lupin.verdict
     );
-    if matches!(lupin.version.as_str(), "0.1.46" | "0.1.47" | "0.1.48") {
+    if matches!(
+        lupin.version.as_str(),
+        "0.1.46" | "0.1.47" | "0.1.48" | "0.1.49"
+    ) {
         assert_eq!(
             lupin.verdict, "trap(race)",
             "lupin {}, measured",
