@@ -730,6 +730,7 @@ os/chdir_relative.lu: lowers
 os/cpus.lu: lowers
 os/env_roundtrip.lu: lowers
 os/exit_code.lu: lowers
+os/job_rows.lu: lowers
 os/pipe_round_trip.lu: lowers
 os/random_differs.lu: lowers
 os/random_edges.lu: lowers
