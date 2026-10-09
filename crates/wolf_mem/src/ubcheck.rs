@@ -6348,6 +6348,82 @@ impl<'t> Machine<'t> {
                 let id = self.mint_list(items, span)?;
                 Ok(Flow::Val(Value::List(id)))
             }
+            // s218 (#625, #536, `[os.fs.stat]`): the 20-word record by
+            // path from ONE host call — `fs_stat` follows a final link,
+            // `fs_lstat` answers the link itself. `wolf_rt::fs`'s
+            // `__wolf_rt_fs_stat_record`, word for word
+            // (`fs_stat_record`, below).
+            "fs_stat" | "fs_lstat" => {
+                let Some(path) = path_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let md = if name == "fs_lstat" {
+                    std::fs::symlink_metadata(&path)
+                } else {
+                    std::fs::metadata(&path)
+                };
+                let md = match md {
+                    Err(e) => return Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
+                    Ok(m) => m,
+                };
+                let Some(rec) = fs_stat_record(&md) else {
+                    return Ok(tag("io"));
+                };
+                self.charge_mem(8 * rec.len() as u64)?;
+                let items: Vec<Value> = rec.into_iter().map(Value::Int).collect();
+                let id = self.mint_list(items, span)?;
+                Ok(Flow::Val(Value::List(id)))
+            }
+            // s218 (#625, `[os.fs.readlink]`): the target's bytes as the
+            // host stored them; a path that is not a link is `invalid`.
+            "fs_read_link" => {
+                let Some(path) = path_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                match std::fs::read_link(&path) {
+                    Err(e) if fs_not_a_link(&e) => {
+                        fs_host_error(&e);
+                        Ok(tag("invalid"))
+                    }
+                    Err(e) => Ok(tag(&errtag(&e, &["not_found", "denied", "invalid", "io"]))),
+                    Ok(t) => {
+                        let bytes = t.as_os_str().as_encoded_bytes().to_vec();
+                        self.charge_mem(bytes.len() as u64)?;
+                        Ok(Flow::Val(self.byte_list_value(&bytes, span)?))
+                    }
+                }
+            }
+            // s218 (#626, `[os.fs.readdir]`): the directory in the
+            // host's order — NOT sorted, unlike `fs_read_dir` — each
+            // entry `[kind] ++ name bytes`, a non-UTF-8 name included.
+            "fs_read_dir_entries" => {
+                let Some(path) = path_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let entries = match std::fs::read_dir(&path) {
+                    Err(e) => return Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
+                    Ok(rd) => rd,
+                };
+                let mut rows: Vec<Vec<u8>> = Vec::new();
+                for entry in entries {
+                    let e = match entry {
+                        Err(e) => return Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
+                        Ok(e) => e,
+                    };
+                    let kind = e.file_type().map_or(2, fs_stat_kind);
+                    let name = e.file_name();
+                    let mut row = vec![kind as u8];
+                    row.extend_from_slice(name.as_encoded_bytes());
+                    rows.push(row);
+                }
+                self.charge_mem(rows.iter().map(|r| r.len() as u64).sum())?;
+                let mut items = Vec::with_capacity(rows.len());
+                for row in &rows {
+                    items.push(self.byte_list_value(row, span)?);
+                }
+                let id = self.mint_list(items, span)?;
+                Ok(Flow::Val(Value::List(id)))
+            }
             // s199 (#426, `[os.fs.seek]`, `[os.fs.tell]`,
             // `[os.fs.read_at]`): the handle's offset, `wolf_rt::fs`'s
             // three calls row for row. `unseekable` is `ESPIPE`
@@ -9527,6 +9603,9 @@ impl<'t> Machine<'t> {
             | "fs_is_dir" | "fs_size" | "fs_modified_ms"
             // s142 (#261): the stat on an open handle.
             | "fs_fstat"
+            // s218 (#625, #626): the full record by path, the link's
+            // target, the typed listing.
+            | "fs_stat" | "fs_lstat" | "fs_read_link" | "fs_read_dir_entries"
             // s199 (#426): the handle's offset.
             | "fs_seek" | "fs_tell" | "fs_read_at"
             // s200 (#417): the fused chunk copy.
@@ -12278,6 +12357,122 @@ fn fs_is_disk(f: &std::fs::File) -> bool {
 #[cfg(not(windows))]
 fn fs_is_disk(_f: &std::fs::File) -> bool {
     true
+}
+
+/// s218 (`[os.fs.stat]`): the record's `kind` for a host file type —
+/// `wolf_rt::fs::stat_kind_of`'s twin: 0 file, 1 directory, 2 anything
+/// else, 3 link, 4 fifo, 5 socket, 6 character device, 7 block device.
+fn fs_stat_kind(ft: std::fs::FileType) -> i64 {
+    if ft.is_symlink() {
+        return 3;
+    }
+    if ft.is_dir() {
+        return 1;
+    }
+    if ft.is_file() {
+        return 0;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileTypeExt as _;
+        if ft.is_fifo() {
+            return 4;
+        }
+        if ft.is_socket() {
+            return 5;
+        }
+        if ft.is_char_device() {
+            return 6;
+        }
+        if ft.is_block_device() {
+            return 7;
+        }
+    }
+    2
+}
+
+/// s218: whole seconds (floored) and nanoseconds `0..1e9` from the Unix
+/// epoch — `wolf_rt::fs::split_time`'s twin.
+fn fs_split_time(t: std::time::SystemTime) -> Option<(i64, i64)> {
+    match t.duration_since(std::time::UNIX_EPOCH) {
+        Ok(d) => Some((
+            i64::try_from(d.as_secs()).ok()?,
+            i64::from(d.subsec_nanos()),
+        )),
+        Err(before) => {
+            let d = before.duration();
+            let s = i64::try_from(d.as_secs()).ok()?;
+            let ns = i64::from(d.subsec_nanos());
+            if ns == 0 {
+                Some((-s, 0))
+            } else {
+                Some((-s - 1, 1_000_000_000 - ns))
+            }
+        }
+    }
+}
+
+/// s218 (`[os.fs.stat]`): the 20-word record — `wolf_rt::fs::stat_record`'s
+/// twin, word for word: `[kind, size, modified_ms, have, mode, nlink, uid,
+/// gid, blocks, dev, ino, rdev, atime s/ns, mtime s/ns, ctime s/ns, btime
+/// s/ns]`, bit `i` of `have` set when word `i` was answered. `None` is the
+/// family's `io` (a size or a modification time outside `i64`).
+fn fs_stat_record(md: &std::fs::Metadata) -> Option<Vec<i64>> {
+    let mut r = vec![0i64; 20];
+    let mut have: i64 = 0;
+    let mut set = |r: &mut Vec<i64>, i: usize, v: i64| {
+        r[i] = v;
+        have |= 1 << i;
+    };
+    set(&mut r, 0, fs_stat_kind(md.file_type()));
+    set(&mut r, 1, i64::try_from(md.len()).ok()?);
+    let ms = match md.modified().ok()?.duration_since(std::time::UNIX_EPOCH) {
+        Ok(d) => i64::try_from(d.as_millis()).ok()?,
+        Err(before) => -i64::try_from(before.duration().as_millis()).ok()?,
+    };
+    set(&mut r, 2, ms);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        set(&mut r, 4, i64::from(md.mode() & 0o7777));
+        set(&mut r, 5, md.nlink() as i64);
+        set(&mut r, 6, i64::from(md.uid()));
+        set(&mut r, 7, i64::from(md.gid()));
+        set(&mut r, 8, md.blocks() as i64);
+        set(&mut r, 9, md.dev() as i64);
+        set(&mut r, 10, md.ino() as i64);
+        set(&mut r, 11, md.rdev() as i64);
+        set(&mut r, 12, md.atime());
+        set(&mut r, 13, md.atime_nsec());
+        set(&mut r, 14, md.mtime());
+        set(&mut r, 15, md.mtime_nsec());
+        set(&mut r, 16, md.ctime());
+        set(&mut r, 17, md.ctime_nsec());
+    }
+    #[cfg(not(unix))]
+    {
+        if let Some((s, ns)) = md.accessed().ok().and_then(fs_split_time) {
+            set(&mut r, 12, s);
+            set(&mut r, 13, ns);
+        }
+        if let Some((s, ns)) = md.modified().ok().and_then(fs_split_time) {
+            set(&mut r, 14, s);
+            set(&mut r, 15, ns);
+        }
+    }
+    if let Some((s, ns)) = md.created().ok().and_then(fs_split_time) {
+        set(&mut r, 18, s);
+        set(&mut r, 19, ns);
+    }
+    r[3] = have | (1 << 3);
+    Some(r)
+}
+
+/// s218 (`[os.fs.readlink]`): a `readlink` failure that says "not a
+/// link" — `EINVAL` on unix, `ERROR_NOT_A_REPARSE_POINT` on windows.
+fn fs_not_a_link(e: &std::io::Error) -> bool {
+    e.kind() == std::io::ErrorKind::InvalidInput
+        || (cfg!(windows) && e.raw_os_error() == Some(4390))
 }
 
 /// One positional read at `off`, the cursor untouched — `pread` on
