@@ -14043,10 +14043,7 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         "os_term_foreground" | "os_term_mode" => {
             (vec![int_], rowed(table, int_, &["unsupported", "io"]))
         }
-        "os_term_set_foreground" => (
-            vec![int_, int_],
-            rowed(table, unit, &["unsupported", "io"]),
-        ),
+        "os_term_set_foreground" => (vec![int_, int_], rowed(table, unit, &["unsupported", "io"])),
         "os_term_set_mode" => (
             vec![int_, int_],
             rowed(table, unit, &["unsupported", "invalid", "io"]),

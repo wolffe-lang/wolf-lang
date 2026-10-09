@@ -14696,7 +14696,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         };
         let unit_shape = matches!(
             name,
-            "os_signal_ignore" | "os_signal_default" | "os_term_set_foreground" | "os_term_set_mode"
+            "os_signal_ignore"
+                | "os_signal_default"
+                | "os_term_set_foreground"
+                | "os_term_set_mode"
         );
         if name == "os_wait_status" {
             let (region, slot) = self.rt_slot(8);
@@ -14706,7 +14709,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let z = self.b.iconst(types::I64, 0);
             let hit = self
                 .b
-                .ins(Opcode::Icmp, &[rc, z], &[types::BOOL], Aux::IntCc(IntCc::Eq))
+                .ins(
+                    Opcode::Icmp,
+                    &[rc, z],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
                 .one();
             let out = self.eu_join(
                 eu,
@@ -14748,10 +14756,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 |_| Ok(Some(rc)),
                 |zz| {
                     let zero = zz.b.iconst(types::I64, 0);
-                    let code = zz
-                        .b
-                        .ins(Opcode::IsubWrap, &[zero, rc], &[types::I64], Aux::None)
-                        .one();
+                    let code =
+                        zz.b.ins(Opcode::IsubWrap, &[zero, rc], &[types::I64], Aux::None)
+                            .one();
                     Ok(zz.code_tag_chain(code, pairs, "io"))
                 },
             )?
