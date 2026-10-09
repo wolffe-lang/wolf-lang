@@ -724,6 +724,18 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_os_pipe",
         "__wolf_rt_os_chdir",
         "__wolf_rt_os_isatty",
+        // s219 (#622): the Ctrl-C and job-control eleven.
+        "__wolf_rt_os_signal_ignore",
+        "__wolf_rt_os_signal_default",
+        "__wolf_rt_os_signal_poll",
+        "__wolf_rt_os_spawn_job",
+        "__wolf_rt_os_proc_pid",
+        "__wolf_rt_os_wait_status",
+        "__wolf_rt_os_pgid",
+        "__wolf_rt_os_term_foreground",
+        "__wolf_rt_os_term_set_foreground",
+        "__wolf_rt_os_term_mode",
+        "__wolf_rt_os_term_set_mode",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -734,7 +746,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        173,
+        184,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

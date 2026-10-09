@@ -10265,6 +10265,25 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         ) {
             return self.lower_signal_builtin(&callee_text, d, e);
         }
+        // s219 (#622, `[os.signal.disp]`, `[os.proc.job]`, `[os.term]`):
+        // what a shell needs for Ctrl-C and jobs — `wolf_rt`'s shims,
+        // codes to row tags.
+        if matches!(
+            callee_text.as_str(),
+            "os_signal_ignore"
+                | "os_signal_default"
+                | "os_signal_poll"
+                | "os_spawn_job"
+                | "os_proc_pid"
+                | "os_wait_status"
+                | "os_pgid"
+                | "os_term_foreground"
+                | "os_term_set_foreground"
+                | "os_term_mode"
+                | "os_term_set_mode"
+        ) {
+            return self.lower_job_builtin(&callee_text, d, e);
+        }
         // The s40 json builtin tier, natively (s107): the reference
         // parser stays the checked lane's (`wolf_mem::json`);
         // `wolf_rt::json` is its hand mirror (the locked graph keeps
@@ -14624,6 +14643,120 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             _ => Err(refuse("this process builtin", e.span)),
         }
+    }
+
+    /// s219 (#622): the eleven Ctrl-C and job-control builtins. Three
+    /// shapes over `wolf_rt`'s shims: UNIT (`rc == 0` ok, else a code),
+    /// INT (`rc >= 0` the value, else the negated code) and SLOT
+    /// (`os_wait_status`: `rc == 0` and the status — which may be
+    /// negative, `-N` for a signal — through an out word). The signal
+    /// family's codes are `sig_code`'s (1 io, 2 unsupported); the rest
+    /// are `proc_code`'s (1 not_found, 2 denied, 5 unsupported, 6
+    /// invalid, anything else io).
+    fn lower_job_builtin(&mut self, name: &str, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {
+        let mut argv: Vec<Value> = Vec::new();
+        for a in d.args().into_iter().flat_map(|l| l.args()) {
+            let Some(vx) = Arg::value(a) else { continue };
+            match self.lower_expr(vx)? {
+                Flow::Val(Some(v)) => argv.push(v),
+                Flow::Val(None) => return Err(refuse("unit-typed job arguments", vx.span)),
+                Flow::Diverged => return Ok(Flow::Diverged),
+            }
+        }
+        let want = match name {
+            "os_pgid" => 0,
+            "os_spawn_job" => 6,
+            "os_term_set_foreground" | "os_term_set_mode" => 2,
+            _ => 1,
+        };
+        if argv.len() != want {
+            return Err(refuse("a job call with missing arguments", e.span));
+        }
+        let eu = self.eu_ty_of(e.span)?;
+        const SIG: &[(i64, &str)] = &[(2, "unsupported")];
+        const PROC: &[(i64, &str)] = &[
+            (1, "not_found"),
+            (2, "denied"),
+            (5, "unsupported"),
+            (6, "invalid"),
+        ];
+        let (sym, pairs): (&str, &[(i64, &str)]) = match name {
+            "os_signal_ignore" => ("__wolf_rt_os_signal_ignore", SIG),
+            "os_signal_default" => ("__wolf_rt_os_signal_default", SIG),
+            "os_signal_poll" => ("__wolf_rt_os_signal_poll", SIG),
+            "os_spawn_job" => ("__wolf_rt_os_spawn_job", PROC),
+            "os_proc_pid" => ("__wolf_rt_os_proc_pid", PROC),
+            "os_wait_status" => ("__wolf_rt_os_wait_status", PROC),
+            "os_pgid" => ("__wolf_rt_os_pgid", PROC),
+            "os_term_foreground" => ("__wolf_rt_os_term_foreground", PROC),
+            "os_term_set_foreground" => ("__wolf_rt_os_term_set_foreground", PROC),
+            "os_term_mode" => ("__wolf_rt_os_term_mode", PROC),
+            "os_term_set_mode" => ("__wolf_rt_os_term_set_mode", PROC),
+            _ => return Err(refuse("this job builtin", e.span)),
+        };
+        let unit_shape = matches!(
+            name,
+            "os_signal_ignore" | "os_signal_default" | "os_term_set_foreground" | "os_term_set_mode"
+        );
+        if name == "os_wait_status" {
+            let (region, slot) = self.rt_slot(8);
+            let rc = self
+                .rt_call_slot(sym, &[argv[0]], slot, region, Some(types::I64))
+                .expect("rc");
+            let z = self.b.iconst(types::I64, 0);
+            let hit = self
+                .b
+                .ins(Opcode::Icmp, &[rc, z], &[types::BOOL], Aux::IntCc(IntCc::Eq))
+                .one();
+            let out = self.eu_join(
+                eu,
+                hit,
+                |zz| Ok(Some(zz.load_flat(types::I64, slot, region, e.span)?)),
+                |zz| Ok(zz.code_tag_chain(rc, pairs, "io")),
+            )?;
+            return Ok(Flow::Val(Some(out)));
+        }
+        let rc = if name == "os_spawn_job" {
+            let (p, l) = self.str_parts(argv[0]);
+            self.rt_call_foreign(
+                sym,
+                &[p, l, argv[1], argv[2], argv[3], argv[4], argv[5]],
+                None,
+                Some(types::I64),
+            )
+            .expect("rc")
+        } else {
+            self.rt_call(sym, &argv, Some(types::I64)).expect("rc")
+        };
+        let z = self.b.iconst(types::I64, 0);
+        let cc = if unit_shape { IntCc::Eq } else { IntCc::Sge };
+        let hit = self
+            .b
+            .ins(Opcode::Icmp, &[rc, z], &[types::BOOL], Aux::IntCc(cc))
+            .one();
+        let out = if unit_shape {
+            self.eu_join(
+                eu,
+                hit,
+                |_| Ok(None),
+                |zz| Ok(zz.code_tag_chain(rc, pairs, "io")),
+            )?
+        } else {
+            self.eu_join(
+                eu,
+                hit,
+                |_| Ok(Some(rc)),
+                |zz| {
+                    let zero = zz.b.iconst(types::I64, 0);
+                    let code = zz
+                        .b
+                        .ins(Opcode::IsubWrap, &[zero, rc], &[types::I64], Aux::None)
+                        .one();
+                    Ok(zz.code_tag_chain(code, pairs, "io"))
+                },
+            )?
+        };
+        Ok(Flow::Val(Some(out)))
     }
 
     fn lower_os_time_builtin(&mut self, name: &str, d: CallExpr<'t>, e: &'t GreenNode) -> R<Flow> {

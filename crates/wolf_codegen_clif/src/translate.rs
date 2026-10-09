@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 173] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 184] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -310,6 +310,21 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 173] = [
     ("__wolf_rt_os_signal_listen", 1, true),
     ("__wolf_rt_os_signal_wait", 1, true),
     ("__wolf_rt_os_signal_raise", 1, true),
+    // s219 (#622): the dispositions and the poll (set in, code or
+    // meaning out), the job spawn (exe pair, args and map headers, group,
+    // tty, defaults), the child's pid, its status through an out word,
+    // this process's group, and the terminal's foreground and mode.
+    ("__wolf_rt_os_signal_ignore", 1, true),
+    ("__wolf_rt_os_signal_default", 1, true),
+    ("__wolf_rt_os_signal_poll", 1, true),
+    ("__wolf_rt_os_spawn_job", 7, true),
+    ("__wolf_rt_os_proc_pid", 1, true),
+    ("__wolf_rt_os_wait_status", 2, true),
+    ("__wolf_rt_os_pgid", 0, true),
+    ("__wolf_rt_os_term_foreground", 1, true),
+    ("__wolf_rt_os_term_set_foreground", 2, true),
+    ("__wolf_rt_os_term_mode", 1, true),
+    ("__wolf_rt_os_term_set_mode", 2, true),
     // The OS random source (s118, #143): count in, a minted List[int]
     // header through the out slot; nonzero rc is trap(assert) in
     // lowering ([os.random.trap]) — the one os shim with no row.
