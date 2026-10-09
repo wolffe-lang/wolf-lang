@@ -32,10 +32,10 @@
 //!   linux and macOS) and `/dev/full` (`ENOSPC`, 28, linux), each
 //!   reported with the host's own words, as GNU reports them.
 //!
-//! lupin 0.1.47 and 0.1.48 (the pairing CI fetches) predate the mirror,
-//! so their answers are pinned by version AND release commit as pre-mirror
-//! (s180's design, s199's precedent), never widened; any other lupin is
-//! held to the ruled answers. The mirror is wolf-interp's s200 PR.
+//! lupin 0.1.47 and 0.1.48 predated the mirror and were pinned by
+//! version AND release commit as pre-mirror (s180's design, s199's
+//! precedent); 0.1.49 (the 0.2.26 pairing, r31) carries the mirror, so
+//! every lupin is held to the ruled answers.
 
 mod lane_exit;
 
@@ -51,8 +51,10 @@ fn wolf() -> &'static str {
 /// release archive reports, so a development build of the mirror (which
 /// still calls itself the last released version) is held to the ruled
 /// answers.
-const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] =
-    &[("0.1.47", Some("b3228cb")), ("0.1.48", Some("531bf05"))];
+///
+/// 0.1.47 and 0.1.48 were listed; emptied at the 0.1.49 pairing (r31),
+/// which carries the mirror.
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[];
 
 fn pre_mirror(lupin: &Obs) -> bool {
     PRE_MIRROR_LUPIN
