@@ -18449,7 +18449,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // unsigned value is zero-extended first and is already
                 // non-negative, so its hole keeps the frozen `0` spec.
                 let wide_unsigned = matches!(p, Prim::U64 | Prim::Uint);
-                let spec = if unsigned && (spec != 0 || wide_unsigned) {
+                let _ = wide_unsigned;
+                let spec = if unsigned && spec != 0 {
                     spec | wolf_sema::fmtspec::PACK_UNSIGNED
                 } else {
                     spec
