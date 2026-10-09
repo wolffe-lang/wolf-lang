@@ -18,13 +18,12 @@
 //! trapped 31 truncation rows (it range-checked a signed wrapping value's
 //! stored mask, not its value); lupin answered all 322.
 //!
-//! One named carve-out, wolf-lang#551: the checked machine's `u64`
-//! holds `0..=i64::MAX`, so a row whose source or kept value lies above
-//! `i64::MAX` is `unsupported` there (the literal, or the cast that would
-//! have to hold it, refused by name). Native, release and lupin answer
-//! those rows; a kept value above `i64::MAX` is compared (`r == LIT`)
-//! instead of printed, because printing a plain `u64` that large is
-//! #551's other half, not this clause.
+//! Until s220 there was one named carve-out, wolf-lang#551: the checked
+//! machine's `u64` held `0..=i64::MAX`, so the 20 rows whose source or
+//! kept value lies above `i64::MAX` were `unsupported` there, and a kept
+//! value that large was compared (`r == LIT`) instead of printed because
+//! native and release printed it signed. s220 retired both: every row is
+//! printed and answered on all four machines.
 
 mod lane_exit;
 
@@ -85,19 +84,8 @@ struct Row {
     src: &'static str,
     dst: &'static str,
     value: i128,
-    /// The value the program must keep (`None` for a trap row).
-    kept: Option<i128>,
     want: Want,
     program: String,
-}
-
-impl Row {
-    /// wolf-lang#551: the checked machine cannot hold this row's source
-    /// literal or its kept value.
-    fn needs_u64_upper_half(&self) -> bool {
-        let top = i128::from(i64::MAX);
-        self.value > top || self.kept.is_some_and(|k| k > top)
-    }
 }
 
 fn row(
@@ -113,13 +101,13 @@ fn row(
     } else {
         format!("v as {dst}")
     };
-    let (show, want) = match kept {
-        None => ("{r}".to_string(), Want::Trap),
-        Some(k) if k > i128::from(i64::MAX) => (format!("{{r == {k}}}"), Want::Keep("true".into())),
-        Some(k) => ("{r}".to_string(), Want::Keep(k.to_string())),
+    // `kept` is the value the program must keep (`None` for a trap row).
+    let want = match kept {
+        None => Want::Trap,
+        Some(k) => Want::Keep(k.to_string()),
     };
     let program = format!(
-        "fn main() -> int {{\n    let v: {src} = {}\n    let r = {cast}\n    print(\"{show}\")\n    0\n}}\n",
+        "fn main() -> int {{\n    let v: {src} = {}\n    let r = {cast}\n    print(\"{{r}}\")\n    0\n}}\n",
         literal(v)
     );
     Row {
@@ -127,7 +115,6 @@ fn row(
         src,
         dst,
         value: v,
-        kept,
         want,
         program,
     }
@@ -311,12 +298,7 @@ fn every_integer_pair_keeps_or_traps_on_four_machines() {
                         match wolfgang(&dir, flag) {
                             Lane::Skip(why) => skips.lock().unwrap().push(format!("{flag}: {why}")),
                             Lane::Ran(obs) => {
-                                let ok = if flag == "--checked" && r.needs_u64_upper_half() {
-                                    obs.verdict == "unsupported"
-                                } else {
-                                    matches(&r.want, &obs)
-                                };
-                                if !ok {
+                                if !matches(&r.want, &obs) {
                                     bad.push(format!("{flag} {} {:?}", obs.verdict, obs.stdout));
                                 }
                             }
@@ -364,23 +346,4 @@ fn every_integer_pair_keeps_or_traps_on_four_machines() {
         rows.len(),
         failures.join("\n")
     );
-}
-
-/// The carve-out stays exactly #551's rows: the checked machine is
-/// excused on these 20 and no others.
-#[test]
-fn the_checked_carve_out_is_only_the_u64_upper_half() {
-    let rows = rows();
-    let carved: Vec<&str> = rows
-        .iter()
-        .filter(|r| r.needs_u64_upper_half())
-        .map(|r| r.name.as_str())
-        .collect();
-    assert!(
-        carved
-            .iter()
-            .all(|n| n.contains("u64") || n.contains("uint")),
-        "{carved:?}"
-    );
-    assert_eq!(carved.len(), 20, "{carved:?}");
 }
