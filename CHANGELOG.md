@@ -1,5 +1,65 @@
 # Changelog
 
+## Unreleased
+
+### Unsigned and wrapping integers print and compute as the values their types hold (s220, #551, #538, #553)
+
+**Read this before you bump the pin.** Programs that print a `u64`,
+`uint` or `wrapping[u64]` value above `i64::MAX` print different bytes
+on native and release, and that is the fix: `u64::MAX` printed `-1` in
+a spec-less hole (`"{x}"`, `print`, a `str` built from it) and now
+prints `18446744073709551615`, as lupin always has and as `{x:x}`
+already did. A program that worked around it (boreutils' `bore.u64`
+halves, `nproc`'s spelled-out `umax_tenth`) still runs and can retire
+the workaround. **No downstream build changed:** boreutils `50d8907`,
+lobo `a728fab`, pelt `1c1d0f7`, wolf-std `0f74ec5` (its 423 test
+files) and pax `f197e40` (29 kernels, freestanding objects) built with
+trunk and with this change, 964 pairs a tier on native and release,
+are byte-identical with identical diagnostics, and the checked machine
+answers all 423 wolf-std test files as before (none of them prints a
+64-bit unsigned value, divides or negates a wrapping value, or holds a
+negative narrow one).
+
+- **Printing (#551, #538, `[type.interp.value]`).** Native and release
+  set the runtime's unsigned bit only beside a format spec; every
+  64-bit unsigned hole now carries it. The checked machine printed
+  `Value::Int` signed whatever the type and its format-spec path said
+  `unsigned: false` (`{d:x}` of `u64::MAX` was `-1`).
+- **The checked machine holds `u64`'s whole range (#551).** A `u64`/
+  `uint` is held as its bit pattern, as the compiled tiers' registers
+  hold it: the literal takes the whole range (it was `unsupported`),
+  arithmetic is `u64`'s (it trapped `overflow` past `i64::MAX`), `<`
+  `>` `<=` `>=` and `/` `%` read it unsigned, `!` answers (it was
+  refused by name), and casts keep it (`wrapping[u64]` above
+  `i64::MAX` into `u64` was refused by name since kw03). kw03's
+  `narrow_cast_lanes` carve-out of 20 checked rows is gone.
+- **Signed narrow wrapping values are negative on the checked machine
+  (#553, #602).** It held every `wrapping[iN]` result as its unsigned
+  mask, so `200 as wrapping[i8]` printed `200`, `5 - 11` at
+  `wrapping[i16]` printed `65530`, and both ordered above zero; native,
+  release and lupin print `-56` and `-6`.
+- **Wrapping division (#538, `[type.wrap.div]`, new).** `/` and `%` on
+  a `wrapping[T]` divide the values: native and release refused them
+  ("no idiv.wrap op"), the checked machine divided a `wrapping[u64]`
+  as signed (`u64::MAX / 10` was `0`). `MIN / -1` wraps to `MIN`,
+  `MIN % -1` is `0`, a zero divisor traps `div-zero`. No new WIR
+  opcode: unsigned is `udiv.chk`, signed branches around `idiv.chk`
+  when the divisor may be -1.
+- **Negation, found on the way.** `-x` at a wrapping type wraps (native
+  and release trapped `-MIN`; `-(5 as wrapping[u8])` is 251), and at a
+  plain unsigned type is `0 - x` there, trapping `overflow` for any `x`
+  but 0: `-x` on a `u8` printed `251` on native and release and `-5`
+  on the checked machine, where lupin traps.
+- **lupin** (wolf-interp s220): a `wrapping[u64]` product past 2^127
+  trapped `overflow` (its `i128` multiply); it now keeps the low bits.
+  Found by the sweep; `int_truth_lanes` pins 0.1.48 and 0.1.49 by
+  version and commit until the next lupin carries it.
+- **Witnesses:** eighteen `corpus/{typecheck,faults}/int_truth_*.lu`
+  rows and `crates/wolf_driver/tests/int_truth_lanes.rs`, which holds
+  them on four machines and sweeps seeded random values of all
+  eighteen integer types (printed, ordered, combined) against an
+  `i128` reference.
+
 ## 0.2.26 — 2026-10-09
 
 THE TWENTY-SIXTH. Five compiler lanes, each with its lupin half, land
