@@ -148,7 +148,11 @@ mod sys {
     pub fn mode_of(_h: i64) -> Result<i64, i64> {
         Err(proc_code::UNSUPPORTED)
     }
-    pub fn set_mode(_h: i64, _m: i64) -> Result<(), i64> {
+    pub fn set_mode(_h: i64, m: i64) -> Result<(), i64> {
+        // The shape first, as on unix: `invalid` before the host.
+        if m < 0 || m & !super::mode::VALID != 0 {
+            return Err(proc_code::INVALID);
+        }
         Err(proc_code::UNSUPPORTED)
     }
     pub fn pgid() -> Result<i64, i64> {

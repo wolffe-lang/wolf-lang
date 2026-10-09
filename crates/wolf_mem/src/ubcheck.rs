@@ -7724,7 +7724,7 @@ impl<'t> Machine<'t> {
                     return self.refuse("this os call shape", span);
                 };
                 if name == "os_term_set_mode" && (v < 0 || v & !TERM_MODE_VALID != 0) {
-                    return Ok(tag(if cfg!(unix) { "invalid" } else { "unsupported" }));
+                    return Ok(tag("invalid"));
                 }
                 let Some(f) = self.fs_handle(fd) else {
                     return Ok(tag(if cfg!(unix) { "io" } else { "unsupported" }));
@@ -11419,7 +11419,9 @@ fn spawn_mapped(
     // s219 (`[os.proc.job]`): the group, the terminal and the defaults,
     // done first in the hook (the tty is still this process's).
     let group = job.map_or(-1, |j| j.group as libc::pid_t);
-    let tty = job.and_then(|j| j.tty.as_ref()).map_or(-1, |f| f.as_raw_fd());
+    let tty = job
+        .and_then(|j| j.tty.as_ref())
+        .map_or(-1, |f| f.as_raw_fd());
     let sigs = job.map_or([0; 9], |j| checked_sig::signals_of(j.defaults));
     const MAX: usize = 64;
     let n = map.len();
@@ -11442,7 +11444,8 @@ fn spawn_mapped(
             if group >= 0 && libc::setpgid(0, group) < 0 {
                 return Err(std::io::Error::last_os_error());
             }
-            if tty >= 0 && checked_term::ttou_blocked(|| libc::tcsetpgrp(tty, libc::getpgrp())) < 0 {
+            if tty >= 0 && checked_term::ttou_blocked(|| libc::tcsetpgrp(tty, libc::getpgrp())) < 0
+            {
                 return Err(std::io::Error::last_os_error());
             }
             for &sig in &sigs {
