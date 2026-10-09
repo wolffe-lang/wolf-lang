@@ -138,8 +138,9 @@ const ISSUE: &str = "wolf-lang#612";
 /// lupin releases that predate the mirror (wolf-interp PR for s216):
 /// they read `copy region { … }` as `copy` of a plain block, whose
 /// value they trap `region-fault` at the `}` — or, for a value with no
-/// site, run. Emptied at the pairing that carries the mirror.
-const PRE_COPYOUT_LUPIN: &[&str] = &["0.1.47", "0.1.48"];
+/// site, run. 0.1.47 and 0.1.48 were listed; emptied at the 0.1.49
+/// pairing (r31), which carries the mirror.
+const PRE_COPYOUT_LUPIN: &[&str] = &[];
 
 /// Checked, native and release run the row to `exit(0)` printing
 /// `want`; lupin does too, or — for a version in `PRE_COPYOUT_LUPIN` —
