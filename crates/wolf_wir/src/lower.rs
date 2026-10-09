@@ -9056,8 +9056,26 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             (SyntaxKind::Plus, true, _) => Opcode::IaddWrap,
             (SyntaxKind::Minus, true, _) => Opcode::IsubWrap,
             (SyntaxKind::Star, true, _) => Opcode::ImulWrap,
-            (SyntaxKind::Slash | SyntaxKind::Percent, true, _) => {
-                return Err(refuse("wrapping division (no idiv.wrap op)", span));
+            // s220 (wolf-lang#538, `[type.wrap.div]`): wrapping division
+            // divides the VALUES. An unsigned quotient or remainder never
+            // leaves its width, so `wrapping[uN]` is exactly the `u*.chk`
+            // pair (a zero divisor traps `div-zero`, nothing else can).
+            // A signed one leaves it at one point only, `MIN / -1`, which
+            // wraps to `MIN` (and `MIN % -1` is 0): a divisor that can be
+            // -1 takes the branch below; any other is the `i*.chk` op.
+            (SyntaxKind::Slash, true, true) => Opcode::UdivChk,
+            (SyntaxKind::Percent, true, true) => Opcode::UremChk,
+            (SyntaxKind::Slash | SyntaxKind::Percent, true, false) => {
+                match self.b.as_int_const(b) {
+                    Some(c) if c != -1 => {
+                        if op == SyntaxKind::Slash {
+                            Opcode::IdivChk
+                        } else {
+                            Opcode::IremChk
+                        }
+                    }
+                    _ => return Ok(Some(self.wrapping_signed_div(op, a, b, wty))),
+                }
             }
             (SyntaxKind::Amp, ..) => Opcode::Band,
             (SyntaxKind::Pipe, ..) => Opcode::Bor,
@@ -9105,6 +9123,69 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
         }
         Ok(Some(out))
+    }
+
+    /// s220 (wolf-lang#538, `[type.wrap.div]`): a signed wrapping `/`
+    /// or `%` whose divisor may be -1. Division by -1 is negation, which
+    /// wraps (`MIN / -1` is `MIN`), and the remainder by -1 is always 0;
+    /// every other divisor, zero included (its `div-zero` trap), is the
+    /// checked op, which can no longer overflow on that edge.
+    fn wrapping_signed_div(&mut self, op: SyntaxKind, a: Value, b: Value, wty: TypeId) -> Value {
+        let is_div = op == SyntaxKind::Slash;
+        let zero = self.b.iconst(wty, 0);
+        if self.b.as_int_const(b) == Some(-1) {
+            if !is_div {
+                return zero;
+            }
+            return self
+                .b
+                .ins(Opcode::IsubWrap, &[zero, a], &[wty], Aux::None)
+                .one();
+        }
+        let minus_one = self.b.iconst(wty, -1);
+        let by_minus_one = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[b, minus_one],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Eq),
+            )
+            .one();
+        let neg_bb = self.b.create_block();
+        let div_bb = self.b.create_block();
+        let merge = self.b.create_block();
+        let out = self.b.add_block_param(merge, wty);
+        self.b.ins_br(by_minus_one, neg_bb, &[], div_bb, &[]);
+        self.b.seal_block(neg_bb);
+        self.b.seal_block(div_bb);
+
+        self.b.switch_to_block(neg_bb);
+        self.b.gvn_push_scope();
+        let negated = if is_div {
+            self.b
+                .ins(Opcode::IsubWrap, &[zero, a], &[wty], Aux::None)
+                .one()
+        } else {
+            zero
+        };
+        self.b.ins_jmp(merge, &[negated]);
+        self.b.gvn_pop_scope();
+
+        self.b.switch_to_block(div_bb);
+        self.b.gvn_push_scope();
+        let chk = if is_div {
+            Opcode::IdivChk
+        } else {
+            Opcode::IremChk
+        };
+        let q = self.b.ins(chk, &[a, b], &[wty], Aux::None).one();
+        self.b.ins_jmp(merge, &[q]);
+        self.b.gvn_pop_scope();
+
+        self.b.seal_block(merge);
+        self.b.switch_to_block(merge);
+        out
     }
 
     fn lower_short_circuit(
