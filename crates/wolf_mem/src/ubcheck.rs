@@ -4901,6 +4901,26 @@ impl<'t> Machine<'t> {
                     }
                 }
                 let v = val!(self.eval(operand));
+                // s220: `-x` at a wrapping type wraps at its width, and at
+                // a plain unsigned type is `0 - x` there (any `x` but 0
+                // traps `overflow`) — lupin's answers; both were the
+                // signed negation before (`-(5 as u8)` was -5).
+                if let Value::Int(n) = v {
+                    if let Some((mask, bits, unsigned)) = self.wrapping_width(e.span) {
+                        return Ok(Flow::Val(Value::Int(wrap_held(
+                            n.wrapping_neg(),
+                            mask,
+                            bits,
+                            unsigned,
+                        ))));
+                    }
+                    if self.unsigned_at(e.span) {
+                        if n != 0 {
+                            return self.trap("overflow", "mem.ub.defined", e.span);
+                        }
+                        return Ok(Flow::Val(Value::Int(0)));
+                    }
+                }
                 match v {
                     Value::Int(n) => match n.checked_neg() {
                         Some(m) => Ok(Flow::Val(Value::Int(m))),
@@ -5469,6 +5489,26 @@ impl<'t> Machine<'t> {
         ctx.expr_tys
             .get(&span)
             .is_some_and(|id| wide_unsigned(&ctx.tb.table, *id))
+    }
+
+    /// s220: is the integer at `span` unsigned (`uint`, `u8`…`u64`,
+    /// through `distinct`; a `wrapping` type answers through
+    /// [`Self::wrapping_width`] instead)?
+    fn unsigned_at(&self, span: Span) -> bool {
+        let ctx = self.ctx();
+        let Some(mut id) = ctx.expr_tys.get(&span).copied() else {
+            return false;
+        };
+        for _ in 0..32 {
+            match ctx.tb.table.kind(id) {
+                TyKind::Distinct(i) => id = *i,
+                _ => break,
+            }
+        }
+        matches!(
+            ctx.tb.table.kind(id),
+            TyKind::Prim(Prim::Uint | Prim::U8 | Prim::U16 | Prim::U32 | Prim::U64)
+        )
     }
 
     /// s220: the target range of an integer cast to the prim at `span`,
