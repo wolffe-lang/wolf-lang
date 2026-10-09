@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 186] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 189] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -204,6 +204,12 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 186] = [
     // s142 (#261): the stat on an open handle — fd in, code out, the
     // `List[int]` header through the out slot.
     ("__wolf_rt_fs_fstat", 2, true),
+    // s218 (#625, #626): the full stat record by path (path pair,
+    // follow, out), the link's target (path pair, out) and the typed
+    // listing (path pair, out) — code out, the list through the slot.
+    ("__wolf_rt_fs_stat_record", 4, true),
+    ("__wolf_rt_fs_read_link", 3, true),
+    ("__wolf_rt_fs_read_dir_entries", 3, true),
     // s199 (#426): the handle's offset — seek (fd, off, whence, out),
     // tell (fd, out), and the positional read (fd, off, max, out).
     ("__wolf_rt_fs_seek", 4, true),

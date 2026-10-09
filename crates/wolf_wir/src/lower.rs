@@ -10179,6 +10179,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "fs_size"
                 | "fs_modified_ms"
                 | "fs_fstat"
+                // s218 (#625, #626): the full record by path, the link's
+                // target, the typed listing.
+                | "fs_stat"
+                | "fs_lstat"
+                | "fs_read_link"
+                | "fs_read_dir_entries"
                 // s199 (#426): the handle's offset.
                 | "fs_seek"
                 | "fs_tell"
@@ -13390,7 +13396,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // through `rt_call_foreign` — the shim allocates into the
             // container regions, so no `data`/`len` the caller loaded
             // may survive it.
-            "fs_read_bytes" | "fs_read_chunk" | "fs_read_dir" | "fs_read_at" => {
+            "fs_read_bytes" | "fs_read_chunk" | "fs_read_dir" | "fs_read_at"
+            // s218 (#625, `[os.fs.readlink]`; #626, `[os.fs.readdir]`):
+            // the link's target bytes and the typed listing — a path in,
+            // a list minted by the shim through the slot.
+            | "fs_read_link" | "fs_read_dir_entries" => {
                 let (region, slot) = self.rt_slot(8);
                 let (sym, args): (&'static str, Vec<Value>) = match name {
                     "fs_read_chunk" => {
@@ -13409,10 +13419,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     _ => {
                         let s = arg(0)?;
                         let (p, l) = self.str_parts(s);
-                        let sym = if name == "fs_read_bytes" {
-                            "__wolf_rt_fs_read_bytes"
-                        } else {
-                            "__wolf_rt_fs_read_dir"
+                        let sym = match name {
+                            "fs_read_bytes" => "__wolf_rt_fs_read_bytes",
+                            "fs_read_link" => "__wolf_rt_fs_read_link",
+                            "fs_read_dir_entries" => "__wolf_rt_fs_read_dir_entries",
+                            _ => "__wolf_rt_fs_read_dir",
                         };
                         (sym, vec![p, l])
                     }
@@ -13511,6 +13522,34 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     eu,
                     hit,
                     |z| Ok(Some(z.load_flat(types::I64, slot, region, e.span)?)),
+                    |z| Ok(z.fs_code_tag(rc, &declared)),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            // s218 (#625, #536, `[os.fs.stat]`): the 20-word record by
+            // path from ONE host call, `follow` 1 for `fs_stat` and 0 for
+            // `fs_lstat`; the shim mints the `List[int]`, so the call goes
+            // through the foreign chain as `fs_fstat`'s does.
+            "fs_stat" | "fs_lstat" => {
+                let s = arg(0)?;
+                let (p, l) = self.str_parts(s);
+                let follow = self.b.iconst(types::I64, i64::from(name == "fs_stat"));
+                let (region, slot) = self.rt_slot(8);
+                let rc = self
+                    .rt_call_foreign(
+                        "__wolf_rt_fs_stat_record",
+                        &[p, l, follow],
+                        Some((slot, region)),
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let hit = zero_eq(self, rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let declared = self.row_tag_names(e.span);
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(types::PTR, slot, region, e.span)?)),
                     |z| Ok(z.fs_code_tag(rc, &declared)),
                 )?;
                 Ok(Flow::Val(Some(out)))

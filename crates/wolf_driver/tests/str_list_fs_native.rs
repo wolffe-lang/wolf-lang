@@ -740,6 +740,12 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         // `[os.env.unset]`.
         "__wolf_rt_os_exec",
         "__wolf_rt_env_unset",
+        // s218 (#625, #626): the full stat record, the link's target and
+        // the typed listing — `[os.fs.stat]`, `[os.fs.readlink]`,
+        // `[os.fs.readdir]`.
+        "__wolf_rt_fs_stat_record",
+        "__wolf_rt_fs_read_link",
+        "__wolf_rt_fs_read_dir_entries",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -750,7 +756,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        186,
+        189,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
