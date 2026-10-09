@@ -1,0 +1,24 @@
+//! member: false
+//! (The s219 call comes before the terminal is opened, so a machine that
+//! refuses it — lupin, by name — refuses it, not the `/dev/tty` open.)
+//! s219 (wolf-lang#622, `[os.signal.poll]`) — a program that LISTENS for
+//! INTERRUPT hears Ctrl-C as an event: it polls (never waits) until the
+//! meaning arrives and prints it, `got 16`.
+
+fn main() -> !int {
+    os_signal_listen(16)?
+    let t = fs_open_mode("/dev/tty", 3)?
+    fs_write(t, "ready\n")?
+    var got = 0
+    var n = 0
+    loop {
+        got = os_signal_poll(16)?
+        if got != 0 || n > 2000 {
+            break
+        }
+        time_sleep_ms(10)
+        n = n + 1
+    }
+    fs_write(t, "got {got}\n")?
+    0
+}

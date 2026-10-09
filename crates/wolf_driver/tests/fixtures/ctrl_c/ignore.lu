@@ -1,0 +1,15 @@
+//! member: false
+//! (The s219 call comes before the terminal is opened, so a machine that
+//! refuses it — lupin, by name — refuses it, not the `/dev/tty` open.)
+//! s219 (wolf-lang#622, `[os.signal.disp]`) — a program that IGNORES
+//! INTERRUPT survives Ctrl-C: the harness types Ctrl-C, then a line, and
+//! the program answers `survived` and exits 0.
+
+fn main() -> !int {
+    os_signal_ignore(16)?
+    let t = fs_open_mode("/dev/tty", 3)?
+    fs_write(t, "ready\n")?
+    let line = fs_read(t, 64)?
+    fs_write(t, "survived {line.len}\n")?
+    0
+}

@@ -1,0 +1,15 @@
+//! member: false
+//! s219 (wolf-lang#622) — the CONTROL: a program that does nothing about
+//! SIGINT dies of Ctrl-C. `ctrl_c_lanes.rs` types Ctrl-C at it through a
+//! pseudo-terminal and expects a death by signal 2, which shows the
+//! harness delivers the signal at all; every other witness's survival is
+//! measured against this death. Only s38/s90 calls, so it runs on every
+//! machine at trunk too.
+
+fn main() -> !int {
+    let t = fs_open_mode("/dev/tty", 3)?
+    fs_write(t, "ready\n")?
+    let line = fs_read(t, 64)?
+    fs_write(t, "never {line.len}\n")?
+    0
+}

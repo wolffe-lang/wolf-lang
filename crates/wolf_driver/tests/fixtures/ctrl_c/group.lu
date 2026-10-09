@@ -1,0 +1,26 @@
+//! member: false
+//! (The s219 call comes before the terminal is opened, so a machine that
+//! refuses it — lupin, by name — refuses it, not the `/dev/tty` open.)
+//! s219 (wolf-lang#622, `[os.proc.job]`, `[os.term]`) — a child in its
+//! own process group, handed the terminal, gets Ctrl-C; the parent, which
+//! never touches SIGINT, does not (it is not the foreground group), takes
+//! the terminal back and reports. Expected: `ready child-fg=true
+//! mine=true`, then after Ctrl-C `child=-2 back=true`.
+
+fn main() -> !int {
+    let me = os_pgid()?
+    let t = fs_open_mode("/dev/tty", 3)?
+    let fg0 = os_term_foreground(t)?
+    let h = os_spawn_job("sleep", ["30"], List[int](), 0, t, 16)?
+    let pid = os_proc_pid(h)?
+    let fg1 = os_term_foreground(t)?
+    let child_fg = fg1 == pid
+    let mine = fg0 == me
+    fs_write(t, "ready child-fg={child_fg} mine={mine}\n")?
+    let st = os_wait_status(h)?
+    os_term_set_foreground(t, me)?
+    let fg2 = os_term_foreground(t)?
+    let back = fg2 == me
+    fs_write(t, "child={st} back={back}\n")?
+    0
+}

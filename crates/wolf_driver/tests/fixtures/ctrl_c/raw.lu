@@ -1,0 +1,22 @@
+//! member: false
+//! (The s219 call comes before the terminal is opened, so a machine that
+//! refuses it — lupin, by name — refuses it, not the `/dev/tty` open.)
+//! s219 (wolf-lang#622, `[os.term.mode]`) — raw mode reads one key
+//! without Enter and the mode reads back as saved: canonical and echo
+//! off, signals kept, VMIN 1 (260); the harness types `x` alone.
+//! Expected: `ready raw=260`, then `key=120 restored=true`.
+
+fn main() -> !int {
+    let saved = os_term_mode(0)?
+    let t = fs_open_mode("/dev/tty", 3)?
+    os_term_set_mode(t, 260)?
+    let now = os_term_mode(t)?
+    fs_write(t, "ready raw={now}\n")?
+    let k = fs_read_chunk(t, 1)?
+    os_term_set_mode(t, saved)?
+    let back = os_term_mode(t)?
+    let same = back == saved
+    let key = k[0] as int
+    fs_write(t, "key={key} restored={same}\n")?
+    0
+}
