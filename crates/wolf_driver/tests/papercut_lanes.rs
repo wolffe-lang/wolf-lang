@@ -25,8 +25,9 @@
 //! measured answering alike, r31) run the `const` and `let` reads
 //! and the bodyless `extern "c" fn` row, and answer E1301 for the
 //! field store outside `unsafe`; they part on every other row, each
-//! pinned below by version and release commit as pre-mirror (lupin's
-//! half is wolf-interp#200). A newer lupin must answer what the clauses say.
+//! was pinned by version and release commit as pre-mirror. 0.1.49 (the
+//! 0.2.26 pairing, r31) carries the mirror (wolf-interp#200); every pin
+//! is dropped and lupin answers what the clauses say.
 
 mod lane_exit;
 
@@ -315,31 +316,18 @@ const E0401: Want<'static> = fails("fail(E0401)", &["E0401"]);
 const E0409: Want<'static> = fails("fail(E0409)", &["E0409"]);
 const E1301: Want<'static> = fails("fail(E1301)", &["E1301"]);
 
-/// The same answer on all four machines, with lupin 0.1.47's and
-/// 0.1.48's parting (if any) pinned by version and release commit.
+/// The same answer on all four machines (lupin's pins, if any, by
+/// version and release commit).
 fn agree(row: &str, want: Want<'_>, pins: &[Pin<'_>]) {
     every_machine(row, want, Some(want), want, pins);
 }
 
-const fn pin<'a>(verdict: &'a str, named: &'a str) -> [Pin<'a>; 2] {
-    [
-        Pin {
-            version: "0.1.47",
-            commit: "b3228cb",
-            verdict,
-            named,
-        },
-        Pin {
-            version: "0.1.48",
-            commit: "531bf05",
-            verdict,
-            named,
-        },
-    ]
-}
+/// Every row's pin dropped at the 0.1.49 pairing (r31): 0.1.49 carries
+/// the mirror (wolf-interp#200). 0.1.47 and 0.1.48 parted on the `var`,
+/// field-store, complement and `never` rows, by version and release
+/// commit.
+const NO_PIN: &[Pin<'static>] = &[];
 
-const NO_PLACE: &str = "does not denote a place";
-const NEEDS_BOOL: &str = "`!` needs a bool";
 
 /// `[mem.static.4]` (#579): `limits.WIDTH` is the `const`'s value and
 /// `limits.WIDTH` of a `pub let` its data — lupin already ran both.
@@ -360,12 +348,12 @@ fn a_pub_var_through_its_module_name_is_raw_tier() {
     agree(
         "memory/static_qualified_var/main.lu",
         runs("40 43 45\n"),
-        &pin("unsupported", "is not a local place"),
+        NO_PIN,
     );
     agree(
         "memory/static_qualified_var_outside_unsafe/main.lu",
         E1301,
-        &pin("exit(0)", ""),
+        NO_PIN,
     );
 }
 
@@ -377,38 +365,22 @@ fn a_field_of_a_raw_element_is_stored_in_place() {
     agree(
         "memory/raw_field_store.lu",
         runs("1 7 0 5\n"),
-        &pin("unsupported", NO_PLACE),
+        NO_PIN,
     );
     agree(
         "memory/raw_field_store_compound.lu",
         runs("3 42 0 -9\n"),
-        &pin("unsupported", NO_PLACE),
+        NO_PIN,
     );
     agree(
         "memory/raw_field_store_nested.lu",
         runs("5 0 9 11\n"),
-        &pin("unsupported", NO_PLACE),
+        NO_PIN,
     );
     agree(
         "memory/raw_field_store_packed.lu",
         runs("65535 4096 1 512\n"),
-        // 0.1.47 refused `packed` itself (E0817); 0.1.48 admits it (is73)
-        // and declines the field store as it does the unpacked rows (r31,
-        // measured).
-        &[
-            Pin {
-                version: "0.1.47",
-                commit: "b3228cb",
-                verdict: "fail(E0817)",
-                named: "",
-            },
-            Pin {
-                version: "0.1.48",
-                commit: "531bf05",
-                verdict: "unsupported",
-                named: NO_PLACE,
-            },
-        ],
+        NO_PIN,
     );
 }
 
@@ -430,7 +402,7 @@ fn a_misaligned_repr_c_element_store_is_row_l4() {
         L4,
         None,
         L4_LUPIN,
-        &pin("unsupported", NO_PLACE),
+        NO_PIN,
     );
 }
 
@@ -442,22 +414,22 @@ fn bang_on_an_integer_is_its_complement() {
     agree(
         "typecheck/int_not_mask.lu",
         runs("73728 77824 4294892730 4294967295 4096 57344\n"),
-        &pin("unsupported", NEEDS_BOOL),
+        NO_PIN,
     );
     agree(
         "typecheck/int_not_signed.lu",
         runs("-6 127 0 -256 -1 -128\n"),
-        &pin("unsupported", NEEDS_BOOL),
+        NO_PIN,
     );
     agree(
         "typecheck/int_not_byte.lu",
         runs("-16 240 255\n"),
-        &pin("unsupported", NEEDS_BOOL),
+        NO_PIN,
     );
     agree(
         "typecheck/int_not_float.lu",
         E0409,
-        &pin("unsupported", NEEDS_BOOL),
+        NO_PIN,
     );
 }
 
@@ -470,7 +442,7 @@ fn a_call_to_a_never_fn_is_bottom() {
     agree(
         "typecheck/fn_never_handler_arm.lu",
         runs("1\n"),
-        &pin("fail(E0301)", ""),
+        NO_PIN,
     );
     agree(
         "typecheck/fn_never_trap.lu",
@@ -481,17 +453,17 @@ fn a_call_to_a_never_fn_is_bottom() {
             named: "",
             ub: ("", ""),
         },
-        &pin("fail(E0301)", ""),
+        NO_PIN,
     );
     agree("typecheck/fn_never_extern.lu", runs("2\n"), &[]);
     agree(
         "typecheck/fn_never_reaches_end.lu",
         E0401,
-        &pin("fail(E0301)", ""),
+        NO_PIN,
     );
     agree(
         "typecheck/fn_never_return.lu",
         E0401,
-        &pin("fail(E0301)", ""),
+        NO_PIN,
     );
 }
