@@ -1,0 +1,24 @@
+//! member: false
+//! s219 (wolf-lang#622, `[os.proc.job]`, `[os.proc.status]`) — no
+//! terminal: a child leads a new process group, a second joins it by the
+//! first's pid, both are killed and their status is -9 (death by signal
+//! 9, never the `signal` row); `false` in a group of its own ends 1; a
+//! second wait of a reaped child is `io`. lupin runs this one too (std's
+//! `process_group`). Expected: `pid>0=true a=-9 b=-9 false=1 again=io`.
+
+fn main() -> !int {
+    let a = os_spawn_job("sleep", ["30"], List[int](), 0, -1, 0)?
+    let pa = os_proc_pid(a)?
+    let b = os_spawn_job("sleep", ["30"], List[int](), pa, -1, 0)?
+    os_kill(a)?
+    os_kill(b)?
+    let sa = os_wait_status(a)?
+    let sb = os_wait_status(b)?
+    let c = os_spawn_job("false", List[str](), List[int](), 0, -1, 0)?
+    let sc = os_wait_status(c)?
+    let again = os_wait_status(c) else |_| -1000
+    let shown = if again == -1000 { "io" } else { "{again}" }
+    let pa_pos = pa > 0
+    print("pid>0={pa_pos} a={sa} b={sb} false={sc} again={shown}")
+    0
+}
