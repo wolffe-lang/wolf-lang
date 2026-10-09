@@ -256,7 +256,10 @@ fn link_tree(test: &str) -> PathBuf {
     std::fs::write(t.join("zz"), b"").unwrap();
     std::fs::write(t.join("B"), b"").unwrap();
     let when = std::time::UNIX_EPOCH + std::time::Duration::new(1_577_854_800, 123_456_789);
-    let f = std::fs::File::options().write(true).open(t.join("a")).unwrap();
+    let f = std::fs::File::options()
+        .write(true)
+        .open(t.join("a"))
+        .unwrap();
     f.set_times(
         std::fs::FileTimes::new()
             .set_modified(when)
@@ -405,7 +408,11 @@ fn the_record_against_stat1() {
         for (rec, (path, link)) in lines.iter().zip([("t/a", false), ("t/ln", true)]) {
             assert_eq!(rec.len(), 20, "{what}: 20 words for {path}");
             let have = rec[3];
-            assert_eq!(have & 0x3ffff, 0x3ffff, "{what}: unix answers words 0..17 of {path}");
+            assert_eq!(
+                have & 0x3ffff,
+                0x3ffff,
+                "{what}: unix answers words 0..17 of {path}"
+            );
             let mut mine = vec![rec[0], rec[1], rec[2]];
             mine.extend_from_slice(&rec[4..18]);
             let host = host_words(&dir.join(path), link);
