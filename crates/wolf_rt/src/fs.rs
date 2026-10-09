@@ -2823,10 +2823,16 @@ mod tests {
     #[test]
     fn split_time_is_a_timespec() {
         use std::time::Duration;
-        assert_eq!(split_time(UNIX_EPOCH + Duration::new(5, 7)), Some((5, 7)));
+        // Steps of 100 ns: windows' `SystemTime` counts 100 ns ticks, so a
+        // 1 ns step is not representable there (wolf-interp's twin test
+        // failed on it: run 37964240513, windows smoke job 113936042378).
         assert_eq!(
-            split_time(UNIX_EPOCH - Duration::new(0, 1)),
-            Some((-1, 999_999_999))
+            split_time(UNIX_EPOCH + Duration::new(5, 700)),
+            Some((5, 700))
+        );
+        assert_eq!(
+            split_time(UNIX_EPOCH - Duration::new(0, 100)),
+            Some((-1, 999_999_900))
         );
         assert_eq!(split_time(UNIX_EPOCH - Duration::new(2, 0)), Some((-2, 0)));
     }
