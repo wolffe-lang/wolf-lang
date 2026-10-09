@@ -501,3 +501,114 @@ fn raw_mode_reads_one_key_and_restores() {
         },
     );
 }
+
+/// The lupin releases (and the trunk build this gate was first run with)
+/// that predate s219's mirror, with the commit each reports: they resolve
+/// none of the eleven names. A mirrored lupin answers like every machine.
+const PRE_MIRROR_LUPIN: &[(&str, &str)] = &[("0.1.48", "531bf05"), ("0.1.48", "17f17c2")];
+
+/// The no-terminal row on every machine: `conform-run` on the checked
+/// machine and lupin, the binaries run directly (and under taskset on
+/// linux), 0 the null device. Each must print `want` and exit 0.
+#[test]
+fn a_group_leader_a_joiner_and_their_status() {
+    let want = "pid>0=true a=-9 b=-9 false=1 again=io\n";
+    let entry = fixture("status.lu");
+    let dir = scratch("status_lu");
+    let run = |argv: &[String]| -> (Option<i32>, String) {
+        let out = Command::new(&argv[0])
+            .args(&argv[1..])
+            .current_dir(&dir)
+            .stdin(Stdio::null())
+            .output()
+            .expect("runs");
+        (
+            out.status.code(),
+            String::from_utf8_lossy(&out.stdout).into_owned(),
+        )
+    };
+    let record = |text: &str| -> serde_json::Value {
+        text.lines()
+            .rev()
+            .find_map(|l| serde_json::from_str(l.trim()).ok())
+            .unwrap_or_else(|| panic!("a record: {text}"))
+    };
+    let (_, t) = run(&[
+        wolf().into(),
+        "conform-run".into(),
+        entry.to_string_lossy().into_owned(),
+        "--checked".into(),
+        "--json".into(),
+    ]);
+    let r = record(&t);
+    eprintln!(
+        "s219 status.lu [checked] {} {:?}",
+        r["verdict"], r["stdout_inline"]
+    );
+    assert_eq!(
+        (r["verdict"].as_str(), r["stdout_inline"].as_str()),
+        (Some("exit(0)"), Some(want))
+    );
+    for release in [false, true] {
+        let Some(exe) = build(&entry, &dir, release) else {
+            continue;
+        };
+        let exe = exe.to_string_lossy().into_owned();
+        let mut legs = vec![vec![exe.clone()]];
+        if cfg!(target_os = "linux") && Path::new("/usr/bin/taskset").exists() {
+            legs.push(vec![
+                "/usr/bin/taskset".into(),
+                "-c".into(),
+                "0-3".into(),
+                exe,
+            ]);
+        }
+        for leg in legs {
+            let (code, out) = run(&leg);
+            eprintln!("s219 status.lu [{leg:?}] code={code:?} {out:?}");
+            assert_eq!((code, out.as_str()), (Some(0), want), "status.lu {leg:?}");
+        }
+    }
+    match sibling_lupin() {
+        None => assert!(
+            std::env::var_os("WOLF_PAIRING_REQUIRE_SIBLING").is_none(),
+            "WOLF_PAIRING_REQUIRE_SIBLING is set and no sibling lupin was found"
+        ),
+        Some(l) => {
+            let (_, t) = run(&[
+                l.to_string_lossy().into_owned(),
+                "conform-run".into(),
+                entry.to_string_lossy().into_owned(),
+                "--json".into(),
+            ]);
+            let r = record(&t);
+            let (v, c) = (
+                r["impl_version"].as_str().unwrap_or(""),
+                r["commit"].as_str().unwrap_or(""),
+            );
+            eprintln!(
+                "s219 status.lu [lupin {v} {c}] {} {:?}",
+                r["verdict"], r["stdout_inline"]
+            );
+            if PRE_MIRROR_LUPIN
+                .iter()
+                .any(|(pv, pc)| *pv == v && c.starts_with(pc))
+            {
+                assert_eq!(r["verdict"], "unsupported", "lupin {v} at {c} (pre-mirror)");
+                assert!(
+                    r["x-unsupported"]
+                        .as_str()
+                        .unwrap_or("")
+                        .contains("os_spawn_job"),
+                    "lupin {v} at {c}: {r}"
+                );
+            } else {
+                assert_eq!(
+                    (r["verdict"].as_str(), r["stdout_inline"].as_str()),
+                    (Some("exit(0)"), Some(want)),
+                    "lupin {v} at {c} (s219 mirrored)"
+                );
+            }
+        }
+    }
+}
