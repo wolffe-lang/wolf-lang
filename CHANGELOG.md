@@ -1,6 +1,121 @@
 # Changelog
 
-## Unreleased
+## 0.2.26 — 2026-10-09
+
+THE TWENTY-SIXTH. Five compiler lanes, each with its lupin half, land
+together, and the pairing moves to lupin 0.1.49, which mirrors all of
+them. A program's standard streams are bytes; a child's descriptors,
+pipes and the working directory are the program's to set; `-> never`
+and `!` on integers are in the language (rulings #50, #51); a loop can
+keep each turn's result and free the rest (`copy region`, ruling #56);
+a package's capabilities are what its code reaches (rulings #53, #54).
+**One P0 is fixed (#618):** a call's `str` result held past a region
+read freed bytes on checked, native and release. Five lanes, 149
+commits integrated by r31 one at a time (s200 19, s213 42, s215 44,
+s216 29, s217 15, each count including r31's integration commits),
+then r31's release commits.
+
+### Read this before you bump the pin
+
+**New prelude names** (`cargo xtask prelude-diff v0.2.25 HEAD
+--markdown`, after `git fetch --tags`, run at the release head):
+
+> **New prelude names.** HEAD adds `fs_copy_chunk`, `os_spawn_fds`,
+> `os_pipe`, `os_chdir`, `os_isatty`, `os_error`, `os_error_text`,
+> `bytes_find`, `bytes_count`, and `never` (the nine functions at
+> `[os.host.sigs]`; `never`: builtin_type, `[type.fn.never]`). A module
+> that declares a function, type or binding named any of the nine
+> functions now draws W0304 (it shadows the ambient name), which
+> `--deny-warnings` makes fatal: rename yours. `never` draws no W0304.
+>
+> **New builtin marks:** `none` (`[os.host.sigs]`).
+
+A grep for a declaration (`fn`, `let`, `var`, `const`, `type`,
+`struct`, `enum`) of any of the ten in wolf-std `0f74ec5a`, boreutils
+`50d89074`, lobo `a728fab7`, pax `396c5fbf`, the book `fde77b8d`, pelt
+`dd22a86c` and muzzle `7c95300e` found **none**. No downstream calls any
+of the nine functions yet; `os_isatty` appears only in two comments
+(boreutils `src/ls.lu`, pelt `src/sh/interact.lu`) that wait for it.
+
+**Packages that built are now refused (s217).** A package whose own
+files call a host builtin in the fs, net, env or exec family, or that
+imports a std module whose code does (`std.process` → `exec`, `std.os`
+→ `env`), must declare the capability. The fix is the word in
+`capabilities: [ … ]`; the E1504 names it. The census at wolf-std
+`2f389a7`, boreutils `2f15585`, lobo `9167cb5`, pax `94364ad`, pelt
+`f0014da` and the book `d0213d0` found **no build that changes**: only
+lobo, pax's kernel and the book's `samples/pkg` have a manifest beside
+the files they build, and none of them reaches an undeclared capability.
+
+**`wolf audit` prints more.** Under `effective:` there is now a reason
+line per capability, so a transcript with a non-empty set gains lines.
+The book has five: `pkg/acquired` in ch24 (two), solutions.md and
+exercises ch24 (`net: regex — declared (nothing in its code reaches
+it)`), and appendix E's `pkg/promote` (`` fs: local/tally (root) —
+declared; calls `fs_write_text` … ``). Transcripts with `effective: []`
+are byte-identical.
+
+**`wolf audit --ci` refuses where it passed.** It fails on an undeclared
+capability with no build, and on a manifest whose directory holds no
+wolf source. lobo is that case: `wolf.pkg` sits at the repository root
+and the program builds from `./src/main.lu`, so the manifest governs no
+build. Nothing in lobo runs `wolf audit` today. If lobo's manifest did
+govern `src/`, it would need `capabilities: [env, exec, fs, net]`.
+
+**A program that compiled may now be refused (#618, s216).** A call to a
+fn returning `str` is an allocation site in the region it is called in,
+so holding its result past that region is E1010 where it used to build
+and read freed bytes. A fn whose every result is a string literal is
+exempt. s216 measured boreutils, lobo, wolf-std's tests and pelt: the
+same verdicts and byte-identical binaries. The way to keep a region
+block's result is `copy region { … }` (`[mem.region.copyout]`).
+
+**Spellings ruled.** `-> never` (ruling #50) and `!` on an integer as
+its bitwise complement (ruling #51) were implemented ahead of their
+rulings in s213 and are ruled A as implemented; `copy region { … }` is
+ruling #56 = A. ruling #53 keeps stdio, the clock and random free of any
+capability; ruling #54 charges `os_chdir` to `env` and `os_pipe` to
+`exec` (`os_isatty` stays free).
+
+### The pairing: lupin 0.1.49
+
+`PAIRING` names **lupin 0.1.49 at pin `294d626`** (wolf-interp release
+408028965; the linux x86-64 archive's sha256 `84911a35…`). The spec pin
+is unchanged (this compiler's v0.2.24 tag). 0.1.49 carries is74
+(volatile access and the raw-pointer atomics, wolf-interp#185, #194),
+is75 (the CI slot budget) and the lupin halves of s200, s213, s215 and
+s216.
+
+- **Dropped 45 cases in eight gates**, each green on the published
+  0.1.49 unpinned: `atomic_lanes` 9 (#194), `volatile_lanes` 5 (#185),
+  `byte_surface_lanes` 10 (s200), `papercut_lanes` 5 (s213, #200),
+  `raw_align_lanes` 2 (#205, answered by s213's struct pointee),
+  `proc_fd_lanes` 9 (s215), `region_copyout_lanes` 4 (s216), and
+  `pairing` 1. The emptied lists stay, empty, as the gates' machinery.
+- **Kept.** attr_closed_set's control, carried to 0.1.49 measured (lupin
+  still declines its `comptime fn`, #174); the racy counter's
+  `trap(race)` check names 0.1.49 too (DIV-2026-028).
+- **Corrected, not widened (#606).** On the volatile and atomic UB rows
+  lupin is held to the verdict, the row and the clause, without the
+  checked machine's E1401: a `ub` record carries no diagnostic
+  (`[proto.record.verdict]`), as `raw_align_lanes` already held it.
+- **Widened 0.** The plant (the 0.1.49 lists against the published
+  0.1.48) is red on exactly the 45 dropped cases.
+- **The ritual** (#87, with #281's control against the 0.1.48 archive,
+  the same corpus and the same release `wolf`, 1057 files):
+  - checked: **moved 39 ledger counts**. Agreements 625 → 657, hard
+    22 → 16, SOUNDNESS 3 → 0 (s216's three copy-out rows, where 0.1.48
+    trapped, now agree).
+  - native: **moved 40**. Agreements 658 → 685, hard 33 → 33,
+    SOUNDNESS 11 → 14: the three copy-out rows leave it, and six UB rows
+    lupin now reaches join the class every UB row holds on native, which
+    compiles undefined behaviour without a check (`atomic_ub_misaligned`,
+    `atomic_ub_uaf`, `volatile_ub_misaligned`, `volatile_ub_uaf`,
+    `raw_ub_misaligned_repr_c_field`, `…_field_store`).
+  - Every move is on the five lanes' rows or is74's, toward agreement,
+    a completeness note, or that UB class. Four checked files and three
+    native moved below the ledger (fail-pinned rows whose lupin answer
+    moved to the pinned code, and `atomic_counter` on checked).
 
 ### The byte surface: bytes on descriptors 0, 1 and 2, the byte scan, the copy the host makes, and the host's number (s200, #405, #411, #417, #407)
 
@@ -242,33 +357,6 @@ refuses an undeclared capability, and refuses when it cannot read the
 code. A directory of standalone entries (`//! member: false`) is
 audited entry by entry. `wolf tree` is unchanged. Witnesses:
 `crates/wolf_driver/tests/cap_reach.rs`.
-
-### Read this before you bump the pin
-
-**Packages that built are now refused (s217).** A package whose own
-files call a host builtin in the fs, net, env or exec family, or that
-imports a std module whose code does (`std.process` → `exec`, `std.os`
-→ `env`), must declare the capability. The fix is the word in
-`capabilities: [ … ]`; the E1504 names it. The census at wolf-std
-`2f389a7`, boreutils `2f15585`, lobo `9167cb5`, pax `94364ad`, pelt
-`f0014da` and the book `d0213d0` found **no build that changes**: only
-lobo, pax's kernel and the book's `samples/pkg` have a manifest beside
-the files they build, and none of them reaches an undeclared capability.
-
-**`wolf audit` prints more.** Under `effective:` there is now a reason
-line per capability, so a transcript with a non-empty set gains lines.
-The book has five: `pkg/acquired` in ch24 (two), solutions.md and
-exercises ch24 (`net: regex — declared (nothing in its code reaches
-it)`), and appendix E's `pkg/promote` (`` fs: local/tally (root) —
-declared; calls `fs_write_text` … ``). Transcripts with `effective: []`
-are byte-identical.
-
-**`wolf audit --ci` refuses where it passed.** It fails on an undeclared
-capability with no build, and on a manifest whose directory holds no
-wolf source. lobo is that case: `wolf.pkg` sits at the repository root
-and the program builds from `./src/main.lu`, so the manifest governs no
-build. Nothing in lobo runs `wolf audit` today. If lobo's manifest did
-govern `src/`, it would need `capabilities: [env, exec, fs, net]`.
 
 ## 0.2.25 — 2026-10-07
 
