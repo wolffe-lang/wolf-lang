@@ -1449,6 +1449,8 @@ mod builtin_cap_tests {
             ("read_text", Cap::Fs),
             ("fs_read_text", Cap::Fs),
             ("fs_read_at", Cap::Fs),
+            ("fs_lstat", Cap::Fs),
+            ("fs_read_dir_entries", Cap::Fs),
             ("net_fetch", Cap::Net),
             ("net_nodelay", Cap::Net),
             ("env_var", Cap::Env),
