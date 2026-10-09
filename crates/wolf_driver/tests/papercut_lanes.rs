@@ -328,7 +328,6 @@ fn agree(row: &str, want: Want<'_>, pins: &[Pin<'_>]) {
 /// commit.
 const NO_PIN: &[Pin<'static>] = &[];
 
-
 /// `[mem.static.4]` (#579): `limits.WIDTH` is the `const`'s value and
 /// `limits.WIDTH` of a `pub let` its data — lupin already ran both.
 #[test]
@@ -362,11 +361,7 @@ fn a_pub_var_through_its_module_name_is_raw_tier() {
 /// `u64` at offset 2 (defined: the struct's alignment is 1).
 #[test]
 fn a_field_of_a_raw_element_is_stored_in_place() {
-    agree(
-        "memory/raw_field_store.lu",
-        runs("1 7 0 5\n"),
-        NO_PIN,
-    );
+    agree("memory/raw_field_store.lu", runs("1 7 0 5\n"), NO_PIN);
     agree(
         "memory/raw_field_store_compound.lu",
         runs("3 42 0 -9\n"),
@@ -421,16 +416,8 @@ fn bang_on_an_integer_is_its_complement() {
         runs("-6 127 0 -256 -1 -128\n"),
         NO_PIN,
     );
-    agree(
-        "typecheck/int_not_byte.lu",
-        runs("-16 240 255\n"),
-        NO_PIN,
-    );
-    agree(
-        "typecheck/int_not_float.lu",
-        E0409,
-        NO_PIN,
-    );
+    agree("typecheck/int_not_byte.lu", runs("-16 240 255\n"), NO_PIN);
+    agree("typecheck/int_not_float.lu", E0409, NO_PIN);
 }
 
 /// `[type.fn.never]` (#572, ruling #50 = A): a call to a `-> never` fn is
@@ -439,11 +426,7 @@ fn bang_on_an_integer_is_its_complement() {
 /// handler; a reachable end or a `return` is E0401.
 #[test]
 fn a_call_to_a_never_fn_is_bottom() {
-    agree(
-        "typecheck/fn_never_handler_arm.lu",
-        runs("1\n"),
-        NO_PIN,
-    );
+    agree("typecheck/fn_never_handler_arm.lu", runs("1\n"), NO_PIN);
     agree(
         "typecheck/fn_never_trap.lu",
         Want {
@@ -456,14 +439,6 @@ fn a_call_to_a_never_fn_is_bottom() {
         NO_PIN,
     );
     agree("typecheck/fn_never_extern.lu", runs("2\n"), &[]);
-    agree(
-        "typecheck/fn_never_reaches_end.lu",
-        E0401,
-        NO_PIN,
-    );
-    agree(
-        "typecheck/fn_never_return.lu",
-        E0401,
-        NO_PIN,
-    );
+    agree("typecheck/fn_never_reaches_end.lu", E0401, NO_PIN);
+    agree("typecheck/fn_never_return.lu", E0401, NO_PIN);
 }
