@@ -849,6 +849,291 @@ pub unsafe extern "C" fn __wolf_rt_fs_fstat(fd: i64, out: i64) -> i64 {
     fs_code::OK
 }
 
+// -------- s218: the full stat record, lstat, readlink, entries --
+//
+// wolf-lang#625 and #626 (`[os.fs.stat]`, `[os.fs.readlink]`,
+// `[os.fs.readdir]`): `ls -l` needs what a link IS, not what it points
+// at, and the rest of the host's stat — mode bits, link count, owner and
+// group, blocks, the file's identity (#536) and its three or four times
+// to the nanosecond. One host call per answer: `stat`/`lstat` is one
+// `metadata`/`symlink_metadata`, the listing is one directory read with
+// each entry's type taken from the entry where the host hands it over.
+
+/// The `kind` words of the record (`[os.fs.stat]`). 0, 1 and 2 are
+/// `fs_fstat`'s own (file, directory, anything else), so the record's
+/// first three words read like `fs_fstat`'s answer; 3..7 split "anything
+/// else" where the host can tell.
+pub mod stat_kind {
+    pub const FILE: i64 = 0;
+    pub const DIR: i64 = 1;
+    /// Anything the host does not name below — and, in a listing, an
+    /// entry whose type the host did not hand over.
+    pub const OTHER: i64 = 2;
+    pub const LINK: i64 = 3;
+    pub const FIFO: i64 = 4;
+    pub const SOCKET: i64 = 5;
+    pub const CHAR_DEVICE: i64 = 6;
+    pub const BLOCK_DEVICE: i64 = 7;
+}
+
+/// The record's words, by index (`[os.fs.stat]`).
+pub mod stat_word {
+    pub const KIND: usize = 0;
+    pub const SIZE: usize = 1;
+    pub const MODIFIED_MS: usize = 2;
+    /// Bit `i` set when word `i` was answered by the host; a word whose
+    /// bit is clear is 0 and is the host's refusal, by name.
+    pub const HAVE: usize = 3;
+    pub const MODE: usize = 4;
+    pub const NLINK: usize = 5;
+    pub const UID: usize = 6;
+    pub const GID: usize = 7;
+    pub const BLOCKS: usize = 8;
+    pub const DEV: usize = 9;
+    pub const INO: usize = 10;
+    pub const RDEV: usize = 11;
+    pub const ATIME_S: usize = 12;
+    pub const ATIME_NS: usize = 13;
+    pub const MTIME_S: usize = 14;
+    pub const MTIME_NS: usize = 15;
+    pub const CTIME_S: usize = 16;
+    pub const CTIME_NS: usize = 17;
+    pub const BTIME_S: usize = 18;
+    pub const BTIME_NS: usize = 19;
+    /// The record's length.
+    pub const WORDS: usize = 20;
+}
+
+/// The record's kind for a host file type.
+fn stat_kind_of(ft: std::fs::FileType) -> i64 {
+    if ft.is_symlink() {
+        return stat_kind::LINK;
+    }
+    if ft.is_dir() {
+        return stat_kind::DIR;
+    }
+    if ft.is_file() {
+        return stat_kind::FILE;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::FileTypeExt as _;
+        if ft.is_fifo() {
+            return stat_kind::FIFO;
+        }
+        if ft.is_socket() {
+            return stat_kind::SOCKET;
+        }
+        if ft.is_char_device() {
+            return stat_kind::CHAR_DEVICE;
+        }
+        if ft.is_block_device() {
+            return stat_kind::BLOCK_DEVICE;
+        }
+    }
+    stat_kind::OTHER
+}
+
+/// A `SystemTime` as whole seconds from the Unix epoch (floored, so
+/// negative before it) and nanoseconds `0..1_000_000_000` — POSIX's
+/// `timespec`. `None` when the seconds do not fit an `i64`.
+fn split_time(t: SystemTime) -> Option<(i64, i64)> {
+    match t.duration_since(UNIX_EPOCH) {
+        Ok(d) => Some((
+            i64::try_from(d.as_secs()).ok()?,
+            i64::from(d.subsec_nanos()),
+        )),
+        Err(before) => {
+            let d = before.duration();
+            let s = i64::try_from(d.as_secs()).ok()?;
+            let ns = i64::from(d.subsec_nanos());
+            if ns == 0 {
+                Some((-s, 0))
+            } else {
+                Some((-s - 1, 1_000_000_000 - ns))
+            }
+        }
+    }
+}
+
+/// The 20-word record for one metadata answer (`[os.fs.stat]`), or
+/// `None` for the family's `io`: a size or a modification time outside
+/// `i64` (`fs_size`'s and `fs_modified_ms`'s rule).
+///
+/// unix (linux, macOS, freebsd) answers every word from the one `stat`
+/// the host made, the birth time where the host reports one (linux:
+/// where `statx` carries it). windows answers the kind, size and the
+/// access, modification and creation times, and refuses the rest by
+/// name: their `have` bits stay clear.
+pub(crate) fn stat_record(md: &std::fs::Metadata) -> Option<[i64; stat_word::WORDS]> {
+    use stat_word as w;
+    let mut r = [0i64; w::WORDS];
+    let mut have: i64 = 0;
+    let mut set = |r: &mut [i64; w::WORDS], i: usize, v: i64| {
+        r[i] = v;
+        have |= 1 << i;
+    };
+    set(&mut r, w::KIND, stat_kind_of(md.file_type()));
+    set(&mut r, w::SIZE, i64::try_from(md.len()).ok()?);
+    set(
+        &mut r,
+        w::MODIFIED_MS,
+        md.modified().ok().and_then(unix_ms)?,
+    );
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt as _;
+        set(&mut r, w::MODE, i64::from(md.mode() & 0o7777));
+        // The host's unsigned words keep their 64 bits (a device or an
+        // inode number is an identity to compare, never to order).
+        set(&mut r, w::NLINK, md.nlink() as i64);
+        set(&mut r, w::UID, i64::from(md.uid()));
+        set(&mut r, w::GID, i64::from(md.gid()));
+        set(&mut r, w::BLOCKS, md.blocks() as i64);
+        set(&mut r, w::DEV, md.dev() as i64);
+        set(&mut r, w::INO, md.ino() as i64);
+        set(&mut r, w::RDEV, md.rdev() as i64);
+        set(&mut r, w::ATIME_S, md.atime());
+        set(&mut r, w::ATIME_NS, md.atime_nsec());
+        set(&mut r, w::MTIME_S, md.mtime());
+        set(&mut r, w::MTIME_NS, md.mtime_nsec());
+        set(&mut r, w::CTIME_S, md.ctime());
+        set(&mut r, w::CTIME_NS, md.ctime_nsec());
+    }
+    #[cfg(not(unix))]
+    {
+        if let Some((s, ns)) = md.accessed().ok().and_then(split_time) {
+            set(&mut r, w::ATIME_S, s);
+            set(&mut r, w::ATIME_NS, ns);
+        }
+        if let Some((s, ns)) = md.modified().ok().and_then(split_time) {
+            set(&mut r, w::MTIME_S, s);
+            set(&mut r, w::MTIME_NS, ns);
+        }
+    }
+    if let Some((s, ns)) = md.created().ok().and_then(split_time) {
+        set(&mut r, w::BTIME_S, s);
+        set(&mut r, w::BTIME_NS, ns);
+    }
+    r[w::HAVE] = have | (1 << w::HAVE);
+    Some(r)
+}
+
+/// `fs_stat(path)` (follow = 1) / `fs_lstat(path)` (follow = 0)
+/// `-> List[int] ! {not_found, denied, io}` — the 20-word record
+/// ([`stat_record`]) from ONE host call: `stat` follows a final symbolic
+/// link, `lstat` answers the link itself (`kind` 3, its own size and
+/// times). A dangling link is `not_found` to `fs_stat` and a record to
+/// `fs_lstat`.
+///
+/// # Safety
+///
+/// A valid str pair; `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_fs_stat_record(pp: i64, pl: i64, follow: i64, out: i64) -> i64 {
+    os_error_clear();
+    let path = unsafe { view(pp, pl) };
+    let md = if follow == 0 {
+        std::fs::symlink_metadata(path)
+    } else {
+        std::fs::metadata(path)
+    };
+    let md = match md {
+        Err(e) => return code_of(&e),
+        Ok(m) => m,
+    };
+    let Some(rec) = stat_record(&md) else {
+        return fs_code::IO;
+    };
+    let hdr = new_list(8);
+    for w in rec {
+        push_int(hdr, w);
+    }
+    unsafe { write_word(out, hdr as i64) };
+    fs_code::OK
+}
+
+/// Whether a `readlink` failure says "this is not a link": `EINVAL` on
+/// unix, `ERROR_NOT_A_REPARSE_POINT` (4390) on windows.
+fn not_a_link(e: &std::io::Error) -> bool {
+    e.kind() == std::io::ErrorKind::InvalidInput
+        || (cfg!(windows) && e.raw_os_error() == Some(4390))
+}
+
+/// `fs_read_link(path) -> List[byte] ! {not_found, denied, invalid, io}`
+/// (`[os.fs.readlink]`) — the link's target as the host stored it, its
+/// bytes verbatim (a target is a name, and a name need not be UTF-8;
+/// windows hands over WTF-8). A path that is not a link is `invalid`.
+///
+/// # Safety
+///
+/// A valid str pair; `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_fs_read_link(pp: i64, pl: i64, out: i64) -> i64 {
+    os_error_clear();
+    let path = unsafe { view(pp, pl) };
+    match std::fs::read_link(path) {
+        Err(e) if not_a_link(&e) => {
+            os_error_record(&e);
+            fs_code::INVALID
+        }
+        Err(e) => code_of(&e),
+        Ok(target) => {
+            unsafe { write_bytes_list(out, target.as_os_str().as_encoded_bytes()) };
+            fs_code::OK
+        }
+    }
+}
+
+/// `fs_read_dir_entries(path) -> List[List[byte]] ! {not_found, denied,
+/// io}` (`[os.fs.readdir]`) — the directory's entries in the order the
+/// host hands them over (no sort), without `.` and `..`; each entry one
+/// `List[byte]`: byte 0 its kind ([`stat_kind`]; [`stat_kind::OTHER`]
+/// when the host gives none), then the name's bytes verbatim. A name
+/// that is not UTF-8 is listed like any other.
+///
+/// The kind is the entry's OWN (a link is `kind` 3, never its target's),
+/// read from the directory entry where the host carries one (`d_type`);
+/// where it carries none the host's `lstat` answers, which is std's
+/// `DirEntry::file_type` posture; an entry that vanished between the read
+/// and that question is [`stat_kind::OTHER`], not a failed listing.
+///
+/// # Safety
+///
+/// A valid str pair; `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_fs_read_dir_entries(pp: i64, pl: i64, out: i64) -> i64 {
+    os_error_clear();
+    let path = unsafe { view(pp, pl) };
+    let entries = match std::fs::read_dir(path) {
+        Err(e) => return code_of(&e),
+        Ok(rd) => rd,
+    };
+    let mut rows: Vec<Vec<u8>> = Vec::new();
+    for entry in entries {
+        let e = match entry {
+            Err(e) => return code_of(&e),
+            Ok(e) => e,
+        };
+        let kind = e.file_type().map_or(stat_kind::OTHER, stat_kind_of);
+        let name = e.file_name();
+        let bytes = name.as_encoded_bytes();
+        let mut row = Vec::with_capacity(bytes.len() + 1);
+        row.push(kind as u8);
+        row.extend_from_slice(bytes);
+        rows.push(row);
+    }
+    // The fd-free part done, the list is minted (allocation is the
+    // ambient region's business).
+    let hdr = new_list(8);
+    for row in &rows {
+        let inner = crate::list::from_bytes(row) as i64;
+        crate::list::push_raw(hdr, (&raw const inner).cast());
+    }
+    unsafe { write_word(out, hdr as i64) };
+    fs_code::OK
+}
+
 // ---------- s199: offsets and the standard streams (#426, #424) --
 
 /// Descriptors 0, 1 and 2 — the standard streams the process was
@@ -2361,5 +2646,188 @@ mod tests {
         assert_eq!(std::fs::read(&b).unwrap(), b"rung zero\nthrough a pipe\n");
         assert_eq!(std::fs::read(&c).unwrap(), b"rung zero\n");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// s218 (#625, `[os.fs.stat]`): the record of a regular file — 20
+    /// words, the first three `fs_fstat`'s, every unix word answered and
+    /// agreeing with std's own metadata; `fs_stat` and `fs_lstat` agree
+    /// on a file that is not a link; a missing path is `not_found`.
+    #[test]
+    fn stat_record_of_a_file() {
+        let dir = scratch("stat_record");
+        let f = dir.join("f.bin");
+        std::fs::write(&f, b"12345").unwrap();
+        let fs_ = f.display().to_string();
+        let (fp, fl) = pair_of(&fs_);
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        unsafe {
+            assert_eq!(__wolf_rt_fs_stat_record(fp, fl, 1, o), fs_code::OK);
+            let st = crate::list::i64_elems(out[0]).expect("List[int]").to_vec();
+            assert_eq!(st.len(), stat_word::WORDS);
+            assert_eq!(st[stat_word::KIND], stat_kind::FILE);
+            assert_eq!(st[stat_word::SIZE], 5);
+            assert_eq!(__wolf_rt_fs_stat_record(fp, fl, 0, o), fs_code::OK);
+            let lst = crate::list::i64_elems(out[0]).expect("List[int]").to_vec();
+            assert_eq!(st, lst, "a file that is not a link: stat == lstat");
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::MetadataExt as _;
+                let md = std::fs::metadata(&f).unwrap();
+                let have = st[stat_word::HAVE];
+                for i in 0..18 {
+                    assert!(have & (1 << i) != 0, "unix answers word {i}");
+                }
+                assert_eq!(st[stat_word::MODE], i64::from(md.mode() & 0o7777));
+                assert_eq!(st[stat_word::NLINK], md.nlink() as i64);
+                assert_eq!(st[stat_word::UID], i64::from(md.uid()));
+                assert_eq!(st[stat_word::GID], i64::from(md.gid()));
+                assert_eq!(st[stat_word::BLOCKS], md.blocks() as i64);
+                assert_eq!(st[stat_word::DEV], md.dev() as i64);
+                assert_eq!(st[stat_word::INO], md.ino() as i64);
+                assert_eq!(st[stat_word::MTIME_S], md.mtime());
+                assert_eq!(st[stat_word::MTIME_NS], md.mtime_nsec());
+                assert_eq!(st[stat_word::CTIME_S], md.ctime());
+                assert_eq!(
+                    st[stat_word::MODIFIED_MS],
+                    md.mtime() * 1000 + md.mtime_nsec() / 1_000_000
+                );
+            }
+            #[cfg(windows)]
+            {
+                let have = st[stat_word::HAVE];
+                for i in [
+                    stat_word::MODE,
+                    stat_word::UID,
+                    stat_word::INO,
+                    stat_word::CTIME_S,
+                ] {
+                    assert_eq!(have & (1 << i), 0, "windows refuses word {i} by name");
+                    assert_eq!(st[i], 0);
+                }
+                assert!(have & (1 << stat_word::MTIME_S) != 0);
+            }
+            let m = dir.join("missing").display().to_string();
+            let (mp, ml) = pair_of(&m);
+            assert_eq!(__wolf_rt_fs_stat_record(mp, ml, 1, o), fs_code::NOT_FOUND);
+            assert_eq!(__wolf_rt_fs_stat_record(mp, ml, 0, o), fs_code::NOT_FOUND);
+            assert_eq!(
+                __wolf_rt_fs_read_link(fp, fl, o),
+                fs_code::INVALID,
+                "not a link"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// s218 (#625): a link and its target — `fs_lstat` answers the link
+    /// (kind 3, its own size: the target's length in bytes), `fs_stat`
+    /// the target; a dangling link is `not_found` to `fs_stat` and a
+    /// record to `fs_lstat`; `fs_read_link` hands the target's bytes
+    /// back verbatim.
+    #[cfg(unix)]
+    #[test]
+    fn lstat_sees_the_link_and_stat_its_target() {
+        let dir = scratch("lstat");
+        std::fs::write(dir.join("a"), b"12345").unwrap();
+        std::os::unix::fs::symlink("a", dir.join("ln")).unwrap();
+        std::os::unix::fs::symlink("nope", dir.join("dangling")).unwrap();
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        let words =
+            |o: &[i64; 1]| unsafe { crate::list::i64_elems(o[0]).expect("List[int]").to_vec() };
+        let ln = dir.join("ln").display().to_string();
+        let (lp, ll) = pair_of(&ln);
+        let dg = dir.join("dangling").display().to_string();
+        let (dp, dl) = pair_of(&dg);
+        unsafe {
+            assert_eq!(__wolf_rt_fs_stat_record(lp, ll, 0, o), fs_code::OK);
+            let l = words(&out);
+            assert_eq!(
+                (l[stat_word::KIND], l[stat_word::SIZE]),
+                (stat_kind::LINK, 1)
+            );
+            assert_eq!(__wolf_rt_fs_stat_record(lp, ll, 1, o), fs_code::OK);
+            let t = words(&out);
+            assert_eq!(
+                (t[stat_word::KIND], t[stat_word::SIZE]),
+                (stat_kind::FILE, 5)
+            );
+            assert_ne!(l[stat_word::INO], t[stat_word::INO], "two inodes");
+            assert_eq!(__wolf_rt_fs_stat_record(dp, dl, 1, o), fs_code::NOT_FOUND);
+            assert_eq!(__wolf_rt_fs_stat_record(dp, dl, 0, o), fs_code::OK);
+            let d = words(&out);
+            assert_eq!(
+                (d[stat_word::KIND], d[stat_word::SIZE]),
+                (stat_kind::LINK, 4)
+            );
+            assert_eq!(__wolf_rt_fs_read_link(lp, ll, o), fs_code::OK);
+            assert_eq!(crate::list::u8_elems(out[0]).expect("List[byte]"), b"a");
+            assert_eq!(__wolf_rt_fs_read_link(dp, dl, o), fs_code::OK);
+            assert_eq!(crate::list::u8_elems(out[0]).expect("List[byte]"), b"nope");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// s218 (#626, `[os.fs.readdir]`): the listing is the directory's —
+    /// no `.`/`..`, every entry with its own kind (a link is 3), and the
+    /// name's bytes verbatim, a non-UTF-8 name included (linux: macOS
+    /// filesystems refuse to create one).
+    #[cfg(unix)]
+    #[test]
+    fn entries_carry_kinds_and_bytes() {
+        let dir = scratch("entries");
+        std::fs::create_dir(dir.join("d")).unwrap();
+        std::fs::write(dir.join("a"), b"x").unwrap();
+        std::os::unix::fs::symlink("a", dir.join("ln")).unwrap();
+        let mut want: Vec<(i64, Vec<u8>)> = vec![
+            (stat_kind::DIR, b"d".to_vec()),
+            (stat_kind::FILE, b"a".to_vec()),
+            (stat_kind::LINK, b"ln".to_vec()),
+        ];
+        if cfg!(target_os = "linux") {
+            use std::os::unix::ffi::OsStrExt as _;
+            let bad = std::ffi::OsStr::from_bytes(b"bad\xff");
+            std::fs::write(dir.join(bad), b"").unwrap();
+            want.push((stat_kind::FILE, b"bad\xff".to_vec()));
+        }
+        let d = dir.display().to_string();
+        let (pp, pl) = pair_of(&d);
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        unsafe {
+            assert_eq!(__wolf_rt_fs_read_dir_entries(pp, pl, o), fs_code::OK);
+            let heads = crate::list::i64_elems(out[0])
+                .expect("List[List[byte]]")
+                .to_vec();
+            let mut got: Vec<(i64, Vec<u8>)> = heads
+                .iter()
+                .map(|&h| {
+                    let b = crate::list::u8_elems(h).expect("List[byte]");
+                    (i64::from(b[0]), b[1..].to_vec())
+                })
+                .collect();
+            // The host's order is the answer; the SET is what this test pins.
+            got.sort();
+            want.sort();
+            assert_eq!(got, want);
+            let m = dir.join("missing").display().to_string();
+            let (mp, ml) = pair_of(&m);
+            assert_eq!(__wolf_rt_fs_read_dir_entries(mp, ml, o), fs_code::NOT_FOUND);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// s218: `split_time` is POSIX's timespec — floored seconds and a
+    /// nanosecond part in `0..1e9`, before the epoch too.
+    #[test]
+    fn split_time_is_a_timespec() {
+        use std::time::Duration;
+        assert_eq!(split_time(UNIX_EPOCH + Duration::new(5, 7)), Some((5, 7)));
+        assert_eq!(
+            split_time(UNIX_EPOCH - Duration::new(0, 1)),
+            Some((-1, 999_999_999))
+        );
+        assert_eq!(split_time(UNIX_EPOCH - Duration::new(2, 0)), Some((-2, 0)));
     }
 }
