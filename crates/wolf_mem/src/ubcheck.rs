@@ -11598,10 +11598,6 @@ mod checked_sig {
     /// `wolf_rt`'s); a terminal or child meaning there is `io`.
     pub(super) fn arm(set: i64) -> Result<(), ()> {
         #[cfg(unix)]
-        if set != 0 {
-            return Ok(());
-        }
-        #[cfg(unix)]
         for i in 0..9 {
             let bit = 1i64 << i;
             if set & bit == 0 {
