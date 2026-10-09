@@ -102,8 +102,22 @@ pub mod meaning {
     pub const QUIT: i64 = 4;
     /// Binary-swap / zero-downtime upgrade (`SIGUSR2`).
     pub const UPGRADE: i64 = 8;
-    /// Every meaning this sprint delivers.
-    pub const ALL: i64 = RELOAD | TERMINATE | QUIT | UPGRADE;
+    /// s219 (wolf-lang#622): the terminal's interrupt character, Ctrl-C
+    /// (`SIGINT`).
+    pub const INTERRUPT: i64 = 16;
+    /// s219: the terminal's suspend character, Ctrl-Z (`SIGTSTP`).
+    pub const SUSPEND: i64 = 32;
+    /// s219: a background process group read the terminal (`SIGTTIN`).
+    pub const BG_READ: i64 = 64;
+    /// s219: a background process group wrote to, or changed, the
+    /// terminal (`SIGTTOU`).
+    pub const BG_WRITE: i64 = 128;
+    /// s219: a child stopped or ended (`SIGCHLD`).
+    pub const CHILD: i64 = 256;
+    /// The s114 four, the meanings windows maps a console event to.
+    pub const V1: i64 = RELOAD | TERMINATE | QUIT | UPGRADE;
+    /// Every meaning there is.
+    pub const ALL: i64 = V1 | INTERRUPT | SUSPEND | BG_READ | BG_WRITE | CHILD;
 }
 
 /// Error codes the WIR lowering keys on (the `os.rs` `proc_code`
@@ -114,15 +128,34 @@ pub mod sig_code {
     pub const OK: i64 = 0;
     /// The one checkable failure row (a bad set, an install failure).
     pub const IO: i64 = 1;
+    /// s219: a disposition this host has no analog for (windows), by
+    /// name — declared by `os_signal_ignore` and `os_signal_default`.
+    pub const UNSUPPORTED: i64 = 2;
 }
 
-/// The four meanings in canonical bit order (iteration helper).
-const MEANINGS: [i64; 4] = [
+/// Every meaning in canonical bit order (iteration helper); a meaning
+/// is `1 << i` for its index `i` here, and the self-pipe carries the
+/// index, so nine meanings fit a byte beside the control bit.
+const MEANINGS: [i64; 9] = [
     meaning::RELOAD,
     meaning::TERMINATE,
     meaning::QUIT,
     meaning::UPGRADE,
+    meaning::INTERRUPT,
+    meaning::SUSPEND,
+    meaning::BG_READ,
+    meaning::BG_WRITE,
+    meaning::CHILD,
 ];
+
+/// What a meaning's signal does to this process (s219,
+/// `[os.signal.disp]`): the host's default action, nothing, or the
+/// trampoline (listen).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Disp {
+    Default,
+    Ignore,
+}
 
 /// The signal hub: the installed-meaning set and the FIFO of delivered
 /// meanings awaiting waiters (plus, on unix, the self-pipe's read end).
@@ -188,8 +221,9 @@ mod sys {
     static READER: Once = Once::new();
 
     /// A self-pipe byte with this bit set is a CONTROL byte, never a
-    /// delivered meaning (meanings are 1/2/4/8): "drain thread, unblock
-    /// the signal of the meaning in the low bits" (wolf-lang#483).
+    /// delivered meaning (a delivery is the meaning's index, 0..8):
+    /// "drain thread, unblock the signal of the meaning whose index is
+    /// in the low bits" (wolf-lang#483; the index since s219).
     pub const CTL_UNBLOCK: u8 = 0x80;
 
     /// The meanings whose signal the drain thread has unblocked on
@@ -248,8 +282,26 @@ mod sys {
             meaning::TERMINATE => Some(libc::SIGTERM),
             meaning::QUIT => Some(libc::SIGQUIT),
             meaning::UPGRADE => Some(libc::SIGUSR2),
+            meaning::INTERRUPT => Some(libc::SIGINT),
+            meaning::SUSPEND => Some(libc::SIGTSTP),
+            meaning::BG_READ => Some(libc::SIGTTIN),
+            meaning::BG_WRITE => Some(libc::SIGTTOU),
+            meaning::CHILD => Some(libc::SIGCHLD),
             _ => None,
         }
+    }
+
+    /// The signal of every meaning in `set`, for a spawn's `defaults`
+    /// (s219): a fixed array the child's hook can walk without
+    /// allocating; unused slots are 0.
+    pub fn signals_of(set: i64) -> [i32; 9] {
+        let mut out = [0i32; 9];
+        for (i, &m) in super::MEANINGS.iter().enumerate() {
+            if set & m != 0 {
+                out[i] = to_signal(m).unwrap_or(0);
+            }
+        }
+        out
     }
 
     /// Map a delivered signal number back to its meaning bit (0 = a
@@ -264,6 +316,16 @@ mod sys {
             meaning::QUIT
         } else if sig == libc::SIGUSR2 {
             meaning::UPGRADE
+        } else if sig == libc::SIGINT {
+            meaning::INTERRUPT
+        } else if sig == libc::SIGTSTP {
+            meaning::SUSPEND
+        } else if sig == libc::SIGTTIN {
+            meaning::BG_READ
+        } else if sig == libc::SIGTTOU {
+            meaning::BG_WRITE
+        } else if sig == libc::SIGCHLD {
+            meaning::CHILD
         } else {
             0
         }
@@ -280,7 +342,9 @@ mod sys {
         if m == 0 {
             return;
         }
-        let byte = m as u8; // meanings 1/2/4/8 fit one byte
+        // The meaning's INDEX (0..8), not its value: 256 does not fit a
+        // byte and 128 is the control bit.
+        let byte = m.trailing_zeros() as u8;
         let fd = SELF_PIPE_W.load(Ordering::Relaxed);
         if fd >= 0 {
             // SAFETY: `write` is async-signal-safe; a single-byte write
@@ -318,9 +382,9 @@ mod sys {
             }
             for &b in &buf[..n as usize] {
                 if b & CTL_UNBLOCK != 0 {
-                    unblock_here(i64::from(b & !CTL_UNBLOCK));
+                    unblock_here(1i64 << (b & !CTL_UNBLOCK));
                 } else {
-                    deliver(h, i64::from(b));
+                    deliver(h, 1i64 << b);
                 }
             }
         }
@@ -363,14 +427,9 @@ mod sys {
         if fd < 0 {
             return;
         }
-        for bit in [
-            meaning::RELOAD,
-            meaning::TERMINATE,
-            meaning::QUIT,
-            meaning::UPGRADE,
-        ] {
+        for bit in super::MEANINGS {
             if missing & bit != 0 {
-                let byte = CTL_UNBLOCK | bit as u8;
+                let byte = CTL_UNBLOCK | bit.trailing_zeros() as u8;
                 // The write end is nonblocking; a full pipe (the drain
                 // thread behind by 64 KiB of deliveries) is retried.
                 loop {
@@ -423,6 +482,29 @@ mod sys {
                 Ok(())
             } else {
                 Err(())
+            }
+        }
+    }
+
+    /// Set the meaning's signal to the host default or to ignored (s219,
+    /// `[os.signal.disp]`) — `sigaction` with `SIG_DFL`/`SIG_IGN`, so a
+    /// child inherits an ignore across `exec` exactly as POSIX says.
+    pub fn set_disp(bit: i64, d: super::Disp) -> i64 {
+        let Some(sig) = to_signal(bit) else {
+            return sig_code::IO;
+        };
+        // SAFETY: a zeroed sigaction with a constant disposition.
+        unsafe {
+            let mut sa: libc::sigaction = std::mem::zeroed();
+            sa.sa_sigaction = match d {
+                super::Disp::Default => libc::SIG_DFL,
+                super::Disp::Ignore => libc::SIG_IGN,
+            };
+            libc::sigemptyset(&mut sa.sa_mask);
+            if libc::sigaction(sig, &sa, std::ptr::null_mut()) == 0 {
+                sig_code::OK
+            } else {
+                sig_code::IO
             }
         }
     }
@@ -507,7 +589,13 @@ mod sys {
     /// Install the one console handler (once, on the first listened
     /// meaning of any kind — RELOAD/UPGRADE included, which only
     /// self-delivery can ever reach here). A failed install is `IO`.
-    pub fn listen_one(_h: &Hub, _bit: i64) -> Result<(), ()> {
+    pub fn listen_one(_h: &Hub, bit: i64) -> Result<(), ()> {
+        // s219: the terminal and child meanings have no console event
+        // behind them — a listen for one is `io`, by name in the clause
+        // (`[os.signal.platform]`).
+        if bit & !meaning::V1 != 0 {
+            return Err(());
+        }
         let mut ok = true;
         HANDLER.call_once(|| {
             // SAFETY: registering a static extern fn with the console.
@@ -538,6 +626,12 @@ mod sys {
             unsafe { ExitProcess(STATUS_CONTROL_C_EXIT) };
         }
         sig_code::OK
+    }
+
+    /// s219: no `SIG_IGN`/`SIG_DFL` on windows — every disposition call
+    /// is `unsupported`, by name (`[os.signal.disp]`).
+    pub fn set_disp(_bit: i64, _d: super::Disp) -> i64 {
+        sig_code::UNSUPPORTED
     }
 }
 
@@ -603,6 +697,58 @@ pub fn wait(mask: i64) -> i64 {
     })
 }
 
+/// `os_signal_ignore(set)` / `os_signal_default(set)` (s219,
+/// `[os.signal.disp]`): every meaning in `set` stops being listened and
+/// its signal is ignored, or does what the host does by default. An
+/// empty set, or one with a bit outside the meanings, is `IO` before
+/// anything changes; windows is `UNSUPPORTED`. Meanings already queued
+/// stay queued for a `wait` or `poll` — they arrived while listened.
+pub fn set_disposition(mask: i64, d: Disp) -> i64 {
+    if mask == 0 || mask & !meaning::ALL != 0 {
+        return sig_code::IO;
+    }
+    for &bit in &MEANINGS {
+        if mask & bit == 0 {
+            continue;
+        }
+        let rc = sys::set_disp(bit, d);
+        if rc != sig_code::OK {
+            return rc;
+        }
+        if let Some(h) = HUB.get() {
+            h.state.lock().unwrap_or_else(|p| p.into_inner()).installed &= !bit;
+        }
+    }
+    sig_code::OK
+}
+
+/// `os_signal_poll(set)` (s219, `[os.signal.poll]`): the oldest queued
+/// meaning in `set`, taken off the queue, or 0 when none has arrived —
+/// never a wait. A program that never listened has nothing queued (and
+/// no hub is built for the question). An empty or all-unmapped set is
+/// `-IO`, as for `wait`.
+pub fn poll(mask: i64) -> i64 {
+    let want = mask & meaning::ALL;
+    if want == 0 {
+        return -sig_code::IO;
+    }
+    let Some(h) = HUB.get() else {
+        return 0;
+    };
+    let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+    match st.queue.iter().position(|&m| m & want != 0) {
+        Some(pos) => st.queue.remove(pos).expect("position just found it"),
+        None => 0,
+    }
+}
+
+/// The signal numbers of the meanings in `set`, for a child's hook
+/// (s219's spawn `defaults`); 0 slots are unused. Empty on windows.
+#[cfg(unix)]
+pub fn signals_of(set: i64) -> [i32; 9] {
+    sys::signals_of(set)
+}
+
 /// `os_signal_raise(meaning)` — send one signal to THIS process (the
 /// self-send companion to `os_kill`'s send-to-child; the deterministic
 /// loopback the witness rides, and a real capability: a program
@@ -634,6 +780,27 @@ pub extern "C" fn __wolf_rt_os_signal_wait(mask: i64) -> i64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_os_signal_raise(m: i64) -> i64 {
     raise(m)
+}
+
+/// `os_signal_ignore(set: int) -> () ! {io, unsupported}` (s219) — 0 ok,
+/// 1 io, 2 unsupported.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_signal_ignore(mask: i64) -> i64 {
+    set_disposition(mask, Disp::Ignore)
+}
+
+/// `os_signal_default(set: int) -> () ! {io, unsupported}` (s219) — 0
+/// ok, 1 io, 2 unsupported.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_signal_default(mask: i64) -> i64 {
+    set_disposition(mask, Disp::Default)
+}
+
+/// `os_signal_poll(set: int) -> int ! {io}` (s219) — the meaning taken
+/// (> 0), 0 for none yet, or `-IO`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_signal_poll(mask: i64) -> i64 {
+    poll(mask)
 }
 
 #[cfg(test)]
@@ -740,5 +907,111 @@ mod tests {
         // Same seed → byte-identical stream (arrival excluded, so it
         // cannot perturb the record).
         assert_eq!(stream(7), stream(7));
+    }
+
+    /// s219: the five new meanings ride the self-pipe by INDEX — BG_WRITE
+    /// (128, the old control bit) and CHILD (256, past a byte) come back
+    /// as themselves, and the trampoline sees SIGINT as INTERRUPT.
+    #[cfg(unix)]
+    #[test]
+    fn new_meanings_round_trip_by_index() {
+        let _g = serial();
+        let set = meaning::INTERRUPT | meaning::BG_WRITE | meaning::CHILD;
+        assert_eq!(listen(set), sig_code::OK);
+        for m in [meaning::INTERRUPT, meaning::BG_WRITE, meaning::CHILD] {
+            assert_eq!(raise(m), sig_code::OK);
+            assert_eq!(wait(m), m, "meaning {m}");
+        }
+        // Leave SIGINT and SIGTTOU as the harness found them.
+        assert_eq!(
+            set_disposition(meaning::INTERRUPT | meaning::BG_WRITE, Disp::Default),
+            sig_code::OK
+        );
+    }
+
+    /// s219 (`[os.signal.poll]`): poll never waits — 0 with nothing
+    /// queued, the meaning once one is, then 0 again; the set filters.
+    #[cfg(unix)]
+    #[test]
+    fn poll_takes_what_arrived_and_never_waits() {
+        let _g = serial();
+        assert_eq!(listen(meaning::SUSPEND | meaning::BG_READ), sig_code::OK);
+        assert_eq!(poll(meaning::SUSPEND), 0);
+        assert_eq!(raise(meaning::BG_READ), sig_code::OK);
+        // Delivery crosses the drain thread: give it up to a second.
+        let mut got = 0;
+        for _ in 0..200 {
+            got = poll(meaning::BG_READ | meaning::SUSPEND);
+            if got != 0 {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert_eq!(got, meaning::BG_READ);
+        assert_eq!(poll(meaning::BG_READ), 0);
+        assert_eq!(poll(0), -sig_code::IO);
+        assert_eq!(
+            set_disposition(meaning::SUSPEND | meaning::BG_READ, Disp::Default),
+            sig_code::OK
+        );
+    }
+
+    /// s219 (`[os.signal.disp]`): an ignored INTERRUPT is not delivered
+    /// (the process lives through its own SIGINT and nothing queues), and
+    /// a child started now inherits the ignore across exec — SigIgn bit
+    /// 1 in its /proc row — while a LISTENED one would come back default.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn ignore_survives_and_is_inherited_listen_is_not() {
+        let _g = serial();
+        let sigint_bit = 1u64 << (libc::SIGINT - 1);
+        let child_ign = || -> u64 {
+            let out = std::process::Command::new("grep")
+                .args(["SigIgn", "/proc/self/status"])
+                .output()
+                .expect("grep runs");
+            let t = String::from_utf8_lossy(&out.stdout);
+            u64::from_str_radix(t.split_whitespace().nth(1).expect("a SigIgn row"), 16)
+                .expect("hex")
+        };
+        assert_eq!(
+            set_disposition(meaning::INTERRUPT, Disp::Ignore),
+            sig_code::OK
+        );
+        assert_eq!(raise(meaning::INTERRUPT), sig_code::OK);
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(
+            poll(meaning::INTERRUPT),
+            0,
+            "an ignored meaning queues nothing"
+        );
+        assert_ne!(
+            child_ign() & sigint_bit,
+            0,
+            "ignored stays ignored across exec"
+        );
+        assert_eq!(listen(meaning::INTERRUPT), sig_code::OK);
+        assert_eq!(
+            child_ign() & sigint_bit,
+            0,
+            "listened becomes default across exec"
+        );
+        assert_eq!(
+            set_disposition(meaning::INTERRUPT, Disp::Default),
+            sig_code::OK
+        );
+    }
+
+    /// s219: a disposition call with an empty set, or a bit outside the
+    /// meanings, changes nothing and is `IO`.
+    #[test]
+    fn disposition_of_a_bad_set_is_io() {
+        let _g = serial();
+        assert_eq!(set_disposition(0, Disp::Ignore), sig_code::IO);
+        assert_eq!(set_disposition(512, Disp::Default), sig_code::IO);
+        assert_eq!(
+            set_disposition(meaning::RELOAD | 1024, Disp::Ignore),
+            sig_code::IO
+        );
     }
 }
