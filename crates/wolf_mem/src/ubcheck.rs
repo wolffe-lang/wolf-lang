@@ -6357,11 +6357,7 @@ impl<'t> Machine<'t> {
                 let Some(path) = path_arg(0) else {
                     return self.refuse("this fs call shape", span);
                 };
-                let md = if name == "fs_lstat" {
-                    std::fs::symlink_metadata(&path)
-                } else {
-                    std::fs::metadata(&path)
-                };
+                let md = std::fs::metadata(&path);
                 let md = match md {
                     Err(e) => return Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
                     Ok(m) => m,

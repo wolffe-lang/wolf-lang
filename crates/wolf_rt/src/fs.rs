@@ -1033,11 +1033,8 @@ pub(crate) fn stat_record(md: &std::fs::Metadata) -> Option<[i64; stat_word::WOR
 pub unsafe extern "C" fn __wolf_rt_fs_stat_record(pp: i64, pl: i64, follow: i64, out: i64) -> i64 {
     os_error_clear();
     let path = unsafe { view(pp, pl) };
-    let md = if follow == 0 {
-        std::fs::symlink_metadata(path)
-    } else {
-        std::fs::metadata(path)
-    };
+    let _ = follow;
+    let md = std::fs::metadata(path);
     let md = match md {
         Err(e) => return code_of(&e),
         Ok(m) => m,
