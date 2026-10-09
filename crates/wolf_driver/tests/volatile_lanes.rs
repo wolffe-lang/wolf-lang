@@ -17,7 +17,10 @@
 //! says. 0.1.46 (the 0.2.23 pairing, r28) is still pre-mirror (#185
 //! open) and answers the same, measured; its pins are carried. So are
 //! 0.1.47 (the 0.2.24 pairing, r29) and 0.1.48 (the 0.2.25 pairing, r30;
-//! #185 still open), measured row by row.
+//! #185 still open), measured row by row. 0.1.49 (the 0.2.26 pairing,
+//! r31) carries is74's mirror: the pins are dropped. Its `ub` record
+//! carries no diagnostic (`[proto.record.verdict]`), so on the UB rows
+//! lupin is held to the verdict, row and clause (wolf-lang#606).
 
 mod lane_exit;
 
@@ -195,6 +198,12 @@ const fn ub<'a>(row: &'a str, clause: &'a str) -> Want<'a> {
     }
 }
 
+/// lupin's answer on a UB row: the same verdict, row and clause, and no
+/// diagnostic — a `ub` record carries none (wolf-lang#606).
+const fn lupin_ub(want: Want<'_>) -> Want<'_> {
+    Want { codes: &[], ..want }
+}
+
 /// lupin's measured answer where it parts (pre-mirror).
 struct Pin<'a> {
     version: &'a str,
@@ -202,31 +211,10 @@ struct Pin<'a> {
     named: &'a str,
 }
 
-/// lupin 0.1.45 has no volatile method: every row is `unsupported`,
-/// by name (measured at trunk and head, `rows-*.log`). 0.1.46 (the
-/// 0.2.23 pairing, r28) answers the same, measured; kept with its issue.
-const PRE_MIRROR: &[Pin<'static>] = &[
-    Pin {
-        version: "0.1.45",
-        verdict: "unsupported",
-        named: "_volatile`",
-    },
-    Pin {
-        version: "0.1.46",
-        verdict: "unsupported",
-        named: "_volatile`",
-    },
-    Pin {
-        version: "0.1.47",
-        verdict: "unsupported",
-        named: "_volatile`",
-    },
-    Pin {
-        version: "0.1.48",
-        verdict: "unsupported",
-        named: "_volatile`",
-    },
-];
+/// lupin 0.1.45 through 0.1.48 had no volatile method: every row was
+/// `unsupported`, by name, measured at each pairing. 0.1.49 (the 0.2.26
+/// pairing, r31) carries is74's mirror (#185): every pin is dropped.
+const PRE_MIRROR: &[Pin<'static>] = &[];
 
 fn assert_obs(who: &str, row: &str, obs: &Obs, want: Want<'_>) {
     assert_eq!(
@@ -350,7 +338,7 @@ fn a_pointee_that_is_not_one_access_is_e1307() {
 #[test]
 fn a_volatile_read_after_free_is_row_p1() {
     let p1 = ub("P1", "mem.prov.state");
-    every_machine("volatile_ub_uaf.lu", p1, None, p1, PRE_MIRROR);
+    every_machine("volatile_ub_uaf.lu", p1, None, lupin_ub(p1), PRE_MIRROR);
 }
 
 /// `[mem.unsafe.volatile.3]`: a misaligned address is row L3, clause
@@ -368,28 +356,7 @@ fn a_misaligned_volatile_read_is_row_l3() {
         "volatile_ub_misaligned.lu",
         l3,
         None,
-        l3,
-        &[
-            Pin {
-                version: "0.1.45",
-                verdict: "unsupported",
-                named: "`with_addr`",
-            },
-            Pin {
-                version: "0.1.46",
-                verdict: "unsupported",
-                named: "`read_volatile`",
-            },
-            Pin {
-                version: "0.1.47",
-                verdict: "unsupported",
-                named: "`read_volatile`",
-            },
-            Pin {
-                version: "0.1.48",
-                verdict: "unsupported",
-                named: "`read_volatile`",
-            },
-        ],
+        lupin_ub(l3),
+        PRE_MIRROR,
     );
 }
