@@ -1,0 +1,32 @@
+//! check: run(exit=0, stdout="-56 -6 -6 -1294967296 2147483647 9223372036854775807 -128 -9223372036854775808\ntrue true true true true true\n88 -38 -6 -56 -6 -1294967296 -28 55\n-56 -6 -1294967296\n")
+//! phase: run
+//! conforms: type.interp.value, type.numlit.cast.narrow
+//!
+//! s220 (wolf-lang#553, #602): a negative signed `wrapping[iN]` holds a
+//! negative value at every width — printed, ordered, multiplied, in hex,
+//! cast to `int`, shifted, complemented and built into a `str`. At 0.2.25
+//! the checked machine held the 8-, 16- and 32-bit results as their
+//! unsigned masks: `200 as wrapping[i8]` printed `200`, `5 - 11` at
+//! `wrapping[i16]` printed `65530`, and both ordered above zero.
+
+fn main() {
+    let d8: int = 200
+    let a = d8 as wrapping[i8]
+    let b = 5 as wrapping[i16]
+    let c = b - 11 as wrapping[i16]
+    let x = b ^ -1 as wrapping[i16]
+    let d32: int = 3000000000
+    let w32 = d32 as wrapping[i32]
+    let n32: int = -2147483648
+    let n64: int = -9223372036854775808
+    let m32 = n32 as wrapping[i32]
+    let m64 = n64 as wrapping[i64]
+    let p8 = 127 as wrapping[i8]
+    let x64: int = 9223372036854775807
+    let p64 = x64 as wrapping[i64]
+    print("{a} {c} {x} {w32} {m32 - 1} {m64 - 1} {p8 + 1} {p64 + 1}")
+    print("{a < 0} {c < 0} {w32 < 0} {(m32 - 1) > 0} {p8 + 1 < 0} {p64 + 1 < 0}")
+    print("{a * 3} {a:x} {c:x} {a as int} {c as int} {w32 as int} {a >> 1} {!a}")
+    let s = "{a} {c} {w32}"
+    print(s)
+}

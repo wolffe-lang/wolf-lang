@@ -1,0 +1,13 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.wrap.div
+//!
+//! s220 (`[type.wrap.div]`): `-x` on a plain `u8` is `0 - x` in `u8` and
+//! traps overflow, as lupin always has. At 0.2.25 native and release
+//! printed 251 and the checked machine -5.
+
+fn main() {
+    let x: u8 = 5
+    let n = -x
+    print("{n}")
+}

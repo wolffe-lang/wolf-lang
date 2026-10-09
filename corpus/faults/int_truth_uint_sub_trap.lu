@@ -1,0 +1,13 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.numlit.value
+//!
+//! s220: `0 - 1` at `uint` traps overflow on every machine (the bottom
+//! of the unsigned range, beside `int_truth_u64_add_trap`'s top).
+
+fn main() {
+    let z: uint = 0
+    let one: uint = 1
+    let x = z - one
+    print("{x}")
+}

@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="18446744073709551615 18446744073709547520 0 18446744073709551614\n")
+//! phase: run
+//! conforms: type.int.not, type.interp.value
+//!
+//! s220 (wolf-lang#551): `!` on a `u64`/`uint` lands in the upper half
+//! — the page-mask idiom `n & !k`. The checked machine refused it by name
+//! until s220; native and release printed it signed.
+
+fn main() {
+    let z: u64 = 0
+    let n = !z
+    let k: u64 = 4095
+    let page = n & !k
+    let u: uint = 1
+    print("{n} {page} {!n} {!u}")
+}

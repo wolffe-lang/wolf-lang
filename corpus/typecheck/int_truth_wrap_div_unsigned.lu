@@ -1,0 +1,23 @@
+//! check: run(exit=0, stdout="25 5 6553 5 429496729 5\n1844674407370955161 5 3074457345618258602 2 1 9223372036854775807\n1152921504606846975 295\n")
+//! phase: run
+//! conforms: type.wrap.div
+//!
+//! s220 (wolf-lang#538, `[type.wrap.div]`): unsigned wrapping `/` and `%`
+//! at every width divide the values, `/=` and `%=` included. At 0.2.25
+//! native and release refused them ("no idiv.wrap op") and the checked
+//! machine divided a `wrapping[u64]` as signed (`u64::MAX / 10` was 0).
+
+fn main() {
+    let a: wrapping[u8] = 255
+    let b: wrapping[u16] = 65535
+    let c: wrapping[u32] = 4294967295
+    let d: wrapping[u64] = 18446744073709551615
+    let e: wrapping[u64] = 9223372036854775808
+    print("{a / 10} {a % 10} {b / 10} {b % 10} {c / 10} {c % 10}")
+    print("{d / 10} {d % 10} {e / 3} {e % 3} {d / e} {d % e}")
+    var acc: wrapping[u64] = 18446744073709551615
+    acc /= 16
+    var rem: wrapping[u32] = 4294967295
+    rem %= 1000
+    print("{acc} {rem}")
+}

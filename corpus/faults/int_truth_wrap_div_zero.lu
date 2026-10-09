@@ -1,0 +1,14 @@
+//! check: run(exit=trap(div-zero))
+//! phase: run
+//! conforms: type.wrap.div
+//!
+//! s220 (`[type.wrap.div]`): a zero divisor traps `div-zero` at a
+//! wrapping type too. Native and release refused the division at 0.2.25;
+//! the checked machine and lupin trapped.
+
+fn main() {
+    let d: wrapping[u64] = 18446744073709551615
+    let z: wrapping[u64] = 0
+    let q = d / z
+    print("{q}")
+}

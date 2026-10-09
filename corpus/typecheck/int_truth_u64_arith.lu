@@ -1,0 +1,26 @@
+//! check: run(exit=0, stdout="9223372036854775808 18446744073709551615 1844674407370955161 5 18446744069414584320 18446744073709551615\ntrue false true 9223372036854775807 18374686479671623680 9223372036854775807 9223372036854775809\n")
+//! phase: run
+//! conforms: type.interp.value, type.numlit.value
+//!
+//! s220 (wolf-lang#551): `u64`/`uint` arithmetic in range above
+//! `i64::MAX` — `+`, `-`, `*`, `/`, `%`, `+=`, the bitwise operators and
+//! the orderings. At 0.2.25 the checked machine trapped `i64::MAX + 1`
+//! (its `u64` was `0..=i64::MAX`) and native and release printed every
+//! upper-half result signed.
+
+fn main() {
+    let v: u64 = 9223372036854775807
+    let w = v + 1
+    let m = w - 1 + w
+    let q = m / 10
+    let r = m % 10
+    let k: uint = 4294967296
+    let p = k * 4294967295
+    var acc: u64 = 18446744073709551000
+    acc += 615
+    let big = w > v
+    let lt = m < 1
+    let ge = p >= 9223372036854775808
+    print("{w} {m} {q} {r} {p} {acc}")
+    print("{big} {lt} {ge} {m - w} {m & 0xff00000000000000} {m ^ w} {w | 1}")
+}

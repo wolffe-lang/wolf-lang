@@ -1,0 +1,19 @@
+//! check: run(exit=0, stdout="3596837031075064250 4 0 1\n")
+//! phase: run
+//! conforms: type.interp.value
+//!
+//! s220: a `wrapping[u64]` product whose exact value passes 2^127 keeps
+//! its low 64 bits like any other — `(2^64 - 2)^2` is 4 at the width.
+//! Found by s220's sweep: lupin 0.1.49 multiplies in `i128` and trapped
+//! `overflow` on these products (fixed beside s220 in wolf-interp); the
+//! compiler machines wrap them in hardware.
+
+fn main() {
+    let a: wrapping[u64] = 18446744073709551614
+    let b: wrapping[u64] = 16648325558172019491
+    let m: int = -9223372036854775808
+    let c = m as wrapping[i64]
+    var acc: wrapping[u64] = 18446744073709551615
+    acc *= 18446744073709551615
+    print("{a * b} {a * a} {c * c} {acc}")
+}

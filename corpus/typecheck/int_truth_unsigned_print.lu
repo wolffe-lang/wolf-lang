@@ -1,0 +1,23 @@
+//! check: run(exit=0, stdout="255 65535 4294967295 18446744073709551615 18446744073709551615 9223372036854775808 0\nffffffffffffffff FFFFFFFFFFFFFFFF   9223372036854775808|11111111111111111111111111111111|18446744073709551615 18446744073709551615\n")
+//! phase: run
+//! conforms: type.interp.value, type.interp.spec
+//!
+//! s220 (wolf-lang#551, #538): an integer hole prints the value its
+//! type holds. `u8`..`u64` and `uint` at their maxima, `2^63` and zero,
+//! bare, under a radix and a width spec, and built into a `str`. At
+//! 0.2.25 native and release printed `u64::MAX` as `-1` and `2^63` as
+//! `-9223372036854775808` in every spec-less hole (the spec path was
+//! already unsigned), and the checked machine refused the literal.
+
+fn main() {
+    let a: u8 = 255
+    let b: u16 = 65535
+    let c: u32 = 4294967295
+    let d: u64 = 18446744073709551615
+    let e: uint = 18446744073709551615
+    let f: u64 = 9223372036854775808
+    let z: u64 = 0
+    let s = "{d} {e}"
+    print("{a} {b} {c} {d} {e} {f} {z}")
+    print("{d:x} {e:X} {f:>21}|{c:b}|{s}")
+}

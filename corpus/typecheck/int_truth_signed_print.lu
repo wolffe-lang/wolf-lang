@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="-128 127 -32768 32767 -2147483648 2147483647\n-9223372036854775808 9223372036854775807 -9223372036854775808 9223372036854775807 -9223372036854775808 9223372036854775807 -80  -9223372036854775808\n")
+//! phase: run
+//! conforms: type.interp.value, type.interp.spec
+//!
+//! s220: the control beside `int_truth_unsigned_print` — every signed
+//! width at its minimum and maximum, both signs, bare, in hex and under a
+//! width, and built into a `str`. All four machines agreed on it at
+//! 0.2.25; it pins that the unsigned fix moved no signed hole.
+
+fn main() {
+    let a: i8 = -128
+    let b: i8 = 127
+    let c: i16 = -32768
+    let d: i16 = 32767
+    let e: i32 = -2147483648
+    let f: i32 = 2147483647
+    let g: i64 = -9223372036854775808
+    let h: i64 = 9223372036854775807
+    let i: int = -9223372036854775808
+    let j: int = 9223372036854775807
+    let s = "{g} {j}"
+    print("{a} {b} {c} {d} {e} {f}")
+    print("{g} {h} {i} {j} {s} {a:x} {g:>21}")
+}

@@ -1,0 +1,38 @@
+//! check: run(exit=0, stdout="-128 0 -32768 0\n-2147483648 0 -9223372036854775808 0\n-3 -1 -3 -1\n-3 1 -3 1\ntrue -9223372036854775808 0\n")
+//! phase: run
+//! conforms: type.wrap.div
+//!
+//! s220 (wolf-lang#538, `[type.wrap.div]`): signed wrapping `/` and `%`
+//! at every width truncate toward zero, and `MIN / -1` wraps to `MIN`
+//! (`MIN % -1` is 0), with a variable and a constant divisor. At 0.2.25
+//! native and release refused them, and the checked machine divided the
+//! narrow minima as their masks (`-128 / -1` at `wrapping[i8]` was 0).
+
+fn main() {
+    let n8: int = -128
+    let n16: int = -32768
+    let n32: int = -2147483648
+    let n64: int = -9223372036854775808
+    let m8 = n8 as wrapping[i8]
+    let m16 = n16 as wrapping[i16]
+    let m32 = n32 as wrapping[i32]
+    let m64 = n64 as wrapping[i64]
+    let n1: int = -1
+    print(
+        "{m8 / (n1 as wrapping[i8])} {m8 % (n1 as wrapping[i8])} {m16 / (n1 as wrapping[i16])} {m16 % (n1 as wrapping[i16])}",
+    )
+    print(
+        "{m32 / (n1 as wrapping[i32])} {m32 % (n1 as wrapping[i32])} {m64 / (n1 as wrapping[i64])} {m64 % (n1 as wrapping[i64])}",
+    )
+    let s8 = -7 as wrapping[i8]
+    let s16 = -7 as wrapping[i16]
+    let s32 = 7 as wrapping[i32]
+    let s64 = 7 as wrapping[i64]
+    print(
+        "{s8 / (2 as wrapping[i8])} {s8 % (2 as wrapping[i8])} {s16 / (2 as wrapping[i16])} {s16 % (2 as wrapping[i16])}",
+    )
+    print(
+        "{s32 / (-2 as wrapping[i32])} {s32 % (-2 as wrapping[i32])} {s64 / (-2 as wrapping[i64])} {s64 % (-2 as wrapping[i64])}",
+    )
+    print("{m8 / (n1 as wrapping[i8]) < 0} {m64 / -1} {m64 % -1}")
+}

@@ -1,0 +1,15 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.numlit.value
+//!
+//! s220 (wolf-lang#551): `u64::MAX + 1` traps overflow on every
+//! machine. The checked machine refused the literal at 0.2.25; it now
+//! holds the whole range and traps where the type ends, not at
+//! `i64::MAX`.
+
+fn main() {
+    let m: u64 = 18446744073709551615
+    let one: u64 = 1
+    let x = m + one
+    print("{x}")
+}

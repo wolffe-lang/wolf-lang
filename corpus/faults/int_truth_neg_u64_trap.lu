@@ -1,0 +1,12 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.wrap.div
+//!
+//! s220 (`[type.wrap.div]`): `-x` on a plain `u64` traps overflow. At
+//! 0.2.25 native and release answered the signed negation.
+
+fn main() {
+    let x: u64 = 9223372036854775808
+    let n = -x
+    print("{n}")
+}

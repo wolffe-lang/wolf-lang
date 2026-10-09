@@ -1,0 +1,28 @@
+//! check: run(exit=0, stdout="255 65535 4294967295 18446744073709551615 9223372036854775808\n0 0 0 0 0\n255 65535 4294967295 18446744073709551615 18446744073709551613 9223372036854775808\nffffffffffffffff true false true 15 1\n18446744073709551615 9223372036854775808\n")
+//! phase: run
+//! conforms: type.interp.value, type.interp.spec
+//!
+//! s220 (wolf-lang#538): `wrapping[u8]`..`wrapping[u64]` at their maxima
+//! and at `2^63`, wrapping past the top and below zero, multiplied, in
+//! hex, ordered, shifted and built into a `str`. At 0.2.25 all three
+//! compiler machines printed the 64-bit values signed (`-1`), and the
+//! checked machine also ordered them signed (`d > 1` false) and printed
+//! `{d:x}` as `-1`.
+
+fn main() {
+    let a: wrapping[u8] = 255
+    let b: wrapping[u16] = 65535
+    let c: wrapping[u32] = 4294967295
+    let d: wrapping[u64] = 18446744073709551615
+    let e: wrapping[u64] = 9223372036854775808
+    print("{a} {b} {c} {d} {e}")
+    print("{a + 1} {b + 1} {c + 1} {d + 1} {e + e}")
+    let z8 = 0 as wrapping[u8]
+    let z16 = 0 as wrapping[u16]
+    let z32 = 0 as wrapping[u32]
+    let z64 = 0 as wrapping[u64]
+    print("{z8 - 1} {z16 - 1} {z32 - 1} {z64 - 1} {d * 3} {e * 3}")
+    print("{d:x} {d > 1} {e < 1} {c > 1} {d >> 60} {a * a}")
+    let s = "{d} {e}"
+    print(s)
+}

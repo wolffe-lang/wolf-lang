@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="-128 -32768 -2147483648 -9223372036854775808 -5\n251 65531 4294967291 18446744073709551611 0\n0\n")
+//! phase: run
+//! conforms: type.wrap.div
+//!
+//! s220 (`[type.wrap.div]`): `-x` at a wrapping type wraps at its width
+//! — `-MIN` is `MIN`, `-5` at `wrapping[u8]` is 251 — and `-0` at a plain
+//! `u64` is 0. Found by s220: at 0.2.25 native and release trapped every
+//! `-MIN`, and the checked machine printed `-5` for the unsigned ones.
+
+fn main() {
+    let n8: int = -128
+    let n16: int = -32768
+    let n32: int = -2147483648
+    let n64: int = -9223372036854775808
+    let m8 = n8 as wrapping[i8]
+    let m16 = n16 as wrapping[i16]
+    let m32 = n32 as wrapping[i32]
+    let m64 = n64 as wrapping[i64]
+    print("{-m8} {-m16} {-m32} {-m64} {-(5 as wrapping[i8])}")
+    let u8v = 5 as wrapping[u8]
+    let u16v = 5 as wrapping[u16]
+    let u32v = 5 as wrapping[u32]
+    let u64v = 5 as wrapping[u64]
+    print("{-u8v} {-u16v} {-u32v} {-u64v} {-(0 as wrapping[u64])}")
+    let z: u64 = 0
+    print("{-z}")
+}

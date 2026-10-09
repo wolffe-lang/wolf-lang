@@ -1,0 +1,13 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.numlit.cast.narrow
+//!
+//! s220 (wolf-lang#551): a `u64` holding `2^63` does not fit `int`, so
+//! the cast traps on every machine. The checked machine refused the
+//! literal at 0.2.25.
+
+fn main() {
+    let h: u64 = 9223372036854775808
+    let i = h as int
+    print("{i}")
+}

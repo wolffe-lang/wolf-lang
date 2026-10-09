@@ -1,0 +1,14 @@
+//! check: run(exit=trap(div-zero))
+//! phase: run
+//! conforms: type.wrap.div
+//!
+//! s220 (`[type.wrap.div]`): `%` by zero at a signed wrapping type traps
+//! `div-zero` (the divisor may be -1 here, so native and release take the
+//! branch around `irem.chk`; zero reaches the check).
+
+fn main() {
+    let d = -7 as wrapping[i32]
+    let z = 0 as wrapping[i32]
+    let q = d % z
+    print("{q}")
+}
