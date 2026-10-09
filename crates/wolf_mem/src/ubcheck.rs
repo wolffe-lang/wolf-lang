@@ -7488,7 +7488,7 @@ impl<'t> Machine<'t> {
                         _ => return self.refuse("a non-str argv element", span),
                     }
                 }
-                match spawn_mapped(&exe, &words, &placed, self.cwd.as_deref()) {
+                match spawn_mapped(&exe, &words, &placed, self.cwd.as_deref(), None) {
                     Err(e) => Ok(tag(match e.kind() {
                         std::io::ErrorKind::NotFound => "not_found",
                         std::io::ErrorKind::PermissionDenied => "denied",
@@ -7576,6 +7576,169 @@ impl<'t> Machine<'t> {
                     Some(f) => Ok(Flow::Val(Value::Bool(f.is_terminal()))),
                 }
             }
+            // s219 (`[os.proc.job]`): `os_spawn_fds` with the job trio
+            // done in the child's hook — the group, the terminal's
+            // foreground, the meanings set back to default — and the
+            // parent's half of the double `setpgid`/`tcsetpgrp`. Read in
+            // `wolf_rt`'s order: shape, host, tty, sources, program.
+            "os_spawn_job" => {
+                let (Some(exe), Some(Value::List(args_id)), Some(Value::List(map_id))) =
+                    (str_arg(0), argv.get(1), argv.get(2))
+                else {
+                    return self.refuse("this os call shape", span);
+                };
+                let (Some(group), Some(tty), Some(defaults)) = (int_arg(3), int_arg(4), int_arg(5))
+                else {
+                    return self.refuse("this os call shape", span);
+                };
+                let mut flat = Vec::new();
+                for v in self.lists.get(*map_id).into_iter().flatten() {
+                    match v {
+                        Value::Int(n) => flat.push(*n),
+                        _ => return self.refuse("a non-int descriptor map element", span),
+                    }
+                }
+                let Some(entries) = fd_map_of(&flat) else {
+                    return Ok(tag("invalid"));
+                };
+                if group < -1 || tty < -1 || defaults < 0 || defaults & !SIG_ALL != 0 {
+                    return Ok(tag("invalid"));
+                }
+                let plain = group == -1 && tty == -1 && defaults == 0;
+                if cfg!(not(unix)) && !(plain && entries.is_empty()) {
+                    return Ok(tag("unsupported"));
+                }
+                let mut tty_file = None;
+                if tty >= 0 {
+                    use std::io::IsTerminal as _;
+                    match self.fs_handle(tty).and_then(|f| f.try_clone().ok()) {
+                        Some(f) if f.is_terminal() => tty_file = Some(f),
+                        _ => return Ok(tag("io")),
+                    }
+                }
+                let mut placed = Vec::with_capacity(entries.len());
+                for &(t, s) in &entries {
+                    match s {
+                        None => placed.push((t, None)),
+                        Some(h) => match self.fs_handle(h).and_then(|f| f.try_clone().ok()) {
+                            None => return Ok(tag("io")),
+                            Some(f) => placed.push((t, Some(f))),
+                        },
+                    }
+                }
+                if exe.is_empty() {
+                    return Ok(tag("not_found"));
+                }
+                let mut words = Vec::new();
+                for v in self.lists.get(*args_id).into_iter().flatten() {
+                    match v {
+                        Value::Str(s) => words.push(s.clone()),
+                        _ => return self.refuse("a non-str argv element", span),
+                    }
+                }
+                let job = (!plain).then(|| CheckedJob {
+                    group,
+                    tty: tty_file,
+                    defaults,
+                });
+                match spawn_mapped(&exe, &words, &placed, self.cwd.as_deref(), job.as_ref()) {
+                    Err(e) => Ok(tag(match e.kind() {
+                        std::io::ErrorKind::NotFound => "not_found",
+                        std::io::ErrorKind::PermissionDenied => "denied",
+                        _ => "io",
+                    })),
+                    Ok(child) => {
+                        let h = self.children.len() as i64;
+                        self.children.push(Some(child));
+                        Ok(Flow::Val(Value::Int(h)))
+                    }
+                }
+            }
+            // s219: the child's OS pid, and its status — an exit code,
+            // or -N for a death by signal N (reaps, as `os_wait`).
+            "os_proc_pid" => {
+                let Some(h) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                match usize::try_from(h).ok().and_then(|i| self.children.get(i)) {
+                    Some(Some(c)) => Ok(Flow::Val(Value::Int(i64::from(c.id())))),
+                    _ => Ok(tag("io")),
+                }
+            }
+            "os_wait_status" => {
+                let Some(h) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                let Some(slot) = usize::try_from(h)
+                    .ok()
+                    .and_then(|i| self.children.get_mut(i))
+                else {
+                    return Ok(tag("io"));
+                };
+                let Some(child) = slot.as_mut() else {
+                    return Ok(tag("io"));
+                };
+                match child.wait() {
+                    Err(_) => Ok(tag("io")),
+                    Ok(status) => {
+                        *slot = None;
+                        if let Some(c) = status.code() {
+                            return Ok(Flow::Val(Value::Int(i64::from(c))));
+                        }
+                        #[cfg(unix)]
+                        {
+                            use std::os::unix::process::ExitStatusExt as _;
+                            if let Some(sig) = status.signal() {
+                                return Ok(Flow::Val(Value::Int(-i64::from(sig))));
+                            }
+                        }
+                        Ok(tag("io"))
+                    }
+                }
+            }
+            // s219 (`[os.term]`): the host's own terminal, through the
+            // descriptor the handle names (0..2 the `wolf` process's).
+            "os_pgid" => match checked_term::pgid() {
+                Ok(p) => Ok(Flow::Val(Value::Int(p))),
+                Err(t) => Ok(tag(t)),
+            },
+            "os_term_foreground" | "os_term_mode" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                let Some(f) = self.fs_handle(fd) else {
+                    return Ok(tag(if cfg!(unix) { "io" } else { "unsupported" }));
+                };
+                let r = if name == "os_term_mode" {
+                    checked_term::mode_of(&f)
+                } else {
+                    checked_term::foreground(&f)
+                };
+                match r {
+                    Ok(v) => Ok(Flow::Val(Value::Int(v))),
+                    Err(t) => Ok(tag(t)),
+                }
+            }
+            "os_term_set_foreground" | "os_term_set_mode" => {
+                let (Some(fd), Some(v)) = (int_arg(0), int_arg(1)) else {
+                    return self.refuse("this os call shape", span);
+                };
+                if name == "os_term_set_mode" && (v < 0 || v & !TERM_MODE_VALID != 0) {
+                    return Ok(tag(if cfg!(unix) { "invalid" } else { "unsupported" }));
+                }
+                let Some(f) = self.fs_handle(fd) else {
+                    return Ok(tag(if cfg!(unix) { "io" } else { "unsupported" }));
+                };
+                let r = if name == "os_term_set_mode" {
+                    checked_term::set_mode(&f, v)
+                } else {
+                    checked_term::set_foreground(&f, v)
+                };
+                match r {
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    Err(t) => Ok(tag(t)),
+                }
+            }
             "os_wait" => {
                 let Some(h) = int_arg(0) else {
                     return self.refuse("this os call shape", span);
@@ -7620,17 +7783,26 @@ impl<'t> Machine<'t> {
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
             }
-            // Signal RECEPTION (s114, #126) — modeled as a PURE
-            // IN-MACHINE queue (no real OS signals: the checked machine
-            // is a threaded test host, the `env_set` asymmetry). The
-            // meaning bitmask matches `wolf_rt::signal::meaning`
-            // (reload=1, terminate=2, quit=4, upgrade=8).
+            // Signal RECEPTION (s114, #126) — the sequential loopback is
+            // a PURE IN-MACHINE queue (raise enqueues, the machine does
+            // not model its own death). s219 (#622): a listen ALSO arms
+            // the host for real — an async-signal-safe handler that sets
+            // a bit in `CHECKED_PENDING`, nothing else — and unblocks the
+            // signal on this, the machine's only thread, so a real Ctrl-C
+            // to a checked program that listens is a delivery `wait` and
+            // `poll` see, never its death. ignore/default are the host's
+            // own `sigaction`. The meaning bitmask is `wolf_rt::signal::
+            // meaning`'s: reload=1 terminate=2 quit=4 upgrade=8
+            // interrupt=16 suspend=32 bg_read=64 bg_write=128 child=256.
             "os_signal_listen" => {
                 let Some(mask) = int_arg(0) else {
                     return self.refuse("this os call shape", span);
                 };
-                // Record interest for the mapped meanings only (ALL = 15).
-                self.signal_listening |= mask & 0xF;
+                let armed = mask & SIG_ALL;
+                if checked_sig::arm(armed).is_err() {
+                    return Ok(tag("io"));
+                }
+                self.signal_listening |= armed;
                 Ok(Flow::Val(Value::Unit))
             }
             "os_signal_raise" => {
@@ -7643,7 +7815,7 @@ impl<'t> Machine<'t> {
                 // default disposition on a real host — the checked
                 // machine does not model process death, so it drops it
                 // (documented asymmetry, like `env_set`'s overlay).
-                if m != 1 && m != 2 && m != 4 && m != 8 {
+                if m <= 0 || m & SIG_ALL != m || m.count_ones() != 1 {
                     return Ok(tag("io"));
                 }
                 if self.signal_listening & m != 0 {
@@ -7651,27 +7823,47 @@ impl<'t> Machine<'t> {
                 }
                 Ok(Flow::Val(Value::Unit))
             }
-            "os_signal_wait" => {
+            "os_signal_wait" | "os_signal_poll" => {
                 let Some(mask) = int_arg(0) else {
                     return self.refuse("this os call shape", span);
                 };
-                let want = mask & 0xF;
+                let want = mask & SIG_ALL;
                 if want == 0 {
                     return Ok(tag("io")); // nothing could ever arrive
                 }
-                match self.signal_queue.iter().position(|&m| m & want != 0) {
-                    Some(pos) => {
-                        let m = self.signal_queue.remove(pos).expect("just found it");
-                        Ok(Flow::Val(Value::Int(m)))
+                if let Some(pos) = self.signal_queue.iter().position(|&m| m & want != 0) {
+                    let m = self.signal_queue.remove(pos).expect("just found it");
+                    return Ok(Flow::Val(Value::Int(m)));
+                }
+                if let Some(m) = checked_sig::take(want & self.signal_listening) {
+                    return Ok(Flow::Val(Value::Int(m)));
+                }
+                if name == "os_signal_poll" {
+                    return Ok(Flow::Val(Value::Int(0)));
+                }
+                // A blocking wait with no pending delivery: the checked
+                // machine is single-threaded and run-to-completion — it
+                // has no concurrency to deliver one later. Refused by
+                // name (the honest ledger entry).
+                self.refuse(
+                    "a blocking signal wait with no pending delivery in checked execution",
+                    span,
+                )
+            }
+            // s219 (`[os.signal.disp]`): the host's own disposition.
+            "os_signal_ignore" | "os_signal_default" => {
+                let Some(mask) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                if mask == 0 || mask & !SIG_ALL != 0 {
+                    return Ok(tag("io"));
+                }
+                match checked_sig::set_disp(mask, name == "os_signal_ignore") {
+                    Err(t) => Ok(tag(t)),
+                    Ok(()) => {
+                        self.signal_listening &= !mask;
+                        Ok(Flow::Val(Value::Unit))
                     }
-                    // A blocking wait with no pending delivery: the
-                    // checked machine is single-threaded and run-to-
-                    // completion — it has no concurrency to deliver one
-                    // later. Refused by name (the honest ledger entry).
-                    None => self.refuse(
-                        "a blocking signal wait with no pending delivery in checked execution",
-                        span,
-                    ),
                 }
             }
             // The OS random source (s118, #143). The checked machine
@@ -9231,6 +9423,11 @@ impl<'t> Machine<'t> {
             | "os_exit"
             | "os_spawn" | "os_spawn_with" | "os_wait" | "os_kill" | "os_signal_listen"
             | "os_spawn_fds" | "os_pipe" | "os_chdir" | "os_isatty"
+            // s219 (#622): dispositions, the poll, the job spawn, the
+            // child's pid and status, the group and the terminal.
+            | "os_signal_ignore" | "os_signal_default" | "os_signal_poll" | "os_spawn_job"
+            | "os_proc_pid" | "os_wait_status" | "os_pgid" | "os_term_foreground"
+            | "os_term_set_foreground" | "os_term_mode" | "os_term_set_mode"
             | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
             | "str_from_utf8"
@@ -11203,6 +11400,7 @@ fn spawn_mapped(
     args: &[String],
     map: &[(i64, Option<std::fs::File>)],
     cwd: Option<&std::path::Path>,
+    job: Option<&CheckedJob>,
 ) -> std::io::Result<std::process::Child> {
     use std::os::fd::AsRawFd as _;
     use std::os::unix::process::CommandExt as _;
@@ -11214,10 +11412,15 @@ fn spawn_mapped(
     if let Some(d) = cwd {
         cmd.current_dir(d);
     }
-    if map.is_empty() {
+    if map.is_empty() && job.is_none() {
         cmd.stdin(std::process::Stdio::null());
         return cmd.spawn();
     }
+    // s219 (`[os.proc.job]`): the group, the terminal and the defaults,
+    // done first in the hook (the tty is still this process's).
+    let group = job.map_or(-1, |j| j.group as libc::pid_t);
+    let tty = job.and_then(|j| j.tty.as_ref()).map_or(-1, |f| f.as_raw_fd());
+    let sigs = job.map_or([0; 9], |j| checked_sig::signals_of(j.defaults));
     const MAX: usize = 64;
     let n = map.len();
     let mut targets = [-1 as libc::c_int; MAX];
@@ -11236,6 +11439,20 @@ fn spawn_mapped(
     // contract in a process that holds other threads.
     unsafe {
         cmd.pre_exec(move || {
+            if group >= 0 && libc::setpgid(0, group) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            if tty >= 0 && checked_term::ttou_blocked(|| libc::tcsetpgrp(tty, libc::getpgrp())) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            for &sig in &sigs {
+                if sig > 0 {
+                    let mut sa: libc::sigaction = std::mem::zeroed();
+                    sa.sa_sigaction = libc::SIG_DFL;
+                    libc::sigemptyset(&mut sa.sa_mask);
+                    libc::sigaction(sig, &sa, std::ptr::null_mut());
+                }
+            }
             let mut staged = [-1 as libc::c_int; MAX];
             for i in 0..n {
                 if sources[i] >= 0 {
@@ -11271,10 +11488,24 @@ fn spawn_mapped(
             Ok(())
         });
     }
-    cmd.spawn()
+    let child = cmd.spawn()?;
+    // The parent's half of the double call; a failure is ignored (the
+    // child may already have exec'd or ended).
+    if group >= 0 {
+        let pid = child.id() as libc::pid_t;
+        let pg = if group == 0 { pid } else { group };
+        // SAFETY: plain syscalls on our own child.
+        unsafe {
+            libc::setpgid(pid, pg);
+            if tty >= 0 {
+                checked_term::ttou_blocked(|| libc::tcsetpgrp(tty, pg));
+            }
+        }
+    }
+    Ok(child)
 }
 
-/// s215: windows places no map (the caller answered `unsupported` for a
+/// s219: windows places no map (the caller answered `unsupported` for a
 /// non-empty one), so only the plain spawn arrives here.
 #[cfg(not(unix))]
 fn spawn_mapped(
@@ -11282,6 +11513,7 @@ fn spawn_mapped(
     args: &[String],
     _map: &[(i64, Option<std::fs::File>)],
     cwd: Option<&std::path::Path>,
+    _job: Option<&CheckedJob>,
 ) -> std::io::Result<std::process::Child> {
     let mut cmd = std::process::Command::new(exe);
     cmd.args(args)
@@ -11292,6 +11524,276 @@ fn spawn_mapped(
         cmd.current_dir(d);
     }
     cmd.spawn()
+}
+
+/// s219: what `os_spawn_job` asks of the child beyond its map.
+struct CheckedJob {
+    group: i64,
+    tty: Option<std::fs::File>,
+    defaults: i64,
+}
+
+/// s219: every signal meaning (`wolf_rt::signal::meaning::ALL`).
+const SIG_ALL: i64 = 511;
+
+/// s219: every bit a terminal mode may carry (`wolf_rt::term::mode`):
+/// canonical=1 echo=2 signals=4, vmin in bits 8..15, vtime in 16..23.
+const TERM_MODE_VALID: i64 = 7 | 0xFF00 | 0xFF_0000;
+
+/// s219 (#622): the checked machine's REAL signal arming. A listened
+/// meaning's handler sets its bit in `PENDING` (an atomic `fetch_or`,
+/// async-signal-safe) and does nothing else; `take` hands the lowest
+/// pending bit of a set to `wait`/`poll`. Dispositions are the host's
+/// `sigaction`.
+mod checked_sig {
+    use std::sync::atomic::{AtomicI64, Ordering};
+
+    static PENDING: AtomicI64 = AtomicI64::new(0);
+
+    #[cfg(unix)]
+    fn sig_of(bit: i64) -> Option<libc::c_int> {
+        Some(match bit {
+            1 => libc::SIGHUP,
+            2 => libc::SIGTERM,
+            4 => libc::SIGQUIT,
+            8 => libc::SIGUSR2,
+            16 => libc::SIGINT,
+            32 => libc::SIGTSTP,
+            64 => libc::SIGTTIN,
+            128 => libc::SIGTTOU,
+            256 => libc::SIGCHLD,
+            _ => return None,
+        })
+    }
+
+    #[cfg(unix)]
+    extern "C" fn handler(sig: libc::c_int) {
+        for i in 0..9 {
+            if sig_of(1 << i) == Some(sig) {
+                PENDING.fetch_or(1 << i, Ordering::SeqCst);
+            }
+        }
+    }
+
+    /// The signal numbers of a meaning set, for a child's hook.
+    pub(super) fn signals_of(set: i64) -> [i32; 9] {
+        let mut out = [0i32; 9];
+        #[cfg(unix)]
+        for (i, slot) in out.iter_mut().enumerate() {
+            if set & (1 << i) != 0 {
+                *slot = sig_of(1 << i).unwrap_or(0);
+            }
+        }
+        #[cfg(not(unix))]
+        let _ = set;
+        out
+    }
+
+    /// Arm the handler for every meaning in `set` and unblock its
+    /// signal on this thread (s188's rule, on the machine's one thread).
+    /// windows: the in-machine model only (the console handler is
+    /// `wolf_rt`'s); a terminal or child meaning there is `io`.
+    pub(super) fn arm(set: i64) -> Result<(), ()> {
+        #[cfg(unix)]
+        for i in 0..9 {
+            let bit = 1i64 << i;
+            if set & bit == 0 {
+                continue;
+            }
+            let sig = sig_of(bit).ok_or(())?;
+            // SAFETY: a static handler that only does an atomic or.
+            unsafe {
+                let mut sa: libc::sigaction = std::mem::zeroed();
+                sa.sa_sigaction = handler as extern "C" fn(libc::c_int) as usize;
+                libc::sigemptyset(&mut sa.sa_mask);
+                sa.sa_flags = libc::SA_RESTART;
+                if libc::sigaction(sig, &sa, std::ptr::null_mut()) != 0 {
+                    return Err(());
+                }
+                let mut m: libc::sigset_t = std::mem::zeroed();
+                libc::sigemptyset(&mut m);
+                libc::sigaddset(&mut m, sig);
+                libc::pthread_sigmask(libc::SIG_UNBLOCK, &m, std::ptr::null_mut());
+            }
+        }
+        #[cfg(not(unix))]
+        if set & !15 != 0 {
+            return Err(());
+        }
+        Ok(())
+    }
+
+    /// The lowest pending meaning in `set`, cleared; `None` for none.
+    pub(super) fn take(set: i64) -> Option<i64> {
+        loop {
+            let cur = PENDING.load(Ordering::SeqCst);
+            let hit = cur & set;
+            if hit == 0 {
+                return None;
+            }
+            let bit = hit & hit.wrapping_neg();
+            if PENDING
+                .compare_exchange(cur, cur & !bit, Ordering::SeqCst, Ordering::SeqCst)
+                .is_ok()
+            {
+                return Some(bit);
+            }
+        }
+    }
+
+    /// `SIG_IGN` or `SIG_DFL` for every meaning in `set` (validated by
+    /// the caller); windows `unsupported`.
+    pub(super) fn set_disp(set: i64, ignore: bool) -> Result<(), &'static str> {
+        #[cfg(unix)]
+        {
+            for i in 0..9 {
+                let bit = 1i64 << i;
+                if set & bit == 0 {
+                    continue;
+                }
+                let sig = sig_of(bit).ok_or("io")?;
+                // SAFETY: a zeroed sigaction with a constant disposition.
+                unsafe {
+                    let mut sa: libc::sigaction = std::mem::zeroed();
+                    sa.sa_sigaction = if ignore { libc::SIG_IGN } else { libc::SIG_DFL };
+                    libc::sigemptyset(&mut sa.sa_mask);
+                    if libc::sigaction(sig, &sa, std::ptr::null_mut()) != 0 {
+                        return Err("io");
+                    }
+                }
+            }
+            Ok(())
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (set, ignore);
+            Err("unsupported")
+        }
+    }
+}
+
+/// s219 (`[os.term]`): the terminal calls on the host descriptor a
+/// handle names. windows: `unsupported`.
+mod checked_term {
+    #[cfg(unix)]
+    use std::os::fd::AsRawFd as _;
+
+    /// `f` with `SIGTTOU` blocked on this thread, the mask restored.
+    #[cfg(unix)]
+    pub(super) fn ttou_blocked(f: impl FnOnce() -> libc::c_int) -> libc::c_int {
+        // SAFETY: zeroed sigsets filled by sigemptyset/sigaddset.
+        unsafe {
+            let mut set: libc::sigset_t = std::mem::zeroed();
+            let mut old: libc::sigset_t = std::mem::zeroed();
+            libc::sigemptyset(&mut set);
+            libc::sigaddset(&mut set, libc::SIGTTOU);
+            libc::pthread_sigmask(libc::SIG_BLOCK, &set, &mut old);
+            let r = f();
+            libc::pthread_sigmask(libc::SIG_SETMASK, &old, std::ptr::null_mut());
+            r
+        }
+    }
+
+    #[cfg(unix)]
+    pub(super) fn pgid() -> Result<i64, &'static str> {
+        // SAFETY: getpgrp cannot fail.
+        Ok(i64::from(unsafe { libc::getpgrp() }))
+    }
+    #[cfg(not(unix))]
+    pub(super) fn pgid() -> Result<i64, &'static str> {
+        Err("unsupported")
+    }
+
+    #[cfg(unix)]
+    pub(super) fn foreground(f: &std::fs::File) -> Result<i64, &'static str> {
+        // SAFETY: a descriptor the machine holds.
+        let pg = unsafe { libc::tcgetpgrp(f.as_raw_fd()) };
+        if pg < 0 { Err("io") } else { Ok(i64::from(pg)) }
+    }
+    #[cfg(not(unix))]
+    pub(super) fn foreground(_f: &std::fs::File) -> Result<i64, &'static str> {
+        Err("unsupported")
+    }
+
+    #[cfg(unix)]
+    pub(super) fn set_foreground(f: &std::fs::File, pgid: i64) -> Result<(), &'static str> {
+        let Ok(pg) = libc::pid_t::try_from(pgid) else {
+            return Err("io");
+        };
+        if pg <= 0 {
+            return Err("io");
+        }
+        let fd = f.as_raw_fd();
+        // SAFETY: a descriptor the machine holds and a plain group id.
+        if ttou_blocked(|| unsafe { libc::tcsetpgrp(fd, pg) }) < 0 {
+            Err("io")
+        } else {
+            Ok(())
+        }
+    }
+    #[cfg(not(unix))]
+    pub(super) fn set_foreground(_f: &std::fs::File, _pgid: i64) -> Result<(), &'static str> {
+        Err("unsupported")
+    }
+
+    #[cfg(unix)]
+    fn get(fd: libc::c_int) -> Result<libc::termios, &'static str> {
+        // SAFETY: a zeroed termios filled by tcgetattr.
+        unsafe {
+            let mut t: libc::termios = std::mem::zeroed();
+            if libc::tcgetattr(fd, &mut t) < 0 {
+                return Err("io");
+            }
+            Ok(t)
+        }
+    }
+
+    #[cfg(unix)]
+    pub(super) fn mode_of(f: &std::fs::File) -> Result<i64, &'static str> {
+        let t = get(f.as_raw_fd())?;
+        let mut m = 0i64;
+        if t.c_lflag & libc::ICANON != 0 {
+            m |= 1;
+        }
+        if t.c_lflag & libc::ECHO != 0 {
+            m |= 2;
+        }
+        if t.c_lflag & libc::ISIG != 0 {
+            m |= 4;
+        }
+        m |= i64::from(t.c_cc[libc::VMIN]) << 8;
+        m |= i64::from(t.c_cc[libc::VTIME]) << 16;
+        Ok(m)
+    }
+    #[cfg(not(unix))]
+    pub(super) fn mode_of(_f: &std::fs::File) -> Result<i64, &'static str> {
+        Err("unsupported")
+    }
+
+    #[cfg(unix)]
+    pub(super) fn set_mode(f: &std::fs::File, m: i64) -> Result<(), &'static str> {
+        let fd = f.as_raw_fd();
+        let mut t = get(fd)?;
+        for (bit, flag) in [(1, libc::ICANON), (2, libc::ECHO), (4, libc::ISIG)] {
+            if m & bit != 0 {
+                t.c_lflag |= flag;
+            } else {
+                t.c_lflag &= !flag;
+            }
+        }
+        t.c_cc[libc::VMIN] = ((m >> 8) & 0xFF) as libc::cc_t;
+        t.c_cc[libc::VTIME] = ((m >> 16) & 0xFF) as libc::cc_t;
+        // SAFETY: a descriptor the machine holds; a termios tcgetattr filled.
+        if ttou_blocked(|| unsafe { libc::tcsetattr(fd, libc::TCSADRAIN, &t) }) < 0 {
+            Err("io")
+        } else {
+            Ok(())
+        }
+    }
+    #[cfg(not(unix))]
+    pub(super) fn set_mode(_f: &std::fs::File, _m: i64) -> Result<(), &'static str> {
+        Err("unsupported")
+    }
 }
 
 /// A file an fs call reads through: a standard stream duplicated for
