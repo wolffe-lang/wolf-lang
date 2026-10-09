@@ -20,8 +20,8 @@
 //!   exactly, the listing in the host's order with kinds, and on linux a
 //!   name that is not UTF-8 listed whole.
 //!
-//! lupin 0.1.48 (the pairing) predates the mirror and resolves none of
-//! the four names: its answers are pinned by version and release commit
+//! lupin 0.1.48 and 0.1.49 (the pairing since v0.2.26) predate the mirror
+//! and resolve none of the four names: its answers are pinned by version and release commit
 //! as pre-mirror (s180's design), never widened.
 
 mod lane_exit;
@@ -34,8 +34,11 @@ fn wolf() -> &'static str {
 }
 
 /// The lupin releases that predate the mirror, with the commit each
-/// release archive reports.
-const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[("0.1.48", Some("531bf05"))];
+/// release archive reports: 0.1.48 (r30, `531bf05`) and 0.1.49 (r31, the
+/// pairing since v0.2.26, `f516a5f`); wolf-interp's s218 is unmerged at
+/// both.
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] =
+    &[("0.1.48", Some("531bf05")), ("0.1.49", Some("f516a5f"))];
 
 fn pre_mirror(lupin: &Obs) -> bool {
     PRE_MIRROR_LUPIN
