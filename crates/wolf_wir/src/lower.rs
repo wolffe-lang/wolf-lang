@@ -18336,9 +18336,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // `{c}` prints the character (D58), never the number —
             // this arm must sit before the integer catch-all.
             TyKind::Prim(Prim::Char) => PrintSeg::Char { v, spec },
-            TyKind::Prim(_) => {
+            TyKind::Prim(p) => {
                 let unsigned = sema_unsigned(table, ty);
-                let spec = if unsigned && spec != 0 {
+                // s220 (wolf-lang#551, #538, `[type.interp.value]`): a
+                // 64-bit unsigned hole prints the value its type holds,
+                // so the unsigned bit rides even a spec-less hole (the
+                // runtime reads `0` as "plain signed decimal"). A narrower
+                // unsigned value is zero-extended first and is already
+                // non-negative, so its hole keeps the frozen `0` spec.
+                let wide_unsigned = matches!(p, Prim::U64 | Prim::Uint);
+                let spec = if unsigned && (spec != 0 || wide_unsigned) {
                     spec | wolf_sema::fmtspec::PACK_UNSIGNED
                 } else {
                     spec
