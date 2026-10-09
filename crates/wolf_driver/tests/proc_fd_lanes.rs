@@ -20,10 +20,10 @@
 //!   under `taskset -c 0-3` (wolf-lang#570: a spawn-heavy program
 //!   green on a 16-cpu host can starve on a 4-cpu runner).
 //!
-//! lupin 0.1.47 (the pairing) predates the mirror: it resolves none of
-//! the four names, so its answers are pinned by version and release
-//! commit as pre-mirror (s180's design), never widened. The mirror is
-//! wolf-interp's s215 PR; at it, every row agrees except `fd_five`,
+//! lupin 0.1.47 and 0.1.48 predated the mirror (they resolve none of
+//! the four names) and were pinned by version and release commit as
+//! pre-mirror (s180's design); 0.1.49 (the 0.2.26 pairing, r31) carries
+//! the mirror. At it, every row agrees except `fd_five`,
 //! which lupin refuses by name (a descriptor above 2 needs `unsafe`,
 //! which lupin forbids).
 
@@ -41,8 +41,10 @@ fn wolf() -> &'static str {
 /// says the last released version; the commit holds it apart).
 /// 0.1.48 (r30, archive sha256 81cfd77a…) reports `531bf05` and predates
 /// the mirror too (wolf-interp#208 is unmerged at the rebase onto it).
-const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] =
-    &[("0.1.47", Some("b3228cb")), ("0.1.48", Some("531bf05"))];
+///
+/// 0.1.47 and 0.1.48 were listed; emptied at the 0.1.49 pairing (r31),
+/// which carries the mirror.
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[];
 
 fn pre_mirror(lupin: &Obs) -> bool {
     PRE_MIRROR_LUPIN
