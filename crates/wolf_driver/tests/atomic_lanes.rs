@@ -392,7 +392,13 @@ fn an_order_the_operation_does_not_admit_is_e1309() {
 #[test]
 fn a_misaligned_atomic_is_row_l4() {
     let l4 = ub("L4", "mem.unsafe.raw.4");
-    every_machine("atomic_ub_misaligned.lu", l4, None, lupin_ub(l4), PRE_MIRROR);
+    every_machine(
+        "atomic_ub_misaligned.lu",
+        l4,
+        None,
+        lupin_ub(l4),
+        PRE_MIRROR,
+    );
 }
 
 /// `[conc.mm.atomic.raw.5]`: on an allocation an atomic operation is an
