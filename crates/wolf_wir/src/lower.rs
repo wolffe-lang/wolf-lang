@@ -8616,6 +8616,29 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         self.b.ins(Opcode::Fneg, &[v], &[ty], Aux::None).one(),
                     )));
                 }
+                // s220 (`[type.wrap.div]`'s neighbour, X3): `-x` at a
+                // wrapping type wraps (`-MIN` is `MIN`, `-5` at
+                // `wrapping[u8]` is 251), and at a plain unsigned type it
+                // is `0 - x` in that type, so any `x` but 0 traps
+                // `overflow` — lupin's answer. Both used to take the
+                // signed `0 - x` below: `-MIN` trapped at a wrapping type,
+                // and `-5` at `u8` printed 251 (at `u64`, -5).
+                let neg_ty = self.expr_sema_ty(e.span);
+                let wrapping =
+                    neg_ty.is_some_and(|t| matches!(self.table.kind(t), TyKind::Wrapping(_)));
+                let unsigned = neg_ty.is_some_and(|t| sema_unsigned(self.table, t));
+                if wrapping || unsigned {
+                    let zero = self.b.iconst(ty, 0);
+                    let op = if wrapping {
+                        Opcode::IsubWrap
+                    } else {
+                        Opcode::UsubChk
+                    };
+                    return match self.b.ins(op, &[zero, v], &[ty], Aux::None) {
+                        InsOut::Vals(r) => Ok(Flow::Val(Some(r[0]))),
+                        InsOut::Trapped => Ok(Flow::Diverged),
+                    };
+                }
                 // A constant operand folds directly (no dead zero
                 // const left behind by the speculative 0 - x shape).
                 if let Some(n) = self.b.as_int_const(v) {
