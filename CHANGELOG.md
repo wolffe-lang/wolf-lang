@@ -349,6 +349,48 @@ objects, which link no runtime, do not); that is layout, not behaviour.
   native, release (and under `taskset -c 0-3`) and lupin. #534's
   signal-number half is s219's `os_wait_status`.
 
+### The full stat record, `lstat`, `readlink`, and a listing as the host keeps it (s218, #625, #626, #536)
+
+**Read this before you bump the pin.** Four new prelude names, all
+`w0304: true` in `spec/prelude.json`: `fs_stat`, `fs_lstat`,
+`fs_read_link` and `fs_read_dir_entries`. A module that declares one
+draws W0304, which `--deny-warnings` makes fatal: rename yours. A grep for
+a declaration of any of the four found none in wolf-std (`0f74ec5`),
+boreutils (`50d8907`), lobo (`a728fab`), pelt (`dd22a86`), pax
+(`396c5fb`) or the book (`fde77b8`). Nothing that existed changed:
+`fs_read_dir` still sorts and still answers `utf8`, `fs_fstat` still
+answers three words, and every path call still follows a link.
+
+- **`fs_stat(path)` and `fs_lstat(path) -> List[int] ! {denied, io,
+  not_found}` (`[os.fs.stat]`).** One record from one host call: kind
+  (file, directory, other, symbolic link, fifo, socket, character and
+  block device), size, modified_ms, a `have` mask, mode bits, link
+  count, uid, gid, blocks, device, inode, rdev, and the access,
+  modification, status-change and birth times to the nanosecond. The
+  first three words are `fs_fstat`'s. `fs_lstat` answers a link itself,
+  so a program can at last tell a link from its target, and a dangling
+  link from a missing name. A word the host does not keep is 0 with its
+  `have` bit clear: windows refuses mode, link count, owner, blocks,
+  identity and ctime by name; linux answers a birth time where the
+  filesystem keeps one. Two paths name one file when their device and
+  inode agree (#536's `pwd -L` question).
+- **`fs_read_link(path) -> List[byte] ! {denied, invalid, io,
+  not_found}` (`[os.fs.readlink]`).** A link's target, as bytes, as
+  stored; `invalid` when the path is not a link.
+- **`fs_read_dir_entries(path) -> List[List[byte]] ! {denied, io,
+  not_found}` (`[os.fs.readdir]`).** A directory in the host's own
+  order, unsorted, each entry one byte list: its kind, then its name's
+  bytes. A name that is not UTF-8 is listed like any other, so one odd
+  name can no longer fail a listing, and a walk knows a directory (or a
+  link) without a stat per entry. `ls -U` prints this order.
+- Every machine: the checked machine reads the same metadata the runtime
+  does, word for word; native and release call the runtime; lupin
+  mirrors all four (wolf-interp s218). A path is still a `str`, so a
+  name that is not UTF-8 can be listed but not yet stat'd by name; the
+  record from an open handle stays `fs_fstat`'s three words. Witnesses:
+  `crates/wolf_driver/tests/fs_stat_lanes.rs` (every word against
+  `stat(1)` on linux).
+
 ## 0.2.26 — 2026-10-09
 
 THE TWENTY-SIXTH. Five compiler lanes, each with its lupin half, land
