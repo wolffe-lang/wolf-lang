@@ -11075,7 +11075,7 @@ fn wide_unsigned(table: &TypeTable, mut id: TyId) -> bool {
 /// is sign-extended from its width, so `200 as wrapping[i8]` is held as
 /// -56, prints -56 and orders below 0; a 64-bit value is its bits.
 fn wrap_held(out: i64, mask: i64, bits: u32, unsigned: bool) -> i64 {
-    if unsigned || bits >= 64 || mask != 0 {
+    if unsigned || bits >= 64 {
         out & mask
     } else {
         let sh = 64 - bits;
