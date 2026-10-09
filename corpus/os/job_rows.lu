@@ -1,0 +1,65 @@
+//! check: run(exit=0, stdout="group=invalid\ntty=invalid\ndefaults=invalid\nmap=invalid\npid=io\nstatus=io\npoll_empty=io\npoll_none=0\nignore_empty=io\ndefault_outside=io")
+//! phase: run
+//! conforms: os.proc.job, os.proc.status, os.signal.poll, os.signal.disp, err.union
+//!
+//! s219 (wolf-lang#622; pelt's H3) — the job-control rows that make no
+//! child and touch no terminal, deterministic on every host. A job
+//! spawn's SHAPE is decided before anything else is read: a group
+//! below -1, a tty below -1, a `defaults` bit outside the nine meanings
+//! and a map of odd length are each `invalid` — on windows too. A
+//! forged handle has no pid and no status (`io`). A poll of an empty
+//! set is `io`; a poll of a meaning this program never listened for
+//! has nothing to take (0). A disposition call with an empty set, or a
+//! bit outside the meanings, is `io` and changes nothing. The live
+//! witnesses run under a pseudo-terminal in
+//! `crates/wolf_driver/tests/ctrl_c_lanes.rs` (unix).
+
+fn job(group: int, tty: int, defaults: int, map: List[int]) -> str {
+    let h = os_spawn_job("true", List[str](), map, group, tty, defaults) else |e| {
+        return match e {
+            unsupported => "unsupported",
+            invalid => "invalid",
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+    }
+    let _st = os_wait_status(h) else |_| 0
+    "spawned"
+}
+
+fn main() -> !int {
+    let g = job(-2, -1, 0, List[int]())
+    print("group={g}")
+    let t = job(-1, -2, 0, List[int]())
+    print("tty={t}")
+    let d = job(-1, -1, 512, List[int]())
+    print("defaults={d}")
+    let m = job(-1, -1, 0, [1])
+    print("map={m}")
+    let pid = os_proc_pid(4096) else |_| -1
+    print(if pid == -1 { "pid=io" } else { "pid={pid}" })
+    let st = os_wait_status(4096) else |_| -1000
+    print(if st == -1000 { "status=io" } else { "status={st}" })
+    let pe = os_signal_poll(0) else |_| -1
+    print(if pe == -1 { "poll_empty=io" } else { "poll_empty={pe}" })
+    let pn = os_signal_poll(16)?
+    print("poll_none={pn}")
+    var ie = "ok"
+    os_signal_ignore(0) else |e| {
+        ie = match e {
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    print("ignore_empty={ie}")
+    var dn = "ok"
+    os_signal_default(512) else |e| {
+        dn = match e {
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    print("default_outside={dn}")
+    0
+}
