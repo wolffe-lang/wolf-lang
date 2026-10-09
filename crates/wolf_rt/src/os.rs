@@ -1865,9 +1865,16 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn spawn_job_into_a_missing_group_is_denied() {
-        // pid 1's group belongs to another session.
+        // A group that cannot exist: the pid of a child already reaped
+        // (no process has it as a group id). pid 1's group is NOT such a
+        // group everywhere — on the macOS runner it was joinable (run
+        // 37965097855, job 113937344310: the spawn answered handle 7).
+        let h = spawn_job_shim("true", &[], &[], 0, -1, 0);
+        assert!(h >= 0);
+        let gone = __wolf_rt_os_proc_pid(h);
+        assert_eq!(wait_status_of(h), 0);
         assert_eq!(
-            spawn_job_shim("true", &[], &[], 1, -1, 0),
+            spawn_job_shim("true", &[], &[], gone, -1, 0),
             -proc_code::DENIED
         );
     }
