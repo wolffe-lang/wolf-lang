@@ -1,0 +1,10 @@
+//! member: false
+// An entry with a link-time symbol of its own.
+use port
+
+extern "c" let k_stack_top: *u8
+
+export fn kmain() {
+    let top = unsafe { k_stack_top as u64 }
+    port.put((top & 0x3f) as int + 48)
+}

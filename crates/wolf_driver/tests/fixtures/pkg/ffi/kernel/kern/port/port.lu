@@ -1,0 +1,10 @@
+//! port — the kernel's one C declaration, as pax's serial module holds
+//! its own: the entries reach it only through this module.
+
+extern "c" fn k_outb(port: u16, v: u8)
+
+/// Write the byte `b` to COM1's transmit register.
+pub fn put(b: int) {
+    // # Safety: io.S's `outb` on COM1; the value is in range or traps.
+    unsafe { k_outb(0x3f8, b as u8) }
+}

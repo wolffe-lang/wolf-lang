@@ -1,0 +1,9 @@
+/// The control: `import c` was charged before s221 and is unchanged.
+import c "stdlib.h"
+
+fn main() -> !int {
+    let p = unsafe { c.malloc(16) }
+    unsafe { c.free(p) }
+    print("ok")
+    0
+}

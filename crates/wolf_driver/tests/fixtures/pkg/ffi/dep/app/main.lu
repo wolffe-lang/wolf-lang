@@ -1,0 +1,7 @@
+/// The root declares nothing and calls one pub fn of its dependency.
+use pad
+
+fn main() -> !int {
+    print("[{pad.left("wolf", 8)}]")
+    0
+}

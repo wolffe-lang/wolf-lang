@@ -1,0 +1,10 @@
+/// wolf-lang#619's program (s221): a `caps=[]` package calls C through a
+/// bodyless `extern "c" fn`. Until s221 it built and ran, and `wolf
+/// audit --ci` said `effective: []`.
+extern "c" fn getpid() -> i32
+
+fn main() -> !int {
+    let p = unsafe { getpid() }
+    print("pid {p > 0}")
+    0
+}

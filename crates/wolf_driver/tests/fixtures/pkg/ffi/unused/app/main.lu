@@ -1,0 +1,8 @@
+/// A C declaration nothing calls still leaves the sandbox open, as an
+/// `import c` nothing uses does: it is charged at the declaration.
+extern "c" fn getpid() -> i32
+
+fn main() -> !int {
+    print("quiet")
+    0
+}

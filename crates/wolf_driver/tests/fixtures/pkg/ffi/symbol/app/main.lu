@@ -1,0 +1,9 @@
+/// A link-time symbol (`[abi.link.extern]`) in a `caps=[]` package: the
+/// C library's `environ`, read through a raw pointer.
+extern "c" let environ: *u64
+
+fn main() -> !int {
+    let first = unsafe { environ[0] }
+    print("environ {first != 0}")
+    0
+}

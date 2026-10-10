@@ -1,0 +1,8 @@
+// pax's shape (s221): one manifest, an assembly roster, standalone
+// `kmain_*.lu` entries built with `--target x86_64-unknown-none
+// --emit=obj`, and the C declarations in a module the entries use.
+pkg {
+    name: "demo/kern"
+    version: "0.0.1"
+    asm: ["io.S"]
+}

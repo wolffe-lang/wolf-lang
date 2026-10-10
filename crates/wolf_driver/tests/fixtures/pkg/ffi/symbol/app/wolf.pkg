@@ -1,0 +1,5 @@
+pkg {
+    name:    "demo/app",
+    version: "0.1.0",
+    edition: "1",
+}

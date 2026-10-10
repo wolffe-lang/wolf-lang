@@ -1,0 +1,14 @@
+/// Wolf code C calls is not a C call: an `extern "c" fn` WITH a body and
+/// an `export fn` (`[abi.c.export]`) charge nothing.
+extern "c" fn wolf_twice(x: i32) -> i32 {
+    x * 2
+}
+
+export fn wolf_thrice(x: i32) -> i32 {
+    x * 3
+}
+
+fn main() -> !int {
+    print("{wolf_twice(21)} {wolf_thrice(14)}")
+    0
+}

@@ -1,0 +1,11 @@
+/// wolf-lang#619's dependency: `caps=[]`, and it calls `getpid` through
+/// its own C declaration.
+extern "c" fn getpid() -> i32
+
+pub fn left(s: str, width: int) -> str {
+    let p = unsafe { getpid() }
+    print("pad saw a pid: {p > 0}")
+    var out = s
+    while out.len < width { out = " " + out }
+    out
+}

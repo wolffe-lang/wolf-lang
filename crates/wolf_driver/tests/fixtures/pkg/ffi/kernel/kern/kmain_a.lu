@@ -1,0 +1,7 @@
+//! member: false
+// An entry that reaches C only through the `port` module.
+use port
+
+export fn kmain() {
+    port.put(65)
+}
