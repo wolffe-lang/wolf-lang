@@ -22,11 +22,11 @@
 //! it against the pid this harness started, so "the process was
 //! replaced, not spawned" is a number, not a stdout.
 //!
-//! lupin 0.1.49 (the pairing, release archive commit `f516a5f`) and its
-//! trunk at the rebase (`51cb491`) predate the mirror: they resolve
-//! neither name and answer `unsupported`. They are pinned by version and
-//! commit as pre-mirror (s180's design), so the mirror's own release
-//! drops the pins rather than widening them.
+//! lupin 0.1.49 (release archive commit `f516a5f`) and its trunk at the
+//! rebase (`51cb491`) predated the mirror: they resolve neither name and
+//! answer `unsupported`, and were pinned by version and commit as
+//! pre-mirror (s180's design). 0.1.50 (the 0.2.27 pairing, r32) carries
+//! the mirror, so the pins are dropped, not widened.
 
 mod lane_exit;
 
@@ -42,8 +42,10 @@ fn wolf() -> &'static str {
 
 /// The lupin builds that predate the mirror, by version and the commit
 /// their records report.
-const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] =
-    &[("0.1.49", Some("f516a5f")), ("0.1.49", Some("51cb491"))];
+///
+/// 0.1.49 at `f516a5f` and at `51cb491` were listed; emptied at the
+/// 0.1.50 pairing (r32), which carries the mirror.
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[];
 
 #[derive(Debug)]
 struct Obs {
