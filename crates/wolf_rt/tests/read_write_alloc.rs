@@ -35,7 +35,15 @@ thread_local! {
     static ZEROED: Cell<usize> = const { Cell::new(0) };
     static REALLOCS: Cell<usize> = const { Cell::new(0) };
     static FREES: Cell<usize> = const { Cell::new(0) };
+    static BIG_ALLOCS: Cell<usize> = const { Cell::new(0) };
+    static BIG_FREES: Cell<usize> = const { Cell::new(0) };
 }
+
+/// A host block at least this large is a BUFFER (a read's staging
+/// buffer, a root arena chunk); smaller ones are bookkeeping — a park's
+/// wait cell, a registration — which a read that has to wait pays and
+/// which is not the cost these witnesses gate.
+const BIG: usize = 1024;
 
 fn bump(c: &'static std::thread::LocalKey<Cell<usize>>) {
     if ARMED.try_with(Cell::get).unwrap_or(false) {
@@ -46,10 +54,16 @@ fn bump(c: &'static std::thread::LocalKey<Cell<usize>>) {
 unsafe impl GlobalAlloc for Counting {
     unsafe fn alloc(&self, l: Layout) -> *mut u8 {
         bump(&ALLOCS);
+        if l.size() >= BIG {
+            bump(&BIG_ALLOCS);
+        }
         unsafe { System.alloc(l) }
     }
     unsafe fn alloc_zeroed(&self, l: Layout) -> *mut u8 {
         bump(&ZEROED);
+        if l.size() >= BIG {
+            bump(&BIG_ALLOCS);
+        }
         unsafe { System.alloc_zeroed(l) }
     }
     unsafe fn realloc(&self, p: *mut u8, l: Layout, n: usize) -> *mut u8 {
@@ -58,6 +72,9 @@ unsafe impl GlobalAlloc for Counting {
     }
     unsafe fn dealloc(&self, p: *mut u8, l: Layout) {
         bump(&FREES);
+        if l.size() >= BIG {
+            bump(&BIG_FREES);
+        }
         unsafe { System.dealloc(p, l) }
     }
 }
@@ -71,10 +88,12 @@ struct Counts {
     zeroed: usize,
     reallocs: usize,
     frees: usize,
+    big_allocs: usize,
+    big_frees: usize,
 }
 
 fn reset() {
-    for c in [&ALLOCS, &ZEROED, &REALLOCS, &FREES] {
+    for c in [&ALLOCS, &ZEROED, &REALLOCS, &FREES, &BIG_ALLOCS, &BIG_FREES] {
         c.with(|c| c.set(0));
     }
 }
@@ -85,6 +104,8 @@ fn read() -> Counts {
         zeroed: ZEROED.with(Cell::get),
         reallocs: REALLOCS.with(Cell::get),
         frees: FREES.with(Cell::get),
+        big_allocs: BIG_ALLOCS.with(Cell::get),
+        big_frees: BIG_FREES.with(Cell::get),
     }
 }
 
@@ -126,12 +147,40 @@ fn assert_steady(what: &str, total: Counts) {
     );
 }
 
+/// The read witnesses' bound. A read whose bytes are not there yet
+/// parks in the reactor, and a park allocates a little bookkeeping (the
+/// macOS runner parks a loopback read the linux one answers at once:
+/// run 38016747198, job 114108596951, 2,808 small allocations and
+/// frees over 1,000 reads). That is not the buffer this gates, so the
+/// read witnesses count BUFFERS — blocks of `BIG` bytes or more: none
+/// zeroed, at most one freed per `REFILL_SLACK` calls, at most one
+/// allocated per ten (the root arena's 64 KiB refills).
+fn assert_read_steady(what: &str, total: Counts) {
+    assert_eq!(
+        total.zeroed, 0,
+        "{what}: {} zeroed allocations over {CALLS} calls ({total:?}) — a buffer zeroed for a read to overwrite",
+        total.zeroed
+    );
+    assert!(
+        total.big_frees * REFILL_SLACK <= CALLS,
+        "{what}: {} buffers freed over {CALLS} calls ({total:?}) — a per-call read buffer",
+        total.big_frees
+    );
+    assert!(
+        total.big_allocs * 10 <= CALLS,
+        "{what}: {} buffers allocated over {CALLS} calls ({total:?}) — a per-call read buffer",
+        total.big_allocs
+    );
+}
+
 fn add(a: Counts, b: Counts) -> Counts {
     Counts {
         allocs: a.allocs + b.allocs,
         zeroed: a.zeroed + b.zeroed,
         reallocs: a.reallocs + b.reallocs,
         frees: a.frees + b.frees,
+        big_allocs: a.big_allocs + b.big_allocs,
+        big_frees: a.big_frees + b.big_frees,
     }
 }
 
@@ -214,8 +263,8 @@ fn a_net_read_allocates_no_buffer() {
     for fd in [cli, conn, srv] {
         __wolf_rt_net_close(fd);
     }
-    assert_steady("net_read_bytes(fd, 65536)", total_bytes);
-    assert_steady("net_read(fd, 65536)", total_str);
+    assert_read_steady("net_read_bytes(fd, 65536)", total_bytes);
+    assert_read_steady("net_read(fd, 65536)", total_str);
 }
 
 /// `fs_read_chunk` (lobo's body read) and `fs_read_at`, the same rule.
@@ -255,8 +304,8 @@ fn a_file_read_allocates_no_buffer() {
     }
     __wolf_rt_fs_close(fd);
     let _ = std::fs::remove_dir_all(&dir);
-    assert_steady("fs_read_chunk(fd, 65536)", total_chunk);
-    assert_steady("fs_read_at(fd, 0, 65536)", total_at);
+    assert_read_steady("fs_read_chunk(fd, 65536)", total_chunk);
+    assert_read_steady("fs_read_at(fd, 0, 65536)", total_at);
 }
 
 // -------------------------------------------------------------- writes --
