@@ -422,7 +422,7 @@ fn unordered_conflict(
     history
         .iter()
         .find(|prior| {
-            prior.task != me
+            prior.task == me
                 && (prior.write || write)
                 && prior.lo < hi
                 && prior.hi > lo
@@ -602,7 +602,7 @@ impl<'t> Sched<'t> {
         loop {
             self.promote_due_sleeps();
             if !self.ready.is_empty() {
-                let index = self.decide(self.ready.len());
+                let index = self.decide(1);
                 return self.ready.remove(index);
             }
             if self.advance_clock() {
