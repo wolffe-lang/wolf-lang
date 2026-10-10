@@ -431,7 +431,9 @@ pub fn capability_check_uses(project: &Project, uses: &[CapUse]) -> Vec<Diagnost
                 Diagnostic::error(
                     codes::E1504,
                     span,
-                    format!("{where_} declares `{decl}` but does not declare the `{cap}` capability"),
+                    format!(
+                        "{where_} declares `{decl}` but does not declare the `{cap}` capability"
+                    ),
                 )
                 .with_label(format!("declared capabilities: {}", caps_str(&p.caps)))
                 .with_note(format!(

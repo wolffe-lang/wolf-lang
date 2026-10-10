@@ -205,7 +205,10 @@ fn issue_619_a_caps_free_package_calling_getpid_is_e1504_on_both_tiers() {
             err.contains("`getpid` is declared here: it reaches the `ffi` capability"),
             "the declaration is shown:\n{err}"
         );
-        assert!(err.contains("first called here"), "the call is shown:\n{err}");
+        assert!(
+            err.contains("first called here"),
+            "the call is shown:\n{err}"
+        );
         assert!(
             flat(&err).contains(
                 "declares the C function `getpid` at app/main.lu:4:15 (first called at \
@@ -259,7 +262,10 @@ fn an_extern_c_let_is_charged_as_a_c_declaration() {
         "this package declares `extern \"c\" let environ` but does not declare the `ffi` \
          capability",
     );
-    assert!(flat(&err).contains("the link-time symbol `environ`"), "{err}");
+    assert!(
+        flat(&err).contains("the link-time symbol `environ`"),
+        "{err}"
+    );
     assert!(err.contains("first used here"), "{err}");
 }
 
@@ -277,7 +283,10 @@ fn a_c_declaration_nothing_calls_is_still_charged() {
         &build(&dir, false),
         "this package declares `extern \"c\" fn getpid`",
     );
-    assert!(flat(&err).contains("(never called in this package)"), "{err}");
+    assert!(
+        flat(&err).contains("(never called in this package)"),
+        "{err}"
+    );
     assert!(!err.contains("first called here"), "{err}");
 }
 
@@ -288,7 +297,10 @@ fn declaring_ffi_builds_and_the_audit_gives_the_reason() {
     let out = audit(&dir, "app", true);
     assert_eq!(out.status.code(), Some(0), "stderr:\n{}", stderr(&out));
     let report = stdout(&out);
-    assert!(report.contains("demo/app 0.1.0 (root) caps=[ffi]\n"), "{report}");
+    assert!(
+        report.contains("demo/app 0.1.0 (root) caps=[ffi]\n"),
+        "{report}"
+    );
     assert!(report.contains("effective: [ffi]\n"), "{report}");
     assert!(
         report.contains(
@@ -413,7 +425,11 @@ fn a_freestanding_kernel_that_declares_ffi_builds_its_objects() {
     declare_ffi(&dir.join("kern/wolf.pkg"));
     let out = audit(&dir, "kern", true);
     assert_eq!(out.status.code(), Some(0), "stdout:\n{}", stdout(&out));
-    assert!(stdout(&out).contains("effective: [ffi]\n"), "{}", stdout(&out));
+    assert!(
+        stdout(&out).contains("effective: [ffi]\n"),
+        "{}",
+        stdout(&out)
+    );
     for entry in ["kmain_a", "kmain_b"] {
         let (out, obj) = build_entry(&dir, entry);
         assert_eq!(
