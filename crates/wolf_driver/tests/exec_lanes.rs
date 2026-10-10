@@ -179,7 +179,6 @@ struct Lane {
     lupin: bool,
 }
 
-#[cfg(unix)]
 /// `taskset` on linux, from PATH (NixOS keeps it outside `/usr/bin`).
 #[cfg(unix)]
 fn taskset() -> Option<PathBuf> {
@@ -192,6 +191,7 @@ fn taskset() -> Option<PathBuf> {
         .find(|p| p.is_file())
 }
 
+#[cfg(unix)]
 /// Every machine a unix fixture runs on: checked and lupin under
 /// `conform-run`, the native and release binaries — plain, and on linux
 /// again under `taskset -c 0-3` (taskset execs its command, so the pid
