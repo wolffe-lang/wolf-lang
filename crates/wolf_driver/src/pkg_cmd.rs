@@ -653,7 +653,10 @@ pub fn audit(args: &[String]) {
 /// of the directory loads at all.
 fn derive_uses(dir: &Path, project: &Project) -> Result<Vec<wolf_pkg::audit::CapUse>, String> {
     use wolf_pkg::audit::CapUse;
-    let std_root = crate::effective_std_root(None)?.or_else(|| project.std_root.clone());
+    let std_root = crate::std_root_in_order(
+        crate::effective_std_root(None)?.as_deref(),
+        project.std_root.as_deref(),
+    );
     // One view: the uses, and whether the root module left standalone
     // entries out.
     let resolve = |entry: Option<&Path>| -> Result<(Vec<CapUse>, bool), String> {

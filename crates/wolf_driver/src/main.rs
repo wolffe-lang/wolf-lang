@@ -493,10 +493,11 @@ fn take_std_root(args: &[String]) -> Result<(Vec<String>, Option<PathBuf>), Stri
     Ok((rest, root))
 }
 
-/// The effective std root: the `--std-root` flag wins, the `WOLF_STD`
-/// environment variable is the fallback, neither keeps the prelude
-/// stub answering `use std.…`. A configured root that is not a
-/// directory is an error, never a silent fall-through to the stub.
+/// The explicit std root: the `--std-root` flag wins, the `WOLF_STD`
+/// environment variable is the fallback; neither leaves the choice to a
+/// `wolf.pkg` `std` dependency and then the default beside the binary
+/// ([`std_root_in_order`]). A configured root that is not a directory is
+/// an error, never a silent fall-through.
 fn effective_std_root(flag: Option<PathBuf>) -> Result<Option<PathBuf>, String> {
     let root = flag.or_else(|| {
         std::env::var_os("WOLF_STD")
@@ -512,6 +513,33 @@ fn effective_std_root(flag: Option<PathBuf>) -> Result<Option<PathBuf>, String> 
     }
 }
 
+/// The default std root (ruling #29, wolf-lang#415): a `std` directory
+/// beside the running `wolf` binary, which is where the release archive
+/// stages the wolf-std its STD-PIN names. Found exactly as `libwolf_rt.a`
+/// is ([`find_rt_lib`]): the directory of `current_exe`, no PATH search
+/// and no ancestor walk. A `std` that is not a directory is not a root.
+/// A checkout's `target/<profile>/wolf` has none beside it, so a build
+/// from source keeps the prelude stub until something configures a std.
+pub(crate) fn default_std_root() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let p = exe.parent()?.join("std");
+    p.is_dir().then_some(p)
+}
+
+/// The std root a command resolves against, every source in precedence
+/// order: the explicit root ([`effective_std_root`]: `--std-root`, then
+/// `WOLF_STD`), then a `wolf.pkg` `std` path dependency, then the
+/// [`default_std_root`] beside the binary.
+pub(crate) fn std_root_in_order(
+    explicit: Option<&Path>,
+    manifest: Option<&Path>,
+) -> Option<PathBuf> {
+    explicit
+        .or(manifest)
+        .map(Path::to_path_buf)
+        .or_else(default_std_root)
+}
+
 /// Run s12 resolution from an entry file; registers every loaded file
 /// with `sources` and returns the resolution (package + the full
 /// parse/graph/resolution diagnostic set in deterministic order).
@@ -520,7 +548,8 @@ fn effective_std_root(flag: Option<PathBuf>) -> Result<Option<PathBuf>, String> 
 /// directory holds a real `wolf.pkg`: dep aliases become loader roots,
 /// and a `std` path-dependency roots `use std.…` when neither the
 /// `--std-root` flag nor `WOLF_STD` said otherwise (explicit beats
-/// manifest).
+/// manifest), and the std beside the binary answers when nothing did
+/// (ruling #29).
 fn resolve_from_entry(
     entry: &Path,
     sm: &mut wolf_span::SourceMap,
@@ -528,9 +557,7 @@ fn resolve_from_entry(
     std_root: Option<&Path>,
     project: Option<&wolf_pkg::Project>,
 ) -> Result<wolf_sema::Resolution, String> {
-    let std_root = std_root
-        .map(Path::to_path_buf)
-        .or_else(|| project.and_then(|p| p.std_root.clone()));
+    let std_root = std_root_in_order(std_root, project.and_then(|p| p.std_root.as_deref()));
     let mut loader = wolf_sema::DiskLoader::from_entry(entry, sm)
         .ok_or_else(|| format!("cannot open package around {}", entry.display()))?
         .with_std_root(std_root);
@@ -563,6 +590,9 @@ fn interface(args: &[String]) {
     let Some(path) = args.first() else {
         crate::help::usage_exit("interface");
     };
+    // No manifest is read here; the default beside the binary still
+    // answers when no explicit root did (ruling #29).
+    let std_root = std_root_in_order(std_root.as_deref(), None);
     let p = Path::new(path);
     let mut sm = wolf_span::SourceMap::new();
     let mut sources = Sources::new();
@@ -654,6 +684,9 @@ fn audit_surface(args: &[String]) {
     let Some(path) = args.first() else {
         crate::help::usage_exit("audit-surface");
     };
+    // No manifest is read here; the default beside the binary still
+    // answers when no explicit root did (ruling #29).
+    let std_root = std_root_in_order(std_root.as_deref(), None);
     let p = Path::new(path);
     let mut sm = wolf_span::SourceMap::new();
     let mut sources = Sources::new();

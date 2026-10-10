@@ -179,9 +179,15 @@ pub fn run(
                 at
             });
         }
-        loader = loader
-            .with_dep_roots(roots)
-            .with_std_root(surface.std_root.clone().or(std_root.map(Path::to_path_buf)));
+        loader = loader.with_dep_roots(roots).with_std_root(
+            surface
+                .std_root
+                .clone()
+                .or(std_root.map(Path::to_path_buf))
+                // Nothing configured: the std beside the binary
+                // (ruling #29).
+                .or_else(crate::default_std_root),
+        );
     }
     let res = match wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default()) {
         Ok(r) => r,

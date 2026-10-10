@@ -268,8 +268,16 @@ pub fn doc(args: &[String]) {
         // The std tree documents itself: it is the package, so it is not
         // also its own std slot.
         None
-    } else {
+    } else if entry.is_some() {
+        // `resolve_from_entry` applies the manifest and the default.
         cli.std_root.clone()
+    } else {
+        // A directory: explicit, then the manifest's `std`, then the
+        // default beside the binary (ruling #29).
+        crate::std_root_in_order(
+            cli.std_root.as_deref(),
+            project.as_ref().and_then(|p| p.std_root.as_deref()),
+        )
     };
 
     let res = match &entry {
