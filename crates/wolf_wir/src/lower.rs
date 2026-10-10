@@ -2176,8 +2176,7 @@ const C_MODULE_CLASH: &str = "an imported C function that shares its name with a
 /// membrane's own, so neither counts.
 fn module_c_defines(sigs: &SigTables, name: &str) -> bool {
     sigs.module_names.iter().enumerate().any(|(m, path)| {
-        path == "c"
-            && matches!(sigs.get(m, name), Some(ItemSig::Fn(f)) if f.membrane.is_none())
+        path == "c" && matches!(sigs.get(m, name), Some(ItemSig::Fn(f)) if f.membrane.is_none())
     })
 }
 

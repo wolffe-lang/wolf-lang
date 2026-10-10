@@ -105,7 +105,10 @@ fn a_gnu_ld_undefined_reference_fails() {
 #[should_panic(expected = "undefined symbol: go")]
 fn an_lld_undefined_symbol_fails_and_names_itself() {
     environment_refusal(
-        &out(2, "ld.lld: error: undefined symbol: go\ncollect2: error: ld returned 1 exit status"),
+        &out(
+            2,
+            "ld.lld: error: undefined symbol: go\ncollect2: error: ld returned 1 exit status",
+        ),
         "diamond-built",
     );
 }

@@ -154,7 +154,10 @@ fn repeated_json_names_are_last_wins_on_four_machines() {
             if let Some(obs) = wolfgang(&dir, row, flag) {
                 ran += 1;
                 if obs.verdict != "exit(0)" || obs.stdout != want {
-                    bad.push(format!("{row} {flag}: {} {:?}, want {want:?}", obs.verdict, obs.stdout));
+                    bad.push(format!(
+                        "{row} {flag}: {} {:?}, want {want:?}",
+                        obs.verdict, obs.stdout
+                    ));
                 }
             }
         }
@@ -165,7 +168,10 @@ fn repeated_json_names_are_last_wins_on_four_machines() {
                 .output()
                 .expect("lupin runs");
             let obs = parse(&out.stdout).unwrap_or_else(|| {
-                panic!("lupin left no record for {row}: {}", String::from_utf8_lossy(&out.stderr))
+                panic!(
+                    "lupin left no record for {row}: {}",
+                    String::from_utf8_lossy(&out.stderr)
+                )
             });
             ran += 1;
             let owed = if (obs.version.as_str(), obs.commit.as_str()) == LUPIN_049 {
@@ -181,6 +187,13 @@ fn repeated_json_names_are_last_wins_on_four_machines() {
             }
         }
     }
-    eprintln!("json_dup_lanes: {ran} program-machine runs, {} disagree", bad.len());
-    assert!(bad.is_empty(), "wolf-lang#124 (B22, last-wins):\n{}", bad.join("\n"));
+    eprintln!(
+        "json_dup_lanes: {ran} program-machine runs, {} disagree",
+        bad.len()
+    );
+    assert!(
+        bad.is_empty(),
+        "wolf-lang#124 (B22, last-wins):\n{}",
+        bad.join("\n")
+    );
 }

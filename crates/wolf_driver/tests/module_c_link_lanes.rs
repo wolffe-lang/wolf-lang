@@ -52,7 +52,10 @@ fn wolfgang(dir: &Path, flag: &str) -> Option<serde_json::Value> {
     }
     let what = format!("wolf conform-run {flag} in {}", dir.display());
     if flag != "--checked" && lane_exit::environment_refusal(&out, &what) {
-        eprintln!("SKIP {what}: {}", String::from_utf8_lossy(&out.stderr).trim());
+        eprintln!(
+            "SKIP {what}: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
         return None;
     }
     panic!(
@@ -139,7 +142,10 @@ fn two_deps() -> PathBuf {
     let dir = stage("two_deps");
     write(dir.join("wolf.pkg"), &manifest("demo/app", &["b", "c"]));
     for leg in ["b", "c"] {
-        write(dir.join(leg).join("wolf.pkg"), &manifest(&format!("acme/{leg}"), &[]));
+        write(
+            dir.join(leg).join("wolf.pkg"),
+            &manifest(&format!("acme/{leg}"), &[]),
+        );
         write(dir.join(leg).join(format!("{leg}.lu")), LEG);
     }
     write(
@@ -213,7 +219,11 @@ fn a_module_named_c_links_on_every_tier() {
     let cases: Vec<(&str, PathBuf, &str)> = vec![
         ("two dependencies b and c", two_deps(), "11 21\n"),
         ("one dependency aliased c", one_dep_c(), "22\n"),
-        ("the release cluster split", split_clusters("run"), "259168 582955\n"),
+        (
+            "the release cluster split",
+            split_clusters("run"),
+            "259168 582955\n",
+        ),
     ];
     let lupin = require_lupin();
     let mut bad = Vec::new();
@@ -252,10 +262,16 @@ fn the_child_module_row_answers_on_four_machines() {
         }
         let what = format!("module_c.lu {flag}");
         if flag != "--checked" && lane_exit::environment_refusal(&out, &what) {
-            eprintln!("SKIP {what}: {}", String::from_utf8_lossy(&out.stderr).trim());
+            eprintln!(
+                "SKIP {what}: {}",
+                String::from_utf8_lossy(&out.stderr).trim()
+            );
             return None;
         }
-        panic!("{what} left no record: {}", String::from_utf8_lossy(&out.stderr));
+        panic!(
+            "{what} left no record: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
     };
     let want = ("exit(0)".to_string(), "21 22\n".to_string());
     for flag in ["--checked", "--native", "--release"] {
@@ -288,7 +304,10 @@ fn the_split_fixture_puts_c_go_in_its_own_cluster() {
     if out.status.code() != Some(0)
         && lane_exit::environment_refusal(&out, "wolf build --release (split)")
     {
-        eprintln!("SKIP split report: {}", String::from_utf8_lossy(&out.stderr).trim());
+        eprintln!(
+            "SKIP split report: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
         return;
     }
     let text = format!(
@@ -322,7 +341,9 @@ fn the_split_fixture_puts_c_go_in_its_own_cluster() {
 fn a_c_import_beside_a_module_c_function_of_its_name_is_refused_by_name() {
     let dir = clash();
     for flag in ["--native", "--release"] {
-        let Some(r) = wolfgang(&dir, flag) else { continue };
+        let Some(r) = wolfgang(&dir, flag) else {
+            continue;
+        };
         assert_eq!(r["verdict"], "unsupported", "{flag}: {r}");
         let why = r["x-unsupported-construct"].as_str().unwrap_or("");
         assert!(
