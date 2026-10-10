@@ -34,9 +34,11 @@ move.
   `muzzle/src/wolf.pkg`; with it their objects are the same as trunk's
   (release byte for byte; native with debug info stripped, since the
   declared copy builds from another directory).
-- **In this repository** the kw05 and kw10 gates' packages call their
-  listed assembly through bodyless externs, so `asm_link.rs`'s manifests
-  and `tests/fixtures/freestanding_interrupt/wolf.pkg` declare `ffi`.
+- **In this repository** three gates' packages call their listed
+  assembly through bodyless externs, so they declare `ffi`: kw05's
+  `asm_link.rs` manifests, kw10's
+  `tests/fixtures/freestanding_interrupt/wolf.pkg`, and s214's #600
+  witness in `shr_range_lanes.rs`.
 - `wolf audit` unites a directory's standalone entries (pax's
   `kmain_*.lu`) by the reason a reader sees, so a declaration several
   entries share is counted once.
