@@ -102,10 +102,15 @@ manifest that asks for build-time execution is refused (E1503).
 
 - `[pkg.caps]` Every package declares its capability set from
   `[net, fs, exec, env, ffi, unsafe, comptime]` (I13). A package's
-  code REACHES a capability three ways, and any one it does not
+  code REACHES a capability four ways, and any one it does not
   declare fails its build (E1504) — an error, never a warning:
   (1) an import of a capability-carrying std facade (`std.net`,
-  `std.fs`, `std.env`) or `import c` (`ffi`); (2) a prelude host
+  `std.fs`, `std.env`) or `import c` (`ffi`); (1a) a C declaration
+  in its own files — a bodyless `extern "c" fn` (`[abi.c.import]`) or
+  an `extern "c" let` (`[abi.link.extern]`) — which carries `ffi` at
+  the declaration, called or not, exactly as `import c` carries it at
+  its line (ruling #55); an `extern "c" fn` with a body and an `export
+  fn` are wolf code C calls and carry nothing; (2) a prelude host
   builtin (`[os.host.sigs]`) named anywhere in the package's own
   files, whose capability is the D33 sandbox category the compiler
   files it under (the fs, net, env and exec families carry `fs`,
@@ -119,7 +124,9 @@ manifest that asks for build-time execution is refused (E1503).
   reach, not what its dependencies' files reach. `wolf audit`
   derives the same set from source, with no build: it prints the
   transitive tree, `effective` (every declared capability united
-  with every reached one) and a reason per capability and package,
+  with every reached one) and a reason per capability and package
+  (for a C declaration, where it is declared and where the package
+  first uses it),
   and diffs the declarations across upgrades; `wolf audit --ci`
   exits non-zero on any acquisition, on any capability reached but
   not declared, and when the code cannot be read.

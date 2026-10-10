@@ -154,7 +154,10 @@ AAPCS64, win64, Apple arm64 deltas).
   bits by the caller according to its signedness, the rule C callers
   keep and clang's callees and the Apple arm64 ABI rely on. The
   program's link supplies `f` (the C library, or an object linked
-  beside the wolf objects). The checked machine and the reference
+  beside the wolf objects). The declaration carries the `ffi`
+  capability, as `import c` does (`[pkg.caps]`, ruling #55): a package
+  that declares one without `capabilities: [ffi]` is E1504, naming the
+  declaration and its first call. The checked machine and the reference
   interpreter have no C membrane and refuse the call by name. `import
   c` resolves the modelled five (`malloc`, `calloc`, `free`, `memset`,
   `memcpy`); its other names wait for the header importer (the second
@@ -463,7 +466,9 @@ AAPCS64, win64, Apple arm64 deltas).
   noreturn)` are reserved for KWC kw13 (LLVM inline assembly on the
   release tier, outlined to a generated assembly file on the native tier,
   which has none). **Not yet implemented**: until then every machine
-  answers an `asm` block `unsupported` by name.
+  answers an `asm` block `unsupported` by name, so a block reaches no
+  host and charges no capability yet (`[pkg.caps]`; its charge is
+  kw13's to land with it).
 
 ## §7 Linker control `[abi.link]`
 
@@ -492,7 +497,8 @@ AAPCS64, win64, Apple arm64 deltas).
   by a linker script (`__kernel_end`), an assembly label, or the C
   library. Its value is the symbol's **address**, as a `*T`: naming it
   is free and safe, and using the pointer is raw-tier like any `*T`
-  (`[mem.unsafe.raw.1]`). A type that is not a raw pointer, an
+  (`[mem.unsafe.raw.1]`). Like a bodyless `extern "c" fn` it carries the
+  `ffi` capability (`[pkg.caps]`). A type that is not a raw pointer, an
   initializer, or the form anywhere but a module's top level is
   **E0821**. The checked machine and lupin model no link: a program that
   names one is `unsupported` with the construct `the link-time symbol
