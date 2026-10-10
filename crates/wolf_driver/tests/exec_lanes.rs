@@ -276,7 +276,12 @@ fn every_lane_prints(name: &str, stdin: &str, want: &str, lupin_refuses: bool) {
                     "{what}: lupin {} at {} refuses (pre-mirror, or by name)",
                     obs.version, obs.commit
                 );
-                eprintln!("PINNED {what}: lupin {} at {} unsupported", obs.version, obs.commit);
+                eprintln!(
+                    "{} {what}: lupin {} at {} unsupported",
+                    if pre_mirror(&obs) { "PINNED" } else { "REFUSED BY NAME" },
+                    obs.version,
+                    obs.commit
+                );
                 continue;
             }
             assert_eq!(obs.verdict, "exit(0)", "{what}: {obs:?}");
@@ -315,7 +320,12 @@ fn every_lane_execs(name: &str, want: &str, lupin_refuses: bool) {
                 "{what}: a record where the image should have been replaced: {obs:?}"
             );
             assert_eq!(obs.verdict, "unsupported", "{what}: {obs:?}");
-            eprintln!("PINNED {what}: lupin {} at {} unsupported", obs.version, obs.commit);
+            eprintln!(
+                "{} {what}: lupin {} at {} unsupported",
+                if pre_mirror(&obs) { "PINNED" } else { "REFUSED BY NAME" },
+                obs.version,
+                obs.commit
+            );
             continue;
         }
         assert!(
@@ -370,6 +380,15 @@ fn command_line(pid: u32) -> String {
         .output()
         .expect("ps runs");
     String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+/// The new image's ignored-signal mask, from `/proc/<pid>/status`
+/// (linux; `None` elsewhere).
+#[cfg(unix)]
+fn sig_ignored(pid: u32) -> Option<u64> {
+    let text = std::fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
+    let hex = text.lines().find_map(|l| l.strip_prefix("SigIgn:"))?;
+    u64::from_str_radix(hex.trim(), 16).ok()
 }
 
 // ------------------------------------------------ the corpus rows --
@@ -517,6 +536,17 @@ fn exec_replaces_the_image_and_keeps_the_pid() {
             argv.starts_with("wolf-s225-argv0 -c "),
             "{what}: argv[0] as given, read from the kernel: {argv:?}"
         );
+        // SIGPIPE is not ignored in the new image: the `wolf` and `lupin`
+        // binaries ignore it (Rust programs do), and the program they run
+        // never asked to — the checked machine and lupin set it back
+        // before the exec; a native binary never changed it.
+        if let Some(ign) = sig_ignored(pid) {
+            assert_eq!(
+                ign & (1 << (13 - 1)),
+                0,
+                "{what}: SIGPIPE ignored in the new image (SigIgn {ign:#x})"
+            );
+        }
         stdin.write_all(b"from-harness\n").expect("feed");
         drop(stdin);
         let mut rest = String::new();
