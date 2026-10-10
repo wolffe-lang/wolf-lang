@@ -306,6 +306,8 @@ struct ArgFlow<'t> {
     store: bool,
     /// Typed exactly `str` (the fix-it's condition).
     is_str: bool,
+    /// The receiver.
+    is_recv: bool,
     /// The `mut` places this argument lends, each with its type.
     muts: Vec<(PlaceId, Option<Ty<'t>>)>,
 }
@@ -1963,8 +1965,10 @@ impl<'t> Lowerer<'t> {
     /// So at the call every `mut` argument gains the sites of every
     /// other argument that can reach it — an owned (`take`/`mut`)
     /// argument's heap values, and any argument's shareable bytes when
-    /// the `mut` argument's type can name such bytes. A builtin
-    /// container method keeps exactly its `store` parameter.
+    /// the `mut` argument's type can name such bytes — and a non-`Copy`
+    /// result gains the `read` arguments' the same way (the `take`/`mut`
+    /// ones already ride it). A builtin container method keeps exactly
+    /// its `store` parameter, and its result is drawn from its receiver.
     ///
     /// Until this pin a `mut` argument gained ONE site, the call's own,
     /// minted in the ambient region. That pins it only while the
@@ -1973,7 +1977,14 @@ impl<'t> Lowerer<'t> {
     /// pin is gone, so `outer` kept `s`'s bytes past the region block
     /// that built them: freed bytes printed on native and release,
     /// stale ones on the checked machine, `region-fault` on lupin.
-    fn flow_kept_arguments(&mut self, flows: &[ArgFlow<'t>], builtin: bool, callee: &str) {
+    fn flow_kept_arguments(
+        &mut self,
+        flows: &[ArgFlow<'t>],
+        builtin: bool,
+        callee: &str,
+        call: Span,
+        result: Option<(&mut Val, bool)>,
+    ) {
         let ambient = self.ambient();
         for (ti, t) in flows.iter().enumerate() {
             for &(place, pty) in &t.muts {
@@ -2027,6 +2038,29 @@ impl<'t> Lowerer<'t> {
                         );
                     }
                 }
+            }
+        }
+        if let Some((out, recv_only)) = result {
+            for a in flows {
+                // A builtin method's result is drawn from its receiver
+                // alone (`m.pairs()`, `xs.pop()`, `m.remove(k)`).
+                if !a.lends || (recv_only && !a.is_recv) {
+                    continue;
+                }
+                for &s in &a.sites {
+                    if self.sites[s.0 as usize].kind == SiteKind::Param {
+                        continue;
+                    }
+                    if out.sites.binary_search(&s).is_ok() {
+                        continue;
+                    }
+                    if let Err(i) = out.views.binary_search(&s) {
+                        out.views.insert(i, s);
+                    }
+                }
+            }
+            if out.origin.is_none() && !out.views.is_empty() {
+                out.origin = Some(call);
             }
         }
     }
@@ -5505,6 +5539,7 @@ impl<'t> Lowerer<'t> {
                     lends: ty.map(|t| self.may_lend_bytes(t, 0)).unwrap_or(true),
                     store: false,
                     is_str: false,
+                    is_recv: true,
                     muts: surface.mut_args.iter().map(|&(p, _)| (p, ty)).collect(),
                 });
             }
@@ -5696,6 +5731,7 @@ impl<'t> Lowerer<'t> {
                         lends: ty.map(|t| self.may_lend_bytes(t, 0)).unwrap_or(true),
                         store: param.store,
                         is_str: ty.is_some_and(|t| matches!(t.kind(), TyKind::Prim(Prim::Str))),
+                        is_recv: false,
                         muts: surface.mut_args[before.2..]
                             .iter()
                             .map(|&(p, _)| (p, ty))
@@ -5890,8 +5926,9 @@ impl<'t> Lowerer<'t> {
             }
         }
         // s227 (wolf-lang#660, `[mem.region.escape]`): what the callee
-        // may keep of one argument in another. A builtin method keeps
-        // exactly its `store` parameter.
+        // may keep of one argument in another, and in a non-`Copy`
+        // result. A builtin method keeps exactly its `store`
+        // parameter, and its result is drawn from its receiver.
         // Sema records a builtin method's "declaration" as the member
         // name at the call itself (it has none), so a declaration span
         // inside this call is the mark of one — whatever the receiver's
@@ -5902,7 +5939,20 @@ impl<'t> Lowerer<'t> {
                     ds.file == e.span.file && ds.lo >= e.span.lo && ds.hi <= e.span.hi
                 })
         });
-        self.flow_kept_arguments(&flows, builtin_method, &callee);
+        let result_shares = (ret_heap && ret_ty.map(|t| self.may_lend_bytes(t, 0)).unwrap_or(true))
+            || declared_str
+            || (builtin_method && !str_site && self.is_str_or_str_row(e.span));
+        self.flow_kept_arguments(
+            &flows,
+            builtin_method,
+            &callee,
+            e.span,
+            if result_shares {
+                Some((&mut out, builtin_method))
+            } else {
+                None
+            },
+        );
         // s171 (wolf-lang#392, `[mem.region.escape]`): a
         // `[mem.str.view]` product is a subslice of the receiver's own
         // storage, so its bytes live exactly where the receiver's do
