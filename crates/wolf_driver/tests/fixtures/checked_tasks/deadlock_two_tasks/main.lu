@@ -1,0 +1,23 @@
+//! s226 witness — a deadlock, reported by name. Two tasks each wait for
+//! the other's message before sending their own: every live task is
+//! blocked at a blocking point and no timer is pending
+//! (`[conc.deadlock.def]`), so the run is `trap(deadlock)`
+//! (`[conc.deadlock.trap]`). Not a corpus row: the native tier is
+//! permitted not to detect it, and waits.
+
+fn main() -> !int {
+    let a = channel[int](0)
+    let b = channel[int](0)
+    scope s {
+        s.spawn(fn() {
+            let v = a.recv() else |_| 0
+            b.send(v) else |_| {}
+        })
+        s.spawn(fn() {
+            let v = b.recv() else |_| 0
+            a.send(v) else |_| {}
+        })
+    }
+    print("unreachable")
+    0
+}

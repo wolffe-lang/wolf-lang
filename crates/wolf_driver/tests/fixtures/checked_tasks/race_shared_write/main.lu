@@ -1,0 +1,33 @@
+//! s226 witness — a channel-less shared write. Two tasks store to one
+//! word through copies of one raw pointer; nothing orders the stores
+//! (no channel, no `Mutex`, no atomic), so the second is a data race:
+//! `trap(race)` at `[conc.mm.race.3]` on the checked machine and lupin.
+//! Not a corpus row: the compiled tiers run it and print one of the two
+//! values (`[conc.mm.race.1]`).
+
+import c "stdlib.h"
+
+fn store(p: *u64, v: u64) {
+    // # Safety: DELIBERATELY UNSOUND — the unsynchronised store is the
+    // race this file exists to show.
+    unsafe {
+        p[0] = v
+    }
+}
+
+fn main() -> int {
+    // # Safety: one live 8-byte word, written by two tasks with no
+    // happens-before between the writes, freed after the scope joined.
+    unsafe {
+        let m = c.calloc(1, 8)
+        let p = m as *u64
+        scope s {
+            s.spawn(fn() { store(p, 1) })
+            s.spawn(fn() { store(p, 2) })
+        }
+        let x = p[0]
+        print("{x}")
+        c.free(m)
+    }
+    0
+}

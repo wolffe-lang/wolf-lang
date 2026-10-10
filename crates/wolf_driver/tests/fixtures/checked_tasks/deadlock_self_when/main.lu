@@ -1,0 +1,21 @@
+//! s226 witness — self-acquisition through a call. `again` acquires a
+//! mutex its caller already holds: it can never complete, and is
+//! `trap(deadlock)` at once (`[conc.deadlock.self]`; the lexical nest is
+//! E1103). Inside a `when` body the operand's name is its payload, so
+//! the callee reaches the mutex through a closure that captured it
+//! (a `Mutex[int]` parameter does not typecheck as a `when` operand
+//! today, which is its own issue).
+
+fn main() -> !int {
+    let m = Mutex(0)
+    let n = Mutex(0)
+    let o = Mutex(0)
+    let again = fn() {
+        when (m, n) { m += 1 }
+    }
+    when (m, o) {
+        m += 1
+        again()
+    }
+    0
+}

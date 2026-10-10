@@ -1,0 +1,42 @@
+//! s226 witness — a race-free hand-off. Two tasks write one word; the
+//! first writes and then sends, the second receives and then writes, so
+//! `[conc.mm.hb.chan]` orders the two writes (the k-th send
+//! happens-before the k-th receive completes) and the scope's join
+//! orders both before `main`'s read. No race: 2 on every machine.
+
+import c "stdlib.h"
+
+fn first(p: *u64, turn: channel[int]) {
+    // # Safety: `p` is the live word `main` owns; this store precedes
+    // the send that hands the word on.
+    unsafe {
+        p[0] = 1
+    }
+    turn.send(1) else |_| {}
+}
+
+fn second(p: *u64, turn: channel[int]) {
+    let t = turn.recv() else |_| 0
+    // # Safety: as `first`; the receive orders this access after it.
+    unsafe {
+        p[0] = p[0] + 1
+    }
+}
+
+fn main() -> int {
+    // # Safety: one live, zeroed 8-byte word; every access is ordered by
+    // the channel or by the scope's join.
+    unsafe {
+        let m = c.calloc(1, 8)
+        let p = m as *u64
+        let turn = channel[int](1)
+        scope s {
+            s.spawn(fn() { first(p, turn) })
+            s.spawn(fn() { second(p, turn) })
+        }
+        let x = p[0]
+        print("{x}")
+        c.free(m)
+    }
+    0
+}
