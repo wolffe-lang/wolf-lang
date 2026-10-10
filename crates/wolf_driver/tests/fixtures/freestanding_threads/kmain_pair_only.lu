@@ -1,0 +1,14 @@
+// s223: a kernel that calls the ambient pair and allocates nothing
+// else. The call alone links the freestanding runtime: wolf writes the
+// archive beside the object (`[abi.target.none.ambient]`).
+extern "c" fn wolf_rt_ambient_get() -> *u8
+extern "c" fn wolf_rt_ambient_set(p: *u8)
+
+export fn kmain() -> i64 {
+    // # Safety: the runtime's documented pair; null is the root.
+    unsafe {
+        let p = wolf_rt_ambient_get()
+        wolf_rt_ambient_set(p)
+        if p as u64 == 0 { 33 } else { 1 }
+    }
+}

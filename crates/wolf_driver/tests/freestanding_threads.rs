@@ -17,7 +17,8 @@
 //! 1. both tiers build the kernel: the roster admits the pair as hooks
 //!    (no E1306), the object imports it, and the runtime archive is
 //!    written beside it; the archive defines the pair and still imports
-//!    only `wolf_alloc`, `wolf_free` and `wolf_trap`;
+//!    only `wolf_alloc`, `wolf_free` and `wolf_trap`; and (1b) a kernel
+//!    whose only runtime call is the pair gets the archive too;
 //! 2. (x86-64 linux) linked `-nostdlib` and run, on both tiers: with the
 //!    pair the List is charged to `ra` and `rb` holds nothing; without
 //!    it (the control, `mode_shared.lu`), the List lands in `rb` — the
@@ -133,10 +134,14 @@ fn none_rt() -> Option<&'static Path> {
 /// every object the build wrote (the release tier may write one per
 /// cluster; the listed assembly lands as `k.<tier>.asm-<stem>.o`).
 fn build_obj(dir: &Path, tier: &str) -> Vec<PathBuf> {
+    build_entry(dir, tier, "kmain_threads.lu")
+}
+
+fn build_entry(dir: &Path, tier: &str, entry: &str) -> Vec<PathBuf> {
     let o = format!("k.{tier}.o");
     let mut args = vec![
         "build",
-        "kmain_threads.lu",
+        entry,
         "--target",
         TARGET,
         "--emit=obj",
@@ -164,7 +169,7 @@ fn build_obj(dir: &Path, tier: &str) -> Vec<PathBuf> {
     objs.sort();
     assert!(
         out.status.success() && !objs.is_empty(),
-        "wolf build kmain_threads.lu --target {TARGET} --emit=obj ({tier}) must build \
+        "wolf build {entry} --target {TARGET} --emit=obj ({tier}) must build \
          (exit {:?}) — a refusal here is the row failing, never a skip:\n{}",
         out.status.code(),
         text(&out.stderr)
@@ -275,6 +280,48 @@ fn the_roster_admits_the_pair_and_the_archive_defines_it() {
         unresolved, want,
         "the archive imports the hook list and nothing else"
     );
+}
+
+/// Row 1b on every unix host: an object whose only call into the
+/// runtime is the pair still gets the archive beside it (the pair is
+/// the program's own `extern "c" fn`, a `c.` callee in the WIR).
+#[cfg(unix)]
+#[test]
+fn calling_the_pair_alone_links_the_archive() {
+    let Some(lib) = none_rt() else { return };
+    for tier in ["native", "release"] {
+        let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
+            .join("freestanding_threads")
+            .join(format!("row1b_{tier}"));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        std::fs::copy(
+            fixture("freestanding_threads", "kmain_pair_only.lu"),
+            dir.join("kmain_pair_only.lu"),
+        )
+        .expect("copy fixture");
+        let objs = build_entry(&dir, tier, "kmain_pair_only.lu");
+        let mut undef = BTreeSet::new();
+        for obj in &objs {
+            let (u, ..) = symbols_of(
+                &std::fs::read(obj).expect("read"),
+                &obj.display().to_string(),
+            );
+            undef.extend(u);
+        }
+        for h in AMBIENT_HOOKS {
+            assert!(
+                undef.contains(h),
+                "{tier}: the object imports `{h}`: {undef:?}"
+            );
+        }
+        let beside = dir.join(format!("k.{tier}.rt-none.a"));
+        assert!(
+            std::fs::read(&beside).ok() == std::fs::read(lib).ok(),
+            "{tier}: a call to the pair alone writes the runtime archive beside the object, {}",
+            beside.display()
+        );
+    }
 }
 
 /// Row 2: linked with no libc, run, on the x86-64 linux host.
