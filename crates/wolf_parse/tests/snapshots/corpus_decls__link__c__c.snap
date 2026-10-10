@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 23..61 name=go pub body=Block
+FnDecl 86..125 name=go2 pub body=Block
