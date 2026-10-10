@@ -2625,3 +2625,131 @@ fn clean_reads_and_disjoint_writes_beside_a_mut_receiver() {
          }\n",
     );
 }
+
+// ---- s227 (wolf-lang#660): the kept-argument rule ----
+
+#[test]
+fn e1010_a_callee_may_keep_its_argument_in_a_mut_argument() {
+    // The report: `in st { }` aims what `keep_it` allocates at `st`;
+    // `s` was built in `pass` and `l` outlives it. The diagnostic
+    // names the callee, both arguments and the region, and offers the
+    // one sound edit at the call.
+    snap(
+        "e1010_kept_argument_str",
+        "struct Log { last: str, seq: int }\n\
+         fn keep_it(mut l: Log, s: str) {\n    \
+             l.last = copy s\n    \
+             l.seq = l.seq + 1\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let st = region()\n    \
+             in st {\n        \
+                 var l = Log { last: \"\", seq: 0 }\n        \
+                 region pass {\n            \
+                     let s = \"built in pass, {l.seq} uses\"\n            \
+                     in st {\n                \
+                         keep_it(mut l, s)\n            \
+                     }\n        \
+                 }\n        \
+                 print(\"{l.last}\")\n    \
+             }\n    \
+             0\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1010_a_kept_aggregate_argument_has_no_fix_it() {
+    // A struct argument that reaches a `str`: the same refusal, and no
+    // `\"{d}\"` edit — only a `str` argument has that repair.
+    snap(
+        "e1010_kept_argument_struct",
+        "struct Log { last: str, seq: int }\n\
+         struct Doc { title: str, n: int }\n\
+         fn keep(mut l: Log, d: Doc) {\n    \
+             l.last = copy d.title\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let st = region()\n    \
+             in st {\n        \
+                 var l = Log { last: \"\", seq: 0 }\n        \
+                 region pass {\n            \
+                     let d = Doc { title: \"built {l.seq}\", n: 1 }\n            \
+                     in st {\n                \
+                         keep(mut l, d)\n            \
+                     }\n        \
+                 }\n        \
+                 print(\"{l.last}\")\n    \
+             }\n    \
+             0\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1010_a_copy_of_an_aggregate_shares_its_strs() {
+    // No call at all: `copy d` is placed in `st`, and its `title`
+    // still names bytes in `pass`.
+    snap(
+        "e1010_copy_shares_str",
+        "struct Doc { title: str, n: int }\n\
+         fn main() -> !int {\n    \
+             let st = region()\n    \
+             in st {\n        \
+                 var o = Doc { title: \"\", n: 0 }\n        \
+                 region pass {\n            \
+                     let d = Doc { title: \"built {o.n}\", n: 1 }\n            \
+                     in st {\n                \
+                         o = copy d\n            \
+                     }\n        \
+                 }\n        \
+                 print(\"{o.title}\")\n    \
+             }\n    \
+             0\n\
+         }\n",
+    );
+}
+
+#[test]
+fn kept_arguments_that_cannot_dangle_stay_silent() {
+    // Built inside the `in` block; a scalar; a `mut` argument that can
+    // name no bytes; a builtin that keeps nothing of its key; and bytes
+    // from a LONGER-lived region kept in a list built in a region block
+    // and then embedded in a struct there — shared, never placed, so no
+    // E1004 (wolf-book's `pargrep`, refused by the first cut).
+    snap(
+        "clean_kept_arguments",
+        "struct Log { last: str, seq: int }\n\
+         struct Tot { n: int, k: int }\n\
+         struct Table { names: List[str], n: int }\n\
+         fn keep_it(mut l: Log, s: str) {\n    \
+             l.last = copy s\n\
+         }\n\
+         fn add(mut t: Tot, s: str) {\n    \
+             t.n = t.n + s.len\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let st = region()\n    \
+             in st {\n        \
+                 var l = Log { last: \"\", seq: 0 }\n        \
+                 var t = Tot { n: 0, k: 0 }\n        \
+                 var m = Map[str, int]()\n        \
+                 let outer = [\"a{t.n}\", \"b\"]\n        \
+                 var total = 0\n        \
+                 region pass {\n            \
+                     let s = \"built in pass, {l.seq} uses\"\n            \
+                     var files = List[str]()\n            \
+                     for name in outer { (mut files).push(name) }\n            \
+                     let table = Table { names: files, n: 2 }\n            \
+                     in st {\n                \
+                         keep_it(mut l, \"{s}\")\n                \
+                         add(mut t, s)\n                \
+                         total = (mut m).remove(s) else table.n\n            \
+                     }\n        \
+                 }\n        \
+                 print(\"{l.last} {t.n} {total}\")\n    \
+             }\n    \
+             0\n\
+         }\n",
+    );
+}

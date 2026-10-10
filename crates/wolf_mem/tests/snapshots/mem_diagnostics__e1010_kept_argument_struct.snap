@@ -1,0 +1,27 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1010]: `keep` may keep `d` in its `mut` argument `l`, and `l` outlives region `pass`, where `d`'s bytes live
+  --> mem:///main.lu:13:29
+   |
+10 |         region pass {
+   |                ---- region `pass` is created here
+11 |             let d = Doc { title: "built {l.seq}", n: 1 }
+   |                                  --------------- allocated here, into region `pass`
+12 |             in st {
+13 |                 keep(mut l, d)
+   |                          - `l` is lent `mut` here: the callee may store any other argument's bytes in it
+   |                             ^ this argument's bytes are in region `pass`, which is freed before `l` is
+14 |             }
+15 |         }
+   |         - the region is freed here — everything in it is freed wholesale, as one unit
+   |
+   = note: a call may keep what it is handed: a callee can store one argument's bytes into a `mut`
+     argument (`l.last = copy s` shares a `str`'s bytes, a `push` lends them), so a `mut`
+     argument is taken to share the bytes of every other argument that can name bytes a
+     region owns [mem.region.escape]. `in r { … }` aims what the callee ALLOCATES at `r`; an
+     argument's bytes stay where they were built. Build the value where the `mut` argument
+     lives: inside the `in` block (an interpolation there materializes in `r`), or outside
+     the region block; or let the block's own value leave with `copy region { … }` and make
+     the call after it [mem.region.copyout].
