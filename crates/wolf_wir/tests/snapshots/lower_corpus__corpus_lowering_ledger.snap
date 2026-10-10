@@ -269,6 +269,13 @@ grammar/type_position_keyword.lu: not mem-clean (pre-wir rungs own it)
 grammar/when_reserved.lu: not mem-clean (pre-wir rungs own it)
 hello.lu: lowers
 io/eprint.lu: lowers
+json/dup_count_distinct.lu: lowers
+json/dup_kind.lu: lowers
+json/dup_last_wins.lu: lowers
+json/dup_nested.lu: lowers
+json/dup_path.lu: lowers
+json/dup_render.lu: lowers
+json/dup_thrice.lu: lowers
 json/query.lu: lowers
 json/rows.lu: lowers
 kernels/churn_b3.lu: lowers
@@ -283,6 +290,7 @@ kernels/hot_sum_reduce.lu: lowers
 kernels/lshr_top_bits.lu: lowers
 kernels/sha256_block.lu: lowers
 kernels/walk_twice.lu: lowers
+link/module_c.lu: lowers
 lints/allow_item.lu: lowers
 lints/allow_nothing.lu: lowers
 lints/allow_unknown_code.lu: lowers
