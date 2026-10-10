@@ -150,6 +150,7 @@
 //! precedent, one clause with two spellings that are checked against
 //! each other instead of trusted to match.
 
+use std::cell::Cell;
 use std::sync::Mutex;
 
 use crate::io::{
@@ -157,46 +158,233 @@ use crate::io::{
 };
 
 // ------------------------------------------------ the ambient region --
+//
+// # Design note: the root arena takes no lock per allocation (s222)
+//
+// **What the lock was for.** Until s222 the process root — where an
+// allocation lands when no `region` is open (`[mem.region.create.3]`)
+// — was ONE bump window over a list of chunks behind one `Mutex`, and
+// every `list::alloc_in(null)` took it: every list header, every list
+// growth, every `str` materialized with no region open. The lock
+// guarded exactly two words (the bump offset and the chunk list); it
+// existed only because every thread bumped the same window. ws54
+// measured it as the largest user-space cost on a lobo hand
+// (wolf-lang#635: 7.4 % self there, 12.6 % on s222's re-derivation —
+// an uncontended lock/unlock pair per allocation on a one-thread
+// hand), and bs50 measured the contended case (#421: `par` over an
+// allocating `f` slower than serial, seconds of kernel time queueing
+// on the futex).
+//
+// **The options.** (a) A lock-free bump: one shared atomic offset per
+// chunk, `fetch_add` per allocation. It removes the futex but keeps a
+// contended cache line and an atomic RMW on every allocation, and
+// chunk replacement is still a lock or a CAS loop. (b) Per-region
+// arenas for tasks (#421's ruling #30: each `par` worker allocates in
+// its own region): a semantic change to where a task's allocations
+// land, owed its own lane (s205), and it does nothing for a one-thread
+// lobo hand, which allocates in the root. (c) **Per-thread windows over
+// a shared, never-freed chunk list** — the recommendation, and what is
+// built here: each thread bumps its own window `[cur, end)` in a
+// thread-local with no atomic and no lock; the lock is taken only to
+// REFILL (once per `CHUNK_MIN` bytes, or for one oversized ask), so it
+// is out of the per-allocation path on both the one-thread and the
+// contended shape.
+//
+// **The memory-safety argument.**
+// 1. *Lifetime.* Every byte the root hands out lies in a `Chunk` owned
+//    by `AMBIENT.chunks`, a `static` that is only ever pushed to: no
+//    chunk is freed or moved for the life of the process, whatever
+//    thread made it and whether that thread still exists. So a pointer
+//    the root returned is valid on every thread forever — exactly the
+//    contract the single arena had ("never fails, never frees"), and
+//    the reason a `str` may cross a channel, a `par` join or a proc
+//    boundary without a copy.
+// 2. *Exclusivity.* A window is owned by exactly one party at a time:
+//    one thread's `WINDOW`, or `AMBIENT.tails`/`AMBIENT.shared` under
+//    the lock. Ownership moves only under the lock (refill adopts a
+//    tail or a fresh chunk; a thread's exit parks its unused tail), so
+//    no two threads ever bump the same window and no byte is handed out
+//    twice (`concurrent_allocations_never_overlap`).
+// 3. *Thread exit.* `Window`'s destructor parks the unused tail (it
+//    frees nothing — the chunk is the static's); an allocation on a
+//    thread whose `WINDOW` is already destroyed (a later TLS destructor)
+//    takes the locked shared window, trunk's path, so it is correct at
+//    any point in teardown (`a_dead_threads_strings_outlive_it`).
+// 4. *Visibility.* The lock never published the BYTES of an
+//    allocation, only the bump offset: a reader on another thread sees
+//    a `str`'s bytes through whatever synchronized the pointer's
+//    hand-off (a channel send, a join, a region transfer —
+//    `[conc.mm.hb.*]`), exactly as before.
+// 5. *Re-entrancy.* No signal handler in this runtime allocates (the
+//    signal path writes one byte to a self-pipe; the stack-overflow
+//    reporter writes and exits), and nothing between reading and
+//    writing `cur` can call back into the allocator, so the window is
+//    never re-entered mid-bump. Tasks are OS threads with their own
+//    stacks (D13: no green threads), so a task never changes threads
+//    under a window it is using.
+//
+// **Cost.** One thread-local window per thread that has allocated in
+// the root: at most `CHUNK_MIN` of address space each (uninitialized in
+// release, so untouched pages cost no RSS; debug zeroes, as every
+// chunk always has). A tail of `TAIL_MIN` or more is parked when its
+// thread exits and adopted by the next refill, so threads that come and
+// go (procs, pool workers that retire) do not leak a window each.
+//
+// **No new rule.** The root's meaning is unchanged — process lifetime,
+// never freed, readable from every thread — so the checked machine and
+// lupin, which model the root region and no lock, mirror nothing.
+// `[conc.task.par.cost]`'s sentence that the root "serializes
+// allocation behind one lock" is rewritten to say what is true now.
 
 const CHUNK_MIN: usize = 64 * 1024;
 const ALIGN: usize = 16;
+/// An ask at least this large gets a chunk of its own and leaves the
+/// thread's window as it was (replacing a mostly-unused window for one
+/// big ask would strand the rest of it).
+const OWN_CHUNK: usize = CHUNK_MIN / 4;
+/// A tail shorter than this is not worth parking: its bytes stay owned
+/// by the chunk list and are simply never handed out.
+const TAIL_MIN: usize = 4096;
+/// Parked tails kept for adoption; past this a tail is dropped (only
+/// its address range — the bytes stay owned by the chunk list).
+const TAILS_MAX: usize = 4096;
 
-struct Arena {
+/// The root arena's shared state, behind the one lock the refill path
+/// takes.
+struct Root {
     /// Raw `MaybeUninit` capacity, same rule as a region's chunks
     /// (`crate::native::Chunk`): the Rust side never reads these bytes.
+    /// Only ever pushed to — the lifetime half of the design note.
     chunks: Vec<crate::native::Chunk>,
-    used: usize,
+    /// Unused windows `(cur, end)` parked by exited threads (and by a
+    /// refill that replaced a still-useful window), adoptable by the
+    /// next refill on any thread.
+    tails: Vec<(usize, usize)>,
+    /// The window for allocations on a thread whose `WINDOW` is gone
+    /// (TLS teardown) — bumped under the lock, the pre-s222 path.
+    shared: (usize, usize),
 }
 
-static AMBIENT: Mutex<Arena> = Mutex::new(Arena {
+static AMBIENT: Mutex<Root> = Mutex::new(Root {
     chunks: Vec::new(),
-    used: 0,
+    tails: Vec::new(),
+    shared: (0, 0),
 });
 
-/// Bump-allocate `size` bytes (16-aligned) in the process ambient
-/// region. Never fails, never frees; zero-size asks get a distinct
-/// aligned pointer.
-pub(crate) fn ambient_alloc(size: usize) -> *mut u8 {
-    let mut a = AMBIENT.lock().unwrap_or_else(|p| p.into_inner());
-    let size = size.next_multiple_of(ALIGN).max(ALIGN);
-    let need_new = match a.chunks.last() {
-        Some(c) => a.used + size > c.len(),
-        None => true,
-    };
-    if need_new {
-        let cap = size.max(CHUNK_MIN);
+impl Root {
+    /// A fresh chunk of at least `cap` bytes; its whole span as a window.
+    fn fresh(&mut self, cap: usize) -> (usize, usize) {
         // #113: no zeroing (the control experiment convicted this path
         // — ambient chunks zeroed in full made the no-region variant
         // 1.65x slower than the region pair). Same debug/release split
         // as `native::new_chunk`, same E1001/L1 reasoning. No pooling:
         // the root arena never frees.
-        a.chunks.push(crate::native::new_chunk(cap));
-        a.used = 0;
+        let mut c = crate::native::new_chunk(cap);
+        let start = c.as_mut_ptr() as usize;
+        self.chunks.push(c);
+        (start, start + cap)
     }
-    let used = a.used;
-    a.used += size;
-    let chunk = a.chunks.last_mut().expect("chunk exists");
-    unsafe { chunk.as_mut_ptr().cast::<u8>().add(used) }
+
+    /// Park a window if it is worth adopting later.
+    fn park(&mut self, (cur, end): (usize, usize)) {
+        if end - cur >= TAIL_MIN && self.tails.len() < TAILS_MAX {
+            self.tails.push((cur, end));
+        }
+    }
+
+    /// Take a parked window that fits `size`.
+    fn adopt(&mut self, size: usize) -> Option<(usize, usize)> {
+        let i = self.tails.iter().position(|&(c, e)| e - c >= size)?;
+        Some(self.tails.swap_remove(i))
+    }
+}
+
+/// One thread's bump window. Addresses, not pointers: the window owns
+/// nothing — the bytes are `AMBIENT.chunks`'s.
+struct Window {
+    cur: Cell<usize>,
+    end: Cell<usize>,
+}
+
+impl Drop for Window {
+    /// Thread exit: park the unused tail for the next thread. Frees
+    /// nothing.
+    fn drop(&mut self) {
+        let w = (self.cur.get(), self.end.get());
+        if w.1 > w.0 {
+            AMBIENT.lock().unwrap_or_else(|p| p.into_inner()).park(w);
+        }
+    }
+}
+
+thread_local! {
+    static WINDOW: Window = const {
+        Window {
+            cur: Cell::new(0),
+            end: Cell::new(0),
+        }
+    };
+}
+
+/// Bump-allocate `size` bytes (16-aligned) in the process ambient
+/// region. Never fails, never frees; zero-size asks get a distinct
+/// aligned pointer. The common path is this thread's window and takes
+/// no lock (the design note above).
+pub(crate) fn ambient_alloc(size: usize) -> *mut u8 {
+    let size = size.next_multiple_of(ALIGN).max(ALIGN);
+    let hit = WINDOW.try_with(|w| {
+        let cur = w.cur.get();
+        if w.end.get() - cur >= size {
+            w.cur.set(cur + size);
+            cur
+        } else {
+            0
+        }
+    });
+    match hit {
+        Ok(p) if p != 0 => p as *mut u8,
+        _ => ambient_refill(size),
+    }
+}
+
+/// The slow path: this thread's window cannot take `size` (or the
+/// thread's `WINDOW` is already destroyed). The one place the root's
+/// lock is taken.
+#[cold]
+#[inline(never)]
+fn ambient_refill(size: usize) -> *mut u8 {
+    let mut root = AMBIENT.lock().unwrap_or_else(|p| p.into_inner());
+    if size >= OWN_CHUNK {
+        // A chunk of its own; the thread's window is left as it was.
+        return root.fresh(size).0 as *mut u8;
+    }
+    let (cur, end) = root.adopt(size).unwrap_or_else(|| root.fresh(CHUNK_MIN));
+    let placed = WINDOW.try_with(|w| {
+        let old = (w.cur.get(), w.end.get());
+        w.cur.set(cur + size);
+        w.end.set(end);
+        old
+    });
+    match placed {
+        Ok(old) => {
+            root.park(old);
+            cur as *mut u8
+        }
+        Err(_) => {
+            // TLS teardown: the window just taken goes back, and the
+            // locked shared window serves this ask.
+            root.park((cur, end));
+            let (sc, se) = root.shared;
+            if se - sc < size {
+                let fresh = root.adopt(size).unwrap_or_else(|| root.fresh(CHUNK_MIN));
+                let old = core::mem::replace(&mut root.shared, fresh);
+                root.park(old);
+            }
+            let p = root.shared.0;
+            root.shared.0 += size;
+            p as *mut u8
+        }
+    }
 }
 
 /// Copy `bytes` into the process ROOT arena, returning the stable
