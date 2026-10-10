@@ -189,6 +189,12 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         "os_spawn_fds" | "os_pipe" => SandboxCategory::Exec,
         "os_chdir" => SandboxCategory::Env,
         "os_isatty" => SandboxCategory::Io,
+        // s225 (wolf-lang#534; rulings #53/#54's reading): replacing the
+        // running program is process control, `exec` with the spawn
+        // family — at comptime it would replace the compiler. Removing a
+        // variable mutates the environment `env_set` writes, `env`.
+        "os_exec" => SandboxCategory::Exec,
+        "env_unset" => SandboxCategory::Env,
         // signal RECEPTION (s114, #126): process control, so `exec`
         // like the rest of the family — comptime-refused (you cannot
         // wait for an OS signal at compile time).
