@@ -253,9 +253,11 @@ fn the_issues_witness_takes_both_branches_on_both_tiers() {
     for name in ["main.lu", "rd.S"] {
         std::fs::copy(fixture(name), dir.join(name)).expect("copy the witness");
     }
+    // The witness reads its value through a bodyless `extern "c" fn`,
+    // which carries `ffi` (s221, ruling #55, `[pkg.caps]`).
     std::fs::write(
         dir.join("wolf.pkg"),
-        "pkg {\n    name: \"shr-range\"\n    version: \"0.0.1\"\n    asm: [\"rd.S\"]\n}\n",
+        "pkg {\n    name: \"shr-range\"\n    version: \"0.0.1\"\n    asm: [\"rd.S\"]\n    capabilities: [ffi]\n}\n",
     )
     .expect("write wolf.pkg");
     rt_staticlib();
