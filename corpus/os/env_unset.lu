@@ -1,0 +1,41 @@
+//! check: run(exit=0, stdout="got: tarn\nlisted: 1\nafter: <missing>\nlisted: 0\nabsent: ok\nempty: invalid\nequals: invalid\nagain: fell")
+//! phase: run
+//! conforms: os.env.unset, err.union
+//!
+//! s225 (`[os.env.unset]`; wolf-lang#534) — `env_unset` removes a
+//! variable: `env_get` answers `missing` after it and `env_vars` no
+//! longer lists it. Removing a variable that is not there succeeds
+//! (POSIX `unsetenv`), and the names `env_set` refuses (`=`, empty) are
+//! `invalid` here too. A later `env_set` brings the name back. Every
+//! machine runs it: the checked machine and lupin over their overlays,
+//! native and release over the program's own environment. That a CHILD
+//! no longer sees an unset variable is a spawn, so it is the unix
+//! witness in `crates/wolf_driver/tests/exec_lanes.rs`.
+
+fn listed(name: str) -> int {
+    var n = 0
+    let want = "{name}="
+    for kv in env_vars() {
+        if kv.starts_with(want) { n += 1 }
+    }
+    n
+}
+
+fn main() -> !int {
+    env_set("WOLF_S225_DEN", "tarn")?
+    let v = env_get("WOLF_S225_DEN")?
+    print("got: {v}")
+    print("listed: {listed("WOLF_S225_DEN")}")
+    env_unset("WOLF_S225_DEN")?
+    let gone = env_get("WOLF_S225_DEN") else |_| "<missing>"
+    print("after: {gone}")
+    print("listed: {listed("WOLF_S225_DEN")}")
+    env_unset("WOLF_S225_NEVER_SET")?
+    print("absent: ok")
+    env_unset("") else |_| print("empty: invalid")
+    env_unset("A=B") else |_| print("equals: invalid")
+    env_set("WOLF_S225_DEN", "fell")?
+    let back = env_get("WOLF_S225_DEN")?
+    print("again: {back}")
+    0
+}

@@ -1,0 +1,41 @@
+//! check: run(exit=0, stdout="no_argv=invalid\nno_equals=invalid\nempty_name=invalid\nodd_map=invalid\nout_of_range=invalid\nrepeated=invalid\nbad_source=invalid\nstill_here")
+//! phase: run
+//! conforms: os.proc.exec, err.union
+//!
+//! s225 (`[os.proc.exec]`; wolf-lang#534) — the exec rows that replace
+//! nothing, deterministic on every host. `os_exec(exe, argv, env, map)`
+//! decides its SHAPE before anything else is read: an empty argv (argv[0]
+//! is the new program's own name and must be given), an environment entry
+//! with no `=` or an empty name, and every map that `os_spawn_fds` would
+//! call `invalid` are each `invalid` — on windows too, where a well-formed
+//! exec is `unsupported` instead. Every row returns, so the program is
+//! still here at the end. The rows that would replace the image are the
+//! unix witnesses in `crates/wolf_driver/tests/exec_lanes.rs`.
+
+fn row(argv: List[str], env: List[str], map: List[int]) -> str {
+    os_exec("wolf-s225-no-such-program", argv, env, map) else |e| {
+        return match e {
+            unsupported => "unsupported",
+            invalid => "invalid",
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+    }
+    "returned"
+}
+
+fn main() -> !int {
+    let none = List[int]()
+    let env = ["A=1"]
+    let argv = ["wolf-s225-no-such-program"]
+    print("no_argv={row(List[str](), copy env, copy none)}")
+    print("no_equals={row(copy argv, ["A"], copy none)}")
+    print("empty_name={row(copy argv, ["=1"], copy none)}")
+    print("odd_map={row(copy argv, copy env, [1])}")
+    print("out_of_range={row(copy argv, copy env, [256, 1])}")
+    print("repeated={row(copy argv, copy env, [1, 1, 1, 2])}")
+    print("bad_source={row(copy argv, copy env, [1, 0 - 2])}")
+    print("still_here")
+    0
+}
