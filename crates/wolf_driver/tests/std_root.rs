@@ -4,6 +4,8 @@
 //! the prelude-stub `std`. Fixtures are self-contained temp trees —
 //! never a sibling checkout.
 
+mod lane_exit;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -175,4 +177,260 @@ fn a_std_miss_with_a_root_does_not_name_wolf_std() {
         !err.contains("WOLF_STD"),
         "no root-is-unset note when a root IS set:\n{err}"
     );
+}
+
+// ---------------------------------------------------------------------
+// Ruling #29 (wolf-lang#415, s204): the default std root is a `std`
+// directory beside the running `wolf` binary — where the release archive
+// stages the pinned wolf-std — and every configured source still
+// overrides it, in this order: `--std-root`, `WOLF_STD`, a `wolf.pkg`
+// `std` path dependency, the default. Each test below reaches one tree
+// by a module only that tree has, so the answer names the root that won.
+
+/// An "installed" wolf: the test binary, hard-linked (copied where a link
+/// is refused) into `<case>/bin/` with a `std/` beside it holding
+/// `std.besidemark`. `std` as given: `Some(true)` a directory, `Some(false)`
+/// a plain FILE named `std`, `None` nothing beside. Returns the binary.
+fn installed_wolf(case: &str, std_beside: Option<bool>) -> PathBuf {
+    let bin = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(case)
+        .join("bin");
+    let _ = std::fs::remove_dir_all(&bin);
+    std::fs::create_dir_all(&bin).unwrap();
+    let exe = bin.join(Path::new(wolf()).file_name().unwrap());
+    if std::fs::hard_link(wolf(), &exe).is_err() {
+        std::fs::copy(wolf(), &exe).unwrap();
+    }
+    match std_beside {
+        Some(true) => {
+            std::fs::create_dir_all(bin.join("std/besidemark")).unwrap();
+            std::fs::write(
+                bin.join("std/besidemark/b.lu"),
+                "pub fn mark() -> int { 29 }\n",
+            )
+            .unwrap();
+        }
+        Some(false) => std::fs::write(bin.join("std"), "not a tree\n").unwrap(),
+        None => {}
+    }
+    exe
+}
+
+/// A std tree holding exactly one module, `std.<mark>`, at `<case>/<name>`.
+fn marked_root(case: &str, name: &str, mark: &str) -> PathBuf {
+    let root = Path::new(env!("CARGO_TARGET_TMPDIR")).join(case).join(name);
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(root.join(mark)).unwrap();
+    std::fs::write(root.join(mark).join("m.lu"), "pub fn mark() -> int { 1 }\n").unwrap();
+    root
+}
+
+/// A package `<case>/pkg/main.lu` using `std.<mark>`; with `manifest_std`
+/// it carries a `wolf.pkg` whose `std` path dependency is that tree.
+fn marked_entry(case: &str, mark: &str, manifest_std: Option<&Path>) -> PathBuf {
+    let pkg = Path::new(env!("CARGO_TARGET_TMPDIR"))
+        .join(case)
+        .join("pkg");
+    let _ = std::fs::remove_dir_all(&pkg);
+    std::fs::create_dir_all(&pkg).unwrap();
+    std::fs::write(
+        pkg.join("main.lu"),
+        format!("use std.{mark}\nfn main() -> int {{\n    {mark}.mark()\n}}\n"),
+    )
+    .unwrap();
+    if let Some(root) = manifest_std {
+        std::fs::write(
+            pkg.join("wolf.pkg"),
+            format!(
+                "pkg {{\n    name: \"s204/prec\",\n    version: \"0.1.0\",\n    edition: \"1\",\n\n    deps: {{\n        std: {{ path: \"{}\" }},\n    }},\n}}\n",
+                root.display().to_string().replace('\\', "/")
+            ),
+        )
+        .unwrap();
+    }
+    pkg.join("main.lu")
+}
+
+/// Which root won, as `wolf build <entry> --emit=obj` with WOLF_STD
+/// scrubbed unless given: `"pass"` when the object was built,
+/// `"fail(E0301)"` when the import missed. `build` is the verb that reads
+/// all four sources — `conform-run` is the conformance protocol and never
+/// reads a `wolf.pkg` — and an object needs no runtime library beside the
+/// linked test binary. `None` (a loud SKIP) where this host refuses the
+/// native tier by name.
+fn verdict_with(exe: &Path, entry: &Path, extra: &[&str], env: &[(&str, &str)]) -> Option<String> {
+    // A package emits one object per module, `prec.<module>.o`; the std
+    // module's object is the evidence a std tree answered.
+    let dir = entry.parent().unwrap();
+    let std_objs = |dir: &Path| -> usize {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().starts_with("prec.std."))
+            .count()
+    };
+    for e in std::fs::read_dir(dir).unwrap().flatten() {
+        if e.file_name().to_string_lossy().starts_with("prec.") {
+            std::fs::remove_file(e.path()).unwrap();
+        }
+    }
+    let obj = dir.join("prec.o");
+    let mut cmd = Command::new(exe);
+    cmd.arg("build")
+        .arg(entry)
+        .arg("--emit=obj")
+        .arg("-o")
+        .arg(&obj)
+        .args(extra)
+        .env_remove("WOLF_STD");
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
+    let out = cmd.output().expect("wolf runs");
+    let err = String::from_utf8_lossy(&out.stderr);
+    if out.status.success() && std_objs(dir) == 1 {
+        return Some("pass".to_string());
+    }
+    if err.contains("error[E0301]") {
+        return Some("fail(E0301)".to_string());
+    }
+    if lane_exit::environment_refusal(&out, "std root precedence") {
+        eprintln!("SKIP std root precedence: {}", err.trim());
+        return None;
+    }
+    panic!(
+        "wolf build answered neither an object nor E0301 ({}):\n{err}",
+        out.status
+    );
+}
+
+/// One precedence row: `None` was a loud SKIP; otherwise the verdict is
+/// the one the order predicts.
+fn expect(got: Option<String>, want: &str, what: &str) {
+    if let Some(got) = got {
+        assert_eq!(got, want, "{what}");
+    }
+}
+
+/// The precondition every older test in this file rests on: the cargo
+/// build's own `wolf` has no `std` beside it, so it still has no default.
+#[test]
+fn the_cargo_built_wolf_has_no_std_beside_it() {
+    let dir = Path::new(wolf()).parent().unwrap();
+    assert!(
+        !dir.join("std").exists(),
+        "{} has a std beside it; every no-root test here would read the default",
+        dir.display()
+    );
+}
+
+/// Order 0: nothing configured — the std beside the binary answers.
+/// Red at trunk ac0ac498: fail(E0301), the stub's miss.
+#[test]
+fn the_std_beside_the_binary_is_the_default_root() {
+    let exe = installed_wolf("prec_default", Some(true));
+    let entry = marked_entry("prec_default", "besidemark", None);
+    expect(verdict_with(&exe, &entry, &[], &[]), "pass", "");
+}
+
+/// …and it runs: the checked machine executes the default tree's code.
+#[test]
+fn a_program_runs_against_the_default_root() {
+    let exe = installed_wolf("prec_default_run", Some(true));
+    let entry = marked_entry("prec_default_run", "besidemark", None);
+    let out = Command::new(&exe)
+        .args([
+            "conform-run",
+            entry.to_str().unwrap(),
+            "--checked",
+            "--json",
+        ])
+        .env_remove("WOLF_STD")
+        .output()
+        .expect("wolf runs");
+    let record: serde_json::Value = serde_json::from_slice(&out.stdout).expect("record");
+    assert_eq!(record["verdict"], "exit(29)", "{record}");
+}
+
+/// Order 1: a `wolf.pkg` `std` path dependency beats the default.
+#[test]
+fn a_manifest_std_beats_the_default() {
+    let exe = installed_wolf("prec_pkg", Some(true));
+    let root = marked_root("prec_pkg", "pkgstd", "pkgmark");
+    let entry = marked_entry("prec_pkg", "pkgmark", Some(&root));
+    expect(verdict_with(&exe, &entry, &[], &[]), "pass", "");
+    let entry = marked_entry("prec_pkg", "besidemark", Some(&root));
+    expect(verdict_with(&exe, &entry, &[], &[]), "fail(E0301)", "");
+}
+
+/// Order 2: `WOLF_STD` beats the manifest and the default.
+#[test]
+fn wolf_std_beats_the_manifest_and_the_default() {
+    let exe = installed_wolf("prec_env", Some(true));
+    let env_root = marked_root("prec_env", "envstd", "envmark");
+    let pkg_root = marked_root("prec_env", "pkgstd", "pkgmark");
+    let env = [("WOLF_STD", env_root.to_str().unwrap())];
+    let entry = marked_entry("prec_env", "envmark", Some(&pkg_root));
+    expect(verdict_with(&exe, &entry, &[], &env), "pass", "");
+    for loser in ["pkgmark", "besidemark"] {
+        let entry = marked_entry("prec_env", loser, Some(&pkg_root));
+        expect(verdict_with(&exe, &entry, &[], &env), "fail(E0301)", loser);
+    }
+}
+
+/// Order 3: `--std-root` beats `WOLF_STD`, the manifest and the default.
+#[test]
+fn the_flag_beats_everything() {
+    let exe = installed_wolf("prec_flag", Some(true));
+    let flag_root = marked_root("prec_flag", "flagstd", "flagmark");
+    let env_root = marked_root("prec_flag", "envstd", "envmark");
+    let pkg_root = marked_root("prec_flag", "pkgstd", "pkgmark");
+    let flag = ["--std-root", flag_root.to_str().unwrap()];
+    let env = [("WOLF_STD", env_root.to_str().unwrap())];
+    let entry = marked_entry("prec_flag", "flagmark", Some(&pkg_root));
+    expect(verdict_with(&exe, &entry, &flag, &env), "pass", "");
+    for loser in ["envmark", "pkgmark", "besidemark"] {
+        let entry = marked_entry("prec_flag", loser, Some(&pkg_root));
+        expect(
+            verdict_with(&exe, &entry, &flag, &env),
+            "fail(E0301)",
+            loser,
+        );
+    }
+}
+
+/// Order 4: nothing beside, nothing configured — the prelude stub, as
+/// before the ruling (and #251's note still names the mechanism).
+#[test]
+fn nothing_beside_keeps_the_stub() {
+    let exe = installed_wolf("prec_none", None);
+    let entry = marked_entry("prec_none", "besidemark", None);
+    expect(verdict_with(&exe, &entry, &[], &[]), "fail(E0301)", "");
+}
+
+/// A FILE named `std` beside the binary is not a root: the stub answers,
+/// never an error about a tree nobody configured.
+#[test]
+fn a_std_file_beside_the_binary_is_not_a_root() {
+    let exe = installed_wolf("prec_file", Some(false));
+    let entry = marked_entry("prec_file", "besidemark", None);
+    expect(verdict_with(&exe, &entry, &[], &[]), "fail(E0301)", "");
+}
+
+/// With the default in play the #251 note would be false, so a miss
+/// against it reads as any configured root's miss: no "set WOLF_STD".
+#[test]
+fn a_miss_against_the_default_does_not_name_wolf_std() {
+    let exe = installed_wolf("prec_default_miss", Some(true));
+    let entry = marked_entry("prec_default_miss", "nosuchmark", None);
+    let out = Command::new(&exe)
+        .arg("conform-run")
+        .arg(&entry)
+        .arg("--phase=resolve")
+        .env_remove("WOLF_STD")
+        .output()
+        .expect("wolf runs");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("E0301"), "the miss is still reported:\n{err}");
+    assert!(!err.contains("WOLF_STD"), "no root-is-unset note:\n{err}");
 }
