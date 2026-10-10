@@ -307,8 +307,7 @@ pub extern "C" fn wolf_rt_ambient_get() -> *mut c_void {
 /// thread now being resumed, whose region is still open there.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wolf_rt_ambient_set(p: *mut c_void) {
-    // PLANT (revert follows): the setter drops its argument.
-    let _ = p;
+    AMBIENT_REGION.store(p, Ordering::Relaxed);
 }
 
 /// A capturing closure's record, in the ambient region
