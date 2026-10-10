@@ -2,6 +2,58 @@
 
 ## Unreleased
 
+### A repeated json name is last-wins; a module named `c` links (s224, #124, #620)
+
+**Read this before you bump the pin.** Two fixes, one runtime rebuild.
+Every hosted binary moves bytes, because `libwolf_rt.a` changed (the
+json kernel); none changes behaviour except a program that reads a
+json object with a repeated name.
+
+- **A repeated json object name is last-wins (#124, ruling B22,
+  `[os.json.dup]`).** `json_get`, `json_type`, `json_len` and every path
+  segment now read an object as one member per name, at the position
+  where the name first appears, holding its LAST value, as
+  `std.json.parse`, JavaScript, Python and serde do.
+  `json_get("{\"a\": 1, \"a\": 2}", "a")` was `1` and is `2`; `json_len`
+  of that object was `2` and is `1`; a nested object `json_get`
+  re-renders carries the name once (`{"a":1,"b":2,"a":3}` renders
+  `{"a":3,"b":2}`). The root's own text is unchanged. All four machines
+  answered first-wins before (the checked machine's `wolf_mem::json`,
+  native and release's `wolf_rt::json`, and lupin); lupin's half is
+  wolf-interp s224, and `json_dup_lanes` pins lupin 0.1.49 to its
+  measured first-wins answers until a lupin release carries it.
+  wolf-std's `tests/x/json/dom_typed_reads.lu` pinned first-wins (rows
+  33 and 34); its s224 PR flips them and waits for this release.
+- **A module named `c` links on every tier (#620).** WIR spells a
+  function `go` of a module whose path is `c` (a child directory `c/`,
+  or a dependency under the alias `c`) as `c.go`, which is also how the
+  C membrane spells an imported C function. Both backends read such a
+  callee outside the current object as C, so the native tier linked it
+  as the plain symbol `go` and failed (`undefined reference to 'go'`,
+  exit 2), and release did the same whenever its cluster partition
+  separated caller and callee. A function the program defines is now
+  never a C import. No symbol moved: wolf functions were already
+  mangled by their module path, and two packages that each define `go`
+  were never the problem (t05's witness happened to name one of them
+  `c`). The one program that needs both readings — an imported C `f`
+  beside a module-`c` function `f` — is refused by name instead of the
+  ICE it was.
+- **A link error fails a gate, never skips it (#620).**
+  `lane_exit::environment_refusal` now fails an exit 2 whose stderr
+  names an undefined or duplicate symbol, as it already failed an ICE;
+  pkg.rs's diamond had been reading `undefined reference to 'go'` as an
+  environment skip. A missing `cc` or runtime library still skips.
+
+**Downstream** (boreutils `5da892e`, lobo `ebace85`, pelt `3e7516c`,
+wolf-std `87ba162`, pax `ef4c3ca`; 984 builds a side, native and
+release): with one runtime on both sides all 1968 are byte-identical
+(stripped), so the compiler change moves nothing. With each side's own
+runtime, 834 hosted binaries move (every one that links
+`libwolf_rt.a`: the runtime's code layout shifted) and the 58 pax
+objects do not. Run, the 399 native and 399 release wolf-std test
+binaries answer as before except `x/json/dom_typed_reads`, which now
+exits 33: its row 33 is the first-wins pin above.
+
 ### A C declaration carries the `ffi` capability, as `import c` does (s221, #619, ruling #55)
 
 **Read this before you bump the pin if your package declares C.** A
