@@ -479,6 +479,10 @@ const STRBUF_POOL: usize = 8;
 const STRBUF_KEEP: usize = 64 * 1024;
 
 thread_local! {
+    // The handle a strbuf hands to compiled code IS the `Box`'s
+    // pointer, so the pool keeps the boxes: pooling bare `String`s
+    // would put a `Box` malloc and free back on every interpolation.
+    #[allow(clippy::vec_box)]
     static STRBUFS: core::cell::RefCell<Vec<Box<String>>> =
         const { core::cell::RefCell::new(Vec::new()) };
 }
