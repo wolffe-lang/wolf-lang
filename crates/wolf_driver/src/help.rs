@@ -19,8 +19,9 @@ use std::fmt::Write as _;
 /// reader has no checkout to look in.
 pub const HOMEPAGE: &str = "https://github.com/wolffe-lang/wolf-lang";
 
-/// The standard library's own repository (#251): it ships separately,
-/// and a packaged wolf has no way to say so except by saying so.
+/// The standard library's own repository (#251). Since ruling #29 the
+/// release archive carries a pinned copy as `std/` beside the binary;
+/// the repository is where a checkout for `--std-root` comes from.
 pub const STD_REPO: &str = "https://github.com/wolffe-lang/wolf-std";
 
 /// One entry of the toolchain's verb table.
@@ -495,9 +496,10 @@ pub fn overview() -> String {
          \x20 2  a usage or environment error\n\n\
          Documentation and the specification:\n\
          \x20 {HOMEPAGE}\n\
-         The standard library ships separately and no package of the compiler\n\
-         carries it; point wolf at a checkout with `--std-root <dir>` or the\n\
-         `WOLF_STD` environment variable:\n\
+         The standard library, wolf-std, ships in the release archive as `std/`\n\
+         beside the `wolf` binary, and that copy is the default; `--std-root <dir>`,\n\
+         the `WOLF_STD` environment variable or a `std` dependency in wolf.pkg\n\
+         points wolf at another:\n\
          \x20 {STD_REPO}\n"
     );
     out
@@ -573,8 +575,12 @@ pub fn man_page(version: &str) -> String {
          .IR std.x\n\
          resolves to\n\
          .IR $WOLF_STD/x/ ).\n\
-         The standard library ships separately, as {STD_REPO}; no package of the\n\
-         compiler contains it.\n\
+         It overrides a\n\
+         .B std\n\
+         dependency in wolf.pkg and the default: the\n\
+         .I std/\n\
+         directory beside the wolf binary, where the release archive ships the\n\
+         standard library ({STD_REPO}) at a pinned commit.\n\
          .B \\-\\-std\\-root\n\
          overrides it for one invocation.\n\
          .SH EXIT STATUS\n\
