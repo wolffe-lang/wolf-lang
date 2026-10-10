@@ -6,8 +6,8 @@
 //! stdout — the checked machine models signals as a pure in-machine
 //! queue, the native lane delivers the real SIGHUP through the reactor's
 //! task layer, and the OUTPUT is causally pinned either way. The
-//! concurrent supervisor shape is native-only (the checked lane refuses
-//! `spawn` by name, C1-deferred), pinned as an honest non-parity case.
+//! concurrent supervisor shape runs on both since s226 (the checked
+//! machine refused `spawn` by name while C1 was deferred).
 //!
 //! Hosts the native tier refuses skip loudly at runtime (the s59
 //! pattern: these tests start passing the moment a gate lifts).
@@ -117,12 +117,14 @@ fn main() -> !int {
     }
 }
 
-/// The wws supervisor shape is native-only: the checked lane refuses
-/// `spawn` by name (structured concurrency, C1-deferred) — an honest
-/// `unsupported`, not a fake pass — while the native lane delivers the
-/// real SIGUSR2 to the parked supervisor.
+/// The wws supervisor shape: the native lane delivers the real SIGUSR2
+/// to the parked supervisor, and since s226 the checked machine runs it
+/// too — the waiter lets its sibling task run, the sibling's raise
+/// lands in the machine's queue, and the wait takes it
+/// (`[os.signal.checked]`). (Until then it refused `spawn` by name,
+/// C1-deferred.)
 #[test]
-fn supervisor_shape_native_runs_checked_refuses() {
+fn supervisor_shape_runs_native_and_checked() {
     let src = r#"
 fn main() -> !int {
     os_signal_listen(8)?
@@ -137,8 +139,9 @@ fn main() -> !int {
 "#;
     let checked = lane("s114_supervisor", src, "--checked").expect("checked always runs");
     assert_eq!(
-        checked.verdict, "unsupported",
-        "checked must refuse spawn by name"
+        (checked.verdict.as_str(), checked.stdout.as_str()),
+        ("exit(0)", "got=8\n"),
+        "checked delivers the sibling's raise"
     );
     if let Some(native) = lane("s114_supervisor", src, "--native") {
         assert_eq!(native.verdict, "exit(0)", "native delivers the signal");
