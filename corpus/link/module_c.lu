@@ -1,0 +1,18 @@
+//! check: run(exit=0, stdout="21 22\n")
+//! phase: run
+//! conforms: abi.c.import
+//! A child module named `c` is an ordinary module (wolf-lang#620). Its
+//! functions are spelled `c.go` and `c.go2` below the checker, which is
+//! also how the C membrane spells an imported function. Until s224 the
+//! native tier linked a call into another object as the C symbol `go`
+//! and failed with `undefined reference to 'go'`. A wolf function the
+//! program defines is never a C import.
+
+use c
+
+fn main() -> !int {
+    let one = c.go(20)
+    let two = c.go2(20)
+    print("{one} {two}")
+    0
+}

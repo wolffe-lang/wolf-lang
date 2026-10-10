@@ -1,0 +1,9 @@
+/// One more than `x`.
+pub fn go(x: int) -> int {
+    x + 1
+}
+
+/// Two more than `x`.
+pub fn go2(x: int) -> int {
+    x + 2
+}
