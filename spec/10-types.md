@@ -1452,11 +1452,15 @@ reaches them. wolf-lang#154 is the book's filing of the same gap.)
   `List` writes a trait and `impl`s it, and step (3) finds it.
 
 - `[type.method.root]` **The home module comes from the std root.** It
-  is loaded from the configured std (`--std-root`, `WOLF_STD`, or a
-  `std` path dependency in `wolf.pkg`), the same tree `use std.list`
-  reads. With no std configured, a call that reaches step (2) is
-  **E0301** naming the home module and the three ways to configure a
-  root — never a silent fall-through, and never a builtin stand-in.
+  is loaded from the std root, the same tree `use std.list` reads: the
+  configured std (`--std-root`, then `WOLF_STD`, then a `std` path
+  dependency in `wolf.pkg`), or, with none configured, the default — a
+  `std` directory beside the `wolf` binary, where the release archive
+  ships wolf-std at a pinned commit (ruling #29). With no std root at
+  all (a build from source with nothing configured), a call that
+  reaches step (2) is **E0301** naming the home module and the ways to
+  configure a root — never a silent fall-through, and never a builtin
+  stand-in.
   Step (1) needs no std, so every builtin method, `par` included, runs
   on a bare `wolf run`. **The cost, stated.** At run time, nothing: a
   method call through a home module is the free call, one instance per
