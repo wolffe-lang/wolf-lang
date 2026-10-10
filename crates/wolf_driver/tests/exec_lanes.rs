@@ -30,9 +30,9 @@
 
 mod lane_exit;
 
+use std::io::Write as _;
 #[cfg(unix)]
 use std::io::{BufRead as _, BufReader, Read as _};
-use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 
@@ -199,7 +199,10 @@ fn taskset() -> Option<PathBuf> {
 fn lanes(entry: &Path, dir: &Path) -> Vec<Lane> {
     let mut out = Vec::new();
     let mut c = Command::new(wolf());
-    c.arg("conform-run").arg(entry).arg("--checked").arg("--json");
+    c.arg("conform-run")
+        .arg(entry)
+        .arg("--checked")
+        .arg("--json");
     out.push(Lane {
         name: "checked".into(),
         cmd: c,
@@ -278,7 +281,11 @@ fn every_lane_prints(name: &str, stdin: &str, want: &str, lupin_refuses: bool) {
                 );
                 eprintln!(
                     "{} {what}: lupin {} at {} unsupported",
-                    if pre_mirror(&obs) { "PINNED" } else { "REFUSED BY NAME" },
+                    if pre_mirror(&obs) {
+                        "PINNED"
+                    } else {
+                        "REFUSED BY NAME"
+                    },
                     obs.version,
                     obs.commit
                 );
@@ -322,7 +329,11 @@ fn every_lane_execs(name: &str, want: &str, lupin_refuses: bool) {
             assert_eq!(obs.verdict, "unsupported", "{what}: {obs:?}");
             eprintln!(
                 "{} {what}: lupin {} at {} unsupported",
-                if pre_mirror(&obs) { "PINNED" } else { "REFUSED BY NAME" },
+                if pre_mirror(&obs) {
+                    "PINNED"
+                } else {
+                    "REFUSED BY NAME"
+                },
                 obs.version,
                 obs.commit
             );
@@ -430,7 +441,10 @@ fn every_lane_says(rel: &str, want: &str) {
                     obs.version,
                     obs.commit
                 );
-                eprintln!("PINNED lupin {} at {} on {rel} (pre-mirror)", obs.version, obs.commit);
+                eprintln!(
+                    "PINNED lupin {} at {} on {rel} (pre-mirror)",
+                    obs.version, obs.commit
+                );
             } else {
                 assert_eq!(
                     (obs.verdict.as_str(), obs.stdout.as_str()),
@@ -518,13 +532,17 @@ fn exec_replaces_the_image_and_keeps_the_pid() {
             // and it says it with a record.
             drop(stdin);
             let _ = child.wait();
-            let obs = record_in(&seen).unwrap_or_else(|| panic!("{what}: no pid, no record: {seen}"));
+            let obs =
+                record_in(&seen).unwrap_or_else(|| panic!("{what}: no pid, no record: {seen}"));
             assert!(
                 lane.lupin && pre_mirror(&obs),
                 "{what}: the image never ran: {obs:?}"
             );
             assert_eq!(obs.verdict, "unsupported", "{what}");
-            eprintln!("PINNED {what}: lupin {} at {} (pre-mirror)", obs.version, obs.commit);
+            eprintln!(
+                "PINNED {what}: lupin {} at {} (pre-mirror)",
+                obs.version, obs.commit
+            );
             continue;
         };
         assert_eq!(

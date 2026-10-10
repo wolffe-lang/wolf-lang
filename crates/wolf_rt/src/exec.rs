@@ -152,7 +152,11 @@ pub fn resolve_program(exe: &str, path: &str) -> Result<String, &'static str> {
         }
         saw_unexecutable = true;
     }
-    Err(if saw_unexecutable { "denied" } else { "not_found" })
+    Err(if saw_unexecutable {
+        "denied"
+    } else {
+        "not_found"
+    })
 }
 
 #[cfg(unix)]
@@ -277,12 +281,7 @@ mod unix {
         arg_ptrs.push(std::ptr::null());
         let mut env_ptrs: Vec<*const libc::c_char> = envs.iter().map(|c| c.as_ptr()).collect();
         env_ptrs.push(std::ptr::null());
-        let floor = map
-            .iter()
-            .map(|&(t, _)| t + 1)
-            .max()
-            .unwrap_or(3)
-            .max(3);
+        let floor = map.iter().map(|&(t, _)| t + 1).max().unwrap_or(3).max(3);
         let mut saved: Vec<Saved> = Vec::with_capacity(map.len());
         let mut staged: Vec<InheritFd> = Vec::with_capacity(map.len());
 
@@ -396,9 +395,15 @@ mod tests {
         assert_eq!(exec_shape("x", &["x"], &["A=1\0"], &[]), Err("invalid"));
         assert_eq!(exec_shape("x", &["x"], &ok_env, &[1]), Err("invalid"));
         assert_eq!(exec_shape("x", &["x"], &ok_env, &[256, 1]), Err("invalid"));
-        assert_eq!(exec_shape("x", &["x"], &ok_env, &[1, 1, 1, 2]), Err("invalid"));
+        assert_eq!(
+            exec_shape("x", &["x"], &ok_env, &[1, 1, 1, 2]),
+            Err("invalid")
+        );
         assert_eq!(exec_shape("x", &["x"], &ok_env, &[1, -2]), Err("invalid"));
-        assert_eq!(exec_shape("x", &["x"], &["A=", "B=c=d"], &[5, -1]), Ok(vec![(5, None)]));
+        assert_eq!(
+            exec_shape("x", &["x"], &["A=", "B=c=d"], &[5, -1]),
+            Ok(vec![(5, None)])
+        );
     }
 
     #[test]
@@ -428,7 +433,10 @@ mod tests {
         assert_eq!(resolve_program("", p), Err("not_found"));
         assert_eq!(resolve_program("./a/b", p), Ok("./a/b".to_string()));
         // A directory on the path is not a program.
-        assert_eq!(resolve_program("wolf_rt_s225_dir", &std::env::temp_dir().to_string_lossy()), Err("not_found"));
+        assert_eq!(
+            resolve_program("wolf_rt_s225_dir", &std::env::temp_dir().to_string_lossy()),
+            Err("not_found")
+        );
         std::fs::remove_dir_all(&d).unwrap();
     }
 
@@ -449,8 +457,15 @@ mod tests {
             &[(0, Some(src)), (200, Some(src))],
         );
         assert!(matches!(r, Err("not_found")));
-        assert!(unsafe { libc::fcntl(200, libc::F_GETFD) } < 0, "200 closed again");
-        assert_eq!(unsafe { libc::fcntl(0, libc::F_GETFD) }, before0, "0's flags back");
+        assert!(
+            unsafe { libc::fcntl(200, libc::F_GETFD) } < 0,
+            "200 closed again"
+        );
+        assert_eq!(
+            unsafe { libc::fcntl(0, libc::F_GETFD) },
+            before0,
+            "0's flags back"
+        );
         drop(f);
     }
 }

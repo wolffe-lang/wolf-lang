@@ -7519,7 +7519,14 @@ impl<'t> Machine<'t> {
                         _ => return self.refuse("a non-str argv element", span),
                     }
                 }
-                match spawn_mapped(&exe, &words, &placed, self.cwd.as_deref(), None, &self.env_overlay) {
+                match spawn_mapped(
+                    &exe,
+                    &words,
+                    &placed,
+                    self.cwd.as_deref(),
+                    None,
+                    &self.env_overlay,
+                ) {
                     Err(e) => Ok(tag(match e.kind() {
                         std::io::ErrorKind::NotFound => "not_found",
                         std::io::ErrorKind::PermissionDenied => "denied",
@@ -7672,7 +7679,14 @@ impl<'t> Machine<'t> {
                     tty: tty_file,
                     defaults,
                 });
-                match spawn_mapped(&exe, &words, &placed, self.cwd.as_deref(), job.as_ref(), &self.env_overlay) {
+                match spawn_mapped(
+                    &exe,
+                    &words,
+                    &placed,
+                    self.cwd.as_deref(),
+                    job.as_ref(),
+                    &self.env_overlay,
+                ) {
                     Err(e) => Ok(tag(match e.kind() {
                         std::io::ErrorKind::NotFound => "not_found",
                         std::io::ErrorKind::PermissionDenied => "denied",
@@ -11577,7 +11591,11 @@ fn exec_resolve(
         }
         saw_unexecutable = true;
     }
-    Err(if saw_unexecutable { "denied" } else { "not_found" })
+    Err(if saw_unexecutable {
+        "denied"
+    } else {
+        "not_found"
+    })
 }
 
 #[cfg(unix)]
