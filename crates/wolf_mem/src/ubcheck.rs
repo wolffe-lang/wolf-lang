@@ -448,6 +448,18 @@ enum Value {
     Shared(usize),
     Weak(usize),
     Region(usize),
+    /// A closure (s226): an index into the machine's closure arena —
+    /// the body and the captures copied at construction
+    /// (`[gram.expr.closure]`; lupin's reading). A fn value copies.
+    Closure(usize),
+    /// A `Mutex` (s226, `[conc.mm.hb.mutex]`): a scheduler-owned sync
+    /// object, by creation order (`[conc.when.order]`'s canonical order).
+    Mutex(usize),
+    /// A scope handle (s226, `[conc.task.scope]`): `Scope`, an ordinary
+    /// value a function can be handed.
+    TaskScope(usize),
+    /// A proc handle (s226, `[conc.proc.handle]`): `Proc[T]`.
+    Proc(usize),
     Ptr(PtrVal),
     /// An error-channel value (`!T`'s row half): tag + payload.
     ErrTag {
@@ -476,6 +488,10 @@ impl Value {
                 | Value::Ptr(_)
                 | Value::Fn(_)
                 | Value::Chan(_)
+                | Value::Closure(_)
+                | Value::Mutex(_)
+                | Value::TaskScope(_)
+                | Value::Proc(_)
         )
     }
 }
@@ -554,15 +570,10 @@ enum Stop {
     /// `os.exit` contract: immediate termination; native calls the
     /// runtime exit with the same rule).
     Exit(u8),
-}
-
-/// One channel (#342, `[conc.chan.buf]`/`[conc.chan.close]`): its
-/// buffered payloads, oldest first, its capacity (0 is rendezvous), and
-/// whether it is closed.
-struct ChanState {
-    buf: std::collections::VecDeque<Value>,
-    cap: usize,
-    closed: bool,
+    /// s226 (`[conc.proc.kill]`): this task's proc was killed, or the
+    /// run is ending — the task unwinds without running user code (no
+    /// `defer` runs on a `Stop`). Never a verdict: a task's own end.
+    Killed,
 }
 
 /// Control flow out of an expression.
@@ -620,6 +631,10 @@ macro_rules! val {
         }
     };
 }
+
+// After the macros: a child module sees them only below their
+// definition.
+mod tasks;
 
 /// Scope-exit obligation, LIFO with the defers
 /// (`[mem.shared.drop.1]`).
@@ -1196,9 +1211,23 @@ struct Machine<'t> {
     maps: Vec<Vec<(MapKey, Value)>>,
     map_region: Vec<usize>,
     pools: Vec<Vec<PoolSlot>>,
-    /// The channel arena (#342): every channel the run made, in the
-    /// order it made them.
-    chans: Vec<ChanState>,
+    /// s226: the scheduler — tasks, scopes, channels (the arena #342
+    /// began), mutexes, procs, timers and the race detector's memory.
+    /// Plain data: whichever thread holds the machine holds it.
+    sched: tasks::Sched<'t>,
+    /// s226: where the machine rests while it changes threads, and how
+    /// a task's thread is asked for. `None` on a host with no thread to
+    /// give (the fallback of [`run_checked_fn`]): one task only.
+    hub: Option<std::sync::Arc<tasks::Hub<'t>>>,
+    spawner: Option<std::sync::mpsc::Sender<tasks::SpawnReq<'t>>>,
+    /// s226: the closure arena — one entry per closure constructed.
+    closures: Vec<tasks::ClosureInst<'t>>,
+    /// s226 (`[conc.when.nonest]`, `[conc.deadlock.self]`): the mutexes
+    /// the running task holds.
+    when_held: Vec<usize>,
+    /// s226: inside an atomic operation — its two raw halves take the
+    /// race detector's atomic path (`[conc.mm.atomic.raw.5]`).
+    in_atomic: bool,
     cells: Vec<RcCell>,
     frames: Vec<Frame<'t>>,
     /// The dynamic ambient-region stack; `[0]` is the run's root
@@ -1707,6 +1736,15 @@ impl<'t> Machine<'t> {
                 span,
             );
         };
+        // s226 (`[conc.mm.race.3]`): the race detector first, as lupin
+        // orders it — raw memory is exactly `[conc.mm.race.1]`'s
+        // surface, and two tasks holding copies of one pointer are the
+        // shape that races.
+        if self.sched.concurrent {
+            let lo = usize::try_from(p.offset.max(0)).unwrap_or(0);
+            let hi = lo.saturating_add(usize::try_from(len).unwrap_or(usize::MAX));
+            self.race_check(tasks::RaceKey::Alloc(aid), lo, hi, write, span)?;
+        }
         // P3 — bounds first: an OOB access has no location to have a
         // permission at.
         let (size, alloc_span) = {
@@ -1889,6 +1927,23 @@ impl<'t> Machine<'t> {
     /// yields the old value; a CAS writes only on a match and yields
     /// `(old, matched)`.
     fn atomic_access(
+        &mut self,
+        op: wolf_ast::atomic::AtomicOp,
+        p: PtrVal,
+        pointee: Prim,
+        args: &[Value],
+        span: Span,
+    ) -> E<Flow> {
+        // s226: the operation's raw halves take the race detector's
+        // atomic path — a sync on the location, a race only against a
+        // plain access (`[conc.mm.atomic.raw.5]`).
+        self.in_atomic = true;
+        let out = self.atomic_access_whole(op, p, pointee, args, span);
+        self.in_atomic = false;
+        out
+    }
+
+    fn atomic_access_whole(
         &mut self,
         op: wolf_ast::atomic::AtomicOp,
         p: PtrVal,
@@ -2164,6 +2219,20 @@ pub fn run_checked_fn(
     stdin: &str,
     entry: &str,
 ) -> Result<RunOutcome, NotYet> {
+    run_checked_seeded(pkg, tc, budget, stdin, entry, 0)
+}
+
+/// [`run_checked_fn`] under a schedule seed (s226, `[exec.checked.sched]`,
+/// `[sched.seed]`): 0 takes the first candidate at every decision, any
+/// other seed selects one schedule, and equal seeds are equal runs.
+pub fn run_checked_seeded(
+    pkg: &Package,
+    tc: &Typecheck,
+    budget: Budget,
+    stdin: &str,
+    entry: &str,
+    seed: u64,
+) -> Result<RunOutcome, NotYet> {
     // #382: the machine runs on a thread whose stack it sizes itself,
     // never on its caller's. The call-depth budget is a depth the
     // machine ALLOWS, so reaching it must answer `unsupported` on every
@@ -2171,21 +2240,61 @@ pub fn run_checked_fn(
     // (8 MiB) and overflowed a windows one (1 MiB), where three
     // wolf-std json rows reach `CALL_DEPTH_BUDGET` with ~1.2 MiB of
     // host frames.
-    std::thread::scope(|scope| {
+    //
+    // s226: this thread then serves the run's other threads. A task is
+    // an evaluator stack and needs a thread to sleep on; only the
+    // thread inside `std::thread::scope` can make one that borrows the
+    // package, so the machine asks for each over a channel and the
+    // loop below ends when the machine — the one sender — is dropped.
+    let hub = tasks::Hub::new();
+    let out = std::thread::scope(|scope| {
+        let (tx, rx) = std::sync::mpsc::channel::<tasks::SpawnReq<'_>>();
+        let root_hub = hub.clone();
         let worker = std::thread::Builder::new()
             .name("wolf-checked".into())
             .stack_size(CHECKED_STACK_BYTES)
-            .spawn_scoped(scope, || run_checked_fn_here(pkg, tc, budget, stdin, entry));
+            .spawn_scoped(scope, move || {
+                let conc = Some((root_hub.clone(), tx));
+                let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    run_checked_fn_here(pkg, tc, budget, stdin, entry, seed, conc)
+                }));
+                match run {
+                    Ok(out) => Some(out),
+                    Err(payload) => {
+                        root_hub.abandon(payload);
+                        None
+                    }
+                }
+            });
         match worker {
-            Ok(handle) => match handle.join() {
-                Ok(out) => out,
-                Err(panic) => std::panic::resume_unwind(panic),
-            },
+            Ok(handle) => {
+                for request in rx {
+                    let made = std::thread::Builder::new()
+                        .name(request.name)
+                        .stack_size(tasks::TASK_STACK_BYTES)
+                        .spawn_scoped(scope, request.run)
+                        .is_ok();
+                    let _ = request.reply.send(made);
+                }
+                handle.join().ok().flatten()
+            }
             // No thread to be had (a host at its thread limit): run
-            // where we stand, which is exactly the old behavior.
-            Err(_) => run_checked_fn_here(pkg, tc, budget, stdin, entry),
+            // where we stand, which is exactly the old behavior — and
+            // one task only.
+            Err(_) => Some(run_checked_fn_here(
+                pkg, tc, budget, stdin, entry, seed, None,
+            )),
         }
-    })
+    });
+    match out {
+        Some(out) => out,
+        // A thread of the run panicked: the caller sees the first
+        // panic, as it did when the machine had one thread.
+        None => std::panic::resume_unwind(
+            hub.take_panic()
+                .unwrap_or_else(|| Box::new("the checked machine panicked")),
+        ),
+    }
 }
 
 /// The deepest call chain the machine executes (`[exec.checked.budget]`):
@@ -2201,12 +2310,18 @@ pub const CALL_DEPTH_BUDGET: usize = 128;
 /// only the frames a program reaches.
 pub const CHECKED_STACK_BYTES: usize = 64 << 20;
 
-fn run_checked_fn_here(
-    pkg: &Package,
-    tc: &Typecheck,
+#[allow(clippy::type_complexity)]
+fn run_checked_fn_here<'t>(
+    pkg: &'t Package,
+    tc: &'t Typecheck,
     budget: Budget,
     stdin: &str,
     entry: &str,
+    seed: u64,
+    conc: Option<(
+        std::sync::Arc<tasks::Hub<'t>>,
+        std::sync::mpsc::Sender<tasks::SpawnReq<'t>>,
+    )>,
 ) -> Result<RunOutcome, NotYet> {
     let root_span = pkg.files[0].parse.root.span;
     // kw09 (`[abi.link.section]`, `[abi.link.extern]`): this machine
@@ -2236,6 +2351,11 @@ fn run_checked_fn_here(
     let mut m = Machine::new(pkg, tc);
     m.budget = budget;
     m.stdin = stdin.to_string();
+    m.sched = tasks::Sched::new(seed);
+    if let Some((hub, spawner)) = conc {
+        m.hub = Some(hub);
+        m.spawner = Some(spawner);
+    }
     let main = match m.find_entry(entry) {
         Some(b) => b,
         None => {
@@ -2261,7 +2381,19 @@ fn run_checked_fn_here(
             span: ctx.node.span,
         });
     }
-    match m.call_body(main, Vec::new()) {
+    let ran = m.call_body(main, Vec::new());
+    // s226 (`[conc.task.root]`): whatever is still alive under the root
+    // supervisor is reaped before the run answers.
+    m.teardown();
+    match ran {
+        // `[conc.proc.root]`: the root domain died abnormally — a
+        // linked partner's abnormal exit killed it. Nonzero,
+        // implementation-specified; the native runtime's number.
+        Err(Stop::Killed) => Ok(RunOutcome {
+            verdict: Verdict::Exit(tasks::ROOT_KILLED_STATUS),
+            stdout: String::from_utf8_lossy(&m.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&m.stderr).into_owned(),
+        }),
         Ok(v) => {
             let code = match v {
                 Value::Int(n) => n.rem_euclid(256) as u8,
@@ -2377,8 +2509,11 @@ pub fn attribute<'f>(finding: &UbFinding, facts: &'f [crate::FnFacts]) -> Option
 }
 
 impl<'t> Machine<'t> {
-    fn new(pkg: &'t Package, tc: &'t Typecheck) -> Machine<'t> {
-        let mut m = Machine {
+    /// A machine with nothing in it (s226): what [`Machine::new`]
+    /// fills, and what a task's thread holds in the real machine's
+    /// place while another task runs.
+    fn blank(pkg: &'t Package, tc: &'t Typecheck) -> Machine<'t> {
+        Machine {
             pkg,
             tc,
             ctxs: Vec::new(),
@@ -2398,7 +2533,12 @@ impl<'t> Machine<'t> {
             maps: Vec::new(),
             map_region: Vec::new(),
             pools: Vec::new(),
-            chans: Vec::new(),
+            sched: tasks::Sched::new(0),
+            hub: None,
+            spawner: None,
+            closures: Vec::new(),
+            when_held: Vec::new(),
+            in_atomic: false,
             cells: Vec::new(),
             frames: Vec::new(),
             ambient: Vec::new(),
@@ -2423,7 +2563,11 @@ impl<'t> Machine<'t> {
             in_defer: false,
             statics: Vec::new(),
             static_slots: HashMap::new(),
-        };
+        }
+    }
+
+    fn new(pkg: &'t Package, tc: &'t Typecheck) -> Machine<'t> {
+        let mut m = Machine::blank(pkg, tc);
         // kw09 (`[mem.static.3]`): module state starts at the value
         // the comptime engine computed; a `byte` item is a byte.
         for ((module, name), fold) in &tc.statics {
@@ -2940,6 +3084,7 @@ impl<'t> Machine<'t> {
     /// Read through a place (bounds and generation checks fire here).
     fn read_place(&mut self, place: &Place, span: Span) -> E<Value> {
         if place.frame == STATIC_FRAME {
+            self.race_check(tasks::RaceKey::Static(place.local), 0, 1, false, span)?;
             let root = self.statics[place.local].clone();
             return self.walk_read(root, &place.path, span);
         }
@@ -3038,6 +3183,8 @@ impl<'t> Machine<'t> {
                 },
                 Value::Pool(id),
             ) => {
+                // s226: a pool slot is memory two tasks can both reach.
+                self.race_check(tasks::RaceKey::Pool(id, *index), 0, 1, false, *isp)?;
                 let pool = &self.pools[id];
                 let stale = *index >= pool.len()
                     || pool[*index].generation != *generation
@@ -3061,6 +3208,8 @@ impl<'t> Machine<'t> {
             if !place.path.is_empty() {
                 return self.refuse("a write into part of module state", span);
             }
+            // s226: module state is one word every task reaches.
+            self.race_check(tasks::RaceKey::Static(place.local), 0, 1, true, span)?;
             self.statics[place.local] = v;
             return Ok(());
         }
@@ -3135,6 +3284,7 @@ impl<'t> Machine<'t> {
             ) => {
                 let id = *id;
                 let (index, generation, isp) = (*index, *generation, *isp);
+                self.race_check(tasks::RaceKey::Pool(id, index), 0, 1, true, isp)?;
                 let stale = index >= self.pools[id].len()
                     || self.pools[id][index].generation != generation
                     || !self.pools[id][index].live;
@@ -3712,6 +3862,34 @@ impl<'t> Machine<'t> {
                 None => Ok(Flow::Val(Value::Unit)),
             },
             SyntaxKind::PathExpr | SyntaxKind::MemberExpr => {
+                // s226 — `1.s`, `20.ms` (`[conc.select.timeout]`): a
+                // duration member on an integer literal scales into
+                // nanoseconds, the `int` currency `timeout` takes.
+                if let Some(m) = MemberExpr::cast(e)
+                    && let (Some(base), Some(member)) = (m.base(), m.member())
+                    && base.kind == SyntaxKind::LiteralExpr
+                    && base
+                        .tokens()
+                        .next()
+                        .is_some_and(|t| t.kind == SyntaxKind::Int)
+                {
+                    let scale: Option<i64> = match self.text(member.span).as_str() {
+                        "s" => Some(1_000_000_000),
+                        "ms" => Some(1_000_000),
+                        "us" => Some(1_000),
+                        "ns" => Some(1),
+                        _ => None,
+                    };
+                    if let Some(scale) = scale {
+                        let Value::Int(n) = self.literal(base)? else {
+                            return self.refuse("a duration on a non-integer literal", e.span);
+                        };
+                        return match n.checked_mul(scale) {
+                            Some(ns) => Ok(Flow::Val(Value::Int(ns))),
+                            None => self.trap("overflow", "mem.ub.defined", e.span),
+                        };
+                    }
+                }
                 if let Some(place) = found!(self.place_of(e)) {
                     let v = self.take_value(&place, e.span)?;
                     return Ok(Flow::Val(v));
@@ -4012,14 +4190,13 @@ impl<'t> Machine<'t> {
                 }
             }
             SyntaxKind::BorrowExpr => self.eval_door(e),
-            SyntaxKind::ClosureExpr => self.refuse("closures in checked execution", e.span),
-            SyntaxKind::ScopeExpr
-            | SyntaxKind::SelectExpr
-            | SyntaxKind::WhenExpr
-            | SyntaxKind::SpawnExpr => self.refuse(
-                "structured concurrency in checked execution (C1 deferred)",
-                e.span,
-            ),
+            // s226 (C1): closures, scopes, `select`, `when` and procs
+            // run — `tasks.rs`.
+            SyntaxKind::ClosureExpr => self.eval_closure(e),
+            SyntaxKind::ScopeExpr => self.eval_scope(e),
+            SyntaxKind::SelectExpr => self.eval_select(e),
+            SyntaxKind::WhenExpr => self.eval_when(e),
+            SyntaxKind::SpawnExpr => self.eval_spawn_proc(e),
             SyntaxKind::InlineC | SyntaxKind::AsmExpr => self.refuse("inline C / asm", e.span),
             _ => self.refuse("this expression shape in checked execution", e.span),
         }
@@ -4741,6 +4918,12 @@ impl<'t> Machine<'t> {
             let item = match chan {
                 Some(id) => match self.chan_recv(id, e.span)? {
                     Flow::Val(v) => v,
+                    // s226: cancellation at the loop's blocking point
+                    // leaves by ordinary return (`[conc.cancel.defer]`);
+                    // drained-close ends the loop.
+                    Flow::Err(Value::ErrTag { tag, payload }, _) if tag == "cancelled" => {
+                        return Ok(Flow::Err(Value::ErrTag { tag, payload }, true));
+                    }
                     _ => break,
                 },
                 None => match items.next() {
@@ -9488,6 +9671,25 @@ impl<'t> Machine<'t> {
                 self.pools.push(Vec::new());
                 return Ok(Flow::Val(Value::Pool(id)));
             }
+            // s226 — `Mutex(v)` (`[conc.mm.hb.mutex]`): a sync object,
+            // numbered in creation order (`[conc.when.order]`).
+            Some(TyKind::Mutex(_))
+                if d.callee().is_some_and(|c| {
+                    c.kind == SyntaxKind::PathExpr && self.text(c.span) == "Mutex"
+                }) =>
+            {
+                let payload = match d
+                    .args()
+                    .into_iter()
+                    .flat_map(|l| l.args())
+                    .find_map(Arg::value)
+                {
+                    Some(v) => val!(self.eval(v)),
+                    None => Value::Unit,
+                };
+                self.charge_mem(16 + slot_bytes(&payload))?;
+                return Ok(Flow::Val(self.new_mutex(payload)));
+            }
             Some(TyKind::Map(..)) if is_container_ctor(d.callee()) => {
                 let id = self.mint_map(e.span)?;
                 return Ok(Flow::Val(Value::Map(id)));
@@ -9511,12 +9713,7 @@ impl<'t> Machine<'t> {
                     None => 0,
                 };
                 self.charge_mem(16)?;
-                let id = self.chans.len();
-                self.chans.push(ChanState {
-                    buf: std::collections::VecDeque::new(),
-                    cap,
-                    closed: false,
-                });
+                let id = self.sched.new_chan(cap);
                 return Ok(Flow::Val(Value::Chan(id)));
             }
             _ => {}
@@ -9856,6 +10053,21 @@ impl<'t> Machine<'t> {
                 Some(callee) => match found!(self.place_of(callee)) {
                     Some(place) => match self.read_place(&place, callee.span)? {
                         Value::Fn(b) => Some(b),
+                        // s226: a closure value — its own frame, its
+                        // captures bound in it.
+                        Value::Closure(cid) => {
+                            let mut args = Vec::new();
+                            for (i, a) in d.args().into_iter().flat_map(|l| l.args()).enumerate() {
+                                let Some(v) = Arg::value(a) else { continue };
+                                let mode = sig.params.get(i).and_then(|p| p.mode);
+                                args.push(val!(self.eval_arg(v, mode)));
+                            }
+                            let out = self.call_closure(cid, args, false)?;
+                            if let Value::ErrTag { .. } = out {
+                                return Ok(raise(out));
+                            }
+                            return Ok(Flow::Val(out));
+                        }
                         _ => None,
                     },
                     None => None,
@@ -10033,51 +10245,26 @@ impl<'t> Machine<'t> {
         let Value::Chan(id) = ch else {
             return self.refuse("a channel method on a non-channel", e.span);
         };
-        let closed = || {
-            Ok(raise(Value::ErrTag {
-                tag: "closed".to_string(),
-                payload: Vec::new(),
-            }))
-        };
         match method {
             "send" => {
                 let Some(v) = args.into_iter().flat_map(|l| l.args()).find_map(Arg::value) else {
                     return self.refuse("a send without a value", e.span);
                 };
                 let x = val!(self.eval_arg(v, None));
-                let st = &self.chans[id];
-                if st.closed {
-                    return closed();
-                }
-                if st.buf.len() >= st.cap {
-                    return self.trap("deadlock", "conc.deadlock.trap", e.span);
-                }
                 // The channel owns the copy in flight
                 // (`[conc.chan.payload]`), charged when it is made.
                 self.charge_mem(slot_bytes(&x))?;
-                self.chans[id].buf.push_back(x);
-                Ok(Flow::Val(Value::Unit))
+                // s226: a send that cannot complete parks its task
+                // (`tasks.rs`); with every task parked it is the
+                // `trap(deadlock)` #342 answered for the one task.
+                self.chan_send(id, x, e.span)
             }
             "recv" => self.chan_recv(id, e.span),
             "close" => {
-                self.chans[id].closed = true;
+                self.chan_close(id);
                 Ok(Flow::Val(Value::Unit))
             }
             _ => self.refuse("this channel method", e.span),
-        }
-    }
-
-    /// One receive (#342): the oldest payload, else `closed` on a
-    /// drained-closed channel, else the root task blocks alone —
-    /// `trap(deadlock)` (see [`Self::eval_chan_method`]).
-    fn chan_recv(&mut self, id: usize, span: Span) -> E<Flow> {
-        match self.chans[id].buf.pop_front() {
-            Some(v) => Ok(Flow::Val(v)),
-            None if self.chans[id].closed => Ok(raise(Value::ErrTag {
-                tag: "closed".to_string(),
-                payload: Vec::new(),
-            })),
-            None => self.trap("deadlock", "conc.deadlock.trap", span),
         }
     }
 
@@ -10185,9 +10372,27 @@ impl<'t> Machine<'t> {
                 _ => self.refuse("this pointer method", e.span),
             };
         }
-        // Channel methods from the root task (#342).
+        // Channel methods (#342; blocking since s226).
         if matches!(recv_ty, Some(TyKind::Chan(_))) {
             return self.eval_chan_method(method, recv, e, args);
+        }
+        // s226: the task and proc surface.
+        match recv_ty {
+            Some(TyKind::TaskScope) if method == "spawn" => {
+                return self.eval_spawn_task(recv, e, args);
+            }
+            Some(TyKind::Proc(_)) => return self.eval_proc_method(method, recv, e, args),
+            Some(TyKind::ExitReason) => {
+                let reason = match found!(self.place_of(recv)) {
+                    Some(place) => self.read_place(&place, recv.span)?,
+                    None => val!(self.eval(recv)),
+                };
+                return match self.exit_reason_is(&reason, method) {
+                    Some(b) => Ok(Flow::Val(Value::Bool(b))),
+                    None => self.refuse("this exit-reason method", e.span),
+                };
+            }
+            _ => {}
         }
         // Container/cell builtins by receiver type.
         match recv_ty {
@@ -10278,6 +10483,15 @@ impl<'t> Machine<'t> {
                     );
                 }
                 match method {
+                    // s226 — `xs.par(f)` (`[conc.task.par]`).
+                    "par" => {
+                        let Some(v) = args.into_iter().flat_map(|l| l.args()).find_map(Arg::value)
+                        else {
+                            return self.refuse("a `par` without its fn", e.span);
+                        };
+                        let f = val!(self.eval(v));
+                        self.eval_par(id, f, e.span)
+                    }
                     "push" => {
                         for a in args.into_iter().flat_map(|l| l.args()) {
                             if let Some(v) = Arg::value(a) {
