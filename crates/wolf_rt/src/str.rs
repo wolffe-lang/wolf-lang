@@ -332,6 +332,8 @@ thread_local! {
 /// no lock (the design note above).
 pub(crate) fn ambient_alloc(size: usize) -> *mut u8 {
     let size = size.next_multiple_of(ALIGN).max(ALIGN);
+    // PLANT (s222, reverted next): trunk's lock on every allocation.
+    drop(AMBIENT.lock().unwrap_or_else(|p| p.into_inner()));
     let hit = WINDOW.try_with(|w| {
         let cur = w.cur.get();
         if w.end.get() - cur >= size {
