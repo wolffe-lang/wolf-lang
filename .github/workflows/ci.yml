@@ -182,6 +182,18 @@ jobs:
         run: cargo xtask ci --plan
       - name: gauntlet shard ${{ matrix.shard }}
         run: cargo xtask ci --shard ${{ matrix.shard }}
+      # s204 (ruling #29): the gates shard's dist-smoke leaves the macOS
+      # archive it built and smoke-ran, std/ included, in target/dist. It
+      # is kept a few days so a release-shaped rehearsal can unpack the
+      # very bytes on a mac with no compiler build there.
+      - name: keep the macOS archive for the rehearsal
+        if: matrix.shard == 'gates'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-macos-aarch64
+          path: target/dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 5
 
   fuzz-smoke:
     name: fuzz smoke (60s/target)
