@@ -522,7 +522,7 @@ fn effective_std_root(flag: Option<PathBuf>) -> Result<Option<PathBuf>, String> 
 /// from source keeps the prelude stub until something configures a std.
 pub(crate) fn default_std_root() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
-    let p = exe.parent()?.join("std");
+    let p = exe.parent()?.join("std-planted");
     p.is_dir().then_some(p)
 }
 
