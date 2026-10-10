@@ -669,6 +669,20 @@ pub fn c_import_symbol(callee: &str) -> Option<&str> {
     .then_some(name)
 }
 
+/// [`c_import_symbol`], asked of a whole module: a callee the module
+/// DEFINES as a wolf function is never a C import, whatever its
+/// spelling (wolf-lang#620). WIR names are module-path qualified
+/// (`[abi.c.export]`'s neighbour, s30), so a function `go` in a
+/// module whose path is `c` — a child directory `c/`, or a dependency
+/// under the alias `c` — is `c.go`, the membrane's own spelling. Both
+/// backends ask this before the membrane, and lowering refuses the one
+/// program that would need both readings of one name (an imported C
+/// function and a module-`c` function sharing it).
+pub fn c_import_symbol_in<'a>(m: &wolf_wir::ir::Module, callee: &'a str) -> Option<&'a str> {
+    let sym = c_import_symbol(callee)?;
+    (!m.funcs.values().any(|f| f.name == callee)).then_some(sym)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1077,5 +1091,19 @@ mod tests {
                 "{not_c} is not a C identifier"
             );
         }
+    }
+
+    /// wolf-lang#620: a module function spelled like the membrane is
+    /// the module's — `c.go` from a module named `c` links as a wolf
+    /// symbol; with no such definition the spelling is the membrane's.
+    #[test]
+    fn a_module_named_c_is_not_the_membrane() {
+        let mut m = Module::new();
+        let sig = m.make_sig(vec![Param::val(types::I64)], vec![types::I64]);
+        assert_eq!(c_import_symbol_in(&m, "c.go"), Some("go"));
+        m.add_func(wolf_wir::ir::Function::new("c.go", sig));
+        assert_eq!(c_import_symbol_in(&m, "c.go"), None);
+        assert_eq!(c_import_symbol_in(&m, "c.labs"), Some("labs"));
+        assert_eq!(c_import_symbol_in(&m, "go"), None);
     }
 }
