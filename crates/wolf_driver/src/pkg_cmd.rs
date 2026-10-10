@@ -1007,7 +1007,7 @@ pub fn cap_uses(project: &Project, res: &wolf_sema::Resolution) -> Vec<wolf_pkg:
         // declarations carry `ffi` at the declaration, as `import c`
         // carries it at its line.
         for item in &pkg.tables[m].items {
-            let Some(kind) = c_declaration(pkg, item).filter(|_| false) else {
+            let Some(kind) = c_declaration(pkg, item) else {
                 continue;
             };
             let used = first_use(m, item).map(|(fi, sp)| (sp, site(pkg, fi, sp)));
