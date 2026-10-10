@@ -83,6 +83,12 @@ fn run_wolf(dir: &Path, args: &[&str]) -> Output {
         .expect("wolf runs")
 }
 
+/// The rendered text with its line wrapping undone: a note wraps at the
+/// terminal width, so a phrase is matched on the flattened text.
+fn flat(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 fn stderr(out: &Output) -> String {
     String::from_utf8_lossy(&out.stderr).into_owned()
 }
@@ -145,15 +151,16 @@ fn audit(dir: &Path, pkg: &str, ci: bool) -> Output {
 }
 
 /// The audit derives `ffi` from the code with no build and no ledger,
-/// gives `reason` for `who`, and `--ci` refuses; without `--ci` the same
-/// report exits 0.
-fn assert_audit_undeclared(dir: &Path, pkg: &str, who: &str, reason: &str) {
+/// gives `reason` for `who` (its report line ending in `more`, the count
+/// of further sites), and `--ci` refuses; without `--ci` the same report
+/// exits 0.
+fn assert_audit_undeclared(dir: &Path, pkg: &str, who: &str, reason: &str, more: &str) {
     let out = audit(dir, pkg, true);
     assert_eq!(out.status.code(), Some(1), "stderr:\n{}", stderr(&out));
     let report = stdout(&out);
     assert!(report.contains("effective: [ffi]\n"), "{report}");
     assert!(
-        report.contains(&format!("  ffi: {who} — UNDECLARED: {reason}\n")),
+        report.contains(&format!("  ffi: {who} — UNDECLARED: {reason}{more}\n")),
         "expected the reason {reason:?}:\n{report}"
     );
     let short = who.trim_end_matches(" (root)");
@@ -186,6 +193,7 @@ fn issue_619_a_caps_free_package_calling_getpid_is_e1504_on_both_tiers() {
         "demo/app (root)",
         "declares `extern \"c\" fn getpid` at app/main.lu:4:15, \
          first called at app/main.lu:7:22",
+        "",
     );
     for release in [false, true] {
         let err = assert_refused(
@@ -199,10 +207,13 @@ fn issue_619_a_caps_free_package_calling_getpid_is_e1504_on_both_tiers() {
         );
         assert!(err.contains("first called here"), "the call is shown:\n{err}");
         assert!(
-            err.contains("declares the C function `getpid` at app/main.lu:4:15 (first called at app/main.lu:7:22)"),
+            flat(&err).contains(
+                "declares the C function `getpid` at app/main.lu:4:15 (first called at \
+                 app/main.lu:7:22)"
+            ),
             "{err}"
         );
-        assert!(err.contains("ruling #55"), "{err}");
+        assert!(flat(&err).contains("ruling #55"), "{err}");
         assert!(!exe(&dir).exists(), "a refused build wrote a program");
     }
 }
@@ -216,6 +227,7 @@ fn a_caps_free_dependency_declaring_a_c_function_is_charged_for_it() {
         "pad",
         "declares `extern \"c\" fn getpid` at pkg://pad/pad.lu:3:15, \
          first called at pkg://pad/pad.lu:6:22",
+        "",
     );
     let err = assert_refused(
         &build(&dir, false),
@@ -223,7 +235,7 @@ fn a_caps_free_dependency_declaring_a_c_function_is_charged_for_it() {
          capability",
     );
     assert!(err.contains(" ::: pkg://pad/pad.lu:3:15"), "{err}");
-    assert!(err.contains(" ::: pkg://pad/pad.lu:6:22"), "{err}");
+    assert!(err.contains("first called here"), "{err}");
     // The root declares nothing and reaches nothing itself.
     assert!(
         !err.contains("this package declares"),
@@ -238,15 +250,16 @@ fn an_extern_c_let_is_charged_as_a_c_declaration() {
         &dir,
         "app",
         "demo/app (root)",
-        "declares `extern \"c\" let environ` at app/main.lu:3:15, \
+        "declares `extern \"c\" let environ` at app/main.lu:3:16, \
          first used at app/main.lu:6:26",
+        "",
     );
     let err = assert_refused(
         &build(&dir, false),
         "this package declares `extern \"c\" let environ` but does not declare the `ffi` \
          capability",
     );
-    assert!(err.contains("the link-time symbol `environ`"), "{err}");
+    assert!(flat(&err).contains("the link-time symbol `environ`"), "{err}");
     assert!(err.contains("first used here"), "{err}");
 }
 
@@ -258,12 +271,13 @@ fn a_c_declaration_nothing_calls_is_still_charged() {
         "app",
         "demo/app (root)",
         "declares `extern \"c\" fn getpid` at app/main.lu:3:15, never called in this package",
+        "",
     );
     let err = assert_refused(
         &build(&dir, false),
         "this package declares `extern \"c\" fn getpid`",
     );
-    assert!(err.contains("(never called in this package)"), "{err}");
+    assert!(flat(&err).contains("(never called in this package)"), "{err}");
     assert!(!err.contains("first called here"), "{err}");
 }
 
@@ -315,7 +329,7 @@ fn import_c_is_charged_exactly_as_before() {
         "this package uses `import c` but does not declare the `ffi` capability",
     );
     assert!(
-        err.contains("the root module imports `import c`. Add `ffi`"),
+        flat(&err).contains("the root module imports `import c`. Add `ffi`"),
         "{err}"
     );
     declare_ffi(&dir.join("app/wolf.pkg"));
@@ -368,6 +382,7 @@ fn a_freestanding_kernel_is_charged_per_entry_and_in_the_audit() {
         "demo/kern (root)",
         "declares `extern \"c\" fn k_outb` at kern/port/port.lu:4:15, \
          first called at kern/port/port.lu:9:14",
+        " (+1 more)",
     );
     let (out, obj) = build_entry(&dir, "kmain_a");
     let err = assert_refused(
@@ -378,7 +393,7 @@ fn a_freestanding_kernel_is_charged_per_entry_and_in_the_audit() {
     let (out, _) = build_entry(&dir, "kmain_b");
     let err = assert_refused(&out, "but does not declare the `ffi` capability");
     assert!(
-        err.contains("1 more site in the same package reaches `ffi`"),
+        flat(&err).contains("1 more site in the same package reaches `ffi`"),
         "kmain_b reaches ffi twice (its own symbol and port's function):\n{err}"
     );
 }
