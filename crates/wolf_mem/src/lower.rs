@@ -51,6 +51,16 @@ type R<T> = Result<T, NotYet>;
 pub(crate) struct Val {
     /// Sorted, deduped site ids.
     sites: Vec<SiteId>,
+    /// s227 (wolf-lang#660): sites this value only SHARES BYTES with —
+    /// a `str` a callee may have kept in it, the strings an aggregate
+    /// `copy` still names. The value is not placed there and embeds
+    /// nothing placed there, so no store demands co-location with one
+    /// (`[mem.region.edge]` rules where a value is PLACED) and no
+    /// write, freeze or promotion fact reads it; but the value must
+    /// not outlive such a site's region, so every escape rule
+    /// (`[mem.region.escape]`) reads these beside `sites`. Sorted,
+    /// deduped.
+    views: Vec<SiteId>,
     /// `Some(r)`: this expression denotes region `r` (X4 value flow).
     region: Option<RegionId>,
     /// The span that produced the first site (diagnostic anchor).
@@ -83,6 +93,7 @@ impl Val {
     fn site(id: SiteId, span: Span) -> Val {
         Val {
             sites: vec![id],
+            views: Vec::new(),
             region: None,
             origin: Some(span),
             region_fields: Vec::new(),
@@ -100,6 +111,11 @@ impl Val {
         for s in other.sites {
             if let Err(i) = self.sites.binary_search(&s) {
                 self.sites.insert(i, s);
+            }
+        }
+        for s in other.views {
+            if let Err(i) = self.views.binary_search(&s) {
+                self.views.insert(i, s);
             }
         }
         if self.origin.is_none() {
@@ -272,6 +288,45 @@ pub struct Lowered {
     pub rc_cells: Vec<(SiteId, bool)>,
 }
 
+/// s227 (wolf-lang#660, `[mem.region.escape]`): one argument of a
+/// call (the receiver included), as the kept-argument rule reads it.
+struct ArgFlow<'t> {
+    /// The argument expression.
+    span: Span,
+    /// The sites its value may name.
+    sites: Vec<SiteId>,
+    /// Declared `take` or `mut`, or a `take` spelled on a builtin
+    /// store: the callee may move heap values out of it.
+    owned: bool,
+    /// Its type can name bytes a region owns that a READ can share: a
+    /// `str`, a fn value, a type parameter, or an aggregate reaching
+    /// one ([`Lowerer::may_lend_bytes`]).
+    lends: bool,
+    /// A builtin container store's value parameter (`push`'s).
+    store: bool,
+    /// Typed exactly `str` (the fix-it's condition).
+    is_str: bool,
+    /// The `mut` places this argument lends, each with its type.
+    muts: Vec<(PlaceId, Option<Ty<'t>>)>,
+}
+
+/// s227 (#660): why a binding holds a site — an argument the callee
+/// may have kept in a `mut` argument. What E1010 names at the close.
+#[derive(Clone)]
+struct KeptFlow {
+    callee: String,
+    /// The argument whose sites flow, and its source text.
+    arg: Span,
+    arg_text: String,
+    /// The `mut` argument that gains them, and its source text.
+    target: Span,
+    target_text: String,
+    /// The argument is a `str` place and the call's ambient region is
+    /// not the one its bytes live in: `"{arg}"` at the call builds the
+    /// bytes where the callee allocates.
+    rebuild: bool,
+}
+
 struct Scope<'t> {
     names: Vec<(String, LocalId)>,
     /// Scope-exit obligations in declaration order: `defer`s and s21
@@ -355,6 +410,14 @@ pub(crate) struct Lowerer<'t> {
     /// May-hold: root local -> the sites its value may contain, each
     /// with the span where it flowed in (diagnostic anchor).
     holds: BTreeMap<u32, BTreeMap<SiteId, Span>>,
+    /// s227 (wolf-lang#660): may-share — root local -> the sites its
+    /// value shares bytes with and is not placed in (`Val::views`),
+    /// each with the span where the bytes flowed in. Read by the
+    /// escape rules only.
+    shares: BTreeMap<u32, BTreeMap<SiteId, Span>>,
+    /// s227 (wolf-lang#660): `(root local, site)` pairs that entered
+    /// `shares` because a callee may have kept another argument there.
+    kept: BTreeMap<(u32, SiteId), KeptFlow>,
     /// s207 (wolf-lang#540): the LIST a `split`/`words`/`lines` call
     /// allocates. Its pieces are subslices of the receiver, so a piece
     /// bound by a `for` carries the receiver's sites and never this one
@@ -665,6 +728,19 @@ impl<'t> Lowerer<'t> {
         }
     }
 
+    /// s227 (#660): the sites a place's value only shares bytes with
+    /// (keyed by the root local, as `sites_of_place` is).
+    fn views_of_place(&self, place: PlaceId) -> Vec<SiteId> {
+        match self.places.get(place).base {
+            Base::Local(l) => self
+                .shares
+                .get(&l)
+                .map(|m| m.keys().copied().collect())
+                .unwrap_or_default(),
+            Base::Global(..) => Vec::new(),
+        }
+    }
+
     fn val_of_place(&self, place: PlaceId, span: Span) -> Val {
         let mut sites: Vec<SiteId> = self
             .sites_of_place(place)
@@ -679,8 +755,12 @@ impl<'t> Lowerer<'t> {
             }
             _ => None,
         };
+        let mut views: Vec<SiteId> = self.views_of_place(place);
+        views.sort_unstable();
+        views.dedup();
         Val {
             sites,
+            views,
             region,
             origin: Some(span),
             region_fields: Vec::new(),
@@ -709,6 +789,20 @@ impl<'t> Lowerer<'t> {
             let entry = self.lent_holds.entry(local).or_default();
             for &(p, sp) in &val.lent {
                 entry.entry(p).or_insert(sp);
+            }
+        }
+        // s227 (#660): the bytes the value shares ride into the
+        // binding beside the sites it holds — unless the binding's
+        // type can name no bytes at all (an `int` read out of a list
+        // that shares a string's bytes shares nothing).
+        if !val.views.is_empty()
+            && self.tys[local as usize]
+                .map(|t| self.may_lend_bytes(t, 0))
+                .unwrap_or(true)
+        {
+            let entry = self.shares.entry(local).or_default();
+            for &s in &val.views {
+                entry.entry(s).or_insert(span);
             }
         }
         if val.sites.is_empty() {
@@ -971,8 +1065,27 @@ impl<'t> Lowerer<'t> {
         self.refuse_lent_escape(val, span, how);
         self.claim_closure_leaving(val, span);
         let reader = if how == "sent" { "receiver" } else { "caller" };
-        for &s in &val.sites {
+        // s227 (#660): the bytes the value shares must outlive the
+        // frame too; only a frame-local region can fail that, and a
+        // shared site takes part in no unification or promotion fact.
+        let all: Vec<(SiteId, bool)> = val
+            .sites
+            .iter()
+            .map(|&s| (s, false))
+            .chain(val.views.iter().map(|&s| (s, true)))
+            .collect();
+        for (s, shared) in all {
             if self.already_conflicted(s) {
+                continue;
+            }
+            if shared
+                && (self.frozen_site.contains_key(&s)
+                    || self.shared_site.contains(&s)
+                    || !matches!(
+                        self.rt.binding(self.sites[s.0 as usize].region),
+                        Some(Binding::Local(_))
+                    ))
+            {
                 continue;
             }
             // Frozen data outlives everything ([mem.region.freeze.1]:
@@ -1062,7 +1175,26 @@ impl<'t> Lowerer<'t> {
     /// A store into module state: the target is `ρ_static`.
     fn demand_static(&mut self, val: &Val, span: Span) {
         self.refuse_lent_escape(val, span, "stored into module state");
-        for &s in &val.sites {
+        let all: Vec<(SiteId, bool)> = val
+            .sites
+            .iter()
+            .map(|&s| (s, false))
+            .chain(val.views.iter().map(|&s| (s, true)))
+            .collect();
+        for (s, shared) in all {
+            // s227 (#660): shared bytes in a region that does not
+            // outlive every call are the same escape; anything else
+            // about a shared site is not this store's business.
+            if shared
+                && (self.frozen_site.contains_key(&s)
+                    || self.shared_site.contains(&s)
+                    || !matches!(
+                        self.rt.binding(self.sites[s.0 as usize].region),
+                        Some(Binding::Caller) | Some(Binding::Local(_))
+                    ))
+            {
+                continue;
+            }
             // Frozen data may live anywhere, forever
             // ([mem.region.edge.imm]).
             if self.frozen_site.contains_key(&s) {
@@ -1137,6 +1269,7 @@ impl<'t> Lowerer<'t> {
                         val.origin.unwrap_or(close_span),
                         close_span,
                         None,
+                        None,
                     );
                 }
             } else {
@@ -1144,6 +1277,29 @@ impl<'t> Lowerer<'t> {
             }
         }
         val.sites = kept;
+        // s227 (#660): bytes the block's value shares with the dying
+        // region are the same escape.
+        let mut kept_views = Vec::new();
+        for &s in &val.views.clone() {
+            if !self.shared_site.contains(&s)
+                && !self.frozen_site.contains_key(&s)
+                && self.rt.same(self.sites[s.0 as usize].region, rid)
+            {
+                if !self.already_conflicted(s) {
+                    self.report_close_escape(
+                        rid,
+                        s,
+                        val.origin.unwrap_or(close_span),
+                        close_span,
+                        None,
+                        None,
+                    );
+                }
+            } else {
+                kept_views.push(s);
+            }
+        }
+        val.views = kept_views;
         // Bindings that outlive the region.
         let entries: Vec<(u32, SiteId, Span)> = self
             .holds
@@ -1151,13 +1307,45 @@ impl<'t> Lowerer<'t> {
             .filter(|(l, _)| (**l as usize) < outer_mark)
             .flat_map(|(&l, m)| m.iter().map(move |(&s, &sp)| (l, s, sp)))
             .collect();
+        // s227: the bindings reported here — one report per binding at
+        // one close is enough (the shared-bytes sweep below skips them).
+        let mut reported: BTreeSet<u32> = BTreeSet::new();
         for (l, s, sp) in entries {
             if self.shared_site.contains(&s) {
                 continue; // s21: RC-owned, outlives the region freely
             }
             if self.rt.same(self.sites[s.0 as usize].region, rid) && !self.already_conflicted(s) {
                 let name = self.locals[l as usize].name.clone();
-                self.report_close_escape(rid, s, sp, close_span, Some(name));
+                self.report_close_escape(rid, s, sp, close_span, Some(name), None);
+                reported.insert(l);
+            }
+        }
+        // s227 (#660): and bindings that outlive it sharing its bytes —
+        // an argument a callee may have kept, a copy's strings.
+        let shared: Vec<(u32, SiteId, Span)> = self
+            .shares
+            .iter()
+            .filter(|(l, _)| (**l as usize) < outer_mark)
+            .flat_map(|(&l, m)| m.iter().map(move |(&s, &sp)| (l, s, sp)))
+            .collect();
+        let mut told: BTreeSet<(u32, u32, u32)> = BTreeSet::new();
+        for (l, s, sp) in shared {
+            if reported.contains(&l)
+                || self.shared_site.contains(&s)
+                || self.frozen_site.contains_key(&s)
+            {
+                continue;
+            }
+            if self.rt.same(self.sites[s.0 as usize].region, rid) && !self.already_conflicted(s) {
+                // One report per binding and flow: a value built from
+                // two sites in the region is one mistake.
+                if !told.insert((l, sp.lo, sp.hi)) {
+                    self.mark_escape(s, "outlives its region");
+                    continue;
+                }
+                let name = self.locals[l as usize].name.clone();
+                let kept = self.kept.get(&(l, s)).cloned();
+                self.report_close_escape(rid, s, sp, close_span, Some(name), kept);
             }
         }
         if !self.tainted_region[rid.0 as usize]
@@ -1175,12 +1363,70 @@ impl<'t> Lowerer<'t> {
         escape_span: Span,
         close_span: Span,
         binding: Option<String>,
+        kept: Option<KeptFlow>,
     ) {
         self.conflicted = true;
         self.tainted_region[rid.0 as usize] = true;
         self.mark_escape(site, "outlives its region");
         let region = self.show_region(rid);
         let alloc = self.sites[site.0 as usize].span;
+        // s227 (wolf-lang#660): the site reached the binding through a
+        // call that may have kept one argument in another — name both
+        // arguments and the callee, at the argument.
+        if let (Some(name), Some(k)) = (&binding, &kept) {
+            let mut d = Diagnostic::error(
+                codes::E1010,
+                k.arg,
+                format!(
+                    "`{}` may keep `{}` in its `mut` argument `{}`, and `{name}` outlives \
+                     {region}, where `{}`'s bytes live",
+                    k.callee, k.arg_text, k.target_text, k.arg_text
+                ),
+            )
+            .with_label(format!(
+                "this argument's bytes are in {region}, which is freed before `{name}` is"
+            ))
+            .with_secondary(
+                k.target,
+                format!(
+                    "`{}` is lent `mut` here: the callee may store any other argument's \
+                     bytes in it",
+                    k.target_text
+                ),
+            )
+            .with_secondary(alloc, format!("allocated here, into {region}"));
+            if let Some((rname, intro)) = self.region_span(rid) {
+                d = d.with_secondary(intro, format!("region `{rname}` is created here"));
+            }
+            d = d
+                .with_secondary(
+                    close_span,
+                    "the region is freed here — everything in it is freed wholesale, as one unit",
+                )
+                .with_note(
+                    "a call may keep what it is handed: a callee can store one argument's \
+                     bytes into a `mut` argument (`l.last = copy s` shares a `str`'s bytes, a \
+                     `push` lends them), so a `mut` argument is taken to share the bytes of \
+                     every other argument that can name bytes a region owns \
+                     [mem.region.escape]. `in r { … }` \
+                     aims what the callee ALLOCATES at `r`; an argument's bytes stay where \
+                     they were built. Build the value where the `mut` argument lives: inside \
+                     the `in` block (an interpolation there materializes in `r`), or outside \
+                     the region block; or let the block's own value leave with `copy region \
+                     { … }` and make the call after it [mem.region.copyout].",
+                );
+            if k.rebuild {
+                d = d.with_suggestion(Suggestion::new(
+                    "to hand the callee bytes built where it allocates, materialize the \
+                     string at the call"
+                        .to_string(),
+                    vec![(k.arg, format!("\"{{{}}}\"", k.arg_text))],
+                    Applicability::Maybe,
+                ));
+            }
+            self.diags.push(d);
+            return;
+        }
         let message = match &binding {
             Some(name) => format!(
                 "`{name}` still holds a value allocated in {region} when the \
@@ -1562,6 +1808,226 @@ impl<'t> Lowerer<'t> {
                 _ => true,
             },
             _ => true,
+        }
+    }
+
+    /// s227 (wolf-lang#660, `[mem.region.escape]`): can a value of this
+    /// type name bytes a region owns that a callee holding it by ANY
+    /// mode can go on naming after the call — bytes a read can share?
+    /// A `str` can (its view is `Copy`, and `copy s` shares the bytes,
+    /// ruling #35); so can a fn value (a closure's captures) and
+    /// anything opaque (a type parameter, a trait object). A container
+    /// or an aggregate can exactly when a part of it can. A scalar, a
+    /// handle, a raw pointer (the raw tier answers for itself,
+    /// `[mem.prov.region]`) and a channel (its payloads are demanded to
+    /// outlive the sender's frame at the send, `[conc.chan.payload]`)
+    /// cannot: a `List[byte]` read by a callee can only be COPIED, and
+    /// the copy is a fresh allocation where the callee allocates.
+    fn may_lend_bytes(&self, t: Ty<'t>, depth: u32) -> bool {
+        if depth > 16 {
+            return true;
+        }
+        let sub = |id: TyId| Ty { table: t.table, id };
+        match t.kind() {
+            TyKind::Prim(p) => matches!(p, Prim::Str),
+            TyKind::Never
+            | TyKind::Unit
+            | TyKind::Range(_)
+            | TyKind::Handle(_)
+            | TyKind::Ptr(_)
+            | TyKind::TypeTy
+            | TyKind::Chan(_)
+            | TyKind::TaskScope
+            | TyKind::Proc(_)
+            | TyKind::ExitReason
+            | TyKind::RegionTy => false,
+            TyKind::Wrapping(i) | TyKind::Distinct(i) => self.may_lend_bytes(sub(*i), depth + 1),
+            TyKind::List(i)
+            | TyKind::Pool(i)
+            | TyKind::Mutex(i)
+            | TyKind::Shared(i)
+            | TyKind::Weak(i) => self.may_lend_bytes(sub(*i), depth + 1),
+            TyKind::Map(k, v) => {
+                self.may_lend_bytes(sub(*k), depth + 1) || self.may_lend_bytes(sub(*v), depth + 1)
+            }
+            TyKind::Tuple(es) => es.iter().any(|e| self.may_lend_bytes(sub(*e), depth + 1)),
+            TyKind::ErrUnion(ok, row) => {
+                self.may_lend_bytes(sub(*ok), depth + 1)
+                    || self.may_lend_bytes(sub(*row), depth + 1)
+            }
+            TyKind::Row { tags, tail } => {
+                tags.iter()
+                    .flat_map(|(_, ps)| ps.iter())
+                    .any(|p| self.may_lend_bytes(sub(*p), depth + 1))
+                    || tail.is_some_and(|tl| self.may_lend_bytes(sub(tl), depth + 1))
+            }
+            TyKind::Nominal { module, name, args } => match self.sigs.get(*module as usize, name) {
+                Some(ItemSig::Struct(_)) => match self.fields_of(t) {
+                    Some(fs) => fs
+                        .into_iter()
+                        .any(|(_, ft)| self.may_lend_bytes(ft, depth + 1)),
+                    None => true,
+                },
+                Some(ItemSig::Enum {
+                    generics, variants, ..
+                }) => variants.iter().flat_map(|v| v.payload.iter()).any(|&p| {
+                    match self.sigs.table.kind(p) {
+                        TyKind::Rigid(r) => match generics.iter().position(|g| g == r) {
+                            Some(i) if i < args.len() => {
+                                self.may_lend_bytes(sub(args[i]), depth + 1)
+                            }
+                            _ => true,
+                        },
+                        _ if mentions_rigid(&self.sigs.table, p) => true,
+                        _ => self.may_lend_bytes(
+                            Ty {
+                                table: &self.sigs.table,
+                                id: p,
+                            },
+                            depth + 1,
+                        ),
+                    }
+                }),
+                Some(ItemSig::Distinct { base, .. }) => self.may_lend_bytes(
+                    Ty {
+                        table: &self.sigs.table,
+                        id: *base,
+                    },
+                    depth + 1,
+                ),
+                _ => true,
+            },
+            // A fn value, a type parameter, a trait object, an
+            // unresolved type: unknown, so yes.
+            _ => true,
+        }
+    }
+
+    /// s227: the type of an argument expression — sema's record, or the
+    /// binding's own type for a bare local (sema types a `mut` place
+    /// through `place_type` and records nothing under its span).
+    fn value_ty(&self, e: &'t GreenNode) -> Option<Ty<'t>> {
+        if let Some(t) = self.expr_ty(e.span) {
+            return Some(t);
+        }
+        match e.kind {
+            SyntaxKind::ParenExpr => self.value_ty(ParenExpr::cast(e)?.expr()?),
+            SyntaxKind::PathExpr => {
+                let t = PathExpr::cast(e)?.ident()?;
+                let local = self.lookup(&self.text(t.span))?;
+                self.tys[local.0 as usize]
+            }
+            _ => None,
+        }
+    }
+
+    /// s227: the sites a closure-holding argument's captures name. A
+    /// closure's own value carries no site (its captures are borrowed
+    /// places, s105), so a callee that keeps the fn value keeps a path
+    /// to every captured place's bytes.
+    fn captured_sites(&self, e: &'t GreenNode, val: Option<&Val>) -> Vec<SiteId> {
+        let mut out: Vec<SiteId> = Vec::new();
+        if let Some(v) = val {
+            for &b in &v.borrowed {
+                out.extend(self.sites_of_place(b).into_iter().map(|(s, _)| s));
+                out.extend(self.views_of_place(b));
+            }
+        }
+        let inner = match ParenExpr::cast(e) {
+            Some(p) => p.expr().unwrap_or(e),
+            None => e,
+        };
+        if inner.kind == SyntaxKind::PathExpr
+            && let Some(t) = PathExpr::cast(inner).and_then(|p| p.ident())
+            && let Some(local) = self.lookup(&self.text(t.span))
+        {
+            let borrowed: Vec<PlaceId> = self
+                .loans
+                .iter()
+                .filter(|l| l.borrower == local)
+                .map(|l| l.place)
+                .collect();
+            for b in borrowed {
+                out.extend(self.sites_of_place(b).into_iter().map(|(s, _)| s));
+                out.extend(self.views_of_place(b));
+            }
+        }
+        out
+    }
+
+    /// s227 (wolf-lang#660, `[mem.region.escape]`): **what a call can
+    /// keep, it is taken to keep.** A callee may store one argument's
+    /// bytes into another: `l.last = copy s` shares `s`'s bytes (ruling
+    /// #35) and `(mut xs).push(s)` lends them (`[mem.region.edge.elem]`),
+    /// and neither is refused in the callee, where both are parameters.
+    /// So at the call every `mut` argument gains the sites of every
+    /// other argument that can reach it — an owned (`take`/`mut`)
+    /// argument's heap values, and any argument's shareable bytes when
+    /// the `mut` argument's type can name such bytes. A builtin
+    /// container method keeps exactly its `store` parameter.
+    ///
+    /// Until this pin a `mut` argument gained ONE site, the call's own,
+    /// minted in the ambient region. That pins it only while the
+    /// ambient region is the shortest-lived one any argument lives in;
+    /// `in r { f(mut outer, s) }` re-aims the ambient at `r` and the
+    /// pin is gone, so `outer` kept `s`'s bytes past the region block
+    /// that built them: freed bytes printed on native and release,
+    /// stale ones on the checked machine, `region-fault` on lupin.
+    fn flow_kept_arguments(&mut self, flows: &[ArgFlow<'t>], builtin: bool, callee: &str) {
+        let ambient = self.ambient();
+        for (ti, t) in flows.iter().enumerate() {
+            for &(place, pty) in &t.muts {
+                if self.places.is_copy(place) {
+                    continue;
+                }
+                let Base::Local(l) = self.places.get(place).base else {
+                    continue;
+                };
+                let holds_bytes = pty.map(|t| self.may_lend_bytes(t, 0)).unwrap_or(true);
+                for (ai, a) in flows.iter().enumerate() {
+                    if ai == ti || a.sites.is_empty() {
+                        continue;
+                    }
+                    let reaches = (a.owned || (a.lends && holds_bytes)) && (!builtin || a.store);
+                    if !reaches {
+                        continue;
+                    }
+                    for &s in &a.sites {
+                        // A parameter's pseudo-site does not ride: its
+                        // bytes outlive this frame and escape no region
+                        // in it (s207's rule for `copy`).
+                        if self.sites[s.0 as usize].kind == SiteKind::Param {
+                            continue;
+                        }
+                        if self.holds.get(&l).is_some_and(|m| m.contains_key(&s)) {
+                            continue;
+                        }
+                        let entry = self.shares.entry(l).or_default();
+                        if entry.contains_key(&s) {
+                            continue;
+                        }
+                        entry.insert(s, a.span);
+                        let arg_text = self.text(a.span);
+                        let rebuild = a.is_str
+                            && !a.owned
+                            && !self.rt.same(self.sites[s.0 as usize].region, ambient)
+                            && arg_text
+                                .bytes()
+                                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'.');
+                        self.kept.insert(
+                            (l, s),
+                            KeptFlow {
+                                callee: callee.to_string(),
+                                arg: a.span,
+                                arg_text,
+                                target: t.span,
+                                target_text: self.text(t.span),
+                                rebuild,
+                            },
+                        );
+                    }
+                }
+            }
         }
     }
 
@@ -3344,6 +3810,7 @@ impl<'t> Lowerer<'t> {
         let rid = self.new_region("<region>", RegionKind::Value, strategy, e.span);
         Ok(Val {
             sites: Vec::new(),
+            views: Vec::new(),
             region: Some(rid),
             origin: Some(e.span),
             region_fields: Vec::new(),
@@ -3547,6 +4014,7 @@ impl<'t> Lowerer<'t> {
         self.freeze_region(rid, e.span);
         Ok(Val {
             sites: Vec::new(),
+            views: Vec::new(),
             region: Some(rid),
             origin: Some(e.span),
             region_fields: Vec::new(),
@@ -3903,7 +4371,8 @@ impl<'t> Lowerer<'t> {
                             .into_iter()
                             .filter(|s| self.sites[s.0 as usize].kind != SiteKind::Param)
                             .collect();
-                        if !v.sites.is_empty() {
+                        v.views = self.views_of_place(place);
+                        if !v.sites.is_empty() || !v.views.is_empty() {
                             v.origin = Some(e.span);
                         }
                         return Ok(v);
@@ -4104,6 +4573,7 @@ impl<'t> Lowerer<'t> {
         self.unclaimed_pairs.push((e.span, true));
         Ok(Val {
             sites: Vec::new(),
+            views: Vec::new(),
             region: None,
             origin: Some(e.span),
             region_fields: Vec::new(),
@@ -4758,18 +5228,24 @@ impl<'t> Lowerer<'t> {
         // w }` handed `last` out of the region with no diagnostic while
         // `s.split(",")[0]` was E1010.
         let mut elem_sites: Vec<SiteId> = Vec::new();
+        // s227 (#660): and the bytes the iterable shares.
+        let mut elem_views: Vec<SiteId> = Vec::new();
         if let Some(iter) = d.iterable() {
             match self.as_place(iter) {
                 Some((place, _)) => {
                     self.emit_read(place, iter.span);
-                    elem_sites = self.val_of_place(place, iter.span).sites;
+                    let iv = self.val_of_place(place, iter.span);
+                    elem_sites = iv.sites;
+                    elem_views = iv.views;
                     if !self.places.is_copy(place) {
                         self.iter_claims.push((place, iter.span));
                         claimed = true;
                     }
                 }
                 None => {
-                    elem_sites = self.eval_value(iter)?.sites;
+                    let iv = self.eval_value(iter)?;
+                    elem_sites = iv.sites;
+                    elem_views = iv.views;
                 }
             }
             // A channel's own allocation holds no payload's bytes, and
@@ -4811,9 +5287,10 @@ impl<'t> Lowerer<'t> {
                     self.locals[local.0 as usize].is_copy,
                 );
                 self.push(Stmt::Init { place, span });
-                if names_bytes && !elem_sites.is_empty() {
+                if names_bytes && (!elem_sites.is_empty() || !elem_views.is_empty()) {
                     let mut v = Val::none();
                     v.sites = elem_sites.clone();
+                    v.views = elem_views.clone();
                     self.hold(local.0, &v, span);
                 }
             }
@@ -4971,6 +5448,12 @@ impl<'t> Lowerer<'t> {
         // bytes (see `declared_str` below). Kept apart from `carry`,
         // which feeds every non-`Copy` result as before.
         let mut read_sites: Vec<SiteId> = Vec::new();
+        // s227 (wolf-lang#660): every argument as the kept-argument
+        // rule reads it ([`Self::flow_kept_arguments`]).
+        let mut flows: Vec<ArgFlow<'t>> = Vec::new();
+        // s227: the bytes each argument's value shares (`Val::views`),
+        // in argument order.
+        let mut arg_views: Vec<SiteId> = Vec::new();
         // The receiver, when the resolved callee takes `self` and the
         // call site spells `recv.method(…)`.
         let mut receiver_done = false;
@@ -5006,7 +5489,24 @@ impl<'t> Lowerer<'t> {
                     &mut surface,
                     &mut carry,
                     &mut recv_sites,
+                    &mut arg_views,
                 )?;
+                // s227 (#660): the receiver is the call's first
+                // argument in the kept-argument rule too.
+                let ty = self.value_ty(recv_expr);
+                let mut sites: Vec<SiteId> = carry.clone();
+                sites.extend(recv_sites.iter().copied());
+                sites.extend(arg_views.iter().copied());
+                sites.extend(self.captured_sites(recv_expr, None));
+                flows.push(ArgFlow {
+                    span: base.span,
+                    sites,
+                    owned: selfp.mode.is_some(),
+                    lends: ty.map(|t| self.may_lend_bytes(t, 0)).unwrap_or(true),
+                    store: false,
+                    is_str: false,
+                    muts: surface.mut_args.iter().map(|&(p, _)| (p, ty)).collect(),
+                });
             }
             // s21: `clone()` on a `shared` receiver is the recorded
             // dup — Perceus inserts RC ops at genuine fan-out only,
@@ -5163,6 +5663,12 @@ impl<'t> Lowerer<'t> {
                     ctor_parts.push((pv, v.span));
                 }
                 (Some(cs), Some(param)) => {
+                    let before = (
+                        carry.len(),
+                        read_sites.len(),
+                        surface.mut_args.len(),
+                        arg_views.len(),
+                    );
                     self.lower_arg(
                         cs,
                         param,
@@ -5172,9 +5678,29 @@ impl<'t> Lowerer<'t> {
                         &mut surface,
                         &mut carry,
                         &mut read_sites,
+                        &mut arg_views,
                         &mut arg_muts,
                         chan_send,
                     )?;
+                    // s227 (#660): what this argument put on the
+                    // call, by itself.
+                    let ty = self.value_ty(v);
+                    let mut sites: Vec<SiteId> = carry[before.0..].to_vec();
+                    sites.extend(read_sites[before.1..].iter().copied());
+                    sites.extend(arg_views[before.3..].iter().copied());
+                    flows.push(ArgFlow {
+                        span: v.span,
+                        sites,
+                        owned: param.mode.is_some()
+                            || (param.store && site_mode == Some(ParamMode::Take)),
+                        lends: ty.map(|t| self.may_lend_bytes(t, 0)).unwrap_or(true),
+                        store: param.store,
+                        is_str: ty.is_some_and(|t| matches!(t.kind(), TyKind::Prim(Prim::Str))),
+                        muts: surface.mut_args[before.2..]
+                            .iter()
+                            .map(|&(p, _)| (p, ty))
+                            .collect(),
+                    });
                 }
                 _ => {
                     // No resolved signature (builtin `print`, host
@@ -5363,6 +5889,20 @@ impl<'t> Lowerer<'t> {
                 }
             }
         }
+        // s227 (wolf-lang#660, `[mem.region.escape]`): what the callee
+        // may keep of one argument in another. A builtin method keeps
+        // exactly its `store` parameter.
+        // Sema records a builtin method's "declaration" as the member
+        // name at the call itself (it has none), so a declaration span
+        // inside this call is the mark of one — whatever the receiver's
+        // spelling (`(mut m).remove(k)` has no typed receiver span).
+        let builtin_method = cs.is_some_and(|c| {
+            c.has_self
+                && c.decl_span.is_some_and(|ds| {
+                    ds.file == e.span.file && ds.lo >= e.span.lo && ds.hi <= e.span.hi
+                })
+        });
+        self.flow_kept_arguments(&flows, builtin_method, &callee);
         // s171 (wolf-lang#392, `[mem.region.escape]`): a
         // `[mem.str.view]` product is a subslice of the receiver's own
         // storage, so its bytes live exactly where the receiver's do
@@ -5427,6 +5967,7 @@ impl<'t> Lowerer<'t> {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn lower_receiver(
         &mut self,
         recv: &'t GreenNode,
@@ -5435,6 +5976,7 @@ impl<'t> Lowerer<'t> {
         surface: &mut CallSurface,
         carry: &mut Vec<SiteId>,
         recv_sites: &mut Vec<SiteId>,
+        arg_views: &mut Vec<SiteId>,
     ) -> R<()> {
         match selfp.mode {
             None => {
@@ -5462,11 +6004,13 @@ impl<'t> Lowerer<'t> {
                     // escape, and marking it so would cost every
                     // `trim` its stack promotion.
                     recv_sites.extend(self.sites_of_place(place).into_iter().map(|(s, _)| s));
+                    arg_views.extend(self.views_of_place(place));
                     if !self.places.is_copy(place) {
                         surface.read_args.push((read_at, recv_span));
                     }
                 } else {
                     let rv = self.eval_value(recv)?;
+                    arg_views.extend(rv.views.iter().copied());
                     // A temporary receiver — `("a" + "b").trim()` —
                     // carries the sites of the value it was built from.
                     recv_sites.extend(rv.sites.iter().copied());
@@ -5492,6 +6036,7 @@ impl<'t> Lowerer<'t> {
                     self.check_iter_claim(place, recv_span, "lent `mut`");
                     self.check_region_lend(place, recv_span);
                     self.escape_to_callee(place, carry);
+                    arg_views.extend(self.views_of_place(place));
                     match &selfp.view {
                         Some(view) => {
                             // The view set narrows the exclusive
@@ -5524,10 +6069,12 @@ impl<'t> Lowerer<'t> {
                 if let Some((place, _)) = self.as_place(recv) {
                     self.check_read_param_take(place, recv_span);
                     self.escape_to_callee(place, carry);
+                    arg_views.extend(self.views_of_place(place));
                     self.emit_move(place, recv_span);
                     surface.take_args.push((place, recv_span));
                 } else {
                     let val = self.eval_value(recv)?;
+                    arg_views.extend(val.views.iter().copied());
                     self.refuse_lent_escape(&val, recv_span, "given to a `take` receiver");
                     self.mark_val_escape(&val, "passed to a call");
                     carry.extend(val.sites);
@@ -5580,6 +6127,7 @@ impl<'t> Lowerer<'t> {
         surface: &mut CallSurface,
         carry: &mut Vec<SiteId>,
         read_sites: &mut Vec<SiteId>,
+        arg_views: &mut Vec<SiteId>,
         arg_muts: &mut Vec<(PlaceId, Span)>,
         sent: bool,
     ) -> R<()> {
@@ -5625,6 +6173,10 @@ impl<'t> Lowerer<'t> {
                     self.emit_read(place, v.span);
                     self.mark_region_lent(place);
                     read_sites.extend(self.sites_of_place(place).into_iter().map(|(s, _)| s));
+                    arg_views.extend(self.views_of_place(place));
+                    // s227 (#660): a bound closure names its captures'
+                    // bytes.
+                    read_sites.extend(self.captured_sites(v, None));
                     if sent {
                         let mut pv = self.val_of_place(place, v.span);
                         pv.lent = self.lent_of_place(place, v.span);
@@ -5646,6 +6198,10 @@ impl<'t> Lowerer<'t> {
                 } else {
                     let av = self.eval_value(v)?;
                     read_sites.extend(av.sites.iter().copied());
+                    arg_views.extend(av.views.iter().copied());
+                    // s227 (#660): a closure argument names its
+                    // captures' bytes.
+                    read_sites.extend(self.captured_sites(v, Some(&av)));
                     if sent {
                         self.demand_sent_outlives_frame(&av, v.span);
                     }
@@ -5673,6 +6229,7 @@ impl<'t> Lowerer<'t> {
                     self.check_iter_claim(place, v.span, "lent `mut`");
                     self.check_region_lend(place, v.span);
                     self.escape_to_callee(place, carry);
+                    arg_views.extend(self.views_of_place(place));
                     surface.mut_args.push((place, v.span));
                     arg_muts.push((place, v.span));
                 }
@@ -5686,6 +6243,7 @@ impl<'t> Lowerer<'t> {
                     own = Some(v.span);
                     self.check_read_param_take(place, v.span);
                     self.escape_to_callee(place, carry);
+                    arg_views.extend(self.views_of_place(place));
                     self.emit_move(place, v.span);
                     surface.take_args.push((place, v.span));
                 } else {
@@ -5694,6 +6252,7 @@ impl<'t> Lowerer<'t> {
                     // (s165, #366): then the callee would own the
                     // caller's value.
                     let val = self.eval_value(v)?;
+                    arg_views.extend(val.views.iter().copied());
                     self.refuse_lent_escape(&val, v.span, "given to a `take` parameter");
                     self.mark_val_escape(&val, "passed to a call");
                     carry.extend(val.sites);
@@ -6597,6 +7156,8 @@ impl<'t> Lowerer<'t> {
             sites: Vec::new(),
             site_escape: Vec::new(),
             holds: BTreeMap::new(),
+            shares: BTreeMap::new(),
+            kept: BTreeMap::new(),
             view_lists: BTreeSet::new(),
             lent_params: BTreeSet::new(),
             lent_holds: BTreeMap::new(),
