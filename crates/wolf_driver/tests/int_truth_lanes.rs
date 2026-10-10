@@ -182,13 +182,11 @@ type Pin = (&'static str, &'static str, &'static str);
 
 /// lupin 0.1.48 has no `!` on integers (#575's mirror shipped in 0.1.49).
 const PIN_INT_NOT: Pin = ("0.1.48", "531bf05", "unsupported");
-/// lupin 0.1.48 and 0.1.49 multiply in `i128` and trap a wrapping
-/// product past 2^127 (found by s220's sweep; wolf-interp's s220 branch
-/// fixes it for the next lupin).
-const PINS_WIDE_MUL: [Pin; 2] = [
-    ("0.1.48", "531bf05", "trap(overflow)"),
-    ("0.1.49", "f516a5f", "trap(overflow)"),
-];
+/// lupin 0.1.48 and 0.1.49 multiplied in `i128` and trapped a wrapping
+/// product past 2^127 (found by s220's sweep). Both were listed here as
+/// `trap(overflow)`; emptied at the 0.1.50 pairing (r32), which keeps
+/// the product's low bits (wolf-interp's s220).
+const PINS_WIDE_MUL: [Pin; 0] = [];
 
 /// Run `jobs` on four machines with a worker pool; every disagreement is
 /// collected (a gate that stops at its first red row hides the shape of
@@ -612,7 +610,7 @@ fn random_integers_print_and_compute_alike_on_four_machines() {
             let dir = root.join(&name);
             std::fs::create_dir_all(&dir).expect("sweep dir");
             std::fs::write(dir.join("prog.lu"), &src).expect("sweep program");
-            // A wrapping product past 2^127 is lupin <= 0.1.49's trap.
+            // A wrapping product past 2^127 was lupin <= 0.1.49's trap.
             let wide = t.wrapping
                 && (0..vals.len())
                     .any(|i| vals[i].checked_mul(vals[(i + 1) % vals.len()]).is_none());
