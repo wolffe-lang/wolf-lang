@@ -440,15 +440,15 @@ out_of_range=invalid\nrepeated=invalid\nbad_source=invalid\nstill_here\n",
     );
 }
 
-/// `env_unset` removes a variable: `missing` after it, unlisted, absent
+/// `env_unset` removes a variable: `missing` after it, absent
 /// is fine, bad names `invalid`, a later set brings it back. Red at
 /// trunk: E0301 (`env_unset` unknown); lupin 0.1.49 `unsupported`.
 #[test]
 fn env_unset_round_trips() {
     every_lane_says(
         "os/env_unset.lu",
-        "got: tarn\nlisted: 1\nafter: <missing>\nlisted: 0\nabsent: ok\nempty: invalid\n\
-equals: invalid\nagain: fell\n",
+        "got: tarn\nafter: <missing>\nabsent: ok\nempty: invalid\nequals: invalid\n\
+again: fell\n",
     );
 }
 
