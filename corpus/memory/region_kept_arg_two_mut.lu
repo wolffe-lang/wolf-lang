@@ -1,0 +1,40 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.create.3
+//!
+//! s227 (wolf-lang#660): two `mut` arguments, one of them living in the
+//! region block: the callee may move or share anything of `b` into `l`.
+//! Trunk a027b643 built it and read freed bytes on native and release
+//! (`ZZZZZZZZZZZZZZZZZZZZZ`, the chunk `other` reused), stale ones on the
+//! checked machine; lupin traps `region-fault`.
+
+struct Log {
+    last: str,
+    seq: int,
+}
+
+fn share(mut a: Log, mut b: Log) {
+    a.last = copy b.last
+    b.seq = b.seq + 1
+}
+
+fn main() -> !int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        var l = Log { last: "", seq: 0 }
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            var b = Log { last: s, seq: 1 }
+            in st {
+                share(mut l, mut b)
+            }
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{l.last}")
+    }
+    0
+}

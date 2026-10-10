@@ -1,0 +1,39 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.create.3
+//!
+//! s227 (wolf-lang#660): the argument is a closure that captured `s` —
+//! a fn value names its captures' bytes, and the callee keeps it.
+//! Trunk a027b643 built it and printed freed bytes on native and
+//! release; lupin traps `region-fault`.
+
+struct H {
+    f: fn() -> str,
+    n: int,
+}
+
+fn dflt() -> str { "" }
+
+fn keep(mut h: H, g: fn() -> str) {
+    h.f = g
+}
+
+fn main() -> !int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        var h = H { f: dflt, n: 0 }
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            in st {
+                keep(mut h, fn() { s })
+            }
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{(h.f)()}")
+    }
+    0
+}

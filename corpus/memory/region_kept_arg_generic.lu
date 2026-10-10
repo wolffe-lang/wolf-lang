@@ -1,0 +1,32 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.edge.elem
+//!
+//! s227 (wolf-lang#660): a generic callee — the body is checked once
+//! for every instantiation, and `V` may be a `str`. Trunk a027b643 built it and read freed bytes on native and release
+//! (`ZZZZZZZZZZZZZZZZZZZZZ`, the chunk `other` reused), stale ones on the
+//! checked machine; lupin traps `region-fault`.
+
+fn set_g[K, V](mut m: Map[K, V], k: K, v: V) {
+    m[k] = v
+}
+
+fn main() -> !int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        var m = Map[str, str]()
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            in st {
+                set_g(mut m, "k", s)
+            }
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{m["k"] else "?"}")
+    }
+    0
+}

@@ -1,0 +1,38 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.create.3
+//!
+//! s227 (wolf-lang#660): a `take` argument moved into a `mut` one —
+//! the element itself lives in `pass`. Trunk a027b643 built it and read freed bytes on native and release
+//! (`ZZZZZZZZZZZZZZZZZZZZZ`, the chunk `other` reused), stale ones on the
+//! checked machine; lupin traps `region-fault`.
+
+struct Doc {
+    title: str,
+    n: int,
+}
+
+fn keep(mut ds: List[Doc], take d: Doc) {
+    (mut ds).push(take d)
+}
+
+fn main() -> !int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        var ds = List[Doc]()
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            var d = Doc { title: s, n: 1 }
+            in st {
+                keep(mut ds, take d)
+            }
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{ds[0].title}")
+    }
+    0
+}

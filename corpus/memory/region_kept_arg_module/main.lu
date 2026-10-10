@@ -1,0 +1,30 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.create.3
+//!
+//! s227 (wolf-lang#660): the callee lives in another module — the rule
+//! reads the call's signature, never the callee's body. Trunk a027b643 built it and read freed bytes on native and release
+//! (`ZZZZZZZZZZZZZZZZZZZZZ`, the chunk `other` reused), stale ones on the
+//! checked machine; lupin traps `region-fault`.
+
+use keeper
+
+fn main() -> !int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        var m = Map[str, str]()
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            in st {
+                keeper.keep(mut m, s)
+            }
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{m[keeper.key()] else "?"}")
+    }
+    0
+}

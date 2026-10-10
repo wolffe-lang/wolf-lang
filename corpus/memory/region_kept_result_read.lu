@@ -1,0 +1,39 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.create.3
+//!
+//! s227 (wolf-lang#660): the RESULT form with a `read` argument. A
+//! `take`/`mut` argument's sites already rode a non-`Copy` result; a
+//! `read` `str`'s did not, so `o = mk(s)` under `in st` kept `s`.
+//! Trunk a027b643 built it and read freed bytes on native and release
+//! (`ZZZZZZZZZZZZZZZZZZZZZ`, the chunk `other` reused), stale ones on the
+//! checked machine; lupin traps `region-fault`.
+
+struct Doc {
+    title: str,
+    n: int,
+}
+
+fn mk(s: str) -> Doc {
+    Doc { title: copy s, n: 1 }
+}
+
+fn main() -> !int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        var o = Doc { title: "", n: 0 }
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            in st {
+                o = mk(s)
+            }
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{o.title}")
+    }
+    0
+}

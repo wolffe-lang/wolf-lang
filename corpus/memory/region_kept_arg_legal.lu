@@ -1,0 +1,134 @@
+//! check: run(exit=0, stdout="built in pass, 0 uses|21|static|built in st 0|21|7|7|21|2|carried out|a.log,b.log|conf-0\n")
+//! phase: run
+//! conforms: mem.region.escape, mem.region.create.3, mem.region.copyout
+//!
+//! s227 (wolf-lang#660) — the sound neighbours of the kept-argument
+//! rule, every one accepted at trunk a027b643 and still accepted: a
+//! string built INSIDE the `in` block; a scalar argument; a literal; a
+//! string built where the `mut` argument lives; a `List[byte]` the
+//! callee can only copy; a `mut` argument that can name no bytes; a
+//! builtin that keeps nothing of its key (`remove`, an index read); the
+//! block's value carried out by `copy region { }` and handed on after
+//! it; and the two shapes the first cut of the rule refused in the
+//! census (wolf-book's `pargrep`, lobo's reload): strings from a
+//! LONGER-lived region pushed into a list built in a region block, and
+//! a `copy` of a longer-lived aggregate stored into a struct built
+//! there — kept bytes are shared, never placed, so no store asks for
+//! co-location with them.
+
+struct Log {
+    last: str,
+    seq: int,
+}
+
+struct Buf {
+    data: List[byte],
+    n: int,
+}
+
+struct Tot {
+    n: int,
+    k: int,
+}
+
+struct Table {
+    names: List[str],
+    nums: List[int],
+}
+
+struct Conf {
+    name: str,
+    port: int,
+}
+
+struct Gen {
+    conf: Conf,
+    id: int,
+}
+
+fn keep_it(mut l: Log, s: str) {
+    l.last = copy s
+    l.seq = l.seq + 1
+}
+
+fn bump(mut l: Log, n: int) {
+    l.seq = l.seq + n
+}
+
+fn feed(mut b: Buf, bytes: List[byte]) {
+    for x in bytes { (mut b.data).push(x) }
+    b.n = b.n + bytes.len
+}
+
+fn add(mut t: Tot, s: str) {
+    t.n = t.n + s.len
+}
+
+fn main() -> !int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        var a = Log { last: "", seq: 0 }
+        var b = Log { last: "", seq: 0 }
+        var c = Log { last: "", seq: 0 }
+        var d = Log { last: "", seq: 0 }
+        var e = Log { last: "", seq: 0 }
+        var buf = Buf { data: List[byte](), n: 0 }
+        var tot = Tot { n: 0, k: 0 }
+        var m = Map[str, int]()
+        m["k"] = 1
+        var got = 0
+        var read = 0
+        var xs = List[int]()
+        let o = "built in st {seq0}"
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            var bs = List[byte]()
+            for ch in s.bytes() { (mut bs).push(ch) }
+            in st {
+                keep_it(mut a, "{s}")
+                bump(mut b, s.len)
+                keep_it(mut c, "static")
+                keep_it(mut d, o)
+                feed(mut buf, bs)
+                add(mut tot, s)
+                got = (mut m).remove(s) else 7
+                read = m[s] else 7
+                (mut xs).push(s.len)
+                (mut xs).push(2)
+            }
+        }
+        let kept = copy region carry {
+            let s = "carried {seq0}ut"
+            s.replace("0", "o")
+        }
+        keep_it(mut e, kept)
+        let names = ["a.log", "b.log"]
+        var gens = List[Gen]()
+        (mut gens).push(Gen { conf: Conf { name: "conf-{seq0}", port: 80 }, id: 0 })
+        var joined = ""
+        var prev_name = ""
+        region build {
+            var files = List[str]()
+            var nums = List[int]()
+            for name in names {
+                (mut files).push(name)
+                (mut nums).push(name.len)
+            }
+            let t = Table { names: files, nums: nums }
+            let prev = Gen { conf: copy gens[0].conf, id: 1 }
+            in st {
+                joined = "{t.names[0]},{t.names[1]}"
+                prev_name = "{prev.conf.name}"
+            }
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            if z.len != 28 { return 1 }
+        }
+        print(
+            "{a.last}|{b.seq}|{c.last}|{d.last}|{buf.n}|{got}|{read}|{tot.n}|{xs[1]}|{e.last}|{joined}|{prev_name}",
+        )
+    }
+    0
+}

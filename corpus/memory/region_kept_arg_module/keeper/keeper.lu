@@ -1,0 +1,14 @@
+//! member: true
+//! conforms: mem.region.escape
+//!
+//! s227 (wolf-lang#660): the leaf that keeps its argument.
+
+/// The key `keep` stores under.
+pub fn key() -> str {
+    "k"
+}
+
+/// Stores `s` in the caller's map.
+pub fn keep(mut m: Map[str, str], s: str) {
+    m[key()] = s
+}

@@ -1,0 +1,44 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.create.3
+//!
+//! s227 (wolf-lang#660): the kept bytes are reached through a `read`
+//! aggregate — the callee cannot move `d` out, but it can share the
+//! `str` inside it. Trunk a027b643 built it and read freed bytes on native and release
+//! (`ZZZZZZZZZZZZZZZZZZZZZ`, the chunk `other` reused), stale ones on the
+//! checked machine; lupin traps `region-fault`.
+
+struct Log {
+    last: str,
+    seq: int,
+}
+
+struct Doc {
+    title: str,
+    n: int,
+}
+
+fn keep(mut l: Log, d: Doc) {
+    l.last = copy d.title
+}
+
+fn main() -> !int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        var l = Log { last: "", seq: 0 }
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            let d = Doc { title: s, n: 1 }
+            in st {
+                keep(mut l, d)
+            }
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{l.last}")
+    }
+    0
+}

@@ -1,0 +1,33 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.edge.elem
+//!
+//! s227 (wolf-lang#660): the callee keeps its argument through a `Map`
+//! index store, which lends (`[mem.region.edge.elem]`) and is refused in
+//! no callee. Trunk a027b643 built it and read freed bytes on native and release
+//! (`ZZZZZZZZZZZZZZZZZZZZZ`, the chunk `other` reused), stale ones on the
+//! checked machine; lupin traps `region-fault`.
+
+fn keep(mut m: Map[str, str], s: str) {
+    m["k"] = s
+}
+
+fn main() -> !int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        var m = Map[str, str]()
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            in st {
+                keep(mut m, s)
+            }
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{m["k"] else "?"}")
+    }
+    0
+}

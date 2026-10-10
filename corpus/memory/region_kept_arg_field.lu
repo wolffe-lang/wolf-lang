@@ -1,0 +1,41 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.create.3
+//!
+//! s227 (wolf-lang#660), the report itself: `in st { }` aims what
+//! `keep_it` ALLOCATES at `st`, but `s` was built in `pass`, and the
+//! callee keeps it in its `mut` argument (`copy s` shares a `str`'s
+//! bytes, ruling #35). `l` outlives `pass`: E1010 at the argument.
+//! Trunk a027b643 built it and read freed bytes on native and release
+//! (`ZZZZZZZZZZZZZZZZZZZZZ`, the chunk `other` reused), stale ones on the
+//! checked machine; lupin traps `region-fault`.
+
+struct Log {
+    last: str,
+    seq: int,
+}
+
+fn keep_it(mut l: Log, s: str) {
+    l.last = copy s
+    l.seq = l.seq + 1
+}
+
+fn main() -> !int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        var l = Log { last: "", seq: 0 }
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            in st {
+                keep_it(mut l, s)
+            }
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{l.last}")
+    }
+    0
+}
