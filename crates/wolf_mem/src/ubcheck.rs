@@ -50,9 +50,10 @@
 //!
 //! # Honest scope
 //!
-//! Single-threaded (C1 stays deferred with the concurrency campaign);
-//! T2 (torn writes) is unreachable single-threaded — both are
-//! reported as out of scope, never silently absent. Constructs beyond
+//! One task runs at a time (s226, `tasks.rs`: spec/03's tasks under a
+//! deterministic scheduler; a data race is the trap kind `race`,
+//! `[conc.mm.race.3]`, found by happens-before). T2 (torn writes) is
+//! unreachable — no two tasks ever run at once. Constructs beyond
 //! the executable surface refuse with [`NotYet`] and the driver
 //! reports `unsupported` (the conservatism ledger). Execution is
 //! budget-bounded ([`Budget`]) with honest exhaustion.
@@ -1270,6 +1271,8 @@ struct Machine<'t> {
     /// s226: inside an atomic operation — its two raw halves take the
     /// race detector's atomic path (`[conc.mm.atomic.raw.5]`).
     in_atomic: bool,
+    /// s226: where a race on the raw store being run is reported.
+    race_span: Option<Span>,
     cells: Vec<RcCell>,
     frames: Vec<Frame<'t>>,
     /// The dynamic ambient-region stack; `[0]` is the run's root
@@ -1785,7 +1788,8 @@ impl<'t> Machine<'t> {
         if self.sched.concurrent {
             let lo = usize::try_from(p.offset.max(0)).unwrap_or(0);
             let hi = lo.saturating_add(usize::try_from(len).unwrap_or(usize::MAX));
-            self.race_check(tasks::RaceKey::Alloc(aid), lo, hi, write, span)?;
+            let at = self.race_span.unwrap_or(span);
+            self.race_check(tasks::RaceKey::Alloc(aid), lo, hi, write, at)?;
         }
         // P3 — bounds first: an OOB access has no location to have a
         // permission at.
@@ -2581,6 +2585,7 @@ impl<'t> Machine<'t> {
             closures: Vec::new(),
             when_held: Vec::new(),
             in_atomic: false,
+            race_span: None,
             cells: Vec::new(),
             frames: Vec::new(),
             ambient: Vec::new(),
@@ -3725,7 +3730,15 @@ impl<'t> Machine<'t> {
             };
             let op = d.op().map(|t| t.kind).filter(|_| compound);
             let ty_span = d.value().map(|x| x.span).unwrap_or(place_expr.span);
-            return self.raw_index_write(place_expr, (p, idx), v, op, ty_span, stmt.span);
+            // s226: a race on this store is reported at the assignment
+            // itself, place through value — the span lupin gives it.
+            self.race_span = Some(Span {
+                hi: d.value().map_or(stmt.span.hi, |x| x.span.hi),
+                ..stmt.span
+            });
+            let out = self.raw_index_write(place_expr, (p, idx), v, op, ty_span, stmt.span);
+            self.race_span = None;
+            return out;
         }
         // s213 (wolf-lang#577): `p[i].f = v`, `(*p).f = v` and nested
         // paths — the element's operands (pointer, then index) run
