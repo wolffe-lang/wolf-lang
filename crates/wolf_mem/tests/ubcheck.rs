@@ -2,8 +2,9 @@
 //! reach (P1–P6, L1, L2, T1) gets a **flag** test (the checker detects
 //! the row) and a **near-miss** test (the closest legal program, which
 //! the checker passes — the SB spurious-UB lesson, enforced as test
-//! discipline). T2 and C1 are out of this machine's single-threaded
-//! scope and are asserted so, never silently absent.
+//! discipline). T2 and C1 are not `[mem.ub]` rows here and are asserted
+//! so, never silently absent (a race is the trap kind `race`, s226 —
+//! `checked_tasks.rs`).
 //!
 //! Each program is unsafe-tier and statically ACCEPTED (the static
 //! tier gates only the surface; UB is dynamic by design,
