@@ -49,6 +49,17 @@ pub const MEM_HOOKS: [&str; 4] = ["memcpy", "memmove", "memset", "memcmp"];
 /// freestanding runtime archive ([`NONE_RT_LIB`]) imports them.
 pub const ALLOC_HOOKS: [&str; 2] = ["wolf_alloc", "wolf_free"];
 
+/// The ambient pair (`[abi.target.none.hooks]` (e),
+/// `[abi.target.none.ambient]`, s223, wolf-lang#611):
+/// `wolf_rt_ambient_get() -> *u8` and `wolf_rt_ambient_set(p: *u8)`.
+/// The freestanding runtime ([`NONE_RT_LIB`]) defines them and the
+/// program calls them: a scheduler saves the running thread's ambient
+/// region at a switch and restores the incoming one's. Not hosted
+/// runtime symbols (the hosted slot is a thread-local already), so they
+/// are not in [`NONE_RT_SYMBOLS`]; a call to one is admitted by the
+/// assembly roster as a hook and links the archive.
+pub const AMBIENT_HOOKS: [&str; 2] = ["wolf_rt_ambient_get", "wolf_rt_ambient_set"];
+
 /// The freestanding runtime archive (kw12, `[abi.target.none.alloc]`):
 /// the `no_std` build of the region runtime (crate `wolf_rt_none`), the
 /// same file name on every host. A freestanding build whose object
@@ -256,11 +267,14 @@ fn first_span(f: &Function) -> Option<(u32, u32)> {
 }
 
 /// Does the lowered `m` call into the freestanding runtime — a region op,
-/// or a call to one of [`NONE_RT_SYMBOLS`]? (kw12: such an object links
+/// a call to one of [`NONE_RT_SYMBOLS`], or to the ambient pair
+/// ([`AMBIENT_HOOKS`], s223)? (kw12: such an object links
 /// [`NONE_RT_LIB`]; one that does not imports exactly the hook list.)
 pub fn uses_none_rt(m: &Module) -> bool {
     m.funcs.values().any(|f| {
-        f.ext_funcs.values().any(|e| none_rt_provides(&e.name))
+        f.ext_funcs
+            .values()
+            .any(|e| none_rt_provides(&e.name) || AMBIENT_HOOKS.contains(&e.name.as_str()))
             || f.layout.iter().any(|&b| {
                 f.blocks[b].insts.iter().any(|&i| {
                     matches!(
@@ -509,6 +523,12 @@ mod tests {
             ("`f64`".to_string(), RefusalClass::Float)
         );
         assert_eq!(ALLOC_HOOKS, ["wolf_alloc", "wolf_free"]);
+        // s223: the ambient pair is the program's to call, not a hosted
+        // runtime symbol the backends lower to.
+        assert_eq!(AMBIENT_HOOKS, ["wolf_rt_ambient_get", "wolf_rt_ambient_set"]);
+        for s in AMBIENT_HOOKS {
+            assert!(!none_rt_provides(s), "{s}");
+        }
     }
 
     #[test]

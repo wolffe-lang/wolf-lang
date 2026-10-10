@@ -1109,10 +1109,13 @@ fn compile_native(
     }
     gate(sources, &mut pending, tc.diagnostics.clone(), false)?;
     // kw05 (`[abi.asm.roster]`): on the freestanding target a package
-    // that lists assembly calls only into its roster or the hooks.
+    // that lists assembly calls only into its roster or the hooks —
+    // the trap hook, the memory functions and (s223) the runtime's
+    // ambient pair, which a scheduler calls at a switch.
     if target.is_freestanding() && !listed_asm.is_empty() {
         let hooks: Vec<&str> = std::iter::once(wolf_backend::target::TRAP_HOOK)
             .chain(wolf_backend::target::MEM_HOOKS)
+            .chain(wolf_backend::target::AMBIENT_HOOKS)
             .collect();
         gate(
             sources,
