@@ -1456,7 +1456,9 @@ reaches them. wolf-lang#154 is the book's filing of the same gap.)
   configured std (`--std-root`, then `WOLF_STD`, then a `std` path
   dependency in `wolf.pkg`), or, with none configured, the default — a
   `std` directory beside the `wolf` binary, where the release archive
-  ships wolf-std at a pinned commit (ruling #29). With no std root at
+  ships wolf-std at a pinned commit (ruling #29) — for a hosted target
+  only: a freestanding build (`[abi.target.none]`) reads no default,
+  since the shipped std is the hosted library. With no std root at
   all (a build from source with nothing configured), a call that
   reaches step (2) is **E0301** naming the home module and the ways to
   configure a root — never a silent fall-through, and never a builtin
