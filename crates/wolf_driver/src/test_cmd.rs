@@ -646,9 +646,10 @@ pub fn test_cmd(args: &[String]) {
                 }
             } else {
                 // s73: a main-shaped test the checked machine refuses
-                // (concurrency, C1 deferred) falls back to one native
-                // black-box run — the conservatism ledger stays for
-                // `test_*` fns, but a runnable program runs.
+                // (it was concurrency until s226 retired C1; today a
+                // construct outside its surface) falls back to one
+                // native black-box run — the conservatism ledger stays
+                // for `test_*` fns, but a runnable program runs.
                 let r = run_once();
                 if r.0 == Status::Unsupported && name == "main" {
                     match native_schedule_runs(file, std_root.as_deref(), &[None]) {
