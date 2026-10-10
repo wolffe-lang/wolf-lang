@@ -1743,7 +1743,15 @@ immutable and `shared` gives a counted escape — both are spellings
 this compiler takes today. A `str` built inside the block — by `+`, `+=`, or an
 interpolation with a hole — is such a value too: the two-word view
 copies out freely, but the bytes it points at were allocated in the
-region ([mem.region.escape]).
+region ([mem.region.escape]). A call can carry it out as well: a
+function may keep what it is handed, so a `mut` argument (and a
+non-`Copy` result) is taken to share the bytes of every other
+argument that can name region bytes. `in r { f(mut outer, s) }` aims
+what `f` allocates at `r`, but `s` stays where it was built — if that
+is a region block `outer` outlives, the call is refused at `s`. Build
+the string inside the `in` block (`"{s}"` materializes it there),
+pass a scalar instead, or copy the block's value out with `copy
+region { … }` and make the call after the block.
 "#);
 
 code!(E1011, "this would open a region while a region that contains it is open", r#"
