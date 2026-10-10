@@ -97,8 +97,8 @@ impl Members {
             Some(ix) => ix.get(&key).copied(),
             None => self.list.iter().position(|(k, _)| *k == key),
         };
-        if let Some(_at) = hit {
-            self.list.push((key, val));
+        if let Some(at) = hit {
+            self.list[at].1 = val;
             return;
         }
         if let Some(ix) = &mut self.index {
