@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### The standard library ships with the compiler (s204, ruling #29, #415)
+
+**Read this before you bump the pin.** The release archive now carries
+wolf-std as `std/` beside the `wolf` binary, at the commit
+`crates/wolf_driver/STD-PIN` names (`87ba162…`, std at wolf 0.2.26 /
+lupin 0.1.49), with `std/STD-REV` recording it and wolf-std's `LICENSE`
+and `LICENSE-EXCEPTION` beside the tree. That directory is the default
+std root: after `brew install wolf` or an unpacked archive, `use std.env`
+and `xs.map(f)` work with no `WOLF_STD` and no `--std-root`, where every
+machine answered E0301 before. Every configured source still wins, in
+this order: `--std-root`, `WOLF_STD`, a `std` path dependency in
+`wolf.pkg`, then the copy beside the binary. A `wolf` built from source
+(`target/<profile>/wolf`) has nothing beside it and keeps the prelude
+stub, so the test suite and the corpus answer as before. `cargo xtask
+dist` fetches the pinned commit (or takes a checkout named by
+`WOLF_DIST_STD_SRC`, refused unless it is at the pin), and its smoke runs
+a `use std.env` program from the unpacked archive with `WOLF_STD` unset.
+Packagers: install `std/` beside the binary with the rest (Homebrew's
+`libexec`, the AUR's `/usr/lib/wolf-lang`). The E0301 stub note now says
+where the shipped std lives.
+
 ### A repeated json name is last-wins; a module named `c` links (s224, #124, #620)
 
 **Read this before you bump the pin.** Two fixes, one runtime rebuild.
