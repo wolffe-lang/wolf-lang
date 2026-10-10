@@ -1,0 +1,14 @@
+//! check: run(exit=0, stdout="2 missing\n")
+//! phase: run
+//! conforms: os.json.dup
+//! A path walks through the LAST container a repeated name holds: the
+//! earlier object, and its `x`, are gone.
+//! Ruling B22 (wolf-lang#124): a repeated object name is last-wins.
+
+fn main() -> !int {
+    let doc = "{{\"a\": {{\"x\": 1}}, \"a\": {{\"y\": 2}}}}"
+    let y = json_get(doc, "a.y") else |_| "missing"
+    let x = json_get(doc, "a.x") else |_| "missing"
+    print("{y} {x}")
+    0
+}

@@ -1,0 +1,13 @@
+//! check: run(exit=0, stdout="{\"a\":3,\"b\":2}\n")
+//! phase: run
+//! conforms: os.json.dup
+//! A nested object re-renders compactly with one member per name, at
+//! the position where the name first appeared, holding its last value.
+//! Ruling B22 (wolf-lang#124): a repeated object name is last-wins.
+
+fn main() -> !int {
+    let doc = "{{\"o\": {{\"a\": 1, \"b\": 2, \"a\": 3}}}}"
+    let r = json_get(doc, "o") else |_| "err"
+    print("{r}")
+    0
+}

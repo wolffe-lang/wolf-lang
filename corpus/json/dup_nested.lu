@@ -1,0 +1,16 @@
+//! check: run(exit=0, stdout="last 1 9 1\n")
+//! phase: run
+//! conforms: os.json.dup
+//! The rule holds at every depth: an object inside an object, and an
+//! object inside an array.
+//! Ruling B22 (wolf-lang#124): a repeated object name is last-wins.
+
+fn main() -> !int {
+    let doc = "{{\"o\": {{\"k\": \"first\", \"k\": \"last\"}}, \"n\": [{{\"z\": 1, \"z\": 9}}]}}"
+    let v = json_get(doc, "o.k") else |_| "err"
+    let n = json_len(doc, "o") else |_| -1
+    let w = json_get(doc, "n.0.z") else |_| "err"
+    let m = json_len(doc, "n.0") else |_| -1
+    print("{v} {n} {w} {m}")
+    0
+}

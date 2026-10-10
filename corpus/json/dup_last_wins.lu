@@ -1,0 +1,14 @@
+//! check: run(exit=0, stdout="2 1\n")
+//! phase: run
+//! conforms: os.json.dup
+//! The simplest repeat: the later value is the one a read sees, and the
+//! object holds one member.
+//! Ruling B22 (wolf-lang#124): a repeated object name is last-wins.
+
+fn main() -> !int {
+    let doc = "{{\"a\": 1, \"a\": 2}}"
+    let v = json_get(doc, "a") else |_| "err"
+    let n = json_len(doc, "") else |_| -1
+    print("{v} {n}")
+    0
+}
