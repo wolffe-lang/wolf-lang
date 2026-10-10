@@ -434,3 +434,54 @@ fn a_miss_against_the_default_does_not_name_wolf_std() {
     assert!(err.contains("E0301"), "the miss is still reported:\n{err}");
     assert!(!err.contains("WOLF_STD"), "no root-is-unset note:\n{err}");
 }
+
+/// A freestanding build gets no default (s204's census: the shipped std is
+/// the hosted library, and its home modules stopped 27 of pax's 29 kernels):
+/// `--target x86_64-unknown-none` with the std beside the binary is the
+/// stub's E0301, and an explicit root still answers.
+#[test]
+fn a_freestanding_build_reads_no_default() {
+    let exe = installed_wolf("prec_freestanding", Some(true));
+    let pkg = Path::new(env!("CARGO_TARGET_TMPDIR")).join("prec_freestanding/kpkg");
+    let _ = std::fs::remove_dir_all(&pkg);
+    std::fs::create_dir_all(&pkg).unwrap();
+    let entry = pkg.join("k.lu");
+    std::fs::write(
+        &entry,
+        "use std.besidemark\n\nexport fn kmain() -> int {\n    besidemark.mark()\n}\n",
+    )
+    .unwrap();
+    let flag_root = exe.parent().unwrap().join("std");
+    let build = |extra: &[&str]| {
+        Command::new(&exe)
+            .current_dir(&pkg)
+            .args([
+                "build",
+                "k.lu",
+                "--target",
+                "x86_64-unknown-none",
+                "--emit=obj",
+                "-o",
+                "k.o",
+            ])
+            .args(extra)
+            .env_remove("WOLF_STD")
+            .env_remove("WOLF_RT_NONE_LIB")
+            .output()
+            .expect("wolf runs")
+    };
+    let out = build(&[]);
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !out.status.success() && err.contains("error[E0301]"),
+        "a kernel must not read the shipped std by default ({}):\n{err}",
+        out.status
+    );
+    let out = build(&["--std-root", flag_root.to_str().unwrap()]);
+    assert!(
+        out.status.success(),
+        "an explicit root still reaches a kernel ({}):\n{}",
+        out.status,
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
