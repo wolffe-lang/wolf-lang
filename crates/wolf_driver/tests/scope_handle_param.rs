@@ -406,7 +406,9 @@ fn every_lane_bounds_a_scope_handle_passed_as_a_parameter() {
     // (lane, flags, expected verdict, expected stdout_inline)
     let lanes: [(&str, &[&str], &str, Option<&str>); 4] = [
         ("default", &[], "pass", None),
-        ("checked", &["--checked"], "unsupported", None),
+        // s226: the checked machine runs tasks (it answered
+        // `unsupported`, C1 deferred, when P3 was measured).
+        ("checked", &["--checked"], "exit(0)", Some("1\n")),
         ("native", &["--native"], "exit(0)", Some("1\n")),
         (
             "release",
