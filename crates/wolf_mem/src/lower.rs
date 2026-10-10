@@ -1905,6 +1905,40 @@ impl<'t> Lowerer<'t> {
         }
     }
 
+    /// s227 (wolf-lang#660, `[mem.tier0.move.3]`): a `copy` of a
+    /// non-`Copy` value is a fresh allocation in the ambient region,
+    /// and "a `str`'s bytes are immutable and the copy shares them" —
+    /// at every depth. So the copy of a struct, list or map that
+    /// reaches a `str` (or a fn value, or an opaque part) still names
+    /// the bytes the original names: it SHARES the original's sites
+    /// (`Val::views` — it is placed in the ambient region alone); a
+    /// parameter's pseudo-site does not ride (s207).
+    /// A value that reaches no shareable bytes — a `List[int]`, a
+    /// struct of scalars — is independent, as before. Until this pin
+    /// `in st { out = copy d }` handed `out` a `str` field in the
+    /// region block `d` was built in: freed bytes on native and
+    /// release. The same holds for the copy a plain index store makes
+    /// (`xs[i] = d`, `[mem.region.edge.elem]`).
+    fn ride_shared_bytes(&self, place: PlaceId, ty: Option<Ty<'t>>, out: &mut Val) {
+        if !ty.map(|t| self.may_lend_bytes(t, 0)).unwrap_or(true) {
+            return;
+        }
+        let named: Vec<SiteId> = self
+            .sites_of_place(place)
+            .into_iter()
+            .map(|(s, _)| s)
+            .chain(self.views_of_place(place))
+            .collect();
+        for s in named {
+            if self.sites[s.0 as usize].kind == SiteKind::Param {
+                continue;
+            }
+            if let Err(i) = out.views.binary_search(&s) {
+                out.views.insert(i, s);
+            }
+        }
+    }
+
     /// s227: the type of an argument expression — sema's record, or the
     /// binding's own type for a bare local (sema types a `mut` place
     /// through `place_type` and records nothing under its span).
@@ -4380,7 +4414,9 @@ impl<'t> Lowerer<'t> {
                             .map(|t| render(t.table, t.id, &|_| Err("_")))
                             .unwrap_or_else(|| "?".to_string());
                         let site = self.alloc_site(rendered, SiteKind::Lit, e.span);
-                        return Ok(Val::site(site, e.span));
+                        let mut out = Val::site(site, e.span);
+                        self.ride_shared_bytes(place, ty, &mut out);
+                        return Ok(out);
                     }
                     // s207 (wolf-lang#540): "a `str`'s bytes are
                     // immutable and the copy shares them"
@@ -7024,7 +7060,9 @@ impl<'t> Lowerer<'t> {
             .map(|t| render(t.table, t.id, &|_| Err("_")))
             .unwrap_or_else(|| "?".to_string());
         let site = self.alloc_site(rendered, SiteKind::Lit, v.span);
-        Ok(Val::site(site, v.span))
+        let mut out = Val::site(site, v.span);
+        self.ride_shared_bytes(place, ty, &mut out);
+        Ok(out)
     }
 
     /// The region flow of a store (s19): the value's sites land in the
