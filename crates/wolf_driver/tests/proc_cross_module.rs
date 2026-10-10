@@ -102,17 +102,15 @@ fn a_proc_spawned_from_a_leaf_module_runs_on_release_under_both_partitions() {
     }
 }
 
-/// The checked half of #219: `conform-run --checked` answered
-/// `{"verdict":"unsupported","diagnostics":[]}` on every proc spawn
-/// — by name on stderr, and NOTHING in the record a rig reads over a
-/// pipe. The record now names the construct and its span as
-/// extension keys (`[proto.record.ext]`); the verdict and the empty
-/// `diagnostics` are unchanged (a refusal is not a fault in the
-/// program, so it carries no E-code — the conservatism ledger's own
-/// rule). The checked machine runs no structured concurrency at all
-/// (C1 deferred); a proc is refused where every spawn is.
+/// The checked half. Until s226 the checked machine ran no structured
+/// concurrency (C1 deferred) and refused this proc spawn by name, the
+/// construct and its span riding the record as extension keys (#219,
+/// `[proto.record.ext]`). It runs the proc now (`[exec.checked.task]`):
+/// the cross-module spawn, the contained `alloc-contract` fault and
+/// both joins, with the compiled tiers' answer and no refusal in the
+/// record.
 #[test]
-fn the_checked_refusal_names_its_construct_in_the_record() {
+fn the_checked_machine_runs_the_cross_module_proc() {
     let out = Command::new(wolf())
         .arg("conform-run")
         .arg(witness())
@@ -121,36 +119,11 @@ fn the_checked_refusal_names_its_construct_in_the_record() {
         .expect("wolf runs");
     assert!(out.status.success());
     let r: serde_json::Value = serde_json::from_slice(&out.stdout).expect("a record");
-    assert_eq!(r["verdict"], "unsupported");
-    assert_eq!(r["phase_reached"], "mem");
-    assert_eq!(r["diagnostics"], serde_json::json!([]));
-    let construct = r["x-unsupported-construct"]
-        .as_str()
-        .expect("the record names the refused construct");
+    assert_eq!(r["verdict"], "exit(0)", "record {r}");
+    assert_eq!(r["phase_reached"], "run");
+    assert_eq!(r["stdout_inline"], "normal=0 breach=2\n");
     assert!(
-        construct.contains("structured concurrency"),
-        "the checked machine refuses the spawn by name: {construct}"
-    );
-    let src = std::fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../corpus/conc/proc_cross_module/work/work.lu"),
-    )
-    .unwrap();
-    let span = r["x-unsupported-span"]
-        .as_array()
-        .expect("a span rides too");
-    let (lo, hi) = (
-        span[0].as_u64().unwrap() as usize,
-        span[1].as_u64().unwrap() as usize,
-    );
-    assert_eq!(
-        &src[lo..hi],
-        "spawn proc body(n, cap)",
-        "the span is the spawn"
-    );
-    let stderr = String::from_utf8_lossy(&out.stderr);
-    assert!(
-        stderr.contains("unsupported — structured concurrency"),
-        "stderr keeps speaking: {stderr}"
+        r.get("x-unsupported-construct").is_none(),
+        "no refusal rides the record"
     );
 }
