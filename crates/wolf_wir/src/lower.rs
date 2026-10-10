@@ -2158,6 +2158,29 @@ fn static_symbol(qname: &str, ty: &str) -> String {
     format!("_W{qname}.s{:015x}", h >> 4)
 }
 
+/// wolf-lang#620: the refusal for the one program whose WIR would need
+/// both readings of a `c.<name>` callee — an imported C function and a
+/// function of a module whose path is `c` (a child directory `c/` or a
+/// dependency under the alias `c`) under one name. [`qualify`] spells
+/// the module's function `c.<name>`, which is the membrane's spelling
+/// too; the backends read a name the program defines as wolf
+/// (`abi::c_import_symbol_in`), so without this refusal the C call
+/// would reach the wolf function (it was an ICE before s224: the two
+/// signatures never agree).
+const C_MODULE_CLASH: &str = "an imported C function that shares its name with a function \
+     of the module `c` (both are `c.<name>` below the checker; wolf-lang#620)";
+
+/// Does a module whose dotted path is exactly `c` define a wolf
+/// function `name` (one [`qualify`] spells `c.<name>`)? An `export fn`
+/// keeps its bare name and a bodyless `extern "c" fn` is the
+/// membrane's own, so neither counts.
+fn module_c_defines(sigs: &SigTables, name: &str) -> bool {
+    sigs.module_names.iter().enumerate().any(|(m, path)| {
+        path == "c"
+            && matches!(sigs.get(m, name), Some(ItemSig::Fn(f)) if f.membrane.is_none())
+    })
+}
+
 fn qualify(sigs: &SigTables, module: usize, name: &str) -> String {
     // kw02 (`[abi.c.export]`): an `export fn` is one C symbol under its
     // own name in every module — C has no module path to fold in.
@@ -11503,6 +11526,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if !cs.callee.starts_with("c.") {
             return self.lower_extern_call(d, cs, e);
         }
+        if module_c_defines(self.sigs, &cs.callee[2..]) {
+            return Err(refuse(C_MODULE_CLASH, e.span));
+        }
         let (param_tys, ret): (Vec<TypeId>, Option<TypeId>) = match cs.callee.as_str() {
             "c.malloc" => (vec![types::I64], Some(types::PTR)),
             "c.calloc" => (vec![types::I64, types::I64], Some(types::PTR)),
@@ -11586,7 +11612,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             ));
         };
         membrane_sig_check(&self.sigs.table, self.sigs, fsig)?;
-        let symbol = format!("c.{}", cs.callee.rsplit('.').next().unwrap_or(&cs.callee));
+        let cname = cs.callee.rsplit('.').next().unwrap_or(&cs.callee);
+        if module_c_defines(self.sigs, cname) {
+            return Err(refuse(C_MODULE_CLASH, e.span));
+        }
+        let symbol = format!("c.{cname}");
         let mut params = Vec::with_capacity(fsig.params.len() + 2);
         for p in &fsig.params {
             let Some(ty) = wir_ty(
