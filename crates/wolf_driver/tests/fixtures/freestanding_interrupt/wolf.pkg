@@ -1,8 +1,10 @@
 // kw10 witness: the trampolines and the IDT's storage are assembly
 // listed here ([abi.asm.link]); boot.S is the consuming build's and is
-// not listed (K6(b)).
+// not listed (K6(b)). Its `extern "c"` declarations carry `ffi`
+// (s221, ruling #55, [pkg.caps]).
 pkg {
     name: "kw10/interrupt"
     version: "0.0.1"
     asm: ["isr.S"]
+    capabilities: [ffi]
 }
