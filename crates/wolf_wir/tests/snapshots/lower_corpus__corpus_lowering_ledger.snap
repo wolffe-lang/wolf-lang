@@ -607,6 +607,8 @@ memory/region_cap_boundary.lu: lowers
 memory/region_conflict_params.lu: not mem-clean (pre-wir rungs own it)
 memory/region_container_freeze_ok.lu: lowers
 memory/region_container_reclaim.lu: lowers
+memory/region_copy_index_store.lu: not mem-clean (pre-wir rungs own it)
+memory/region_copy_shares_str.lu: not mem-clean (pre-wir rungs own it)
 memory/region_copyout_binding.lu: not mem-clean (pre-wir rungs own it)
 memory/region_copyout_closure.lu: not mem-clean (pre-wir rungs own it)
 memory/region_copyout_exits.lu: lowers
@@ -625,6 +627,19 @@ memory/region_infer_list_builder.lu: lowers
 memory/region_infer_request_handler.lu: lowers
 memory/region_infer_tree_transform.lu: lowers
 memory/region_iso_edge_ok.lu: not mem-clean (pre-wir rungs own it)
+memory/region_kept_arg_closure.lu: not mem-clean (pre-wir rungs own it)
+memory/region_kept_arg_field.lu: not mem-clean (pre-wir rungs own it)
+memory/region_kept_arg_generic.lu: not mem-clean (pre-wir rungs own it)
+memory/region_kept_arg_legal.lu: lowers
+memory/region_kept_arg_map.lu: not mem-clean (pre-wir rungs own it)
+memory/region_kept_arg_method.lu: not mem-clean (pre-wir rungs own it)
+memory/region_kept_arg_module/main.lu: not mem-clean (pre-wir rungs own it)
+memory/region_kept_arg_read_struct.lu: not mem-clean (pre-wir rungs own it)
+memory/region_kept_arg_recv.lu: not mem-clean (pre-wir rungs own it)
+memory/region_kept_arg_take.lu: not mem-clean (pre-wir rungs own it)
+memory/region_kept_arg_two_mut.lu: not mem-clean (pre-wir rungs own it)
+memory/region_kept_result_method.lu: not mem-clean (pre-wir rungs own it)
+memory/region_kept_result_read.lu: not mem-clean (pre-wir rungs own it)
 memory/region_move_while_open.lu: not mem-clean (pre-wir rungs own it)
 memory/region_multiopen_ok.lu: lowers
 memory/region_multiopen_swap.lu: lowers
