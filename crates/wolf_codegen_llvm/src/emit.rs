@@ -3145,7 +3145,9 @@ impl<'a> Fx<'a> {
         let (symbol, conv) = if let Some(entry) = self.funcs.get(callee) {
             let conv = if entry.export { Conv::C } else { Conv::Wolf };
             (entry.symbol.clone(), conv)
-        } else if let Some(sym) = abi::c_import_symbol(callee) {
+        } else if let Some(sym) = abi::c_import_symbol_in(self.m, callee) {
+            // A function this program defines is never a C import
+            // (wolf-lang#620: a module named `c` spells `c.go` too).
             (sym.to_string(), Conv::C)
         } else if callee.starts_with("__wolf_rt_") {
             self.refuse_runtime(callee)?;
