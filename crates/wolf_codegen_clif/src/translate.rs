@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 184] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 186] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -277,6 +277,8 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 184] = [
     ("__wolf_rt_env_args", 0, true),
     ("__wolf_rt_env_get", 3, true),
     ("__wolf_rt_env_set", 4, true),
+    // s225 (#534, `[os.env.unset]`): the name's str pair, 0 or 1 back.
+    ("__wolf_rt_env_unset", 2, true),
     ("__wolf_rt_env_vars", 0, true),
     ("__wolf_rt_os_cwd", 1, true),
     // s90 (#69): the running executable's path — the rig that spawns
@@ -300,6 +302,9 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 184] = [
     ("__wolf_rt_os_pipe", 1, true),
     ("__wolf_rt_os_chdir", 2, true),
     ("__wolf_rt_os_isatty", 2, true),
+    // s225 (#534, `[os.proc.exec]`): the exe pair and the argv, env and
+    // map headers; returns only on a failed exec, with the row's code.
+    ("__wolf_rt_os_exec", 5, true),
     // s137/#233: the schedulable core count through a caller out
     // word, the `os_cwd` shape without the string — `[os.cpus]`.
     ("__wolf_rt_os_cpus", 1, true),

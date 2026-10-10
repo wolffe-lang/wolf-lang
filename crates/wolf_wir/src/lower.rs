@@ -10211,6 +10211,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "env_args"
                 | "env_get"
                 | "env_set"
+                // s225 (#534, `[os.env.unset]`): `env_set`'s shape with
+                // one str.
+                | "env_unset"
                 | "env_vars"
                 | "os_cwd"
                 | "os_exe"
@@ -10251,6 +10254,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if matches!(
             callee_text.as_str(),
             "os_spawn_fds" | "os_pipe" | "os_chdir" | "os_isatty"
+            // s225 (#534, `[os.proc.exec]`): the exec, `os_spawn_fds`'s
+            // operands plus the environment's header.
+            | "os_exec"
         ) {
             return self.lower_proc_fd_builtin(&callee_text, d, e);
         }
@@ -14641,6 +14647,53 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
+            // s225 (`[os.proc.exec]`): the shim returns only on a failed
+            // exec, with the row's code (never 0), so the ok edge is
+            // unreachable in practice; it is built as `os_chdir`'s
+            // unit-or-row join all the same.
+            "os_exec" => {
+                let s = arg(0)?;
+                let (p, l) = self.str_parts(s);
+                let argv_hdr = arg(1)?;
+                let env_hdr = arg(2)?;
+                let map_hdr = arg(3)?;
+                let rc = self
+                    .rt_call_foreign(
+                        "__wolf_rt_os_exec",
+                        &[p, l, argv_hdr, env_hdr, map_hdr],
+                        None,
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |_| Ok(None),
+                    |zelf| {
+                        Ok(zelf.code_tag_chain(
+                            rc,
+                            &[
+                                (1, "not_found"),
+                                (2, "denied"),
+                                (5, "unsupported"),
+                                (6, "invalid"),
+                            ],
+                            "io",
+                        ))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
             _ => Err(refuse("this process builtin", e.span)),
         }
     }
@@ -14836,6 +14889,38 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 };
                 let rc = self
                     .rt_call("__wolf_rt_env_set", &[np, nl, vp, vl], Some(types::I64))
+                    .expect("rc");
+                let z = self.b.iconst(types::I64, 0);
+                let hit = self
+                    .b
+                    .ins(
+                        Opcode::Icmp,
+                        &[rc, z],
+                        &[types::BOOL],
+                        Aux::IntCc(IntCc::Eq),
+                    )
+                    .one();
+                let eu = self.eu_ty_of(e.span)?;
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |_| Ok(None),
+                    |z| {
+                        let id = z.b.module.tag_id("invalid");
+                        Ok(z.b.iconst(types::I64, id))
+                    },
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
+            // s225 (`[os.env.unset]`): `env_set` with one str — 0 ok,
+            // 1 `invalid`.
+            "env_unset" => {
+                let (np, nl) = {
+                    let s = arg(0)?;
+                    self.str_parts(s)
+                };
+                let rc = self
+                    .rt_call("__wolf_rt_env_unset", &[np, nl], Some(types::I64))
                     .expect("rc");
                 let z = self.b.iconst(types::I64, 0);
                 let hit = self
