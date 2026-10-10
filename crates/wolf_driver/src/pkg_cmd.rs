@@ -1457,6 +1457,9 @@ mod builtin_cap_tests {
             ("os_spawn", Cap::Exec),
             ("os_exit", Cap::Exec),
             ("os_signal_listen", Cap::Exec),
+            // s225 (#534): the removal charges `env`, the exec `exec`.
+            ("env_unset", Cap::Env),
+            ("os_exec", Cap::Exec),
         ] {
             assert_eq!(builtin_cap(name), Some(cap), "{name}");
         }
