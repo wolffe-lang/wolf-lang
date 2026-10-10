@@ -15,7 +15,11 @@ machine answered E0301 before. Every configured source still wins, in
 this order: `--std-root`, `WOLF_STD`, a `std` path dependency in
 `wolf.pkg`, then the copy beside the binary. A `wolf` built from source
 (`target/<profile>/wolf`) has nothing beside it and keeps the prelude
-stub, so the test suite and the corpus answer as before. `cargo xtask
+stub, so the test suite and the corpus answer as before. A freestanding
+build (`--target x86_64-unknown-none`, or a manifest `target`) reads no
+default: the shipped std is the hosted library, and with it beside the
+binary 27 of pax's 29 kernels stopped on a `str` comparison its home
+modules lower; only an explicit root reaches a kernel. `cargo xtask
 dist` fetches the pinned commit (or takes a checkout named by
 `WOLF_DIST_STD_SRC`, refused unless it is at the pin), and its smoke runs
 a `use std.env` program from the unpacked archive with `WOLF_STD` unset.
