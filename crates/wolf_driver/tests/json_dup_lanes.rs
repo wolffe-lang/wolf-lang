@@ -13,10 +13,10 @@
 //! answered every row FIRST-wins and counted every repeat, agreeing with
 //! each other and parting from the ruling — so a gate that compared the
 //! machines with each other would have been green. This one compares
-//! each with the header. lupin 0.1.49 (`f516a5f`, the pairing) is pinned
-//! by version and commit to the stdout it was measured giving; any other
-//! lupin build owes the header (the wolf-interp s224 branch mirrors the
-//! kernel).
+//! each with the header. lupin 0.1.49 (`f516a5f`) answered first-wins
+//! and was pinned by version and commit to the stdout it was measured
+//! giving; 0.1.50 (the 0.2.27 pairing, r32) mirrors the kernel, the pin
+//! is dropped, and every lupin owes the header.
 
 mod lane_exit;
 
@@ -101,23 +101,6 @@ fn require_lupin() -> Option<PathBuf> {
     l
 }
 
-/// lupin 0.1.49 (the pairing, release commit `f516a5f`) as measured on
-/// each row: first-wins, every repeat counted.
-const LUPIN_049: (&str, &str) = ("0.1.49", "f516a5f");
-
-fn lupin_049_measured(row: &str) -> &'static str {
-    match row {
-        "dup_last_wins.lu" => "1 2\n",
-        "dup_count_distinct.lu" => "1 3\n",
-        "dup_nested.lu" => "first 2 1 2\n",
-        "dup_thrice.lu" => "1 2 6\n",
-        "dup_kind.lu" => "num str -1\n",
-        "dup_render.lu" => "{\"a\":1,\"b\":2,\"a\":3}\n",
-        "dup_path.lu" => "missing 1\n",
-        other => panic!("{other}: a new dup row needs lupin 0.1.49's measured answer here"),
-    }
-}
-
 /// A row's `check: run(exit=0, stdout="…")` stdout (a JSON string).
 fn want_of(text: &str, path: &Path) -> String {
     let line = text
@@ -174,14 +157,9 @@ fn repeated_json_names_are_last_wins_on_four_machines() {
                 )
             });
             ran += 1;
-            let owed = if (obs.version.as_str(), obs.commit.as_str()) == LUPIN_049 {
-                lupin_049_measured(row).to_string()
-            } else {
-                want.clone()
-            };
-            if obs.verdict != "exit(0)" || obs.stdout != owed {
+            if obs.verdict != "exit(0)" || obs.stdout != want {
                 bad.push(format!(
-                    "{row} lupin {} {}: {} {:?}, want {owed:?}",
+                    "{row} lupin {} {}: {} {:?}, want {want:?}",
                     obs.version, obs.commit, obs.verdict, obs.stdout
                 ));
             }
