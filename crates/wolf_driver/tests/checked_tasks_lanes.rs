@@ -24,9 +24,10 @@
 //!
 //! Two witnesses part from lupin 0.1.49, each pinned by that version so
 //! a newer lupin is held to the clause: the rendezvous back-edge
-//! (`[conc.mm.hb.chan]`, lupin adds none and traps `race`) and a
-//! self-acquisition reached through a closure (`[conc.deadlock.self]`,
-//! lupin traps `exclusivity` first).
+//! (`[conc.mm.hb.chan]`, lupin adds none and traps `race`,
+//! wolf-interp#227) and a self-acquisition reached through a closure
+//! (`[conc.deadlock.self]`, lupin traps `exclusivity` first,
+//! wolf-interp#230).
 //!
 //! The fixtures that race or deadlock are not corpus rows: the compiled
 //! tiers run a race as whatever the hardware does and wait on a
@@ -336,8 +337,8 @@ fn the_rendezvous_receive_orders_the_senders_next_access() {
         assert_eq!(
             (l.verdict.as_str(), l.clause.as_str()),
             ("trap(race)", "conc.mm.race.3"),
-            "lupin {PINNED_LUPIN} has no rendezvous back-edge (measured at s226); \
-             if this moved, drop the pin"
+            "lupin {PINNED_LUPIN} has no rendezvous back-edge (wolf-interp#227, \
+             measured at s226); if this moved, drop the pin"
         );
     } else {
         assert_eq!(
@@ -390,7 +391,8 @@ fn a_self_acquisition_through_a_call_is_a_deadlock() {
         assert_eq!(
             l.verdict, "trap(exclusivity)",
             "lupin {PINNED_LUPIN} on a `when` reached through a closure that captured \
-             the held mutex (measured at s226); if this moved, drop the pin"
+             the held mutex (wolf-interp#230, measured at s226); if this moved, drop \
+             the pin"
         );
     } else {
         assert_eq!(

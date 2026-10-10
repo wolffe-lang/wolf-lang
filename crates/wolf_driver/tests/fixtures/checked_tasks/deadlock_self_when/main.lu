@@ -4,7 +4,7 @@
 //! E1103). Inside a `when` body the operand's name is its payload, so
 //! the callee reaches the mutex through a closure that captured it
 //! (a `Mutex[int]` parameter does not typecheck as a `when` operand
-//! today, which is its own issue).
+//! today — wolf-lang#658).
 
 fn main() -> !int {
     let m = Mutex(0)
