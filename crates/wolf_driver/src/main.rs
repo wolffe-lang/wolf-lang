@@ -3515,6 +3515,7 @@ const PHASES: [&str; 8] = [
 /// licensed optimization (the D2 pairing, executable). An honest
 /// refusal keeps the ladder at `mem`/`unsupported` — the conservatism
 /// ledger, never a guess.
+#[allow(clippy::too_many_arguments)]
 fn checked_run(
     pkg: &wolf_sema::Package,
     tc: &wolf_sema::Typecheck,
@@ -3524,13 +3525,11 @@ fn checked_run(
     run_stdout: &mut Option<String>,
     x_ext: &mut Vec<(&'static str, serde_json::Value)>,
     seed: Option<u64>,
-    seed_reached: &mut bool,
 ) -> (&'static str, String, Vec<Diagnostic>) {
     use wolf_mem::ubcheck::{self, Budget, Verdict};
     // s226 (`[exec.checked.sched]`): `--seed=N` selects the checked
     // machine's schedule; absent, every decision takes its first
     // candidate (seed 0).
-    *seed_reached = seed.is_some();
     match ubcheck::run_checked_seeded(pkg, tc, Budget::default(), "", "main", seed.unwrap_or(0)) {
         Err(nyc) => {
             // Surface the refusal on stderr (the rich channel); the
@@ -4190,6 +4189,7 @@ fn conform_run(args: &[String]) {
                                                         // HIR directly; the wir
                                                         // rung below serves the
                                                         // default ladder.)
+                                                        checked_seeded = seed.is_some();
                                                         checked_run(
                                                             &res.package,
                                                             &tc,
@@ -4199,7 +4199,6 @@ fn conform_run(args: &[String]) {
                                                             &mut run_stdout,
                                                             &mut x_ext,
                                                             seed,
-                                                            &mut checked_seeded,
                                                         )
                                                     } else if native || release {
                                                         // The s28 native rung:
