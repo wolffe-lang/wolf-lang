@@ -525,7 +525,10 @@ mod tests {
         assert_eq!(ALLOC_HOOKS, ["wolf_alloc", "wolf_free"]);
         // s223: the ambient pair is the program's to call, not a hosted
         // runtime symbol the backends lower to.
-        assert_eq!(AMBIENT_HOOKS, ["wolf_rt_ambient_get", "wolf_rt_ambient_set"]);
+        assert_eq!(
+            AMBIENT_HOOKS,
+            ["wolf_rt_ambient_get", "wolf_rt_ambient_set"]
+        );
         for s in AMBIENT_HOOKS {
             assert!(!none_rt_provides(s), "{s}");
         }

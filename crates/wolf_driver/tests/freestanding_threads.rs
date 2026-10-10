@@ -119,7 +119,11 @@ fn none_rt() -> Option<&'static Path> {
             .expect("target dir")
             .join(TARGET)
             .join("release/libwolf_rt_none.a");
-        assert!(lib.is_file(), "rt-none built, but {} is missing", lib.display());
+        assert!(
+            lib.is_file(),
+            "rt-none built, but {} is missing",
+            lib.display()
+        );
         Some(lib)
     })
     .as_deref()
@@ -203,7 +207,10 @@ fn the_roster_admits_the_pair_and_the_archive_defines_it() {
         let mut undef = BTreeSet::new();
         let mut defined = BTreeSet::new();
         for obj in &objs {
-            let (u, g, w) = symbols_of(&std::fs::read(obj).expect("read"), &obj.display().to_string());
+            let (u, g, w) = symbols_of(
+                &std::fs::read(obj).expect("read"),
+                &obj.display().to_string(),
+            );
             undef.extend(u);
             defined.extend(g);
             defined.extend(w);
@@ -221,8 +228,14 @@ fn the_roster_admits_the_pair_and_the_archive_defines_it() {
             .chain(AMBIENT_HOOKS)
             .chain(NONE_RT_SYMBOLS.iter().copied())
             .collect();
-        let stray: Vec<&String> = undef.iter().filter(|s| !allowed.contains(s.as_str())).collect();
-        assert!(stray.is_empty(), "{tier}: imports outside the hook list: {stray:?}");
+        let stray: Vec<&String> = undef
+            .iter()
+            .filter(|s| !allowed.contains(s.as_str()))
+            .collect();
+        assert!(
+            stray.is_empty(),
+            "{tier}: imports outside the hook list: {stray:?}"
+        );
         let beside = dir.join(format!("k.{tier}.rt-none.a"));
         assert!(
             std::fs::read(&beside).ok() == std::fs::read(lib).ok(),
@@ -247,7 +260,10 @@ fn the_roster_admits_the_pair_and_the_archive_defines_it() {
         weak.extend(w);
     }
     for h in AMBIENT_HOOKS {
-        assert!(global.contains(h), "libwolf_rt_none.a defines `{h}` globally");
+        assert!(
+            global.contains(h),
+            "libwolf_rt_none.a defines `{h}` globally"
+        );
     }
     let unresolved: BTreeSet<&str> = undef
         .iter()
@@ -255,7 +271,10 @@ fn the_roster_admits_the_pair_and_the_archive_defines_it() {
         .map(String::as_str)
         .collect();
     let want: BTreeSet<&str> = ["wolf_trap"].into_iter().chain(ALLOC_HOOKS).collect();
-    assert_eq!(unresolved, want, "the archive imports the hook list and nothing else");
+    assert_eq!(
+        unresolved, want,
+        "the archive imports the hook list and nothing else"
+    );
 }
 
 /// Row 2: linked with no libc, run, on the x86-64 linux host.
@@ -293,13 +312,23 @@ mod linux_x86_64 {
         for o in objs {
             args.push(o.to_str().unwrap().into());
         }
-        args.push(dir.join(format!("k.{tier}.rt-none.a")).to_str().unwrap().into());
+        args.push(
+            dir.join(format!("k.{tier}.rt-none.a"))
+                .to_str()
+                .unwrap()
+                .into(),
+        );
         let argv: Vec<&str> = args.iter().map(String::as_str).collect();
         let r = match Command::new("ld.lld").args(&argv).output() {
             Ok(r) => r,
             Err(_) => tool("ld", &argv),
         };
-        assert!(r.status.success(), "link {}: {}", exe.display(), text(&r.stderr));
+        assert!(
+            r.status.success(),
+            "link {}: {}",
+            exe.display(),
+            text(&r.stderr)
+        );
         tool(exe.to_str().unwrap(), &[])
     }
 
@@ -310,14 +339,19 @@ mod linux_x86_64 {
         assert_eq!(lines.len(), 3, "{tier} {mode}: three lines:\n{out}");
         let l = lines[0];
         let num = |after: &str| -> u64 {
-            let i = l.find(after).unwrap_or_else(|| panic!("{tier} {mode}: `{after}` in {l}"));
+            let i = l
+                .find(after)
+                .unwrap_or_else(|| panic!("{tier} {mode}: `{after}` in {l}"));
             l[i + after.len()..]
                 .split(' ')
                 .next()
                 .and_then(|w| w.parse().ok())
                 .unwrap_or_else(|| panic!("{tier} {mode}: a number after `{after}` in {l}"))
         };
-        assert!(l.starts_with("threads: A list 64, region ra "), "{tier} {mode}: {l}");
+        assert!(
+            l.starts_with("threads: A list 64, region ra "),
+            "{tier} {mode}: {l}"
+        );
         assert!(
             l.ends_with(", sum 2016, both exited"),
             "{tier} {mode}: A's List read back whole after B's exit, both exited: {l}"
@@ -344,7 +378,11 @@ mod linux_x86_64 {
                 "{tier}: with the pair, A's 64-int List is charged to ra (>= 512 bytes) and rb \
                  holds nothing; got ra {ra}, rb {rb} (wolf-lang#611)"
             );
-            assert_eq!(s.lines().nth(1), Some("ambient: the List landed in ra"), "{tier}");
+            assert_eq!(
+                s.lines().nth(1),
+                Some("ambient: the List landed in ra"),
+                "{tier}"
+            );
         }
     }
 
@@ -363,7 +401,11 @@ mod linux_x86_64 {
                 "{tier}: the control's switch leaves the one slot alone, so A allocates in \
                  B's rb (the gate reaches the hazard); got ra {ra}, rb {rb}"
             );
-            assert_eq!(s.lines().nth(1), Some("ambient: the List landed in rb"), "{tier}");
+            assert_eq!(
+                s.lines().nth(1),
+                Some("ambient: the List landed in rb"),
+                "{tier}"
+            );
         }
     }
 }
