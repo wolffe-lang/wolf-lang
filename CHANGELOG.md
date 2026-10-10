@@ -2,6 +2,53 @@
 
 ## Unreleased
 
+### The checked machine runs tasks (s226, C1)
+
+`wolf conform-run --checked` (the checked machine; `wolf run --checked`
+is the native build) refused `scope`, `spawn`, `spawn proc`, `select`,
+`when`, closures and `xs.par(f)` by name since s23 — "structured
+concurrency in checked execution (C1 deferred)". It runs them now, so
+the concurrency tier is checked by three machines and lupin instead of
+two. No compiled binary changes: the runtime and both backends are
+untouched.
+
+- **Tasks, one at a time, under a deterministic scheduler
+  (`[exec.checked.task]`, `[exec.checked.sched]`).** The scheduler is
+  lupin's: a task runs until it blocks and is never preempted, a spawn
+  leaves the spawner running, and with no seed tasks run in spawn
+  order. `--seed=N` selects one schedule (the ready-task and
+  `select`-arm choices; a seed with bit 62 set is a packed schedule),
+  equal seeds are equal runs, and a seeded checked record now says
+  `"seeded": true` (it said `false` whatever the flag). It explores
+  nothing: one seed is one interleaving. Procs, `link`, `monitor`,
+  `kill`, `cancel`, `join`, `timeout` arms on a virtual clock, `when`
+  and `Mutex` run as `[conc.*]` says; a `par` worker allocates in a
+  region of its own that is transferred to the `par`'s region at the
+  join (ruling #30, the checked machine first).
+- **A data race is `trap(race)` (`[exec.checked.race]`,
+  `[conc.mm.race.3]`).** Vector clocks over `[conc.mm.hb]`'s edges,
+  checked on every raw access, pool slot and module `var`:
+  `corpus/conc/atomic_race_plain.lu` is `trap(race)` at the span lupin
+  reports, where the compiled tiers print whatever four racing writers
+  left (119370 and 400000 on one run). Two tasks that only wait on
+  each other are `trap(deadlock)` with the roster on stderr.
+- **What moved.** 42 corpus run rows that were `unsupported` on the
+  checked machine reach lupin's verdict and bytes (the `corpus/conc/`
+  tier, `procs.lu`, `net/spawn_accept.lu`, `os/signal_supervisor.lu`,
+  the closure rows); `freeze region { … }` and `1.s`-style durations
+  run there too. Still declined there by name: a nested `fn`
+  (`typecheck/closure_return.lu`).
+- **Two measured partings from lupin 0.1.49**, pinned by version in
+  `checked_tasks_lanes`: lupin adds no rendezvous back-edge
+  (`[conc.mm.hb.chan]`: "the receive also happens-before the send
+  returns"), so a program ordered only by it is `trap(race)` on lupin
+  and runs here; and a `when` reached through a closure that captured
+  a held mutex is `trap(deadlock)` (`[conc.deadlock.self]`) here and
+  `trap(exclusivity)` on lupin.
+- **For the book:** ex16-7 and ex16-8, the two concurrency samples the
+  checked machine declined, can run on it at the pin that carries
+  this.
+
 ### The standard library ships with the compiler (s204, ruling #29, #415)
 
 **Read this before you bump the pin.** The release archive now carries
