@@ -80,9 +80,16 @@ fn main() -> !int {
 /// Exec rows that return, in-process: the shape, a missing path, a bare
 /// name the handed PATH cannot find — and what the program printed before
 /// them stays in the record (no refusal the machine can see coming lets
-/// the buffer out).
+/// the buffer out). On windows every well-formed exec is `unsupported`,
+/// by name; the shape row is `invalid` there too, because the shape is
+/// read first (`[os.proc.exec]`'s order).
 #[test]
 fn exec_rows_that_return_keep_the_record() {
+    let want = if cfg!(unix) {
+        "first\nshape invalid\nmissing not_found\nbare not_found\ndir denied\n"
+    } else {
+        "first\nshape invalid\nmissing unsupported\nbare unsupported\ndir unsupported\n"
+    };
     assert_stdout(
         r#"
 fn row(exe: str, argv: List[str], env: List[str]) -> str {
@@ -107,6 +114,6 @@ fn main() -> !int {
     0
 }
 "#,
-        "first\nshape invalid\nmissing not_found\nbare not_found\ndir denied\n",
+        want,
     );
 }
