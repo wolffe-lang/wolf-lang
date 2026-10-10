@@ -37,7 +37,7 @@
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::Command;
 use std::sync::OnceLock;
 
 use wolf_backend::target::{
@@ -328,6 +328,7 @@ fn calling_the_pair_alone_links_the_archive() {
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 mod linux_x86_64 {
     use super::*;
+    use std::process::Output;
 
     fn tool(name: &str, args: &[&str]) -> Output {
         Command::new(name)
