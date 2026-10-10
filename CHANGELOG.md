@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+### A C declaration carries the `ffi` capability, as `import c` does (s221, #619, ruling #55)
+
+**Read this before you bump the pin if your package declares C.** A
+bodyless `extern "c" fn` (a C function wolf calls, `[abi.c.import]`)
+and an `extern "c" let` (a link-time symbol, `[abi.link.extern]`) now
+charge `ffi` at the declaration, called or not, exactly as `import c`
+is charged at its line (`[pkg.caps]` (1a)). Until now a `caps=[]`
+package could call `getpid` through `extern "c" fn` and run, and `wolf
+audit --ci` said `effective: []`. A package that declares C without
+`capabilities: [ffi]` is now E1504 on native and release, naming the
+declaration and its first call (or that nothing calls it), and `wolf
+audit --ci` exits 1 with the reason ("declares `extern "c" fn getpid`
+at app/main.lu:4:15, first called at app/main.lu:7:22"). An `extern "c"
+fn` with a body and an `export fn` are wolf code that C calls and charge
+nothing; an inline `asm` block still compiles nowhere, so it charges
+nothing yet (kw13's). The checked machine and lupin never reached C
+through these declarations (both refuse the call by name) and do not
+move.
+
+- **Downstream (census at boreutils `5da892e`, lobo `ebace85`, wolf-std
+  `87ba162`, pelt `3e7516c`, pax `ef4c3ca`, muzzle `7c95300`, wolf-book
+  `2504a0f`; trunk vs this change, native and release).** Every
+  boreutils utility (28), lobo, pelt, wolf-std's 433 test files and the
+  book's 6 sample packages build byte-identical with identical
+  diagnostics, and every manifest's `wolf audit` prints the same bytes.
+  **pax and muzzle declare C and need one line each:** all 29 pax
+  kernels (27 under `kernel/`, 2 under `tests/mkw.d/kernel/`) and
+  muzzle's `src/muzzle.lu` are E1504 until `capabilities: [ffi]` is in
+  `pax/kernel/wolf.pkg`, `pax/tests/mkw.d/kernel/wolf.pkg` and
+  `muzzle/src/wolf.pkg`; with it their objects are the same as trunk's
+  (release byte for byte; native with debug info stripped, since the
+  declared copy builds from another directory).
+- **In this repository** the kw05 and kw10 gates' packages call their
+  listed assembly through bodyless externs, so `asm_link.rs`'s manifests
+  and `tests/fixtures/freestanding_interrupt/wolf.pkg` declare `ffi`.
+- `wolf audit` unites a directory's standalone entries (pax's
+  `kmain_*.lu`) by the reason a reader sees, so a declaration several
+  entries share is counted once.
+- Witness: `crates/wolf_driver/tests/cap_ffi.rs` (nine rows: a
+  `caps=[]` root and dependency, an `extern "c" let`, an unused
+  declaration, a pax-shaped freestanding kernel per entry and in the
+  audit, and the honest twins).
+
 ### Unsigned and wrapping integers print and compute as the values their types hold (s220, #551, #538, #553)
 
 **Read this before you bump the pin.** Programs that print a `u64`,
