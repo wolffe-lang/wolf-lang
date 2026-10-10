@@ -1,0 +1,23 @@
+//! member: false
+//! s225 (`[os.proc.exec]`; wolf-lang#534) — the image replaced. This
+//! program opens a file it does not map, prints a line, and execs `sh`
+//! found by its bare name along the PATH it hands over. The new image
+//! reports its pid and then waits on its standard input, which is when
+//! the harness reads the pid's command line (argv[0] as given) and
+//! compares the pid with the one it started; then two arguments (one
+//! with a space), the one
+//! variable it was handed and a host variable it was not, a line of the
+//! harness's standard input (0 is kept by an exec), and which of
+//! descriptors 3..19 are open (the harness compares that with a control
+//! `sh` it starts itself: the opened file must not be among them).
+//! Unix only.
+
+fn main() -> !int {
+    fs_write_text("s225-unmapped.txt", "unmapped\n")?
+    let h = fs_open("s225-unmapped.txt")?
+    print("before exec handle_above_2={h > 2}")
+    let script = "echo pid=$$; read line; echo stdin=$line; echo zero=$0 one=$1 two=$2; echo env=$WOLF_S225_E; echo host=[$WOLF_S225_HOST]; n=; for f in 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19; do [ -e /dev/fd/$f ] && n=$n$f,; done; echo open=$n"
+    os_exec("sh", ["wolf-s225-argv0", "-c", script, "zero", "one", "two words"], ["WOLF_S225_E=fell", "PATH=/usr/bin:/bin"], List[int]())?
+    print("not reached")
+    1
+}

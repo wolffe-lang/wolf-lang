@@ -1,0 +1,33 @@
+//! member: false
+//! s225 (`[os.proc.exec]`) — the exec rows that return, with the
+//! process put back. A missing absolute path and a bare name the handed
+//! PATH cannot find are `not_found`; a file without an execute bit is
+//! `denied`. The last exec maps a file onto descriptor 0 and fails: 0
+//! must be the harness's standard input again afterwards, so the line
+//! read from it is the harness's, not the file's. Unix only.
+
+fn row(exe: str, argv: List[str], env: List[str], map: List[int]) -> str {
+    os_exec(exe, argv, env, map) else |e| {
+        return match e {
+            unsupported => "unsupported",
+            invalid => "invalid",
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+    }
+    "returned"
+}
+
+fn main() -> !int {
+    fs_write_text("s225-plain.txt", "from-the-file\n")?
+    let h = fs_open("s225-plain.txt")?
+    let none = List[int]()
+    print("abs_missing={row("/nonexistent/wolf-s225", ["x"], ["A=1"], copy none)}")
+    print("bare_missing={row("sh", ["sh"], ["PATH=/nonexistent/wolf-s225"], copy none)}")
+    print("denied={row("./s225-plain.txt", ["x"], ["A=1"], copy none)}")
+    print("mapped_then_failed={row("/nonexistent/wolf-s225", ["x"], ["A=1"], [0, h])}")
+    let got = fs_read(0, 64) else |_| "<no read>"
+    print("stdin={got.trim()}")
+    0
+}

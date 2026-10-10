@@ -1,0 +1,16 @@
+//! member: false
+//! s225 (`[os.proc.exec]`) — the map applied at an exec: this program
+//! opens a file and hands it to the new image AS descriptor 5, and
+//! closes descriptor 2 in it with a `-1` entry. The new image reads its
+//! line from 5 and asks whether 2 is open. lupin cannot place a
+//! descriptor above 2 or close one (it admits no `unsafe`), so it
+//! refuses this program by name, as it refuses `fd_five.lu`. Unix only.
+
+fn main() -> !int {
+    fs_write_text("s225-five.txt", "five-line\n")?
+    let h = fs_open("s225-five.txt")?
+    let script = "read x <&5; echo fd5=$x; if [ -e /dev/fd/2 ]; then echo two=open; else echo two=closed; fi"
+    os_exec("/bin/sh", ["sh", "-c", script], ["PATH=/usr/bin:/bin"], [5, h, 2, 0 - 1])?
+    print("not reached")
+    1
+}

@@ -1,0 +1,27 @@
+//! member: false
+//! s225 (`[os.env.unset]`; pelt's `pending/unset_env`) — a child no
+//! longer sees a removed variable. Each question is a child `sh` whose
+//! exit status says whether the variable reached it (a lupin child is
+//! null-wired, so a status is what every machine can answer with). One
+//! variable the program set, then removed, then set again; one the
+//! harness put in this program's environment, then removed. Unix only.
+
+fn sees(name: str) -> int {
+    let script = "env | grep -q '^{name}='"
+    let h = os_spawn(["sh", "-c", script]) else |_| { return 0 - 1 }
+    let code = os_wait(h) else |_| { return 0 - 2 }
+    if code == 0 { 1 } else { 0 }
+}
+
+fn main() -> !int {
+    env_set("WOLF_S225_GONE", "x")?
+    print("set={sees("WOLF_S225_GONE")}")
+    env_unset("WOLF_S225_GONE")?
+    print("unset={sees("WOLF_S225_GONE")}")
+    print("host={sees("WOLF_S225_HOST")}")
+    env_unset("WOLF_S225_HOST")?
+    print("host_unset={sees("WOLF_S225_HOST")}")
+    env_set("WOLF_S225_GONE", "y")?
+    print("set_again={sees("WOLF_S225_GONE")}")
+    0
+}
