@@ -82,3 +82,56 @@ fn a_conform_run_ice_fails() {
         "conform-run --native",
     );
 }
+
+/// wolf-lang#620: pkg.rs's diamond read this exact stderr (kasumi, GNU
+/// ld via collect2; hasu's binutils 2.46 prints the same line) as a
+/// skip. A link error is the compiler's defect, never the host's.
+#[test]
+#[should_panic(expected = "failed to LINK")]
+fn a_gnu_ld_undefined_reference_fails() {
+    environment_refusal(
+        &out(
+            2,
+            "ld: /tmp/wolf-link-1/02-root.o: in function `main':\n\
+             main.lu:6:(.text+0x2f): undefined reference to `go'\n\
+             collect2: error: ld returned 1 exit status\n\
+             wolf run: `cc` failed linking ./.lu-cache/bin/main",
+        ),
+        "diamond-built",
+    );
+}
+
+#[test]
+#[should_panic(expected = "undefined symbol: go")]
+fn an_lld_undefined_symbol_fails_and_names_itself() {
+    environment_refusal(
+        &out(2, "ld.lld: error: undefined symbol: go\ncollect2: error: ld returned 1 exit status"),
+        "diamond-built",
+    );
+}
+
+#[test]
+fn every_linker_spelling_of_a_symbol_defect_fails() {
+    for text in [
+        "Undefined symbols for architecture arm64:\n  \"_go\", referenced from:",
+        "duplicate symbol '_go' in:\n    a.o\n    b.o",
+        "ld: b.o: multiple definition of `go'; a.o: first defined here",
+        "ld.lld: error: duplicate symbol: go",
+    ] {
+        let r = std::panic::catch_unwind(|| environment_refusal(&out(2, text), "test"));
+        assert!(r.is_err(), "{text:?} was read as an environment refusal");
+    }
+}
+
+/// A host that cannot link at all still skips: no symbol is named.
+#[test]
+fn a_missing_linker_or_runtime_is_still_a_refusal() {
+    for text in [
+        "wolf run: cannot run `cc`: No such file or directory (os error 2)",
+        "/usr/bin/ld: cannot find -lwolf_rt: No such file or directory\n\
+         collect2: error: ld returned 1 exit status",
+        "wolf build: libwolf_rt.a not found beside the compiler",
+    ] {
+        assert!(environment_refusal(&out(2, text), "test"), "{text:?}");
+    }
+}
