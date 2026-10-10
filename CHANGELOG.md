@@ -44,9 +44,14 @@ untouched.
   `checked_tasks_lanes`: lupin adds no rendezvous back-edge
   (`[conc.mm.hb.chan]`: "the receive also happens-before the send
   returns"), so a program ordered only by it is `trap(race)` on lupin
-  and runs here; and a `when` reached through a closure that captured
-  a held mutex is `trap(deadlock)` (`[conc.deadlock.self]`) here and
-  `trap(exclusivity)` on lupin.
+  and runs here (wolf-interp#227); and a `when` reached through a
+  closure that captured a held mutex is `trap(deadlock)`
+  (`[conc.deadlock.self]`) here and `trap(exclusivity)` on lupin
+  (wolf-interp#230). Three more differences sit outside the corpus:
+  a UB finding inside a proc ends the run here and is the exit reason
+  `error` on lupin (wolf-interp#228); a task writes the program's one
+  module state here and a private copy on lupin, and allocates in the
+  root region here and its spawner's on lupin (wolf-interp#229).
 - **For the book:** ex16-7 and ex16-8, the two concurrency samples the
   checked machine declined, can run on it at the pin that carries
   this.
