@@ -327,10 +327,12 @@ premise by construction.
   allocation and a buffer copy for every `List` or `Map` it reaches,
   charged where the task allocates, so a `par` whose `f` copies a
   container pays that per element and not per list. What `f` allocates lands where a task's allocations land:
-  tasks run with the process root as their ambient region, and the
-  native root arena serializes allocation behind one lock, so an `f`
-  that allocates on every call contends there and scales worse than
-  one that computes. Speedup is not promised: a list shorter than `W`,
+  tasks run with the process root as their ambient region. The
+  native root arena gives each thread its own bump window and takes
+  its lock only to refill one (once per 64 KiB, or for one large
+  allocation), so an `f` that allocates on every call does not queue
+  on the root; it still pays its allocations, and the memory each
+  task leaves in the root lives as long as the process. Speedup is not promised: a list shorter than `W`,
   or an `f` cheaper than a spawn, can make `xs.par(f)` slower than
   `xs.map(f)`, and both are conforming.
 - `[conc.task.root]` The process runs under a root supervisor scope of
