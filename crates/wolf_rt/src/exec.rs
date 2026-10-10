@@ -333,8 +333,7 @@ mod unix {
             }
             libc::execve(path.as_ptr(), arg_ptrs.as_ptr(), env_ptrs.as_ptr());
             let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
-            // PLANT (s225, reverted next): a failed exec leaves the map in place.
-            let _ = (&saved, &staged);
+            restore(&saved, &staged);
             Err(match errno {
                 libc::ENOENT | libc::ENOTDIR => "not_found",
                 libc::EACCES | libc::EPERM => "denied",
