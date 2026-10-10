@@ -1,0 +1,22 @@
+//! check: fail(E0701)
+//! phase: resolve
+//! conforms: comptime.sandbox, comptime.sandbox.exec, os.proc.exec
+//! forward: List construction at comptime
+//!
+//! s225 (D33): an exec would replace the COMPILER with another program,
+//! so it joins `os_spawn`/`os_spawn_fds` in the `exec` category.
+//!
+//! A FORWARD PIN, as `sandbox_spawn_fds.lu` is: building the `List`
+//! arguments is outside the comptime engine, so the engine declines the
+//! file at the list before the call's capability is asked. The category
+//! itself is pinned by `crates/wolf_sema/tests/sandbox_s225.rs`.
+
+comptime fn helper() -> int {
+    os_exec("true", List[str](), List[str](), List[int]()) else |_| {}
+    0
+}
+
+fn main() -> !int {
+    const H = helper()
+    H
+}

@@ -1,0 +1,18 @@
+//! check: fail(E0701)
+//! phase: resolve
+//! conforms: comptime.sandbox, comptime.sandbox.env, os.env.unset
+//!
+//! s225 (D33): `env_unset` would change the COMPILER's environment —
+//! `env_set`'s family, the `env` category (ruling #54's reading: an
+//! environment mutation is `env`), refused at comptime with that
+//! category's reason.
+
+comptime fn helper() -> int {
+    env_unset("HOME") else |_| {}
+    0
+}
+
+fn main() -> !int {
+    const H = helper()
+    H
+}
