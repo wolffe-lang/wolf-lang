@@ -32,11 +32,13 @@ untouched.
   reports, where the compiled tiers print whatever four racing writers
   left (119370 and 400000 on one run). Two tasks that only wait on
   each other are `trap(deadlock)` with the roster on stderr.
-- **What moved.** 42 corpus run rows that were `unsupported` on the
-  checked machine reach lupin's verdict and bytes (the `corpus/conc/`
-  tier, `procs.lu`, `net/spawn_accept.lu`, `os/signal_supervisor.lu`,
-  the closure rows); `freeze region { … }` and `1.s`-style durations
-  run there too. Still declined there by name: a nested `fn`
+- **What moved.** The checked lane executes 660 of the corpus's 1037
+  entries at run, from 614, and all three lanes together 652, from 609
+  (`cargo xtask lane-coverage`). The rows that were `unsupported` there
+  — the `corpus/conc/` tier, `procs.lu`, `net/spawn_accept.lu`,
+  `os/signal_supervisor.lu`, the closure rows — reach lupin's verdict
+  and bytes; `freeze region { … }` and `1.s`-style durations run there
+  too. Still declined there by name: a nested `fn`
   (`typecheck/closure_return.lu`).
 - **Two measured partings from lupin 0.1.49**, pinned by version in
   `checked_tasks_lanes`: lupin adds no rendezvous back-edge
