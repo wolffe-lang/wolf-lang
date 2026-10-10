@@ -507,11 +507,11 @@ fn raw_mode_reads_one_key_and_restores() {
 /// none of the eleven names. 0.1.49 (r31, tag `v0.1.49`, `f516a5f`) is
 /// wolf 0.2.26's pairing and predates the mirror too (wolf-interp's s219
 /// is unmerged at the tag). A mirrored lupin answers like every machine.
-const PRE_MIRROR_LUPIN: &[(&str, &str)] = &[
-    ("0.1.48", "531bf05"),
-    ("0.1.48", "17f17c2"),
-    ("0.1.49", "f516a5f"),
-];
+///
+/// 0.1.48 (`531bf05`, and the trunk build `17f17c2`) and 0.1.49
+/// (`f516a5f`) were listed; emptied at the 0.1.50 pairing (r32), which
+/// carries the mirror.
+const PRE_MIRROR_LUPIN: &[(&str, &str)] = &[];
 
 /// The no-terminal row on every machine: `conform-run` on the checked
 /// machine and lupin, the binaries run directly (and under taskset on
