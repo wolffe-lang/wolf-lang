@@ -1726,4 +1726,130 @@ mod tests {
         );
         assert_eq!(read_pair(&out), "wolf", "the str owns its bytes");
     }
+
+    // ------------------------------------ s222 (wolf-lang#635, #421) --
+    //
+    // The root arena's witnesses. The first is the lock itself: an
+    // allocation on the common path must not wait for the arena's
+    // shared state. It holds `AMBIENT` — the one mutex trunk takes on
+    // EVERY allocation — while a warmed thread allocates; at trunk the
+    // thread blocks and the deadline fires (red), and with per-thread
+    // windows it finishes without touching the lock. The rest are the
+    // memory-safety half: what a thread allocated stays its bytes on
+    // every thread and after the thread is gone, and no two threads
+    // are ever handed overlapping bytes.
+
+    /// The common path takes no shared lock: a thread that has
+    /// allocated once makes 100 sixteen-byte allocations (1,600 bytes,
+    /// inside any window it can hold — a parked tail is at least
+    /// 4 KiB) while another thread holds the arena's mutex.
+    #[test]
+    fn the_common_path_takes_no_shared_lock() {
+        use std::sync::mpsc;
+        let (warm_tx, warm_rx) = mpsc::channel::<()>();
+        let (go_tx, go_rx) = mpsc::channel::<()>();
+        let (done_tx, done_rx) = mpsc::channel::<usize>();
+        let t = std::thread::spawn(move || {
+            // Warm: the first allocation may take the lock (a refill).
+            let _ = ambient_alloc(16);
+            warm_tx.send(()).unwrap();
+            go_rx.recv().unwrap();
+            let mut sum = 0usize;
+            for _ in 0..100 {
+                sum = sum.wrapping_add(ambient_alloc(16) as usize);
+            }
+            done_tx.send(sum).unwrap();
+        });
+        warm_rx.recv().unwrap();
+        let held = AMBIENT.lock().unwrap_or_else(|p| p.into_inner());
+        go_tx.send(()).unwrap();
+        let r = done_rx.recv_timeout(std::time::Duration::from_secs(5));
+        drop(held);
+        t.join().unwrap();
+        assert!(
+            r.is_ok(),
+            "100 small allocations waited on the root arena's lock: every allocation takes it"
+        );
+    }
+
+    /// Bytes a thread allocated are still its bytes after the thread
+    /// has exited and other threads have allocated since: the root
+    /// arena never frees, so a dead thread's window must not either.
+    #[test]
+    fn a_dead_threads_strings_outlive_it() {
+        let mut made: Vec<(usize, usize, u8)> = Vec::new();
+        for round in 0..4u8 {
+            let hs: Vec<_> = (0..8u8)
+                .map(|t| {
+                    std::thread::spawn(move || {
+                        let tag = round.wrapping_mul(31).wrapping_add(t);
+                        (0..500)
+                            .map(|i| {
+                                let len = 1 + (i * 7 + usize::from(t)) % 300;
+                                let p = ambient_alloc(len);
+                                unsafe { core::ptr::write_bytes(p, tag, len) };
+                                (p as usize, len, tag)
+                            })
+                            .collect::<Vec<_>>()
+                    })
+                })
+                .collect();
+            for h in hs {
+                made.extend(h.join().unwrap());
+            }
+        }
+        // Churn on fresh threads after every writer is gone.
+        let hs: Vec<_> = (0..8)
+            .map(|_| {
+                std::thread::spawn(|| {
+                    for i in 0..2000 {
+                        let len = 1 + i % 500;
+                        let p = ambient_alloc(len);
+                        unsafe { core::ptr::write_bytes(p, 0xEE, len) };
+                    }
+                })
+            })
+            .collect();
+        for h in hs {
+            h.join().unwrap();
+        }
+        for &(p, len, tag) in &made {
+            let b = unsafe { core::slice::from_raw_parts(p as *const u8, len) };
+            assert!(
+                b.iter().all(|&x| x == tag),
+                "an allocation of {len} bytes at {p:#x} lost its bytes after its thread exited"
+            );
+        }
+    }
+
+    /// No two allocations overlap, whichever threads made them, and
+    /// every one is 16-aligned — under contention (8 threads at once).
+    #[test]
+    fn concurrent_allocations_never_overlap() {
+        let hs: Vec<_> = (0..8usize)
+            .map(|t| {
+                std::thread::spawn(move || {
+                    (0..4000usize)
+                        .map(|i| {
+                            let len = 1 + (i * 13 + t) % 700;
+                            let len = if i % 997 == 0 { 40_000 } else { len };
+                            (ambient_alloc(len) as usize, len)
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        let mut all: Vec<(usize, usize)> = hs.into_iter().flat_map(|h| h.join().unwrap()).collect();
+        all.sort_unstable();
+        for w in all.windows(2) {
+            assert_eq!(w[0].0 % ALIGN, 0, "unaligned allocation");
+            assert!(
+                w[0].0 + w[0].1 <= w[1].0,
+                "allocations overlap: {:#x}+{} and {:#x}",
+                w[0].0,
+                w[0].1,
+                w[1].0
+            );
+        }
+    }
 }
