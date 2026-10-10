@@ -322,6 +322,13 @@ fn git_dep_pins_and_tamper_fails_e1506() {
                 "user.name=fixture",
                 "-c",
                 "user.email=fixture@example.org",
+                // A fixture commit is never signed: a host whose git
+                // signs by default (hasu's) would otherwise wait on a
+                // pinentry and fail the test on the host, not the code.
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "tag.gpgsign=false",
             ])
             .args(args)
             .current_dir(&repo)
@@ -394,6 +401,10 @@ fn git_in(repo: &Path, args: &[&str]) {
             "user.name=fixture",
             "-c",
             "user.email=fixture@example.org",
+            "-c",
+            "commit.gpgsign=false",
+            "-c",
+            "tag.gpgsign=false",
         ])
         .args(args)
         .current_dir(repo)
