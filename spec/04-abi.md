@@ -355,8 +355,11 @@ AAPCS64, win64, Apple arm64 deltas).
   program's own `extern "c"` declarations; (d) for a program that
   allocates, the allocator pair `wolf_alloc(size: i64, align: i64) ->
   *u8` and `wolf_free(p: *u8, size: i64, align: i64)` (K8(b) = B),
-  which only the freestanding runtime calls (`[abi.target.none.alloc]`).
-  The program supplies (a), (b) and (d), in wolf (`export fn`) or
+  which only the freestanding runtime calls (`[abi.target.none.alloc]`);
+  (e) the freestanding runtime's ambient pair, `wolf_rt_ambient_get()
+  -> *u8` and `wolf_rt_ambient_set(p: *u8)`, which the runtime defines
+  and a program that switches threads calls
+  (`[abi.target.none.ambient]`). The program supplies (a), (b) and (d), in wolf (`export fn`) or
   assembly; the freestanding runtime defines (b) as weak symbols, so a
   program that defines its own wins at the link. On a hosted target
   `wolf_trap` is the runtime's own report-and-exit: a hosted program
@@ -386,9 +389,10 @@ AAPCS64, win64, Apple arm64 deltas).
   never with null — a region's chunks and header when the region is
   freed, an interpolation's build buffer when it finishes. A block
   allocated outside every `region` (the process root) is never freed.
-  The runtime keeps one ambient-region slot and takes no lock: the
-  target has no threads, and a program that runs wolf code on several
-  CPUs must not allocate from two at once. A fault inside the runtime (a
+  The runtime keeps one ambient-region slot, the running thread of
+  control's (`[abi.target.none.ambient]`), and takes no lock: a program
+  that runs wolf code on several CPUs must not allocate from two at
+  once. A fault inside the runtime (a
   breached budget, a negative size) reaches `wolf_trap` with its kind
   and no site, `(null, 0, 0, 0)`. Still refused by name, as constructs
   the freestanding runtime does not carry: `Pool`, `freeze`, a boxed
@@ -400,6 +404,39 @@ AAPCS64, win64, Apple arm64 deltas).
   report through the hosted runtime and through this one over a bump
   allocator written in wolf, linked `-nostdlib`, and compares the
   bytes.
+- `[abi.target.none.ambient]` The ambient region (`[mem.region.create.3]`)
+  belongs to a thread of control. The language has no threads on the
+  freestanding target, but a program may have its own (a kernel's
+  scheduler switching stacks, by a timer or by a yield), and a switch
+  that leaves a `region` open must carry that thread's ambient region
+  with it, or the next thread's allocations land in a region it never
+  entered, whose exit frees them under it. The freestanding runtime
+  keeps the running thread's ambient region in one word and defines
+  two functions over it, with the C convention: `wolf_rt_ambient_get()
+  -> *u8` returns it (null is the process root), and
+  `wolf_rt_ambient_set(p: *u8)` makes `p` the running thread's. A
+  program that switches threads calls `get` for the outgoing thread
+  and keeps the value in that thread's record, and calls `set` with
+  the incoming thread's saved value, or with null for a thread that
+  has not run yet, before that thread runs again. Passing `set`
+  anything else is undefined. The value is opaque: the program
+  stores it and gives it back, and reads nothing through it. Both
+  functions read or write one word and never call a hook, so a switch
+  may call them with interrupts off. The runtime's other state is a
+  region's own, which belongs to the thread inside it, or a counter
+  moved by one atomic read-modify-write. So a switch may land anywhere
+  inside a runtime call on one CPU. A program that never switches
+  threads inside a `region` need not call them, and its object is the
+  same as before. In a package that lists assembly, the pair is a hook
+  to the roster (`[abi.asm.roster]`), never E1306. A call to either
+  links the runtime archive as an allocating construct does
+  (`[abi.target.none.alloc]`). They are freestanding only: the hosted
+  runtime keeps the slot per thread itself and defines neither.
+  Witness: `crates/wolf_driver/tests/freestanding_threads.rs`. It
+  switches two threads of control between two stacks in one process,
+  each inside its own `region` across the switch, on both tiers. With
+  the pair, the List lands in its own thread's region. Without it
+  (the control), the List lands in the other thread's.
 - `[abi.target.none.codegen]` Code generated for `x86_64-unknown-none`
   uses no red zone, no x87/MMX/SSE/AVX register and no stack protector,
   keeps frame pointers, and is position-independent under the small
