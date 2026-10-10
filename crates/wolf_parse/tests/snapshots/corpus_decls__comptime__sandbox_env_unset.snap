@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 344..415 name=helper comptime body=Block
+FnDecl 417..467 name=main body=Block
