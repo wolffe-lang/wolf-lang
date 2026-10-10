@@ -18,7 +18,9 @@
 //! Scope is the query-kernel tier std.x.json wraps (D31): full RFC
 //! 8259 parse (every escape, surrogate pairs, explicit [`MAX_DEPTH`]);
 //! dotted-path queries (digit segments index arrays, others key
-//! objects, `""` is the root); rendering (strings decode, numbers
+//! objects, `""` is the root); a repeated object name last-wins at
+//! its first position (ruling B22, wolf-lang#124, `[os.json.dup]` —
+//! see `Members`); rendering (strings decode, numbers
 //! keep their SOURCE spelling, containers render as their raw slice
 //! at the root and re-render nested). No DOM handle table exists at
 //! this tier: the declared surface is four stateless entries over the
@@ -62,8 +64,57 @@ enum Val {
     },
     Str(String),
     Arr(Vec<Val>),
-    /// Declaration order preserved (query semantics + determinism).
+    /// One member per name, in the order each name first appears
+    /// (query semantics + determinism); see [`Members`] for duplicates.
     Obj(Vec<(String, Val)>),
+}
+
+/// An object's members as the parser collects them. **A repeated name
+/// is last-wins** (ruling B22, wolf-lang#124): the later value
+/// replaces the earlier one IN PLACE, so the object holds one member
+/// per name, at the position where that name first appeared, with the
+/// value of its last occurrence — a `Map` assignment, what std.json,
+/// JavaScript, Python and serde (preserve_order) read. Every query
+/// follows from that one rule: `json_get`/`json_type` and a path
+/// segment answer the last value, `json_len` counts distinct names,
+/// and a nested object re-renders without the repeat. (The ROOT
+/// container's `json_get` is its raw source slice, repeats and all —
+/// it is the document's own text, not a rendering.) Small objects
+/// scan for a repeat; past [`MEMBERS_INDEXED`] members a name index
+/// answers, so a wide object stays linear to parse.
+#[derive(Default)]
+struct Members {
+    list: Vec<(String, Val)>,
+    index: Option<std::collections::HashMap<String, usize>>,
+}
+
+/// The member count past which [`Members`] keeps a name index.
+const MEMBERS_INDEXED: usize = 16;
+
+impl Members {
+    fn put(&mut self, key: String, val: Val) {
+        let hit = match &self.index {
+            Some(ix) => ix.get(&key).copied(),
+            None => self.list.iter().position(|(k, _)| *k == key),
+        };
+        if let Some(at) = hit {
+            self.list[at].1 = val;
+            return;
+        }
+        if let Some(ix) = &mut self.index {
+            ix.insert(key.clone(), self.list.len());
+        }
+        self.list.push((key, val));
+        if self.index.is_none() && self.list.len() >= MEMBERS_INDEXED {
+            self.index = Some(
+                self.list
+                    .iter()
+                    .enumerate()
+                    .map(|(i, (k, _))| (k.clone(), i))
+                    .collect(),
+            );
+        }
+    }
 }
 
 /// One value with the span of its raw text (containers render as the
@@ -123,7 +174,7 @@ impl<'a> Parser<'a> {
             b'"' => Val::Str(self.string()?),
             b'{' => {
                 self.i += 1;
-                let mut members = Vec::new();
+                let mut members = Members::default();
                 self.ws();
                 if self.b.get(self.i) == Some(&b'}') {
                     self.i += 1;
@@ -140,7 +191,7 @@ impl<'a> Parser<'a> {
                         }
                         self.i += 1;
                         let v = self.value(depth + 1)?;
-                        members.push((key, v.val));
+                        members.put(key, v.val);
                         self.ws();
                         match self.b.get(self.i) {
                             Some(&b',') => self.i += 1,
@@ -152,7 +203,7 @@ impl<'a> Parser<'a> {
                         }
                     }
                 }
-                Val::Obj(members)
+                Val::Obj(members.list)
             }
             b'[' => {
                 self.i += 1;
@@ -379,7 +430,8 @@ pub fn type_of(s: &str, path: &str) -> Result<&'static str, JsonErr> {
     })
 }
 
-/// `json_len`: element count of an array, member count of an object;
+/// `json_len`: element count of an array, member count of an object
+/// (distinct names: a repeated name is one member, ruling B22);
 /// scalars are the `Kind` error.
 pub fn len_of(s: &str, path: &str) -> Result<i64, JsonErr> {
     let (v, _, _) = walk(parse(s)?, path)?;
@@ -685,5 +737,57 @@ mod tests {
             unsafe { __wolf_rt_json_len(bp, bl, xp, xl) },
             -json_code::PARSE
         );
+    }
+
+    /// Ruling B22 (wolf-lang#124): a repeated name is last-wins, one
+    /// member per name at its first position — the seven s224 rows.
+    #[test]
+    fn duplicate_names_are_last_wins() {
+        assert_eq!(get(r#"{"a": 1, "a": 2}"#, "a").unwrap(), "2");
+        assert_eq!(len_of(r#"{"a": 1, "a": 2}"#, "").unwrap(), 1);
+        let s = r#"{"a": 1, "b": 2, "a": 3, "c": 4, "a": 5, "b": 6}"#;
+        assert_eq!(get(s, "a").unwrap(), "5");
+        assert_eq!(get(s, "b").unwrap(), "6");
+        assert_eq!(len_of(s, "").unwrap(), 3);
+        let n = r#"{"o": {"k": "first", "k": "last"}, "n": [{"z": 1, "z": 9}]}"#;
+        assert_eq!(get(n, "o.k").unwrap(), "last");
+        assert_eq!(len_of(n, "o").unwrap(), 1);
+        assert_eq!(get(n, "n.0.z").unwrap(), "9");
+        let k = r#"{"a": 1, "a": "s", "b": "t", "b": [1, 2, 3]}"#;
+        assert_eq!(type_of(k, "a").unwrap(), "str");
+        assert_eq!(type_of(k, "b").unwrap(), "array");
+        assert_eq!(len_of(k, "b").unwrap(), 3);
+        // A nested object re-renders one member per name, first position.
+        assert_eq!(
+            get(r#"{"o": {"a": 1, "b": 2, "a": 3}}"#, "o").unwrap(),
+            r#"{"a":3,"b":2}"#
+        );
+        // A path walks through the LAST container under a repeated name.
+        let p = r#"{"a": {"x": 1}, "a": {"y": 2}}"#;
+        assert_eq!(get(p, "a.y").unwrap(), "2");
+        assert_eq!(get(p, "a.x").unwrap_err(), JsonErr::Missing);
+        // The root renders as its own source text, repeats and all.
+        assert_eq!(get(r#" {"a":1,"a":2} "#, "").unwrap(), r#"{"a":1,"a":2}"#);
+    }
+
+    /// Past the index threshold the same rule holds (the name index
+    /// answers instead of the scan), at both ends of a wide object.
+    #[test]
+    fn duplicate_names_in_a_wide_object() {
+        let mut s = String::from("{");
+        for i in 0..40 {
+            s.push_str(&format!("\"k{i}\": {i}, "));
+        }
+        s.push_str("\"k0\": \"zero\", \"k39\": \"last\", \"new\": true}");
+        assert_eq!(get(&s, "k0").unwrap(), "zero");
+        assert_eq!(get(&s, "k39").unwrap(), "last");
+        assert_eq!(get(&s, "k20").unwrap(), "20");
+        assert_eq!(len_of(&s, "").unwrap(), 41);
+        let mut o = String::from("{\"o\": ");
+        o.push_str(&s);
+        o.push('}');
+        let r = get(&o, "o").unwrap();
+        assert!(r.starts_with(r#"{"k0":"zero","k1":1,"#), "{r}");
+        assert!(r.ends_with(r#""k39":"last","new":true}"#), "{r}");
     }
 }
