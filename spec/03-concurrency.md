@@ -133,8 +133,11 @@ premise by construction.
     — so a program whose correctness rests on those outcomes never
     arising is not checked by them: the checked machine is a subset of
     the hardware's behaviours, never a superset. The checked machine
-    also runs no task at all (structured concurrency there is C1,
-    deferred, and refused by name), so its atomics are single-task.
+    runs its tasks one at a time and never preempts one between
+    blocking points (`[exec.checked.sched]`), so an atomic operation
+    there is whole against every other task's, and its race detector
+    orders the atomic operations on one location by a clock of that
+    location's own (`[exec.checked.race]`).
     Witnesses: `conc/atomic_widths.lu`, `conc/atomic_orders.lu`,
     `conc/atomic_counter.lu` (exact counts on every cpu set,
     `atomic_witness.rs`).
@@ -314,10 +317,10 @@ premise by construction.
   the identical `List` — the chunks' actions touch disjoint slots and
   so commute — and a DPOR reduction may identify them all
   (`[conc.det.dpor]`). The **checked** execution (`wolf conform-run
-  --checked`) refuses `scope` and closures today, and so refuses `par`
-  by the same name, unsupported rather than wrong; the native tiers
-  run it. Cost: the recording costs the `spawn` events and nothing
-  per element.
+  --checked`) runs it with `W = 4` on every host, one schedule per
+  seed (`[exec.checked.sched]`), each worker in a region of its own
+  (`[exec.checked.task]`). Cost: the recording costs the `spawn`
+  events and nothing per element.
 - `[conc.task.par.cost]` **The cost, stated.** One allocation of `n`
   slots in the ambient region of the `par` expression — exactly `map`'s
   (`[type.comb.set]`) — and no copy of `xs`. `k` task spawns, each
@@ -633,21 +636,28 @@ schedule deadlocks"; `unsupported` was honest and insufficient.)
   deterministic test modes (record/replay, the is07 explorer) and
   permitted elsewhere. `trap(deadlock)` is the verdict spelling
   is07 reports per schedule. The checked tier (`[exec.checked]`) is
-  one of the deterministic modes, and it runs exactly one task: it
-  refuses `spawn`, `scope`, `select` and `when` by name before they
-  run. So a channel operation that would block there — a send on a
-  full or rendezvous channel, a receive or a `for` on an empty open
-  one — blocks every live task, and the tier answers `trap(deadlock)`
-  at that operation. It costs nothing to detect: with one task the
-  check is the block itself. The native tier is permitted not to
+  one of the deterministic modes: its scheduler knows every task's
+  state (`[exec.checked.sched]`), so when a task blocks and nothing
+  else is ready and no timer is pending, every blocked task is woken
+  with the verdict and the run answers `trap(deadlock)` at the
+  blocking operation of the first one scheduled, the roster on
+  stderr. With one task that is the block itself — a send on a full
+  or rendezvous channel, a receive or a `for` on an empty open one —
+  and it costs nothing to detect; with several it is one scan of the
+  ready queue and the timers. A wait the host may still end — a
+  socket, a signal — is not a blocking point of this definition and
+  is never called a deadlock. The native tier is permitted not to
   detect it and, at 0.2.14, waits. (s161, wolf-lang#342: the checked
   tier served no channel method at all before; lupin 0.1.36 answers
-  the same `trap(deadlock)` on the same four shapes. Witnesses:
+  the same `trap(deadlock)` on the same four shapes. s226: the tier
+  ran exactly one task until then and refused `spawn`, `scope`,
+  `select` and `when` by name. Witnesses:
   `corpus/conc/chan_root_task.lu` for the operations that complete,
-  and `ubcheck`'s
+  `ubcheck`'s
   `a_blocking_channel_operation_on_the_only_task_is_deadlock` for the
-  four that block, which the corpus cannot carry because the native
-  tier would wait on them.)
+  four that block, and the driver's `checked_tasks_lanes` for two
+  tasks that wait on each other — none of which the corpus can carry,
+  because the native tier would wait on them.)
 - `[conc.deadlock.self]` Acquiring a sync object the acquiring task
   already holds can never complete: the same defined outcome,
   detected immediately — `trap(deadlock)`. (The lexical case is
