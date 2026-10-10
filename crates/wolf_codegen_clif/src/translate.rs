@@ -2559,7 +2559,7 @@ impl<'a, 'b> Tx<'a, 'b> {
             let fr = self.om.declare_func_in_func(fid, self.b.func);
             self.fref_cache.insert(callee.to_string(), (fr, Conv::C));
             (fr, Conv::C)
-        } else if let Some(symbol) = abi::c_import_symbol_in(self.m, callee) {
+        } else if let Some(symbol) = abi::c_import_symbol(callee) {
             // The explicit membrane (D19): the WIR name's `c.`
             // namespace IS the seam; the linker symbol is the plain C
             // name, declared with the SysV plan. A function this
