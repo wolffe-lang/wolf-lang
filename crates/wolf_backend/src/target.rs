@@ -272,17 +272,19 @@ fn first_span(f: &Function) -> Option<(u32, u32)> {
 /// [`NONE_RT_LIB`]; one that does not imports exactly the hook list.)
 pub fn uses_none_rt(m: &Module) -> bool {
     m.funcs.values().any(|f| {
-        f.ext_funcs
-            .values()
-            .any(|e| none_rt_provides(&e.name) || AMBIENT_HOOKS.contains(&e.name.as_str()))
-            || f.layout.iter().any(|&b| {
-                f.blocks[b].insts.iter().any(|&i| {
-                    matches!(
-                        f.insts[i].op,
-                        Opcode::RegionNew | Opcode::RegionAlloc | Opcode::RegionFree
-                    )
-                })
+        f.ext_funcs.values().any(|e| {
+            none_rt_provides(&e.name)
+                // The program's own `extern "c" fn` declaration of the
+                // pair: a `c.`-namespace callee (`[abi.c.import]`).
+                || crate::abi::c_import_symbol(&e.name).is_some_and(|n| AMBIENT_HOOKS.contains(&n))
+        }) || f.layout.iter().any(|&b| {
+            f.blocks[b].insts.iter().any(|&i| {
+                matches!(
+                    f.insts[i].op,
+                    Opcode::RegionNew | Opcode::RegionAlloc | Opcode::RegionFree
+                )
             })
+        })
     })
 }
 
