@@ -128,7 +128,10 @@ fn add(a: Counts, b: Counts) -> Counts {
 
 // ------------------------------------------------------------ helpers --
 
-use wolf_rt::fs::{__wolf_rt_fs_close, __wolf_rt_fs_open, __wolf_rt_fs_read_at, __wolf_rt_fs_read_chunk, __wolf_rt_fs_seek};
+use wolf_rt::fs::{
+    __wolf_rt_fs_close, __wolf_rt_fs_open, __wolf_rt_fs_read_at, __wolf_rt_fs_read_chunk,
+    __wolf_rt_fs_seek,
+};
 use wolf_rt::list::{__wolf_rt_list_new, __wolf_rt_list_push};
 use wolf_rt::net::{
     __wolf_rt_net_accept, __wolf_rt_net_close, __wolf_rt_net_connect, __wolf_rt_net_listen,
@@ -184,7 +187,8 @@ fn a_net_read_allocates_no_buffer() {
     for i in 0..WARM + CALLS {
         assert_eq!(unsafe { __wolf_rt_net_write(cli, xp, xl) }, 0);
         let mut out = [0i64; 2];
-        let (rc, c) = armed(|| unsafe { __wolf_rt_net_read_bytes(conn, 65536, out.as_mut_ptr() as i64) });
+        let (rc, c) =
+            armed(|| unsafe { __wolf_rt_net_read_bytes(conn, 65536, out.as_mut_ptr() as i64) });
         assert_eq!(rc, 0, "read_bytes");
         assert_eq!(list_header(out[0])[1], 1, "one byte back");
         if i >= WARM {
@@ -220,15 +224,20 @@ fn a_file_read_allocates_no_buffer() {
     let mut total_at = Counts::default();
     for i in 0..WARM + CALLS {
         let mut pos = 0i64;
-        assert_eq!(unsafe { __wolf_rt_fs_seek(fd, 0, 0, &mut pos as *mut i64 as i64) }, 0);
+        assert_eq!(
+            unsafe { __wolf_rt_fs_seek(fd, 0, 0, &mut pos as *mut i64 as i64) },
+            0
+        );
         let mut out = 0i64;
-        let (rc, c) = armed(|| unsafe { __wolf_rt_fs_read_chunk(fd, 65536, &mut out as *mut i64 as i64) });
+        let (rc, c) =
+            armed(|| unsafe { __wolf_rt_fs_read_chunk(fd, 65536, &mut out as *mut i64 as i64) });
         assert_eq!(rc, 0, "read_chunk");
         assert_eq!(list_header(out)[1], 1024);
         if i >= WARM {
             total_chunk = add(total_chunk, c);
         }
-        let (rc, c) = armed(|| unsafe { __wolf_rt_fs_read_at(fd, 0, 65536, &mut out as *mut i64 as i64) });
+        let (rc, c) =
+            armed(|| unsafe { __wolf_rt_fs_read_at(fd, 0, 65536, &mut out as *mut i64 as i64) });
         assert_eq!(rc, 0, "read_at");
         assert_eq!(list_header(out)[1], 1024);
         if i >= WARM {
@@ -265,7 +274,10 @@ fn a_gathered_write_allocates_nothing() {
         let mut got = 0usize;
         while got < want {
             let mut out = 0i64;
-            assert_eq!(unsafe { __wolf_rt_net_read_bytes(cli, 65536, &mut out as *mut i64 as i64) }, 0);
+            assert_eq!(
+                unsafe { __wolf_rt_net_read_bytes(cli, 65536, &mut out as *mut i64 as i64) },
+                0
+            );
             got += list_header(out)[1] as usize;
         }
     }
@@ -280,8 +292,14 @@ fn a_gathered_write_allocates_nothing() {
 #[test]
 fn an_interpolation_allocates_nothing_once_warm() {
     let segs = [
-        "HTTP/1.1 ", "200 OK", "\r\nServer: ", "lobo", "\r\nContent-Type: ", "text/html",
-        "\r\nContent-Length: 1024\r\nLast-Modified: Thu, 08 Oct 2026 12:00:00 GMT\r\n", "\r\n",
+        "HTTP/1.1 ",
+        "200 OK",
+        "\r\nServer: ",
+        "lobo",
+        "\r\nContent-Type: ",
+        "text/html",
+        "\r\nContent-Length: 1024\r\nLast-Modified: Thu, 08 Oct 2026 12:00:00 GMT\r\n",
+        "\r\n",
     ];
     let want: String = segs.concat();
     let mut total = Counts::default();

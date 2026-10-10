@@ -491,10 +491,7 @@ thread_local! {
 /// `realloc` per doubling and a free on every one.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_strbuf_new() -> i64 {
-    let pooled = STRBUFS
-        .try_with(|p| p.borrow_mut().pop())
-        .ok()
-        .flatten();
+    let pooled = STRBUFS.try_with(|p| p.borrow_mut().pop()).ok().flatten();
     Box::into_raw(pooled.unwrap_or_default()) as i64
 }
 

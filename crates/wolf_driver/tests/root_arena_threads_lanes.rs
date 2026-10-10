@@ -145,7 +145,10 @@ fn every_machine(name: &str, src: &str, want: &str, checked_reason: &str) {
                 "{name}: checked is unsupported for a reason other than the recorded one: {}",
                 obs.unsupported
             );
-            eprintln!("REPORT: {name} checked unsupported: {}", obs.unsupported.trim());
+            eprintln!(
+                "REPORT: {name} checked unsupported: {}",
+                obs.unsupported.trim()
+            );
         } else {
             assert_eq!(
                 (obs.verdict.as_str(), obs.stdout.as_str()),
@@ -155,7 +158,11 @@ fn every_machine(name: &str, src: &str, want: &str, checked_reason: &str) {
         }
     }
     if let Some(obs) = lupin_says(&entry) {
-        assert_ne!(obs.verdict, "trap(race)", "{name}: lupin {} saw a race", obs.version);
+        assert_ne!(
+            obs.verdict, "trap(race)",
+            "{name}: lupin {} saw a race",
+            obs.version
+        );
         assert_eq!(
             (obs.verdict.as_str(), obs.stdout.as_str()),
             ("exit(0)", want),

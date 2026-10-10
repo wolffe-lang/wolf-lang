@@ -72,7 +72,10 @@ mod tests {
         with_read_buf(16, |outer| {
             outer.fill(7);
             with_read_buf(16, |inner| inner.fill(9));
-            assert!(outer.iter().all(|&x| x == 7), "the nested call did not alias");
+            assert!(
+                outer.iter().all(|&x| x == 7),
+                "the nested call did not alias"
+            );
         });
     }
 }

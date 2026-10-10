@@ -388,7 +388,9 @@ pub unsafe extern "C" fn __wolf_rt_fs_read(fd: i64, max: i64, out: i64) -> i64 {
     // and `io` under the executor — a cross-lane divergence #40 left
     // behind. A forged handle is `io` whatever `max` says.
     let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
-    let Some(i) = usize::try_from(fd).ok().filter(|&i| matches!(files.get(i), Some(Some(_))))
+    let Some(i) = usize::try_from(fd)
+        .ok()
+        .filter(|&i| matches!(files.get(i), Some(Some(_))))
     else {
         return fs_code::IO;
     };
@@ -398,7 +400,10 @@ pub unsafe extern "C" fn __wolf_rt_fs_read(fd: i64, max: i64, out: i64) -> i64 {
         return fs_code::OK;
     }
     with_read_buf(clamp(max), |buf| {
-        let r = files[i].as_mut().expect("the handle was checked above").read(buf);
+        let r = files[i]
+            .as_mut()
+            .expect("the handle was checked above")
+            .read(buf);
         // s222: the table is released before the copy out, as
         // `fs_read_chunk` always did.
         drop(files);
@@ -552,7 +557,9 @@ pub unsafe extern "C" fn __wolf_rt_fs_read_chunk(fd: i64, max: i64, out: i64) ->
     }
     // Handle first, size second — `fs_read`'s order, on both lanes.
     let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
-    let Some(i) = usize::try_from(fd).ok().filter(|&i| matches!(files.get(i), Some(Some(_))))
+    let Some(i) = usize::try_from(fd)
+        .ok()
+        .filter(|&i| matches!(files.get(i), Some(Some(_))))
     else {
         return fs_code::IO;
     };
@@ -562,7 +569,10 @@ pub unsafe extern "C" fn __wolf_rt_fs_read_chunk(fd: i64, max: i64, out: i64) ->
     }
     // s222 (#635): the thread's reusable buffer, not a zeroed one.
     with_read_buf(clamp(max), |buf| {
-        let r = files[i].as_mut().expect("the handle was checked above").read(buf);
+        let r = files[i]
+            .as_mut()
+            .expect("the handle was checked above")
+            .read(buf);
         // The fd table is released before the list is minted: allocation
         // is the ambient region's business and has no reason to sit behind
         // the fs lock.
