@@ -10,8 +10,8 @@
 //! exact on every cpu set — `atomic_witness.rs` runs this program under
 //! all cores, `taskset -c 0-3` and `taskset -c 0`; the plain-increment
 //! twin, `atomic_race_plain.lu`, is a data race and asserts nothing. The
-//! checked machine refuses tasks by name (C1 deferred), so on it this is
-//! `unsupported`, not a count.
+//! checked machine runs the eight tasks one at a time (s226) and counts
+//! the same.
 
 import c "stdlib.h"
 

@@ -11,8 +11,8 @@
 //! row's tag by name, `killed`, and `fault(bounds)` — the trap kind
 //! contained at the proc boundary (D68), spelled from
 //! `[conf.trap.set]`. `cancelled` is `conc/proc_cancel_defers.lu`'s.
-//! The checked lane refuses procs (C1 deferred); this is a native
-//! witness, byte-identical with lupin 0.1.28.
+//! The checked lane runs procs since s226 (C1 was deferred); this is a
+//! witness on every lane, byte-identical with lupin 0.1.28.
 
 fn fine() -> int { 1540 }
 
