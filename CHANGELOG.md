@@ -216,6 +216,63 @@ move and nothing it prints does.
   scoped-task strings read back on the spawner on native, release and
   lupin; the checked machine refuses both shapes by name).
 
+### Exec and env unset: a program can become another, and remove a variable (s225, #534)
+
+**Read this before you bump the pin.** Two new prelude names, both
+`w0304: true` in `spec/prelude.json`: `os_exec` and `env_unset`. A
+module that declares one draws W0304 (fatal under `--deny-warnings`);
+no downstream does (boreutils, lobo, pelt, wolf-std, pax at their
+trunks). No existing builtin's row changed. **One checked-machine
+behaviour moved:** a child the checked machine spawns is now handed the
+environment with the machine's overlay applied, so a variable the
+program `env_set` reaches its children there as it always did on
+native and release (before, a checked child saw only the host's
+environment). **No compiler output changed:** boreutils `5da892e`,
+lobo `ebace85`, pelt `3e7516c`, wolf-std `87ba162` (433 test files) and
+pax `ef4c3ca` (29 kernels, freestanding objects), 1968 builds on native
+and release, are byte-identical (debug info and build-id stripped)
+with identical diagnostics and exit codes when trunk and this change
+link one runtime archive; 1826 build and 142 refuse identically. Linked
+with each side's own archive every linked binary differs, because a new
+module in `wolf_rt` moves rustc's code-generation units (the freestanding
+objects, which link no runtime, do not); that is layout, not behaviour.
+
+- **`os_exec(exe, argv, env, map)` (`[os.proc.exec]`, new).** Replace
+  the running program: the pid stays, the image goes. `argv` is the
+  whole vector (argv[0] included), `env` the new program's whole
+  environment as `NAME=VALUE` entries (`env_vars()` passed through
+  keeps the current one), `map` `os_spawn_fds`'s pairs with an unmapped
+  0, 1 and 2 left as this process's own; everything else the runtime
+  opened is close-on-exec. A bare name is searched along the `PATH` of
+  the handed `env`, or `/usr/bin:/bin`. Returns only with a row, in
+  order: `invalid` (shape), `unsupported` (windows), `io` (a source),
+  `not_found`/`denied`/`io` (the program); a failed exec puts back
+  every descriptor the map moved. Result type unit, as `os_exit`'s.
+  The checked machine replaces the `wolf` process itself, its print
+  buffers written out, its working directory entered and `SIGPIPE`
+  defaulted first; under `conform-run` no record follows a successful
+  exec. Capability `exec`.
+- **`env_unset(name)` (`[os.env.unset]`, new).** Remove a variable;
+  absent is not an error; `env_set`'s names are `invalid`. Native and
+  release write the real environment; the checked machine keeps a
+  tombstone in its overlay. Capability `env`.
+- **Every spelling is a ruling owed**, implemented as recommended:
+  `env_unset` beside `env_set` (no `os_env_set`: `env_set` exists),
+  `os_exec`'s execve shape, the handed environment's `PATH`, and the
+  record-less checked exec.
+- **lupin** (wolf-interp s225) mirrors both; its exec is std's
+  `CommandExt::exec` for descriptors 0..2 and refuses a map above 2 or
+  a close by name. `exec_lanes` pins 0.1.49 (`f516a5f`) and its trunk
+  (`51cb491`) as pre-mirror by version and commit.
+- **Witnesses:** `corpus/os/exec_rows.lu`, `corpus/os/env_unset.lu`,
+  two comptime rows, and `crates/wolf_driver/tests/exec_lanes.rs`: the
+  new image's pid is the pid the harness started, argv[0] read from the
+  kernel, SIGPIPE not ignored in the image, a file mapped AS descriptor
+  5, an opened unmapped file closed, a failed exec putting descriptor 0
+  back, and a child that no longer sees a removed variable — checked,
+  native, release (and under `taskset -c 0-3`) and lupin. #534's
+  signal-number half is s219's `os_wait_status`.
+
 ## 0.2.26 — 2026-10-09
 
 THE TWENTY-SIXTH. Five compiler lanes, each with its lupin half, land
