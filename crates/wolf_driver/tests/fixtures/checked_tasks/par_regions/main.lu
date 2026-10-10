@@ -1,0 +1,34 @@
+//! s226 witness — `par`'s results move back (ruling #30). Each worker
+//! builds strings and lists in its own region; after the join every
+//! result is where the `par` expression lives, in input order, and
+//! readable long after the workers are gone. 1000 elements cross every
+//! chunk boundary; an empty list and a one-element list take the
+//! no-spawn path.
+
+struct Row { n: int, label: str, squares: List[int] }
+
+fn build(n: int) -> Row {
+    var sq = List[int]()
+    for i in 0..3 { (mut sq).push((n + i) * (n + i)) }
+    Row { n: n, label: "row-{n}", squares: sq }
+}
+
+fn main() -> !int {
+    var xs = List[int]()
+    for i in 0..1000 { (mut xs).push(i) }
+    let rows = xs.par(build)
+    var bad = 0
+    var total = 0
+    for i in 0..1000 {
+        if rows[i].n != i { bad += 1 }
+        if rows[i].label != "row-{i}" { bad += 1 }
+        if rows[i].squares[2] != (i + 2) * (i + 2) { bad += 1 }
+        total += rows[i].squares[0]
+    }
+    var one = List[int]()
+    (mut one).push(41)
+    let single = one.par(fn(x) x + 1)
+    let none = List[int]().par(fn(x: int) x)
+    print("{rows.len} {bad} {total} {rows[999].label} {single[0]} {none.len}")
+    if bad == 0 { 0 } else { 1 }
+}

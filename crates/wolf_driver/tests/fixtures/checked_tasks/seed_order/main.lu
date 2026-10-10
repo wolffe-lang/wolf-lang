@@ -1,0 +1,15 @@
+//! s226 witness — the seed selects the schedule. Three tasks print one
+//! letter each and nothing orders them, so the line is a permutation of
+//! `abc` chosen by the scheduler: the same seed gives the same line
+//! every time (`[sched.stable]`), and without a seed the tasks run in
+//! spawn order.
+
+fn main() -> !int {
+    scope s {
+        s.spawn(fn() { print_raw("a") })
+        s.spawn(fn() { print_raw("b") })
+        s.spawn(fn() { print_raw("c") })
+    }
+    print("")
+    0
+}
