@@ -324,16 +324,17 @@ fn a_fallible_fns_tail_chain_discards() {
 }
 
 /// The closure form: a closure checked against `fn(bool) -> () ! {bad}`
-/// ending in an else-less `if`. The checked machine does not execute
-/// closures (`unsupported`, at trunk and head). Red at trunk 8e36bc1a:
-/// native and release answer `run true`, unwarned.
+/// ending in an else-less `if`. The checked machine executes closures
+/// since s226 (`unsupported` before) and discards as the compiled tiers
+/// do. Red at trunk 8e36bc1a: native and release answer `run true`,
+/// unwarned.
 #[test]
 fn a_closures_else_less_tail_if_discards() {
     let entry = corpus("rows/unit_discard_tail_if_closure.lu");
     let checked = lane(&entry, "--checked").expect("the checked lane always runs");
     assert_eq!(
-        checked.verdict,
-        "unsupported",
+        (checked.verdict.as_str(), checked.stdout.as_str()),
+        ("exit(0)", "run false\n"),
         "the --checked answer on {} ({ISSUE}): {checked:?}",
         entry.display()
     );
