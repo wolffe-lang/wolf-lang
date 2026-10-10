@@ -11711,7 +11711,8 @@ fn exec_replace(
             undo(&saved, &staged);
             return Err("io");
         }
-        let old_pipe = libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+        // PLANT (s225, reverted next): SIGPIPE is left as the wolf binary has it.
+        let old_pipe = libc::signal(libc::SIGPIPE, libc::SIG_IGN);
         libc::execve(path.as_ptr(), arg_ptrs.as_ptr(), env_ptrs.as_ptr());
         let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
         libc::signal(libc::SIGPIPE, old_pipe);
