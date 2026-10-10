@@ -1253,7 +1253,11 @@ struct Machine<'t> {
     /// unsound under threads. Reads consult the overlay first, then
     /// the real environment. Documented lane asymmetry: native
     /// `env_set` writes the compiled program's own environment.
-    env_overlay: HashMap<String, String>,
+    /// s225 (`[os.env.unset]`): `None` is a variable `env_unset`
+    /// removed — a tombstone over the real environment — and a spawned
+    /// child is handed the real environment with the overlay applied,
+    /// sets and removals both, as a native child is handed its parent's.
+    env_overlay: HashMap<String, Option<String>>,
     /// s215 (`[os.fs.chdir]`): the machine-local working directory,
     /// `env_overlay`'s twin and for its reason — the checked machine
     /// runs inside threaded test hosts, where a real `chdir` would move
@@ -7224,10 +7228,15 @@ impl<'t> Machine<'t> {
                 let Some(key) = str_arg(0) else {
                     return self.refuse("this os call shape", span);
                 };
-                if let Some(v) = self.env_overlay.get(&key) {
-                    let v = v.clone();
-                    self.charge_mem(v.len() as u64)?;
-                    return Ok(Flow::Val(Value::Str(v)));
+                match self.env_overlay.get(&key) {
+                    Some(Some(v)) => {
+                        let v = v.clone();
+                        self.charge_mem(v.len() as u64)?;
+                        return Ok(Flow::Val(Value::Str(v)));
+                    }
+                    // s225: removed by `env_unset`.
+                    Some(None) => return Ok(tag("missing")),
+                    None => {}
                 }
                 match std::env::var(&key) {
                     Ok(v) => {
@@ -7246,7 +7255,22 @@ impl<'t> Machine<'t> {
                     return Ok(tag("invalid"));
                 }
                 self.charge_mem((key.len() + val.len()) as u64)?;
-                self.env_overlay.insert(key, val);
+                self.env_overlay.insert(key, Some(val));
+                Ok(Flow::Val(Value::Unit))
+            }
+            // s225 (`[os.env.unset]`): a tombstone in the overlay — the
+            // host environment is the threaded host's and is not
+            // written (the field's reason). Absent is not an error;
+            // `env_set`'s names are `invalid`.
+            "env_unset" => {
+                let Some(key) = str_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                if key.is_empty() || key.contains('=') || key.contains('\0') {
+                    return Ok(tag("invalid"));
+                }
+                self.charge_mem(key.len() as u64)?;
+                self.env_overlay.insert(key, None);
                 Ok(Flow::Val(Value::Unit))
             }
             "env_vars" => {
@@ -7258,7 +7282,10 @@ impl<'t> Machine<'t> {
                     .filter_map(|(k, v)| Some((k.into_string().ok()?, v.into_string().ok()?)))
                     .collect();
                 for (k, v) in &self.env_overlay {
-                    map.insert(k.clone(), v.clone());
+                    match v {
+                        Some(v) => map.insert(k.clone(), v.clone()),
+                        None => map.remove(k),
+                    };
                 }
                 let items: Vec<Value> = map
                     .into_iter()
@@ -7349,8 +7376,8 @@ impl<'t> Machine<'t> {
                 let Some((prog, rest)) = words.split_first() else {
                     return Ok(tag("not_found"));
                 };
-                let spawned = std::process::Command::new(prog)
-                    .args(rest)
+                let mut cmd = std::process::Command::new(prog);
+                cmd.args(rest)
                     .stdin(std::process::Stdio::null())
                     // Write-through (#129): the child shares the
                     // HOST process's stdout/stderr — this machine's
@@ -7365,8 +7392,10 @@ impl<'t> Machine<'t> {
                         self.cwd
                             .clone()
                             .unwrap_or_else(|| std::path::PathBuf::from(".")),
-                    )
-                    .spawn();
+                    );
+                // s225: and with the program's environment.
+                overlay_child_env(&mut cmd, &self.env_overlay);
+                let spawned = cmd.spawn();
                 match spawned {
                     Err(e) => Ok(tag(match e.kind() {
                         std::io::ErrorKind::NotFound => "not_found",
@@ -7411,8 +7440,8 @@ impl<'t> Machine<'t> {
                         _ => return self.refuse("a non-str argv element", span),
                     }
                 }
-                let spawned = std::process::Command::new(&exe)
-                    .args(&words)
+                let mut cmd = std::process::Command::new(&exe);
+                cmd.args(&words)
                     .stdin(std::process::Stdio::null())
                     .stdout(std::process::Stdio::inherit())
                     .stderr(std::process::Stdio::inherit())
@@ -7422,8 +7451,10 @@ impl<'t> Machine<'t> {
                         self.cwd
                             .clone()
                             .unwrap_or_else(|| std::path::PathBuf::from(".")),
-                    )
-                    .spawn();
+                    );
+                // s225: and with the program's environment.
+                overlay_child_env(&mut cmd, &self.env_overlay);
+                let spawned = cmd.spawn();
                 match spawned {
                     Err(e) => Ok(tag(match e.kind() {
                         std::io::ErrorKind::NotFound => "not_found",
@@ -7488,7 +7519,7 @@ impl<'t> Machine<'t> {
                         _ => return self.refuse("a non-str argv element", span),
                     }
                 }
-                match spawn_mapped(&exe, &words, &placed, self.cwd.as_deref(), None) {
+                match spawn_mapped(&exe, &words, &placed, self.cwd.as_deref(), None, &self.env_overlay) {
                     Err(e) => Ok(tag(match e.kind() {
                         std::io::ErrorKind::NotFound => "not_found",
                         std::io::ErrorKind::PermissionDenied => "denied",
@@ -7641,7 +7672,7 @@ impl<'t> Machine<'t> {
                     tty: tty_file,
                     defaults,
                 });
-                match spawn_mapped(&exe, &words, &placed, self.cwd.as_deref(), job.as_ref()) {
+                match spawn_mapped(&exe, &words, &placed, self.cwd.as_deref(), job.as_ref(), &self.env_overlay) {
                     Err(e) => Ok(tag(match e.kind() {
                         std::io::ErrorKind::NotFound => "not_found",
                         std::io::ErrorKind::PermissionDenied => "denied",
@@ -9428,6 +9459,8 @@ impl<'t> Machine<'t> {
             | "os_signal_ignore" | "os_signal_default" | "os_signal_poll" | "os_spawn_job"
             | "os_proc_pid" | "os_wait_status" | "os_pgid" | "os_term_foreground"
             | "os_term_set_foreground" | "os_term_mode" | "os_term_set_mode"
+            // s225 (#534): the removal.
+            | "env_unset"
             | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
             | "str_from_utf8"
@@ -11386,6 +11419,22 @@ fn dir_searchable(_dir: &std::path::Path) -> bool {
     true
 }
 
+/// s225 (`[os.env.unset]`): a child is handed the program's environment
+/// — the host's, with the machine's overlay applied: a set variable set,
+/// a removed one removed — as a native child is handed its parent's.
+fn overlay_child_env(cmd: &mut std::process::Command, overlay: &HashMap<String, Option<String>>) {
+    for (k, v) in overlay {
+        match v {
+            Some(v) => {
+                cmd.env(k, v);
+            }
+            None => {
+                cmd.env_remove(k);
+            }
+        }
+    }
+}
+
 /// s215 (`[os.proc.fds]`): spawn `exe` with `args` in `cwd` (the
 /// process's own when `None`) and the child's descriptors placed as
 /// `map` says — `wolf_rt::os::ChildTable::spawn_fds`'s mechanics,
@@ -11401,6 +11450,7 @@ fn spawn_mapped(
     map: &[(i64, Option<std::fs::File>)],
     cwd: Option<&std::path::Path>,
     job: Option<&CheckedJob>,
+    env: &HashMap<String, Option<String>>,
 ) -> std::io::Result<std::process::Child> {
     use std::os::fd::AsRawFd as _;
     use std::os::unix::process::CommandExt as _;
@@ -11409,6 +11459,7 @@ fn spawn_mapped(
         .stdin(std::process::Stdio::inherit())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit());
+    overlay_child_env(&mut cmd, env);
     if let Some(d) = cwd {
         cmd.current_dir(d);
     }
@@ -11517,12 +11568,14 @@ fn spawn_mapped(
     _map: &[(i64, Option<std::fs::File>)],
     cwd: Option<&std::path::Path>,
     _job: Option<&CheckedJob>,
+    env: &HashMap<String, Option<String>>,
 ) -> std::io::Result<std::process::Child> {
     let mut cmd = std::process::Command::new(exe);
     cmd.args(args)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit());
+    overlay_child_env(&mut cmd, env);
     if let Some(d) = cwd {
         cmd.current_dir(d);
     }
