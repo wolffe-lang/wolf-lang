@@ -51,6 +51,7 @@ pub mod reactor;
 // reactor's poller is not written).
 #[cfg(any(unix, windows))]
 pub(crate) mod poll;
+pub(crate) mod scratch;
 // Signal RECEPTION (s114, #126): the meaning-based receive surface
 // over the self-pipe/sigaction trampoline (linux at s114, macOS since
 // s59 — `pipe` + FD_CLOEXEC where pipe2 does not exist, spec

@@ -1238,23 +1238,24 @@ impl NetTable {
         if max <= 0 {
             return Ok(Vec::new());
         }
-        try_then_park(spec, Interest::Read, || self.read_ready(fd, max))
+        let mut buf = vec![0u8; crate::scratch::clamp(max)];
+        let n = try_then_park(spec, Interest::Read, || self.read_ready(fd, &mut buf))?;
+        buf.truncate(n);
+        Ok(buf)
     }
 
-    /// [`NetTable::read`]'s syscall half. `max` is already known
-    /// positive. `Ok(None)` is `WouldBlock`: nothing there yet, the
-    /// caller parks.
-    fn read_ready(&mut self, fd: i64, max: i64) -> Result<Option<Vec<u8>>, NetErr> {
+    /// [`NetTable::read`]'s syscall half, into the caller's buffer
+    /// (s222: the shims lend the thread's reusable one —
+    /// `crate::scratch` — so no read allocates or zeroes a buffer of
+    /// its own). `buf` is non-empty. `Ok(None)` is `WouldBlock`:
+    /// nothing there yet, the caller parks.
+    fn read_ready(&mut self, fd: i64, buf: &mut [u8]) -> Result<Option<usize>, NetErr> {
         let Some(s) = self.get(fd).filter(|s| s.is_stream()) else {
             return Err("io");
         };
-        let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
-        match s.read(&mut buf) {
+        match s.read(buf) {
             Ok(0) => Err("closed"),
-            Ok(n) => {
-                buf.truncate(n);
-                Ok(Some(buf))
-            }
+            Ok(n) => Ok(Some(n)),
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
             Err(e) => Err(err_tag(e.kind())),
         }
@@ -1713,19 +1714,23 @@ pub unsafe extern "C" fn __wolf_rt_net_connect(ap: i64, al: i64) -> i64 {
 
 /// The read shims' shared head: the park spec is also the `io` check
 /// for a wrong-kind or forged fd, which wins whatever `max` says (the
-/// #40 ordering); `max <= 0` owes no syscall and no wait. `Err` is a
-/// code to return as is; `Ok(None)` is the empty answer.
-fn read_shim(fd: i64, max: i64) -> Result<Option<Vec<u8>>, i64> {
+/// #40 ordering); `max <= 0` owes no syscall and no wait and hands
+/// `emit` the empty slice. `Err` is a code to return as is; otherwise
+/// `emit` sees the bytes read, in the thread's reusable buffer (s222,
+/// #635: never a fresh zeroed one), and copies out what it keeps.
+fn read_shim<R>(fd: i64, max: i64, emit: impl FnOnce(&[u8]) -> R) -> Result<R, i64> {
     let spec = match tbl().park_spec(fd, true) {
         Ok(spec) => spec,
         Err(t) => return Err(code_of_tag(t)),
     };
     if max <= 0 {
-        return Ok(None);
+        return Ok(emit(&[]));
     }
-    try_then_park(spec, Interest::Read, || tbl().read_ready(fd, max))
-        .map(Some)
-        .map_err(code_of_tag)
+    crate::scratch::with_read_buf(crate::scratch::clamp(max), |buf| {
+        let n = try_then_park(spec, Interest::Read, || tbl().read_ready(fd, &mut *buf))
+            .map_err(code_of_tag)?;
+        Ok(emit(&buf[..n]))
+    })
 }
 
 /// The write shims' shared body: snapshot, then drain from the top
@@ -1752,19 +1757,15 @@ fn write_shim(fd: i64, bytes: &[u8]) -> i64 {
 /// `out` must address 16 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_read(fd: i64, max: i64, out: i64) -> i64 {
-    let bytes = match read_shim(fd, max) {
-        Err(code) => return code,
-        Ok(None) => Vec::new(),
-        Ok(Some(bytes)) => bytes,
-    };
-    match String::from_utf8(bytes) {
+    let emit = |bytes: &[u8]| match core::str::from_utf8(bytes) {
         Ok(s) => {
             let p = ambient_copy(s.as_bytes());
             unsafe { write_pair(out, p as i64, s.len() as i64) };
             net_code::OK
         }
         Err(_) => net_code::UTF8,
-    }
+    };
+    read_shim(fd, max, emit).unwrap_or_else(|code| code)
 }
 
 /// `net_write(fd, s) -> () ! {closed, io}` — the whole buffer, the
@@ -1791,13 +1792,11 @@ pub unsafe extern "C" fn __wolf_rt_net_write(fd: i64, sp: i64, sl: i64) -> i64 {
 /// `out` must address 8 writable bytes (the list header word).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_read_bytes(fd: i64, max: i64, out: i64) -> i64 {
-    let bytes = match read_shim(fd, max) {
-        Err(code) => return code,
-        Ok(None) => Vec::new(),
-        Ok(Some(bytes)) => bytes,
+    let emit = |bytes: &[u8]| {
+        unsafe { write_bytes_list(out, bytes) };
+        net_code::OK
     };
-    unsafe { write_bytes_list(out, &bytes) };
-    net_code::OK
+    read_shim(fd, max, emit).unwrap_or_else(|code| code)
 }
 
 /// `net_write_bytes(fd, bytes) -> () ! {closed, invalid, io}` — the

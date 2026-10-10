@@ -50,6 +50,7 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::list::{new_list, push_int, push_str};
+use crate::scratch::{clamp, with_read_buf};
 use crate::str::{ambient_copy, view, write_pair, write_word};
 
 /// Error codes of the fs family (lowering maps them to row tags).
@@ -257,7 +258,13 @@ pub(crate) unsafe fn write_int_list(out: i64, bytes: &[u8]) {
 }
 
 unsafe fn write_text(out: i64, bytes: Vec<u8>) -> i64 {
-    match String::from_utf8(bytes) {
+    unsafe { write_text_from(out, &bytes) }
+}
+
+/// [`write_text`] from a borrowed slice (s222: the read family's bytes
+/// sit in the thread's reusable buffer, not in a `Vec` of their own).
+unsafe fn write_text_from(out: i64, bytes: &[u8]) -> i64 {
+    match core::str::from_utf8(bytes) {
         Ok(s) => {
             let p = ambient_copy(s.as_bytes());
             unsafe { write_pair(out, p as i64, s.len() as i64) };
@@ -367,16 +374,13 @@ pub unsafe extern "C" fn __wolf_rt_fs_read(fd: i64, max: i64, out: i64) -> i64 {
             unsafe { write_pair(out, p as i64, 0) };
             return fs_code::OK;
         }
-        let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
-        return match std_read(fd, &mut buf) {
+        // s222 (#635): the thread's reusable buffer, not a zeroed one.
+        return with_read_buf(clamp(max), |buf| match std_read(fd, buf) {
             None => fs_code::IO,
             Some(Err(e)) => code_of(&e),
             Some(Ok(0)) => fs_code::EOF,
-            Some(Ok(n)) => {
-                buf.truncate(n);
-                unsafe { write_text(out, buf) }
-            }
-        };
+            Some(Ok(n)) => unsafe { write_text_from(out, &buf[..n]) },
+        });
     }
     // s90: the HANDLE is checked before the size. It used to be the
     // other way round here and the other way round again in the
@@ -384,7 +388,8 @@ pub unsafe extern "C" fn __wolf_rt_fs_read(fd: i64, max: i64, out: i64) -> i64 {
     // and `io` under the executor — a cross-lane divergence #40 left
     // behind. A forged handle is `io` whatever `max` says.
     let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
-    let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| files.get_mut(i)) else {
+    let Some(i) = usize::try_from(fd).ok().filter(|&i| matches!(files.get(i), Some(Some(_))))
+    else {
         return fs_code::IO;
     };
     if max <= 0 {
@@ -392,15 +397,17 @@ pub unsafe extern "C" fn __wolf_rt_fs_read(fd: i64, max: i64, out: i64) -> i64 {
         unsafe { write_pair(out, p as i64, 0) };
         return fs_code::OK;
     }
-    let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
-    match f.read(&mut buf) {
-        Err(e) => code_of(&e),
-        Ok(0) => fs_code::EOF,
-        Ok(n) => {
-            buf.truncate(n);
-            unsafe { write_text(out, buf) }
+    with_read_buf(clamp(max), |buf| {
+        let r = files[i].as_mut().expect("the handle was checked above").read(buf);
+        // s222: the table is released before the copy out, as
+        // `fs_read_chunk` always did.
+        drop(files);
+        match r {
+            Err(e) => code_of(&e),
+            Ok(0) => fs_code::EOF,
+            Ok(n) => unsafe { write_text_from(out, &buf[..n]) },
         }
-    }
+    })
 }
 
 /// `fs_write(fd, s) -> () ! {io}`.
@@ -533,8 +540,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_read_chunk(fd: i64, max: i64, out: i64) ->
             unsafe { write_bytes_list(out, b"") };
             return fs_code::OK;
         }
-        let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
-        return match std_read(fd, &mut buf) {
+        return with_read_buf(clamp(max), |buf| match std_read(fd, buf) {
             None => fs_code::IO,
             Some(Err(e)) => code_of(&e),
             Some(Ok(0)) => fs_code::EOF,
@@ -542,32 +548,34 @@ pub unsafe extern "C" fn __wolf_rt_fs_read_chunk(fd: i64, max: i64, out: i64) ->
                 unsafe { write_bytes_list(out, &buf[..n]) };
                 fs_code::OK
             }
-        };
+        });
     }
     // Handle first, size second — `fs_read`'s order, on both lanes.
     let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
-    let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| files.get_mut(i)) else {
+    let Some(i) = usize::try_from(fd).ok().filter(|&i| matches!(files.get(i), Some(Some(_))))
+    else {
         return fs_code::IO;
     };
     if max <= 0 {
         unsafe { write_bytes_list(out, b"") };
         return fs_code::OK;
     }
-    let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
-    let r = f.read(&mut buf);
-    // The fd table is released before the list is minted: allocation
-    // is the ambient region's business and has no reason to sit behind
-    // the fs lock.
-    drop(files);
-    match r {
-        Err(e) => code_of(&e),
-        Ok(0) => fs_code::EOF,
-        Ok(n) => {
-            buf.truncate(n);
-            unsafe { write_bytes_list(out, &buf) };
-            fs_code::OK
+    // s222 (#635): the thread's reusable buffer, not a zeroed one.
+    with_read_buf(clamp(max), |buf| {
+        let r = files[i].as_mut().expect("the handle was checked above").read(buf);
+        // The fd table is released before the list is minted: allocation
+        // is the ambient region's business and has no reason to sit behind
+        // the fs lock.
+        drop(files);
+        match r {
+            Err(e) => code_of(&e),
+            Ok(0) => fs_code::EOF,
+            Ok(n) => {
+                unsafe { write_bytes_list(out, &buf[..n]) };
+                fs_code::OK
+            }
         }
-    }
+    })
 }
 
 /// `fs_write_chunk(fd, bytes) -> () ! {invalid, io}` — `bytes` a
@@ -1146,39 +1154,37 @@ fn read_at(f: &File, buf: &mut [u8], off: u64) -> std::io::Result<usize> {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_fs_read_at(fd: i64, off: i64, max: i64, out: i64) -> i64 {
     os_error_clear();
-    let r = with_handle(fd, |f| {
-        let Ok(off) = u64::try_from(off) else {
-            return Err(fs_code::INVALID);
-        };
-        if max <= 0 {
-            return Ok(Vec::new());
-        }
-        #[cfg(windows)]
-        {
-            if windows_unseekable(f) {
-                return Err(fs_code::UNSEEKABLE);
+    // s222 (#635): the thread's reusable buffer, not a zeroed one; the
+    // bytes are copied out after the fd table is released.
+    with_read_buf(clamp(max), |buf| {
+        let r = with_handle(fd, |f| {
+            let Ok(off) = u64::try_from(off) else {
+                return Err(fs_code::INVALID);
+            };
+            if max <= 0 {
+                return Ok(0);
+            }
+            #[cfg(windows)]
+            {
+                if windows_unseekable(f) {
+                    return Err(fs_code::UNSEEKABLE);
+                }
+            }
+            match read_at(f, buf, off) {
+                Err(e) => Err(seek_code(&e)),
+                Ok(0) => Err(fs_code::EOF),
+                Ok(n) => Ok(n),
+            }
+        });
+        match r {
+            None => fs_code::IO,
+            Some(Err(code)) => code,
+            Some(Ok(n)) => {
+                unsafe { write_bytes_list(out, &buf[..n]) };
+                fs_code::OK
             }
         }
-        let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
-        match read_at(f, &mut buf, off) {
-            Err(e) => Err(seek_code(&e)),
-            Ok(0) => Err(fs_code::EOF),
-            Ok(n) => {
-                buf.truncate(n);
-                Ok(buf)
-            }
-        }
-    });
-    // The fd table is released before the list is minted
-    // (`fs_read_chunk`'s order).
-    match r {
-        None => fs_code::IO,
-        Some(Err(code)) => code,
-        Some(Ok(bytes)) => {
-            unsafe { write_bytes_list(out, &bytes) };
-            fs_code::OK
-        }
-    }
+    })
 }
 
 // ------------------------ s200: the kernel-side copy (wolf-lang#417) --
