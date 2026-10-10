@@ -46,6 +46,13 @@ const TEXTS: &[&str] = &[
     r#"{"users":[{"name":"lupin","tags":[1,2,3]},{"name":"ainu"}],"n":42}"#,
     r#" {"a": [1, {"b": "c d"}]} "#,
     r#"{"pack": [{"name": "lupin"}, {"name": "ainu"}], "n": 42, "a": [1, 2, 3], "b": null}"#,
+    // Repeated names (ruling B22, wolf-lang#124): last-wins, first
+    // position, one member per name — nested, thrice, across kinds,
+    // and a path through the later container.
+    r#"{"a": 1, "a": 2}"#,
+    r#"{"a": 1, "b": 2, "a": 3, "n": {"x": 1, "y": 2, "x": [3]}, "a": 5, "b": 6}"#,
+    r#"{"a": {"x": 1}, "a": {"y": 2}, "users": [{"name": "a", "name": "b"}]}"#,
+    r#" {"a": [1, {"b": "c d", "b": "e"}], "a": [9, {"b": "f"}, 3]} "#,
 ];
 
 const PATHS: &[&str] = &[
@@ -64,6 +71,10 @@ const PATHS: &[&str] = &[
     "pack.0.name",
     "a.0",
     "a.b",
+    "a.y",
+    "a.x",
+    "a.1",
+    "a.1.b",
     ".",
     "0",
 ];
