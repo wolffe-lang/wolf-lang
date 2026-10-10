@@ -1,0 +1,14 @@
+# The standard library this wolf ships (ruling #29, wolf-lang#415):
+# `cargo xtask dist` stages wolf-std's `std/` tree at the commit below
+# into the release archive as `std/`, beside the `wolf` binary, with
+# the commit written to `std/STD-REV` (the 40-hex line boreutils'
+# fetch-toolchain already writes for its own staged tree). The driver's
+# default std root is that directory; `--std-root`, `WOLF_STD` and a
+# `wolf.pkg` `std` dependency still override it.
+#
+# Pinned as PAIRING pins lupin: a deliberate bump in its own commit,
+# with the gauntlet green at the new pin (dist-smoke runs a `use std.…`
+# program from the unpacked archive). The commit must be on
+# wolffe-lang/wolf-std; dist fetches exactly this sha and refuses any
+# other.
+wolf-std-commit = 87ba16208da8ea642dd463fa89ff3a1ec80ceba1

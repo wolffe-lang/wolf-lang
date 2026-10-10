@@ -4919,6 +4919,272 @@ fn prune_dist(dir: &Path, host: &str) {
     }
 }
 
+// ------------------------------------------------------------- dist std --
+
+/// Where `cargo xtask dist` reads the standard library's pin (ruling #29,
+/// wolf-lang#415).
+const STD_PIN_FILE: &str = "crates/wolf_driver/STD-PIN";
+
+/// The repository the pinned commit is fetched from.
+const STD_REPO_URL: &str = "https://github.com/wolffe-lang/wolf-std.git";
+
+/// The file inside the archive's `std/` that records the commit it was
+/// staged from: one 40-hex line, the shape boreutils' fetch-toolchain
+/// writes for the std tree it stages (`git rev-parse FETCH_HEAD`).
+const STD_REV_FILE: &str = "STD-REV";
+
+/// The wolf-std commit a STD-PIN text names, as a pure parse: the one
+/// `wolf-std-commit = <40 lowercase hex>` line, `#` lines ignored. A
+/// short or uppercase sha, a second key line, or none at all is an
+/// error — a pin that could name two commits is not a pin.
+fn parse_std_pin(text: &str) -> Result<String, String> {
+    let mut found = None;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some(v) = line.strip_prefix("wolf-std-commit") else {
+            return Err(format!("unexpected line in {STD_PIN_FILE}: {line}"));
+        };
+        let Some(v) = v.trim_start().strip_prefix('=') else {
+            return Err(format!("unexpected line in {STD_PIN_FILE}: {line}"));
+        };
+        let v = v.trim();
+        if v.len() != 40
+            || !v
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
+            return Err(format!(
+                "{STD_PIN_FILE}: `{v}` is not a full 40-hex lowercase commit"
+            ));
+        }
+        if found.replace(v.to_string()).is_some() {
+            return Err(format!("{STD_PIN_FILE} names wolf-std-commit twice"));
+        }
+    }
+    found.ok_or_else(|| format!("{STD_PIN_FILE} names no wolf-std-commit"))
+}
+
+/// `git -C <dir> rev-parse HEAD`, or `None` when it is not a checkout.
+fn git_head_of(dir: &Path) -> Option<String> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())?;
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// A wolf-std checkout at exactly `pin`. `WOLF_DIST_STD_SRC` names one a
+/// packager fetched itself (a Homebrew resource, an AUR source), and is
+/// refused unless its HEAD is the pin. Otherwise the pin is fetched by
+/// sha, shallow, into `target/dist-std/<pin>/` and reused while its HEAD
+/// is still the pin; any other directory there is a previous pin's and is
+/// pruned by name.
+fn std_checkout(pin: &str) -> Result<PathBuf, String> {
+    if let Some(src) = std::env::var_os("WOLF_DIST_STD_SRC").filter(|v| !v.is_empty()) {
+        let src = PathBuf::from(src);
+        return match git_head_of(&src) {
+            Some(head) if head == pin => Ok(src),
+            Some(head) => Err(format!(
+                "WOLF_DIST_STD_SRC={} is at {head}, not the pinned {pin} ({STD_PIN_FILE})",
+                src.display()
+            )),
+            None => Err(format!(
+                "WOLF_DIST_STD_SRC={} is not a git checkout, so its commit cannot be \
+                 checked against the pin {pin}",
+                src.display()
+            )),
+        };
+    }
+    let cache_root = Path::new("target/dist-std");
+    if let Ok(entries) = std::fs::read_dir(cache_root) {
+        for e in entries.flatten() {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name != pin {
+                match std::fs::remove_dir_all(e.path()) {
+                    Ok(()) => eprintln!("dist: pruned prior std checkout {name}"),
+                    Err(err) => eprintln!("dist: could not prune std checkout {name}: {err}"),
+                }
+            }
+        }
+    }
+    let dir = cache_root.join(pin);
+    if git_head_of(&dir).as_deref() == Some(pin) && dir.join("std").is_dir() {
+        eprintln!("dist: wolf-std {pin} (cached at {})", dir.display());
+        return Ok(dir);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("mkdir {}: {e}", dir.display()))?;
+    let d = dir.to_string_lossy().into_owned();
+    let steps: [&[&str]; 3] = [
+        &["-C", &d, "init", "-q"],
+        &["-C", &d, "fetch", "-q", "--depth", "1", STD_REPO_URL, pin],
+        &[
+            "-C",
+            &d,
+            "-c",
+            "advice.detachedHead=false",
+            "checkout",
+            "-q",
+            "FETCH_HEAD",
+        ],
+    ];
+    for args in steps {
+        if !run_ok("git", args) {
+            return Err(format!(
+                "cannot fetch wolf-std {pin} from {STD_REPO_URL} (`git {}` failed); \
+                 WOLF_DIST_STD_SRC=<checkout at the pin> stages it offline",
+                args[2..].join(" ")
+            ));
+        }
+    }
+    match git_head_of(&dir) {
+        Some(head) if head == pin => {
+            eprintln!("dist: wolf-std {pin} fetched from {STD_REPO_URL}");
+            Ok(dir)
+        }
+        other => Err(format!(
+            "the fetched wolf-std is at {other:?}, not the pinned {pin}"
+        )),
+    }
+}
+
+/// Copy a directory tree, files and directories only. Anything else (a
+/// symlink, a socket) is refused by name: the archive's std must be the
+/// bytes of the pinned tree, not wherever a link happened to point.
+fn copy_tree(from: &Path, to: &Path) -> Result<usize, String> {
+    std::fs::create_dir_all(to).map_err(|e| format!("mkdir {}: {e}", to.display()))?;
+    let mut entries: Vec<_> = std::fs::read_dir(from)
+        .map_err(|e| format!("read {}: {e}", from.display()))?
+        .flatten()
+        .collect();
+    entries.sort_by_key(|e| e.file_name());
+    let mut files = 0;
+    for e in entries {
+        let ty = e
+            .file_type()
+            .map_err(|err| format!("{}: {err}", e.path().display()))?;
+        let dest = to.join(e.file_name());
+        if ty.is_dir() {
+            files += copy_tree(&e.path(), &dest)?;
+        } else if ty.is_file() {
+            std::fs::copy(e.path(), &dest)
+                .map_err(|err| format!("copy {}: {err}", e.path().display()))?;
+            files += 1;
+        } else {
+            return Err(format!(
+                "{} is neither a file nor a directory",
+                e.path().display()
+            ));
+        }
+    }
+    Ok(files)
+}
+
+/// Stage the pinned standard library as `<stage>/std/` (ruling #29): the
+/// checkout's `std/` tree, its two license files, and `STD-REV`. The
+/// driver's default std root is exactly this directory beside the binary.
+fn stage_std(stage: &Path) -> Result<String, String> {
+    let text = std::fs::read_to_string(STD_PIN_FILE)
+        .map_err(|e| format!("cannot read {STD_PIN_FILE}: {e}"))?;
+    let pin = parse_std_pin(&text)?;
+    let src = std_checkout(&pin)?;
+    let dest = stage.join("std");
+    let files = copy_tree(&src.join("std"), &dest)?;
+    for f in ["LICENSE", "LICENSE-EXCEPTION", STD_REV_FILE] {
+        if dest.join(f).exists() {
+            return Err(format!(
+                "wolf-std {pin}'s std/ already has a `{f}`; staging would overwrite it"
+            ));
+        }
+    }
+    for f in ["LICENSE", "LICENSE-EXCEPTION"] {
+        std::fs::copy(src.join(f), dest.join(f))
+            .map_err(|e| format!("wolf-std {pin} has no {f}: {e}"))?;
+    }
+    std::fs::write(dest.join(STD_REV_FILE), format!("{pin}\n"))
+        .map_err(|e| format!("write {STD_REV_FILE}: {e}"))?;
+    eprintln!("dist: staged std/ ({files} files) from wolf-std {pin}");
+    Ok(pin)
+}
+
+/// The std smoke (s204): the witness `use std.env` program, run by the
+/// UNPACKED `wolf` with `WOLF_STD` removed and no `--std-root` and no
+/// `wolf.pkg` — the default root beside the binary is the only std it can
+/// reach. The checked tier answers on every host; the native tier must
+/// print the same or refuse by name (exit 2) where it is unserved.
+fn smoke_std(
+    smoke: &Path,
+    unpacked_dir: &Path,
+    unpacked_wolf: &Path,
+    pin: &str,
+) -> Result<(), String> {
+    let rev = std::fs::read_to_string(unpacked_dir.join("std").join(STD_REV_FILE))
+        .map_err(|e| format!("the unpacked archive has no std/{STD_REV_FILE}: {e}"))?;
+    if rev.trim() != pin {
+        return Err(format!(
+            "the unpacked std/{STD_REV_FILE} says {}, not the pin {pin}",
+            rev.trim()
+        ));
+    }
+    let dir = smoke.join("std_env");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::write(
+        dir.join("main.lu"),
+        "use std.env\n\nfn main() -> !int {\n    print(\"{env.has(\"S204_NEVER_SET\")}\")\n    0\n}\n",
+    )
+    .map_err(|e| e.to_string())?;
+    let wolf = std::path::absolute(unpacked_wolf).map_err(|e| e.to_string())?;
+    let rec = Command::new(&wolf)
+        .current_dir(&dir)
+        .args(["conform-run", "main.lu", "--checked", "--json"])
+        .env_remove("WOLF_STD")
+        .output()
+        .map_err(|e| format!("cannot run {}: {e}", wolf.display()))?;
+    let v: serde_json::Value = serde_json::from_slice(&rec.stdout).map_err(|e| {
+        format!(
+            "checked tier: no observation record ({e}); stderr: {}",
+            String::from_utf8_lossy(&rec.stderr)
+        )
+    })?;
+    if v["verdict"] != "exit(0)" || v["stdout_inline"] != "false\n" {
+        return Err(format!(
+            "checked tier: `use std.env` with no std configured answered {} {}, not exit(0) \"false\"",
+            v["verdict"], v["stdout_inline"]
+        ));
+    }
+    let run = Command::new(&wolf)
+        .current_dir(&dir)
+        .args(["run", "main.lu"])
+        .env_remove("WOLF_STD")
+        .env_remove("WOLF_RT_LIB")
+        .output()
+        .map_err(|e| format!("cannot run {}: {e}", wolf.display()))?;
+    let out = String::from_utf8_lossy(&run.stdout);
+    let err = String::from_utf8_lossy(&run.stderr);
+    if run.status.success() && out == "false\n" {
+        eprintln!(
+            "dist: smoke — `use std.env` ran from the archive's own std/ (checked and native)"
+        );
+        Ok(())
+    } else if run.status.code() == Some(2) && err.contains("cannot run the native tier") {
+        eprintln!(
+            "dist: smoke — `use std.env` ran from the archive's own std/ (checked; native unserved here, by name)"
+        );
+        Ok(())
+    } else {
+        Err(format!(
+            "native tier: `use std.env` with no std configured: {} stdout {out:?} stderr {err}",
+            run.status
+        ))
+    }
+}
+
 /// The freestanding target the `no_std` runtime is built for (kw12).
 const NONE_TARGET: &str = "x86_64-unknown-none";
 
@@ -5101,6 +5367,16 @@ fn dist() -> ExitCode {
         let dest = stage.join(Path::new(f).file_name().expect("named file"));
         std::fs::copy(f, dest).expect("stage metadata file");
     }
+    // The standard library (ruling #29, wolf-lang#415): wolf-std's `std/`
+    // at the commit crates/wolf_driver/STD-PIN names, beside the binary,
+    // where the driver's default std root looks.
+    let std_pin = match stage_std(&stage) {
+        Ok(pin) => pin,
+        Err(e) => {
+            eprintln!("dist: std — {e}");
+            return ExitCode::FAILURE;
+        }
+    };
     // The man page and the shell completions (#250): a packager had
     // neither to install, because neither existed. The binary that just
     // built is the one that emits them, so they cannot be a stale
@@ -5159,6 +5435,10 @@ fn dist() -> ExitCode {
         return ExitCode::FAILURE;
     }
     let unpacked_wolf = smoke.join(&name).join(exe);
+    if let Err(e) = smoke_std(smoke, &smoke.join(&name), &unpacked_wolf, &std_pin) {
+        eprintln!("dist: smoke — the archive's std: {e}");
+        return ExitCode::FAILURE;
+    }
     // kw12: the unpacked `wolf` finds the freestanding runtime beside
     // itself — an allocating kernel builds, and its object gets the
     // archive beside it — with nothing from target/ in reach.
@@ -5839,6 +6119,61 @@ mod version_stamp_tests {
             sha.len()
         );
         assert!(sha.chars().all(|c| c.is_ascii_hexdigit()), "{sha}");
+    }
+}
+
+#[cfg(test)]
+mod std_pin_tests {
+    use super::{STD_PIN_FILE, copy_tree, parse_std_pin};
+
+    const SHA: &str = "87ba16208da8ea642dd463fa89ff3a1ec80ceba1";
+
+    /// The checked-in pin parses, and to a full sha (ruling #29): the
+    /// file dist reads is the file this test reads.
+    #[test]
+    fn the_checked_in_pin_parses() {
+        let text = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../crates/wolf_driver/STD-PIN"
+        ))
+        .expect(STD_PIN_FILE);
+        let pin = parse_std_pin(&text).expect("STD-PIN parses");
+        assert_eq!(pin.len(), 40);
+    }
+
+    /// One key line, comments ignored; every other shape is refused.
+    #[test]
+    fn a_pin_names_exactly_one_full_commit() {
+        let ok = format!("# why\n\nwolf-std-commit = {SHA}\n");
+        assert_eq!(parse_std_pin(&ok), Ok(SHA.to_string()));
+        assert_eq!(
+            parse_std_pin(&format!("wolf-std-commit={SHA}")),
+            Ok(SHA.to_string())
+        );
+        for bad in [
+            String::from("# nothing\n"),
+            String::from("wolf-std-commit = 87ba162\n"),
+            format!("wolf-std-commit = {}\n", SHA.to_uppercase()),
+            format!("wolf-std-commit = {SHA}\nwolf-std-commit = {SHA}\n"),
+            format!("wolf-std-rev = {SHA}\n"),
+            format!("wolf-std-commit {SHA}\n"),
+        ] {
+            assert!(parse_std_pin(&bad).is_err(), "accepted: {bad:?}");
+        }
+    }
+
+    /// The staged tree is the source tree's files, nested, byte for byte.
+    #[test]
+    fn copy_tree_copies_nested_files() {
+        let base = std::env::temp_dir().join(format!("xtask-copy-tree-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(base.join("a/net/http")).unwrap();
+        std::fs::write(base.join("a/env.lu"), "e").unwrap();
+        std::fs::write(base.join("a/net/http/h.lu"), "h").unwrap();
+        assert_eq!(copy_tree(&base.join("a"), &base.join("b")), Ok(2));
+        assert_eq!(std::fs::read(base.join("b/net/http/h.lu")).unwrap(), b"h");
+        assert_eq!(std::fs::read(base.join("b/env.lu")).unwrap(), b"e");
+        let _ = std::fs::remove_dir_all(&base);
     }
 }
 
