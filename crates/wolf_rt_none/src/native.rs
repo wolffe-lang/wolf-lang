@@ -133,7 +133,10 @@ const REGION_HDR: usize = (core::mem::size_of::<Region>() + ALIGN - 1) & !(ALIGN
 static LIVE_REGION_BYTES: AtomicUsize = AtomicUsize::new(0);
 
 /// The ambient region (`[mem.region.create.3]`); null = the process
-/// root. One slot: the target has no threads.
+/// root. One word for the thread of control running now: a program
+/// that switches threads saves and restores it per thread through
+/// [`wolf_rt_ambient_get`] / [`wolf_rt_ambient_set`]
+/// (`[abi.target.none.ambient]`, wolf-lang#611).
 static AMBIENT_REGION: AtomicPtr<c_void> = AtomicPtr::new(core::ptr::null_mut());
 
 /// The ambient region, or null for the process root (read by the
@@ -283,6 +286,28 @@ pub unsafe extern "C" fn __wolf_rt_region_ambient_enter(handle: *mut c_void) -> 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_region_ambient_leave(prev: *mut c_void) {
     AMBIENT_REGION.store(prev, Ordering::Relaxed);
+}
+
+/// `wolf_rt_ambient_get() -> *u8` (`[abi.target.none.ambient]`): the
+/// running thread's ambient region, null for the process root. A
+/// scheduler stores it in the outgoing thread's record at a switch.
+#[unsafe(no_mangle)]
+pub extern "C" fn wolf_rt_ambient_get() -> *mut c_void {
+    AMBIENT_REGION.load(Ordering::Relaxed)
+}
+
+/// `wolf_rt_ambient_set(p: *u8)` (`[abi.target.none.ambient]`): make
+/// `p` the running thread's ambient region. A scheduler passes the
+/// incoming thread's saved value at a switch — null for a thread that
+/// has not run yet (the process root).
+///
+/// # Safety
+///
+/// `p` is null or a value [`wolf_rt_ambient_get`] returned on the
+/// thread now being resumed, whose region is still open there.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wolf_rt_ambient_set(p: *mut c_void) {
+    AMBIENT_REGION.store(p, Ordering::Relaxed);
 }
 
 /// A capturing closure's record, in the ambient region

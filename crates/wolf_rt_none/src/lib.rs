@@ -28,11 +28,17 @@
 //! hosted contracts: 16-aligned grants, the ledger and its cap, the
 //! ambient slot, the root region that never frees.
 //!
-//! One CPU at a time. The target has no threads (`spawn` is refused on
-//! it), so the ambient slot and the live-bytes counter are single
-//! words, not per-thread state; a kernel that runs wolf code on several
-//! CPUs at once must not allocate from two of them concurrently — the
-//! runtime takes no lock.
+//! One CPU at a time. The language has no threads on this target
+//! (`spawn` is refused on it), but a kernel has its own: the ambient
+//! slot is one word for the thread of control running now, and the
+//! program's scheduler carries it across a switch with the documented
+//! pair `wolf_rt_ambient_get` / `wolf_rt_ambient_set`
+//! (`[abi.target.none.ambient]`, wolf-lang#611). Every other word the
+//! runtime keeps is a region's own (one thread's) or the live-bytes
+//! counter, moved by single read-modify-write instructions, so a switch
+//! may land anywhere inside the runtime on one CPU. A kernel that runs
+//! wolf code on several CPUs at once must not allocate from two of them
+//! concurrently — the runtime takes no lock.
 
 #![no_std]
 
