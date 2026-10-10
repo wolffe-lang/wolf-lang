@@ -13,11 +13,16 @@
 //! are that call's and no other test's (libtest runs tests on threads
 //! of their own; the counters are thread-local).
 //!
-//! The bound is the root arena's own refill (one 64 KiB chunk per
-//! 64 KiB of materialized results, which is the root region doing its
-//! job, not a per-call cost): at most one host allocation per
-//! `REFILL_SLACK` calls. Trunk at `ac0ac498` pays two or more per call
-//! (red); the fix pays none once warm.
+//! The bound separates a per-call buffer from the root arena's own
+//! refill (one 64 KiB chunk per 64 KiB of materialized results, and
+//! the chunk list's amortized growth — the root region doing its job,
+//! never freed): no zeroed allocation at all, at most one free per
+//! `REFILL_SLACK` calls, and at most one allocation per ten. Trunk
+//! pays an allocation and a free (or more) on every call (red); the
+//! fix frees nothing once warm. (The first bound, one host call of any
+//! kind per 50 calls, was too tight for a 1 KiB result: `fs_read_at`
+//! read 21 — 17 chunk refills and 4 chunk-list reallocs — in 2 of 30
+//! release runs under `taskset -c 0-3` on kasumi.)
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
@@ -68,12 +73,6 @@ struct Counts {
     frees: usize,
 }
 
-impl Counts {
-    fn host_calls(&self) -> usize {
-        self.allocs + self.zeroed + self.reallocs + self.frees
-    }
-}
-
 fn reset() {
     for c in [&ALLOCS, &ZEROED, &REALLOCS, &FREES] {
         c.with(|c| c.set(0));
@@ -110,10 +109,20 @@ fn assert_steady(what: &str, total: Counts) {
         "{what}: {} zeroed allocations over {CALLS} calls ({total:?}) — a buffer zeroed for a read to overwrite",
         total.zeroed
     );
+    // A per-call buffer is allocated AND freed every call; the root
+    // arena's refills are allocations (a 64 KiB chunk per 64 KiB of
+    // results, plus the chunk list's own amortized growth) and are
+    // never freed. So frees are the per-call signal, and allocations
+    // get a bound that only a per-call buffer can break.
     assert!(
-        total.host_calls() * REFILL_SLACK <= CALLS,
-        "{what}: {} host allocator calls over {CALLS} calls ({total:?}) — a per-call buffer",
-        total.host_calls()
+        total.frees * REFILL_SLACK <= CALLS,
+        "{what}: {} host frees over {CALLS} calls ({total:?}) — a per-call buffer",
+        total.frees
+    );
+    assert!(
+        (total.allocs + total.reallocs) * 10 <= CALLS,
+        "{what}: {} host allocations over {CALLS} calls ({total:?}) — a per-call buffer",
+        total.allocs + total.reallocs
     );
 }
 
