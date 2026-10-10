@@ -412,7 +412,7 @@ exhausted` arrived — an OOM where an honest refusal was owed.)
   a refusal, an exhausted budget or `os_exit` on any task ends the run
   with that answer at once — a proc does not contain a UB finding.
   (Deviation from lupin 0.1.49, which hands a proc's UB finding to its
-  monitor as `error`; ruling owed.) A run whose root domain is killed
+  monitor as `error` — wolf-interp#228; ruling owed.) A run whose root domain is killed
   (`[conc.proc.root]`) exits 121, the native runtime's number. A host
   call that would park the machine's one running thread — an accept, a
   read on a socket, a signal wait, a sleep — waits a millisecond at a
@@ -477,7 +477,7 @@ exhausted` arrived — an OOM where an honest refusal was owed.)
   measured: lupin adds no rendezvous back-edge, so a program ordered
   only by "the receive happens-before the send returns" is
   `trap(race)` there and runs here — `[conc.mm.hb.chan]` is the
-  clause; ruling owed. Witnesses: `corpus/conc/atomic_race_plain.lu`
+  clause; wolf-interp#227, ruling owed. Witnesses: `corpus/conc/atomic_race_plain.lu`
   and the driver's `checked_tasks_lanes`.)
 - `[exec.checked.budget]` **The tier keeps two budgets — steps AND
   bytes — and exhausting either is `unsupported`, never a verdict.**
