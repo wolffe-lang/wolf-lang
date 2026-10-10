@@ -520,7 +520,16 @@ fn effective_std_root(flag: Option<PathBuf>) -> Result<Option<PathBuf>, String> 
 /// and no ancestor walk. A `std` that is not a directory is not a root.
 /// A checkout's `target/<profile>/wolf` has none beside it, so a build
 /// from source keeps the prelude stub until something configures a std.
+///
+/// A freestanding build (`[abi.target.none]`, the thread's build target is
+/// `x86_64-unknown-none`) gets no default: the shipped std is the hosted
+/// library, and its home modules lower hosted-only operations — s204's
+/// downstream census stopped 27 of pax's 29 kernels on a `str` comparison
+/// that needs the hosted runtime. Only an explicit root reaches a kernel.
 pub(crate) fn default_std_root() -> Option<PathBuf> {
+    if wolf_sema::attrs::build_target() == wolf_backend::target::FREESTANDING {
+        return None;
+    }
     let exe = std::env::current_exe().ok()?;
     let p = exe.parent()?.join("std");
     p.is_dir().then_some(p)
