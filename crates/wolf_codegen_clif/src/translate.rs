@@ -2559,10 +2559,12 @@ impl<'a, 'b> Tx<'a, 'b> {
             let fr = self.om.declare_func_in_func(fid, self.b.func);
             self.fref_cache.insert(callee.to_string(), (fr, Conv::C));
             (fr, Conv::C)
-        } else if let Some(symbol) = abi::c_import_symbol(callee) {
+        } else if let Some(symbol) = abi::c_import_symbol_in(self.m, callee) {
             // The explicit membrane (D19): the WIR name's `c.`
             // namespace IS the seam; the linker symbol is the plain C
-            // name, declared with the SysV plan.
+            // name, declared with the SysV plan. A function this
+            // program defines is never a C import (wolf-lang#620: a
+            // module named `c` spells its functions `c.go` too).
             let si_c = sig_info(self.m, sig, Conv::C, cc)?;
             let fid = match self.imports.get(callee) {
                 Some(&fid) => fid,
