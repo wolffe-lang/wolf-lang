@@ -304,7 +304,7 @@ fn declaring_ffi_builds_and_the_audit_gives_the_reason() {
             let what = if release { "root --release" } else { "root" };
             if assert_builds(&build(&dir, release), what) {
                 let ran = Command::new(exe(&dir)).output().expect("the program runs");
-                assert_eq!(stdout(&ran), "pid true\n", "{what}");
+                assert_eq!(stdout(&ran).trim_end(), "pid true", "{what}");
             }
         }
     }
@@ -332,8 +332,14 @@ fn import_c_is_charged_exactly_as_before() {
         flat(&err).contains("the root module imports `import c`. Add `ffi`"),
         "{err}"
     );
+    // Declared, it builds where `cc` links the C library's malloc.
     declare_ffi(&dir.join("app/wolf.pkg"));
-    assert_builds(&build(&dir, false), "importc declared");
+    if cfg!(unix) {
+        assert_builds(&build(&dir, false), "importc declared");
+    } else {
+        let out = audit(&dir, "app", true);
+        assert_eq!(out.status.code(), Some(0), "stdout:\n{}", stdout(&out));
+    }
 }
 
 #[test]
@@ -344,7 +350,7 @@ fn wolf_code_c_calls_charges_nothing() {
     assert!(stdout(&out).contains("effective: []\n"), "{}", stdout(&out));
     if assert_builds(&build(&dir, false), "body") {
         let ran = Command::new(exe(&dir)).output().expect("the program runs");
-        assert_eq!(stdout(&ran), "42 42\n");
+        assert_eq!(stdout(&ran).trim_end(), "42 42");
     }
 }
 
