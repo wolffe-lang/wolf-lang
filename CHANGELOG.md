@@ -164,6 +164,58 @@ existing builtin's row changed. **Every spelling below is a ruling owed**
   four calls added: a listen, a poll after the read, `os_wait_status`,
   a poll after the wait.
 
+### The root arena takes no lock per allocation; reads and gathered writes stop allocating (s222, #635, #421)
+
+No program's output, verdict or diagnostics change: this is the native
+runtime (`libwolf_rt.a`), so every native and release binary's bytes
+move and nothing it prints does.
+
+- **The root arena bumps a per-thread window (#635, #421).** Where an
+  allocation lands with no `region` open — every list header, list
+  growth and materialized `str` in such code — was one bump window
+  behind one `Mutex`, taken on EVERY allocation. Each thread now bumps
+  its own window over the same never-freed chunk list and takes the
+  lock only to refill one (once per 64 KiB, or for one allocation of
+  16 KiB or more); a thread's unused tail is parked when it exits and
+  adopted by the next thread. The root's meaning is unchanged (process
+  lifetime, readable from every thread; the design note and its
+  memory-safety argument are `wolf_rt::str`'s module doc), so no rule
+  moves on the checked machine or in lupin. `[conc.task.par.cost]`'s
+  sentence that the root "serializes allocation behind one lock" is
+  rewritten. bs50's word counter (#421: 72 pieces of ~380k characters,
+  a `Map[str, int]` and a `lower()` per word) on kasumi (16 cpus):
+  `par` 0.77–0.79 s with 6.3–7.3 s of system time and 178,911 futex
+  calls before, 0.03–0.04 s and 2,556 after, against 0.18–0.21 s
+  serial; under `taskset -c 0-3`, 0.63–0.75 s before and 0.05–0.07 s
+  after.
+- **Reads stop zeroing a buffer per call (#635).** `net_read`,
+  `net_read_bytes`, `fs_read`, `fs_read_chunk` and `fs_read_at` read
+  into one buffer a thread keeps (zero-filled only when it grows,
+  never past the 1 MiB clamp) and copy the bytes read out of it, where
+  each call used to allocate `max` zeroed bytes and free them.
+- **Gathered writes and interpolations stop asking the host allocator
+  (#635).** `net_writev` and `net_writev_head` build their `IoSlice`
+  run on the stack for up to 16 parts (two malloc/free pairs a call
+  before); an interpolation's buffer comes from a per-thread pool and
+  keeps its capacity (a `Box`, a `realloc` per doubling and a free per
+  interpolation before), and an integer hole formats in place. #635
+  named the `realloc` as `net_writev_head`'s; measured, it was the
+  interpolation buffer's.
+- **Measured on lobo** (trunk `ebace85`, its release build, one hand,
+  `perf stat -e instructions:u`, kasumi, median of three): user
+  instructions a request keepalive 19,532 → 17,179 (−12.0 %), close
+  20,847 → 18,182 (−12.8 %); the arena alone −4.1 % / −5.8 %, the
+  reads −3.6 % / −2.9 %, the writes −4.9 % / −4.7 %.
+- **Witnesses:** `wolf_rt`'s `str::tests` (a warmed thread allocates
+  while the arena's lock is held; a dead thread's bytes survive later
+  threads' churn; concurrent allocations never overlap),
+  `crates/wolf_rt/tests/read_write_alloc.rs` (a counting global
+  allocator: zero zeroed allocations and at most one host call per 50
+  reads, gathers or interpolations once warm), and
+  `crates/wolf_driver/tests/root_arena_threads_lanes.rs` (`par` and
+  scoped-task strings read back on the spawner on native, release and
+  lupin; the checked machine refuses both shapes by name).
+
 ## 0.2.26 — 2026-10-09
 
 THE TWENTY-SIXTH. Five compiler lanes, each with its lupin half, land
