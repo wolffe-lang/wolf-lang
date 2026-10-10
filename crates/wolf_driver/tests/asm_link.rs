@@ -69,8 +69,13 @@ fn package(case: &str, files: &[(&str, &str, &str)], manifest: &str) -> PathBuf 
     dir
 }
 
+/// Every package here calls its listed assembly through a bodyless
+/// `extern "c" fn`, which carries the `ffi` capability (s221, ruling #55,
+/// `[pkg.caps]`), so the manifest declares it.
 fn manifest(asm: &str) -> String {
-    format!("pkg {{\n    name: \"kw05/gate\"\n    version: \"0.0.1\"\n    asm: {asm}\n}}\n")
+    format!(
+        "pkg {{\n    name: \"kw05/gate\"\n    version: \"0.0.1\"\n    asm: {asm}\n    capabilities: [ffi]\n}}\n"
+    )
 }
 
 fn wolf_in(dir: &Path, args: &[&str]) -> Output {
