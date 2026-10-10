@@ -1,0 +1,38 @@
+//! s226 witness — an atomic and a plain access race. One task adds to
+//! the word atomically, the other stores to it plainly; two atomic
+//! accesses never race, an atomic and an unordered plain one do
+//! (`[conc.mm.race.1]`): `trap(race)`.
+
+import c "stdlib.h"
+
+fn add(p: *u64) {
+    // # Safety: `p` is the live, aligned word `main` owns.
+    unsafe {
+        let before = p.atomic_add(1, Order.seq_cst)
+    }
+}
+
+fn store(p: *u64) {
+    // # Safety: DELIBERATELY UNSOUND — a plain store unordered with the
+    // atomic add.
+    unsafe {
+        p[0] = 5
+    }
+}
+
+fn main() -> int {
+    // # Safety: one live, zeroed 8-byte word, freed after the scope
+    // joined; the two tasks race on it by design.
+    unsafe {
+        let m = c.calloc(1, 8)
+        let p = m as *u64
+        scope s {
+            s.spawn(fn() { add(p) })
+            s.spawn(fn() { store(p) })
+        }
+        let x = p[0]
+        print("{x}")
+        c.free(m)
+    }
+    0
+}

@@ -376,11 +376,109 @@ exhausted` arrived — an OOM where an honest refusal was owed.)
 
 - `[exec.checked]` The **checked tier** (`wolf conform-run --checked`,
   `wolf_mem::ubcheck`) runs `[mem.model.machine]`'s abstract machine
-  as an interpreter: single-threaded, run-to-completion, every
-  allocation modelled in shadow memory, every UB row of `[mem.ub]`
-  detected rather than exploited. Its answers are `[conf.trap]`
-  verdicts or an honest `unsupported` (`[proto.record.unsupported]`);
-  it never guesses.
+  as an interpreter: one task running at a time
+  (`[exec.checked.task]`), every allocation modelled in shadow memory,
+  every UB row of `[mem.ub]` detected rather than exploited. Its
+  answers are `[conf.trap]` verdicts or an honest `unsupported`
+  (`[proto.record.unsupported]`); it never guesses.
+- `[exec.checked.task]` **The tier runs spec/03's tasks, one at a
+  time.** `scope` and `s.spawn`, `spawn proc` and the `Proc[T]`
+  surface, channels, `select`, `when`, `xs.par(f)` and closures all
+  execute (until s226 the tier refused each by name: "structured
+  concurrency in checked execution (C1 deferred)"). A task is one
+  evaluator stack; the machine is handed from task to task whole, so
+  no two tasks ever run at once and nothing in the machine is shared
+  between threads. What a task owns while it waits is its frames and
+  its ambient-region stack; everything else — shadow memory, regions,
+  channels, the output — is the one machine's. A closure copies the
+  enclosing bindings it names when it is constructed
+  (`[gram.expr.closure]`), and a spawned closure's captured region
+  moves into the task (`[conc.task.spawn]`). A task's allocations land
+  in its proc's own region, or the run's root for the root domain
+  (`[conc.task.par.cost]`); each `par` worker allocates in a region of
+  its own, and at the join every worker's region is transferred whole
+  to the region the `par` expression was evaluated in, its charge
+  included (STATUS #30, wolf-lang#421), so a result is readable for as
+  long as that region lives and a failed `par` frees what its workers
+  built. `W` of `[conc.task.par.chunk]` is 4 on every host. **The
+  cost, stated:** one host thread per task that has started and not
+  finished, each with the tier's 64 MiB of reserved stack
+  (`[exec.checked.budget]`), made at the task's first schedule and
+  gone at its end; the step and byte budgets are the run's, summed
+  over its tasks. A host with no thread to give answers `unsupported`
+  at the first schedule of a second task. A trap in a task is
+  `[conc.task.fail]`'s failure, re-raised at its scope's exit, or the
+  `fault(kind)` its proc contains (`[conc.proc.exit]`); a UB finding,
+  a refusal, an exhausted budget or `os_exit` on any task ends the run
+  with that answer at once — a proc does not contain a UB finding.
+  (Deviation from lupin 0.1.49, which hands a proc's UB finding to its
+  monitor as `error` — wolf-interp#228; ruling owed.) A run whose root domain is killed
+  (`[conc.proc.root]`) exits 121, the native runtime's number. A host
+  call that would park the machine's one running thread — an accept, a
+  read on a socket, a signal wait, a sleep — waits a millisecond at a
+  time while other tasks exist and lets them run between waits, so the
+  peer that will resolve it gets the cpu (`corpus/net/spawn_accept.lu`,
+  `corpus/os/signal_supervisor.lu`).
+- `[exec.checked.sched]` **The schedule is deterministic and a seed
+  selects it.** The scheduler is the reference interpreter's
+  (`sched-ev/0`, spec/07): a first-in-first-out ready queue; a spawn
+  makes the child ready and the spawner keeps running; a task leaves
+  the cpu only at a blocking point (`[conc.cancel.points]`: a scope's
+  join, a channel operation that cannot complete, a `select` with no
+  ready arm, a held `Mutex`, a proc's join) and is never preempted.
+  Two things are decided: which ready task runs when more than one is
+  ready, and which arm commits when more than one `select` arm is
+  ready (`[conc.select.fair]`). With no `--seed`, or `--seed=0`, every
+  decision takes the first candidate — tasks run in spawn order. Any
+  other seed below 2^62 draws each decision from xorshift64 (shifts
+  13, 7, 17) started at `seed | 1`, modulo the candidate count; a seed
+  with bit 62 set and bit 63 clear is a packed schedule (`[sched.seed]`:
+  its low 62 bits are the choices, mixed radix, first decision
+  lowest). **Equal seeds are equal runs** — the same verdict and the
+  same output bytes (`[sched.stable]`), and a record made under a seed
+  says `"seeded": true` (`[proto.seed.flag]`). `timeout` arms run on a
+  virtual clock that advances only when no task is ready
+  (`[conc.select.timeout]`); when no task is ready and no timer is
+  pending the run is `trap(deadlock)` (`[conc.deadlock.trap]`), its
+  roster on stderr. **What it does not do:** it explores nothing. One
+  seed is one interleaving, so a seed that passes says nothing about
+  the schedules it did not take (`wolf test --schedules=N` on the
+  native tier and lupin's explorer are the tools for that), and
+  because a task is never preempted between blocking points, an
+  interleaving that needs a preemption there is one this tier never
+  shows. Every outcome it does show is one a real schedule can
+  produce: the tier is a subset of the hardware's behaviours
+  (`[conc.mm.atomic.raw.5]`), never a superset.
+- `[exec.checked.race]` **A data race is `trap(race)`
+  (`[conc.mm.race.3]`), found by happens-before, not by luck.** Every
+  task carries a vector clock, and the edges are `[conc.mm.hb]`'s: a
+  spawn (the child starts from its spawner's clock), a scope's join
+  (each child into the owner), the k-th send into the k-th receive
+  (the message carries its sender's clock; a moved region publishes
+  with it) and, on a rendezvous channel, that receive back into the
+  send's return, a `Mutex` release into the next acquisition, a proc's
+  exit into each delivery of its reason, and each atomic operation
+  through its location's clock (every order is run as `seq_cst`). The
+  memory watched is what two tasks can both reach: the bytes of a raw
+  allocation, a pool slot, a module `var`. Two accesses to overlapping
+  bytes by two tasks, at least one a write, with no order between
+  them, are a race, reported at the second access with both tasks
+  named on stderr. Two atomic accesses never race; an atomic and a
+  plain one do (`[conc.mm.race.1]`). Because the rule reads the order
+  and not the interleaving, a race is found in whichever order the
+  seed ran the two accesses, with no preemption needed; a race between
+  accesses the run never reached is not found. The detector precedes
+  the `[mem.ub]` rows on an access, as lupin's does. **The cost,
+  stated:** nothing until a second task exists; after that one clock
+  merge per edge and, per access, a scan of that allocation's
+  remembered accesses — one entry per task, byte range and kind, so
+  the memory is bounded by the program's distinct shared words, not by
+  how long it loops. (s226. One difference from lupin 0.1.49 is
+  measured: lupin adds no rendezvous back-edge, so a program ordered
+  only by "the receive happens-before the send returns" is
+  `trap(race)` there and runs here — `[conc.mm.hb.chan]` is the
+  clause; wolf-interp#227, ruling owed. Witnesses: `corpus/conc/atomic_race_plain.lu`
+  and the driver's `checked_tasks_lanes`.)
 - `[exec.checked.budget]` **The tier keeps two budgets — steps AND
   bytes — and exhausting either is `unsupported`, never a verdict.**
   The *step* budget counts expression evaluations (20,000,000 at

@@ -2,8 +2,9 @@
 //! reach (P1–P6, L1, L2, T1) gets a **flag** test (the checker detects
 //! the row) and a **near-miss** test (the closest legal program, which
 //! the checker passes — the SB spurious-UB lesson, enforced as test
-//! discipline). T2 and C1 are out of this machine's single-threaded
-//! scope and are asserted so, never silently absent.
+//! discipline). T2 and C1 are not `[mem.ub]` rows here and are asserted
+//! so, never silently absent (a race is the trap kind `race`, s226 —
+//! `checked_tasks.rs`).
 //!
 //! Each program is unsafe-tier and statically ACCEPTED (the static
 //! tier gates only the surface; UB is dynamic by design,
@@ -509,11 +510,12 @@ fn t1_near_miss_valid_bool_passes() {
 
 // ---------------------------------------------- out-of-scope rows, stated --
 
-/// T2 (torn writes) and C1 (data races) are unreachable in this
-/// single-threaded machine — the sprint's honest-scope contract. This
-/// is asserted structurally (the `UbRow` enum has no T2/C1 constructor)
-/// rather than left as an unexplained absence: the concurrency campaign
-/// (ic03/C1) makes them reachable.
+/// T2 (torn writes) has no row in this machine, and C1 (a data race)
+/// is not a `UbRow` either: since s226 the machine runs tasks one at a
+/// time, so no write is ever torn, and a race it detects is the trap
+/// kind `race` (`[conc.mm.race.3]`), never a `[mem.ub]` row. Asserted
+/// structurally (the `UbRow` enum has no T2/C1 constructor) rather than
+/// left as an unexplained absence.
 #[test]
 fn t2_and_c1_are_out_of_single_threaded_scope() {
     // Enumerate the reachable rows: exactly the nine this machine

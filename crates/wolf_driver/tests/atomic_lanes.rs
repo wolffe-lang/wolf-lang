@@ -411,21 +411,16 @@ fn an_atomic_load_after_free_is_row_p1() {
 
 /// `[conc.mm.atomic.raw]` under contention: four tasks' `atomic_add`s
 /// and four tasks' CAS loops give exact counts on native and release
-/// (every cpu set is `atomic_witness.rs`'s). The checked machine runs no
-/// task (C1 deferred) and refuses the program by name.
+/// (every cpu set is `atomic_witness.rs`'s). The checked machine runs
+/// its eight tasks one at a time (s226, `[exec.checked.task]`; it
+/// refused the program by name while C1 was deferred) and counts the
+/// same.
 #[test]
 fn the_counter_is_exact_on_the_compiled_tiers() {
     const OUT: &str = "400000 100000\n";
-    let refused = Want {
-        verdict: "unsupported",
-        codes: &[],
-        stdout: "",
-        named: "structured concurrency",
-        ub: ("", ""),
-    };
     every_machine(
         "atomic_counter.lu",
-        refused,
+        runs(OUT),
         Some(runs(OUT)),
         runs(OUT),
         PRE_MIRROR,
@@ -436,13 +431,14 @@ fn the_counter_is_exact_on_the_compiled_tiers() {
 /// compiled tiers compile and run it and nothing is asserted about the
 /// count; lupin may detect the race (`[conc.mm.race.3]`), and 0.1.46,
 /// 0.1.47 and 0.1.48 do (measured at r30; lupin files the row's `pass`
-/// as DIV-2026-028, wolf-lang#603).
+/// as DIV-2026-028, wolf-lang#603). Since s226 the checked machine
+/// detects it too (`[exec.checked.race]`; the clause and the span are
+/// `checked_tasks_lanes.rs`'s).
 #[test]
 fn the_plain_counter_is_a_race_and_asserts_nothing() {
     let entry = corpus("atomic_race_plain.lu");
     if let Some(obs) = lane(&entry, "--checked") {
-        assert_eq!(obs.verdict, "unsupported", "checked on the racy counter");
-        assert!(obs.unsupported.contains("structured concurrency"));
+        assert_eq!(obs.verdict, "trap(race)", "checked on the racy counter");
     }
     for flag in ["--native", "--release"] {
         let Some(obs) = lane(&entry, flag) else {

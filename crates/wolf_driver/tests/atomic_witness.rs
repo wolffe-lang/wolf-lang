@@ -14,8 +14,8 @@
 //!
 //! On linux `taskset` is part of this gate's host (no skip); on macOS
 //! there is no cpu-affinity tool, so only the all-cores set runs there
-//! and the gate says so. The checked machine runs no task (C1) and is
-//! `atomic_lanes.rs`'s.
+//! and the gate says so. The checked machine runs its tasks one at a
+//! time whatever the cpu set (s226) and is `atomic_lanes.rs`'s.
 //!
 //! At trunk a3465f87 the counter did not build (`unsupported` — "this
 //! raw-pointer operation"); the plain twin built and ran (105556 natively,

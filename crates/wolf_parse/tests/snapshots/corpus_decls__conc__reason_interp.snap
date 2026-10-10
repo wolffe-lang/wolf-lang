@@ -2,8 +2,8 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 893..918 name=fine body=Block
-FnDecl 920..951 name=broken body=Block
-FnDecl 953..1043 name=parked body=Block
-FnDecl 1045..1102 name=faulty body=Block
-FnDecl 1104..1894 name=main body=Block
+FnDecl 912..937 name=fine body=Block
+FnDecl 939..970 name=broken body=Block
+FnDecl 972..1062 name=parked body=Block
+FnDecl 1064..1121 name=faulty body=Block
+FnDecl 1123..1913 name=main body=Block

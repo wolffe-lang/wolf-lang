@@ -3,10 +3,10 @@
 //! The conc corpus tier's run files execute NATIVELY (wir → Cranelift
 //! → cc → the s32–s36 runtime) at the exit/stdout expectations the
 //! reference machine pinned (the lupin exit-parity discipline: the
-//! `check:` headers ARE the vendored verdicts). The checked lane
-//! stays an honest `unsupported` for concurrency (C1 deferred — the
-//! `[proto.cmp]` rule keeps that a non-divergence), so parity here is
-//! native-vs-pinned, plus verdict STABILITY under `--seed`
+//! `check:` headers ARE the vendored verdicts). The checked lane was
+//! an honest `unsupported` for concurrency until s226 (C1 deferred);
+//! its rows and its seed stability are `checked_tasks_lanes.rs`'s, so
+//! parity here is native-vs-pinned, plus verdict STABILITY under `--seed`
 //! ([sched.stable]'s CI property: same seed ⇒ same verdict and
 //! stdout; different seeds ⇒ same VERDICT for these fixtures).
 //!

@@ -1,0 +1,37 @@
+//! s226 witness — the rendezvous back-edge. On an unbuffered channel
+//! "the receive also happens-before the send returns"
+//! (`[conc.mm.hb.chan]`): the receiver writes the word BEFORE it
+//! receives, the sender reads it AFTER its send returned, and only that
+//! clause orders the two. No race by the spec: 7 on the checked machine
+//! and the compiled tiers.
+
+import c "stdlib.h"
+
+fn receiver(p: *u64, meet: channel[int]) {
+    // # Safety: `p` is the live word `main` owns; this store precedes
+    // the receive the sender is waiting on.
+    unsafe {
+        p[0] = 7
+    }
+    let v = meet.recv() else |_| 0
+}
+
+fn main() -> int {
+    // # Safety: one live, zeroed 8-byte word; the write precedes the
+    // receive and the read follows the send's return on a rendezvous
+    // channel.
+    unsafe {
+        let m = c.calloc(1, 8)
+        let p = m as *u64
+        let meet = channel[int](0)
+        var seen: u64 = 0
+        scope s {
+            s.spawn(fn() { receiver(p, meet) })
+            meet.send(1) else |_| {}
+            seen = p[0]
+        }
+        print("{seen}")
+        c.free(m)
+    }
+    0
+}

@@ -3515,6 +3515,7 @@ const PHASES: [&str; 8] = [
 /// licensed optimization (the D2 pairing, executable). An honest
 /// refusal keeps the ladder at `mem`/`unsupported` — the conservatism
 /// ledger, never a guess.
+#[allow(clippy::too_many_arguments)]
 fn checked_run(
     pkg: &wolf_sema::Package,
     tc: &wolf_sema::Typecheck,
@@ -3523,9 +3524,13 @@ fn checked_run(
     mut all: Vec<Diagnostic>,
     run_stdout: &mut Option<String>,
     x_ext: &mut Vec<(&'static str, serde_json::Value)>,
+    seed: Option<u64>,
 ) -> (&'static str, String, Vec<Diagnostic>) {
     use wolf_mem::ubcheck::{self, Budget, Verdict};
-    match ubcheck::run_checked(pkg, tc, Budget::default()) {
+    // s226 (`[exec.checked.sched]`): `--seed=N` selects the checked
+    // machine's schedule; absent, every decision takes its first
+    // candidate (seed 0).
+    match ubcheck::run_checked_seeded(pkg, tc, Budget::default(), "", "main", seed.unwrap_or(0)) {
         Err(nyc) => {
             // Surface the refusal on stderr (the rich channel); the
             // record stays `unsupported` — the conservatism ledger.
@@ -3810,6 +3815,8 @@ fn conform_run(args: &[String]) {
     // drives the s32/s36 scheduler PRNG) — `[proto.seed.flag]` made
     // real for the native rung; the record reports `seeded` honestly.
     let mut seed: Option<u64> = None;
+    // s226: a seed reached a checked execution.
+    let mut checked_seeded = false;
     // kw04 (`[abi.target]`, kw00 F1 §4): `--target <triple>`. No machine
     // here runs a freestanding program — it has no `main`, no host
     // process, no runtime — so the freestanding target is refused by
@@ -4182,6 +4189,7 @@ fn conform_run(args: &[String]) {
                                                         // HIR directly; the wir
                                                         // rung below serves the
                                                         // default ladder.)
+                                                        checked_seeded = seed.is_some();
                                                         checked_run(
                                                             &res.package,
                                                             &tc,
@@ -4190,6 +4198,7 @@ fn conform_run(args: &[String]) {
                                                             all,
                                                             &mut run_stdout,
                                                             &mut x_ext,
+                                                            seed,
                                                         )
                                                     } else if native || release {
                                                         // The s28 native rung:
@@ -4395,9 +4404,10 @@ fn conform_run(args: &[String]) {
         "commit": BUILD_COMMIT.unwrap_or("unknown"),
         "file": file.replace('\\', "/"),
         "phase_reached": phase_reached,
-        // s73: true exactly when a --seed reached a native execution
-        // ([proto.seed.flag] — the checked machine stays seed-blind).
-        "seeded": seed.is_some() && native,
+        // s73: true exactly when a --seed reached an execution
+        // ([proto.seed.flag]): the native runtime's scheduler, or —
+        // since s226 — the checked machine's.
+        "seeded": seed.is_some() && (native || checked_seeded),
         "diagnostics": minimal,
         "warnings": warnings,
         "verdict": verdict,

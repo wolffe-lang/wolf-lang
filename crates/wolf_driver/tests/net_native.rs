@@ -8,9 +8,9 @@
 //! IDENTICAL verdict and stdout — byte-equal, per file. The
 //! acceptance's ten-run clause is asserted here for the echo
 //! roundtrip on both native tiers; the spawn-accept witness rides
-//! conc_native.rs's X12 ten-run suite (the checked lane refuses
-//! structured concurrency wholesale — C1 deferred — so its honest
-//! verdict there is `unsupported`, pinned below).
+//! conc_native.rs's X12 ten-run suite (the checked lane runs it since
+//! s226 — C1 was deferred there until then — and its answer is pinned
+//! below).
 //!
 //! lupin (wolf-interp) is the differential's fourth lane and runs
 //! through `cargo xtask differ`; at 0.1.13 it does not resolve the
@@ -167,16 +167,19 @@ fn echo_roundtrip_is_ten_run_stable_on_both_tiers() {
 
 /// Blocking honesty: the spawn-accept witness runs on both native
 /// tiers (a parked accept neither deadlocks the dial nor starves the
-/// scheduler — the ten-run half lives in conc_native.rs), while the
-/// checked lane's honest verdict is `unsupported` (C1: structured
-/// concurrency is deferred there wholesale — a skip, never a
-/// divergence).
+/// scheduler — the ten-run half lives in conc_native.rs). The checked
+/// machine runs it too since s226: its one running thread polls the
+/// socket a millisecond at a time and lets the other task run between
+/// polls (`[exec.checked.task]`), so the owner's `net_read` and the
+/// task's `net_accept` meet. (Until then its honest verdict was
+/// `unsupported`, C1 deferred.)
 #[test]
-fn spawn_accept_runs_native_and_checked_refuses_honestly() {
+fn spawn_accept_runs_native_and_checked() {
     let checked = lane("spawn_accept.lu", "--checked").expect("checked lane always runs");
     assert_eq!(
-        checked.verdict, "unsupported",
-        "checked refuses structured concurrency (C1 deferred) — if this ran, pin its parity here"
+        (checked.verdict.as_str(), checked.stdout.as_str()),
+        ("exit(0)", "echo: howl\n"),
+        "spawn_accept --checked"
     );
     for flag in ["--native", "--release"] {
         let Some(obs) = lane("spawn_accept.lu", flag) else {

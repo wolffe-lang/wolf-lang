@@ -1,0 +1,42 @@
+//! s226 witness — a race-free critical section. Four tasks bump one raw
+//! word, each inside `when (gate, tally)`: the n-th release
+//! happens-before the n+1-th acquisition (`[conc.mm.hb.mutex]`), so
+//! every access is ordered. `4 4` on every machine.
+
+import c "stdlib.h"
+
+fn bump(p: *u64) {
+    // # Safety: `p` is the live word `main` owns, and the caller holds
+    // `gate` for the whole access.
+    unsafe {
+        p[0] = p[0] + 1
+    }
+}
+
+fn main() -> int {
+    let gate = Mutex(0)
+    let tally = Mutex(0)
+    var x: u64 = 0
+    // # Safety: one live, zeroed 8-byte word, touched only while `gate`
+    // is held or after the scope joined.
+    unsafe {
+        let m = c.calloc(1, 8)
+        let p = m as *u64
+        scope s {
+            for t in 0..4 {
+                s.spawn(fn() {
+                    when (gate, tally) {
+                        bump(p)
+                        tally += 1
+                    }
+                })
+            }
+        }
+        x = p[0]
+        c.free(m)
+    }
+    var n = 0
+    when (gate, tally) { n = tally }
+    print("{x} {n}")
+    0
+}

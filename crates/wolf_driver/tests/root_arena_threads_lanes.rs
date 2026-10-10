@@ -14,11 +14,11 @@
 //!
 //! - native and release: the answer below, byte for byte (the release
 //!   tier links the same runtime with its own codegen).
-//! - checked: these shapes are outside the checked machine today —
-//!   `par` is "this List method" and a `scope` is "structured
-//!   concurrency in checked execution (C1 deferred)". Recorded as
-//!   `unsupported` with its reason, never read as a pass: if it starts
-//!   answering, it must answer the same bytes.
+//! - checked: these shapes were outside the checked machine until s226
+//!   (`par` was "this List method" and a `scope` "structured
+//!   concurrency in checked execution (C1 deferred)"). It answers now,
+//!   and must answer the same bytes; a refusal for any other reason
+//!   fails the gate.
 //! - lupin: the oracle, and the race detector (`[conc.mm.race.3]`): it
 //!   must answer the same bytes and never `trap(race)`.
 //!

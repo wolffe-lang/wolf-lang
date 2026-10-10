@@ -12,10 +12,10 @@
 //! composes; here the supervisor simply waits.
 //!
 //! Lanes: native and release RUN this (the real SIGUSR2 through the
-//! task layer). The CHECKED lane refuses it BY NAME — `spawn` is
-//! structured concurrency, C1-deferred in checked execution — so it is
-//! an honest `unsupported`, never a fake pass. The deterministic
-//! sequential twin (`signal_loopback.lu`) carries the checked lane.
+//! task layer). The CHECKED lane runs it since s226 through its own
+//! queue: the waiter lets the sibling task run, and its raise is the
+//! delivery the wait takes (`[os.signal.checked]`). The deterministic
+//! sequential twin is `signal_loopback.lu`.
 
 fn main() -> !int {
     os_signal_listen(8)?
