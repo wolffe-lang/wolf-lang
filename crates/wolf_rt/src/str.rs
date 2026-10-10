@@ -469,11 +469,33 @@ unsafe fn write_owned(out: i64, s: &str) {
 
 // -------------------------------------------------------- the strbuf --
 
-/// `strbuf.new` — a fresh interpolation buffer (a Rust `String`;
-/// `finish` moves the bytes into the ambient region and drops it).
+/// Interpolation buffers a thread keeps between uses (s222,
+/// wolf-lang#635). Interpolations nest (a hole can itself
+/// interpolate), so it is a small stack rather than one slot.
+const STRBUF_POOL: usize = 8;
+/// A buffer that grew past this goes back to the host at `finish`
+/// rather than being kept: one huge interpolation must not pin its
+/// capacity for the thread's life.
+const STRBUF_KEEP: usize = 64 * 1024;
+
+thread_local! {
+    static STRBUFS: core::cell::RefCell<Vec<Box<String>>> =
+        const { core::cell::RefCell::new(Vec::new()) };
+}
+
+/// `strbuf.new` — an interpolation buffer (a Rust `String`; `finish`
+/// copies the bytes into the ambient region). Since s222 (#635) the
+/// buffer comes from this thread's pool and `finish` returns it there
+/// with its capacity, so once warm an interpolation asks the host
+/// allocator for nothing — ws54's profile had a `Box` malloc, a
+/// `realloc` per doubling and a free on every one.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_strbuf_new() -> i64 {
-    Box::into_raw(Box::new(String::new())) as i64
+    let pooled = STRBUFS
+        .try_with(|p| p.borrow_mut().pop())
+        .ok()
+        .flatten();
+    Box::into_raw(pooled.unwrap_or_default()) as i64
 }
 
 unsafe fn buf<'a>(handle: i64) -> &'a mut String {
@@ -507,7 +529,10 @@ pub unsafe extern "C" fn __wolf_rt_strbuf_str(handle: i64, ptr: i64, len: i64, s
 pub unsafe extern "C" fn __wolf_rt_strbuf_i64(handle: i64, v: i64, spec: i64) {
     let b = unsafe { buf(handle) };
     if spec == 0 {
-        b.push_str(&v.to_string());
+        // s222: formatted in place — `v.to_string()` was a String
+        // allocated and freed per hole.
+        use core::fmt::Write as _;
+        let _ = write!(b, "{v}");
     } else {
         b.push_str(&render_i64_packed(v, spec));
     }
@@ -571,8 +596,9 @@ pub unsafe extern "C" fn __wolf_rt_strbuf_char(handle: i64, v: i64, spec: i64) {
     }
 }
 
-/// Move the built bytes into the ambient region; write the `{ptr,
-/// len}` pair through `out`; drop the buffer.
+/// Copy the built bytes into the ambient region; write the `{ptr,
+/// len}` pair through `out`; return the buffer to the thread's pool
+/// (s222) or, past `STRBUF_KEEP`, to the host.
 ///
 /// # Safety
 ///
@@ -580,8 +606,17 @@ pub unsafe extern "C" fn __wolf_rt_strbuf_char(handle: i64, v: i64, spec: i64) {
 /// `out` must address 16 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_strbuf_finish(handle: i64, out: i64) {
-    let s = unsafe { Box::from_raw(handle as *mut String) };
+    let mut s = unsafe { Box::from_raw(handle as *mut String) };
     unsafe { write_owned(out, &s) };
+    if s.capacity() <= STRBUF_KEEP {
+        s.clear();
+        let _ = STRBUFS.try_with(|p| {
+            let mut p = p.borrow_mut();
+            if p.len() < STRBUF_POOL {
+                p.push(s);
+            }
+        });
+    }
 }
 
 // ------------------------------------------ the separator set (s84) --
