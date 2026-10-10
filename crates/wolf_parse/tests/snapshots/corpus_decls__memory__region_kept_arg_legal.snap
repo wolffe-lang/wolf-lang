@@ -1,0 +1,15 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 1083..1126 name=Log fields=2
+StructDecl 1128..1176 name=Buf fields=2
+StructDecl 1178..1216 name=Tot fields=2
+StructDecl 1218..1277 name=Table fields=2
+StructDecl 1279..1324 name=Conf fields=2
+StructDecl 1326..1369 name=Gen fields=2
+FnDecl 1371..1447 name=keep_it body=Block
+FnDecl 1449..1502 name=bump body=Block
+FnDecl 1504..1616 name=feed body=Block
+FnDecl 1618..1670 name=add body=Block
+FnDecl 1672..3888 name=main body=Block
