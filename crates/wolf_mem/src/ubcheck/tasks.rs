@@ -1569,6 +1569,21 @@ impl<'t> Machine<'t> {
                 ..ScopeState::default()
             });
             let sid = self.sched.scopes.len() - 1;
+            // Ruling #30 (wolf-lang#421): each worker allocates in its
+            // own region, and the results move back by region transfer.
+            let regions: Vec<usize> = (0..k)
+                .map(|_| {
+                    self.regions.push(DynRegion {
+                        live: true,
+                        frozen: false,
+                        backing: None,
+                        span,
+                        charged: 0,
+                        cap: None,
+                    });
+                    self.regions.len() - 1
+                })
+                .collect();
             self.sched.par_jobs.push(ParJob {
                 f,
                 items,
@@ -1577,10 +1592,9 @@ impl<'t> Machine<'t> {
             });
             let job = self.sched.par_jobs.len() - 1;
             let proc = self.sched.tasks[me].proc;
-            let ambient = self.task_ambient(proc);
             let (base, extra) = (n / k, n % k);
             let mut lo = 0;
-            for chunk in 0..k {
+            for (chunk, region) in regions.iter().enumerate() {
                 let hi = lo + base + usize::from(chunk < extra);
                 self.sched.spawn_task(
                     me,
@@ -1588,17 +1602,37 @@ impl<'t> Machine<'t> {
                     proc,
                     format!("par@{}#{chunk}", span.lo),
                     Entry::ParChunk { job, lo, hi },
-                    ambient,
+                    *region,
                 );
                 lo = hi;
             }
-            let failures = self.join_scope(sid, span)?;
+            let joined = self.join_scope(sid, span);
             let slots = std::mem::take(&mut self.sched.par_jobs[job].slots);
             self.sched.par_jobs[job].items = Vec::new();
-            match failures.into_iter().next() {
-                Some(TaskEnd::Error(v)) => return Ok(raise(v)),
-                Some(TaskEnd::Trapped(trap)) => return Err(Stop::Trap(trap)),
-                _ => {}
+            let failure = match joined {
+                Ok(failures) => failures.into_iter().next(),
+                Err(stop) => {
+                    for region in regions {
+                        self.free_region(region);
+                    }
+                    return Err(stop);
+                }
+            };
+            if let Some(failure) = failure {
+                // A failed `par` has no value (`[conc.task.par.fail]`):
+                // what its workers built is freed with their regions.
+                for region in regions {
+                    self.free_region(region);
+                }
+                return match failure {
+                    TaskEnd::Error(v) => Ok(raise(v)),
+                    TaskEnd::Trapped(trap) => Err(Stop::Trap(trap)),
+                    _ => self.refuse("a `par` failure that is not one", span),
+                };
+            }
+            let home = self.ambient.last().copied().unwrap_or(0);
+            for region in regions {
+                self.adopt_region(region, home, span)?;
             }
             for slot in slots {
                 match slot {
@@ -1609,6 +1643,30 @@ impl<'t> Machine<'t> {
         }
         let id = self.mint_list(out, span)?;
         Ok(Flow::Val(Value::List(id)))
+    }
+
+    /// Region transfer (ruling #30): everything `from` owns becomes
+    /// `into`'s — its allocations, its lists and maps, and its charge,
+    /// which meets `into`'s cap here (`[mem.region.cap.1]`). `from`
+    /// is spent, never freed: nothing it held dies.
+    fn adopt_region(&mut self, from: usize, into: usize, span: Span) -> E<()> {
+        for a in &mut self.allocs {
+            if a.region == from {
+                a.region = into;
+            }
+        }
+        for r in self
+            .list_region
+            .iter_mut()
+            .chain(self.map_region.iter_mut())
+        {
+            if *r == from {
+                *r = into;
+            }
+        }
+        let charged = std::mem::take(&mut self.regions[from].charged);
+        self.regions[from].live = false;
+        self.charge_region_bytes(into, charged, span)
     }
 
     /// One chunk: `for i in lo..hi { out[i] = f(xs[i])? }`.
