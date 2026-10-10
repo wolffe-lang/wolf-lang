@@ -11,8 +11,8 @@
 //! (the X12 ten-run suite in `conc_native.rs` runs this file on both
 //! tiers). Output is deterministic by construction: main writes,
 //! the task echoes, main reads — one order, whatever the schedule.
-//! The checked lane refuses structured concurrency wholesale (C1
-//! deferred), so this file's run rung is the native tiers'.
+//! The checked lane runs it since s226: its one running thread polls
+//! the socket and lets the other task run between polls.
 
 fn main() -> !int {
     let srv = net_listen("127.0.0.1:0")?
