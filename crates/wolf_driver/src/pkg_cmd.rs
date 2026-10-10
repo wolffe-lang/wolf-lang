@@ -606,10 +606,9 @@ pub fn audit(args: &[String]) {
                 let p = &project.pkgs[u.owner];
                 let who = if u.owner == 0 { &p.name } else { &p.alias };
                 println!(
-                    "wolf audit: `{who}` reaches capability `{}` without declaring it ({} at {})",
+                    "wolf audit: `{who}` reaches capability `{}` without declaring it ({})",
                     u.cap.as_str(),
-                    u.what(),
-                    u.at
+                    u.what_at(),
                 );
                 undeclared = true;
             }
@@ -862,6 +861,43 @@ fn site(pkg: &wolf_sema::Package, fi: usize, span: wolf_span::Span) -> String {
     format!("{}:{line}:{col}", unit.raw.display.replace('\\', "/"))
 }
 
+/// Is module item `item` a C declaration that charges `ffi` (s221,
+/// wolf-lang#619, ruling #55)? A bodyless `extern "c" fn` — a C
+/// function wolf calls (`[abi.c.import]`, `sig::Membrane::Import`) — or
+/// an `extern "c" let`, a link-time symbol (`[abi.link.extern]`). An
+/// `extern "c" fn` with a body and an `export fn` are wolf code that C
+/// calls, and charge nothing. Only the ABI string `"c"` counts: any
+/// other is E0818 at the declaration, and charging it would put an
+/// E1504 in front of that refusal.
+fn c_declaration(
+    pkg: &wolf_sema::Package,
+    item: &wolf_sema::graph::Item,
+) -> Option<wolf_pkg::audit::ExternKind> {
+    use wolf_pkg::audit::ExternKind;
+    use wolf_sema::graph::ItemKind;
+    let unit = &pkg.files[item.file];
+    let node = unit
+        .parse
+        .root
+        .nodes()
+        .filter(|n| n.kind.is_item())
+        .nth(item.decl)?;
+    let (abi, kind) = match item.kind {
+        ItemKind::Fn => {
+            let d = wolf_ast::FnDecl::cast(node)?;
+            if wolf_sema::Membrane::of(d) != Some(wolf_sema::Membrane::Import) {
+                return None;
+            }
+            (d.extern_abi()?, ExternKind::Fn)
+        }
+        ItemKind::Let => (wolf_ast::binding_extern_abi(node)?, ExternKind::Let),
+        _ => return None,
+    };
+    let sp = abi.syntax().span;
+    let text = unit.raw.src.get(sp.lo as usize..sp.hi as usize)?;
+    (text == b"\"c\"").then_some(kind)
+}
+
 /// A site in the package: (index into `Package::files`, span).
 type Site = Option<(usize, wolf_span::Span)>;
 
@@ -874,6 +910,11 @@ type OwnReach = (wolf_pkg::manifest::Cap, wolf_pkg::audit::Reach, Site);
 ///
 /// - **imports** the facade rule names (`use std.net`, `import c`),
 ///   charged to the importing module's package, as since s51;
+/// - **C declarations** (s221, wolf-lang#619, ruling #55): each
+///   module-level bodyless `extern "c" fn` and `extern "c" let` carries
+///   `ffi` at its declaration, called or not, as `import c` does at its
+///   line; the reason names the first place the package's own code uses
+///   it;
 /// - **host builtins**: every name the resolver bound to the prelude
 ///   (`RefTarget::Prelude`) that the sandbox table puts in a
 ///   capability-carrying category, anywhere in the package's own files
@@ -908,6 +949,35 @@ pub fn cap_uses(project: &Project, res: &wolf_sema::Resolution) -> Vec<wolf_pkg:
                 })
             })
     };
+    // The package each module belongs to (`None`: std).
+    let owners: Vec<Option<usize>> = (0..pkg.modules.len())
+        .map(|m| owner_of(project, &pkg.modules[m].dotted(), is_std(m)))
+        .collect();
+    // The first place the declaring package's own code names item
+    // `item` of module `m` — its declaring file first, then the
+    // package's other files in load order; the declaration's own name
+    // token is not a use.
+    let first_use = |m: usize, item: &wolf_sema::graph::Item| -> Site {
+        let mut files: Vec<usize> = (0..pkg.modules.len())
+            .filter(|&mm| owners[mm].is_some() && owners[mm] == owners[m])
+            .flat_map(|mm| pkg.modules[mm].files.iter().copied())
+            .collect();
+        files.sort_by_key(|&fi| (fi != item.file, fi));
+        files.into_iter().find_map(|fi| {
+            res.refs
+                .get(fi)
+                .into_iter()
+                .flatten()
+                .filter(|r| {
+                    r.span != item.name_span
+                        && matches!(&r.target,
+                            wolf_sema::RefTarget::Item { module, name }
+                                if *module == m && *name == item.name)
+                })
+                .min_by_key(|r| r.span.lo)
+                .map(|r| (fi, r.span))
+        })
+    };
     // One module's own reach: (cap, how, site) in source order.
     let own_of = |m: usize| -> Vec<OwnReach> {
         let md = &pkg.modules[m];
@@ -929,6 +999,24 @@ pub fn cap_uses(project: &Project, res: &wolf_sema::Resolution) -> Vec<wolf_pkg:
                     ));
                 }
             }
+        }
+        // s221 (wolf-lang#619, ruling #55): the module's own C
+        // declarations carry `ffi` at the declaration, as `import c`
+        // carries it at its line.
+        for item in &pkg.tables[m].items {
+            let Some(kind) = c_declaration(pkg, item) else {
+                continue;
+            };
+            let used = first_use(m, item).map(|(fi, sp)| (sp, site(pkg, fi, sp)));
+            v.push((
+                Cap::Ffi,
+                Reach::Extern {
+                    name: item.name.clone(),
+                    kind,
+                    first_use: used,
+                },
+                Some((item.file, item.name_span)),
+            ));
         }
         for &fi in &md.files {
             for r in res.refs.get(fi).into_iter().flatten() {
@@ -968,6 +1056,7 @@ pub fn cap_uses(project: &Project, res: &wolf_sema::Resolution) -> Vec<wolf_pkg:
                 Reach::Import { target } => target,
                 Reach::Builtin { name } => name,
                 Reach::Std { via, .. } => via,
+                Reach::Extern { name, .. } => name,
             };
             acc.entry(*cap).or_insert_with(|| via.clone());
         }
