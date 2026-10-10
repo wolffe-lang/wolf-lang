@@ -439,12 +439,15 @@ contains only such files, the message says so — the fix is to remove
 the standalone marker from the file that belongs to the module.
 
 A `use std.…` that misses is usually neither a typo nor a module
-mistake. The standard library is a separate release, wolf-std, and no
-package of the compiler ships it: with no std tree configured, `std` is
-a small built-in stub and almost everything is absent from it. Point
-wolf at a wolf-std checkout with `--std-root <dir>` or the `WOLF_STD`
-environment variable and the real tree answers — the message says so
-whenever the stub was the one that answered.
+mistake. The standard library is wolf-std. A release archive carries it
+as `std/` beside the `wolf` binary, and that copy is the default std
+root; `--std-root <dir>`, the `WOLF_STD` environment variable and a
+`std` dependency in `wolf.pkg` each override it. With none of them and
+no `std/` beside the binary (a build from source, or a binary moved out
+of its archive), `std` is a small built-in stub and almost everything is
+absent from it; point wolf at a wolf-std checkout and the real tree
+answers — the message says so whenever the stub was the one that
+answered.
 
 Names never resolve through types here — a capitalized name used as an
 error-row tag (D30) is deferred to the type checker rather than
