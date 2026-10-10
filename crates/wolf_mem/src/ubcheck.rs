@@ -11531,10 +11531,15 @@ const EXEC_DEFAULT_PATH: &str = "/usr/bin:/bin";
 /// s225 (`[os.proc.exec]`): the program `exe` names —
 /// `wolf_rt::exec::resolve_program`'s twin, with every relative
 /// candidate checked against the machine-local working directory (the
-/// exec runs from it). A name with `/` is used as written; a bare name
-/// is searched along `path`, an empty component the working directory,
-/// and the first regular file with an execute bit wins; none is
-/// `not_found`, or `denied` when a candidate was a file without one.
+/// exec runs from it). A bare name is searched along `path`, an empty
+/// component the working directory, and the first regular file with an
+/// execute bit wins; none is `not_found`, or `denied` when a candidate
+/// was a file without one. A name with `/` is used as written, and —
+/// unlike the runtime, which lets the kernel answer — asked here first,
+/// with the answers the kernel gives (missing `not_found`, a directory
+/// or a file without an execute bit `denied`): this machine writes its
+/// print buffers out before the exec, so a refusal it can see coming
+/// must come before that, or the bytes would leave the record.
 fn exec_resolve(
     exe: &str,
     path: &str,
@@ -11544,7 +11549,15 @@ fn exec_resolve(
         return Err("not_found");
     }
     if exe.contains('/') {
-        return Ok(exe.to_string());
+        return match std::fs::metadata(resolve_in(cwd, exe.to_string())) {
+            Err(e) => Err(match e.kind() {
+                std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory => "not_found",
+                std::io::ErrorKind::PermissionDenied => "denied",
+                _ => "io",
+            }),
+            Ok(md) if !md.is_file() || !exec_bit(&md) => Err("denied"),
+            Ok(_) => Ok(exe.to_string()),
+        };
     }
     let mut saw_unexecutable = false;
     for dir in path.split(':') {
