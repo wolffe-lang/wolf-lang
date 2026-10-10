@@ -92,7 +92,8 @@ wolf run main.lu
 
 `--std-root <dir>` does the same for one invocation and overrides
 `WOLF_STD`; both override a `std` path dependency in `wolf.pkg`, and all
-three override the `std/` beside the binary. The directory tree is the
+three override the `std/` beside the binary, which a freestanding
+build (`--target x86_64-unknown-none`) never reads. The directory tree is the
 namespace (D32): `use std.list` names `<root>/list/`.
 
 ## Where things are
