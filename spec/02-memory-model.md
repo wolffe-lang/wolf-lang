@@ -709,6 +709,93 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   the same diagnostics — no site newly refused. Witnesses
   `corpus/memory/region_net_read_return.lu` and
   `region_net_read_charged.lu`.)
+  (Extended 2026-10-10 by s227 for wolf-lang#660; ruling owed. **What
+  a call can keep, it is taken to keep.** `in r { … }` sets the
+  current region, so it decides where the callee ALLOCATES
+  (`[mem.region.create.3]`); it does not move an argument, whose bytes
+  stay in the region that built them. And a callee may keep an
+  argument past its return without being refused anywhere: a store
+  through a container index or a `push` lends
+  (`[mem.region.edge.elem]`), and `l.last = copy s` on a `str` shares
+  the bytes (`[mem.tier0.move.3]`) — in the callee both are parameters,
+  whose regions it cannot compare. So
+  `region pass { let s = "built {n}"; in st { keep(mut l, s) } }`, with
+  `l` living in `st`, left `l` naming bytes in `pass`: native and
+  release printed the chunk the next region reused, the checked machine
+  stale bytes, and lupin traps `region-fault`. The rule, read off the
+  call's SIGNATURE and never the callee's body (so a fn value, a trait
+  method, a generic and a callee in another package answer alike):
+  every `mut` argument, the `mut` receiver included, **shares the
+  bytes** of every other argument and of the receiver that can reach
+  it — an argument declared `take` or `mut`, whose heap values the
+  callee may move, always; an argument passed by `read` when its type
+  can name bytes a read can share (a `str`, a fn value and what it
+  captured, a type parameter, a trait object, or a container or
+  aggregate reaching one) and the `mut` argument's type can name such
+  bytes too. A non-`Copy` result, and a declared call's `str` result,
+  share the `read` arguments' bytes the same way (the `take` and `mut`
+  ones already rode a non-`Copy` result). A builtin container method
+  keeps exactly its storing parameter (`push`'s value, `Pool.init`'s),
+  and its result is drawn from its receiver alone (`m.pairs()`,
+  `xs.pop()`). Not shared: a scalar; a `List[byte]` or any value that
+  reaches no `str`, passed by `read` — the callee can only copy it, and
+  the copy is a fresh allocation where the callee allocates; anything
+  into a `mut` argument whose type can name no bytes (an `int`, a
+  struct of scalars, a `List[int]`); a parameter's own bytes, which
+  outlive the frame. **Shared is not placed.** A value that shares
+  bytes with a site is not allocated there and embeds nothing allocated
+  there, so no store asks it to be co-located with that site
+  (`[mem.region.edge]` rules where a value is PLACED: a list built in a
+  region block that holds strings from a longer-lived region is still
+  stored into a struct built in the block), and no write, freeze or
+  promotion fact reads it; what it may not do is OUTLIVE the site's
+  region, so every arm of this clause — the block's value, a return, a
+  send, module state, a binding declared outside the block — reads
+  shared bytes exactly as it reads the sites a value holds. The same
+  reading closes two doors that need no call: **a `copy` of a
+  non-`Copy` value shares every `str` the original reaches**
+  (`[mem.tier0.move.3]` says so of a `str`, and it holds at every
+  depth: `in st { out = copy d }` handed `out.title` bytes in the block
+  `d` was built in), and so does the copy a plain index store makes
+  (`xs[i] = d`, `[mem.region.edge.elem]`). The diagnostic is E1010 at
+  the argument, naming the callee, the argument whose bytes flow, the
+  `mut` argument that outlives them and the region; for a `str`
+  argument it offers the one edit that is sound at the call —
+  `"{s}"`, an interpolation, which materializes the bytes in the
+  current region, the one the callee allocates in. The other repairs:
+  build the value outside the region block, or let the block's own
+  value leave with `copy region { … }` and make the call after it
+  (`[mem.region.copyout]`). **The cost, stated.** Nothing at run time
+  on any tier — a refusal; no accepted program's code changes
+  (measured: byte-identical binaries below). What is refused that
+  would have run correctly: a call under `in r { }` that hands a
+  region-built `str` to a callee which only READS it, beside a `mut`
+  argument that could have held it (`fn count(mut l: Log, s: str)
+  { l.seq += s.len }`) — never unsound, sometimes strict, and the
+  `"{s}"` edit or a scalar argument (`s.len`) repairs it; a summary of
+  what each callee keeps would make it exact for a direct call to a
+  fn in the same package, and is the debt. Without `in`, nothing new
+  is refused: the call's own site already pinned every `mut` argument
+  to the current region. Measured before it landed, trunk `a027b643`
+  against head at the memory check (`conform-run --phase=mem`): every
+  `.lu` file of wolf-std, boreutils, lobo `c9eff15`, pelt, pax, muzzle
+  and the book (1,156 files, 868 of them reaching the check) and
+  lobo's 120 staged tests — **zero rows moved**; lobo (26 `in life
+  { }` blocks in its entry), boreutils' 28 utilities and pelt
+  build byte-identical binaries on both tiers. The first cut of the
+  rule, which made a kept argument a site the `mut` argument HELD,
+  moved five: wolf-book's `pargrep` and three exercises (a list of
+  longer-lived strings embedded in a struct built in a `freeze region
+  { }`) and lobo's reload (`conf: copy gens[ci].conf` inside `region
+  rload`), all sound and all E1004 — which is why shared bytes are not
+  placed. Not covered, filed: a callee that SENDS its argument on a
+  channel it was handed (wolf-lang#665), and a `mut` argument that is
+  module state (the raw tier answers for a module `var`). lupin runs
+  five `List` shapes to `exit(0)` on stale bytes
+  (wolffe-lang/wolf-interp#232) and traps the rest. Witnesses
+  `corpus/memory/region_kept_arg_*.lu`, `region_kept_result_*.lu`,
+  `region_copy_shares_str.lu`, `region_copy_index_store.lu`, and the
+  legal companion `region_kept_arg_legal.lu`.)
   (Ruled 2026-09-11 by s153 for wolf-lang#310: `region scratch { let s
   = "re" + "gions"; s }` returned from a function printed `regions`
   from freed bytes on wolf 0.2.10 and lupin 0.1.31 alike, with a W1001
