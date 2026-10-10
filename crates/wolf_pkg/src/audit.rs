@@ -7,15 +7,20 @@
 //! reaches a capability it does not declare fails its build (E1504) —
 //! the tree is only trustworthy if it cannot silently under-report.
 //!
-//! What a package REACHES (s217, wolf-lang#615) is three things, each a
+//! What a package REACHES (s217, wolf-lang#615) is four things, each a
 //! [`CapUse`] the driver derives from the resolved code: an import of a
 //! capability-carrying std facade module or `import c` ([`Reach::Import`]);
-//! a prelude host builtin named anywhere in the package's own code — the
+//! a C declaration of its own — a bodyless `extern "c" fn` or an
+//! `extern "c" let` (s221, wolf-lang#619, ruling #55), which leaves
+//! wolf's world exactly as `import c` does ([`Reach::Extern`]); a
+//! prelude host builtin named anywhere in the package's own code — the
 //! sandbox table decides its capability ([`Reach::Builtin`]); and a std
 //! module the package imports whose own code reaches one
 //! ([`Reach::Std`]). Until s217 only the first counted, so a `caps=[]`
 //! dependency read the filesystem through `fs_read_text` with no
-//! diagnostic and `wolf audit` said `effective: []`.
+//! diagnostic and `wolf audit` said `effective: []`; until s221 a
+//! `caps=[]` package called `getpid` through `extern "c" fn` the same
+//! way.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -170,6 +175,36 @@ pub enum Reach {
     /// its own code (`std.process` → `os_spawn`), `via` naming the first
     /// builtin or facade import that does.
     Std { module: String, via: String },
+    /// A C declaration in the package's own code (s221, wolf-lang#619,
+    /// ruling #55): a bodyless `extern "c" fn` (a C function wolf calls,
+    /// `[abi.c.import]`) or an `extern "c" let` (a link-time symbol,
+    /// `[abi.link.extern]`). It carries `ffi` at the declaration, called
+    /// or not, as `import c` does at its line. `first_use` is the first
+    /// place the package's own code names it, when it does.
+    Extern {
+        name: String,
+        kind: ExternKind,
+        first_use: Option<(Span, String)>,
+    },
+}
+
+/// The two C declarations that charge `ffi` ([`Reach::Extern`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExternKind {
+    /// `extern "c" fn f(…)` with no body.
+    Fn,
+    /// `extern "c" let NAME: *T`.
+    Let,
+}
+
+impl ExternKind {
+    /// The declaration keyword: `fn` or `let`.
+    pub fn keyword(self) -> &'static str {
+        match self {
+            ExternKind::Fn => "fn",
+            ExternKind::Let => "let",
+        }
+    }
 }
 
 /// One site where a package's code reaches a capability.
@@ -195,15 +230,45 @@ impl CapUse {
             Reach::Import { target } => format!("imports `{target}`"),
             Reach::Builtin { name } => format!("calls `{name}`"),
             Reach::Std { module, via } => format!("uses `{module}`, which reaches `{via}`"),
+            Reach::Extern { name, kind, .. } => {
+                format!("declares `extern \"c\" {} {name}`", kind.keyword())
+            }
+        }
+    }
+
+    /// The reason a reader acts on: what the site does and where —
+    /// "calls `fs_read_text` at pad/pad.lu:4:16". A C declaration also
+    /// says where the package first uses it, or that it never does.
+    pub fn what_at(&self) -> String {
+        let base = format!("{} at {}", self.what(), self.at);
+        match &self.reach {
+            Reach::Extern {
+                kind, first_use, ..
+            } => match first_use {
+                Some((_, at)) => format!("{base}, first {} at {at}", used_word(*kind)),
+                None => format!("{base}, never {} in this package", used_word(*kind)),
+            },
+            _ => base,
         }
     }
 
     fn rank(&self) -> u8 {
         match self.reach {
-            Reach::Import { .. } => 0,
+            // A C declaration is a declared act like an import: where
+            // `import c` and an extern both reach `ffi`, the first in
+            // source order is reported (imports precede items).
+            Reach::Import { .. } | Reach::Extern { .. } => 0,
             Reach::Std { .. } => 1,
             Reach::Builtin { .. } => 2,
         }
+    }
+}
+
+/// "called" for a C function, "used" for a link-time symbol.
+fn used_word(kind: ExternKind) -> &'static str {
+    match kind {
+        ExternKind::Fn => "called",
+        ExternKind::Let => "used",
     }
 }
 
@@ -349,12 +414,57 @@ pub fn capability_check_uses(project: &Project, uses: &[CapUse]) -> Vec<Diagnost
                  `wolf audit`, I13), or drop the import.",
                 u.at
             )),
+            Reach::Extern {
+                name,
+                kind,
+                first_use,
+            } => {
+                let decl = format!("extern \"c\" {} {name}", kind.keyword());
+                let what = match kind {
+                    ExternKind::Fn => "the C function",
+                    ExternKind::Let => "the link-time symbol",
+                };
+                let used = match first_use {
+                    Some((_, at)) => format!("first {} at {at}", used_word(*kind)),
+                    None => format!("never {} in this package", used_word(*kind)),
+                };
+                Diagnostic::error(
+                    codes::E1504,
+                    span,
+                    format!("{where_} declares `{decl}` but does not declare the `{cap}` capability"),
+                )
+                .with_label(format!("declared capabilities: {}", caps_str(&p.caps)))
+                .with_note(format!(
+                    "{module} declares {what} `{name}` at {} ({used}): a bodyless \
+                     `extern \"c\"` declaration leaves wolf's world exactly as `import c` \
+                     does, whether or not it is called (ruling #55). Add `{cap}` to this \
+                     package's `capabilities: [ … ]` (making the footprint visible to \
+                     every consumer running `wolf audit`, I13), or drop the declaration.",
+                    u.at
+                ))
+            }
         };
         if let (Some(site), Reach::Builtin { name }) = (u.span, &u.reach) {
             d = d.with_secondary(
                 site,
                 format!("`{name}` reaches the `{cap}` capability here"),
             );
+        }
+        if let Reach::Extern {
+            name,
+            kind,
+            first_use,
+        } = &u.reach
+        {
+            if let Some(site) = u.span {
+                d = d.with_secondary(
+                    site,
+                    format!("`{name}` is declared here: it reaches the `{cap}` capability"),
+                );
+            }
+            if let Some((site, _)) = first_use {
+                d = d.with_secondary(*site, format!("first {} here", used_word(*kind)));
+            }
         }
         if more > 0 {
             d = d.with_note(format!(
@@ -413,12 +523,12 @@ pub fn render_audit(project: &Project, derived: Result<&[CapUse], &str>) -> Stri
                 String::new()
             };
             let line = match (declared, first) {
-                (true, Some(u)) => format!("declared; {} at {}{more}", u.what(), u.at),
+                (true, Some(u)) => format!("declared; {}{more}", u.what_at()),
                 (true, None) if derived.is_ok() => {
                     "declared (nothing in its code reaches it)".to_string()
                 }
                 (true, None) => "declared".to_string(),
-                (false, Some(u)) => format!("UNDECLARED: {} at {}{more}", u.what(), u.at),
+                (false, Some(u)) => format!("UNDECLARED: {}{more}", u.what_at()),
                 (false, None) => unreachable!("filtered above"),
             };
             out.push_str(&format!("  {}: {who} — {line}\n", cap.as_str()));
