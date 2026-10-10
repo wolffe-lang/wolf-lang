@@ -697,21 +697,66 @@ fn drain(
     })
 }
 
-/// [`drain`] for a gather: the parts become one `IoSlice` run the step
-/// advances as the kernel takes bytes. Empty parts never reach the
-/// kernel; all-empty parts are a completed write with no syscall.
+/// Parts a gather holds on the stack before it spills to the heap.
+/// lobo's response is two (a head and a body); sixteen is far past any
+/// shape the tree writes, and `IOV_MAX` is 1024.
+const GATHER_INLINE: usize = 16;
+
+/// A gather's `IoSlice` run (s222, wolf-lang#635): built on the stack
+/// for up to [`GATHER_INLINE`] non-empty parts, so a gathered write
+/// asks the host allocator for nothing — until s222 every
+/// `net_writev_head` paid two malloc/free pairs (the part list and the
+/// collected run). Past the inline count it spills to one `Vec`, the
+/// old shape. Empty parts never enter it, so they never reach the
+/// kernel.
+struct Gather<'a> {
+    inline: [std::io::IoSlice<'a>; GATHER_INLINE],
+    len: usize,
+    spill: Vec<std::io::IoSlice<'a>>,
+}
+
+impl<'a> Gather<'a> {
+    fn new() -> Self {
+        Gather {
+            inline: [std::io::IoSlice::new(&[]); GATHER_INLINE],
+            len: 0,
+            spill: Vec::new(),
+        }
+    }
+
+    fn push(&mut self, part: &'a [u8]) {
+        if part.is_empty() {
+            return;
+        }
+        if self.spill.is_empty() && self.len < GATHER_INLINE {
+            self.inline[self.len] = std::io::IoSlice::new(part);
+            self.len += 1;
+        } else {
+            if self.spill.is_empty() {
+                self.spill.extend_from_slice(&self.inline[..self.len]);
+            }
+            self.spill.push(std::io::IoSlice::new(part));
+        }
+    }
+
+    fn slices(&mut self) -> &mut [std::io::IoSlice<'a>] {
+        if self.spill.is_empty() {
+            &mut self.inline[..self.len]
+        } else {
+            &mut self.spill
+        }
+    }
+}
+
+/// [`drain`] for a gather: the parts are one `IoSlice` run the step
+/// advances as the kernel takes bytes. All-empty parts are a completed
+/// write with no syscall.
 fn drain_vectored(
     spec: ParkSpec,
-    parts: &[&[u8]],
+    gather: &mut Gather<'_>,
     mut ready: impl FnMut(&mut &mut [std::io::IoSlice<'_>]) -> Result<bool, NetErr>,
 ) -> Result<(), NetErr> {
-    let mut slices: Vec<std::io::IoSlice<'_>> = parts
-        .iter()
-        .copied()
-        .filter(|p| !p.is_empty())
-        .map(std::io::IoSlice::new)
-        .collect();
-    let mut bufs: &mut [std::io::IoSlice<'_>] = &mut slices;
+    let mut bufs: &mut [std::io::IoSlice<'_>] = gather.slices();
     if bufs.is_empty() {
         return Ok(());
     }
@@ -1307,7 +1352,11 @@ impl NetTable {
     /// skipped; parts that are all empty send nothing.
     pub fn writev(&mut self, fd: i64, parts: &[&[u8]]) -> Result<(), NetErr> {
         let spec = self.park_spec(fd, true)?;
-        drain_vectored(spec, parts, |bufs| self.writev_ready(fd, bufs))
+        let mut gather = Gather::new();
+        for p in parts {
+            gather.push(p);
+        }
+        drain_vectored(spec, &mut gather, |bufs| self.writev_ready(fd, bufs))
     }
 
     /// [`NetTable::writev`]'s syscall half: `bufs` is advanced past
@@ -1834,7 +1883,7 @@ pub unsafe extern "C" fn __wolf_rt_net_writev(fd: i64, hdr: i64) -> i64 {
     let Some(heads) = (unsafe { crate::list::i64_elems(hdr) }) else {
         return net_code::IO;
     };
-    let mut parts: Vec<&[u8]> = Vec::with_capacity(heads.len());
+    let mut gather = Gather::new();
     for &h in heads {
         if h == 0 {
             return net_code::IO;
@@ -1842,13 +1891,13 @@ pub unsafe extern "C" fn __wolf_rt_net_writev(fd: i64, hdr: i64) -> i64 {
         let Some(part) = (unsafe { crate::list::u8_elems(h) }) else {
             return net_code::IO;
         };
-        parts.push(part);
+        gather.push(part);
     }
     let spec = match tbl().park_spec(fd, true) {
         Ok(spec) => spec,
         Err(t) => return code_of_tag(t),
     };
-    match drain_vectored(spec, &parts, |bufs| tbl().writev_ready(fd, bufs)) {
+    match drain_vectored(spec, &mut gather, |bufs| tbl().writev_ready(fd, bufs)) {
         Ok(()) => net_code::OK,
         Err(t) => code_of_tag(t),
     }
@@ -1872,11 +1921,11 @@ pub unsafe extern "C" fn __wolf_rt_net_writev_head(fd: i64, hp: i64, hl: i64, hd
     let Some(heads) = (unsafe { crate::list::i64_elems(hdr) }) else {
         return net_code::IO;
     };
-    let mut parts: Vec<&[u8]> = Vec::with_capacity(heads.len() + 1);
+    let mut gather = Gather::new();
     if hl > 0 && hp != 0 {
         // SAFETY: caller contract — a valid str pair addresses `hl`
         // bytes that outlive the call (the gather drains inside it).
-        parts.push(unsafe { core::slice::from_raw_parts(hp as *const u8, hl as usize) });
+        gather.push(unsafe { core::slice::from_raw_parts(hp as *const u8, hl as usize) });
     }
     for &h in heads {
         if h == 0 {
@@ -1885,13 +1934,13 @@ pub unsafe extern "C" fn __wolf_rt_net_writev_head(fd: i64, hp: i64, hl: i64, hd
         let Some(part) = (unsafe { crate::list::u8_elems(h) }) else {
             return net_code::IO;
         };
-        parts.push(part);
+        gather.push(part);
     }
     let spec = match tbl().park_spec(fd, true) {
         Ok(spec) => spec,
         Err(t) => return code_of_tag(t),
     };
-    match drain_vectored(spec, &parts, |bufs| tbl().writev_ready(fd, bufs)) {
+    match drain_vectored(spec, &mut gather, |bufs| tbl().writev_ready(fd, bufs)) {
         Ok(()) => net_code::OK,
         Err(t) => code_of_tag(t),
     }
