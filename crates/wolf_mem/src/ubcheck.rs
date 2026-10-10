@@ -7770,6 +7770,110 @@ impl<'t> Machine<'t> {
                     Err(t) => Ok(tag(t)),
                 }
             }
+            // s225 (`[os.proc.exec]`, wolf-lang#534): replace the running
+            // program — and here the running program is the `wolf`
+            // process interpreting it, so a successful exec REPLACES
+            // `wolf`, as a native exec replaces the binary: the pid stays,
+            // the image goes. `wolf_rt::exec`'s rules and their order,
+            // entry for entry: shape (`invalid`), host (`unsupported` on
+            // windows), sources (`io`, the machine's own table or 0..2),
+            // program (`not_found`/`denied`/`io`, searched along the
+            // HANDED environment's PATH). Then three things only this
+            // machine has to do, each undone if the exec fails: its
+            // buffered print stream is written to descriptor 1 (the bytes
+            // a native program printed are already there), the process
+            // enters the machine-local working directory, and `SIGPIPE`
+            // goes back to the default (the `wolf` binary ignores it, as
+            // Rust programs do; the program it runs never asked to).
+            // Under `conform-run` no record follows a successful exec: the
+            // observation ended with the program.
+            "os_exec" => {
+                let (
+                    Some(exe),
+                    Some(Value::List(argv_id)),
+                    Some(Value::List(env_id)),
+                    Some(Value::List(map_id)),
+                ) = (str_arg(0), argv.get(1), argv.get(2), argv.get(3))
+                else {
+                    return self.refuse("this os call shape", span);
+                };
+                let mut words = Vec::new();
+                for v in self.lists.get(*argv_id).into_iter().flatten() {
+                    match v {
+                        Value::Str(s) => words.push(s.clone()),
+                        _ => return self.refuse("a non-str argv element", span),
+                    }
+                }
+                let mut entries = Vec::new();
+                for v in self.lists.get(*env_id).into_iter().flatten() {
+                    match v {
+                        Value::Str(s) => entries.push(s.clone()),
+                        _ => return self.refuse("a non-str environment entry", span),
+                    }
+                }
+                let mut flat = Vec::new();
+                for v in self.lists.get(*map_id).into_iter().flatten() {
+                    match v {
+                        Value::Int(n) => flat.push(*n),
+                        _ => return self.refuse("a non-int descriptor map element", span),
+                    }
+                }
+                let entry_ok = |e: &String| match e.split_once('=') {
+                    None => false,
+                    Some((name, _)) => !name.is_empty() && !e.contains('\0'),
+                };
+                if words.is_empty()
+                    || exe.contains('\0')
+                    || words.iter().any(|w| w.contains('\0'))
+                    || !entries.iter().all(entry_ok)
+                {
+                    return Ok(tag("invalid"));
+                }
+                let Some(map) = fd_map_of(&flat) else {
+                    return Ok(tag("invalid"));
+                };
+                if cfg!(not(unix)) {
+                    return Ok(tag("unsupported"));
+                }
+                let mut placed = Vec::with_capacity(map.len());
+                for &(t, s) in &map {
+                    match s {
+                        None => placed.push((t, None)),
+                        Some(h) => match self.fs_handle(h).and_then(|f| f.try_clone().ok()) {
+                            None => return Ok(tag("io")),
+                            Some(f) => placed.push((t, Some(f))),
+                        },
+                    }
+                }
+                let search = entries
+                    .iter()
+                    .find_map(|e| e.strip_prefix("PATH="))
+                    .unwrap_or(EXEC_DEFAULT_PATH)
+                    .to_string();
+                let program = match exec_resolve(&exe, &search, &self.cwd) {
+                    Ok(p) => p,
+                    Err(t) => return Ok(tag(t)),
+                };
+                // Descriptors 1 and 2 get what the program printed so far;
+                // the buffers are emptied so a failed exec's record does
+                // not carry them twice (the bytes are on the streams,
+                // ahead of the record — `[os.proc.spawn]`'s asymmetry).
+                {
+                    use std::io::Write as _;
+                    let mut out = std::io::stdout().lock();
+                    let _ = out.write_all(&self.stdout);
+                    let _ = out.flush();
+                    let mut err = std::io::stderr().lock();
+                    let _ = err.write_all(&self.stderr);
+                    let _ = err.flush();
+                }
+                self.stdout.clear();
+                self.stderr.clear();
+                match exec_replace(&program, &words, &entries, &placed, self.cwd.as_deref()) {
+                    Err(t) => Ok(tag(t)),
+                    Ok(never) => match never {},
+                }
+            }
             "os_wait" => {
                 let Some(h) = int_arg(0) else {
                     return self.refuse("this os call shape", span);
@@ -9459,8 +9563,8 @@ impl<'t> Machine<'t> {
             | "os_signal_ignore" | "os_signal_default" | "os_signal_poll" | "os_spawn_job"
             | "os_proc_pid" | "os_wait_status" | "os_pgid" | "os_term_foreground"
             | "os_term_set_foreground" | "os_term_mode" | "os_term_set_mode"
-            // s225 (#534): the removal.
-            | "env_unset"
+            // s225 (#534): the removal and the exec.
+            | "env_unset" | "os_exec"
             | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
             | "str_from_utf8"
@@ -11417,6 +11521,191 @@ fn dir_searchable(dir: &std::path::Path) -> bool {
 #[cfg(not(unix))]
 fn dir_searchable(_dir: &std::path::Path) -> bool {
     true
+}
+
+/// s225 (`[os.proc.exec]`): the search path a bare program name falls
+/// back to when the handed environment names no `PATH` —
+/// `wolf_rt::exec::DEFAULT_PATH`'s twin.
+const EXEC_DEFAULT_PATH: &str = "/usr/bin:/bin";
+
+/// s225 (`[os.proc.exec]`): the program `exe` names —
+/// `wolf_rt::exec::resolve_program`'s twin, with every relative
+/// candidate checked against the machine-local working directory (the
+/// exec runs from it). A name with `/` is used as written; a bare name
+/// is searched along `path`, an empty component the working directory,
+/// and the first regular file with an execute bit wins; none is
+/// `not_found`, or `denied` when a candidate was a file without one.
+fn exec_resolve(
+    exe: &str,
+    path: &str,
+    cwd: &Option<std::path::PathBuf>,
+) -> Result<String, &'static str> {
+    if exe.is_empty() {
+        return Err("not_found");
+    }
+    if exe.contains('/') {
+        return Ok(exe.to_string());
+    }
+    let mut saw_unexecutable = false;
+    for dir in path.split(':') {
+        let cand = if dir.is_empty() {
+            format!("./{exe}")
+        } else {
+            format!("{}/{exe}", dir.trim_end_matches('/'))
+        };
+        let Ok(md) = std::fs::metadata(resolve_in(cwd, cand.clone())) else {
+            continue;
+        };
+        if !md.is_file() {
+            continue;
+        }
+        if exec_bit(&md) {
+            return Ok(cand);
+        }
+        saw_unexecutable = true;
+    }
+    Err(if saw_unexecutable { "denied" } else { "not_found" })
+}
+
+#[cfg(unix)]
+fn exec_bit(md: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::PermissionsExt as _;
+    md.permissions().mode() & 0o111 != 0
+}
+
+#[cfg(not(unix))]
+fn exec_bit(_md: &std::fs::Metadata) -> bool {
+    false
+}
+
+/// s225 (`[os.proc.exec]`): `wolf_rt::exec`'s steps 5 and 6 for the
+/// checked machine — every target saved, the map placed, the machine's
+/// working directory entered and `SIGPIPE` defaulted, `execve`; on
+/// failure every one of those undone and the row answered. `Ok` cannot
+/// be built.
+#[cfg(unix)]
+fn exec_replace(
+    program: &str,
+    argv: &[String],
+    env: &[String],
+    map: &[(i64, Option<std::fs::File>)],
+    cwd: Option<&std::path::Path>,
+) -> Result<std::convert::Infallible, &'static str> {
+    use std::ffi::CString;
+    use std::os::fd::AsRawFd as _;
+    let cstr = |s: &str| CString::new(s).map_err(|_| "invalid");
+    let path = cstr(program)?;
+    let args: Vec<CString> = argv.iter().map(|a| cstr(a)).collect::<Result<_, _>>()?;
+    let envs: Vec<CString> = env.iter().map(|e| cstr(e)).collect::<Result<_, _>>()?;
+    let mut arg_ptrs: Vec<*const libc::c_char> = args.iter().map(|c| c.as_ptr()).collect();
+    arg_ptrs.push(std::ptr::null());
+    let mut env_ptrs: Vec<*const libc::c_char> = envs.iter().map(|c| c.as_ptr()).collect();
+    env_ptrs.push(std::ptr::null());
+    let floor = map
+        .iter()
+        .map(|(t, _)| *t as libc::c_int + 1)
+        .max()
+        .unwrap_or(3)
+        .max(3);
+    let old_cwd = match cwd {
+        Some(_) => Some(std::env::current_dir().map_err(|_| "io")?),
+        None => None,
+    };
+    // (target, saved copy or -1, its flags)
+    let mut saved: Vec<(libc::c_int, libc::c_int, libc::c_int)> = Vec::with_capacity(map.len());
+    let mut staged: Vec<libc::c_int> = Vec::with_capacity(map.len());
+    // SAFETY: descriptor calls on numbers this function makes (saves,
+    // stages) or the map names, and one `signal` call; every failure
+    // below restores what was moved before answering.
+    unsafe {
+        let undo = |saved: &[(libc::c_int, libc::c_int, libc::c_int)], staged: &[libc::c_int]| {
+            for &(t, c, flags) in saved {
+                if c >= 0 {
+                    libc::dup2(c, t);
+                    libc::fcntl(t, libc::F_SETFD, flags);
+                    libc::close(c);
+                } else {
+                    libc::close(t);
+                }
+            }
+            for &st in staged {
+                if st >= 0 {
+                    libc::close(st);
+                }
+            }
+        };
+        for (t, _) in map {
+            let t = *t as libc::c_int;
+            let flags = libc::fcntl(t, libc::F_GETFD);
+            let copy = if flags < 0 {
+                -1
+            } else {
+                let c = libc::fcntl(t, libc::F_DUPFD_CLOEXEC, floor);
+                if c < 0 {
+                    undo(&saved, &staged);
+                    return Err("io");
+                }
+                c
+            };
+            saved.push((t, copy, flags));
+        }
+        for (_, s) in map {
+            let st = match s {
+                None => -1,
+                Some(f) => {
+                    let c = libc::fcntl(f.as_raw_fd(), libc::F_DUPFD_CLOEXEC, floor);
+                    if c < 0 {
+                        undo(&saved, &staged);
+                        return Err("io");
+                    }
+                    c
+                }
+            };
+            staged.push(st);
+        }
+        for (i, (t, _)) in map.iter().enumerate() {
+            let t = *t as libc::c_int;
+            if staged[i] >= 0 {
+                if libc::dup2(staged[i], t) < 0 {
+                    undo(&saved, &staged);
+                    return Err("io");
+                }
+            } else {
+                libc::close(t);
+            }
+        }
+        if let Some(d) = cwd
+            && std::env::set_current_dir(d).is_err()
+        {
+            undo(&saved, &staged);
+            return Err("io");
+        }
+        let old_pipe = libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+        libc::execve(path.as_ptr(), arg_ptrs.as_ptr(), env_ptrs.as_ptr());
+        let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
+        libc::signal(libc::SIGPIPE, old_pipe);
+        if let Some(d) = old_cwd {
+            let _ = std::env::set_current_dir(d);
+        }
+        undo(&saved, &staged);
+        Err(match errno {
+            libc::ENOENT | libc::ENOTDIR => "not_found",
+            libc::EACCES | libc::EPERM => "denied",
+            _ => "io",
+        })
+    }
+}
+
+/// s225: windows answered `unsupported` before anything reached here.
+#[cfg(not(unix))]
+fn exec_replace(
+    _program: &str,
+    _argv: &[String],
+    _env: &[String],
+    _map: &[(i64, Option<std::fs::File>)],
+    _cwd: Option<&std::path::Path>,
+) -> Result<std::convert::Infallible, &'static str> {
+    Err("unsupported")
 }
 
 /// s225 (`[os.env.unset]`): a child is handed the program's environment
