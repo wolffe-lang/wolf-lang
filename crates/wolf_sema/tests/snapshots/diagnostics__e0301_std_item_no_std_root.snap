@@ -8,6 +8,6 @@ error[E0301]: module `std` has no item named `list`
 1 | use std.list
   |         ^^^^ not found in the module
   |
-  = note: no standard library is configured, so `std` here is a small built-in stub. The standard
-    library is a separate release (wolf-std): point wolf at a checkout with `--std-root
-    <dir>` or the `WOLF_STD` environment variable.
+  = note: no standard library was found, so `std` here is a small built-in stub. A release archive
+    carries wolf-std as `std/` beside the `wolf` binary; otherwise point wolf at a checkout
+    with `--std-root <dir>` or the `WOLF_STD` environment variable.

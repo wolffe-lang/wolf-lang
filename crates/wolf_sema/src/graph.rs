@@ -1449,15 +1449,17 @@ impl LoadState<'_> {
 // ------------------------------------------------- diagnostic builders --
 
 /// The rider on every `use std.…` miss that reaches the prelude stub
-/// tables (#251): reaching them AT ALL means no std root is configured,
-/// and that is the one fact the reader needs and cannot guess. A
-/// packaged wolf ships no standard library, so `use std.list` reported
-/// only what was absent and never what would supply it.
+/// tables (#251): reaching them AT ALL means no std root is configured
+/// and none sits beside the binary, and that is the one fact the reader
+/// needs and cannot guess. Since ruling #29 a release archive carries
+/// wolf-std as `std/` beside `wolf`, so this note now speaks to a build
+/// from source or a binary moved away from its archive.
 fn no_std_root_note(d: Diagnostic) -> Diagnostic {
     d.with_note(
-        "no standard library is configured, so `std` here is a small built-in stub. \
-         The standard library is a separate release (wolf-std): point wolf at a \
-         checkout with `--std-root <dir>` or the `WOLF_STD` environment variable.",
+        "no standard library was found, so `std` here is a small built-in stub. \
+         A release archive carries wolf-std as `std/` beside the `wolf` binary; \
+         otherwise point wolf at a checkout with `--std-root <dir>` or the \
+         `WOLF_STD` environment variable.",
     )
 }
 

@@ -21,9 +21,9 @@ error[E0301]: module `std.fs` has no item named `write_text`
 1 | use std.fs.{read_text, write_text}
   |                        ^^^^^^^^^^ not found in the module
   |
-  = note: no standard library is configured, so `std` here is a small built-in stub. The standard
-    library is a separate release (wolf-std): point wolf at a checkout with `--std-root
-    <dir>` or the `WOLF_STD` environment variable.
+  = note: no standard library was found, so `std` here is a small built-in stub. A release archive
+    carries wolf-std as `std/` beside the `wolf` binary; otherwise point wolf at a checkout
+    with `--std-root <dir>` or the `WOLF_STD` environment variable.
 
 error[E0301]: there is no module named `std.net.http` to import
  --> mem:///main.lu:2:5
@@ -33,6 +33,6 @@ error[E0301]: there is no module named `std.net.http` to import
   |
   = note: a module is a directory of `.lu` files: a sibling directory of the package root forms
     one (D32), and `std.…` or a package alias also resolves here.
-  = note: no standard library is configured, so `std` here is a small built-in stub. The standard
-    library is a separate release (wolf-std): point wolf at a checkout with `--std-root
-    <dir>` or the `WOLF_STD` environment variable.
+  = note: no standard library was found, so `std` here is a small built-in stub. A release archive
+    carries wolf-std as `std/` beside the `wolf` binary; otherwise point wolf at a checkout
+    with `--std-root <dir>` or the `WOLF_STD` environment variable.
