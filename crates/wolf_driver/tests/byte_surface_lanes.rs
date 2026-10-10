@@ -640,9 +640,10 @@ fn bytes_after_read_line_continue_where_it_stopped() {
 /// The native and release binaries count 0 sightings of another task's
 /// number, also under `taskset -c 0-3`, where the tasks really run at once
 /// (strict evidence, wolf-lang#571); lupin, whose machine is one per task,
-/// agrees. The checked machine declines structured concurrency by name
-/// (C1 deferred), so it has one task and nothing to race: `unsupported`,
-/// asserted, never skipped. Red at trunk: E0301 (`os_error` unknown); a
+/// agrees. The checked machine runs the eight tasks one at a time and
+/// keeps the word with each task's frames (s226, `[exec.checked.task]`;
+/// it declined the program by name while C1 was deferred), so it counts
+/// 0 as well. Red at trunk: E0301 (`os_error` unknown); a
 /// process-wide word is the defect this catches (seen red locally with the
 /// word made a process-wide atomic, the PR's evidence index).
 #[test]
@@ -653,8 +654,9 @@ fn os_error_is_the_tasks_own() {
     let (checked, _) =
         conform(&entry, &dir, "--checked", Stdin::File(b"")).expect("the checked lane always runs");
     assert_eq!(
-        checked.verdict, "unsupported",
-        "the checked machine declines structured concurrency by name"
+        (checked.verdict.as_str(), checked.stdout.as_bytes()),
+        ("exit(0)", want),
+        "the checked machine keeps the host's number per task"
     );
     let mut runs: Vec<(&str, Command)> = Vec::new();
     for release in [false, true] {
