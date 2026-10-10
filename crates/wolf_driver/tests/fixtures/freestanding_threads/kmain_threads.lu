@@ -1,0 +1,36 @@
+// s223 (wolf-lang#611): px06's witness with a switch that carries the
+// runtime's ambient slot per thread (`wolf_rt_ambient_get` /
+// `wolf_rt_ambient_set`). Prints
+//
+//     threads: A list 64, region ra <x> bytes, region rb <y> bytes, sum <s>, both exited
+//     ambient: the List landed in ra|rb
+//     books: every block back=<bool>
+//
+// and returns 33. The gate wants `ra` ≥ 512, `rb` 0, sum 2016.
+extern "c" fn kw_outb(port: u16, v: u8)
+
+fn emit_line(s: str) {
+    for b in s.bytes() {
+        // # Safety: kw_outb is rt_stub.S's port write (stdout here).
+        unsafe {
+            kw_outb(1016, b as int as u8)
+        }
+    }
+    // # Safety: as above.
+    unsafe {
+        kw_outb(1016, 10)
+    }
+}
+
+export fn kmain() -> i64 {
+    let before = outstanding_bytes()
+    run(SAVE_AMBIENT)
+    let after = outstanding_bytes()
+    let both = get(A_DONE) == 1 && get(B_DONE) == 1
+    let exited = if both { "both exited" } else { "NOT both exited" }
+    let landed = if get(RA) > 0 { "ra" } else { "rb" }
+    emit_line("threads: A list {get(LEN)}, region ra {get(RA)} bytes, region rb {get(RB)} bytes, sum {get(SUM)}, {exited}")
+    emit_line("ambient: the List landed in {landed}")
+    emit_line("books: every block back={before == after}")
+    33
+}

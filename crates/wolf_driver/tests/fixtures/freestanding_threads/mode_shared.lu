@@ -1,0 +1,4 @@
+// The control: the switch leaves the runtime's one slot alone, so the
+// threads share it (wolf-lang#611's shape) — proof that the gate's
+// switch reaches the hazard at all.
+let SAVE_AMBIENT: bool = false

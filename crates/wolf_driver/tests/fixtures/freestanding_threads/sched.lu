@@ -1,0 +1,137 @@
+// s223 (wolf-lang#611, `[abi.target.none.ambient]`): a cooperative
+// scheduler for two threads of control over threads.S's switch, and
+// px06's witness (pax `kernel/heapthreads`) as its two bodies.
+//
+// Thread A enters `region ra` and yields; B enters `region rb` and
+// yields; A builds a `List[int]` of 64 — inside `ra`, as written — and
+// records both ledgers' view; B leaves `rb` (freeing it) and exits; A,
+// back, sums its List and leaves `ra`. The List belongs in `ra`. When
+// the switch saves and restores the runtime's ambient slot per thread
+// (`wolf_rt_ambient_get` / `wolf_rt_ambient_set`), it lands there;
+// when it does not, the slot is still B's when A allocates, the List
+// is charged to and allocated in `rb`, and B's exit frees it under A.
+//
+// Every scheduler word lives in threads.S's `kw_state`, read and
+// written volatile: a switch writes them behind the compiler's back.
+extern "c" fn kw_switch(save: *u64, next: u64)
+extern "c" fn kw_thread_sp(t: u64) -> u64
+extern "c" fn wolf_rt_ambient_get() -> *u8
+extern "c" fn wolf_rt_ambient_set(p: *u8)
+extern "c" let kw_state: *u64
+
+// kw_state's words.
+let CUR: u64 = 0
+let SP: u64 = 1 // 1, 2, 3: each thread's saved %rsp (0 is kmain)
+let AMB: u64 = 4 // 4, 5, 6: each thread's saved ambient region
+let ALIVE: u64 = 7 // 7, 8, 9
+let SAVE: u64 = 10 // 1: the switch carries the ambient slot
+pub let RA: u64 = 11
+pub let RB: u64 = 12
+pub let LEN: u64 = 13
+pub let SUM: u64 = 14
+pub let A_DONE: u64 = 15
+pub let B_DONE: u64 = 16
+
+fn at(i: u64) -> u64 {
+    // # Safety: the address of threads.S's 256-byte kw_state.
+    unsafe { kw_state as u64 + i * 8 }
+}
+
+pub fn get(i: u64) -> u64 {
+    // # Safety: a word of kw_state.
+    unsafe { (at(i) as *u64).read_volatile() }
+}
+
+pub fn put(i: u64, v: u64) {
+    // # Safety: a word of kw_state.
+    unsafe { (at(i) as *u64).write_volatile(v) }
+}
+
+/// Switch from the current thread to `next`. With SAVE set, the
+/// outgoing thread's ambient region goes into its word and the
+/// incoming thread's comes out of its own — what a kernel's switch
+/// does with the pair; without it the runtime's one slot rides along.
+fn switch_to(next: u64) {
+    let me = get(CUR)
+    if get(SAVE) == 1 {
+        // # Safety: the freestanding runtime's documented pair; the
+        // value restored is one this thread's own switch saved (or
+        // null, the root, for a fresh thread).
+        unsafe {
+            put(AMB + me, wolf_rt_ambient_get() as u64)
+            wolf_rt_ambient_set(get(AMB + next) as *u8)
+        }
+    }
+    put(CUR, next)
+    // # Safety: threads.S's switch; `next`'s word holds a %rsp that
+    // kw_switch or kw_thread_sp left.
+    unsafe { kw_switch(at(SP + me) as *u64, get(SP + next)) }
+}
+
+/// Give the CPU to the other thread if it is alive, else to kmain.
+fn yield_now() {
+    let me = get(CUR)
+    let other: u64 = if me == 1 { 2 } else { 1 }
+    switch_to(if get(ALIVE + other) == 1 { other } else { 0 })
+}
+
+/// A thread's end: it is never switched to again.
+fn exit_thread() {
+    put(ALIVE + get(CUR), 0)
+    yield_now()
+}
+
+fn body_a() {
+    region ra {
+        yield_now() // B enters rb
+        var xs = List[int]()
+        for i in 0..64 {
+            (mut xs).push(i)
+        }
+        put(RA, region_bytes(ra) as u64)
+        put(LEN, xs.len as u64)
+        yield_now() // B reads rb and leaves it
+        var sum = 0
+        for x in xs {
+            sum += x
+        }
+        put(SUM, sum as u64)
+    }
+    put(A_DONE, 1)
+}
+
+fn body_b() {
+    region rb {
+        yield_now() // A allocates
+        put(RB, region_bytes(rb) as u64)
+    }
+    put(B_DONE, 1)
+}
+
+/// threads.S's kw_thread_entry lands here on a fresh thread's stack.
+export fn kw_thread_main(t: u64) {
+    if t == 1 {
+        body_a()
+    } else {
+        body_b()
+    }
+    exit_thread()
+}
+
+/// Run A and B to their ends from kmain; `save`: the switch carries
+/// the ambient slot.
+pub fn run(save: bool) {
+    put(SAVE, if save { 1 } else { 0 })
+    put(CUR, 0)
+    // # Safety: threads.S builds each thread's first frame.
+    unsafe {
+        put(SP + 1, kw_thread_sp(1))
+        put(SP + 2, kw_thread_sp(2))
+    }
+    put(AMB + 1, 0)
+    put(AMB + 2, 0)
+    put(ALIVE + 1, 1)
+    put(ALIVE + 2, 1)
+    switch_to(1)
+    // Both threads have exited when kmain runs again.
+}

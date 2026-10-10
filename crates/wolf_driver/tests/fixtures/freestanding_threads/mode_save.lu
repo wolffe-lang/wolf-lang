@@ -1,0 +1,2 @@
+// The witness: the switch carries the ambient slot.
+let SAVE_AMBIENT: bool = true

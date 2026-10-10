@@ -1,0 +1,8 @@
+// s223: the gate's kernel lists its assembly, so every call through a
+// bodyless `extern "c" fn` is judged by the roster ([abi.asm.roster]):
+// the ambient pair must be admitted as hooks, never as E1306.
+pkg {
+    name: "s223/threads"
+    version: "0.0.1"
+    asm: ["rt_stub.S", "threads.S"]
+}
