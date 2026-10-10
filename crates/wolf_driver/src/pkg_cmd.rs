@@ -690,8 +690,11 @@ fn derive_uses(dir: &Path, project: &Project) -> Result<Vec<wolf_pkg::audit::Cap
             };
             loaded = true;
             for u in more {
+                // Compared as the reader sees them: a C declaration's
+                // first use carries a span, and each entry's view
+                // numbers its files afresh (s221).
                 let dup = uses.iter().any(|v| {
-                    v.owner == u.owner && v.cap == u.cap && v.reach == u.reach && v.at == u.at
+                    v.owner == u.owner && v.cap == u.cap && v.what_at() == u.what_at()
                 });
                 if !dup {
                     uses.push(u);
