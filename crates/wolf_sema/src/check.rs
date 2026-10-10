@@ -13918,6 +13918,10 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         }
         "env_get" => (vec![str_], rowed(table, str_, &["missing", "utf8"])),
         "env_set" => (vec![str_, str_], rowed(table, unit, &["invalid"])),
+        // s225 (wolf-lang#534, `[os.env.unset]`): remove a variable;
+        // absent is not an error (POSIX `unsetenv`), and the names
+        // `env_set` refuses are `invalid` here too.
+        "env_unset" => (vec![str_], rowed(table, unit, &["invalid"])),
         // `os_exe` (s90, #69) is `os_cwd`'s shape: a process-context
         // read whose one failure — no path, or one this str tier
         // cannot hold — is `io`. It exists so std.process's rig can
@@ -13996,6 +14000,24 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // s215 (`[os.fs.isatty]`): whether a handle names a terminal;
         // a closed or forged handle is `io`.
         "os_isatty" => (vec![int_], rowed(table, bool_, &["io"])),
+        // s225 (wolf-lang#534, `[os.proc.exec]`): replace the running
+        // program. `os_exec(exe, argv, env, map)` — argv WHOLE (argv[0]
+        // included), env the complete environment as `NAME=VALUE`
+        // entries, map `os_spawn_fds`'s pairs with an unmapped 0..2 left
+        // as this process's own. Unit, as `os_exit` is: it returns only
+        // with a row; on success nothing returns.
+        "os_exec" => {
+            let list_str = table.intern(TyKind::List(str_));
+            let list_int = table.intern(TyKind::List(int_));
+            (
+                vec![str_, list_str, list_str, list_int],
+                rowed(
+                    table,
+                    unit,
+                    &["unsupported", "invalid", "not_found", "denied", "io"],
+                ),
+            )
+        }
         "os_wait" => (vec![int_], rowed(table, int_, &["signal", "io"])),
         "os_kill" => (vec![int_], rowed(table, unit, &["io"])),
         // signal RECEPTION (s114, #126): the abstraction is by

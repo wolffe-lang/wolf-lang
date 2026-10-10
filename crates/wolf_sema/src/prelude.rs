@@ -265,6 +265,9 @@ pub const PRELUDE: &[Ambient] = &[
     host("env_args"),
     host("env_get"),
     host("env_set"),
+    // s225 (wolf-lang#534, `[os.env.unset]`): the removal `env_set`
+    // lacked — `env`-tagged with the family it completes.
+    host("env_unset"),
     host("env_vars"),
     host("os_cwd"),
     // s90 (wolf-lang#69): the running executable's path. `env`-tagged
@@ -288,6 +291,10 @@ pub const PRELUDE: &[Ambient] = &[
     host("os_pipe"),
     host("os_chdir"),
     host("os_isatty"),
+    // s225 (wolf-lang#534, `[os.proc.exec]`): replace the running
+    // program — argv, an explicit environment and a descriptor map;
+    // `exec`-tagged with the spawn family it ends.
+    host("os_exec"),
     host("os_wait"),
     host("os_kill"),
     // signal RECEPTION (s114, wolf-lang#126): the receive side of the
