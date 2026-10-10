@@ -74,10 +74,13 @@ describes the first release feature by feature.
 
 ## The standard library
 
-The standard library is a separate repository,
-[wolf-std](https://github.com/wolffe-lang/wolf-std), on its own release
-cadence. No package of the compiler includes it. Until one does,
-`use std.…` resolves against a small built-in stub, which is why
+The standard library is its own repository,
+[wolf-std](https://github.com/wolffe-lang/wolf-std). The release archive
+carries it, pinned to the commit `crates/wolf_driver/STD-PIN` names, as
+`std/` beside the `wolf` binary (`std/STD-REV` records the commit), and
+that copy is the default: `use std.env` works from an unpacked archive
+with nothing set. A `wolf` built from source has no `std/` beside it, so
+there `use std.…` resolves against a small built-in stub, which is why
 `use std.list` reports that module `std` has no item named `list`.
 Point the compiler at a wolf-std checkout and the real tree answers:
 
@@ -88,8 +91,9 @@ wolf run main.lu
 ```
 
 `--std-root <dir>` does the same for one invocation and overrides
-`WOLF_STD`. The directory tree is the namespace (D32): `use std.list`
-names `<root>/list/`.
+`WOLF_STD`; both override a `std` path dependency in `wolf.pkg`, and all
+three override the `std/` beside the binary. The directory tree is the
+namespace (D32): `use std.list` names `<root>/list/`.
 
 ## Where things are
 
