@@ -2095,12 +2095,17 @@ code!(E1504, "this package uses a capability its manifest does not declare", r#"
 Capability manifests (I13) make a package's ambient-authority footprint
 a reviewable, diffable declaration: a package that touches `std.net`
 must say `capabilities: [net]` in its `wolf.pkg`, and likewise `fs` and
-`env` for those facades. The build found an import of a
-capability-carrying std module that the owning package's manifest does
-not declare. Declare the capability (making the footprint visible to
-every consumer running `wolf audit`) or drop the import. Undeclared
-capability use is a build error, not a warning — the audit tree is only
-trustworthy if it cannot silently under-report.
+`env` for those facades. The build found code in the owning package
+that reaches a capability its manifest does not declare: an import of a
+capability-carrying std module or `import c` (`ffi`); a C declaration
+of its own — a bodyless `extern "c" fn` or an `extern "c" let` — which
+carries `ffi` whether or not it is called; a host builtin in a
+capability-carrying family (`fs_read_text` → `fs`); or a std module
+whose own code reaches one ([pkg.caps]). Declare the capability
+(making the footprint visible to every consumer running `wolf audit`)
+or remove what reaches it. Undeclared capability use is a build error,
+not a warning — the audit tree is only trustworthy if it cannot
+silently under-report.
 "#);
 
 code!(E1505, "dependency resolution failed", r#"
