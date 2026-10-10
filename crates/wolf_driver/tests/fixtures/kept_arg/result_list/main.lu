@@ -1,0 +1,26 @@
+fn mk(s: str) -> List[str] {
+    var xs = List[str]()
+    (mut xs).push(s)
+    xs
+}
+
+fn main() -> !int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        var o = List[str]()
+        region pass {
+            let s = "built in pass, {seq0} uses"
+
+            in st {
+                o = mk(s)
+            }
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{o[0]}")
+    }
+    0
+}

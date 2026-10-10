@@ -1,0 +1,24 @@
+fn keep_g[T](mut xs: List[T], v: T) {
+    (mut xs).push(v)
+}
+
+fn main() -> !int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        var xs = List[str]()
+        region pass {
+            let s = "built in pass, {seq0} uses"
+
+            in st {
+                keep_g(mut xs, s)
+            }
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{xs[0]}")
+    }
+    0
+}

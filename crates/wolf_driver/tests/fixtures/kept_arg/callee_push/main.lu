@@ -1,0 +1,24 @@
+fn keep(mut xs: List[str], s: str) {
+    (mut xs).push(s)
+}
+
+fn main() -> !int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        var xs = List[str]()
+        region pass {
+            let s = "built in pass, {seq0} uses"
+
+            in st {
+                keep(mut xs, s)
+            }
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{xs[0]}")
+    }
+    0
+}

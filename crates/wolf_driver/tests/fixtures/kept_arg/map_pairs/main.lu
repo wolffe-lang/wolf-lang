@@ -1,0 +1,21 @@
+fn main() -> !int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        var o = List[(str, int)]()
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            var m = Map[str, int]()
+            m[s] = 1
+            in st {
+                o = m.pairs()
+            }
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{o[0].0}")
+    }
+    0
+}

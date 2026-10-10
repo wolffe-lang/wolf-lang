@@ -1,0 +1,20 @@
+fn main() -> !int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        var xs = List[str]()
+        region pass {
+            let s = "built in pass, {seq0} uses"
+
+            in st {
+                (mut xs).push(s)
+            }
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{xs[0]}")
+    }
+    0
+}
