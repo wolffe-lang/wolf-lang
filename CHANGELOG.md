@@ -47,6 +47,30 @@ move.
   declaration, a pax-shaped freestanding kernel per entry and in the
   audit, and the honest twins).
 
+### A kernel's threads each keep their own ambient region (s223, #611)
+
+On the freestanding target (`x86_64-unknown-none`), the runtime kept
+one ambient-region slot for the whole program. A kernel that switched
+threads while one of them was inside a `region` sent the next thread's
+allocations into a region that thread never entered, and that
+region's exit freed them under it. pax measured `region ra 0 bytes,
+region rb 1008 bytes` on both tiers, BIOS and UEFI. The freestanding
+runtime now exports `wolf_rt_ambient_get() -> *u8` and
+`wolf_rt_ambient_set(p: *u8)` (`[abi.target.none.ambient]`,
+`[abi.target.none.hooks]` (e)). A scheduler stores `get()` in the
+outgoing thread's record and calls `set()` with the incoming thread's
+saved value, or null for a thread that has not run yet. In a package
+that lists assembly, the roster admits both as hooks. A call to either
+links `libwolf_rt_none.a`, which still imports only `wolf_alloc`,
+`wolf_free` and `wolf_trap`, so a kernel that calls the pair supplies
+the allocator hooks. **What moves:** `libwolf_rt_none.a` gains the two
+symbols. No hosted runtime byte changes, and a freestanding object that
+never calls the pair is unchanged. pax can lift its rule against
+holding a `region` across a yield once it saves the slot in its switch.
+Witness: `crates/wolf_driver/tests/freestanding_threads.rs`. With the
+pair, the List lands in its own thread's region on both tiers. Without
+it (the control), the List lands in the other thread's region.
+
 ### Unsigned and wrapping integers print and compute as the values their types hold (s220, #551, #538, #553)
 
 **Read this before you bump the pin.** Programs that print a `u64`,
