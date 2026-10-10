@@ -775,6 +775,48 @@ impl NetSock {
 
     /// One accepted connection of the listener's family; an armed
     /// budget bounds the park (s106 — the `timeout` tag, reachable).
+    /// s226: is there something to accept or read within `timeout_ms`?
+    fn poll_readable(&self, timeout_ms: i32) -> std::io::Result<bool> {
+        #[cfg(unix)]
+        let raw = {
+            use std::os::fd::AsRawFd as _;
+            match self {
+                NetSock::Listener(l) => l.as_raw_fd(),
+                NetSock::Stream(st) => st.as_raw_fd(),
+                NetSock::UnixListener(l, _) => l.as_raw_fd(),
+                NetSock::UnixStream(st) => st.as_raw_fd(),
+            }
+        };
+        #[cfg(windows)]
+        let raw = {
+            use std::os::windows::io::AsRawSocket as _;
+            match self {
+                NetSock::Listener(l) => l.as_raw_socket(),
+                NetSock::Stream(st) => st.as_raw_socket(),
+            }
+        };
+        #[cfg(any(unix, windows))]
+        {
+            checked_poll_readable(&[raw], timeout_ms)
+                .map(|flags| flags.first().copied().unwrap_or(true))
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = timeout_ms;
+            Ok(true)
+        }
+    }
+
+    /// s226: the read budget a stream carries (`net_deadline`).
+    fn read_budget(&self) -> Option<std::time::Duration> {
+        match self {
+            NetSock::Stream(s) => s.read_timeout().ok().flatten(),
+            #[cfg(unix)]
+            NetSock::UnixStream(s) => s.read_timeout().ok().flatten(),
+            _ => None,
+        }
+    }
+
     fn accept_with(&self, budget: Option<std::time::Duration>) -> std::io::Result<NetSock> {
         match self {
             NetSock::Listener(l) => match budget {
@@ -4180,6 +4222,13 @@ impl<'t> Machine<'t> {
                 let Some(operand) = d.expr() else {
                     return Ok(Flow::Val(Value::Unit));
                 };
+                // s226 — `freeze region { … }` (`[mem.region.freeze.1]`):
+                // the block's region is frozen where the plain block
+                // frees it, and the block's value is the `imm` data
+                // every task may read (`[conc.mm.hb.freeze]`).
+                if operand.kind == SyntaxKind::RegionBlock {
+                    return self.eval_region_block_as(operand, true);
+                }
                 let v = val!(self.eval(operand));
                 match v {
                     Value::Region(rid) => {
@@ -4214,6 +4263,10 @@ impl<'t> Machine<'t> {
     }
 
     fn eval_region_block(&mut self, e: &'t GreenNode) -> E<Flow> {
+        self.eval_region_block_as(e, false)
+    }
+
+    fn eval_region_block_as(&mut self, e: &'t GreenNode, freeze: bool) -> E<Flow> {
         let d = RegionBlock::cast(e).expect("kind");
         // The cap evaluates at creation, before the region opens
         // (s132, [mem.region.cap.1]).
@@ -4249,8 +4302,13 @@ impl<'t> Machine<'t> {
         }
         self.ambient.pop();
         // The sugar-block exit is the wholesale free
-        // ([mem.region.intra.2]).
-        self.free_region(rid);
+        // ([mem.region.intra.2]) — or, under `freeze`, the freeze: the
+        // region lives on, immutable.
+        if freeze && matches!(out, Ok(Flow::Val(_))) {
+            self.freeze_region(rid);
+        } else {
+            self.free_region(rid);
+        }
         out
     }
 
@@ -7180,6 +7238,9 @@ impl<'t> Machine<'t> {
                     return self.refuse("this net call shape", span);
                 };
                 let budget = self.sock_deadlines.get(&fd).copied();
+                if self.net_park(fd, budget, span)? {
+                    return Ok(tag("timeout"));
+                }
                 let accepted = match self.sock(fd) {
                     // s106: an armed budget bounds the park — the
                     // `timeout` tag, reachable. Either family (s136).
@@ -7214,6 +7275,12 @@ impl<'t> Machine<'t> {
                 let (Some(fd), Some(max)) = (int_arg(0), int_arg(1)) else {
                     return self.refuse("this net call shape", span);
                 };
+                if max > 0 {
+                    let budget = self.sock(fd).and_then(|s| s.read_budget());
+                    if self.net_park(fd, budget, span)? {
+                        return Ok(tag("timeout"));
+                    }
+                }
                 let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
                     return Ok(tag("io"));
                 };
@@ -7254,6 +7321,12 @@ impl<'t> Machine<'t> {
                 let (Some(fd), Some(max)) = (int_arg(0), int_arg(1)) else {
                     return self.refuse("this net call shape", span);
                 };
+                if max > 0 {
+                    let budget = self.sock(fd).and_then(|s| s.read_budget());
+                    if self.net_park(fd, budget, span)? {
+                        return Ok(tag("timeout"));
+                    }
+                }
                 let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
                     return Ok(tag("io"));
                 };
@@ -7438,6 +7511,37 @@ impl<'t> Machine<'t> {
                 }
             }
             _ => self.refuse("this net builtin", span),
+        }
+    }
+
+    /// s226: a host call that would park the machine's one running
+    /// thread (an accept, a read) waits here first while other tasks
+    /// exist — a one-millisecond readiness poll, then the other tasks
+    /// run — so the peer that will resolve it gets the cpu
+    /// (`net/spawn_accept.lu`). `true` is the socket's armed budget
+    /// running out: the `timeout` row. With no other task this returns
+    /// at once and the call parks as it always did.
+    fn net_park(&mut self, fd: i64, budget: Option<std::time::Duration>, span: Span) -> E<bool> {
+        if !self.sched.concurrent {
+            return Ok(false);
+        }
+        let started = std::time::Instant::now();
+        loop {
+            let ready = match self.sock(fd) {
+                Some(s) => s.poll_readable(1),
+                None => return Ok(false),
+            };
+            match ready {
+                Ok(false) => {}
+                // Ready, or a poll the host refused: let the call say.
+                Ok(true) | Err(_) => return Ok(false),
+            }
+            if budget.is_some_and(|b| started.elapsed() >= b) {
+                return Ok(true);
+            }
+            if !self.yield_now(span)? {
+                return Ok(false);
+            }
         }
     }
 
@@ -8249,10 +8353,22 @@ impl<'t> Machine<'t> {
                 if name == "os_signal_poll" {
                     return Ok(Flow::Val(Value::Int(0)));
                 }
-                // A blocking wait with no pending delivery: the checked
-                // machine is single-threaded and run-to-completion — it
-                // has no concurrency to deliver one later. Refused by
-                // name (the honest ledger entry).
+                // s226: beside other tasks the waiter lets them run
+                // — one of them may raise — and looks again.
+                while self.yield_now(span)? {
+                    if let Some(pos) = self.signal_queue.iter().position(|&m| m & want != 0) {
+                        let m = self.signal_queue.remove(pos).expect("just found it");
+                        return Ok(Flow::Val(Value::Int(m)));
+                    }
+                    if let Some(m) = checked_sig::take(want & self.signal_listening) {
+                        return Ok(Flow::Val(Value::Int(m)));
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(1));
+                }
+                // A blocking wait with no pending delivery and no other
+                // task to make one: the machine models signals as its
+                // own queue and has nothing to deliver later. Refused
+                // by name (the honest ledger entry).
                 self.refuse(
                     "a blocking signal wait with no pending delivery in checked execution",
                     span,
@@ -8362,7 +8478,9 @@ impl<'t> Machine<'t> {
                     return self.refuse("this time call shape", span);
                 };
                 if *ms > 0 {
-                    std::thread::sleep(std::time::Duration::from_millis(*ms as u64));
+                    // s226: beside other tasks the sleeper parks, so
+                    // its siblings run for the duration.
+                    self.sleep_park(*ms as u64, span)?;
                 }
                 Ok(Flow::Val(Value::Unit))
             }
