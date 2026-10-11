@@ -757,7 +757,15 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   (`[mem.tier0.move.3]` says so of a `str`, and it holds at every
   depth: `in st { out = copy d }` handed `out.title` bytes in the block
   `d` was built in), and so does the copy a plain index store makes
-  (`xs[i] = d`, `[mem.region.edge.elem]`). The diagnostic is E1010 at
+  (`xs[i] = d`, `[mem.region.edge.elem]`). And **a `Map` store keeps
+  its key**: `m[k] = v` may insert, the map then holds `k`, and a `str`
+  key's bytes are shared, so the map shares the bytes its key names —
+  as it shares an argument a callee may store. This one never needed
+  `in`: `region pass { let s = "built {n}"; m[s] = 1 }` with `m`
+  declared outside was accepted, and on native and release
+  `m[k] else 0` answered `0` for the key just stored once the next
+  region reused the chunk (the value side, `m["k"] = s`, was E1004 all
+  along). The diagnostic is E1010 at
   the argument, naming the callee, the argument whose bytes flow, the
   `mut` argument that outlives them and the region; for a `str`
   argument it offers the one edit that is sound at the call —
@@ -791,7 +799,7 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   placed. Not covered, filed: a callee that SENDS its argument on a
   channel it was handed (wolf-lang#665), and a `mut` argument that is
   module state (the raw tier answers for a module `var`). lupin runs
-  five `List` shapes to `exit(0)` on stale bytes
+  five `List` shapes and the `Map` key to `exit(0)` on stale bytes
   (wolffe-lang/wolf-interp#232) and traps the rest. Witnesses
   `corpus/memory/region_kept_arg_*.lu`, `region_kept_result_*.lu`,
   `region_copy_shares_str.lu`, `region_copy_index_store.lu`, and the
