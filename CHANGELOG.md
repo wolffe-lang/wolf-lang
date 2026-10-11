@@ -225,6 +225,70 @@ halves of s220, s219, s225, s224, s218 and s204.
 - **lupin and the shipped std.** A lupin beside this `wolf` reads the
   archive's `std/` as its last std root; lupin's own archive ships none.
 
+### A long-running server stops growing in the runtime (s228, #661, #662, #374)
+
+**Read this before you bump the pin.** Three places where the runtime
+kept memory for the life of the process, and one compile-time rule that
+had to come with the third. Every hosted binary moves bytes
+(`libwolf_rt.a` changed); no handle number, error row or exit reason
+moves; one program shape is newly refused (a `net_read` result leaving
+the region it was read in, E1010), and no downstream source has it.
+
+- **A closed handle's storage is reused (#661).** `fs_open` and the net
+  calls kept one table slot per open for ever — 4 bytes a file, 56 a
+  socket: five million open/close cycles took a process from 6 MB to
+  22 MB, a million connections to 112 MB. The tables are now keyed by
+  the live handle numbers. **The numbers themselves are unchanged**:
+  they still only go up and are never reused (`[os.fs.std]`), which is
+  also the use-after-close argument — a closed number is absent from
+  the table and can never be handed out again, so a call on it answers
+  `io` as before and cannot reach the handle whose storage it now
+  shares. After: 0 bytes a cycle for both.
+- **A finished proc leaves its reason word, and nothing else (#662).**
+  A spawned and monitored proc kept about 277 bytes: the monitor's
+  channel, handed to compiled code as a raw pointer that nothing ever
+  freed (260 bytes), and a 16-byte registry tombstone. The monitor is
+  now a table handle whose channel is dropped once its delivery has
+  been received — still an ordinary `channel[ExitReason]` to the
+  program, an empty one afterwards — and the registry keeps one word
+  per finished proc, one word per 512 when they ended alike. A million
+  procs: 286 MB before; 0.1 MB after when they end alike (a server's
+  per-request procs), 8 MB when each ends with a value of its own. That
+  last word cannot go without a rule the language does not have: a
+  `Proc[T]` is a copyable id, and `[conc.proc.join]` lets it be joined
+  after the exit any number of times (#671).
+- **Contained traps no longer stop the pool (#662).** A trap contained
+  at a proc boundary parks its worker thread for good (D68). The parked
+  thread also kept its pool slot, the pool has eight slots a core, and
+  after that many `fault` exits nothing could run a task: the process
+  stopped answering (a 2-cpu host: 16 traps). The parked worker now
+  gives its slot and its queued work back. The thread itself remains,
+  14.5 kB each, until D68's mechanism changes (#670).
+- **`net_read` allocates in the region it is called in (#374, the net
+  half).** It copied into the process root whatever region was open, so
+  a server that read each request inside its own region gave none of
+  it back. The mem tier names `net_read` a `[mem.region.escape]` site
+  first (a read returned out of its region is E1010,
+  `corpus/memory/region_net_read_return.lu`), then the runtime puts
+  the bytes in the ambient region; the checked machine charges the same
+  ledger. Census, trunk compiler against head: boreutils (28), lobo and
+  its 28 serve tests, pelt, wolf-std (433 test files) and the book (357
+  samples and exercises) build with the same verdicts and diagnostics.
+  lobo's `conn.sock_read` (which read bytes and decoded them to route
+  around this) can go back to `net_read`: with it removed, lobo's
+  memory gate reads 4 kB over 4,000 requests at this branch and
+  17,112 kB at 0.2.26. `fs_read_text`, `fs_read`, `read_line`, the
+  directory, environment and json producers still use the root (#374
+  stays open). lupin 0.1.49 charges the read to its region already and
+  does not yet refuse the escape (wolf-interp#234).
+- **The gate.** `soak_residue` (wolf_driver) builds one program on the
+  release tier and runs a million opens, a million connections and two
+  million procs, reading the process's RSS from outside: 0 kB, 0 kB,
+  96 kB and 7,124 kB of growth (8.1 bytes a proc on the leg where
+  every proc returns its own value), against 3,516, 98,436, 251,256
+  and 251,540 kB at trunk. `handle_residue` (wolf_rt) counts host bytes
+  outstanding around the same cycles at the shims.
+
 ### The standard library ships with the compiler (s204, ruling #29, #415)
 
 **Read this before you bump the pin.** The release archive now carries
