@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 189] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 190] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -162,6 +162,9 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 189] = [
     // buffer in the ambient region.
     ("__wolf_rt_list_copy", 1, true),
     ("__wolf_rt_map_copy", 1, true),
+    // s228 (#663): `xs[lo..hi]` — the header and the two resolved
+    // endpoints in, a fresh header out; one copy, not a push a slot.
+    ("__wolf_rt_list_slice", 3, true),
     // s173 (#31/#268, `wolf_rt::pool`): the generational slot arena.
     // `new` takes the payload size; every other entry takes the
     // header and a packed handle word. `addr` is the odd one out and

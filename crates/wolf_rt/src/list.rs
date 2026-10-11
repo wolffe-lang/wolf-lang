@@ -255,6 +255,38 @@ pub unsafe extern "C" fn __wolf_rt_list_copy(hdr: i64) -> i64 {
     }
 }
 
+/// `xs[lo..hi]` (s228, wolf-lang#663, `[mem.list.slice]`): a fresh list
+/// in the AMBIENT region holding a byte copy of elements `lo..hi`, at
+/// exact capacity — one allocation and one copy, where lowering used to
+/// call [`__wolf_rt_list_push`] once per element (1.9 ns a byte: 7.8 µs
+/// for a 4 KiB `List[byte]` slice that a decode of the same bytes made
+/// in 0.13 µs). The value is the one the loop built: the same elements
+/// in the same order, each a byte copy of its source — which is every
+/// element type a list slice is lowered for, since `List` elements are
+/// flat. The bounds check is the caller's (`trap(bounds)` unless
+/// `lo <= hi <= len`, lowered before this call); out-of-range
+/// endpoints are clamped here all the same, so the copy can never
+/// read outside the source.
+///
+/// # Safety
+///
+/// `hdr` from [`__wolf_rt_list_new`] (or any live list header).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_list_slice(hdr: i64, lo: i64, hi: i64) -> i64 {
+    unsafe {
+        let h = &*(hdr as *const ListHdr);
+        let lo = lo.clamp(0, h.len);
+        let hi = hi.clamp(lo, h.len);
+        let n = ((hi - lo) * h.elem) as usize;
+        let bytes: &[u8] = if n == 0 {
+            &[]
+        } else {
+            core::slice::from_raw_parts(h.data.add((lo * h.elem) as usize), n)
+        };
+        list_from_bytes(h.elem as usize, bytes) as i64
+    }
+}
+
 /// `pop` — 1 with the last element through `out`, or 0 when empty.
 ///
 /// # Safety

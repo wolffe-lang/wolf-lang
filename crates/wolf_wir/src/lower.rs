@@ -15349,50 +15349,26 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     if self.trap_unless(ok, TrapKind::Bounds) {
                         return Ok(Flow::Diverged);
                     }
-                    let esize = self.list_stride(ewty, e.span)?;
-                    let sz = self.b.iconst(types::I64, esize as i64);
+                    // The element type must still have a stride (the
+                    // refusal for one that has none is this call's).
+                    self.list_stride(ewty, e.span)?;
+                    // s228 (wolf-lang#663): ONE copy. Until here this
+                    // was a loop of `__wolf_rt_list_push` calls, one
+                    // per element, into a list that grew by doubling —
+                    // 7.8 µs for a 4 KiB `List[byte]` slice. The value
+                    // is the same fresh list (the same elements, each
+                    // the byte copy a push made), minted at exact
+                    // capacity in the ambient region; every element
+                    // type that reaches here is flat, so every one
+                    // takes it.
                     let out = self
-                        .rt_call_foreign("__wolf_rt_list_new", &[sz], None, Some(types::PTR))
-                        .expect("hdr");
-                    let header = self.b.create_block();
-                    let iparam = self.b.add_block_param(header, types::I64);
-                    self.b.ins_jmp(header, &[lo]);
-                    self.b.switch_to_block(header);
-                    self.b.gvn_push_scope();
-                    let cond = self
-                        .b
-                        .ins(
-                            Opcode::Icmp,
-                            &[iparam, hi],
-                            &[types::BOOL],
-                            Aux::IntCc(IntCc::Slt),
+                        .rt_call_foreign(
+                            "__wolf_rt_list_slice",
+                            &[hdr, lo, hi],
+                            None,
+                            Some(types::PTR),
                         )
-                        .one();
-                    let body_bb = self.b.create_block();
-                    let exit = self.b.create_block();
-                    self.b.ins_br(cond, body_bb, &[], exit, &[]);
-                    self.b.seal_block(body_bb);
-                    self.b.seal_block(exit);
-                    self.b.switch_to_block(body_bb);
-                    self.b.gvn_push_scope();
-                    // The source pointer is re-read inside the body
-                    // (the push may not touch it, but a hoisted copy
-                    // is a bug waiting for growth-aliasing; LICM lifts
-                    // the load when it is safe).
-                    let data = self.list_data(hdr);
-                    let p = self.list_elem_addr(data, iparam, esize);
-                    let r = self.foreign_buf_region();
-                    self.rt_call_foreign("__wolf_rt_list_push", &[out], Some((p, r)), None);
-                    let one = self.b.iconst(types::I64, 1);
-                    let inext = self
-                        .b
-                        .ins(Opcode::IaddWrap, &[iparam, one], &[types::I64], Aux::None)
-                        .one();
-                    self.b.ins_jmp(header, &[inext]);
-                    self.b.gvn_pop_scope();
-                    self.b.seal_block(header);
-                    self.b.switch_to_block(exit);
-                    self.b.gvn_pop_scope();
+                        .expect("hdr");
                     return Ok(Flow::Val(Some(out)));
                 }
                 let Some(idx) = flow_val!(self.lower_expr(ix)) else {

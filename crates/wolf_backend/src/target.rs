@@ -89,6 +89,7 @@ pub const NONE_RT_SYMBOLS: &[&str] = &[
     "__wolf_rt_list_len",
     "__wolf_rt_list_clear",
     "__wolf_rt_list_copy",
+    "__wolf_rt_list_slice",
     "__wolf_rt_map_new",
     "__wolf_rt_map_get",
     "__wolf_rt_map_set",
