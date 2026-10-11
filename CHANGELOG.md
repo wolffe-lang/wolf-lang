@@ -87,6 +87,71 @@ bytes for that slice where it was 8,240, so a slice that fits a
 natively. The freestanding runtime archive defines the symbol too, so
 a kernel that slices a `List` links as before.
 
+### A call keeps what it is handed: `in r { f(mut outer, s) }` is refused when `s` dies first (s227, #660; ruling owed)
+
+**Read this before you bump the pin: a soundness fix that refuses
+programs 0.2.26 built.** Under `in r { … }` a call aims what the callee
+allocates at `r`, but an argument's bytes stay in the region that built
+them, and a callee may keep an argument in a `mut` one: `l.last = copy
+s` shares a `str`'s bytes, a `push` or an index store lends them. So
+
+```wolf
+region pass {
+    let s = "built in pass, {n} uses"
+    in st { keep_it(mut l, s) }     // `l` lives in `st`
+}
+```
+
+built on every tier and left `l` naming freed bytes: native and release
+printed the chunk the next region reused, the checked machine stale
+bytes, and lupin traps `region-fault`. It is E1010 now, at `s`, naming
+the callee, both arguments and the region, with the edit that is sound
+at the call for a `str` (`"{s}"`: an interpolation inside the `in` block
+materializes the bytes where the callee allocates). The rule reads the
+call's signature, never the callee's body: every `mut` argument (the
+`mut` receiver included) shares the bytes of every other argument that
+can reach it — a `take` or `mut` argument always; a `read` one when its
+type can name bytes a read can share (a `str`, a fn value and its
+captures, a type parameter, or an aggregate reaching one) and the `mut`
+argument's type can too. A non-`Copy` result and a declared call's `str`
+result share the `read` arguments' bytes the same way; a builtin
+container method keeps only what it stores (`push`'s value) and answers
+from its receiver. Two doors that need no call close with it: `in st {
+out = copy d }` and `in st { xs[i] = d }` — a `copy` of a struct, list
+or map shares every `str` the original reaches (`[mem.tier0.move.3]`).
+And one that needs neither a call nor `in`: **a `Map` store keeps its
+key.** `region pass { let s = "built {n}"; m[s] = 1 }`, with `m` declared
+outside the block, was accepted, and native and release then answered
+`m[k] else 0` with `0` for the key just stored (its bytes freed and
+reused): a silent wrong answer. It is E1010 at the store.
+
+What is **not** refused: a string built inside the `in` block, a scalar
+(`s.len`), a literal, a string built where the `mut` argument lives, a
+`List[byte]` (the callee can only copy it), a `mut` argument that can
+name no bytes (an `int`, a struct of scalars, a `List[int]`), a builtin
+that keeps nothing of its argument (`(mut m).remove(key)`), and
+anything without `in` that built before — there the call already pinned
+its `mut` arguments to the current region. Shared bytes are never
+"placed": a list built in a region block that holds strings from a
+longer-lived region still goes into a struct built in the block.
+
+What is refused that would have run correctly: under `in r { }`, a
+region-built `str` handed to a callee that only reads it, beside a `mut`
+argument that could have held it. The repair is the `"{s}"` edit or a
+scalar argument. **Measured** against trunk `a027b643` at the memory
+check: wolf-std, boreutils, lobo `c9eff15`, pelt, pax, muzzle and the
+book — 1,156 files and lobo's 120 staged tests — move zero rows, and
+lobo, boreutils' 28 utilities and pelt build byte-identical binaries on
+both tiers. No run-time cost on any tier: a refusal.
+
+Filed, not fixed here: a callee that sends its argument on a channel it
+was handed (#665, the same read of freed bytes, no `in` needed); lupin
+0.1.50 (as 0.1.49) runs the `List` and `Map`-key forms of this to
+`exit(0)` on stale bytes (wolf-interp#232) and traps a sound `copy` of a scalar struct under
+`in` (wolf-interp#233). Witnesses: `corpus/memory/region_kept_*.lu`,
+`region_copy_shares_str.lu`, `region_copy_index_store.lu`; gate
+`region_kept_arg_lanes` (checked, native, release, lupin).
+
 ## 0.2.27 — 2026-10-11
 
 THE TWENTY-SEVENTH, and the first release that ships its standard
@@ -311,71 +376,6 @@ halves of s220, s219, s225, s224, s218 and s204.
     whose lupin stdout is now the last-wins answer.
 - **lupin and the shipped std.** A lupin beside this `wolf` reads the
   archive's `std/` as its last std root; lupin's own archive ships none.
-
-### A call keeps what it is handed: `in r { f(mut outer, s) }` is refused when `s` dies first (s227, #660; ruling owed)
-
-**Read this before you bump the pin: a soundness fix that refuses
-programs 0.2.26 built.** Under `in r { … }` a call aims what the callee
-allocates at `r`, but an argument's bytes stay in the region that built
-them, and a callee may keep an argument in a `mut` one: `l.last = copy
-s` shares a `str`'s bytes, a `push` or an index store lends them. So
-
-```wolf
-region pass {
-    let s = "built in pass, {n} uses"
-    in st { keep_it(mut l, s) }     // `l` lives in `st`
-}
-```
-
-built on every tier and left `l` naming freed bytes: native and release
-printed the chunk the next region reused, the checked machine stale
-bytes, and lupin traps `region-fault`. It is E1010 now, at `s`, naming
-the callee, both arguments and the region, with the edit that is sound
-at the call for a `str` (`"{s}"`: an interpolation inside the `in` block
-materializes the bytes where the callee allocates). The rule reads the
-call's signature, never the callee's body: every `mut` argument (the
-`mut` receiver included) shares the bytes of every other argument that
-can reach it — a `take` or `mut` argument always; a `read` one when its
-type can name bytes a read can share (a `str`, a fn value and its
-captures, a type parameter, or an aggregate reaching one) and the `mut`
-argument's type can too. A non-`Copy` result and a declared call's `str`
-result share the `read` arguments' bytes the same way; a builtin
-container method keeps only what it stores (`push`'s value) and answers
-from its receiver. Two doors that need no call close with it: `in st {
-out = copy d }` and `in st { xs[i] = d }` — a `copy` of a struct, list
-or map shares every `str` the original reaches (`[mem.tier0.move.3]`).
-And one that needs neither a call nor `in`: **a `Map` store keeps its
-key.** `region pass { let s = "built {n}"; m[s] = 1 }`, with `m` declared
-outside the block, was accepted, and native and release then answered
-`m[k] else 0` with `0` for the key just stored (its bytes freed and
-reused): a silent wrong answer. It is E1010 at the store.
-
-What is **not** refused: a string built inside the `in` block, a scalar
-(`s.len`), a literal, a string built where the `mut` argument lives, a
-`List[byte]` (the callee can only copy it), a `mut` argument that can
-name no bytes (an `int`, a struct of scalars, a `List[int]`), a builtin
-that keeps nothing of its argument (`(mut m).remove(key)`), and
-anything without `in` that built before — there the call already pinned
-its `mut` arguments to the current region. Shared bytes are never
-"placed": a list built in a region block that holds strings from a
-longer-lived region still goes into a struct built in the block.
-
-What is refused that would have run correctly: under `in r { }`, a
-region-built `str` handed to a callee that only reads it, beside a `mut`
-argument that could have held it. The repair is the `"{s}"` edit or a
-scalar argument. **Measured** against trunk `a027b643` at the memory
-check: wolf-std, boreutils, lobo `c9eff15`, pelt, pax, muzzle and the
-book — 1,156 files and lobo's 120 staged tests — move zero rows, and
-lobo, boreutils' 28 utilities and pelt build byte-identical binaries on
-both tiers. No run-time cost on any tier: a refusal.
-
-Filed, not fixed here: a callee that sends its argument on a channel it
-was handed (#665, the same read of freed bytes, no `in` needed); lupin
-0.1.49 runs the `List` and `Map`-key forms of this to `exit(0)` on stale
-bytes (wolf-interp#232) and traps a sound `copy` of a scalar struct under
-`in` (wolf-interp#233). Witnesses: `corpus/memory/region_kept_*.lu`,
-`region_copy_shares_str.lu`, `region_copy_index_store.lu`; gate
-`region_kept_arg_lanes` (checked, native, release, lupin).
 
 ### The standard library ships with the compiler (s204, ruling #29, #415)
 
