@@ -249,12 +249,13 @@ impl ChildTable {
         let Some((prog, rest)) = argv.split_first() else {
             return Err("not_found");
         };
-        let spawned = Command::new(prog)
-            .args(rest)
+        let mut cmd = Command::new(prog);
+        cmd.args(rest)
             .stdin(Stdio::null())
             .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .spawn();
+            .stderr(Stdio::inherit());
+        keep_pipe_ignore(&mut cmd);
+        let spawned = cmd.spawn();
         match spawned {
             Err(e) => Err(match e.kind() {
                 std::io::ErrorKind::NotFound => "not_found",
@@ -330,6 +331,7 @@ impl ChildTable {
         for (k, v) in env {
             cmd.env(k, v);
         }
+        keep_pipe_ignore(&mut cmd);
         #[cfg(unix)]
         if !inherit.is_empty() {
             use std::os::unix::process::CommandExt as _;
@@ -464,6 +466,7 @@ impl ChildTable {
                 .stdin(Stdio::inherit())
                 .stdout(Stdio::inherit())
                 .stderr(Stdio::inherit());
+            keep_pipe_ignore(&mut cmd);
             let n = map.len();
             let mut targets = [-1 as InheritFd; MAX_FD_PAIRS];
             let mut sources = [-1 as InheritFd; MAX_FD_PAIRS];
@@ -655,7 +658,7 @@ impl ChildTable {
 pub struct JobOpts {
     pub group: i64,
     pub tty: Option<InheritFd>,
-    pub defaults: [i32; 9],
+    pub defaults: [i32; 20],
 }
 
 impl JobOpts {
@@ -663,7 +666,7 @@ impl JobOpts {
     pub const PLAIN: JobOpts = JobOpts {
         group: -1,
         tty: None,
-        defaults: [0; 9],
+        defaults: [0; 20],
     };
 }
 
@@ -715,6 +718,38 @@ pub const MAX_INHERIT: usize = 64;
 
 /// Error codes of the process family (lowering maps them to row tags,
 /// coarsening any the call's row does not declare to `io`).
+/// s232 (`[os.signal.disp]`, wolf-lang#423): a child starts with an
+/// ignored `BROKEN_PIPE` still ignored, as `exec` leaves it. Rust's
+/// `Command` sets `SIGPIPE` back to the default in every child it starts
+/// (it assumes its own runtime ignored it, which a wolf program's never
+/// did — measured: a native child of a program that ignored `SIGPIPE`
+/// died of it), so when this process ignores `SIGPIPE` now the child
+/// sets it ignored again, last, before it runs. Nothing is added when it
+/// is not ignored: the common spawn keeps Rust's fast path.
+pub(crate) fn keep_pipe_ignore(cmd: &mut Command) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt as _;
+        // SAFETY: a read-only sigaction query into a zeroed struct.
+        let ignored = unsafe {
+            let mut old: libc::sigaction = std::mem::zeroed();
+            libc::sigaction(libc::SIGPIPE, std::ptr::null(), &mut old) == 0
+                && old.sa_sigaction == libc::SIG_IGN
+        };
+        if ignored {
+            // SAFETY: `signal` is async-signal-safe; constant arguments.
+            unsafe {
+                cmd.pre_exec(|| {
+                    libc::signal(libc::SIGPIPE, libc::SIG_IGN);
+                    Ok(())
+                });
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = cmd;
+}
+
 pub mod proc_code {
     pub const OK: i64 = 0;
     pub const NOT_FOUND: i64 = 1;
@@ -929,7 +964,7 @@ pub unsafe extern "C" fn __wolf_rt_os_spawn_job(
         if defaults != 0 {
             return -proc_code::UNSUPPORTED;
         }
-        [0i32; 9]
+        [0i32; 20]
     };
     let mut held: Vec<std::fs::File> = Vec::with_capacity(entries.len() + 1);
     let mut tty_fd: Option<InheritFd> = None;
@@ -978,8 +1013,34 @@ pub unsafe extern "C" fn __wolf_rt_os_spawn_job(
 }
 
 /// The meaning bits a spawn's `defaults` may name (s219) — the signal
-/// module's `ALL`, restated here because that module is platform-gated.
-const SIGNAL_MEANINGS: i64 = 511;
+/// module's `LISTENABLE` (s232: twenty catchable signals; `KILL`,
+/// `STOP` and the fault signals cannot be put back to a default they
+/// never left), restated here because that module is platform-gated.
+const SIGNAL_MEANINGS: i64 = (1 << 20) - 1;
+
+/// `os_pid() -> int` (s232, #141, `[os.proc.self]`) — this process's
+/// id. Every host has one (windows: the process id std reads).
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_pid() -> i64 {
+    i64::from(std::process::id())
+}
+
+/// `os_ppid() -> int ! {unsupported}` (s232, #141, `[os.proc.self]`) —
+/// the parent's process id now (`getppid`: a process whose parent ended
+/// answers the id of the process that adopted it), or `-UNSUPPORTED` on
+/// a host with no such call (windows).
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_ppid() -> i64 {
+    #[cfg(unix)]
+    {
+        // SAFETY: getppid takes nothing and cannot fail.
+        i64::from(unsafe { libc::getppid() })
+    }
+    #[cfg(not(unix))]
+    {
+        -proc_code::UNSUPPORTED
+    }
+}
 
 /// `os_proc_pid(h) -> int ! {io}` (s219) — the child's process id (> 0)
 /// or `-IO`.
@@ -1806,7 +1867,9 @@ mod tests {
             -proc_code::INVALID
         );
         assert_eq!(
-            spawn_job_shim("true", &[], &[], -1, -1, 512),
+            // s232: 512 is USER now; KILL (send-only) cannot be put
+            // back to a default it never left.
+            spawn_job_shim("true", &[], &[], -1, -1, 1 << 20),
             -proc_code::INVALID
         );
         assert_eq!(
@@ -1877,6 +1940,49 @@ mod tests {
             spawn_job_shim("true", &[], &[], gone, -1, 0),
             -proc_code::DENIED
         );
+    }
+
+    /// s232 (`[os.signal.disp]`, #423): a child of a process that
+    /// ignores SIGPIPE starts with it ignored (Rust's `Command` would
+    /// put it back to the default). This test binary ignores SIGPIPE
+    /// (Rust's runtime), so a child that sends itself SIGPIPE lives.
+    #[cfg(unix)]
+    #[test]
+    fn a_child_keeps_an_ignored_sigpipe() {
+        // SAFETY: a read-only query of this process's disposition.
+        let ignored = unsafe {
+            let mut old: libc::sigaction = std::mem::zeroed();
+            libc::sigaction(libc::SIGPIPE, std::ptr::null(), &mut old) == 0
+                && old.sa_sigaction == libc::SIG_IGN
+        };
+        assert!(ignored, "the test harness ignores SIGPIPE");
+        let h = children()
+            .spawn(&["sh", "-c", "kill -PIPE $$ && exit 7"])
+            .expect("spawn");
+        assert_eq!(
+            wait_status_of(h),
+            7,
+            "the child lived through its own SIGPIPE"
+        );
+    }
+
+    /// s232 (#141, `[os.proc.self]`): this process's id, and its
+    /// parent's — the ids a child that asks reads back.
+    #[cfg(unix)]
+    #[test]
+    fn own_pid_and_parent_pid() {
+        assert_eq!(__wolf_rt_os_pid(), i64::from(std::process::id()));
+        assert_eq!(
+            __wolf_rt_os_ppid(),
+            i64::from(std::os::unix::process::parent_id())
+        );
+        // A child's parent is this process.
+        let out = std::process::Command::new("sh")
+            .args(["-c", "echo $PPID"])
+            .output()
+            .unwrap();
+        let theirs: i64 = String::from_utf8_lossy(&out.stdout).trim().parse().unwrap();
+        assert_eq!(theirs, __wolf_rt_os_pid());
     }
 
     /// s219: a tty that is not a terminal is `io` before any child.

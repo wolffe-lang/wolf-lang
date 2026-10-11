@@ -114,10 +114,59 @@ pub mod meaning {
     pub const BG_WRITE: i64 = 128;
     /// s219: a child stopped or ended (`SIGCHLD`).
     pub const CHILD: i64 = 256;
+    /// s232 (wolf-lang#679): the user-defined signal wws does not take
+    /// (`SIGUSR1`; `SIGUSR2` is `UPGRADE`).
+    pub const USER: i64 = 512;
+    /// s232: a timer ran out (`SIGALRM`).
+    pub const ALARM: i64 = 1 << 10;
+    /// s232 (wolf-lang#423): a write to a pipe or socket nobody reads
+    /// (`SIGPIPE`).
+    pub const BROKEN_PIPE: i64 = 1 << 11;
+    /// s232: the process was asked to abort (`SIGABRT`).
+    pub const ABORT: i64 = 1 << 12;
+    /// s232: the process was continued after a stop (`SIGCONT`).
+    pub const CONTINUE: i64 = 1 << 13;
+    /// s232: the terminal's window changed size (`SIGWINCH`).
+    pub const RESIZE: i64 = 1 << 14;
+    /// s232: out-of-band data arrived on a socket (`SIGURG`).
+    pub const URGENT: i64 = 1 << 15;
+    /// s232: a virtual (user-time) timer ran out (`SIGVTALRM`).
+    pub const VIRTUAL_ALARM: i64 = 1 << 16;
+    /// s232: a profiling timer ran out (`SIGPROF`).
+    pub const PROFILE_ALARM: i64 = 1 << 17;
+    /// s232: the CPU-time limit was passed (`SIGXCPU`).
+    pub const CPU_LIMIT: i64 = 1 << 18;
+    /// s232: the file-size limit was passed (`SIGXFSZ`).
+    pub const FILE_LIMIT: i64 = 1 << 19;
+    /// s232 (wolf-lang#141), SEND only: the end no process can catch
+    /// (`SIGKILL`).
+    pub const KILL: i64 = 1 << 20;
+    /// s232, SEND only: the stop no process can catch (`SIGSTOP`).
+    pub const STOP: i64 = 1 << 21;
+    /// s232, SEND only — a fault signal: a handler that returns from a
+    /// real fault runs the faulting instruction again, and the runtime's
+    /// stack guard owns `SIGSEGV` and `SIGBUS` (`task::stack`).
+    pub const SEGMENT_FAULT: i64 = 1 << 22;
+    /// s232, SEND only (fault): `SIGBUS`.
+    pub const BUS_ERROR: i64 = 1 << 23;
+    /// s232, SEND only (fault): `SIGFPE`.
+    pub const ARITHMETIC: i64 = 1 << 24;
+    /// s232, SEND only (fault): `SIGILL`.
+    pub const ILLEGAL: i64 = 1 << 25;
+    /// s232, SEND only (fault): `SIGTRAP`.
+    pub const BREAKPOINT: i64 = 1 << 26;
+    /// s232, SEND only (fault): `SIGSYS`.
+    pub const BAD_SYSCALL: i64 = 1 << 27;
     /// The s114 four, the meanings windows maps a console event to.
     pub const V1: i64 = RELOAD | TERMINATE | QUIT | UPGRADE;
-    /// Every meaning there is.
-    pub const ALL: i64 = V1 | INTERRUPT | SUSPEND | BG_READ | BG_WRITE | CHILD;
+    /// Every meaning a program may listen for, ignore, put back to the
+    /// default, wait for, poll and raise on itself: the twenty catchable
+    /// signals (s232: bits 0..19).
+    pub const LISTENABLE: i64 = (1 << 20) - 1;
+    /// Every meaning a program may SEND (`os_signal_send`) and ask the
+    /// number of (`os_signal_number`): the twenty, `KILL`, `STOP` and the
+    /// six fault signals (s232: bits 0..27).
+    pub const SENDABLE: i64 = (1 << 28) - 1;
 }
 
 /// Error codes the WIR lowering keys on (the `os.rs` `proc_code`
@@ -133,20 +182,45 @@ pub mod sig_code {
     pub const UNSUPPORTED: i64 = 2;
 }
 
-/// Every meaning in canonical bit order (iteration helper); a meaning
-/// is `1 << i` for its index `i` here, and the self-pipe carries the
-/// index, so nine meanings fit a byte beside the control bit.
-const MEANINGS: [i64; 9] = [
-    meaning::RELOAD,
-    meaning::TERMINATE,
-    meaning::QUIT,
-    meaning::UPGRADE,
-    meaning::INTERRUPT,
-    meaning::SUSPEND,
-    meaning::BG_READ,
-    meaning::BG_WRITE,
-    meaning::CHILD,
-];
+/// How many meanings can be listened for — the self-pipe carries a
+/// delivered meaning's index, `0..LISTENED_COUNT`.
+pub const LISTENED_COUNT: usize = 20;
+
+/// How many meanings there are (`SENDABLE`'s bits).
+pub const MEANING_COUNT: usize = 28;
+
+/// Every listenable meaning in canonical bit order (iteration helper);
+/// a meaning is `1 << i` for its index `i` here, and the self-pipe
+/// carries the index.
+const MEANINGS: [i64; LISTENED_COUNT] = {
+    let mut a = [0i64; LISTENED_COUNT];
+    let mut i = 0;
+    while i < LISTENED_COUNT {
+        a[i] = 1 << i;
+        i += 1;
+    }
+    a
+};
+
+/// A set every set-taking call accepts (s232, `[os.signal.set]`'s one
+/// shape rule): non-empty, and every bit a listenable meaning.
+#[must_use]
+pub const fn listenable_set(set: i64) -> bool {
+    set != 0 && set & !meaning::LISTENABLE == 0
+}
+
+/// One listenable meaning (`os_signal_raise`'s operand).
+#[must_use]
+pub const fn one_listenable(m: i64) -> bool {
+    m > 0 && m & (m - 1) == 0 && m & !meaning::LISTENABLE == 0
+}
+
+/// One meaning of the whole table (`os_signal_send`'s and
+/// `os_signal_number`'s operand).
+#[must_use]
+pub const fn one_sendable(m: i64) -> bool {
+    m > 0 && m & (m - 1) == 0 && m & !meaning::SENDABLE == 0
+}
 
 /// What a meaning's signal does to this process (s219,
 /// `[os.signal.disp]`): the host's default action, nothing, or the
@@ -158,10 +232,13 @@ pub enum Disp {
 }
 
 /// The signal hub: the installed-meaning set and the FIFO of delivered
-/// meanings awaiting waiters (plus, on unix, the self-pipe's read end).
+/// meanings awaiting waiters (plus, on unix, the self-pipe's read end
+/// and the control pipe's).
 struct Hub {
     #[cfg(unix)]
     read_fd: std::os::fd::RawFd,
+    #[cfg(unix)]
+    ctl_fd: std::os::fd::RawFd,
     state: Mutex<HubState>,
     cv: Condvar,
 }
@@ -180,21 +257,28 @@ static HUB: OnceLock<Hub> = OnceLock::new();
 /// carries no signal pipe and no drain thread): first `listen` builds
 /// the hub and the platform's delivery path ([`sys::init`]).
 fn hub() -> &'static Hub {
-    let h = HUB.get_or_init(|| Hub {
+    let h = HUB.get_or_init(|| {
         #[cfg(unix)]
-        read_fd: sys::make_pipe(),
-        state: Mutex::new(HubState {
-            installed: 0,
-            queue: VecDeque::new(),
-        }),
-        cv: Condvar::new(),
+        let (read_fd, ctl_fd) = sys::make_pipes();
+        Hub {
+            #[cfg(unix)]
+            read_fd,
+            #[cfg(unix)]
+            ctl_fd,
+            state: Mutex::new(HubState {
+                installed: 0,
+                queue: VecDeque::new(),
+            }),
+            cv: Condvar::new(),
+        }
     });
     sys::init(h);
     h
 }
 
-/// Enqueue a delivered meaning and wake the waiters — the drain
-/// thread's step on unix, the console handler's own on windows.
+/// Enqueue a delivered meaning and wake the waiters — the console
+/// handler's own step on windows (unix enqueues in [`sys::drain`]).
+#[cfg(windows)]
 fn deliver(h: &Hub, m: i64) {
     let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
     st.queue.push_back(m);
@@ -202,46 +286,57 @@ fn deliver(h: &Hub, m: i64) {
 }
 
 /// The per-platform delivery path behind the hub — the WHOLE per-OS
-/// surface of this module: `init` (unix: the self-pipe's drain
-/// thread; windows: nothing to start), `listen_one` (unix: the
-/// `sigaction` trampoline for the meaning's signal; windows: the one
-/// console handler), `raise` (unix: `kill(getpid())`; windows: the
-/// in-process enqueue the module doc explains).
+/// surface of this module: `init` (unix: the drain thread; windows:
+/// nothing to start), `listen_one` (unix: the `sigaction` trampoline
+/// for the meaning's signal; windows: the one console handler), `raise`
+/// (unix: `kill(getpid())`; windows: the in-process enqueue the module
+/// doc explains), `settle`/`drain` (unix: s232's exact poll; windows:
+/// nothing, its handler enqueues under the lock).
 #[cfg(unix)]
 mod sys {
-    use super::{Hub, deliver, meaning, sig_code};
+    use super::{Hub, HubState, meaning, sig_code};
     use std::os::fd::RawFd;
-    use std::sync::atomic::{AtomicI32, Ordering};
+    use std::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
     use std::sync::{Condvar, Mutex, Once};
 
     /// The self-pipe write end, reachable from the async-signal
     /// handler WITHOUT a lock (an atomic load is async-signal-safe; a
-    /// mutex is not). `-1` until the hub is initialized.
+    /// mutex is not). `-1` until the hub is initialized. Its bytes are
+    /// delivered meanings' INDEXES (`0..LISTENED_COUNT`) and nothing
+    /// else (s232: the unblock requests have a pipe of their own,
+    /// [`CTL_PIPE_W`], because a poll now reads this one too).
     static SELF_PIPE_W: AtomicI32 = AtomicI32::new(-1);
+    /// The control pipe's write end (s232): "drain thread, unblock the
+    /// signal of the meaning whose index this byte is" (wolf-lang#483).
+    /// Only the drain thread reads it — only a thread can change its
+    /// own mask.
+    static CTL_PIPE_W: AtomicI32 = AtomicI32::new(-1);
     static READER: Once = Once::new();
 
-    /// A self-pipe byte with this bit set is a CONTROL byte, never a
-    /// delivered meaning (a delivery is the meaning's index, 0..8):
-    /// "drain thread, unblock the signal of the meaning whose index is
-    /// in the low bits" (wolf-lang#483; the index since s219).
-    pub const CTL_UNBLOCK: u8 = 0x80;
+    /// s232 (#691): trampolines running now, on any thread. A poll
+    /// waits for this to be 0 before it reads the pipe, so a handler
+    /// mid-write is not missed.
+    static IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
+    /// s232 (#691): trampolines completed since the start. A poll lets
+    /// pending signals be delivered on its own thread until a round
+    /// delivers none ([`settle`]).
+    static DELIVERED: AtomicUsize = AtomicUsize::new(0);
 
     /// The meanings whose signal the drain thread has unblocked on
     /// itself, and the condvar `unblock` waits on until it has.
     static UNBLOCKED: Mutex<i64> = Mutex::new(0);
     static UNBLOCKED_CV: Condvar = Condvar::new();
 
-    /// Build the self-pipe; returns the read end (the write end
-    /// publishes through [`SELF_PIPE_W`]).
-    pub fn make_pipe() -> RawFd {
+    /// A close-on-exec pipe: linux `pipe2(O_CLOEXEC)`; macOS has no
+    /// pipe2, so `pipe` + two `fcntl(F_SETFD, FD_CLOEXEC)` — the exact
+    /// widening `[os.signal.platform]` pre-authorized (s59). The
+    /// set-race window pipe2 closes (a concurrent fork+exec between
+    /// pipe and fcntl) does not arise here: the hub initializes once,
+    /// under OnceLock, before any wolf code could spawn a process off
+    /// it.
+    fn cloexec_pipe() -> [RawFd; 2] {
         let mut fds = [0i32; 2];
-        // SAFETY: plain pipe creation; result checked. Linux gets the
-        // atomic-CLOEXEC pipe2; macOS has no pipe2, so it is `pipe` +
-        // two `fcntl(F_SETFD, FD_CLOEXEC)` — the exact widening
-        // `[os.signal.platform]` pre-authorized (s59). The set-race
-        // window pipe2 closes (a concurrent fork+exec between pipe and
-        // fcntl) does not arise here: the hub initializes once, under
-        // OnceLock, before any wolf code could spawn a process off it.
+        // SAFETY: plain pipe creation; result checked.
         #[cfg(target_os = "linux")]
         let rc = unsafe { libc::pipe2(fds.as_mut_ptr(), libc::O_CLOEXEC) };
         #[cfg(not(target_os = "linux"))]
@@ -254,29 +349,46 @@ mod sys {
             rc
         };
         assert!(rc == 0, "signal self-pipe failed");
-        // Write end nonblocking: the handler must never block.
+        fds
+    }
+
+    fn set_nonblocking(fd: RawFd) {
         // SAFETY: our own fd; standard nonblocking flip.
         unsafe {
-            let fl = libc::fcntl(fds[1], libc::F_GETFL);
-            libc::fcntl(fds[1], libc::F_SETFL, fl | libc::O_NONBLOCK);
+            let fl = libc::fcntl(fd, libc::F_GETFL);
+            libc::fcntl(fd, libc::F_SETFL, fl | libc::O_NONBLOCK);
         }
-        SELF_PIPE_W.store(fds[1], Ordering::Relaxed);
-        fds[0]
+    }
+
+    /// Build the self-pipe and the control pipe; returns their read
+    /// ends (the write ends publish through [`SELF_PIPE_W`] and
+    /// [`CTL_PIPE_W`]). The self-pipe is nonblocking at BOTH ends: the
+    /// handler must never block, and since s232 a poll reads it too and
+    /// must never wait.
+    pub fn make_pipes() -> (RawFd, RawFd) {
+        let sig = cloexec_pipe();
+        set_nonblocking(sig[0]);
+        set_nonblocking(sig[1]);
+        let ctl = cloexec_pipe();
+        set_nonblocking(ctl[1]);
+        SELF_PIPE_W.store(sig[1], Ordering::Relaxed);
+        CTL_PIPE_W.store(ctl[1], Ordering::Relaxed);
+        (sig[0], ctl[0])
     }
 
     /// Spawn the one drain thread (once).
     pub fn init(h: &'static Hub) {
         READER.call_once(|| {
-            let read_fd = h.read_fd;
             std::thread::Builder::new()
                 .name("wolf-signal".into())
-                .spawn(move || reader_main(h, read_fd))
+                .spawn(move || reader_main(h))
                 .expect("spawn signal drain thread");
         });
     }
 
-    /// Map a single meaning bit to its platform signal number.
-    fn to_signal(m: i64) -> Option<i32> {
+    /// Map a single meaning bit to its platform signal number — the
+    /// whole table, the eight send-only meanings included (s232).
+    pub fn to_signal(m: i64) -> Option<i32> {
         match m {
             meaning::RELOAD => Some(libc::SIGHUP),
             meaning::TERMINATE => Some(libc::SIGTERM),
@@ -287,6 +399,25 @@ mod sys {
             meaning::BG_READ => Some(libc::SIGTTIN),
             meaning::BG_WRITE => Some(libc::SIGTTOU),
             meaning::CHILD => Some(libc::SIGCHLD),
+            meaning::USER => Some(libc::SIGUSR1),
+            meaning::ALARM => Some(libc::SIGALRM),
+            meaning::BROKEN_PIPE => Some(libc::SIGPIPE),
+            meaning::ABORT => Some(libc::SIGABRT),
+            meaning::CONTINUE => Some(libc::SIGCONT),
+            meaning::RESIZE => Some(libc::SIGWINCH),
+            meaning::URGENT => Some(libc::SIGURG),
+            meaning::VIRTUAL_ALARM => Some(libc::SIGVTALRM),
+            meaning::PROFILE_ALARM => Some(libc::SIGPROF),
+            meaning::CPU_LIMIT => Some(libc::SIGXCPU),
+            meaning::FILE_LIMIT => Some(libc::SIGXFSZ),
+            meaning::KILL => Some(libc::SIGKILL),
+            meaning::STOP => Some(libc::SIGSTOP),
+            meaning::SEGMENT_FAULT => Some(libc::SIGSEGV),
+            meaning::BUS_ERROR => Some(libc::SIGBUS),
+            meaning::ARITHMETIC => Some(libc::SIGFPE),
+            meaning::ILLEGAL => Some(libc::SIGILL),
+            meaning::BREAKPOINT => Some(libc::SIGTRAP),
+            meaning::BAD_SYSCALL => Some(libc::SIGSYS),
             _ => None,
         }
     }
@@ -294,8 +425,8 @@ mod sys {
     /// The signal of every meaning in `set`, for a spawn's `defaults`
     /// (s219): a fixed array the child's hook can walk without
     /// allocating; unused slots are 0.
-    pub fn signals_of(set: i64) -> [i32; 9] {
-        let mut out = [0i32; 9];
+    pub fn signals_of(set: i64) -> [i32; super::LISTENED_COUNT] {
+        let mut out = [0i32; super::LISTENED_COUNT];
         for (i, &m) in super::MEANINGS.iter().enumerate() {
             if set & m != 0 {
                 out[i] = to_signal(m).unwrap_or(0);
@@ -304,87 +435,204 @@ mod sys {
         out
     }
 
-    /// Map a delivered signal number back to its meaning bit (0 = a
-    /// signal we never installed, ignored). Async-signal-safe: integer
-    /// compares only, called from the trampoline.
-    fn from_signal(sig: i32) -> i64 {
-        if sig == libc::SIGHUP {
-            meaning::RELOAD
-        } else if sig == libc::SIGTERM {
-            meaning::TERMINATE
-        } else if sig == libc::SIGQUIT {
-            meaning::QUIT
-        } else if sig == libc::SIGUSR2 {
-            meaning::UPGRADE
-        } else if sig == libc::SIGINT {
-            meaning::INTERRUPT
-        } else if sig == libc::SIGTSTP {
-            meaning::SUSPEND
-        } else if sig == libc::SIGTTIN {
-            meaning::BG_READ
-        } else if sig == libc::SIGTTOU {
-            meaning::BG_WRITE
-        } else if sig == libc::SIGCHLD {
-            meaning::CHILD
-        } else {
-            0
+    /// Map a delivered signal number back to its meaning's INDEX, or
+    /// `u8::MAX` for a signal no meaning is listened by. Async-signal-
+    /// safe: integer compares only, called from the trampoline.
+    fn index_of(sig: i32) -> u8 {
+        let mut i = 0u8;
+        while (i as usize) < super::LISTENED_COUNT {
+            if to_signal(1i64 << i) == Some(sig) {
+                return i;
+            }
+            i += 1;
+        }
+        u8::MAX
+    }
+
+    /// This thread's `errno`, which a handler must leave as it found it
+    /// (signal-safety(7)): its `write` may set it.
+    unsafe fn errno_slot() -> *mut libc::c_int {
+        // SAFETY: the C library's per-thread errno location.
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        unsafe {
+            libc::__errno_location()
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
+        unsafe {
+            libc::__error()
         }
     }
 
-    /// The async-signal-safe trampoline: map the signal to a meaning
-    /// byte and `write` it to the self-pipe. This is the ENTIRE handler
-    /// — no allocation, no lock, no wolf code. A full (nonblocking)
-    /// pipe drops the byte, which coalesces rapid repeats: standard
-    /// signal semantics (real-time signals / queued siginfo are
-    /// explicitly out of scope).
+    /// The async-signal-safe trampoline: map the signal to its meaning's
+    /// index and `write` that byte to the self-pipe. This is the ENTIRE
+    /// handler — no allocation, no lock, no wolf code; two atomic
+    /// counters around the write (s232, #691: a poll can tell a handler
+    /// is mid-write and wait for it), and `errno` kept. A full
+    /// (nonblocking) pipe drops the byte, which coalesces rapid
+    /// repeats: standard signal semantics (real-time signals / queued
+    /// siginfo are explicitly out of scope).
     extern "C" fn trampoline(sig: libc::c_int) {
-        let m = from_signal(sig);
-        if m == 0 {
-            return;
-        }
-        // The meaning's INDEX (0..8), not its value: 256 does not fit a
-        // byte and 128 is the control bit.
-        let byte = m.trailing_zeros() as u8;
+        IN_FLIGHT.fetch_add(1, Ordering::SeqCst);
+        let byte = index_of(sig);
         let fd = SELF_PIPE_W.load(Ordering::Relaxed);
-        if fd >= 0 {
+        if byte != u8::MAX && fd >= 0 {
             // SAFETY: `write` is async-signal-safe; a single-byte write
             // to the runtime's own nonblocking pipe. The return is
             // ignored on purpose — a full pipe (EAGAIN) drops,
-            // coalescing.
+            // coalescing. errno is saved and put back around it.
             unsafe {
+                let slot = errno_slot();
+                let saved = *slot;
                 libc::write(fd, (&raw const byte).cast(), 1);
+                *slot = saved;
+            }
+        }
+        DELIVERED.fetch_add(1, Ordering::SeqCst);
+        IN_FLIGHT.fetch_sub(1, Ordering::SeqCst);
+    }
+
+    /// Move every byte the self-pipe holds onto the queue, under the
+    /// hub lock the caller holds; true when one moved. The pipe is
+    /// nonblocking, so this never waits. Every reader of the pipe — the
+    /// drain thread and each poll — reads it only here, under the lock,
+    /// so the queue keeps the pipe's order and no byte is between the
+    /// pipe and the queue while another reader looks (s232, #691).
+    pub fn drain(h: &Hub, st: &mut HubState) -> bool {
+        let mut buf = [0u8; 64];
+        let mut moved = false;
+        loop {
+            // SAFETY: valid nonblocking read end; buffer live and sized.
+            let n = unsafe { libc::read(h.read_fd, buf.as_mut_ptr().cast(), buf.len()) };
+            if n <= 0 {
+                if n < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
+                    continue;
+                }
+                return moved; // EAGAIN: empty (or the write end gone)
+            }
+            for &b in &buf[..n as usize] {
+                if (b as usize) < super::LISTENED_COUNT {
+                    st.queue.push_back(1i64 << b);
+                    moved = true;
+                }
             }
         }
     }
 
-    /// The drain thread: read meaning bytes off the self-pipe in
-    /// NORMAL thread context (locks, allocates — everything the
-    /// handler cannot), enqueue them, and wake waiters. One blocking
-    /// `read`, not an event loop — the sanctioned "dedicated thread"
-    /// shape (the reactor thread's twin), not a second epoll.
-    fn reader_main(h: &'static Hub, read_fd: RawFd) {
-        let mut buf = [0u8; 64];
+    /// s232 (#691, `[os.signal.poll]`): before a poll or a wait reads
+    /// the pipe, let every signal of a listened meaning that is still
+    /// PENDING for this process be delivered — on this thread, now —
+    /// and wait out a trampoline running on another. POSIX
+    /// `pthread_sigmask`: "if there are any pending unblocked signals
+    /// after the call, at least one of those signals shall be delivered
+    /// before the call returns". Measured on linux, a call that leaves
+    /// the mask as it was delivers nothing, so the listened signals are
+    /// first BLOCKED on this thread and then UNBLOCKED — the second call
+    /// changes the mask, and a pending one is delivered before it
+    /// returns — and the mask is put back as found; repeated until a
+    /// round delivers nothing (bounded: a flood of signals must not
+    /// hold a poll forever).
+    pub fn settle(installed: i64) {
+        let mut set_has = false;
+        // SAFETY: a zeroed sigset filled by sigemptyset/sigaddset; the
+        // mask is this thread's own, put back exactly as found.
+        unsafe {
+            let mut set: libc::sigset_t = std::mem::zeroed();
+            libc::sigemptyset(&mut set);
+            for &m in &super::MEANINGS {
+                if installed & m != 0
+                    && let Some(sig) = to_signal(m)
+                {
+                    libc::sigaddset(&mut set, sig);
+                    set_has = true;
+                }
+            }
+            if set_has {
+                for _ in 0..64 {
+                    let before = DELIVERED.load(Ordering::SeqCst);
+                    let mut old: libc::sigset_t = std::mem::zeroed();
+                    libc::pthread_sigmask(libc::SIG_BLOCK, &set, &mut old);
+                    libc::pthread_sigmask(libc::SIG_UNBLOCK, &set, std::ptr::null_mut());
+                    libc::pthread_sigmask(libc::SIG_SETMASK, &old, std::ptr::null_mut());
+                    if DELIVERED.load(Ordering::SeqCst) == before {
+                        break;
+                    }
+                }
+            }
+        }
+        let mut spins = 0u32;
+        while IN_FLIGHT.load(Ordering::SeqCst) != 0 {
+            spins += 1;
+            if spins < 128 {
+                std::hint::spin_loop();
+            } else {
+                std::thread::yield_now();
+            }
+        }
+    }
+
+    /// Whether `sig` is blocked on the calling thread.
+    fn blocked_here(sig: i32) -> bool {
+        // SAFETY: a read of this thread's mask (SIG_BLOCK with an empty
+        // set changes nothing).
+        unsafe {
+            let mut none: libc::sigset_t = std::mem::zeroed();
+            let mut cur: libc::sigset_t = std::mem::zeroed();
+            libc::sigemptyset(&mut none);
+            libc::pthread_sigmask(libc::SIG_BLOCK, &none, &mut cur);
+            libc::sigismember(&cur, sig) == 1
+        }
+    }
+
+    /// The drain thread: wait (`poll(2)`, no lock held) until the
+    /// self-pipe or the control pipe has a byte; move the self-pipe's
+    /// onto the queue under the hub lock ([`drain`]) and wake waiters;
+    /// carry out the control pipe's unblock requests. NORMAL thread
+    /// context — locks, allocates, everything the handler cannot. The
+    /// sanctioned "dedicated thread" shape (the reactor thread's twin).
+    fn reader_main(h: &'static Hub) {
+        let mut fds = [
+            libc::pollfd {
+                fd: h.read_fd,
+                events: libc::POLLIN,
+                revents: 0,
+            },
+            libc::pollfd {
+                fd: h.ctl_fd,
+                events: libc::POLLIN,
+                revents: 0,
+            },
+        ];
         loop {
-            // SAFETY: valid read end; buffer is live and correctly
-            // sized.
-            let n = unsafe { libc::read(read_fd, buf.as_mut_ptr().cast(), buf.len()) };
+            fds[0].revents = 0;
+            fds[1].revents = 0;
+            // SAFETY: two live pollfds; no timeout.
+            let n = unsafe { libc::poll(fds.as_mut_ptr(), 2, -1) };
             if n < 0 {
-                // EINTR: retry. Any other error on our own pipe is
-                // fatal to delivery — end the thread (only reachable on
-                // teardown).
                 if std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
                     continue;
                 }
-                return;
+                return; // fatal to delivery — only reachable on teardown
             }
-            if n == 0 {
-                return; // write end closed (process teardown)
+            if fds[1].revents != 0 {
+                let mut buf = [0u8; 64];
+                // SAFETY: the control pipe's read end is readable.
+                let k = unsafe { libc::read(h.ctl_fd, buf.as_mut_ptr().cast(), buf.len()) };
+                if k == 0 {
+                    return; // write end closed (process teardown)
+                }
+                if k > 0 {
+                    for &b in &buf[..k as usize] {
+                        unblock_here(1i64 << b);
+                    }
+                }
             }
-            for &b in &buf[..n as usize] {
-                if b & CTL_UNBLOCK != 0 {
-                    unblock_here(1i64 << (b & !CTL_UNBLOCK));
-                } else {
-                    deliver(h, 1i64 << b);
+            if fds[0].revents != 0 {
+                let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+                if drain(h, &mut st) {
+                    h.cv.notify_all();
+                }
+                if fds[0].revents & libc::POLLIN == 0 {
+                    return; // hang-up or error on our own pipe: teardown
                 }
             }
         }
@@ -414,24 +662,24 @@ mod sys {
     /// Have the drain thread unblock the signals of `armed` (only
     /// those), and return once it has: after `listen` returns, a signal
     /// the program armed reaches it whatever mask the process
-    /// inherited. Each meaning is asked for once; the ask is one
-    /// control byte on the self-pipe.
+    /// inherited. Each meaning is asked for once; the ask is one byte on
+    /// the control pipe.
     pub fn unblock(armed: i64) {
         let mut done = UNBLOCKED.lock().unwrap_or_else(|p| p.into_inner());
-        let want = armed & meaning::ALL;
+        let want = armed & meaning::LISTENABLE;
         let missing = want & !*done;
         if missing == 0 {
             return;
         }
-        let fd = SELF_PIPE_W.load(Ordering::Relaxed);
+        let fd = CTL_PIPE_W.load(Ordering::Relaxed);
         if fd < 0 {
             return;
         }
         for bit in super::MEANINGS {
             if missing & bit != 0 {
-                let byte = CTL_UNBLOCK | bit.trailing_zeros() as u8;
+                let byte = bit.trailing_zeros() as u8;
                 // The write end is nonblocking; a full pipe (the drain
-                // thread behind by 64 KiB of deliveries) is retried.
+                // thread behind) is retried.
                 loop {
                     // SAFETY: a one-byte write to the runtime's own pipe.
                     let n = unsafe { libc::write(fd, (&raw const byte).cast(), 1) };
@@ -468,7 +716,7 @@ mod sys {
     /// reactor's `epoll_wait` handles EINTR regardless).
     pub fn listen_one(_h: &Hub, bit: i64) -> Result<(), ()> {
         let Some(sig) = to_signal(bit) else {
-            return Ok(());
+            return Err(());
         };
         // SAFETY: installing a static extern handler; the sigaction
         // struct is zeroed then filled, the mask emptied — the stack.rs
@@ -509,16 +757,93 @@ mod sys {
         }
     }
 
-    /// Send one signal to THIS process: `kill(getpid(), sig)` targets
-    /// the process so any thread without the signal blocked runs the
-    /// trampoline. `IO` for an unmapped meaning or a failed send.
+    /// s232 (#681, `[os.signal.ignored]`): the listenable meanings whose
+    /// signal is ignored now — `sigaction` with a null new action reads
+    /// the disposition and changes nothing.
+    pub fn ignored() -> i64 {
+        let mut out = 0;
+        for &m in &super::MEANINGS {
+            let Some(sig) = to_signal(m) else { continue };
+            // SAFETY: a read-only sigaction query into a zeroed struct.
+            unsafe {
+                let mut old: libc::sigaction = std::mem::zeroed();
+                if libc::sigaction(sig, std::ptr::null(), &mut old) == 0
+                    && old.sa_sigaction == libc::SIG_IGN
+                {
+                    out |= m;
+                }
+            }
+        }
+        out
+    }
+
+    /// Send one signal to THIS process. s232 (#691): to the calling
+    /// THREAD (`raise(3)`), which POSIX says does not return until the
+    /// handler has — so the trampoline has written its byte before
+    /// `os_signal_raise` returns, and a poll after it sees the meaning.
+    /// (`kill(getpid())`, used before, is process-directed: the host may
+    /// hand it to another thread, which runs the trampoline after the
+    /// call returns — the measured 2,000 of 2,000.) When this thread
+    /// blocks the signal (an inherited mask, s188) a thread-directed
+    /// signal would pend here forever, so it is sent to the process
+    /// instead and reaches the drain thread, which unblocked it. `IO`
+    /// for anything but one listenable meaning, or a failed send.
     pub fn raise(m: i64) -> i64 {
+        if !super::one_listenable(m) {
+            return sig_code::IO;
+        }
         let Some(sig) = to_signal(m) else {
             return sig_code::IO;
         };
-        // SAFETY: getpid + kill with a validated signal number.
-        let rc = unsafe { libc::kill(libc::getpid(), sig) };
+        // SAFETY: raise / getpid + kill with a validated signal number.
+        let rc = unsafe {
+            if blocked_here(sig) {
+                libc::kill(libc::getpid(), sig)
+            } else {
+                libc::raise(sig)
+            }
+        };
         if rc == 0 { sig_code::OK } else { sig_code::IO }
+    }
+
+    /// s232 (#141, `[os.signal.send]`): `kill(pid, sig)` for a pid > 0
+    /// and one meaning, or signal 0 for `m == 0` (the existence and
+    /// permission check). Codes are `os::proc_code`'s.
+    pub fn send(pid: i64, m: i64) -> i64 {
+        use crate::os::proc_code;
+        let Ok(p) = libc::pid_t::try_from(pid) else {
+            return proc_code::INVALID;
+        };
+        if p <= 0 || (m != 0 && !super::one_sendable(m)) {
+            return proc_code::INVALID;
+        }
+        let sig = if m == 0 {
+            0
+        } else {
+            match to_signal(m) {
+                Some(s) => s,
+                None => return proc_code::INVALID,
+            }
+        };
+        // SAFETY: kill with a positive pid and a validated signal.
+        if unsafe { libc::kill(p, sig) } == 0 {
+            return proc_code::OK;
+        }
+        match std::io::Error::last_os_error().raw_os_error() {
+            Some(libc::ESRCH) => proc_code::NOT_FOUND,
+            Some(libc::EPERM) => proc_code::DENIED,
+            Some(libc::EINVAL) => proc_code::INVALID,
+            _ => proc_code::IO,
+        }
+    }
+
+    /// s232 (`[os.signal.number]`): the host's number for one meaning,
+    /// or `-INVALID`.
+    pub fn number(m: i64) -> i64 {
+        if !super::one_sendable(m) {
+            return -crate::os::proc_code::INVALID;
+        }
+        to_signal(m).map_or(-crate::os::proc_code::INVALID, i64::from)
     }
 }
 
@@ -633,12 +958,51 @@ mod sys {
     pub fn set_disp(_bit: i64, _d: super::Disp) -> i64 {
         sig_code::UNSUPPORTED
     }
+
+    /// s232: nothing to settle — the console handler enqueues under the
+    /// hub lock itself, so a delivery is on the queue when it returns.
+    pub fn settle(_installed: i64) {}
+
+    /// s232: no self-pipe on windows.
+    pub fn drain(_h: &Hub, _st: &mut super::HubState) -> bool {
+        false
+    }
+
+    /// s232 (`[os.signal.ignored]`): no dispositions to read — by name.
+    pub fn ignored() -> i64 {
+        -sig_code::UNSUPPORTED
+    }
+
+    /// s232 (`[os.signal.send]`): the console has no signal to send to
+    /// another process — `unsupported` by name, after the shape.
+    pub fn send(pid: i64, m: i64) -> i64 {
+        use crate::os::proc_code;
+        if pid <= 0 || pid > i64::from(i32::MAX) || (m != 0 && !super::one_sendable(m)) {
+            return proc_code::INVALID;
+        }
+        proc_code::UNSUPPORTED
+    }
+
+    /// s232 (`[os.signal.number]`): no signal numbers on windows.
+    pub fn number(m: i64) -> i64 {
+        use crate::os::proc_code;
+        if !super::one_sendable(m) {
+            return -proc_code::INVALID;
+        }
+        -proc_code::UNSUPPORTED
+    }
 }
 
 /// `os_signal_listen(set)` — register interest in a set of meanings,
 /// installing the platform's delivery for each ([`sys::listen_one`]).
-/// Idempotent per meaning. `IO` if any install fails.
+/// Idempotent per meaning. `IO` for a set that is empty or holds a bit
+/// that is not a listenable meaning (s232, #679: before, such a bit was
+/// dropped and the call answered ok), before anything changes; `IO` if
+/// any install fails.
 pub fn listen(mask: i64) -> i64 {
+    if !listenable_set(mask) {
+        return sig_code::IO;
+    }
     let h = hub();
     let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
     for &bit in &MEANINGS {
@@ -657,26 +1021,40 @@ pub fn listen(mask: i64) -> i64 {
     sig_code::OK
 }
 
+/// The oldest queued meaning in `want`, taken off the queue.
+fn take(st: &mut HubState, want: i64) -> Option<i64> {
+    let pos = st.queue.iter().position(|&m| m & want != 0)?;
+    st.queue.remove(pos)
+}
+
+/// s232 (#691): the meanings installed now, read under the lock.
+fn installed(h: &Hub) -> i64 {
+    h.state.lock().unwrap_or_else(|p| p.into_inner()).installed
+}
+
 /// `os_signal_wait(set)` — park the calling task until a meaning in
 /// `set` is delivered, returning that meaning. Parks through
 /// `task::blocking` (pool compensation, c19). A KILL teardown point
 /// (`[conc.proc.kill]`): a killed supervisor terminates at the wait
 /// instead of hanging on a signal that never comes. Plain cancellation
 /// keeps waiting (the net tier's kill-only posture — the `{io}` row
-/// vocabulary has no cancellation row). An empty or all-invalid set is
-/// `-IO` (nothing could ever arrive — never a hang).
+/// vocabulary has no cancellation row). A set [`listen`] would refuse
+/// is `-IO` (nothing could ever arrive — never a hang). Its first look
+/// is a poll's (s232, #691): a signal delivered or pending before the
+/// call is taken without parking.
 pub fn wait(mask: i64) -> i64 {
-    let want = mask & meaning::ALL;
-    if want == 0 {
+    if !listenable_set(mask) {
         return -sig_code::IO;
     }
+    let want = mask;
     let h = hub();
+    sys::settle(installed(h));
     blocking(|| {
         let scope = current_scope();
         let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
         loop {
-            if let Some(pos) = st.queue.iter().position(|&m| m & want != 0) {
-                let m = st.queue.remove(pos).expect("position just found it");
+            sys::drain(h, &mut st);
+            if let Some(m) = take(&mut st, want) {
                 return m;
             }
             if let Some(s) = scope.as_ref()
@@ -699,12 +1077,12 @@ pub fn wait(mask: i64) -> i64 {
 
 /// `os_signal_ignore(set)` / `os_signal_default(set)` (s219,
 /// `[os.signal.disp]`): every meaning in `set` stops being listened and
-/// its signal is ignored, or does what the host does by default. An
-/// empty set, or one with a bit outside the meanings, is `IO` before
-/// anything changes; windows is `UNSUPPORTED`. Meanings already queued
-/// stay queued for a `wait` or `poll` — they arrived while listened.
+/// its signal is ignored, or does what the host does by default. A set
+/// [`listen`] would refuse is `IO` before anything changes; windows is
+/// `UNSUPPORTED`. Meanings already queued stay queued for a `wait` or
+/// `poll` — they arrived while listened.
 pub fn set_disposition(mask: i64, d: Disp) -> i64 {
-    if mask == 0 || mask & !meaning::ALL != 0 {
+    if !listenable_set(mask) {
         return sig_code::IO;
     }
     for &bit in &MEANINGS {
@@ -725,27 +1103,51 @@ pub fn set_disposition(mask: i64, d: Disp) -> i64 {
 /// `os_signal_poll(set)` (s219, `[os.signal.poll]`): the oldest queued
 /// meaning in `set`, taken off the queue, or 0 when none has arrived —
 /// never a wait. A program that never listened has nothing queued (and
-/// no hub is built for the question). An empty or all-unmapped set is
-/// `-IO`, as for `wait`.
+/// no hub is built for the question). A set [`listen`] would refuse is
+/// `-IO`. **Exact since s232 (#691):** it first lets every pending
+/// signal of a listened meaning be delivered on this thread and waits
+/// out a trampoline mid-write ([`sys::settle`]), then reads the
+/// self-pipe itself under the hub lock ([`sys::drain`]) — so a signal
+/// whose trampoline has run, or that is pending for this process, is on
+/// the queue before the poll looks.
 pub fn poll(mask: i64) -> i64 {
-    let want = mask & meaning::ALL;
-    if want == 0 {
+    if !listenable_set(mask) {
         return -sig_code::IO;
     }
     let Some(h) = HUB.get() else {
         return 0;
     };
+    sys::settle(installed(h));
     let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
-    match st.queue.iter().position(|&m| m & want != 0) {
-        Some(pos) => st.queue.remove(pos).expect("position just found it"),
-        None => 0,
-    }
+    sys::drain(h, &mut st);
+    take(&mut st, mask).unwrap_or(0)
+}
+
+/// s232 (#681, `[os.signal.ignored]`): the listenable meanings whose
+/// signal is ignored now, or `-UNSUPPORTED` (windows). Read before the
+/// program's first `ignore`, `default` or `listen` of a meaning, it is
+/// the disposition the process started with.
+pub fn ignored() -> i64 {
+    sys::ignored()
+}
+
+/// s232 (#141, `[os.signal.send]`): one meaning to process `pid`, or
+/// with `m == 0` the check that one could be sent. `os::proc_code`'s
+/// codes (0 ok, 1 not_found, 2 denied, 5 unsupported, 6 invalid, 4 io).
+pub fn send(pid: i64, m: i64) -> i64 {
+    sys::send(pid, m)
+}
+
+/// s232 (`[os.signal.number]`): the host's number for one meaning, or
+/// a negated `os::proc_code` (`-INVALID`, `-UNSUPPORTED`).
+pub fn number(m: i64) -> i64 {
+    sys::number(m)
 }
 
 /// The signal numbers of the meanings in `set`, for a child's hook
 /// (s219's spawn `defaults`); 0 slots are unused. Empty on windows.
 #[cfg(unix)]
-pub fn signals_of(set: i64) -> [i32; 9] {
+pub fn signals_of(set: i64) -> [i32; LISTENED_COUNT] {
     sys::signals_of(set)
 }
 
@@ -753,8 +1155,8 @@ pub fn signals_of(set: i64) -> [i32; 9] {
 /// self-send companion to `os_kill`'s send-to-child; the deterministic
 /// loopback the witness rides, and a real capability: a program
 /// triggering its own reload path). `kill(getpid(), sig)` on unix; the
-/// in-process enqueue on windows ([`sys::raise`]). `IO` for an unmapped
-/// meaning or a failed send.
+/// in-process enqueue on windows ([`sys::raise`]). `IO` for anything
+/// but one listenable meaning, or a failed send.
 pub fn raise(m: i64) -> i64 {
     sys::raise(m)
 }
@@ -801,6 +1203,27 @@ pub extern "C" fn __wolf_rt_os_signal_default(mask: i64) -> i64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_os_signal_poll(mask: i64) -> i64 {
     poll(mask)
+}
+
+/// `os_signal_ignored() -> int ! {unsupported}` (s232) — the ignored
+/// set (>= 0), or `-UNSUPPORTED` (`sig_code`, 2).
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_signal_ignored() -> i64 {
+    ignored()
+}
+
+/// `os_signal_send(pid: int, meaning: int) -> () ! {denied, invalid, io,
+/// not_found, unsupported}` (s232) — 0 ok, else an `os::proc_code`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_signal_send(pid: i64, m: i64) -> i64 {
+    send(pid, m)
+}
+
+/// `os_signal_number(meaning: int) -> int ! {invalid, unsupported}`
+/// (s232) — the number (> 0), or a negated `os::proc_code`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_signal_number(m: i64) -> i64 {
+    number(m)
 }
 
 #[cfg(test)]
@@ -938,16 +1361,8 @@ mod tests {
         assert_eq!(listen(meaning::SUSPEND | meaning::BG_READ), sig_code::OK);
         assert_eq!(poll(meaning::SUSPEND), 0);
         assert_eq!(raise(meaning::BG_READ), sig_code::OK);
-        // Delivery crosses the drain thread: give it up to a second.
-        let mut got = 0;
-        for _ in 0..200 {
-            got = poll(meaning::BG_READ | meaning::SUSPEND);
-            if got != 0 {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(5));
-        }
-        assert_eq!(got, meaning::BG_READ);
+        // s232 (#691): no sleep — the poll reads the pipe itself.
+        assert_eq!(poll(meaning::BG_READ | meaning::SUSPEND), meaning::BG_READ);
         assert_eq!(poll(meaning::BG_READ), 0);
         assert_eq!(poll(0), -sig_code::IO);
         assert_eq!(
@@ -1003,15 +1418,197 @@ mod tests {
     }
 
     /// s219: a disposition call with an empty set, or a bit outside the
-    /// meanings, changes nothing and is `IO`.
+    /// meanings, changes nothing and is `IO` — s232: `USER` (512) is a
+    /// meaning now; `KILL` (send-only) and a bit past the table are not.
     #[test]
     fn disposition_of_a_bad_set_is_io() {
         let _g = serial();
         assert_eq!(set_disposition(0, Disp::Ignore), sig_code::IO);
-        assert_eq!(set_disposition(512, Disp::Default), sig_code::IO);
+        assert_eq!(set_disposition(meaning::KILL, Disp::Default), sig_code::IO);
+        assert_eq!(set_disposition(1 << 40, Disp::Default), sig_code::IO);
         assert_eq!(
-            set_disposition(meaning::RELOAD | 1024, Disp::Ignore),
+            set_disposition(meaning::RELOAD | (1 << 28), Disp::Ignore),
             sig_code::IO
         );
+        assert_eq!(set_disposition(-1, Disp::Ignore), sig_code::IO);
+    }
+
+    /// s232 (#679, `[os.signal.set]`): one shape rule for every set —
+    /// a listen of a set holding a bit that is not a listenable meaning
+    /// is `IO` (it answered ok before, the bit dropped), and so are
+    /// wait and poll of one; raise takes one listenable meaning.
+    #[test]
+    fn a_bit_outside_the_listenable_meanings_is_io_everywhere() {
+        let _g = serial();
+        for bad in [
+            0,
+            1 << 20,
+            1 << 27,
+            1 << 28,
+            1 << 40,
+            -1,
+            meaning::RELOAD | (1 << 30),
+        ] {
+            assert_eq!(listen(bad), sig_code::IO, "listen {bad}");
+            assert_eq!(poll(bad), -sig_code::IO, "poll {bad}");
+            assert_eq!(wait(bad), -sig_code::IO, "wait {bad}");
+        }
+        for bad in [0, 3, meaning::KILL, meaning::STOP, 1 << 40, -16] {
+            assert_eq!(raise(bad), sig_code::IO, "raise {bad}");
+        }
+        assert!(listenable_set(meaning::LISTENABLE));
+        assert!(!listenable_set(meaning::SENDABLE));
+    }
+
+    /// s232 (#679): the eleven new catchable meanings ride the self-pipe
+    /// by index, and each one's real signal reaches the trampoline.
+    #[cfg(unix)]
+    #[test]
+    fn the_eleven_new_meanings_round_trip() {
+        let _g = serial();
+        let set = meaning::USER
+            | meaning::ALARM
+            | meaning::BROKEN_PIPE
+            | meaning::ABORT
+            | meaning::CONTINUE
+            | meaning::RESIZE
+            | meaning::URGENT
+            | meaning::VIRTUAL_ALARM
+            | meaning::PROFILE_ALARM
+            | meaning::CPU_LIMIT
+            | meaning::FILE_LIMIT;
+        assert_eq!(listen(set), sig_code::OK);
+        let mut m = meaning::USER;
+        while m <= meaning::FILE_LIMIT {
+            assert_eq!(raise(m), sig_code::OK);
+            assert_eq!(poll(m), m, "meaning {m}");
+            m <<= 1;
+        }
+        assert_eq!(set_disposition(set, Disp::Default), sig_code::OK);
+    }
+
+    /// s232 (#691, `[os.signal.poll]`): a poll right after a raise sees
+    /// it — 2,000 rounds of 2,000, where trunk answered 0 in all of them.
+    #[cfg(unix)]
+    #[test]
+    fn poll_right_after_raise_never_misses() {
+        let _g = serial();
+        assert_eq!(listen(meaning::INTERRUPT), sig_code::OK);
+        let mut missed = 0;
+        for _ in 0..2000 {
+            assert_eq!(raise(meaning::INTERRUPT), sig_code::OK);
+            if poll(meaning::INTERRUPT) != meaning::INTERRUPT {
+                missed += 1;
+                let _late = wait(meaning::INTERRUPT);
+            }
+        }
+        assert_eq!(missed, 0, "poll after raise missed {missed} of 2000");
+        assert_eq!(
+            set_disposition(meaning::INTERRUPT, Disp::Default),
+            sig_code::OK
+        );
+    }
+
+    /// s232 (#691): a raise from a thread that blocks the signal still
+    /// arrives (it goes to the process, and the drain thread takes it) —
+    /// the thread-directed raise is used only where it can be delivered.
+    #[cfg(unix)]
+    #[test]
+    fn raise_from_a_thread_that_blocks_it_still_arrives() {
+        let _g = serial();
+        assert_eq!(listen(meaning::ALARM), sig_code::OK);
+        // SAFETY: this thread's own mask, put back below.
+        unsafe {
+            let mut set: libc::sigset_t = std::mem::zeroed();
+            let mut old: libc::sigset_t = std::mem::zeroed();
+            libc::sigemptyset(&mut set);
+            libc::sigaddset(&mut set, libc::SIGALRM);
+            libc::pthread_sigmask(libc::SIG_BLOCK, &set, &mut old);
+            for _ in 0..50 {
+                assert_eq!(raise(meaning::ALARM), sig_code::OK);
+                assert_eq!(wait(meaning::ALARM), meaning::ALARM);
+            }
+            libc::pthread_sigmask(libc::SIG_SETMASK, &old, std::ptr::null_mut());
+        }
+        assert_eq!(set_disposition(meaning::ALARM, Disp::Default), sig_code::OK);
+    }
+
+    /// s232 (#681, `[os.signal.ignored]`): the read follows the
+    /// disposition and changes nothing.
+    #[cfg(unix)]
+    #[test]
+    fn ignored_reads_the_disposition() {
+        let _g = serial();
+        let before = ignored();
+        assert!(before >= 0 && before & !meaning::LISTENABLE == 0);
+        assert_eq!(set_disposition(meaning::USER, Disp::Ignore), sig_code::OK);
+        assert_ne!(ignored() & meaning::USER, 0);
+        assert_eq!(
+            ignored() & meaning::USER,
+            meaning::USER,
+            "a read changes nothing"
+        );
+        assert_eq!(listen(meaning::USER), sig_code::OK);
+        assert_eq!(ignored() & meaning::USER, 0, "a listen ends the ignore");
+        assert_eq!(set_disposition(meaning::USER, Disp::Default), sig_code::OK);
+        assert_eq!(ignored() & meaning::USER, 0);
+    }
+
+    /// s232 (#141, `[os.signal.send]`): the shape, then the host.
+    #[cfg(unix)]
+    #[test]
+    fn send_rows() {
+        use crate::os::proc_code;
+        let _g = serial();
+        let me = i64::from(std::process::id());
+        assert_eq!(send(me, 0), proc_code::OK, "kill -0 of this process");
+        for (pid, m) in [
+            (0, 0),
+            (-1, 0),
+            (me, 3),
+            (me, 1 << 28),
+            (i64::MAX, 0),
+            (me, -2),
+        ] {
+            assert_eq!(send(pid, m), proc_code::INVALID, "send({pid}, {m})");
+        }
+        // A pid no process has: the largest a pid_t holds.
+        assert_eq!(send(i64::from(i32::MAX), 0), proc_code::NOT_FOUND);
+        // A child ended by a sent TERMINATE.
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .unwrap();
+        let pid = i64::from(child.id());
+        assert_eq!(send(pid, meaning::TERMINATE), proc_code::OK);
+        use std::os::unix::process::ExitStatusExt as _;
+        assert_eq!(child.wait().unwrap().signal(), Some(libc::SIGTERM));
+        // And one ended by KILL, a send-only meaning.
+        let mut child = std::process::Command::new("sleep")
+            .arg("30")
+            .spawn()
+            .unwrap();
+        assert_eq!(send(i64::from(child.id()), meaning::KILL), proc_code::OK);
+        assert_eq!(child.wait().unwrap().signal(), Some(libc::SIGKILL));
+    }
+
+    /// s232 (`[os.signal.number]`): one meaning's number, the table's
+    /// last bit included; anything else `-INVALID`.
+    #[cfg(unix)]
+    #[test]
+    fn number_rows() {
+        use crate::os::proc_code;
+        assert_eq!(number(meaning::INTERRUPT), i64::from(libc::SIGINT));
+        assert_eq!(number(meaning::KILL), 9);
+        assert_eq!(number(meaning::BAD_SYSCALL), i64::from(libc::SIGSYS));
+        assert_eq!(number(meaning::USER), i64::from(libc::SIGUSR1));
+        for bad in [0, 3, 1 << 28, -1] {
+            assert_eq!(number(bad), -proc_code::INVALID, "number {bad}");
+        }
+        let mut seen = std::collections::HashSet::new();
+        for i in 0..MEANING_COUNT {
+            let n = number(1 << i);
+            assert!(n > 0 && seen.insert(n), "bit {i}: {n}");
+        }
     }
 }
