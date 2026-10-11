@@ -2253,10 +2253,6 @@ impl<'t> Lowerer<'t> {
         call: Span,
         in_caller_region: bool,
     ) {
-        // PLANT (s229, reverted next): the rule is off unless asked for.
-        if std::env::var_os("WOLF_S229_SENT_RULE").is_none() {
-            return;
-        }
         let handed = flows.iter().find_map(|f| {
             if let Some(c) = &f.sink_capture {
                 Some(SentFlow {
