@@ -2028,14 +2028,12 @@ impl<'t> Lowerer<'t> {
                 let Base::Local(l) = self.places.get(place).base else {
                     continue;
                 };
-                // PLANT (s227, reverted next): a `read` argument's bytes
-                // no longer reach a `mut` argument — #660 itself.
-                let _ = pty;
+                let holds_bytes = pty.map(|t| self.may_lend_bytes(t, 0)).unwrap_or(true);
                 for (ai, a) in flows.iter().enumerate() {
                     if ai == ti || a.sites.is_empty() {
                         continue;
                     }
-                    let reaches = a.owned && (!builtin || a.store);
+                    let reaches = (a.owned || (a.lends && holds_bytes)) && (!builtin || a.store);
                     if !reaches {
                         continue;
                     }
