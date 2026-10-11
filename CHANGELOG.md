@@ -295,6 +295,23 @@ halves of s220, s219, s225, s224, s218 and s204.
 - **lupin and the shipped std.** A lupin beside this `wolf` reads the
   archive's `std/` as its last std root; lupin's own archive ships none.
 
+### A `List` slice is one copy (s228, #663)
+
+`xs[a..b]` on a `List` was lowered as a loop of runtime `push` calls,
+one per element, into a list that grew by doubling: 12.2 µs for a
+4,096-byte `List[byte]` slice on the release tier (linux x86-64), where
+a UTF-8 decode of twice those bytes takes 0.19 µs. It is now one
+runtime call, `__wolf_rt_list_slice`: the bounds check the caller
+already made, one allocation at exact capacity, one copy — 0.06 µs for
+the same slice, for every element type (a slice is only lowered for
+flat elements, and a flat element's copy is its bytes). The value is
+the list the loop built; what a program can observe is the region
+charge, which stops counting the abandoned doubling buffers: 4,144
+bytes for that slice where it was 8,240, so a slice that fits a
+`cap:` budget on the checked machine (4,096) no longer breaches it
+natively. The freestanding runtime archive defines the symbol too, so
+a kernel that slices a `List` links as before.
+
 ### The standard library ships with the compiler (s204, ruling #29, #415)
 
 **Read this before you bump the pin.** The release archive now carries
