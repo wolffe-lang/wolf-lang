@@ -147,8 +147,10 @@ const RULED_LUPIN: &str = "trap(region-fault)";
 /// element and a map key reaching into a freed region). Pinned by
 /// version so the pin dies with the fix: a lupin outside this list
 /// must trap. Measured on the published 0.1.50 archive (the pairing
-/// since wolf 0.2.27): all seven rows `exit(0)`, as 0.1.49 answered.
-const LUPIN_MISSES_LIST_ELEMENTS: &[&str] = &["0.1.50"];
+/// since wolf 0.2.27): all seven rows `exit(0)`, as 0.1.49 answered;
+/// and on the published 0.1.51 archive (the 0.2.28 pairing, r33; #232
+/// still open), the same.
+const LUPIN_MISSES_LIST_ELEMENTS: &[&str] = &["0.1.50", "0.1.51"];
 
 fn base_version(v: &str) -> &str {
     v.split('+').next().unwrap_or(v)
