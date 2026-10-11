@@ -30,9 +30,11 @@
 //! runs as (`denied.lu` asks the host whether a locked directory binds
 //! it, and asserts on both answers).
 //!
-//! lupin 0.1.50 (the 0.2.27 pairing) predates the mirror — it resolves
-//! none of the eight names — and is pinned by version and release commit
-//! as pre-mirror (s180's design); a newer lupin must carry the mirror:
+//! lupin 0.1.50 (the 0.2.27 pairing) predated the mirror — it resolved
+//! none of the eight names — and was pinned by version and release
+//! commit as pre-mirror (s180's design). 0.1.51 (the 0.2.28 pairing, r33)
+//! carries it, measured on the published archive, so the pin is dropped
+//! and every lupin must carry the mirror:
 //! every row as the compiler's, except the two it refuses BY NAME for
 //! want of a host call it can make without `unsafe` (`os_umask`, and
 //! `fs_set_times` on a link itself).
@@ -46,10 +48,10 @@ fn wolf() -> &'static str {
     env!("CARGO_BIN_EXE_wolf")
 }
 
-/// The lupin release that predates the mirror, with the commit its
-/// archive reports: 0.1.50 (r32, `32b970d`), the pairing since v0.2.27.
-/// wolf-interp's s230 is unmerged at it.
-const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[("0.1.50", Some("32b970d"))];
+/// The lupin releases that predate the mirror, with the commit each
+/// archive reports. Empty since the 0.2.28 pairing: 0.1.51 (r33) carries
+/// wolf-interp's s230, measured; 0.1.50 (`32b970d`) did not.
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[];
 
 fn pre_mirror(lupin: &Obs) -> bool {
     PRE_MIRROR_LUPIN
