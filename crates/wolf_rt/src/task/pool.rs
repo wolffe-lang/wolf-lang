@@ -7,8 +7,16 @@
 //! compensation** (Loom's strategy at thread level): runtime-owned
 //! blocking primitives wrap themselves in [`blocking`], which marks
 //! the worker blocked, and when unblocked workers drop below target
-//! parallelism the pool spins up a replacement thread (up to a cap);
-//! replacements retire lazily when idle. Raw FFI that blocks is
+//! parallelism the pool spins up a replacement thread; replacements
+//! retire lazily when idle. Since s231 (wolf-lang#713) there is no cap
+//! on replacements: the pool holds `target` unblocked workers plus one
+//! thread for every task parked in a runtime-owned wait, because a
+//! parked task holds its thread and the task that would wake it may be
+//! the next one queued. Before s231 compensation stopped at
+//! `max(8 t, t + 4)` workers, and a program that parked that many
+//! tasks at once (one per connection) stopped. The slot table grows in
+//! chunks; the operating system's thread limit is the last word, and a
+//! thread it refuses is reported once on stderr. Raw FFI that blocks is
 //! invisible to this machinery — documented loudly in mod.rs; the
 //! stdlib rule (s35/s38) is that all std blocking routes through
 //! runtime-owned primitives.
@@ -31,7 +39,8 @@
 //! a thread, installs a handler, or touches a queue.
 
 use std::cell::RefCell;
-use std::collections::VecDeque;
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicPtr, AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::thread::Thread;
@@ -99,10 +108,46 @@ struct WorkerSlot {
     lifo: AtomicPtr<Task>,
 }
 
+impl WorkerSlot {
+    fn new() -> WorkerSlot {
+        WorkerSlot {
+            occupied: AtomicBool::new(false),
+            thread: Mutex::new(None),
+            deque: Deque::new(),
+            lifo: AtomicPtr::new(std::ptr::null_mut()),
+        }
+    }
+}
+
+/// Worker slots per chunk past the first ([`Pool::slot`]).
+const CHUNK: usize = 128;
+/// Chunks past the first: 8,192 x 128 = 1,048,576 more slots than the
+/// first chunk's, far past any host's thread limit (kasumi: 254,378).
+const MAX_CHUNKS: usize = 8_192;
+
 struct Pool {
     target: usize,
-    cap: usize,
-    slots: Vec<WorkerSlot>,
+    /// The first chunk's size: s32's fixed table, `max(8 t, t + 4)`
+    /// slots, made at start. The steal probe's random draw ranges over
+    /// these exactly as it always has.
+    base: usize,
+    /// The first chunk, `base` slots.
+    core: Box<[WorkerSlot]>,
+    /// Further chunks of [`CHUNK`] slots each, made on demand (s231)
+    /// and never freed (the pool is a static). A null entry is a chunk
+    /// not yet made; a slot below `made` always has its chunk.
+    more: Box<[AtomicPtr<WorkerSlot>]>,
+    /// Slots ever handed out: every slot below it is occupied or in
+    /// `free`. Published after the slot's chunk exists.
+    made: AtomicUsize,
+    /// Vacated slots, lowest first — the one taken next, as the old
+    /// first-free scan took it. Also the lock that serializes growth.
+    free: Mutex<BinaryHeap<Reverse<usize>>>,
+    /// The operating system refused a worker thread once: reported.
+    refused: AtomicBool,
+    /// Idle extras asleep with no timeout (they had no surplus to
+    /// retire from); a blocking exit that makes a surplus wakes one.
+    sleepers: AtomicUsize,
     injector: Mutex<VecDeque<Box<Task>>>,
     /// Parked worker ids, most-recently-parked first.
     idle: Mutex<Vec<usize>>,
@@ -116,6 +161,62 @@ struct Pool {
 }
 
 static POOL: OnceLock<Pool> = OnceLock::new();
+
+impl Pool {
+    /// Slot `i`, which must be below `made` (or a core slot).
+    fn slot(&self, i: usize) -> &WorkerSlot {
+        if i < self.base {
+            return &self.core[i];
+        }
+        let j = i - self.base;
+        let chunk = self.more[j / CHUNK].load(SeqCst);
+        assert!(!chunk.is_null(), "worker slot {i} has no chunk");
+        // SAFETY: a non-null chunk is a leaked `Box<[WorkerSlot]>` of
+        // CHUNK slots (`claim_slot`), never freed.
+        unsafe { &*chunk.add(j % CHUNK) }
+    }
+
+    /// Slots handed out so far (every one of them exists).
+    fn made(&self) -> usize {
+        self.made.load(SeqCst)
+    }
+
+    /// Take a free slot for a new worker and mark it occupied: the
+    /// lowest vacated one, else a fresh one (making its chunk). `None`
+    /// only past the table's ceiling.
+    fn claim_slot(&self) -> Option<usize> {
+        let mut free = self.free.lock().unwrap();
+        while let Some(Reverse(i)) = free.pop() {
+            // A vacated core slot may have been retaken by
+            // `ensure_workers` since it was listed.
+            if !self.slot(i).occupied.swap(true, SeqCst) {
+                return Some(i);
+            }
+        }
+        let i = self.made.load(SeqCst);
+        if i >= self.base {
+            let j = i - self.base;
+            if j / CHUNK >= MAX_CHUNKS {
+                return None;
+            }
+            if self.more[j / CHUNK].load(SeqCst).is_null() {
+                let chunk: Box<[WorkerSlot]> = (0..CHUNK).map(|_| WorkerSlot::new()).collect();
+                self.more[j / CHUNK].store(Box::leak(chunk).as_mut_ptr(), SeqCst);
+            }
+        }
+        self.slot(i).occupied.store(true, SeqCst);
+        self.made.store(i + 1, SeqCst);
+        Some(i)
+    }
+
+    /// Give a slot back: its worker has left the pool.
+    fn vacate(&self, i: usize) {
+        let mut free = self.free.lock().unwrap();
+        *self.slot(i).thread.lock().unwrap() = None;
+        self.slot(i).occupied.store(false, SeqCst);
+        free.push(Reverse(i));
+    }
+}
 
 thread_local! {
     static WORKER_ID: std::cell::Cell<Option<usize>> =
@@ -204,10 +305,11 @@ pub(crate) fn finish_current_task(reason: ExitReason) {
 /// to the injector and gives its pool slot back before it parks, so
 /// the pool starts a replacement in that slot. Until s228 the parked
 /// thread kept the slot — counted as a blocked worker for ever — and
-/// the pool has `cap` slots (eight per core): after that many
-/// contained traps every slot was a parked thread, nothing could run a
-/// task, and the process stopped answering (hasu, 20 cpus: between
-/// 120 and 250 traps; a 2-cpu host has 16 slots).
+/// the pool had a fixed table of slots (eight per core): after that
+/// many contained traps every slot was a parked thread, nothing could
+/// run a task, and the process stopped answering (hasu, 20 cpus:
+/// between 120 and 250 traps; a 2-cpu host had 16 slots). Since s231
+/// the table grows, but a slot held for ever is still a slot lost.
 ///
 /// What a contained trap still costs is the parked thread itself: its
 /// kernel record and the stack pages its dead frames occupy. The
@@ -216,7 +318,7 @@ pub(crate) fn finish_current_task(reason: ExitReason) {
 pub(crate) fn park_after_contained_trap() -> ! {
     if let Some(w) = WORKER_ID.with(std::cell::Cell::get) {
         let p = pool();
-        let slot = &p.slots[w];
+        let slot = p.slot(w);
         // Everything this worker alone could reach goes where any
         // worker can take it: the LIFO slot and its own deque (thieves
         // skip an unoccupied slot).
@@ -233,8 +335,7 @@ pub(crate) fn park_after_contained_trap() -> ! {
         }
         // Leave the pool: no longer a worker, the slot is free.
         WORKER_ID.with(|c| c.set(None));
-        *slot.thread.lock().unwrap() = None;
-        slot.occupied.store(false, SeqCst);
+        p.vacate(w);
         p.running.fetch_sub(1, SeqCst);
         p.unblocked.fetch_sub(1, SeqCst);
         compensate(p);
@@ -269,19 +370,21 @@ fn pool() -> &'static Pool {
             .map(|n| n.get())
             .unwrap_or(2)
             .max(2);
-        let cap = (target * 8).max(target + 4);
-        let slots = (0..cap)
-            .map(|_| WorkerSlot {
-                occupied: AtomicBool::new(false),
-                thread: Mutex::new(None),
-                deque: Deque::new(),
-                lifo: AtomicPtr::new(std::ptr::null_mut()),
-            })
+        let base = (target * 8).max(target + 4);
+        let core = (0..base).map(|_| WorkerSlot::new()).collect();
+        let more = (0..MAX_CHUNKS)
+            .map(|_| AtomicPtr::new(std::ptr::null_mut()))
             .collect();
         Pool {
             target,
-            cap,
-            slots,
+            base,
+            core,
+            more,
+            // The core workers take 0..target (`ensure_workers`).
+            made: AtomicUsize::new(target),
+            free: Mutex::new(BinaryHeap::new()),
+            refused: AtomicBool::new(false),
+            sleepers: AtomicUsize::new(0),
             injector: Mutex::new(VecDeque::new()),
             idle: Mutex::new(Vec::new()),
             idle_count: AtomicUsize::new(0),
@@ -322,7 +425,7 @@ pub fn spawn_task(scope: &Arc<ScopeInner>, name: &str, body: Body) {
         Some(w) => {
             // LIFO slot for locality; the displaced task goes to the
             // deque (or spills to the injector when full).
-            let slot = &p.slots[w];
+            let slot = p.slot(w);
             let old = slot.lifo.swap(Box::into_raw(task), SeqCst);
             if !old.is_null()
                 && let Err(back) = slot.deque.push(old)
@@ -343,10 +446,10 @@ fn ensure_workers(p: &'static Pool) {
         return;
     }
     for slot in 0..p.target {
-        if !p.slots[slot].occupied.swap(true, SeqCst) {
+        if !p.slot(slot).occupied.swap(true, SeqCst) {
             p.running.fetch_add(1, SeqCst);
             p.unblocked.fetch_add(1, SeqCst);
-            start_worker(p, slot, false);
+            start_or_report(p, slot, false);
         }
     }
 }
@@ -363,7 +466,7 @@ fn wake_one(p: &Pool) {
     };
     if let Some(w) = woken {
         sched_point(SchedEvent::Unpark { worker: w });
-        if let Some(t) = p.slots[w].thread.lock().unwrap().as_ref() {
+        if let Some(t) = p.slot(w).thread.lock().unwrap().as_ref() {
             t.unpark();
         }
     }
@@ -385,6 +488,15 @@ pub fn blocking<R>(f: impl FnOnce() -> R) -> R {
          ([conc.chan.mailbox]: handlers are atomic and non-blocking — \
          spawn the work onto the proc's scope and complete via a message)"
     );
+    compensated(f)
+}
+
+/// [`blocking`]'s compensation alone, for a wait the program asked for
+/// by name — `time_sleep_ms`, `net_wait` (s231: until then they held
+/// their worker with no compensation at all). They are not runtime
+/// blocking primitives in [`blocking`]'s handler sense, so its handler
+/// assert is not applied to them.
+pub(crate) fn compensated<R>(f: impl FnOnce() -> R) -> R {
     let Some(w) = WORKER_ID.with(std::cell::Cell::get) else {
         // det (s36): the harness root context blocks off-pool.
         super::hooks::det_block_enter();
@@ -396,7 +508,7 @@ pub fn blocking<R>(f: impl FnOnce() -> R) -> R {
     // The LIFO slot is owner-private: flush it to stealable ground
     // before blocking, or a child spawned just before a nested join
     // would deadlock its own parent.
-    let slot = &p.slots[w];
+    let slot = p.slot(w);
     let held = slot.lifo.swap(std::ptr::null_mut(), SeqCst);
     if !held.is_null() {
         match slot.deque.push(held) {
@@ -419,29 +531,76 @@ pub fn blocking<R>(f: impl FnOnce() -> R) -> R {
     super::hooks::det_block_enter();
     let r = f();
     super::hooks::det_block_exit();
-    p.unblocked.fetch_add(1, SeqCst);
+    if p.unblocked.fetch_add(1, SeqCst) + 1 > p.target {
+        nudge_sleeping_extra(p);
+    }
     r
 }
 
+/// A surplus of unblocked workers exists: wake one idle extra that is
+/// asleep with no timeout, so it can retire. It stays on the idle list
+/// (retirement requires that), so this only unparks it.
+fn nudge_sleeping_extra(p: &Pool) {
+    if p.sleepers.load(SeqCst) == 0 {
+        return;
+    }
+    let extra = {
+        let idle = p.idle.lock().unwrap();
+        idle.iter().rev().copied().find(|&w| w >= p.target)
+    };
+    if let Some(w) = extra
+        && let Some(t) = p.slot(w).thread.lock().unwrap().as_ref()
+    {
+        t.unpark();
+    }
+}
+
 /// Live unblocked workers dipped below target: add a replacement
-/// thread, up to the cap. Any free slot serves (s228): a core slot is
-/// free only when a contained trap vacated it
-/// ([`park_after_contained_trap`]), and its replacement is a core
-/// worker like the one it replaces — it never retires.
+/// thread. Any free slot serves (s228): a core slot is free only when a
+/// contained trap vacated it ([`park_after_contained_trap`]), and its
+/// replacement is a core worker like the one it replaces — it never
+/// retires. No cap (s231, wolf-lang#713): a parked task holds its
+/// thread, so every one parked needs a worker beside the `target`
+/// unblocked ones, or the task that would wake them never runs. The
+/// count is bounded by the tasks parked at once; the operating system
+/// bounds it after that ([`start_or_report`]).
 fn compensate(p: &'static Pool) {
     if p.unblocked.load(SeqCst) >= p.target {
         return;
     }
-    if p.running.load(SeqCst) >= p.cap {
+    let Some(slot) = p.claim_slot() else {
+        report_refusal(p, "the worker table is full");
         return;
+    };
+    p.running.fetch_add(1, SeqCst);
+    p.unblocked.fetch_add(1, SeqCst);
+    start_or_report(p, slot, slot >= p.target);
+}
+
+/// Start a worker in the occupied `slot`; when the operating system
+/// refuses the thread, give the slot back, take the counts down and say
+/// so once. The process keeps running on the workers it has: a queued
+/// task waits until a parked one returns (the pre-s231 stall, now named
+/// where it happens).
+fn start_or_report(p: &'static Pool, slot: usize, extra: bool) {
+    if let Err(e) = start_worker(p, slot, extra) {
+        p.vacate(slot);
+        p.running.fetch_sub(1, SeqCst);
+        p.unblocked.fetch_sub(1, SeqCst);
+        report_refusal(p, &e);
     }
-    for slot in 0..p.cap {
-        if !p.slots[slot].occupied.swap(true, SeqCst) {
-            p.running.fetch_add(1, SeqCst);
-            p.unblocked.fetch_add(1, SeqCst);
-            start_worker(p, slot, slot >= p.target);
-            return;
-        }
+}
+
+fn report_refusal(p: &Pool, why: &str) {
+    if !p.refused.swap(true, SeqCst) {
+        let running = p.running.load(SeqCst);
+        let unblocked = p.unblocked.load(SeqCst);
+        eprintln!(
+            "wolf: the runtime could not start another worker thread ({why}); {running} \
+             are running, {} of them held by tasks parked in waits. A task queued now \
+             waits until a parked task returns. (Reported once.)",
+            running.saturating_sub(unblocked)
+        );
     }
 }
 
@@ -449,7 +608,7 @@ fn compensate(p: &'static Pool) {
 
 fn worker_main(p: &'static Pool, slot: usize, extra: bool) {
     WORKER_ID.with(|c| c.set(Some(slot)));
-    *p.slots[slot].thread.lock().unwrap() = Some(std::thread::current());
+    *p.slot(slot).thread.lock().unwrap() = Some(std::thread::current());
     let mut rng = SchedRng::for_worker(slot);
     loop {
         if let Some(task) = find_task(p, slot, &mut rng) {
@@ -477,7 +636,24 @@ fn worker_main(p: &'static Pool, slot: usize, extra: bool) {
         #[cfg(unix)]
         trim_own_stack(p, slot);
         if extra {
-            std::thread::park_timeout(std::time::Duration::from_millis(50));
+            if p.unblocked.load(SeqCst) > p.target {
+                // Surplus: wait out the retire window, then leave.
+                std::thread::park_timeout(std::time::Duration::from_millis(50));
+            } else {
+                // No surplus, so this extra cannot retire: sleep until
+                // work or a surplus wakes it (s231). Until s231 it woke
+                // every 50 ms regardless, and each wake scans every
+                // slot — with 10,000 tasks parked, sixteen idle extras
+                // cost 28 % of a cpu. `sleepers` before the re-check, so
+                // a surplus made after the re-check sees this sleeper
+                // ([`nudge_sleeping_extra`]); park's token covers an
+                // unpark that lands before the park.
+                p.sleepers.fetch_add(1, SeqCst);
+                if p.unblocked.load(SeqCst) <= p.target {
+                    std::thread::park();
+                }
+                p.sleepers.fetch_sub(1, SeqCst);
+            }
             let mut idle = p.idle.lock().unwrap();
             let still_idle = idle.iter().position(|&w| w == slot);
             // Retire only out of SURPLUS unblocked parallelism, and take
@@ -499,8 +675,7 @@ fn worker_main(p: &'static Pool, slot: usize, extra: bool) {
                 idle.remove(pos);
                 p.idle_count.store(idle.len(), SeqCst);
                 drop(idle);
-                *p.slots[slot].thread.lock().unwrap() = None;
-                p.slots[slot].occupied.store(false, SeqCst);
+                p.vacate(slot);
                 p.running.fetch_sub(1, SeqCst);
                 return;
             }
@@ -517,14 +692,15 @@ fn have_visible_work(p: &Pool) -> bool {
     if !p.injector.lock().unwrap().is_empty() {
         return true;
     }
-    p.slots
-        .iter()
-        .any(|s| s.occupied.load(SeqCst) && s.deque.len_hint() > 0)
+    (0..p.made()).any(|i| {
+        let s = p.slot(i);
+        s.occupied.load(SeqCst) && s.deque.len_hint() > 0
+    })
 }
 
 fn find_task(p: &Pool, slot: usize, rng: &mut SchedRng) -> Option<Box<Task>> {
     // 1. LIFO slot (spawn locality).
-    let own = &p.slots[slot];
+    let own = p.slot(slot);
     let t = own.lifo.swap(std::ptr::null_mut(), SeqCst);
     if !t.is_null() {
         // SAFETY: pointer from Box::into_raw, sole taker via swap.
@@ -540,24 +716,48 @@ fn find_task(p: &Pool, slot: usize, rng: &mut SchedRng) -> Option<Box<Task>> {
         return Some(t);
     }
     // 4. Steal — victim choice draws from the seeded PRNG (the one
-    //    nondeterminism the s32 scheduler owns).
-    for _ in 0..(4 * p.cap) {
-        let victim = rng.below(p.cap);
-        if victim == slot || !p.slots[victim].occupied.load(SeqCst) {
-            continue;
+    //    nondeterminism the s32 scheduler owns), over the first chunk
+    //    exactly as before s231.
+    for _ in 0..(4 * p.base) {
+        let victim = rng.below(p.base);
+        if let Some(t) = try_steal(p, slot, victim) {
+            return Some(t);
         }
-        sched_point(SchedEvent::Steal {
-            thief: slot,
-            victim,
-        });
-        match p.slots[victim].deque.steal() {
-            // SAFETY: pointer from Box::into_raw, CAS-claimed once.
-            Steal::Taken(t) => return Some(unsafe { Box::from_raw(t) }),
-            Steal::Retry => std::hint::spin_loop(),
-            Steal::Empty => {}
+    }
+    // 5. Past the first chunk (s231: the pool grew because tasks
+    //    parked, and a parked worker's deque holds what it spawned
+    //    before it parked): one pass from a random start, so a thief
+    //    finds any stealable task in time linear in the workers.
+    let made = p.made();
+    if made > p.base {
+        let span = made - p.base;
+        let start = rng.below(span);
+        for k in 0..span {
+            if let Some(t) = try_steal(p, slot, p.base + (start + k) % span) {
+                return Some(t);
+            }
         }
     }
     None
+}
+
+fn try_steal(p: &Pool, slot: usize, victim: usize) -> Option<Box<Task>> {
+    if victim == slot || victim >= p.made() || !p.slot(victim).occupied.load(SeqCst) {
+        return None;
+    }
+    sched_point(SchedEvent::Steal {
+        thief: slot,
+        victim,
+    });
+    match p.slot(victim).deque.steal() {
+        // SAFETY: pointer from Box::into_raw, CAS-claimed once.
+        Steal::Taken(t) => Some(unsafe { Box::from_raw(t) }),
+        Steal::Retry => {
+            std::hint::spin_loop();
+            None
+        }
+        Steal::Empty => None,
+    }
 }
 
 #[allow(clippy::boxed_local)] // tasks travel the queues as raw Boxes
@@ -727,12 +927,12 @@ mod os {
     }
 
     /// Spawn `run` on a pooled stack. Falls back to `std::thread` if
-    /// mapping or pthread_create fails (never silently loses a
-    /// worker).
-    pub fn spawn_worker(run: Box<dyn FnOnce() + Send>) {
+    /// mapping or pthread_create fails; `Err` when that fails too (the
+    /// operating system's thread or memory limit — the caller reports
+    /// it, s231).
+    pub fn spawn_worker(run: Box<dyn FnOnce() + Send>) -> Result<(), String> {
         let Some(stack) = take_stack() else {
-            std::thread::spawn(run);
-            return;
+            return fallback(run, "no stack could be mapped");
         };
         let (lo, len) = (stack.stack_lo(), stack.stack_len());
         let boot = Box::into_raw(Box::new(Boot { run, stack }));
@@ -750,12 +950,23 @@ mod os {
                 let boot = Box::from_raw(boot);
                 let Boot { run, stack } = *boot;
                 store().lock().unwrap().free.push(stack);
-                std::thread::spawn(run);
+                let why = format!("pthread_create: {}", std::io::Error::from_raw_os_error(rc));
+                return fallback(run, &why);
             }
             // The pthread_t is NOT detached and NOT joined here: the
             // worker parks it with its stack on exit (park_retired)
             // and the next take_stack joins it.
         }
+        Ok(())
+    }
+
+    /// The plain `std::thread` worker, when the pooled stack could not
+    /// be had; `Err` names both refusals.
+    fn fallback(run: Box<dyn FnOnce() + Send>, first: &str) -> Result<(), String> {
+        std::thread::Builder::new()
+            .spawn(run)
+            .map(drop)
+            .map_err(|e| format!("{first}; std::thread: {e}"))
     }
 }
 
@@ -790,7 +1001,7 @@ mod os {
     //! hold back the stack guarantee the overflow report runs in.
     use super::super::stack;
 
-    pub fn spawn_worker(run: Box<dyn FnOnce() + Send>) {
+    pub fn spawn_worker(run: Box<dyn FnOnce() + Send>) -> Result<(), String> {
         std::thread::Builder::new()
             .name("wolf-worker".into())
             .stack_size(stack::reserve_size())
@@ -798,13 +1009,14 @@ mod os {
                 stack::enter();
                 run()
             })
-            .expect("wolf-rt: CreateThread failed for a pool worker");
+            .map(drop)
+            .map_err(|e| format!("CreateThread: {e}"))
     }
 }
 
-fn start_worker(p: &'static Pool, slot: usize, extra: bool) {
+fn start_worker(p: &'static Pool, slot: usize, extra: bool) -> Result<(), String> {
     let run: Box<dyn FnOnce() + Send> = Box::new(move || worker_main(p, slot, extra));
-    os::spawn_worker(run);
+    os::spawn_worker(run)
 }
 
 /// Test/diagnostic visibility: (target, running, unblocked).

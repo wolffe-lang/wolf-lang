@@ -111,6 +111,7 @@ pub use hooks::{ChanPhase, SchedEvent, SchedRng, kind_code, seed_spec};
 pub(crate) use hooks::sched_point;
 #[cfg(test)]
 pub(crate) use hooks::test_hook;
+pub(crate) use pool::compensated;
 pub(crate) use pool::kill_teardown_check;
 pub use pool::{Body, SendPtr, TaskCtx, blocking, counters, current_scope, initialized};
 pub use proc::{

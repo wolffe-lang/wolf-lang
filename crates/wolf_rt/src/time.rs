@@ -43,11 +43,16 @@ pub extern "C" fn __wolf_rt_time_unix_ms() -> i64 {
 }
 
 /// `time_sleep_ms(ms)` — blocks the calling thread; non-positive
-/// durations return immediately.
+/// durations return immediately. A task's sleep holds its worker, so
+/// the pool compensates as for any wait (s231: until then a sleeping
+/// task's worker was simply gone for the duration — two sleeping tasks
+/// on a one-cpu host left no worker for anything else).
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_time_sleep_ms(ms: i64) {
     if ms > 0 {
-        std::thread::sleep(std::time::Duration::from_millis(ms as u64));
+        crate::task::compensated(|| {
+            std::thread::sleep(std::time::Duration::from_millis(ms as u64));
+        });
     }
 }
 
