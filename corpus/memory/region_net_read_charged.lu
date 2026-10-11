@@ -1,0 +1,44 @@
+//! check: run(exit=0, stdout="charged true | reclaimed true | got 64000")
+//! phase: run
+//! conforms: mem.region.account.1, mem.region.account.2, mem.region.create.3
+//!
+//! s228 (wolf-lang#374, the net half) — `region_str_charged.lu` for the
+//! one `str` a server builds per request without asking: what
+//! `net_read` returns. `[mem.region.create.3]` charges every
+//! materialization to the ambient region and a read's bytes are one,
+//! so a read inside `region pass { }` must appear in that region's
+//! ledger and vanish with it.
+//!
+//! Until s228 the native tiers copied a read into the process root
+//! whatever region was open: `charged` read 0 here, and a server that
+//! read each request inside its own region kept every request head
+//! for the life of the process (lobo routed around it with
+//! `net_read_bytes` + `str_from_utf8`, lobo#66). The booleans are the
+//! portable claim (`[mem.region.account.1]`: the ledger's units are a
+//! per-tier fact); `got` is the bytes that arrived, which every
+//! machine owes.
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    let cli = net_connect("127.0.0.1:{port}")?
+    let conn = net_accept(srv)?
+    let chunk = "0123456789abcdef".repeat(4)
+    let before = live_region_bytes()
+    var charged = 0
+    var got = 0
+    region pass {
+        for _ in 0..1000 {
+            net_write(cli, chunk)?
+            let piece = net_read(conn, 64)?
+            got = got + piece.len
+        }
+        charged = region_bytes(pass)
+    }
+    let reclaimed = live_region_bytes() == before
+    print_raw("charged {charged >= 64000} | reclaimed {reclaimed} | got {got}")
+    net_close(cli)?
+    net_close(conn)?
+    net_close(srv)?
+    0
+}

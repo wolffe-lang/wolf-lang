@@ -1,0 +1,33 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.account.1, mem.region.intra.2
+//!
+//! s228 (wolf-lang#374, the net half) — `net_read` is a site. It copies
+//! what arrived into the ambient region, an ordinary owned `str`, so a
+//! read returned out of the region it was made in is the escape
+//! `str_from_utf8`'s is (`region_str_from_utf8_return.lu`), and the row
+//! on its type (`str ! {closed, timeout, utf8, io}`) is why the mem
+//! tier could not see it by asking whether the result is `str`.
+//!
+//! #374's order, and the reason this file exists: while the runtime
+//! put a read's bytes in the process root whatever region was open,
+//! this program leaked a request and printed fine. s228 routes the
+//! bytes to the region they were read in, so that the region gives
+//! them back — and without this refusal the same program would then
+//! print freed memory.
+
+fn head(conn: int) -> str {
+    region scratch {
+        net_read(conn, 64) else "?"   // ERROR E1010: read in scratch
+    }
+}
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    let cli = net_connect("127.0.0.1:{port}")?
+    net_write(cli, "ping")?
+    let conn = net_accept(srv)?
+    print("{head(conn)}\n")
+    0
+}
