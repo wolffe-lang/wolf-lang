@@ -1,0 +1,53 @@
+//! member: false
+//! s230 (wolf-lang#704; `[os.fs.umask]`) — the file mode creation mask,
+//! set by the program. `os_umask` answers the mask it replaced; every
+//! creation after it — plain or moded, a file or a directory — loses the
+//! mask's bits; a child inherits the mask (a shell's `umask` builtin and
+//! the command after it); and bu21's witness: under a mask that takes
+//! the owner's write bit a parent directory is made 0o500, so a
+//! `mkdir -p` gives it `u+wx` with `fs_set_mode` before creating inside
+//! it. The program restores the mask it found. The gate runs this in a
+//! process of its own, so no other test sees the mask. Unix only; lupin
+//! refuses `os_umask` by name (it has no host call for it).
+
+fn mode_of(path: str) -> !int {
+    let s = fs_stat(path)?
+    s[4]
+}
+
+fn main() -> !int {
+    fs_remove_dir_all("u") else |_| {}
+    let found = os_umask(0o027)?
+    fs_create_dir("u")?
+    let f = fs_create("u/f")?
+    fs_close(f)?
+    fs_create_dir("u/d")?
+    let f_mode = mode_of("u/f")?
+    let d_mode = mode_of("u/d")?
+    print("under 0o027: file={f_mode} dir={d_mode}")
+
+    let was = os_umask(0o077)?
+    let g = fs_open_perm("u/g", 4, 0o666)?
+    fs_close(g)?
+    fs_create_dir_mode("u/e", 0o777)?
+    let g_mode = mode_of("u/g")?
+    let e_mode = mode_of("u/e")?
+    print("under 0o077: replaced={was} file={g_mode} dir={e_mode}")
+
+    let child = os_spawn(["/bin/sh", "-c", "umask > u/child.txt"])?
+    let status = os_wait(child)?
+    let said = fs_read_text("u/child.txt")?
+    print("a child inherits it: exit={status} umask={said.trim()}")
+
+    let before = os_umask(0o277)?
+    fs_create_dir("u/p")?
+    let p_mode = mode_of("u/p")?
+    fs_set_mode("u/p", 0o700)?
+    fs_create_dir("u/p/q")?
+    let q_mode = mode_of("u/p/q")?
+    print("under 0o277: replaced={before} parent={p_mode} repaired child={q_mode}")
+
+    let last = os_umask(found)?
+    print("restored: replaced={last}")
+    0
+}

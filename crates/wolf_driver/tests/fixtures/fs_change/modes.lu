@@ -1,0 +1,120 @@
+//! member: false
+//! s230 (wolf-lang#346; `[os.fs.mode]`, `[os.fs.create.mode]`) — modes
+//! under a KNOWN umask. The gate starts this program with the mask
+//! 0o027 (through `sh`, so the program itself never touches it and
+//! lupin, which has no `os_umask`, runs every row). A plain creation
+//! asks for 0o666 (a file) or 0o777 (a directory) less the mask; the
+//! moded creations ask for their own bits less the mask, from the first
+//! instant; an existing file keeps its mode whatever a later open asks;
+//! `fs_set_mode` sets exactly the bits it is given — the mask does not
+//! apply, and the set-id and sticky bits are bits like the others — and
+//! follows a link. Unix only.
+
+fn mode_of(path: str) -> !int {
+    let s = fs_stat(path)?
+    s[4]
+}
+
+fn mode_row(path: str, mode: int) -> str {
+    fs_set_mode(path, mode) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn open_row(path: str, open: int, mode: int) -> str {
+    let fd = fs_open_perm(path, open, mode) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    fs_close(fd) else |_| {}
+    "ok"
+}
+
+fn mkdir_row(path: str, mode: int) -> str {
+    fs_create_dir_mode(path, mode) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    fs_remove_dir_all("m") else |_| {}
+    fs_create_dir("m")?
+    let fd = fs_create("m/plain")?
+    fs_close(fd)?
+    fs_create_dir("m/d")?
+    let plain = mode_of("m/plain")?
+    let d = mode_of("m/d")?
+    print("plain: file={plain} dir={d}")
+
+    let made = open_row("m/private", 4, 0o600)
+    let private = mode_of("m/private")?
+    let exe_made = open_row("m/exe", 1, 0o777)
+    let exe = mode_of("m/exe")?
+    let reopened = open_row("m/private", 1, 0o777)
+    let kept = mode_of("m/private")?
+    print(
+        "open_perm: {made} private={private} {exe_made} exe={exe} existing {reopened} kept={kept}",
+    )
+    let taken = open_row("m/private", 4, 0o600)
+    let taken_code = os_error()
+    let absent = open_row("m/absent", 0, 0o600)
+    print(
+        "open_perm rows: taken={taken} errno={taken_code} read_absent={absent} errno={os_error()}",
+    )
+
+    let sub_made = mkdir_row("m/sub", 0o700)
+    let sub = mode_of("m/sub")?
+    let wide_made = mkdir_row("m/wide", 0o777)
+    let wide = mode_of("m/wide")?
+    let again = mkdir_row("m/sub", 0o700)
+    let orphan = mkdir_row("m/no/such", 0o700)
+    print(
+        "create_dir_mode: {sub_made} sub={sub} {wide_made} wide={wide} again={again} orphan={orphan}",
+    )
+
+    var seen = ""
+    for mode in [0o600, 0o755, 0o4711, 0, 0o644] {
+        fs_set_mode("m/plain", mode)?
+        let now = mode_of("m/plain")?
+        seen = seen + " {now}"
+    }
+    fs_set_mode("m/d", 0o1750)?
+    let sticky = mode_of("m/d")?
+    print("set_mode:{seen} sticky_dir={sticky}")
+
+    fs_symlink("plain", "m/ln")?
+    let link_before = fs_lstat("m/ln")?
+    fs_set_mode("m/ln", 0o600)?
+    let target = mode_of("m/plain")?
+    let link_after = fs_lstat("m/ln")?
+    print("through a link: target={target} link_unchanged={link_before[4] == link_after[4]}")
+    fs_symlink("nope", "m/dangling")?
+    let dangling = mode_row("m/dangling", 0o600)
+    let dangling_code = os_error()
+    let missing = mode_row("m/gone", 0o600)
+    print(
+        "set_mode rows: dangling={dangling} errno={dangling_code} missing={missing} errno={os_error()}",
+    )
+    0
+}

@@ -1,0 +1,123 @@
+//! member: false
+//! s230 — the `denied` row of each call that takes a path, with no
+//! question about who runs the test. The program makes `x/locked`,
+//! takes every permission bit off it, and first asks the host whether
+//! that binds this process (a read of a file inside is `denied`) or not
+//! (the host lets some processes through every mode). Where it binds,
+//! each of the six calls on a path inside is `denied` with the host's
+//! EACCES (13) beside it and changes nothing; where it does not, each
+//! is served. Either way the last line is the same, and standard error
+//! says which was measured. The directory gets its bits back before the
+//! program ends. Unix only.
+
+fn row_of(n: int) -> str {
+    let f = "x/locked/f"
+    if n == 0 {
+        fs_set_mode(f, 0o600) else |e| {
+            return match e {
+                denied => "denied",
+                not_found => "not_found",
+                invalid => "invalid",
+                unsupported => "unsupported",
+                io => "io",
+            }
+        }
+    }
+    if n == 1 {
+        let fd = fs_open_perm("x/locked/n", 4, 0o600) else |e| {
+            return match e {
+                denied => "denied",
+                not_found => "not_found",
+                exists => "exists",
+                invalid => "invalid",
+                unsupported => "unsupported",
+                io => "io",
+            }
+        }
+        fs_close(fd) else |_| {}
+    }
+    if n == 2 {
+        fs_create_dir_mode("x/locked/s", 0o700) else |e| {
+            return match e {
+                denied => "denied",
+                not_found => "not_found",
+                exists => "exists",
+                invalid => "invalid",
+                unsupported => "unsupported",
+                io => "io",
+            }
+        }
+    }
+    if n == 3 {
+        fs_symlink("f", "x/locked/l") else |e| {
+            return match e {
+                denied => "denied",
+                not_found => "not_found",
+                exists => "exists",
+                invalid => "invalid",
+                unsupported => "unsupported",
+                io => "io",
+            }
+        }
+    }
+    if n == 4 {
+        fs_link("x/a", "x/locked/b") else |e| {
+            return match e {
+                denied => "denied",
+                not_found => "not_found",
+                exists => "exists",
+                cross_device => "cross_device",
+                io => "io",
+            }
+        }
+    }
+    if n == 5 {
+        fs_set_times(f, 0, -2, 5, 0, true) else |e| {
+            return match e {
+                denied => "denied",
+                not_found => "not_found",
+                invalid => "invalid",
+                io => "io",
+            }
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    fs_set_mode("x/locked", 0o700) else |_| {}
+    fs_remove_dir_all("x") else |_| {}
+    fs_create_dir_all("x/locked")?
+    fs_write_text("x/locked/f", "x")?
+    fs_write_text("x/a", "x")?
+    fs_set_mode("x/locked", 0)?
+    var binds = false
+    fs_read_text("x/locked/f") else |e| {
+        binds = match e {
+            denied => true,
+            not_found => false,
+            io => false,
+            utf8 => false,
+        }
+        ""
+    }
+    eprint("the lock binds this process: {binds}")
+    var all = true
+    var n = 0
+    while n < 6 {
+        let row = row_of(n)
+        let code = os_error()
+        eprint("call {n}: {row} errno={code}")
+        if binds {
+            all = all && row == "denied" && code == 13
+        } else {
+            all = all && row == "ok"
+        }
+        n = n + 1
+    }
+    fs_set_mode("x/locked", 0o700)?
+    let entries = fs_read_dir("x/locked")?
+    print("denied rows hold: {all}; nothing made where it binds: {!binds || entries.len == 1}")
+    fs_remove_dir_all("x")?
+    0
+}

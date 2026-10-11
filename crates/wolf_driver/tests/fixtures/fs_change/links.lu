@@ -1,0 +1,91 @@
+//! member: false
+//! s230 (wolf-lang#698, #699; `[os.fs.symlink]`, `[os.fs.link]`) — the
+//! two kinds of link, made by the program and read back through s218's
+//! calls. A symbolic link stores its target VERBATIM (a relative path,
+//! a path that climbs, a path to nothing — none is resolved or checked),
+//! is kind 3 to `fs_lstat` with the target's length as its size, and is
+//! never made over an entry that is there, a dangling link included. A
+//! hard link is a second name: both names share one device and inode and
+//! count two links; a link's hard link is the LINK (kind 3), not its
+//! target; a directory has no second name (`denied`, the host's EPERM).
+//! Each refusal carries the host's number. Unix only.
+
+fn symlink_row(target: str, path: str) -> str {
+    fs_symlink(target, path) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn link_row(existing: str, path: str) -> str {
+    fs_link(existing, path) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            exists => "exists",
+            cross_device => "cross_device",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn link_text(path: str) -> str {
+    let t = fs_read_link(path) else |_| {
+        return "<row>"
+    }
+    str_from_utf8(t) else "<bytes>"
+}
+
+fn main() -> !int {
+    fs_remove_dir_all("l") else |_| {}
+    fs_create_dir_all("l/d")?
+    fs_write_text("l/a", "12345")?
+
+    let ln = symlink_row("a", "l/ln")
+    let own = fs_lstat("l/ln")?
+    let through = fs_read_text("l/ln")?
+    print("symlink: {ln} target={link_text("l/ln")} kind={own[0]} size={own[1]} reads={through}")
+    let far = symlink_row("../no/such/place", "l/dangling")
+    let far_own = fs_lstat("l/dangling")?
+    print(
+        "dangling: {far} target={link_text("l/dangling")} kind={far_own[0]} exists={fs_exists("l/dangling")}",
+    )
+    let to_dir = symlink_row("d", "l/lnd")
+    print("to a directory: {to_dir} is_dir={fs_is_dir("l/lnd")}")
+    let over_link = symlink_row("b", "l/ln")
+    let over_link_code = os_error()
+    let over_dangling = symlink_row("b", "l/dangling")
+    let over_file = symlink_row("b", "l/a")
+    let orphan = symlink_row("a", "l/no/such")
+    print(
+        "symlink rows: over_link={over_link} errno={over_link_code} over_dangling={over_dangling} over_file={over_file} orphan={orphan} errno={os_error()}",
+    )
+
+    let hard = link_row("l/a", "l/b")
+    let a = fs_stat("l/a")?
+    let b = fs_stat("l/b")?
+    print("link: {hard} same_file={a[9] == b[9] && a[10] == b[10]} nlink={a[5]},{b[5]}")
+    let of_link = link_row("l/ln", "l/hl")
+    let hl = fs_lstat("l/hl")?
+    let a_after = fs_stat("l/a")?
+    print(
+        "link of a link: {of_link} kind={hl[0]} target={link_text("l/hl")} file_nlink={a_after[5]}",
+    )
+    let taken = link_row("l/a", "l/b")
+    let taken_code = os_error()
+    let gone = link_row("l/gone", "l/c")
+    let gone_code = os_error()
+    let dir = link_row("l/d", "l/dd")
+    print(
+        "link rows: taken={taken} errno={taken_code} missing={gone} errno={gone_code} directory={dir} errno={os_error()}",
+    )
+    0
+}

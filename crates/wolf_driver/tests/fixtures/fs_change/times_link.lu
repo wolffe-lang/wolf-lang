@@ -1,0 +1,42 @@
+//! member: false
+//! s230 (wolf-lang#700; `[os.fs.times]`) — a link's OWN times. With
+//! `follow` false the call sets the times of a final symbolic link
+//! itself (`utimensat`'s `AT_SYMLINK_NOFOLLOW`, what `touch -h` asks
+//! for) and leaves its target's alone; with `follow` true the same path
+//! sets the target's and leaves the link's. A dangling link can be
+//! stamped itself and is `not_found` when followed. Unix only; lupin
+//! refuses the first call by name (no `utimensat` without `unsafe`).
+
+fn times_row(path: str, mtime_s: int, follow: bool) -> str {
+    fs_set_times(path, 0, -2, mtime_s, 0, follow) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            invalid => "invalid",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    fs_remove_dir_all("k") else |_| {}
+    fs_create_dir("k")?
+    fs_write_text("k/a", "x")?
+    fs_set_times("k/a", 800000000, 0, 800000000, 0, true)?
+    fs_symlink("a", "k/ln")?
+    fs_set_times("k/ln", 1000000000, 1, 1000000000, 2, false)?
+    let l = fs_lstat("k/ln")?
+    let a = fs_stat("k/a")?
+    print("no follow: link atime={l[12]}.{l[13]} mtime={l[14]}.{l[15]} target mtime={a[14]}")
+    fs_set_times("k/ln", 0, -2, 900000000, 3, true)?
+    let l2 = fs_lstat("k/ln")?
+    let a2 = fs_stat("k/a")?
+    print("follow: target mtime={a2[14]}.{a2[15]} atime={a2[12]} link mtime={l2[14]}.{l2[15]}")
+    fs_symlink("nope", "k/dangling")?
+    let own = times_row("k/dangling", 700000000, false)
+    let d = fs_lstat("k/dangling")?
+    let followed = times_row("k/dangling", 700000000, true)
+    print("dangling: itself={own} mtime={d[14]} followed={followed} errno={os_error()}")
+    0
+}
