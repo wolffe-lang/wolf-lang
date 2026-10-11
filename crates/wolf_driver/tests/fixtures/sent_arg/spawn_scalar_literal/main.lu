@@ -1,0 +1,16 @@
+// s229 (wolf-lang#678): a literal and a scalar own no region storage.
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(100)
+    print("child sees: {s} {n}")
+    n
+}
+
+fn main() -> int {
+    let seq0 = 7
+    region pass {
+        let t = "built in pass, {seq0} uses"
+        let _w = spawn proc child("a literal", t.len)
+    }
+    time_sleep_ms(400)
+    0
+}

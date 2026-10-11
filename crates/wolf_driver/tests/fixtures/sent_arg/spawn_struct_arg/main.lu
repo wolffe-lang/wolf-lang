@@ -1,0 +1,22 @@
+// s229 (wolf-lang#678): the bytes are reached through a struct argument of the spawn.
+struct Job { path: str, n: int }
+
+fn child(j: Job) -> int {
+    time_sleep_ms(300)
+    print("child sees: {j.path}")
+    j.n
+}
+
+fn main() -> int {
+    let seq0 = 7
+    region pass {
+        let j = Job { path: "built in pass, {seq0} uses", n: 0 }
+        let _w = spawn proc child(j)
+    }
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    time_sleep_ms(700)
+    0
+}

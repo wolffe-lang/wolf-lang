@@ -1,0 +1,16 @@
+// s229 (wolf-lang#678): the proc is joined inside the block that built its argument: sound, and refused — no join is tracked.
+fn child(s: str, n: int) -> int {
+    print("child sees: {s}")
+    n
+}
+
+fn main() -> !int {
+    let seq0 = 7
+    region pass {
+        let s = "built in pass, {seq0} uses"
+        let w = spawn proc child(s, 0)
+        let got = w.join() else 1
+        print("{got}")
+    }
+    0
+}

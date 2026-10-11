@@ -1,4 +1,5 @@
-//! s229 (wolf-lang#665) — what a call can send, it is taken to send.
+//! s229 (wolf-lang#665, and #678's direct half) — what a call can send,
+//! it is taken to send; what a proc is handed outlives the spawning frame.
 //!
 //! A payload leaves the sending frame, so it must outlive it
 //! (`[conc.chan.payload]`), and the builtin `send` demands that. A
@@ -18,6 +19,10 @@
 //! inside `"{ch.recv() else "?"}"` (wolffe-lang/wolf-interp#232), so
 //! those shapes are fixtures beside this test, pinned to the lupin
 //! that runs them.
+//!
+//! wolf-lang#678 is the same frame rule at `spawn proc` with no
+//! channel at all: an argument built in a region block is read by the
+//! proc after the block closed. Its rows are at the end.
 //!
 //! The legal side is gated in two rows (one needs tasks, which the
 //! checked machine declines), and so is the rule's stated cost: three
@@ -526,6 +531,65 @@ fn a_channel_used_inside_one_region_block_is_refused_though_sound() {
 #[test]
 fn a_proc_s_parameter_through_a_helper_is_refused_though_sound() {
     refused_though_sound(&fixture("sound_proc_param"), "built 7 here\n");
+}
+
+// ---- wolf-lang#678, the spawn twin: no channel at all ----
+
+/// The compiler refuses. lupin's proc reads the freed bytes inside its
+/// own failure domain and no trap reaches the program, so its verdict
+/// is logged and not asserted.
+fn spawn_refused(entry: &Path) {
+    refused_by_the_compiler(entry);
+    if let Some(lupin) = lupin_says(entry) {
+        eprintln!(
+            "OBSERVED: lupin {} answers {} printing {:?} on {}",
+            lupin.version,
+            lupin.verdict,
+            lupin.stdout,
+            entry.display()
+        );
+    }
+}
+
+/// #678's witness: a `spawn proc` argument built in a region block.
+#[test]
+fn a_spawn_argument_built_in_a_region_block_is_refused() {
+    spawn_refused(&fixture("spawn_region_arg"));
+}
+
+/// The bytes are reached through a struct argument.
+#[test]
+fn a_spawn_argument_s_struct_field_built_in_a_region_block_is_refused() {
+    spawn_refused(&fixture("spawn_struct_arg"));
+}
+
+/// The proc is joined inside the block that built its argument.
+#[test]
+fn a_spawn_joined_inside_its_region_block_is_refused_though_sound() {
+    refused_though_sound(
+        &fixture("sound_spawn_joined"),
+        "child sees: built in pass, 7 uses\n0\n",
+    );
+}
+
+/// A function handed the bytes as a parameter spawns and joins.
+#[test]
+fn a_spawn_with_a_parameter_joined_before_the_return_still_runs() {
+    runs(
+        &fixture("spawn_helper_joins"),
+        "child sees: built in pass, 7 uses\n0\n",
+        true,
+    );
+}
+
+/// A literal and a scalar own no region storage.
+#[test]
+fn a_spawn_with_a_literal_and_a_scalar_still_runs() {
+    runs(
+        &fixture("spawn_scalar_literal"),
+        "child sees: a literal 21\n",
+        true,
+    );
 }
 
 // ---- the sound neighbours ----
