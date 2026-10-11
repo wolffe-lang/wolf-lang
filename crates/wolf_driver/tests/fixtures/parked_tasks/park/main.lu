@@ -1,0 +1,121 @@
+// park.lu — the s231 soak (wolf-lang#713): park M tasks in one runtime
+// wait, hold them there for HOLD ms, then release every one and count
+// the answers. `chan` parks each task in a channel recv, `read` in a
+// net_read on its own accepted connection, `accept` in a net_accept on
+// its own listener. The driver samples the process (threads, RSS, CPU)
+// while the tasks are parked.
+//
+// usage: park chan|read|accept M HOLD
+
+fn hold_chan(m: int, hold: int) -> int {
+    let go = channel[int](m)
+    let done = channel[int](m)
+    var got = 0
+    scope s {
+        for _ in 0..m {
+            s.spawn(fn() {
+                let v = go.recv() else 0
+                done.send(v) else |_| {}
+            })
+        }
+        print("parked: {m} tasks in recv")
+        time_sleep_ms(hold)
+        for _ in 0..m {
+            go.send(1) else |_| {}
+        }
+        for _ in 0..m {
+            got += done.recv() else 0
+        }
+    }
+    got
+}
+
+fn hold_read(m: int, hold: int) -> int {
+    let srv = net_listen("127.0.0.1:0") else |_| { return -1 }
+    let port = net_port(srv) else |_| { return -1 }
+    var clients = List[int]()
+    let done = channel[int](m)
+    var got = 0
+    scope s {
+        for _ in 0..m {
+            let c = net_connect("127.0.0.1:{port}") else -1
+            let conn = net_accept(srv) else -1
+            (mut clients).push(c)
+            s.spawn(fn() {
+                let msg = net_read(conn, 16) else ""
+                net_write(conn, "ok\n") else |_| {}
+                net_close(conn) else |_| {}
+                done.send(msg.len) else |_| {}
+            })
+        }
+        print("parked: {m} tasks in net_read")
+        time_sleep_ms(hold)
+        for c in clients {
+            net_write(c, "x") else |_| {}
+        }
+        for _ in 0..m {
+            got += done.recv() else 0
+        }
+    }
+    for c in clients {
+        net_close(c) else |_| {}
+    }
+    net_close(srv) else |_| {}
+    got
+}
+
+fn hold_accept(m: int, hold: int) -> int {
+    var ports = List[int]()
+    let done = channel[int](m)
+    var got = 0
+    scope s {
+        for _ in 0..m {
+            let l = net_listen("127.0.0.1:0") else -1
+            let port = net_port(l) else -1
+            (mut ports).push(port)
+            s.spawn(fn() {
+                let conn = net_accept(l) else -1
+                if conn >= 0 {
+                    net_close(conn) else |_| {}
+                }
+                net_close(l) else |_| {}
+                done.send(if conn >= 0 then 1 else 0) else |_| {}
+            })
+        }
+        print("parked: {m} tasks in net_accept")
+        time_sleep_ms(hold)
+        for p in ports {
+            let c = net_connect("127.0.0.1:{p}") else -1
+            if c >= 0 {
+                net_close(c) else |_| {}
+            }
+        }
+        for _ in 0..m {
+            got += done.recv() else 0
+        }
+    }
+    got
+}
+
+fn main() -> !int {
+    let args = env_args()
+    if args.len < 3 {
+        print("usage: park chan|read|accept M HOLD")
+        return 2
+    }
+    let m = args[1].to_int()?
+    let hold = args[2].to_int()?
+    var got = -1
+    if args[0] == "chan" {
+        got = hold_chan(m, hold)
+    } else if args[0] == "read" {
+        got = hold_read(m, hold)
+    } else if args[0] == "accept" {
+        got = hold_accept(m, hold)
+    } else {
+        print("park: no such way: {args[0]}")
+        return 2
+    }
+    print("released: {args[0]} {m} parked, {got} answered")
+    return if got == m then 0 else 1
+}

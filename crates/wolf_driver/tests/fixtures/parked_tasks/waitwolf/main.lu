@@ -1,0 +1,135 @@
+// wolf-lang#713's witness, verbatim from the issue (px24's waitwolf.lu):
+// `loop 0 N` holds 2N+1 tasks parked in net_read, net_accept and a
+// channel recv in one process. parked_tasks.rs builds and runs it.
+
+fn serve_one(conn: int) -> int {
+    var asked = 0
+    var open = true
+    while open {
+        let msg = net_read(conn, 256) else ""
+        if msg.len == 0 {
+            open = false
+        } else if msg.trim() == "bye" {
+            net_write(conn, "farewell\n") else |_| {}
+            open = false
+        } else {
+            net_write(conn, "the wolf heard: {msg.trim()}\n") else |_| {}
+            asked += 1
+        }
+    }
+    net_close(conn) else |_| {}
+    asked
+}
+
+fn serve(srv: int, n: int) -> int {
+    let asked = channel[int](n)
+    scope s {
+        for _ in 0..n {
+            let conn = net_accept(srv) else -1
+            if conn >= 0 {
+                s.spawn(fn() {
+                    asked.send(serve_one(conn)) else |_| {}
+                })
+            } else {
+                asked.send(0) else |_| {}
+            }
+        }
+    }
+    var total = 0
+    for _ in 0..n {
+        total += asked.recv() else 0
+    }
+    total
+}
+
+fn call(addr: str, n: int) -> (int, int) {
+    let ready = channel[int](n)
+    let go = channel[int](n)
+    let done = channel[int](n)
+    var answered = 0
+    scope s {
+        for k in 0..n {
+            s.spawn(fn() {
+                let conn = net_connect(addr) else -1
+                if conn < 0 {
+                    ready.send(0) else |_| {}
+                    done.send(0) else |_| {}
+                } else {
+                    net_write(conn, "hello {k}\n") else |_| {}
+                    let reply = net_read(conn, 256) else ""
+                    let right = reply == "the wolf heard: hello {k}\n"
+                    ready.send(if right then 1 else 0) else |_| {}
+                    let _g = go.recv() else 0
+                    net_write(conn, "bye\n") else |_| {}
+                    let last = net_read(conn, 256) else ""
+                    let end = net_read(conn, 256) else ""
+                    net_close(conn) else |_| {}
+                    done.send(if right && last == "farewell\n" && end.len == 0 then 1 else 0) else |_| {}
+                }
+            })
+        }
+        for _ in 0..n {
+            answered += ready.recv() else 0
+        }
+        for _ in 0..n {
+            go.send(1) else |_| {}
+        }
+    }
+    var whole = 0
+    for _ in 0..n {
+        whole += done.recv() else 0
+    }
+    (answered, whole)
+}
+
+fn main() -> !int {
+    let args = env_args()
+    if args.len < 3 {
+        print("usage: waitwolf serve PORT N [HOST PORT] | call HOST PORT N | loop PORT N")
+        return 2
+    }
+    if args[0] == "serve" {
+        let n = args[2].to_int()?
+        let srv = net_listen("0.0.0.0:{args[1]}")?
+        let port = net_port(srv)?
+        print("waitwolf serve: listening on port {port} for {n} connections")
+        if args.len >= 5 {
+            let up = net_connect("{args[3]}:{args[4]}")?
+            net_write(up, "ready\n")?
+            net_close(up)?
+        }
+        let asked = serve(srv, n)
+        net_close(srv)?
+        print("waitwolf serve: {n} connections held at once, {asked} requests answered, each closed")
+        return if asked == n then 0 else 1
+    }
+    if args[0] == "call" {
+        let n = args[3].to_int()?
+        let (answered, whole) = call("{args[1]}:{args[2]}", n)
+        print("waitwolf call: {n} connections at once, {answered} answered right, {whole} ended as they should")
+        return if answered == n && whole == n then 0 else 1
+    }
+    if args[0] == "loop" {
+        let n = args[2].to_int()?
+        let srv = net_listen("127.0.0.1:{args[1]}")?
+        let port = net_port(srv)?
+        print("waitwolf loop: listening on 127.0.0.1 port {port}")
+        let result = channel[int](2)
+        var asked = 0
+        scope s {
+            s.spawn(fn() {
+                let (answered, whole) = call("127.0.0.1:{port}", n)
+                result.send(answered) else |_| {}
+                result.send(whole) else |_| {}
+            })
+            asked = serve(srv, n)
+        }
+        let answered = result.recv() else 0
+        let whole = result.recv() else 0
+        net_close(srv)?
+        print("waitwolf loop: {n} connections at once, {asked} requests answered, {answered} answered right, {whole} ended as they should")
+        return if asked == n && answered == n && whole == n then 0 else 1
+    }
+    print("waitwolf: no such way: {args[0]}")
+    2
+}
