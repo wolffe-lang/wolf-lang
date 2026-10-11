@@ -14,8 +14,9 @@ boreutils (`abc59f5`), pelt (`b32bebc`), lobo (`b256d2e`), pax
 (`0cc43be`) or the book (`2504a0f`). Nothing that existed changed:
 `fs_open_mode` and `fs_create_dir` keep their arity and still ask for
 `0o666` and `0o777`. Every hosted binary moves bytes (`libwolf_rt.a`
-gained the eight shims). **Each spelling and shape is a ruling owed**
-(`[os.fs.change.note]`, R1 to R10), implemented as recommended.
+gained the eight shims). **Each spelling and shape was a ruling owed
+and is ruled as implemented** (ruling #67; `[os.fs.change.note]`, R1
+to R10).
 
 s218 let a program read what `ls -l` shows; these let it write the same
 words — what `chmod`, `touch`, `ln`, `mkdir -m`, `cp -p` and a shell's
