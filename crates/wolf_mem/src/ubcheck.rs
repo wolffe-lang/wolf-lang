@@ -5952,35 +5952,11 @@ impl<'t> Machine<'t> {
                         None => return self.refuse("this fs call shape", span),
                     },
                 };
-                let mut o = std::fs::OpenOptions::new();
-                let opts = match mode {
-                    0 => o.read(true),
-                    1 => o.write(true).create(true).truncate(true),
-                    2 => o.append(true).create(true),
-                    3 => o.read(true).write(true).create(true),
-                    4 => o.read(true).write(true).create_new(true),
-                    // s149 (#289, `[os.fs.open]`): mode 5 is mode 0
-                    // carrying `O_NONBLOCK` where the host has it, so
-                    // an open cannot park on a fifo nobody writes.
-                    // The checked machine opens the same file the
-                    // same way — parity by construction, and the
-                    // handle it hands back behaves as mode 0's on
-                    // every regular file.
-                    5 => {
-                        #[cfg(unix)]
-                        {
-                            use std::os::unix::fs::OpenOptionsExt as _;
-                            o.read(true).custom_flags(libc::O_NONBLOCK)
-                        }
-                        #[cfg(not(unix))]
-                        {
-                            o.read(true)
-                        }
-                    }
-                    // Decided before the filesystem is touched, and
-                    // `invalid` is only in `fs_open_mode`'s row: the
-                    // 1-argument spellings cannot reach it.
-                    _ => return Ok(tag("invalid")),
+                // Decided before the filesystem is touched, and
+                // `invalid` is only in `fs_open_mode`'s row: the
+                // 1-argument spellings cannot reach it.
+                let Some(opts) = fs_open_options(mode) else {
+                    return Ok(tag("invalid"));
                 };
                 let declared: &[&str] = match name {
                     "fs_open" => &["not_found", "denied", "io"],
@@ -6423,6 +6399,160 @@ impl<'t> Machine<'t> {
                 }
                 let id = self.mint_list(items, span)?;
                 Ok(Flow::Val(Value::List(id)))
+            }
+            // s230 (wolf-lang#346, `[os.fs.mode]`): `chmod` by path,
+            // following a final link — `wolf_rt::fs_change`'s call, in
+            // its order: shape, host, the host's one call.
+            "fs_set_mode" => {
+                let (Some(path), Some(mode)) = (path_arg(0), int_arg(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                if !(0..=0o7777).contains(&mode) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt as _;
+                    let perm = std::fs::Permissions::from_mode(mode as u32);
+                    match std::fs::set_permissions(&path, perm) {
+                        Err(e) => Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
+                        Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = path;
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s230 (wolf-lang#346, `[os.fs.create.mode]`): the open with
+            // a creation's permission bits. The open mode is judged
+            // first, then the bits, then the host.
+            "fs_open_perm" => {
+                let (Some(path), Some(open), Some(mode)) = (path_arg(0), int_arg(1), int_arg(2))
+                else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let Some(opts) = fs_open_options(open) else {
+                    return Ok(tag("invalid"));
+                };
+                if !(0..=0o777).contains(&mode) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::OpenOptionsExt as _;
+                    let mut opts = opts;
+                    match opts.mode(mode as u32).open(&path) {
+                        Err(e) => Ok(tag(&errtag(&e, &["not_found", "denied", "exists", "io"]))),
+                        Ok(f) => {
+                            if self.files.len() < FS_FIRST_HANDLE {
+                                self.files.resize_with(FS_FIRST_HANDLE, || None);
+                            }
+                            let fd = self.files.len() as i64;
+                            self.files.push(Some(f));
+                            Ok(Flow::Val(Value::Int(fd)))
+                        }
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = (path, opts);
+                    Ok(tag("unsupported"))
+                }
+            }
+            "fs_create_dir_mode" => {
+                let (Some(path), Some(mode)) = (path_arg(0), int_arg(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                if !(0..=0o777).contains(&mode) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::DirBuilderExt as _;
+                    match std::fs::DirBuilder::new().mode(mode as u32).create(&path) {
+                        Err(e) => Ok(tag(&errtag(&e, &["not_found", "denied", "exists", "io"]))),
+                        Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = path;
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s230 (wolf-lang#698, `[os.fs.symlink]`): the target is
+            // stored VERBATIM — it is not a path this machine resolves,
+            // so the machine-local directory joins only `path`.
+            "fs_symlink" => {
+                let (Some(target), Some(path)) = (str_arg(0), path_arg(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                if target.is_empty() {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    match std::os::unix::fs::symlink(&target, &path) {
+                        Err(e) => Ok(tag(&errtag(&e, &["not_found", "denied", "exists", "io"]))),
+                        Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = path;
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s230 (wolf-lang#699, `[os.fs.link]`): a second name;
+            // `linkat` with no flag, so a final link is not followed.
+            "fs_link" => {
+                let (Some(existing), Some(path)) = (path_arg(0), path_arg(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                match std::fs::hard_link(&existing, &path) {
+                    Err(e) => Ok(tag(&errtag(
+                        &e,
+                        &["not_found", "denied", "exists", "cross_device", "io"],
+                    ))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
+            // s230 (wolf-lang#700, `[os.fs.times]`): one `utimensat`.
+            "fs_set_times" => {
+                let (Some(path), Some(a_s), Some(a_ns), Some(m_s), Some(m_ns)) =
+                    (path_arg(0), int_arg(1), int_arg(2), int_arg(3), int_arg(4))
+                else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let Some(Value::Bool(follow)) = argv.get(5) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let (Some(a), Some(m)) = (fs_time_arg(a_s, a_ns), fs_time_arg(m_s, m_ns)) else {
+                    return Ok(tag("invalid"));
+                };
+                match fs_set_times(&path, a, m, *follow) {
+                    Err(e) => Ok(tag(&errtag(&e, &["not_found", "denied", "io"]))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
+            // s230 (wolf-lang#702, `[os.fs.truncate]`): the length of
+            // the file behind a handle; every host refusal is `io`.
+            "fs_truncate" => {
+                let (Some(fd), Some(len)) = (int_arg(0), int_arg(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let Ok(len) = u64::try_from(len) else {
+                    return Ok(tag("invalid"));
+                };
+                let Some(f) = self.fs_handle(fd) else {
+                    return Ok(tag("io"));
+                };
+                match f.set_len(len) {
+                    Err(e) => Ok(tag(&errtag(&e, &["io"]))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
             }
             // s199 (#426, `[os.fs.seek]`, `[os.fs.tell]`,
             // `[os.fs.read_at]`): the handle's offset, `wolf_rt::fs`'s
@@ -7665,6 +7795,34 @@ impl<'t> Machine<'t> {
             // path `getcwd` would then report), must be a directory
             // (`io` otherwise, as ENOTDIR is), and on unix must be
             // searchable (`access(X_OK)`, chdir's own permission).
+            // s230 (wolf-lang#704, `[os.fs.umask]`): the PROCESS's mask,
+            // really set — unlike the working directory and the
+            // environment, which this machine keeps to itself. A
+            // machine-local mask could only be honoured by a second
+            // host call after each creation (the file would exist at
+            // the host's mask first), which is the window the mask
+            // exists to close; so this machine's creations, and its
+            // children, read the one the host keeps. A host embedding
+            // several checked runs in one process runs those that call
+            // this one at a time.
+            "os_umask" => {
+                let Some(mask) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                if !(0..=0o777).contains(&mask) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    // SAFETY: `umask` cannot fail and takes no pointer.
+                    let old = unsafe { libc::umask(mask as libc::mode_t) };
+                    Ok(Flow::Val(Value::Int(i64::from(old))))
+                }
+                #[cfg(not(unix))]
+                {
+                    Ok(tag("unsupported"))
+                }
+            }
             "os_chdir" => {
                 let Some(path) = str_arg(0) else {
                     return self.refuse("this os call shape", span);
@@ -9620,7 +9778,11 @@ impl<'t> Machine<'t> {
             // s199 (#426): the handle's offset.
             | "fs_seek" | "fs_tell" | "fs_read_at"
             // s200 (#417): the fused chunk copy.
-            | "fs_copy_chunk" => {
+            | "fs_copy_chunk"
+            // s230 (#346, #698, #699, #700, #702): a mode, a mode at
+            // creation, the links, the times, the length.
+            | "fs_set_mode" | "fs_open_perm" | "fs_create_dir_mode" | "fs_symlink"
+            | "fs_link" | "fs_set_times" | "fs_truncate" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
@@ -9669,6 +9831,8 @@ impl<'t> Machine<'t> {
             | "os_term_set_foreground" | "os_term_mode" | "os_term_set_mode"
             // s225 (#534): the removal and the exec.
             | "env_unset" | "os_exec"
+            // s230 (#704): the file mode creation mask.
+            | "os_umask"
             | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
             | "str_from_utf8"
@@ -12368,6 +12532,129 @@ fn fs_is_disk(f: &std::fs::File) -> bool {
 #[cfg(not(windows))]
 fn fs_is_disk(_f: &std::fs::File) -> bool {
     true
+}
+
+/// The `OpenOptions` of one of `[os.fs.open]`'s six modes, or `None`
+/// for a mode outside the set — `wolf_rt::fs::open_options`'s twin,
+/// shared by the open family and `fs_open_perm` (s230).
+fn fs_open_options(mode: i64) -> Option<std::fs::OpenOptions> {
+    let mut o = std::fs::OpenOptions::new();
+    match mode {
+        0 => o.read(true),
+        1 => o.write(true).create(true).truncate(true),
+        2 => o.append(true).create(true),
+        3 => o.read(true).write(true).create(true),
+        4 => o.read(true).write(true).create_new(true),
+        // s149 (#289, `[os.fs.open]`): mode 5 is mode 0 carrying
+        // `O_NONBLOCK` where the host has it, so an open cannot park
+        // on a fifo nobody writes. The checked machine opens the same
+        // file the same way — parity by construction, and the handle
+        // it hands back behaves as mode 0's on every regular file.
+        5 => {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt as _;
+                o.read(true).custom_flags(libc::O_NONBLOCK)
+            }
+            #[cfg(not(unix))]
+            {
+                o.read(true)
+            }
+        }
+        _ => return None,
+    };
+    Some(o)
+}
+
+/// s230 (`[os.fs.times]`): one of `fs_set_times`'s two times —
+/// `wolf_rt::fs_change::TimeArg`'s twin.
+#[derive(Clone, Copy)]
+enum FsTime {
+    At(i64, i64),
+    Now,
+    Leave,
+}
+
+/// A `(seconds, nanoseconds)` pair decoded: nanoseconds `0..=999999999`
+/// with the seconds, `-1` "now", `-2` "leave"; `None` is `invalid`.
+fn fs_time_arg(s: i64, ns: i64) -> Option<FsTime> {
+    match ns {
+        -1 => Some(FsTime::Now),
+        -2 => Some(FsTime::Leave),
+        0..=999_999_999 => Some(FsTime::At(s, ns)),
+        _ => None,
+    }
+}
+
+/// s230 (`[os.fs.times]`): one `utimensat` — `wolf_rt::fs_change::
+/// set_times`'s twin, call for call.
+#[cfg(unix)]
+fn fs_set_times(path: &str, a: FsTime, m: FsTime, follow: bool) -> std::io::Result<()> {
+    fn spec(t: FsTime) -> libc::timespec {
+        // SAFETY: `timespec` is plain integers; all-zero is a value.
+        let mut ts: libc::timespec = unsafe { std::mem::zeroed() };
+        match t {
+            FsTime::At(s, ns) => {
+                ts.tv_sec = s as libc::time_t;
+                ts.tv_nsec = ns as _;
+            }
+            FsTime::Now => ts.tv_nsec = libc::UTIME_NOW as _,
+            FsTime::Leave => ts.tv_nsec = libc::UTIME_OMIT as _,
+        }
+        ts
+    }
+    let c = std::ffi::CString::new(path)
+        .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+    let times = [spec(a), spec(m)];
+    let flags = if follow { 0 } else { libc::AT_SYMLINK_NOFOLLOW };
+    // SAFETY: a NUL-terminated path and two initialized timespecs.
+    if unsafe { libc::utimensat(libc::AT_FDCWD, c.as_ptr(), times.as_ptr(), flags) } == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
+/// windows: the times set on a handle opened for
+/// `FILE_WRITE_ATTRIBUTES` — `wolf_rt::fs_change::set_times`'s twin.
+#[cfg(windows)]
+fn fs_set_times(path: &str, a: FsTime, m: FsTime, follow: bool) -> std::io::Result<()> {
+    use std::os::windows::fs::OpenOptionsExt as _;
+    const FILE_WRITE_ATTRIBUTES: u32 = 0x0100;
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+    const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+    fn at(s: i64, ns: i64) -> std::io::Result<std::time::SystemTime> {
+        let epoch = std::time::UNIX_EPOCH;
+        let t = if s >= 0 {
+            epoch.checked_add(std::time::Duration::new(s as u64, ns as u32))
+        } else {
+            epoch
+                .checked_sub(std::time::Duration::from_secs(s.unsigned_abs()))
+                .and_then(|t| t.checked_add(std::time::Duration::new(0, ns as u32)))
+        };
+        t.ok_or_else(|| std::io::Error::from(std::io::ErrorKind::InvalidInput))
+    }
+    let now = std::time::SystemTime::now();
+    let mut ft = std::fs::FileTimes::new();
+    match a {
+        FsTime::At(s, ns) => ft = ft.set_accessed(at(s, ns)?),
+        FsTime::Now => ft = ft.set_accessed(now),
+        FsTime::Leave => {}
+    }
+    match m {
+        FsTime::At(s, ns) => ft = ft.set_modified(at(s, ns)?),
+        FsTime::Now => ft = ft.set_modified(now),
+        FsTime::Leave => {}
+    }
+    let mut flags = FILE_FLAG_BACKUP_SEMANTICS;
+    if !follow {
+        flags |= FILE_FLAG_OPEN_REPARSE_POINT;
+    }
+    let f = std::fs::OpenOptions::new()
+        .access_mode(FILE_WRITE_ATTRIBUTES)
+        .custom_flags(flags)
+        .open(path)?;
+    f.set_times(ft)
 }
 
 /// s218 (`[os.fs.stat]`): the record's `kind` for a host file type —
