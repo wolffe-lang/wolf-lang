@@ -760,6 +760,13 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_fs_set_times",
         "__wolf_rt_fs_truncate",
         "__wolf_rt_os_umask",
+        // s232 (#679, #681, #691, #141): the ignored set, the send, a
+        // meaning's number, this process's id and its parent's.
+        "__wolf_rt_os_signal_ignored",
+        "__wolf_rt_os_signal_send",
+        "__wolf_rt_os_signal_number",
+        "__wolf_rt_os_pid",
+        "__wolf_rt_os_ppid",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -770,7 +777,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        198,
+        203,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

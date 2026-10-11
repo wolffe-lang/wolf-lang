@@ -1475,6 +1475,12 @@ mod builtin_cap_tests {
             ("fs_set_times", Cap::Fs),
             ("fs_truncate", Cap::Fs),
             ("os_umask", Cap::Env),
+            // s232 (#141, #681): the send charges `exec`; this process's
+            // id, its parent's and the ignored set `env`.
+            ("os_signal_send", Cap::Exec),
+            ("os_pid", Cap::Env),
+            ("os_ppid", Cap::Env),
+            ("os_signal_ignored", Cap::Env),
         ] {
             assert_eq!(builtin_cap(name), Some(cap), "{name}");
         }
