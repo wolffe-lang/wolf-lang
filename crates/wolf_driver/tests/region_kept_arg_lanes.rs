@@ -141,10 +141,10 @@ const ISSUE: &str = "wolf-lang#660";
 
 const RULED_LUPIN: &str = "trap(region-fault)";
 
-/// The paired lupins that run a region-built `str` kept in a `List`
-/// to `exit(0)` instead of trapping (wolffe-lang/wolf-interp#232: the
-/// dynamic machine misses a list element reaching into a freed
-/// region). Pinned by version so the pin dies with the fix: a lupin
+/// The paired lupins that run a region-built `str` kept in a `List`,
+/// or as a `Map` key, to `exit(0)` instead of trapping
+/// (wolffe-lang/wolf-interp#232: the dynamic machine misses a list
+/// element and a map key reaching into a freed region). Pinned by version so the pin dies with the fix: a lupin
 /// outside this list must trap.
 const LUPIN_MISSES_LIST_ELEMENTS: &[&str] = &["0.1.49", "0.1.50"];
 
@@ -379,6 +379,23 @@ fn a_list_result_keeping_a_read_argument_is_refused() {
 #[test]
 fn a_builtin_result_drawn_from_its_receiver_is_refused() {
     refused_and_lupin_pinned(&fixture("map_pairs"));
+}
+
+/// A `Map` store keeps its KEY: `in st { m[s] = 1 }`. Red at trunk
+/// a027b643 as a silent wrong answer — native and release answered
+/// `m[k] else 0` with `0` for the key just stored, its bytes freed and
+/// reused. lupin runs it (the same miss as a list element's,
+/// wolf-interp#232).
+#[test]
+fn a_map_store_s_region_built_key_is_refused() {
+    refused_and_lupin_pinned(&fixture("map_key_store"));
+}
+
+/// The same store with no `in` at all — the one shape of this family
+/// that never needed the door.
+#[test]
+fn a_map_store_s_region_built_key_is_refused_without_in() {
+    refused_and_lupin_pinned(&fixture("map_key_no_in"));
 }
 
 /// The sound neighbours, every one green at trunk a027b643: they must

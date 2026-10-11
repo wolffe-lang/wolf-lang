@@ -1,0 +1,17 @@
+fn main() -> !int {
+    region st {
+        let seq0 = 0
+        var m = Map[str, int]()
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            m[s] = 1
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        let k = "built in pass, {seq0} uses"
+        print("{m[k] else 0}")
+    }
+    0
+}
