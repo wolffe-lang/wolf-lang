@@ -540,6 +540,13 @@ impl WaitCell {
     }
 }
 
+impl crate::task::Wake for WaitCell {
+    fn wake(&self) {
+        let _g = self.st.lock().unwrap();
+        self.cv.notify_all();
+    }
+}
+
 /// One pending wait in the reactor's table.
 struct Waiter {
     cell: Arc<WaitCell>,
@@ -683,11 +690,16 @@ fn reactor_main(r: &'static Reactor) {
 }
 
 /// Park until the cell resolves; observe cancellation/kill while
-/// parked (5ms poll backstop, the task layer's standard at
-/// runtime-owned blocking points; real wakeups arrive via the
-/// completion's notify).
+/// parked. The completion's notify ends the wait, and so does a
+/// cancellation anywhere in the process, through the parked registry
+/// (s231, wolf-lang#713: until then every parked wait woke each 5 ms to
+/// poll, ~200 wakeups a second per parked task). A wait with no scope
+/// cannot be cancelled and registers nothing; the det domain keeps the
+/// 5 ms poll its scheduler is driven by.
 fn wait_on(cell: &Arc<WaitCell>, token: u64, r: &'static Reactor, cancellable: bool) -> IoWait {
     let scope = current_scope();
+    let poll = crate::task::det_in_domain();
+    let _parked = (scope.is_some() && !poll).then(|| crate::task::park_on(&**cell));
     loop {
         {
             let mut g = cell.st.lock().unwrap();
@@ -701,8 +713,11 @@ fn wait_on(cell: &Arc<WaitCell>, token: u64, r: &'static Reactor, cancellable: b
                 if stop {
                     break;
                 }
-                let (g2, _) = cell.cv.wait_timeout(g, Duration::from_millis(5)).unwrap();
-                g = g2;
+                g = if poll {
+                    cell.cv.wait_timeout(g, Duration::from_millis(5)).unwrap().0
+                } else {
+                    cell.cv.wait(g).unwrap()
+                };
             }
         }
         // Cancellation (or kill) requested: try to CLAIM the wait.
