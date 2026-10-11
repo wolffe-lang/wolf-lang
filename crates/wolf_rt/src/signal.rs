@@ -1117,9 +1117,9 @@ pub fn poll(mask: i64) -> i64 {
     let Some(h) = HUB.get() else {
         return 0;
     };
-    sys::settle(installed(h));
+    // PLANT (s232, reverted next): the poll trails the drain thread again.
+    let _ = installed(h);
     let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
-    sys::drain(h, &mut st);
     take(&mut st, mask).unwrap_or(0)
 }
 
