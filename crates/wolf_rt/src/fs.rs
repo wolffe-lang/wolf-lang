@@ -81,6 +81,12 @@ pub mod fs_code {
     /// (`ESPIPE`). A tag of its own because the response differs from
     /// `io`: a program falls back to reading forward.
     pub const UNSEEKABLE: i64 = 9;
+    /// s230 (`[os.fs.mode]`, `[os.fs.symlink]`, `[os.fs.umask]`): the
+    /// host has no such operation — windows has no permission bits, no
+    /// umask and no unprivileged symbolic link. The fs family's first
+    /// host refusal BY NAME; only the calls that declare the tag
+    /// produce it.
+    pub const UNSUPPORTED: i64 = 10;
 }
 
 /// `fs_open_mode`'s mode argument. The set is deliberately small and
@@ -131,7 +137,7 @@ static FILES: Mutex<Handles<File>> = Mutex::new(Handles::starting_at(FIRST_HANDL
 /// The first number an open answers (`[os.fs.std]`).
 pub const FIRST_HANDLE: usize = 3;
 
-fn code_of(e: &std::io::Error) -> i64 {
+pub(crate) fn code_of(e: &std::io::Error) -> i64 {
     os_error_record(e);
     match e.kind() {
         std::io::ErrorKind::NotFound => fs_code::NOT_FOUND,
@@ -310,24 +316,13 @@ pub unsafe extern "C" fn __wolf_rt_fs_write_text(pp: i64, pl: i64, cp: i64, cl: 
     }
 }
 
-/// The open family: the fd (>= 0), or `-code` on failure.
-///
-/// `fs_open(path)` is mode [`fs_mode::READ`], `fs_create(path)` is
-/// mode [`fs_mode::WRITE`], and `fs_open_mode(path, mode)` passes the
-/// caller's own — s38's two entries are the two modes it happened to
-/// have, so widening the flag kept every existing call site exact.
-/// A mode outside [`fs_mode`] is `-`[`fs_code::INVALID`], decided
-/// before the filesystem is touched.
-///
-/// # Safety
-///
-/// A valid str pair.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_fs_open(pp: i64, pl: i64, mode: i64) -> i64 {
-    os_error_clear();
-    let path = unsafe { view(pp, pl) };
+/// The `OpenOptions` of one of [`fs_mode`]'s six modes, or `None` for a
+/// mode outside the set (`invalid`). Shared by the open family and by
+/// `fs_open_perm` (s230, [`crate::fs_change`]), which adds the
+/// creation's permission bits to the same options.
+pub(crate) fn open_options(mode: i64) -> Option<std::fs::OpenOptions> {
     let mut o = std::fs::OpenOptions::new();
-    let opts = match mode {
+    match mode {
         fs_mode::READ => o.read(true),
         fs_mode::WRITE => o.write(true).create(true).truncate(true),
         fs_mode::APPEND => o.append(true).create(true),
@@ -348,7 +343,29 @@ pub unsafe extern "C" fn __wolf_rt_fs_open(pp: i64, pl: i64, mode: i64) -> i64 {
                 o.read(true)
             }
         }
-        _ => return -fs_code::INVALID,
+        _ => return None,
+    };
+    Some(o)
+}
+
+/// The open family: the fd (>= 0), or `-code` on failure.
+///
+/// `fs_open(path)` is mode [`fs_mode::READ`], `fs_create(path)` is
+/// mode [`fs_mode::WRITE`], and `fs_open_mode(path, mode)` passes the
+/// caller's own — s38's two entries are the two modes it happened to
+/// have, so widening the flag kept every existing call site exact.
+/// A mode outside [`fs_mode`] is `-`[`fs_code::INVALID`], decided
+/// before the filesystem is touched.
+///
+/// # Safety
+///
+/// A valid str pair.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_fs_open(pp: i64, pl: i64, mode: i64) -> i64 {
+    os_error_clear();
+    let path = unsafe { view(pp, pl) };
+    let Some(opts) = open_options(mode) else {
+        return -fs_code::INVALID;
     };
     match opts.open(path) {
         Err(e) => -code_of(&e),
@@ -1174,7 +1191,7 @@ fn std_stream(fd: i64) -> Option<std::mem::ManuallyDrop<File>> {
 /// Run `f` on the file `fd` names — a standard stream for 0..2
 /// ([`std_stream`]), the table's slot otherwise, held under the table
 /// lock for the call. `None` is a closed or forged handle (`io`).
-fn with_handle<R>(fd: i64, f: impl FnOnce(&File) -> R) -> Option<R> {
+pub(crate) fn with_handle<R>(fd: i64, f: impl FnOnce(&File) -> R) -> Option<R> {
     if (0..FIRST_HANDLE as i64).contains(&fd) {
         let file = std_stream(fd)?;
         return Some(f(&file));

@@ -12,6 +12,11 @@ pub mod bytes;
 // variable — `[os.proc.exec]`, `[os.env.unset]`.
 pub mod exec;
 pub mod fs;
+// s230 (wolf-lang#346, #698, #699, #700, #702, #704): the calls that
+// change a file without writing its bytes, and the umask — `[os.fs.mode]`,
+// `[os.fs.create.mode]`, `[os.fs.symlink]`, `[os.fs.link]`, `[os.fs.times]`,
+// `[os.fs.truncate]`, `[os.fs.umask]`.
+pub mod fs_change;
 // s228 (wolf-lang#661): the table behind `fs_open`'s and the net
 // calls' handles — numbers never reused, storage always.
 pub(crate) mod handles;
