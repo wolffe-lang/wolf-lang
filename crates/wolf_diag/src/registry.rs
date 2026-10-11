@@ -1765,7 +1765,10 @@ bytes outlive the frame: outside the region block, or under `in r
 { … }` for a region the function was handed (`"{s}"` then builds the
 string in `r`). A closure that captured such a channel sends what it
 is called with: call it where it was made, and hand a callee the
-channel itself, never the closure.
+channel itself, never the closure. A `spawn proc` argument is asked
+the same: the proc outlives the frame that spawned it, so an argument
+built in a region block is refused — pass it in from a function that
+was handed it as a parameter and joins the proc before returning.
 "#);
 
 code!(E1011, "this would open a region while a region that contains it is open", r#"
