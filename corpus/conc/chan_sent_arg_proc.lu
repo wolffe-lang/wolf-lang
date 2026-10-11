@@ -1,0 +1,38 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.proc, conc.chan.payload, mem.region.escape
+//!
+//! s229 (wolf-lang#665): the proc half. A `spawn proc` entry's current
+//! region is the proc's own and dies with it (`[mem.region.proc]`); the
+//! direct send of a proc-built string is E1010
+//! (`chan_payload_escape_proc.lu`), the helper-wrapped one was
+//! accepted. A callee handed a channel may send what it is handed, so
+//! at the call every argument that can name region bytes — and what the
+//! callee may build in the caller's current region — is demanded to
+//! outlive the frame, as a sent payload is. Before s229 the compiler
+//! built it, and native and release print the right bytes only because
+//! a proc's region is the process root arena there (wolf-lang#191);
+//! lupin traps `region-fault`.
+
+fn fwd(ch: channel[str], s: str) {
+    ch.send(s) else { }
+}
+
+fn worker(n: int, out: channel[str]) -> !int {
+    let s = "built in proc, {n} uses"
+    fwd(out, s)
+    0
+}
+
+fn main() -> !int {
+    let out = channel[str](4)
+    let c = spawn proc worker(7, out)
+    let m = c.monitor()
+    select {
+        exit(reason) from m => {},
+        timeout(1.s) => { return 1 },
+    }
+    out.close()
+    for line in out { print(line) }
+    0
+}

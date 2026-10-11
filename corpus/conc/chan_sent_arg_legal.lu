@@ -1,0 +1,73 @@
+//! check: run(exit=0, stdout="28\nbuilt in main, 0 uses\nbuilt by emit, 0 uses\nstatic\nbuilt in pass, 0 uses\na 0 doc 2\n21")
+//! phase: run
+//! conforms: conc.chan.payload, mem.region.escape
+//!
+//! s229 (wolf-lang#665): the sound neighbours of the sent-argument
+//! rule, every one green before s229 on checked, native, release
+//! and lupin — they must stay green. A helper called where the bytes
+//! outlive the frame; a callee that builds where `main` allocates; a
+//! literal; the fix-it applied under `in life { }` for a region handed
+//! in; an aggregate payload built at the call; and a channel of
+//! scalars, which carries no bytes wherever the call sits.
+
+struct Doc { title: str, words: int }
+
+fn fwd(ch: channel[str], s: str) {
+    ch.send(s) else { }
+}
+
+fn fwd_d(ch: channel[Doc], d: Doc) {
+    ch.send(d) else { }
+}
+
+fn tally(ch: channel[int], s: str) {
+    ch.send(s.len) else { }
+}
+
+fn emit(ch: channel[str], n: int) {
+    ch.send("built by emit, {n} uses") else { }
+}
+
+fn pass_one(ch: channel[str], life: region, n: int) {
+    region pass {
+        let s = "built in pass, {n} uses"
+        in life {
+            fwd(ch, "{s}")
+        }
+    }
+}
+
+fn main() -> int {
+    let seq0 = 0
+    let ch = channel[str](4)
+    let docs = channel[Doc](1)
+    let counts = channel[int](1)
+    let life = region()
+    // The bytes outlive the frame: built where `main` allocates.
+    let s = "built in main, {seq0} uses"
+    fwd(ch, s)
+    // The callee builds where its caller allocates, and that is `main`.
+    emit(ch, seq0)
+    // A literal names no region.
+    fwd(ch, "static")
+    // The fix-it applied: built in a region handed in.
+    pass_one(ch, life, seq0)
+    fwd_d(docs, Doc { title: "a {seq0} doc", words: 2 })
+    region pass {
+        // A channel of scalars carries no bytes, wherever the call sits.
+        let t = "built in pass, {seq0} uses"
+        tally(counts, t)
+    }
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    print("{ch.recv() else "?"}")
+    print("{ch.recv() else "?"}")
+    print("{ch.recv() else "?"}")
+    print("{ch.recv() else "?"}")
+    let d = docs.recv() else Doc { title: "?", words: 0 }
+    print("{d.title} {d.words}")
+    print("{counts.recv() else 0}")
+    0
+}

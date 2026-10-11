@@ -1,0 +1,35 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.proc, conc.chan.payload, mem.region.escape
+//!
+//! s229 (wolf-lang#665): no argument carries the bytes. The callee
+//! builds its string in ITS caller's current region (D12) — here the
+//! proc's own — and sends it. A callee handed a channel may send what
+//! it is handed, so at the call every argument that can name region
+//! bytes — and what the callee may build in the caller's current region
+//! — is demanded to outlive the frame, as a sent payload is. Before
+//! s229 the compiler built it, and native and release print the right
+//! bytes only because a proc's region is the process root arena there
+//! (wolf-lang#191); lupin traps `region-fault`.
+
+fn emit(ch: channel[str], n: int) {
+    ch.send("built in proc, {n} uses") else { }
+}
+
+fn worker(n: int, out: channel[str]) -> !int {
+    emit(out, n)
+    0
+}
+
+fn main() -> !int {
+    let out = channel[str](4)
+    let c = spawn proc worker(7, out)
+    let m = c.monitor()
+    select {
+        exit(reason) from m => {},
+        timeout(1.s) => { return 1 },
+    }
+    out.close()
+    for line in out { print(line) }
+    0
+}

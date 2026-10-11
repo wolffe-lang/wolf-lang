@@ -1,0 +1,37 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: conc.chan.payload, mem.region.escape
+//!
+//! s229 (wolf-lang#665): the report's shape received by a `select` arm.
+//! A callee handed a channel may send what it is handed, so at the call
+//! every argument that can name region bytes — and what the callee may
+//! build in the caller's current region — is demanded to outlive the
+//! frame, as a sent payload is. Before s229 the compiler built it:
+//! native and release printed the chunk the next region reused
+//! (`ZZZZZZZZZZZZZZZZZZZZZ`), the checked machine the stale bytes;
+//! lupin traps `region-fault`.
+
+fn fwd(ch: channel[str], s: str) {
+    ch.send(s) else { }
+}
+
+fn main() -> int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        let ch = channel[str](1)
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            fwd(ch, s)
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        select {
+            v from ch => { print("{v}") },
+            timeout(1.s) => { print("timeout") },
+        }
+    }
+    0
+}

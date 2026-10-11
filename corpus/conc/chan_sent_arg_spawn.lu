@@ -1,0 +1,40 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: conc.proc.arg, conc.chan.payload, mem.region.escape
+//!
+//! s229 (wolf-lang#665): a proc entry is a callee too. `msg` lives in a
+//! region block of the spawner; the proc sends it on the channel it was
+//! handed, and the receiver reads after the block closed. A callee
+//! handed a channel may send what it is handed, so at the call every
+//! argument that can name region bytes — and what the callee may build
+//! in the caller's current region — is demanded to outlive the frame,
+//! as a sent payload is. Before s229 the compiler built it: native and
+//! release printed the chunk the next region reused
+//! (`ZZZZZZZZZZZZZZZZZZZZZ`), the checked machine the stale bytes;
+//! lupin traps `region-fault`.
+
+fn worker(msg: str, out: channel[str]) -> !int {
+    out.send(msg)?
+    0
+}
+
+fn main() -> !int {
+    let n = 7
+    let out = channel[str](4)
+    region pass {
+        let msg = "built in pass, {n} uses"
+        let c = spawn proc worker(msg, out)
+        let m = c.monitor()
+        select {
+            exit(reason) from m => {},
+            timeout(1.s) => { return 1 },
+        }
+    }
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{n}ZZ"
+        print("{z.len}")
+    }
+    out.close()
+    for line in out { print(line) }
+    0
+}

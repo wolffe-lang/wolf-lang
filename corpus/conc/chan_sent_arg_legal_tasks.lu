@@ -1,0 +1,73 @@
+//! check: run(exit=0, stdout="built in main, 7 uses\nbuilt in launch, 7 uses\n7")
+//! phase: run
+//! conforms: conc.chan.payload, mem.region.escape, conc.proc.arg
+//!
+//! s229 (wolf-lang#665): the sound neighbours that need tasks — green
+//! before s229 on native, release and lupin (the checked machine
+//! declines `scope` and `spawn`, C1). A scope task handing a helper
+//! bytes built where `main` allocates; a proc's argument built in the
+//! spawner's caller's region; a proc relaying what it received with a
+//! direct send; a closure that captured a channel of bytes called where
+//! it was made; a closure that captured a channel of scalars handed to
+//! a callee.
+
+fn fwd(ch: channel[str], s: str) {
+    ch.send(s) else { }
+}
+
+fn relay(inp: channel[str], out: channel[str]) -> !int {
+    for line in inp {
+        out.send(line)?
+    }
+    out.close()
+    0
+}
+
+fn worker(msg: str, out: channel[str]) -> !int {
+    out.send(msg)?
+    0
+}
+
+fn launch(out: channel[str], n: int) -> !int {
+    let msg = "built in launch, {n} uses"
+    let c = spawn proc worker(msg, out)
+    let m = c.monitor()
+    select {
+        exit(reason) from m => {},
+        timeout(1.s) => { return 1 },
+    }
+    0
+}
+
+fn each(f: fn(int), n: int) {
+    region inner {
+        f(n)
+    }
+}
+
+fn main() -> !int {
+    let n = 7
+    let a = channel[str](4)
+    let b = channel[str](4)
+    let counts = channel[int](1)
+    // A scope task hands a helper bytes built where `main` allocates.
+    scope w {
+        w.spawn(fn() {
+            let s = "built in main, {n} uses"
+            fwd(a, s)
+        })
+    }
+    // A proc's argument built in the spawner's caller's region.
+    launch(a, n)?
+    a.close()
+    // A proc relays what it received: a direct send of a received value.
+    let c = spawn proc relay(a, b)
+    for line in b { print(line) }
+    // A closure that captured a channel of bytes, called where it was made.
+    let say = fn(i: int) { a.send("said") else { } }
+    say(n)
+    // A closure that captured a channel of scalars travels freely.
+    each(fn(i: int) { counts.send(i) else { } }, n)
+    print("{counts.recv() else 0}")
+    0
+}

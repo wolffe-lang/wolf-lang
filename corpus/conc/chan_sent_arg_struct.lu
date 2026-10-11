@@ -1,0 +1,42 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: conc.chan.payload, mem.region.escape
+//!
+//! s229 (wolf-lang#665): a struct reaching a `str`, handed to a callee
+//! beside the channel that carries it. The direct `ch.send(d)` is E1010
+//! (`chan_payload_escape.lu`); one line of helper around it was
+//! accepted. A callee handed a channel may send what it is handed, so
+//! at the call every argument that can name region bytes — and what the
+//! callee may build in the caller's current region — is demanded to
+//! outlive the frame, as a sent payload is. Before s229 the compiler
+//! built it: native and release printed the chunk the next region
+//! reused (`ZZZZZZZZZZZZZZZZZZZZZ`), the checked machine the stale
+//! bytes; lupin traps `region-fault`.
+
+struct Doc {
+    title: str,
+    words: int,
+}
+fn fwd_d(ch: channel[Doc], d: Doc) {
+    ch.send(d) else { }
+}
+
+fn main() -> int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        let ch = channel[Doc](1)
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            let d = Doc { title: s, words: 1 }
+            fwd_d(ch, d)
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        let got = ch.recv() else Doc { title: "?", words: 0 }
+        print("{got.title}")
+    }
+    0
+}
