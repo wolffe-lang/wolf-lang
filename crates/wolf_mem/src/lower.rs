@@ -417,6 +417,10 @@ pub(crate) struct Lowerer<'t> {
     /// each with the span where the bytes flowed in. Read by the
     /// escape rules only.
     shares: BTreeMap<u32, BTreeMap<SiteId, Span>>,
+    /// s227 (wolf-lang#660): the value of the index expression of the
+    /// container place `as_place` resolved last (its outermost
+    /// bracket) — a `Map` store keeps its key.
+    last_index: Val,
     /// s227 (wolf-lang#660): `(root local, site)` pairs that entered
     /// `shares` because a callee may have kept another argument there.
     kept: BTreeMap<(u32, SiteId), KeptFlow>,
@@ -2759,14 +2763,21 @@ impl<'t> Lowerer<'t> {
                 ) {
                     return None; // not a container place (s17 surface)
                 }
+                // s227 (#660): the index's own value is kept for the
+                // one position that KEEPS it — a `Map` store's key
+                // (`lower_assign`).
+                let mut index = Val::none();
                 for a in b.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = wolf_ast::Arg::value(a)
                         && wolf_ast::is_expr_kind(v.kind)
-                        && self.eval_value(v).is_err()
                     {
-                        return None;
+                        match self.eval_value(v) {
+                            Ok(val) => index.merge(val),
+                            Err(_) => return None,
+                        }
                     }
                 }
+                self.last_index = index;
                 let base_place = self.places.get(base_id).clone();
                 let mut proj = base_place.proj;
                 proj.push(self.elem_step(b, base_ty));
@@ -6974,12 +6985,37 @@ impl<'t> Lowerer<'t> {
             }
             return Ok(());
         }
+        self.last_index = Val::none();
         let Some((place, _)) = self.as_place(place_expr) else {
             return Err(NotYet {
                 construct: "assignment through this place shape",
                 span: place_expr.span,
             });
         };
+        // s227 (wolf-lang#660's door, `[mem.region.escape]`): a store
+        // through a `Map` index may INSERT, and the map keeps the key —
+        // a `str` key's bytes are shared, never copied. So the map
+        // shares the key's bytes, exactly as a callee's `mut` map
+        // shares an argument it may store. `in st { m[s] = 1 }` with
+        // `s` built in an enclosing region block left a key of freed
+        // bytes: native and release answered `m[k] else 0` with `0`
+        // for the key just stored. (A `List` index is an `int` and
+        // names nothing.)
+        if place_expr.kind == SyntaxKind::BracketApply
+            && let Base::Local(l) = self.places.get(place).base
+        {
+            let key = std::mem::take(&mut self.last_index);
+            let mut kept = Val::none();
+            for s in key.sites.iter().chain(key.views.iter()).copied() {
+                if self.sites[s.0 as usize].kind == SiteKind::Param {
+                    continue;
+                }
+                if let Err(i) = kept.views.binary_search(&s) {
+                    kept.views.insert(i, s);
+                }
+            }
+            self.hold(l, &kept, place_expr.span);
+        }
         let compound = d.op().map(|t| t.kind != SyntaxKind::Eq).unwrap_or(false);
         if compound {
             self.emit_mutate(place, place_expr.span);
@@ -7245,6 +7281,7 @@ impl<'t> Lowerer<'t> {
             site_escape: Vec::new(),
             holds: BTreeMap::new(),
             shares: BTreeMap::new(),
+            last_index: Val::none(),
             kept: BTreeMap::new(),
             view_lists: BTreeSet::new(),
             lent_params: BTreeSet::new(),
