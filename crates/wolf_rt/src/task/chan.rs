@@ -65,7 +65,7 @@ use std::time::{Duration, Instant};
 
 use super::hooks::{ChanPhase, SchedEvent, SchedRng, sched_point};
 use super::pool::{blocking, current_scope};
-use crate::handles::SeqMap;
+use crate::handles::SeqTable;
 
 /// Why a channel operation did not deliver: the channel is closed
 /// (`[conc.chan.close]`'s error value) or structured cancellation
@@ -795,10 +795,9 @@ const ST_CANCELLED: i32 = 2;
 
 static NEXT_MONITOR: AtomicU64 = AtomicU64::new(1);
 
-static MONITORS: Mutex<SeqMap<u64, Arc<Chan>>> =
-    Mutex::new(SeqMap::with_hasher(std::hash::BuildHasherDefault::new()));
+static MONITORS: Mutex<SeqTable<Arc<Chan>>> = Mutex::new(SeqTable::new());
 
-fn monitors() -> MutexGuard<'static, SeqMap<u64, Arc<Chan>>> {
+fn monitors() -> MutexGuard<'static, SeqTable<Arc<Chan>>> {
     MONITORS.lock().unwrap_or_else(|p| p.into_inner())
 }
 
@@ -816,12 +815,12 @@ pub(crate) fn monitor_handle(ch: Arc<Chan>) -> *mut c_void {
 /// with the table locked by whoever just let go of a reference — new
 /// references are only ever taken under that lock, so the count cannot
 /// rise between the check and the removal.
-fn settle(table: &mut SeqMap<u64, Arc<Chan>>, serial: u64) {
-    if let Some(ch) = table.get(&serial)
+fn settle(table: &mut SeqTable<Arc<Chan>>, serial: u64) {
+    if let Some(ch) = table.get(serial)
         && Arc::strong_count(ch) == 1
         && ch.is_pristine()
     {
-        table.remove(&serial);
+        table.remove(serial);
     }
 }
 
@@ -842,7 +841,7 @@ pub(crate) fn monitor_delivered(ch: Arc<Chan>) {
 /// Whether the table still holds a channel for this monitor handle.
 #[cfg(test)]
 pub(crate) fn monitor_held(ch: *mut c_void) -> bool {
-    monitors().contains_key(&(ch as usize as u64 >> 1))
+    monitors().get(ch as usize as u64 >> 1).is_some()
 }
 
 /// A channel handle resolved for the length of one shim call.
@@ -899,12 +898,19 @@ unsafe fn hold(ch: *mut c_void) -> Held {
         }));
     }
     let serial = word >> 1;
-    let chan = monitors()
-        .entry(serial)
-        // Dropped as pristine by an earlier call: a fresh empty
-        // channel is the same channel.
-        .or_insert_with(|| Chan::new(1))
-        .clone();
+    let mut table = monitors();
+    let chan = match table.get(serial) {
+        Some(ch) => ch.clone(),
+        None => {
+            // Dropped as pristine by an earlier call: a fresh empty
+            // channel is the same channel.
+            let ch = Chan::new(1);
+            ch.monitor.store(serial, SeqCst);
+            table.insert(serial, ch.clone());
+            ch
+        }
+    };
+    drop(table);
     Held::Monitor(serial, std::mem::ManuallyDrop::new(chan))
 }
 

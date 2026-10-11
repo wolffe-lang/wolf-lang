@@ -115,7 +115,7 @@ use super::chan::{Arm, Chan, select};
 use super::hooks::{SchedEvent, sched_point};
 use super::pool::{self, Body, TaskCtx};
 use super::scope::{ExitReason, ScopeInner};
-use crate::handles::SeqMap;
+use crate::handles::SeqTable;
 use crate::native;
 
 /// The root supervisor's domain id — the process itself
@@ -410,7 +410,7 @@ fn pack(words: &[u64]) -> Option<Block> {
 /// encoded word; `kill`, `cancel` and `link` read its class).
 struct Registry {
     /// Index → the running proc.
-    live: SeqMap<u32, Arc<Proc>>,
+    live: SeqTable<Arc<Proc>>,
     /// Index → the exit reason word, or [`RUNNING`].
     exits: ExitWords,
     /// Proc-root scope id → proc id (scope-chain attribution:
@@ -446,7 +446,7 @@ fn registry() -> &'static Mutex<Registry> {
         native::install_region_ledger_hooks(&LEDGER_HOOKS);
         native::install_trap_containment(contain_trap);
         Mutex::new(Registry {
-            live: SeqMap::default(),
+            live: SeqTable::new(),
             exits: ExitWords::new(),
             scope_to_proc: HashMap::new(),
             region_owner: HashMap::new(),
@@ -478,7 +478,7 @@ fn slot_index(id: u64) -> Option<u32> {
 fn live_proc(id: u64) -> Result<Arc<Proc>, ProcErr> {
     let reg = registry().lock().unwrap();
     slot_index(id)
-        .and_then(|i| reg.live.get(&i))
+        .and_then(|i| reg.live.get(u64::from(i)))
         .cloned()
         .ok_or(ProcErr::Stale)
 }
@@ -556,7 +556,7 @@ pub fn spawn_proc(name: &str, body: impl FnOnce(&TaskCtx) -> ProcOutcome + Send 
             }),
             cv: Condvar::new(),
         });
-        reg.live.insert(index, proc.clone());
+        reg.live.insert(u64::from(index), proc.clone());
         reg.scope_to_proc.insert(scope.id(), id);
         reg.proc_regions.insert(id, HashSet::new());
         proc
@@ -666,7 +666,7 @@ fn reap(proc: &Arc<Proc>) {
         {
             let mut reg = registry().lock().unwrap();
             if let Some(i) = slot_index(proc.id) {
-                reg.live.remove(&i);
+                reg.live.remove(u64::from(i));
                 reg.exits.set(i as usize, reason.encode());
             }
         }
