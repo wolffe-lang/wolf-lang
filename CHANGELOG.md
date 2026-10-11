@@ -1,5 +1,40 @@
 # Changelog
 
+## Unreleased
+
+### A program may park a task per connection (s231, #713)
+
+A task parked in a wait — `net_read`, `net_accept`, a channel `recv` —
+holds its thread, and the pool adds a worker beside it. That stopped at
+eight workers a core (sixteen on one or two cpus): a program that
+parked more tasks at once stopped, the task that would have woken them
+queued behind them. #713's witness (`waitwolf loop 0 N`, 2N + 1 parked
+tasks) stopped at N = 8 on one cpu, 16 on four and 64 on sixteen.
+
+- **No cap.** The pool holds a worker for every parked task; the host's
+  thread limit is the last word, and a thread it refuses is one line on
+  stderr, never an abort. The witness answers at N = 64 on one cpu and
+  N = 1000 on four and sixteen, native and release
+  (`parked_tasks.rs`); 10,000 tasks parked in `recv`, `net_read` or
+  `net_accept` are held and released.
+- **A parked task costs no cpu.** Every parked wait used to wake each
+  5 ms to look for a cancellation (~200 wakeups a second a task; with
+  10,000 parked, more than the machine). A cancellation now wakes the
+  waits; one task parked 8 s in `net_accept` makes 8 `futex` calls in
+  its whole run, from 1,741. Idle extra workers that cannot retire
+  sleep instead of waking every 50 ms. `os_signal_wait` still polls.
+- **About 15 KiB a parked task** on linux x86-64 (19.6 in `net_read`),
+  and task stacks take no transparent huge pages, which made one cost
+  8 KiB or 2 MiB by luck.
+- **A dial holds no lock.** `net_connect` held the process's socket
+  table across a blocking connect, so a full listen backlog stopped
+  every socket call, the draining `net_accept` included. It dials
+  outside the lock now. `time_sleep_ms`, `net_wait` and the dial tell
+  the pool they wait, as every other wait does.
+- `[conc.task.order]`'s cost paragraph is restated with these numbers.
+  lupin and the checked machine answer the witness at N = 64 as the
+  compiled tiers do.
+
 ## 0.2.28 — 2026-10-11
 
 THE TWENTY-EIGHTH, the soundness release. **0.2.27 shipped with two
