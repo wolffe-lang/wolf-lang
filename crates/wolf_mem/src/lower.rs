@@ -83,6 +83,14 @@ pub(crate) struct Val {
     /// The caller still holds it, so it is a second live path to the
     /// caller's value; where it may go is [`Lower::refuse_lent_escape`].
     lent: Vec<(u32, Span)>,
+    /// s229 (wolf-lang#665): this value is, or holds, a closure that
+    /// CAPTURED a channel able to carry bytes — the captured binding's
+    /// name. A fn value's type says nothing of its captures, so the
+    /// fact rides the value: into a binding ([`Lowerer::senders`]), a
+    /// copy of it, an aggregate built around it. Calling it is a call
+    /// that may send; handing it to a callee, returning it or sending
+    /// it is refused where it would become a fn value nobody can ask.
+    sends: Option<String>,
 }
 
 impl Val {
@@ -99,10 +107,14 @@ impl Val {
             region_fields: Vec::new(),
             borrowed: Vec::new(),
             lent: Vec::new(),
+            sends: None,
         }
     }
 
     fn merge(&mut self, other: Val) {
+        if self.sends.is_none() {
+            self.sends = other.sends;
+        }
         for (p, sp) in other.lent {
             if !self.lent.iter().any(|&(q, _)| q == p) {
                 self.lent.push((p, sp));
@@ -310,6 +322,13 @@ struct ArgFlow<'t> {
     is_recv: bool,
     /// The `mut` places this argument lends, each with its type.
     muts: Vec<(PlaceId, Option<Ty<'t>>)>,
+    /// s229 (wolf-lang#665): the callee can SEND through this argument
+    /// — its type reaches a channel whose payload can name bytes a
+    /// region owns ([`Lowerer::reaches_byte_channel`]).
+    sink: bool,
+    /// s229: it is a closure (or a `dyn` pair) whose CAPTURES reach
+    /// such a channel; the text is the first such capture's name.
+    sink_capture: Option<String>,
 }
 
 /// s227 (#660): why a binding holds a site — an argument the callee
@@ -327,6 +346,38 @@ struct KeptFlow {
     /// not the one its bytes live in: `"{arg}"` at the call builds the
     /// bytes where the callee allocates.
     rebuild: bool,
+}
+
+/// s229 (wolf-lang#665): the way a callee may SEND what it is handed —
+/// the argument (or receiver) that reaches a channel, or the capture
+/// of the closure being called. What E1010 names beside the payload.
+#[derive(Clone)]
+struct SentFlow {
+    /// The argument, the receiver or the called closure.
+    span: Span,
+    /// What to call the channel: the argument's source text, or the
+    /// captured binding's name.
+    text: String,
+    /// It is a closure (or the callee itself) and `text` is a capture.
+    captured: bool,
+}
+
+impl SentFlow {
+    fn label(&self) -> String {
+        if self.captured {
+            format!(
+                "this closure captured `{}`, which reaches a channel that carries bytes: the call \
+                 may send through it",
+                self.text
+            )
+        } else {
+            format!(
+                "`{}` reaches a channel that carries bytes: the callee may send any other \
+                 argument on it",
+                self.text
+            )
+        }
+    }
 }
 
 struct Scope<'t> {
@@ -424,6 +475,13 @@ pub(crate) struct Lowerer<'t> {
     /// s227 (wolf-lang#660): `(root local, site)` pairs that entered
     /// `shares` because a callee may have kept another argument there.
     kept: BTreeMap<(u32, SiteId), KeptFlow>,
+    /// s229 (wolf-lang#665): root local -> the captured binding's
+    /// name, for a binding that is or holds a closure which captured a
+    /// channel able to carry bytes (`Val::sends`).
+    senders: BTreeMap<u32, String>,
+    /// s229: `Val::sends` of the argument `lower_arg` lowered last.
+    /// Cleared before each argument.
+    arg_sends: Option<String>,
     /// s207 (wolf-lang#540): the LIST a `split`/`words`/`lines` call
     /// allocates. Its pieces are subslices of the receiver, so a piece
     /// bound by a `for` carries the receiver's sites and never this one
@@ -764,6 +822,10 @@ impl<'t> Lowerer<'t> {
         let mut views: Vec<SiteId> = self.views_of_place(place);
         views.sort_unstable();
         views.dedup();
+        let sends = match self.places.get(place).base {
+            Base::Local(l) => self.senders.get(&l).cloned(),
+            Base::Global(..) => None,
+        };
         Val {
             sites,
             views,
@@ -772,6 +834,7 @@ impl<'t> Lowerer<'t> {
             region_fields: Vec::new(),
             borrowed: Vec::new(),
             lent: Vec::new(),
+            sends,
         }
     }
 
@@ -796,6 +859,13 @@ impl<'t> Lowerer<'t> {
             for &(p, sp) in &val.lent {
                 entry.entry(p).or_insert(sp);
             }
+        }
+        // s229 (#665): a closure that captured a channel is still one
+        // under a second name, or inside an aggregate bound here.
+        if let Some(name) = &val.sends
+            && self.tys[local as usize].is_none_or(|t| self.may_lend_bytes(t, 0))
+        {
+            self.senders.entry(local).or_insert_with(|| name.clone());
         }
         // s227 (#660): the bytes the value shares ride into the
         // binding beside the sites it holds — unless the binding's
@@ -1069,6 +1139,7 @@ impl<'t> Lowerer<'t> {
 
     fn demand_outlives_frame_how(&mut self, val: &Val, span: Span, how: &'static str) {
         self.refuse_lent_escape(val, span, how);
+        self.refuse_sending_closure_leaving(val, span, how);
         self.claim_closure_leaving(val, span);
         let reader = if how == "sent" { "receiver" } else { "caller" };
         // s227 (#660): the bytes the value shares must outlive the
@@ -1181,6 +1252,7 @@ impl<'t> Lowerer<'t> {
     /// A store into module state: the target is `ρ_static`.
     fn demand_static(&mut self, val: &Val, span: Span) {
         self.refuse_lent_escape(val, span, "stored into module state");
+        self.refuse_sending_closure_leaving(val, span, "stored into module state");
         let all: Vec<(SiteId, bool)> = val
             .sites
             .iter()
@@ -1993,6 +2065,497 @@ impl<'t> Lowerer<'t> {
             }
         }
         out
+    }
+
+    /// s229 (wolf-lang#665, `[conc.chan.payload]`): can a callee that
+    /// holds a value of this type SEND bytes through it — does the type
+    /// reach a `channel[T]` whose payload can name bytes a region owns
+    /// ([`Self::may_lend_bytes`]: a `str`, or a struct, tuple or enum
+    /// reaching one)? A channel handle is a word, so it is reached
+    /// through anything that can hold one: a struct or enum field, a
+    /// tuple, a container, a `Mutex`, a channel of channels. A type
+    /// parameter and a trait object are opaque — a bounded `S: Sink`
+    /// may be a struct holding the channel — so they answer yes. A fn
+    /// value answers by what it CAPTURED, which its type does not say
+    /// (`Val::sends`); the type alone answers
+    /// no. A `channel[int]` and every scalar payload answer no: a word
+    /// crosses in the word.
+    fn reaches_byte_channel(&self, t: Ty<'t>, depth: u32) -> bool {
+        self.reaches_byte_channel_in(t, depth, &mut Vec::new())
+    }
+
+    /// The walk behind [`Self::reaches_byte_channel`]. `open` is the
+    /// stack of nominal types being walked: a recursive type
+    /// (`struct Node { kids: List[Node] }`) met again inside itself
+    /// adds nothing its first unrolling does not already answer.
+    fn reaches_byte_channel_in(
+        &self,
+        t: Ty<'t>,
+        depth: u32,
+        open: &mut Vec<(u32, String)>,
+    ) -> bool {
+        if depth > 16 {
+            return true;
+        }
+        let sub = |id: TyId| Ty { table: t.table, id };
+        match t.kind() {
+            TyKind::Chan(i) => {
+                self.may_lend_bytes(sub(*i), depth + 1)
+                    || self.reaches_byte_channel_in(sub(*i), depth + 1, open)
+            }
+            TyKind::Prim(_)
+            | TyKind::Never
+            | TyKind::Unit
+            | TyKind::Range(_)
+            | TyKind::Handle(_)
+            | TyKind::Ptr(_)
+            | TyKind::TypeTy
+            | TyKind::TaskScope
+            | TyKind::Proc(_)
+            | TyKind::ExitReason
+            | TyKind::RegionTy
+            | TyKind::Fn(..) => false,
+            TyKind::Wrapping(i) | TyKind::Distinct(i) => {
+                self.reaches_byte_channel_in(sub(*i), depth + 1, open)
+            }
+            TyKind::List(i)
+            | TyKind::Pool(i)
+            | TyKind::Mutex(i)
+            | TyKind::Shared(i)
+            | TyKind::Weak(i) => self.reaches_byte_channel_in(sub(*i), depth + 1, open),
+            TyKind::Map(k, v) => {
+                self.reaches_byte_channel_in(sub(*k), depth + 1, open)
+                    || self.reaches_byte_channel_in(sub(*v), depth + 1, open)
+            }
+            TyKind::Tuple(es) => es
+                .iter()
+                .any(|e| self.reaches_byte_channel_in(sub(*e), depth + 1, open)),
+            TyKind::ErrUnion(ok, row) => {
+                self.reaches_byte_channel_in(sub(*ok), depth + 1, open)
+                    || self.reaches_byte_channel_in(sub(*row), depth + 1, open)
+            }
+            TyKind::Row { tags, tail } => {
+                tags.iter()
+                    .flat_map(|(_, ps)| ps.iter())
+                    .any(|p| self.reaches_byte_channel_in(sub(*p), depth + 1, open))
+                    || tail.is_some_and(|tl| self.reaches_byte_channel_in(sub(tl), depth + 1, open))
+            }
+            TyKind::Nominal { module, name, args } => {
+                let key = (*module, name.clone());
+                if open.contains(&key) {
+                    return false;
+                }
+                open.push(key);
+                let found = self.nominal_reaches_byte_channel(t, *module, name, args, depth, open);
+                open.pop();
+                found
+            }
+            // A type parameter, a trait object, an unresolved type:
+            // unknown, so yes.
+            _ => true,
+        }
+    }
+
+    /// A struct's fields, an enum's payloads or a distinct type's base
+    /// ([`Self::reaches_byte_channel_in`]'s nominal arm).
+    fn nominal_reaches_byte_channel(
+        &self,
+        t: Ty<'t>,
+        module: u32,
+        name: &str,
+        args: &[TyId],
+        depth: u32,
+        open: &mut Vec<(u32, String)>,
+    ) -> bool {
+        let sub = |id: TyId| Ty { table: t.table, id };
+        {
+            match self.sigs.get(module as usize, name) {
+                Some(ItemSig::Struct(_)) => match self.fields_of(t) {
+                    Some(fs) => fs
+                        .into_iter()
+                        .any(|(_, ft)| self.reaches_byte_channel_in(ft, depth + 1, open)),
+                    None => true,
+                },
+                Some(ItemSig::Enum {
+                    generics, variants, ..
+                }) => variants.iter().flat_map(|v| v.payload.iter()).any(|&p| {
+                    match self.sigs.table.kind(p) {
+                        TyKind::Rigid(r) => match generics.iter().position(|g| g == r) {
+                            Some(i) if i < args.len() => {
+                                self.reaches_byte_channel_in(sub(args[i]), depth + 1, open)
+                            }
+                            _ => true,
+                        },
+                        _ if mentions_rigid(&self.sigs.table, p) => true,
+                        _ => self.reaches_byte_channel_in(
+                            Ty {
+                                table: &self.sigs.table,
+                                id: p,
+                            },
+                            depth + 1,
+                            open,
+                        ),
+                    }
+                }),
+                Some(ItemSig::Distinct { base, .. }) => self.reaches_byte_channel_in(
+                    Ty {
+                        table: &self.sigs.table,
+                        id: *base,
+                    },
+                    depth + 1,
+                    open,
+                ),
+                _ => true,
+            }
+        }
+    }
+
+    /// s229 (#665): does this captured place hand a closure a channel
+    /// that can carry bytes — by its own type, or because it is itself
+    /// a closure that captured one ([`Self::senders`])? Answers with
+    /// the binding's name (what the diagnostic says was captured).
+    fn capture_reaches_byte_channel(&self, place: PlaceId) -> Option<String> {
+        let Base::Local(l) = self.places.get(place).base else {
+            return None;
+        };
+        if let Some(name) = self.senders.get(&l) {
+            return Some(name.clone());
+        }
+        if self.tys[l as usize].is_none_or(|t| self.reaches_byte_channel(t, 0)) {
+            return Some(self.locals[l as usize].name.clone());
+        }
+        None
+    }
+
+    /// s229 (#665): find how this call's callee may send — a channel
+    /// it is handed, the captures of a closure it is handed, the
+    /// captures of the closure being called — and apply the rule
+    /// ([`Self::demand_sent_through_call`]). `in_caller_region` is
+    /// false for `spawn proc`, whose entry allocates in the proc's own
+    /// region and never in the spawner's.
+    fn demand_sent_by_callee(
+        &mut self,
+        flows: &[ArgFlow<'t>],
+        callee_sink: Option<&SentFlow>,
+        callee: &str,
+        call: Span,
+        in_caller_region: bool,
+    ) {
+        let handed = flows.iter().find_map(|f| {
+            if let Some(c) = &f.sink_capture {
+                Some(SentFlow {
+                    span: f.span,
+                    text: c.clone(),
+                    captured: true,
+                })
+            } else if f.sink {
+                Some(SentFlow {
+                    span: f.span,
+                    text: self.text(f.span),
+                    captured: false,
+                })
+            } else {
+                None
+            }
+        });
+        match (handed, callee_sink) {
+            (Some(h), _) if h.captured => self.refuse_sending_closure_handed(&h, callee),
+            (Some(h), _) => {
+                self.demand_sent_through_call(flows, &h, callee, call, in_caller_region)
+            }
+            (None, Some(c)) => {
+                self.demand_sent_through_call(flows, c, callee, call, in_caller_region)
+            }
+            (None, None) => {}
+        }
+    }
+
+    /// s229 (wolf-lang#665, `[mem.region.escape]`, `[conc.chan.payload]`):
+    /// **what a call can send, it is taken to send.** A payload leaves
+    /// the sending frame, so it must outlive it ("sent on a channel" is
+    /// an arm of `[mem.region.escape]`), and the builtin `send` demands
+    /// exactly that. A callee handed the channel sends too, and is
+    /// refused nowhere: in the callee the payload is a parameter, whose
+    /// bytes outlive the callee's frame, or a value it built in ITS
+    /// caller's current region (D12), which the callee cannot name. So
+    /// at a call whose callee is handed a channel that can carry bytes
+    /// — through an argument, the receiver, or the captures of the
+    /// closure being called (`sink`) — every argument that can name
+    /// bytes a region owns is demanded as a sent payload is, and so is
+    /// the call's own site in the current region (what the callee may
+    /// build here and send). Read off the SIGNATURE, as s227's
+    /// kept-argument rule is: a fn in another package, a generic and a
+    /// trait method answer alike, and a callee that only reads is
+    /// refused with one that sends.
+    ///
+    /// A channel is not a `mut` argument that shares bytes (s227): a
+    /// handle is a word that copies anywhere, a channel is never freed
+    /// and has no region, so there is no binding whose lifetime bounds
+    /// the receiver's. The frame is the only bound there is — the one
+    /// `[conc.chan.payload]` already uses.
+    ///
+    /// Until this pin `region pass { let s = "built {n}"; fwd(ch, s) }`
+    /// — `fwd` one line around `ch.send(s)` — was accepted while the
+    /// direct send was E1010: native and release handed the receiver
+    /// the chunk the next region reused.
+    fn demand_sent_through_call(
+        &mut self,
+        flows: &[ArgFlow<'t>],
+        sink: &SentFlow,
+        callee: &str,
+        call: Span,
+        in_caller_region: bool,
+    ) {
+        let mut reported = false;
+        for a in flows {
+            if !a.lends || a.sites.is_empty() {
+                continue;
+            }
+            let mut told = false;
+            for &s in &a.sites {
+                if self.sites[s.0 as usize].kind == SiteKind::Param
+                    || self.already_conflicted(s)
+                    || self.frozen_site.contains_key(&s)
+                    || self.shared_site.contains(&s)
+                {
+                    continue;
+                }
+                let sr = self.sites[s.0 as usize].region;
+                let Some(Binding::Local(rid)) = self.rt.binding(sr) else {
+                    // The bytes outlive this frame; the callee may
+                    // still send them, so they are not this frame's to
+                    // promote.
+                    self.mark_escape(s, "sent");
+                    continue;
+                };
+                self.conflicted = true;
+                self.tainted_region[rid.0 as usize] = true;
+                self.mark_escape(s, "outlives its region");
+                if told {
+                    continue;
+                }
+                told = true;
+                reported = true;
+                self.report_sent_argument(a, s, sr, sink, callee);
+            }
+        }
+        if reported || !in_caller_region {
+            return;
+        }
+        // What the callee builds, it builds in this frame's current
+        // region (D12) — and may send. Nothing here names those bytes,
+        // so the region itself must outlive the frame.
+        let ambient = self.ambient();
+        let Some(Binding::Local(rid)) = self.rt.binding(ambient) else {
+            return;
+        };
+        self.conflicted = true;
+        self.tainted_region[rid.0 as usize] = true;
+        let region = self.show_region(ambient);
+        let is_proc = self.is_proc_region(ambient);
+        let headline = if is_proc {
+            format!(
+                "`{callee}` is handed `{}` and may send what it builds here: it would build it in \
+                 {region}, the proc's own region, which is freed when the proc exits — before a \
+                 receiver could ever use it",
+                sink.text
+            )
+        } else {
+            format!(
+                "`{callee}` is handed `{}` and may send what it builds here: it would build it in \
+                 {region}, which is freed before a receiver could ever use it",
+                sink.text
+            )
+        };
+        let mut d = Diagnostic::error(codes::E1010, call, headline)
+            .with_label(format!(
+                "a callee allocates in its caller's current region — here, {region}"
+            ))
+            .with_secondary(sink.span, sink.label());
+        if let Some((name, intro)) = self.region_span(ambient) {
+            d = d.with_secondary(
+                intro,
+                if is_proc {
+                    format!(
+                        "`{name}` is a `spawn proc` entry: a proc owns its regions and they \
+                         bulk-free at its exit, so nothing built here outlives it \
+                         ([conc.proc.kill])"
+                    )
+                } else {
+                    format!(
+                        "region `{name}` is created here and freed with its scope — everything \
+                         in it is freed wholesale"
+                    )
+                },
+            );
+        }
+        d = d.with_note(Self::sent_through_note(is_proc));
+        self.diags.push(d);
+    }
+
+    /// s229 (#665): a closure that captured a channel carrying bytes
+    /// is handed to a callee. The callee may call it with anything —
+    /// bytes it built in a region block of its OWN, which no call site
+    /// can see (`fn each(f: fn(str)) { region r { let t = …; f(t) } }`)
+    /// — and a fn value's type says nothing of what it captured, so
+    /// the callee cannot be asked to refuse. The refusal is here,
+    /// where the capture is known: such a closure is called where it
+    /// was made, or the channel is handed over by name.
+    fn refuse_sending_closure_handed(&mut self, sink: &SentFlow, callee: &str) {
+        self.conflicted = true;
+        let d = Diagnostic::error(
+            codes::E1010,
+            sink.span,
+            format!(
+                "`{callee}` may call this closure with bytes that are freed before a receiver \
+                 could ever use them: the closure captured `{}`, and what it is called with it \
+                 may send",
+                sink.text
+            ),
+        )
+        .with_label(format!(
+            "this closure captured `{}`, which reaches a channel that carries bytes",
+            sink.text
+        ))
+        .with_note(
+            "a closure that captured a channel sends what it is called with, and a callee handed \
+             the closure may call it with bytes built in a region block of its own; a fn value's \
+             type does not say what it captured, so the callee cannot be checked for it \
+             [conc.chan.payload] [mem.region.escape]. Call the closure where it was made, or hand \
+             the callee the channel itself — a channel argument is checked at every call that \
+             passes it.",
+        );
+        self.diags.push(d);
+    }
+
+    /// s229 (#665): a closure that captured a channel carrying bytes
+    /// leaves the frame that made it — returned, sent, stored into
+    /// module state. From there it is a fn value whose type says
+    /// nothing of the channel, called by code no check here can see.
+    fn refuse_sending_closure_leaving(&mut self, val: &Val, span: Span, how: &'static str) {
+        let Some(name) = &val.sends else { return };
+        self.conflicted = true;
+        let d = Diagnostic::error(
+            codes::E1010,
+            span,
+            format!(
+                "this closure captured `{name}`, which reaches a channel that carries bytes, and \
+                 it is {how} here: whoever calls it next may hand it bytes that are freed before \
+                 a receiver could ever use them"
+            ),
+        )
+        .with_label(format!(
+            "a closure that may send on `{name}` leaves its frame"
+        ))
+        .with_note(
+            "a closure that captured a channel sends what it is called with, and a fn value's \
+             type does not say what it captured — once it leaves the frame that made it, no call \
+             of it can be checked [conc.chan.payload] [mem.region.escape]. Call the closure where \
+             it was made, or hand over the channel itself and let the other side send: a channel \
+             argument is checked at every call that passes it.",
+        );
+        self.diags.push(d);
+    }
+
+    /// s229 (#665): E1010 at an argument a callee may send.
+    fn report_sent_argument(
+        &mut self,
+        a: &ArgFlow<'t>,
+        site: SiteId,
+        sr: RegionId,
+        sink: &SentFlow,
+        callee: &str,
+    ) {
+        let region = self.show_region(sr);
+        let alloc = self.sites[site.0 as usize].span;
+        let is_proc = self.is_proc_region(sr);
+        let arg_text = self.text(a.span);
+        let shown = if arg_text.len() <= 40 && !arg_text.contains('\n') {
+            format!("`{arg_text}`")
+        } else {
+            "this argument".to_string()
+        };
+        let on = if sink.span == a.span {
+            "the channel it reaches".to_string()
+        } else {
+            format!("`{}`", sink.text)
+        };
+        let headline = if is_proc {
+            format!(
+                "`{callee}` may send {shown} on {on}, and its bytes live in {region}, the proc's \
+                 own region, which is freed when the proc exits — before a receiver could ever \
+                 use them"
+            )
+        } else {
+            format!(
+                "`{callee}` may send {shown} on {on}, and its bytes live in {region}, which is \
+                 freed before a receiver could ever use them"
+            )
+        };
+        let mut d = Diagnostic::error(codes::E1010, a.span, headline)
+            .with_label(format!("this argument's bytes are in {region}"))
+            .with_secondary(sink.span, sink.label())
+            .with_secondary(alloc, format!("allocated here, into {region}"));
+        if let Some((name, intro)) = self.region_span(sr) {
+            d = d.with_secondary(
+                intro,
+                if is_proc {
+                    format!(
+                        "`{name}` is a `spawn proc` entry: a proc owns its regions and they \
+                         bulk-free at its exit, so nothing built here outlives it \
+                         ([conc.proc.kill])"
+                    )
+                } else {
+                    format!(
+                        "region `{name}` is created here and freed with its scope — everything \
+                         in it is freed wholesale"
+                    )
+                },
+            );
+        }
+        d = d.with_note(Self::sent_through_note(is_proc));
+        // The one edit that is sound AT the call: an interpolation
+        // builds the bytes in the current region, and that helps
+        // exactly when the current region outlives this frame (the
+        // call sits under `in r { }` for a region handed in).
+        let ambient = self.ambient();
+        let ambient_outlives = !matches!(self.rt.binding(ambient), Some(Binding::Local(_)));
+        if a.is_str
+            && !a.owned
+            && ambient_outlives
+            && arg_text
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'.')
+        {
+            d = d.with_suggestion(Suggestion::new(
+                "to hand the callee bytes built in the current region, which outlives this \
+                 frame, materialize the string at the call"
+                    .to_string(),
+                vec![(a.span, format!("\"{{{arg_text}}}\""))],
+                Applicability::Maybe,
+            ));
+        }
+        self.diags.push(d);
+    }
+
+    /// s229 (#665): the note both sent-through-a-call diagnostics end on.
+    fn sent_through_note(is_proc: bool) -> &'static str {
+        if is_proc {
+            "a call may send what it is handed: a callee given a channel can send any other \
+             argument on it, or a value it builds in its caller's current region, and a payload \
+             must outlive the frame that sends it [conc.chan.payload] [mem.region.escape]. A \
+             proc's regions die with the proc ([conc.proc.kill] step 3): build the bytes in the \
+             SPAWNER and pass them in as a parameter, and send them from the proc entry itself — \
+             or send a payload that owns no region storage (a literal, an `int`, a `bool`)."
+        } else {
+            "a call may send what it is handed: a callee given a channel can send any other \
+             argument on it, or a value it builds in its caller's current region, and a payload \
+             must outlive the frame that sends it [conc.chan.payload] [mem.region.escape] — a \
+             channel is never tied to a region, so its receiver may read after any region block \
+             has closed. Make the call where the bytes outlive the frame: build the value and \
+             make the call outside the region block, or hand the callee a scalar (`s.len`) \
+             instead of the bytes."
+        }
     }
 
     /// s227 (wolf-lang#660, `[mem.region.escape]`): **what a call can
@@ -3522,7 +4085,14 @@ impl<'t> Lowerer<'t> {
                     // never unsound, and `copy` is the first rung.
                     let str_view = self.is_str_expr(e.span);
                     let mut val = if self.places.is_copy(place) && !str_view {
-                        Val::none()
+                        // s229 (#665): a fn value is a word, but a
+                        // closure that captured a channel is still one
+                        // when it is read out of its binding.
+                        let mut v = Val::none();
+                        if let Base::Local(l) = self.places.get(place).base {
+                            v.sends = self.senders.get(&l).cloned();
+                        }
+                        v
                     } else {
                         self.val_of_place(place, e.span)
                     };
@@ -3895,6 +4465,7 @@ impl<'t> Lowerer<'t> {
             region_fields: Vec::new(),
             borrowed: Vec::new(),
             lent: Vec::new(),
+            sends: None,
         })
     }
 
@@ -4099,6 +4670,7 @@ impl<'t> Lowerer<'t> {
             region_fields: Vec::new(),
             borrowed: Vec::new(),
             lent: Vec::new(),
+            sends: None,
         })
     }
 
@@ -4651,6 +5223,12 @@ impl<'t> Lowerer<'t> {
         if borrowed.is_empty() {
             return Ok(Val::none());
         }
+        // s229 (wolf-lang#665): a closure that captured a channel able
+        // to carry bytes sends what it is called with, and what it
+        // builds wherever it is called.
+        let sends = borrowed
+            .iter()
+            .find_map(|&p| self.capture_reaches_byte_channel(p));
         self.unclaimed_pairs.push((e.span, true));
         Ok(Val {
             sites: Vec::new(),
@@ -4660,6 +5238,7 @@ impl<'t> Lowerer<'t> {
             region_fields: Vec::new(),
             borrowed,
             lent: Vec::new(),
+            sends,
         })
     }
 
@@ -4776,19 +5355,47 @@ impl<'t> Lowerer<'t> {
     /// what makes `[abi.native.procenv]`'s per-proc copy honest.
     fn eval_spawn(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = wolf_ast::SpawnExpr::cast(e).expect("kind");
+        // s229 (wolf-lang#665): the arguments as the sent-argument
+        // rule reads them — a proc entry handed a channel sends as any
+        // callee does, and it outlives the frame that spawned it.
+        let mut flows: Vec<ArgFlow<'t>> = Vec::new();
         if let Some(args) = d.args() {
             for a in args.args() {
                 let Some(v) = a.value() else { continue };
+                let mut sites: Vec<SiteId> = Vec::new();
+                let mut sends = None;
                 match self.as_place(v) {
                     Some((place, _)) if self.frozen_at(place).is_some() => {
                         self.emit_read(place, v.span);
                     }
                     _ => {
-                        self.eval_value(v)?;
+                        let av = self.eval_value(v)?;
+                        sites.extend(av.sites.iter().copied());
+                        sites.extend(av.views.iter().copied());
+                        sites.extend(self.captured_sites(v, Some(&av)));
+                        sends = av.sends;
                     }
                 }
+                let ty = self.value_ty(v);
+                flows.push(ArgFlow {
+                    span: v.span,
+                    sites,
+                    owned: true,
+                    lends: ty.is_none_or(|t| self.may_lend_bytes(t, 0)),
+                    store: false,
+                    is_str: ty.is_some_and(|t| matches!(t.kind(), TyKind::Prim(Prim::Str))),
+                    is_recv: false,
+                    muts: Vec::new(),
+                    sink: ty.is_none_or(|t| self.reaches_byte_channel(t, 0)),
+                    sink_capture: sends,
+                });
             }
         }
+        let callee = d
+            .proc_path()
+            .map(|p| self.text(p.syntax().span))
+            .unwrap_or_else(|| "the proc".to_string());
+        self.demand_sent_by_callee(&flows, None, &callee, e.span, false);
         Ok(Val::none())
     }
 
@@ -5311,6 +5918,8 @@ impl<'t> Lowerer<'t> {
         let mut elem_sites: Vec<SiteId> = Vec::new();
         // s227 (#660): and the bytes the iterable shares.
         let mut elem_views: Vec<SiteId> = Vec::new();
+        // s229 (#665): an element of a list of sending closures is one.
+        let mut elem_sends: Option<String> = None;
         if let Some(iter) = d.iterable() {
             match self.as_place(iter) {
                 Some((place, _)) => {
@@ -5318,6 +5927,7 @@ impl<'t> Lowerer<'t> {
                     let iv = self.val_of_place(place, iter.span);
                     elem_sites = iv.sites;
                     elem_views = iv.views;
+                    elem_sends = iv.sends;
                     if !self.places.is_copy(place) {
                         self.iter_claims.push((place, iter.span));
                         claimed = true;
@@ -5327,6 +5937,7 @@ impl<'t> Lowerer<'t> {
                     let iv = self.eval_value(iter)?;
                     elem_sites = iv.sites;
                     elem_views = iv.views;
+                    elem_sends = iv.sends;
                 }
             }
             // A channel's own allocation holds no payload's bytes, and
@@ -5372,6 +5983,11 @@ impl<'t> Lowerer<'t> {
                     let mut v = Val::none();
                     v.sites = elem_sites.clone();
                     v.views = elem_views.clone();
+                    self.hold(local.0, &v, span);
+                }
+                if elem_sends.is_some() {
+                    let mut v = Val::none();
+                    v.sends = elem_sends.clone();
                     self.hold(local.0, &v, span);
                 }
             }
@@ -5588,6 +6204,11 @@ impl<'t> Lowerer<'t> {
                     is_str: false,
                     is_recv: true,
                     muts: surface.mut_args.iter().map(|&(p, _)| (p, ty)).collect(),
+                    sink: ty.is_none_or(|t| self.reaches_byte_channel(t, 0)),
+                    sink_capture: match self.as_place(recv_expr) {
+                        Some((place, _)) => self.val_of_place(place, base.span).sends,
+                        None => None,
+                    },
                 });
             }
             // s21: `clone()` on a `shared` receiver is the recorded
@@ -5696,22 +6317,37 @@ impl<'t> Lowerer<'t> {
         // `List[handle Node]` bracket form), not a value — nothing to
         // evaluate.
         let is_ctor = cs.map(|c| c.ctor).unwrap_or(false);
+        // s229 (#665): the called closure's capture that reaches a
+        // channel carrying bytes, when there is one.
+        let mut callee_sink: Option<SentFlow> = None;
+        // s229: the arguments of a call with no resolved signature (a
+        // closure called through its binding), as the sent-argument
+        // rule reads them. Kept apart from `flows`, which feeds s227's
+        // rule for declared callees.
+        let mut loose: Vec<ArgFlow<'t>> = Vec::new();
         if !receiver_done
             && !is_ctor
             && let Some(callee) = d.callee()
         {
             // Callee expressions with effects: a fn-typed place is
             // read; a member path's base may be one.
-            match callee.kind {
-                SyntaxKind::PathExpr | SyntaxKind::MemberExpr => {
-                    if let Some((place, _)) = self.as_place(callee) {
+            // s229 (wolf-lang#665): a called closure sends through
+            // what it CAPTURED (`Val::sends`).
+            let sends = match callee.kind {
+                SyntaxKind::PathExpr | SyntaxKind::MemberExpr => match self.as_place(callee) {
+                    Some((place, _)) => {
                         self.emit_read(place, callee.span);
+                        self.val_of_place(place, callee.span).sends
                     }
-                }
-                _ => {
-                    self.eval_value(callee)?;
-                }
-            }
+                    None => None,
+                },
+                _ => self.eval_value(callee)?.sends,
+            };
+            callee_sink = sends.map(|text| SentFlow {
+                span: callee.span,
+                text,
+                captured: true,
+            });
         }
         // Arguments, left to right.
         let args: Vec<Arg<'_>> = d.args().into_iter().flat_map(|a| a.args()).collect();
@@ -5751,6 +6387,7 @@ impl<'t> Lowerer<'t> {
                         surface.mut_args.len(),
                         arg_views.len(),
                     );
+                    self.arg_sends = None;
                     self.lower_arg(
                         cs,
                         param,
@@ -5764,6 +6401,7 @@ impl<'t> Lowerer<'t> {
                         &mut arg_muts,
                         chan_send,
                     )?;
+                    let arg_sends = self.arg_sends.take();
                     // s227 (#660): what this argument put on the
                     // call, by itself.
                     let ty = self.value_ty(v);
@@ -5783,16 +6421,46 @@ impl<'t> Lowerer<'t> {
                             .iter()
                             .map(|&(p, _)| (p, ty))
                             .collect(),
+                        sink: ty.is_none_or(|t| self.reaches_byte_channel(t, 0)),
+                        sink_capture: arg_sends,
                     });
                 }
                 _ => {
                     // No resolved signature (builtin `print`, host
                     // stubs, or error-suppressed): arguments are
                     // reads — never silent moves.
+                    let mut sites: Vec<SiteId> = Vec::new();
                     if let Some((place, _)) = self.as_place(v) {
                         self.emit_read(place, v.span);
+                        if callee_sink.is_some() {
+                            sites.extend(self.sites_of_place(place).into_iter().map(|(s, _)| s));
+                            sites.extend(self.views_of_place(place));
+                            sites.extend(self.captured_sites(v, None));
+                        }
                     } else {
-                        self.eval_value(v)?;
+                        let av = self.eval_value(v)?;
+                        if callee_sink.is_some() {
+                            sites.extend(av.sites.iter().copied());
+                            sites.extend(av.views.iter().copied());
+                            sites.extend(self.captured_sites(v, Some(&av)));
+                        }
+                    }
+                    // s229 (#665): a closure that captured a channel is
+                    // being called — its arguments are what it may send.
+                    if callee_sink.is_some() {
+                        let ty = self.value_ty(v);
+                        loose.push(ArgFlow {
+                            span: v.span,
+                            sites,
+                            owned: false,
+                            lends: ty.is_none_or(|t| self.may_lend_bytes(t, 0)),
+                            store: false,
+                            is_str: ty.is_some_and(|t| matches!(t.kind(), TyKind::Prim(Prim::Str))),
+                            is_recv: false,
+                            muts: Vec::new(),
+                            sink: false,
+                            sink_capture: None,
+                        });
                     }
                 }
             }
@@ -6000,6 +6668,33 @@ impl<'t> Lowerer<'t> {
                 None
             },
         );
+        // s229 (wolf-lang#665, `[mem.region.escape]`,
+        // `[conc.chan.payload]`): what the callee may SEND of what it is
+        // handed. A builtin method sends nothing but `send`'s own
+        // payload, demanded where it was lowered; a `scope`'s `spawn`
+        // runs its closure in this frame, where the body's own sends
+        // are checked.
+        if builtin_method {
+            // A builtin container store keeps a sending closure as it
+            // keeps anything else: the container holds one from here.
+            if let Some(name) = flows
+                .iter()
+                .find(|f| f.store)
+                .and_then(|f| f.sink_capture.clone())
+            {
+                for f in flows.iter().filter(|f| f.is_recv) {
+                    for &(place, _) in &f.muts {
+                        if let Base::Local(l) = self.places.get(place).base {
+                            self.senders.entry(l).or_insert_with(|| name.clone());
+                        }
+                    }
+                }
+            }
+        }
+        if !builtin_method && !chan_send {
+            flows.extend(loose);
+            self.demand_sent_by_callee(&flows, callee_sink.as_ref(), &callee, e.span, true);
+        }
         // s171 (wolf-lang#392, `[mem.region.escape]`): a
         // `[mem.str.view]` product is a subslice of the receiver's own
         // storage, so its bytes live exactly where the receiver's do
@@ -6274,6 +6969,8 @@ impl<'t> Lowerer<'t> {
                     // s227 (#660): a bound closure names its captures'
                     // bytes.
                     read_sites.extend(self.captured_sites(v, None));
+                    // s229 (#665): and may send through them.
+                    self.arg_sends = self.val_of_place(place, v.span).sends;
                     if sent {
                         let mut pv = self.val_of_place(place, v.span);
                         pv.lent = self.lent_of_place(place, v.span);
@@ -6299,6 +6996,8 @@ impl<'t> Lowerer<'t> {
                     // s227 (#660): a closure argument names its
                     // captures' bytes.
                     read_sites.extend(self.captured_sites(v, Some(&av)));
+                    // s229 (#665): and may send through them.
+                    self.arg_sends = av.sends.clone();
                     if sent {
                         self.demand_sent_outlives_frame(&av, v.span);
                     }
@@ -7283,6 +7982,8 @@ impl<'t> Lowerer<'t> {
             shares: BTreeMap::new(),
             last_index: Val::none(),
             kept: BTreeMap::new(),
+            senders: BTreeMap::new(),
+            arg_sends: None,
             view_lists: BTreeSet::new(),
             lent_params: BTreeSet::new(),
             lent_holds: BTreeMap::new(),
