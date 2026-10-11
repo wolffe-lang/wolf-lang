@@ -92,7 +92,7 @@ use std::sync::Mutex;
 
 use crate::fs::write_bytes_list;
 use crate::handles::Handles;
-use crate::str::{ambient_copy, view, write_pair};
+use crate::str::{region_copy, view, write_pair};
 
 /// The v0 row-tag mapping: `io::ErrorKind` → net row tag. One table,
 /// mirrored by `wolf_mem::ubcheck::net_err_tag`, pinned by the
@@ -1814,7 +1814,13 @@ fn write_shim(fd: i64, bytes: &[u8]) -> i64 {
 pub unsafe extern "C" fn __wolf_rt_net_read(fd: i64, max: i64, out: i64) -> i64 {
     let emit = |bytes: &[u8]| match core::str::from_utf8(bytes) {
         Ok(s) => {
-            let p = ambient_copy(s.as_bytes());
+            // s228 (wolf-lang#374): the CURRENT region, as every other
+            // materializing builtin since s160 — until here a read made
+            // inside `region pass { }` stayed in the process root for
+            // good, a request head per request in a server. The mem
+            // tier names `net_read` a `[mem.region.escape]` site, so a
+            // read cannot leave the region it was made in.
+            let p = region_copy(s.as_bytes());
             unsafe { write_pair(out, p as i64, s.len() as i64) };
             net_code::OK
         }

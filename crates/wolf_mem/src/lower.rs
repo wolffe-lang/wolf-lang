@@ -4345,6 +4345,15 @@ impl<'t> Lowerer<'t> {
         if callee.kind == SyntaxKind::PathExpr && self.text(callee.span) == "os_error_text" {
             return self.is_str_or_str_row(e.span);
         }
+        // s228 (wolf-lang#374, the net half): `net_read(fd, max) -> str
+        // ! {closed, timeout, utf8, io}` copies what arrived into the
+        // ambient region — a site BEFORE the runtime routes the bytes
+        // there, in #374's order: with the site, a read returned out of
+        // the region it was made in is E1010; without it, moving the
+        // bytes would turn today's leak into a read of freed memory.
+        if callee.kind == SyntaxKind::PathExpr && self.text(callee.span) == "net_read" {
+            return self.is_str_or_str_row(e.span);
+        }
         if !self.is_str_expr(e.span) {
             return false;
         }

@@ -7045,7 +7045,18 @@ impl<'t> Machine<'t> {
                         buf.truncate(n);
                         self.charge_mem(n as u64)?;
                         match String::from_utf8(buf) {
-                            Ok(s) => Ok(Flow::Val(Value::Str(s))),
+                            Ok(s) => {
+                                // s228 (wolf-lang#374): the read is a
+                                // materialization in the ambient region
+                                // (`[mem.region.escape]`), charged to
+                                // its ledger as the native tiers charge
+                                // it — so a `cap:` breach traps here
+                                // too (`mint_str`'s region half; the
+                                // budget half is charged above).
+                                let rid = self.ambient.last().copied().unwrap_or(0);
+                                self.charge_region_bytes(rid, n as u64, span)?;
+                                Ok(Flow::Val(Value::Str(s)))
+                            }
                             Err(_) => Ok(tag("utf8")),
                         }
                     }
