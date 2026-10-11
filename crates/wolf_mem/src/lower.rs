@@ -326,6 +326,8 @@ struct ArgFlow<'t> {
     /// — its type reaches a channel whose payload can name bytes a
     /// region owns ([`Lowerer::reaches_byte_channel`]).
     sink: bool,
+    /// s229: the argument IS such a channel (the diagnostic's wording).
+    sink_direct: bool,
     /// s229: it is a closure (or a `dyn` pair) whose CAPTURES reach
     /// such a channel; the text is the first such capture's name.
     sink_capture: Option<String>,
@@ -360,20 +362,30 @@ struct SentFlow {
     text: String,
     /// It is a closure (or the callee itself) and `text` is a capture.
     captured: bool,
+    /// The argument IS a channel (not a value that holds one).
+    direct: bool,
 }
 
 impl SentFlow {
-    fn label(&self) -> String {
+    /// The secondary label: `argument` when the report is about
+    /// another argument's bytes, not about what the callee builds.
+    fn label(&self, argument: bool) -> String {
+        let may = if argument {
+            "the callee may send any other argument on it"
+        } else {
+            "the callee may send on it"
+        };
         if self.captured {
             format!(
                 "this closure captured `{}`, which reaches a channel that carries bytes: the call \
                  may send through it",
                 self.text
             )
+        } else if self.direct {
+            format!("`{}` is a channel that carries bytes: {may}", self.text)
         } else {
             format!(
-                "`{}` reaches a channel that carries bytes: the callee may send any other \
-                 argument on it",
+                "`{}` reaches a channel that carries bytes: {may}",
                 self.text
             )
         }
@@ -2247,12 +2259,14 @@ impl<'t> Lowerer<'t> {
                     span: f.span,
                     text: c.clone(),
                     captured: true,
+                    direct: false,
                 })
             } else if f.sink {
                 Some(SentFlow {
                     span: f.span,
                     text: self.text(f.span),
                     captured: false,
+                    direct: f.sink_direct,
                 })
             } else {
                 None
@@ -2371,7 +2385,7 @@ impl<'t> Lowerer<'t> {
             .with_label(format!(
                 "a callee allocates in its caller's current region — here, {region}"
             ))
-            .with_secondary(sink.span, sink.label());
+            .with_secondary(sink.span, sink.label(false));
         if let Some((name, intro)) = self.region_span(ambient) {
             d = d.with_secondary(
                 intro,
@@ -2494,7 +2508,7 @@ impl<'t> Lowerer<'t> {
         };
         let mut d = Diagnostic::error(codes::E1010, a.span, headline)
             .with_label(format!("this argument's bytes are in {region}"))
-            .with_secondary(sink.span, sink.label())
+            .with_secondary(sink.span, sink.label(true))
             .with_secondary(alloc, format!("allocated here, into {region}"));
         if let Some((name, intro)) = self.region_span(sr) {
             d = d.with_secondary(
@@ -4092,6 +4106,9 @@ impl<'t> Lowerer<'t> {
                         if let Base::Local(l) = self.places.get(place).base {
                             v.sends = self.senders.get(&l).cloned();
                         }
+                        if v.sends.is_some() {
+                            v.origin = Some(e.span);
+                        }
                         v
                     } else {
                         self.val_of_place(place, e.span)
@@ -5387,6 +5404,7 @@ impl<'t> Lowerer<'t> {
                     is_recv: false,
                     muts: Vec::new(),
                     sink: ty.is_none_or(|t| self.reaches_byte_channel(t, 0)),
+                    sink_direct: ty.is_some_and(|t| matches!(t.kind(), TyKind::Chan(_))),
                     sink_capture: sends,
                 });
             }
@@ -6205,6 +6223,7 @@ impl<'t> Lowerer<'t> {
                     is_recv: true,
                     muts: surface.mut_args.iter().map(|&(p, _)| (p, ty)).collect(),
                     sink: ty.is_none_or(|t| self.reaches_byte_channel(t, 0)),
+                    sink_direct: ty.is_some_and(|t| matches!(t.kind(), TyKind::Chan(_))),
                     sink_capture: match self.as_place(recv_expr) {
                         Some((place, _)) => self.val_of_place(place, base.span).sends,
                         None => None,
@@ -6347,6 +6366,7 @@ impl<'t> Lowerer<'t> {
                 span: callee.span,
                 text,
                 captured: true,
+                direct: false,
             });
         }
         // Arguments, left to right.
@@ -6422,6 +6442,7 @@ impl<'t> Lowerer<'t> {
                             .map(|&(p, _)| (p, ty))
                             .collect(),
                         sink: ty.is_none_or(|t| self.reaches_byte_channel(t, 0)),
+                        sink_direct: ty.is_some_and(|t| matches!(t.kind(), TyKind::Chan(_))),
                         sink_capture: arg_sends,
                     });
                 }
@@ -6459,6 +6480,7 @@ impl<'t> Lowerer<'t> {
                             is_recv: false,
                             muts: Vec::new(),
                             sink: false,
+                            sink_direct: false,
                             sink_capture: None,
                         });
                     }
