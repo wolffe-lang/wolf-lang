@@ -243,7 +243,11 @@ the region it was read in, E1010), and no downstream source has it.
   also the use-after-close argument — a closed number is absent from
   the table and can never be handed out again, so a call on it answers
   `io` as before and cannot reach the handle whose storage it now
-  shares. After: 0 bytes a cycle for both.
+  shares. After: 0 bytes a cycle for both. The cost is the lookup: a
+  slot found by the number's low bits and one comparison, 72 more user
+  instructions per `fs_open` + `fs_close` than the vector's index (345
+  to 417, linux x86-64) and 103 more per socket's life, with no change
+  in wall time — both cycles are their syscalls.
 - **A finished proc leaves its reason word, and nothing else (#662).**
   A spawned and monitored proc kept about 277 bytes: the monitor's
   channel, handed to compiled code as a raw pointer that nothing ever
