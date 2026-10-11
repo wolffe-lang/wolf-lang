@@ -344,6 +344,11 @@ container method keeps only what it stores (`push`'s value) and answers
 from its receiver. Two doors that need no call close with it: `in st {
 out = copy d }` and `in st { xs[i] = d }` — a `copy` of a struct, list
 or map shares every `str` the original reaches (`[mem.tier0.move.3]`).
+And one that needs neither a call nor `in`: **a `Map` store keeps its
+key.** `region pass { let s = "built {n}"; m[s] = 1 }`, with `m` declared
+outside the block, was accepted, and native and release then answered
+`m[k] else 0` with `0` for the key just stored (its bytes freed and
+reused): a silent wrong answer. It is E1010 at the store.
 
 What is **not** refused: a string built inside the `in` block, a scalar
 (`s.len`), a literal, a string built where the `mut` argument lives, a
@@ -366,8 +371,8 @@ both tiers. No run-time cost on any tier: a refusal.
 
 Filed, not fixed here: a callee that sends its argument on a channel it
 was handed (#665, the same read of freed bytes, no `in` needed); lupin
-0.1.49 runs the `List` forms of this to `exit(0)` on stale bytes
-(wolf-interp#232) and traps a sound `copy` of a scalar struct under
+0.1.49 runs the `List` and `Map`-key forms of this to `exit(0)` on stale
+bytes (wolf-interp#232) and traps a sound `copy` of a scalar struct under
 `in` (wolf-interp#233). Witnesses: `corpus/memory/region_kept_*.lu`,
 `region_copy_shares_str.lu`, `region_copy_index_store.lu`; gate
 `region_kept_arg_lanes` (checked, native, release, lupin).
