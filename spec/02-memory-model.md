@@ -1528,6 +1528,16 @@ adopt that design and give `for` its desugar.)
   iterates the fresh `List` by `[mem.iter.impl]`; nothing new is
   ruled. The full-open `[..]` spelling stays refused at the grammar
   (`[gram.expr.primary]` requires an endpoint — lupin's letter).
+  **The cost, stated** (s228, wolf-lang#663): one bounds check, one
+  allocation of exactly the slice's elements and one copy of them, for
+  every element type — the native tiers used to append the elements
+  one at a time into a buffer that grew by doubling, 1.9 ns a byte
+  where a decode of the same bytes took 0.03 (7.8 µs against 0.13 µs
+  for 4 KiB), and charged the region every abandoned buffer on the
+  way: a 4,096-byte `List[byte]` slice charged 8,240 bytes, so it
+  breached a `cap: 6000` the checked machine ran it under. It charges
+  4,144 now (`[mem.region.account.1]`: the units stay each tier's
+  own).
 - `[mem.list.pop]` **The recoverable `List` reads answer the `none`
   row** (ruled 2026-09-09, wolf-lang#274; the s37 posture, D25's:
   absence is a row, not a sentinel and not a trap). `xs.pop() ->
