@@ -12,6 +12,9 @@ pub mod bytes;
 // variable — `[os.proc.exec]`, `[os.env.unset]`.
 pub mod exec;
 pub mod fs;
+// s228 (wolf-lang#661): the table behind `fs_open`'s and the net
+// calls' handles — numbers never reused, storage always.
+pub(crate) mod handles;
 pub mod io;
 // The s107 json query kernels (c26's last crossing): the HAND MIRROR
 // of `wolf_mem::json` — the locked graph keeps the reference out of

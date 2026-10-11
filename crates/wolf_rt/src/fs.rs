@@ -8,9 +8,12 @@
 //! materialize in the ambient region ([`crate::str`]'s design note)
 //! and return as `{ptr, len}` pairs through caller out slots.
 //!
-//! The fd table mirrors the checked lane's: sequential indices, never
-//! reused, `close` tombstones the slot (double close = `io`). A forged
-//! or foreign fd is `io`, never a trap — same as checked.
+//! The fd table answers the checked lane's numbers: sequential, never
+//! reused, and a closed one misses (double close = `io`). A forged or
+//! foreign fd is `io`, never a trap — same as checked. Since s228
+//! (wolf-lang#661) a closed handle's storage is reused, where the
+//! checked lane's vector still keeps a tombstone
+//! ([`crate::handles`]).
 //!
 //! Semantics are `ubcheck.rs`'s `io_fs_builtin`, call for call:
 //! `fs_read`'s 1 MiB clamp, `read_line`'s `\r` strip, `fs_read_text`'s
@@ -49,6 +52,7 @@ use std::io::{BufRead as _, Read as _, Write as _};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::handles::Handles;
 use crate::list::{new_list, push_int, push_str};
 use crate::scratch::{clamp, with_read_buf};
 use crate::str::{ambient_copy, view, write_pair, write_word};
@@ -116,11 +120,13 @@ pub mod fs_mode {
     pub const READ_NONBLOCK: i64 = 5;
 }
 
-/// The open files, by handle. Slots 0, 1 and 2 are never filled: those
-/// three numbers are the process's standard streams (`[os.fs.std]`,
-/// s199 — wolf-lang#424), so the first open answers 3 and
-/// [`std_stream`] serves 0..2 for the calls that take them.
-static FILES: Mutex<Vec<Option<File>>> = Mutex::new(Vec::new());
+/// The open files, by handle. 0, 1 and 2 are never in it: those three
+/// numbers are the process's standard streams (`[os.fs.std]`, s199 —
+/// wolf-lang#424), so the first open answers 3 and [`std_stream`]
+/// serves 0..2 for the calls that take them. A handle's number is never
+/// reused and a closed one's storage always is (s228, wolf-lang#661 —
+/// [`crate::handles`] has the scheme and the use-after-close argument).
+static FILES: Mutex<Handles<File>> = Mutex::new(Handles::starting_at(FIRST_HANDLE as i64));
 
 /// The first number an open answers (`[os.fs.std]`).
 pub const FIRST_HANDLE: usize = 3;
@@ -346,14 +352,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_open(pp: i64, pl: i64, mode: i64) -> i64 {
     };
     match opts.open(path) {
         Err(e) => -code_of(&e),
-        Ok(f) => {
-            let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
-            if files.len() < FIRST_HANDLE {
-                files.resize_with(FIRST_HANDLE, || None);
-            }
-            files.push(Some(f));
-            (files.len() - 1) as i64
-        }
+        Ok(f) => mint_file(f),
     }
 }
 
@@ -388,20 +387,17 @@ pub unsafe extern "C" fn __wolf_rt_fs_read(fd: i64, max: i64, out: i64) -> i64 {
     // and `io` under the executor — a cross-lane divergence #40 left
     // behind. A forged handle is `io` whatever `max` says.
     let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
-    let Some(i) = usize::try_from(fd)
-        .ok()
-        .filter(|&i| matches!(files.get(i), Some(Some(_))))
-    else {
+    if files.get(fd).is_none() {
         return fs_code::IO;
-    };
+    }
     if max <= 0 {
         let p = ambient_copy(b"");
         unsafe { write_pair(out, p as i64, 0) };
         return fs_code::OK;
     }
     with_read_buf(clamp(max), |buf| {
-        let r = files[i]
-            .as_mut()
+        let r = files
+            .get_mut(fd)
             .expect("the handle was checked above")
             .read(buf);
         // s222: the table is released before the copy out, as
@@ -433,7 +429,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_write(fd: i64, sp: i64, sl: i64) -> i64 {
         };
     }
     let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
-    let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| files.get_mut(i)) else {
+    let Some(f) = files.get_mut(fd) else {
         return fs_code::IO;
     };
     match f.write_all(s.as_bytes()) {
@@ -442,18 +438,20 @@ pub unsafe extern "C" fn __wolf_rt_fs_write(fd: i64, sp: i64, sl: i64) -> i64 {
     }
 }
 
-/// `fs_close(fd) -> () ! {io}` — tombstones the slot; double close is
-/// `io`.
+/// `fs_close(fd) -> () ! {io}` — the handle leaves the table for good
+/// (its number is never answered again, its storage is reused); double
+/// close is `io`.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_fs_close(fd: i64) -> i64 {
     os_error_clear();
     let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
-    match usize::try_from(fd).ok().and_then(|i| files.get_mut(i)) {
-        Some(slot @ Some(_)) => {
-            *slot = None;
-            fs_code::OK
-        }
-        _ => fs_code::IO,
+    // The table gives the entry up under its lock; the host's close
+    // (the `File`'s drop) runs after the lock is released.
+    let gone = files.remove(fd);
+    drop(files);
+    match gone {
+        Some(_) => fs_code::OK,
+        None => fs_code::IO,
     }
 }
 
@@ -557,20 +555,17 @@ pub unsafe extern "C" fn __wolf_rt_fs_read_chunk(fd: i64, max: i64, out: i64) ->
     }
     // Handle first, size second — `fs_read`'s order, on both lanes.
     let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
-    let Some(i) = usize::try_from(fd)
-        .ok()
-        .filter(|&i| matches!(files.get(i), Some(Some(_))))
-    else {
+    if files.get(fd).is_none() {
         return fs_code::IO;
-    };
+    }
     if max <= 0 {
         unsafe { write_bytes_list(out, b"") };
         return fs_code::OK;
     }
     // s222 (#635): the thread's reusable buffer, not a zeroed one.
     with_read_buf(clamp(max), |buf| {
-        let r = files[i]
-            .as_mut()
+        let r = files
+            .get_mut(fd)
             .expect("the handle was checked above")
             .read(buf);
         // The fd table is released before the list is minted: allocation
@@ -609,7 +604,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_write_chunk(fd: i64, hdr: i64) -> i64 {
         };
     }
     let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
-    let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| files.get_mut(i)) else {
+    let Some(f) = files.get_mut(fd) else {
         return fs_code::IO;
     };
     match f.write_all(&bytes) {
@@ -1185,9 +1180,7 @@ fn with_handle<R>(fd: i64, f: impl FnOnce(&File) -> R) -> Option<R> {
         return Some(f(&file));
     }
     let files = FILES.lock().unwrap_or_else(|p| p.into_inner());
-    let Some(Some(file)) = usize::try_from(fd).ok().and_then(|i| files.get(i)) else {
-        return None;
-    };
+    let file = files.get(fd)?;
     Some(f(file))
 }
 
@@ -1520,7 +1513,7 @@ fn copy_side(fd: i64) -> std::io::Result<Option<Side>> {
         return Ok(std_stream(fd).map(Side::Std));
     }
     let files = FILES.lock().unwrap_or_else(|p| p.into_inner());
-    let Some(Some(f)) = usize::try_from(fd).ok().and_then(|i| files.get(i)) else {
+    let Some(f) = files.get(fd) else {
         return Ok(None);
     };
     f.try_clone().map(|d| Some(Side::Dup(d)))
@@ -1835,12 +1828,7 @@ pub unsafe extern "C" fn __wolf_rt_read_line(out: i64) -> i64 {
 /// two ends enter the table this way, so every handle call (`fs_read`,
 /// `fs_write`, the chunks, `fs_fstat`, `fs_close`) serves them.
 pub(crate) fn mint_file(f: File) -> i64 {
-    let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
-    if files.len() < FIRST_HANDLE {
-        files.resize_with(FIRST_HANDLE, || None);
-    }
-    files.push(Some(f));
-    (files.len() - 1) as i64
+    FILES.lock().unwrap_or_else(|p| p.into_inner()).insert(f)
 }
 
 /// s215 (`[os.proc.fds]`): a descriptor of this process's own for the
@@ -2623,14 +2611,7 @@ mod tests {
             w.write_all(b"through a pipe\n").unwrap();
             drop(w);
             let rd = std::fs::File::from_raw_fd(fds[0]);
-            let pipe_fd = {
-                let mut files = FILES.lock().unwrap_or_else(|p| p.into_inner());
-                if files.len() < FIRST_HANDLE {
-                    files.resize_with(FIRST_HANDLE, || None);
-                }
-                files.push(Some(rd));
-                (files.len() - 1) as i64
-            };
+            let pipe_fd = mint_file(rd);
             assert_eq!(__wolf_rt_fs_copy_chunk(pipe_fd, dst, 64, o), fs_code::OK);
             assert_eq!(rung(), 2, "a pipe to a file is splice");
             assert_eq!(__wolf_rt_fs_copy_chunk(pipe_fd, dst, 64, o), fs_code::EOF);

@@ -91,6 +91,7 @@ use std::os::unix::net::{UnixListener, UnixStream};
 use std::sync::Mutex;
 
 use crate::fs::write_bytes_list;
+use crate::handles::Handles;
 use crate::str::{ambient_copy, view, write_pair};
 
 /// The v0 row-tag mapping: `io::ErrorKind` → net row tag. One table,
@@ -318,13 +319,17 @@ impl Entry {
     }
 }
 
-/// The process-local socket table: index = the `int` fd wolf code
-/// holds; `None` after close (drop closes — double close is `io`).
-/// Deliberately NOT the OS fd: wolf handles are dense small ints into
-/// this table, so a forged handle can never alias a foreign OS fd.
-#[derive(Debug, Default)]
+/// The process-local socket table, keyed by the `int` fd wolf code
+/// holds; a closed one is absent (drop closes — double close is `io`).
+/// Deliberately NOT the OS fd: wolf handles are this table's own
+/// numbers, so a forged handle can never alias a foreign OS fd. The
+/// first handle is 0 and each later one is one more; a number is never
+/// reused and a closed socket's storage always is (s228, wolf-lang#661
+/// — [`crate::handles`] has the scheme and the use-after-close
+/// argument).
+#[derive(Debug)]
 pub struct NetTable {
-    socks: Vec<Option<Entry>>,
+    socks: Handles<Entry>,
     /// s137 (#235, `[os.proc.inherit]`): the OS descriptors this table
     /// ADOPTED through [`NetTable::adopt_listener`]. An adopted fd is
     /// owned by exactly one slot; adopting the same number twice would
@@ -798,26 +803,30 @@ fn wait_raw(
     }
 }
 
+impl Default for NetTable {
+    fn default() -> NetTable {
+        NetTable::new()
+    }
+}
+
 impl NetTable {
     /// `const` so the shim tier's process table ([`NET`]) can live in a
     /// `static Mutex` without lazy-init machinery (the fs `FILES`
     /// precedent).
     pub const fn new() -> NetTable {
         NetTable {
-            socks: Vec::new(),
+            socks: Handles::starting_at(0),
             #[cfg(unix)]
             adopted: Vec::new(),
         }
     }
 
     fn push(&mut self, s: Sock) -> i64 {
-        let fd = self.socks.len() as i64;
-        self.socks.push(Some(Entry {
+        self.socks.insert(Entry {
             nodelay: Nodelay::of(&s),
             sock: s,
             deadline: None,
-        }));
-        fd
+        })
     }
 
     /// A LISTENER enters the table (s138, #242, `[os.net.accept]`):
@@ -880,10 +889,7 @@ impl NetTable {
     }
 
     fn entry(&mut self, fd: i64) -> Option<&mut Entry> {
-        usize::try_from(fd)
-            .ok()
-            .and_then(|i| self.socks.get_mut(i))
-            .and_then(Option::as_mut)
+        self.socks.get_mut(fd)
     }
 
     fn get(&mut self, fd: i64) -> Option<&mut Sock> {
@@ -892,7 +898,7 @@ impl NetTable {
 
     /// What a park needs, snapshotted under the table lock BEFORE the
     /// first syscall attempt (s141): the raw OS fd (a stream when
-    /// `want_stream`, else a listener; the wrong kind or a tombstone is
+    /// `want_stream`, else a listener; the wrong kind or a closed handle is
     /// `io`) and the socket's armed deadline as an absolute instant —
     /// so every park a call makes goes against the budget computed when
     /// the call began, never a fresh one (`[os.net.accept]`'s rule, now
@@ -1418,9 +1424,9 @@ impl NetTable {
     /// for the next bind to refuse as `exists`. A stream's close never
     /// touches the path.
     pub fn close(&mut self, fd: i64) -> Result<(), NetErr> {
-        match usize::try_from(fd).ok().and_then(|i| self.socks.get_mut(i)) {
-            Some(slot @ Some(_)) => {
-                let gone = slot.take();
+        match self.socks.remove(fd) {
+            Some(gone) => {
+                let gone = Some(gone);
                 #[cfg(unix)]
                 {
                     // s137: an adopted descriptor leaves the adopted
@@ -1956,8 +1962,9 @@ pub extern "C" fn __wolf_rt_net_nodelay(fd: i64, on: i64) -> i64 {
         Err(t) => code_of_tag(t),
     }
 }
-/// `net_close(fd) -> () ! {io}` — tombstones the slot; double close
-/// (or a forged fd) is `io`.
+/// `net_close(fd) -> () ! {io}` — the handle leaves the table for good
+/// (s228: its number is never answered again, its storage is reused);
+/// double close (or a forged fd) is `io`.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_net_close(fd: i64) -> i64 {
     match tbl().close(fd) {
