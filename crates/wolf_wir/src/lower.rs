@@ -10191,6 +10191,18 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "fs_read_at"
                 // s200 (#417): the fused chunk copy.
                 | "fs_copy_chunk"
+                // s230 (#346, #698, #699, #700, #702, #704): a mode, a
+                // mode at creation, the two links, the times, the
+                // length — and the umask, which rides the open family's
+                // "a word >= 0, or the negated code" shape.
+                | "fs_set_mode"
+                | "fs_open_perm"
+                | "fs_create_dir_mode"
+                | "fs_symlink"
+                | "fs_link"
+                | "fs_set_times"
+                | "fs_truncate"
+                | "os_umask"
         ) {
             return self.lower_fs_builtin(&callee_text, d, e);
         }
@@ -12155,6 +12167,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // s199 (#426): `unseekable` — only the three offset calls
             // produce it and each declares it.
             (9, "unseekable", false),
+            // s230: `unsupported` — a host with no such operation
+            // (windows: a mode, a symbolic link, the umask); only the
+            // calls that declare it produce it.
+            (10, "unsupported", false),
         ]
         .into_iter()
         .map(|(c, name, coarsen)| {
@@ -13582,8 +13598,59 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             "fs_write_text" | "fs_write" | "fs_close" | "fs_remove" | "fs_write_bytes"
             | "fs_write_chunk" | "fs_create_dir" | "fs_create_dir_all" | "fs_remove_dir"
-            | "fs_remove_dir_all" | "fs_rename" => {
+            | "fs_remove_dir_all" | "fs_rename"
+            // s230: the unit-or-row changers — one shim each, the code
+            // to the declared row.
+            | "fs_set_mode" | "fs_create_dir_mode" | "fs_symlink" | "fs_link"
+            | "fs_set_times" | "fs_truncate" => {
                 let rc = match name {
+                    // s230 (`[os.fs.mode]`, `[os.fs.create.mode]`): a
+                    // path pair and the mode word.
+                    "fs_set_mode" | "fs_create_dir_mode" => {
+                        let path = arg(0)?;
+                        let mode = arg(1)?;
+                        let (pp, pl) = self.str_parts(path);
+                        let sym = if name == "fs_set_mode" {
+                            "__wolf_rt_fs_set_mode"
+                        } else {
+                            "__wolf_rt_fs_create_dir_mode"
+                        };
+                        self.rt_call(sym, &[pp, pl, mode], Some(types::I64))
+                    }
+                    // s230 (`[os.fs.symlink]`, `[os.fs.link]`): two
+                    // path pairs, `fs_rename`'s shape.
+                    "fs_symlink" | "fs_link" => {
+                        let first = arg(0)?;
+                        let second = arg(1)?;
+                        let (ap, al) = self.str_parts(first);
+                        let (bp, bl) = self.str_parts(second);
+                        let sym = if name == "fs_symlink" {
+                            "__wolf_rt_fs_symlink"
+                        } else {
+                            "__wolf_rt_fs_link"
+                        };
+                        self.rt_call(sym, &[ap, al, bp, bl], Some(types::I64))
+                    }
+                    // s230 (`[os.fs.times]`): the path pair, the two
+                    // times as their four words, `follow` widened.
+                    "fs_set_times" => {
+                        let path = arg(0)?;
+                        let (pp, pl) = self.str_parts(path);
+                        let (a_s, a_ns, m_s, m_ns) = (arg(1)?, arg(2)?, arg(3)?, arg(4)?);
+                        let follow = self.widen_to_wire(arg(5)?, e.span)?;
+                        self.rt_call(
+                            "__wolf_rt_fs_set_times",
+                            &[pp, pl, a_s, a_ns, m_s, m_ns, follow],
+                            Some(types::I64),
+                        )
+                    }
+                    // s230 (`[os.fs.truncate]`): the handle and the
+                    // length.
+                    "fs_truncate" => {
+                        let fd = arg(0)?;
+                        let len = arg(1)?;
+                        self.rt_call("__wolf_rt_fs_truncate", &[fd, len], Some(types::I64))
+                    }
                     "fs_write_text" => {
                         let path = arg(0)?;
                         let contents = arg(1)?;
@@ -13671,16 +13738,39 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // always meant (0 read, 1 write+truncate); `fs_open_mode`
             // passes the caller's, and the runtime answers an unknown
             // one with `-invalid` before touching the filesystem.
-            "fs_open" | "fs_create" | "fs_open_mode" => {
-                let path = arg(0)?;
-                let (pp, pl) = self.str_parts(path);
-                let mode = match name {
-                    "fs_open_mode" => arg(1)?,
-                    _ => self.b.iconst(types::I64, i64::from(name == "fs_create")),
-                };
-                let rc = self
-                    .rt_call("__wolf_rt_fs_open", &[pp, pl, mode], Some(types::I64))
-                    .expect("rc");
+            //
+            // s230: `fs_open_perm` is the same call with the creation's
+            // permission bits (`[os.fs.create.mode]`), and `os_umask`
+            // answers the old mask the same way (`[os.fs.umask]`) — a
+            // word >= 0, or the negated code.
+            "fs_open" | "fs_create" | "fs_open_mode" | "fs_open_perm" | "os_umask" => {
+                let rc = match name {
+                    "os_umask" => {
+                        let mask = arg(0)?;
+                        self.rt_call("__wolf_rt_os_umask", &[mask], Some(types::I64))
+                    }
+                    "fs_open_perm" => {
+                        let path = arg(0)?;
+                        let (pp, pl) = self.str_parts(path);
+                        let open = arg(1)?;
+                        let perm = arg(2)?;
+                        self.rt_call(
+                            "__wolf_rt_fs_open_perm",
+                            &[pp, pl, open, perm],
+                            Some(types::I64),
+                        )
+                    }
+                    _ => {
+                        let path = arg(0)?;
+                        let (pp, pl) = self.str_parts(path);
+                        let mode = match name {
+                            "fs_open_mode" => arg(1)?,
+                            _ => self.b.iconst(types::I64, i64::from(name == "fs_create")),
+                        };
+                        self.rt_call("__wolf_rt_fs_open", &[pp, pl, mode], Some(types::I64))
+                    }
+                }
+                .expect("rc");
                 let z = self.b.iconst(types::I64, 0);
                 let hit = self
                     .b

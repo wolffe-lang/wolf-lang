@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 190] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 198] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -213,6 +213,19 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 190] = [
     ("__wolf_rt_fs_stat_record", 4, true),
     ("__wolf_rt_fs_read_link", 3, true),
     ("__wolf_rt_fs_read_dir_entries", 3, true),
+    // s230 (#346, #698, #699, #700, #702, #704): the changers — each
+    // named for its builtin, so the freestanding target refuses each by
+    // that name. A path pair and a mode; the open with a creation's
+    // bits; two path pairs for a link; a path pair, four time words and
+    // `follow`; a handle and a length; the mask in, the old mask out.
+    ("__wolf_rt_fs_set_mode", 3, true),
+    ("__wolf_rt_fs_open_perm", 4, true),
+    ("__wolf_rt_fs_create_dir_mode", 3, true),
+    ("__wolf_rt_fs_symlink", 4, true),
+    ("__wolf_rt_fs_link", 4, true),
+    ("__wolf_rt_fs_set_times", 7, true),
+    ("__wolf_rt_fs_truncate", 2, true),
+    ("__wolf_rt_os_umask", 1, true),
     // s199 (#426): the handle's offset — seek (fd, off, whence, out),
     // tell (fd, out), and the positional read (fd, off, max, out).
     ("__wolf_rt_fs_seek", 4, true),
