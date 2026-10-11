@@ -2,7 +2,7 @@
 source: crates/wolf_mem/tests/mem_diagnostics.rs
 expression: render_mem(src)
 ---
-error[E1010]: `worker` may send `msg` on `out`, and its bytes live in region `pass`, which is freed before a receiver could ever use them
+error[E1010]: `worker` is spawned as a proc and may outlive this frame, and `msg`'s bytes live in region `pass`, which is freed with its scope — while the proc may still be reading them
   --> mem:///main.lu:10:35
    |
  8 |     region pass {
@@ -11,11 +11,10 @@ error[E1010]: `worker` may send `msg` on `out`, and its bytes live in region `pa
    |                   ------------------------- allocated here, into region `pass`
 10 |         let c = spawn proc worker(msg, out)
    |                                   ^^^ this argument's bytes are in region `pass`
-   |                                        --- `out` is a channel that carries bytes: the callee may send any other argument on it
    |
-   = note: a call may send what it is handed: a callee given a channel can send any other argument
-     on it, or a value it builds in its caller's current region, and a payload must outlive
-     the frame that sends it [conc.chan.payload] [mem.region.escape] — a channel is never
-     tied to a region, so its receiver may read after any region block has closed. Make the
-     call where the bytes outlive the frame: build the value and make the call outside the
-     region block, or hand the callee a scalar (`s.len`) instead of the bytes.
+   = note: a `spawn proc` argument crosses into a domain that outlives the spawner [conc.proc.arg],
+     and a `str` crosses as its view: the bytes stay where they were built, so they must
+     outlive the frame that spawns [mem.region.escape]. Build the value where it outlives
+     this frame — outside the region block — or spawn from a function that is handed the
+     value as a parameter and joins the proc before it returns; a literal or a scalar
+     argument owns no region storage.

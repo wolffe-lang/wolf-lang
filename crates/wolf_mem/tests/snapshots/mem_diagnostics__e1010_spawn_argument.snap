@@ -1,0 +1,20 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1010]: `child` is spawned as a proc and may outlive this frame, and `s`'s bytes live in region `pass`, which is freed with its scope — while the proc may still be reading them
+ --> mem:///main.lu:9:35
+  |
+7 |     region pass {
+  |            ---- region `pass` is created here and freed with its scope — everything in it is freed wholesale
+8 |         let s = "built in pass, {n} uses"
+  |                 ------------------------- allocated here, into region `pass`
+9 |         let _w = spawn proc child(s, 0)
+  |                                   ^ this argument's bytes are in region `pass`
+  |
+  = note: a `spawn proc` argument crosses into a domain that outlives the spawner [conc.proc.arg],
+    and a `str` crosses as its view: the bytes stay where they were built, so they must
+    outlive the frame that spawns [mem.region.escape]. Build the value where it outlives
+    this frame — outside the region block — or spawn from a function that is handed the
+    value as a parameter and joins the proc before it returns; a literal or a scalar
+    argument owns no region storage.

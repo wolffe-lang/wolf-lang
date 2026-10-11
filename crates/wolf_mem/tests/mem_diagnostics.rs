@@ -3057,3 +3057,55 @@ fn main() -> !int {
 "#,
     );
 }
+
+#[test]
+fn e1010_a_spawn_argument_built_in_a_region_block() {
+    // wolf-lang#678, the spawn twin of #665: no channel anywhere. The
+    // proc outlives the frame, and `s`'s bytes die with `pass`.
+    snap(
+        "e1010_spawn_argument",
+        r#"fn child(s: str, n: int) -> int {
+    print("child sees: {s}")
+    n
+}
+fn main() -> int {
+    let n = 7
+    region pass {
+        let s = "built in pass, {n} uses"
+        let _w = spawn proc child(s, 0)
+    }
+    0
+}
+"#,
+    );
+}
+
+#[test]
+fn spawn_arguments_that_outlive_the_frame_stay_silent() {
+    // lobo's shape: a function handed the bytes as PARAMETERS spawns
+    // and joins before it returns. A literal, a scalar, and a string
+    // built where `main` allocates.
+    snap(
+        "clean_spawn_arguments",
+        r#"fn child(s: str, n: int) -> int {
+    print("child sees: {s}")
+    n
+}
+fn run(path: str, head: str) -> int {
+    let w = spawn proc child(path, head.len)
+    w.join() else 1
+}
+fn main() -> int {
+    let n = 7
+    let s = "built in main, {n} uses"
+    let _a = spawn proc child(s, 0)
+    region pass {
+        let t = "built in pass, {n} uses"
+        let _b = spawn proc child("a literal", t.len)
+        print("{run(t, t)}")
+    }
+    0
+}
+"#,
+    );
+}
