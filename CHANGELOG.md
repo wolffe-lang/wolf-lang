@@ -152,6 +152,75 @@ was handed (#665, the same read of freed bytes, no `in` needed); lupin
 `region_copy_shares_str.lu`, `region_copy_index_store.lu`; gate
 `region_kept_arg_lanes` (checked, native, release, lupin).
 
+### A call sends what it is handed: `fwd(ch, s)` is refused where `ch.send(s)` was (s229, #665; ruling owed)
+
+**Read this before you bump the pin: a soundness fix that refuses
+programs 0.2.27 built.** A sent payload must outlive the frame that
+sends it (`[conc.chan.payload]`), and the compiler asked that of the
+builtin `send` alone. One line of helper around the send and nothing
+was asked:
+
+```wolf
+fn fwd(ch: channel[str], s: str) { ch.send(s) else { } }
+
+region pass {
+    let s = "built in pass, {n} uses"
+    fwd(ch, s)                      // E1010 now; `ch.send(s)` always was
+}
+```
+
+built on every tier, and the receiver read `s` after `pass` was freed:
+native and release printed the chunk the next region reused, the
+checked machine stale bytes. It is E1010 now, at `s`, naming the
+callee, the argument and the channel. The rule reads the call's
+signature, never the callee's body. At a call that hands its callee a
+channel able to carry bytes — an argument or receiver whose type
+reaches a `channel[str]` or a channel of structs, tuples or enums
+reaching a `str`, through any field or container; a type parameter or
+a `dyn` value counts — two things must outlive the frame, as a sent
+payload must:
+
+- **every argument that can name region bytes** (a `str`, or a list,
+  map, struct, tuple or enum reaching one, by any mode);
+- **the call's own site.** A callee allocates in its caller's current
+  region and may send what it builds there, so `region pass { emit(ch,
+  n) }` — `emit` sending `"built {n}"` — read freed bytes with no
+  argument carrying them. A call that hands such a channel from inside
+  a region block, under `in r { }` for a region made in the same
+  frame, or in a `spawn proc` entry is refused at the call.
+
+`spawn proc f(args)` is such a call for its arguments. **A closure that
+captured such a channel** sends what it is called with, wherever it is
+called: calling it is a call under both demands, and handing it to a
+function, returning it, sending it or storing it in module state is
+E1010 there (a `scope`'s `spawn` is not a handing-over).
+
+**What to change.** Make the call where the bytes outlive the frame:
+outside the region block, or under `in r { }` for a region the
+function was handed — there the diagnostic offers `"{s}"`, which builds
+the string in `r`. Send from a proc entry itself, not from a helper it
+calls. Hand a function the channel, never a closure that captured it.
+
+**What it costs.** Nothing at run time; no accepted program's code
+changes. It refuses some programs that would have run correctly, and
+says so: a helper that only reads the argument beside a channel it
+sends something else on; any helper handed a `channel[str]` inside a
+region block or a proc entry, whatever it sends; a channel made, used
+and drained inside one region block through a helper. A `channel[int]`
+and every channel of scalars is untouched, in any region. Measured
+before it landed, the compiler before against after at the memory
+check: wolf-std, boreutils, lobo, pelt, pax, muzzle and the book
+(1,162 files and lobo's 120 staged tests) — zero rows moved; lobo has
+no channel that carries bytes.
+
+Still open: a `spawn proc` argument built in a region block and read by
+the proc after the block closed, with no channel in sight (#696). lupin
+0.1.50 runs the shapes whose receive is read inside an interpolation
+(wolf-interp#232) and traps the rest. A run-time alternative — a send
+that copies the bytes out, about 40 ns a message — is the ruling owed.
+Gate `chan_sent_arg_lanes`: 37 rows on checked, native, release and
+lupin.
+
 ## 0.2.27 — 2026-10-11
 
 THE TWENTY-SEVENTH, and the first release that ships its standard
