@@ -217,6 +217,18 @@ pub const PRELUDE: &[Ambient] = &[
     host("fs_lstat"),
     host("fs_read_link"),
     host("fs_read_dir_entries"),
+    // s230 (wolf-lang#346, #698, #699, #700, #702): the calls that
+    // change a file without writing its bytes — a mode (`[os.fs.mode]`),
+    // a mode at creation (`[os.fs.create.mode]`), a symbolic and a hard
+    // link (`[os.fs.symlink]`, `[os.fs.link]`), the times
+    // (`[os.fs.times]`) and the length (`[os.fs.truncate]`).
+    host("fs_set_mode"),
+    host("fs_open_perm"),
+    host("fs_create_dir_mode"),
+    host("fs_symlink"),
+    host("fs_link"),
+    host("fs_set_times"),
+    host("fs_truncate"),
     // s199 (#426): the handle's offset — `[os.fs.seek]`,
     // `[os.fs.tell]`, `[os.fs.read_at]`.
     host("fs_seek"),
@@ -298,6 +310,10 @@ pub const PRELUDE: &[Ambient] = &[
     host("os_pipe"),
     host("os_chdir"),
     host("os_isatty"),
+    // s230 (wolf-lang#704, `[os.fs.umask]`): the process's file mode
+    // creation mask — `env`-tagged with `os_chdir`, the other piece of
+    // process state a creation reads.
+    host("os_umask"),
     // s225 (wolf-lang#534, `[os.proc.exec]`): replace the running
     // program — argv, an explicit environment and a descriptor map;
     // `exec`-tagged with the spawn family it ends.

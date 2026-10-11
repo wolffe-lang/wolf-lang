@@ -158,7 +158,12 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         | "fs_copy_chunk"
         // s218 (#625, #626): the stat record, the link's target and the
         // typed listing read the filesystem — `fs`, with the family.
-        | "fs_stat" | "fs_lstat" | "fs_read_link" | "fs_read_dir_entries" => {
+        | "fs_stat" | "fs_lstat" | "fs_read_link" | "fs_read_dir_entries"
+        // s230 (#346, #698, #699, #700, #702): a mode, a link, a time
+        // and a length are changes to the filesystem — `fs`, with the
+        // family.
+        | "fs_set_mode" | "fs_open_perm" | "fs_create_dir_mode" | "fs_symlink" | "fs_link"
+        | "fs_set_times" | "fs_truncate" => {
             SandboxCategory::Fs
         }
         // The s39 net builtin tier: every entry point carries the
@@ -198,6 +203,10 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // variable mutates the environment `env_set` writes, `env`.
         "os_exec" => SandboxCategory::Exec,
         "env_unset" => SandboxCategory::Env,
+        // s230 (wolf-lang#704; ruling #54's reading): the umask is
+        // process state every later creation reads, as the working
+        // directory is — `env`, with `os_chdir`.
+        "os_umask" => SandboxCategory::Env,
         // signal RECEPTION (s114, #126): process control, so `exec`
         // like the rest of the family — comptime-refused (you cannot
         // wait for an OS signal at compile time).

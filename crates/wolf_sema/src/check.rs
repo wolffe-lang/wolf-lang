@@ -13778,6 +13778,93 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
                 rowed(table, entries, &["not_found", "denied", "io"]),
             )
         }
+        // s230 (wolf-lang#346, `[os.fs.mode]`): `chmod` by path — the
+        // permission, set-id and sticky bits become exactly `mode`
+        // (0..=0o7777, else `invalid`); a final link is followed.
+        // `unsupported` is a host with no permission bits (windows).
+        "fs_set_mode" => (
+            vec![str_, int_],
+            rowed(
+                table,
+                unit,
+                &["not_found", "denied", "invalid", "unsupported", "io"],
+            ),
+        ),
+        // s230 (wolf-lang#346, `[os.fs.create.mode]`): `fs_open_mode`
+        // and `fs_create_dir` with the permission bits a creation uses
+        // (0..=0o777, less the umask), so a file is never wider than
+        // asked for even for an instant.
+        "fs_open_perm" => (
+            vec![str_, int_, int_],
+            rowed(
+                table,
+                int_,
+                &[
+                    "not_found",
+                    "denied",
+                    "exists",
+                    "invalid",
+                    "unsupported",
+                    "io",
+                ],
+            ),
+        ),
+        "fs_create_dir_mode" => (
+            vec![str_, int_],
+            rowed(
+                table,
+                unit,
+                &[
+                    "not_found",
+                    "denied",
+                    "exists",
+                    "invalid",
+                    "unsupported",
+                    "io",
+                ],
+            ),
+        ),
+        // s230 (wolf-lang#698, `[os.fs.symlink]`): `fs_symlink(target,
+        // path)` — the target stored verbatim, as `fs_read_link` reads
+        // it back; an empty target is `invalid`.
+        "fs_symlink" => (
+            vec![str_, str_],
+            rowed(
+                table,
+                unit,
+                &[
+                    "not_found",
+                    "denied",
+                    "exists",
+                    "invalid",
+                    "unsupported",
+                    "io",
+                ],
+            ),
+        ),
+        // s230 (wolf-lang#699, `[os.fs.link]`): `fs_link(existing,
+        // path)` — a second name; it never replaces and never follows a
+        // final link in `existing`.
+        "fs_link" => (
+            vec![str_, str_],
+            rowed(
+                table,
+                unit,
+                &["not_found", "denied", "exists", "cross_device", "io"],
+            ),
+        ),
+        // s230 (wolf-lang#700, `[os.fs.times]`): `fs_set_times(path,
+        // atime_s, atime_ns, mtime_s, mtime_ns, follow)` — one
+        // `utimensat`; a nanosecond word is 0..=999999999, -1 "now" or
+        // -2 "leave", anything else `invalid`.
+        "fs_set_times" => (
+            vec![str_, int_, int_, int_, int_, bool_],
+            rowed(table, unit, &["not_found", "denied", "invalid", "io"]),
+        ),
+        // s230 (wolf-lang#702, `[os.fs.truncate]`): `ftruncate` on a
+        // handle; a negative length is `invalid`, every host refusal
+        // `io`.
+        "fs_truncate" => (vec![int_, int_], rowed(table, unit, &["invalid", "io"])),
         // s199 (#426, `[os.fs.seek]`, `[os.fs.tell]`,
         // `[os.fs.read_at]`): the handle's offset. `unseekable` is a
         // pipe, fifo, socket or terminal (ESPIPE) — its own tag
@@ -14032,6 +14119,11 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // s215 (`[os.fs.isatty]`): whether a handle names a terminal;
         // a closed or forged handle is `io`.
         "os_isatty" => (vec![int_], rowed(table, bool_, &["io"])),
+        // s230 (wolf-lang#704, `[os.fs.umask]`): set the process's file
+        // mode creation mask and answer the one it replaced — POSIX's
+        // only form. `invalid` is a mask outside 0..=0o777;
+        // `unsupported` a host with no mask (windows).
+        "os_umask" => (vec![int_], rowed(table, int_, &["invalid", "unsupported"])),
         // s225 (wolf-lang#534, `[os.proc.exec]`): replace the running
         // program. `os_exec(exe, argv, env, map)` — argv WHOLE (argv[0]
         // included), env the complete environment as `NAME=VALUE`
