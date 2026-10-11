@@ -100,6 +100,17 @@ impl TaskStack {
             return None;
         }
         let base = base.cast::<u8>();
+        // No transparent huge pages on a task stack (s231): on a host
+        // whose THP mode is `always`, the first touch of a stack could
+        // fault in a whole 2 MiB page, so a parked task's stack cost
+        // 2 MiB or 8 KiB depending on what the kernel had free (kasumi:
+        // 64 of 2,031 stacks were huge, 45 % of the process's RSS). A
+        // stack is touched a page at a time; it is paged that way.
+        #[cfg(target_os = "linux")]
+        // SAFETY: advice on our own fresh mapping; failure is harmless.
+        unsafe {
+            libc::madvise(base.cast(), total, libc::MADV_NOHUGEPAGE);
+        }
         // SAFETY: protecting the low GUARD bytes of our own mapping.
         if unsafe { libc::mprotect(base.cast(), GUARD, libc::PROT_NONE) } != 0 {
             // SAFETY: unmapping the mapping we just made.
