@@ -1,0 +1,28 @@
+// s229 (wolf-lang#665): a `mut` argument.
+struct Doc {
+    title: str,
+    words: int,
+}
+fn fwd_m(ch: channel[str], mut d: Doc) {
+    d.words += 1
+    ch.send(d.title) else { }
+}
+
+fn main() -> int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        let ch = channel[str](1)
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            var d = Doc { title: s, words: 1 }
+            fwd_m(ch, mut d)
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{ch.recv() else "?"}")
+    }
+    0
+}

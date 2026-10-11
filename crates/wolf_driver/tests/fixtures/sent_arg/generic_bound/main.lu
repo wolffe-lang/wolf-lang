@@ -1,0 +1,32 @@
+// s229 (wolf-lang#665): inside a generic body: a bounded type parameter may hold the channel.
+trait Sink {
+    fn put(self, s: str)
+}
+struct Out {
+    ch: channel[str],
+    n: int,
+}
+impl Sink for Out {
+    fn put(self, s: str) {
+        self.ch.send(s) else { }
+    }
+}
+fn feed_all[S: Sink](k: S, n: int) {
+    region pass {
+        let s = "built in pass, {n} uses"
+        k.put(s)
+    }
+}
+
+fn main() -> int {
+    let seq0 = 0
+    let ch = channel[str](1)
+    let o = Out { ch: ch, n: 0 }
+    feed_all(o, seq0)
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    print("{ch.recv() else "?"}")
+    0
+}

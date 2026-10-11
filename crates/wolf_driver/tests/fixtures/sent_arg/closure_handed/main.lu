@@ -1,0 +1,19 @@
+// s229 (wolf-lang#665): the closure handed to a callee that calls it with bytes from a region block of its own.
+fn each(f: fn(str), n: int) {
+    region inner {
+        let t = "built in pass, {n} uses"
+        f(t)
+    }
+}
+
+fn main() -> int {
+    let seq0 = 0
+    let ch = channel[str](1)
+    each(fn(x: str) { ch.send(x) else { } }, seq0)
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    print("{ch.recv() else "?"}")
+    0
+}

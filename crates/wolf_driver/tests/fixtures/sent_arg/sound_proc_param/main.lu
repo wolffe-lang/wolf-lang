@@ -1,0 +1,24 @@
+// s229 (wolf-lang#665): a proc entry hands its PARAMETER to a helper: sound, and refused — the helper may send what it builds in the proc's region.
+fn fwd(ch: channel[str], s: str) {
+    ch.send(s) else { }
+}
+
+fn worker(msg: str, out: channel[str]) -> !int {
+    fwd(out, msg)
+    0
+}
+
+fn main() -> !int {
+    let n = 7
+    let msg = "built {n} here"
+    let out = channel[str](4)
+    let c = spawn proc worker(msg, out)
+    let m = c.monitor()
+    select {
+        exit(reason) from m => {},
+        timeout(1.s) => { return 1 },
+    }
+    out.close()
+    for line in out { print(line) }
+    0
+}

@@ -1,0 +1,21 @@
+// s229 (wolf-lang#665): the closure returned: from there it is a fn value whose type says nothing of the channel.
+fn mk(ch: channel[str]) -> fn(str) {
+    let f = fn(x: str) { ch.send(x) else { } }
+    f
+}
+
+fn main() -> int {
+    let seq0 = 0
+    let ch = channel[str](1)
+    let f = mk(ch)
+    region pass {
+        let s = "built in pass, {seq0} uses"
+        f(s)
+    }
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    print("{ch.recv() else "?"}")
+    0
+}

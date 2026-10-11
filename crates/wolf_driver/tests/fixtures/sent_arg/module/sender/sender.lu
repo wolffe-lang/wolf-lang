@@ -1,0 +1,3 @@
+pub fn fwd(ch: channel[str], s: str) {
+    ch.send(s) else { }
+}

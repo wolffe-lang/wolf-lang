@@ -1,0 +1,21 @@
+// s229 (wolf-lang#665): no argument carries the bytes: the callee builds in its caller's current region and sends.
+fn emit(ch: channel[str], n: int) {
+    ch.send("built in pass, {n} uses") else { }
+}
+
+fn main() -> int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        let ch = channel[str](1)
+        region pass {
+            emit(ch, seq0)
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{ch.recv() else "?"}")
+    }
+    0
+}

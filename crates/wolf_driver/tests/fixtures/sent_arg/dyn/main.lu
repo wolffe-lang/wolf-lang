@@ -1,0 +1,35 @@
+// s229 (wolf-lang#665): a `dyn` value hides the channel: an opaque type answers as one that holds it.
+trait Sink {
+    fn put(self, s: str)
+}
+struct Out {
+    ch: channel[str],
+    n: int,
+}
+impl Sink for Out {
+    fn put(self, s: str) {
+        self.ch.send(s) else { }
+    }
+}
+fn feed(k: dyn Sink, s: str) {
+    k.put(s)
+}
+
+fn main() -> int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        let ch = channel[str](1)
+        let o = Out { ch: ch, n: 0 }
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            feed(o as dyn Sink, s)
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{ch.recv() else "?"}")
+    }
+    0
+}

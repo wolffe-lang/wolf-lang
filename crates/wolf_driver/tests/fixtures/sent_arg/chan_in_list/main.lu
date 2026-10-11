@@ -1,0 +1,24 @@
+// s229 (wolf-lang#665): the channel is reached through a list.
+fn fwd_l(chs: List[channel[str]], s: str) {
+    chs[0].send(s) else { }
+}
+
+fn main() -> int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        let ch = channel[str](1)
+        var chs = List[channel[str]]()
+        (mut chs).push(ch)
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            fwd_l(chs, s)
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{ch.recv() else "?"}")
+    }
+    0
+}

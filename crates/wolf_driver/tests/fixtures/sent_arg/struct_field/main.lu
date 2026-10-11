@@ -1,0 +1,27 @@
+// s229 (wolf-lang#665): the bytes are reached through a struct argument's field.
+struct Doc {
+    title: str,
+    words: int,
+}
+fn fwd_d(ch: channel[str], d: Doc) {
+    ch.send(d.title) else { }
+}
+
+fn main() -> int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        let ch = channel[str](1)
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            let d = Doc { title: s, words: 1 }
+            fwd_d(ch, d)
+        }
+        region other {
+            let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+            print("{z.len}")
+        }
+        print("{ch.recv() else "?"}")
+    }
+    0
+}

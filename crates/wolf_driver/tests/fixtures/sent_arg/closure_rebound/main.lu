@@ -1,0 +1,17 @@
+// s229 (wolf-lang#665): the closure under a second name.
+fn main() -> int {
+    let seq0 = 0
+    let ch = channel[str](1)
+    let f = fn(x: str) { ch.send(x) else { } }
+    let g = f
+    region pass {
+        let s = "built in pass, {seq0} uses"
+        g(s)
+    }
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    print("{ch.recv() else "?"}")
+    0
+}
