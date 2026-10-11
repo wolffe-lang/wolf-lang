@@ -1354,6 +1354,12 @@ struct Machine<'t> {
     /// sequential loopback (listen→raise→wait) is fully modeled.
     signal_listening: i64,
     signal_queue: std::collections::VecDeque<i64>,
+    /// s232 (#681): the meanings whose disposition this program has
+    /// set (listen, ignore, default). `os_signal_ignored` reads the host
+    /// for each, except `BROKEN_PIPE` before the program touches it —
+    /// the `wolf` binary's own runtime ignored that one, so the program
+    /// is answered what `wolf` inherited (`checked_sig::INHERITED_PIPE`).
+    signal_touched: i64,
     /// The monotonic anchor (s40 `time_now_ms`): an arbitrary
     /// process-local epoch, per X12's "monotonic, never wall".
     t0: std::time::Instant,
@@ -2293,6 +2299,15 @@ pub fn run_checked_seeded(
     // package, so the machine asks for each over a channel and the
     // loop below ends when the machine — the one sender — is dropped.
     let hub = tasks::Hub::new();
+    // s232 (#691, `[os.signal.checked]`): the twenty catchable signals
+    // are blocked on THIS thread while the machine runs, so a signal
+    // sent to the process is handed to the machine's own thread — the
+    // one that arms them and polls — and not to this one, idle in the
+    // loop below, whose handler would run after the machine had looked.
+    // The machine's thread puts back the mask this thread had, so what
+    // it runs and execs starts as it would have; task threads, made
+    // here, keep the block.
+    let caller_mask = checked_sig::block_on_caller();
     let out = std::thread::scope(|scope| {
         let (tx, rx) = std::sync::mpsc::channel::<tasks::SpawnReq<'_>>();
         let root_hub = hub.clone();
@@ -2300,6 +2315,7 @@ pub fn run_checked_seeded(
             .name("wolf-checked".into())
             .stack_size(CHECKED_STACK_BYTES)
             .spawn_scoped(scope, move || {
+                checked_sig::restore_here(caller_mask);
                 let conc = Some((root_hub.clone(), tx));
                 let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     run_checked_fn_here(pkg, tc, budget, stdin, entry, seed, conc)
@@ -2327,11 +2343,15 @@ pub fn run_checked_seeded(
             // No thread to be had (a host at its thread limit): run
             // where we stand, which is exactly the old behavior — and
             // one task only.
-            Err(_) => Some(run_checked_fn_here(
-                pkg, tc, budget, stdin, entry, seed, None,
-            )),
+            Err(_) => {
+                checked_sig::restore_here(caller_mask);
+                Some(run_checked_fn_here(
+                    pkg, tc, budget, stdin, entry, seed, None,
+                ))
+            }
         }
     });
+    checked_sig::restore_here(caller_mask);
     match out {
         Some(out) => out,
         // A thread of the run panicked: the caller sees the first
@@ -2600,6 +2620,7 @@ impl<'t> Machine<'t> {
             children: Vec::new(),
             signal_listening: 0,
             signal_queue: std::collections::VecDeque::new(),
+            signal_touched: 0,
             args: Vec::new(),
             env_overlay: HashMap::new(),
             cwd: None,
@@ -7715,6 +7736,18 @@ impl<'t> Machine<'t> {
     /// stdin stays null-wired; every
     /// operation on a reaped or foreign child handle is `io`, never a
     /// trap.
+    /// s232: whether the program ignores `BROKEN_PIPE` now — the host's
+    /// disposition once the program has set it, and before that the one
+    /// `wolf` was started with (Rust's runtime ignored it in `wolf`
+    /// itself; `[os.signal.checked]`).
+    fn program_pipe_ignored(&self) -> bool {
+        if self.signal_touched & 2048 != 0 {
+            checked_sig::host_pipe_ignored()
+        } else {
+            checked_sig::INHERITED_PIPE.load(std::sync::atomic::Ordering::SeqCst) == 1
+        }
+    }
+
     fn os_builtin(&mut self, name: &str, argv: Vec<Value>, span: Span) -> E<Flow> {
         fn tag(t: &str) -> Flow {
             raise(Value::ErrTag {
@@ -7912,6 +7945,8 @@ impl<'t> Machine<'t> {
                     );
                 // s225: and with the program's environment.
                 overlay_child_env(&mut cmd, &self.env_overlay);
+                // s232: and an ignored BROKEN_PIPE still ignored.
+                checked_sig::keep_pipe_ignore(&mut cmd, self.program_pipe_ignored());
                 let spawned = cmd.spawn();
                 match spawned {
                     Err(e) => Ok(tag(match e.kind() {
@@ -7971,6 +8006,8 @@ impl<'t> Machine<'t> {
                     );
                 // s225: and with the program's environment.
                 overlay_child_env(&mut cmd, &self.env_overlay);
+                // s232: and an ignored BROKEN_PIPE still ignored.
+                checked_sig::keep_pipe_ignore(&mut cmd, self.program_pipe_ignored());
                 let spawned = cmd.spawn();
                 match spawned {
                     Err(e) => Ok(tag(match e.kind() {
@@ -8043,6 +8080,7 @@ impl<'t> Machine<'t> {
                     self.cwd.as_deref(),
                     None,
                     &self.env_overlay,
+                    self.program_pipe_ignored(),
                 ) {
                     Err(e) => Ok(tag(match e.kind() {
                         std::io::ErrorKind::NotFound => "not_found",
@@ -8231,6 +8269,7 @@ impl<'t> Machine<'t> {
                     self.cwd.as_deref(),
                     job.as_ref(),
                     &self.env_overlay,
+                    self.program_pipe_ignored(),
                 ) {
                     Err(e) => Ok(tag(match e.kind() {
                         std::io::ErrorKind::NotFound => "not_found",
@@ -8242,6 +8281,22 @@ impl<'t> Machine<'t> {
                         self.children.push(Some(child));
                         Ok(Flow::Val(Value::Int(h)))
                     }
+                }
+            }
+            // s232 (#141, `[os.proc.self]`): the `wolf` process's id
+            // — the checked program runs as it, as `os_exec` replaces it
+            // — and its parent's.
+            "os_pid" => Ok(Flow::Val(Value::Int(i64::from(std::process::id())))),
+            "os_ppid" => {
+                #[cfg(unix)]
+                {
+                    Ok(Flow::Val(Value::Int(i64::from(
+                        std::os::unix::process::parent_id(),
+                    ))))
+                }
+                #[cfg(not(unix))]
+                {
+                    Ok(tag("unsupported"))
                 }
             }
             // s219: the child's OS pid, and its status — an exit code,
@@ -8428,7 +8483,15 @@ impl<'t> Machine<'t> {
                 }
                 self.stdout.clear();
                 self.stderr.clear();
-                match exec_replace(&program, &words, &entries, &placed, self.cwd.as_deref()) {
+                let pipe_ignored = self.program_pipe_ignored();
+                match exec_replace(
+                    &program,
+                    &words,
+                    &entries,
+                    &placed,
+                    self.cwd.as_deref(),
+                    pipe_ignored,
+                ) {
                     Err(t) => Ok(tag(t)),
                     Ok(never) => match never {},
                 }
@@ -8492,11 +8555,17 @@ impl<'t> Machine<'t> {
                 let Some(mask) = int_arg(0) else {
                     return self.refuse("this os call shape", span);
                 };
-                let armed = mask & SIG_ALL;
+                // s232 (#679): a bit that is not a listenable meaning is
+                // `io` and arms nothing (it was masked off and ok before).
+                if !sig_set_ok(mask) {
+                    return Ok(tag("io"));
+                }
+                let armed = mask;
                 if checked_sig::arm(armed).is_err() {
                     return Ok(tag("io"));
                 }
                 self.signal_listening |= armed;
+                self.signal_touched |= armed;
                 Ok(Flow::Val(Value::Unit))
             }
             "os_signal_raise" => {
@@ -8521,10 +8590,14 @@ impl<'t> Machine<'t> {
                 let Some(mask) = int_arg(0) else {
                     return self.refuse("this os call shape", span);
                 };
-                let want = mask & SIG_ALL;
-                if want == 0 {
-                    return Ok(tag("io")); // nothing could ever arrive
+                // s232: listen's shape rule (nothing could ever arrive
+                // for a bit outside it).
+                if !sig_set_ok(mask) {
+                    return Ok(tag("io"));
                 }
+                let want = mask;
+                // s232 (#691): a pending signal is delivered first.
+                checked_sig::settle(self.signal_listening);
                 if let Some(pos) = self.signal_queue.iter().position(|&m| m & want != 0) {
                     let m = self.signal_queue.remove(pos).expect("just found it");
                     return Ok(Flow::Val(Value::Int(m)));
@@ -8561,15 +8634,51 @@ impl<'t> Machine<'t> {
                 let Some(mask) = int_arg(0) else {
                     return self.refuse("this os call shape", span);
                 };
-                if mask == 0 || mask & !SIG_ALL != 0 {
+                if !sig_set_ok(mask) {
                     return Ok(tag("io"));
                 }
                 match checked_sig::set_disp(mask, name == "os_signal_ignore") {
                     Err(t) => Ok(tag(t)),
                     Ok(()) => {
                         self.signal_listening &= !mask;
+                        self.signal_touched |= mask;
                         Ok(Flow::Val(Value::Unit))
                     }
+                }
+            }
+            // s232 (#681, `[os.signal.ignored]`): the host's disposition,
+            // BROKEN_PIPE from the `wolf` process's inherited one until
+            // the program sets it.
+            "os_signal_ignored" => match checked_sig::ignored(self.signal_touched & 2048 == 0) {
+                Ok(v) => Ok(Flow::Val(Value::Int(v))),
+                Err(t) => Ok(tag(t)),
+            },
+            // s232 (#141, `[os.signal.send]`): the host's own `kill`, in
+            // the runtime's order — the shape (`invalid`), the host, then
+            // the target.
+            "os_signal_send" => {
+                let (Some(pid), Some(m)) = (int_arg(0), int_arg(1)) else {
+                    return self.refuse("this os call shape", span);
+                };
+                if pid <= 0 || pid > i64::from(i32::MAX) || (m != 0 && !sig_one_sendable(m)) {
+                    return Ok(tag("invalid"));
+                }
+                match checked_sig::send(pid, m) {
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    Err(t) => Ok(tag(t)),
+                }
+            }
+            // s232 (`[os.signal.number]`): the host's number.
+            "os_signal_number" => {
+                let Some(m) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                if !sig_one_sendable(m) {
+                    return Ok(tag("invalid"));
+                }
+                match checked_sig::number(m) {
+                    Ok(n) => Ok(Flow::Val(Value::Int(n))),
+                    Err(t) => Ok(tag(t)),
                 }
             }
             // The OS random source (s118, #143). The checked machine
@@ -10161,6 +10270,9 @@ impl<'t> Machine<'t> {
             | "env_unset" | "os_exec"
             // s230 (#704): the file mode creation mask.
             | "os_umask"
+            // s232 (#679, #681, #141): the disposition read, the send,
+            // a meaning's number, this process's id and its parent's.
+            | "os_signal_ignored" | "os_signal_send" | "os_signal_number" | "os_pid" | "os_ppid"
             | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
             | "str_from_utf8"
@@ -12210,7 +12322,8 @@ fn exec_bit(_md: &std::fs::Metadata) -> bool {
 
 /// s225 (`[os.proc.exec]`): `wolf_rt::exec`'s steps 5 and 6 for the
 /// checked machine — every target saved, the map placed, the machine's
-/// working directory entered and `SIGPIPE` defaulted, `execve`; on
+/// working directory entered and `SIGPIPE` defaulted (s232: or ignored,
+/// when the program ignores `BROKEN_PIPE`), `execve`; on
 /// failure every one of those undone and the row answered. `Ok` cannot
 /// be built.
 #[cfg(unix)]
@@ -12220,6 +12333,7 @@ fn exec_replace(
     env: &[String],
     map: &[(i64, Option<std::fs::File>)],
     cwd: Option<&std::path::Path>,
+    pipe_ignored: bool,
 ) -> Result<std::convert::Infallible, &'static str> {
     use std::ffi::CString;
     use std::os::fd::AsRawFd as _;
@@ -12310,7 +12424,16 @@ fn exec_replace(
             undo(&saved, &staged);
             return Err("io");
         }
-        let old_pipe = libc::signal(libc::SIGPIPE, libc::SIG_DFL);
+        // s232: the program's own disposition — the default unless it
+        // ignores BROKEN_PIPE (set it, or was started with it ignored).
+        let old_pipe = libc::signal(
+            libc::SIGPIPE,
+            if pipe_ignored {
+                libc::SIG_IGN
+            } else {
+                libc::SIG_DFL
+            },
+        );
         libc::execve(path.as_ptr(), arg_ptrs.as_ptr(), env_ptrs.as_ptr());
         let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
         libc::signal(libc::SIGPIPE, old_pipe);
@@ -12334,6 +12457,7 @@ fn exec_replace(
     _env: &[String],
     _map: &[(i64, Option<std::fs::File>)],
     _cwd: Option<&std::path::Path>,
+    _pipe_ignored: bool,
 ) -> Result<std::convert::Infallible, &'static str> {
     Err("unsupported")
 }
@@ -12370,6 +12494,7 @@ fn spawn_mapped(
     cwd: Option<&std::path::Path>,
     job: Option<&CheckedJob>,
     env: &HashMap<String, Option<String>>,
+    pipe_ignored: bool,
 ) -> std::io::Result<std::process::Child> {
     use std::os::fd::AsRawFd as _;
     use std::os::unix::process::CommandExt as _;
@@ -12379,6 +12504,7 @@ fn spawn_mapped(
         .stdout(std::process::Stdio::inherit())
         .stderr(std::process::Stdio::inherit());
     overlay_child_env(&mut cmd, env);
+    checked_sig::keep_pipe_ignore(&mut cmd, pipe_ignored);
     if let Some(d) = cwd {
         cmd.current_dir(d);
     }
@@ -12392,7 +12518,7 @@ fn spawn_mapped(
     let tty = job
         .and_then(|j| j.tty.as_ref())
         .map_or(-1, |f| f.as_raw_fd());
-    let sigs = job.map_or([0; 9], |j| checked_sig::signals_of(j.defaults));
+    let sigs = job.map_or([0; 20], |j| checked_sig::signals_of(j.defaults));
     const MAX: usize = 64;
     let n = map.len();
     let mut targets = [-1 as libc::c_int; MAX];
@@ -12488,6 +12614,7 @@ fn spawn_mapped(
     cwd: Option<&std::path::Path>,
     _job: Option<&CheckedJob>,
     env: &HashMap<String, Option<String>>,
+    _pipe_ignored: bool,
 ) -> std::io::Result<std::process::Child> {
     let mut cmd = std::process::Command::new(exe);
     cmd.args(args)
@@ -12508,8 +12635,36 @@ struct CheckedJob {
     defaults: i64,
 }
 
-/// s219: every signal meaning (`wolf_rt::signal::meaning::ALL`).
-const SIG_ALL: i64 = 511;
+/// s219: every listenable signal meaning
+/// (`wolf_rt::signal::meaning::LISTENABLE`; s232: twenty, bits 0..19).
+const SIG_ALL: i64 = (1 << 20) - 1;
+
+/// s232: every meaning a program may send or ask the number of
+/// (`wolf_rt::signal::meaning::SENDABLE`: the twenty, `KILL`, `STOP` and
+/// the six fault signals, bits 0..27).
+const SIG_SENDABLE: i64 = (1 << 28) - 1;
+
+/// s232 (`[os.signal.set]`'s one shape rule): a non-empty set of
+/// listenable meanings.
+fn sig_set_ok(set: i64) -> bool {
+    set != 0 && set & !SIG_ALL == 0
+}
+
+/// s232: one meaning of the whole table.
+fn sig_one_sendable(m: i64) -> bool {
+    m > 0 && m & (m - 1) == 0 && m & !SIG_SENDABLE == 0
+}
+
+/// s232 (#681): what the `wolf` process's SIGPIPE disposition was when
+/// it started, before Rust's runtime set it to ignored — recorded by the
+/// `wolf` binary's start-up constructor. The checked machine answers a
+/// program's `os_signal_ignored` for `BROKEN_PIPE` from it.
+pub fn record_inherited_sigpipe(ignored: bool) {
+    checked_sig::INHERITED_PIPE.store(
+        if ignored { 1 } else { 0 },
+        std::sync::atomic::Ordering::SeqCst,
+    );
+}
 
 /// s219: every bit a terminal mode may carry (`wolf_rt::term::mode`):
 /// canonical=1 echo=2 signals=4, vmin in bits 8..15, vtime in 16..23.
@@ -12521,12 +12676,19 @@ const TERM_MODE_VALID: i64 = 7 | 0xFF00 | 0xFF_0000;
 /// pending bit of a set to `wait`/`poll`. Dispositions are the host's
 /// `sigaction`.
 mod checked_sig {
-    use std::sync::atomic::{AtomicI64, Ordering};
+    use std::sync::atomic::{AtomicI8, AtomicI64, Ordering};
 
     static PENDING: AtomicI64 = AtomicI64::new(0);
 
+    /// s232: the `wolf` process's inherited SIGPIPE disposition — -1
+    /// unknown (no constructor ran: a test binary), 0 not ignored, 1
+    /// ignored.
+    pub(super) static INHERITED_PIPE: AtomicI8 = AtomicI8::new(-1);
+
+    /// A meaning's signal — the whole table (s232: 28 bits; the eight
+    /// past bit 19 are send-only).
     #[cfg(unix)]
-    fn sig_of(bit: i64) -> Option<libc::c_int> {
+    pub(super) fn sig_of(bit: i64) -> Option<libc::c_int> {
         Some(match bit {
             1 => libc::SIGHUP,
             2 => libc::SIGTERM,
@@ -12537,13 +12699,32 @@ mod checked_sig {
             64 => libc::SIGTTIN,
             128 => libc::SIGTTOU,
             256 => libc::SIGCHLD,
+            512 => libc::SIGUSR1,
+            1024 => libc::SIGALRM,
+            2048 => libc::SIGPIPE,
+            4096 => libc::SIGABRT,
+            8192 => libc::SIGCONT,
+            16384 => libc::SIGWINCH,
+            32768 => libc::SIGURG,
+            65536 => libc::SIGVTALRM,
+            131_072 => libc::SIGPROF,
+            262_144 => libc::SIGXCPU,
+            524_288 => libc::SIGXFSZ,
+            1_048_576 => libc::SIGKILL,
+            2_097_152 => libc::SIGSTOP,
+            4_194_304 => libc::SIGSEGV,
+            8_388_608 => libc::SIGBUS,
+            16_777_216 => libc::SIGFPE,
+            33_554_432 => libc::SIGILL,
+            67_108_864 => libc::SIGTRAP,
+            134_217_728 => libc::SIGSYS,
             _ => return None,
         })
     }
 
     #[cfg(unix)]
     extern "C" fn handler(sig: libc::c_int) {
-        for i in 0..9 {
+        for i in 0..20 {
             if sig_of(1 << i) == Some(sig) {
                 PENDING.fetch_or(1 << i, Ordering::SeqCst);
             }
@@ -12551,8 +12732,8 @@ mod checked_sig {
     }
 
     /// The signal numbers of a meaning set, for a child's hook.
-    pub(super) fn signals_of(set: i64) -> [i32; 9] {
-        let mut out = [0i32; 9];
+    pub(super) fn signals_of(set: i64) -> [i32; 20] {
+        let mut out = [0i32; 20];
         #[cfg(unix)]
         for (i, slot) in out.iter_mut().enumerate() {
             if set & (1 << i) != 0 {
@@ -12570,7 +12751,7 @@ mod checked_sig {
     /// `wolf_rt`'s); a terminal or child meaning there is `io`.
     pub(super) fn arm(set: i64) -> Result<(), ()> {
         #[cfg(unix)]
-        for i in 0..9 {
+        for i in 0..20 {
             let bit = 1i64 << i;
             if set & bit == 0 {
                 continue;
@@ -12598,6 +12779,42 @@ mod checked_sig {
         Ok(())
     }
 
+    /// s232 (#691): let every pending signal of an armed meaning be
+    /// delivered on this thread before a poll or wait looks — POSIX
+    /// `pthread_sigmask` delivers at least one pending unblocked signal
+    /// before it returns; repeated until a round sets no new bit.
+    pub(super) fn settle(set: i64) {
+        #[cfg(unix)]
+        // SAFETY: this thread's own mask, put back exactly as found.
+        unsafe {
+            let mut m: libc::sigset_t = std::mem::zeroed();
+            libc::sigemptyset(&mut m);
+            let mut any = false;
+            for i in 0..20 {
+                if set & (1 << i) != 0
+                    && let Some(sig) = sig_of(1 << i)
+                {
+                    libc::sigaddset(&mut m, sig);
+                    any = true;
+                }
+            }
+            if !any {
+                return;
+            }
+            for _ in 0..64 {
+                let before = PENDING.load(Ordering::SeqCst);
+                let mut old: libc::sigset_t = std::mem::zeroed();
+                libc::pthread_sigmask(libc::SIG_UNBLOCK, &m, &mut old);
+                libc::pthread_sigmask(libc::SIG_SETMASK, &old, std::ptr::null_mut());
+                if PENDING.load(Ordering::SeqCst) == before {
+                    break;
+                }
+            }
+        }
+        #[cfg(not(unix))]
+        let _ = set;
+    }
+
     /// The lowest pending meaning in `set`, cleared; `None` for none.
     pub(super) fn take(set: i64) -> Option<i64> {
         loop {
@@ -12621,7 +12838,7 @@ mod checked_sig {
     pub(super) fn set_disp(set: i64, ignore: bool) -> Result<(), &'static str> {
         #[cfg(unix)]
         {
-            for i in 0..9 {
+            for i in 0..20 {
                 let bit = 1i64 << i;
                 if set & bit == 0 {
                     continue;
@@ -12642,6 +12859,164 @@ mod checked_sig {
         #[cfg(not(unix))]
         {
             let _ = (set, ignore);
+            Err("unsupported")
+        }
+    }
+
+    /// s232 (#681): the listenable meanings the host ignores now —
+    /// except `BROKEN_PIPE` while `pipe_from_record`, which is answered
+    /// from what the `wolf` process inherited (when it was recorded).
+    /// windows `unsupported`.
+    pub(super) fn ignored(pipe_from_record: bool) -> Result<i64, &'static str> {
+        #[cfg(unix)]
+        {
+            let mut out = 0;
+            for i in 0..20 {
+                let bit = 1i64 << i;
+                let Some(sig) = sig_of(bit) else { continue };
+                if bit == 2048 && pipe_from_record {
+                    // Unrecorded (a host that is not the `wolf` binary,
+                    // such as a test harness) reads as the default,
+                    // what a shell starts a program with.
+                    if INHERITED_PIPE.load(Ordering::SeqCst) == 1 {
+                        out |= bit;
+                    }
+                    continue;
+                }
+                // SAFETY: a read-only sigaction query into a zeroed struct.
+                unsafe {
+                    let mut old: libc::sigaction = std::mem::zeroed();
+                    if libc::sigaction(sig, std::ptr::null(), &mut old) == 0
+                        && old.sa_sigaction == libc::SIG_IGN
+                    {
+                        out |= bit;
+                    }
+                }
+            }
+            Ok(out)
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = pipe_from_record;
+            Err("unsupported")
+        }
+    }
+
+    /// s232 (#691): this thread's signal mask, saved by
+    /// [`block_on_caller`] (a unit on windows).
+    #[derive(Clone, Copy)]
+    pub(super) struct Mask {
+        #[cfg(unix)]
+        old: libc::sigset_t,
+    }
+
+    /// Block the twenty catchable signals on the calling thread and
+    /// return the mask it had.
+    pub(super) fn block_on_caller() -> Mask {
+        #[cfg(unix)]
+        // SAFETY: zeroed sigsets filled by sigemptyset/sigaddset; this
+        // thread's own mask.
+        unsafe {
+            let mut set: libc::sigset_t = std::mem::zeroed();
+            let mut old: libc::sigset_t = std::mem::zeroed();
+            libc::sigemptyset(&mut set);
+            for i in 0..20 {
+                if let Some(sig) = sig_of(1 << i) {
+                    libc::sigaddset(&mut set, sig);
+                }
+            }
+            libc::pthread_sigmask(libc::SIG_BLOCK, &set, &mut old);
+            Mask { old }
+        }
+        #[cfg(not(unix))]
+        Mask {}
+    }
+
+    /// Put `m` back as the calling thread's mask.
+    pub(super) fn restore_here(m: Mask) {
+        #[cfg(unix)]
+        // SAFETY: a mask read by `block_on_caller`.
+        unsafe {
+            libc::pthread_sigmask(libc::SIG_SETMASK, &m.old, std::ptr::null_mut());
+        }
+        #[cfg(not(unix))]
+        let _ = m;
+    }
+
+    /// s232 (`[os.signal.disp]`): whether the host ignores SIGPIPE now.
+    pub(super) fn host_pipe_ignored() -> bool {
+        #[cfg(unix)]
+        // SAFETY: a read-only sigaction query into a zeroed struct.
+        unsafe {
+            let mut old: libc::sigaction = std::mem::zeroed();
+            libc::sigaction(libc::SIGPIPE, std::ptr::null(), &mut old) == 0
+                && old.sa_sigaction == libc::SIG_IGN
+        }
+        #[cfg(not(unix))]
+        false
+    }
+
+    /// s232 (`[os.signal.disp]`, #423): a child of a program that ignores
+    /// `BROKEN_PIPE` starts with it ignored — Rust's `Command` sets
+    /// SIGPIPE back to the default in every child, so the child sets it
+    /// ignored again, last, before it runs.
+    pub(super) fn keep_pipe_ignore(cmd: &mut std::process::Command, ignored: bool) {
+        #[cfg(unix)]
+        if ignored {
+            use std::os::unix::process::CommandExt as _;
+            // SAFETY: `signal` is async-signal-safe; constant arguments.
+            unsafe {
+                cmd.pre_exec(|| {
+                    libc::signal(libc::SIGPIPE, libc::SIG_IGN);
+                    Ok(())
+                });
+            }
+        }
+        #[cfg(not(unix))]
+        let _ = (cmd, ignored);
+    }
+
+    /// s232 (#141): `kill(pid, sig)`, `sig` 0 for the meaning 0 (the
+    /// caller has checked the shape); windows `unsupported`.
+    pub(super) fn send(pid: i64, m: i64) -> Result<(), &'static str> {
+        #[cfg(unix)]
+        {
+            let Ok(p) = libc::pid_t::try_from(pid) else {
+                return Err("invalid");
+            };
+            let sig = if m == 0 {
+                0
+            } else {
+                sig_of(m).ok_or("invalid")?
+            };
+            // SAFETY: kill with a positive pid and a validated signal.
+            if unsafe { libc::kill(p, sig) } == 0 {
+                return Ok(());
+            }
+            Err(match std::io::Error::last_os_error().raw_os_error() {
+                Some(libc::ESRCH) => "not_found",
+                Some(libc::EPERM) => "denied",
+                Some(libc::EINVAL) => "invalid",
+                _ => "io",
+            })
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (pid, m);
+            Err("unsupported")
+        }
+    }
+
+    /// s232: the host's number for one meaning (shape checked by the
+    /// caller); windows `unsupported`.
+    pub(super) fn number(m: i64) -> Result<i64, &'static str> {
+        #[cfg(unix)]
+        {
+            sig_of(m).map(i64::from).ok_or("invalid")
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = m;
             Err("unsupported")
         }
     }
