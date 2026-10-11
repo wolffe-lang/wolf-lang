@@ -6443,7 +6443,9 @@ impl<'t> Machine<'t> {
                 {
                     use std::os::unix::fs::OpenOptionsExt as _;
                     let mut opts = opts;
-                    match opts.mode(mode as u32).open(&path) {
+                    // PLANT (s230, reverted next): the creation asks for
+                    // 0o666 whatever mode it was given.
+                    match opts.mode(0o666).open(&path) {
                         Err(e) => Ok(tag(&errtag(&e, &["not_found", "denied", "exists", "io"]))),
                         Ok(f) => {
                             if self.files.len() < FS_FIRST_HANDLE {
