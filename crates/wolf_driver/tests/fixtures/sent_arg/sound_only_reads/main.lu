@@ -1,12 +1,11 @@
 // s229 (wolf-lang#665): the callee only READS the argument and sends a literal: sound, and refused — the rule reads the signature.
 fn note(ch: channel[str], s: str) {
     print("{s.len}")
-    ch.send("noted") else { }
+    ch.send("noted") else {}
 }
 
 fn main() -> int {
-    let st = region()
-    in st {
+    region st {
         let seq0 = 0
         let ch = channel[str](1)
         region pass {

@@ -1,6 +1,6 @@
 // s229 (wolf-lang#665): the closure returned: from there it is a fn value whose type says nothing of the channel.
 fn mk(ch: channel[str]) -> fn(str) {
-    let f = fn(x: str) { ch.send(x) else { } }
+    let f = fn(x: str) { ch.send(x) else {} }
     f
 }
 

@@ -3,13 +3,13 @@ struct Doc {
     title: str,
     words: int,
 }
+
 fn fwd_t(ch: channel[str], take d: Doc) {
-    ch.send(d.title) else { }
+    ch.send(d.title) else {}
 }
 
 fn main() -> int {
-    let st = region()
-    in st {
+    region st {
         let seq0 = 0
         let ch = channel[str](1)
         region pass {

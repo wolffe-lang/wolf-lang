@@ -1,11 +1,10 @@
 // s229 (wolf-lang#665): a generic callee.
 fn fwd_g[T](ch: channel[T], v: T) {
-    ch.send(copy v) else { }
+    ch.send(copy v) else {}
 }
 
 fn main() -> int {
-    let st = region()
-    in st {
+    region st {
         let seq0 = 0
         let ch = channel[str](1)
         region pass {

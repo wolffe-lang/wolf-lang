@@ -1,6 +1,6 @@
 // s229 (wolf-lang#665): the call sits under `in st { }`.
 fn fwd(ch: channel[str], s: str) {
-    ch.send(s) else { }
+    ch.send(s) else {}
 }
 
 fn main() -> int {

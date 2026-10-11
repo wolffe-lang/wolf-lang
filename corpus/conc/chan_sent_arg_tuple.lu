@@ -12,12 +12,11 @@
 //! lupin traps `region-fault`.
 
 fn fwd_p(ch: channel[(int, str)], p: (int, str)) {
-    ch.send(p) else { }
+    ch.send(p) else {}
 }
 
 fn main() -> int {
-    let st = region()
-    in st {
+    region st {
         let seq0 = 0
         let ch = channel[(int, str)](1)
         region pass {

@@ -12,7 +12,7 @@
 //! machine the stale bytes; lupin traps `region-fault`.
 
 fn fwd(ch: channel[str], s: str) {
-    ch.send(s) else { }
+    ch.send(s) else {}
 }
 
 fn main() -> !int {

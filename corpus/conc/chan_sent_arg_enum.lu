@@ -15,13 +15,13 @@ enum Msg {
     Line(str),
     Done,
 }
+
 fn fwd_e(ch: channel[Msg], m: Msg) {
-    ch.send(m) else { }
+    ch.send(m) else {}
 }
 
 fn main() -> !int {
-    let st = region()
-    in st {
+    region st {
         let seq0 = 0
         let ch = channel[Msg](1)
         region pass {

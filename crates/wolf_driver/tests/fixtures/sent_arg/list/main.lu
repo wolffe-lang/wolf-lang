@@ -1,11 +1,10 @@
 // s229 (wolf-lang#665): the bytes are reached through a `List[str]` argument.
 fn fwd_first(ch: channel[str], xs: List[str]) {
-    ch.send(xs[0]) else { }
+    ch.send(xs[0]) else {}
 }
 
 fn main() -> int {
-    let st = region()
-    in st {
+    region st {
         let seq0 = 0
         let ch = channel[str](1)
         region pass {

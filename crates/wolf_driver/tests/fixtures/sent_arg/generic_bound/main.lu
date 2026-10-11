@@ -2,15 +2,18 @@
 trait Sink {
     fn put(self, s: str)
 }
+
 struct Out {
     ch: channel[str],
     n: int,
 }
+
 impl Sink for Out {
     fn put(self, s: str) {
-        self.ch.send(s) else { }
+        self.ch.send(s) else {}
     }
 }
+
 fn feed_all[S: Sink](k: S, n: int) {
     region pass {
         let s = "built in pass, {n} uses"

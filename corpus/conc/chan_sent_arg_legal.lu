@@ -13,19 +13,19 @@
 struct Doc { title: str, words: int }
 
 fn fwd(ch: channel[str], s: str) {
-    ch.send(s) else { }
+    ch.send(s) else {}
 }
 
 fn fwd_d(ch: channel[Doc], d: Doc) {
-    ch.send(d) else { }
+    ch.send(d) else {}
 }
 
 fn tally(ch: channel[int], s: str) {
-    ch.send(s.len) else { }
+    ch.send(s.len) else {}
 }
 
 fn emit(ch: channel[str], n: int) {
-    ch.send("built by emit, {n} uses") else { }
+    ch.send("built by emit, {n} uses") else {}
 }
 
 fn pass_one(ch: channel[str], life: region, n: int) {

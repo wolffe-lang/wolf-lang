@@ -1,6 +1,6 @@
 // s229 (wolf-lang#665): a proc entry hands its PARAMETER to a helper: sound, and refused — the helper may send what it builds in the proc's region.
 fn fwd(ch: channel[str], s: str) {
-    ch.send(s) else { }
+    ch.send(s) else {}
 }
 
 fn worker(msg: str, out: channel[str]) -> !int {

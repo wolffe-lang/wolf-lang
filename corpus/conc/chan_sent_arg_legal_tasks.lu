@@ -12,7 +12,7 @@
 //! a callee.
 
 fn fwd(ch: channel[str], s: str) {
-    ch.send(s) else { }
+    ch.send(s) else {}
 }
 
 fn relay(inp: channel[str], out: channel[str]) -> !int {
@@ -64,10 +64,10 @@ fn main() -> !int {
     let c = spawn proc relay(a, b)
     for line in b { print(line) }
     // A closure that captured a channel of bytes, called where it was made.
-    let say = fn(i: int) { a.send("said") else { } }
+    let say = fn(i: int) { a.send("said") else {} }
     say(n)
     // A closure that captured a channel of scalars travels freely.
-    each(fn(i: int) { counts.send(i) else { } }, n)
+    each(fn(i: int) { counts.send(i) else {} }, n)
     print("{counts.recv() else 0}")
     0
 }

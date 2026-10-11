@@ -1,10 +1,9 @@
 // s229 (wolf-lang#665): a closure that captured the channel, called in the region block.
 fn main() -> int {
-    let st = region()
-    in st {
+    region st {
         let seq0 = 0
         let ch = channel[str](1)
-        let f = fn(x: str) { ch.send(x) else { } }
+        let f = fn(x: str) { ch.send(x) else {} }
         region pass {
             let s = "built in pass, {seq0} uses"
             f(s)

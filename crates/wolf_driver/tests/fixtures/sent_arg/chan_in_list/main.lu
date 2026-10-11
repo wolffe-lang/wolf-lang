@@ -1,11 +1,10 @@
 // s229 (wolf-lang#665): the channel is reached through a list.
 fn fwd_l(chs: List[channel[str]], s: str) {
-    chs[0].send(s) else { }
+    chs[0].send(s) else {}
 }
 
 fn main() -> int {
-    let st = region()
-    in st {
+    region st {
         let seq0 = 0
         let ch = channel[str](1)
         var chs = List[channel[str]]()

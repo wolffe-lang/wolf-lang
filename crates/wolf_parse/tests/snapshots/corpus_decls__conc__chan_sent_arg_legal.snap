@@ -3,9 +3,9 @@ source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
 StructDecl 672..709 name=Doc fields=2
-FnDecl 711..771 name=fwd body=Block
-FnDecl 773..835 name=fwd_d body=Block
-FnDecl 837..903 name=tally body=Block
-FnDecl 905..990 name=emit body=Block
-FnDecl 992..1168 name=pass_one body=Block
-FnDecl 1170..2275 name=main body=Block
+FnDecl 711..770 name=fwd body=Block
+FnDecl 772..833 name=fwd_d body=Block
+FnDecl 835..900 name=tally body=Block
+FnDecl 902..986 name=emit body=Block
+FnDecl 988..1164 name=pass_one body=Block
+FnDecl 1166..2271 name=main body=Block

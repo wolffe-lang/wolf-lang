@@ -1,6 +1,6 @@
 // s229 (wolf-lang#665): the channel is made, used and drained inside the one region block: sound, and refused — a channel has no region to compare (the direct send there is E1010 too).
 fn fwd(ch: channel[str], s: str) {
-    ch.send(s) else { }
+    ch.send(s) else {}
 }
 
 fn main() -> int {

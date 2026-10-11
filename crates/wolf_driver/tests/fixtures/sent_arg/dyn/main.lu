@@ -2,22 +2,24 @@
 trait Sink {
     fn put(self, s: str)
 }
+
 struct Out {
     ch: channel[str],
     n: int,
 }
+
 impl Sink for Out {
     fn put(self, s: str) {
-        self.ch.send(s) else { }
+        self.ch.send(s) else {}
     }
 }
+
 fn feed(k: dyn Sink, s: str) {
     k.put(s)
 }
 
 fn main() -> int {
-    let st = region()
-    in st {
+    region st {
         let seq0 = 0
         let ch = channel[str](1)
         let o = Out { ch: ch, n: 0 }

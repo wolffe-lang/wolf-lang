@@ -17,13 +17,13 @@ struct Doc {
     title: str,
     words: int,
 }
+
 fn fwd_d(ch: channel[Doc], d: Doc) {
-    ch.send(d) else { }
+    ch.send(d) else {}
 }
 
 fn main() -> int {
-    let st = region()
-    in st {
+    region st {
         let seq0 = 0
         let ch = channel[Doc](1)
         region pass {

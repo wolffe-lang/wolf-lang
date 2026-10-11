@@ -2,7 +2,7 @@
 fn main() -> int {
     let seq0 = 0
     let ch = channel[str](1)
-    let f = fn(x: str) { ch.send(x) else { } }
+    let f = fn(x: str) { ch.send(x) else {} }
     let g = f
     region pass {
         let s = "built in pass, {seq0} uses"

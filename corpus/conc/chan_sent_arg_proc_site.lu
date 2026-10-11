@@ -13,7 +13,7 @@
 //! (wolf-lang#191); lupin traps `region-fault`.
 
 fn emit(ch: channel[str], n: int) {
-    ch.send("built in proc, {n} uses") else { }
+    ch.send("built in proc, {n} uses") else {}
 }
 
 fn worker(n: int, out: channel[str]) -> !int {

@@ -9,7 +9,7 @@ fn each(f: fn(str), n: int) {
 fn main() -> int {
     let seq0 = 0
     let ch = channel[str](1)
-    each(fn(x: str) { ch.send(x) else { } }, seq0)
+    each(fn(x: str) { ch.send(x) else {} }, seq0)
     region other {
         let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
         print("{z.len}")
