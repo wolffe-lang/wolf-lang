@@ -189,7 +189,12 @@ payload must:
   a region block, under `in r { }` for a region made in the same
   frame, or in a `spawn proc` entry is refused at the call.
 
-`spawn proc f(args)` is such a call for its arguments. **A closure that
+**A `spawn proc` argument is demanded the same way, channel or no
+channel (#678).** The proc outlives the frame that spawned it, and a
+`str` argument crosses as its view, so `region pass { let s = "built
+{n}"; spawn proc child(s) }` left `child` reading freed bytes. It is
+E1010 at `s` now. A function handed the bytes as parameters that spawns
+and joins before it returns is accepted, and is the repair. **A closure that
 captured such a channel** sends what it is called with, wherever it is
 called: calling it is a call under both demands, and handing it to a
 function, returning it, sending it or storing it in module state is
@@ -206,19 +211,23 @@ changes. It refuses some programs that would have run correctly, and
 says so: a helper that only reads the argument beside a channel it
 sends something else on; any helper handed a `channel[str]` inside a
 region block or a proc entry, whatever it sends; a channel made, used
-and drained inside one region block through a helper. A `channel[int]`
+and drained inside one region block through a helper; a proc joined
+inside the region block that built its argument. A `channel[int]`
 and every channel of scalars is untouched, in any region. Measured
 before it landed, the compiler before against after at the memory
 check: wolf-std, boreutils, lobo, pelt, pax, muzzle and the book
-(1,162 files and lobo's 120 staged tests) — zero rows moved; lobo has
-no channel that carries bytes.
+(1,165 files and lobo's 122 staged tests) — zero rows moved; lobo has
+no channel that carries bytes, and its two spawns with request-lived
+strings pass them as parameters and join.
 
-Still open: a `spawn proc` argument built in a region block and read by
-the proc after the block closed, with no channel in sight (#696). lupin
+Still open: a function that spawns a proc with its own parameter and
+returns without joining it — legal in the function, invisible at its
+call, and it needs a must-join rule this change does not have (#678
+stays open for that half). lupin
 0.1.50 runs the shapes whose receive is read inside an interpolation
 (wolf-interp#232) and traps the rest. A run-time alternative — a send
 that copies the bytes out, about 40 ns a message — is the ruling owed.
-Gate `chan_sent_arg_lanes`: 37 rows on checked, native, release and
+Gate `chan_sent_arg_lanes`: 42 rows on checked, native, release and
 lupin.
 
 ## 0.2.27 — 2026-10-11
