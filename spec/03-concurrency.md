@@ -407,6 +407,40 @@ premise by construction.
   therefore be handed to any number of procs. (Added 2026-09-18,
   s170, wolf-lang#312: the mem tier moved it, so the same two calls
   compiled as plain calls and refused as spawns.)
+  (Extended 2026-10-11 by s229 for wolf-lang#678, the spawn twin of
+  wolf-lang#665; ruling owed. **A `spawn proc` argument outlives the
+  spawning frame.** "Moved" does not move a `str`: it is `Copy`, the
+  proc receives its view, and the bytes stay where they were built. So
+  `region pass { let s = "built {n}"; spawn proc child(s) }` was
+  accepted, the block closed while `child` ran, and native and release
+  printed the chunk the next region reused. An argument that can name
+  bytes a region owns — a `str`, or a list, map, struct, tuple or enum
+  reaching one — is now demanded as a sent payload is
+  (`[conc.chan.payload]`): E1010 at the argument when its bytes live
+  in a frame-local region (a region block, a region value made in this
+  frame, the spawning proc's own region). A literal, a scalar, frozen
+  data and a parameter of the spawning function pass. **The cost,
+  stated.** Nothing at run time. Refused though sound: a proc joined
+  inside the block that built its argument
+  (`region pass { let s = "…"; let w = spawn proc child(s); w.join() }`)
+  — no join is tracked; the repair is the shape that is accepted, a
+  function handed the bytes as parameters that spawns and joins before
+  it returns. **Not covered, and it needs a different rule:** that same
+  function when it does NOT join. A parameter's bytes outlive the
+  frame, so `fn helper(s: str) { spawn proc child(s) }` is legal in
+  `helper`, and nothing at `region pass { helper(s) }` says a callee
+  may spawn with what it is handed — every callee may, so a signature
+  rule would refuse every call that passes region bytes. What decides
+  it is whether the proc is joined before the frame returns: a
+  must-join check over the proc handle on every path, which this pass
+  does not have (wolf-lang#678 stays open for it; a killed proc is not
+  yet a finished one, wolf-lang#683, so the join and not the kill is
+  the fact to track). Measured before it landed: the same census as
+  `[conc.chan.payload]`'s, zero rows moved; lobo's two spawns that
+  pass request-lived strings (`budget.run_small`, `budget.run_stream`)
+  pass them as parameters and join, and compile unchanged. Witnesses:
+  the gate `chan_sent_arg_lanes`'s spawn rows and
+  `corpus/conc/chan_sent_arg_spawn.lu`.)
 - `[conc.proc.kill]` **Killed-proc sequence, in order** (the decided
   rule): (1) the proc's task tree is cancelled *without running any
   further user code* — pending `defer`/`errdefer` in the killed proc
@@ -504,10 +538,10 @@ premise by construction.
   it builds there, so a call that hands such a channel from inside a
   frame-local region is E1010 at the call even when no argument carries
   bytes — `region pass { emit(ch, n) }`, with `emit` sending
-  `"built {n}"`, read freed bytes the same way. `spawn proc f(args)` is
-  a call for (a): the entry is handed the channel and outlives the
-  spawning frame (`[conc.proc.arg]`); (b) does not apply, a proc
-  allocating in its own region. A channel is NOT a `mut` argument that
+  `"built {n}"`, read freed bytes the same way. A `spawn proc`
+  argument is demanded the same way whether or not a channel is handed
+  over (`[conc.proc.arg]`); (b) does not apply there, a proc allocating
+  in its own region. A channel is NOT a `mut` argument that
   shares bytes: a handle is a word that copies to any binding and
   crosses channels itself, and a channel is never freed with a region,
   so no binding's lifetime bounds its receiver's — the frame is the
@@ -541,9 +575,9 @@ premise by construction.
   inside one package, and is the debt, as for the kept-argument rule.
   Measured before it landed, the compiler before against after at the
   memory check (`conform-run --phase=mem`): every `.lu` file of
-  wolf-std, boreutils, lobo `c9eff15`, pelt, pax, muzzle and the book
-  (1,162 files, 988 records reaching the check) and lobo's 120 staged
-  tests — **zero rows moved**; downstream every channel but three is a
+  wolf-std, boreutils, lobo, pelt, pax, muzzle and the book
+  (1,165 files, 991 records reaching the check, lobo at `bea04ee`) and
+  lobo's 122 staged tests — **zero rows moved**; downstream every channel but three is a
   `channel[int]`, and lobo has none outside two replay tests. The first
   cut moved six, all in the book and all sound: its walk of a recursive
   struct (`Node { kids: List[Node] }`) gave up at a depth bound and
@@ -558,9 +592,7 @@ premise by construction.
   region per turn — about 40 ns a message, the bytes twice, and an
   allocation per message in the receiver's region. It changes this
   clause ("a `str` payload is its view") and parts from lupin, which
-  keeps the bytes in the sender's region. Not covered, filed: a
-  `spawn proc` argument built in a region block and read by the proc
-  after the block closed, no channel involved (wolf-lang#696). lupin
+  keeps the bytes in the sender's region. lupin
   runs the shapes whose receive is read inside an interpolation to
   `exit(0)` on stale bytes (wolffe-lang/wolf-interp#232) and traps the
   rest. Witnesses `corpus/conc/chan_sent_arg_*.lu` and the legal
