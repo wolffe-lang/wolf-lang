@@ -330,6 +330,65 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "hosted runtime",
         ),
         ("os_error", "", "os_error()", "`os_error`", "hosted runtime"),
+        // s230 (#346, #698, #699, #700, #702, #704): the calls that
+        // change a file, and the mask — each a runtime symbol named for
+        // its builtin, so each is refused by that name.
+        (
+            "fs_set_mode",
+            "",
+            "fs_set_mode(\"f\", 0o600) else |e| {\n        return 0\n    }\n    1",
+            "`fs_set_mode`",
+            "hosted runtime",
+        ),
+        (
+            "fs_open_perm",
+            "",
+            "let fd = fs_open_perm(\"f\", 4, 0o600) else |e| {\n        return 0\n    }\n    fd",
+            "`fs_open_perm`",
+            "hosted runtime",
+        ),
+        (
+            "fs_create_dir_mode",
+            "",
+            "fs_create_dir_mode(\"d\", 0o700) else |e| {\n        return 0\n    }\n    1",
+            "`fs_create_dir_mode`",
+            "hosted runtime",
+        ),
+        (
+            "fs_symlink",
+            "",
+            "fs_symlink(\"f\", \"l\") else |e| {\n        return 0\n    }\n    1",
+            "`fs_symlink`",
+            "hosted runtime",
+        ),
+        (
+            "fs_link",
+            "",
+            "fs_link(\"f\", \"g\") else |e| {\n        return 0\n    }\n    1",
+            "`fs_link`",
+            "hosted runtime",
+        ),
+        (
+            "fs_set_times",
+            "",
+            "fs_set_times(\"f\", 0, -1, 0, -2, true) else |e| {\n        return 0\n    }\n    1",
+            "`fs_set_times`",
+            "hosted runtime",
+        ),
+        (
+            "fs_truncate",
+            "",
+            "fs_truncate(0, 0) else |e| {\n        return 0\n    }\n    1",
+            "`fs_truncate`",
+            "hosted runtime",
+        ),
+        (
+            "os_umask",
+            "",
+            "let old = os_umask(0o022) else |e| {\n        return 0\n    }\n    old",
+            "`os_umask`",
+            "hosted runtime",
+        ),
         (
             "float",
             "",
