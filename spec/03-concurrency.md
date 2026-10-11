@@ -477,6 +477,95 @@ premise by construction.
   family: the native tier carried one word since s39 and E1102 refused
   every aggregate, which held chapter 12 §12.1's `channel[Doc]` on one
   machine. Witness `corpus/conc/chan_struct_payload.lu`.)
+  (Extended 2026-10-11 by s229 for wolf-lang#665; ruling owed. **What
+  a call can send, it is taken to send.** The frame rule above was
+  demanded at the builtin `send` alone, and a callee handed the channel
+  sends too. `fn fwd(ch: channel[str], s: str) { ch.send(s) }` is legal
+  in `fwd`, where `s` is a parameter and its bytes outlive `fwd`'s
+  frame; so `region pass { let s = "built {n}"; fwd(ch, s) }` was
+  accepted while `ch.send(s)` in its place was E1010. Native and
+  release handed the receiver the chunk the next region reused, the
+  checked machine stale bytes, and lupin traps `region-fault` wherever
+  it reads the payload outside an interpolation. The rule, read off the
+  call's SIGNATURE and never the callee's body, as
+  `[mem.region.escape]`'s kept-argument rule is (a fn in another
+  package, a generic and a trait method answer alike): at a call whose
+  callee is **handed a channel that can carry bytes** — an argument or
+  the receiver whose type reaches a `channel[T]` with `T` a `str` or a
+  struct, tuple or enum reaching one, through any field, container,
+  `Mutex` or channel of channels; a type parameter and a trait object
+  count, because a bounded `S` may be a struct holding the channel —
+  (a) **every argument that can name bytes a region owns is demanded
+  to outlive the frame, as a sent payload is**: E1010 at the argument
+  when its bytes live in a frame-local region (a region block, a region
+  value made in this frame, a proc's own region, `[mem.region.proc]`);
+  and (b) **so is the call's own site**: a callee allocates in its
+  caller's current region (`[mem.region.create.3]`) and may send what
+  it builds there, so a call that hands such a channel from inside a
+  frame-local region is E1010 at the call even when no argument carries
+  bytes — `region pass { emit(ch, n) }`, with `emit` sending
+  `"built {n}"`, read freed bytes the same way. `spawn proc f(args)` is
+  a call for (a): the entry is handed the channel and outlives the
+  spawning frame (`[conc.proc.arg]`); (b) does not apply, a proc
+  allocating in its own region. A channel is NOT a `mut` argument that
+  shares bytes: a handle is a word that copies to any binding and
+  crosses channels itself, and a channel is never freed with a region,
+  so no binding's lifetime bounds its receiver's — the frame is the
+  only bound there is, the one this clause already used. **A closure
+  that captured such a channel** sends what it is called with and
+  builds its payload wherever it is called, and its type says nothing
+  of the capture. So the fact rides the value — a binding, a copy of
+  it, an aggregate built around it: calling it is a call under (a) and
+  (b); handing it to a callee, returning it, sending it or storing it
+  in module state is E1010 there, where the capture is still known
+  (`fn each(f: fn(str)) { region r { let t = "…"; f(t) } }` cannot be
+  asked to refuse). A `scope`'s `spawn` is not a handing-over: the
+  task's body is checked in the frame that wrote it. Untouched: a
+  `channel[int]` and every payload of scalars, in any region; a call
+  made where the bytes outlive the frame; a direct `send` of a received
+  value. The diagnostic is E1010 at the argument (or the call), naming
+  the callee, the argument and the channel; for a `str` argument under
+  `in r { }` with `r` a region the function was handed, it offers
+  `"{s}"`, which builds the bytes in `r`. **The cost, stated.** Nothing
+  at run time on any tier — a refusal; no accepted program's code
+  changes. What is refused that would have run correctly: a callee
+  that only READS the argument beside a channel it sends something
+  else on; any helper handed such a channel from inside a region block
+  or a proc entry, even one that sends a literal, a parameter or a
+  received value (so `[mem.region.proc]`'s parameter form sends from
+  the proc entry itself); a channel made, used and drained inside one
+  region block through a helper (the direct send there was E1010
+  already); a closure that captured such a channel, handed to a callee
+  that would have called it with long-lived bytes. A summary of what
+  each callee sends would make (a) and (b) exact for a direct call
+  inside one package, and is the debt, as for the kept-argument rule.
+  Measured before it landed, the compiler before against after at the
+  memory check (`conform-run --phase=mem`): every `.lu` file of
+  wolf-std, boreutils, lobo `c9eff15`, pelt, pax, muzzle and the book
+  (1,162 files, 988 records reaching the check) and lobo's 120 staged
+  tests — **zero rows moved**; downstream every channel but three is a
+  `channel[int]`, and lobo has none outside two replay tests. The first
+  cut moved six, all in the book and all sound: its walk of a recursive
+  struct (`Node { kids: List[Node] }`) gave up at a depth bound and
+  answered "may hold a channel"; a recursive type met again inside
+  itself now adds nothing. **The alternative weighed, and owed a
+  ruling:** a `send` that copies the payload's `str` bytes into the
+  channel's box, and a receive that copies them into the receiver's
+  current region, would make every shape here sound at run time and
+  let this clause's E1010 go. Measured ceiling on linux x86-64,
+  release, 2,000,000 round trips of a 29-byte `str` on a buffered
+  channel: 33 ns a round trip as it is, 77 ns with two copies and a
+  region per turn — about 40 ns a message, the bytes twice, and an
+  allocation per message in the receiver's region. It changes this
+  clause ("a `str` payload is its view") and parts from lupin, which
+  keeps the bytes in the sender's region. Not covered, filed: a
+  `spawn proc` argument built in a region block and read by the proc
+  after the block closed, no channel involved (wolf-lang#696). lupin
+  runs the shapes whose receive is read inside an interpolation to
+  `exit(0)` on stale bytes (wolffe-lang/wolf-interp#232) and traps the
+  rest. Witnesses `corpus/conc/chan_sent_arg_*.lu` and the legal
+  companions `chan_sent_arg_legal.lu` and
+  `chan_sent_arg_legal_tasks.lu`.)
 - `[conc.chan.buf]` Capacity `n ≥ 1` buffers; `n = 0` is rendezvous.
   Sends on a full channel and receives on an empty one block (they are
   cancellation points and recorded events).

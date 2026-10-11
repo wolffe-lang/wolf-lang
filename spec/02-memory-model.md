@@ -804,6 +804,17 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   `corpus/memory/region_kept_arg_*.lu`, `region_kept_result_*.lu`,
   `region_copy_shares_str.lu`, `region_copy_index_store.lu`, and the
   legal companion `region_kept_arg_legal.lu`.)
+  (Extended 2026-10-11 by s229 for wolf-lang#665; ruling owed. The
+  channel door the paragraph above left open is closed in
+  `[conc.chan.payload]`, by that clause's own frame rule carried
+  through the call and not by shared bytes: a callee handed a channel
+  that can carry bytes may send any argument on it, or a value it
+  builds in its caller's current region, so each such argument and the
+  call's own site are demanded to outlive the frame as a sent payload
+  is — "sent on a channel" is this clause's arm, reached through a
+  call. A channel has no binding whose lifetime bounds its receiver's,
+  which is why it is not a `mut` argument that shares. Witnesses
+  `corpus/conc/chan_sent_arg_*.lu`.)
   (Ruled 2026-09-11 by s153 for wolf-lang#310: `region scratch { let s
   = "re" + "gions"; s }` returned from a function printed `regions`
   from freed bytes on wolf 0.2.10 and lupin 0.1.31 alike, with a W1001
