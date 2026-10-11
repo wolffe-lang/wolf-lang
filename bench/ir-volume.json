@@ -150,8 +150,8 @@
     },
     "corpus/faults/byte_view_slice_reversed.lu": {
       "midend": 19,
-      "naive": 43,
-      "ratio": 0.442
+      "naive": 32,
+      "ratio": 0.594
     },
     "corpus/faults/cast_float_nan_trap.lu": {
       "midend": 14,
@@ -204,9 +204,9 @@
       "ratio": 1.0
     },
     "corpus/faults/list_slice_reversed.lu": {
-      "midend": 23,
-      "naive": 32,
-      "ratio": 0.719
+      "midend": 21,
+      "naive": 21,
+      "ratio": 1.0
     },
     "corpus/faults/overflow_add.lu": {
       "midend": 5,
@@ -904,9 +904,9 @@
       "ratio": 0.959
     },
     "corpus/memory/list_slice_edges.lu": {
-      "midend": 114,
-      "naive": 123,
-      "ratio": 0.927
+      "midend": 79,
+      "naive": 79,
+      "ratio": 1.0
     },
     "corpus/memory/list_slice_inline_owned.lu": {
       "midend": 102,
@@ -1420,8 +1420,8 @@
     },
     "corpus/strings/byte_view_slice_lent.lu": {
       "midend": 87,
-      "naive": 245,
-      "ratio": 0.355
+      "naive": 190,
+      "ratio": 0.458
     },
     "corpus/strings/bytes_roundtrip.lu": {
       "midend": 340,
