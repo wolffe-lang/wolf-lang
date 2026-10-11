@@ -1,0 +1,15 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1010]: this closure captured `ch`, which reaches a channel that carries bytes, and it is returned here: whoever calls it next may hand it bytes that are freed before a receiver could ever use them
+ --> mem:///main.lu:3:5
+  |
+3 |     f
+  |     ^ a closure that may send on `ch` leaves its frame
+  |
+  = note: a closure that captured a channel sends what it is called with, and a fn value's type
+    does not say what it captured — once it leaves the frame that made it, no call of it can
+    be checked [conc.chan.payload] [mem.region.escape]. Call the closure where it was made,
+    or hand over the channel itself and let the other side send: a channel argument is
+    checked at every call that passes it.

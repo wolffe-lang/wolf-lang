@@ -1,0 +1,21 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1010]: `emit` may send `d` on `o`, and its bytes live in region `pass`, which is freed before a receiver could ever use them
+  --> mem:///main.lu:14:16
+   |
+12 |     region pass {
+   |            ---- region `pass` is created here and freed with its scope — everything in it is freed wholesale
+13 |         let d = Doc { title: "built {n}", words: 1 }
+   |                              ----------- allocated here, into region `pass`
+14 |         o.emit(d)
+   |         - `o` reaches a channel that carries bytes: the callee may send any other argument on it
+   |                ^ this argument's bytes are in region `pass`
+   |
+   = note: a call may send what it is handed: a callee given a channel can send any other argument
+     on it, or a value it builds in its caller's current region, and a payload must outlive
+     the frame that sends it [conc.chan.payload] [mem.region.escape] — a channel is never
+     tied to a region, so its receiver may read after any region block has closed. Make the
+     call where the bytes outlive the frame: build the value and make the call outside the
+     region block, or hand the callee a scalar (`s.len`) instead of the bytes.

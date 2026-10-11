@@ -2771,3 +2771,289 @@ fn e1010_a_map_store_keeps_its_key() {
          }\n",
     );
 }
+
+// ---- s229 (wolf-lang#665): the sent-argument rule ----
+
+#[test]
+fn e1010_a_callee_may_send_its_argument() {
+    // The report: `fwd` is one line around `ch.send(s)`. The direct
+    // send was E1010 all along; through the helper nothing was. The
+    // diagnostic names the callee, the argument and the channel. No
+    // fix-it: the current region is `pass` itself.
+    snap(
+        "e1010_sent_argument_str",
+        r#"fn fwd(ch: channel[str], s: str) {
+    ch.send(s) else { }
+}
+fn main() -> int {
+    let n = 0
+    let ch = channel[str](1)
+    region pass {
+        let s = "built in pass, {n} uses"
+        fwd(ch, s)
+    }
+    print("{ch.recv() else "?"}")
+    0
+}
+"#,
+    );
+}
+
+#[test]
+fn e1010_a_sent_argument_under_in_has_a_fix_it() {
+    // `in life { }` for a region handed in: the current region
+    // outlives this frame, so `"{s}"` there builds bytes the callee
+    // may send. The one sound edit at the call, offered.
+    snap(
+        "e1010_sent_argument_fix_it",
+        r#"fn fwd(ch: channel[str], s: str) {
+    ch.send(s) else { }
+}
+fn pass_one(ch: channel[str], life: region, n: int) {
+    region pass {
+        let s = "built in pass, {n} uses"
+        in life {
+            fwd(ch, s)
+        }
+    }
+}
+"#,
+    );
+}
+
+#[test]
+fn e1010_a_callee_may_send_what_it_builds_in_the_caller_s_region() {
+    // No argument carries the bytes: `emit` builds its string in ITS
+    // caller's current region, which is `pass`, and sends it.
+    snap(
+        "e1010_sent_call_site",
+        r#"fn emit(ch: channel[str], n: int) {
+    ch.send("built in pass, {n} uses") else { }
+}
+fn main() -> int {
+    let n = 0
+    let ch = channel[str](1)
+    region pass {
+        emit(ch, n)
+    }
+    print("{ch.recv() else "?"}")
+    0
+}
+"#,
+    );
+}
+
+#[test]
+fn e1010_a_proc_s_helper_may_send_what_the_proc_built() {
+    // A proc's own region is frame-local to the proc
+    // ([mem.region.proc]): the helper-wrapped send of a proc-built
+    // string, in the proc's words.
+    snap(
+        "e1010_sent_argument_proc",
+        r#"fn fwd(ch: channel[str], s: str) {
+    ch.send(s) else { }
+}
+fn worker(n: int, out: channel[str]) -> !int {
+    let s = "built in proc, {n} uses"
+    fwd(out, s)
+    0
+}
+fn main() -> !int {
+    let out = channel[str](4)
+    let c = spawn proc worker(7, out)
+    let m = c.monitor()
+    select {
+        exit(reason) from m => {},
+        timeout(1.s) => { return 1 },
+    }
+    0
+}
+"#,
+    );
+}
+
+#[test]
+fn e1010_a_struct_payload_and_a_channel_inside_a_struct() {
+    // The channel is reached through a struct's field (a method's
+    // receiver), and the payload is an aggregate reaching a `str`.
+    snap(
+        "e1010_sent_argument_struct",
+        r#"struct Doc { title: str, words: int }
+struct Out { ch: channel[Doc], n: int }
+impl Out {
+    fn emit(self, d: Doc) {
+        self.ch.send(d) else { }
+    }
+}
+fn main() -> int {
+    let n = 0
+    let ch = channel[Doc](1)
+    let o = Out { ch: ch, n: 0 }
+    region pass {
+        let d = Doc { title: "built {n}", words: 1 }
+        o.emit(d)
+    }
+    0
+}
+"#,
+    );
+}
+
+#[test]
+fn e1010_a_closure_that_captured_a_channel_is_called() {
+    // The called closure sends through what it captured — under its
+    // own name and under a second one.
+    snap(
+        "e1010_sending_closure_called",
+        r#"fn main() -> int {
+    let n = 0
+    let ch = channel[str](1)
+    let f = fn(x: str) { ch.send(x) else { } }
+    let g = f
+    region pass {
+        let s = "built in pass, {n} uses"
+        g(s)
+    }
+    0
+}
+"#,
+    );
+}
+
+#[test]
+fn e1010_a_closure_that_captured_a_channel_is_handed_to_a_callee() {
+    // `each` may call it with bytes built in a region block of its
+    // own, which no call site sees: refused where the capture is known.
+    snap(
+        "e1010_sending_closure_handed",
+        r#"fn each(f: fn(str), n: int) {
+    region inner {
+        let t = "built in inner, {n} uses"
+        f(t)
+    }
+}
+fn main() -> int {
+    let n = 0
+    let ch = channel[str](1)
+    each(fn(x: str) { ch.send(x) else { } }, n)
+    0
+}
+"#,
+    );
+}
+
+#[test]
+fn e1010_a_closure_that_captured_a_channel_is_returned() {
+    // Returned, it is a fn value whose type says nothing of `ch`.
+    snap(
+        "e1010_sending_closure_returned",
+        r#"fn mk(ch: channel[str]) -> fn(str) {
+    let f = fn(x: str) { ch.send(x) else { } }
+    f
+}
+"#,
+    );
+}
+
+#[test]
+fn e1010_a_spawn_argument_beside_a_channel() {
+    // A proc entry is a callee too, and it outlives the frame that
+    // spawned it: `msg` lives in `pass`, `worker` may send it on `out`.
+    snap(
+        "e1010_sent_argument_spawn",
+        r#"fn worker(msg: str, out: channel[str]) -> !int {
+    out.send(msg)?
+    0
+}
+fn main() -> !int {
+    let n = 7
+    let out = channel[str](4)
+    region pass {
+        let msg = "built in pass, {n} uses"
+        let c = spawn proc worker(msg, out)
+        let m = c.monitor()
+        select {
+            exit(reason) from m => {},
+            timeout(1.s) => { return 1 },
+        }
+    }
+    0
+}
+"#,
+    );
+}
+
+#[test]
+fn sent_arguments_that_cannot_dangle_stay_silent() {
+    // A helper called where the bytes outlive the frame; a channel of
+    // scalars, whatever region the call sits in; the fix-it applied; a
+    // closure that captured a channel of scalars handed to a callee; a
+    // closure that captured a `channel[str]` called outside any region
+    // block; a recursive struct that reaches no channel (wolf-book's
+    // word tree, refused by a walk that gave up on the recursion); a
+    // spawn whose argument lives in the spawner's own caller's region.
+    snap(
+        "clean_sent_arguments",
+        r#"struct Node { word: str, kids: List[Node] }
+fn fwd(ch: channel[str], s: str) {
+    ch.send(s) else { }
+}
+fn tally(ch: channel[int], s: str) {
+    ch.send(s.len) else { }
+}
+fn each(f: fn(int), n: int) {
+    region inner {
+        f(n)
+    }
+}
+fn add(mut n: Node, w: str) {
+    if n.kids.is_empty() {
+        (mut n.kids).push(Node { word: w, kids: List[Node]() })
+    } else {
+        add(mut n.kids[0], w)
+    }
+}
+fn pass_one(ch: channel[str], life: region, n: int) {
+    region pass {
+        let s = "built in pass, {n} uses"
+        in life {
+            fwd(ch, "{s}")
+        }
+    }
+}
+fn worker(msg: str, out: channel[str]) -> !int {
+    out.send(msg)?
+    0
+}
+fn launch(out: channel[str], n: int) -> !int {
+    let msg = "built in launch, {n} uses"
+    let c = spawn proc worker(msg, out)
+    let m = c.monitor()
+    select {
+        exit(reason) from m => {},
+        timeout(1.s) => { return 1 },
+    }
+    0
+}
+fn main() -> !int {
+    let n = 0
+    let ch = channel[str](4)
+    let counts = channel[int](4)
+    let s = "built in main, {n} uses"
+    fwd(ch, s)
+    let say = fn(i: int) { ch.send("said") else { } }
+    say(n)
+    each(fn(i: int) { counts.send(i) else { } }, n)
+    region pass {
+        let t = "built in pass, {n} uses"
+        tally(counts, t)
+        var forest = List[Node]()
+        (mut forest).push(Node { word: t, kids: List[Node]() })
+        add(mut forest[0], t)
+    }
+    launch(ch, n)?
+    0
+}
+"#,
+    );
+}

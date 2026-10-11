@@ -1,0 +1,15 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1010]: `each` may call this closure with bytes that are freed before a receiver could ever use them: the closure captured `ch`, and what it is called with it may send
+  --> mem:///main.lu:10:10
+   |
+10 |     each(fn(x: str) { ch.send(x) else { } }, n)
+   |          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this closure captured `ch`, which reaches a channel that carries bytes
+   |
+   = note: a closure that captured a channel sends what it is called with, and a callee handed the
+     closure may call it with bytes built in a region block of its own; a fn value's type
+     does not say what it captured, so the callee cannot be checked for it
+     [conc.chan.payload] [mem.region.escape]. Call the closure where it was made, or hand the
+     callee the channel itself — a channel argument is checked at every call that passes it.

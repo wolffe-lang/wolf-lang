@@ -1,0 +1,21 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1010]: `fwd` may send `s` on `out`, and its bytes live in region `proc:worker`, the proc's own region, which is freed when the proc exits — before a receiver could ever use them
+ --> mem:///main.lu:6:14
+  |
+4 | fn worker(n: int, out: channel[str]) -> !int {
+  |    ------ `proc:worker` is a `spawn proc` entry: a proc owns its regions and they bulk-free at its exit, so nothing built here outlives it ([conc.proc.kill])
+5 |     let s = "built in proc, {n} uses"
+  |             ------------------------- allocated here, into region `proc:worker`
+6 |     fwd(out, s)
+  |         --- `out` is a channel that carries bytes: the callee may send any other argument on it
+  |              ^ this argument's bytes are in region `proc:worker`
+  |
+  = note: a call may send what it is handed: a callee given a channel can send any other argument
+    on it, or a value it builds in its caller's current region, and a payload must outlive
+    the frame that sends it [conc.chan.payload] [mem.region.escape]. A proc's regions die
+    with the proc ([conc.proc.kill] step 3): build the bytes in the SPAWNER and pass them in
+    as a parameter, and send them from the proc entry itself — or send a payload that owns
+    no region storage (a literal, an `int`, a `bool`).
