@@ -1,0 +1,145 @@
+//! check: run(exit=0, stdout="set_mode: true\nopen_perm: true\ncreate_dir_mode: true\nsymlink: true\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.mode, os.fs.create.mode, os.fs.symlink, os.fs.stat, os.fs.readlink, err.union
+//!
+//! s230 (wolf-lang#346, #698; `[os.fs.mode]`, `[os.fs.create.mode]`,
+//! `[os.fs.symlink]`) — a mode set, a mode at creation and a symbolic
+//! link, with one truth on every tier-1 host. Each is a host CAPABILITY:
+//! linux, macOS and freebsd serve it, and windows answers `unsupported`
+//! by name. So each line is asserted on both sides, in the program:
+//!
+//!   served        the effect is read back through `fs_stat` — the mode
+//!                 is exactly the one set; a created file is 0o600 and a
+//!                 created directory 0o700 from the first instant (the
+//!                 owner's bits, which no sane umask takes); the link
+//!                 reads back its target verbatim, is kind 3 to
+//!                 `fs_lstat`, reads through to the file, refuses to
+//!                 replace (`exists`), and a link to nothing is made
+//!                 like any other;
+//!   unsupported   nothing was made or changed, and the record does not
+//!                 answer a mode either (`have` bit 4 clear).
+//!
+//! The rows under a known umask, the bits above 0o777 and a link
+//! followed by `fs_set_mode` are the unix witnesses in
+//! `crates/wolf_driver/tests/fs_change_lanes.rs`.
+
+fn mode_row(path: str, mode: int) -> str {
+    fs_set_mode(path, mode) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn open_row(path: str, open: int, mode: int) -> str {
+    let fd = fs_open_perm(path, open, mode) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    fs_close(fd) else |_| {}
+    "ok"
+}
+
+fn mkdir_row(path: str, mode: int) -> str {
+    fs_create_dir_mode(path, mode) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn symlink_row(target: str, path: str) -> str {
+    fs_symlink(target, path) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+/// The mode word of `path`'s record, or -1 where the host answers none.
+fn mode_of(path: str) -> !int {
+    let s = fs_stat(path)?
+    if s[3] / 16 % 2 == 1 {
+        return s[4]
+    }
+    -1
+}
+
+fn link_text(path: str) -> str {
+    let t = fs_read_link(path) else |_| {
+        return "<row>"
+    }
+    str_from_utf8(t) else "<bytes>"
+}
+
+fn main() -> !int {
+    let dir = "target/s230-mode-symlink"
+    fs_remove_dir_all(dir) else |_| {}
+    fs_create_dir_all(dir)?
+    let f = dir + "/f"
+    fs_write_text(f, "12345")?
+
+    let set = mode_row(f, 0o640)
+    let after = mode_of(f)?
+    print("set_mode: {(set == "ok" && after == 0o640) || (set == "unsupported" && after == -1)}")
+
+    let private = dir + "/private"
+    let opened = open_row(private, 4, 0o600)
+    var open_truth = opened == "unsupported" && !fs_exists(private)
+    if opened == "ok" {
+        let m = mode_of(private)?
+        open_truth = m == 0o600 && open_row(private, 4, 0o600) == "exists"
+    }
+    print("open_perm: {open_truth}")
+
+    let sub = dir + "/sub"
+    let made = mkdir_row(sub, 0o700)
+    var dir_truth = made == "unsupported" && !fs_exists(sub)
+    if made == "ok" {
+        let m = mode_of(sub)?
+        dir_truth = m == 0o700 && fs_is_dir(sub) && mkdir_row(sub, 0o700) == "exists"
+    }
+    print("create_dir_mode: {dir_truth}")
+
+    let ln = dir + "/ln"
+    let dangling = dir + "/dangling"
+    let linked = symlink_row("f", ln)
+    var link_truth = linked == "unsupported" && !fs_exists(ln)
+    if linked == "ok" {
+        let own = fs_lstat(ln)?
+        let through = fs_read_text(ln)?
+        let again = symlink_row("elsewhere", ln)
+        let nothing = symlink_row("no/such/place", dangling)
+        let dangles = !fs_exists(dangling) && link_text(dangling) == "no/such/place"
+        let reads = own[0] == 3 && link_text(ln) == "f" && through == "12345"
+        link_truth = reads && again == "exists" && nothing == "ok" && dangles
+    }
+    print("symlink: {link_truth}")
+
+    fs_remove_dir_all(dir)?
+    print("cleaned={!fs_exists(dir)}")
+    0
+}

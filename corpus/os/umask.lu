@@ -1,0 +1,44 @@
+//! check: run(exit=0, stdout="umask: true\nread_is_two_calls: true\nrestored: true")
+//! phase: run
+//! conforms: os.fs.umask, err.union
+//!
+//! s230 (wolf-lang#704, `[os.fs.umask]`) — the file mode creation mask,
+//! with one truth on every tier-1 host. `os_umask(mask)` sets the
+//! process's mask and answers the one it replaced — the only form POSIX
+//! has, so a program READS the mask by setting one and setting it back,
+//! which is what this file does. windows has no mask and answers
+//! `unsupported` by name; there every line is true because nothing was
+//! changed. The masks used here keep every owner bit (0o027 and the
+//! one found), so a file some other program creates meanwhile in this
+//! process is still its owner's to use. What a mask does to a creation,
+//! and that a child inherits it, are the unix witnesses in
+//! `crates/wolf_driver/tests/fs_change_lanes.rs`; a mask outside 0o777
+//! is `invalid` (`corpus/fs/change_rows.lu`).
+
+/// The mask `os_umask(mask)` replaced, or -1 on a host with no mask.
+fn swap(mask: int) -> int {
+    let old = os_umask(mask) else |e| {
+        return match e {
+            unsupported => -1,
+            invalid => -2,
+        }
+    }
+    old
+}
+
+fn main() -> !int {
+    let first = swap(0o027)
+    if first == -1 {
+        print("umask: true")
+        print("read_is_two_calls: true")
+        print("restored: true")
+        return 0
+    }
+    let mine = swap(first)
+    print("umask: {first >= 0 && first <= 0o777 && mine == 0o027}")
+    let read = swap(first)
+    print("read_is_two_calls: {read == first}")
+    let back = swap(first)
+    print("restored: {back == first}")
+    0
+}

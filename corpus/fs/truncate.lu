@@ -1,0 +1,61 @@
+//! check: run(exit=0, stdout="shorter=4 offset=10\nlonger=8 kept=51 zeros=0,0\nwrite_at_offset=11 hole=0\nempty=0\nclosed=io host_number=0\nread_only=io host_number=true size_kept=12")
+//! phase: run
+//! conforms: os.fs.truncate, os.fs.error, err.union
+//!
+//! s230 (wolf-lang#702, `[os.fs.truncate]`) — a file's length, set on a
+//! handle, on every tier-1 host. `fs_truncate(fd, len)` makes the file
+//! exactly `len` bytes: shorter (the tail is gone), or longer with zeros
+//! no write stored. The handle's offset does NOT move — after ten bytes
+//! written and a truncation to four the offset is still 10, and the next
+//! write lands there, leaving zeros between. Every host refusal is `io`:
+//! a closed handle (no host number: the implementation decided it) and a
+//! handle opened for reading (the host's number beside the row; the file
+//! keeps its length — 12, the one byte written at the unmoved offset 11
+//! after the truncation to nothing). A negative length is `invalid` before any of that
+//! (`change_rows.lu`).
+
+fn truncate_row(fd: int, len: int) -> str {
+    fs_truncate(fd, len) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    let dir = "target/s230-truncate"
+    fs_remove_dir_all(dir) else |_| {}
+    fs_create_dir_all(dir)?
+    let f = dir + "/f"
+    let fd = fs_open_mode(f, 3)?
+    fs_write(fd, "0123456789")?
+    fs_truncate(fd, 4)?
+    let shorter = fs_size(f)?
+    let at = fs_tell(fd)?
+    print("shorter={shorter} offset={at}")
+    fs_truncate(fd, 8)?
+    let longer = fs_size(f)?
+    let bytes = fs_read_bytes(f)?
+    print("longer={longer} kept={bytes[3] as int} zeros={bytes[4] as int},{bytes[7] as int}")
+    fs_write(fd, "X")?
+    let grown = fs_size(f)?
+    let holed = fs_read_bytes(f)?
+    print("write_at_offset={grown} hole={holed[9] as int}")
+    fs_truncate(fd, 0)?
+    let empty = fs_size(f)?
+    print("empty={empty}")
+    fs_write(fd, "X")?
+    fs_close(fd)?
+    let closed = truncate_row(fd, 0)
+    print("closed={closed} host_number={os_error()}")
+    let ro = fs_open(f)?
+    let refused = truncate_row(ro, 0)
+    let number = os_error()
+    fs_close(ro)?
+    let size = fs_size(f)?
+    print("read_only={refused} host_number={number != 0} size_kept={size}")
+    fs_remove_dir_all(dir)?
+    0
+}

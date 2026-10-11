@@ -1,0 +1,121 @@
+//! check: run(exit=0, stdout="set_mode(0o10000)=invalid set_mode(-1)=invalid\ncreate_dir_mode(0o1000)=invalid\nopen_perm(open 9)=invalid open_perm(mode 0o1000)=invalid\nsymlink(empty)=invalid\nset_times(ns 1000000000)=invalid set_times(ns -3)=invalid\ntruncate(-1)=invalid truncate(forged)=io\numask(0o1000)=invalid umask(-1)=invalid\nos_error=0 made_nothing=true")
+//! phase: run
+//! conforms: os.fs.mode, os.fs.create.mode, os.fs.symlink, os.fs.times, os.fs.truncate, os.fs.umask, os.fs.error, err.union
+//!
+//! s230 (wolf-lang#346, #698, #700, #702, #704) — the SHAPE rows of the
+//! calls that change a file, deterministic on every host. Each call
+//! judges its arguments before it asks the host anything: a mode outside
+//! its bits (0o7777 for a change, 0o777 for a creation), an open mode
+//! outside `[os.fs.open]`'s set, an empty link target, a nanosecond word
+//! that is neither a count below a second nor -1 ("now") nor -2
+//! ("leave"), a negative length, a mask outside 0o777 — each is
+//! `invalid`, on windows too, where the well-formed call would be
+//! `unsupported` instead. A forged handle is `io`. None of them reaches
+//! the host, so `os_error()` stays 0 and nothing is created. The rows
+//! that change something are `hard_link.lu`, `truncate.lu`,
+//! `set_times.lu`, `mode_symlink.lu` and `corpus/os/umask.lu`.
+
+fn mode_row(path: str, mode: int) -> str {
+    fs_set_mode(path, mode) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn mkdir_row(path: str, mode: int) -> str {
+    fs_create_dir_mode(path, mode) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn open_row(path: str, open: int, mode: int) -> str {
+    let fd = fs_open_perm(path, open, mode) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    fs_close(fd) else |_| {}
+    "ok"
+}
+
+fn symlink_row(target: str, path: str) -> str {
+    fs_symlink(target, path) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn times_row(path: str, atime_ns: int, mtime_ns: int) -> str {
+    fs_set_times(path, 0, atime_ns, 0, mtime_ns, true) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            invalid => "invalid",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn truncate_row(fd: int, len: int) -> str {
+    fs_truncate(fd, len) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn umask_row(mask: int) -> str {
+    let old = os_umask(mask) else |e| {
+        return match e {
+            invalid => "invalid",
+            unsupported => "unsupported",
+        }
+    }
+    "was {old}"
+}
+
+fn main() -> !int {
+    let p = "target/s230-rows-never-made"
+    print("set_mode(0o10000)={mode_row(p, 0o10000)} set_mode(-1)={mode_row(p, -1)}")
+    print("create_dir_mode(0o1000)={mkdir_row(p, 0o1000)}")
+    print(
+        "open_perm(open 9)={open_row(p, 9, 0o600)} open_perm(mode 0o1000)={open_row(p, 1, 0o1000)}",
+    )
+    print("symlink(empty)={symlink_row("", p)}")
+    print(
+        "set_times(ns 1000000000)={times_row(p, 1000000000, 0)} set_times(ns -3)={times_row(p, 0, -3)}",
+    )
+    print("truncate(-1)={truncate_row(999999, -1)} truncate(forged)={truncate_row(999999, 0)}")
+    print("umask(0o1000)={umask_row(0o1000)} umask(-1)={umask_row(-1)}")
+    print("os_error={os_error()} made_nothing={!fs_exists(p)}")
+    0
+}

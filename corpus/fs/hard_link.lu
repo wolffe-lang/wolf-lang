@@ -1,0 +1,56 @@
+//! check: run(exit=0, stdout="link=ok second_name_reads=more wolves\nagain=exists host_number=true\nmissing_source=not_found missing_parent=not_found\nafter_remove=more wolves one_name_left=true\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.link, os.fs.error, err.union
+//!
+//! s230 (wolf-lang#699, `[os.fs.link]`) — a hard link is a second name
+//! of one file, on every tier-1 host. `fs_link(existing, path)` makes
+//! `path` name the file `existing` names: bytes written through one
+//! name are read through the other, and removing one name leaves the
+//! file under the other (the link count, where the host answers one,
+//! is back to 1). The call never replaces: a name that is taken is
+//! `exists`, with the host's number beside the row — which is what
+//! makes it the atomic publish `fs_rename` (which replaces) is not. A
+//! source that is not there and a parent that is not there are both
+//! `not_found`. The rows that need a second file system
+//! (`cross_device`), a directory (`denied`) or a symbolic link (the
+//! link itself is linked, never its target) are the unix witnesses in
+//! `crates/wolf_driver/tests/fs_change_lanes.rs`.
+
+fn link_row(existing: str, path: str) -> str {
+    fs_link(existing, path) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            exists => "exists",
+            cross_device => "cross_device",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    let dir = "target/s230-hard-link"
+    fs_remove_dir_all(dir) else |_| {}
+    fs_create_dir_all(dir)?
+    let a = dir + "/a"
+    let b = dir + "/b"
+    fs_write_text(a, "wolves")?
+    let made = link_row(a, b)
+    fs_write_text(a, "more wolves")?
+    let via = fs_read_text(b)?
+    print("link={made} second_name_reads={via}")
+    let again = link_row(a, b)
+    print("again={again} host_number={os_error() != 0}")
+    let gone = link_row(dir + "/gone", dir + "/c")
+    let orphan = link_row(a, dir + "/no/such")
+    print("missing_source={gone} missing_parent={orphan}")
+    fs_remove(a)?
+    let kept = fs_read_text(b)?
+    let s = fs_stat(b)?
+    let counted = s[3] / 32 % 2 == 1
+    print("after_remove={kept} one_name_left={!counted || s[5] == 1}")
+    fs_remove_dir_all(dir)?
+    print("cleaned={!fs_exists(dir)}")
+    0
+}

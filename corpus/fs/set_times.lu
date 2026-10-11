@@ -1,0 +1,59 @@
+//! check: run(exit=0, stdout="both: atime=1000000000.123456700 mtime=1500000000.7654300 modified_ms=1500000000007\nleave: atime=1000000000.123456700 mtime=1600000000.0\nnow: atime_kept=true mtime_is_now=true\ndirectory: mtime=1400000000\nbefore_epoch: atime=-1.999999900 mtime=-86400.0\nmissing=not_found host_number=true\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.times, os.fs.stat, os.fs.error, err.union
+//!
+//! s230 (wolf-lang#700, `[os.fs.times]`) — a file's access and
+//! modification times, set and read back through `fs_stat`'s words
+//! 12..15, on every tier-1 host. `fs_set_times(path, atime_s, atime_ns,
+//! mtime_s, mtime_ns, follow)` takes each time as whole seconds from the
+//! Unix epoch (negative before it, floored) and nanoseconds, or — in the
+//! nanosecond word — one of two special values: **-1**, the host's clock
+//! now, and **-2**, leave this time as it is (the seconds beside either
+//! are not read). So one call sets both, sets one and keeps the other
+//! with no read in between, or stamps "now". The nanoseconds here are
+//! multiples of 100 because windows keeps a time in 100 ns steps. A
+//! directory's times are set like a file's; a path that is not there is
+//! `not_found`. A link's own times (`follow` false on a link) are the
+//! unix witness in `crates/wolf_driver/tests/fs_change_lanes.rs`.
+
+fn times_row(path: str, mtime_s: int) -> str {
+    fs_set_times(path, 0, -2, mtime_s, 0, true) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            invalid => "invalid",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    let dir = "target/s230-set-times"
+    fs_remove_dir_all(dir) else |_| {}
+    fs_create_dir_all(dir)?
+    let f = dir + "/f"
+    fs_write_text(f, "x")?
+    fs_set_times(f, 1000000000, 123456700, 1500000000, 7654300, true)?
+    let s = fs_stat(f)?
+    print("both: atime={s[12]}.{s[13]} mtime={s[14]}.{s[15]} modified_ms={s[2]}")
+    fs_set_times(f, 0, -2, 1600000000, 0, true)?
+    let l = fs_stat(f)?
+    print("leave: atime={l[12]}.{l[13]} mtime={l[14]}.{l[15]}")
+    fs_set_times(f, 0, -2, 0, -1, false)?
+    let n = fs_stat(f)?
+    let clock = time_unix_ms() / 1000
+    let kept = n[12] == 1000000000 && n[13] == 123456700
+    print("now: atime_kept={kept} mtime_is_now={n[14] > clock - 120 && n[14] < clock + 120}")
+    fs_set_times(dir, 0, -2, 1400000000, 0, true)?
+    let d = fs_stat(dir)?
+    print("directory: mtime={d[14]}")
+    fs_set_times(f, -1, 999999900, -86400, 0, true)?
+    let b = fs_stat(f)?
+    print("before_epoch: atime={b[12]}.{b[13]} mtime={b[14]}.{b[15]}")
+    let gone = times_row(dir + "/gone", 5)
+    print("missing={gone} host_number={os_error() != 0}")
+    fs_remove_dir_all(dir)?
+    print("cleaned={!fs_exists(dir)}")
+    0
+}
