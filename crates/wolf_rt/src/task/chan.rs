@@ -146,6 +146,11 @@ impl WaitCell {
         let timer = super::hooks::det_timer_register(deadline);
         let out = blocking(|| {
             let scope = current_scope();
+            // s231: outside the det domain the wait sleeps until an
+            // event — a peer's commit, its deadline, or a cancellation
+            // (the parked registry nudges it) — never on a poll timer.
+            let poll = super::hooks::det_in_domain();
+            let _parked = (scope.is_some() && !poll).then(|| super::parked::park_on(self));
             let mut st = self.st.lock().unwrap();
             loop {
                 if let Some(c) = *st {
@@ -171,23 +176,35 @@ impl WaitCell {
                 // det: drive grant/fire evaluation from parked
                 // waiters (no dedicated scheduler thread exists).
                 super::hooks::det_poll_tick();
-                // 5ms poll backstop covers enclosing-scope
-                // cancellation (the same posture as Gate/
-                // wait_cancelled); real wakeups arrive via notify.
-                // Det waits poll tighter so the quiet window keeps
-                // its margin.
-                let mut dur = super::hooks::det_poll_period(Duration::from_millis(5));
-                if timer.is_none()
-                    && let Some(d) = deadline
-                {
-                    dur = dur.min(d.saturating_duration_since(Instant::now()));
+                if poll {
+                    // The det domain polls tighter so the quiet window
+                    // keeps its margin.
+                    let mut dur = super::hooks::det_poll_period(Duration::from_millis(5));
+                    if timer.is_none()
+                        && let Some(d) = deadline
+                    {
+                        dur = dur.min(d.saturating_duration_since(Instant::now()));
+                    }
+                    st = self.cv.wait_timeout(st, dur).unwrap().0;
+                } else if let Some(d) = deadline {
+                    // Wake at the deadline itself; a commit or a
+                    // cancellation notifies sooner.
+                    let dur = d.saturating_duration_since(Instant::now());
+                    st = self.cv.wait_timeout(st, dur).unwrap().0;
+                } else {
+                    st = self.cv.wait(st).unwrap();
                 }
-                let (g, _) = self.cv.wait_timeout(st, dur).unwrap();
-                st = g;
             }
         });
         super::hooks::det_timer_done(timer);
         out
+    }
+}
+
+impl super::parked::Wake for WaitCell {
+    fn wake(&self) {
+        let _g = self.st.lock().unwrap();
+        self.cv.notify_all();
     }
 }
 
