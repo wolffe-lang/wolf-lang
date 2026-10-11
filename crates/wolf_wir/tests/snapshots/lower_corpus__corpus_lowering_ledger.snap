@@ -785,6 +785,7 @@ os/random_differs.lu: lowers
 os/random_edges.lu: lowers
 os/random_negative_trap.lu: lowers
 os/signal_loopback.lu: lowers
+os/signal_shell_rows.lu: lowers
 os/signal_supervisor.lu: lowers
 os/spawn_fds_rows.lu: lowers
 os/spawn_rows.lu: lowers
