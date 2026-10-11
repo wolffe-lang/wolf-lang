@@ -65,6 +65,7 @@ use std::time::{Duration, Instant};
 
 use super::hooks::{ChanPhase, SchedEvent, SchedRng, sched_point};
 use super::pool::{blocking, current_scope};
+use crate::handles::SeqMap;
 
 /// Why a channel operation did not deliver: the channel is closed
 /// (`[conc.chan.close]`'s error value) or structured cancellation
@@ -255,6 +256,10 @@ pub struct Chan {
     /// frees every box still buffered or parked with a blocked
     /// sender.
     boxed: bool,
+    /// The monitor table's serial for this channel, or 0 (s228): set
+    /// when `__wolf_rt_proc_monitor` hands the channel to compiled
+    /// code as a table handle, read when the reaper lets go of it.
+    monitor: AtomicU64,
     st: Mutex<ChanSt>,
 }
 
@@ -274,6 +279,7 @@ impl Chan {
             id: NEXT_CHAN.fetch_add(1, SeqCst),
             cap,
             boxed,
+            monitor: AtomicU64::new(0),
             st: Mutex::new(ChanSt {
                 buf: VecDeque::new(),
                 closed: false,
@@ -286,6 +292,14 @@ impl Chan {
     /// Whether this channel's words are payload boxes.
     pub fn is_boxed(&self) -> bool {
         self.boxed
+    }
+
+    /// Indistinguishable from a channel just made: nothing buffered,
+    /// nobody parked, not closed (s228 — when a monitor's channel may
+    /// be dropped).
+    fn is_pristine(&self) -> bool {
+        let st = self.st.lock().unwrap();
+        st.buf.is_empty() && !st.closed && st.senders.is_empty() && st.recvers.is_empty()
     }
 
     /// Stable channel id (hook payloads; select's canonical lock
@@ -752,6 +766,148 @@ const ST_OK: i32 = 0;
 const ST_CLOSED: i32 = 1;
 const ST_CANCELLED: i32 = 2;
 
+// ---- monitor handles (s228, wolf-lang#662) --------------------------
+//
+// `w.monitor()` is a `channel[ExitReason]`, and compiled code never
+// frees a channel handle: until s228 the monitor's `Arc<Chan>` was
+// leaked into the program with `Arc::into_raw`, so every monitored
+// proc left its channel behind for the life of the process — 260 of
+// the 277 bytes ws57 measured per proc.
+//
+// A monitor's handle is now a NUMBER, not a pointer: an odd word
+// (`serial << 1 | 1` — a channel pointer is aligned, so the two can
+// never be confused, and null is neither), and the channel behind it
+// lives in a table the runtime owns. Every shim that takes a channel
+// handle resolves it through [`hold`], so a monitor is still an
+// ordinary channel to the program — `recv`, `select`, `close`, a copy
+// handed to another task.
+//
+// What the table buys is the right to DROP the channel when nothing
+// can tell: at the end of any call through the handle, if the channel
+// is empty, open, and referenced by nobody else — no proc still owes it
+// a delivery, no other call is inside it — the entry goes
+// ([`Held::drop`]). A later call through the same handle finds no
+// entry and gets a fresh empty channel in its place, which is what the
+// dropped one was. So a monitor whose exit reason has been received
+// costs nothing, and a program cannot observe the difference: the
+// serial is never reused, so a handle never reaches another monitor's
+// channel.
+
+static NEXT_MONITOR: AtomicU64 = AtomicU64::new(1);
+
+static MONITORS: Mutex<SeqMap<u64, Arc<Chan>>> =
+    Mutex::new(SeqMap::with_hasher(std::hash::BuildHasherDefault::new()));
+
+fn monitors() -> MutexGuard<'static, SeqMap<u64, Arc<Chan>>> {
+    MONITORS.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// The handle compiled code holds for a monitor's channel.
+pub(crate) fn monitor_handle(ch: Arc<Chan>) -> *mut c_void {
+    let serial = NEXT_MONITOR.fetch_add(1, SeqCst);
+    let mut table = monitors();
+    ch.monitor.store(serial, SeqCst);
+    table.insert(serial, ch);
+    ((serial << 1) | 1) as usize as *mut c_void
+}
+
+/// Drop the table's channel for `serial` when it is indistinguishable
+/// from a fresh one: empty, open, and held by the table alone. Called
+/// with the table locked by whoever just let go of a reference — new
+/// references are only ever taken under that lock, so the count cannot
+/// rise between the check and the removal.
+fn settle(table: &mut SeqMap<u64, Arc<Chan>>, serial: u64) {
+    if let Some(ch) = table.get(&serial)
+        && Arc::strong_count(ch) == 1
+        && ch.is_pristine()
+    {
+        table.remove(&serial);
+    }
+}
+
+/// The reaper lets go of a monitor channel it has delivered to (s228).
+/// If the program already received the reason, this is the last
+/// reference but the table's, and the channel goes here; if not, it
+/// goes at the end of the call that receives it ([`Held::drop`]).
+pub(crate) fn monitor_delivered(ch: Arc<Chan>) {
+    let serial = ch.monitor.load(SeqCst);
+    if serial == 0 {
+        return; // a Rust caller's channel: its `Arc` is its lifetime
+    }
+    let mut table = monitors();
+    drop(ch);
+    settle(&mut table, serial);
+}
+
+/// Whether the table still holds a channel for this monitor handle.
+#[cfg(test)]
+pub(crate) fn monitor_held(ch: *mut c_void) -> bool {
+    monitors().contains_key(&(ch as usize as u64 >> 1))
+}
+
+/// A channel handle resolved for the length of one shim call.
+enum Held {
+    /// A channel's own handle: the caller's reference, borrowed.
+    Chan(std::mem::ManuallyDrop<Arc<Chan>>),
+    /// A monitor's: the table's channel, shared for the call. This
+    /// reference is the call's own, given up in [`Held::drop`] under
+    /// the table lock.
+    Monitor(u64, std::mem::ManuallyDrop<Arc<Chan>>),
+}
+
+impl std::ops::Deref for Held {
+    type Target = Arc<Chan>;
+    fn deref(&self) -> &Arc<Chan> {
+        match self {
+            Held::Chan(c) => c,
+            Held::Monitor(_, c) => c,
+        }
+    }
+}
+
+impl Drop for Held {
+    /// The end of a call through a monitor handle: this call's
+    /// reference goes, and the table's channel with it when nothing is
+    /// left to tell it from a fresh one ([`settle`]). Any other
+    /// reference — a proc that still owes the delivery, another call
+    /// inside the channel — keeps it, and settles it in its turn.
+    fn drop(&mut self) {
+        let Held::Monitor(serial, ch) = self else {
+            return;
+        };
+        let mut table = monitors();
+        // SAFETY: the variant's reference is this call's own, dropped
+        // here once and never read again (`self` is being dropped).
+        unsafe { std::mem::ManuallyDrop::drop(ch) };
+        settle(&mut table, *serial);
+    }
+}
+
+/// Resolve a channel handle.
+///
+/// # Safety
+///
+/// `ch` must be a live handle from [`__wolf_rt_chan_new`] (or its
+/// boxed twin), or a monitor's from `__wolf_rt_proc_monitor`.
+unsafe fn hold(ch: *mut c_void) -> Held {
+    let word = ch as usize as u64;
+    if word & 1 == 0 {
+        // SAFETY: an even word is a channel's own handle, live per the
+        // caller's contract; borrowed, never consumed.
+        return Held::Chan(std::mem::ManuallyDrop::new(unsafe {
+            Arc::from_raw(ch.cast::<Chan>())
+        }));
+    }
+    let serial = word >> 1;
+    let chan = monitors()
+        .entry(serial)
+        // Dropped as pristine by an earlier call: a fresh empty
+        // channel is the same channel.
+        .or_insert_with(|| Chan::new(1))
+        .clone();
+    Held::Monitor(serial, std::mem::ManuallyDrop::new(chan))
+}
+
 fn status(r: Result<(), ChanErr>) -> i32 {
     match r {
         Ok(()) => ST_OK,
@@ -894,6 +1050,11 @@ impl Drop for Chan {
 /// `ch` must be a live handle from [`__wolf_rt_chan_new`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_chan_clone(ch: *mut c_void) -> *mut c_void {
+    if ch as usize & 1 == 1 {
+        // A monitor's handle is a number: a copy is the same number
+        // (s228), and the table's one reference serves every copy.
+        return ch;
+    }
     // SAFETY: borrow without consuming, then bump the count.
     let arc = unsafe { std::mem::ManuallyDrop::new(Arc::from_raw(ch.cast::<Chan>())) };
     Arc::into_raw((*arc).clone()).cast_mut().cast()
@@ -906,6 +1067,14 @@ pub unsafe extern "C" fn __wolf_rt_chan_clone(ch: *mut c_void) -> *mut c_void {
 /// `ch` must be a live handle; it is dead after this call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_chan_free(ch: *mut c_void) {
+    if ch as usize & 1 == 1 {
+        // A monitor's handle owns no reference (s228): the table drops
+        // the channel when it is spent. Resolving it here is that
+        // check.
+        // SAFETY: a monitor handle per the caller's contract.
+        drop(unsafe { hold(ch) });
+        return;
+    }
     // SAFETY: consumes the caller's reference.
     drop(unsafe { Arc::from_raw(ch.cast::<Chan>()) });
 }
@@ -918,7 +1087,7 @@ pub unsafe extern "C" fn __wolf_rt_chan_free(ch: *mut c_void) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_chan_send(ch: *mut c_void, val: u64) -> i32 {
     // SAFETY: borrow the caller's handle.
-    let ch = unsafe { std::mem::ManuallyDrop::new(Arc::from_raw(ch.cast::<Chan>())) };
+    let ch = unsafe { hold(ch) };
     let r = ch.send(val);
     if r.is_err() && ch.boxed {
         // The channel owns a box from the moment it is handed over
@@ -943,7 +1112,7 @@ pub unsafe extern "C" fn __wolf_rt_chan_send(ch: *mut c_void, val: u64) -> i32 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_chan_send_region(ch: *mut c_void, region: *mut c_void) -> i32 {
     // SAFETY: borrow the caller's handle; region per caller contract.
-    let ch = unsafe { std::mem::ManuallyDrop::new(Arc::from_raw(ch.cast::<Chan>())) };
+    let ch = unsafe { hold(ch) };
     status(unsafe { ch.send_region(region) })
 }
 
@@ -956,7 +1125,7 @@ pub unsafe extern "C" fn __wolf_rt_chan_send_region(ch: *mut c_void, region: *mu
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_chan_recv(ch: *mut c_void, out: *mut u64) -> i32 {
     // SAFETY: borrow the caller's handle.
-    let ch = unsafe { std::mem::ManuallyDrop::new(Arc::from_raw(ch.cast::<Chan>())) };
+    let ch = unsafe { hold(ch) };
     match ch.recv() {
         Ok(v) => {
             if !out.is_null() {
@@ -978,7 +1147,7 @@ pub unsafe extern "C" fn __wolf_rt_chan_recv(ch: *mut c_void, out: *mut u64) -> 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_chan_close(ch: *mut c_void) {
     // SAFETY: borrow the caller's handle.
-    let ch = unsafe { std::mem::ManuallyDrop::new(Arc::from_raw(ch.cast::<Chan>())) };
+    let ch = unsafe { hold(ch) };
     ch.close();
 }
 
@@ -1026,10 +1195,10 @@ pub unsafe extern "C" fn __wolf_rt_select(
 ) -> i64 {
     // SAFETY: caller contract — n valid descriptors.
     let descs = unsafe { std::slice::from_raw_parts(arms, usize::try_from(n).unwrap_or(0)) };
-    let chans: Vec<std::mem::ManuallyDrop<Arc<Chan>>> = descs
+    let chans: Vec<Held> = descs
         .iter()
         // SAFETY: live handles per caller contract; borrowed only.
-        .map(|d| unsafe { std::mem::ManuallyDrop::new(Arc::from_raw(d.chan.cast::<Chan>())) })
+        .map(|d| unsafe { hold(d.chan) })
         .collect();
     let arms: Vec<Arm<'_>> = descs
         .iter()

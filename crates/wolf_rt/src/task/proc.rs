@@ -115,6 +115,7 @@ use super::chan::{Arm, Chan, select};
 use super::hooks::{SchedEvent, sched_point};
 use super::pool::{self, Body, TaskCtx};
 use super::scope::{ExitReason, ScopeInner};
+use crate::handles::SeqMap;
 use crate::native;
 
 /// The root supervisor's domain id — the process itself
@@ -256,16 +257,162 @@ pub enum ProcErr {
 
 // ---- registry -------------------------------------------------------------
 
-enum SlotState {
-    Live(Arc<Proc>),
-    /// Tombstone: the recorded reason serves late monitors (observer
-    /// outlives observed). v0 never reuses slots — procs are coarse;
-    /// slot recycling (with a generation bump) is post-v0.
-    Exited(ProcExit),
+/// The word [`ExitWords`] holds for a proc that has not exited. Never
+/// a reason: [`ProcExit::encode`] puts the class (0..=4) in the low
+/// byte.
+const RUNNING: u64 = u64::MAX;
+
+/// Procs per block of [`ExitWords`].
+const BLOCK: usize = 512;
+/// A full block is packed when at most this many of its words differ
+/// from its commonest one.
+const PACK_MAX: usize = 32;
+
+/// One block of exit words.
+enum Block {
+    /// A word a proc, in index order.
+    Open(Vec<u64>),
+    /// Every proc of a full block ended with `common` but the few in
+    /// `others` (offset in the block, word) — a still-running proc is
+    /// one of the few, with [`RUNNING`].
+    Packed {
+        common: u64,
+        others: Vec<(u16, u64)>,
+    },
 }
 
+/// The exit reason word of every proc ever spawned, by index (s228,
+/// wolf-lang#662).
+///
+/// A `Proc[T]` is a copyable id with no lifetime, and
+/// `[conc.proc.join]` promises that a join after the exit answers, any
+/// number of times; so the runtime can never tell that an id will not
+/// be asked about again, and SOMETHING per finished proc has to stay.
+/// This is the least that can: no object, no channel, one word — and
+/// where a block of [`BLOCK`] consecutive procs ended alike (a server's
+/// per-request procs, all `normal(0)`), one word for the block. Procs
+/// that each end with their own value keep their 8 bytes each.
+struct ExitWords {
+    blocks: Vec<Block>,
+    len: usize,
+}
+
+impl ExitWords {
+    const fn new() -> ExitWords {
+        ExitWords {
+            blocks: Vec::new(),
+            len: 0,
+        }
+    }
+
+    /// A new proc: its index, marked running.
+    fn push_running(&mut self) -> usize {
+        let i = self.len;
+        if i.is_multiple_of(BLOCK) {
+            self.blocks.push(Block::Open(Vec::new()));
+        }
+        match self.blocks.last_mut() {
+            Some(Block::Open(words)) => words.push(RUNNING),
+            _ => unreachable!("the last block is open until it is full"),
+        }
+        self.len += 1;
+        i
+    }
+
+    /// The word for index `i`: a reason, [`RUNNING`], or `None` for an
+    /// index no proc was ever given.
+    fn get(&self, i: usize) -> Option<u64> {
+        if i >= self.len {
+            return None;
+        }
+        Some(match &self.blocks[i / BLOCK] {
+            Block::Open(words) => words[i % BLOCK],
+            Block::Packed { common, others } => others
+                .iter()
+                .find(|(at, _)| usize::from(*at) == i % BLOCK)
+                .map_or(*common, |&(_, w)| w),
+        })
+    }
+
+    /// Record the exit of the proc at index `i`.
+    fn set(&mut self, i: usize, word: u64) {
+        debug_assert!(i < self.len);
+        let full = i / BLOCK < self.len / BLOCK;
+        let block = &mut self.blocks[i / BLOCK];
+        match block {
+            Block::Open(words) => {
+                words[i % BLOCK] = word;
+                // Worth a look once the block is full and nearly all
+                // of it has exited; a block of distinct reasons is
+                // looked at `PACK_MAX` times and then left alone.
+                if full
+                    && words.iter().filter(|&&w| w == RUNNING).count() <= PACK_MAX
+                    && let Some(packed) = pack(words)
+                {
+                    *block = packed;
+                }
+            }
+            Block::Packed { common, others } => {
+                let at = (i % BLOCK) as u16;
+                if word == *common {
+                    others.retain(|&(o, _)| o != at);
+                    if others.is_empty() {
+                        others.shrink_to_fit();
+                    }
+                } else if let Some(slot) = others.iter_mut().find(|(o, _)| *o == at) {
+                    slot.1 = word;
+                } else {
+                    // The proc's word was the common one: only a proc
+                    // that already exited, and an exit is recorded once.
+                    debug_assert!(false, "a second exit for one proc");
+                    others.push((at, word));
+                }
+            }
+        }
+    }
+}
+
+/// A full block as its commonest word and the exceptions, when the
+/// exceptions are few.
+fn pack(words: &[u64]) -> Option<Block> {
+    // The commonest exit word by a majority vote (Boyer–Moore): if no
+    // word holds a majority the block does not pack anyway.
+    let mut common = RUNNING;
+    let mut votes = 0usize;
+    for &w in words.iter().filter(|&&w| w != RUNNING) {
+        if votes == 0 {
+            common = w;
+        }
+        if w == common {
+            votes += 1;
+        } else {
+            votes -= 1;
+        }
+    }
+    if common == RUNNING {
+        return None;
+    }
+    let others: Vec<(u16, u64)> = words
+        .iter()
+        .enumerate()
+        .filter(|&(_, &w)| w != common)
+        .map(|(at, &w)| (at as u16, w))
+        .collect();
+    (others.len() <= PACK_MAX).then_some(Block::Packed { common, others })
+}
+
+/// What the runtime keeps per proc. A proc's index is a counter that
+/// only goes up, so an id is never reused (the generation half stays
+/// 1, as it always has). While the proc runs, its object is in `live`;
+/// when it exits, the object leaves and its reason word stays in
+/// `exits` — as [`ProcExit::encode`] packs it, which is exactly what
+/// every later reader is handed (`monitor` and `join` deliver the
+/// encoded word; `kill`, `cancel` and `link` read its class).
 struct Registry {
-    slots: Vec<SlotState>,
+    /// Index → the running proc.
+    live: SeqMap<u32, Arc<Proc>>,
+    /// Index → the exit reason word, or [`RUNNING`].
+    exits: ExitWords,
     /// Proc-root scope id → proc id (scope-chain attribution:
     /// `current_proc` walks to the root scope and looks it up here).
     scope_to_proc: HashMap<u64, u64>,
@@ -299,7 +446,8 @@ fn registry() -> &'static Mutex<Registry> {
         native::install_region_ledger_hooks(&LEDGER_HOOKS);
         native::install_trap_containment(contain_trap);
         Mutex::new(Registry {
-            slots: Vec::new(),
+            live: SeqMap::default(),
+            exits: ExitWords::new(),
             scope_to_proc: HashMap::new(),
             region_owner: HashMap::new(),
             proc_regions: HashMap::new(),
@@ -313,27 +461,26 @@ fn root_scope() -> &'static Arc<ScopeInner> {
 
 /// Pack (generation, index) — generation in the high word so id 0 is
 /// never a real proc (it is [`ROOT_DOMAIN`]). v0 pins generation 1
-/// (slots are not reused); the shape is the contract.
+/// (an index is never reused); the shape is the contract.
 fn pack_id(generation: u32, index: u32) -> u64 {
     (u64::from(generation) << 32) | u64::from(index)
 }
 
-fn slot_index(id: u64) -> Option<usize> {
+fn slot_index(id: u64) -> Option<u32> {
     // v0: generation must be exactly 1 (no reuse yet); anything else
     // is a stale or forged id.
     if id >> 32 != 1 {
         return None;
     }
-    Some((id & 0xFFFF_FFFF) as usize)
+    Some((id & 0xFFFF_FFFF) as u32)
 }
 
 fn live_proc(id: u64) -> Result<Arc<Proc>, ProcErr> {
     let reg = registry().lock().unwrap();
-    match slot_index(id).and_then(|i| reg.slots.get(i)) {
-        Some(SlotState::Live(p)) => Ok(p.clone()),
-        Some(SlotState::Exited(_)) => Err(ProcErr::Stale),
-        None => Err(ProcErr::Stale),
-    }
+    slot_index(id)
+        .and_then(|i| reg.live.get(&i))
+        .cloned()
+        .ok_or(ProcErr::Stale)
 }
 
 // ---- the proc object -------------------------------------------------------
@@ -392,7 +539,7 @@ pub fn spawn_proc(name: &str, body: impl FnOnce(&TaskCtx) -> ProcOutcome + Send 
     let scope = ScopeInner::new(&format!("proc:{name}"), None);
     let proc = {
         let mut reg = registry().lock().unwrap();
-        let index = u32::try_from(reg.slots.len()).expect("proc slots exhausted");
+        let index = u32::try_from(reg.exits.push_running()).expect("proc ids exhausted");
         let id = pack_id(1, index);
         let proc = Arc::new(Proc {
             id,
@@ -409,7 +556,7 @@ pub fn spawn_proc(name: &str, body: impl FnOnce(&TaskCtx) -> ProcOutcome + Send 
             }),
             cv: Condvar::new(),
         });
-        reg.slots.push(SlotState::Live(proc.clone()));
+        reg.live.insert(index, proc.clone());
         reg.scope_to_proc.insert(scope.id(), id);
         reg.proc_regions.insert(id, HashSet::new());
         proc
@@ -511,7 +658,7 @@ fn reap(proc: &Arc<Proc>) {
         owned
     };
 
-    // Publish the reason: registry tombstone (late monitors read it),
+    // Publish the reason: the registry's word (late monitors read it),
     // then phase + cv (kill()/monitor() waiters), then the registered
     // monitors/links are taken for delivery. Ordered AROUND the
     // bulk-free per teardown law below.
@@ -519,7 +666,8 @@ fn reap(proc: &Arc<Proc>) {
         {
             let mut reg = registry().lock().unwrap();
             if let Some(i) = slot_index(proc.id) {
-                reg.slots[i] = SlotState::Exited(reason);
+                reg.live.remove(&i);
+                reg.exits.set(i as usize, reason.encode());
             }
         }
         let mut st = proc.st.lock().unwrap();
@@ -545,13 +693,13 @@ fn reap(proc: &Arc<Proc>) {
         // races the reaper cannot read it early.
         bulk_free(&owned);
         let (monitors, links) = publish(reason);
-        deliver(reason, &monitors, &links);
+        deliver(reason, monitors, &links);
     } else {
         // Crash/normal order (sprint Target 5): deliver, then free —
         // a monitor never observes a freed region's data (reasons are
         // values; cross-proc data moved or froze, D14).
         let (monitors, links) = publish(reason);
-        deliver(reason, &monitors, &links);
+        deliver(reason, monitors, &links);
         bulk_free(&owned);
     }
 }
@@ -573,14 +721,19 @@ fn bulk_free(owned: &[usize]) {
 /// (`[conc.proc.2]`): abnormal reasons kill the partner — unless it
 /// traps exits, then the reason arrives as a message. Deliveries are
 /// non-blocking sends (a full mailbox never wedges a reaper).
-fn deliver(reason: ProcExit, monitors: &[Arc<Chan>], links: &[u64]) {
+fn deliver(reason: ProcExit, monitors: Vec<Arc<Chan>>, links: &[u64]) {
     let word = reason.encode();
     for m in monitors {
         // Monitor channels are runtime-created with capacity 1 and
         // receive exactly one delivery — but never block on a
         // misbehaving receiver: the else-arm drops the delivery
         // rather than wedging the reaper.
-        let _ = select(&[Arm::Send(m, word)], None, true);
+        let _ = select(&[Arm::Send(&m, word)], None, true);
+        // s228 (#662): the proc's reference goes here, not at the end
+        // of the reap — a compiled monitor's channel is dropped by
+        // whoever lets go of it last, and the program may already
+        // have received.
+        super::chan::monitor_delivered(m);
     }
     if !reason.is_abnormal() {
         return;
@@ -672,13 +825,7 @@ fn root_died(reason: ProcExit) {
     );
     let live: Vec<Arc<Proc>> = {
         let reg = registry().lock().unwrap();
-        reg.slots
-            .iter()
-            .filter_map(|s| match s {
-                SlotState::Live(p) => Some(p.clone()),
-                SlotState::Exited(_) => None,
-            })
-            .collect()
+        reg.live.values().cloned().collect()
     };
     for p in &live {
         kill_mark(p);
@@ -878,8 +1025,8 @@ pub fn set_trap_exit(proc: u64, mailbox: Arc<Chan>) -> Result<(), ProcErr> {
 /// The recorded exit reason of a proc that already exited.
 fn exited_reason(id: u64) -> Result<ProcExit, ProcErr> {
     let reg = registry().lock().unwrap();
-    match slot_index(id).and_then(|i| reg.slots.get(i)) {
-        Some(SlotState::Exited(r)) => Ok(*r),
+    match slot_index(id).and_then(|i| reg.exits.get(i as usize)) {
+        Some(word) if word != RUNNING => Ok(ProcExit::decode(word)),
         _ => Err(ProcErr::Stale),
     }
 }
@@ -1143,11 +1290,15 @@ pub extern "C" fn __wolf_rt_proc_self() -> u64 {
 }
 
 /// Monitor `proc`: returns a fresh channel handle delivering the
-/// encoded exit reason word. Stale ids trap (stale-handle).
+/// encoded exit reason word. Stale ids trap (stale-handle). The handle
+/// is a monitor's (s228, `chan.rs`): every channel shim takes it, and
+/// nothing has to free it.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_proc_monitor(proc: u64) -> *mut c_void {
     match monitor(proc) {
-        Ok(ch) => Arc::into_raw(ch).cast_mut().cast(),
+        // s228 (#662): a table handle, not a leaked pointer — the
+        // channel goes when its delivery has been received.
+        Ok(ch) => super::chan::monitor_handle(ch),
         Err(ProcErr::Stale) => native::__wolf_rt_trap(native::trap_code::STALE_HANDLE),
     }
 }
@@ -1841,6 +1992,171 @@ mod tests {
         }
         // The root domain spells 0 outside any proc.
         assert_eq!(__wolf_rt_proc_self(), ROOT_DOMAIN);
+    }
+
+    /// s228 (wolf-lang#662): the exit words answer every index the way
+    /// a plain vector would — through packing, a proc still running in
+    /// a packed block, and reasons that do not repeat.
+    #[test]
+    fn exit_words_answer_like_a_vector() {
+        let mut words = ExitWords::new();
+        let mut model: Vec<u64> = Vec::new();
+        let check = |words: &ExitWords, model: &[u64]| {
+            for (i, &w) in model.iter().enumerate() {
+                assert_eq!(words.get(i), Some(w), "index {i}");
+            }
+            assert_eq!(words.get(model.len()), None);
+        };
+        let normal0 = ProcExit::Normal { value: 0 }.encode();
+        let fault = ProcExit::Fault { kind: 3 }.encode();
+        // Block 0: everyone ends alike, but two stragglers and one
+        // fault; exits arrive out of order.
+        for _ in 0..BLOCK {
+            assert_eq!(words.push_running(), model.len());
+            model.push(RUNNING);
+        }
+        for i in (0..BLOCK).rev() {
+            if i == 7 || i == 300 {
+                continue;
+            }
+            let w = if i == 100 { fault } else { normal0 };
+            words.set(i, w);
+            model[i] = w;
+        }
+        // Block 1: a reason of its own for every proc.
+        for k in 0..BLOCK {
+            let i = words.push_running();
+            model.push(RUNNING);
+            let w = ProcExit::Normal {
+                value: k as i64 + 1,
+            }
+            .encode();
+            words.set(i, w);
+            model[i] = w;
+        }
+        // A third block opens; the first two are full.
+        let tail = words.push_running();
+        model.push(RUNNING);
+        check(&words, &model);
+        // Block 0 packs once its last exits make it full-and-quiet:
+        // the stragglers are exceptions until they exit.
+        words.set(300, normal0);
+        model[300] = normal0;
+        assert!(
+            matches!(&words.blocks[0], Block::Packed { common, others }
+                if *common == normal0 && others.len() == 2),
+            "a block that ended alike is one word and its exceptions"
+        );
+        check(&words, &model);
+        words.set(7, fault);
+        model[7] = fault;
+        check(&words, &model);
+        assert!(matches!(&words.blocks[0], Block::Packed { others, .. } if others.len() == 2));
+        // Distinct reasons do not pack, and stay exact.
+        assert!(matches!(&words.blocks[1], Block::Open(w) if w.len() == BLOCK));
+        words.set(tail, normal0);
+        model[tail] = normal0;
+        check(&words, &model);
+    }
+
+    /// The bound the packing buys: a million procs that end alike keep
+    /// a block entry per 512, not a word each.
+    #[test]
+    fn procs_that_end_alike_share_a_word() {
+        let mut words = ExitWords::new();
+        let normal0 = ProcExit::Normal { value: 0 }.encode();
+        for _ in 0..1_000_000 {
+            let i = words.push_running();
+            words.set(i, normal0);
+        }
+        let open = words
+            .blocks
+            .iter()
+            .filter(|b| matches!(b, Block::Open(_)))
+            .count();
+        assert!(open <= 1, "{open} blocks kept a word a proc");
+        assert_eq!(words.get(999_999), Some(normal0));
+        assert_eq!(words.get(0), Some(normal0));
+    }
+
+    /// s228 (wolf-lang#662): a monitor's handle is a table number, and
+    /// the table lets the channel go exactly when nothing can tell —
+    /// kept while the proc owes it a delivery and while the delivery
+    /// sits unread, dropped once it has been received, and an ordinary
+    /// (empty) channel again for any later call.
+    #[test]
+    fn a_monitor_channel_is_dropped_once_received() {
+        use super::super::chan::monitor_held;
+        use super::super::{
+            __wolf_rt_chan_close, __wolf_rt_chan_free, __wolf_rt_chan_recv, __wolf_rt_chan_send,
+        };
+        unsafe extern "C" fn ok_body(_env: *mut core::ffi::c_void) -> i64 {
+            0
+        }
+        // The channel goes when its LAST holder lets go — the call
+        // that received, or the reaper a moment after its send — so
+        // "dropped" is waited for, briefly.
+        fn dropped(m: *mut core::ffi::c_void) -> bool {
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while monitor_held(m) {
+                if Instant::now() > deadline {
+                    return false;
+                }
+                std::thread::sleep(Duration::from_millis(1));
+            }
+            true
+        }
+        let gate = Chan::new(0);
+        let g = gate.clone();
+        let parked = spawn_proc("parked", move |_| {
+            let _ = g.recv();
+            ProcOutcome::Value(7)
+        });
+        // SAFETY: entry points used per their documented contracts.
+        unsafe {
+            let m = __wolf_rt_proc_monitor(parked);
+            assert_eq!(m as usize & 1, 1, "a monitor handle is an odd word");
+            assert!(monitor_held(m), "kept while the proc runs");
+            // A copy is the same number; freeing it frees nothing.
+            assert_eq!(super::super::__wolf_rt_chan_clone(m), m);
+            __wolf_rt_chan_free(m);
+            assert!(monitor_held(m), "kept: the delivery is still owed");
+            gate.send(0).unwrap();
+            // The receive parks until the reaper delivers.
+            let mut word = 0u64;
+            assert_eq!(__wolf_rt_chan_recv(m, &raw mut word), 0);
+            assert_eq!(ProcExit::decode(word), ProcExit::Normal { value: 7 });
+            assert!(dropped(m), "dropped: received, empty, unreferenced");
+
+            // The spent handle is an empty channel, not a dead one: a
+            // word sent through it is held and comes back, then it is
+            // dropped again.
+            assert_eq!(__wolf_rt_chan_send(m, 42), 0);
+            assert!(monitor_held(m), "kept: a word is buffered");
+            assert_eq!(__wolf_rt_chan_recv(m, &raw mut word), 0);
+            assert_eq!(word, 42);
+            assert!(dropped(m));
+
+            // A closed monitor stays closed (the table keeps what a
+            // fresh channel would not reproduce).
+            let late = __wolf_rt_proc_monitor(parked);
+            assert_ne!(late, m, "a serial is never reused");
+            __wolf_rt_chan_close(late);
+            assert_eq!(__wolf_rt_chan_recv(late, &raw mut word), 0, "drains first");
+            assert_eq!(ProcExit::decode(word), ProcExit::Normal { value: 7 });
+            assert_eq!(__wolf_rt_chan_recv(late, &raw mut word), 1, "then closed");
+            assert!(monitor_held(late));
+
+            // 2,000 monitored procs: every channel is gone afterwards.
+            let mut handles = Vec::new();
+            for _ in 0..2_000 {
+                let p = __wolf_rt_proc_spawn(ok_body, std::ptr::null_mut(), b"p".as_ptr(), 1);
+                let h = __wolf_rt_proc_monitor(p);
+                assert_eq!(__wolf_rt_chan_recv(h, &raw mut word), 0);
+                handles.push(h);
+            }
+            assert!(handles.iter().all(|&h| dropped(h)));
+        }
     }
 
     /// `current_proc` attributes nested scopes to their proc, and the
