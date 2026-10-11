@@ -205,21 +205,38 @@ premise by construction.
   with happens-before. Implementations schedule on OS threads; a blocked
   task holds its thread; pool compensation is unobservable **to the
   program** — no value, ordering or exit depends on it — **and
-  observable to the host.** **The cost, stated** (measured, not
-  derived): on wolf's native tier on linux, compensation is a timed
-  wait that re-arms, armed once per parked blocking wait, so each task
-  parked in a kernel wait with no deadline — `os_signal_wait`, an
-  unbudgeted `net_accept` — costs **~196 `futex` calls a second, every
-  one an error return**, for as long as it stays parked, and a process
-  with two such waits pays two clocks. Four measurements by lobo on
-  ubuntu-latest (4 vcpus) under `strace -c -f`, 8 s idle windows:
-  ws30 (wolf 0.2.9 and `fc07cc5`, runs 34553773533, 34554207566),
-  ws31 (0.2.11, run 34598620069), ws32 (0.2.11, run 34603180650,
-  6,273 calls over four hands, and run 34603229602 for the per-wait
-  increment). It is under 0.1% of a serving hand's CPU, and it is a
-  count a server choosing between a poll and a park is owed. (The
-  number written 2026-09-15 by s163 — wolf-lang#302 item 2; whether a
-  deadline-less park can cost nothing is item 1, still open.)
+  observable to the host.** Compensation has no cap of its own: the
+  native runtime holds a thread for every task parked in a wait at
+  once, beside one per core, so a program that parks one task per
+  connection holds as many as the host lets it start. The host's thread
+  limit is the last word, and a thread it refuses is reported once on
+  stderr; a task queued then waits for a parked one to return. (Since
+  s231, wolf-lang#713: compensation used to stop at eight threads a
+  core, and `waitwolf loop 0 N`, which parks 2N + 1 tasks, stopped at
+  N = 8 on one cpu, 16 on four and 64 on sixteen.) **The cost, stated**
+  (measured, not derived): a parked task costs its thread and no cpu.
+  On wolf's native tier on linux x86-64 the thread is about 15 KiB of
+  resident memory — the stack pages its frames touch — plus the
+  kernel's own record of a thread (s231's soak, 10,000 tasks parked at
+  once on kasumi: 15.1 KiB a task in a channel `recv`, 19.6 KiB in
+  `net_read`, 15.3 KiB in `net_accept`). A wait parked in the reactor
+  (`net_read`, `net_accept`, `net_write`), a channel operation or a
+  `when` acquisition sleeps until its completion, its deadline or a
+  cancellation, with no system call meanwhile: one task parked 8 s in
+  an unbudgeted `net_accept` made 8 `futex` calls in its whole run,
+  against 1,741 before s231, when every parked wait woke each 5 ms to
+  look for a cancellation. `os_signal_wait` still does: **~196 `futex`
+  calls a second, every one an error return**, for as long as it stays
+  parked, and a process with two such waits pays two clocks — lobo's
+  four measurements on ubuntu-latest (4 vcpus) under `strace -c -f`,
+  8 s idle windows: ws30 (wolf 0.2.9 and `fc07cc5`, runs 34553773533,
+  34554207566), ws31 (0.2.11, run 34598620069), ws32 (0.2.11, run
+  34603180650, 6,273 calls over four hands, and run 34603229602 for
+  the per-wait increment). It is under 0.1% of a serving hand's CPU,
+  and it is a count a server choosing between a poll and a park is
+  owed. (The number written 2026-09-15 by s163 — wolf-lang#302 item 2;
+  item 1, whether a deadline-less park can cost nothing, is answered
+  for every wait above but `os_signal_wait`.)
 - `[conc.task.name]` Tasks and procs carry names (spawn-site default,
   user-overridable) surfaced in the structured dump — the dump's
   *contents* are implementation-specified; its *existence* is contract.
