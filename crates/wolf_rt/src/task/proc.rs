@@ -1298,12 +1298,7 @@ pub extern "C" fn __wolf_rt_proc_monitor(proc: u64) -> *mut c_void {
     match monitor(proc) {
         // s228 (#662): a table handle, not a leaked pointer — the
         // channel goes when its delivery has been received.
-        // PLANT (s228, revert follows): one reference nothing gives
-        // back, so the channel can never be dropped.
-        Ok(ch) => {
-            std::mem::forget(ch.clone());
-            super::chan::monitor_handle(ch)
-        }
+        Ok(ch) => super::chan::monitor_handle(ch),
         Err(ProcErr::Stale) => native::__wolf_rt_trap(native::trap_code::STALE_HANDLE),
     }
 }
