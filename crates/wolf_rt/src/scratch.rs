@@ -50,6 +50,14 @@ pub(crate) fn with_read_buf<R>(len: usize, f: impl FnOnce(&mut [u8]) -> R) -> R 
     r
 }
 
+/// Give the calling thread's buffer back to the host — for a thread
+/// that will never read again (s228: a worker parked for good after a
+/// contained trap, `task::pool`).
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+pub(crate) fn release_thread() {
+    let _ = READ_BUF.try_with(|c| drop(c.take()));
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

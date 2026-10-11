@@ -197,33 +197,53 @@ pub(crate) fn finish_current_task(reason: ExitReason) {
 /// Park the calling worker forever after a contained trap (D68,
 /// s132). The frames below this call are compiled wolf frames plus
 /// the trap path's own — never unwound (`[abi.native.nounwind]`),
-/// never resumed. The worker leaves the unblocked count exactly the
-/// way [`blocking`] does (LIFO slot flushed to stealable ground, the
-/// pool compensated), minus `blocking`'s handler debug-assert: a trap
-/// inside a proc message handler is precisely a case this path must
-/// contain, not assert on. The thread and its stack's high water are
-/// the measured containment cost — the same class as a task parked on
-/// a channel nobody sends to, and the pool already compensates for
-/// those.
+/// never resumed.
+///
+/// The THREAD stays (its frames cannot be discarded), but since s228
+/// (wolf-lang#662) it stops being a WORKER: it hands its queued work
+/// to the injector and gives its pool slot back before it parks, so
+/// the pool starts a replacement in that slot. Until s228 the parked
+/// thread kept the slot — counted as a blocked worker for ever — and
+/// the pool has `cap` slots (eight per core): after that many
+/// contained traps every slot was a parked thread, nothing could run a
+/// task, and the process stopped answering (hasu, 20 cpus: between
+/// 120 and 250 traps; a 2-cpu host has 16 slots).
+///
+/// What a contained trap still costs is the parked thread itself: its
+/// kernel record and the stack pages its dead frames occupy. The
+/// thread's reusable buffers are released here; the stack below the
+/// trap is trimmed.
 pub(crate) fn park_after_contained_trap() -> ! {
     if let Some(w) = WORKER_ID.with(std::cell::Cell::get) {
         let p = pool();
         let slot = &p.slots[w];
+        // Everything this worker alone could reach goes where any
+        // worker can take it: the LIFO slot and its own deque (thieves
+        // skip an unoccupied slot).
         let held = slot.lifo.swap(std::ptr::null_mut(), SeqCst);
         if !held.is_null() {
-            match slot.deque.push(held) {
-                Ok(()) => {}
-                Err(back) => {
-                    // SAFETY: pointer from Box::into_raw in spawn_task.
-                    let boxed = unsafe { Box::from_raw(back) };
-                    p.injector.lock().unwrap().push_back(boxed);
-                }
-            }
-            wake_one(p);
+            // SAFETY: pointer from Box::into_raw in spawn_task.
+            let boxed = unsafe { Box::from_raw(held) };
+            p.injector.lock().unwrap().push_back(boxed);
         }
+        while let Some(t) = slot.deque.pop() {
+            // SAFETY: pointer from Box::into_raw, popped once.
+            let boxed = unsafe { Box::from_raw(t) };
+            p.injector.lock().unwrap().push_back(boxed);
+        }
+        // Leave the pool: no longer a worker, the slot is free.
+        WORKER_ID.with(|c| c.set(None));
+        *slot.thread.lock().unwrap() = None;
+        slot.occupied.store(false, SeqCst);
+        p.running.fetch_sub(1, SeqCst);
         p.unblocked.fetch_sub(1, SeqCst);
         compensate(p);
+        wake_one(p);
+        #[cfg(unix)]
+        trim_own_stack(p, w);
     }
+    crate::scratch::release_thread();
+    crate::native::release_thread_pools();
     // det (s36): the baton frees for good — this thread never takes
     // another grant (no-op outside the det domain).
     super::hooks::det_block_enter();
@@ -404,7 +424,10 @@ pub fn blocking<R>(f: impl FnOnce() -> R) -> R {
 }
 
 /// Live unblocked workers dipped below target: add a replacement
-/// thread, up to the cap.
+/// thread, up to the cap. Any free slot serves (s228): a core slot is
+/// free only when a contained trap vacated it
+/// ([`park_after_contained_trap`]), and its replacement is a core
+/// worker like the one it replaces — it never retires.
 fn compensate(p: &'static Pool) {
     if p.unblocked.load(SeqCst) >= p.target {
         return;
@@ -412,11 +435,11 @@ fn compensate(p: &'static Pool) {
     if p.running.load(SeqCst) >= p.cap {
         return;
     }
-    for slot in p.target..p.cap {
+    for slot in 0..p.cap {
         if !p.slots[slot].occupied.swap(true, SeqCst) {
             p.running.fetch_add(1, SeqCst);
             p.unblocked.fetch_add(1, SeqCst);
-            start_worker(p, slot, true);
+            start_worker(p, slot, slot >= p.target);
             return;
         }
     }

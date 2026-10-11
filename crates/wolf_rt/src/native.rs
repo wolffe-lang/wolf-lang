@@ -446,6 +446,22 @@ thread_local! {
     };
 }
 
+/// Give the calling thread's pooled chunks and region headers back to
+/// the host — for a thread that will never open a region again (s228:
+/// a worker parked for good after a contained trap, `task::pool`). A
+/// trap that fired inside a pool visit leaves the pool borrowed; then
+/// it stays as it is.
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+pub(crate) fn release_thread_pools() {
+    let _ = POOLS.try_with(|p| {
+        if let Ok(mut p) = p.try_borrow_mut() {
+            p.chunks.chunks = Vec::new();
+            p.chunks.bytes = 0;
+            p.regions = Vec::new();
+        }
+    });
+}
+
 /// A chunk of exactly `cap` bytes: pooled when one is waiting, fresh
 /// otherwise. Debug builds zero the pooled path too — reuse must not
 /// be less deterministic than a fresh chunk.
