@@ -2,6 +2,88 @@
 
 ## Unreleased
 
+### The calls that change a file: modes, links, times, a length, the umask (s230, #346, #698, #699, #700, #702, #704, #688)
+
+**Read this before you bump the pin.** Eight new prelude names, all
+`w0304: true` in `spec/prelude.json`: `fs_set_mode`, `fs_open_perm`,
+`fs_create_dir_mode`, `fs_symlink`, `fs_link`, `fs_set_times`,
+`fs_truncate` and `os_umask`. A module that declares one draws W0304,
+which `--deny-warnings` makes fatal: rename yours. A grep for a
+declaration of any of the eight found none in wolf-std (`98e1b7b`),
+boreutils (`abc59f5`), pelt (`b32bebc`), lobo (`b256d2e`), pax
+(`0cc43be`) or the book (`2504a0f`). Nothing that existed changed:
+`fs_open_mode` and `fs_create_dir` keep their arity and still ask for
+`0o666` and `0o777`. Every hosted binary moves bytes (`libwolf_rt.a`
+gained the eight shims). **Each spelling and shape is a ruling owed**
+(`[os.fs.change.note]`, R1 to R10), implemented as recommended.
+
+s218 let a program read what `ls -l` shows; these let it write the same
+words — what `chmod`, `touch`, `ln`, `mkdir -m`, `cp -p` and a shell's
+`umask` are made of (boreutils' bu21 left them out for want of each).
+Every call judges its arguments first (`invalid`, the same on every
+host), then says so by name where the host has no such operation
+(`unsupported`), then makes the host's one call.
+
+- **`fs_set_mode(path, mode) -> () ! {denied, invalid, io, not_found,
+  unsupported}` (`[os.fs.mode]`).** `chmod`: the permission, set-id and
+  sticky bits become exactly `mode` (`0..=0o7777`, `fs_stat`'s word 4),
+  following a final link.
+- **`fs_open_perm(path, open, mode) -> int` and
+  `fs_create_dir_mode(path, mode) -> ()`, each `! {denied, exists,
+  invalid, io, not_found, unsupported}` (`[os.fs.create.mode]`).**
+  `fs_open_mode` and `fs_create_dir` with the permission bits the
+  creation uses (`0..=0o777`, less the umask), so a private file is
+  never readable for an instant (#346) and a copied program is
+  executable from the first.
+- **`fs_symlink(target, path) -> () ! {denied, exists, invalid, io,
+  not_found, unsupported}` (`[os.fs.symlink]`).** The target stored
+  verbatim, as `fs_read_link` reads it back; an empty target is
+  `invalid`.
+- **`fs_link(existing, path) -> () ! {cross_device, denied, exists,
+  io, not_found}` (`[os.fs.link]`).** A second name. It never replaces
+  (the atomic publish `fs_rename` is not) and never follows a final
+  link in `existing`.
+- **`fs_set_times(path, atime_s, atime_ns, mtime_s, mtime_ns, follow)
+  -> () ! {denied, invalid, io, not_found}` (`[os.fs.times]`).** One
+  `utimensat`. A nanosecond word is a count below a second, or `-1`
+  for the host's clock now, or `-2` to leave that time alone; `follow`
+  false sets a link's own times.
+- **`fs_truncate(fd, len) -> () ! {invalid, io}`
+  (`[os.fs.truncate]`).** The file behind a handle becomes exactly
+  `len` bytes; the offset does not move.
+- **`os_umask(mask) -> int ! {invalid, unsupported}`
+  (`[os.fs.umask]`).** Sets the process's file mode creation mask and
+  answers the one it replaced, POSIX's only form. The mask is the
+  process's: every task's, and every child's.
+- **windows**, by name: `fs_set_mode`, `fs_open_perm`,
+  `fs_create_dir_mode`, `fs_symlink` and `os_umask` are `unsupported`
+  (it has no permission bits, no mask, and no unprivileged symbolic
+  link); `fs_link`, `fs_set_times` and `fs_truncate` are served.
+- **Capabilities:** the seven `fs_*` calls charge `fs`; `os_umask`
+  charges `env`, as `os_chdir` does. A package that reaches one must
+  declare it (E1504).
+- **Every machine.** native and release call the runtime; the checked
+  machine makes the same host calls — and sets the process's real mask,
+  where it keeps the working directory to itself (`[os.fs.umask]` says
+  why); the freestanding target refuses each by name; lupin mirrors
+  seven and refuses `os_umask`, and a link's own times, by name
+  (wolf-interp s230). `os_error()` carries the host's number after each
+  new `fs_*` refusal.
+- **An octal or binary literal lowers (#688).** `0o755` and `0b101` ran
+  on the checked machine and lupin and were refused by native and
+  release ("this literal shape in WIR lowering", exit 4): the two
+  literal readers in the lowering knew `0x` alone. A mode can be
+  written the way everyone writes one. Witness:
+  `corpus/typecheck/numlit_radix.lu`.
+- Witnesses: `crates/wolf_driver/tests/fs_change_lanes.rs` — six corpus
+  rows on every host and five unix fixtures (modes under a known mask,
+  both links, a link's own times, `denied`, the mask), on four
+  machines, each followed by the test's own reading of the host;
+  `wolf_rt`'s crate tests, the umask's in a test binary of their own.
+  Not done, each left to its issue: owner changes (#701), holes and
+  reflinks (#703), fifos and device nodes (#705), a rename that does
+  not replace (#706), calls relative to an open directory (#707).
+
 ### A long-running server stops growing in the runtime (s228, #661, #662, #374)
 
 **Read this before you bump the pin.** Three places where the runtime
