@@ -752,6 +752,11 @@ pub(crate) fn poll_tick() {
     }
 }
 
+/// Is the calling thread inside the det domain?
+pub(crate) fn in_domain() -> bool {
+    CTX.with(std::cell::Cell::get).is_some()
+}
+
 /// The det poll period for waiters inside the domain (tighter than
 /// the production 5ms backstop so the quiet window keeps its margin).
 pub(crate) fn poll_period(default: Duration) -> Duration {

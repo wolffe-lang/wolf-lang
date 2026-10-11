@@ -79,6 +79,7 @@ mod deque;
 #[cfg(any(test, feature = "sched-test"))]
 pub mod det;
 mod hooks;
+mod parked;
 mod pool;
 mod proc;
 mod scope;
@@ -108,9 +109,11 @@ pub use hooks::{ChanPhase, SchedEvent, SchedRng, kind_code, seed_spec};
 // the task layer through these crate-internal seams: the one
 // sched_point site rule and the kill-teardown discipline hold there
 // too.
+pub(crate) use hooks::det_in_domain;
 pub(crate) use hooks::sched_point;
 #[cfg(test)]
 pub(crate) use hooks::test_hook;
+pub(crate) use parked::{Wake, park_on};
 pub(crate) use pool::compensated;
 pub(crate) use pool::kill_teardown_check;
 pub use pool::{Body, SendPtr, TaskCtx, blocking, counters, current_scope, initialized};
@@ -201,6 +204,10 @@ impl Gate {
     /// cancellation surfaces as a value at the blocking point).
     pub fn wait(&self, ctx: &TaskCtx) -> bool {
         let opened = blocking(|| {
+            // s231: `open` or a cancellation (through the parked
+            // registry) ends the wait; no poll timer outside det.
+            let poll = hooks::det_in_domain();
+            let _parked = (!poll).then(|| parked::park_on(self));
             let mut opened = self.state.lock().unwrap();
             loop {
                 if *opened {
@@ -209,11 +216,14 @@ impl Gate {
                 if ctx.is_cancelled() {
                     return false;
                 }
-                let (g, _) = self
-                    .cv
-                    .wait_timeout(opened, std::time::Duration::from_millis(5))
-                    .unwrap();
-                opened = g;
+                opened = if poll {
+                    self.cv
+                        .wait_timeout(opened, std::time::Duration::from_millis(5))
+                        .unwrap()
+                        .0
+                } else {
+                    self.cv.wait(opened).unwrap()
+                };
             }
         });
         if !opened {
@@ -223,6 +233,13 @@ impl Gate {
             pool::kill_teardown_check(&ctx.scope);
         }
         opened
+    }
+}
+
+impl parked::Wake for Gate {
+    fn wake(&self) {
+        let _g = self.state.lock().unwrap();
+        self.cv.notify_all();
     }
 }
 

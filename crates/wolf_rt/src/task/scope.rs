@@ -214,8 +214,13 @@ impl ScopeInner {
     pub fn cancel(&self) {
         self.cancelled.store(true, SeqCst);
         // Wake everything blocked on this scope (join, wait points).
-        let _g = self.state.lock().unwrap();
-        self.cv.notify_all();
+        {
+            let _g = self.state.lock().unwrap();
+            self.cv.notify_all();
+        }
+        // And every parked wait in the process, which re-checks its own
+        // scope chain (s231: parked waits no longer poll on a timer).
+        super::parked::wake_all();
     }
 
     /// Deliver kill teardown (`[conc.proc.kill]` step 1): the scope is
@@ -315,6 +320,11 @@ impl ScopeInner {
     /// it). Fires a cancel-check event on every wakeup.
     pub fn wait_cancelled(&self) {
         pool::blocking(|| {
+            // Enclosing-scope cancellation notifies a *parent's* cv, not
+            // ours: the parked registry nudges us instead (s231); the
+            // det domain keeps its poll.
+            let poll = super::hooks::det_in_domain();
+            let _parked = (!poll).then(|| super::parked::park_on(self));
             let mut st = self.state.lock().unwrap();
             loop {
                 let cancelled = self.is_cancelled();
@@ -325,14 +335,14 @@ impl ScopeInner {
                 if cancelled {
                     return;
                 }
-                // Timed wait: enclosing-scope cancellation notifies a
-                // *parent's* cv, not ours — poll covers the chain
-                // (v0; s33's primitives register on the chain).
-                let (g, _t) = self
-                    .cv
-                    .wait_timeout(st, std::time::Duration::from_millis(5))
-                    .unwrap();
-                st = g;
+                st = if poll {
+                    self.cv
+                        .wait_timeout(st, std::time::Duration::from_millis(5))
+                        .unwrap()
+                        .0
+                } else {
+                    self.cv.wait(st).unwrap()
+                };
             }
         });
         // Kill teardown (s34): a killed scope's task terminates here
@@ -383,4 +393,11 @@ pub fn dump() -> String {
         }
     }
     out
+}
+
+impl super::parked::Wake for ScopeInner {
+    fn wake(&self) {
+        let _g = self.state.lock().unwrap();
+        self.cv.notify_all();
+    }
 }

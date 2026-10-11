@@ -332,6 +332,21 @@ pub(crate) fn det_poll_tick() {
     super::det::poll_tick();
 }
 
+/// True on a thread inside the det domain, whose scheduler is driven by
+/// parked waiters polling ([`det_poll_tick`]): its waits stay timed.
+/// Everywhere else a parked wait sleeps until an event (s231).
+#[inline(always)]
+pub(crate) fn det_in_domain() -> bool {
+    #[cfg(any(test, feature = "sched-test"))]
+    {
+        super::det::in_domain()
+    }
+    #[cfg(not(any(test, feature = "sched-test")))]
+    {
+        false
+    }
+}
+
 #[inline(always)]
 #[allow(unused_variables)]
 pub(crate) fn det_poll_period(default: std::time::Duration) -> std::time::Duration {
