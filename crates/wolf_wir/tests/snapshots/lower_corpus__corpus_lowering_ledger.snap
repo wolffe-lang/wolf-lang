@@ -32,7 +32,9 @@ comptime/sandbox_os_exec.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_os_random.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_pipe.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_random.lu: not mem-clean (pre-wir rungs own it)
+comptime/sandbox_set_mode.lu: not mem-clean (pre-wir rungs own it)
 comptime/sandbox_spawn_fds.lu: not mem-clean (pre-wir rungs own it)
+comptime/sandbox_umask.lu: not mem-clean (pre-wir rungs own it)
 comptime/size_of_layout.lu: not mem-clean (pre-wir rungs own it)
 comptime.lu: lowers
 conc/atomic_counter.lu: lowers
@@ -155,16 +157,21 @@ faults/wrap_high_as_i32.lu: lowers
 faults/wrap_top_bit_as_int.lu: lowers
 ffi.lu: not mem-clean (pre-wir rungs own it)
 fs/bytes_dirs.lu: lowers
+fs/change_rows.lu: lowers
 fs/copy_chunk.lu: lowers
 fs/error_row.lu: lowers
 fs/fstat.lu: lowers
+fs/hard_link.lu: lowers
+fs/mode_symlink.lu: lowers
 fs/open_nonblock.lu: lowers
 fs/os_error.lu: lowers
 fs/read_at.lu: lowers
 fs/remove_dir_refused.lu: lowers
 fs/roundtrip.lu: lowers
 fs/seek_tell.lu: lowers
+fs/set_times.lu: lowers
 fs/std_write_bytes.lu: lowers
+fs/truncate.lu: lowers
 generics/box_method.lu: lowers
 generics/explicit_apply.lu: lowers
 generics/explicit_apply_arity.lu: not mem-clean (pre-wir rungs own it)
@@ -781,6 +788,7 @@ os/signal_loopback.lu: lowers
 os/signal_supervisor.lu: lowers
 os/spawn_fds_rows.lu: lowers
 os/spawn_rows.lu: lowers
+os/umask.lu: lowers
 overflow.lu: lowers
 procs.lu: lowers
 projects/count.lu: lowers
@@ -1051,6 +1059,7 @@ typecheck/numlit_extremes.lu: lowers
 typecheck/numlit_fit.lu: not mem-clean (pre-wir rungs own it)
 typecheck/numlit_float_to_int_refused.lu: not mem-clean (pre-wir rungs own it)
 typecheck/numlit_list_element_width.lu: lowers
+typecheck/numlit_radix.lu: lowers
 typecheck/numlit_u64_edge.lu: lowers
 typecheck/numlit_value_refused.lu: not mem-clean (pre-wir rungs own it)
 typecheck/pattern_shape.lu: not mem-clean (pre-wir rungs own it)
