@@ -86,3 +86,18 @@ pub mod time;
 // wolf_rt without it; freebsd (s61) widens this gate next.
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 pub mod task;
+
+/// A wait the program asked for by name — `time_sleep_ms`, `net_wait`,
+/// the dial — on a thread that may be a pool worker: where the task
+/// layer exists the pool compensates for it as for any runtime wait
+/// (s231, wolf-lang#713); elsewhere there is no pool to tell.
+pub(crate) fn host_wait<R>(f: impl FnOnce() -> R) -> R {
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    {
+        task::compensated(f)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        f()
+    }
+}

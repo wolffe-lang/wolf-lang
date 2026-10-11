@@ -1525,7 +1525,7 @@ static NET: Mutex<NetTable> = Mutex::new(NetTable::new());
 /// stopped that way on 16 cpus once the pool's cap no longer stopped it
 /// first.
 fn dial(addr: &str) -> Result<Sock, NetErr> {
-    crate::task::compensated(|| TcpStream::connect(addr))
+    crate::host_wait(|| TcpStream::connect(addr))
         .map(Sock::Stream)
         .map_err(|e| err_tag(e.kind()))
 }
@@ -1535,7 +1535,7 @@ fn dial(addr: &str) -> Result<Sock, NetErr> {
 fn dial_unix(path: &str) -> Result<Sock, NetErr> {
     #[cfg(unix)]
     {
-        crate::task::compensated(|| UnixStream::connect(path))
+        crate::host_wait(|| UnixStream::connect(path))
             .map(Sock::UnixStream)
             .map_err(|e| err_tag(e.kind()))
     }
@@ -1682,8 +1682,7 @@ pub(crate) fn wait_ready(handles: &[i64], deadline_ms: i64) -> Result<Vec<i64>, 
     };
     // The poll holds the worker for as long as the caller asked, so the
     // pool compensates (s231; until then it did not).
-    let flags =
-        crate::task::compensated(|| crate::poll::readable(&raws, timeout)).map_err(|_| "io")?;
+    let flags = crate::host_wait(|| crate::poll::readable(&raws, timeout)).map_err(|_| "io")?;
     Ok(handles
         .iter()
         .zip(flags)

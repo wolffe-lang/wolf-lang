@@ -50,7 +50,7 @@ pub extern "C" fn __wolf_rt_time_unix_ms() -> i64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_time_sleep_ms(ms: i64) {
     if ms > 0 {
-        crate::task::compensated(|| {
+        crate::host_wait(|| {
             std::thread::sleep(std::time::Duration::from_millis(ms as u64));
         });
     }
