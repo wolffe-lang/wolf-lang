@@ -60,3 +60,11 @@ find-msvc-tools = "0.1"
 # in the graph (wolf_rt, wolf_mem); unix only, dev only.
 [target.'cfg(unix)'.dev-dependencies]
 libc = "0.2"
+
+# s232 (wolf-lang#681): the `wolf` binary reads its inherited SIGPIPE
+# disposition in a start-up constructor, before Rust's runtime sets it to
+# ignored, so the checked machine can answer `os_signal_ignored` for the
+# program rather than for `wolf`. Already in the graph (wolf_rt,
+# wolf_mem); unix only.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"

@@ -127,6 +127,31 @@ fn emit(text: &str) {
     }
 }
 
+/// s232 (wolf-lang#681, `[os.signal.ignored]`): the SIGPIPE disposition
+/// this process was started with, read before `main` — Rust's runtime
+/// sets SIGPIPE to ignored before `main` runs, and a checked program's
+/// `os_signal_ignored` must answer what the program inherited, not what
+/// Rust chose for `wolf`. A start-up constructor (ELF `.init_array`,
+/// Mach-O `__mod_init_func`) runs before the runtime's set-up; it makes
+/// one read-only `sigaction` query and stores one flag.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod inherited_sigpipe {
+    extern "C" fn record() {
+        // SAFETY: a read-only query (null new action) into a zeroed struct.
+        unsafe {
+            let mut old: libc::sigaction = std::mem::zeroed();
+            if libc::sigaction(libc::SIGPIPE, std::ptr::null(), &mut old) == 0 {
+                wolf_mem::ubcheck::record_inherited_sigpipe(old.sa_sigaction == libc::SIG_IGN);
+            }
+        }
+    }
+
+    #[used]
+    #[cfg_attr(target_os = "linux", unsafe(link_section = ".init_array"))]
+    #[cfg_attr(target_os = "macos", unsafe(link_section = "__DATA,__mod_init_func"))]
+    static RECORD: extern "C" fn() = record;
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     // `wolf <command> --help` (#250). Only in the SECOND position: in
