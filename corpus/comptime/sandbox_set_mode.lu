@@ -1,0 +1,20 @@
+//! check: fail(E0701)
+//! phase: resolve
+//! conforms: comptime.sandbox, comptime.sandbox.fs, os.fs.mode
+//!
+//! s230 (D33): `fs_set_mode` would change a file on the machine that
+//! COMPILES — the `fs` category, with the rest of the fs family, refused
+//! at comptime with that category's reason. The six calls beside it
+//! (`fs_open_perm`, `fs_create_dir_mode`, `fs_symlink`, `fs_link`,
+//! `fs_set_times`, `fs_truncate`) carry the same category;
+//! `crates/wolf_sema/tests/sandbox_s230.rs` pins each.
+
+comptime fn helper() -> int {
+    fs_set_mode("Cargo.toml", 0o600) else |_| {}
+    0
+}
+
+fn main() -> !int {
+    const H = helper()
+    H
+}
