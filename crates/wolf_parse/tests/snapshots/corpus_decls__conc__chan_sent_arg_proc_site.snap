@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 736..821 name=emit body=Block
+FnDecl 823..894 name=worker body=Block
+FnDecl 896..1159 name=main body=Block

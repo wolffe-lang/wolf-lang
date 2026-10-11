@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 678..738 name=fwd body=Block
+FnDecl 740..872 name=relay body=Block
+FnDecl 874..949 name=worker body=Block
+FnDecl 951..1203 name=launch body=Block
+FnDecl 1205..1274 name=each body=Block
+FnDecl 1276..2136 name=main body=Block
