@@ -2239,6 +2239,113 @@ impl<'t> Lowerer<'t> {
         None
     }
 
+    /// s229 (wolf-lang#678, `[conc.proc.arg]`): **a `spawn proc`
+    /// argument outlives the spawning frame.** The proc is a domain
+    /// that outlives its spawner by design, and a `str` crosses as its
+    /// view (it is `Copy`: the "move" shares the bytes), so an argument
+    /// that can name bytes a region owns is demanded exactly as a sent
+    /// payload is: E1010 when its bytes live in a frame-local region.
+    /// Until this pin nothing was asked, and `region pass { let s =
+    /// "built {n}"; spawn proc child(s) }` left `child` reading the
+    /// chunk the next region reused. A closure that captured a channel
+    /// is refused as at any call ([`Self::refuse_sending_closure_handed`]).
+    ///
+    /// What this does NOT see is the other half of #678: a function
+    /// that spawns with its PARAMETER and returns while the proc runs.
+    /// A parameter's bytes outlive the frame, so the spawn is legal
+    /// here, and whether the caller's region outlives the proc depends
+    /// on a join this pass does not track.
+    fn demand_spawn_arguments_outlive(&mut self, flows: &[ArgFlow<'t>], callee: &str) {
+        if let Some(f) = flows.iter().find(|f| f.sink_capture.is_some()) {
+            let sink = SentFlow {
+                span: f.span,
+                text: f.sink_capture.clone().unwrap_or_default(),
+                captured: true,
+                direct: false,
+            };
+            self.refuse_sending_closure_handed(&sink, callee);
+            return;
+        }
+        for a in flows {
+            if !a.lends || a.sites.is_empty() {
+                continue;
+            }
+            let mut told = false;
+            for &s in &a.sites {
+                if self.sites[s.0 as usize].kind == SiteKind::Param
+                    || self.already_conflicted(s)
+                    || self.frozen_site.contains_key(&s)
+                    || self.shared_site.contains(&s)
+                {
+                    continue;
+                }
+                let sr = self.sites[s.0 as usize].region;
+                let Some(Binding::Local(rid)) = self.rt.binding(sr) else {
+                    self.mark_escape(s, "passed to a proc");
+                    continue;
+                };
+                self.conflicted = true;
+                self.tainted_region[rid.0 as usize] = true;
+                self.mark_escape(s, "outlives its region");
+                if told {
+                    continue;
+                }
+                told = true;
+                let region = self.show_region(sr);
+                let alloc = self.sites[s.0 as usize].span;
+                let is_proc = self.is_proc_region(sr);
+                let arg_text = self.text(a.span);
+                let shown = if arg_text.len() <= 40 && !arg_text.contains('\n') {
+                    format!("`{arg_text}`")
+                } else {
+                    "this argument".to_string()
+                };
+                let dies = if is_proc {
+                    "the spawning proc's own region, which is freed when that proc exits"
+                } else {
+                    "which is freed with its scope"
+                };
+                let mut d = Diagnostic::error(
+                    codes::E1010,
+                    a.span,
+                    format!(
+                        "`{callee}` is spawned as a proc and may outlive this frame, and \
+                         {shown}'s bytes live in {region}, {dies} — while the proc may still \
+                         be reading them"
+                    ),
+                )
+                .with_label(format!("this argument's bytes are in {region}"))
+                .with_secondary(alloc, format!("allocated here, into {region}"));
+                if let Some((name, intro)) = self.region_span(sr) {
+                    d = d.with_secondary(
+                        intro,
+                        if is_proc {
+                            format!(
+                                "`{name}` is a `spawn proc` entry: a proc owns its regions and \
+                                 they bulk-free at its exit ([conc.proc.kill])"
+                            )
+                        } else {
+                            format!(
+                                "region `{name}` is created here and freed with its scope — \
+                                 everything in it is freed wholesale"
+                            )
+                        },
+                    );
+                }
+                d = d.with_note(
+                    "a `spawn proc` argument crosses into a domain that outlives the spawner \
+                     [conc.proc.arg], and a `str` crosses as its view: the bytes stay where \
+                     they were built, so they must outlive the frame that spawns \
+                     [mem.region.escape]. Build the value where it outlives this frame — \
+                     outside the region block — or spawn from a function that is handed the \
+                     value as a parameter and joins the proc before it returns; a literal or \
+                     a scalar argument owns no region storage.",
+                );
+                self.diags.push(d);
+            }
+        }
+    }
+
     /// s229 (#665): find how this call's callee may send — a channel
     /// it is handed, the captures of a closure it is handed, the
     /// captures of the closure being called — and apply the rule
@@ -5372,9 +5479,9 @@ impl<'t> Lowerer<'t> {
     /// what makes `[abi.native.procenv]`'s per-proc copy honest.
     fn eval_spawn(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = wolf_ast::SpawnExpr::cast(e).expect("kind");
-        // s229 (wolf-lang#665): the arguments as the sent-argument
-        // rule reads them — a proc entry handed a channel sends as any
-        // callee does, and it outlives the frame that spawned it.
+        // s229 (wolf-lang#678, the spawn twin of #665): the arguments
+        // as the frame rule reads them — a proc outlives the frame
+        // that spawned it, with whatever it was handed.
         let mut flows: Vec<ArgFlow<'t>> = Vec::new();
         if let Some(args) = d.args() {
             for a in args.args() {
@@ -5413,7 +5520,7 @@ impl<'t> Lowerer<'t> {
             .proc_path()
             .map(|p| self.text(p.syntax().span))
             .unwrap_or_else(|| "the proc".to_string());
-        self.demand_sent_by_callee(&flows, None, &callee, e.span, false);
+        self.demand_spawn_arguments_outlive(&flows, &callee);
         Ok(Val::none())
     }
 
