@@ -389,6 +389,38 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`os_umask`",
             "hosted runtime",
         ),
+        // s232 (#679, #681, #691, #141): the shell's signal and process
+        // calls — each a runtime symbol named for its builtin, so each is
+        // refused by that name.
+        (
+            "os_signal_ignored",
+            "",
+            "let s = os_signal_ignored() else |e| {\n        return 0\n    }\n    s",
+            "`os_signal_ignored`",
+            "hosted runtime",
+        ),
+        (
+            "os_signal_send",
+            "",
+            "os_signal_send(1, 0) else |e| {\n        return 0\n    }\n    1",
+            "`os_signal_send`",
+            "hosted runtime",
+        ),
+        (
+            "os_signal_number",
+            "",
+            "let n = os_signal_number(16) else |e| {\n        return 0\n    }\n    n",
+            "`os_signal_number`",
+            "hosted runtime",
+        ),
+        ("os_pid", "", "os_pid()", "`os_pid`", "hosted runtime"),
+        (
+            "os_ppid",
+            "",
+            "let p = os_ppid() else |e| {\n        return 0\n    }\n    p",
+            "`os_ppid`",
+            "hosted runtime",
+        ),
         (
             "float",
             "",
