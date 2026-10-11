@@ -142,6 +142,32 @@ terminal half by name), #58 (`wolf_rt_ambient_get`/`_set`, option A),
 name is listable, not yet stat'able by name), #61 (json: Map
 semantics), #62 (`env_unset`, the execve-shaped `os_exec`, R1–R5).
 
+**Known issues: two soundness holes this release shares with 0.2.26.**
+Neither is new in 0.2.27 and neither is fixed in it. Both let a
+compiled program read freed bytes with no diagnostic, and both go
+through a call: the callee stores or sends an argument, and the call
+site does not charge that to the other arguments.
+
+- **wolf-lang#660: a callee keeps a string built in an enclosing region
+  block.** Inside a region block, under `in r { f(mut outer, s) }` with
+  `r` a longer-lived region, the callee may keep `s` (through
+  `copy s`, which shares the bytes) in the `mut` argument, which
+  outlives the block. No E1010 on any compiler machine. Native and
+  release then read the freed bytes (the witness prints another
+  region's reuse of them); the checked machine prints the stale bytes
+  and reports nothing; lupin traps `region-fault`. Until the fix, hand
+  such a call scalars, or a string built inside the `in` block
+  (`"{s}"`), as lobo does. The fix is written (PR #666, s227), held for
+  a ruling, and ships in the next release.
+- **wolf-lang#665: a callee sends its argument on a channel it was
+  handed.** `fn fwd(ch: channel[str], s: str) { ch.send(s) else { } }`
+  called with a string built in a region block: the direct send is
+  E1010, the send through the helper is not refused, and the receiver
+  reads freed bytes on native and release and stale bytes on the
+  checked machine. No `in` and no `mut` argument are needed. lupin does
+  not trap here either. Not yet fixed; send directly, where the
+  compiler checks the payload, until it is.
+
 **What each downstream does to bump.**
 
 - **wolf-std:** pins to 0.2.27 / 0.1.50 in `vendor/tools.toml`; rebase
