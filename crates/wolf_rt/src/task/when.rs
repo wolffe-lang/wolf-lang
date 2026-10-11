@@ -97,6 +97,13 @@ unsafe impl Send for SyncCell {}
 // SAFETY: as above — cross-thread access is serialized by holding.
 unsafe impl Sync for SyncCell {}
 
+impl super::parked::Wake for SyncCell {
+    fn wake(&self) {
+        let _g = self.st.lock().unwrap();
+        self.cv.notify_all();
+    }
+}
+
 impl SyncCell {
     /// Create a cell; its acquisition id is the next in the one
     /// canonical order.
@@ -134,6 +141,11 @@ impl SyncCell {
         drop(holder);
         blocking(|| {
             let scope = current_scope();
+            // s231: a release's notify or a cancellation (through the
+            // parked registry) ends the wait; no poll timer outside the
+            // det domain.
+            let poll = super::hooks::det_in_domain();
+            let _parked = (scope.is_some() && !poll).then(|| super::parked::park_on(self));
             let mut holder = self.st.lock().unwrap();
             loop {
                 if *holder == 0 {
@@ -152,13 +164,14 @@ impl SyncCell {
                     });
                     return Err(WhenErr::Cancelled);
                 }
-                // 5ms poll backstop for enclosing-scope cancellation;
-                // real wakeups arrive via the release's notify.
-                let (g, _) = self
-                    .cv
-                    .wait_timeout(holder, Duration::from_millis(5))
-                    .unwrap();
-                holder = g;
+                holder = if poll {
+                    self.cv
+                        .wait_timeout(holder, Duration::from_millis(5))
+                        .unwrap()
+                        .0
+                } else {
+                    self.cv.wait(holder).unwrap()
+                };
             }
         })
     }
