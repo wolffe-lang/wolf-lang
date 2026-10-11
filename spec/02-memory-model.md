@@ -683,6 +683,32 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   `corpus/memory/region_str_call_*.lu`,
   `region_str_elem_call_held.lu`, and the legal companions
   `region_str_call_static.lu` and `region_str_call_inside.lu`.)
+  (Extended 2026-10-10 by s228 for wolf-lang#374, the net half.
+  **`net_read` is a site.** s216 left a host builtin's `str` no site
+  "because the runtime places it in the process root or static data",
+  and for `net_read` that placement was the defect: a server that read
+  each request inside a region of its own kept every request's bytes
+  for the life of the process, because the root gives nothing back
+  (lobo with its workaround taken out: 17 MB over 4,000 keepalive
+  requests). `net_read`'s bytes are now built in the ambient region
+  like every other materialization (`[mem.region.create.3]`), and so
+  the call is a site exactly as `str_from_utf8` is — by name, because
+  its row (`str ! {closed, timeout, utf8, io}`) hides it from "is the
+  result `str`". The order is #374's and it is not optional: the site
+  first, then the bytes; the other way round, the programs that leaked
+  would read freed memory instead. The remaining host producers —
+  `fs_read_text`, `fs_read`, `read_line`, `fs_read_dir`'s names, the
+  environment and argument family, the json accessors — still place
+  their bytes in the root and are still no site. **The cost, stated.**
+  Nothing at run time but where the copy lands; the checked machine
+  charges the read to the ambient region's ledger as the native tiers
+  do, so a `cap:` breach on a read traps on all three. Measured before
+  it landed, trunk compiler against head: boreutils' 28 utilities, lobo
+  and its 28 serve tests, pelt, wolf-std's 433 test files and the
+  book's 357 samples and exercises build with the same verdicts and
+  the same diagnostics — no site newly refused. Witnesses
+  `corpus/memory/region_net_read_return.lu` and
+  `region_net_read_charged.lu`.)
   (Ruled 2026-09-11 by s153 for wolf-lang#310: `region scratch { let s
   = "re" + "gions"; s }` returned from a function printed `regions`
   from freed bytes on wolf 0.2.10 and lupin 0.1.31 alike, with a W1001
