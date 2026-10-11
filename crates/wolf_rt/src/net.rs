@@ -1164,18 +1164,8 @@ impl NetTable {
     /// nobody listens on (a stale one) is `refused`; a permission the
     /// caller lacks is `denied`. Windows: `unsupported`, by name.
     pub fn connect_unix(&mut self, path: &str) -> Result<i64, NetErr> {
-        #[cfg(unix)]
-        {
-            match UnixStream::connect(path) {
-                Ok(s) => self.push_stream(Sock::UnixStream(s)),
-                Err(e) => Err(err_tag(e.kind())),
-            }
-        }
-        #[cfg(not(unix))]
-        {
-            let _ = path;
-            Err("unsupported")
-        }
+        let s = dial_unix(path)?;
+        self.push_stream(s)
     }
 
     /// The local port a listener (or stream) is bound to — how a
@@ -1252,10 +1242,8 @@ impl NetTable {
     /// reactor route awaits the raw-socket floor). The stream enters
     /// the table under the runtime's posture ([`NetTable::push_stream`]).
     pub fn connect(&mut self, addr: &str) -> Result<i64, NetErr> {
-        match TcpStream::connect(addr) {
-            Ok(s) => self.push_stream(Sock::Stream(s)),
-            Err(e) => Err(err_tag(e.kind())),
-        }
+        let s = dial(addr)?;
+        self.push_stream(s)
     }
 
     /// Dial with a deadline: the `timeout` row when the handshake
@@ -1527,6 +1515,37 @@ pub mod net_code {
 /// `FILES` precedent, holding the [`NetTable`] the unit tests pin.
 static NET: Mutex<NetTable> = Mutex::new(NetTable::new());
 
+/// The blocking dial (the module doc's recorded delta: no reactor
+/// route for connect yet), made with NO table lock held and with the
+/// pool told the worker is waiting (s231, wolf-lang#713). Until s231 the
+/// shim dialled inside `tbl()`: a connect the kernel held — a listener
+/// whose backlog was full — held the process's socket table with it, so
+/// the very `net_accept` that would have drained the backlog waited on
+/// the lock, and so did every other socket call. `waitwolf loop 0 1000`
+/// stopped that way on 16 cpus once the pool's cap no longer stopped it
+/// first.
+fn dial(addr: &str) -> Result<Sock, NetErr> {
+    crate::task::compensated(|| TcpStream::connect(addr))
+        .map(Sock::Stream)
+        .map_err(|e| err_tag(e.kind()))
+}
+
+/// [`dial`] for an `AF_UNIX` path (its connect blocks on a full
+/// backlog too). Windows: `unsupported`, by name.
+fn dial_unix(path: &str) -> Result<Sock, NetErr> {
+    #[cfg(unix)]
+    {
+        crate::task::compensated(|| UnixStream::connect(path))
+            .map(Sock::UnixStream)
+            .map_err(|e| err_tag(e.kind()))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        Err("unsupported")
+    }
+}
+
 fn tbl() -> std::sync::MutexGuard<'static, NetTable> {
     NET.lock().unwrap_or_else(|p| p.into_inner())
 }
@@ -1661,7 +1680,10 @@ pub(crate) fn wait_ready(handles: &[i64], deadline_ms: i64) -> Result<Vec<i64>, 
     } else {
         i32::try_from(deadline_ms).unwrap_or(i32::MAX)
     };
-    let flags = crate::poll::readable(&raws, timeout).map_err(|_| "io")?;
+    // The poll holds the worker for as long as the caller asked, so the
+    // pool compensates (s231; until then it did not).
+    let flags =
+        crate::task::compensated(|| crate::poll::readable(&raws, timeout)).map_err(|_| "io")?;
     Ok(handles
         .iter()
         .zip(flags)
@@ -1714,7 +1736,7 @@ pub unsafe extern "C" fn __wolf_rt_net_wait(hdr: i64, deadline: i64, out: i64) -
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_connect_unix(pp: i64, pl: i64) -> i64 {
     let path = unsafe { view(pp, pl) };
-    match tbl().connect_unix(path) {
+    match dial_unix(path).and_then(|s| tbl().push_stream(s)) {
         Ok(fd) => fd,
         Err(t) => -code_of_tag(t),
     }
@@ -1761,7 +1783,7 @@ pub extern "C" fn __wolf_rt_net_accept(fd: i64) -> i64 {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_connect(ap: i64, al: i64) -> i64 {
     let addr = unsafe { view(ap, al) };
-    match tbl().connect(addr) {
+    match dial(addr).and_then(|s| tbl().push_stream(s)) {
         Ok(fd) => fd,
         Err(t) => -code_of_tag(t),
     }
