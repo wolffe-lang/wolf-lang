@@ -23,15 +23,22 @@ fn main() -> !int {
     let port = net_port(srv)?
     let cli = net_connect("127.0.0.1:{port}")?
     let conn = net_accept(srv)?
-    let chunk = "0123456789abcdef".repeat(4)
+    // A read that never arrives is the `timeout` row and a red run,
+    // never a parked job: every wait below is bounded.
+    net_deadline(conn, 10000) else |_| {}
+    let chunk = "0123456789abcdef".repeat(250)
     let before = live_region_bytes()
     var charged = 0
     var got = 0
     region pass {
-        for _ in 0..1000 {
+        for _ in 0..16 {
             net_write(cli, chunk)?
-            let piece = net_read(conn, 64)?
-            got = got + piece.len
+            var have = 0
+            while have < 4000 {
+                let piece = net_read(conn, 4096)?
+                have = have + piece.len
+            }
+            got = got + have
         }
         charged = region_bytes(pass)
     }
