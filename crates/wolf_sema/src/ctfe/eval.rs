@@ -1823,6 +1823,11 @@ impl<'a> Engine<'a> {
                         "the byte scan at comptime (the engine models no \
                          `List` values; growing the D33 allowlist is a design \
                          decision, not a convenience)"
+                    } else if name == "os_signal_number" {
+                        // s232: the number is the host's, and the host
+                        // that compiles is not the one that runs.
+                        "`os_signal_number` at comptime (a signal's number \
+                         is the running host's, not the compiling one's)"
                     } else if name == "os_error" || name == "os_error_text" {
                         // s200 (#407): no fs call runs at comptime to
                         // leave a code, and the text is the host's table.

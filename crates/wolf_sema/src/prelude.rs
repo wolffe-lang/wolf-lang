@@ -346,6 +346,15 @@ pub const PRELUDE: &[Ambient] = &[
     host("os_term_set_foreground"),
     host("os_term_mode"),
     host("os_term_set_mode"),
+    // s232 (wolf-lang#679, #681, #691, #141; pelt's trap, kill, $$ and
+    // $PPID): what the disposition was, a signal to any process, a
+    // meaning's number on this host, and this process's id and its
+    // parent's.
+    host("os_signal_ignored"),
+    host("os_signal_send"),
+    host("os_signal_number"),
+    host("os_pid"),
+    host("os_ppid"),
     // the OS random source (s118, wolf-lang#143): `os_random(n)` mints
     // n bytes of OS-provided entropy as a `List[int]` — the ONLY
     // sanctioned source of cryptographic material ([os.random.sole]).

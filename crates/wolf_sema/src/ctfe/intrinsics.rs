@@ -222,6 +222,14 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         "os_signal_ignore" | "os_signal_default" | "os_signal_poll" | "os_spawn_job"
         | "os_proc_pid" | "os_wait_status" | "os_term_set_foreground" => SandboxCategory::Exec,
         "os_pgid" => SandboxCategory::Env,
+        // s232 (ruling owed, #54's reasoning): a signal to another
+        // process is process control, `exec` with `os_kill`. This
+        // process's id, its parent's and the dispositions it holds are
+        // process context read and nothing started, `env` with
+        // `os_pgid`. (`os_signal_number` reads the host's numbering,
+        // `os_error_text`'s shelf: `pure_builtin`.)
+        "os_signal_send" => SandboxCategory::Exec,
+        "os_pid" | "os_ppid" | "os_signal_ignored" => SandboxCategory::Env,
         "os_term_foreground" | "os_term_mode" | "os_term_set_mode" => SandboxCategory::Io,
         // The s40 time builtin tier: every clock read and sleep is the
         // one Clock category (X12 — two identical builds must not
@@ -259,6 +267,10 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
 /// surface a capability names. All four stay comptime-refused: the
 /// sandbox models no `List`, and a comptime fs call cannot exist to
 /// leave a code.)
+/// (s232 adds `os_signal_number`: it reads the host's signal numbering,
+/// a table like `os_error_text`'s, and reaches no ambient surface; it
+/// stays comptime-refused with the rest — a comptime number would be
+/// the COMPILING host's, not the target's.)
 pub fn pure_builtin(name: &str) -> bool {
     matches!(
         name,
@@ -273,6 +285,7 @@ pub fn pure_builtin(name: &str) -> bool {
             | "bytes_count"
             | "os_error"
             | "os_error_text"
+            | "os_signal_number"
     )
 }
 

@@ -14162,6 +14162,23 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             (vec![int_], rowed(table, unit, &["unsupported", "io"]))
         }
         "os_signal_poll" => (vec![int_], rowed(table, int_, &["io"])),
+        // s232 (wolf-lang#681, `[os.signal.ignored]`): the listenable
+        // meanings ignored now (before the program's first disposition
+        // call, the ones it started with); windows `unsupported`.
+        "os_signal_ignored" => (Vec::new(), rowed(table, int_, &["unsupported"])),
+        // s232 (wolf-lang#141, `[os.signal.send]`): one meaning (the
+        // whole table, KILL and STOP included) to a process id > 0, or 0
+        // to ask whether one could be sent.
+        "os_signal_send" => (
+            vec![int_, int_],
+            rowed(
+                table,
+                unit,
+                &["unsupported", "invalid", "not_found", "denied", "io"],
+            ),
+        ),
+        // s232 (`[os.signal.number]`): the host's number for a meaning.
+        "os_signal_number" => (vec![int_], rowed(table, int_, &["unsupported", "invalid"])),
         // s219 (`[os.proc.job]`): `os_spawn_fds` plus the job-control
         // trio done in the child before exec — a process group (-1
         // stay, 0 lead, > 0 join), the terminal's foreground (a handle
@@ -14182,6 +14199,10 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // exit code, or -N for a death by signal N.
         "os_proc_pid" => (vec![int_], rowed(table, int_, &["io"])),
         "os_wait_status" => (vec![int_], rowed(table, int_, &["io"])),
+        // s232 (wolf-lang#141, `[os.proc.self]`): this process's id
+        // (every host has one) and its parent's (windows `unsupported`).
+        "os_pid" => (Vec::new(), int_),
+        "os_ppid" => (Vec::new(), rowed(table, int_, &["unsupported"])),
         // s219 (`[os.term]`): this process's group, the terminal's
         // foreground group and its mode (canonical=1, echo=2, signals=4,
         // vmin in bits 8..15, vtime in 16..23). windows: `unsupported`.
