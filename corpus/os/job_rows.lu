@@ -5,13 +5,14 @@
 //! s219 (wolf-lang#622; pelt's H3) — the job-control rows that make no
 //! child and touch no terminal, deterministic on every host. A job
 //! spawn's SHAPE is decided before anything else is read: a group
-//! below -1, a tty below -1, a `defaults` bit outside the nine meanings
+//! below -1, a tty below -1, a `defaults` bit outside the listenable
+//! meanings (s232: `KILL`, 1048576 — 512 is `USER` since then)
 //! and a map of odd length are each `invalid` — on windows too. A
 //! forged handle has no pid and no status (`io`). A poll of an empty
 //! set is `io`; a poll of a meaning this program never listened for
 //! has nothing to take (0). A disposition call with an empty set, or a
-//! bit outside the meanings, is `io` and changes nothing. The live
-//! witnesses run under a pseudo-terminal in
+//! bit outside the listenable meanings, is `io` and changes nothing.
+//! The live witnesses run under a pseudo-terminal in
 //! `crates/wolf_driver/tests/ctrl_c_lanes.rs` (unix).
 
 fn job(group: int, tty: int, defaults: int, map: List[int]) -> str {
@@ -33,7 +34,7 @@ fn main() -> !int {
     print("group={g}")
     let t = job(-1, -2, 0, List[int]())
     print("tty={t}")
-    let d = job(-1, -1, 512, List[int]())
+    let d = job(-1, -1, 1048576, List[int]())
     print("defaults={d}")
     let m = job(-1, -1, 0, [1])
     print("map={m}")
@@ -54,7 +55,7 @@ fn main() -> !int {
     }
     print("ignore_empty={ie}")
     var dn = "ok"
-    os_signal_default(512) else |e| {
+    os_signal_default(1048576) else |e| {
         dn = match e {
             io => "io",
             unsupported => "unsupported",
