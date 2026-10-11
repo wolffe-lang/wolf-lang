@@ -568,10 +568,6 @@ fn compensate(p: &'static Pool) {
     if p.unblocked.load(SeqCst) >= p.target {
         return;
     }
-    // PLANT (s231, reverted next): the old cap, `max(8 t, t + 4)`.
-    if p.running.load(SeqCst) >= p.base {
-        return;
-    }
     let Some(slot) = p.claim_slot() else {
         report_refusal(p, "the worker table is full");
         return;
