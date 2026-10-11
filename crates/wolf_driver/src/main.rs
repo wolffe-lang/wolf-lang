@@ -3950,6 +3950,15 @@ fn conform_run(args: &[String]) {
         eprintln!("wolf conform-run: no such file: {file}");
         std::process::exit(2);
     }
+    // s232 (#691, `[os.signal.checked]`): before any thread of this
+    // process exists, a checked run blocks the catchable signals here,
+    // so every thread made from now on (the compiler's, the run's tasks)
+    // blocks them too, and the machine's own thread — which puts back
+    // the mask this process started with — is the one a signal sent to
+    // the process is handed to.
+    if checked {
+        wolf_mem::ubcheck::route_signals_to_the_machine();
+    }
     // A bare relative name is read as `./name` — the loader's reading
     // of an entry whose parent is the EMPTY path (#206). Taken here,
     // once, so the record's `file`, the interned entry, the

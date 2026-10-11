@@ -2308,6 +2308,7 @@ pub fn run_checked_seeded(
     // it runs and execs starts as it would have; task threads, made
     // here, keep the block.
     let caller_mask = checked_sig::block_on_caller();
+    let machine_mask = checked_sig::machine_mask(caller_mask);
     let out = std::thread::scope(|scope| {
         let (tx, rx) = std::sync::mpsc::channel::<tasks::SpawnReq<'_>>();
         let root_hub = hub.clone();
@@ -2315,7 +2316,7 @@ pub fn run_checked_seeded(
             .name("wolf-checked".into())
             .stack_size(CHECKED_STACK_BYTES)
             .spawn_scoped(scope, move || {
-                checked_sig::restore_here(caller_mask);
+                checked_sig::restore_here(machine_mask);
                 let conc = Some((root_hub.clone(), tx));
                 let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     run_checked_fn_here(pkg, tc, budget, stdin, entry, seed, conc)
@@ -2344,7 +2345,7 @@ pub fn run_checked_seeded(
             // where we stand, which is exactly the old behavior — and
             // one task only.
             Err(_) => {
-                checked_sig::restore_here(caller_mask);
+                checked_sig::restore_here(machine_mask);
                 Some(run_checked_fn_here(
                     pkg, tc, budget, stdin, entry, seed, None,
                 ))
@@ -12655,6 +12656,17 @@ fn sig_one_sendable(m: i64) -> bool {
     m > 0 && m & (m - 1) == 0 && m & !SIG_SENDABLE == 0
 }
 
+/// s232 (#691, `[os.signal.checked]`): block the twenty catchable
+/// signals on the calling thread — `wolf conform-run --checked` calls
+/// this before it makes any other thread, so every thread it makes
+/// inherits the block — and remember the mask it had. The machine's own
+/// thread puts that mask back (`run_checked_seeded`), so it is the one
+/// thread a signal sent to the process can be handed to: the thread that
+/// polls. Called once; a second call changes nothing.
+pub fn route_signals_to_the_machine() {
+    checked_sig::route_to_machine();
+}
+
 /// s232 (#681): what the `wolf` process's SIGPIPE disposition was when
 /// it started, before Rust's runtime set it to ignored — recorded by the
 /// `wolf` binary's start-up constructor. The checked machine answers a
@@ -12801,10 +12813,15 @@ mod checked_sig {
             if !any {
                 return;
             }
+            // As the runtime's settle: a call that leaves the mask as it
+            // was delivers nothing (measured on linux), so block, then
+            // unblock — the change delivers a pending one — then put the
+            // mask back.
             for _ in 0..64 {
                 let before = PENDING.load(Ordering::SeqCst);
                 let mut old: libc::sigset_t = std::mem::zeroed();
-                libc::pthread_sigmask(libc::SIG_UNBLOCK, &m, &mut old);
+                libc::pthread_sigmask(libc::SIG_BLOCK, &m, &mut old);
+                libc::pthread_sigmask(libc::SIG_UNBLOCK, &m, std::ptr::null_mut());
                 libc::pthread_sigmask(libc::SIG_SETMASK, &old, std::ptr::null_mut());
                 if PENDING.load(Ordering::SeqCst) == before {
                     break;
@@ -12930,6 +12947,22 @@ mod checked_sig {
         }
         #[cfg(not(unix))]
         Mask {}
+    }
+
+    /// The mask the process started with, when `route_to_machine` ran.
+    static ROUTED: std::sync::OnceLock<Mask> = std::sync::OnceLock::new();
+
+    /// Block the twenty on this thread, once, remembering the mask it
+    /// had before.
+    pub(super) fn route_to_machine() {
+        let _ = ROUTED.get_or_init(block_on_caller);
+    }
+
+    /// The mask the machine's thread runs with: the process's own from
+    /// before `route_to_machine`, else the caller's from before
+    /// `block_on_caller`.
+    pub(super) fn machine_mask(caller: Mask) -> Mask {
+        ROUTED.get().copied().unwrap_or(caller)
     }
 
     /// Put `m` back as the calling thread's mask.
