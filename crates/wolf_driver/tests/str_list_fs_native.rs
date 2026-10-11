@@ -748,6 +748,18 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_fs_read_dir_entries",
         // s228 (#663): the bulk list slice, `[mem.list.slice]`.
         "__wolf_rt_list_slice",
+        // s230 (#346, #698, #699, #700, #702, #704): the calls that
+        // change a file, and the mask — `[os.fs.mode]`,
+        // `[os.fs.create.mode]`, `[os.fs.symlink]`, `[os.fs.link]`,
+        // `[os.fs.times]`, `[os.fs.truncate]`, `[os.fs.umask]`.
+        "__wolf_rt_fs_set_mode",
+        "__wolf_rt_fs_open_perm",
+        "__wolf_rt_fs_create_dir_mode",
+        "__wolf_rt_fs_symlink",
+        "__wolf_rt_fs_link",
+        "__wolf_rt_fs_set_times",
+        "__wolf_rt_fs_truncate",
+        "__wolf_rt_os_umask",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -758,7 +770,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        190,
+        198,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

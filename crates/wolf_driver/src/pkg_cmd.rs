@@ -1465,6 +1465,16 @@ mod builtin_cap_tests {
             // s225 (#534): the removal charges `env`, the exec `exec`.
             ("env_unset", Cap::Env),
             ("os_exec", Cap::Exec),
+            // s230 (#346, #698, #699, #700, #702, #704): the seven
+            // changers charge `fs`, the mask `env`.
+            ("fs_set_mode", Cap::Fs),
+            ("fs_open_perm", Cap::Fs),
+            ("fs_create_dir_mode", Cap::Fs),
+            ("fs_symlink", Cap::Fs),
+            ("fs_link", Cap::Fs),
+            ("fs_set_times", Cap::Fs),
+            ("fs_truncate", Cap::Fs),
+            ("os_umask", Cap::Env),
         ] {
             assert_eq!(builtin_cap(name), Some(cap), "{name}");
         }
