@@ -1,6 +1,203 @@
 # Changelog
 
-## Unreleased
+## 0.2.27 — 2026-10-11
+
+THE TWENTY-SEVENTH, and the first release that ships its standard
+library: every archive carries wolf-std as `std/` beside the `wolf`
+binary, and that copy is the default std root (s204, ruling #59). Nine
+compiler lanes land with it, six of them with a lupin half, and the
+pairing moves to lupin 0.1.50, which mirrors all six. A program can
+survive Ctrl-C, run a job in its own process group and own the terminal
+(s219, ruling #57); become another program and remove a variable (s225,
+ruling #62); read the full stat record, a link and a typed listing
+(s218, ruling #60). **Three P0s are fixed (#551, #538, #553):** unsigned
+and wrapping integers print and compute as the values their types hold
+(s220). A repeated json name is last-wins (s224, ruling #61); a C
+declaration needs the `ffi` capability (s221, ruling #55); a kernel's
+threads keep their own ambient region (s223, ruling #58); the root arena
+takes no lock per allocation (s222). 184 commits since 0.2.26 (s220 18,
+s219 29, s221 20, s222 15, s225 32, s223 13, s224 23, s218 16, s204 18),
+every lane merged before the release lane (r32) began, then r32's
+release commits.
+
+### Read this before you bump the pin
+
+**The archive carries std, and it is the default (s204, ruling #59).**
+`std/` sits beside `wolf` in all four archives with `std/STD-REV` naming
+its commit. With nothing configured, `use std.env` resolves there, where
+every machine answered E0301 through 0.2.26. Every configured source
+still wins, in this order: `--std-root`, `WOLF_STD`, a `std` path
+dependency in `wolf.pkg`, then the copy beside the binary. A `wolf`
+built from source with plain `cargo build` has nothing beside it and
+keeps the prelude stub.
+
+- **The bundled std is wolf-std `87ba162`** (sc57: std as it stood for
+  wolf 0.2.26 / lupin 0.1.49). It does **not** have the wrappers for
+  this release's new builtins, because those wolf-std changes need this
+  compiler and merge after it: `std.signal`, `std.term` and process
+  jobs (wolf-std#56, s219), `std.fs`'s `stat`, `lstat`, `read_link` and
+  `entries` (wolf-std#57, s218), `std.env.unset` and `std.process.exec`
+  (wolf-std#60, s225). Until a release bumps `STD-PIN`, call the
+  builtins directly (they are in the prelude), or point `WOLF_STD`,
+  `--std-root` or a `wolf.pkg` `std` dependency at a wolf-std that has
+  them; any of the three overrides the bundled copy.
+- **Measured under this release** (kasumi, linux x86-64, the
+  release-head archive with lupin 0.1.50 beside `wolf`, no `WOLF_STD`):
+  wolf-std `87ba162`'s
+  433 tests on lupin, the checked machine and native, and its 457 doc
+  examples, answer as under 0.2.26 except **one test,
+  `tests/x/json/dom_typed_reads.lu`, which exits 33**: its row 33 pins
+  the first-wins json reading this release replaces (below). The
+  release machine equals native on 432 of the 433 with no std
+  configured; the one (`list/sort_by_tier.lu`) is refused by name on
+  release as it was at 0.2.26. So the bundled std compiles and runs,
+  and one sentence in it is stale: the header of `std/x/json/json.lu`
+  still says a repeated key answers its first occurrence. The code
+  calls the builtins and is last-wins. wolf-std#59 corrects the header
+  and the row.
+- **If you stage your own std beside a staged `wolf`** (boreutils',
+  pelt's and lobo's `.wolf-bin/std`): the archive now puts a `std/`
+  there first. A fetch that copies the whole archive into `.wolf-bin/`
+  and then unpacks its own std pin over it is left with a mix whenever
+  the two commits differ in a file one of them lacks. Remove
+  `.wolf-bin/std` before staging yours, or stage none and read the
+  archive's `std/STD-REV` as the pin. A `WOLF_STD` you export still
+  wins either way.
+- **A freestanding build reads no default std.** `--target
+  x86_64-unknown-none` (or a manifest `target`) sees only a root you
+  name: the shipped std is the hosted library (with it beside the
+  binary, 27 of pax's 29 kernels stopped on a `str` comparison its home
+  modules lower).
+- **lupin's archive ships no std** (ruling #59 B(1)). A `lupin` unpacked
+  beside this `wolf` reads the same `std/`; a `lupin` installed alone
+  (Homebrew's, the AUR's) still answers `unsupported` for `use std.…`
+  with nothing set. `LUPIN_STD` or `--std-root` serves it.
+- **Packagers** install `std/` beside the real binary: Homebrew's
+  `libexec/std`, the AUR's `/usr/lib/wolf-lang/std`. A source build
+  that must not fetch sets `WOLF_DIST_STD_SRC` to a wolf-std checkout
+  at `STD-PIN`'s commit; `cargo xtask dist` refuses any other commit.
+
+**Freestanding downstreams (pax, muzzle): one line each, before the
+build (s221, ruling #55).** A package that declares C — a bodyless
+`extern "c" fn` or an `extern "c" let` — must list `ffi` in its
+manifest's `capabilities`, called or not. Without it every one of pax's
+29 kernels and muzzle's `src/muzzle.lu` is E1504 on native and release.
+The files: `pax/kernel/wolf.pkg`, `pax/tests/mkw.d/kernel/wolf.pkg`,
+`muzzle/src/wolf.pkg`. With the line their objects are the same as
+0.2.26 built them. Nothing hosted downstream declares C this way.
+
+**New prelude names** (`cargo xtask prelude-diff v0.2.26 HEAD
+--markdown`, after `git fetch --tags`, run at the release head):
+
+> **New prelude names.** HEAD adds `fs_stat`, `fs_lstat`,
+> `fs_read_link`, `fs_read_dir_entries`, `env_unset`, `os_exec`,
+> `os_signal_ignore`, `os_signal_default`, `os_signal_poll`,
+> `os_spawn_job`, `os_proc_pid`, `os_wait_status`, `os_pgid`,
+> `os_term_foreground`, `os_term_set_foreground`, `os_term_mode`, and
+> `os_term_set_mode` (all seventeen: function, `[os.host.sigs]`). A
+> module that declares a function, type or binding named any of the
+> seventeen now draws W0304 (it shadows the ambient name), which
+> `--deny-warnings` makes fatal: rename yours.
+
+A grep for a declaration (`fn`, `let`, `var`, `const`, `type`,
+`struct`, `enum`) of any of the seventeen in wolf-std `87ba1620`,
+boreutils `5da892e8`, lobo `d1bf1356`, pelt `3e7516c9`, pax `bc130e46`,
+muzzle `7c95300e` and the book `2504a0fc` found **none**. No downstream
+calls any of them yet; the one mention is a comment in wolf-std's
+`std/env/env.lu` ("There is no `env_unset` builtin"), which wolf-std#60
+retires.
+
+**Output that moves.**
+
+- *Unsigned 64-bit values print as themselves (s220).* A `u64`, `uint`
+  or `wrapping[u64]` above `i64::MAX` printed negative in a spec-less
+  hole on native and release (`u64::MAX` was `-1`); it prints
+  `18446744073709551615`. `-x` on a plain unsigned type traps
+  `overflow` for any `x` but 0, where native and release printed a
+  wrapped value. Wrapping `/` and `%` compile. A program that worked
+  around the printing (boreutils' `bore.u64` halves) still runs.
+- *json (s224, ruling #61).* `json_get`, `json_type`, `json_len` and
+  paths read a repeated object name last-wins, one member per name:
+  `json_get("{\"a\": 1, \"a\": 2}", "a")` was `1` and is `2`, and
+  `json_len` of that object was `2` and is `1`.
+- *A checked child sees `env_set` (s225).* A child the checked machine
+  spawns is handed the environment with the program's `env_set` and
+  `env_unset` applied, as native and release always did.
+- *Every hosted binary's bytes move, and nothing else it prints does.*
+  `libwolf_rt.a` changed (the root arena, the json kernel, the exec
+  module). The lanes' censuses (984 builds a side) found the compiler's
+  own output byte-identical when both sides link one runtime.
+  `libwolf_rt_none.a` gains two symbols (`wolf_rt_ambient_get`,
+  `wolf_rt_ambient_set`); a freestanding object that calls neither is
+  unchanged.
+
+**A module or alias named `c` now links (s224, #620)**, and a program
+that needs both an imported C `f` and a module-`c` function `f` is
+refused by name.
+
+**Spellings ruled, each as implemented:** #55 (`ffi` at a C
+declaration), #57 (s219's eleven names, R1–R7; R8 = A, lupin refuses the
+terminal half by name), #58 (`wolf_rt_ambient_get`/`_set`, option A),
+#59 (the archive's `std/`, A–D), #60 (s218's four names; a non-UTF-8
+name is listable, not yet stat'able by name), #61 (json: Map
+semantics), #62 (`env_unset`, the execve-shaped `os_exec`, R1–R5).
+
+**What each downstream does to bump.**
+
+- **wolf-std:** pins to 0.2.27 / 0.1.50 in `vendor/tools.toml`; rebase
+  and merge #56, #57, #59, #60 (each red by design until this pin);
+  `tests/x/json/dom_typed_reads.lu` goes green with #59. A later
+  compiler release bumps `STD-PIN` to carry them.
+- **boreutils, pelt, lobo:** the toolchain digests; remove the staged
+  `.wolf-bin/std` before unpacking their own std pin (above); no
+  manifest change. boreutils can now write `ls -l`, `stat`, `readlink`
+  and `env -u` on the new builtins and retire `bore.u64`'s halves; pelt
+  can take `os_exec`, `env_unset`, the signal poll and job spawn.
+- **pax, muzzle:** `capabilities: [ffi]` in the three manifests named
+  above, in the same change as the pin. pax may save and restore the
+  ambient slot in its switch (`wolf_rt_ambient_get`/`_set`) and then
+  lift its rule against a `region` held across a yield. No std reaches
+  a kernel unless it names one.
+- **wolf-book:** builds wolf from source, so no std is beside its
+  binary and no transcript moves for that reason; a sample that prints
+  a 64-bit unsigned value above `i64::MAX`, or reads a repeated json
+  name, prints the new bytes.
+- **Homebrew and the AUR:** install `std/` beside the binary (done in
+  this release's tap change).
+
+### The pairing: lupin 0.1.50
+
+`PAIRING` names **lupin 0.1.50 at pin `294d626`** (wolf-interp release
+409303515; the linux x86-64 archive's sha256 `e2867a35…`). The spec pin
+is unchanged (this compiler's v0.2.24 tag). 0.1.50 carries the lupin
+halves of s220, s219, s225, s224, s218 and s204.
+
+- **Dropped 13 cases in five gates**, each green on the published
+  0.1.50 unpinned: `exec_lanes` 5 (s225), `fs_stat_lanes` 4 (s218),
+  `int_truth_lanes` 2 (s220's wide wrapping product, in the rows and in
+  the sweep), `ctrl_c_lanes` 1 (s219) and `json_dup_lanes` 1 (s224, its
+  seven rows); and `pairing` 1. The emptied lists stay, empty, as the
+  gates' machinery; `json_dup_lanes` loses its 0.1.49 table outright.
+- **Kept.** attr_closed_set's control, carried to 0.1.50 measured (lupin
+  still declines its `comptime fn`, #174); the racy counter's
+  `trap(race)` check names 0.1.50 too; `int_truth_lanes`' `PIN_INT_NOT`,
+  which names 0.1.48 alone and is inert against this pairing.
+- **Widened 0.** The plant (the 0.1.50 lists against the published
+  0.1.49) is red on exactly those 14 cases.
+- **The ritual** (#87, with #281's control against the 0.1.49 archive,
+  the same corpus and the same release `wolf`, 1089 files):
+  - checked: **moved 4 ledger counts**. Agreements 683 → 687,
+    unsupported 138 → 135, SOUNDNESS 1 → 0, hard 17 → 16.
+  - native: **moved 4**. Agreements 710 → 714, unsupported 94 → 91,
+    SOUNDNESS 15 → 14, hard 34 → 33.
+  - The same four files on both: `os/env_unset.lu`, `os/exec_rows.lu`
+    and `os/job_rows.lu` go from unsupported to agreement, and
+    `typecheck/int_truth_wrap_mul_wide.lu` from SOUNDNESS to agreement
+    (0.1.49 trapped where the compiler machines answered). Seven files
+    moved below the ledger on each, the seven `json/dup_*.lu` rows,
+    whose lupin stdout is now the last-wins answer.
+- **lupin and the shipped std.** A lupin beside this `wolf` reads the
+  archive's `std/` as its last std root; lupin's own archive ships none.
 
 ### The standard library ships with the compiler (s204, ruling #29, #415)
 
@@ -45,8 +242,9 @@ json object with a repeated name.
   `{"a":3,"b":2}`). The root's own text is unchanged. All four machines
   answered first-wins before (the checked machine's `wolf_mem::json`,
   native and release's `wolf_rt::json`, and lupin); lupin's half is
-  wolf-interp s224, and `json_dup_lanes` pins lupin 0.1.49 to its
-  measured first-wins answers until a lupin release carries it.
+  wolf-interp s224, in lupin 0.1.50; `json_dup_lanes` pinned lupin
+  0.1.49 to its measured first-wins answers until then (dropped at
+  this pairing).
   wolf-std's `tests/x/json/dom_typed_reads.lu` pinned first-wins (rows
   33 and 34); its s224 PR flips them and waits for this release.
 - **A module named `c` links on every tier (#620).** WIR spells a
@@ -198,8 +396,8 @@ negative narrow one).
   on the checked machine, where lupin traps.
 - **lupin** (wolf-interp s220): a `wrapping[u64]` product past 2^127
   trapped `overflow` (its `i128` multiply); it now keeps the low bits.
-  Found by the sweep; `int_truth_lanes` pins 0.1.48 and 0.1.49 by
-  version and commit until the next lupin carries it.
+  Found by the sweep; `int_truth_lanes` pinned 0.1.48 and 0.1.49 by
+  version and commit until 0.1.50 carried it (dropped at this pairing).
 - **Witnesses:** eighteen `corpus/{typecheck,faults}/int_truth_*.lu`
   rows and `crates/wolf_driver/tests/int_truth_lanes.rs`, which holds
   them on four machines and sweeps seeded random values of all
@@ -214,8 +412,9 @@ negative narrow one).
 `os_wait_status`, `os_pgid`, `os_term_foreground`,
 `os_term_set_foreground`, `os_term_mode` and `os_term_set_mode`. A
 module that declares one draws W0304 (fatal under `--deny-warnings`). No
-existing builtin's row changed. **Every spelling below is a ruling owed**
-(`[os.term.note]` R1–R8), implemented as recommended.
+existing builtin's row changed. **Every spelling below was a ruling
+owed** (`[os.term.note]` R1–R8) and is ruled as implemented (ruling
+#57, R8 = A).
 
 - **Five new meanings** (`[os.signal.set]`): `INTERRUPT` 16 (`SIGINT`,
   Ctrl-C), `SUSPEND` 32 (`SIGTSTP`), `BG_READ` 64 (`SIGTTIN`),
@@ -357,14 +556,16 @@ objects, which link no runtime, do not); that is layout, not behaviour.
   absent is not an error; `env_set`'s names are `invalid`. Native and
   release write the real environment; the checked machine keeps a
   tombstone in its overlay. Capability `env`.
-- **Every spelling is a ruling owed**, implemented as recommended:
+- **Every spelling was a ruling owed**, and is ruled as implemented
+  (ruling #62, R1–R5):
   `env_unset` beside `env_set` (no `os_env_set`: `env_set` exists),
   `os_exec`'s execve shape, the handed environment's `PATH`, and the
   record-less checked exec.
 - **lupin** (wolf-interp s225) mirrors both; its exec is std's
   `CommandExt::exec` for descriptors 0..2 and refuses a map above 2 or
-  a close by name. `exec_lanes` pins 0.1.49 (`f516a5f`) and its trunk
-  (`51cb491`) as pre-mirror by version and commit.
+  a close by name. `exec_lanes` pinned 0.1.49 (`f516a5f`) and its
+  trunk (`51cb491`) as pre-mirror by version and commit until 0.1.50
+  (dropped at this pairing).
 - **Witnesses:** `corpus/os/exec_rows.lu`, `corpus/os/env_unset.lu`,
   two comptime rows, and `crates/wolf_driver/tests/exec_lanes.rs`: the
   new image's pid is the pid the harness started, argv[0] read from the
