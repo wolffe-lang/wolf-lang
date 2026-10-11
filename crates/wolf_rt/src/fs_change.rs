@@ -131,9 +131,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_open_perm(pp: i64, pl: i64, open: i64, mod
     {
         use std::os::unix::fs::OpenOptionsExt as _;
         let path = unsafe { view(pp, pl) };
-        // PLANT (s230, reverted next): the creation asks for 0o666
-        // whatever mode it was given.
-        match opts.mode(0o666).open(path) {
+        match opts.mode(mode as u32).open(path) {
             Err(e) => -code_of(&e),
             Ok(f) => mint_file(f),
         }
