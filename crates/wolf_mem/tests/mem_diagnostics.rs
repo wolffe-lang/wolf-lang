@@ -2753,3 +2753,21 @@ fn kept_arguments_that_cannot_dangle_stay_silent() {
          }\n",
     );
 }
+
+#[test]
+fn e1010_a_map_store_keeps_its_key() {
+    // No call and no `in`: the map outlives `pass` and keeps the key,
+    // whose bytes a `str` shares.
+    snap(
+        "e1010_map_key_kept",
+        "fn main() -> !int {\n    \
+             var m = Map[str, int]()\n    \
+             region pass {\n        \
+                 let s = \"built in pass, {m.count()} uses\"\n        \
+                 m[s] = 1\n    \
+             }\n    \
+             print(\"{m.count()}\")\n    \
+             0\n\
+         }\n",
+    );
+}
