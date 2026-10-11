@@ -228,4 +228,3 @@ fn a_list_slice_is_one_copy_of_the_same_elements() {
          budget 4375\n",
     );
 }
-
