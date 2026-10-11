@@ -87,7 +87,6 @@ bytes for that slice where it was 8,240, so a slice that fits a
 natively. The freestanding runtime archive defines the symbol too, so
 a kernel that slices a `List` links as before.
 
-
 ## 0.2.27 — 2026-10-11
 
 THE TWENTY-SEVENTH, and the first release that ships its standard
