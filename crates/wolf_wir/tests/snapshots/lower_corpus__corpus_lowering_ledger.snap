@@ -58,6 +58,19 @@ conc/chan_payload_escape_proc.lu: not mem-clean (pre-wir rungs own it)
 conc/chan_payload_proc_param.lu: lowers
 conc/chan_root_task.lu: lowers
 conc/chan_send_closed_row.lu: lowers
+conc/chan_sent_arg_bound.lu: not mem-clean (pre-wir rungs own it)
+conc/chan_sent_arg_enum.lu: not mem-clean (pre-wir rungs own it)
+conc/chan_sent_arg_for.lu: not mem-clean (pre-wir rungs own it)
+conc/chan_sent_arg_legal.lu: lowers
+conc/chan_sent_arg_legal_tasks.lu: lowers
+conc/chan_sent_arg_nested.lu: not mem-clean (pre-wir rungs own it)
+conc/chan_sent_arg_proc.lu: not mem-clean (pre-wir rungs own it)
+conc/chan_sent_arg_proc_site.lu: not mem-clean (pre-wir rungs own it)
+conc/chan_sent_arg_scope.lu: not mem-clean (pre-wir rungs own it)
+conc/chan_sent_arg_select.lu: not mem-clean (pre-wir rungs own it)
+conc/chan_sent_arg_spawn.lu: not mem-clean (pre-wir rungs own it)
+conc/chan_sent_arg_struct.lu: not mem-clean (pre-wir rungs own it)
+conc/chan_sent_arg_tuple.lu: not mem-clean (pre-wir rungs own it)
 conc/chan_struct_payload.lu: lowers
 conc/chan_unsendable.lu: not mem-clean (pre-wir rungs own it)
 conc/freeze_proc_snapshot.lu: lowers
