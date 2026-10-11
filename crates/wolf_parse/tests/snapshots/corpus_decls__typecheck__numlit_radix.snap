@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 917..955 name=perms body=Block
+FnDecl 957..994 name=twice body=Block
+FnDecl 996..1125 name=name_of body=Block
+FnDecl 1127..1667 name=main body=Block

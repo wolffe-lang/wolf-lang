@@ -1,0 +1,12 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 1343..1646 name=mode_row body=Block
+FnDecl 1648..1991 name=mkdir_row body=Block
+FnDecl 1993..2384 name=open_row body=Block
+FnDecl 2386..2727 name=symlink_row body=Block
+FnDecl 2729..3037 name=times_row body=Block
+FnDecl 3039..3228 name=truncate_row body=Block
+FnDecl 3230..3437 name=umask_row body=Block
+FnDecl 3439..4175 name=main body=Block

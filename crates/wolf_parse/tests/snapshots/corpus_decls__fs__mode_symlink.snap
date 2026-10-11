@@ -1,0 +1,11 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 1444..1747 name=mode_row body=Block
+FnDecl 1749..2140 name=open_row body=Block
+FnDecl 2142..2485 name=mkdir_row body=Block
+FnDecl 2487..2828 name=symlink_row body=Block
+FnDecl 2903..3024 name=mode_of body=Block
+FnDecl 3026..3167 name=link_text body=Block
+FnDecl 3169..4875 name=main body=Block
