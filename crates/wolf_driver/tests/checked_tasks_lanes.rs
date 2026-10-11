@@ -22,8 +22,9 @@
 //! checked machine, five more "closures in checked execution", two
 //! "this List method" (`par`) and two "freeze of a non-region value".
 //!
-//! Two witnesses part from lupin 0.1.49, each pinned by that version so
-//! a newer lupin is held to the clause: the rendezvous back-edge
+//! Two witnesses part from lupin 0.1.49 and 0.1.50 (the 0.2.27 pairing;
+//! measured again on the published 0.1.50 archive at the rebase), each
+//! pinned by those versions so a newer lupin is held to the clause: the rendezvous back-edge
 //! (`[conc.mm.hb.chan]`, lupin adds none and traps `race`,
 //! wolf-interp#227) and a self-acquisition reached through a closure
 //! (`[conc.deadlock.self]`, lupin traps `exclusivity` first,
@@ -42,8 +43,8 @@ fn wolf() -> &'static str {
     env!("CARGO_BIN_EXE_wolf")
 }
 
-/// The lupin release whose two partings are measured and pinned.
-const PINNED_LUPIN: &str = "0.1.49";
+/// The lupin releases whose two partings are measured and pinned.
+const PINNED_LUPIN: &[&str] = &["0.1.49", "0.1.50"];
 
 #[derive(Debug, Clone)]
 struct Obs {
@@ -312,8 +313,8 @@ fn a_race_free_program_is_accepted() {
 /// happens-before the send *returns*". The receiver writes before it
 /// receives, the sender reads after its send returned; only that
 /// sentence orders the two. The checked machine and the compiled tiers
-/// run it; lupin 0.1.49 has no such edge and traps `race` (measured,
-/// pinned by version; a newer lupin is held to the clause).
+/// run it; lupin 0.1.49 and 0.1.50 have no such edge and trap `race`
+/// (measured, pinned by version; a newer lupin is held to the clause).
 #[test]
 fn the_rendezvous_receive_orders_the_senders_next_access() {
     let entry = fixture("race_free_rendezvous");
@@ -333,12 +334,13 @@ fn the_rendezvous_receive_orders_the_senders_next_access() {
         }
     }
     let Some(l) = lupin(&entry, None) else { return };
-    if l.version == PINNED_LUPIN {
+    if PINNED_LUPIN.contains(&l.version.as_str()) {
         assert_eq!(
             (l.verdict.as_str(), l.clause.as_str()),
             ("trap(race)", "conc.mm.race.3"),
-            "lupin {PINNED_LUPIN} has no rendezvous back-edge (wolf-interp#227, \
-             measured at s226); if this moved, drop the pin"
+            "lupin {} has no rendezvous back-edge (wolf-interp#227, \
+             measured at s226); if this moved, drop the pin",
+            l.version
         );
     } else {
         assert_eq!(
@@ -374,8 +376,8 @@ fn a_deadlock_is_reported_by_name() {
 
 /// `[conc.deadlock.self]`: an acquisition of a mutex the task already
 /// holds, reached through a call, is `trap(deadlock)` at once. lupin
-/// 0.1.49 answers `trap(exclusivity)` on the closure spelling (measured,
-/// pinned by version).
+/// 0.1.49 and 0.1.50 answer `trap(exclusivity)` on the closure spelling
+/// (measured, pinned by version).
 #[test]
 fn a_self_acquisition_through_a_call_is_a_deadlock() {
     let entry = fixture("deadlock_self_when");
@@ -387,12 +389,13 @@ fn a_self_acquisition_through_a_call_is_a_deadlock() {
         c.stderr
     );
     let Some(l) = lupin(&entry, None) else { return };
-    if l.version == PINNED_LUPIN {
+    if PINNED_LUPIN.contains(&l.version.as_str()) {
         assert_eq!(
             l.verdict, "trap(exclusivity)",
-            "lupin {PINNED_LUPIN} on a `when` reached through a closure that captured \
+            "lupin {} on a `when` reached through a closure that captured \
              the held mutex (wolf-interp#230, measured at s226); if this moved, drop \
-             the pin"
+             the pin",
+            l.version
         );
     } else {
         assert_eq!(
