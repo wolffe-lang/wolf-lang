@@ -1,0 +1,21 @@
+//! member: false
+//! s232 (wolf-lang#679's smaller finding, `[os.signal.set]`) — a listen
+//! of a set holding a bit that is not a listenable meaning is `io` and
+//! arms nothing: `KILL` (send-only), a bit past the table, every bit.
+//! 512 is `USER`, a meaning, and its listen is ok. Red at trunk: the
+//! three bad sets answered ok (the bit dropped).
+
+fn listen_row(set: int) -> str {
+    os_signal_listen(set) else |_| { return "io" }
+    "ok"
+}
+
+fn main() -> !int {
+    print("kill={listen_row(1048576)}")
+    print("past_table={listen_row(1099511627776)}")
+    print("every_bit={listen_row(0 - 1)}")
+    print("empty={listen_row(0)}")
+    print("user={listen_row(512)}")
+    os_signal_default(512)?
+    0
+}

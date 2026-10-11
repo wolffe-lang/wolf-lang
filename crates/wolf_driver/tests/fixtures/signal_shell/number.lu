@@ -1,0 +1,20 @@
+//! member: false
+//! s232 (`[os.signal.number]`; pelt's `kill -l`, `trap … 13`) — every
+//! meaning's number on this host, by bit, printed for the harness to
+//! hold against the host's own table (and each machine against the
+//! others). Red at trunk: `os_signal_number` did not exist (a compile
+//! error). Unix only.
+
+fn main() -> !int {
+    var line = ""
+    var bit = 1
+    var i = 0
+    while i < 28 {
+        let n = os_signal_number(bit)?
+        line = "{line}{n} "
+        bit = bit * 2
+        i += 1
+    }
+    print(line.trim())
+    0
+}

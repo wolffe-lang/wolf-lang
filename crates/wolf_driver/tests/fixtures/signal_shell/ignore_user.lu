@@ -1,0 +1,24 @@
+//! member: false
+//! s232 (wolf-lang#679; pelt's `pending/trap_ignore_usr1`) — a program
+//! ignores `USER` and `BROKEN_PIPE`; a child `sh` sends each to it and
+//! ends; the program lives. A child started now inherits both ignores
+//! across exec: a `sh` that sends each to itself survives to exit 0
+//! (with the default it would die by the signal). Red at trunk:
+//! `os_signal_ignore(512)` was `io` (a bit outside the nine) and the
+//! child's `kill -USR1` ended the program. Unix only.
+
+fn main() -> !int {
+    os_signal_ignore(512 | 2048)?
+    for name in ["USR1", "PIPE"] {
+        let h = os_spawn(["sh", "-c", "kill -{name} $PPID"])?
+        let _st = os_wait_status(h)?
+    }
+    print("alive")
+    for name in ["USR1", "PIPE"] {
+        let h = os_spawn(["sh", "-c", "kill -{name} $$ && exit 0"])?
+        let st = os_wait_status(h)?
+        print("child_{name}_ignored={st == 0}")
+    }
+    os_signal_default(512 | 2048)?
+    0
+}

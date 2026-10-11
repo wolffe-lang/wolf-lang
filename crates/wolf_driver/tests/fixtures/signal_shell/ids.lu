@@ -1,0 +1,21 @@
+//! member: false
+//! s232 (wolf-lang#141, `[os.proc.self]`; pelt's `$$`, `$PPID`,
+//! `pending/pid`, `env/c_ppid`) — this process's id and its parent's,
+//! printed for the harness to hold against the process it started and
+//! itself; a child `sh` reports its `$PPID`, which must be this
+//! process's id. Red at trunk: `os_pid` did not exist (a compile error).
+//! Unix only.
+
+fn main() -> !int {
+    let me = os_pid()
+    print("pid={me}")
+    let pp = os_ppid()?
+    print("ppid={pp}")
+    let (r, w) = os_pipe()?
+    let h = os_spawn_fds("sh", ["-c", "echo $PPID"], [1, w])?
+    fs_close(w)?
+    let line = fs_read(r, 64)?
+    let _st = os_wait_status(h)?
+    print("child_parent_is_me={line.trim() == "{me}"}")
+    0
+}

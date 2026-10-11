@@ -1,0 +1,40 @@
+//! member: false
+//! s232 (wolf-lang#691, `[os.signal.poll]`) — a poll never trails a
+//! delivery. Two shapes, 2,000 rounds each: a poll straight after a
+//! raise (the issue's program), and the shell's — a child signals this
+//! process and ends, this process reaps it, then polls. Each round that
+//! polls 0 is a miss, waited out so the next round starts clean. Red at
+//! trunk: 2,000 of 2,000 raises missed on native and release, and the
+//! reap shape missed a few in 2,000 under `taskset -c 0-3` (kasumi,
+//! 16 cpus). Unix only.
+
+fn main() -> !int {
+    os_signal_listen(2)?
+    var missed = 0
+    var i = 0
+    while i < 2000 {
+        os_signal_raise(2)?
+        let m = os_signal_poll(2)?
+        if m == 0 {
+            missed += 1
+            let _late = os_signal_wait(2)?
+        }
+        i += 1
+    }
+    print("raise_then_poll_missed={missed}")
+    var reap_missed = 0
+    var j = 0
+    while j < 2000 {
+        let h = os_spawn(["sh", "-c", "kill -TERM $PPID"])?
+        let _st = os_wait_status(h)?
+        let m = os_signal_poll(2)?
+        if m == 0 {
+            reap_missed += 1
+            let _late = os_signal_wait(2)?
+        }
+        j += 1
+    }
+    print("reap_then_poll_missed={reap_missed}")
+    os_signal_default(2)?
+    0
+}

@@ -1,0 +1,36 @@
+//! member: false
+//! s232 (wolf-lang#679, #423; pelt's `pending/trap_usr1` and the census
+//! cases `c_trap_alrm`, `c_trap_pipe`, `c_trap_abrt_number`,
+//! `c_trap_winch_cont`) — a program listens for a meaning, a child `sh`
+//! sends that signal to its parent (this program) and ends, the program
+//! reaps it and polls: the meaning is there, and the program lives. One
+//! round for each of the eleven meanings s232 adds. Red at trunk: the
+//! listen of 512 answered ok and installed nothing, so the first child's
+//! `kill -USR1` ended the program by SIGUSR1. Unix only.
+
+fn round(m: int, name: str) -> str {
+    os_signal_listen(m) else |_| { return "{name}=listen-io" }
+    let h = os_spawn(["sh", "-c", "kill -{name} $PPID"]) else |_| {
+        return "{name}=spawn-failed"
+    }
+    let st = os_wait_status(h) else |_| { return "{name}=wait-io" }
+    let got = os_signal_poll(m) else |_| { return "{name}=poll-io" }
+    os_signal_default(m) else |_| { return "{name}=default-io" }
+    if got == m { "{name}=caught" } else { "{name}=missed({got},{st})" }
+}
+
+fn main() -> !int {
+    print(round(512, "USR1"))
+    print(round(1024, "ALRM"))
+    print(round(2048, "PIPE"))
+    print(round(4096, "ABRT"))
+    print(round(8192, "CONT"))
+    print(round(16384, "WINCH"))
+    print(round(32768, "URG"))
+    print(round(65536, "VTALRM"))
+    print(round(131072, "PROF"))
+    print(round(262144, "XCPU"))
+    print(round(524288, "XFSZ"))
+    print("alive")
+    0
+}

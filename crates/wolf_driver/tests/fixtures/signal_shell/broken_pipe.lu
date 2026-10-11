@@ -1,0 +1,31 @@
+//! member: false
+//! s232 (wolf-lang#423; boreutils' `tee -p`, pelt's
+//! `signal/c_trap_ignore_pipe`) — a write to a pipe whose reader has
+//! gone. Ignored, `BROKEN_PIPE` leaves the write to answer its `io` row
+//! and the program goes on; listened, the same, and the poll after it
+//! says the signal came. Red at trunk: there was no meaning for SIGPIPE
+//! (`os_signal_ignore(2048)` was `io`) and the write ended the program
+//! by the signal (status 141 to a shell). Unix only.
+
+fn write_row(w: int) -> str {
+    fs_write(w, "x") else |_| { return "io" }
+    "ok"
+}
+
+fn main() -> !int {
+    os_signal_ignore(2048)?
+    let (r, w) = os_pipe()?
+    fs_close(r)?
+    print("ignored_write={write_row(w)}")
+    fs_close(w)?
+    os_signal_listen(2048)?
+    let (r2, w2) = os_pipe()?
+    fs_close(r2)?
+    print("listened_write={write_row(w2)}")
+    let got = os_signal_poll(2048)?
+    print("listened_poll={got}")
+    fs_close(w2)?
+    os_signal_default(2048)?
+    print("alive")
+    0
+}

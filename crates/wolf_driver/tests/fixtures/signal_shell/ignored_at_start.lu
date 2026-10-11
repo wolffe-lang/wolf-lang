@@ -1,0 +1,22 @@
+//! member: false
+//! s232 (wolf-lang#681; pelt's `signal/c_ignored_on_entry`) — what was
+//! ignored when the program started, read before it sets any
+//! disposition. The harness starts it with `TERMINATE` and `USER`
+//! ignored (and, in a second run, `BROKEN_PIPE` too) and every other
+//! signal at its default. A listen then ends the ignore of `TERMINATE`,
+//! which the read sees. Red at trunk: `os_signal_ignored` did not exist
+//! (a compile error). Unix only.
+
+fn main() -> !int {
+    let at_start = os_signal_ignored()?
+    print("terminate={at_start & 2 != 0}")
+    print("user={at_start & 512 != 0}")
+    print("broken_pipe={at_start & 2048 != 0}")
+    print("interrupt={at_start & 16 != 0}")
+    os_signal_listen(2)?
+    let after = os_signal_ignored()?
+    print("terminate_after_listen={after & 2 != 0}")
+    print("user_still={after & 512 != 0}")
+    os_signal_default(2)?
+    0
+}

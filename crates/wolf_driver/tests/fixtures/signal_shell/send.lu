@@ -1,0 +1,38 @@
+//! member: false
+//! s232 (wolf-lang#141, `[os.signal.send]`; pelt's `kill/c_send`) — a
+//! signal to a process by its id: `TERMINATE` and `KILL` (send-only) end
+//! a `sleep` child, which reports -15 and -9; 0 asks whether this
+//! process could be signalled; an id no process holds is `not_found`;
+//! pid 1 is `denied` to a user (the harness says which it is: the row
+//! prints `pid1=denied` or, as root, `pid1=ok` — 0 sends nothing). Red at
+//! trunk: `os_signal_send` did not exist (a compile error). Unix only.
+
+fn send_row(pid: int, m: int) -> str {
+    os_signal_send(pid, m) else |e| {
+        return match e {
+            unsupported => "unsupported",
+            invalid => "invalid",
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    let a = os_spawn(["sleep", "30"])?
+    let pa = os_proc_pid(a)?
+    print("term={send_row(pa, 2)}")
+    let sa = os_wait_status(a)?
+    print("term_status={sa}")
+    let b = os_spawn(["sleep", "30"])?
+    let pb = os_proc_pid(b)?
+    print("kill={send_row(pb, 1048576)}")
+    let sb = os_wait_status(b)?
+    print("kill_status={sb}")
+    print("self_zero={send_row(os_pid(), 0)}")
+    print("nobody={send_row(2147483647, 0)}")
+    print("pid1={send_row(1, 0)}")
+    0
+}
