@@ -74,6 +74,8 @@ fn want(n: usize) -> String {
 /// Raise this process's open-file limit as far as the host allows; the
 /// programs run below inherit it. `loop 0 1000` holds 2,001 sockets and
 /// the read soak 20,001.
+// `rlim_t` is u64 on linux and macOS and i64 on the BSDs.
+#[allow(clippy::unnecessary_cast)]
 fn raise_fd_limit() -> u64 {
     #[cfg(unix)]
     {
@@ -256,6 +258,10 @@ fn run_bounded(exe: &Path, set: Option<&str>, args: &[&str], limit: Duration) ->
     finish(child, t0, limit)
 }
 
+fn stall_note(stalled: bool) -> &'static str {
+    if stalled { " — STALLED, killed" } else { "" }
+}
+
 fn last_line(s: &str) -> &str {
     s.trim_end().lines().last().unwrap_or("")
 }
@@ -295,7 +301,7 @@ fn the_witness_completes_on_every_cpu_set() {
                 last_line(&r.stdout),
                 r.code,
                 r.elapsed,
-                if r.stalled { " — STALLED, killed" } else { "" }
+                stall_note(r.stalled)
             );
             assert!(
                 !r.stalled,
@@ -417,7 +423,7 @@ fn every_tier_answers_the_witness_alike() {
             last_line(&r.stdout),
             r.code,
             r.elapsed,
-            if r.stalled { " — STALLED, killed" } else { "" }
+            stall_note(r.stalled)
         );
         assert!(
             !r.stalled,
@@ -596,7 +602,7 @@ fn ten_thousand_parked_tasks_hold_and_release() {
             last_line(&s.run.stdout),
             s.run.code,
             s.run.elapsed,
-            if s.run.stalled { " — STALLED, killed" } else { "" },
+            stall_note(s.run.stalled),
             s.parked,
             base.parked,
             per_task.map_or("n/a".to_string(), |k| format!("{k:.1}"))
@@ -636,10 +642,7 @@ fn ten_thousand_parked_tasks_hold_and_release() {
                 cpu * 100.0
             );
             let k = per_task.expect("both runs sampled");
-            assert!(
-                k < 128.0,
-                "soak {mode}: {k:.1} KiB of RSS per parked task"
-            );
+            assert!(k < 128.0, "soak {mode}: {k:.1} KiB of RSS per parked task");
         }
     }
 }
