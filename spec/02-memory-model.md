@@ -709,7 +709,7 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   the same diagnostics — no site newly refused. Witnesses
   `corpus/memory/region_net_read_return.lu` and
   `region_net_read_charged.lu`.)
-  (Extended 2026-10-10 by s227 for wolf-lang#660; ruling owed. **What
+  (Extended 2026-10-10 by s227 for wolf-lang#660; ruled A (#64), 2026-10-11. **What
   a call can keep, it is taken to keep.** `in r { … }` sets the
   current region, so it decides where the callee ALLOCATES
   (`[mem.region.create.3]`); it does not move an argument, whose bytes
@@ -804,7 +804,7 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   `corpus/memory/region_kept_arg_*.lu`, `region_kept_result_*.lu`,
   `region_copy_shares_str.lu`, `region_copy_index_store.lu`, and the
   legal companion `region_kept_arg_legal.lu`.)
-  (Extended 2026-10-11 by s229 for wolf-lang#665; ruling owed. The
+  (Extended 2026-10-11 by s229 for wolf-lang#665; ruled A (#66), 2026-10-11. The
   channel door the paragraph above left open is closed in
   `[conc.chan.payload]`, by that clause's own frame rule carried
   through the call and not by shared bytes: a callee handed a channel

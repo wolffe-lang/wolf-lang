@@ -411,7 +411,7 @@ premise by construction.
   s170, wolf-lang#312: the mem tier moved it, so the same two calls
   compiled as plain calls and refused as spawns.)
   (Extended 2026-10-11 by s229 for wolf-lang#678, the spawn twin of
-  wolf-lang#665; ruling owed. **A `spawn proc` argument outlives the
+  wolf-lang#665; ruled A (#66), 2026-10-11. **A `spawn proc` argument outlives the
   spawning frame.** "Moved" does not move a `str`: it is `Copy`, the
   proc receives its view, and the bytes stay where they were built. So
   `region pass { let s = "built {n}"; spawn proc child(s) }` was
@@ -514,7 +514,7 @@ premise by construction.
   family: the native tier carried one word since s39 and E1102 refused
   every aggregate, which held chapter 12 §12.1's `channel[Doc]` on one
   machine. Witness `corpus/conc/chan_struct_payload.lu`.)
-  (Extended 2026-10-11 by s229 for wolf-lang#665; ruling owed. **What
+  (Extended 2026-10-11 by s229 for wolf-lang#665; ruled A (#66), 2026-10-11. **What
   a call can send, it is taken to send.** The frame rule above was
   demanded at the builtin `send` alone, and a callee handed the channel
   sends too. `fn fwd(ch: channel[str], s: str) { ch.send(s) }` is legal
