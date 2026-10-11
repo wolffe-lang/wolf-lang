@@ -10327,6 +10327,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_term_set_foreground"
                 | "os_term_mode"
                 | "os_term_set_mode"
+                // s232 (#679, #681, #691, #141): the disposition read,
+                // the send, a meaning's number, this process's id and
+                // its parent's.
+                | "os_signal_ignored"
+                | "os_signal_send"
+                | "os_signal_number"
+                | "os_pid"
+                | "os_ppid"
         ) {
             return self.lower_job_builtin(&callee_text, d, e);
         }
@@ -14875,13 +14883,20 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
         }
         let want = match name {
-            "os_pgid" => 0,
+            "os_pgid" | "os_signal_ignored" | "os_pid" | "os_ppid" => 0,
             "os_spawn_job" => 6,
-            "os_term_set_foreground" | "os_term_set_mode" => 2,
+            "os_term_set_foreground" | "os_term_set_mode" | "os_signal_send" => 2,
             _ => 1,
         };
         if argv.len() != want {
             return Err(refuse("a job call with missing arguments", e.span));
+        }
+        // s232: this process's id has no row — every host has one.
+        if name == "os_pid" {
+            let v = self
+                .rt_call("__wolf_rt_os_pid", &[], Some(types::I64))
+                .expect("pid");
+            return Ok(Flow::Val(Some(v)));
         }
         let eu = self.eu_ty_of(e.span)?;
         const SIG: &[(i64, &str)] = &[(2, "unsupported")];
@@ -14903,6 +14918,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_term_set_foreground" => ("__wolf_rt_os_term_set_foreground", PROC),
             "os_term_mode" => ("__wolf_rt_os_term_mode", PROC),
             "os_term_set_mode" => ("__wolf_rt_os_term_set_mode", PROC),
+            "os_signal_ignored" => ("__wolf_rt_os_signal_ignored", SIG),
+            "os_signal_send" => ("__wolf_rt_os_signal_send", PROC),
+            "os_signal_number" => ("__wolf_rt_os_signal_number", PROC),
+            "os_ppid" => ("__wolf_rt_os_ppid", PROC),
             _ => return Err(refuse("this job builtin", e.span)),
         };
         let unit_shape = matches!(
@@ -14911,6 +14930,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_signal_default"
                 | "os_term_set_foreground"
                 | "os_term_set_mode"
+                | "os_signal_send"
         );
         if name == "os_wait_status" {
             let (region, slot) = self.rt_slot(8);
