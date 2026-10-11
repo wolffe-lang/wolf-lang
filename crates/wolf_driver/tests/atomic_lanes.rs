@@ -26,7 +26,8 @@
 //! UB rows lupin is held to the verdict, row and clause, its `ub` record
 //! carrying no diagnostic (wolf-lang#606). It still traps `race` on the
 //! plain counter, measured, so that check names 0.1.49 too, and 0.1.50
-//! (the 0.2.27 pairing, r32), measured the same.
+//! (the 0.2.27 pairing, r32) and 0.1.51 (the 0.2.28 pairing, r33),
+//! measured the same.
 
 mod lane_exit;
 
@@ -468,7 +469,7 @@ fn the_plain_counter_is_a_race_and_asserts_nothing() {
     );
     if matches!(
         lupin.version.as_str(),
-        "0.1.46" | "0.1.47" | "0.1.48" | "0.1.49" | "0.1.50"
+        "0.1.46" | "0.1.47" | "0.1.48" | "0.1.49" | "0.1.50" | "0.1.51"
     ) {
         assert_eq!(
             lupin.verdict, "trap(race)",
