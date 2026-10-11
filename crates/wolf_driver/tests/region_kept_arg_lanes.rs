@@ -144,9 +144,11 @@ const RULED_LUPIN: &str = "trap(region-fault)";
 /// The paired lupins that run a region-built `str` kept in a `List`,
 /// or as a `Map` key, to `exit(0)` instead of trapping
 /// (wolffe-lang/wolf-interp#232: the dynamic machine misses a list
-/// element and a map key reaching into a freed region). Pinned by version so the pin dies with the fix: a lupin
-/// outside this list must trap.
-const LUPIN_MISSES_LIST_ELEMENTS: &[&str] = &["0.1.49", "0.1.50"];
+/// element and a map key reaching into a freed region). Pinned by
+/// version so the pin dies with the fix: a lupin outside this list
+/// must trap. Measured on the published 0.1.50 archive (the pairing
+/// since wolf 0.2.27): all seven rows `exit(0)`, as 0.1.49 answered.
+const LUPIN_MISSES_LIST_ELEMENTS: &[&str] = &["0.1.50"];
 
 fn base_version(v: &str) -> &str {
     v.split('+').next().unwrap_or(v)
@@ -188,14 +190,17 @@ fn refused_everywhere(entry: &Path) {
     }
 }
 
-/// The compiler refuses; lupin traps, except the versions pinned at
-/// wolf-interp#232, which run the stale read to `exit(0)`.
+/// The compiler refuses; lupin traps, except the version pinned at
+/// wolf-interp#232, which runs the stale read to `exit(0)`.
 fn refused_and_lupin_pinned(entry: &Path) {
     refused_by_the_compiler(entry);
     if let Some(lupin) = lupin_says(entry) {
         if LUPIN_MISSES_LIST_ELEMENTS.contains(&base_version(&lupin.version)) {
+            // The release answers `exit(0)`, exactly. A dev build of
+            // the pinned version may already carry the fix and trap.
+            let release = lupin.version == base_version(&lupin.version);
             assert!(
-                lupin.verdict == "exit(0)" || lupin.verdict == RULED_LUPIN,
+                lupin.verdict == "exit(0)" || (!release && lupin.verdict == RULED_LUPIN),
                 "lupin {} on {}: {} (pinned at exit(0), wolf-interp#232)",
                 lupin.version,
                 entry.display(),
