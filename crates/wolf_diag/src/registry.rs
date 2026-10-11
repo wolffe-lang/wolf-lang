@@ -1751,7 +1751,21 @@ what `f` allocates at `r`, but `s` stays where it was built — if that
 is a region block `outer` outlives, the call is refused at `s`. Build
 the string inside the `in` block (`"{s}"` materializes it there),
 pass a scalar instead, or copy the block's value out with `copy
-region { … }` and make the call after the block.
+region { … }` and make the call after the block. A call can SEND it
+out too: a function handed a channel may send any other argument on
+it, or a value it builds in its caller's current region, and a sent
+payload must outlive the frame that sends it ([conc.chan.payload]).
+So `region pass { let s = "built {n}"; fwd(ch, s) }` is refused at
+`s` exactly as `ch.send(s)` there is, and so is any call that hands a
+channel carrying bytes (a `channel[str]`, or one of structs, tuples
+or enums reaching a `str`) from inside a region block or a `spawn
+proc` entry — the callee could build its payload right there. A
+channel of scalars is never in question. Make the call where the
+bytes outlive the frame: outside the region block, or under `in r
+{ … }` for a region the function was handed (`"{s}"` then builds the
+string in `r`). A closure that captured such a channel sends what it
+is called with: call it where it was made, and hand a callee the
+channel itself, never the closure.
 "#);
 
 code!(E1011, "this would open a region while a region that contains it is open", r#"
