@@ -1,0 +1,49 @@
+//! check: run(exit=0, stdout="oct=15 bin=5 hex=255\nannotated=493 u64=511 u8=7\nunderscored=420 grouped=192\nreturned=438 argument=448 negated=-8\nmatched=octal\nsum=2748")
+//! phase: run
+//! conforms: type.numlit.value
+//!
+//! wolf-lang#688: an integer literal in octal (`0o17`) or binary
+//! (`0b101`) is a value like a hexadecimal one, on every machine. The
+//! grammar's `INT` has had all three prefixes since s02 and the checked
+//! machine and lupin ran them; the native and release tiers knew `0x`
+//! alone and refused the other two ("this literal shape in WIR
+//! lowering", exit 4), so a program that wrote a file mode the way
+//! everyone writes one — `0o755` — passed `wolf test` and could not be
+//! built. Every position a literal lowers from: an inferred `let`, an
+//! annotated one, two unsigned ones, with underscores, a
+//! `return`, a call argument, under a
+//! minus, and a `match` pattern.
+
+fn perms() -> int {
+    return 0o666
+}
+
+fn twice(n: int) -> int {
+    n + n
+}
+
+fn name_of(mode: int) -> str {
+    match mode {
+        0o755 => "octal",
+        0b11 => "binary",
+        _ => "other",
+    }
+}
+
+fn main() -> !int {
+    let oct = 0o17
+    let bin = 0b101
+    let hex = 0xff
+    print("oct={oct} bin={bin} hex={hex}")
+    let annotated: int = 0o755
+    let wide: u64 = 0o777
+    let small: u8 = 0b111
+    print("annotated={annotated} u64={wide} u8={small}")
+    let underscored = 0o6_44
+    let grouped = 0b1100_0000
+    print("underscored={underscored} grouped={grouped}")
+    print("returned={perms()} argument={twice(0o340)} negated={-0o10}")
+    print("matched={name_of(0o755)}")
+    print("sum={0o5000 + 0b1100_0000 - 0x4}")
+    0
+}

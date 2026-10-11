@@ -24096,10 +24096,26 @@ fn contains_control(node: &GreenNode) -> bool {
 /// pattern, admitted up to 64 bits).
 fn parse_int_literal(text: &str) -> Option<i64> {
     let t: String = text.chars().filter(|&c| c != '_').collect();
-    if let Some(hex) = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")) {
-        return u64::from_str_radix(hex, 16).ok().map(|v| v as i64);
+    if let Some((digits, radix)) = radix_digits(&t) {
+        return u64::from_str_radix(digits, radix).ok().map(|v| v as i64);
     }
     t.parse::<i64>().ok()
+}
+
+/// The digits and radix of a prefixed integer literal — `0x` hex, `0o`
+/// octal, `0b` binary (`[gram.lex]`'s `INT`) — or `None` for a decimal
+/// one. wolf-lang#688: the two readers below knew `0x` alone, so an
+/// octal or binary literal the checked machine ran was refused here
+/// ("this literal shape in WIR lowering").
+fn radix_digits(t: &str) -> Option<(&str, u32)> {
+    let pre = |a: &str, b: &str| t.strip_prefix(a).or_else(|| t.strip_prefix(b));
+    if let Some(hex) = pre("0x", "0X") {
+        Some((hex, 16))
+    } else if let Some(oct) = pre("0o", "0O") {
+        Some((oct, 8))
+    } else {
+        pre("0b", "0B").map(|bin| (bin, 2))
+    }
 }
 
 fn parse_float_literal(text: &str) -> Option<f64> {
@@ -24107,11 +24123,12 @@ fn parse_float_literal(text: &str) -> Option<f64> {
     t.parse::<f64>().ok()
 }
 
-/// Unsigned literal: full u64 range, decimal or `0x…` hex.
+/// Unsigned literal: full u64 range, decimal or a prefixed radix
+/// ([`radix_digits`]).
 fn parse_uint_literal(text: &str) -> Option<u64> {
     let t: String = text.chars().filter(|&c| c != '_').collect();
-    if let Some(hex) = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X")) {
-        return u64::from_str_radix(hex, 16).ok();
+    if let Some((digits, radix)) = radix_digits(&t) {
+        return u64::from_str_radix(digits, radix).ok();
     }
     t.parse::<u64>().ok()
 }
