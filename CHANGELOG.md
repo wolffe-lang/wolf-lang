@@ -301,6 +301,80 @@ half of s230; s226, s227, s228 and s229 have none.
     `fs/truncate.lu`, from unsupported to agreement. Nothing moved
     below the ledger.
 
+### The shell's signals: every signal, what was ignored, a poll that never trails, a pid (s232, #679, #681, #691, #141, #423; rulings owed)
+
+A POSIX shell written in wolf (pelt) could trap five signals; a listen
+of any other bit answered ok and armed nothing, so `trap … USR1` let
+SIGUSR1 kill the shell. It could not tell which signals it was started
+ignoring, could poll 0 for a signal already delivered, and could not
+name its own id or signal a process it had not spawned. Spellings are
+rulings owed (`[os.signal.shell.note]` R1–R9), each implemented as
+recommended.
+
+- **Every signal POSIX names has a bit (`[os.signal.set]`, #679,
+  #423).** Eleven more a program may listen for, ignore, put back,
+  wait for, poll and raise: `USER` (`SIGUSR1`, 512), `ALARM`,
+  `BROKEN_PIPE`, `ABORT`, `CONTINUE`, `RESIZE` (`SIGWINCH`), `URGENT`,
+  `VIRTUAL_ALARM`, `PROFILE_ALARM`, `CPU_LIMIT`, `FILE_LIMIT` (bits
+  9..19). Eight a program may only send and ask the number of: `KILL`,
+  `STOP` and the six fault signals (bits 20..27). A program that
+  ignores `BROKEN_PIPE` sees a write to a closed pipe as its `io` row
+  instead of dying, and a program that listens for it is told.
+- **One shape rule.** `os_signal_listen`, `wait`, `poll`, `ignore` and
+  `default` refuse an empty set, or one holding any bit that is not a
+  listenable meaning, with `io` and change nothing (a listen dropped
+  such a bit and answered ok; a wait or poll refused only a set with no
+  listenable bit). `os_signal_raise` takes one listenable meaning.
+- **`os_signal_ignored() -> int ! {unsupported}`
+  (`[os.signal.ignored]`, #681)** answers the meanings ignored now —
+  read at start, what the program was started ignoring (XCU `trap`,
+  `nohup`). The checked machine answers `BROKEN_PIPE` from what the
+  `wolf` binary was started with, recorded in a start-up constructor
+  before Rust's runtime ignores it.
+- **A poll never trails a delivery (`[os.signal.poll]`, #691).** A
+  poll, and a wait's first look, let pending listened signals be
+  delivered on the calling thread, wait out a trampoline running
+  elsewhere, and read the self-pipe themselves under the drain thread's
+  lock; `os_signal_raise` sends to the calling thread (`raise(3)`), so
+  it is delivered when the call returns. The issue's witness — a poll
+  straight after a raise — missed 2,000 of 2,000 on native and release;
+  a child that signals its parent before the parent reaps it missed a
+  few in 2,000 under `taskset -c 0-3`. Both are 0 in every cell now.
+  pelt's `settle` barrier can go.
+- **`os_pid() -> int` and `os_ppid() -> int ! {unsupported}`
+  (`[os.proc.self]`, #141)** — `$$` and `$PPID` on every host.
+  `os_proc_pid(h)` stays a child's id by handle.
+- **`os_signal_send(pid, meaning) -> () ! {denied, invalid, io,
+  not_found, unsupported}` (`[os.signal.send]`, #141)** — `kill(2)` for
+  a pid above 0 and one meaning of the 28, or 0 to ask whether one
+  could be sent. A group send stays with job control.
+- **`os_signal_number(meaning) -> int ! {invalid, unsupported}`
+  (`[os.signal.number]`)** — the host's number, for `kill -l`,
+  `trap … 13` and `128 + N` (`USER` is 10 on linux, 30 on macOS).
+- **A child keeps an ignored `BROKEN_PIPE`.** The runtimes start
+  children through Rust's `Command`, which set `SIGPIPE` back to the
+  default in every child; a native child of a program that ignored it
+  died of it. The child now sets it ignored again before it runs, only
+  when the program ignores it. The checked machine's spawns and exec
+  follow the program's disposition, not `wolf`'s.
+- **Capabilities (R8).** `os_signal_send` charges `exec`; `os_pid`,
+  `os_ppid` and `os_signal_ignored` charge `env`; `os_signal_number`
+  charges nothing.
+- **lupin (R9).** lupin serves `os_pid`, `os_ppid` and
+  `os_signal_number`, answers every shape row, and refuses
+  `os_signal_send` and `os_signal_ignored` by name; it still never
+  listens. lupin 0.1.50 predates the mirror and is pinned so in
+  `signal_shell_lanes`.
+- **Counts.** The host table is 117 lines (from 112), `RT_SYMBOLS` 203
+  (from 198), the prelude 124 functions and 156 W0304 names.
+
+**Read this before you bump.** A program that passed a set with a bit
+outside the meanings to `os_signal_wait` or `os_signal_poll` (masked
+off before) now gets `io`. `512` is `USER` now: a program that used it
+as a "bit outside the meanings" (s219's `job_rows` did) gets ok where
+it got `io`. wolf-std's `std.signal`, if it validates against the nine
+meanings, needs the twenty.
+
 ### The checked machine runs tasks (s226, C1)
 
 `wolf conform-run --checked` (the checked machine; `wolf run --checked`
