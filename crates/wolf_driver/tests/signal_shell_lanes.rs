@@ -323,25 +323,39 @@ fn run(mut cmd: Command, dir: &Path) -> Output {
 
 #[cfg(unix)]
 /// What a lane printed, or `None` for a lupin that refuses (pre-mirror,
-/// or by name where `lupin_refuses`) — said in the log either way.
-fn lane_stdout(lane: &Lane, out: &Output, what: &str, lupin_refuses: bool) -> Option<String> {
+/// or by name where `lupin_refuses`) — said in the log either way. A
+/// pre-mirror lupin answers `unsupported`, or the verdict `pinned` names
+/// for a fixture where its own pre-s232 rows decide first.
+fn lane_stdout(
+    lane: &Lane,
+    out: &Output,
+    what: &str,
+    lupin_refuses: bool,
+    pinned: &str,
+) -> Option<String> {
     if lane.recorded {
         let obs = parse_obs(&out.stdout, what);
         if lane.lupin && (pre_mirror(&obs) || lupin_refuses) {
+            let want = if pre_mirror(&obs) {
+                pinned
+            } else {
+                "unsupported"
+            };
             assert_eq!(
-                obs.verdict, "unsupported",
+                obs.verdict, want,
                 "{what}: lupin {} at {} refuses (pre-mirror, or by name)",
                 obs.version, obs.commit
             );
             eprintln!(
-                "{} {what}: lupin {} at {} unsupported",
+                "{} {what}: lupin {} at {} {}",
                 if pre_mirror(&obs) {
                     "PINNED"
                 } else {
                     "REFUSED BY NAME"
                 },
                 obs.version,
-                obs.commit
+                obs.commit,
+                obs.verdict
             );
             return None;
         }
@@ -362,15 +376,29 @@ fn lane_stdout(lane: &Lane, out: &Output, what: &str, lupin_refuses: bool) -> Op
 /// A fixture that prints `want` on every machine, started with `ignore`
 /// ignored and every other listenable signal at its default.
 fn every_lane_prints(name: &str, ignore: &'static [libc::c_int], want: &str, lupin_refuses: bool) {
+    every_lane_prints_pinned(name, ignore, want, lupin_refuses, "unsupported");
+}
+
+#[cfg(unix)]
+/// [`every_lane_prints`], with the verdict a pre-mirror lupin answers.
+fn every_lane_prints_pinned(
+    name: &str,
+    ignore: &'static [libc::c_int],
+    want: &str,
+    lupin_refuses: bool,
+    pinned: &str,
+) {
     eprintln!("harness: {}", harness_masks());
     let entry = fixture(name);
-    let dir = scratch(&name.replace('.', "_"));
+    // One directory per (fixture, start): two tests run one fixture with
+    // different ignores, side by side, and each builds its own binaries.
+    let dir = scratch(&format!("{}_{}", name.replace('.', "_"), ignore.len()));
     for mut lane in lanes(&entry, &dir) {
         start_clean(&mut lane.cmd, ignore);
         let what = format!("the {} lane on {name}", lane.name);
         let cmd = std::mem::replace(&mut lane.cmd, Command::new("true"));
         let out = run(cmd, &dir);
-        let Some(got) = lane_stdout(&lane, &out, &what, lupin_refuses) else {
+        let Some(got) = lane_stdout(&lane, &out, &what, lupin_refuses, pinned) else {
             continue;
         };
         assert_eq!(got, want, "{what} (s232)");
@@ -475,30 +503,34 @@ URG=caught\nVTALRM=caught\nPROF=caught\nXCPU=caught\nXFSZ=caught\nalive\n",
 
 /// #679 (pelt's `pending/trap_ignore_usr1`): an ignored `USER` and
 /// `BROKEN_PIPE` are survived and handed to a child. Red at trunk: the
-/// ignore of 512 was `io` and SIGUSR1 ended the program.
+/// ignore of 512 was `io` and SIGUSR1 ended the program. lupin 0.1.50's
+/// own shape row answers first there (`io`, so `exit(1)`): pinned.
 #[cfg(unix)]
 #[test]
 fn an_ignored_user_signal_is_survived_and_inherited() {
-    every_lane_prints(
+    every_lane_prints_pinned(
         "ignore_user.lu",
         &[],
         "alive\nchild_USR1_ignored=true\nchild_PIPE_ignored=true\n",
         true,
+        "exit(1)",
     );
 }
 
 /// #423: a write to a pipe nobody reads answers `io` when
 /// `BROKEN_PIPE` is ignored or listened, and the program lives; the
 /// listened one is polled. Red at trunk: the ignore of 2048 was `io`
-/// and the write ended the program by SIGPIPE.
+/// and the write ended the program by SIGPIPE. lupin 0.1.50 answers its
+/// own shape row first (`exit(1)`): pinned.
 #[cfg(unix)]
 #[test]
 fn a_broken_pipe_is_a_row_when_ignored_or_listened() {
-    every_lane_prints(
+    every_lane_prints_pinned(
         "broken_pipe.lu",
         &[],
         "ignored_write=io\nlistened_write=io\nlistened_poll=2048\nalive\n",
         true,
+        "exit(1)",
     );
 }
 
@@ -571,7 +603,7 @@ fn this_process_ids_are_the_hosts() {
         let child = cmd.spawn().expect("spawn");
         let pid = child.id();
         let out = child.wait_with_output().expect("wait");
-        let Some(got) = lane_stdout(&lane, &out, &what, false) else {
+        let Some(got) = lane_stdout(&lane, &out, &what, false, "unsupported") else {
             continue;
         };
         assert_eq!(
