@@ -499,6 +499,7 @@
     "os.signal.raise": "11-os.md",
     "os.signal.send": "11-os.md",
     "os.signal.set": "11-os.md",
+    "os.signal.set.stable": "11-os.md",
     "os.signal.shell.note": "11-os.md",
     "os.signal.wait": "11-os.md",
     "os.term": "11-os.md",
