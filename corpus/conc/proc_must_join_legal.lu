@@ -1,0 +1,75 @@
+//! check: run(exit=0, stdout="child sees: built in pass, 7 uses 1\nchild sees: built in pass, 7 uses 2\nchild sees: built in pass, 7 uses 3\nchild sees: built in pass, 7 uses 4\nchild sees: built in pass, 7 uses 5\nchild sees: built in pass, 7 uses 6\n1 1 3 9 7")
+//! phase: run
+//! conforms: conc.proc.arg, conc.proc.join, mem.region.escape
+//!
+//! s233 (wolf-lang#678's helper half): the sound neighbours of the
+//! must-join check. Each helper is handed bytes built in `main`'s
+//! region block and spawns a proc with them, and every path out of it
+//! waits for the proc first — a join, a deferred join an early return
+//! runs, a join through a copy of the handle, a join in each
+//! iteration, a join on both arms of an `if`. So the proc never reads
+//! after `pass` is freed, and every call stays legal. A helper that
+//! may return with its proc still running is E1010 at the call
+//! (`[conc.proc.arg]`); those shapes run on lupin, so they are the
+//! gate `proc_must_join_lanes`'s fixtures, not corpus rows.
+
+fn child(s: str, n: int) -> int {
+    print("child sees: {s} {n}")
+    n
+}
+
+fn joins(s: str) -> int {
+    let w = spawn proc child(s, 1)
+    w.join() else 0
+}
+
+fn deferred(s: str, n: int) -> int {
+    let w = spawn proc child(s, 2)
+    defer {
+        let _v = w.join() else 0
+    }
+    if n > 0 {
+        return n
+    }
+    0
+}
+
+fn copied(s: str) -> int {
+    let w = spawn proc child(s, 3)
+    let w2 = w
+    w2.join() else 0
+}
+
+fn each(s: str) -> int {
+    var t = 0
+    for i in 4..6 {
+        let w = spawn proc child(s, i)
+        t = t + (w.join() else 0)
+    }
+    t
+}
+
+fn either(s: str, n: int) -> int {
+    let w = spawn proc child(s, 6)
+    if n > 0 {
+        let a = w.join() else 0
+        return a + n
+    } else {
+        let b = w.join() else 0
+        return b
+    }
+}
+
+fn main() -> int {
+    let n = 7
+    region pass {
+        let s = "built in pass, {n} uses"
+        let a = joins(s)
+        let b = deferred(s, 1)
+        let c = copied(s)
+        let d = each(s)
+        let e = either(s, 1)
+        print("{a} {b} {c} {d} {e}")
+    }
+    0
+}
