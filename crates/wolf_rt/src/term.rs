@@ -119,7 +119,7 @@ mod sys {
         if t.c_lflag & libc::ISIG != 0 {
             m |= mode::SIGNALS;
         }
-        if t.c_iflag & libc::IXOFF != 0 {
+        if t.c_iflag & libc::IXON != 0 {
             m |= mode::FLOW;
         }
         if t.c_lflag & libc::IEXTEN != 0 {
@@ -182,7 +182,7 @@ mod sys {
             if libc::ioctl(f.as_raw_fd(), libc::TIOCGWINSZ, &mut w) < 0 {
                 return Err(proc_code::IO);
             }
-            Ok((i64::from(w.ws_col), i64::from(w.ws_row)))
+            Ok((i64::from(w.ws_row), i64::from(w.ws_col)))
         }
     }
 
