@@ -172,10 +172,7 @@ fn refused(name: &str) {
         );
         assert!(
             obs.codes.iter().any(|c| c == "E1010")
-                && obs
-                    .codes
-                    .iter()
-                    .all(|c| c == "E1010" || c.starts_with('W')),
+                && obs.codes.iter().all(|c| c == "E1010" || c.starts_with('W')),
             "{flag} refused {} with an error besides E1010: {:?}",
             entry.display(),
             obs.codes
