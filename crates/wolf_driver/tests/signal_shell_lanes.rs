@@ -25,7 +25,7 @@
 //! does not decide a row); a test that needs a signal ignored at start
 //! says which. The harness's own `SigBlk`/`SigIgn` are printed first.
 //!
-//! lupin 0.1.50 (the 0.2.27 pairing) predates the mirror: it resolves
+//! lupin 0.1.51 (the 0.2.28 pairing) predates the mirror: it resolves
 //! none of the five new names and answers `unsupported`, pinned by
 //! version as pre-mirror (s180's design). lupin never listens
 //! (`os_signal_listen` is declined, ruling #57 R8), and refuses the send
@@ -44,10 +44,11 @@ fn wolf() -> &'static str {
 }
 
 /// The lupin builds that predate the mirror, by version and the commit
-/// their records report: the 0.1.50 release (`32b970d`, the 0.2.27
-/// pairing) and wolf-interp trunk at s232's start (`c00b88c`).
-const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] =
-    &[("0.1.50", Some("32b970d")), ("0.1.50", Some("c00b88c"))];
+/// their records report: the 0.1.51 release (`f72e78d`, the 0.2.28
+/// pairing, which is also wolf-interp trunk at this rebase). 0.1.50
+/// (`32b970d`, and trunk `c00b88c`) were listed until 0.2.28 moved the
+/// pairing; they are dropped, not widened.
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[("0.1.51", Some("f72e78d"))];
 
 #[derive(Debug)]
 struct Obs {
@@ -411,7 +412,7 @@ fn every_lane_prints_pinned(
 /// The rows that signal nothing: every wolfgang lane under `conform-run`
 /// prints `want`, and lupin agrees or answers its pinned pre-mirror
 /// verdict. Red at trunk 6143943d: E0301 (`os_signal_send` unknown) on
-/// every wolfgang lane; lupin 0.1.50 `unsupported`.
+/// every wolfgang lane; lupin 0.1.51 `unsupported`.
 #[test]
 fn the_shell_rows_on_every_machine() {
     let rel = "os/signal_shell_rows.lu";
@@ -503,7 +504,7 @@ URG=caught\nVTALRM=caught\nPROF=caught\nXCPU=caught\nXFSZ=caught\nalive\n",
 
 /// #679 (pelt's `pending/trap_ignore_usr1`): an ignored `USER` and
 /// `BROKEN_PIPE` are survived and handed to a child. Red at trunk: the
-/// ignore of 512 was `io` and SIGUSR1 ended the program. lupin 0.1.50's
+/// ignore of 512 was `io` and SIGUSR1 ended the program. lupin 0.1.51's
 /// own shape row answers first there (`io`, so `exit(1)`): pinned.
 #[cfg(unix)]
 #[test]
@@ -520,7 +521,7 @@ fn an_ignored_user_signal_is_survived_and_inherited() {
 /// #423: a write to a pipe nobody reads answers `io` when
 /// `BROKEN_PIPE` is ignored or listened, and the program lives; the
 /// listened one is polled. Red at trunk: the ignore of 2048 was `io`
-/// and the write ended the program by SIGPIPE. lupin 0.1.50 answers its
+/// and the write ended the program by SIGPIPE. lupin 0.1.51 answers its
 /// own shape row first (`exit(1)`): pinned.
 #[cfg(unix)]
 #[test]
