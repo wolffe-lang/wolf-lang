@@ -215,8 +215,7 @@ pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
         {
             {
                 out.diagnostics.extend(lowered.diags);
-                // PLANT (s233): the must-join check's refusals are dropped.
-                let _ = joined;
+                out.diagnostics.extend(joined);
                 moves::check(&lowered.cfg, &mut out.diagnostics);
                 excl::check(&lowered.cfg, &mut out.diagnostics);
                 loans::check(&lowered.cfg, &mut out.diagnostics);
