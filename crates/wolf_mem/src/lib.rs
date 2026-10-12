@@ -138,6 +138,7 @@ pub mod loans;
 mod lower;
 mod moves;
 pub mod place;
+mod procjoin;
 pub mod regions;
 mod shared;
 mod strres;
@@ -183,6 +184,10 @@ pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
     // pass a view instead of a copy. Since wolf-lang#387 retired W1004
     // that lowering is their ONLY consumer — this pass no longer needs
     // the table for a diagnostic of its own.
+    // s233 (wolf-lang#678's helper half): every body is lowered before
+    // any is judged, because the must-join check reads the whole
+    // package — a call is refused by what its callee leaves running.
+    let mut lowered_all: Vec<(&wolf_sema::BodyOutcome, Lowered)> = Vec::new();
     for outcome in &tc.bodies {
         let BodyResult::Checked(tb) = &outcome.result else {
             continue;
@@ -197,8 +202,20 @@ pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
         ) {
             None => {}
             Some(Err(nyc)) => out.not_yet.push(nyc),
-            Some(Ok(lowered)) => {
+            Some(Ok(lowered)) => lowered_all.push((outcome, lowered)),
+        }
+    }
+    let must_join = procjoin::solve(
+        &lowered_all
+            .iter()
+            .map(|(_, l)| (&l.cfg, &l.procs))
+            .collect::<Vec<_>>(),
+    );
+    for ((outcome, lowered), joined) in lowered_all.into_iter().zip(must_join) {
+        {
+            {
                 out.diagnostics.extend(lowered.diags);
+                out.diagnostics.extend(joined);
                 moves::check(&lowered.cfg, &mut out.diagnostics);
                 excl::check(&lowered.cfg, &mut out.diagnostics);
                 loans::check(&lowered.cfg, &mut out.diagnostics);
@@ -356,7 +373,18 @@ fn lower_body(
             // function's NAME — where a reader sees which proc this
             // is, and where lupin's `region-fault` points too.
             let proc_intro = proc_entry.then(|| d.name().map_or(block.syntax().span, |t| t.span));
-            Some(lowerer.lower_fn(&body.name, params, block, proc_intro))
+            let key = d.name().map(|t| t.span);
+            Some(
+                lowerer
+                    .lower_fn(&body.name, params, block, proc_intro)
+                    .map(|mut l| {
+                        // s233: the must-join check's name for this body.
+                        l.procs.key = key;
+                        l.procs.trait_key = trait_method_key(sigs, body, outer);
+                        l.procs.name = body.name.clone();
+                        l
+                    }),
+            )
         }
         SyntaxKind::ConstDecl => {
             let init = node.nodes().find(|n| is_expr_kind(n.kind))?;
@@ -425,6 +453,26 @@ fn fn_params<'a>(
         }
         _ => None,
     }
+}
+
+/// s233: for a method of a trait impl, the trait method's NAME span —
+/// what a call dispatched through a bound names as its declaration.
+fn trait_method_key(sigs: &SigTables, body: &BodyRef, outer: Option<&GreenNode>) -> Option<Span> {
+    let o = outer?;
+    if o.kind != SyntaxKind::ImplDecl {
+        return None;
+    }
+    let imp = sigs
+        .impls
+        .iter()
+        .find(|i| i.file == body.file && i.decl == body.decl)?;
+    let tr = imp.trait_ref.as_ref()?;
+    sigs.traits
+        .get(tr)?
+        .methods
+        .iter()
+        .find(|m| m.name == body.name)
+        .map(|m| m.name_span)
 }
 
 fn text(pkg: &Package, file: usize, span: Span) -> String {
