@@ -12948,6 +12948,9 @@ mod checked_sig {
                 libc::FD_ZERO(&mut set);
                 libc::FD_SET(fd, &mut set);
                 libc::FD_SET(r, &mut set);
+                // `suseconds_t` is i64 on linux and i32 on macOS: the conversion
+                // is a no-op on one host and a widening on the other.
+                #[allow(clippy::useless_conversion)]
                 let mut tv = libc::timeval {
                     tv_sec: (timeout_ms.max(0) / 1000).into(),
                     tv_usec: ((timeout_ms.max(0) % 1000) * 1000).into(),
