@@ -39,6 +39,56 @@ outlive the frame — and the proc may outlive it too.
   through a value the dataflow does not carry, a handle joined out of a
   list.
 
+### What a line editor asks of the terminal: its size, a wait a signal ends, its special characters (s234, #719; rulings owed)
+
+pelt's line editor (sh11) worked around four gaps (#719, W05): it asked
+the terminal for its width with a cursor-position report before every
+prompt (0.3 s on a terminal that never answers), redrew a wrapped line
+at the old width after a resize until the next prompt, read keys with
+`VTIME 1` and polled for signals between reads — ten wake-ups a second
+at an idle prompt and up to 0.1 s before a `kill -INT` acted — and could
+not learn the user's erase, kill or interrupt characters, or turn flow
+control and the host's extended input processing off (so Ctrl-S and
+Ctrl-Q stayed flow control, and on macOS Ctrl-V and Ctrl-O never reached
+the program).
+
+- **`os_term_size(fd) -> (int, int) ! {io, unsupported}`**
+  (`[os.term.size]`): the window's rows and columns as the terminal
+  holds them (`TIOCGWINSZ`); 0 for a size it was never told.
+- **A resize is s232's `RESIZE`** (bit 16384, `SIGWINCH`). #719 asked for
+  it at bit 512, which s232 gave to `USER`; nothing changes here, and a
+  set with a bit outside the listenable meanings is already `io`.
+- **`os_signal_wait_fd(fd, set) -> int ! {io, unsupported}`**
+  (`[os.signal.wait.fd]`): one wait that a key and a signal both end — it
+  answers the meaning delivered (taken off the queue, first when both
+  are ready), or 0 when the descriptor has a byte, the end of input or a
+  hang-up, and reads nothing. It is `poll(2)` on the descriptor and a
+  wake pipe the signal hub writes when it queues a meaning: an idle wait
+  wakes for nothing, and a `kill -INT` is answered in about 0.2 ms
+  (measured on linux, every tier).
+- **`os_term_chars(fd) -> List[int] ! {io, unsupported}`**
+  (`[os.term.chars]`): erase, kill, interrupt, quit, suspend, end of
+  file, word erase, literal next, start, stop, reprint, discard, in that
+  order, -1 for one that is disabled.
+- **The mode gains `FLOW` (8, `IXON`) and `EXTENDED` (16, `IEXTEN`).** A
+  mode read and set again still round-trips. **The one change of
+  meaning:** a mode built by hand without these two bits now turns
+  `IXON` and `IEXTEN` off where it used to leave them as found; a
+  program that changes only the bits it means to is
+  unaffected. Bit 3 was `invalid` before; bit 5 (32) is the first that
+  still is.
+- Every machine: native and release through `wolf_rt`, the checked
+  machine on the host's own terminal (its wait is the host's `poll(2)`
+  on the descriptor and a pipe its handler writes), and the freestanding
+  target refuses each by name. lupin refuses all three by name after
+  their shape rows (no `unsafe`, and std has no `ioctl`, `tcgetattr` or
+  `poll`). Windows: `unsupported`, as every `[os.term]` call.
+- Capabilities: the size and the characters are `io` (uncharged, as
+  `os_term_mode`); the wait is `exec` (as `os_signal_wait`). Host table
+  120, RT_SYMBOLS 206.
+- **Rulings owed** (`[os.term.editor.note]` R1–R6), each implemented as
+  recommended.
+
 ## 0.2.29 — 2026-10-12
 
 THE TWENTY-NINTH. Three compiler lanes land, one with a lupin half, and
@@ -339,56 +389,6 @@ off before) now gets `io`. `512` is `USER` now: a program that used it
 as a "bit outside the meanings" (s219's `job_rows` did) gets ok where
 it got `io`. wolf-std's `std.signal`, if it validates against the nine
 meanings, needs the twenty.
-
-### What a line editor asks of the terminal: its size, a wait a signal ends, its special characters (s234, #719; rulings owed)
-
-pelt's line editor (sh11) worked around four gaps (#719, W05): it asked
-the terminal for its width with a cursor-position report before every
-prompt (0.3 s on a terminal that never answers), redrew a wrapped line
-at the old width after a resize until the next prompt, read keys with
-`VTIME 1` and polled for signals between reads — ten wake-ups a second
-at an idle prompt and up to 0.1 s before a `kill -INT` acted — and could
-not learn the user's erase, kill or interrupt characters, or turn flow
-control and the host's extended input processing off (so Ctrl-S and
-Ctrl-Q stayed flow control, and on macOS Ctrl-V and Ctrl-O never reached
-the program).
-
-- **`os_term_size(fd) -> (int, int) ! {io, unsupported}`**
-  (`[os.term.size]`): the window's rows and columns as the terminal
-  holds them (`TIOCGWINSZ`); 0 for a size it was never told.
-- **A resize is s232's `RESIZE`** (bit 16384, `SIGWINCH`). #719 asked for
-  it at bit 512, which s232 gave to `USER`; nothing changes here, and a
-  set with a bit outside the listenable meanings is already `io`.
-- **`os_signal_wait_fd(fd, set) -> int ! {io, unsupported}`**
-  (`[os.signal.wait.fd]`): one wait that a key and a signal both end — it
-  answers the meaning delivered (taken off the queue, first when both
-  are ready), or 0 when the descriptor has a byte, the end of input or a
-  hang-up, and reads nothing. It is `poll(2)` on the descriptor and a
-  wake pipe the signal hub writes when it queues a meaning: an idle wait
-  wakes for nothing, and a `kill -INT` is answered in about 0.2 ms
-  (measured on linux, every tier).
-- **`os_term_chars(fd) -> List[int] ! {io, unsupported}`**
-  (`[os.term.chars]`): erase, kill, interrupt, quit, suspend, end of
-  file, word erase, literal next, start, stop, reprint, discard, in that
-  order, -1 for one that is disabled.
-- **The mode gains `FLOW` (8, `IXON`) and `EXTENDED` (16, `IEXTEN`).** A
-  mode read and set again still round-trips. **The one change of
-  meaning:** a mode built by hand without these two bits now turns
-  `IXON` and `IEXTEN` off where it used to leave them as found; a
-  program that changes only the bits it means to is
-  unaffected. Bit 3 was `invalid` before; bit 5 (32) is the first that
-  still is.
-- Every machine: native and release through `wolf_rt`, the checked
-  machine on the host's own terminal (its wait is the host's `poll(2)`
-  on the descriptor and a pipe its handler writes), and the freestanding
-  target refuses each by name. lupin refuses all three by name after
-  their shape rows (no `unsafe`, and std has no `ioctl`, `tcgetattr` or
-  `poll`). Windows: `unsupported`, as every `[os.term]` call.
-- Capabilities: the size and the characters are `io` (uncharged, as
-  `os_term_mode`); the wait is `exec` (as `os_signal_wait`). Host table
-  120, RT_SYMBOLS 206.
-- **Rulings owed** (`[os.term.editor.note]` R1–R6), each implemented as
-  recommended.
 
 ## 0.2.28 — 2026-10-11
 
