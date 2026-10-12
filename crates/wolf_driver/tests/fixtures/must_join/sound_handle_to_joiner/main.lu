@@ -1,0 +1,30 @@
+// s233 (wolf-lang#678, sound, accepted): the handle is handed to a function that kills and joins it.
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(300)
+    print("child sees: {s}")
+    n
+}
+
+fn end_body(w: Proc[int]) {
+    w.kill()
+    let _v = w.join() else 1
+}
+
+fn helper(s: str) {
+    let w = spawn proc child(s, 0)
+    end_body(w)
+}
+
+fn main() -> int {
+    let seq0 = 7
+    region pass {
+        let s = "built in pass, {seq0} uses"
+        helper(s)
+    }
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    time_sleep_ms(700)
+    0
+}

@@ -1,0 +1,60 @@
+// s233 (wolf-lang#678, sound, accepted): lobo's run_small shape — monitor, select on the exit or a timeout, and on the timeout arm a helper that kills and joins.
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(300)
+    print("child sees: {s}")
+    n
+}
+
+fn end_body(w: Proc[int]) {
+    w.kill()
+    let _v = w.join() else |e| match e {
+        killed => {
+            0
+        },
+        cancelled => {
+            0
+        },
+        error => {
+            0
+        },
+        fault => {
+            0
+        },
+    }
+}
+
+fn run(s: str) -> int {
+    let w = spawn proc child(s, 0)
+    let m = w.monitor()
+    var cls = 3
+    select {
+        exit(reason) from m => {
+            if reason.is_normal() {
+                cls = 0
+            } else {
+                cls = 1
+            }
+        },
+        timeout(5.s) => {
+            cls = 4
+        },
+    }
+    if cls == 4 {
+        end_body(w)
+    }
+    cls
+}
+
+fn main() -> int {
+    let seq0 = 7
+    region pass {
+        let s = "built in pass, {seq0} uses"
+        print("cls {run(s)}")
+    }
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    time_sleep_ms(700)
+    0
+}

@@ -1,0 +1,9 @@
+pub fn helper(s: str) {
+    let _w = spawn proc child(s, 0)
+}
+
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(300)
+    print("child sees: {s}")
+    n
+}

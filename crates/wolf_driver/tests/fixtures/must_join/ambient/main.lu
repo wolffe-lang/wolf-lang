@@ -1,0 +1,24 @@
+// s233 (wolf-lang#678, unsound, refused): the helper builds the bytes in its caller's region and spawns with them; the caller is a region block.
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(300)
+    print("child sees: {s}")
+    n
+}
+
+fn helper(n: int) {
+    let s = "built by helper, {n} uses"
+    let _w = spawn proc child(s, 0)
+}
+
+fn main() -> int {
+    let seq0 = 7
+    region pass {
+        helper(seq0)
+    }
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    time_sleep_ms(700)
+    0
+}

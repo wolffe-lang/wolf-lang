@@ -1,0 +1,55 @@
+// s233 (wolf-lang#678, sound, accepted): lobo's chain — a request region, a serving fn handed the path, run_small's monitor and cls.
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(300)
+    print("child sees: {s}")
+    n
+}
+
+fn end_body(w: Proc[int]) {
+    w.kill()
+    let _v = w.join() else 1
+}
+
+fn run_small(path: str, head: str) -> int {
+    let w = spawn proc child("{head} {path}", 0)
+    let m = w.monitor()
+    var cls = 3
+    select {
+        exit(reason) from m => {
+            if reason.is_normal() {
+                cls = 0
+            } else {
+                cls = 1
+            }
+        },
+        timeout(5.s) => {
+            cls = 4
+        },
+    }
+    if cls == 4 {
+        end_body(w)
+    }
+    if cls >= 2 {
+        return cls
+    }
+    cls
+}
+
+fn serve_file(path: str) -> int {
+    let head = "HTTP/1.1 200 {path.len}"
+    run_small(path, head)
+}
+
+fn main() -> int {
+    let seq0 = 7
+    region req {
+        let path = "/index-{seq0}.html"
+        print("{serve_file(path)}")
+    }
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    time_sleep_ms(700)
+    0
+}

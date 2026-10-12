@@ -1,0 +1,31 @@
+// s233 (wolf-lang#678, sound, accepted): every path joins (if/else both join).
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(300)
+    print("child sees: {s}")
+    n
+}
+
+fn helper(s: str, n: int) -> int {
+    let w = spawn proc child(s, 0)
+    if n > 0 {
+        let a = w.join() else 1
+        return a + n
+    } else {
+        let b = w.join() else 2
+        return b
+    }
+}
+
+fn main() -> int {
+    let seq0 = 7
+    region pass {
+        let s = "built in pass, {seq0} uses"
+        print("{helper(s, 3)}")
+    }
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    time_sleep_ms(700)
+    0
+}

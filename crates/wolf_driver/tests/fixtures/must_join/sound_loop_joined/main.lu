@@ -1,0 +1,28 @@
+// s233 (wolf-lang#678, sound, accepted): spawned and joined in each iteration.
+fn child(s: str, n: int) -> int {
+    print("child sees: {s} {n}")
+    n
+}
+
+fn helper(s: str) -> int {
+    var t = 0
+    for i in 0..3 {
+        let w = spawn proc child(s, i)
+        t = t + (w.join() else 0)
+    }
+    t
+}
+
+fn main() -> int {
+    let seq0 = 7
+    region pass {
+        let s = "built in pass, {seq0} uses"
+        print("{helper(s)}")
+    }
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    time_sleep_ms(700)
+    0
+}

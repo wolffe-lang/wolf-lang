@@ -1,0 +1,32 @@
+// s233 (wolf-lang#678, unsound, refused): wolf-std's with_cap shape — a closure capturing region bytes, run in a proc the timeout arm leaves running.
+fn under(f: fn()) -> int {
+    f()
+    0
+}
+
+fn with_cap(f: fn()) -> bool {
+    let w = spawn proc under(f)
+    let m = w.monitor()
+    var ok = false
+    select {
+        exit(reason) from m => {
+            ok = reason.is_normal()
+        },
+        timeout(30.s) => {
+            ok = false
+        },
+    }
+    ok
+}
+
+fn main() -> int {
+    let seq0 = 7
+    region pass {
+        let s = "built in pass, {seq0} uses"
+        let f = fn() {
+            print("closure sees: {s}")
+        }
+        print("{with_cap(f)}")
+    }
+    0
+}
