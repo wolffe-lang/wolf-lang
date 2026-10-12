@@ -1,6 +1,179 @@
 # Changelog
 
-## Unreleased
+## 0.2.29 — 2026-10-12
+
+THE TWENTY-NINTH. Three compiler lanes land, one with a lupin half, and
+the pairing moves to lupin 0.1.52, which mirrors it: a program may park
+a task per connection, with no cap and no cpu while parked (s231,
+#713); the shell's signals, every signal POSIX names, what was ignored
+at start, a poll that never trails a delivery, this process's id and a
+send to any pid (s232, ruling #70); the language server finds the
+standard library (s235, #724). The bundled standard library moves to
+wolf-std `d7c2968`. 56 commits since 0.2.28 (s231 17, s232 25, s235 14),
+then r34's release commits; s235 merged while the release lane ran and
+was taken into it.
+
+### Read this before you bump the pin
+
+**The signal set has twenty meanings (s232, ruling #70).** `512` is
+`USER` (`SIGUSR1`) now, and bits 9..19 are the eleven new meanings a
+program may listen for; bits 20..27 may only be sent. Every call that
+takes a set (`os_signal_listen`, `wait`, `poll`, `ignore`, `default`)
+answers `io` for an empty set or one holding any bit that is not a
+listenable meaning, and changes nothing: a listen that dropped such a
+bit and answered ok, and a wait or poll that ignored it, now refuse. A
+program that used `512` as "a bit outside the meanings" gets ok where it
+got `io` (s219's `job_rows` did; it moved to `KILL`'s bit). A child now
+keeps an ignored `BROKEN_PIPE`.
+
+**A signal bit is permanent (`[os.signal.set.stable]`, new):** a
+published meaning keeps its bit forever and a new one takes the next
+unused bit; name meanings, never literal bits or host numbers
+(`os_signal_number` is the one way to a host number).
+
+**The bundled std's `std.signal` predates the twenty meanings.** wolf-std
+`d7c2968` was written against 0.2.28: `std.signal` names the nine
+meanings (`reload()` … `child()`), its header says a bit outside the
+nine is `io`, and it has no function for the eleven new meanings and no
+wrapper for the five new builtins. Its calls hand any bit straight to
+the builtins, so a program that passes it `512` gets `USER`'s answer.
+Until wolf-std catches up, call the new builtins directly (they are in
+the prelude) and write the new bits as numbers.
+
+**The bundled std is wolf-std `d7c2968`** (sc59: std at 0.2.28 / lupin
+0.1.51), where 0.2.28 shipped `98e1b7b`. It carries s230's wrappers,
+which 0.2.28's bundled std lacked: `fs.set_mode`, `create_private`,
+`create_with_mode`, `create_dir_mode`, `symlink`, `link`, `fs.Time`,
+`set_times`, `set_link_times`, `truncate` and `env.umask`; and
+`tests/ledger.toml` records the checked machine running
+`mem/budget/breach_is_a_row.lu` (0.2.28's one red row). On windows,
+`fs.truncate` on a handle opened for append fails (#723): open it for
+writing.
+
+- **Measured under this release** (kasumi, linux x86-64, the
+  release-head archive with lupin 0.1.52 beside `wolf`, no `WOLF_STD`):
+  wolf-std `d7c2968`'s 449 tests on lupin, the checked machine and
+  native, and its 477 doc examples, compile and answer as under 0.2.28
+  except **one test, `tests/signal/rows.lu`**: its `signal.reset(512)`
+  expects `io` (512 was "a bit outside the meanings") and now gets ok on
+  every compiler tier, because 512 is `USER`; lupin 0.1.52 answers the
+  file `unsupported`, refusing `os_signal_default` by name once the
+  shape row passes (ruling #70 R9). `cargo xtask std-test` reads the row
+  as red until wolf-std's directive moves. Nothing in it answers a wrong
+  value. The release machine equals native on 448 of the 449 with no
+  std configured; the one (`list/sort_by_tier.lu`) is refused by name
+  on release, as at 0.2.28.
+
+**The worker pool grows a worker per parked task (s231, #713).** A
+program that parks more tasks than eight a core (sixteen on one or two
+cpus) in `net_read`, `net_accept`, a channel `recv`, a `when` or a
+sleep no longer stops: each parked task holds a thread (about 15 KiB on
+linux x86-64) and costs no cpu. The host's thread limit is the last
+word; a thread it refuses is one line on stderr, never an abort. A
+server that holds a task per connection now holds as many threads, so
+the host's limits (`ulimit -u`, `kernel.threads-max`) bound it, where
+the cap stopped it first. `os_signal_wait` still polls.
+
+**`wolf lsp` finds std as `wolf build` does (s235, #724).** An editor
+that ran `wolf lsp` saw a false E0301 ("no standard library is
+configured") on every std method outside the builtins. The server now
+reads, in order: `wolf lsp --std-root <dir>` (new), `WOLF_STD`, a `std`
+path dependency in the opened file's `wolf.pkg`, then the `std/`
+installed beside `wolf`; a freestanding manifest target reads none, and
+a `WOLF_STD` that is not a directory exits 2 with build's message.
+Rename now refuses a std or dependency declaration by name. A tool
+embedding `wolf_query` meets contract v6 (`QueryHost::with_roots`).
+**Known:** the `parked_tasks` witness build can fail on macOS
+(`dsymutil`, then a missing `waitwolf_native/w`; #733, open).
+
+**Every hosted binary's bytes move** (`libwolf_rt.a`: s231's pool,
+parked registry and waits; s232's signal table, self-pipe poll and five
+shims). No handle number, error row or exit reason moves.
+
+**New prelude names** (`cargo xtask prelude-diff v0.2.28 HEAD
+--markdown`, after `git fetch --tags`, run at the release head):
+
+> **New prelude names.** HEAD adds `os_signal_ignored`,
+> `os_signal_send`, `os_signal_number`, `os_pid`, and `os_ppid` (all
+> five: function, `[os.host.sigs]`). A module that declares a function,
+> type or binding named any of the five now draws W0304 (it shadows the
+> ambient name), which `--deny-warnings` makes fatal: rename yours.
+
+A grep for any of the five in wolf-std `d7c2968c`, boreutils
+`2ab36513`, lobo `944edc1b`, pelt `96828ac4`, pax `6316c51c`, muzzle
+`7c95300e` and the book `b845e077` found **no declaration and no use**.
+s231 and s235 add no prelude name.
+
+**Capabilities (ruling #70 R8).** `os_signal_send` charges `exec`;
+`os_pid`, `os_ppid` and `os_signal_ignored` charge `env`;
+`os_signal_number` charges nothing. A package that calls one without
+the declaration is E1504.
+
+**Spellings ruled, each as implemented:** #70 (s232, R1–R9: every
+signal POSIX names, by meaning; one shape rule; `os_signal_ignored`; a
+poll that settles and reads the self-pipe; `os_pid`, `os_ppid`;
+`os_signal_send` to one pid; `os_signal_number`; the capabilities;
+lupin serves what the standard library reaches and refuses the rest by
+name).
+
+**What each downstream does to bump.**
+
+- **wolf-std, first:** pins to 0.2.29 / 0.1.52 in `vendor/tools.toml`;
+  `std.signal` learns the twenty meanings (eleven more functions; the
+  header's "nine"), `tests/signal/rows.lu` moves its outside bit off
+  `512` to one that is not listenable (s232 moved `job_rows` to `KILL`'s
+  1048576), and wrappers for `os_pid`, `os_ppid`, `os_signal_send`,
+  `os_signal_number` and `os_signal_ignored`. A later compiler release
+  bumps `STD-PIN` to carry them.
+- **wolf-book, then the site:** the book pins 0.2.29 / 0.1.52 (it is at
+  0.2.28 / 0.1.51); no sample uses the five new names. Then wolf-web
+  pins the pair and the book, and deploys.
+- **boreutils:** the toolchain digests (remove the staged
+  `.wolf-bin/std` before unpacking its own std pin, as at 0.2.27).
+  `kill` can be written on `os_signal_send` and `os_signal_number`.
+- **lobo:** the toolchain digests; a server holding a task per
+  connection no longer stops past eight a core (s231).
+- **pelt:** the toolchain digests; `trap` for every signal, `$$` and
+  `$PPID` (`os_pid`, `os_ppid`), `kill` (`os_signal_send`), the set it
+  was started ignoring (`os_signal_ignored`); the `settle` barrier can
+  go (s232 measured twelve more pending cases passing).
+- **wolf-lsp:** the pin; the server it drives now loads std (hover,
+  definition into the std file, member completion of home-module
+  methods), and `wolf lsp --std-root` is available to its clients.
+- **pax:** the pin. The five new builtins are hosted: the freestanding
+  target refuses each by name.
+- **muzzle:** `capabilities: [ffi]` in `src/wolf.pkg`, owed since 0.2.27
+  (muzzle#3 is open for it).
+- **Homebrew and the AUR:** the std beside the binary moves to
+  `d7c2968` (this release's tap change).
+
+### The pairing: lupin 0.1.52
+
+`PAIRING` names **lupin 0.1.52 at pin `294d626`** (wolf-interp release
+410845419; the linux x86-64 archive's sha256 `f5194b74…`). The spec pin
+is unchanged (this compiler's v0.2.24 tag). 0.1.52 carries the lupin
+half of s232; s231 and s235 have none.
+
+- **Dropped 6 cases in two gates**, each green on the published 0.1.52
+  unpinned: `signal_shell_lanes` 5 (s232's mirror; its pre-mirror list
+  stays, empty, as the gate's machinery) and `pairing` 1.
+- **Carried to 0.1.52, measured** (each answers as 0.1.51 on the pinned
+  rows; the issues are open): `checked_tasks_lanes`' two partings
+  (wolf-interp#227, #230), `region_kept_arg_lanes`' seven `List` and
+  `Map`-key rows and `chan_sent_arg_lanes`' channel-payload rows (both
+  wolf-interp#232), attr_closed_set's control (lupin still declines its
+  `comptime fn`); the racy counter's `trap(race)` check names 0.1.52 too;
+  `int_truth_lanes`' `PIN_INT_NOT` names 0.1.48 alone and is inert.
+- **Widened 0.** The plant (the 0.1.52 lists against the published
+  0.1.51) is red on exactly those 6 cases.
+- **The ritual** (#87, with #281's control against the 0.1.51 archive,
+  the same corpus and the same release `wolf`, 1130 files):
+  - checked: **moved 1 ledger count**. Agreements 764 → 765,
+    unsupported 94 → 93; SOUNDNESS 0 and hard 19 unchanged.
+  - native: **moved 1**. Agreements 749 → 750, unsupported 95 → 94;
+    SOUNDNESS 14 and hard 33 unchanged.
+  - The same file on both, s232's row `os/signal_shell_rows.lu`, from
+    unsupported to agreement. Nothing moved below the ledger.
 
 ### The language server finds the standard library (s235, #724)
 
@@ -55,15 +228,14 @@ tasks) stopped at N = 8 on one cpu, 16 on four and 64 on sixteen.
 - `[conc.task.order]`'s cost paragraph is restated with these numbers.
   lupin and the checked machine answer the witness at N = 64 as the
   compiled tiers do.
-### The shell's signals: every signal, what was ignored, a poll that never trails, a pid (s232, #679, #681, #691, #141, #423; rulings owed)
+### The shell's signals: every signal, what was ignored, a poll that never trails, a pid (s232, #679, #681, #691, #141, #423; ruling #70)
 
 A POSIX shell written in wolf (pelt) could trap five signals; a listen
 of any other bit answered ok and armed nothing, so `trap … USR1` let
 SIGUSR1 kill the shell. It could not tell which signals it was started
 ignoring, could poll 0 for a signal already delivered, and could not
 name its own id or signal a process it had not spawned. Spellings are
-rulings owed (`[os.signal.shell.note]` R1–R9), each implemented as
-recommended.
+ruled as implemented (#70, `[os.signal.shell.note]` R1–R9).
 
 - **Every signal POSIX names has a bit (`[os.signal.set]`, #679,
   #423).** Eleven more a program may listen for, ignore, put back,
@@ -117,8 +289,8 @@ recommended.
 - **lupin (R9).** lupin serves `os_pid`, `os_ppid` and
   `os_signal_number`, answers every shape row, and refuses
   `os_signal_send` and `os_signal_ignored` by name; it still never
-  listens. lupin 0.1.51 (the 0.2.28 pairing) predates the mirror and is pinned so in
-  `signal_shell_lanes`.
+  listens. lupin 0.1.52 (the 0.2.29 pairing) carries the mirror; the
+  pre-mirror pin on 0.1.51 in `signal_shell_lanes` is dropped.
 - **Counts.** The host table is 117 lines (from 112), `RT_SYMBOLS` 203
   (from 198), the prelude 124 functions and 156 W0304 names.
 
