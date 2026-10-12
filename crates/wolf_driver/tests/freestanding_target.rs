@@ -421,6 +421,29 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`os_ppid`",
             "hosted runtime",
         ),
+        // s234 (#719): the line editor's terminal calls — each a runtime
+        // symbol named for its builtin, so each is refused by that name.
+        (
+            "os_term_size",
+            "",
+            "let (r, c) = os_term_size(0) else |e| {\n        return 0\n    }\n    r + c",
+            "`os_term_size`",
+            "hosted runtime",
+        ),
+        (
+            "os_term_chars",
+            "",
+            "let _cs = os_term_chars(0) else |e| {\n        return 0\n    }\n    1",
+            "`os_term_chars`",
+            "hosted runtime",
+        ),
+        (
+            "os_signal_wait_fd",
+            "",
+            "let m = os_signal_wait_fd(0, 16384) else |e| {\n        return 0\n    }\n    m",
+            "`os_signal_wait_fd`",
+            "hosted runtime",
+        ),
         (
             "float",
             "",

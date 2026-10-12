@@ -1481,6 +1481,10 @@ mod builtin_cap_tests {
             ("os_pid", Cap::Env),
             ("os_ppid", Cap::Env),
             ("os_signal_ignored", Cap::Env),
+            // s234 (#719): the descriptor-and-signal wait charges `exec`
+            // (`os_signal_wait`'s); the size and the characters are `io`,
+            // uncharged as `os_term_mode` is (below).
+            ("os_signal_wait_fd", Cap::Exec),
         ] {
             assert_eq!(builtin_cap(name), Some(cap), "{name}");
         }
@@ -1502,6 +1506,11 @@ mod builtin_cap_tests {
             "json_get",
             "str_from_utf8",
             "region_bytes",
+            // s234: the terminal's size and characters, `io` as
+            // `os_term_mode` (ruling #53's stdio shelf).
+            "os_term_mode",
+            "os_term_size",
+            "os_term_chars",
             "left",
         ] {
             assert_eq!(builtin_cap(name), None, "{name}");
