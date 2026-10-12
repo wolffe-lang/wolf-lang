@@ -1769,6 +1769,16 @@ channel itself, never the closure. A `spawn proc` argument is asked
 the same: the proc outlives the frame that spawned it, so an argument
 built in a region block is refused — pass it in from a function that
 was handed it as a parameter and joins the proc before returning.
+That function must join on every path: one that may return while its
+proc still runs — no join on some path, a kill without a join, the
+handle returned or stored — leaves the proc running with what it was
+handed, and every call to it is asked the same question at the
+argument (at the call, when the function builds the bytes in its
+caller's region). Join the proc on every path out of the function
+(`p.join()`, an exit received from `p.monitor()`, or `p` handed to a
+function that does), or build the value where it outlives the calling
+frame. A closure that leaves such a proc running, and such a function
+taken as a fn value, are refused where they are written.
 "#);
 
 code!(E1011, "this would open a region while a region that contains it is open", r#"
