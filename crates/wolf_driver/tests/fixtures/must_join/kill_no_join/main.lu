@@ -1,0 +1,25 @@
+// s233 (wolf-lang#678, unsound, refused): the helper kills its proc and does not join it.
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(300)
+    print("child sees: {s}")
+    n
+}
+
+fn helper(s: str) {
+    let w = spawn proc child(s, 0)
+    w.kill()
+}
+
+fn main() -> int {
+    let seq0 = 7
+    region pass {
+        let s = "built in pass, {seq0} uses"
+        helper(s)
+    }
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    time_sleep_ms(700)
+    0
+}

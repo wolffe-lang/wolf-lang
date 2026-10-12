@@ -1,0 +1,24 @@
+// s233 (wolf-lang#678, unsound, refused): the bytes reach the helper inside a List[str].
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(300)
+    print("child sees: {s}")
+    n
+}
+
+fn helper(xs: List[str]) {
+    let _w = spawn proc child(xs[0], 0)
+}
+
+fn main() -> int {
+    let seq0 = 7
+    region pass {
+        let xs = ["built in pass, {seq0} uses"]
+        helper(xs)
+    }
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    time_sleep_ms(700)
+    0
+}

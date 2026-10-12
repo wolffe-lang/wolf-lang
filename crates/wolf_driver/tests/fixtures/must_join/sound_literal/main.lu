@@ -1,0 +1,23 @@
+// s233 (wolf-lang#678, sound, accepted): the helper is called with a literal from a region block.
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(300)
+    print("child sees: {s}")
+    n
+}
+
+fn helper(s: str) {
+    let _w = spawn proc child(s, 0)
+}
+
+fn main() -> int {
+    let seq0 = 7
+    region pass {
+        helper("a literal")
+    }
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    time_sleep_ms(700)
+    0
+}

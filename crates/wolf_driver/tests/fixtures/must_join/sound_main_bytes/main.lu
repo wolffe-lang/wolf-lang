@@ -1,0 +1,22 @@
+// s233 (wolf-lang#678, sound, accepted): lobo's daemon_start shape — the helper does not join, and the bytes are built in main's own region, which outlives the proc.
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(300)
+    print("child sees: {s}")
+    n
+}
+
+fn helper(s: str) {
+    let _w = spawn proc child(s, 0)
+}
+
+fn main() -> int {
+    let seq0 = 7
+    let s = "built in main, {seq0} uses"
+    helper(s)
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    time_sleep_ms(700)
+    0
+}

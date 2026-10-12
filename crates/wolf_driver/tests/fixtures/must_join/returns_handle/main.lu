@@ -1,0 +1,25 @@
+// s233 (wolf-lang#678, unsound, refused): the helper returns the handle; the caller joins after the region closed.
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(300)
+    print("child sees: {s}")
+    n
+}
+
+fn helper(s: str) -> Proc[int] {
+    spawn proc child(s, 0)
+}
+
+fn main() -> int {
+    let seq0 = 7
+    let w = region pass {
+        let s = "built in pass, {seq0} uses"
+        helper(s)
+    }
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    let got = w.join() else 1
+    print("{got}")
+    0
+}

@@ -1,0 +1,34 @@
+// s233 (wolf-lang#678, unsound, refused): an error edge between the spawn and the join.
+fn child(s: str, n: int) -> int {
+    time_sleep_ms(300)
+    print("child sees: {s}")
+    n
+}
+
+fn check(n: int) -> int ! {io} {
+    if n > 0 {
+        return io
+    }
+    n
+}
+
+fn helper(s: str, n: int) -> int ! {io} {
+    let w = spawn proc child(s, 0)
+    check(n)?
+    w.join() else 1
+}
+
+fn main() -> int {
+    let seq0 = 7
+    region pass {
+        let s = "built in pass, {seq0} uses"
+        let r = helper(s, 1) else 9
+        print("{r}")
+    }
+    region other {
+        let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
+        print("{z.len}")
+    }
+    time_sleep_ms(700)
+    0
+}
