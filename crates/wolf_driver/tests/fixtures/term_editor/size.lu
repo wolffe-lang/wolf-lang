@@ -1,0 +1,19 @@
+//! member: false
+//! (The s234 call comes before the terminal is opened, so a machine that
+//! refuses it — lupin, by name — refuses it, not the `/dev/tty` open.)
+//! s234 (wolf-lang#719 items 1 and 2; `[os.term.size]`, `RESIZE`,
+//! `[os.signal.wait.fd]`) — the window's size, and a resize heard while
+//! the program waits on the terminal. The harness sizes the terminal
+//! 24x80 before the start and 30x100 after `ready`; nothing is typed.
+//! Expected: `ready size 24 80`, then `resized 16384 30 100`.
+
+fn main() -> !int {
+    let (r0, c0) = os_term_size(0)?
+    os_signal_listen(16384)?
+    let t = fs_open_mode("/dev/tty", 3)?
+    fs_write(t, "ready size {r0} {c0}\n")?
+    let m = os_signal_wait_fd(t, 16384)?
+    let (r1, c1) = os_term_size(t)?
+    fs_write(t, "resized {m} {r1} {c1}\n")?
+    0
+}

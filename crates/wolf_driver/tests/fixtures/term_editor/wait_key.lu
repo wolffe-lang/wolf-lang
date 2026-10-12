@@ -1,0 +1,28 @@
+//! member: false
+//! (The s234 call comes before the terminal is opened.)
+//! s234 (wolf-lang#719 item 3, `[os.signal.wait.fd]`) — one wait that a
+//! key ends and a signal ends. Canonical input and echo off, VMIN 1 (the
+//! mode written 256, not `1 << 8`: the checked machine refuses a shift by
+//! name), so a single key makes the terminal readable. The harness types `k` after
+//! `ready`: the wait answers 0 and the key is still there to read. Then
+//! it sends SIGINT with `kill` (not Ctrl-C: the wait must hear a signal
+//! nothing typed) after `key`: the wait answers INTERRUPT, 16, with
+//! nothing typed. The mode is put back.
+//! Expected: `ready`, `key 0 107`, `signal 16`.
+
+fn main() -> !int {
+    let early = os_signal_wait_fd(-1, 16) else |_| -1
+    os_signal_listen(16)?
+    let t = fs_open_mode("/dev/tty", 3)?
+    let saved = os_term_mode(t)?
+    let flags = saved & 31
+    os_term_set_mode(t, flags & 28 | 256)?
+    fs_write(t, "ready early={early}\n")?
+    let a = os_signal_wait_fd(t, 16)?
+    let k = fs_read_chunk(t, 1)?
+    fs_write(t, "key {a} {k[0] as int}\n")?
+    let b = os_signal_wait_fd(t, 16)?
+    fs_write(t, "signal {b}\n")?
+    os_term_set_mode(t, saved)?
+    0
+}

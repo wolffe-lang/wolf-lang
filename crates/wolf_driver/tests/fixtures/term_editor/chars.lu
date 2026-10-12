@@ -1,0 +1,41 @@
+//! member: false
+//! (The s234 call comes before the terminal is opened.)
+//! s234 (wolf-lang#719 item 4; `[os.term.chars]`, `[os.term.mode]`) —
+//! the special characters the user chose, and FLOW and EXTENDED. After
+//! `ready` the harness moves the interrupt character to Ctrl-X, disables
+//! literal-next and turns IXON off through the other side of the
+//! terminal, then types `g`; the program reads the characters and the
+//! mode again. Then it turns every flag off (FLOW and EXTENDED too) and
+//! the harness types Ctrl-S, Ctrl-V, Ctrl-O, Ctrl-Q and `.`: all four
+//! control keys arrive as bytes (before s234 IXON kept Ctrl-S and
+//! Ctrl-Q, and on macOS IEXTEN kept Ctrl-V and Ctrl-O). The mode is put
+//! back.
+//! Expected: `ready intr=3 flow=8 ext=16`, `after intr=24 lnext=-1
+//! flow=0`, `bytes 19 22 15 17`.
+
+fn main() -> !int {
+    let before = os_term_chars(0)?
+    let t = fs_open_mode("/dev/tty", 3)?
+    let saved = os_term_mode(t)?
+    let flags = saved & 31
+    os_term_set_mode(t, flags & 28 | 256)?
+    fs_write(t, "ready intr={before[2]} flow={saved & 8} ext={saved & 16}\n")?
+    let _g = fs_read_chunk(t, 1)?
+    let now = os_term_chars(t)?
+    let m = os_term_mode(t)?
+    fs_write(t, "after intr={now[2]} lnext={now[7]} flow={m & 8}\n")?
+    os_term_set_mode(t, 256)?
+    fs_write(t, "raw\n")?
+    var seen = ""
+    loop {
+        let c = fs_read_chunk(t, 1)?
+        let b = c[0] as int
+        if b == 46 {
+            break
+        }
+        seen += " {b}"
+    }
+    fs_write(t, "bytes{seen}\n")?
+    os_term_set_mode(t, saved)?
+    0
+}
