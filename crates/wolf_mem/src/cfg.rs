@@ -94,6 +94,21 @@ pub enum SiteKind {
     /// The pseudo-site of a non-`Copy` parameter: data received in
     /// that parameter's generalized region.
     Param,
+    /// s233 (wolf-lang#678): the pseudo-site of a `Copy` parameter
+    /// that can name bytes (a `str`, a fn value): carried only as a
+    /// VIEW (`Val::views`), in the caller's region, so the one reader
+    /// is the must-join check ([`crate::procjoin`]) asking which
+    /// parameter's bytes a spawned proc may read. Every rule that
+    /// skips a `Param` site skips this one; the dumps leave it out.
+    ParamBytes,
+}
+
+impl SiteKind {
+    /// A parameter's pseudo-site of either kind: the caller's bytes,
+    /// not an allocation of this frame.
+    pub fn is_param(self) -> bool {
+        matches!(self, SiteKind::Param | SiteKind::ParamBytes)
+    }
 }
 
 #[derive(Debug, Clone)]

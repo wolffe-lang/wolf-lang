@@ -225,6 +225,11 @@ impl RegionSummary {
             let _ = writeln!(out, "  {line}");
         }
         for s in &self.sites {
+            // s233: a `Copy` parameter's pseudo-site is the must-join
+            // check's alone — no allocation, nothing to show.
+            if s.kind == SiteKind::ParamBytes {
+                continue;
+            }
             let region = &self.resolved[s.region.0 as usize];
             let mark = match (s.stacked, s.escape) {
                 (true, _) => " [stack]".to_string(),
@@ -235,6 +240,7 @@ impl RegionSummary {
                 SiteKind::Lit => "alloc",
                 SiteKind::CallResult => "call-alloc",
                 SiteKind::Param => "param-data",
+                SiteKind::ParamBytes => "param-bytes",
             };
             let _ = writeln!(
                 out,
