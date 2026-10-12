@@ -135,6 +135,17 @@ impl HintConfig {
 /// bare `exit` is an abnormal end and must not look like success). A
 /// client that hangs up without `exit` is scored by the same rule.
 pub fn main_loop(connection: Connection) -> Result<i32, Box<dyn std::error::Error + Send + Sync>> {
+    main_loop_with(connection, None)
+}
+
+/// [`main_loop`] over a host whose packages resolve `std` and their
+/// dependencies against the trees `roots` names (s235, wolf-lang#724):
+/// the driver passes `wolf build`'s resolution order; `None` is the
+/// std-less host [`main_loop`] serves.
+pub fn main_loop_with(
+    connection: Connection,
+    roots: Option<wolf_query::RootsResolver>,
+) -> Result<i32, Box<dyn std::error::Error + Send + Sync>> {
     let (init_id, init_value) = connection.initialize_start()?;
     let init: InitializeParams = serde_json::from_value(init_value)?;
     let enc = positions::negotiate(&init);
@@ -175,7 +186,10 @@ pub fn main_loop(connection: Connection) -> Result<i32, Box<dyn std::error::Erro
         }) as SendFn
     };
     let cx = Cx {
-        host: Arc::new(QueryHost::new()),
+        host: Arc::new(match roots {
+            Some(r) => QueryHost::with_roots(r),
+            None => QueryHost::new(),
+        }),
         sender,
         inflight: Arc::new(Mutex::new(HashMap::new())),
         early_cancel: Arc::new(Mutex::new(std::collections::HashSet::new())),

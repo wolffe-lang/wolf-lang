@@ -53,16 +53,26 @@ mod convert;
 pub mod positions;
 mod server;
 
-pub use server::main_loop;
+pub use server::{main_loop, main_loop_with};
+pub use wolf_query::{PackageRoots, RootsResolver};
 
-/// Serve LSP over stdio until `exit`. The driver's `wolf lsp` entry.
+/// Serve LSP over stdio until `exit`, with no std (the prelude stub).
 ///
 /// Returns the exit code the LSP lifecycle demands: `0` when `exit`
 /// followed `shutdown`, `1` for a bare `exit` — the driver passes it to
 /// `std::process::exit` unchanged.
 pub fn run_stdio() -> Result<i32, Box<dyn std::error::Error + Send + Sync>> {
+    run_stdio_with(None)
+}
+
+/// Serve LSP over stdio until `exit`, each package resolving `std` and
+/// its dependencies against the trees `roots` names — the driver's
+/// `wolf lsp` entry, which passes `wolf build`'s order (s235).
+pub fn run_stdio_with(
+    roots: Option<RootsResolver>,
+) -> Result<i32, Box<dyn std::error::Error + Send + Sync>> {
     let (connection, io_threads) = lsp_server::Connection::stdio();
-    let code = main_loop(connection)?;
+    let code = main_loop_with(connection, roots)?;
     io_threads.join()?;
     Ok(code)
 }
