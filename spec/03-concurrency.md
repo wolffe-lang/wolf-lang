@@ -452,15 +452,64 @@ premise by construction.
   may spawn with what it is handed — every callee may, so a signature
   rule would refuse every call that passes region bytes. What decides
   it is whether the proc is joined before the frame returns: a
-  must-join check over the proc handle on every path, which this pass
-  does not have (wolf-lang#678 stays open for it; a killed proc is not
-  yet a finished one, wolf-lang#683, so the join and not the kill is
-  the fact to track). Measured before it landed: the same census as
-  `[conc.chan.payload]`'s, zero rows moved; lobo's two spawns that
-  pass request-lived strings (`budget.run_small`, `budget.run_stream`)
-  pass them as parameters and join, and compile unchanged. Witnesses:
-  the gate `chan_sent_arg_lanes`'s spawn rows and
+  must-join check over the proc handle on every path (s233 adds it,
+  below; a killed proc is not yet a finished one, wolf-lang#683, so the
+  join and not the kill is the fact to track). Measured before it
+  landed: the same census as `[conc.chan.payload]`'s, zero rows moved;
+  lobo's two spawns that pass request-lived strings
+  (`budget.run_small`, `budget.run_stream`) pass them as parameters and
+  join, and compile unchanged. Witnesses: the gate
+  `chan_sent_arg_lanes`'s spawn rows and
   `corpus/conc/chan_sent_arg_spawn.lu`.)
+  (Extended 2026-10-12 by s233 for wolf-lang#678's helper half; ruling
+  owed. **A function that may leave a proc running with its caller's
+  bytes is held to the frame rule at every call.** A `spawn proc`
+  whose arguments can name a parameter's bytes, or bytes in the
+  function's caller's current region (`[mem.region.create.3]`), raises
+  an obligation the frame meets on every path out of it: `p.join()`
+  returns, an exit is received from `p.monitor()` (a `select` arm or a
+  receive on that channel — `[conc.proc.kill]` delivers the reason
+  after the proc's regions are freed), or `p` is handed to a function
+  that meets it on every path of its own. A kill meets nothing
+  (wolf-lang#683). "Every path" is a forward dataflow over the memory
+  checker's control-flow graph: `return`, `?`, `defer` and loop edges
+  included, a trap ending the path; an `int` or `bool` local assigned
+  a literal is carried across an `if` on it, so lobo's `cls = 4` on a
+  `select`'s timeout arm followed by `if cls == 4 { end_body(w) }` is
+  read path by path. A proc whose handle is rebound, stored, returned
+  or spawned again while the first is open is never met. A function
+  that misses an obligation **leaves a proc running** with those
+  parameters (or its caller's region): a per-callee summary, the least
+  fixpoint over the package's calls and spawns (a spawned proc that
+  leaves a grandchild running makes its spawner answer for it; a call
+  through a trait bound answers for every impl of the method). At a
+  call of such a function the argument flowing into such a parameter —
+  or, for the caller's region, the call's own current region — must
+  outlive the calling frame: E1010 at the argument (at the call) when
+  its bytes live in a region block, a region value made in the frame
+  or the spawning proc's own region; when they are a parameter's or
+  the caller region's, the calling function leaves the proc running in
+  turn. A literal, a scalar, frozen and `shared` data pass anywhere.
+  What no summary names is refused where it is made: a closure (or a
+  nested fn) that may return while a proc it spawned still runs with a
+  value that can name bytes and is not a literal (E1010 at the spawn
+  argument), and a function that leaves a proc running taken as a fn
+  value (E1010 at the name — a call through the value cannot be asked).
+  **The cost, stated.** Nothing at run time; the summary is computed
+  once per package. Sound programs refused: a closure spawning with a
+  value nothing outlives-checks; a join through a value whose literal
+  the dataflow does not carry (a `match` on it, a value computed rather
+  than assigned); a handle joined from a list or a struct field; and,
+  still, s229's proc joined inside the block that built its argument.
+  Measured: the downstream census at the memory check (wolf-std,
+  boreutils, lobo, pelt, pax, muzzle, the book, lobo's staged tests,
+  1,383 records) moved zero rows; lobo compiles unchanged — its
+  `run_small`/`run_stream` meet the obligation on every feasible path
+  and `acme.daemon_start`, never joined, is handed bytes in `main`'s
+  chain of caller regions — and with `end_body(w)` replaced by
+  `w.kill()` it is refused at its three region blocks in `main.lu`.
+  Witnesses: the gate `proc_must_join_lanes` and
+  `wolf_mem::procjoin`.)
 - `[conc.proc.kill]` **Killed-proc sequence, in order** (the decided
   rule): (1) the proc's task tree is cancelled *without running any
   further user code* — pending `defer`/`errdefer` in the killed proc
