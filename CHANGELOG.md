@@ -2,6 +2,43 @@
 
 ## Unreleased
 
+### A function that may leave a proc running is asked at every call (s233, #678; ruling owed)
+
+`fn helper(s: str) { let _w = spawn proc child(s, 0) }` called from
+`region pass { helper(s) }` compiled: `helper` returned while `child`
+slept, the block freed `s`'s bytes, and native and release printed the
+chunk the next region reused (the checked machine the stale bytes).
+s229 refused the spawn when its argument was built in the spawning
+frame's own region block; a parameter's bytes passed, because they
+outlive the frame — and the proc may outlive it too.
+
+- **The must-join check** (`[conc.proc.arg]`, `wolf_mem::procjoin`). A
+  spawn whose arguments can name a parameter's bytes, or the caller's
+  region's, must be met on every path out of the function: `p.join()`,
+  an exit received from `p.monitor()`, or `p` handed to a function that
+  does so. A kill is not a join (#683). An `int` or `bool` set from a
+  literal is followed across an `if`, so lobo's `budget.run_small`
+  (`cls = 4` on the timeout arm, then `if cls == 4 { end_body(w) }`)
+  is read path by path.
+- **A function that misses one leaves a proc running**, and every call
+  to it is E1010 at the argument whose bytes live in a region block, a
+  region value made in the frame or the proc's own region — or at the
+  call, when the function builds the bytes in its caller's region. A
+  caller handing on a parameter leaves the proc running in turn
+  (computed once per package; a call through a trait bound answers for
+  every impl). A closure that may return with such a proc still
+  running, and such a function taken as a fn value, are refused where
+  they are written.
+- **Measured:** 25 refused shapes and 12 sound ones on checked, native,
+  release and lupin 0.1.51 (`proc_must_join_lanes`); 17 of the refused
+  printed the reused chunk on native and release before. Downstream at
+  the memory check, 0 of 1,383 records moved; lobo compiles unchanged,
+  and the same lobo with `end_body(w)` replaced by `w.kill()` is
+  refused at its three region blocks. Still refused though sound:
+  s229's proc joined inside the block that built its argument, a join
+  through a value the dataflow does not carry, a handle joined out of a
+  list.
+
 ### The language server finds the standard library (s235, #724)
 
 `wolf lsp` never loaded std: in an editor every method of a std data
