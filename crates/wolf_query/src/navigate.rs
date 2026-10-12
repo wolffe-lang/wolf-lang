@@ -374,7 +374,27 @@ fn refuse_token(kind: SyntaxKind, text: &str) -> Option<String> {
 
 fn refuse_symbol(res: &Resolution, symbol: &Symbol, text: &str) -> Option<String> {
     match symbol {
-        Symbol::Decl(_) => None,
+        // A declaration in a std or dependency tree (s235: those trees
+        // load now) is as foreign as the stub's std names were.
+        Symbol::Decl(span) => outside_package(res, span.file).map(|tree| {
+            format!(
+                "`{text}` is a {tree} item: it lives outside this package (cross-package \
+                 rename is refused)"
+            )
+        }),
+        Symbol::Module(m)
+            if res.package.modules[*m]
+                .files
+                .first()
+                .and_then(|&f| outside_package(res, res.package.files[f].raw.file))
+                .is_some() =>
+        {
+            Some(format!(
+                "`{text}` names the module {}: it lives outside this package \
+                 (cross-package rename is refused)",
+                res.package.modules[*m].display_name()
+            ))
+        }
         Symbol::Module(m) => Some(format!(
             "`{text}` names the module {} — a directory (D32: directory = module), \
              not a token; rename the directory",
@@ -392,6 +412,20 @@ fn refuse_symbol(res: &Resolution, symbol: &Symbol, text: &str) -> Option<String
             "`{text}` is a C symbol (`import c`): it lives outside this package"
         )),
         Symbol::SelfKw => Some("`Self` is a keyword and cannot be renamed".to_string()),
+    }
+}
+
+/// `Some("std")` / `Some("dependency")` when `file` was loaded from a
+/// std or dependency tree — the loader's `std://` and `pkg://`
+/// displays (D7) are how a package file and a foreign one differ.
+fn outside_package(res: &Resolution, file: wolf_span::FileId) -> Option<&'static str> {
+    let unit = res.package.files.iter().find(|u| u.raw.file == file)?;
+    if unit.raw.display.starts_with("std://") {
+        Some("std")
+    } else if unit.raw.display.starts_with("pkg://") {
+        Some("dependency")
+    } else {
+        None
     }
 }
 
