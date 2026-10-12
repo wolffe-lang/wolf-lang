@@ -25,9 +25,12 @@
 //! does not decide a row); a test that needs a signal ignored at start
 //! says which. The harness's own `SigBlk`/`SigIgn` are printed first.
 //!
-//! lupin 0.1.51 (the 0.2.28 pairing) predates the mirror: it resolves
-//! none of the five new names and answers `unsupported`, pinned by
-//! version as pre-mirror (s180's design). lupin never listens
+//! lupin 0.1.51 (the 0.2.28 pairing) predated the mirror: it resolved
+//! none of the five new names and answered `unsupported`, and was pinned
+//! by version and release commit as pre-mirror (s180's design). 0.1.52
+//! (the 0.2.29 pairing, r34) carries it, measured on the published
+//! archive, so the pin is dropped and every lupin must carry the mirror.
+//! lupin never listens
 //! (`os_signal_listen` is declined, ruling #57 R8), and refuses the send
 //! and the disposition read by name (R9 here): those fixtures expect
 //! its refusal.
@@ -44,11 +47,10 @@ fn wolf() -> &'static str {
 }
 
 /// The lupin builds that predate the mirror, by version and the commit
-/// their records report: the 0.1.51 release (`f72e78d`, the 0.2.28
-/// pairing, which is also wolf-interp trunk at this rebase). 0.1.50
-/// (`32b970d`, and trunk `c00b88c`) were listed until 0.2.28 moved the
-/// pairing; they are dropped, not widened.
-const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[("0.1.51", Some("f72e78d"))];
+/// their records report. Empty since the 0.2.29 pairing: 0.1.52 (r34)
+/// carries wolf-interp's s232, measured; 0.1.51 (`f72e78d`) and 0.1.50
+/// (`32b970d`) did not.
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[];
 
 #[derive(Debug)]
 struct Obs {
