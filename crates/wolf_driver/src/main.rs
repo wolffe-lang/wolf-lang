@@ -269,14 +269,34 @@ fn main() {
 /// stdio (s52 v0, D34: one process, one truth). `--stdio` is accepted
 /// for clients that pass the conventional channel flag; sockets are
 /// s57's attachment story.
+///
+/// The std root resolves exactly as `wolf build`'s does (s235,
+/// wolf-lang#724), by the same functions: `--std-root <dir>`, then
+/// `WOLF_STD` — read once here, a root that is not a directory exiting
+/// 2 with build's message — then, per package, a `wolf.pkg` `std` path
+/// dependency beside the entry and the `std/` beside this binary
+/// ([`lsp_package_roots`]). Without it, every std data-type method was a
+/// false E0301 in the editor while the build was clean.
 fn lsp(args: &[String]) {
-    for a in args {
+    let (args, explicit) = match take_std_root(args).and_then(|(a, f)| {
+        let root = effective_std_root(f)?;
+        Ok((a, root))
+    }) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("wolf lsp: {e}");
+            std::process::exit(2);
+        }
+    };
+    for a in &args {
         if a != "--stdio" {
             eprintln!("wolf lsp: unknown flag `{a}` (v0 serves stdio only)");
             std::process::exit(2);
         }
     }
-    match wolf_lsp::run_stdio() {
+    let roots: wolf_query::RootsResolver =
+        std::sync::Arc::new(move |root: &Path| lsp_package_roots(root, explicit.as_deref()));
+    match wolf_lsp::run_stdio_with(Some(roots)) {
         // The lifecycle's exit code: 0 only when `exit` followed
         // `shutdown`; a bare `exit` is 1 (LSP spec).
         Ok(code) => std::process::exit(code),
@@ -574,6 +594,43 @@ pub(crate) fn std_root_in_order(
         .or_else(default_std_root)
 }
 
+/// The trees a package resolves against beyond its own directory: the
+/// std root in [`std_root_in_order`] and the dependency roots of its
+/// resolved `wolf.pkg`, when it has one. `wolf build` (through
+/// [`resolve_from_entry`]) and `wolf lsp` (through
+/// [`lsp_package_roots`]) both answer here.
+pub(crate) fn package_roots(
+    explicit: Option<&Path>,
+    project: Option<&wolf_pkg::Project>,
+) -> wolf_query::PackageRoots {
+    wolf_query::PackageRoots {
+        std_root: std_root_in_order(explicit, project.and_then(|p| p.std_root.as_deref())),
+        dep_roots: project.map(|p| p.dep_roots.clone()).unwrap_or_default(),
+    }
+}
+
+/// `wolf lsp`'s roots for the package rooted at `root` (the opened
+/// file's directory — the server's entry rule): what `wolf build` of an
+/// entry in `root` resolves against. The manifest is
+/// [`pkg_cmd::project_for_build`]'s (beside the entry, no ancestor
+/// walk), and a manifest whose `target` is freestanding withholds the
+/// default root exactly as the build does (`default_std_root` reads the
+/// thread's build target).
+fn lsp_package_roots(root: &Path, explicit: Option<&Path>) -> wolf_query::PackageRoots {
+    let mut sm = wolf_span::SourceMap::new();
+    let project = pkg_cmd::project_for_build(root, &mut sm);
+    let freestanding = project
+        .as_ref()
+        .and_then(|p| p.target.as_ref())
+        .is_some_and(|(t, _)| {
+            wolf_backend::target::Target::parse(t, &wolf_sema::attrs::host_target())
+                .is_ok_and(|t| t.is_freestanding())
+        });
+    let _target_scope = freestanding
+        .then(|| wolf_sema::attrs::enter_build_target(wolf_backend::target::FREESTANDING));
+    package_roots(explicit, project.as_ref())
+}
+
 /// Run s12 resolution from an entry file; registers every loaded file
 /// with `sources` and returns the resolution (package + the full
 /// parse/graph/resolution diagnostic set in deterministic order).
@@ -591,13 +648,11 @@ fn resolve_from_entry(
     std_root: Option<&Path>,
     project: Option<&wolf_pkg::Project>,
 ) -> Result<wolf_sema::Resolution, String> {
-    let std_root = std_root_in_order(std_root, project.and_then(|p| p.std_root.as_deref()));
+    let roots = package_roots(std_root, project);
     let mut loader = wolf_sema::DiskLoader::from_entry(entry, sm)
         .ok_or_else(|| format!("cannot open package around {}", entry.display()))?
-        .with_std_root(std_root);
-    if let Some(p) = project {
-        loader = loader.with_dep_roots(p.dep_roots.clone());
-    }
+        .with_std_root(roots.std_root)
+        .with_dep_roots(roots.dep_roots);
     let res = wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default())?;
     for unit in &res.package.files {
         sources.add(unit.raw.file, unit.raw.display.clone(), &unit.raw.src);

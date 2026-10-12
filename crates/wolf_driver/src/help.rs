@@ -354,12 +354,15 @@ record has to be reproducible from the file and the command line.",
         name: "lsp",
         group: Group::Tool,
         summary: "serve the Language Server Protocol over stdio",
-        usage: &["lsp [--stdio]"],
+        usage: &["lsp [--stdio] [--std-root <dir>]"],
         about: "\
 One process, one truth: the editor sees the same resolver, the same
 type checker and the same diagnostics `wolf build` does. `--stdio` is
 accepted for clients that pass the conventional channel flag; it is
-the only channel served.",
+the only channel served. The standard library is found as `build`
+finds it: `--std-root <dir>`, then the `WOLF_STD` environment
+variable, then a `std` path dependency in the opened file's
+`wolf.pkg`, then the `std` directory installed beside `wolf`.",
     },
 ];
 
