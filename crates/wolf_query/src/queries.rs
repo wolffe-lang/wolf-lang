@@ -224,6 +224,12 @@ impl Snapshot {
         // against the std and dependency trees the host's resolver
         // names for the package root (s235: `wolf build`'s order).
         let roots = self.roots_for(crate::overlay::normalize(entry).parent()?);
+        // PLANT (s235): the std root is dropped on its way to the loader, so
+        // the server is std-less again — the s235 rows must go red in CI.
+        let roots = crate::overlay::PackageRoots {
+            std_root: None,
+            ..roots
+        };
         let mut loader = OverlayLoader::new(entry, overlays, &mut sm)?.with_roots(roots);
         let res =
             wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default()).ok()?;
