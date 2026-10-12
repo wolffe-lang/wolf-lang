@@ -17,6 +17,9 @@ fn main() -> int {
             let s = "built in r, {seq0} uses"
             helper(s)
         }
+        in r {
+            print("r again")
+        }
     }
     region other {
         let z = "ZZZZZZZZZZZZZZZZZZZZZZZZZ{seq0}ZZ"
