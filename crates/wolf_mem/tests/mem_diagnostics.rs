@@ -3109,3 +3109,181 @@ fn main() -> int {
 "#,
     );
 }
+
+#[test]
+fn e1010_a_helper_that_leaves_a_proc_running_with_its_parameter() {
+    // wolf-lang#678's helper half (s233): `helper` spawns with its
+    // parameter and returns while the proc runs, so the call is held
+    // to the frame rule, and `s`'s bytes die with `pass`.
+    snap(
+        "e1010_must_join_helper",
+        r#"fn child(s: str, n: int) -> int {
+    print("child sees: {s}")
+    n
+}
+fn helper(s: str) {
+    let _w = spawn proc child(s, 0)
+}
+fn outer(s: str) {
+    helper(s)
+}
+fn main() -> int {
+    let n = 7
+    region pass {
+        let s = "built in pass, {n} uses"
+        helper(s)
+        outer(s)
+    }
+    0
+}
+"#,
+    );
+}
+
+#[test]
+fn e1010_a_helper_that_leaves_a_proc_running_with_its_caller_s_region() {
+    // s233: the bytes are built by the helper, in its caller's region —
+    // here a region block — so the refusal is at the call.
+    snap(
+        "e1010_must_join_ambient",
+        r#"fn child(s: str, n: int) -> int {
+    print("child sees: {s}")
+    n
+}
+fn helper(n: int) {
+    let s = "built by helper, {n} uses"
+    let _w = spawn proc child(s, 0)
+}
+fn main() -> int {
+    let n = 7
+    region pass {
+        helper(n)
+    }
+    0
+}
+"#,
+    );
+}
+
+#[test]
+fn e1010_no_summary_names_a_closure_or_a_fn_value() {
+    // s233: a closure that leaves a proc running with what can name
+    // bytes is refused at its spawn; a sink taken as a fn value at the
+    // value.
+    snap(
+        "e1010_must_join_closure_and_value",
+        r#"fn child(s: str, n: int) -> int {
+    print("child sees: {s}")
+    n
+}
+fn helper(s: str) {
+    let _w = spawn proc child(s, 0)
+}
+fn main() -> int {
+    let f = fn(x: str) {
+        let _w = spawn proc child(x, 0)
+    }
+    let h: fn(str) = helper
+    f("a literal")
+    h("a literal")
+    0
+}
+"#,
+    );
+}
+
+#[test]
+fn procs_waited_for_on_every_path_stay_silent() {
+    // s233: every path out of each helper waits for its proc — a join,
+    // a deferred join, a join through a copy of the handle, an exit
+    // from the monitor or `end_body` on the timeout arm read through
+    // `cls` (lobo's `budget.run_small`), a bool flag; and helpers whose
+    // procs read scalars, literals or `main`'s bytes.
+    snap(
+        "clean_must_join",
+        r#"fn child(s: str, n: int) -> int {
+    print("child sees: {s}")
+    n
+}
+fn end_body(w: Proc[int]) {
+    w.kill()
+    let _v = w.join() else 1
+}
+fn joins(s: str) -> int {
+    let w = spawn proc child(s, 0)
+    w.join() else 1
+}
+fn deferred(s: str, n: int) -> int {
+    let w = spawn proc child(s, 0)
+    defer {
+        let _v = w.join() else 1
+    }
+    if n > 0 {
+        return n
+    }
+    0
+}
+fn copied(s: str) -> int {
+    let w = spawn proc child(s, 0)
+    let w2 = w
+    w2.join() else 1
+}
+fn run_small(path: str, head: str) -> int {
+    let w = spawn proc child("{head} {path}", 0)
+    let m = w.monitor()
+    var cls = 3
+    select {
+        exit(reason) from m => {
+            if reason.is_normal() {
+                cls = 0
+            } else {
+                cls = 1
+            }
+        },
+        timeout(5.s) => {
+            cls = 4
+        },
+    }
+    if cls == 4 {
+        end_body(w)
+    }
+    cls
+}
+fn flagged(s: str) -> int {
+    let w = spawn proc child(s, 0)
+    let m = w.monitor()
+    var late = false
+    select {
+        exit(reason) from m => {
+            late = false
+        },
+        timeout(5.s) => {
+            late = true
+        },
+    }
+    if late {
+        end_body(w)
+    }
+    0
+}
+fn scalars(n: int) {
+    let _w = spawn proc child("a literal", n)
+}
+fn unjoined(s: str) {
+    let _w = spawn proc child(s, 0)
+}
+fn main() -> int {
+    let n = 7
+    let kept = "built in main, {n} uses"
+    unjoined(kept)
+    region pass {
+        let s = "built in pass, {n} uses"
+        print("{joins(s)} {deferred(s, 1)} {copied(s)} {run_small(s, s)} {flagged(s)}")
+        scalars(s.len)
+        unjoined("a literal")
+    }
+    0
+}
+"#,
+    );
+}
