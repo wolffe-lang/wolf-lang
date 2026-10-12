@@ -176,7 +176,15 @@ impl Tty {
                 .to_string_lossy()
                 .into_owned();
             let master = std::fs::File::from_raw_fd(m);
-            // The size a terminal emulator would have told it.
+            let slave = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .custom_flags(libc::O_NOCTTY)
+                .open(&name)
+                .expect("open the pty's slave");
+            // The size a terminal emulator would have told it — after the
+            // slave is open: macOS refuses TIOCSWINSZ on a master whose
+            // slave nobody has opened (ENOTTY, measured black-box).
             let w = libc::winsize {
                 ws_row: 24,
                 ws_col: 80,
@@ -184,12 +192,6 @@ impl Tty {
                 ws_ypixel: 0,
             };
             assert_eq!(libc::ioctl(m, libc::TIOCSWINSZ, &w), 0, "TIOCSWINSZ");
-            let slave = std::fs::OpenOptions::new()
-                .read(true)
-                .write(true)
-                .custom_flags(libc::O_NOCTTY)
-                .open(&name)
-                .expect("open the pty's slave");
             let mut cmd = Command::new(&argv[0]);
             cmd.args(&argv[1..])
                 .current_dir(dir)

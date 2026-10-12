@@ -119,8 +119,8 @@ mod sys {
         if t.c_lflag & libc::ISIG != 0 {
             m |= mode::SIGNALS;
         }
-        if t.c_iflag & libc::IXON != 0 {
-            m |= 0;
+        if t.c_iflag & libc::IXOFF != 0 {
+            m |= mode::FLOW;
         }
         if t.c_lflag & libc::IEXTEN != 0 {
             m |= mode::EXTENDED;
