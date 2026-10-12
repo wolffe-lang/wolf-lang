@@ -172,8 +172,9 @@ const RULED_LUPIN: &str = "trap(region-fault)";
 /// dies with the fix: a lupin outside this list must trap. Measured on
 /// the published 0.1.50 archive: every pinned row `exit(0)`; and on the
 /// published 0.1.51 archive (the 0.2.28 pairing, r33; #232 still open),
-/// the same.
-const LUPIN_MISSES_CHANNEL_PAYLOADS: &[&str] = &["0.1.50", "0.1.51"];
+/// the same; and on the published 0.1.52 archive (the 0.2.29 pairing,
+/// r34; #232 still open), the same.
+const LUPIN_MISSES_CHANNEL_PAYLOADS: &[&str] = &["0.1.50", "0.1.51", "0.1.52"];
 
 fn base_version(v: &str) -> &str {
     v.split('+').next().unwrap_or(v)
