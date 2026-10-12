@@ -249,6 +249,13 @@ struct HubState {
     installed: i64,
     /// Delivered meanings, oldest first (a coalescing edge queue).
     queue: VecDeque<i64>,
+    /// s234 (#719, `[os.signal.wait.fd]`): the write ends of the wake
+    /// pipes of the `os_signal_wait_fd` calls parked now. Whoever moves
+    /// a meaning onto the queue ([`sys::drain`], under this lock) writes
+    /// one byte to each, so a wait blocked in `poll(2)` on its
+    /// descriptor and its pipe learns a meaning came without a timer.
+    #[cfg(unix)]
+    waiters: Vec<std::os::fd::RawFd>,
 }
 
 static HUB: OnceLock<Hub> = OnceLock::new();
@@ -268,6 +275,8 @@ fn hub() -> &'static Hub {
             state: Mutex::new(HubState {
                 installed: 0,
                 queue: VecDeque::new(),
+                #[cfg(unix)]
+                waiters: Vec::new(),
             }),
             cv: Condvar::new(),
         }
@@ -507,7 +516,7 @@ mod sys {
                 if n < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
                     continue;
                 }
-                return moved; // EAGAIN: empty (or the write end gone)
+                break; // EAGAIN: empty (or the write end gone)
             }
             for &b in &buf[..n as usize] {
                 if (b as usize) < super::LISTENED_COUNT {
@@ -516,6 +525,116 @@ mod sys {
                 }
             }
         }
+        // s234 (`[os.signal.wait.fd]`): wake every descriptor wait. A
+        // full wake pipe already holds a byte, which is all a wake is.
+        if moved {
+            for &w in &st.waiters {
+                let one = 1u8;
+                // SAFETY: a one-byte write to a nonblocking pipe the
+                // registered wait owns until it deregisters, under the
+                // lock it deregisters under.
+                unsafe { libc::write(w, (&raw const one).cast(), 1) };
+            }
+        }
+        moved
+    }
+
+    /// s234 (#719, `[os.signal.wait.fd]`): park until a meaning in
+    /// `want` is queued (answered, taken off the queue) or the file `h`
+    /// names has something to read — a byte, end of input, a hang-up —
+    /// (0; nothing is read). A meaning wins when both are ready. The
+    /// wait is `poll(2)` on the descriptor and a wake pipe of the call's
+    /// own, registered in the hub under its lock BEFORE the queue is
+    /// looked at for the last time, so a meaning queued after that look
+    /// writes the pipe and none is missed. With no scope that can be
+    /// killed the poll has no timeout: an idle wait wakes for nothing.
+    /// Inside one it looks for a kill every 100 ms (the teardown point
+    /// `os_signal_wait` is). Codes are `sig_code`'s, negated.
+    pub fn wait_fd(h_fd: i64, want: i64) -> i64 {
+        use std::os::fd::AsRawFd as _;
+        let Some(file) = crate::fs::dup_of(h_fd) else {
+            return -sig_code::IO;
+        };
+        let fd = file.as_raw_fd();
+        let h = super::hub();
+        let wake = cloexec_pipe();
+        set_nonblocking(wake[0]);
+        set_nonblocking(wake[1]);
+        let out = crate::task::blocking(|| {
+            let scope = crate::task::current_scope();
+            let mut registered = false;
+            loop {
+                settle(super::installed(h));
+                {
+                    let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+                    drain(h, &mut st);
+                    if let Some(m) = super::take(&mut st, want) {
+                        st.waiters.retain(|&w| w != wake[1]);
+                        return m;
+                    }
+                    if !registered {
+                        st.waiters.push(wake[1]);
+                        registered = true;
+                    }
+                }
+                if let Some(s) = scope.as_ref()
+                    && s.is_killed()
+                {
+                    let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+                    st.waiters.retain(|&w| w != wake[1]);
+                    drop(st);
+                    crate::task::kill_teardown_check(s);
+                    return -sig_code::IO;
+                }
+                let mut fds = [
+                    libc::pollfd {
+                        fd,
+                        events: libc::POLLIN,
+                        revents: 0,
+                    },
+                    libc::pollfd {
+                        fd: wake[0],
+                        events: libc::POLLIN,
+                        revents: 0,
+                    },
+                ];
+                let timeout = if scope.is_some() { 100 } else { -1 };
+                // SAFETY: two live pollfds.
+                let n = unsafe { libc::poll(fds.as_mut_ptr(), 2, timeout) };
+                if n < 0 {
+                    let e = std::io::Error::last_os_error().raw_os_error();
+                    if e == Some(libc::EINTR) || e == Some(libc::EAGAIN) {
+                        continue;
+                    }
+                    let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+                    st.waiters.retain(|&w| w != wake[1]);
+                    return -sig_code::IO;
+                }
+                if fds[1].revents != 0 {
+                    let mut buf = [0u8; 16];
+                    // SAFETY: our own nonblocking pipe; emptied, it
+                    // answers EAGAIN.
+                    while unsafe { libc::read(wake[0], buf.as_mut_ptr().cast(), buf.len()) } > 0 {}
+                }
+                if fds[0].revents != 0 {
+                    // One more look: a meaning that came with the input
+                    // wins (the clause's order).
+                    settle(super::installed(h));
+                    let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+                    drain(h, &mut st);
+                    st.waiters.retain(|&w| w != wake[1]);
+                    return super::take(&mut st, want).unwrap_or(0);
+                }
+            }
+        });
+        // SAFETY: the wake pipe is ours and deregistered (every return
+        // above removes it under the hub lock).
+        unsafe {
+            libc::close(wake[0]);
+            libc::close(wake[1]);
+        }
+        drop(file);
+        out
     }
 
     /// s232 (#691, `[os.signal.poll]`): before a poll or a wait reads
@@ -968,6 +1087,12 @@ mod sys {
         false
     }
 
+    /// s234 (`[os.signal.wait.fd]`): no descriptor wait beside the
+    /// console — by name, after the shape.
+    pub fn wait_fd(_h_fd: i64, _want: i64) -> i64 {
+        -sig_code::UNSUPPORTED
+    }
+
     /// s232 (`[os.signal.ignored]`): no dispositions to read — by name.
     pub fn ignored() -> i64 {
         -sig_code::UNSUPPORTED
@@ -1123,6 +1248,20 @@ pub fn poll(mask: i64) -> i64 {
     take(&mut st, mask).unwrap_or(0)
 }
 
+/// `os_signal_wait_fd(fd, set)` (s234, wolf-lang#719,
+/// `[os.signal.wait.fd]`): park until a meaning in `set` is delivered —
+/// answered and taken off the queue, as [`wait`] does — or the file `fd`
+/// names has something to read (0; nothing is read). A set [`listen`]
+/// would refuse is `-IO` (shape first), then windows `-UNSUPPORTED`,
+/// then a closed or forged handle `-IO`. The exactness of [`poll`] holds
+/// for its looks.
+pub fn wait_fd(fd: i64, mask: i64) -> i64 {
+    if !listenable_set(mask) {
+        return -sig_code::IO;
+    }
+    sys::wait_fd(fd, mask)
+}
+
 /// s232 (#681, `[os.signal.ignored]`): the listenable meanings whose
 /// signal is ignored now, or `-UNSUPPORTED` (windows). Read before the
 /// program's first `ignore`, `default` or `listen` of a meaning, it is
@@ -1203,6 +1342,14 @@ pub extern "C" fn __wolf_rt_os_signal_default(mask: i64) -> i64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_os_signal_poll(mask: i64) -> i64 {
     poll(mask)
+}
+
+/// `os_signal_wait_fd(fd: int, set: int) -> int ! {io, unsupported}`
+/// (s234) — the meaning taken (> 0), 0 when `fd` has something to read,
+/// or a negated `sig_code`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_signal_wait_fd(fd: i64, mask: i64) -> i64 {
+    wait_fd(fd, mask)
 }
 
 /// `os_signal_ignored() -> int ! {unsupported}` (s232) — the ignored
@@ -1610,5 +1757,75 @@ mod tests {
             let n = number(1 << i);
             assert!(n > 0 && seen.insert(n), "bit {i}: {n}");
         }
+    }
+
+    /// A pipe whose two ends are in the fs table: (read handle, write
+    /// handle) — the descriptor `wait_fd` waits on.
+    #[cfg(unix)]
+    fn table_pipe() -> (i64, i64) {
+        let (r, w) = std::io::pipe().expect("pipe");
+        let rf = std::fs::File::from(std::os::fd::OwnedFd::from(r));
+        let wf = std::fs::File::from(std::os::fd::OwnedFd::from(w));
+        (crate::fs::mint_file(rf), crate::fs::mint_file(wf))
+    }
+
+    /// s234 (#719, `[os.signal.wait.fd]`): input waiting answers 0 and
+    /// reads nothing; a meaning already delivered answers the meaning
+    /// first, even with input waiting; the shape rule and a forged
+    /// handle are `-IO`.
+    #[cfg(unix)]
+    #[test]
+    fn wait_fd_answers_input_or_the_meaning() {
+        use std::io::{Read as _, Write as _};
+        let _g = serial();
+        assert_eq!(listen(meaning::RESIZE), sig_code::OK);
+        let (r, w) = table_pipe();
+        assert_eq!(wait_fd(r, 0), -sig_code::IO, "empty set");
+        assert_eq!(wait_fd(r, 1 << 20), -sig_code::IO, "KILL is not listenable");
+        assert_eq!(wait_fd(1 << 40, meaning::RESIZE), -sig_code::IO, "forged");
+        crate::fs::with_handle(w, |f| (&*f).write_all(b"k").unwrap()).unwrap();
+        assert_eq!(wait_fd(r, meaning::RESIZE), 0, "input waiting");
+        assert_eq!(wait_fd(r, meaning::RESIZE), 0, "still waiting: nothing was read");
+        assert_eq!(raise(meaning::RESIZE), sig_code::OK);
+        assert_eq!(wait_fd(r, meaning::RESIZE), meaning::RESIZE, "the meaning wins");
+        let mut b = [0u8; 1];
+        crate::fs::with_handle(r, |f| (&*f).read_exact(&mut b).unwrap()).unwrap();
+        assert_eq!(&b, b"k");
+        assert_eq!(crate::fs::__wolf_rt_fs_close(w), 0);
+        assert_eq!(crate::fs::__wolf_rt_fs_close(r), 0);
+        assert_eq!(
+            set_disposition(meaning::RESIZE, Disp::Default),
+            sig_code::OK
+        );
+    }
+
+    /// s234: a signal sent from another thread while the wait is parked
+    /// on an empty descriptor wakes it promptly (no timer: the delivery
+    /// path writes the wait's pipe), 200 rounds; and end of input (the
+    /// write end closed) answers 0.
+    #[cfg(unix)]
+    #[test]
+    fn wait_fd_wakes_for_a_signal_while_parked() {
+        let _g = serial();
+        assert_eq!(listen(meaning::USER), sig_code::OK);
+        let (r, w) = table_pipe();
+        let mut slow = 0;
+        for _ in 0..200 {
+            let t = std::thread::spawn(|| {
+                std::thread::sleep(Duration::from_millis(2));
+                // SAFETY: a process-directed signal to ourselves.
+                unsafe { libc::kill(libc::getpid(), libc::SIGUSR1) };
+            });
+            let t0 = std::time::Instant::now();
+            assert_eq!(wait_fd(r, meaning::USER), meaning::USER);
+            if t0.elapsed() > Duration::from_millis(50) {
+                slow += 1;
+            }
+            t.join().unwrap();
+        }
+        assert_eq!(slow, 0, "{slow} of 200 waits took over 50 ms");
+        assert_eq!(crate::fs::__wolf_rt_fs_close(w), 0);
+        assert_eq!(wait_fd(r, meaning::USER), 0, "end of input is ready");
+        assert_eq!(set_disposition(meaning::USER, Disp::Default), sig_code::OK);
     }
 }
