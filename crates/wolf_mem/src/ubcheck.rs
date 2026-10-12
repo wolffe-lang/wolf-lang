@@ -8365,6 +8365,37 @@ impl<'t> Machine<'t> {
                     Err(t) => Ok(tag(t)),
                 }
             }
+            // s234 (#719, `[os.term.size]`, `[os.term.chars]`): the
+            // host's own terminal, as for the mode.
+            "os_term_size" | "os_term_chars" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                let Some(f) = self.fs_handle(fd) else {
+                    return Ok(tag(if cfg!(unix) { "io" } else { "unsupported" }));
+                };
+                if name == "os_term_size" {
+                    return match checked_term::size(&f) {
+                        Ok((rows, cols)) => Ok(Flow::Val(Value::Struct {
+                            fields: vec![
+                                ("0".to_string(), Value::Int(rows)),
+                                ("1".to_string(), Value::Int(cols)),
+                            ],
+                        })),
+                        Err(t) => Ok(tag(t)),
+                    };
+                }
+                match checked_term::chars(&f) {
+                    Ok(cs) => {
+                        let items: Vec<Value> = cs.iter().map(|&c| Value::Int(c)).collect();
+                        drop(f);
+                        self.charge_mem(8 * items.len() as u64)?;
+                        let id = self.mint_list(items, span)?;
+                        Ok(Flow::Val(Value::List(id)))
+                    }
+                    Err(t) => Ok(tag(t)),
+                }
+            }
             "os_term_set_foreground" | "os_term_set_mode" => {
                 let (Some(fd), Some(v)) = (int_arg(0), int_arg(1)) else {
                     return self.refuse("this os call shape", span);
@@ -8629,6 +8660,56 @@ impl<'t> Machine<'t> {
                     "a blocking signal wait with no pending delivery in checked execution",
                     span,
                 )
+            }
+            // s234 (#719, `[os.signal.wait.fd]`): park until a meaning in
+            // the set is delivered (answered, as `os_signal_wait`) or the
+            // descriptor has something to read (0). The in-machine queue
+            // first, then the host's pending set; then the host's own
+            // `poll(2)` on the descriptor and the machine's wake pipe,
+            // which the handler writes. Beside other tasks the wait lets
+            // them run between short polls (a sibling may raise).
+            "os_signal_wait_fd" => {
+                let (Some(fd), Some(mask)) = (int_arg(0), int_arg(1)) else {
+                    return self.refuse("this os call shape", span);
+                };
+                if !sig_set_ok(mask) {
+                    return Ok(tag("io"));
+                }
+                if !cfg!(unix) {
+                    return Ok(tag("unsupported"));
+                }
+                // An owned duplicate: the machine's table must stay free
+                // for the tasks the wait lets run.
+                let Some(f) = self.fs_handle(fd).and_then(|h| h.try_clone().ok()) else {
+                    return Ok(tag("io"));
+                };
+                let want = mask;
+                loop {
+                    checked_sig::settle(self.signal_listening);
+                    if let Some(pos) = self.signal_queue.iter().position(|&m| m & want != 0) {
+                        let m = self.signal_queue.remove(pos).expect("just found it");
+                        return Ok(Flow::Val(Value::Int(m)));
+                    }
+                    if let Some(m) = checked_sig::take(want & self.signal_listening) {
+                        return Ok(Flow::Val(Value::Int(m)));
+                    }
+                    let others = self.yield_now(span)?;
+                    match checked_sig::wait_readable(
+                        &f,
+                        want & self.signal_listening,
+                        if others { 1 } else { -1 },
+                    ) {
+                        Err(t) => return Ok(tag(t)),
+                        Ok(checked_sig::Woke::Signal | checked_sig::Woke::Timeout) => continue,
+                        Ok(checked_sig::Woke::Ready) => {
+                            checked_sig::settle(self.signal_listening);
+                            if let Some(m) = checked_sig::take(want & self.signal_listening) {
+                                return Ok(Flow::Val(Value::Int(m)));
+                            }
+                            return Ok(Flow::Val(Value::Int(0)));
+                        }
+                    }
+                }
             }
             // s219 (`[os.signal.disp]`): the host's own disposition.
             "os_signal_ignore" | "os_signal_default" => {
@@ -10274,6 +10355,9 @@ impl<'t> Machine<'t> {
             // s232 (#679, #681, #141): the disposition read, the send,
             // a meaning's number, this process's id and its parent's.
             | "os_signal_ignored" | "os_signal_send" | "os_signal_number" | "os_pid" | "os_ppid"
+            // s234 (#719): the window's size, the special characters, the
+            // wait on a descriptor and a signal set.
+            | "os_term_size" | "os_term_chars" | "os_signal_wait_fd"
             | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
             | "str_from_utf8"
@@ -12680,7 +12764,8 @@ pub fn record_inherited_sigpipe(ignored: bool) {
 
 /// s219: every bit a terminal mode may carry (`wolf_rt::term::mode`):
 /// canonical=1 echo=2 signals=4, vmin in bits 8..15, vtime in 16..23.
-const TERM_MODE_VALID: i64 = 7 | 0xFF00 | 0xFF_0000;
+/// s234 (#719): flow=8 (`IXON`) and extended=16 (`IEXTEN`) join them.
+const TERM_MODE_VALID: i64 = 31 | 0xFF00 | 0xFF_0000;
 
 /// s219 (#622): the checked machine's REAL signal arming. A listened
 /// meaning's handler sets its bit in `PENDING` (an atomic `fetch_or`,
@@ -12741,6 +12826,125 @@ mod checked_sig {
                 PENDING.fetch_or(1 << i, Ordering::SeqCst);
             }
         }
+        // s234: wake a descriptor wait (`wait_readable`). `write` is
+        // async-signal-safe; errno is kept.
+        let w = WAKE_W.load(Ordering::SeqCst);
+        if w >= 0 {
+            // SAFETY: a one-byte write to the machine's own nonblocking
+            // pipe; a full pipe already holds a wake.
+            unsafe {
+                let e = *errno_slot();
+                let one = 1u8;
+                libc::write(w, (&raw const one).cast(), 1);
+                *errno_slot() = e;
+            }
+        }
+    }
+
+    /// s234: the wake pipe's write end, -1 until the first descriptor
+    /// wait makes it (the handler reads it with an atomic load).
+    #[cfg(unix)]
+    static WAKE_W: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(-1);
+    #[cfg(unix)]
+    static WAKE_R: std::sync::OnceLock<libc::c_int> = std::sync::OnceLock::new();
+
+    #[cfg(unix)]
+    unsafe fn errno_slot() -> *mut libc::c_int {
+        // SAFETY: the C library's per-thread errno location.
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        unsafe {
+            libc::__errno_location()
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
+        unsafe {
+            libc::__error()
+        }
+    }
+
+    /// What ended a [`wait_readable`].
+    pub(super) enum Woke {
+        /// The descriptor has something to read (or hung up).
+        Ready,
+        /// A listened meaning's handler ran (or one was pending).
+        Signal,
+        /// The timeout passed.
+        Timeout,
+    }
+
+    /// s234 (`[os.signal.wait.fd]`): `poll(2)` on `f` and the wake pipe
+    /// (made once, nonblocking and close-on-exec at both ends). The pipe
+    /// exists and is emptied BEFORE the pending set is looked at, so a
+    /// handler that runs after the look writes it and the poll wakes.
+    /// `timeout_ms` -1 waits for one or the other.
+    #[cfg(unix)]
+    pub(super) fn wait_readable(
+        f: &std::fs::File,
+        set: i64,
+        timeout_ms: i32,
+    ) -> Result<Woke, &'static str> {
+        use std::os::fd::AsRawFd as _;
+        let r = *WAKE_R.get_or_init(|| {
+            let mut fds = [0 as libc::c_int; 2];
+            // SAFETY: a plain pipe; both ends made nonblocking and
+            // close-on-exec before the write end is published.
+            unsafe {
+                if libc::pipe(fds.as_mut_ptr()) != 0 {
+                    return -1;
+                }
+                for &fd in &fds {
+                    let fl = libc::fcntl(fd, libc::F_GETFL);
+                    libc::fcntl(fd, libc::F_SETFL, fl | libc::O_NONBLOCK);
+                    libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC);
+                }
+            }
+            WAKE_W.store(fds[1], Ordering::SeqCst);
+            fds[0]
+        });
+        if r < 0 {
+            return Err("io");
+        }
+        let mut buf = [0u8; 16];
+        // SAFETY: our own nonblocking pipe; emptied, it answers EAGAIN.
+        while unsafe { libc::read(r, buf.as_mut_ptr().cast(), buf.len()) } > 0 {}
+        if PENDING.load(Ordering::SeqCst) & set != 0 {
+            return Ok(Woke::Signal);
+        }
+        let mut fds = [
+            libc::pollfd {
+                fd: f.as_raw_fd(),
+                events: libc::POLLIN,
+                revents: 0,
+            },
+            libc::pollfd {
+                fd: r,
+                events: libc::POLLIN,
+                revents: 0,
+            },
+        ];
+        // SAFETY: two live pollfds.
+        let n = unsafe { libc::poll(fds.as_mut_ptr(), 2, timeout_ms) };
+        if n < 0 {
+            let e = std::io::Error::last_os_error().raw_os_error();
+            if e == Some(libc::EINTR) || e == Some(libc::EAGAIN) {
+                return Ok(Woke::Signal);
+            }
+            return Err("io");
+        }
+        if fds[0].revents != 0 {
+            return Ok(Woke::Ready);
+        }
+        if fds[1].revents != 0 {
+            return Ok(Woke::Signal);
+        }
+        Ok(Woke::Timeout)
+    }
+    #[cfg(not(unix))]
+    pub(super) fn wait_readable(
+        _f: &std::fs::File,
+        _set: i64,
+        _timeout_ms: i32,
+    ) -> Result<Woke, &'static str> {
+        Err("unsupported")
     }
 
     /// The signal numbers of a meaning set, for a child's hook.
@@ -13144,6 +13348,13 @@ mod checked_term {
         if t.c_lflag & libc::ISIG != 0 {
             m |= 4;
         }
+        // s234 (#719): flow (IXON, an input flag) and extended (IEXTEN).
+        if t.c_iflag & libc::IXON != 0 {
+            m |= 8;
+        }
+        if t.c_lflag & libc::IEXTEN != 0 {
+            m |= 16;
+        }
         m |= i64::from(t.c_cc[libc::VMIN]) << 8;
         m |= i64::from(t.c_cc[libc::VTIME]) << 16;
         Ok(m)
@@ -13157,12 +13368,22 @@ mod checked_term {
     pub(super) fn set_mode(f: &std::fs::File, m: i64) -> Result<(), &'static str> {
         let fd = f.as_raw_fd();
         let mut t = get(fd)?;
-        for (bit, flag) in [(1, libc::ICANON), (2, libc::ECHO), (4, libc::ISIG)] {
+        for (bit, flag) in [
+            (1, libc::ICANON),
+            (2, libc::ECHO),
+            (4, libc::ISIG),
+            (16, libc::IEXTEN),
+        ] {
             if m & bit != 0 {
                 t.c_lflag |= flag;
             } else {
                 t.c_lflag &= !flag;
             }
+        }
+        if m & 8 != 0 {
+            t.c_iflag |= libc::IXON;
+        } else {
+            t.c_iflag &= !libc::IXON;
         }
         t.c_cc[libc::VMIN] = ((m >> 8) & 0xFF) as libc::cc_t;
         t.c_cc[libc::VTIME] = ((m >> 16) & 0xFF) as libc::cc_t;
@@ -13175,6 +13396,61 @@ mod checked_term {
     }
     #[cfg(not(unix))]
     pub(super) fn set_mode(_f: &std::fs::File, _m: i64) -> Result<(), &'static str> {
+        Err("unsupported")
+    }
+
+    /// s234 (`[os.term.size]`): rows and columns (`TIOCGWINSZ`).
+    #[cfg(unix)]
+    pub(super) fn size(f: &std::fs::File) -> Result<(i64, i64), &'static str> {
+        // SAFETY: a zeroed winsize filled by the ioctl.
+        unsafe {
+            let mut w: libc::winsize = std::mem::zeroed();
+            if libc::ioctl(f.as_raw_fd(), libc::TIOCGWINSZ, &mut w) < 0 {
+                return Err("io");
+            }
+            Ok((i64::from(w.ws_row), i64::from(w.ws_col)))
+        }
+    }
+    #[cfg(not(unix))]
+    pub(super) fn size(_f: &std::fs::File) -> Result<(i64, i64), &'static str> {
+        Err("unsupported")
+    }
+
+    /// s234 (`[os.term.chars]`): the twelve special characters in
+    /// `wolf_rt::term::chars`'s order — erase, kill, interrupt, quit,
+    /// suspend, end of file, word erase, literal next, start, stop,
+    /// reprint, discard — -1 for one disabled (0 on linux, 255 on macOS
+    /// and the BSDs, measured with `stty intr undef`).
+    #[cfg(unix)]
+    pub(super) fn chars(f: &std::fs::File) -> Result<[i64; 12], &'static str> {
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        const DISABLED: libc::cc_t = 0;
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
+        const DISABLED: libc::cc_t = 0xFF;
+        let t = get(f.as_raw_fd())?;
+        let idx = [
+            libc::VERASE,
+            libc::VKILL,
+            libc::VINTR,
+            libc::VQUIT,
+            libc::VSUSP,
+            libc::VEOF,
+            libc::VWERASE,
+            libc::VLNEXT,
+            libc::VSTART,
+            libc::VSTOP,
+            libc::VREPRINT,
+            libc::VDISCARD,
+        ];
+        let mut out = [0i64; 12];
+        for (slot, &i) in out.iter_mut().zip(idx.iter()) {
+            let c = t.c_cc[i];
+            *slot = if c == DISABLED { -1 } else { i64::from(c) };
+        }
+        Ok(out)
+    }
+    #[cfg(not(unix))]
+    pub(super) fn chars(_f: &std::fs::File) -> Result<[i64; 12], &'static str> {
         Err("unsupported")
     }
 }
