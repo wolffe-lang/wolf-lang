@@ -298,6 +298,8 @@ pub struct Lowered {
     /// atomicity bit (true = a freeze/transfer point reaches the
     /// cell; every other cell is provably thread-exclusive).
     pub rc_cells: Vec<(SiteId, bool)>,
+    /// s233 (wolf-lang#678): the must-join check's record of this body.
+    pub(crate) procs: crate::procjoin::BodyProcs,
 }
 
 /// s227 (wolf-lang#660, `[mem.region.escape]`): one argument of a
@@ -634,6 +636,19 @@ pub(crate) struct Lowerer<'t> {
     /// EG3's R2 (eg03): `for` indices over literal bounds that their
     /// body never writes (`Cfg::induction`).
     induction: HashMap<u32, (u128, u128)>,
+
+    // ---------------------------------------- the must-join check (s233) --
+    /// s233 (wolf-lang#678): what this body tells [`crate::procjoin`] —
+    /// its spawns, the handle events, its calls of declared fns.
+    procs: crate::procjoin::BodyProcs,
+    /// s233: a parameter's pseudo-site -> the parameter's declared
+    /// index (the receiver is 0), for both kinds.
+    param_index: HashMap<SiteId, u32>,
+    /// s233: each non-`Copy` parameter's generalized region, with the
+    /// parameter's declared index.
+    param_regions: Vec<(RegionId, u32)>,
+    /// s233: the obligation the last `spawn proc` lowered raised.
+    last_spawn: Option<u32>,
 }
 
 /// Where the statement stream stood before one call argument lowered
@@ -2018,7 +2033,7 @@ impl<'t> Lowerer<'t> {
             .chain(self.views_of_place(place))
             .collect();
         for s in named {
-            if self.sites[s.0 as usize].kind == SiteKind::Param {
+            if self.sites[s.0 as usize].kind.is_param() {
                 continue;
             }
             if let Err(i) = out.views.binary_search(&s) {
@@ -2272,7 +2287,7 @@ impl<'t> Lowerer<'t> {
             }
             let mut told = false;
             for &s in &a.sites {
-                if self.sites[s.0 as usize].kind == SiteKind::Param
+                if self.sites[s.0 as usize].kind.is_param()
                     || self.already_conflicted(s)
                     || self.frozen_site.contains_key(&s)
                     || self.shared_site.contains(&s)
@@ -2343,6 +2358,313 @@ impl<'t> Lowerer<'t> {
                 );
                 self.diags.push(d);
             }
+        }
+    }
+
+    /// s233 (wolf-lang#678): whose bytes these sites are, as the
+    /// must-join check reads them — a parameter's (by its pseudo-site,
+    /// or a site placed in its region), the caller's region's, or a
+    /// frame-local region's (the first such is the refusal's anchor).
+    /// Static, frozen and `shared` data outlive every proc.
+    fn proc_marks(
+        &mut self,
+        sites: &[SiteId],
+    ) -> (
+        BTreeSet<crate::procjoin::Mark>,
+        Option<crate::procjoin::Hit>,
+    ) {
+        use crate::procjoin::{Hit, Mark};
+        let mut marks: BTreeSet<Mark> = BTreeSet::new();
+        let mut hit: Option<Hit> = None;
+        for &s in sites {
+            if let Some(&i) = self.param_index.get(&s) {
+                marks.insert(Mark::Param(i));
+                continue;
+            }
+            if self.frozen_site.contains_key(&s) || self.shared_site.contains(&s) {
+                continue;
+            }
+            let sr = self.sites[s.0 as usize].region;
+            match self.rt.binding(sr) {
+                Some(Binding::Static) => {}
+                Some(Binding::Caller) => {
+                    marks.insert(Mark::Ambient);
+                }
+                Some(Binding::Local(_)) => {
+                    if hit.is_none() && !self.already_conflicted(s) {
+                        let region = self.show_region(sr);
+                        let intro = self.region_span(sr);
+                        let is_proc = self.is_proc_region(sr);
+                        hit = Some(Hit {
+                            region,
+                            alloc: self.sites[s.0 as usize].span,
+                            intro,
+                            is_proc,
+                        });
+                    }
+                }
+                None => {
+                    let pr = self.param_regions.clone();
+                    match pr.iter().find(|(r, _)| self.rt.same(*r, sr)) {
+                        Some(&(_, i)) => {
+                            marks.insert(Mark::Param(i));
+                        }
+                        None => {
+                            marks.insert(Mark::Ambient);
+                        }
+                    }
+                }
+            }
+        }
+        (marks, hit)
+    }
+
+    /// s233: the must-join check's record of the call's ambient region
+    /// — the caller's (a mark), a frame-local one (a refusal's anchor),
+    /// or static (nothing).
+    fn proc_ambient(&mut self, at: Span) -> (bool, Option<crate::procjoin::Hit>) {
+        let a = self.ambient();
+        match self.rt.binding(a) {
+            Some(Binding::Caller) => (true, None),
+            Some(Binding::Local(_)) => {
+                let region = self.show_region(a);
+                let intro = self.region_span(a);
+                let is_proc = self.is_proc_region(a);
+                let alloc = intro.as_ref().map_or(at, |x| x.1);
+                (
+                    false,
+                    Some(crate::procjoin::Hit {
+                        region,
+                        alloc,
+                        intro,
+                        is_proc,
+                    }),
+                )
+            }
+            _ => (false, None),
+        }
+    }
+
+    /// s233: the NAME span and the text of the declared fn this path
+    /// (`f`, or `m.f` through another module) names, when it names one
+    /// and no local shadows it.
+    fn fn_item_named(&self, e: &'t GreenNode) -> Option<(Span, String)> {
+        match e.kind {
+            SyntaxKind::PathExpr => {
+                let t = PathExpr::cast(e)?.ident()?;
+                let name = self.text(t.span);
+                if self.lookup(&name).is_some() {
+                    return None;
+                }
+                match self.sigs.get(self.module, &name)? {
+                    ItemSig::Fn(f) => Some((f.name_span, name)),
+                    _ => None,
+                }
+            }
+            SyntaxKind::MemberExpr => {
+                let m = MemberExpr::cast(e)?;
+                let base = m.base()?;
+                let member = m.member()?;
+                if base.kind != SyntaxKind::PathExpr {
+                    return None;
+                }
+                let bname = self.text(PathExpr::cast(base)?.ident()?.span);
+                if self.lookup(&bname).is_some() {
+                    return None;
+                }
+                let target = wolf_sema::module_bindings(self.pkg, self.module, self.file)
+                    .into_iter()
+                    .find(|(n, _)| *n == bname)
+                    .map(|(_, m)| m)?;
+                let mname = self.text(member.span);
+                match self.sigs.get(target, &mname)? {
+                    ItemSig::Fn(f) => Some((f.name_span, format!("{bname}.{mname}"))),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// s233: the parameter pseudo-sites a path names directly. A fn
+    /// value read out of its binding is a `Copy` word that carries no
+    /// view, so a parameter of fn type handed on is found by name.
+    fn param_bytes_named(&self, e: &'t GreenNode) -> Vec<SiteId> {
+        let Some(l) = self.path_local(e) else {
+            return Vec::new();
+        };
+        self.shares
+            .get(&l)
+            .map(|m| {
+                m.keys()
+                    .copied()
+                    .filter(|s| self.sites[s.0 as usize].kind == SiteKind::ParamBytes)
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// s233: is this argument a literal (or a scalar) — bytes nothing
+    /// can free? Used where no pseudo-site can answer (a closure's
+    /// parameters carry none).
+    fn is_literal_arg(&self, e: &'t GreenNode) -> bool {
+        let inner = match ParenExpr::cast(e) {
+            Some(p) => p.expr().unwrap_or(e),
+            None => e,
+        };
+        match inner.kind {
+            SyntaxKind::LiteralExpr => true,
+            SyntaxKind::StringExpr => {
+                StringExpr::cast(inner).is_some_and(|d| d.interps().all(|i| i.expr().is_none()))
+            }
+            _ => !self
+                .value_ty(inner)
+                .is_none_or(|t| self.may_lend_bytes(t, 0)),
+        }
+    }
+
+    /// s233: where an event lands in the statement stream — after
+    /// every statement the current block holds so far.
+    fn proc_event(&mut self, ev: crate::procjoin::Ev) {
+        let b = self.cur.0;
+        let i = self.blocks[b as usize].stmts.len() as u32;
+        let frame = self.in_inner_frame().then_some(self.exit.0);
+        self.procs.events.push((b, i, frame, ev));
+    }
+
+    /// s233: the local a path expression names, if any.
+    fn path_local(&self, e: &'t GreenNode) -> Option<u32> {
+        let inner = match ParenExpr::cast(e) {
+            Some(p) => p.expr().unwrap_or(e),
+            None => e,
+        };
+        if inner.kind != SyntaxKind::PathExpr {
+            return None;
+        }
+        let t = PathExpr::cast(inner)?.ident()?;
+        self.lookup(&self.text(t.span)).map(|l| l.0)
+    }
+
+    /// s233: inside a closure or a nested fn — a frame no summary
+    /// names.
+    fn in_inner_frame(&self) -> bool {
+        self.exit != BlockId(1)
+    }
+
+    /// s233: record what a binding or an assignment tells the
+    /// must-join check about `local`: it holds a spawned proc's handle,
+    /// a copy of another local's handle or monitor, or a literal.
+    fn proc_bind(&mut self, local: u32, init: &'t GreenNode, spawned: Option<u32>) {
+        use crate::procjoin::Ev;
+        let inner = match ParenExpr::cast(init) {
+            Some(p) => p.expr().unwrap_or(init),
+            None => init,
+        };
+        if inner.kind == SyntaxKind::SpawnExpr {
+            if let Some(ob) = spawned {
+                self.proc_event(Ev::Bind(local, ob));
+            }
+            return;
+        }
+        if let Some(src) = self.path_local(inner) {
+            self.proc_event(Ev::Alias(local, src));
+            return;
+        }
+        // `p.monitor()`: the channel the exit arrives on stands for the
+        // proc.
+        if inner.kind == SyntaxKind::CallExpr
+            && let Some(d) = CallExpr::cast(inner)
+            && let Some(callee) = d.callee()
+            && callee.kind == SyntaxKind::MemberExpr
+            && let Some(m) = MemberExpr::cast(callee)
+            && let Some(member) = m.member()
+            && self.text(member.span) == "monitor"
+            && let Some(base) = m.base()
+            && self
+                .expr_ty(base.span)
+                .is_some_and(|t| matches!(t.kind(), TyKind::Proc(_)))
+            && let Some(src) = self.path_local(base)
+        {
+            self.proc_event(Ev::Alias(local, src));
+            return;
+        }
+        if let Some(v) = self.literal_int(inner) {
+            self.proc_event(Ev::Const(local, v));
+        }
+    }
+
+    /// s233: an integer or `bool` literal's value (`-n` included).
+    fn literal_int(&self, e: &'t GreenNode) -> Option<i128> {
+        match e.kind {
+            SyntaxKind::LiteralExpr => {
+                let t = self.text(e.span);
+                match t.as_str() {
+                    "true" => Some(1),
+                    "false" => Some(0),
+                    _ => int_literal_value(&t).and_then(|v| i128::try_from(v).ok()),
+                }
+            }
+            SyntaxKind::PrefixExpr => {
+                let d = wolf_ast::PrefixExpr::cast(e)?;
+                if d.op().map(|t| t.kind) != Some(SyntaxKind::Minus) {
+                    return None;
+                }
+                self.literal_int(d.operand()?).map(|v| -v)
+            }
+            SyntaxKind::ParenExpr => self.literal_int(ParenExpr::cast(e)?.expr()?),
+            _ => None,
+        }
+    }
+
+    /// s233: an `if` condition the must-join check can read: `x <cmp>
+    /// lit`, `lit <cmp> x`, `x` or `!x` for a `bool` local `x`.
+    fn branch_cond(&self, e: &'t GreenNode) -> Option<(u32, crate::procjoin::Cmp, i128)> {
+        use crate::procjoin::Cmp;
+        let e = match ParenExpr::cast(e) {
+            Some(p) => p.expr()?,
+            None => e,
+        };
+        match e.kind {
+            SyntaxKind::PathExpr => {
+                let l = self.path_local(e)?;
+                self.expr_ty(e.span)
+                    .is_some_and(|t| matches!(t.kind(), TyKind::Prim(Prim::Bool)))
+                    .then_some((l, Cmp::Eq, 1))
+            }
+            SyntaxKind::PrefixExpr => {
+                let d = wolf_ast::PrefixExpr::cast(e)?;
+                if d.op().map(|t| t.kind) != Some(SyntaxKind::Not) {
+                    return None;
+                }
+                let (l, c, v) = self.branch_cond(d.operand()?)?;
+                (c == Cmp::Eq && v == 1).then_some((l, Cmp::Eq, 0))
+            }
+            SyntaxKind::BinExpr => {
+                let d = wolf_ast::BinExpr::cast(e)?;
+                let cmp = match d.op().map(|t| t.kind)? {
+                    SyntaxKind::EqEq => Cmp::Eq,
+                    SyntaxKind::NotEq => Cmp::Ne,
+                    SyntaxKind::Lt => Cmp::Lt,
+                    SyntaxKind::LtEq => Cmp::Le,
+                    SyntaxKind::Gt => Cmp::Gt,
+                    SyntaxKind::GtEq => Cmp::Ge,
+                    _ => return None,
+                };
+                let (lhs, rhs) = (d.lhs()?, d.rhs()?);
+                if let (Some(l), Some(v)) = (self.path_local(lhs), self.literal_int(rhs)) {
+                    return Some((l, cmp, v));
+                }
+                let flip = match cmp {
+                    Cmp::Lt => Cmp::Gt,
+                    Cmp::Le => Cmp::Ge,
+                    Cmp::Gt => Cmp::Lt,
+                    Cmp::Ge => Cmp::Le,
+                    c => c,
+                };
+                let (l, v) = (self.path_local(rhs)?, self.literal_int(lhs)?);
+                Some((l, flip, v))
+            }
+            _ => None,
         }
     }
 
@@ -2434,7 +2756,7 @@ impl<'t> Lowerer<'t> {
             }
             let mut told = false;
             for &s in &a.sites {
-                if self.sites[s.0 as usize].kind == SiteKind::Param
+                if self.sites[s.0 as usize].kind.is_param()
                     || self.already_conflicted(s)
                     || self.frozen_site.contains_key(&s)
                     || self.shared_site.contains(&s)
@@ -2729,7 +3051,7 @@ impl<'t> Lowerer<'t> {
                         // A parameter's pseudo-site does not ride: its
                         // bytes outlive this frame and escape no region
                         // in it (s207's rule for `copy`).
-                        if self.sites[s.0 as usize].kind == SiteKind::Param {
+                        if self.sites[s.0 as usize].kind.is_param() {
                             continue;
                         }
                         if self.holds.get(&l).is_some_and(|m| m.contains_key(&s)) {
@@ -2770,7 +3092,7 @@ impl<'t> Lowerer<'t> {
                     continue;
                 }
                 for &s in &a.sites {
-                    if self.sites[s.0 as usize].kind == SiteKind::Param {
+                    if self.sites[s.0 as usize].kind.is_param() {
                         continue;
                     }
                     if out.sites.binary_search(&s).is_ok() {
@@ -4253,6 +4575,12 @@ impl<'t> Lowerer<'t> {
                     }
                     return Ok(val);
                 }
+                // s233 (wolf-lang#678): a declared fn named as a value.
+                // If it may leave a proc running with what it is handed,
+                // no call through the value can be asked.
+                if let Some((key, name)) = self.fn_item_named(e) {
+                    self.procs.values.push((e.span, key, name));
+                }
                 Ok(Val::none()) // item reference (fn value, enum type, …)
             }
             SyntaxKind::StringExpr => {
@@ -5146,7 +5474,7 @@ impl<'t> Lowerer<'t> {
                             .val_of_place(place, operand.span)
                             .sites
                             .into_iter()
-                            .filter(|s| self.sites[s.0 as usize].kind != SiteKind::Param)
+                            .filter(|s| !self.sites[s.0 as usize].kind.is_param())
                             .collect();
                         v.views = self.views_of_place(place);
                         if !v.sites.is_empty() || !v.views.is_empty() {
@@ -5396,6 +5724,21 @@ impl<'t> Lowerer<'t> {
             let arm_block = self.new_block();
             self.goto(fan, arm_block);
             self.cur = arm_block;
+            // s233 (wolf-lang#678): an arm that receives from a local
+            // receives an exit when that local is a proc's monitor —
+            // the proc is gone ([conc.proc.kill] step 4 delivers after
+            // its regions are freed).
+            if !arm.is_timeout() {
+                let body = arm.body();
+                let head = arm
+                    .syntax()
+                    .nodes()
+                    .filter(|n| wolf_ast::is_expr_kind(n.kind))
+                    .find(|n| body.is_none_or(|b| !std::ptr::eq(*n as *const _, b as *const _)));
+                if let Some(l) = head.and_then(|h| self.path_local(h)) {
+                    self.proc_event(crate::procjoin::Ev::RecvExit(l));
+                }
+            }
             self.push_scope();
             if let Some(pat) = arm.pattern() {
                 let mut binds = Vec::new();
@@ -5521,7 +5864,85 @@ impl<'t> Lowerer<'t> {
             .map(|p| self.text(p.syntax().span))
             .unwrap_or_else(|| "the proc".to_string());
         self.demand_spawn_arguments_outlive(&flows, &callee);
+        self.record_spawn(e, &d, &flows, &callee);
         Ok(Val::none())
+    }
+
+    /// s233 (wolf-lang#678's helper half, `[conc.proc.arg]`): what this
+    /// spawn tells the must-join check. Arguments that can name a
+    /// parameter's bytes or the caller region's raise an obligation the
+    /// frame must meet before it returns; in a closure or a nested fn,
+    /// any argument that can name bytes and is not a literal does,
+    /// against that frame's exit. The spawn is also a call of the proc
+    /// entry, so a proc that leaves a grandchild running with its
+    /// parameter makes this frame answer for it.
+    fn record_spawn(
+        &mut self,
+        e: &'t GreenNode,
+        d: &wolf_ast::SpawnExpr<'t>,
+        flows: &[ArgFlow<'t>],
+        callee: &str,
+    ) {
+        use crate::procjoin::{ArgEdge, CallEdge, Ev, SpawnOb};
+        self.last_spawn = None;
+        let inner = self.in_inner_frame();
+        let values: Vec<&'t GreenNode> = d
+            .args()
+            .into_iter()
+            .flat_map(|a| a.args())
+            .filter_map(Arg::value)
+            .collect();
+        let mut marks = BTreeSet::new();
+        let mut edges: Vec<ArgEdge> = Vec::new();
+        let mut inner_arg: Option<(Span, String)> = None;
+        for (k, f) in flows.iter().enumerate() {
+            if !f.lends {
+                continue;
+            }
+            let mut fsites = f.sites.clone();
+            if let Some(v) = values.get(k) {
+                fsites.extend(self.param_bytes_named(v));
+            }
+            let (m, _) = self.proc_marks(&fsites);
+            let literal = values.get(k).is_some_and(|v| self.is_literal_arg(v));
+            if inner && inner_arg.is_none() && !literal {
+                inner_arg = Some((f.span, self.text(f.span)));
+            }
+            marks.extend(m.iter().copied());
+            edges.push(ArgEdge {
+                param: k as u32,
+                span: f.span,
+                text: self.text(f.span),
+                marks: m,
+                hit: None,
+                opaque: !literal,
+            });
+        }
+        if let Some(key) = self.calls.get(&e.span).and_then(|c| c.decl_span) {
+            self.procs.calls.push(CallEdge {
+                span: e.span,
+                callee: key,
+                name: callee.to_string(),
+                args: edges,
+                ambient_mark: false,
+                ambient_hit: None,
+                spawn: true,
+                inner,
+            });
+        }
+        if marks.is_empty() && inner_arg.is_none() {
+            return;
+        }
+        let ob = self.procs.spawns.len() as u32;
+        self.procs.spawns.push(SpawnOb {
+            span: e.span,
+            callee: callee.to_string(),
+            marks,
+            inner_exit: inner.then_some(self.exit.0),
+            inner_arg,
+        });
+        self.proc_event(Ev::Gen(ob));
+        self.last_spawn = Some(ob);
     }
 
     fn eval_bin(&mut self, e: &'t GreenNode) -> R<Val> {
@@ -5850,6 +6271,8 @@ impl<'t> Lowerer<'t> {
 
     fn eval_if(&mut self, e: &'t GreenNode) -> R<Val> {
         let d = IfExpr::cast(e).expect("kind");
+        // s233: a condition the must-join check can read path by path.
+        let pj_cond = d.condition().and_then(|c| self.branch_cond(c));
         if let Some(cond) = d.condition() {
             self.eval_value(cond)?;
         }
@@ -5876,9 +6299,29 @@ impl<'t> Lowerer<'t> {
                     _ => val.merge(self.eval_value(else_node)?),
                 }
                 self.goto(self.cur, join);
+                if let Some((local, cmp, lit)) = pj_cond {
+                    self.procs.branches.push(crate::procjoin::Branch {
+                        block: cond_block.0,
+                        then_b: then_block.0,
+                        else_b: else_block.0,
+                        local,
+                        cmp,
+                        lit,
+                    });
+                }
             }
             None => {
                 self.goto(cond_block, join);
+                if let Some((local, cmp, lit)) = pj_cond {
+                    self.procs.branches.push(crate::procjoin::Branch {
+                        block: cond_block.0,
+                        then_b: then_block.0,
+                        else_b: join.0,
+                        local,
+                        cmp,
+                        lit,
+                    });
+                }
             }
         }
         self.cur = join;
@@ -6286,6 +6729,14 @@ impl<'t> Lowerer<'t> {
         // leaves this frame for a receiver, so it is demanded to
         // outlive the frame exactly as a returned value is.
         let mut chan_send = false;
+        // s233 (wolf-lang#678): the call as the must-join check reads
+        // it — each argument's marks, the handles it is handed, and a
+        // join or an exit received through the receiver.
+        let mut pj_args: Vec<crate::procjoin::ArgEdge> = Vec::new();
+        let mut pj_vias: Vec<(u32, u32)> = Vec::new();
+        let mut pj_recv: Option<crate::procjoin::Ev> = None;
+        // s233: how many of `arg_views` are the receiver's.
+        let mut recv_views = 0usize;
         if let Some(cs) = cs
             && cs.has_self
             && let Some(callee) = d.callee()
@@ -6313,6 +6764,7 @@ impl<'t> Lowerer<'t> {
                     &mut recv_sites,
                     &mut arg_views,
                 )?;
+                recv_views = arg_views.len();
                 // s227 (#660): the receiver is the call's first
                 // argument in the kept-argument rule too.
                 let ty = self.value_ty(recv_expr);
@@ -6336,6 +6788,34 @@ impl<'t> Lowerer<'t> {
                         None => None,
                     },
                 });
+                // s233: the receiver is parameter 0.
+                if let Some(f) = flows.last() {
+                    let fsites = f.sites.clone();
+                    let (fspan, flends) = (f.span, f.lends);
+                    if flends {
+                        let (m, hit) = self.proc_marks(&fsites);
+                        pj_args.push(crate::procjoin::ArgEdge {
+                            param: 0,
+                            span: fspan,
+                            text: self.text(fspan),
+                            marks: m,
+                            hit,
+                            opaque: !self.is_literal_arg(recv_expr),
+                        });
+                    }
+                }
+                let recv_proc = self
+                    .expr_ty(recv_expr.span)
+                    .is_some_and(|t| matches!(t.kind(), TyKind::Proc(_)));
+                if let Some(l) = self.path_local(recv_expr) {
+                    if recv_proc && cs.callee == "join" {
+                        pj_recv = Some(crate::procjoin::Ev::Join(l));
+                    } else if cs.callee == "recv" {
+                        pj_recv = Some(crate::procjoin::Ev::RecvExit(l));
+                    } else if recv_proc {
+                        pj_vias.push((0, l));
+                    }
+                }
             }
             // s21: `clone()` on a `shared` receiver is the recorded
             // dup — Perceus inserts RC ops at genuine fan-out only,
@@ -6552,6 +7032,28 @@ impl<'t> Lowerer<'t> {
                         sink_direct: ty.is_some_and(|t| matches!(t.kind(), TyKind::Chan(_))),
                         sink_capture: arg_sends,
                     });
+                    // s233: what this argument hands a callee that may
+                    // leave a proc running with it.
+                    let pidx = (i + offset) as u32;
+                    if ty.is_none_or(|t| self.may_lend_bytes(t, 0)) {
+                        let mut psites = flows.last().map(|f| f.sites.clone()).unwrap_or_default();
+                        psites.extend(self.captured_sites(v, None));
+                        psites.extend(self.param_bytes_named(v));
+                        let (m, hit) = self.proc_marks(&psites);
+                        pj_args.push(crate::procjoin::ArgEdge {
+                            param: pidx,
+                            span: v.span,
+                            text: self.text(v.span),
+                            marks: m,
+                            hit,
+                            opaque: !self.is_literal_arg(v),
+                        });
+                    }
+                    if ty.is_some_and(|t| matches!(t.kind(), TyKind::Proc(_)))
+                        && let Some(l) = self.path_local(v)
+                    {
+                        pj_vias.push((pidx, l));
+                    }
                 }
                 _ => {
                     // No resolved signature (builtin `print`, host
@@ -6753,7 +7255,7 @@ impl<'t> Lowerer<'t> {
                         .chain(read_sites.iter())
                         .chain(recv_sites.iter())
                         .copied()
-                        .filter(|s| self.sites[s.0 as usize].kind != SiteKind::Param)
+                        .filter(|s| !self.sites[s.0 as usize].kind.is_param())
                         .collect();
                     for s in viewed {
                         if let Err(i) = out.sites.binary_search(&s) {
@@ -6786,6 +7288,36 @@ impl<'t> Lowerer<'t> {
         let result_shares = (ret_heap && ret_ty.map(|t| self.may_lend_bytes(t, 0)).unwrap_or(true))
             || declared_str
             || (builtin_method && !str_site && self.is_str_or_str_row(e.span));
+        // s233: the call, for the must-join check — a declared callee's
+        // (never a builtin method's or the C membrane's); then what it
+        // did to a handle: joined it, received its exit, or handed it on.
+        if let Some(key) = cs.and_then(|c| c.decl_span)
+            && !builtin_method
+            && !cs.is_some_and(|c| c.c_call || c.ctor)
+        {
+            let (ambient_mark, ambient_hit) = self.proc_ambient(e.span);
+            let inner = self.in_inner_frame();
+            self.procs.calls.push(crate::procjoin::CallEdge {
+                span: e.span,
+                callee: key,
+                name: callee.clone(),
+                args: std::mem::take(&mut pj_args),
+                ambient_mark,
+                ambient_hit,
+                spawn: false,
+                inner,
+            });
+            for (param, local) in pj_vias.drain(..) {
+                self.proc_event(crate::procjoin::Ev::JoinVia {
+                    callee: key,
+                    param,
+                    local,
+                });
+            }
+        }
+        if builtin_method && let Some(ev) = pj_recv.take() {
+            self.proc_event(ev);
+        }
         self.flow_kept_arguments(
             &flows,
             builtin_method,
@@ -6856,6 +7388,16 @@ impl<'t> Lowerer<'t> {
             for s in recv_sites {
                 if let Err(i) = out.sites.binary_search(&s) {
                     out.sites.insert(i, s);
+                }
+            }
+            // s233: a view of a parameter's `str` still names that
+            // parameter's bytes — the pseudo-site rides as a view, the
+            // one place it is read.
+            for &s in &arg_views[..recv_views.min(arg_views.len())] {
+                if self.sites[s.0 as usize].kind == SiteKind::ParamBytes
+                    && let Err(i) = out.views.binary_search(&s)
+                {
+                    out.views.insert(i, s);
                 }
             }
             if out.origin.is_none() && !out.sites.is_empty() {
@@ -7575,12 +8117,23 @@ impl<'t> Lowerer<'t> {
                 self.bind_struct_from_place(pat, place, ty);
                 continue;
             }
+            self.last_spawn = None;
             let (has_init, val) = match b.init {
                 Some(init) => (true, self.eval_value(init)?),
                 None => (false, Val::none()),
             };
+            let spawned = self.last_spawn.take();
             if let Some(pat) = b.pattern {
                 self.bind_pattern_inits(pat, has_init, &val);
+                // s233: a single name bound to a handle, a monitor or a
+                // literal is something the must-join check follows.
+                let mut binds = Vec::new();
+                collect_binding_spans(pat, &mut binds);
+                if let ([span], Some(init)) = (binds.as_slice(), b.init)
+                    && let Some(local) = self.lookup(&self.text(*span))
+                {
+                    self.proc_bind(local.0, init, spawned);
+                }
             }
         }
         Ok(())
@@ -7762,6 +8315,23 @@ impl<'t> Lowerer<'t> {
     }
 
     fn lower_assign(&mut self, stmt: &'t GreenNode) -> R<()> {
+        self.last_spawn = None;
+        self.lower_assign_inner(stmt)?;
+        let spawned = self.last_spawn.take();
+        // s233: `x = <handle | monitor | literal>` to a whole local is
+        // something the must-join check follows (the assignment's own
+        // write already made it forget what `x` held).
+        let d = AssignStmt::cast(stmt).expect("kind");
+        if d.op().map(|t| t.kind) == Some(SyntaxKind::Eq)
+            && let (Some(place), Some(v)) = (d.place(), d.value())
+            && let Some(local) = self.path_local(place)
+        {
+            self.proc_bind(local, v, spawned);
+        }
+        Ok(())
+    }
+
+    fn lower_assign_inner(&mut self, stmt: &'t GreenNode) -> R<()> {
         let d = AssignStmt::cast(stmt).expect("kind");
         // wolf-lang#438 (`[mem.region.edge.elem]`): a plain `=` through
         // a container index is `push`'s twin, not a move.
@@ -7835,7 +8405,7 @@ impl<'t> Lowerer<'t> {
             let key = std::mem::take(&mut self.last_index);
             let mut kept = Val::none();
             for s in key.sites.iter().chain(key.views.iter()).copied() {
-                if self.sites[s.0 as usize].kind == SiteKind::Param {
+                if self.sites[s.0 as usize].kind.is_param() {
                     continue;
                 }
                 if let Err(i) = kept.views.binary_search(&s) {
@@ -8145,6 +8715,10 @@ impl<'t> Lowerer<'t> {
             receiver_claims: std::collections::HashSet::new(),
             induction: HashMap::new(),
             casts,
+            procs: crate::procjoin::BodyProcs::default(),
+            param_index: HashMap::new(),
+            param_regions: Vec::new(),
+            last_spawn: None,
         }
     }
 
@@ -8183,7 +8757,8 @@ impl<'t> Lowerer<'t> {
         );
         self.ambient.push(caller);
         self.push_scope();
-        for p in params {
+        for (pi, p) in params.iter().enumerate() {
+            let pi = pi as u32;
             let ty = Ty {
                 table: &self.sigs.table,
                 id: p.ty,
@@ -8223,6 +8798,30 @@ impl<'t> Lowerer<'t> {
                     });
                     self.site_escape.push(None);
                     self.holds.entry(local.0).or_default().insert(sid, p.span);
+                    self.param_index.insert(sid, pi);
+                    self.param_regions.push((rid, pi));
+                }
+                // s233 (wolf-lang#678): a `Copy` parameter that can
+                // name bytes — a `str`, a fn value — carries a
+                // pseudo-site too, as a VIEW in the caller's region:
+                // invisible to every placement and escape rule (a view
+                // outside a frame-local region is skipped by all of
+                // them), read only by the must-join check to say which
+                // parameter's bytes a spawned proc may read.
+                TyKind::Proc(_) => {
+                    self.procs.proc_params.push((pi, local.0));
+                }
+                _ if self.may_lend_bytes(ty, 0) => {
+                    let sid = SiteId(self.sites.len() as u32);
+                    self.sites.push(AllocSite {
+                        span: p.span,
+                        ty: render(ty.table, ty.id, &|_| Err("_")),
+                        region: caller,
+                        kind: SiteKind::ParamBytes,
+                    });
+                    self.site_escape.push(None);
+                    self.shares.entry(local.0).or_default().insert(sid, p.span);
+                    self.param_index.insert(sid, pi);
                 }
                 _ => {}
             }
@@ -8333,6 +8932,7 @@ impl<'t> Lowerer<'t> {
             diags: self.diags,
             regions,
             rc_cells,
+            procs: self.procs,
         }
     }
 }
