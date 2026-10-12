@@ -542,7 +542,11 @@ fn lsp_verdict_with(exe: &Path, entry: &Path, extra: &[&str], env: &[(&str, &str
 fn expect_lsp(exe: &Path, entry: &Path, extra: &[&str], env: &[(&str, &str)], want: &str) {
     let got = lsp_verdict_with(exe, entry, extra, env);
     assert_eq!(got, want, "wolf lsp on {}", entry.display());
-    expect(verdict_with(exe, entry, extra, env), want, "wolf build agrees");
+    expect(
+        verdict_with(exe, entry, extra, env),
+        want,
+        "wolf build agrees",
+    );
 }
 
 /// Order 0: nothing configured — the std beside the binary answers the
@@ -661,7 +665,12 @@ fn lsp_reads_no_default_for_a_freestanding_manifest() {
     );
     let flag_root = exe.parent().unwrap().join("std");
     assert_eq!(
-        lsp_verdict_with(&exe, &entry, &["--std-root", flag_root.to_str().unwrap()], &[]),
+        lsp_verdict_with(
+            &exe,
+            &entry,
+            &["--std-root", flag_root.to_str().unwrap()],
+            &[]
+        ),
         "pass",
         "an explicit root still reaches a kernel"
     );
@@ -684,10 +693,14 @@ fn lsp_bad_std_root_is_builds_loud_error() {
         assert_eq!(out.status.code(), Some(2));
         String::from_utf8_lossy(&out.stderr).into_owned()
     };
-    let want = "std root is not a directory: /definitely/not/a/std/root (from --std-root or WOLF_STD)";
+    let want =
+        "std root is not a directory: /definitely/not/a/std/root (from --std-root or WOLF_STD)";
     assert!(build_err.contains(want), "{build_err}");
     for (args, env) in [
-        (vec!["lsp", "--std-root", "/definitely/not/a/std/root"], None),
+        (
+            vec!["lsp", "--std-root", "/definitely/not/a/std/root"],
+            None,
+        ),
         (vec!["lsp"], Some("/definitely/not/a/std/root")),
     ] {
         let mut cmd = Command::new(&exe);

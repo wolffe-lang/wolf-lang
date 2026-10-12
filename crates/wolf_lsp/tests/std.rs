@@ -40,7 +40,10 @@ fn with_std() -> wolf_lsp::RootsResolver {
 /// `(line, character)` of the first `needle` on 0-based `line`.
 fn at(text: &str, line: usize, needle: &str) -> (u32, u32) {
     let l = text.lines().nth(line).expect("line exists");
-    (line as u32, l.find(needle).expect("needle on the line") as u32)
+    (
+        line as u32,
+        l.find(needle).expect("needle on the line") as u32,
+    )
 }
 
 fn position(uri: &lsp_types::Url, (line, character): (u32, u32)) -> Value {
@@ -182,7 +185,12 @@ fn completion_lists_the_home_modules_methods() {
         .as_array()
         .expect("a list")
         .iter()
-        .map(|i| (i["label"].as_str().unwrap(), i["detail"].as_str().unwrap_or("")))
+        .map(|i| {
+            (
+                i["label"].as_str().unwrap(),
+                i["detail"].as_str().unwrap_or(""),
+            )
+        })
         .collect();
     assert_eq!(
         labels,

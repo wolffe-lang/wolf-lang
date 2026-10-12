@@ -511,7 +511,11 @@ fn fn_decl_hover(
     at: Span,
     decl: Span,
 ) -> Option<HoverResult> {
-    let file_idx = res.package.files.iter().position(|u| u.raw.file == decl.file)?;
+    let file_idx = res
+        .package
+        .files
+        .iter()
+        .position(|u| u.raw.file == decl.file)?;
     let unit = &res.package.files[file_idx];
     let header = item_header_at(&unit.parse.root, &unit.raw.src, decl.lo)?;
     let name = header.text.strip_prefix("fn ")?;
