@@ -83,9 +83,15 @@ fn sibling_lupin() -> Option<PathBuf> {
 
 /// The lupin builds that predate the mirror, by version and the commit
 /// their records report: the 0.1.51 release (`f72e78d`, the 0.2.28
-/// pairing) and wolf-interp trunk `71b8d97`, which this lane started
-/// from. They resolve none of the three names.
-const PRE_MIRROR_LUPIN: &[(&str, &str)] = &[("0.1.51", "f72e78d"), ("0.1.51", "71b8d97")];
+/// pairing), wolf-interp trunk `71b8d97`, which this lane started from,
+/// and the 0.1.52 release (`025428b`, r34's, wolf 0.2.29's pairing;
+/// archive digest f5194b74…, measured: "`os_signal_wait_fd` does not
+/// resolve"). They resolve none of the three names.
+const PRE_MIRROR_LUPIN: &[(&str, &str)] = &[
+    ("0.1.51", "f72e78d"),
+    ("0.1.51", "71b8d97"),
+    ("0.1.52", "025428b"),
+];
 
 /// The native or release binary of `entry`. A compile error FAILS the
 /// gate (it is the defect at a pre-fix head, never an environment).
