@@ -6,6 +6,7 @@
 //! layer ([`Snapshot::guard`]) so cancellation surfaces as
 //! `Err(Cancelled)` and never as a dropped request.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -122,6 +123,18 @@ pub(crate) struct PackageAnalysis {
     /// withheld from `diagnostics` while any body is `NotYetCheckable`
     /// (the CLI's conservatism ledger, mirrored).
     pub(crate) typecheck: Option<wolf_sema::Typecheck>,
+    /// Every loaded file's real path (s235). A std or dependency file
+    /// DISPLAYS as `std://…`/`pkg://…` (D7: diagnostics and interfaces
+    /// never leak a tree's location), but navigation into it must name
+    /// a file an editor can open. Empty before the resolve rung.
+    pub(crate) paths: HashMap<FileId, PathBuf>,
+}
+
+impl PackageAnalysis {
+    /// The file a span lives in, as a path an editor can open.
+    pub(crate) fn path_of_file(&self, file: FileId) -> Option<PathBuf> {
+        self.paths.get(&file).cloned()
+    }
 }
 
 fn first_error(ds: &[Diagnostic]) -> bool {
@@ -185,6 +198,7 @@ impl Snapshot {
                 phase: "lex",
                 resolution: None,
                 typecheck: None,
+                paths: HashMap::new(),
             });
         }
         self.checkpoint();
@@ -201,14 +215,25 @@ impl Snapshot {
                 phase: "parse",
                 resolution: None,
                 typecheck: None,
+                paths: HashMap::new(),
             });
         }
         self.checkpoint();
 
-        // Rung 3: resolve the single-entry package through the overlay.
-        let mut loader = OverlayLoader::new(entry, overlays, &mut sm)?;
+        // Rung 3: resolve the single-entry package through the overlay,
+        // against the std and dependency trees the host's resolver
+        // names for the package root (s235: `wolf build`'s order).
+        let roots = self.roots_for(crate::overlay::normalize(entry).parent()?);
+        let mut loader = OverlayLoader::new(entry, overlays, &mut sm)?.with_roots(roots);
         let res =
             wolf_sema::resolve_package(&mut loader, &wolf_sema::AliasTable::default()).ok()?;
+        drop(loader);
+        let paths: HashMap<FileId, PathBuf> = res
+            .package
+            .files
+            .iter()
+            .map(|u| (u.raw.file, sm.path(u.raw.file).to_path_buf()))
+            .collect();
         let files: Vec<SourceFile> = res
             .package
             .files
@@ -227,6 +252,7 @@ impl Snapshot {
                 phase: "resolve",
                 resolution: Some(res),
                 typecheck: None,
+                paths,
             });
         }
         self.checkpoint();
@@ -249,6 +275,7 @@ impl Snapshot {
             phase,
             resolution: Some(res),
             typecheck: Some(tc),
+            paths,
         })
     }
 

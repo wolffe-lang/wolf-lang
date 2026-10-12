@@ -273,10 +273,12 @@ fn format_is_idempotent() {
 /// table, and the daemon owes the same table — and to 5 when the
 /// annotating trio joined (s134): signature help, semantic tokens and
 /// inlay hints read that table plus the checker's call and local
-/// records.
+/// records — and to 6 when the host learned a package's std and
+/// dependency roots (s235, wolf-lang#724): the daemon owes the same
+/// resolution order `wolf build` uses.
 #[test]
-fn contract_version_is_five() {
-    assert_eq!(wolf_query::CONTRACT_VERSION, 5);
+fn contract_version_is_six() {
+    assert_eq!(wolf_query::CONTRACT_VERSION, 6);
 }
 
 /// The one doc-comment model, from the query side: the same `///` block

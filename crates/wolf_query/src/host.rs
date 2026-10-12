@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, Weak};
 use std::time::Duration;
 
-use crate::overlay::OverlayStore;
+use crate::overlay::{OverlayStore, PackageRoots, RootsResolver};
 use crate::queries::PackageAnalysis;
 
 /// A query was cancelled — by a write ([`QueryHost::apply_change`]) or
@@ -112,11 +112,26 @@ pub struct QueryHost {
     /// Cleared inside `apply_change`, strictly after every old
     /// snapshot has dropped — entries therefore never cross revisions.
     cache: Arc<AnalysisCache>,
+    /// Where each package's std and dependency trees are (s235);
+    /// `None` = no std, the prelude stub (a [`QueryHost::new`] host).
+    roots: Option<RootsResolver>,
 }
 
 impl QueryHost {
     pub fn new() -> QueryHost {
         QueryHost::default()
+    }
+
+    /// A host whose packages resolve `use std.…`, std's data-type
+    /// methods and dependency imports against the trees `resolver`
+    /// names for each package root (contract v6, s235). The resolver
+    /// runs once per analysis, so a `wolf.pkg` edited on disk is read
+    /// again at the next change.
+    pub fn with_roots(resolver: RootsResolver) -> QueryHost {
+        QueryHost {
+            roots: Some(resolver),
+            ..QueryHost::default()
+        }
     }
 
     /// Apply one overlay change: cancel and drain every outstanding
@@ -149,6 +164,7 @@ impl QueryHost {
             overlays: state.overlays.clone(),
             revision: state.revision,
             cache: Arc::clone(&self.cache),
+            roots: self.roots.clone(),
         }
     }
 
@@ -182,6 +198,7 @@ pub struct Snapshot {
     pub(crate) overlays: OverlayStore,
     pub(crate) revision: u64,
     pub(crate) cache: Arc<AnalysisCache>,
+    roots: Option<RootsResolver>,
 }
 
 impl Drop for Snapshot {
@@ -201,6 +218,12 @@ impl Snapshot {
     /// The revision this snapshot was taken at.
     pub fn revision(&self) -> u64 {
         self.revision
+    }
+
+    /// The std and dependency roots of the package rooted at `root`
+    /// (the host's resolver; none for a [`QueryHost::new`] host).
+    pub(crate) fn roots_for(&self, root: &Path) -> PackageRoots {
+        self.roots.as_ref().map(|r| r(root)).unwrap_or_default()
     }
 
     /// Unwind-if-cancelled — the read-side half of clause 3. Called at

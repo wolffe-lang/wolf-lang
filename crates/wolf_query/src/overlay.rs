@@ -6,8 +6,28 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use wolf_sema::{ModuleLoader, RawFile};
+use wolf_sema::{DiskLoader, ModuleLoader, RawFile};
 use wolf_span::SourceMap;
+
+/// The trees a package resolves against beyond its own directory
+/// (s235, wolf-lang#724): the std root that backs `use std.…` and the
+/// home modules of std's data-type methods, and the dependency roots a
+/// `wolf.pkg` names. The same two inputs `wolf build` hands
+/// `wolf_sema::DiskLoader` (`with_std_root`, `with_dep_roots`).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PackageRoots {
+    /// `use std.X` reads `<std_root>/X/`; `None` keeps the prelude stub.
+    pub std_root: Option<PathBuf>,
+    /// Import alias → dependency package root (s51).
+    pub dep_roots: BTreeMap<String, PathBuf>,
+}
+
+/// Package root directory (the entry file's directory, the CLI's
+/// single-entry rule) → the roots it resolves against. The host's
+/// owner supplies it: the query layer reads no environment, flag or
+/// manifest of its own, so the order lives in exactly one place (the
+/// driver's, shared with `wolf build`).
+pub type RootsResolver = Arc<dyn Fn(&Path) -> PackageRoots + Send + Sync>;
 
 /// Open-buffer contents layered over disk. Cloning is cheap (paths +
 /// `Arc`'d texts); a [`crate::Snapshot`] owns a frozen clone.
@@ -73,11 +93,20 @@ pub(crate) fn normalize(path: &Path) -> PathBuf {
 /// byte-for-byte (the one-truth invariant, contract clause 5).
 /// Overlay-only files participate too — an unsaved new file is real to
 /// the editor and therefore to us.
+///
+/// `use std.…` and dependency-alias paths read through
+/// `wolf_sema::DiskLoader` itself, configured with [`PackageRoots`] —
+/// the very loader `wolf build` uses, so the std and dependency trees
+/// load with its whole-package membership and its `std://`/`pkg://`
+/// displays (D7). Those trees are read from disk, not through the
+/// overlays: an open, unsaved std buffer does not change what the
+/// user's package resolves against, as it does not for `wolf build`.
 pub(crate) struct OverlayLoader<'a> {
     root: PathBuf,
     entry: PathBuf,
     overlays: &'a OverlayStore,
     sm: &'a mut SourceMap,
+    roots: PackageRoots,
 }
 
 impl<'a> OverlayLoader<'a> {
@@ -95,12 +124,38 @@ impl<'a> OverlayLoader<'a> {
             entry,
             overlays,
             sm,
+            roots: PackageRoots::default(),
         })
+    }
+
+    /// Resolve `std` and dependency paths against `roots`.
+    pub(crate) fn with_roots(mut self, roots: PackageRoots) -> Self {
+        self.roots = roots;
+        self
+    }
+
+    /// Is `path` served by a std or dependency tree rather than the
+    /// package directory? (`DiskLoader::load_module`'s own test.)
+    fn is_external(&self, path: &[String]) -> bool {
+        path.first().is_some_and(|s| {
+            (s == "std" && self.roots.std_root.is_some()) || self.roots.dep_roots.contains_key(s)
+        })
+    }
+
+    /// The build's loader over the same roots, borrowing this loader's
+    /// source map so every file keeps one `FileId`.
+    fn disk(&mut self) -> DiskLoader<'_> {
+        DiskLoader::from_dir(&self.root, self.sm)
+            .with_std_root(self.roots.std_root.clone())
+            .with_dep_roots(self.roots.dep_roots.clone())
     }
 }
 
 impl ModuleLoader for OverlayLoader<'_> {
     fn load_module(&mut self, path: &[String]) -> Option<wolf_sema::LoadedModule> {
+        if self.is_external(path) {
+            return self.disk().load_module(path);
+        }
         let mut dir = self.root.clone();
         for seg in path {
             dir.push(seg);
@@ -163,6 +218,14 @@ impl ModuleLoader for OverlayLoader<'_> {
             .collect();
         names.sort();
         names
+    }
+
+    fn has_std_root(&self) -> bool {
+        self.roots.std_root.is_some()
+    }
+
+    fn std_module_names(&mut self) -> Vec<String> {
+        self.disk().std_module_names()
     }
 }
 

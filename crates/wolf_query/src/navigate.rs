@@ -148,7 +148,7 @@ impl Snapshot {
         let origin = origin.span;
         match symbol {
             Symbol::Decl(span) => Some(DefResult {
-                path: path_of(res, span)?,
+                path: a.path_of_file(span.file)?,
                 span,
                 origin,
             }),
@@ -157,7 +157,7 @@ impl Snapshot {
                 let first = *res.package.modules[m].files.first()?;
                 let target = &res.package.files[first];
                 Some(DefResult {
-                    path: target.raw.display.clone().into(),
+                    path: a.path_of_file(target.raw.file)?,
                     span: Span::new(target.raw.file, 0, 0),
                     origin,
                 })
@@ -181,7 +181,7 @@ impl Snapshot {
             .into_iter()
             .filter_map(|span| {
                 Some(DefResult {
-                    path: path_of(res, span)?,
+                    path: a.path_of_file(span.file)?,
                     span,
                     origin: origin.span,
                 })
@@ -357,14 +357,6 @@ fn references_of(a: &PackageAnalysis, symbol: &Symbol, include_declaration: bool
         }
     }
     out
-}
-
-fn path_of(res: &Resolution, span: Span) -> Option<PathBuf> {
-    res.package
-        .files
-        .iter()
-        .find(|u| u.raw.file == span.file)
-        .map(|u| PathBuf::from(&u.raw.display))
 }
 
 // ----------------------------------------------------------- refusals --

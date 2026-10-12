@@ -64,6 +64,7 @@ pub use docs::{
 };
 pub use host::{CancelToken, Cancelled, Change, QueryHost, Snapshot};
 pub use navigate::{FileEdits, RenameOutcome, RenamePrep, Symbol};
+pub use overlay::{PackageRoots, RootsResolver};
 pub use queries::{
     DefResult, DiagnosticsBatch, DocSymbol, FormatResult, HoverResult, SourceFile, SymbolKind,
 };
@@ -99,7 +100,16 @@ pub use queries::{
 /// `TypedBody::locals`); the semantic-token kind set
 /// ([`SemKind`]) is closed and its names are the protocol's standard
 /// legend names (the `annotate` module docs).
-pub const CONTRACT_VERSION: u32 = 5;
+///
+/// v6 (s235, wolf-lang#724): the host learns where a package's `std`
+/// and dependency trees are — additive. [`QueryHost::with_roots`] takes
+/// a [`RootsResolver`] (package root directory → [`PackageRoots`]); the
+/// driver's `wolf lsp` hands it the same resolution order `wolf build`
+/// uses, so clause 5 now holds for programs that use std. A host built
+/// with [`QueryHost::new`] still has no std, as before. Navigation into
+/// a std or dependency file answers its real path (the `std://` and
+/// `pkg://` displays stay the displays, D7).
+pub const CONTRACT_VERSION: u32 = 6;
 
 /// Test-only knob: when set to a number of milliseconds, every query
 /// sleeps that long at its first checkpoint (in small cancellable
