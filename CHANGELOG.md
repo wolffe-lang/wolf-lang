@@ -30,7 +30,7 @@ outlive the frame — and the proc may outlive it too.
   running, and such a function taken as a fn value, are refused where
   they are written.
 - **Measured:** 25 refused shapes and 12 sound ones on checked, native,
-  release and lupin 0.1.51 (`proc_must_join_lanes`); 17 of the refused
+  release and lupin 0.1.52 (`proc_must_join_lanes`); 17 of the refused
   printed the reused chunk on native and release before. Downstream at
   the memory check, 0 of 1,383 records moved; lobo compiles unchanged,
   and the same lobo with `end_body(w)` replaced by `w.kill()` is
