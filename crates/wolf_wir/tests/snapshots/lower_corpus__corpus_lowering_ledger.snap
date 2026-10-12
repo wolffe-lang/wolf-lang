@@ -790,6 +790,7 @@ os/signal_shell_rows.lu: lowers
 os/signal_supervisor.lu: lowers
 os/spawn_fds_rows.lu: lowers
 os/spawn_rows.lu: lowers
+os/term_editor_rows.lu: lowers
 os/umask.lu: lowers
 overflow.lu: lowers
 procs.lu: lowers
