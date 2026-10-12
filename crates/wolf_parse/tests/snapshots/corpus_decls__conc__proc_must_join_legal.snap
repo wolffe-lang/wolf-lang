@@ -1,0 +1,11 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 1022..1096 name=child body=Block
+FnDecl 1098..1180 name=joins body=Block
+FnDecl 1182..1350 name=deferred body=Block
+FnDecl 1352..1451 name=copied body=Block
+FnDecl 1453..1598 name=each body=Block
+FnDecl 1600..1807 name=either body=Block
+FnDecl 1809..2087 name=main body=Block
