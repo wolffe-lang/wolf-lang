@@ -1038,7 +1038,7 @@ fn render(table: &TypeTable, ty: TyId) -> String {
 
 /// `fn name(a: int, b: str) -> ret`, the receiver elided; a unit
 /// return elides the arrow.
-fn render_fn_sig(table: &TypeTable, name: &str, sig: &wolf_sema::sig::FnSig) -> String {
+pub(crate) fn render_fn_sig(table: &TypeTable, name: &str, sig: &wolf_sema::sig::FnSig) -> String {
     let params: Vec<String> = sig
         .params
         .iter()

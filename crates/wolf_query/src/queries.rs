@@ -378,6 +378,19 @@ impl Snapshot {
         let wolf_sema::BodyResult::Checked(tb) = &outcome.result else {
             return None; // NotYetCheckable / errored: nothing, honestly.
         };
+        // A method call that resolved to a top-level `fn` — a std data
+        // type's home-module method (`[type.method.home]`) above all —
+        // answers that function's signature and doc comment, read from
+        // its own file (s235). Fields and `impl` methods keep the typed
+        // answer below.
+        if let Some(hit) = tb
+            .member_refs
+            .iter()
+            .find(|(u, _)| u.lo <= offset && offset < u.hi)
+            .and_then(|(u, decl)| fn_decl_hover(res, tc, *u, *decl))
+        {
+            return Some(hit);
+        }
         let render = |t| wolf_sema::types::render(&tb.table, t, &|_| Err("_"));
         // A local's name token answers `name: ty`; otherwise the
         // innermost recorded expression answers its type.
@@ -485,6 +498,42 @@ fn item_header_at(root: &GreenNode, src: &[u8], offset: u32) -> Option<HoverResu
         text: format!("{keyword} {name_text}"),
         doc,
         span: name_tok.span,
+    })
+}
+
+/// Hover for a use (`at`, in the asking file) of the top-level `fn`
+/// whose name token is `decl`: `// <module>` then the signature, and
+/// the declaration's doc comment — what `wolf doc` publishes for it.
+/// `None` when `decl` is not a top-level `fn` name.
+fn fn_decl_hover(
+    res: &wolf_sema::Resolution,
+    tc: &wolf_sema::Typecheck,
+    at: Span,
+    decl: Span,
+) -> Option<HoverResult> {
+    let file_idx = res.package.files.iter().position(|u| u.raw.file == decl.file)?;
+    let unit = &res.package.files[file_idx];
+    let header = item_header_at(&unit.parse.root, &unit.raw.src, decl.lo)?;
+    let name = header.text.strip_prefix("fn ")?;
+    let module = res
+        .package
+        .modules
+        .iter()
+        .position(|m| m.files.contains(&file_idx))?;
+    let Some(wolf_sema::sig::ItemSig::Fn(sig)) = tc.sigs.get(module, name) else {
+        return None;
+    };
+    let shown = crate::completions::render_fn_sig(&tc.sigs.table, name, sig);
+    let path = &res.package.modules[module].path;
+    let text = if path.is_empty() {
+        shown
+    } else {
+        format!("// {}\n{shown}", path.join("."))
+    };
+    Some(HoverResult {
+        text,
+        doc: header.doc,
+        span: at,
     })
 }
 
