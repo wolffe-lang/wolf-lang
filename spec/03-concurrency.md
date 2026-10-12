@@ -461,8 +461,8 @@ premise by construction.
   join, and compile unchanged. Witnesses: the gate
   `chan_sent_arg_lanes`'s spawn rows and
   `corpus/conc/chan_sent_arg_spawn.lu`.)
-  (Extended 2026-10-12 by s233 for wolf-lang#678's helper half; ruling
-  owed. **A function that may leave a proc running with its caller's
+  (Extended 2026-10-12 by s233 for wolf-lang#678's helper half; ruled
+  A (#71), 2026-10-12. **A function that may leave a proc running with its caller's
   bytes is held to the frame rule at every call.** A `spawn proc`
   whose arguments can name a parameter's bytes, or bytes in the
   function's caller's current region (`[mem.region.create.3]`), raises
