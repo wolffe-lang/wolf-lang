@@ -508,7 +508,7 @@ fn typed_receiver_route(a: &PackageAnalysis, entry: &Path, dot: usize) -> Option
         .iter()
         .filter(|(s, _)| s.hi as usize == dot)
         .max_by_key(|(s, _)| s.hi - s.lo)?;
-    Some(members_of_type(&tb.table, *ty, tc))
+    Some(members_of_type(&tb.table, *ty, tc, &res.package))
 }
 
 /// Route 2: the receiver word names an import binding (module members)
@@ -685,17 +685,75 @@ fn declared_annotation(
 // -------------------------------------------------- member: the types --
 
 /// Value members of a type: struct fields + impl methods for
-/// nominals, the builtin surface for `str`. Everything else answers
-/// empty (the residue list in the module docs) — typed-but-unmodeled
-/// must not guess.
-fn members_of_type(table: &TypeTable, ty: TyId, tc: &wolf_sema::Typecheck) -> Vec<Completion> {
-    match table.kind(ty) {
+/// nominals, the builtin surface for `str`, and — when a std is loaded
+/// — a std data type's home-module methods (s235). Everything else
+/// answers empty (the residue list in the module docs) —
+/// typed-but-unmodeled must not guess.
+fn members_of_type(
+    table: &TypeTable,
+    ty: TyId,
+    tc: &wolf_sema::Typecheck,
+    pkg: &Package,
+) -> Vec<Completion> {
+    let kind = table.kind(ty);
+    let mut out = match kind {
         TyKind::Prim(Prim::Str) => str_members(),
         TyKind::Nominal { module, name, .. } => {
             nominal_members(tc, *module as usize, name, Receiver::Value)
         }
         _ => Vec::new(),
+    };
+    if let Some(home) = wolf_sema::check::home_of(kind) {
+        let mut bag = Bag::default();
+        for c in out.drain(..) {
+            bag.push(c);
+        }
+        for c in home_members(tc, pkg, home) {
+            bag.push(c);
+        }
+        out = bag.out;
     }
+    out
+}
+
+/// A std data type's methods from its home module `std.<home>`
+/// (`[type.method.home]`): the module's `pub fn`s whose first parameter
+/// is spelled with the receiver's type constructor — the checker's own
+/// candidate rule (`home_method_call`), so what completes is what
+/// resolves. Empty when the module is not loaded: the graph loads a
+/// home module only for a package that calls one of its methods, so a
+/// package's FIRST such call has nothing to list yet.
+fn home_members(tc: &wolf_sema::Typecheck, pkg: &Package, home: &str) -> Vec<Completion> {
+    let Some(module) = pkg
+        .modules
+        .iter()
+        .position(|m| m.path.len() == 2 && m.path[0] == "std" && m.path[1] == home)
+    else {
+        return Vec::new();
+    };
+    let table = &tc.sigs.table;
+    let mut bag = Bag::default();
+    for item in &pkg.tables[module].items {
+        if item.kind != ItemKind::Fn || item.vis != wolf_sema::graph::Vis::Pub {
+            continue;
+        }
+        let Some(ItemSig::Fn(sig)) = tc.sigs.get(module, &item.name) else {
+            continue;
+        };
+        let Some(p0) = sig.params.first() else {
+            continue;
+        };
+        if wolf_sema::check::home_of(table.kind(p0.ty)) != Some(home) {
+            continue;
+        }
+        bag.push(
+            Completion::new(item.name.clone(), CompletionKind::Method)
+                .detail(render_fn_sig(table, &item.name, sig)),
+        );
+    }
+    let mut out = bag.out;
+    out.sort_by(|a, b| a.label.cmp(&b.label));
+    out
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

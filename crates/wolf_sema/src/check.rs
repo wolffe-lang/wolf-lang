@@ -14295,8 +14295,10 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
 }
 
 /// `[type.method.home]` — the home module (`std.<name>`) of a std data
-/// type's constructor, or `None` for a type that has none.
-fn home_of(k: &TyKind) -> Option<&'static str> {
+/// type's constructor, or `None` for a type that has none. Public for
+/// the editor's member completion (s235), which lists a receiver's
+/// home-module methods by this same table.
+pub fn home_of(k: &TyKind) -> Option<&'static str> {
     match k {
         TyKind::List(_) => Some("list"),
         TyKind::Map(..) => Some("map"),
