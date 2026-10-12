@@ -231,6 +231,13 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         "os_signal_send" => SandboxCategory::Exec,
         "os_pid" | "os_ppid" | "os_signal_ignored" => SandboxCategory::Env,
         "os_term_foreground" | "os_term_mode" | "os_term_set_mode" => SandboxCategory::Io,
+        // s234 (ruling owed, #57 R7's reasoning): the window's size and
+        // the special characters are read off a descriptor the program
+        // holds and start nothing, `io` with `os_term_mode`; the wait on
+        // a descriptor and a signal set is signal control, `exec` with
+        // `os_signal_wait`.
+        "os_term_size" | "os_term_chars" => SandboxCategory::Io,
+        "os_signal_wait_fd" => SandboxCategory::Exec,
         // The s40 time builtin tier: every clock read and sleep is the
         // one Clock category (X12 — two identical builds must not
         // observe different times).

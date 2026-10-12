@@ -355,6 +355,12 @@ pub const PRELUDE: &[Ambient] = &[
     host("os_signal_number"),
     host("os_pid"),
     host("os_ppid"),
+    // s234 (wolf-lang#719, W05; pelt's line editor): the window's size,
+    // the terminal's special characters, and one wait on a descriptor
+    // and a signal set together.
+    host("os_term_size"),
+    host("os_term_chars"),
+    host("os_signal_wait_fd"),
     // the OS random source (s118, wolf-lang#143): `os_random(n)` mints
     // n bytes of OS-provided entropy as a `List[int]` — the ONLY
     // sanctioned source of cryptographic material ([os.random.sole]).

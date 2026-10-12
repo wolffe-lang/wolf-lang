@@ -14162,6 +14162,13 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             (vec![int_], rowed(table, unit, &["unsupported", "io"]))
         }
         "os_signal_poll" => (vec![int_], rowed(table, int_, &["io"])),
+        // s234 (wolf-lang#719, `[os.signal.wait.fd]`): park until a
+        // meaning in the set is delivered (answered) or the descriptor
+        // has something to read (0); windows `unsupported`.
+        "os_signal_wait_fd" => (
+            vec![int_, int_],
+            rowed(table, int_, &["unsupported", "io"]),
+        ),
         // s232 (wolf-lang#681, `[os.signal.ignored]`): the listenable
         // meanings ignored now (before the program's first disposition
         // call, the ones it started with); windows `unsupported`.
@@ -14215,6 +14222,18 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             vec![int_, int_],
             rowed(table, unit, &["unsupported", "invalid", "io"]),
         ),
+        // s234 (wolf-lang#719, `[os.term.size]`): the window's rows and
+        // columns, `os_pipe`'s pair shape.
+        "os_term_size" => {
+            let pair = table.intern(TyKind::Tuple(vec![int_, int_]));
+            (vec![int_], rowed(table, pair, &["unsupported", "io"]))
+        }
+        // s234 (`[os.term.chars]`): the twelve special characters, -1
+        // for one disabled.
+        "os_term_chars" => {
+            let list_int = table.intern(TyKind::List(int_));
+            (vec![int_], rowed(table, list_int, &["unsupported", "io"]))
+        }
         // the OS random source (s118, #143): exactly n OS-provided
         // entropy bytes as a `List[int]` (s115's byte carrier).
         // Deliberately NO error row — the one os-tier surface
