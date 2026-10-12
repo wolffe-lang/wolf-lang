@@ -12930,10 +12930,54 @@ mod checked_sig {
             }
             return Err("io");
         }
-        if fds[0].revents != 0 {
+        let (input, woke) = if fds[0].revents & libc::POLLNVAL == 0 {
+            (fds[0].revents != 0, fds[1].revents != 0)
+        } else {
+            // macOS answers POLLNVAL for a terminal opened by path
+            // (`/dev/tty`), measured; `select(2)` on it works — the
+            // runtime's `wait_two`, mirrored.
+            let fd = f.as_raw_fd();
+            let limit = libc::FD_SETSIZE as i64;
+            if i64::from(fd) >= limit || i64::from(r) >= limit {
+                return Err("io");
+            }
+            // SAFETY: a zeroed fd_set filled by FD_ZERO/FD_SET with two
+            // descriptors under FD_SETSIZE; a timeval or none.
+            unsafe {
+                let mut set: libc::fd_set = std::mem::zeroed();
+                libc::FD_ZERO(&mut set);
+                libc::FD_SET(fd, &mut set);
+                libc::FD_SET(r, &mut set);
+                let mut tv = libc::timeval {
+                    tv_sec: (timeout_ms.max(0) / 1000).into(),
+                    tv_usec: ((timeout_ms.max(0) % 1000) * 1000).into(),
+                };
+                let tvp = if timeout_ms < 0 {
+                    std::ptr::null_mut()
+                } else {
+                    &raw mut tv
+                };
+                let n = libc::select(
+                    fd.max(r) + 1,
+                    &mut set,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    tvp,
+                );
+                if n < 0 {
+                    let e = std::io::Error::last_os_error().raw_os_error();
+                    if e == Some(libc::EINTR) || e == Some(libc::EAGAIN) {
+                        return Ok(Woke::Signal);
+                    }
+                    return Err("io");
+                }
+                (libc::FD_ISSET(fd, &set), libc::FD_ISSET(r, &set))
+            }
+        };
+        if input {
             return Ok(Woke::Ready);
         }
-        if fds[1].revents != 0 {
+        if woke {
             return Ok(Woke::Signal);
         }
         Ok(Woke::Timeout)
