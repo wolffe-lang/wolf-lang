@@ -10335,6 +10335,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_signal_number"
                 | "os_pid"
                 | "os_ppid"
+                // s234 (#719, W05): the window's size, the special
+                // characters, the wait on a descriptor and a signal set.
+                | "os_term_size"
+                | "os_term_chars"
+                | "os_signal_wait_fd"
         ) {
             return self.lower_job_builtin(&callee_text, d, e);
         }
@@ -14886,6 +14891,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_pgid" | "os_signal_ignored" | "os_pid" | "os_ppid" => 0,
             "os_spawn_job" => 6,
             "os_term_set_foreground" | "os_term_set_mode" | "os_signal_send" => 2,
+            "os_signal_wait_fd" => 2,
             _ => 1,
         };
         if argv.len() != want {
@@ -14922,8 +14928,73 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_signal_send" => ("__wolf_rt_os_signal_send", PROC),
             "os_signal_number" => ("__wolf_rt_os_signal_number", PROC),
             "os_ppid" => ("__wolf_rt_os_ppid", PROC),
+            "os_term_size" => ("__wolf_rt_os_term_size", PROC),
+            "os_term_chars" => ("__wolf_rt_os_term_chars", PROC),
+            "os_signal_wait_fd" => ("__wolf_rt_os_signal_wait_fd", SIG),
             _ => return Err(refuse("this job builtin", e.span)),
         };
+        // s234 (`[os.term.size]`): `os_pipe`'s pair shape — rc 0 and the
+        // (rows, columns) pair through a 16-byte slot, else the code.
+        if name == "os_term_size" {
+            let Some(sema) = self.expr_sema_ty(e.span) else {
+                return Err(refuse("a window size without a recorded type", e.span));
+            };
+            let stripped = self.strip_sema(sema);
+            let TyKind::ErrUnion(ok, _) = self.table.kind(stripped).clone() else {
+                return Err(refuse("a window size without a union shape", e.span));
+            };
+            let Some(pair_ty) = wir_ty(&mut self.b.module.types, self.table, self.sigs, ok, e.span)?
+            else {
+                return Err(refuse("a window size without a pair type", e.span));
+            };
+            let (region, slot) = self.rt_slot(16);
+            let rc = self
+                .rt_call_slot(sym, &[argv[0]], slot, region, Some(types::I64))
+                .expect("rc");
+            let z = self.b.iconst(types::I64, 0);
+            let hit = self
+                .b
+                .ins(
+                    Opcode::Icmp,
+                    &[rc, z],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
+                .one();
+            let out = self.eu_join(
+                eu,
+                hit,
+                |zz| Ok(Some(zz.load_flat(pair_ty, slot, region, e.span)?)),
+                |zz| Ok(zz.code_tag_chain(rc, pairs, "io")),
+            )?;
+            return Ok(Flow::Val(Some(out)));
+        }
+        // s234 (`[os.term.chars]`): `fs_fstat`'s list shape — the shim
+        // mints the `List[int]`, so the call goes through the foreign
+        // chain; rc 0 and the header through an out word, else the code.
+        if name == "os_term_chars" {
+            let (region, slot) = self.rt_slot(8);
+            let rc = self
+                .rt_call_foreign(sym, &[argv[0]], Some((slot, region)), Some(types::I64))
+                .expect("rc");
+            let z = self.b.iconst(types::I64, 0);
+            let hit = self
+                .b
+                .ins(
+                    Opcode::Icmp,
+                    &[rc, z],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
+                .one();
+            let out = self.eu_join(
+                eu,
+                hit,
+                |zz| Ok(Some(zz.load_flat(types::PTR, slot, region, e.span)?)),
+                |zz| Ok(zz.code_tag_chain(rc, pairs, "io")),
+            )?;
+            return Ok(Flow::Val(Some(out)));
+        }
         let unit_shape = matches!(
             name,
             "os_signal_ignore"
