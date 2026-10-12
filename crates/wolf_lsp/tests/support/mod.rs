@@ -61,9 +61,25 @@ impl Client {
     /// As [`Client::start_with`], with `initializationOptions` (s134:
     /// the inlay-hint class configuration rides there).
     pub fn start_with_options(caps: Value, options: Value) -> (Client, Value) {
+        Client::start_inner(caps, options, None)
+    }
+
+    /// As [`Client::start`], with a host whose packages resolve `std`
+    /// and their dependencies against `roots` (s235) — the shape the
+    /// driver's `wolf lsp` serves.
+    pub fn start_with_roots(encodings: &[&str], roots: wolf_lsp::RootsResolver) -> (Client, Value) {
+        let caps = json!({ "general": { "positionEncodings": encodings } });
+        Client::start_inner(caps, Value::Null, Some(roots))
+    }
+
+    fn start_inner(
+        caps: Value,
+        options: Value,
+        roots: Option<wolf_lsp::RootsResolver>,
+    ) -> (Client, Value) {
         let (server_side, client_side) = Connection::memory();
         let server = std::thread::spawn(move || {
-            wolf_lsp::main_loop(server_side).expect("server loop failed")
+            wolf_lsp::main_loop_with(server_side, roots).expect("server loop failed")
         });
         let mut client = Client {
             conn: client_side,

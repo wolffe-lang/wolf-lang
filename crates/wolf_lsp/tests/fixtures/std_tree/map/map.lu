@@ -1,0 +1,28 @@
+//! A stand-in std tree for the s235 rows: `std.map`, the home module of
+//! `Map[K, V]`'s methods outside the builtins (`[type.method.home]`).
+
+/// Every key, in the map's iteration order.
+pub fn keys[K, V](m: Map[K, V]) -> List[K] {
+    var out = List[K]()
+    for pair in m.pairs() {
+        (mut out).push(pair.0)
+    }
+    out
+}
+
+/// Every value, in the order `keys` reports.
+pub fn values[K, V](m: Map[K, V]) -> List[V] {
+    var out = List[V]()
+    for pair in m.pairs() {
+        (mut out).push(pair.1)
+    }
+    out
+}
+
+/// A fresh tally: a `pub fn` of the home module that is not a method
+/// (its first parameter is no `Map`), so it never completes after `.`.
+pub fn fresh(n: int) -> Map[str, int] {
+    var m = Map[str, int]()
+    m["n"] = n
+    m
+}
