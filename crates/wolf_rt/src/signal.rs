@@ -586,37 +586,23 @@ mod sys {
                     crate::task::kill_teardown_check(s);
                     return -sig_code::IO;
                 }
-                let mut fds = [
-                    libc::pollfd {
-                        fd,
-                        events: libc::POLLIN,
-                        revents: 0,
-                    },
-                    libc::pollfd {
-                        fd: wake[0],
-                        events: libc::POLLIN,
-                        revents: 0,
-                    },
-                ];
                 let timeout = if scope.is_some() { 100 } else { -1 };
-                // SAFETY: two live pollfds.
-                let n = unsafe { libc::poll(fds.as_mut_ptr(), 2, timeout) };
-                if n < 0 {
-                    let e = std::io::Error::last_os_error().raw_os_error();
-                    if e == Some(libc::EINTR) || e == Some(libc::EAGAIN) {
-                        continue;
+                let (input, woke) = match wait_two(fd, wake[0], timeout) {
+                    Ok(r) => r,
+                    Err(e) if e == libc::EINTR || e == libc::EAGAIN => continue,
+                    Err(_) => {
+                        let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+                        st.waiters.retain(|&w| w != wake[1]);
+                        return -sig_code::IO;
                     }
-                    let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
-                    st.waiters.retain(|&w| w != wake[1]);
-                    return -sig_code::IO;
-                }
-                if fds[1].revents != 0 {
+                };
+                if woke {
                     let mut buf = [0u8; 16];
                     // SAFETY: our own nonblocking pipe; emptied, it
                     // answers EAGAIN.
                     while unsafe { libc::read(wake[0], buf.as_mut_ptr().cast(), buf.len()) } > 0 {}
                 }
-                if fds[0].revents != 0 {
+                if input {
                     // One more look: a meaning that came with the input
                     // wins (the clause's order).
                     settle(super::installed(h));
@@ -635,6 +621,72 @@ mod sys {
         }
         drop(file);
         out
+    }
+
+    /// s234: wait until `fd` has something to read or `wake` has a
+    /// byte (or `timeout_ms` passes; -1 never), answering (input, wake).
+    /// `poll(2)` first; where the host's poll refuses the descriptor —
+    /// macOS answers `POLLNVAL` for a terminal opened by path
+    /// (`/dev/tty`), measured black-box, where `select(2)` on the same
+    /// descriptor works — `select(2)`, for descriptors under
+    /// `FD_SETSIZE`. `Err` is the `errno`.
+    pub fn wait_two(fd: RawFd, wake: RawFd, timeout_ms: i32) -> Result<(bool, bool), i32> {
+        let errno = || {
+            std::io::Error::last_os_error()
+                .raw_os_error()
+                .unwrap_or(libc::EIO)
+        };
+        let mut fds = [
+            libc::pollfd {
+                fd,
+                events: libc::POLLIN,
+                revents: 0,
+            },
+            libc::pollfd {
+                fd: wake,
+                events: libc::POLLIN,
+                revents: 0,
+            },
+        ];
+        // SAFETY: two live pollfds.
+        if unsafe { libc::poll(fds.as_mut_ptr(), 2, timeout_ms) } < 0 {
+            return Err(errno());
+        }
+        if fds[0].revents & libc::POLLNVAL == 0 {
+            return Ok((fds[0].revents != 0, fds[1].revents != 0));
+        }
+        let limit = libc::FD_SETSIZE as i64;
+        if i64::from(fd) >= limit || i64::from(wake) >= limit {
+            return Err(libc::EBADF);
+        }
+        // SAFETY: a zeroed fd_set filled by FD_ZERO/FD_SET with two
+        // descriptors under FD_SETSIZE; a timeval or none.
+        unsafe {
+            let mut set: libc::fd_set = std::mem::zeroed();
+            libc::FD_ZERO(&mut set);
+            libc::FD_SET(fd, &mut set);
+            libc::FD_SET(wake, &mut set);
+            let mut tv = libc::timeval {
+                tv_sec: (timeout_ms.max(0) / 1000).into(),
+                tv_usec: ((timeout_ms.max(0) % 1000) * 1000).into(),
+            };
+            let tvp = if timeout_ms < 0 {
+                std::ptr::null_mut()
+            } else {
+                &raw mut tv
+            };
+            let n = libc::select(
+                fd.max(wake) + 1,
+                &mut set,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                tvp,
+            );
+            if n < 0 {
+                return Err(errno());
+            }
+            Ok((libc::FD_ISSET(fd, &set), libc::FD_ISSET(wake, &set)))
+        }
     }
 
     /// s232 (#691, `[os.signal.poll]`): before a poll or a wait reads
