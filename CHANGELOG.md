@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### The language server finds the standard library (s235, #724)
+
+`wolf lsp` never loaded std: in an editor every method of a std data
+type outside the builtins (`Map.keys`, `Map.has`, …) was a false
+E0301, "no standard library is configured", on files `wolf build`
+compiles clean — nine of them on pelt's `sh/` package at 0.2.28.
+
+- **The server finds std as `build` does**, by the same functions:
+  `wolf lsp --std-root <dir>`, then `WOLF_STD` (a root that is not a
+  directory exits 2 with build's message), then a `std` path dependency
+  in the opened file's `wolf.pkg`, then the `std/` installed beside
+  `wolf`; a freestanding manifest target reads no default. A
+  `wolf.pkg`'s dependency roots reach the server too.
+- **Hover on a std method** shows its module, signature and doc comment;
+  **definition** opens the std file itself (a `file://` path, not the
+  `std://` display); **member completion** on a `Map`, `List`, `str` or
+  range lists its home module's methods once the package calls one;
+  **rename** refuses a std or dependency declaration by name.
+- `wolf_query`'s contract is v6: `QueryHost::with_roots` takes the
+  resolver; `QueryHost::new` is the std-less host it always was.
+
 ### A program may park a task per connection (s231, #713)
 
 A task parked in a wait — `net_read`, `net_accept`, a channel `recv` —
