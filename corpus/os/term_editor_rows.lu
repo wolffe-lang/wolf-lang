@@ -1,0 +1,46 @@
+//! check: run(exit=0, stdout="wait_empty=io\nwait_send_only=io\nwait_past_table=io\nmode_bit5=invalid\nmode_negative=invalid\nmode_past_vtime=invalid")
+//! phase: run
+//! conforms: os.signal.wait.fd, os.signal.set, os.term.mode, err.union
+//!
+//! s234 (wolf-lang#719, W05; pelt's line editor) — the rows of the
+//! terminal surface that need no terminal and wait for nothing, one truth
+//! on every host. The wait on a descriptor and a signal set takes the one
+//! shape rule every set-taking call does (`[os.signal.set]`): an empty
+//! set, a send-only meaning (`KILL`, 1048576) and a bit past the table
+//! are each `io` before the handle is looked at — on windows too. A mode
+//! is `invalid` before its handle is read for a bit that is no field —
+//! bit 5 (32) now that `FLOW` (8) and `EXTENDED` (16) are fields — a
+//! negative mode, or a bit past `VTIME`. The live witnesses (the size, a
+//! resize while waiting, a key and a signal ending one wait, the special
+//! characters and the two flags) run under a pseudo-terminal in
+//! `crates/wolf_driver/tests/term_editor_lanes.rs` (unix).
+
+fn wait_row(set: int) -> str {
+    let m = os_signal_wait_fd(0, set) else |e| {
+        return match e {
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "{m}"
+}
+
+fn mode_row(m: int) -> str {
+    os_term_set_mode(0, m) else |e| {
+        return match e {
+            unsupported => "unsupported",
+            invalid => "invalid",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn main() {
+    print("wait_empty={wait_row(0)}")
+    print("wait_send_only={wait_row(1048576)}")
+    print("wait_past_table={wait_row(1099511627776)}")
+    print("mode_bit5={mode_row(32)}")
+    print("mode_negative={mode_row(-1)}")
+    print("mode_past_vtime={mode_row(16777216)}")
+}
