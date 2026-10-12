@@ -131,7 +131,7 @@ pub fn collect(
     for s in &regions.sites {
         // Parameter pseudo-sites are the *caller's* allocations; the
         // param mode lines above already carry their facts.
-        if s.kind == crate::cfg::SiteKind::Param {
+        if s.kind.is_param() {
             continue;
         }
         facts.alloc_sites.push((
