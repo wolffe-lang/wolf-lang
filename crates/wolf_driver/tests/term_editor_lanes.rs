@@ -394,7 +394,12 @@ fn lanes(name: &str) -> (PathBuf, Vec<Lane>) {
         if let Some(t) = taskset() {
             out.push(Lane {
                 name: format!("{tier} taskset -c 0-3"),
-                argv: vec![t.to_string_lossy().into_owned(), "-c".into(), "0-3".into(), exe],
+                argv: vec![
+                    t.to_string_lossy().into_owned(),
+                    "-c".into(),
+                    "0-3".into(),
+                    exe,
+                ],
                 lupin: false,
             });
         }
@@ -433,7 +438,12 @@ fn lupin_record(text: &str) -> (String, String, String, String) {
                     .ok()
                     .map(|v| {
                         let s = |k: &str| v[k].as_str().unwrap_or("").to_string();
-                        (s("verdict"), s("x-unsupported"), s("impl_version"), s("commit"))
+                        (
+                            s("verdict"),
+                            s("x-unsupported"),
+                            s("impl_version"),
+                            s("commit"),
+                        )
                     })
             })
         })
@@ -445,12 +455,7 @@ fn lupin_record(text: &str) -> (String, String, String, String) {
 /// `check(lane, end, transcript)`. lupin must refuse, naming `first` —
 /// by name at the mirror, "does not resolve" when it predates it (pinned
 /// by version).
-fn every_lane(
-    name: &str,
-    steps: &[(&str, Act)],
-    first: &str,
-    check: &dyn Fn(&str, &End, &str),
-) {
+fn every_lane(name: &str, steps: &[(&str, Act)], first: &str, check: &dyn Fn(&str, &End, &str)) {
     let (dir, ls) = lanes(name);
     for lane in ls {
         let mut t = Tty::start(&lane.argv, &dir);
@@ -528,7 +533,10 @@ fn the_size_and_a_resize_while_waiting() {
 fn the_wait_ends_for_a_key_and_for_a_signal() {
     every_lane(
         "wait_key.lu",
-        &[("ready", Act::Type(b"k")), ("key 0 107", Act::Kill(libc::SIGINT))],
+        &[
+            ("ready", Act::Type(b"k")),
+            ("key 0 107", Act::Kill(libc::SIGINT)),
+        ],
         "os_signal_wait_fd",
         &|lane, end, text| {
             assert!(text.contains("ready early=-1"), "wait on {lane}: {text}");
@@ -561,7 +569,10 @@ fn the_characters_and_flow_and_extended() {
                 text.contains("after intr=24 lnext=-1 flow=0"),
                 "chars on {lane}: {text}"
             );
-            assert!(text.contains("bytes 19 22 15 17"), "chars on {lane}: {text}");
+            assert!(
+                text.contains("bytes 19 22 15 17"),
+                "chars on {lane}: {text}"
+            );
             assert_eq!(*end, End::Exit(0), "chars on {lane}: {text}");
         },
     );
@@ -590,14 +601,27 @@ mode_negative=invalid\nmode_past_vtime=invalid\n";
         let v: serde_json::Value = text
             .lines()
             .rev()
-            .find_map(|l| l.find('{').and_then(|i| serde_json::from_str(l[i..].trim()).ok()))
+            .find_map(|l| {
+                l.find('{')
+                    .and_then(|i| serde_json::from_str(l[i..].trim()).ok())
+            })
             .unwrap_or_else(|| panic!("a record on {rel}: {text}"));
         let s = |k: &str| v[k].as_str().unwrap_or("").to_string();
-        (s("verdict"), s("stdout_inline"), s("impl_version"), s("commit"))
+        (
+            s("verdict"),
+            s("stdout_inline"),
+            s("impl_version"),
+            s("commit"),
+        )
     };
     for flag in ["--checked", "--native", "--release"] {
-        let (verdict, stdout, ..) =
-            record(Command::new(wolf()).arg("conform-run").arg(&entry).arg(flag).arg("--json"));
+        let (verdict, stdout, ..) = record(
+            Command::new(wolf())
+                .arg("conform-run")
+                .arg(&entry)
+                .arg(flag)
+                .arg("--json"),
+        );
         assert_eq!(
             (verdict.as_str(), stdout.as_str()),
             ("exit(0)", want),
@@ -613,7 +637,10 @@ mode_negative=invalid\nmode_past_vtime=invalid\n";
                 .iter()
                 .any(|(v, c)| *v == version && commit.starts_with(c))
             {
-                assert_eq!(verdict, "unsupported", "pre-mirror lupin {version} on {rel}");
+                assert_eq!(
+                    verdict, "unsupported",
+                    "pre-mirror lupin {version} on {rel}"
+                );
                 eprintln!("PINNED pre-mirror lupin {version} {commit} on {rel}: {verdict}");
             } else {
                 assert_eq!(

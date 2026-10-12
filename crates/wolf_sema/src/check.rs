@@ -14165,10 +14165,7 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // s234 (wolf-lang#719, `[os.signal.wait.fd]`): park until a
         // meaning in the set is delivered (answered) or the descriptor
         // has something to read (0); windows `unsupported`.
-        "os_signal_wait_fd" => (
-            vec![int_, int_],
-            rowed(table, int_, &["unsupported", "io"]),
-        ),
+        "os_signal_wait_fd" => (vec![int_, int_], rowed(table, int_, &["unsupported", "io"])),
         // s232 (wolf-lang#681, `[os.signal.ignored]`): the listenable
         // meanings ignored now (before the program's first disposition
         // call, the ones it started with); windows `unsupported`.

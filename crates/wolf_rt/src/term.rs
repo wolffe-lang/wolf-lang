@@ -436,7 +436,8 @@ mod tests {
         assert_eq!(now[7], -1, "literal next disabled");
         assert_eq!(now[0], base[0], "erase unchanged");
         let old = mode_of(s).expect("mode");
-        let raw = old & !(mode::CANONICAL | mode::ECHO | mode::SIGNALS | mode::FLOW | mode::EXTENDED);
+        let raw =
+            old & !(mode::CANONICAL | mode::ECHO | mode::SIGNALS | mode::FLOW | mode::EXTENDED);
         assert_eq!(set_mode(s, raw), Ok(()));
         assert_eq!(mode_of(s), Ok(raw));
         // SAFETY: a read of the pair's settings.
@@ -448,7 +449,11 @@ mod tests {
         }
         assert_eq!(set_mode(s, old), Ok(()));
         assert_eq!(mode_of(s), Ok(old));
-        assert_eq!(set_mode(s, 32), Err(proc_code::INVALID), "bit 5 is not a field");
+        assert_eq!(
+            set_mode(s, 32),
+            Err(proc_code::INVALID),
+            "bit 5 is not a field"
+        );
         assert_eq!(chars(1_000_000), Err(proc_code::IO));
     }
 

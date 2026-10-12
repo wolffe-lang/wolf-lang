@@ -1785,9 +1785,17 @@ mod tests {
         assert_eq!(wait_fd(1 << 40, meaning::RESIZE), -sig_code::IO, "forged");
         crate::fs::with_handle(w, |f| (&*f).write_all(b"k").unwrap()).unwrap();
         assert_eq!(wait_fd(r, meaning::RESIZE), 0, "input waiting");
-        assert_eq!(wait_fd(r, meaning::RESIZE), 0, "still waiting: nothing was read");
+        assert_eq!(
+            wait_fd(r, meaning::RESIZE),
+            0,
+            "still waiting: nothing was read"
+        );
         assert_eq!(raise(meaning::RESIZE), sig_code::OK);
-        assert_eq!(wait_fd(r, meaning::RESIZE), meaning::RESIZE, "the meaning wins");
+        assert_eq!(
+            wait_fd(r, meaning::RESIZE),
+            meaning::RESIZE,
+            "the meaning wins"
+        );
         let mut b = [0u8; 1];
         crate::fs::with_handle(r, |f| (&*f).read_exact(&mut b).unwrap()).unwrap();
         assert_eq!(&b, b"k");

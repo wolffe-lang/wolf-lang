@@ -14943,7 +14943,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let TyKind::ErrUnion(ok, _) = self.table.kind(stripped).clone() else {
                 return Err(refuse("a window size without a union shape", e.span));
             };
-            let Some(pair_ty) = wir_ty(&mut self.b.module.types, self.table, self.sigs, ok, e.span)?
+            let Some(pair_ty) =
+                wir_ty(&mut self.b.module.types, self.table, self.sigs, ok, e.span)?
             else {
                 return Err(refuse("a window size without a pair type", e.span));
             };
