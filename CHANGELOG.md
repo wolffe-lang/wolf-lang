@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-### A function that may leave a proc running is asked at every call (s233, #678; ruling owed)
+### A function that may leave a proc running is asked at every call (s233, #678; ruling #71)
 
 `fn helper(s: str) { let _w = spawn proc child(s, 0) }` called from
 `region pass { helper(s) }` compiled: `helper` returned while `child`
