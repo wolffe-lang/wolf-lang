@@ -1,0 +1,48 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1010]: `helper` may leave a proc running that reads `s` after it returns, and its bytes live in region `pass`, which is freed with its scope — while the proc may still be reading them
+  --> mem:///main.lu:15:16
+   |
+ 6 |     let _w = spawn proc child(s, 0)
+   |              ---------------------- `child` is spawned here, and not every path out of the function joins it before it returns
+...
+13 |     region pass {
+   |            ---- region `pass` is created here and freed with its scope — everything in it is freed wholesale
+14 |         let s = "built in pass, {n} uses"
+   |                 ------------------------- allocated here, into region `pass`
+15 |         helper(s)
+   |                ^ this argument's bytes are in region `pass`
+   |
+   = note: a function that spawns a proc with bytes its caller owns must join that proc on every
+     path before it returns — `p.join()`, an exit received from `p.monitor()`, or `p` handed
+     to a function that does so; a kill is not a join, the proc may run on until it is joined
+     (wolf-lang#683) — or the bytes must outlive the calling frame [conc.proc.arg]. Here the
+     function may return with the proc still running, so the bytes it was handed must outlive
+     this frame [mem.region.escape]. Join the proc in the callee on every path, or build the
+     value where it outlives this frame — outside the region block; a literal or a scalar
+     argument owns no region storage.
+
+error[E1010]: `outer` may leave a proc running that reads `s` after it returns, and its bytes live in region `pass`, which is freed with its scope — while the proc may still be reading them
+  --> mem:///main.lu:16:15
+   |
+ 9 |     helper(s)
+   |     --------- this calls `helper`, which may leave a proc running with what it is handed
+...
+13 |     region pass {
+   |            ---- region `pass` is created here and freed with its scope — everything in it is freed wholesale
+14 |         let s = "built in pass, {n} uses"
+   |                 ------------------------- allocated here, into region `pass`
+15 |         helper(s)
+16 |         outer(s)
+   |               ^ this argument's bytes are in region `pass`
+   |
+   = note: a function that spawns a proc with bytes its caller owns must join that proc on every
+     path before it returns — `p.join()`, an exit received from `p.monitor()`, or `p` handed
+     to a function that does so; a kill is not a join, the proc may run on until it is joined
+     (wolf-lang#683) — or the bytes must outlive the calling frame [conc.proc.arg]. Here the
+     function may return with the proc still running, so the bytes it was handed must outlive
+     this frame [mem.region.escape]. Join the proc in the callee on every path, or build the
+     value where it outlives this frame — outside the region block; a literal or a scalar
+     argument owns no region storage.

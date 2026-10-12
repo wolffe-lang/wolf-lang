@@ -1,0 +1,29 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1010]: this closure may return while `child` still runs, and `x` can name bytes nothing here says outlive it
+  --> mem:///main.lu:10:35
+   |
+10 |         let _w = spawn proc child(x, 0)
+   |                  ---------------------- spawned here, and not every path out of the closure joins it
+   |                                   ^ the proc may read these bytes after the closure returns
+   |
+   = note: a closure (or a nested fn) is not a function a caller can ask about, so a proc it leaves
+     running with a value that can name bytes is refused where it is spawned [conc.proc.arg]:
+     join the proc on every path out of the closure — `p.join()`, an exit received from
+     `p.monitor()` — or spawn it from a named function.
+
+error[E1010]: `helper` may leave a proc running with what it is handed, so it cannot be taken as a fn value: a call through the value cannot be asked what it leaves running
+  --> mem:///main.lu:12:22
+   |
+ 6 |     let _w = spawn proc child(s, 0)
+   |              ---------------------- `child` is spawned here, and not every path out of the function joins it before it returns
+...
+12 |     let h: fn(str) = helper
+   |                      ^^^^^^ a fn value hides the proc from every call made through it
+   |
+   = note: a function that may return while a proc it spawned still reads its arguments is held to
+     [conc.proc.arg] at every call, where the arguments are visible; through a fn value they
+     are not. Call it by name, or join the proc inside it on every path so it leaves nothing
+     running.
