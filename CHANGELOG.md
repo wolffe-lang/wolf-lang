@@ -1,6 +1,270 @@
 # Changelog
 
-## Unreleased
+## 0.2.28 — 2026-10-11
+
+THE TWENTY-EIGHTH, the soundness release. **0.2.27 shipped with two
+known soundness holes (#660, #665); both are fixed here, and users of
+0.2.27 should move.** Six compiler lanes land with it, one with a lupin
+half, and the pairing moves to lupin 0.1.51, which mirrors it: the
+checked machine runs tasks (s226, ruling #63); the calls that change a
+file, eight new builtins (s230, ruling #67); a long-running server
+stops growing in the runtime, and a `List` slice is one copy (s228,
+ruling #65); a call that keeps or sends what it is handed is refused
+when its bytes die first (s227, ruling #64; s229, ruling #66). The
+bundled standard library moves to wolf-std `98e1b7b`. 120 commits since
+0.2.27 (s228 25, s227 22, s229 20, s230 24, s226 29), every lane merged
+before the release lane (r33) began, then r33's release commits.
+
+### Soundness: a program could read freed region bytes on every compiler tier (#660, #665)
+
+**Affected: 0.2.27 and earlier.** Two holes, both named as known in
+0.2.27's notes, both through a call: the callee keeps or sends an
+argument, and the call site charged that to nothing.
+
+- **#660, a callee keeps a string built in an enclosing region block.**
+  `region pass { let s = "built {n}"; in st { keep_it(mut l, s) } }`,
+  with `l` living in `st`: the callee may keep `s` in `l` (a `copy`
+  shares the bytes; a `push` or an index store lends them), and `l`
+  outlives `pass`. It built on every compiler tier: native and release
+  then printed whatever the next region wrote into the freed chunk, the
+  checked machine printed stale bytes, and lupin traps `region-fault`.
+  The same hole reached two shapes with no call at all: `in st { out =
+  copy d }` (a `copy` of an aggregate shares its strings), and a
+  region-built `str` stored as a key in an outer `Map` — which needed
+  no `in` either, and then answered `m[k] else 0` with `0` for the key
+  just stored.
+- **#665, a callee sends its argument on a channel it was handed.**
+  `fn fwd(ch: channel[str], s: str) { ch.send(s) else { } }` called with
+  a string built in a region block: the direct `ch.send(s)` was always
+  E1010, the send through the helper was not, and the receiver read the
+  freed bytes on native and release and stale bytes on the checked
+  machine. No `in` and no `mut` argument were needed. **#678's direct
+  half** is the same hole without a channel: a `spawn proc` argument
+  built in a region block, read by the proc after the block freed it.
+
+**The fix is a compile-time refusal (E1010), not a run-time check.** No
+accepted program's code changes and nothing costs time at run time; a
+program that compiled on 0.2.27 may now be refused. Each rule reads the
+call's signature, never the callee's body (rulings #64 R1 and #66 R1):
+a `mut` argument (the receiver too) or a non-`Copy` result shares the
+bytes of every other argument that can reach it by mode and type; a call
+that hands its callee a channel able to carry bytes, and every `spawn
+proc` argument, must outlive the frame, as a sent payload must. So the
+refusals include some programs that ran correctly — a region-built
+`str` handed under `in r { }` to a callee that only reads it beside a
+`mut` argument that could have held it; any helper handed a
+`channel[str]` inside a region block, whatever it sends; a proc joined
+inside the block that built its argument.
+
+**The fix-it.** E1010 names the callee, the argument and the region or
+channel, and offers the edit that is sound at the call for a `str`:
+`"{s}"`, an interpolation inside the `in` block, which builds the bytes
+where the callee allocates. Otherwise: hand the callee a scalar
+(`s.len`), make the call outside the region block, send from the proc
+entry itself rather than a helper it calls, hand a function the channel
+rather than a closure that captured it, and pass a spawned proc its
+bytes as parameters of a function that joins it before returning.
+
+**Measured downstream before each fix landed** (`conform-run
+--phase=mem --json`, verdict and every diagnostic's code and span, the
+compiler before against after, linux x86-64 and macOS arm64, over
+wolf-std, boreutils, lobo, pelt, pax, muzzle and the book): s227, 1,276
+records (1,156 files and lobo's 120 staged tests), **0 rows moved**;
+s229, 1,287 records (1,165 files and lobo's 122 staged tests), **0 rows
+moved**. Each time, lobo, boreutils' 28 utilities and pelt built
+byte-identical binaries on native and release, on both hosts (60 of
+60); in s227's census pax's 28 kernels built 56 of 56 identical objects
+(linux).
+
+**Known, not fixed here.** #678's other half (#678 stays open for
+it): a function that spawns a proc with its own parameter and returns
+without joining it is legal in the function and invisible at its call;
+it needs a must-join rule (ruling #66 R4 left it to a lane of its own).
+The checked machine has no dynamic `region-fault` for safe-tier values
+(#667), so an escape the compiler missed would run there too. lupin 0.1.51 still runs a freed
+region's bytes reached through a `List` element, a `Map` key or a
+channel payload read inside an interpolation to `exit(0)`
+(wolf-interp#232); the compiler refuses all of them.
+
+### Read this before you bump the pin
+
+**New refusals (E1010).** A program that compiled on 0.2.27 can be
+refused by this release in four shapes, each a soundness fix (above and
+in the lanes' sections below), each with the edits above:
+
+- under `in r { f(mut outer, s) }`, an argument whose bytes die before
+  `outer` does (s227, #660);
+- `in st { out = copy d }` and `in st { xs[i] = d }` where `d` reaches a
+  region-built `str`, and a region-built `str` stored as a key in a
+  `Map` that outlives its block, with or without `in` (s227);
+- a call that hands its callee a channel able to carry bytes, from a
+  region block, under `in r { }` for a region made in the same frame,
+  or in a `spawn proc` entry; and a `spawn proc` argument that can name
+  region bytes, channel or no channel (s229, #665, #678's direct half);
+- a `net_read` result returned out of the region it was read in (s228,
+  #374's net half).
+
+None of them moved a row in the downstream censuses taken as each
+landed (above; s228's census: boreutils, lobo and its 28 serve tests,
+pelt, wolf-std's 433 test files and the book's 357 samples and
+exercises, the same verdicts and diagnostics).
+
+**Eight new builtins, and what windows answers (s230, ruling #67).**
+`fs_set_mode`, `fs_open_perm`, `fs_create_dir_mode`, `fs_symlink`,
+`fs_link`, `fs_set_times`, `fs_truncate` and `os_umask`: `chmod`,
+creating a file or directory with its permission bits, `ln -s`, `ln`,
+`touch`, a length, and the process's creation mask. On windows
+`fs_set_mode`, `fs_open_perm`, `fs_create_dir_mode`, `fs_symlink` and
+`os_umask` answer `unsupported` by name (no permission bits, no mask, no
+unprivileged symbolic link); `fs_link`, `fs_set_times` and
+`fs_truncate` are served. The seven `fs_*` calls charge `fs` and
+`os_umask` charges `env` (E1504 without the declaration). lupin 0.1.51
+mirrors seven and refuses `os_umask`, and `fs_set_times` on a link
+itself, by name (ruling #67 R10). **Not run per lane on windows** by the
+lane (CI green only), nor on linux aarch64.
+
+**The bundled std is wolf-std `98e1b7b`** (sc58: std at 0.2.27 / lupin
+0.1.50, wolf-lang#693), where 0.2.27 shipped `87ba162`. It carries
+what 0.2.27's bundled std lacked: `std.signal`, `std.term` and process
+jobs (s219), `fs.stat`, `lstat`, `read_link` and `entries` (s218),
+`env.unset` and `process.exec` (s225), and json's last-wins reading in
+its header and tests (s224, ruling #61); the red row 0.2.27 shipped
+(`tests/x/json/dom_typed_reads.lu`) is green. **It does not have this
+release's wrappers**: `fs.set_mode`, `create_private`,
+`create_with_mode`, `create_dir_mode`, `symlink`, `link`, `fs.Time`,
+`set_times`, `set_link_times`, `truncate` and `env.umask` (wolf-std#62)
+need this compiler and merge after it. Until a release bumps `STD-PIN`
+again, call the builtins directly (they are in the prelude), or point
+`WOLF_STD`, `--std-root` or a `wolf.pkg` `std` dependency at a wolf-std
+that has them.
+
+- **Measured under this release** (kasumi, linux x86-64, the
+  release-head archive with lupin 0.1.51 beside `wolf`, no `WOLF_STD`):
+  wolf-std `98e1b7b`'s 442 tests on lupin, the checked machine and
+  native, and its 464 doc examples, compile and answer as under 0.2.27
+  except **one test, `tests/mem/budget/breach_is_a_row.lu`, which the
+  checked machine now runs** (s226) to the exit and bytes its directive
+  names, where wolf-std's ledger still records the checked machine
+  declining it; `cargo xtask std-test` reads that advancement as red
+  until the ledger moves (wolf-std, after this release). Nothing in it
+  answers a wrong value. The release machine equals native on 441 of
+  the 442 with no std configured; the one (`list/sort_by_tier.lu`) is
+  refused by name on release, as at 0.2.27.
+
+**The checked machine runs tasks (s226, ruling #63).** `wolf
+conform-run --checked` answers `scope`, `spawn`, `spawn proc`, `select`,
+`when`, closures and `par` where it answered `unsupported` since s23;
+`--seed=N` selects its one schedule and the record says `"seeded":
+true`; a data race is `trap(race)`. A tool that read a checked record's
+`unsupported` as "concurrency, skip it" now gets a verdict. `wolf run
+--checked` is still the native build. No compiled binary changes for
+this.
+
+**Every hosted binary's bytes move** (`libwolf_rt.a`: s228's handle
+tables, monitor and pool; s230's eight shims; `__wolf_rt_list_slice`).
+No handle number, error row or exit reason moves. A `List` slice's
+region charge is the slice's own bytes, where it counted the abandoned
+doubling buffers: a slice that fit a checked `cap:` budget now fits
+natively too.
+
+**For contributors:** the linux CI job's limit is 45 minutes, from 30
+(s226; the gauntlet had grown to 29 m 42 s).
+
+**A correction to 0.2.27's notes (#695).** They said nothing hosted
+downstream declares C. pax's `user/play` does (`extern "c" fn
+play_kd`), and at 0.2.27 it is E1504 without `capabilities: [ffi]`;
+pax added the line in `0cc43be`. Re-taken over every downstream
+manifest at this release (wolf-std `98e1b7bc`, boreutils `abc59f5b`,
+lobo `d6bd15b2`, pelt `84a02dc1`, pax `1af462d5`, muzzle `7c95300e`, the
+book `2504a0fc`): the packages whose sources declare C are pax's
+`kernel` and `tests/mkw.d/kernel` and muzzle's `src` (freestanding), and
+pax's `user/play` (hosted). pax's three carry `ffi`; **muzzle's
+`src/wolf.pkg` still does not**, so muzzle's build stays E1504 (0.2.27's
+notes name the line) until it adds it.
+
+**New prelude names** (`cargo xtask prelude-diff v0.2.27 HEAD
+--markdown`, after `git fetch --tags`, run at the release head):
+
+> **New prelude names.** HEAD adds `fs_set_mode`, `fs_open_perm`,
+> `fs_create_dir_mode`, `fs_symlink`, `fs_link`, `fs_set_times`,
+> `fs_truncate`, and `os_umask` (all eight: function,
+> `[os.host.sigs]`). A module that declares a function, type or binding
+> named any of the eight now draws W0304 (it shadows the ambient name),
+> which `--deny-warnings` makes fatal: rename yours.
+
+A grep for a declaration (`fn`, `let`, `var`, `const`, `type`,
+`struct`, `enum`) of any of the eight in wolf-std `98e1b7bc`, boreutils
+`abc59f5b`, lobo `d6bd15b2`, pelt `84a02dc1`, pax `1af462d5`, muzzle
+`7c95300e` and the book `2504a0fc` found **none**. The only calls are
+boreutils' bu21 probes for the then-missing builtins
+(`notes/bu21/census/missing/`), which are notes and are not built. s226,
+s227, s228 and s229 add no prelude name.
+
+**Spellings ruled, each as implemented:** #63 (s226, R1–R8, A
+throughout: the seed, `trap(race)`, a UB finding inside a proc ends the
+run, the rendezvous back-edge, the deadlock through a closure, a task's
+ambient region and module state, exit 121 when the root domain is
+killed, `par` regions on checked first), #64 (s227, R1–R6), #65 (s228:
+a finished proc keeps its exit reason for now, #671; the parked
+worker's frames by option A as their own lane, #670), #66 (s229, R1–R6:
+refuse now; a copying send stays the alternative), #67 (s230, R1–R10,
+the umask the real process mask on the checked machine).
+
+**What each downstream does to bump.**
+
+- **wolf-std, first:** pins to 0.2.28 / 0.1.51 in `vendor/tools.toml`;
+  rebase and merge #62 (s230's wrappers, red by design until this pin);
+  move `tests/ledger.toml`'s checked column for
+  `mem/budget/breach_is_a_row.lu` to `run` (s226). A later compiler
+  release bumps `STD-PIN` to carry #62.
+- **wolf-book, then the site:** the book pins 0.2.28 / 0.1.51 (the book
+  and lupp.us are still at 0.2.26 / 0.1.49); ex16-7 and ex16-8, the two
+  concurrency samples the checked machine declined, can run on it; no
+  sample moved in the E1010 censuses. Then wolf-web pins the pair and
+  the book, and deploys.
+- **boreutils:** the toolchain digests (remove the staged
+  `.wolf-bin/std` before unpacking its own std pin, as at 0.2.27).
+  `chmod`, `touch`, `ln`, `mkdir -m` and `cp -p` can be written on the
+  new builtins (bu21 left them out for want of each).
+- **lobo:** the toolchain digests; `conn.sock_read` can go back to
+  `net_read`, which now allocates in the region it is called in (s228).
+- **pelt:** the toolchain digests; a `umask` built-in can be served by
+  `os_umask`.
+- **pax:** the pin; `user/play` already carries `ffi`. The eight new
+  builtins are hosted: the freestanding target refuses each by name.
+- **muzzle:** `capabilities: [ffi]` in `src/wolf.pkg`, owed since 0.2.27.
+- **Homebrew and the AUR:** the std beside the binary moves to
+  `98e1b7b` (this release's tap change).
+
+### The pairing: lupin 0.1.51
+
+`PAIRING` names **lupin 0.1.51 at pin `294d626`** (wolf-interp release
+409991647; the linux x86-64 archive's sha256 `d8f62dd1…`). The spec pin
+is unchanged (this compiler's v0.2.24 tag). 0.1.51 carries the lupin
+half of s230; s226, s227, s228 and s229 have none.
+
+- **Dropped 9 cases in two gates**, each green on the published 0.1.51
+  unpinned: `fs_change_lanes` 8 (s230's mirror; its pre-mirror list
+  stays, empty, as the gate's machinery) and `pairing` 1.
+- **Carried to 0.1.51, measured** (each answers as 0.1.50 on the pinned
+  rows; the issues are open): `checked_tasks_lanes`' two partings
+  (wolf-interp#227, #230), `region_kept_arg_lanes`' seven `List` and
+  `Map`-key rows and `chan_sent_arg_lanes`' channel-payload rows (both
+  wolf-interp#232), attr_closed_set's control (lupin still declines its
+  `comptime fn`); the racy counter's `trap(race)` check names 0.1.51 too;
+  `int_truth_lanes`' `PIN_INT_NOT` names 0.1.48 alone and is inert.
+- **Widened 0.** The plant (the 0.1.51 lists against the published
+  0.1.50) is red on exactly those 9 cases.
+- **The ritual** (#87, with #281's control against the 0.1.50 archive,
+  the same corpus and the same release `wolf`, 1129 files):
+  - checked: **moved 5 ledger counts**. Agreements 759 → 764,
+    unsupported 98 → 93; SOUNDNESS 0 and hard 19 unchanged.
+  - native: **moved 5**. Agreements 744 → 749, unsupported 99 → 94;
+    SOUNDNESS 14 and hard 33 unchanged.
+  - The same five files on both, s230's rows: `fs/change_rows.lu`,
+    `fs/hard_link.lu`, `fs/mode_symlink.lu`, `fs/set_times.lu` and
+    `fs/truncate.lu`, from unsupported to agreement. Nothing moved
+    below the ledger.
 
 ### The checked machine runs tasks (s226, C1)
 
@@ -40,8 +304,8 @@ untouched.
   and bytes; `freeze region { … }` and `1.s`-style durations run there
   too. Still declined there by name: a nested `fn`
   (`typecheck/closure_return.lu`).
-- **Two measured partings from lupin 0.1.49 and 0.1.50**, pinned by
-  version in `checked_tasks_lanes`: lupin adds no rendezvous back-edge
+- **Two measured partings from lupin 0.1.49, 0.1.50 and 0.1.51**,
+  pinned by version in `checked_tasks_lanes`: lupin adds no rendezvous back-edge
   (`[conc.mm.hb.chan]`: "the receive also happens-before the send
   returns"), so a program ordered only by it is `trap(race)` on lupin
   and runs here (wolf-interp#227); and a `when` reached through a
@@ -224,7 +488,7 @@ bytes for that slice where it was 8,240, so a slice that fits a
 natively. The freestanding runtime archive defines the symbol too, so
 a kernel that slices a `List` links as before.
 
-### A call keeps what it is handed: `in r { f(mut outer, s) }` is refused when `s` dies first (s227, #660; ruling owed)
+### A call keeps what it is handed: `in r { f(mut outer, s) }` is refused when `s` dies first (s227, #660, ruling #64)
 
 **Read this before you bump the pin: a soundness fix that refuses
 programs 0.2.26 built.** Under `in r { … }` a call aims what the callee
@@ -281,15 +545,15 @@ book — 1,156 files and lobo's 120 staged tests — move zero rows, and
 lobo, boreutils' 28 utilities and pelt build byte-identical binaries on
 both tiers. No run-time cost on any tier: a refusal.
 
-Filed, not fixed here: a callee that sends its argument on a channel it
-was handed (#665, the same read of freed bytes, no `in` needed); lupin
-0.1.50 (as 0.1.49) runs the `List` and `Map`-key forms of this to
-`exit(0)` on stale bytes (wolf-interp#232) and traps a sound `copy` of a scalar struct under
-`in` (wolf-interp#233). Witnesses: `corpus/memory/region_kept_*.lu`,
+A callee that sends its argument on a channel it was handed (#665, the
+same read of freed bytes, no `in` needed) is s229's, below. lupin 0.1.51
+(as 0.1.50 and 0.1.49) runs the `List` and `Map`-key forms of this to
+`exit(0)` on stale bytes (wolf-interp#232) and traps a sound `copy` of a
+scalar struct under `in` (wolf-interp#233). Witnesses: `corpus/memory/region_kept_*.lu`,
 `region_copy_shares_str.lu`, `region_copy_index_store.lu`; gate
 `region_kept_arg_lanes` (checked, native, release, lupin).
 
-### A call sends what it is handed: `fwd(ch, s)` is refused where `ch.send(s)` was (s229, #665; ruling owed)
+### A call sends what it is handed: `fwd(ch, s)` is refused where `ch.send(s)` was (s229, #665, #678, ruling #66)
 
 **Read this before you bump the pin: a soundness fix that refuses
 programs 0.2.27 built.** A sent payload must outlive the frame that
@@ -359,11 +623,12 @@ strings pass them as parameters and join.
 
 Still open: a function that spawns a proc with its own parameter and
 returns without joining it — legal in the function, invisible at its
-call, and it needs a must-join rule this change does not have (#678
-stays open for that half). lupin
-0.1.50 runs the shapes whose receive is read inside an interpolation
-(wolf-interp#232) and traps the rest. A run-time alternative — a send
-that copies the bytes out, about 40 ns a message — is the ruling owed.
+call, and it needs a must-join rule this change does not have (#678's
+helper half; ruling #66 R4 leaves it to a lane of its own). lupin 0.1.51,
+as 0.1.50, runs the shapes whose receive is read inside an
+interpolation (wolf-interp#232) and traps the rest. A run-time
+alternative — a send that copies the bytes out, about 40 ns a message —
+was weighed; ruling #66 refuses now (R2).
 Gate `chan_sent_arg_lanes`: 42 rows on checked, native, release and
 lupin.
 
