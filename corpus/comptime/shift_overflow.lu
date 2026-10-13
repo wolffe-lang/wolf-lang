@@ -1,0 +1,14 @@
+//! check: fail(E0706)
+//! phase: resolve
+//! conforms: type.int.shift, comptime.arith
+//!
+//! s237 (`[type.int.shift]`): `200 << 1` at `u8` leaves the type at
+//! comptime as it does at run time, where it is the `overflow` trap.
+//! The constant evaluator always refused it; until s237 the compiled
+//! `let a: u8 = 200 << 1` printed 144 beside it.
+
+const K: u8 = 200 << 1
+
+fn main() {
+    print("{K}")
+}

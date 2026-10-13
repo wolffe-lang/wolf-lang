@@ -1,0 +1,36 @@
+//! check: run(exit=0, stdout="8 0 0 -1 128 2 255\n")
+//! phase: run
+//! conforms: type.int.shift, comptime.arith
+//!
+//! s237 (`[type.int.shift]`): a constant shift is the run time's. A
+//! plain count at or past the width answers the value's floor or
+//! product (`255 >> 8` at `u8` is 0, `0 << 8` is 0, `-8 >> 64` is -1),
+//! and a `wrapping[T]` count masks to the width (`1 << 9` at
+//! `wrapping[u8]` is 2). Until s237 the constant evaluator refused
+//! every count at or past the width (E0706, "shift by 8 exceeds the
+//! width") where the compiled program computed an answer.
+
+const A: u8 = 1 << 3
+const B: u8 = 255 >> 8
+const C: u8 = 0 << 8
+const D: int = -8 >> 64
+const E: u8 = 1 << 7
+
+comptime fn wrapped() -> int {
+    let one: wrapping[u8] = 1
+    let nine: wrapping[u8] = 9
+    let two: wrapping[u8] = 2
+    if one << nine == two { 2 } else { 0 }
+}
+
+comptime fn kept() -> int {
+    let top: wrapping[u8] = 255
+    let eight: wrapping[u8] = 8
+    if top >> eight == top { 255 } else { 0 }
+}
+
+fn main() {
+    const W = wrapped()
+    const K = kept()
+    print("{A} {B} {C} {D} {E} {W} {K}")
+}
