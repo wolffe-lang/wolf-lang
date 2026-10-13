@@ -1,0 +1,83 @@
+//! member: false
+//! s236 (wolf-lang#701; `[os.fs.owner]`) — what the owner calls answer
+//! ON A HOST, where nothing may change an owner: a call that leaves
+//! both ids alone, a call that names the owner the file already has (by
+//! path, on a link itself, and on a handle), the rows for a missing
+//! path, a dangling link and a closed handle, and the refusal a user
+//! gets: a file may not be given to the super-user. The program reads
+//! who owns the file it has just made — that is the user it runs as —
+//! and as the super-user (owner 0) the refusal would not be one, so it
+//! is not asked and the line says so. Every file is under `h/`, made
+//! and removed here, and the file's owner is read before and after.
+//! Unix only; it reads no id, so lupin serves every row.
+
+fn owner_row(path: str, uid: int, gid: int, follow: bool) -> str {
+    fs_set_owner(path, uid, gid, follow) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn owner_fd_row(fd: int, uid: int, gid: int) -> str {
+    fs_set_owner_fd(fd, uid, gid) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    fs_remove_dir_all("h") else |_| {}
+    fs_create_dir("h")?
+    fs_write_text("h/f", "x")?
+    fs_symlink("f", "h/ln")?
+    fs_symlink("nope", "h/dangling")?
+    let before = fs_stat("h/f")?
+    let uid = before[6]
+    let gid = before[7]
+
+    let leave = owner_row("h/f", -1, -1, true)
+    let same = owner_row("h/f", uid, gid, true)
+    let link = fs_lstat("h/ln")?
+    let itself = owner_row("h/ln", link[6], link[7], false)
+    print("leave: {leave} same: {same} a link itself: {itself}")
+
+    let missing = owner_row("h/gone", -1, -1, true)
+    let missing_code = os_error()
+    let followed = owner_row("h/dangling", -1, -1, true)
+    let dangling = owner_row("h/dangling", -1, -1, false)
+    print("missing: {missing} errno={missing_code} dangling: followed={followed} itself={dangling}")
+
+    let fd = fs_open("h/f")?
+    let fd_leave = owner_fd_row(fd, -1, -1)
+    let fd_same = owner_fd_row(fd, uid, gid)
+    fs_close(fd)?
+    let closed = owner_fd_row(fd, -1, -1)
+    print("by handle: leave={fd_leave} same={fd_same} closed={closed} errno={os_error()}")
+
+    if uid == 0 {
+        print("to root: not asked (this is the super-user)")
+    } else {
+        let away = owner_row("h/f", 0, -1, true)
+        let away_code = os_error()
+        let fd2 = fs_open("h/f")?
+        let fd_away = owner_fd_row(fd2, 0, -1)
+        fs_close(fd2)?
+        print("to root: {away} errno={away_code} by handle={fd_away}")
+    }
+
+    let after = fs_stat("h/f")?
+    print("owner unchanged: {after[6] == uid && after[7] == gid}")
+    fs_remove_dir_all("h")?
+    0
+}

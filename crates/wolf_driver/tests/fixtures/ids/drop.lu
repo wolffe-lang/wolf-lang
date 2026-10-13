@@ -1,0 +1,113 @@
+//! member: false
+//! s236 (wolf-lang#742; `[os.proc.ids.set]`) — the drop. RUN ONLY AS THE
+//! SUPER-USER INSIDE A THROWAWAY CONTAINER: this program changes who it
+//! runs as, and refuses to start anywhere it is not uid 0.
+//!
+//! It first gives itself three supplementary groups while it is still
+//! the super-user (so the drop has something to leave behind if it is
+//! made in the wrong order), runs four tasks so the runtime has worker
+//! threads, and then becomes user 1000, group 1000, groups {1000,
+//! 2000} with one `os_set_ids` — the list given unsorted, with a
+//! repeat. After it: the four ids and the groups this process reads;
+//! every THREAD's ids as the host lists them (`/proc/self/task/*/status`:
+//! the real, effective, saved and file-system id of each, which must
+//! be one line for all of them); what a child is (`id`, a second
+//! reader that is not this program); the way back, which is `denied`;
+//! and the owner of a file it creates. Linux only; lupin refuses
+//! `os_uid` by name.
+
+fn ids_line() -> !str {
+    let uid = os_uid()?
+    let euid = os_euid()?
+    let gid = os_gid()?
+    let egid = os_egid()?
+    let gs = os_groups()?
+    "uid={uid} euid={euid} gid={gid} egid={egid} groups={gs}"
+}
+
+fn set_row(uid: int, gid: int, groups: List[int]) -> str {
+    os_set_ids(uid, gid, groups) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+/// One thread's ids as the host reports them: the `Uid:`, `Gid:` and
+/// `Groups:` lines of its status file, on one line.
+fn thread_ids(tid: str) -> !str {
+    let text = fs_read_text("/proc/self/task/" + tid + "/status")?
+    var out = ""
+    for line in text.split("\n") {
+        if line.starts_with("Uid:") || line.starts_with("Gid:") || line.starts_with("Groups:") {
+            out = out + line.replace("\t", " ").trim() + "; "
+        }
+    }
+    out
+}
+
+fn spin(n: int) -> int {
+    var i = 0
+    var acc = 0
+    while i < n {
+        acc = acc + i % 7
+        i = i + 1
+    }
+    acc
+}
+
+fn main() -> !int {
+    let me = os_euid()?
+    if me != 0 {
+        print("refusing: this witness runs only as the super-user in a throwaway container")
+        return 2
+    }
+    os_set_ids(0, 0, [27, 4, 0, 4])?
+    let planted = ids_line()?
+    print("the super-user, with groups: {planted}")
+
+    scope s {
+        for t in 0..4 {
+            s.spawn(fn() {
+                spin(200000)
+            })
+        }
+    }
+
+    os_set_ids(1000, 1000, [2000, 1000, 2000])?
+    let dropped = ids_line()?
+    print("dropped: {dropped}")
+
+    let tids = fs_read_dir("/proc/self/task")?
+    var first = ""
+    var agree = true
+    for tid in tids {
+        let ids = thread_ids(tid)?
+        if first == "" {
+            first = ids
+        }
+        agree = agree && ids == first
+    }
+    eprint("threads: {tids.len}")
+    print("every thread agrees: {agree}: {first}")
+
+    let child = os_spawn(
+        ["/bin/sh", "-c", "echo $(id -u) $(id -g) $(id -G) > /tmp/s236-child.txt"],
+    )?
+    let status = os_wait(child)?
+    let said = fs_read_text("/tmp/s236-child.txt")?
+    print("a child is: exit={status} {said.trim()}")
+
+    print("the way back: {set_row(0, 0, [0])}")
+    let still = ids_line()?
+    print("still: {still}")
+
+    fs_write_text("/tmp/s236-made.txt", "x")?
+    let made = fs_stat("/tmp/s236-made.txt")?
+    print("a file it makes is owned: {made[6]}:{made[7]}")
+    0
+}

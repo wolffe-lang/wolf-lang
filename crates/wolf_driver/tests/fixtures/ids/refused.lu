@@ -1,0 +1,78 @@
+//! member: false
+//! s236 (wolf-lang#742; `[os.proc.ids.set]`) — a drop refused at its
+//! LAST step is put back whole. RUN ONLY AS THE SUPER-USER INSIDE A
+//! THROWAWAY CONTAINER STARTED WITHOUT THE POWER TO CHANGE USER IDS
+//! (`--cap-drop SETUID`): there the groups and the group ids change and
+//! the user ids are then refused, which is the state a caller must
+//! never be handed. The program gives itself three groups, asks to
+//! become user 1000, and prints what it reads afterwards: the row is
+//! `denied`, and the process is the super-user with group 0 and the
+//! three groups, exactly as before — in every thread. In a container
+//! that kept the power the drop succeeds instead, and the program says
+//! so and exits 3 (the gate started it wrongly). Linux only.
+
+fn ids_line() -> !str {
+    let uid = os_uid()?
+    let euid = os_euid()?
+    let gid = os_gid()?
+    let egid = os_egid()?
+    let gs = os_groups()?
+    "uid={uid} euid={euid} gid={gid} egid={egid} groups={gs}"
+}
+
+fn set_row(uid: int, gid: int, groups: List[int]) -> str {
+    os_set_ids(uid, gid, groups) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn thread_ids(tid: str) -> !str {
+    let text = fs_read_text("/proc/self/task/" + tid + "/status")?
+    var out = ""
+    for line in text.split("\n") {
+        if line.starts_with("Uid:") || line.starts_with("Gid:") || line.starts_with("Groups:") {
+            out = out + line.replace("\t", " ").trim() + "; "
+        }
+    }
+    out
+}
+
+fn main() -> !int {
+    let me = os_euid()?
+    if me != 0 {
+        print("refusing: this witness runs only as the super-user in a throwaway container")
+        return 2
+    }
+    os_set_ids(0, 0, [0, 4, 27])?
+    let before = ids_line()?
+    print("before: {before}")
+    let row = set_row(1000, 1000, [1000, 2000])
+    print("the drop: {row}")
+    if row == "ok" {
+        print(
+            "this container kept the power to change user ids; the witness needs --cap-drop SETUID",
+        )
+        return 3
+    }
+    let after = ids_line()?
+    print("after: {after}")
+    let tids = fs_read_dir("/proc/self/task")?
+    var first = ""
+    var agree = true
+    for tid in tids {
+        let ids = thread_ids(tid)?
+        if first == "" {
+            first = ids
+        }
+        agree = agree && ids == first
+    }
+    print("every thread agrees: {agree}: {first}")
+    print("as it was: {after == before}")
+    0
+}

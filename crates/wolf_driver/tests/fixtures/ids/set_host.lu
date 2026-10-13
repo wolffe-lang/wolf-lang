@@ -1,0 +1,50 @@
+//! member: false
+//! s236 (wolf-lang#742; `[os.proc.ids.set]`) — the drop asked ON A
+//! HOST, by a user: a process without the privilege may not set its
+//! ids. Asked for the ids it already has, and asked for the
+//! super-user's, the answer is the same row — `denied` on linux, where
+//! the call is served and its first step is refused; `unsupported`, by
+//! name, on a host where it is not served — and the process reads
+//! exactly the ids and groups it read before. The program asks who it
+//! is first: as the super-user the call would succeed, so it is not
+//! asked and the line says so. Unix only; lupin refuses `os_euid` by
+//! name.
+
+fn set_row(uid: int, gid: int, groups: List[int]) -> str {
+    os_set_ids(uid, gid, groups) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn ids_line() -> !str {
+    let uid = os_uid()?
+    let euid = os_euid()?
+    let gid = os_gid()?
+    let egid = os_egid()?
+    let gs = os_groups()?
+    "{uid} {euid} {gid} {egid} {gs}"
+}
+
+fn main() -> !int {
+    let me = os_euid()?
+    let before = ids_line()?
+    if me == 0 {
+        print("set ids: not asked (this is the super-user)")
+    } else {
+        let uid = os_uid()?
+        let gid = os_gid()?
+        let groups = os_groups()?
+        let own = set_row(uid, gid, groups)
+        let root = set_row(0, 0, List[int]())
+        print("set ids: own={own} root={root}")
+    }
+    let after = ids_line()?
+    print("unchanged: {after == before}")
+    0
+}

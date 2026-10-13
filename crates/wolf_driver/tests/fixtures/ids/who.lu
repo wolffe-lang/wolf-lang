@@ -1,0 +1,23 @@
+//! member: false
+//! s236 (wolf-lang#633; `[os.proc.ids]`) — who this process runs as, in
+//! the host's own numbers: the real and effective user id, the real and
+//! effective group id, and the supplementary groups in the order the
+//! host lists them. The gate holds the first line to `id -ru`, `id -u`,
+//! `id -rg` and `id -g`, and the second, as a set, to the host's own
+//! reading of this process's groups. Unix only; lupin refuses `os_uid`
+//! by name (it has no host call for it).
+
+fn main() -> !int {
+    let uid = os_uid()?
+    let euid = os_euid()?
+    let gid = os_gid()?
+    let egid = os_egid()?
+    print("uid={uid} euid={euid} gid={gid} egid={egid}")
+    let gs = os_groups()?
+    var line = "groups:"
+    for g in gs {
+        line = line + " {g}"
+    }
+    print(line)
+    0
+}

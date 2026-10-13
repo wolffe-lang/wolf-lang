@@ -1,0 +1,145 @@
+//! member: false
+//! s236 (wolf-lang#701; `[os.fs.owner]`) — changing a file's owner. RUN
+//! ONLY AS THE SUPER-USER INSIDE A THROWAWAY CONTAINER, on the
+//! container's own file system (`/tmp/s236-owner`): it changes owners,
+//! and refuses to start anywhere it is not uid 0.
+//!
+//! As the super-user: an owner and a group set and read back through
+//! `fs_stat` (and the set-user-id and set-group-id bits the host clears
+//! when it does), each id left alone in turn, a link itself against
+//! its target, a dangling link, the handle form, a closed handle. Then
+//! the program becomes user 1000 with groups {1000, 2000} and asks
+//! again, as a user who owns the file: it may not give it away, it may
+//! move it to a group it is in, and not to one it is not in; and of a
+//! file it does not own it may change nothing. The modes are decimal:
+//! 3565 is 0o6755, 493 0o755.
+
+fn owner_row(path: str, uid: int, gid: int, follow: bool) -> str {
+    fs_set_owner(path, uid, gid, follow) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn owner_fd_row(fd: int, uid: int, gid: int) -> str {
+    fs_set_owner_fd(fd, uid, gid) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+/// `uid:gid` of what `path` names, a link followed.
+fn owner_of(path: str) -> !str {
+    let s = fs_stat(path)?
+    "{s[6]}:{s[7]}"
+}
+
+/// `uid:gid` of `path` itself.
+fn owner_of_link(path: str) -> !str {
+    let s = fs_lstat(path)?
+    "{s[6]}:{s[7]}"
+}
+
+fn mode_of(path: str) -> !int {
+    let s = fs_stat(path)?
+    s[4]
+}
+
+fn main() -> !int {
+    let me = os_euid()?
+    if me != 0 {
+        print("refusing: this witness runs only as the super-user in a throwaway container")
+        return 2
+    }
+    let d = "/tmp/s236-owner"
+    fs_remove_dir_all(d) else |_| {}
+    fs_create_dir(d)?
+    let f = d + "/f"
+    fs_write_text(f, "x")?
+    fs_set_mode(f, 0o6755)?
+    let made = owner_of(f)?
+    let made_mode = mode_of(f)?
+    print("made: {made} mode={made_mode}")
+
+    let both = owner_row(f, 1000, 2000, true)
+    let both_now = owner_of(f)?
+    let both_mode = mode_of(f)?
+    print("both: {both} {both_now} mode={both_mode}")
+    let group_only = owner_row(f, -1, 3000, true)
+    let group_now = owner_of(f)?
+    let user_only = owner_row(f, 1001, -1, true)
+    let user_now = owner_of(f)?
+    print("the group alone: {group_only} {group_now}; the user alone: {user_only} {user_now}")
+
+    fs_symlink("f", d + "/ln")?
+    let itself = owner_row(d + "/ln", 1234, 1234, false)
+    let link_now = owner_of_link(d + "/ln")?
+    let target_now = owner_of(f)?
+    print("a link itself: {itself} link={link_now} target={target_now}")
+    let through = owner_row(d + "/ln", 5, 6, true)
+    let link_then = owner_of_link(d + "/ln")?
+    let target_then = owner_of(f)?
+    print("through the link: {through} link={link_then} target={target_then}")
+
+    fs_symlink("nope", d + "/dangling")?
+    let followed = owner_row(d + "/dangling", 7, 8, true)
+    let followed_code = os_error()
+    let dangling = owner_row(d + "/dangling", 7, 8, false)
+    let dangling_now = owner_of_link(d + "/dangling")?
+    print("dangling: followed={followed} errno={followed_code} itself={dangling} {dangling_now}")
+
+    let fd = fs_open(f)?
+    let by_handle = owner_fd_row(fd, 1000, 1000)
+    let handle_now = owner_of(f)?
+    let handle_group = owner_fd_row(fd, -1, 2000)
+    let handle_then = owner_of(f)?
+    fs_close(fd)?
+    let closed = owner_fd_row(fd, 0, 0)
+    print(
+        "by handle: {by_handle} {handle_now}; the group alone: {handle_group} {handle_then}; closed={closed} errno={os_error()}",
+    )
+
+    fs_create_dir(d + "/sub")?
+    let dir = owner_row(d + "/sub", 1000, 2000, true)
+    let dir_now = owner_of(d + "/sub")?
+    fs_write_text(d + "/roots", "x")?
+    print("a directory: {dir} {dir_now}")
+
+    os_set_ids(1000, 1000, [1000, 2000])?
+    let who = os_euid()?
+    let away = owner_row(f, 0, -1, true)
+    let away_code = os_error()
+    let other = owner_row(f, 1001, -1, true)
+    print("as user {who}, its own file: to root={away} errno={away_code} to another user={other}")
+    let own_group = owner_row(f, -1, 1000, true)
+    let own_now = owner_of(f)?
+    let second_group = owner_row(f, -1, 2000, true)
+    let second_now = owner_of(f)?
+    let not_mine = owner_row(f, -1, 3000, true)
+    let not_mine_now = owner_of(f)?
+    print(
+        "its group: to its own={own_group} {own_now} to its second={second_group} {second_now} to one it is not in={not_mine} {not_mine_now}",
+    )
+    let fd3 = fs_open(f)?
+    let fd_ok = owner_fd_row(fd3, -1, 1000)
+    let fd_denied = owner_fd_row(fd3, 0, -1)
+    fs_close(fd3)?
+    let fd_now = owner_of(f)?
+    print("by handle: its own group={fd_ok} to root={fd_denied} {fd_now}")
+    let roots = owner_row(d + "/roots", 1000, -1, true)
+    let roots_group = owner_row(d + "/roots", -1, 1000, true)
+    let roots_now = owner_of(d + "/roots")?
+    print("a file it does not own: the user={roots} the group={roots_group} {roots_now}")
+    0
+}
