@@ -13732,10 +13732,11 @@ mod checked_ids {
         why: &'static str,
         t: &'static str,
     ) -> Result<(), &'static str> {
-        let gid_back = setresgid(before.gid);
-        let groups_back = setgroups(&before.groups);
+        // The read-back decides, not what the two calls answer.
+        let _ = setresgid(before.gid);
+        let _ = setgroups(&before.groups);
         let now = Ids::read();
-        if gid_back && groups_back && now.as_ref() == Some(before) {
+        if now.as_ref() == Some(before) {
             return Err(t);
         }
         half_dropped(why, before, now.as_ref(), want)

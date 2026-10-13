@@ -522,10 +522,13 @@ pub fn drop_to(uid: u32, gid: u32, groups: &[u32]) -> Result<(), i64> {
 /// exactly `before`.
 #[cfg(target_os = "linux")]
 fn put_back(before: &Ids, want: &Ids, why: &'static str, code: i64) -> Result<(), i64> {
-    let gid_back = host::setresgid(before.gid);
-    let groups_back = host::setgroups(&before.groups);
+    // What the two calls answer is not asked: the read-back decides. A
+    // call refused over a value the process already holds has changed
+    // nothing, and a call that answered 0 is believed only once read.
+    let _ = host::setresgid(before.gid);
+    let _ = host::setgroups(&before.groups);
     let now = Ids::read();
-    if gid_back && groups_back && now.as_ref() == Some(before) {
+    if now.as_ref() == Some(before) {
         return Err(code);
     }
     half_dropped(why, before, now.as_ref(), want)
