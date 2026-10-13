@@ -163,7 +163,9 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // and a length are changes to the filesystem — `fs`, with the
         // family.
         | "fs_set_mode" | "fs_open_perm" | "fs_create_dir_mode" | "fs_symlink" | "fs_link"
-        | "fs_set_times" | "fs_truncate" => {
+        | "fs_set_times" | "fs_truncate"
+        // s236 (#701): an owner is a change to the filesystem — `fs`.
+        | "fs_set_owner" | "fs_set_owner_fd" => {
             SandboxCategory::Fs
         }
         // The s39 net builtin tier: every entry point carries the
@@ -230,6 +232,13 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // `os_error_text`'s shelf: `pure_builtin`.)
         "os_signal_send" => SandboxCategory::Exec,
         "os_pid" | "os_ppid" | "os_signal_ignored" => SandboxCategory::Env,
+        // s236 (#633; ruling #74's reading of `os_pid`): who the process
+        // runs as is process state it reads — `env`. Changing it (#742)
+        // is process control, and changes what every later spawn, exec
+        // and signal may do — `exec`, with `os_exec` and
+        // `os_signal_send`.
+        "os_uid" | "os_euid" | "os_gid" | "os_egid" | "os_groups" => SandboxCategory::Env,
+        "os_set_ids" => SandboxCategory::Exec,
         "os_term_foreground" | "os_term_mode" | "os_term_set_mode" => SandboxCategory::Io,
         // s234 (ruling owed, #57 R7's reasoning): the window's size and
         // the special characters are read off a descriptor the program

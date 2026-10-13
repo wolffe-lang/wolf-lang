@@ -13865,6 +13865,25 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // handle; a negative length is `invalid`, every host refusal
         // `io`.
         "fs_truncate" => (vec![int_, int_], rowed(table, unit, &["invalid", "io"])),
+        // s236 (wolf-lang#701, `[os.fs.owner]`): `fs_set_owner(path, uid,
+        // gid, follow)` — one `fchownat`; an id is -1 ("leave") or
+        // 0..=4294967294, anything else `invalid`, as is an id the host
+        // has no mapping for. `follow` false changes a link itself.
+        // `unsupported` is a host with no owners (windows).
+        "fs_set_owner" => (
+            vec![str_, int_, int_, bool_],
+            rowed(
+                table,
+                unit,
+                &["not_found", "denied", "invalid", "unsupported", "io"],
+            ),
+        ),
+        // s236 (`[os.fs.owner]`): the same change on a handle
+        // (`fchown`) — the file the handle holds, whatever its name.
+        "fs_set_owner_fd" => (
+            vec![int_, int_, int_],
+            rowed(table, unit, &["denied", "invalid", "unsupported", "io"]),
+        ),
         // s199 (#426, `[os.fs.seek]`, `[os.fs.tell]`,
         // `[os.fs.read_at]`): the handle's offset. `unseekable` is a
         // pipe, fifo, socket or terminal (ESPIPE) — its own tag
@@ -14207,6 +14226,28 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // (every host has one) and its parent's (windows `unsupported`).
         "os_pid" => (Vec::new(), int_),
         "os_ppid" => (Vec::new(), rowed(table, int_, &["unsupported"])),
+        // s236 (wolf-lang#633, `[os.proc.ids]`): who this process runs
+        // as — the real and effective user and group ids, and the
+        // supplementary groups as the host lists them. windows has no
+        // such ids: `unsupported`.
+        "os_uid" | "os_euid" | "os_gid" | "os_egid" => {
+            (Vec::new(), rowed(table, int_, &["unsupported"]))
+        }
+        "os_groups" => {
+            let list_int = table.intern(TyKind::List(int_));
+            (Vec::new(), rowed(table, list_int, &["unsupported", "io"]))
+        }
+        // s236 (wolf-lang#742, `[os.proc.ids.set]`): become user `uid`,
+        // group `gid`, with exactly the supplementary groups given —
+        // for good, in the one order that works, read back; whole or
+        // not at all.
+        "os_set_ids" => {
+            let list_int = table.intern(TyKind::List(int_));
+            (
+                vec![int_, int_, list_int],
+                rowed(table, unit, &["denied", "invalid", "unsupported", "io"]),
+            )
+        }
         // s219 (`[os.term]`): this process's group, the terminal's
         // foreground group and its mode (canonical=1, echo=2, signals=4,
         // vmin in bits 8..15, vtime in 16..23). windows: `unsupported`.

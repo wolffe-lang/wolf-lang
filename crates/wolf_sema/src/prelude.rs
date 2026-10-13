@@ -229,6 +229,10 @@ pub const PRELUDE: &[Ambient] = &[
     host("fs_link"),
     host("fs_set_times"),
     host("fs_truncate"),
+    // s236 (wolf-lang#701, `[os.fs.owner]`): a file's owner and group,
+    // by path (a link followed or not) and on a handle.
+    host("fs_set_owner"),
+    host("fs_set_owner_fd"),
     // s199 (#426): the handle's offset — `[os.fs.seek]`,
     // `[os.fs.tell]`, `[os.fs.read_at]`.
     host("fs_seek"),
@@ -355,6 +359,16 @@ pub const PRELUDE: &[Ambient] = &[
     host("os_signal_number"),
     host("os_pid"),
     host("os_ppid"),
+    // s236 (wolf-lang#633, #742): who this process runs as
+    // (`[os.proc.ids]`) — `env`-tagged with `os_pid` (ruling #74) — and
+    // the one call that changes it for good (`[os.proc.ids.set]`),
+    // `exec`-tagged with the process-control family.
+    host("os_uid"),
+    host("os_euid"),
+    host("os_gid"),
+    host("os_egid"),
+    host("os_groups"),
+    host("os_set_ids"),
     // s234 (wolf-lang#719, W05; pelt's line editor): the window's size,
     // the terminal's special characters, and one wait on a descriptor
     // and a signal set together.
