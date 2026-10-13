@@ -20,6 +20,10 @@ pub mod fs_change;
 // s228 (wolf-lang#661): the table behind `fs_open`'s and the net
 // calls' handles — numbers never reused, storage always.
 pub(crate) mod handles;
+// s236 (wolf-lang#633, #701, #742): who the process runs as, a file's
+// owner, and the drop — `[os.proc.ids]`, `[os.proc.ids.set]`,
+// `[os.fs.owner]`.
+pub mod ids;
 pub mod io;
 // The s107 json query kernels (c26's last crossing): the HAND MIRROR
 // of `wolf_mem::json` — the locked graph keeps the reference out of
