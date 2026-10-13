@@ -1485,6 +1485,17 @@ mod builtin_cap_tests {
             // (`os_signal_wait`'s); the size and the characters are `io`,
             // uncharged as `os_term_mode` is (below).
             ("os_signal_wait_fd", Cap::Exec),
+            // s236 (#633, #701, #742): reading who the process runs as
+            // charges `env` (ruling #74's `os_pid`), a file's owner
+            // `fs`, and the drop `exec`.
+            ("os_uid", Cap::Env),
+            ("os_euid", Cap::Env),
+            ("os_gid", Cap::Env),
+            ("os_egid", Cap::Env),
+            ("os_groups", Cap::Env),
+            ("fs_set_owner", Cap::Fs),
+            ("fs_set_owner_fd", Cap::Fs),
+            ("os_set_ids", Cap::Exec),
         ] {
             assert_eq!(builtin_cap(name), Some(cap), "{name}");
         }

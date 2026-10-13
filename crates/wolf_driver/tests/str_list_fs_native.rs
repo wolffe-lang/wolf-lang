@@ -773,6 +773,17 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_os_term_size",
         "__wolf_rt_os_term_chars",
         "__wolf_rt_os_signal_wait_fd",
+        // s236 (#633, #701, #742): who the process runs as, the drop,
+        // and a file's owner — `[os.proc.ids]`, `[os.proc.ids.set]`,
+        // `[os.fs.owner]`.
+        "__wolf_rt_os_uid",
+        "__wolf_rt_os_euid",
+        "__wolf_rt_os_gid",
+        "__wolf_rt_os_egid",
+        "__wolf_rt_os_groups",
+        "__wolf_rt_os_set_ids",
+        "__wolf_rt_fs_set_owner",
+        "__wolf_rt_fs_set_owner_fd",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -783,7 +794,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        206,
+        214,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

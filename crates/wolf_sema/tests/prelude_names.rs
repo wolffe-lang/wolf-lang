@@ -57,12 +57,12 @@ fn the_list_by_kind() {
         [
             ("builtin_type", 18),
             ("type", 8),
-            ("function", 127),
+            ("function", 135),
             ("intrinsic", 8),
             ("provisional", 6),
             ("mark", 18),
             ("unanchored", 30),
-            ("w0304", 159),
+            ("w0304", 167),
         ],
         "the prelude moved"
     );
