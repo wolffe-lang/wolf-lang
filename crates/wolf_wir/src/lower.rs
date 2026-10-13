@@ -9085,6 +9085,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             };
             return Ok(Some(self.b.ins(fop, &[a, b], &[wty], Aux::None).one()));
         }
+        // s237 (wolf-lang#736, `[type.int.shift]`): a shift on a plain
+        // integer is X3 arithmetic, checked like `+` and `*`.
+        if !wrapping && matches!(op, SyntaxKind::Shl | SyntaxKind::Shr) {
+            return self.plain_shift(op, a, b, unsigned, wty, span);
+        }
         // Wrapping arithmetic is sign-agnostic (two's complement), so
         // `wrapping[uN]` shares the `.wrap` ops with the signed forms.
         let iop = match (op, wrapping, unsigned) {
@@ -9168,6 +9173,70 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
         }
         Ok(Some(out))
+    }
+
+    /// s237 (wolf-lang#736, `[type.int.shift]`): `a << n` and `a >> n`
+    /// on a plain (non-wrapping) integer. The WIR shift ops mask their
+    /// amount to the width and drop the bits that leave it, which is
+    /// `wrapping[T]`'s meaning; a plain integer's is the value's, so
+    /// the count is checked first (one unsigned compare against the
+    /// width, which a negative count fails too) and a left shift is
+    /// checked by shifting back: the value times `2^n` fits exactly
+    /// when the round trip (arithmetic for a signed type, logical for
+    /// an unsigned one) returns the operand. Either failure is the
+    /// `overflow` trap. A right shift cannot leave the type. `None`
+    /// means a check provably failed (a constant count or operand).
+    fn plain_shift(
+        &mut self,
+        op: SyntaxKind,
+        a: Value,
+        n: Value,
+        unsigned: bool,
+        wty: TypeId,
+        span: Span,
+    ) -> R<Option<Value>> {
+        let Some(bits) = int_bits(wty) else {
+            return Err(refuse("a shift outside the integer types", span));
+        };
+        let width = self.b.iconst(wty, i64::from(bits));
+        let in_width = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[n, width],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Ult),
+            )
+            .one();
+        if self.trap_unless(in_width, TrapKind::Overflow) {
+            return Ok(None);
+        }
+        let right = if unsigned {
+            Opcode::Lshr
+        } else {
+            Opcode::Ashr
+        };
+        if op == SyntaxKind::Shr {
+            return Ok(Some(self.b.ins(right, &[a, n], &[wty], Aux::None).one()));
+        }
+        let shifted = self
+            .b
+            .ins(Opcode::Shl, &[a, n], &[wty], Aux::None)
+            .one();
+        let back = self.b.ins(right, &[shifted, n], &[wty], Aux::None).one();
+        let fits = self
+            .b
+            .ins(
+                Opcode::Icmp,
+                &[back, a],
+                &[types::BOOL],
+                Aux::IntCc(IntCc::Eq),
+            )
+            .one();
+        if self.trap_unless(fits, TrapKind::Overflow) {
+            return Ok(None);
+        }
+        Ok(Some(shifted))
     }
 
     /// s220 (wolf-lang#538, `[type.wrap.div]`): a signed wrapping `/`
