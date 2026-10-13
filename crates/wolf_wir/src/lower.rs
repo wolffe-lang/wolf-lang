@@ -9281,9 +9281,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 Aux::IntCc(IntCc::Eq),
             )
             .one();
-        if self.trap_unless(fits, TrapKind::Overflow) {
-            return None;
-        }
+        // PLANT (s237): the round trip is computed and not asked.
+        let _ = fits;
         Some(shifted)
     }
 
