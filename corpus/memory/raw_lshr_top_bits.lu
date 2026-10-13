@@ -8,8 +8,9 @@
 //! as one `u64` and as its top byte. At wolf 0.2.24 (294d626d) release
 //! printed `33554304 1 15 0` — every branch deleted by rangeopt's
 //! signed bound on `>>`. Native and lupin 0.1.47 printed what this row
-//! says; the checked machine refuses `>>` on a non-wrapping integer by
-//! name (it has no ruled checked-tier semantics yet).
+//! says; the checked machine refused `>>` on a non-wrapping integer by
+//! name until s237 (wolf-lang#736, `[type.int.shift]`) and prints it
+//! now.
 
 import c "stdlib.h"
 
