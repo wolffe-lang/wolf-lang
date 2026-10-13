@@ -1,0 +1,19 @@
+//! A home module for `Map`, for the s237 gate.
+
+/// Every key, in the map's own order.
+pub fn keys[K, V](m: Map[K, V]) -> List[K] {
+    var out = List[K]()
+    for pair in m.pairs() {
+        (mut out).push(pair.0)
+    }
+    out
+}
+
+/// How many entries the map holds.
+pub fn size[K, V](m: Map[K, V]) -> int {
+    var n = 0
+    for pair in m.pairs() {
+        n += 1
+    }
+    n
+}

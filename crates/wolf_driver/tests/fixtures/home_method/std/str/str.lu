@@ -1,0 +1,6 @@
+//! A home module for `str`, for the s237 gate.
+
+/// The text written twice.
+pub fn twice(s: str) -> str {
+    s + s
+}

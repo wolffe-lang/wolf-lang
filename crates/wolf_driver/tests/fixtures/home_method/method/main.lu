@@ -1,0 +1,15 @@
+fn big(x: int) -> bool {
+    x > 2
+}
+
+fn main() {
+    var xs = [1, 2, 3]
+    var m = Map[str, int]()
+    m["a"] = 1
+    m["b"] = 2
+    let ks = m.keys()
+    let s = "ab"
+    (mut xs).double_all()
+    print("{xs.any(big)} {xs.sum_over(2)} {xs[0]} {xs[2]} {xs.pick(1)}")
+    print("{ks.len} {ks.pick(0)} {m.size()} {s.twice()}")
+}

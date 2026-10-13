@@ -1,0 +1,19 @@
+use std.list
+use std.map
+use std.str
+
+fn big(x: int) -> bool {
+    x > 2
+}
+
+fn main() {
+    var xs = [1, 2, 3]
+    var m = Map[str, int]()
+    m["a"] = 1
+    m["b"] = 2
+    let ks = map.keys(m)
+    let s = "ab"
+    list.double_all(mut xs)
+    print("{list.any(xs, big)} {list.sum_over(xs, 2)} {xs[0]} {xs[2]} {list.pick(xs, 1)}")
+    print("{ks.len} {list.pick(ks, 0)} {map.size(m)} {str.twice(s)}")
+}

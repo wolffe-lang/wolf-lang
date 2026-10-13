@@ -1,0 +1,36 @@
+//! A home module for `List`, for the s237 gate: the shape of a std
+//! tree's `std.list` (`[type.method.home]`), written for this fixture.
+
+/// Is `pred` true of any element?
+pub fn any[T](xs: List[T], pred: fn(T) -> bool) -> bool {
+    for x in xs {
+        if pred(x) { return true }
+    }
+    false
+}
+
+/// The sum of the elements above `floor`: a candidate that is not
+/// generic and takes a second argument.
+pub fn sum_over(xs: List[int], floor: int) -> int {
+    var total = 0
+    for x in xs {
+        if x > floor {
+            total += x
+        }
+    }
+    total
+}
+
+/// Doubles every element in place: a `mut` receiver.
+pub fn double_all(mut xs: List[int]) {
+    var i = 0
+    while i < xs.len {
+        xs[i] = xs[i] * 2
+        i += 1
+    }
+}
+
+/// The element at `i`: generic in what it answers.
+pub fn pick[T](xs: List[T], i: int) -> T {
+    copy xs[i]
+}
