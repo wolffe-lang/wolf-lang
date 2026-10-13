@@ -1,0 +1,60 @@
+//! check: run(exit=0, stdout="ids: true\ngroups: true\nowner of a new file is the effective user: true")
+//! phase: run
+//! conforms: os.proc.ids, err.union
+//!
+//! s236 (wolf-lang#633, `[os.proc.ids]`) — who this process runs as,
+//! with one truth on every tier-1 host. The real and effective user
+//! and group ids are each a number from 0 where the host has such ids,
+//! and `unsupported`, by name, where it has none (windows) — all four
+//! alike, and the supplementary groups with them. A file the process
+//! creates is owned by its EFFECTIVE user (`fs_stat`'s word 6), which
+//! is the one fact about the ids a program can check without being
+//! told who it is. The numbers themselves are the host's: the gate
+//! `crates/wolf_driver/tests/ids_lanes.rs` holds them to `id`. lupin
+//! has no host call for an id and refuses `os_uid` by name.
+
+/// One id: its value, -1 on a host with no ids.
+fn id_of(which: int) -> int {
+    if which == 0 {
+        return os_uid() else |_| -1
+    }
+    if which == 1 {
+        return os_euid() else |_| -1
+    }
+    if which == 2 {
+        return os_gid() else |_| -1
+    }
+    os_egid() else |_| -1
+}
+
+fn main() -> !int {
+    let uid = id_of(0)
+    let euid = id_of(1)
+    let gid = id_of(2)
+    let egid = id_of(3)
+    let served = uid >= 0
+    print("ids: {(euid >= 0) == served && (gid >= 0) == served && (egid >= 0) == served}")
+    var groups_served = true
+    var all_ids = true
+    let gs = os_groups() else |e| {
+        groups_served = match e {
+            unsupported => false,
+            io => true,
+        }
+        List[int]()
+    }
+    for g in gs {
+        all_ids = all_ids && g >= 0 && g <= 4294967294
+    }
+    print("groups: {groups_served == served && all_ids}")
+    let p = "target/s236-ids-read"
+    fs_create_dir_all("target")?
+    fs_write_text(p, "x")?
+    let s = fs_stat(p)?
+    fs_remove(p)?
+    let owned = s[3] / 64 % 2 == 1
+    print(
+        "owner of a new file is the effective user: {owned == served && (!owned || s[6] == euid)}",
+    )
+    0
+}
