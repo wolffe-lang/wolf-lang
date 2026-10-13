@@ -10594,6 +10594,28 @@ impl<'t> Machine<'t> {
             Some(b) => b,
             None => return self.refuse("calls into unresolvable bodies", e.span),
         };
+        let args: Vec<Option<&'t GreenNode>> = d
+            .args()
+            .into_iter()
+            .flat_map(|l| l.args())
+            .map(Arg::value)
+            .collect();
+        self.call_free(sig, body, &args)
+    }
+
+    /// The free call of a declared function: `args` are the call's
+    /// argument expressions in parameter order (`None` where an
+    /// argument carries no value expression). A plain call hands its
+    /// argument list; a home-module method call
+    /// (`[type.method.resolve]` step 2) hands the receiver first, so
+    /// the two spellings bind generics, evaluate modes and run the
+    /// body through this one path.
+    fn call_free(
+        &mut self,
+        sig: &'t CallSig,
+        body: usize,
+        args: &[Option<&'t GreenNode>],
+    ) -> E<Flow> {
         // Generic bindings for the callee (#12): a declared param type
         // that NAMES one of the callee's own generic params binds it
         // to the caller-side concrete type of the matching argument —
@@ -10619,7 +10641,7 @@ impl<'t> Machine<'t> {
                     .collect();
                 if !gnames.is_empty() {
                     let mut map: HashMap<String, String> = HashMap::new();
-                    let mut arg_iter = d.args().into_iter().flat_map(|l| l.args());
+                    let mut arg_iter = args.iter().copied();
                     for pdecl in fd.params().into_iter().flat_map(|ps| ps.params()) {
                         let a = arg_iter.next();
                         let (Some(tynode), Some(a)) = (pdecl.ty(), a) else {
@@ -10627,7 +10649,7 @@ impl<'t> Machine<'t> {
                         };
                         let tytext = slice(tynode.span);
                         if gnames.contains(&tytext)
-                            && let Some(v) = Arg::value(a)
+                            && let Some(v) = a
                             && let Some(c) = self.ty_concrete_name(v.span)
                         {
                             map.entry(tytext).or_insert(c);
@@ -10639,13 +10661,13 @@ impl<'t> Machine<'t> {
                 }
             }
         }
-        let mut args = Vec::new();
-        for (i, a) in d.args().into_iter().flat_map(|l| l.args()).enumerate() {
-            let Some(v) = Arg::value(a) else { continue };
+        let mut vals = Vec::new();
+        for (i, a) in args.iter().enumerate() {
+            let Some(v) = *a else { continue };
             let mode = sig.params.get(i).and_then(|p| p.mode);
-            args.push(val!(self.eval_arg(v, mode)));
+            vals.push(val!(self.eval_arg(v, mode)));
         }
-        let out = self.call_body(body, args)?;
+        let out = self.call_body(body, vals)?;
         // A raised row tag crosses the call as the error flow — the
         // caller's `?`/`else`/`match` observes it (D30).
         if let Value::ErrTag { .. } = out {
@@ -10779,15 +10801,23 @@ impl<'t> Machine<'t> {
         args: Option<wolf_ast::ArgList<'t>>,
     ) -> E<Flow> {
         let method = sig.callee.as_str();
-        // s166 — a home-module method (`[type.method.resolve]` step 2)
-        // is the free call with the receiver first; the checked
-        // machine's generic binding reads positional arguments only,
-        // so it refuses the method spelling by name rather than guess.
-        if matches!(
-            self.ctx().dispatch.get(&e.span),
-            Some(Dispatch::Home { .. })
-        ) {
-            return self.refuse("home-module method calls in checked execution", e.span);
+        // s166, s237 (wolf-lang#745) — a home-module method
+        // (`[type.method.resolve]` step 2) IS the free call with the
+        // receiver first: the home module's function is found by the
+        // record's own module and name, and the receiver takes the
+        // first parameter's place in the one path a free call runs.
+        if let Some(Dispatch::Home { module, name }) = self.ctx().dispatch.get(&e.span).cloned() {
+            let Some(body) = self
+                .fns
+                .get(&(module, name))
+                .copied()
+                .filter(|b| self.ctxs[*b].is_some())
+            else {
+                return self.refuse("a home-module method without a resolvable body", e.span);
+            };
+            let mut exprs: Vec<Option<&'t GreenNode>> = vec![Some(recv)];
+            exprs.extend(args.into_iter().flat_map(|l| l.args()).map(Arg::value));
+            return self.call_free(sig, body, &exprs);
         }
         let recv_ty = self.expr_ty(recv.span).cloned();
         // Raw-pointer provenance ops.
