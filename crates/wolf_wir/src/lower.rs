@@ -10203,6 +10203,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "fs_set_times"
                 | "fs_truncate"
                 | "os_umask"
+                // s236 (#701): a file's owner, by path and on a handle.
+                | "fs_set_owner"
+                | "fs_set_owner_fd"
         ) {
             return self.lower_fs_builtin(&callee_text, d, e);
         }
@@ -10340,6 +10343,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_term_size"
                 | "os_term_chars"
                 | "os_signal_wait_fd"
+                // s236 (#633, #742): who the process runs as, and the
+                // one call that changes it.
+                | "os_uid"
+                | "os_euid"
+                | "os_gid"
+                | "os_egid"
+                | "os_groups"
+                | "os_set_ids"
         ) {
             return self.lower_job_builtin(&callee_text, d, e);
         }
@@ -13615,8 +13626,31 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // s230: the unit-or-row changers — one shim each, the code
             // to the declared row.
             | "fs_set_mode" | "fs_create_dir_mode" | "fs_symlink" | "fs_link"
-            | "fs_set_times" | "fs_truncate" => {
+            | "fs_set_times" | "fs_truncate"
+            // s236: the owner, the same shape.
+            | "fs_set_owner" | "fs_set_owner_fd" => {
                 let rc = match name {
+                    // s236 (`[os.fs.owner]`): the path pair, the two
+                    // ids, `follow` widened; and the handle form.
+                    "fs_set_owner" => {
+                        let path = arg(0)?;
+                        let (pp, pl) = self.str_parts(path);
+                        let (uid, gid) = (arg(1)?, arg(2)?);
+                        let follow = self.widen_to_wire(arg(3)?, e.span)?;
+                        self.rt_call(
+                            "__wolf_rt_fs_set_owner",
+                            &[pp, pl, uid, gid, follow],
+                            Some(types::I64),
+                        )
+                    }
+                    "fs_set_owner_fd" => {
+                        let (fd, uid, gid) = (arg(0)?, arg(1)?, arg(2)?);
+                        self.rt_call(
+                            "__wolf_rt_fs_set_owner_fd",
+                            &[fd, uid, gid],
+                            Some(types::I64),
+                        )
+                    }
                     // s230 (`[os.fs.mode]`, `[os.fs.create.mode]`): a
                     // path pair and the mode word.
                     "fs_set_mode" | "fs_create_dir_mode" => {
@@ -14889,6 +14923,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
         let want = match name {
             "os_pgid" | "os_signal_ignored" | "os_pid" | "os_ppid" => 0,
+            "os_uid" | "os_euid" | "os_gid" | "os_egid" | "os_groups" => 0,
+            "os_set_ids" => 3,
             "os_spawn_job" => 6,
             "os_term_set_foreground" | "os_term_set_mode" | "os_signal_send" => 2,
             "os_signal_wait_fd" => 2,
@@ -14931,6 +14967,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_term_size" => ("__wolf_rt_os_term_size", PROC),
             "os_term_chars" => ("__wolf_rt_os_term_chars", PROC),
             "os_signal_wait_fd" => ("__wolf_rt_os_signal_wait_fd", SIG),
+            "os_uid" => ("__wolf_rt_os_uid", PROC),
+            "os_euid" => ("__wolf_rt_os_euid", PROC),
+            "os_gid" => ("__wolf_rt_os_gid", PROC),
+            "os_egid" => ("__wolf_rt_os_egid", PROC),
+            "os_groups" => ("__wolf_rt_os_groups", PROC),
+            "os_set_ids" => ("__wolf_rt_os_set_ids", PROC),
             _ => return Err(refuse("this job builtin", e.span)),
         };
         // s234 (`[os.term.size]`): `os_pipe`'s pair shape — rc 0 and the
@@ -14973,10 +15015,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // s234 (`[os.term.chars]`): `fs_fstat`'s list shape — the shim
         // mints the `List[int]`, so the call goes through the foreign
         // chain; rc 0 and the header through an out word, else the code.
-        if name == "os_term_chars" {
+        //
+        // s236 (`[os.proc.ids]`): `os_groups` is the same shape with no
+        // argument.
+        if name == "os_term_chars" || name == "os_groups" {
             let (region, slot) = self.rt_slot(8);
             let rc = self
-                .rt_call_foreign(sym, &[argv[0]], Some((slot, region)), Some(types::I64))
+                .rt_call_foreign(sym, &argv, Some((slot, region)), Some(types::I64))
                 .expect("rc");
             let z = self.b.iconst(types::I64, 0);
             let hit = self
@@ -15003,6 +15048,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_term_set_foreground"
                 | "os_term_set_mode"
                 | "os_signal_send"
+                | "os_set_ids"
         );
         if name == "os_wait_status" {
             let (region, slot) = self.rt_slot(8);
@@ -15027,7 +15073,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             )?;
             return Ok(Flow::Val(Some(out)));
         }
-        let rc = if name == "os_spawn_job" {
+        let rc = if name == "os_set_ids" {
+            // s236 (`[os.proc.ids.set]`): the two ids and the groups'
+            // `List[int]` header, which the shim reads — the foreign
+            // chain, as the job spawn's lists.
+            self.rt_call_foreign(sym, &argv, None, Some(types::I64))
+                .expect("rc")
+        } else if name == "os_spawn_job" {
             let (p, l) = self.str_parts(argv[0]);
             self.rt_call_foreign(
                 sym,

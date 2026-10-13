@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 206] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 214] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -225,6 +225,10 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 206] = [
     ("__wolf_rt_fs_link", 4, true),
     ("__wolf_rt_fs_set_times", 7, true),
     ("__wolf_rt_fs_truncate", 2, true),
+    // s236 (#701): the owner — a path pair, the two ids and `follow`;
+    // a handle and the two ids.
+    ("__wolf_rt_fs_set_owner", 5, true),
+    ("__wolf_rt_fs_set_owner_fd", 3, true),
     ("__wolf_rt_os_umask", 1, true),
     // s199 (#426): the handle's offset — seek (fd, off, whence, out),
     // tell (fd, out), and the positional read (fd, off, max, out).
@@ -368,6 +372,16 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 206] = [
     ("__wolf_rt_os_term_size", 2, true),
     ("__wolf_rt_os_term_chars", 2, true),
     ("__wolf_rt_os_signal_wait_fd", 2, true),
+    // s236 (#633, #742): the four ids (none in, the id or a negated
+    // code out), the supplementary groups (a minted List[int] header
+    // through the out slot), and the drop (the two ids and the groups'
+    // header in, a code out).
+    ("__wolf_rt_os_uid", 0, true),
+    ("__wolf_rt_os_euid", 0, true),
+    ("__wolf_rt_os_gid", 0, true),
+    ("__wolf_rt_os_egid", 0, true),
+    ("__wolf_rt_os_groups", 1, true),
+    ("__wolf_rt_os_set_ids", 3, true),
     // The OS random source (s118, #143): count in, a minted List[int]
     // header through the out slot; nonzero rc is trap(assert) in
     // lowering ([os.random.trap]) — the one os shim with no row.
