@@ -461,31 +461,19 @@ pub fn drop_to(uid: u32, gid: u32, groups: &[u32]) -> Result<(), i64> {
         gid: [gid; 3],
         groups: groups.to_vec(),
     };
-    // PLANT (s236, reverted next): the WRONG order — the user ids first.
-    // Once they are another user's the process may change no group, so
-    // the two steps after them are refused and the old group id and the
-    // old groups are left behind; the read-back and the put-back below
-    // are what must catch it.
-    if !host::setresuid(want.uid) {
+    // 1. The supplementary groups. Refused, nothing has changed.
+    if !host::setgroups(groups) {
         return Err(ids_code(errno()));
     }
-    if !host::setgroups(groups) {
-        let code = ids_code(errno());
-        return put_back(
-            &before,
-            &want,
-            "PLANT: the groups were refused after the user ids were set",
-            code,
-        );
-    }
+    // 2. The group ids. Refused, the groups go back.
     if !host::setresgid(want.gid) {
         let code = ids_code(errno());
-        return put_back(
-            &before,
-            &want,
-            "PLANT: the group ids were refused after the user ids were set",
-            code,
-        );
+        return put_back(&before, &want, "the group ids were refused", code);
+    }
+    // 3. The user ids, last: after them the process may change no group.
+    if !host::setresuid(want.uid) {
+        let code = ids_code(errno());
+        return put_back(&before, &want, "the user ids were refused", code);
     }
     // 4. It took: what the host reads back is what was asked.
     match Ids::read() {
