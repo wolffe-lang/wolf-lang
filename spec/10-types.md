@@ -408,6 +408,102 @@ the checked machine where lupin trapped.) Witnesses:
   `typecheck/int_not_signed.lu`, `typecheck/int_not_byte.lu`,
   `typecheck/int_not_float.lu` (`fail(E0409)`).
 
+- `[type.int.shift]` **A shift on a plain integer is arithmetic on its
+  value.** *(s237 for wolf-lang#736. **Ruling owed:** the maintainer
+  has not ruled this clause. It is written as the lane recommends and
+  implemented as written, in commits of their own, so a different
+  ruling is a rewording here and a change to those commits; the
+  options are listed at the end.)* For `x` and `n` of one plain integer
+  type `T` (`int`, `uint`, `i8`…`i64`, `u8`…`u64`) of width `W`,
+  **`x << n` is `x * 2^n` and `x >> n` is the floor of `x / 2^n`**,
+  computed on the values, each of type `T`. X3 holds as it does for
+  `*`: a result that does not fit `T` is the `overflow` trap
+  (`[mem.ub.defined]`) on every machine and in every profile, never a
+  wrapped answer. What follows from that one sentence:
+  **(1) `>>` cannot trap on a count of zero or more.** It rounds toward
+  negative infinity, so it is the arithmetic shift on a signed type
+  (`-8 >> 1` is `-4`, `-7 >> 1` is `-4`, `-1 >> n` is `-1`) and the
+  logical shift on an unsigned one (`255 >> 7` at `u8` is `1`).
+  **(2) `<<` traps exactly when the product leaves the type**: `255 <<
+  1` at `u8`, `127 << 1` at `i8`, `MIN << 1`; and `1 << 63` at `int`,
+  because 2^63 is one past `int`'s maximum — a positive value is never
+  shifted into a signed type's top bit (`-1 << 63` is `MIN`, and `1 <<
+  63` at `u64` fits). `1 << 7` at `u8` is `128`.
+  **(3) A count at or past the width is no case of its own.** Every bit
+  has left: `x >> n` is `0`, or `-1` for a negative `x` (`255 >> 8` at
+  `u8` is `0`, `-8 >> 64` at `int` is `-1`), `0 << n` is `0`, and any
+  other `x << n` traps, as (2) says.
+  **(4) A negative count traps `overflow`**, for `<<` and `>>` alike:
+  `8 >> -1` has no value under the definition and is not `8 << 1`.
+  **(5) The count has the operand's type.** `<<` and `>>` take two
+  operands of one type as `+` does (`x << n` with `x: u64` and `n: int`
+  is E0401); a literal count adopts it, and an unsigned type's count
+  cannot be negative.
+  **(6) `wrapping[T]` is the other meaning, unchanged**: the count is
+  taken modulo `W`, the bits that leave are dropped, and `>>` is logical
+  for an unsigned inner type and arithmetic for a signed one — a
+  rotation is `x << k | x >> (W - k)` there and nowhere else. That is
+  the answer every machine has given since #130; it had no clause
+  either, and this sentence is its record, not a change.
+  **(7) Everything that computes a shift computes this one.** A `byte`
+  operand widens to `int` first (`[type.byte.op]`: `b << 4` is `int`'s);
+  `<<=` and `>>=` are the operator and the store; a constant shift is
+  evaluated by the same rule, so `const K: u8 = 200 << 1` is E0706
+  where `let a: u8 = 200 << 1` traps, and `const Z: u8 = 255 >> 8` is
+  `0`.
+  **The cost, stated:** a count the compiler cannot see is one unsigned
+  compare against the width and a branch; `<<` adds the shift back and
+  a compare (the product fits exactly when the round trip returns
+  `x`). A constant in-width count folds the first check away, and `x >>
+  3` is the bare instruction.
+  **What it replaced, measured** (250 programs: ten types by
+  twenty-five edges, operands through a function; wolf 0.2.29 and lupin
+  0.1.52, 2026-10-13): the checked machine refused every shift on a
+  plain integer by name; native and release computed `wrapping[T]`'s
+  answer on a plain type — the count masked to the width and the bits
+  dropped (`255 << 1` at `u8` was `254`, `1 << 8` was `1`, `1 << 9` was
+  `2`, `255 >> 8` was `255`, `1 << 63` at `int` was `MIN`, `8 >> -1` was
+  `0`); lupin computed this clause on all 250 and so disagreed with the
+  compiled tiers on 155; and the compiler's constant evaluator faulted
+  on every count at or past the width while its own run time computed
+  an answer. **A program compiled by 0.2.29 or earlier that shifts a
+  set bit out of a plain integer, or shifts by its width or more, or by
+  a negative count, changes behaviour**: it trapped nowhere and now
+  traps `overflow`, or (for `>>` past the width) prints 0 or -1 where
+  it printed the masked shift's answer. The spelling that keeps the old
+  bits is `wrapping[T]`.
+  **Not answered by lupin 0.1.52:** a count of 128 or more traps there
+  where (3) answers (its integers are 128 bits wide), and a constant
+  initialiser is not checked against its type (`const K: u8 = 200 << 1`
+  prints `400`). `shift_lanes` pins the first by version.
+  **The ruling, as options.** *A (this clause):* the value, X3 on the
+  product, no rule about the count but its sign. One sentence, lupin's
+  answer on every measured cell, the constant evaluator's on every
+  in-width one; no interpreter release is owed for the table. *B:* as A,
+  but any count outside `0..W` traps. One fewer path in the compiled
+  code (`>>` past the width needs no answer) and the constant
+  evaluator's old behaviour; lupin answers 55 of the 250 cells
+  differently (`0 << W`, every `>>` past the width) and would change.
+  *C:* the count outside `0..W` traps and the bits that leave are
+  dropped silently (a shift is a bit operation, as `&` is). The
+  cheapest check; it makes `<<` the one plain operator that loses
+  value without a trap, and lupin and the constant evaluator both
+  change. *D:* the masked machine shift, what native and release did.
+  No compiled program changes; `x << 64 == x` on a type that traps on
+  `x * 2`, and a plain integer and its `wrapping` form become the same
+  type for two operators. *E:* no shift on a plain integer at all
+  (a type error naming `wrapping[T]`); every `1 << k` in the corpus,
+  std and downstream is rewritten.
+  Witnesses: `typecheck/int_shift_value.lu`,
+  `faults/int_shift_left_overflow.lu`,
+  `faults/int_shift_left_sign_bit.lu`,
+  `faults/int_shift_left_past_width.lu`,
+  `faults/int_shift_count_negative.lu`, `comptime/shift_value.lu`,
+  `comptime/shift_overflow.lu` (`fail(E0706)`),
+  `kernels/wrap_lshr_fold.lu`, `memory/raw_lshr_top_bits.lu`; the gate
+  `shift_lanes` runs the table on four machines against the rule
+  written a second time.
+
 - `[type.byte.interp]` **`{b}` prints the number** — the decimal octet
   value, `0` through `255`, never a character: a byte is a quantity,
   and the character it might encode is `str`'s business
@@ -1411,7 +1507,10 @@ reaches them. wolf-lang#154 is the book's filing of the same gap.)
   parameter with the candidate's generics fresh, then `args` against the
   rest — the same instantiation, the same dispatch record, the same
   instance and the same code as `list.any(xs, p)` written out, so the
-  two spellings are one call and no program can tell them apart. The
+  two spellings are one call and no program can tell them apart
+  (every machine: the checked machine refused the method spelling by
+  name until s237, wolf-lang#745, and ran the free one; it now runs
+  both through one path, `home_method_lanes`). The
   receiver's mode is spelled, as on every method (X1): a candidate whose
   first parameter is `mut` is called `(mut xs).sort_by(less)`, and a
   receiver whose written mode disagrees with the first parameter's is
