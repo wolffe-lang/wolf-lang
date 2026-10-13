@@ -591,6 +591,7 @@
     "type.generic": "10-types.md",
     "type.generic.bind": "10-types.md",
     "type.int.not": "10-types.md",
+    "type.int.shift": "10-types.md",
     "type.interp": "10-types.md",
     "type.interp.agg": "10-types.md",
     "type.interp.none": "10-types.md",
