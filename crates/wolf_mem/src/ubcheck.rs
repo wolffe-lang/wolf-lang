@@ -10878,7 +10878,7 @@ impl<'t> Machine<'t> {
         if let Some(Dispatch::Home { module, name }) = self.ctx().dispatch.get(&e.span).cloned() {
             let Some(body) = self
                 .fns
-                .get(&(module, name))
+                .get(&(*module, name.clone()))
                 .copied()
                 .filter(|b| self.ctxs[*b].is_some())
             else {
