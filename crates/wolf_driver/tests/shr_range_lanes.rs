@@ -11,8 +11,10 @@
 //! 1. `corpus/kernels/lshr_top_bits.lu` — `wrapping[u64]` and
 //!    `wrapping[u8]`, four machines: release printed `... 0` for `31`;
 //! 2. `corpus/memory/raw_lshr_top_bits.lu` — plain `u64`/`u8` out of a
-//!    C allocation: release `0` for `31`; the checked machine refuses a
-//!    shift on a non-wrapping integer by name;
+//!    C allocation: release `0` for `31`. The checked machine refused a
+//!    shift on a non-wrapping integer by name until s237 (wolf-lang#736)
+//!    gave it `[type.int.shift]`; it prints the row with the others now
+//!    (`shift_lanes.rs` is that clause's own gate);
 //! 3. the issue's hosted witness (`fixtures/shr_range/`, an opaque value
 //!    from listed assembly; x86-64 linux): release printed one line of
 //!    three.
@@ -235,14 +237,11 @@ fn a_branch_on_the_top_half_of_a_wrapping_shift_is_kept() {
     );
 }
 
-/// Row 2: plain `u64` and `u8`.
+/// Row 2: plain `u64` and `u8`, all four machines since s237
+/// (`[type.int.shift]`: `>>` on a plain integer is the value's floor).
 #[test]
 fn a_branch_on_the_top_half_of_a_u64_shift_is_kept() {
-    every_machine_prints(
-        "memory/raw_lshr_top_bits.lu",
-        "33554304 1 15 31\n",
-        Some("this operator in checked execution"),
-    );
+    every_machine_prints("memory/raw_lshr_top_bits.lu", "33554304 1 15 31\n", None);
 }
 
 /// Row 3: #600's own witness, the value behind listed assembly.
