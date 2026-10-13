@@ -1271,7 +1271,7 @@ in the type system as `wrapping[T]`, and wraps identically at
 comptime; there is no flag, profile, or mode that changes any of
 this. Fix the computation, widen the type, or spell the wraparound.
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__overflow_i32.snap, crates/wolf_sema/tests/snapshots/ctfe_diagnostics__e0706_overflow.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__overflow_i32.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__comptime__shift_overflow.snap, crates/wolf_sema/tests/snapshots/ctfe_diagnostics__e0706_overflow.snap
 
 ## E0707 — const-generic equality needs a witness
 
