@@ -509,7 +509,7 @@ fn fold_inst(f: &Function, types: &TypeInterner, inst: Inst) -> Fold {
                     } else {
                         (1u64 << bits) - 1
                     };
-                    (((a as u64) & mask) >> sh) as i64
+                    wrap_to(i128::from(((a as u64) & mask) >> sh), bits)
                 }
             })
         }
