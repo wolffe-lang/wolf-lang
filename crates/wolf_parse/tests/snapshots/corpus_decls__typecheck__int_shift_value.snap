@@ -1,0 +1,18 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 886..926 name=l8 body=Block
+FnDecl 928..968 name=r8 body=Block
+FnDecl 970..1011 name=li8 body=Block
+FnDecl 1013..1054 name=ri8 body=Block
+FnDecl 1056..1100 name=l16 body=Block
+FnDecl 1102..1146 name=r16 body=Block
+FnDecl 1148..1193 name=li16 body=Block
+FnDecl 1195..1240 name=li32 body=Block
+FnDecl 1242..1286 name=l32 body=Block
+FnDecl 1288..1333 name=lint body=Block
+FnDecl 1335..1380 name=rint body=Block
+FnDecl 1382..1426 name=l64 body=Block
+FnDecl 1428..1472 name=r64 body=Block
+FnDecl 1474..2106 name=main body=Block

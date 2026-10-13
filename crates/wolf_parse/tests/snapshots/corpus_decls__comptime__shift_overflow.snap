@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ConstDecl 351..374 name=K init=BinExpr
+FnDecl 375..405 name=main body=Block
