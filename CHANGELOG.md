@@ -89,6 +89,79 @@ the program).
 - **Rulings owed** (`[os.term.editor.note]` R1–R6), each implemented as
   recommended.
 
+### Who a process runs as, a file's owner, and the drop (s236, #633, #701, #742; rulings owed)
+
+A wolf program could not tell whether it ran as root (lobo read
+`/proc/self/status`, and on macOS the exit code of a spawned `id`),
+could not change a file's owner (`chown`, `chgrp`, `cp -p` and
+`install -o` could not be written), and could not stop being the
+super-user (`su`, `login`, a server after it binds its low port). No
+machine resolved a name for any of it.
+
+- **`os_uid()`, `os_euid()`, `os_gid()`, `os_egid()` `-> int !
+  {unsupported}`** and **`os_groups() -> List[int] ! {io,
+  unsupported}`** (`[os.proc.ids]`): the real and effective user and
+  group ids, and the supplementary groups as `getgroups` answers them,
+  in the host's order (whether the effective group is in the list is
+  the host's). "Am I the super-user?" is `os_euid()? == 0`.
+- **`fs_set_owner(path, uid, gid, follow) -> () ! {denied, invalid, io,
+  not_found, unsupported}`** and **`fs_set_owner_fd(fd, uid, gid) -> ()
+  ! {denied, invalid, io, unsupported}`** (`[os.fs.owner]`): `chown` by
+  path — `-1` leaves an id alone, `follow` false changes a link itself —
+  and on a handle. An id outside `-1` and `0..=4294967294` is `invalid`
+  before the host is asked, and so is an id the host has no mapping for
+  (a user namespace). The host clears set-user-id and set-group-id when
+  an owner changes, so set the owner first and the mode after.
+- **`os_set_ids(uid, gid, groups) -> () ! {denied, invalid, io,
+  unsupported}`** (`[os.proc.ids.set]`): this process becomes that user
+  for good — real, effective and saved ids, and exactly those
+  supplementary groups — in the one order that works: the groups, the
+  group ids, the user ids. The other order leaves the old group id and
+  the old groups behind (measured as root in a container: `uid 1000`,
+  `gid 0`, groups `[0, 4, 27]`), and a program cannot write it with this
+  call. **The call returns with every id as asked or every id as it
+  was, and never in between:** a refusal before any change returns its
+  row; a refusal after one is put back and read back first; and if the
+  put-back fails, the ids read back are not the ones asked for, or an
+  old id can still be taken, the process ends — one line on standard
+  error and an abort. Every thread of the process changes together.
+- **Hosts.** linux serves all eight. macOS and freebsd serve the reads
+  and the owner calls and answer `unsupported` for `os_set_ids` (macOS
+  has no way to read a drop back). windows answers `unsupported` for
+  all eight, after the shape rows. The freestanding target refuses each
+  by name.
+- **Machines.** checked, native and release make the same host calls in
+  the same order; the checked machine sets the real ids of the `wolf`
+  process the program runs as, as `os_umask` sets the real mask. lupin
+  serves the two owner calls and refuses the five reads and
+  `os_set_ids` by name (wolf-interp's s236; lupin 0.1.52 resolves none
+  of the eight and is pinned as pre-mirror in the gate).
+- **Capabilities.** The five reads charge `env`, the owner calls `fs`,
+  `os_set_ids` `exec`.
+- **Witnessed** (`ids_lanes`, checked, native, release and lupin): the
+  ids held to `id` and the groups to the host's own list; on a host,
+  only calls that change nothing and the refusals a user gets. The drop
+  and the owner changes run as the super-user inside a throwaway
+  `--network none` container with read-only mounts (docker in CI, where
+  a missing engine is a failure; podman on a developer's box, or a loud
+  skip): the drop read back in every thread and by a child `id`, the
+  way back `denied`, a drop refused at its last step (`--cap-drop
+  SETUID`) put back whole, and a user's `chgrp` to a group it is in and
+  to one it is not.
+- **Counts:** the host table 120 → 128 lines, `RT_SYMBOLS` 206 → 214,
+  the prelude 127 → 135 functions and 159 → 167 W0304 names, anchors
+  644 → 648. A program that defines a top-level `os_uid`, `os_euid`,
+  `os_gid`, `os_egid`, `os_groups`, `os_set_ids`, `fs_set_owner` or
+  `fs_set_owner_fd` now gets W0304; none of boreutils, pelt, lobo, pax,
+  wolf-std or muzzle does.
+- **Rulings owed** (`[os.proc.ids.note]`, R1–R10, each implemented as
+  recommended): the spellings (`fs_set_owner`, where #701 and px38 say
+  `fs_chown`), one call or three for setting ids, what a failed drop
+  does, the check, the capabilities, macOS, windows, the checked
+  machine, lupin. **Not done:** `fs_access` (#633's second ask), a
+  temporary change of the effective id, names for ids (wolf-std's
+  `std.os.users` reads the account files).
+
 ## 0.2.29 — 2026-10-12
 
 THE TWENTY-NINTH. Three compiler lanes land, one with a lupin half, and
