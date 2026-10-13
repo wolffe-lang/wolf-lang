@@ -5753,7 +5753,11 @@ impl<'t> Machine<'t> {
         if out < lo || out > hi {
             return self.trap("overflow", "mem.ub.defined", span);
         }
-        Ok(Value::Int(if wide { out as u64 as i64 } else { out as i64 }))
+        Ok(Value::Int(if wide {
+            out as u64 as i64
+        } else {
+            out as i64
+        }))
     }
 
     /// The range of the integer prim at `span` when it is narrower
