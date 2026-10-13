@@ -5601,15 +5601,13 @@ impl<'t> Machine<'t> {
                 // two's-complement bits stay sign-extended, an unsigned
                 // width's stay in `0..=max` — so they are the bits'
                 // own answer, as on every other machine (the mask
-                // idiom `x & !m` needs them). Shifts can leave the
-                // width and still have no ruled checked-tier semantics
-                // — the honest refusal, never a silent identity.
+                // idiom `x & !m` needs them).
                 match op {
                     SyntaxKind::Amp => return Ok(Value::Int(a & b)),
                     SyntaxKind::Pipe => return Ok(Value::Int(a | b)),
                     SyntaxKind::Caret => return Ok(Value::Int(a ^ b)),
                     SyntaxKind::Shl | SyntaxKind::Shr => {
-                        return self.refuse("this operator in checked execution", span);
+                        return self.plain_shift(op, a, b, span, ty_span);
                     }
                     _ => {}
                 }
@@ -5691,6 +5689,77 @@ impl<'t> Machine<'t> {
                 Ok(Value::Str(a))
             }
             _ => self.refuse("arithmetic outside integers", span),
+        }
+    }
+
+    /// s237 (wolf-lang#736, `[type.int.shift]`): a shift on a plain
+    /// (non-wrapping) integer is X3 arithmetic on the VALUE. The count
+    /// lies in `0..width` or the shift traps `overflow`; `a << n` is
+    /// `a * 2^n` and traps `overflow` when that leaves the type; `a >>
+    /// n` is the floor of `a / 2^n` (arithmetic on a signed type,
+    /// logical on an unsigned one). Computed in `i128`, which holds
+    /// every operand and every in-range product of every width, so
+    /// nothing here depends on how the host shifts. A `u64`/`uint` is
+    /// read back from its held bit pattern (`wide_unsigned`).
+    fn plain_shift(
+        &mut self,
+        op: SyntaxKind,
+        a: i64,
+        b: i64,
+        span: Span,
+        ty_span: Span,
+    ) -> E<Value> {
+        let wide = self.wide_unsigned_at(ty_span) || self.wide_unsigned_at(span);
+        let (lo, hi): (i128, i128) = if wide {
+            (0, i128::from(u64::MAX))
+        } else {
+            match self
+                .narrow_range_at(ty_span)
+                .or_else(|| self.narrow_range_at(span))
+            {
+                Some((lo, hi)) => (i128::from(lo), i128::from(hi)),
+                None => (i128::from(i64::MIN), i128::from(i64::MAX)),
+            }
+        };
+        // The width is the range's: `hi - lo + 1` is `2^width`.
+        let width = i128::from((hi - lo + 1).trailing_zeros());
+        let read = |v: i64| {
+            if wide {
+                i128::from(v as u64)
+            } else {
+                i128::from(v)
+            }
+        };
+        let (x, n) = (read(a), read(b));
+        if n < 0 || n >= width {
+            return self.trap("overflow", "mem.ub.defined", span);
+        }
+        let out = if op == SyntaxKind::Shl {
+            x << n
+        } else {
+            x >> n
+        };
+        if out < lo || out > hi {
+            return self.trap("overflow", "mem.ub.defined", span);
+        }
+        Ok(Value::Int(if wide { out as u64 as i64 } else { out as i64 }))
+    }
+
+    /// The range of the integer prim at `span` when it is narrower
+    /// than 64 bits, read through `distinct` (a `distinct u8` shifts
+    /// at eight bits).
+    fn narrow_range_at(&self, span: Span) -> Option<(i64, i64)> {
+        let ctx = self.ctx();
+        let mut id = ctx.expr_tys.get(&span).copied()?;
+        for _ in 0..32 {
+            match ctx.tb.table.kind(id) {
+                TyKind::Distinct(i) => id = *i,
+                _ => break,
+            }
+        }
+        match ctx.tb.table.kind(id) {
+            TyKind::Prim(p) => prim_range(*p),
+            _ => None,
         }
     }
 
