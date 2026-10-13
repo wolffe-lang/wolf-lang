@@ -6813,6 +6813,76 @@ impl<'t> Machine<'t> {
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
             }
+            // s236 (wolf-lang#701, `[os.fs.owner]`): one `fchownat` —
+            // `wolf_rt::ids`'s call, in its order: the shape of the two
+            // ids, then the host, then the call. The host's `EINVAL`
+            // (an id with no mapping in this user namespace) is
+            // `invalid`.
+            "fs_set_owner" => {
+                let (Some(path), Some(uid), Some(gid)) = (path_arg(0), int_arg(1), int_arg(2))
+                else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let Some(Value::Bool(follow)) = argv.get(3) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let (Some(u), Some(g)) = (checked_ids::owner_arg(uid), checked_ids::owner_arg(gid))
+                else {
+                    return Ok(tag("invalid"));
+                };
+                #[cfg(unix)]
+                {
+                    match checked_ids::set_owner(&path, u, g, *follow) {
+                        Err(e) => {
+                            let t = errtag(&e, &["not_found", "denied", "io"]);
+                            Ok(tag(if checked_ids::no_such_id(&e) {
+                                "invalid"
+                            } else {
+                                &t
+                            }))
+                        }
+                        Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = (path, u, g, follow);
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s236 (`[os.fs.owner]`): the same change on a handle —
+            // `fchown`; a closed or forged handle is `io`.
+            "fs_set_owner_fd" => {
+                let (Some(fd), Some(uid), Some(gid)) = (int_arg(0), int_arg(1), int_arg(2)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let (Some(u), Some(g)) = (checked_ids::owner_arg(uid), checked_ids::owner_arg(gid))
+                else {
+                    return Ok(tag("invalid"));
+                };
+                #[cfg(unix)]
+                {
+                    let Some(f) = self.fs_handle(fd) else {
+                        return Ok(tag("io"));
+                    };
+                    match checked_ids::set_owner_fd(&f, u, g) {
+                        Err(e) => {
+                            let t = errtag(&e, &["denied", "io"]);
+                            Ok(tag(if checked_ids::no_such_id(&e) {
+                                "invalid"
+                            } else {
+                                &t
+                            }))
+                        }
+                        Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = (fd, u, g);
+                    Ok(tag("unsupported"))
+                }
+            }
             // s230 (wolf-lang#702, `[os.fs.truncate]`): the length of
             // the file behind a handle; every host refusal is `io`.
             "fs_truncate" => {
@@ -8298,6 +8368,51 @@ impl<'t> Machine<'t> {
                 #[cfg(not(unix))]
                 {
                     Ok(tag("unsupported"))
+                }
+            }
+            // s236 (#633, `[os.proc.ids]`): who the `wolf` process runs
+            // as — the checked program runs as it — in the host's own
+            // words.
+            "os_uid" | "os_euid" | "os_gid" | "os_egid" => match checked_ids::id(name) {
+                Some(v) => Ok(Flow::Val(Value::Int(v))),
+                None => Ok(tag("unsupported")),
+            },
+            "os_groups" => match checked_ids::groups() {
+                Err(t) => Ok(tag(t)),
+                Ok(gs) => {
+                    let items: Vec<Value> =
+                        gs.iter().map(|&g| Value::Int(i64::from(g))).collect();
+                    self.charge_mem(8 * items.len() as u64)?;
+                    let id = self.mint_list(items, span)?;
+                    Ok(Flow::Val(Value::List(id)))
+                }
+            },
+            // s236 (#742, `[os.proc.ids.set]`): the PROCESS's ids,
+            // really set — as `os_umask` sets the real mask and
+            // `os_exec` replaces the real process: there is no
+            // machine-local identity a host would check. The shape,
+            // then the host, then `wolf_rt::ids`'s drop step for step:
+            // an error only with the process exactly as it was, and
+            // otherwise the same abort.
+            "os_set_ids" => {
+                let (Some(uid), Some(gid), Some(Value::List(list))) =
+                    (int_arg(0), int_arg(1), argv.get(2))
+                else {
+                    return self.refuse("this os call shape", span);
+                };
+                let mut flat = Vec::new();
+                for v in self.lists.get(*list).into_iter().flatten() {
+                    match v {
+                        Value::Int(n) => flat.push(*n),
+                        _ => return self.refuse("a non-int group id", span),
+                    }
+                }
+                let Some((u, g, set)) = checked_ids::ids_shape(uid, gid, &flat) else {
+                    return Ok(tag("invalid"));
+                };
+                match checked_ids::drop_to(u, g, &set) {
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    Err(t) => Ok(tag(t)),
                 }
             }
             // s219: the child's OS pid, and its status — an exit code,
@@ -10301,7 +10416,9 @@ impl<'t> Machine<'t> {
             // s230 (#346, #698, #699, #700, #702): a mode, a mode at
             // creation, the links, the times, the length.
             | "fs_set_mode" | "fs_open_perm" | "fs_create_dir_mode" | "fs_symlink"
-            | "fs_link" | "fs_set_times" | "fs_truncate" => {
+            | "fs_link" | "fs_set_times" | "fs_truncate"
+            // s236 (#701): a file's owner, by path and on a handle.
+            | "fs_set_owner" | "fs_set_owner_fd" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
@@ -10358,6 +10475,8 @@ impl<'t> Machine<'t> {
             // s234 (#719): the window's size, the special characters, the
             // wait on a descriptor and a signal set.
             | "os_term_size" | "os_term_chars" | "os_signal_wait_fd"
+            // s236 (#633, #742): who the process runs as, and the drop.
+            | "os_uid" | "os_euid" | "os_gid" | "os_egid" | "os_groups" | "os_set_ids"
             | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
             | "str_from_utf8"
@@ -13308,6 +13427,339 @@ mod checked_sig {
 
 /// s219 (`[os.term]`): the terminal calls on the host descriptor a
 /// handle names. windows: `unsupported`.
+/// s236 (wolf-lang#633, #701, #742): who the process runs as, a file's
+/// owner and the drop — `wolf_rt::ids`'s twin, call for call and step
+/// for step (`[os.proc.ids]`, `[os.proc.ids.set]`, `[os.fs.owner]`).
+/// The drop's rule is the runtime's: an error only with the process
+/// exactly as it was; anything between ends the process.
+mod checked_ids {
+    /// The largest id; one below the all-ones value every host call
+    /// reads as "leave this id alone".
+    const ID_MAX: i64 = 0xFFFF_FFFE;
+    /// The most supplementary groups one drop takes (linux's limit).
+    const GROUPS_MAX: usize = 65536;
+
+    /// An owner word: `Some(None)` leaves the id, `Some(Some(id))` sets
+    /// it, `None` is `invalid`.
+    pub(super) fn owner_arg(v: i64) -> Option<Option<u32>> {
+        match v {
+            -1 => Some(None),
+            0..=ID_MAX => Some(Some(v as u32)),
+            _ => None,
+        }
+    }
+
+    /// The drop's arguments: the two ids and the groups sorted with
+    /// repeats dropped; `None` is `invalid`.
+    pub(super) fn ids_shape(uid: i64, gid: i64, groups: &[i64]) -> Option<(u32, u32, Vec<u32>)> {
+        let id = |v: i64| (0..=ID_MAX).contains(&v).then_some(v as u32);
+        let (u, g) = (id(uid)?, id(gid)?);
+        if groups.len() > GROUPS_MAX {
+            return None;
+        }
+        let mut set = Vec::with_capacity(groups.len());
+        for &x in groups {
+            set.push(id(x)?);
+        }
+        set.sort_unstable();
+        set.dedup();
+        Some((u, g, set))
+    }
+
+    /// One of the four ids by its builtin's name; `None` on a host with
+    /// no such ids.
+    pub(super) fn id(name: &str) -> Option<i64> {
+        #[cfg(unix)]
+        {
+            // SAFETY: the four take nothing and cannot fail.
+            Some(i64::from(unsafe {
+                match name {
+                    "os_uid" => libc::getuid(),
+                    "os_euid" => libc::geteuid(),
+                    "os_gid" => libc::getgid(),
+                    _ => libc::getegid(),
+                }
+            }))
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = name;
+            None
+        }
+    }
+
+    /// `getgroups`, in the host's order; a list that grew between the
+    /// two calls is asked again.
+    pub(super) fn groups() -> Result<Vec<u32>, &'static str> {
+        #[cfg(unix)]
+        {
+            for _ in 0..8 {
+                // SAFETY: a zero size reads the count and writes nothing.
+                let n = unsafe { libc::getgroups(0, std::ptr::null_mut()) };
+                if n < 0 {
+                    return Err("io");
+                }
+                let mut buf: Vec<libc::gid_t> = vec![0; n as usize + 8];
+                // SAFETY: `buf` holds `buf.len()` writable ids.
+                let m = unsafe { libc::getgroups(buf.len() as libc::c_int, buf.as_mut_ptr()) };
+                if m >= 0 {
+                    buf.truncate(m as usize);
+                    return Ok(buf);
+                }
+                if std::io::Error::last_os_error().raw_os_error() != Some(libc::EINVAL) {
+                    return Err("io");
+                }
+            }
+            Err("io")
+        }
+        #[cfg(not(unix))]
+        {
+            Err("unsupported")
+        }
+    }
+
+    /// Is `e` the host's `EINVAL` — an id with no mapping here, or a
+    /// handle with no owner to change? The `invalid` row.
+    #[cfg(unix)]
+    pub(super) fn no_such_id(e: &std::io::Error) -> bool {
+        e.raw_os_error() == Some(libc::EINVAL)
+    }
+
+    #[cfg(unix)]
+    fn host_id(v: Option<u32>) -> u32 {
+        v.unwrap_or(u32::MAX)
+    }
+
+    /// One `fchownat`.
+    #[cfg(unix)]
+    pub(super) fn set_owner(
+        path: &str,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        follow: bool,
+    ) -> std::io::Result<()> {
+        let c = std::ffi::CString::new(path)
+            .map_err(|_| std::io::Error::from(std::io::ErrorKind::InvalidInput))?;
+        let flags = if follow { 0 } else { libc::AT_SYMLINK_NOFOLLOW };
+        // SAFETY: a NUL-terminated path; the ids are plain words.
+        let rc = unsafe {
+            libc::fchownat(
+                libc::AT_FDCWD,
+                c.as_ptr(),
+                host_id(uid) as libc::uid_t,
+                host_id(gid) as libc::gid_t,
+                flags,
+            )
+        };
+        if rc == 0 {
+            Ok(())
+        } else {
+            Err(std::io::Error::last_os_error())
+        }
+    }
+
+    /// One `fchown`.
+    #[cfg(unix)]
+    pub(super) fn set_owner_fd(
+        f: &std::fs::File,
+        uid: Option<u32>,
+        gid: Option<u32>,
+    ) -> std::io::Result<()> {
+        use std::os::fd::AsRawFd as _;
+        // SAFETY: `f` is open for the length of the call.
+        let rc = unsafe {
+            libc::fchown(
+                f.as_raw_fd(),
+                host_id(uid) as libc::uid_t,
+                host_id(gid) as libc::gid_t,
+            )
+        };
+        if rc == 0 {
+            Ok(())
+        } else {
+            Err(std::io::Error::last_os_error())
+        }
+    }
+
+    /// The drop on a host that has none: `unsupported`, by name.
+    #[cfg(not(target_os = "linux"))]
+    pub(super) fn drop_to(_uid: u32, _gid: u32, _groups: &[u32]) -> Result<(), &'static str> {
+        Err("unsupported")
+    }
+
+    /// Everything the drop changes, as the host reads it back.
+    #[cfg(target_os = "linux")]
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    struct Ids {
+        uid: [u32; 3],
+        gid: [u32; 3],
+        groups: Vec<u32>,
+    }
+
+    #[cfg(target_os = "linux")]
+    impl Ids {
+        fn read() -> Option<Ids> {
+            let (mut r, mut e, mut s) = (0, 0, 0);
+            // SAFETY: three writable ids.
+            if unsafe { libc::getresuid(&mut r, &mut e, &mut s) } != 0 {
+                return None;
+            }
+            let uid = [r, e, s];
+            // SAFETY: three writable ids.
+            if unsafe { libc::getresgid(&mut r, &mut e, &mut s) } != 0 {
+                return None;
+            }
+            let mut groups = groups().ok()?;
+            groups.sort_unstable();
+            groups.dedup();
+            Some(Ids {
+                uid,
+                gid: [r, e, s],
+                groups,
+            })
+        }
+
+        fn show(&self) -> String {
+            format!(
+                "uid {}/{}/{} gid {}/{}/{} groups {:?}",
+                self.uid[0],
+                self.uid[1],
+                self.uid[2],
+                self.gid[0],
+                self.gid[1],
+                self.gid[2],
+                self.groups
+            )
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn refusal() -> &'static str {
+        match std::io::Error::last_os_error().raw_os_error() {
+            Some(libc::EPERM) => "denied",
+            Some(libc::EINVAL) => "invalid",
+            _ => "io",
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn setgroups(gs: &[u32]) -> bool {
+        // SAFETY: `gs.len()` readable ids.
+        unsafe { libc::setgroups(gs.len(), gs.as_ptr()) == 0 }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn setresgid(g: [u32; 3]) -> bool {
+        // SAFETY: plain words.
+        unsafe { libc::setresgid(g[0], g[1], g[2]) == 0 }
+    }
+
+    #[cfg(target_os = "linux")]
+    fn setresuid(u: [u32; 3]) -> bool {
+        // SAFETY: plain words.
+        unsafe { libc::setresuid(u[0], u[1], u[2]) == 0 }
+    }
+
+    /// The drop, `wolf_rt::ids::drop_to`'s steps: the groups, the group
+    /// ids, the user ids; a later refusal put back and read back; the
+    /// result read back and the old ids tried.
+    #[cfg(target_os = "linux")]
+    pub(super) fn drop_to(uid: u32, gid: u32, groups: &[u32]) -> Result<(), &'static str> {
+        let Some(before) = Ids::read() else {
+            return Err("io");
+        };
+        let want = Ids {
+            uid: [uid; 3],
+            gid: [gid; 3],
+            groups: groups.to_vec(),
+        };
+        if !setgroups(groups) {
+            return Err(refusal());
+        }
+        if !setresgid(want.gid) {
+            let t = refusal();
+            return put_back(&before, &want, "the group ids were refused", t);
+        }
+        if !setresuid(want.uid) {
+            let t = refusal();
+            return put_back(&before, &want, "the user ids were refused", t);
+        }
+        match Ids::read() {
+            Some(after) if after == want => {}
+            after => half_dropped(
+                "the ids read back are not the ids asked for",
+                &before,
+                after.as_ref(),
+                &want,
+            ),
+        }
+        if uid != 0 {
+            for (i, &old) in before.uid.iter().enumerate() {
+                // SAFETY: plain words.
+                if old != uid
+                    && !before.uid[..i].contains(&old)
+                    && unsafe { libc::seteuid(old) } == 0
+                {
+                    half_dropped(
+                        "the user id it had can still be taken back",
+                        &before,
+                        Ids::read().as_ref(),
+                        &want,
+                    );
+                }
+            }
+            for (i, &old) in before.gid.iter().enumerate() {
+                // SAFETY: plain words.
+                if old != gid
+                    && !before.gid[..i].contains(&old)
+                    && unsafe { libc::setegid(old) } == 0
+                {
+                    half_dropped(
+                        "the group id it had can still be taken back",
+                        &before,
+                        Ids::read().as_ref(),
+                        &want,
+                    );
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[cfg(target_os = "linux")]
+    fn put_back(
+        before: &Ids,
+        want: &Ids,
+        why: &'static str,
+        t: &'static str,
+    ) -> Result<(), &'static str> {
+        let gid_back = setresgid(before.gid);
+        let groups_back = setgroups(&before.groups);
+        let now = Ids::read();
+        if gid_back && groups_back && now.as_ref() == Some(before) {
+            return Err(t);
+        }
+        half_dropped(why, before, now.as_ref(), want)
+    }
+
+    /// One line on standard error and `abort`: the process is neither
+    /// who it was nor who it asked to be.
+    #[cfg(target_os = "linux")]
+    fn half_dropped(why: &str, before: &Ids, now: Option<&Ids>, want: &Ids) -> ! {
+        use std::io::Write as _;
+        let now = now.map_or_else(|| "unreadable".to_string(), Ids::show);
+        let line = format!(
+            "wolf: os_set_ids: {why}: asked for {}; was {}; is {now} — the process stops rather than run half-dropped\n",
+            want.show(),
+            before.show(),
+        );
+        let mut err = std::io::stderr().lock();
+        let _ = err.write_all(line.as_bytes());
+        let _ = err.flush();
+        std::process::abort()
+    }
+}
+
 mod checked_term {
     #[cfg(unix)]
     use std::os::fd::AsRawFd as _;
