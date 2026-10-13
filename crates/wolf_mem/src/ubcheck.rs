@@ -5693,14 +5693,17 @@ impl<'t> Machine<'t> {
     }
 
     /// s237 (wolf-lang#736, `[type.int.shift]`): a shift on a plain
-    /// (non-wrapping) integer is X3 arithmetic on the VALUE. The count
-    /// lies in `0..width` or the shift traps `overflow`; `a << n` is
-    /// `a * 2^n` and traps `overflow` when that leaves the type; `a >>
-    /// n` is the floor of `a / 2^n` (arithmetic on a signed type,
-    /// logical on an unsigned one). Computed in `i128`, which holds
-    /// every operand and every in-range product of every width, so
-    /// nothing here depends on how the host shifts. A `u64`/`uint` is
-    /// read back from its held bit pattern (`wide_unsigned`).
+    /// (non-wrapping) integer is X3 arithmetic on the VALUE. `a << n`
+    /// is `a * 2^n` and traps `overflow` when that leaves the type;
+    /// `a >> n` is the floor of `a / 2^n` (arithmetic on a signed
+    /// type, logical on an unsigned one) and cannot leave it; a
+    /// negative count traps `overflow`. A count at or past the width
+    /// is no special case of the rule: every bit has left, so `>>`
+    /// answers 0 (-1 for a negative value) and `<<` answers 0 for a
+    /// zero value and traps for any other. Computed in `i128`, which
+    /// holds every operand and every in-range product of every width,
+    /// so nothing here depends on how the host shifts. A `u64`/`uint`
+    /// is read back from its held bit pattern (`wide_unsigned`).
     fn plain_shift(
         &mut self,
         op: SyntaxKind,
@@ -5731,13 +5734,21 @@ impl<'t> Machine<'t> {
             }
         };
         let (x, n) = (read(a), read(b));
-        if n < 0 || n >= width {
+        if n < 0 {
             return self.trap("overflow", "mem.ub.defined", span);
         }
-        let out = if op == SyntaxKind::Shl {
-            x << n
-        } else {
-            x >> n
+        let out = match (op == SyntaxKind::Shl, n >= width) {
+            (true, false) => x << n,
+            (true, true) if x == 0 => 0,
+            (true, true) => return self.trap("overflow", "mem.ub.defined", span),
+            (false, false) => x >> n,
+            (false, true) => {
+                if x < 0 {
+                    -1
+                } else {
+                    0
+                }
+            }
         };
         if out < lo || out > hi {
             return self.trap("overflow", "mem.ub.defined", span);
