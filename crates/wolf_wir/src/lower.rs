@@ -9266,18 +9266,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         unsigned: bool,
         wty: TypeId,
     ) -> Option<Value> {
-        let right = if unsigned {
-            Opcode::Lshr
-        } else {
-            Opcode::Ashr
-        };
+        let right = if unsigned { Opcode::Lshr } else { Opcode::Ashr };
         if op == SyntaxKind::Shr {
             return Some(self.b.ins(right, &[a, n], &[wty], Aux::None).one());
         }
-        let shifted = self
-            .b
-            .ins(Opcode::Shl, &[a, n], &[wty], Aux::None)
-            .one();
+        let shifted = self.b.ins(Opcode::Shl, &[a, n], &[wty], Aux::None).one();
         let back = self.b.ins(right, &[shifted, n], &[wty], Aux::None).one();
         let fits = self
             .b
@@ -9326,11 +9319,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
             // Every bit out of a signed value leaves its sign: 0 or -1.
             let top = self.b.iconst(wty, i64::from(bits - 1));
-            return Some(
-                self.b
-                    .ins(Opcode::Ashr, &[a, top], &[wty], Aux::None)
-                    .one(),
-            );
+            return Some(self.b.ins(Opcode::Ashr, &[a, top], &[wty], Aux::None).one());
         }
         let is_zero = self
             .b
