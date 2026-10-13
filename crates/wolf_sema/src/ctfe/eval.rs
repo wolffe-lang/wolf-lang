@@ -2150,19 +2150,40 @@ impl<'a> Engine<'a> {
                         K::Amp => Some(a & b),
                         K::Pipe => Some(a | b),
                         K::Caret => Some(a ^ b),
+                        // s237 (wolf-lang#736, `[type.int.shift]`): what
+                        // the run-time machines compute. A `wrapping[T]`
+                        // count masks to the width (#130's rule); a plain
+                        // integer's shift is the value's: a negative
+                        // count is a fault, `>>` is the floor (0 or -1
+                        // once every bit has left) and `<<` is the
+                        // product, which the range check below judges.
                         K::Shl | K::Shr => {
                             let width_bits = width_bits(w);
-                            if b < 0 || b >= width_bits {
+                            if wrapping {
+                                let n = b.rem_euclid(width_bits) as u32;
+                                if op == K::Shl {
+                                    a.checked_shl(n)
+                                } else {
+                                    Some(a >> n)
+                                }
+                            } else if b < 0 {
                                 return Err(FaultKind::Arith {
                                     op: op_text(op).to_string(),
                                     ty: w.name().to_string(),
-                                    detail: format!("shift by {b} exceeds the width"),
+                                    detail: format!("a shift by {b}: the count is negative"),
                                 });
-                            }
-                            if op == K::Shl {
-                                a.checked_shl(b as u32)
+                            } else if op == K::Shr {
+                                Some(if b >= width_bits {
+                                    if a < 0 { -1 } else { 0 }
+                                } else {
+                                    a >> b
+                                })
+                            } else if b >= width_bits {
+                                // Every bit out: 0 stays 0, anything
+                                // else has left the type.
+                                if a == 0 { Some(0) } else { None }
                             } else {
-                                a.checked_shr(b as u32)
+                                a.checked_shl(b as u32)
                             }
                         }
                         _ => None,
