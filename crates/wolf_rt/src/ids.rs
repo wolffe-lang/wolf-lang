@@ -33,8 +33,9 @@
 //!   step, so the process still holds what it needs to), the result is
 //!   read back, and the row is returned only if the process is exactly
 //!   as it was;
-//! - anything else — the put-back refused, a read-back that disagrees,
-//!   an old id that can still be taken — ends the process:
+//! - anything else — a put-back that does not read back as before, a
+//!   read-back after the drop that disagrees, an old id that can still
+//!   be taken — ends the process:
 //!   [`half_dropped`] writes one line on standard error and aborts. Not
 //!   a trap: a proc boundary contains a trap (D68), and the ids are the
 //!   whole process's.
