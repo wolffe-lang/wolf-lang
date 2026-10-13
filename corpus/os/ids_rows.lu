@@ -1,0 +1,92 @@
+//! check: run(exit=0, stdout="set_ids(uid -1)=invalid set_ids(gid 4294967295)=invalid set_ids(group -1)=invalid\nset_owner(uid -2)=invalid set_owner(gid 4294967295)=invalid set_owner_fd(uid -2)=invalid\nos_error=0\nleave=true same=true by_handle=true\nmissing=true forged=true\nunchanged=true cleaned=true")
+//! phase: run
+//! conforms: os.proc.ids.set, os.fs.owner, os.fs.error, err.union
+//!
+//! s236 (wolf-lang#701, #742) — the rows of the id and owner calls that
+//! change nothing, one truth on every host. Each call judges its
+//! arguments before it asks the host anything: a user or group id is
+//! 0..=4294967294 (the all-ones word is every host's "leave this one
+//! alone", so it is never an id), an owner word may also be -1
+//! ("leave"), and `os_set_ids` has no "leave" at all — each of these is
+//! `invalid`, on windows too, where the well-formed call would be
+//! `unsupported`. None reaches the host, so `os_error()` stays 0.
+//! Then the owner calls that are well formed and change nothing: -1 -1,
+//! and the owner the file already has (`fs_stat`'s words 6 and 7), by
+//! path and on a handle — `ok` where the host has owners,
+//! `unsupported` where it has none (windows: `fs_stat` answers no
+//! owner there, its `have` bit clear). A missing path is `not_found`
+//! and a forged handle `io`. The rows that DO change an id or an owner
+//! run inside a throwaway container, as the super-user:
+//! `crates/wolf_driver/tests/ids_lanes.rs`.
+
+fn set_row(uid: int, gid: int, groups: List[int]) -> str {
+    os_set_ids(uid, gid, groups) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn owner_row(path: str, uid: int, gid: int, follow: bool) -> str {
+    fs_set_owner(path, uid, gid, follow) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn owner_fd_row(fd: int, uid: int, gid: int) -> str {
+    fs_set_owner_fd(fd, uid, gid) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    let none = List[int]()
+    print(
+        "set_ids(uid -1)={set_row(-1, 0, none)} set_ids(gid 4294967295)={set_row(0, 4294967295, none)} set_ids(group -1)={set_row(0, 0, [0, -1])}",
+    )
+    let p = "target/s236-ids-rows"
+    print(
+        "set_owner(uid -2)={owner_row(p, -2, -1, true)} set_owner(gid 4294967295)={owner_row(p, -1, 4294967295, false)} set_owner_fd(uid -2)={owner_fd_row(999999, -2, -1)}",
+    )
+    print("os_error={os_error()}")
+
+    fs_remove(p) else |_| {}
+    fs_create_dir_all("target")?
+    fs_write_text(p, "x")?
+    let before = fs_stat(p)?
+    // Where the host answers an owner (the record's `have` bit 6) the
+    // calls are served; where it answers none they are refused by name.
+    let want = if before[3] / 64 % 2 == 1 { "ok" } else { "unsupported" }
+    let leave = owner_row(p, -1, -1, true)
+    let same = owner_row(p, before[6], before[7], true)
+    let fd = fs_open(p)?
+    let by_handle = owner_fd_row(fd, -1, -1)
+    fs_close(fd)?
+    print("leave={leave == want} same={same == want} by_handle={by_handle == want}")
+    let missing = owner_row("target/s236-ids-rows-never-made", -1, -1, true)
+    let forged = owner_fd_row(999999, -1, -1)
+    print(
+        "missing={missing == (if want == "ok" { "not_found" } else { want })} forged={forged == (if want == "ok" { "io" } else { want })}",
+    )
+    let after = fs_stat(p)?
+    fs_remove(p)?
+    print("unchanged={after[6] == before[6] && after[7] == before[7]} cleaned={!fs_exists(p)}")
+    0
+}
