@@ -11,9 +11,13 @@
 //! width") where the compiled program computed an answer.
 
 const A: u8 = 1 << 3
+
 const B: u8 = 255 >> 8
+
 const C: u8 = 0 << 8
+
 const D: int = -8 >> 64
+
 const E: u8 = 1 << 7
 
 comptime fn wrapped() -> int {
