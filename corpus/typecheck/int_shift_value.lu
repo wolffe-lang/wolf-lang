@@ -1,0 +1,86 @@
+//! check: run(exit=0, stdout="8 16 128 64 -128 -4 -4 -1\n4096 1 32768 -2 1073741824 2147483648\n4611686018427387904 9223372036854775808 1 -9223372036854775808\n0 0 0 0 -1 -1 0 0\n40 5 12 3200\n")
+//! phase: run
+//! conforms: type.int.shift
+//!
+//! s237 (wolf-lang#736, `[type.int.shift]`): a shift on a plain integer
+//! is the value's. `x << n` is `x * 2^n` wherever that fits the type
+//! (the top bit of an unsigned type included; `-1 << 7` at `i8` is
+//! `MIN`), `x >> n` is the floor of `x / 2^n` (`-7 >> 1` is -4), and a
+//! count at or past the width has shifted every bit out: 0, or -1 for
+//! a negative value, and `0 << n` is 0. A `byte` widens to `int` first.
+//! At 0.2.29 the checked machine refused every line by name, and
+//! native and release masked the count (`255 >> 8` at `u8` printed 255,
+//! `-8 >> 64` printed -8) where lupin 0.1.52 printed what this row says.
+
+fn l8(x: u8, n: u8) -> u8 {
+    x << n
+}
+
+fn r8(x: u8, n: u8) -> u8 {
+    x >> n
+}
+
+fn li8(x: i8, n: i8) -> i8 {
+    x << n
+}
+
+fn ri8(x: i8, n: i8) -> i8 {
+    x >> n
+}
+
+fn l16(x: u16, n: u16) -> u16 {
+    x << n
+}
+
+fn r16(x: u16, n: u16) -> u16 {
+    x >> n
+}
+
+fn li16(x: i16, n: i16) -> i16 {
+    x << n
+}
+
+fn li32(x: i32, n: i32) -> i32 {
+    x << n
+}
+
+fn l32(x: u32, n: u32) -> u32 {
+    x << n
+}
+
+fn lint(x: int, n: int) -> int {
+    x << n
+}
+
+fn rint(x: int, n: int) -> int {
+    x >> n
+}
+
+fn l64(x: u64, n: u64) -> u64 {
+    x << n
+}
+
+fn r64(x: u64, n: u64) -> u64 {
+    x >> n
+}
+
+fn main() {
+    print(
+        "{l8(1, 3)} {r8(64, 2)} {l8(1, 7)} {li8(1, 6)} {li8(-1, 7)} {ri8(-8, 1)} {ri8(-7, 1)} {ri8(-128, 7)}",
+    )
+    print(
+        "{l16(1, 12)} {r16(65535, 15)} {l16(1, 15)} {li16(-1, 1)} {li32(1, 30)} {l32(1, 31)}",
+    )
+    print(
+        "{lint(1, 62)} {l64(1, 63)} {r64(18446744073709551615, 63)} {lint(-1, 63)}",
+    )
+    print(
+        "{r8(255, 8)} {r8(255, 100)} {r64(18446744073709551615, 64)} {rint(9223372036854775807, 64)} {rint(-8, 64)} {ri8(-8, 100)} {l8(0, 8)} {lint(0, 100)}",
+    )
+    let b = 200 as byte
+    var acc = 5
+    acc <<= 3
+    var down = 40
+    down >>= 3
+    print("{acc} {down} {b >> 4} {b << 4}")
+}
