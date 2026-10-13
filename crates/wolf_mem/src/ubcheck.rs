@@ -13672,16 +13672,28 @@ mod checked_ids {
             gid: [gid; 3],
             groups: groups.to_vec(),
         };
-        if !setgroups(groups) {
+        // PLANT (s236, reverted next): the WRONG order — the user ids
+        // first, as in `wolf_rt::ids`.
+        if !setresuid(want.uid) {
             return Err(refusal());
+        }
+        if !setgroups(groups) {
+            let t = refusal();
+            return put_back(
+                &before,
+                &want,
+                "PLANT: the groups were refused after the user ids were set",
+                t,
+            );
         }
         if !setresgid(want.gid) {
             let t = refusal();
-            return put_back(&before, &want, "the group ids were refused", t);
-        }
-        if !setresuid(want.uid) {
-            let t = refusal();
-            return put_back(&before, &want, "the user ids were refused", t);
+            return put_back(
+                &before,
+                &want,
+                "PLANT: the group ids were refused after the user ids were set",
+                t,
+            );
         }
         match Ids::read() {
             Some(after) if after == want => {}
