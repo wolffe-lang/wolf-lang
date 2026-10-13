@@ -491,10 +491,7 @@ pub fn drop_to(uid: u32, gid: u32, groups: &[u32]) -> Result<(), i64> {
     if uid != 0 {
         for (i, &old) in before.uid.iter().enumerate() {
             // SAFETY: plain words.
-            if old != uid
-                && !before.uid[..i].contains(&old)
-                && unsafe { libc::seteuid(old) } == 0
-            {
+            if old != uid && !before.uid[..i].contains(&old) && unsafe { libc::seteuid(old) } == 0 {
                 half_dropped(
                     "the user id it had can still be taken back",
                     &before,
@@ -505,10 +502,7 @@ pub fn drop_to(uid: u32, gid: u32, groups: &[u32]) -> Result<(), i64> {
         }
         for (i, &old) in before.gid.iter().enumerate() {
             // SAFETY: plain words.
-            if old != gid
-                && !before.gid[..i].contains(&old)
-                && unsafe { libc::setegid(old) } == 0
-            {
+            if old != gid && !before.gid[..i].contains(&old) && unsafe { libc::setegid(old) } == 0 {
                 half_dropped(
                     "the group id it had can still be taken back",
                     &before,
@@ -597,10 +591,7 @@ mod tests {
     fn a_bad_owner_is_invalid_before_the_host() {
         let (pp, pl) = pair_of("wolf-s236-no-such-path");
         unsafe {
-            assert_eq!(
-                __wolf_rt_fs_set_owner(pp, pl, -2, -1, 1),
-                fs_code::INVALID
-            );
+            assert_eq!(__wolf_rt_fs_set_owner(pp, pl, -2, -1, 1), fs_code::INVALID);
             assert_eq!(
                 __wolf_rt_fs_set_owner(pp, pl, -1, ID_MAX + 1, 0),
                 fs_code::INVALID
@@ -678,7 +669,11 @@ mod tests {
             assert_eq!(__wolf_rt_fs_set_owner_fd(fd, uid, gid), fs_code::OK);
             assert_eq!(__wolf_rt_fs_close(fd), fs_code::OK);
             assert_eq!(__wolf_rt_fs_set_owner_fd(fd, -1, -1), fs_code::IO);
-            assert_eq!(__wolf_rt_os_error(), 0, "a closed handle has no host number");
+            assert_eq!(
+                __wolf_rt_os_error(),
+                0,
+                "a closed handle has no host number"
+            );
             // Root's files are not a user's to take, and a user's are
             // not his to give away.
             if libc::geteuid() != 0 {

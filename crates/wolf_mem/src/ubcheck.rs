@@ -8380,8 +8380,7 @@ impl<'t> Machine<'t> {
             "os_groups" => match checked_ids::groups() {
                 Err(t) => Ok(tag(t)),
                 Ok(gs) => {
-                    let items: Vec<Value> =
-                        gs.iter().map(|&g| Value::Int(i64::from(g))).collect();
+                    let items: Vec<Value> = gs.iter().map(|&g| Value::Int(i64::from(g))).collect();
                     self.charge_mem(8 * items.len() as u64)?;
                     let id = self.mint_list(items, span)?;
                     Ok(Flow::Val(Value::List(id)))
