@@ -1,0 +1,22 @@
+//! check: run(exit=0, stdout="255 4294967295 1\n")
+//! phase: run
+//! conforms: type.int.shift
+//!
+//! s237: a `wrapping[T]` shift masks its count to the width, so `255
+//! >> 8` at `wrapping[u8]` is `255 >> 0`. With both operands known, the
+//! builder folded the logical shift to the constant 255 in an 8-bit
+//! cell, whose payloads are stored sign-extended (-1): the verifier
+//! refused it and native and release answered an ICE ("lowered WIR
+//! failed verification", `iconst.i8 255`) at 0.2.29, at `wrapping[u8]`
+//! and `wrapping[u32]`. The checked machine and lupin 0.1.52 printed
+//! what this row says.
+
+fn main() {
+    let x: wrapping[u8] = 255
+    let n: wrapping[u8] = 8
+    let y: wrapping[u32] = 4294967295
+    let m: wrapping[u32] = 32
+    let z: wrapping[u16] = 65535
+    let k: wrapping[u16] = 15
+    print("{x >> n} {y >> m} {z >> k}")
+}
