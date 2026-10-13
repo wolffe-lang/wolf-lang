@@ -46,6 +46,14 @@ jobs:
       # built for x86_64-unknown-none (added below), so a skipped archive
       # here is a broken job, never a quiet skip.
       WOLF_RT_NONE_REQUIRE: "1"
+      # s236 ([os.proc.ids.set], [os.fs.owner]): the witnesses that set a
+      # process's ids and change a file's owner run as the super-user
+      # inside a throwaway `--network none` container (ids_lanes.rs) —
+      # never on the runner itself. This runner has docker and the image
+      # is pulled below, so an engine that cannot run it here is a broken
+      # job, never a quiet skip.
+      WOLF_IDS_REQUIRE_CONTAINER: "1"
+      WOLF_IDS_ENGINE: docker
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -54,6 +62,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: the freestanding runtime's target (kw12, libwolf_rt_none.a)
         run: rustup target add x86_64-unknown-none
+      - name: the image s236's id and owner witnesses run inside (it
+          supplies a C library, sh, id and taskset; the containers
+          themselves get no network)
+        run: |
+          docker pull docker.io/library/ubuntu:24.04
+          docker image inspect docker.io/library/ubuntu:24.04 --format '{{.Id}} {{index .RepoDigests 0}}'
+          docker run --rm --network none docker.io/library/ubuntu:24.04 sh -c 'id; nproc'
       - name: install native toolchain (gdb for debug-check, lld for the link
           probe, clang for the s41 release tier — system LLVM is a NAMED
           toolchain requirement per D33, never a build script; strace is the
