@@ -1,0 +1,12 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ConstDecl 584..605 name=A init=BinExpr
+ConstDecl 606..629 name=B init=BinExpr
+ConstDecl 630..651 name=C init=BinExpr
+ConstDecl 652..676 name=D init=BinExpr
+ConstDecl 677..698 name=E init=BinExpr
+FnDecl 699..865 name=wrapped comptime body=Block
+FnDecl 867..1006 name=kept comptime body=Block
+FnDecl 1008..1107 name=main body=Block
