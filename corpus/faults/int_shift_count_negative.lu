@@ -1,0 +1,17 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.int.shift
+//!
+//! s237 (`[type.int.shift]`): a negative count has no value to answer
+//! with (`8 >> -1` is not `8 << 1`): the `overflow` trap, for `>>` and
+//! `<<` alike. At 0.2.29 native and release masked the count to 63 and
+//! printed 0; lupin 0.1.52 trapped.
+
+fn sh(x: int, n: int) -> int {
+    x >> n
+}
+
+fn main() {
+    let r = sh(8, -1)
+    print("{r}")
+}

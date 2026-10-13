@@ -1,0 +1,18 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.int.shift
+//!
+//! s237 (`[type.int.shift]`): `1 << 63` at `int` is 2^63, one past the
+//! type's maximum: the `overflow` trap. The sign bit of a signed type
+//! is not reached by shifting a positive value into it (`-1 << 63` is
+//! `MIN`, and `1 << 63` at `u64` fits). At 0.2.29 native and release
+//! printed -9223372036854775808; lupin 0.1.52 trapped.
+
+fn sh(x: int, n: int) -> int {
+    x << n
+}
+
+fn main() {
+    let r = sh(1, 63)
+    print("{r}")
+}

@@ -1,0 +1,18 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.int.shift
+//!
+//! s237 (`[type.int.shift]`): `1 << 32` at `u32` is 2^32, which leaves
+//! the type: the `overflow` trap. A count at or past the width is no
+//! rule of its own; the product decides (`0 << 32` is 0). At 0.2.29
+//! native and release masked the count and printed 1; lupin 0.1.52
+//! trapped.
+
+fn sh(x: u32, n: u32) -> u32 {
+    x << n
+}
+
+fn main() {
+    let r = sh(1, 32)
+    print("{r}")
+}

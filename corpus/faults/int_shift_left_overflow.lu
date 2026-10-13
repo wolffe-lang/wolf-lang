@@ -1,0 +1,17 @@
+//! check: run(exit=trap(overflow))
+//! phase: run
+//! conforms: type.int.shift
+//!
+//! s237 (wolf-lang#736, `[type.int.shift]`): `255 << 1` at `u8` is 510,
+//! which leaves the type: the `overflow` trap, as `255 * 2` is. At
+//! 0.2.29 native and release printed 254 (the bit dropped), the checked
+//! machine refused the operator by name, and lupin 0.1.52 trapped.
+
+fn sh(x: u8, n: u8) -> u8 {
+    x << n
+}
+
+fn main() {
+    let r = sh(255, 1)
+    print("{r}")
+}
