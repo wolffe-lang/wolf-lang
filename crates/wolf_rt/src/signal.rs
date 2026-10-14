@@ -259,30 +259,58 @@ struct HubState {
 }
 
 static HUB: OnceLock<Hub> = OnceLock::new();
+/// Serializes the hub's making (s239): two first calls make one hub.
+static HUB_MAKING: Mutex<()> = Mutex::new(());
 
 /// Lazy init (D15 pay-for-what-you-use — a program that never listens
-/// carries no signal pipe and no drain thread): first `listen` builds
-/// the hub and the platform's delivery path ([`sys::init`]).
-fn hub() -> &'static Hub {
-    let h = HUB.get_or_init(|| {
-        #[cfg(unix)]
-        let (read_fd, ctl_fd) = sys::make_pipes();
-        Hub {
+/// carries no signal pipe and no drain thread): the first call that
+/// needs it builds the hub and the platform's delivery path
+/// ([`sys::init`]) — or answers the host's refusal (s239, wolf-lang#750:
+/// a pipe or the drain thread the host would not give). Nothing is left
+/// half-made that a later call cannot finish.
+fn try_hub() -> std::io::Result<&'static Hub> {
+    if sys::running()
+        && let Some(h) = HUB.get()
+    {
+        return Ok(h);
+    }
+    let _making = HUB_MAKING
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let h = match HUB.get() {
+        Some(h) => h,
+        None => {
             #[cfg(unix)]
-            read_fd,
-            #[cfg(unix)]
-            ctl_fd,
-            state: Mutex::new(HubState {
-                installed: 0,
-                queue: VecDeque::new(),
+            let (read_fd, ctl_fd) = sys::make_pipes()?;
+            HUB.get_or_init(move || Hub {
                 #[cfg(unix)]
-                waiters: Vec::new(),
-            }),
-            cv: Condvar::new(),
+                read_fd,
+                #[cfg(unix)]
+                ctl_fd,
+                state: Mutex::new(HubState {
+                    installed: 0,
+                    queue: VecDeque::new(),
+                    #[cfg(unix)]
+                    waiters: Vec::new(),
+                }),
+                cv: Condvar::new(),
+            })
         }
-    });
-    sys::init(h);
-    h
+    };
+    sys::init(h)?;
+    Ok(h)
+}
+
+/// The hub for the calls that do not park — `listen`, `ignore`,
+/// `default`, `poll`, `raise`: a refusal to make it still ends the
+/// process there (s239's census: not a park, so not that lane's rule;
+/// named in `[os.net.reactor]`'s note). The one parking call,
+/// `os_signal_wait_fd`, asks [`try_hub`] and answers `io`.
+fn hub() -> &'static Hub {
+    match try_hub() {
+        Ok(h) => h,
+        Err(e) => panic!("the signal hub could not be made: {e}"),
+    }
 }
 
 /// Enqueue a delivered meaning and wake the waiters — the console
@@ -305,8 +333,8 @@ fn deliver(h: &Hub, m: i64) {
 mod sys {
     use super::{Hub, HubState, meaning, sig_code};
     use std::os::fd::RawFd;
-    use std::sync::atomic::{AtomicI32, AtomicUsize, Ordering};
-    use std::sync::{Condvar, Mutex, Once};
+    use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
+    use std::sync::{Condvar, Mutex};
 
     /// The self-pipe write end, reachable from the async-signal
     /// handler WITHOUT a lock (an atomic load is async-signal-safe; a
@@ -320,7 +348,9 @@ mod sys {
     /// Only the drain thread reads it — only a thread can change its
     /// own mask.
     static CTL_PIPE_W: AtomicI32 = AtomicI32::new(-1);
-    static READER: Once = Once::new();
+    /// The drain thread runs (s239: set after a spawn the host
+    /// accepted; until then the next call to [`init`] asks again).
+    static READER_UP: AtomicBool = AtomicBool::new(false);
 
     /// s232 (#691): trampolines running now, on any thread. A poll
     /// waits for this to be 0 before it reads the pipe, so a handler
@@ -343,7 +373,7 @@ mod sys {
     /// pipe and fcntl) does not arise here: the hub initializes once,
     /// under OnceLock, before any wolf code could spawn a process off
     /// it.
-    fn cloexec_pipe() -> [RawFd; 2] {
+    fn cloexec_pipe() -> std::io::Result<[RawFd; 2]> {
         let mut fds = [0i32; 2];
         // SAFETY: plain pipe creation; result checked.
         #[cfg(target_os = "linux")]
@@ -357,8 +387,10 @@ mod sys {
             }
             rc
         };
-        assert!(rc == 0, "signal self-pipe failed");
-        fds
+        if rc != 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(fds)
     }
 
     fn set_nonblocking(fd: RawFd) {
@@ -374,25 +406,42 @@ mod sys {
     /// [`CTL_PIPE_W`]). The self-pipe is nonblocking at BOTH ends: the
     /// handler must never block, and since s232 a poll reads it too and
     /// must never wait.
-    pub fn make_pipes() -> (RawFd, RawFd) {
-        let sig = cloexec_pipe();
+    pub fn make_pipes() -> std::io::Result<(RawFd, RawFd)> {
+        let sig = cloexec_pipe()?;
+        let ctl = match cloexec_pipe() {
+            Ok(ctl) => ctl,
+            Err(e) => {
+                // SAFETY: the first pair is ours and published nowhere.
+                unsafe {
+                    libc::close(sig[0]);
+                    libc::close(sig[1]);
+                }
+                return Err(e);
+            }
+        };
         set_nonblocking(sig[0]);
         set_nonblocking(sig[1]);
-        let ctl = cloexec_pipe();
         set_nonblocking(ctl[1]);
         SELF_PIPE_W.store(sig[1], Ordering::Relaxed);
         CTL_PIPE_W.store(ctl[1], Ordering::Relaxed);
-        (sig[0], ctl[0])
+        Ok((sig[0], ctl[0]))
     }
 
-    /// Spawn the one drain thread (once).
-    pub fn init(h: &'static Hub) {
-        READER.call_once(|| {
+    /// Whether the drain thread runs.
+    pub fn running() -> bool {
+        READER_UP.load(Ordering::SeqCst)
+    }
+
+    /// Spawn the one drain thread, unless it runs — or answer the
+    /// host's refusal (s239); the hub's making serializes the callers.
+    pub fn init(h: &'static Hub) -> std::io::Result<()> {
+        if !READER_UP.load(Ordering::SeqCst) {
             std::thread::Builder::new()
                 .name("wolf-signal".into())
-                .spawn(move || reader_main(h))
-                .expect("spawn signal drain thread");
-        });
+                .spawn(move || reader_main(h))?;
+            READER_UP.store(true, Ordering::SeqCst);
+        }
+        Ok(())
     }
 
     /// Map a single meaning bit to its platform signal number — the
@@ -556,8 +605,15 @@ mod sys {
             return -sig_code::IO;
         };
         let fd = file.as_raw_fd();
-        let h = super::hub();
-        let wake = cloexec_pipe();
+        // s239 (wolf-lang#750): a park asks the host for nothing it can
+        // refuse with an abort — a hub or a wake pipe the host will not
+        // give (a process at its descriptor limit) is `io`.
+        let Ok(h) = super::try_hub() else {
+            return -sig_code::IO;
+        };
+        let Ok(wake) = cloexec_pipe() else {
+            return -sig_code::IO;
+        };
         set_nonblocking(wake[0]);
         set_nonblocking(wake[1]);
         let out = crate::task::blocking(|| {
@@ -1047,7 +1103,14 @@ mod sys {
 
     /// Nothing to start: the console handler is installed by the
     /// first `listen`, and the system runs it on a thread of its own.
-    pub fn init(_h: &'static Hub) {}
+    pub fn init(_h: &'static Hub) -> std::io::Result<()> {
+        Ok(())
+    }
+
+    /// Nothing runs that could be missing.
+    pub fn running() -> bool {
+        true
+    }
 
     /// No signal masks on windows: console control events are not
     /// blocked by one (wolf-lang#483 is a unix fact).
