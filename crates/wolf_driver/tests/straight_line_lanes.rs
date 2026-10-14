@@ -146,7 +146,6 @@ fn lupin_says(entry: &Path) -> Option<Obs> {
     Some(parse_obs(&out.stdout, &out.stderr, "lupin's observation"))
 }
 
-
 fn corpus(rel: &str) -> PathBuf {
     let p = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../corpus")
