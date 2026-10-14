@@ -173,9 +173,16 @@ pub fn os_error_clear() {
 }
 
 /// Record the host's number for `e` (0 when `e` carries none — an error
-/// std built itself).
-fn os_error_record(e: &std::io::Error) {
-    let code = e.raw_os_error().map_or(0, i64::from);
+/// std built itself). The net family records through this too since
+/// s239 (wolf-lang#751).
+pub(crate) fn os_error_record(e: &std::io::Error) {
+    os_error_set(e.raw_os_error().map_or(0, i64::from));
+}
+
+/// Record `code` as the task's host number (s239: the net family's
+/// numbers that do not arrive as an `io::Error`, such as the readiness
+/// set's refusal).
+pub(crate) fn os_error_set(code: i64) {
     let _ = OS_ERROR.try_with(|c| c.set(code));
 }
 

@@ -115,6 +115,30 @@ pub fn err_tag(kind: std::io::ErrorKind) -> &'static str {
     }
 }
 
+/// A host refusal as the net row it raises, its number left in
+/// `os_error()` (s239, wolf-lang#751, `[os.fs.error]`: the net family
+/// sets the word as the fs family does, so a failed accept can name
+/// EMFILE or ENFILE). `WouldBlock` is never a refusal — it is the
+/// kernel's "not yet", which the runtime parks on and which the checked
+/// machine meets only as a budget firing — so it leaves 0, the number
+/// of a budget the runtime ran out.
+fn host_err(e: &std::io::Error) -> NetErr {
+    if e.kind() == std::io::ErrorKind::WouldBlock {
+        crate::fs::os_error_set(0);
+    } else {
+        crate::fs::os_error_record(e);
+    }
+    err_tag(e.kind())
+}
+
+/// [`host_err`] for a call whose row is `io` whatever the host said (an
+/// option the kernel refused, the poll behind `net_wait`): the number
+/// is kept, the row stays `io`.
+fn host_io(e: &std::io::Error) -> NetErr {
+    crate::fs::os_error_record(e);
+    "io"
+}
+
 /// One open socket in the runtime's table.
 #[derive(Debug)]
 pub enum Sock {
@@ -304,7 +328,7 @@ impl Entry {
             let Sock::Stream(s) = &self.sock else {
                 return Ok(());
             };
-            s.set_nodelay(true).map_err(|_| "io")?;
+            s.set_nodelay(true).map_err(|e| host_io(&e))?;
             self.nodelay = Nodelay::Set;
         }
         Ok(())
@@ -803,7 +827,10 @@ fn wait_raw(
         // s239 (wolf-lang#750): the readiness set could not be made — a
         // process at its descriptor limit — so nothing waited. `io`,
         // the call's own row, never an abort.
-        crate::reactor::IoWait::Unavailable(_) => Err("io"),
+        crate::reactor::IoWait::Unavailable(code) => {
+            crate::fs::os_error_set(i64::from(code));
+            Err("io")
+        }
     }
 }
 
@@ -847,8 +874,8 @@ impl NetTable {
     /// accept would answer `WouldBlock` to a program that asked to
     /// wait.
     fn push_listener(&mut self, s: Sock) -> Result<i64, NetErr> {
-        if REACTOR_HOST && s.set_nonblocking(true).is_err() {
-            return Err("io");
+        if REACTOR_HOST && let Err(e) = s.set_nonblocking(true) {
+            return Err(host_io(&e));
         }
         Ok(self.push(s))
     }
@@ -886,8 +913,11 @@ impl NetTable {
     /// with the connection, on macOS and windows it costs the flag
     /// write it always did.
     fn push_stream_under(&mut self, s: Sock, already: bool) -> Result<i64, NetErr> {
-        if REACTOR_HOST && !already && s.set_nonblocking(true).is_err() {
-            return Err("io");
+        if REACTOR_HOST
+            && !already
+            && let Err(e) = s.set_nonblocking(true)
+        {
+            return Err(host_io(&e));
         }
         Ok(self.push(s))
     }
@@ -974,7 +1004,7 @@ impl NetTable {
     pub fn listen(&mut self, addr: &str) -> Result<i64, NetErr> {
         match TcpListener::bind(addr) {
             Ok(l) => self.push_listener(Sock::Listener(l)),
-            Err(e) => Err(err_tag(e.kind())),
+            Err(e) => Err(host_err(&e)),
         }
     }
 
@@ -1004,7 +1034,7 @@ impl NetTable {
         {
             match bind_with(addr, reuse_port, backlog) {
                 Ok(l) => self.push_listener(Sock::Listener(l)),
-                Err(e) => Err(err_tag(e.kind())),
+                Err(e) => Err(host_err(&e)),
             }
         }
         #[cfg(not(unix))]
@@ -1017,7 +1047,7 @@ impl NetTable {
             let _ = backlog;
             match TcpListener::bind(addr) {
                 Ok(l) => self.push_listener(Sock::Listener(l)),
-                Err(e) => Err(err_tag(e.kind())),
+                Err(e) => Err(host_err(&e)),
             }
         }
     }
@@ -1153,7 +1183,7 @@ impl NetTable {
         {
             match UnixListener::bind(path) {
                 Ok(l) => self.push_listener(Sock::UnixListener(l, std::path::PathBuf::from(path))),
-                Err(e) => Err(err_tag(e.kind())),
+                Err(e) => Err(host_err(&e)),
             }
         }
         #[cfg(not(unix))]
@@ -1183,7 +1213,7 @@ impl NetTable {
             _ => return Err("io"),
         };
         addr.map(|a| i64::from(a.port()))
-            .map_err(|e| err_tag(e.kind()))
+            .map_err(|e| host_err(&e))
     }
 
     /// Park until one connection is this handle's (reactor-routed on
@@ -1238,7 +1268,7 @@ impl NetTable {
             {
                 Ok(None)
             }
-            Err(e) => Err(err_tag(e.kind())),
+            Err(e) => Err(host_err(&e)),
         }
     }
 
@@ -1267,7 +1297,7 @@ impl NetTable {
         };
         match TcpStream::connect_timeout(&sa, std::time::Duration::from_millis(m)) {
             Ok(s) => self.push_stream(Sock::Stream(s)),
-            Err(e) => Err(err_tag(e.kind())),
+            Err(e) => Err(host_err(&e)),
         }
     }
 
@@ -1300,7 +1330,7 @@ impl NetTable {
             Ok(0) => Err("closed"),
             Ok(n) => Ok(Some(n)),
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
-            Err(e) => Err(err_tag(e.kind())),
+            Err(e) => Err(host_err(&e)),
         }
     }
 
@@ -1335,7 +1365,7 @@ impl NetTable {
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => return Ok(false),
                 Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
-                Err(e) => return Err(err_tag(e.kind())),
+                Err(e) => return Err(host_err(&e)),
             }
         }
         Ok(true)
@@ -1382,7 +1412,7 @@ impl NetTable {
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => return Ok(false),
                 Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
-                Err(e) => return Err(err_tag(e.kind())),
+                Err(e) => return Err(host_err(&e)),
             }
         }
         Ok(true)
@@ -1405,7 +1435,7 @@ impl NetTable {
         // moment, never a program's call being put off. `false` also
         // ends the deferral: the runtime does not set an option the
         // program has told it not to want.
-        s.set_nodelay(on).map_err(|_| "io")?;
+        s.set_nodelay(on).map_err(|e| host_io(&e))?;
         e.nodelay = if on { Nodelay::Set } else { Nodelay::Never };
         Ok(())
     }
@@ -1531,7 +1561,7 @@ static NET: Mutex<NetTable> = Mutex::new(NetTable::new());
 fn dial(addr: &str) -> Result<Sock, NetErr> {
     crate::host_wait(|| TcpStream::connect(addr))
         .map(Sock::Stream)
-        .map_err(|e| err_tag(e.kind()))
+        .map_err(|e| host_err(&e))
 }
 
 /// [`dial`] for an `AF_UNIX` path (its connect blocks on a full
@@ -1541,7 +1571,7 @@ fn dial_unix(path: &str) -> Result<Sock, NetErr> {
     {
         crate::host_wait(|| UnixStream::connect(path))
             .map(Sock::UnixStream)
-            .map_err(|e| err_tag(e.kind()))
+            .map_err(|e| host_err(&e))
     }
     #[cfg(not(unix))]
     {
@@ -1576,6 +1606,9 @@ fn code_of_tag(tag: NetErr) -> i64 {
 /// A valid str pair.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_listen(ap: i64, al: i64) -> i64 {
+    // s239 (#751): every net call clears the task's host number on
+    // entry; a host refusal leaves its own (`[os.fs.error]`).
+    crate::fs::os_error_clear();
     let addr = unsafe { view(ap, al) };
     match tbl().listen(addr) {
         Ok(fd) => fd,
@@ -1593,6 +1626,7 @@ pub unsafe extern "C" fn __wolf_rt_net_listen(ap: i64, al: i64) -> i64 {
 /// A valid str pair.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_listen_unix(pp: i64, pl: i64) -> i64 {
+    crate::fs::os_error_clear();
     let path = unsafe { view(pp, pl) };
     match tbl().listen_unix(path) {
         Ok(fd) => fd,
@@ -1615,6 +1649,7 @@ pub unsafe extern "C" fn __wolf_rt_net_listen_with(
     reuse: i64,
     backlog: i64,
 ) -> i64 {
+    crate::fs::os_error_clear();
     let addr = unsafe { view(ap, al) };
     match tbl().listen_with(addr, reuse != 0, backlog) {
         Ok(fd) => fd,
@@ -1627,6 +1662,7 @@ pub unsafe extern "C" fn __wolf_rt_net_listen_with(
 /// descriptor, or `-code`. See [`NetTable::adopt_listener`].
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_net_adopt_listener(fd: i64) -> i64 {
+    crate::fs::os_error_clear();
     match tbl().adopt_listener(fd) {
         Ok(h) => h,
         Err(t) => -code_of_tag(t),
@@ -1686,7 +1722,7 @@ pub(crate) fn wait_ready(handles: &[i64], deadline_ms: i64) -> Result<Vec<i64>, 
     };
     // The poll holds the worker for as long as the caller asked, so the
     // pool compensates (s231; until then it did not).
-    let flags = crate::host_wait(|| crate::poll::readable(&raws, timeout)).map_err(|_| "io")?;
+    let flags = crate::host_wait(|| crate::poll::readable(&raws, timeout)).map_err(|e| host_io(&e))?;
     Ok(handles
         .iter()
         .zip(flags)
@@ -1703,6 +1739,7 @@ pub(crate) fn wait_ready(handles: &[i64], deadline_ms: i64) -> Result<Vec<i64>, 
 /// `hdr` a live `List[int]` header; `out` 8 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_wait(hdr: i64, deadline: i64, out: i64) -> i64 {
+    crate::fs::os_error_clear();
     #[cfg(any(unix, windows))]
     {
         let Some(handles) = (unsafe { crate::list::i64_elems(hdr) }) else {
@@ -1738,6 +1775,7 @@ pub unsafe extern "C" fn __wolf_rt_net_wait(hdr: i64, deadline: i64, out: i64) -
 /// A valid str pair.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_connect_unix(pp: i64, pl: i64) -> i64 {
+    crate::fs::os_error_clear();
     let path = unsafe { view(pp, pl) };
     match dial_unix(path).and_then(|s| tbl().push_stream(s)) {
         Ok(fd) => fd,
@@ -1749,6 +1787,7 @@ pub unsafe extern "C" fn __wolf_rt_net_connect_unix(pp: i64, pl: i64) -> i64 {
 /// `-code`.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_net_port(fd: i64) -> i64 {
+    crate::fs::os_error_clear();
     match tbl().port(fd) {
         Ok(p) => p,
         Err(t) => -code_of_tag(t),
@@ -1766,6 +1805,7 @@ pub extern "C" fn __wolf_rt_net_port(fd: i64) -> i64 {
 /// already queued is answered with no park.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_net_accept(fd: i64) -> i64 {
+    crate::fs::os_error_clear();
     let spec = match tbl().park_spec(fd, false) {
         Ok(spec) => spec,
         Err(t) => return -code_of_tag(t),
@@ -1785,6 +1825,7 @@ pub extern "C" fn __wolf_rt_net_accept(fd: i64) -> i64 {
 /// A valid str pair.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_connect(ap: i64, al: i64) -> i64 {
+    crate::fs::os_error_clear();
     let addr = unsafe { view(ap, al) };
     match dial(addr).and_then(|s| tbl().push_stream(s)) {
         Ok(fd) => fd,
@@ -1837,6 +1878,7 @@ fn write_shim(fd: i64, bytes: &[u8]) -> i64 {
 /// `out` must address 16 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_read(fd: i64, max: i64, out: i64) -> i64 {
+    crate::fs::os_error_clear();
     let emit = |bytes: &[u8]| match core::str::from_utf8(bytes) {
         Ok(s) => {
             // s228 (wolf-lang#374): the CURRENT region, as every other
@@ -1863,6 +1905,7 @@ pub unsafe extern "C" fn __wolf_rt_net_read(fd: i64, max: i64, out: i64) -> i64 
 /// A valid str pair.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_write(fd: i64, sp: i64, sl: i64) -> i64 {
+    crate::fs::os_error_clear();
     let s = unsafe { view(sp, sl) };
     write_shim(fd, s.as_bytes())
 }
@@ -1878,6 +1921,7 @@ pub unsafe extern "C" fn __wolf_rt_net_write(fd: i64, sp: i64, sl: i64) -> i64 {
 /// `out` must address 8 writable bytes (the list header word).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_read_bytes(fd: i64, max: i64, out: i64) -> i64 {
+    crate::fs::os_error_clear();
     let emit = |bytes: &[u8]| {
         unsafe { write_bytes_list(out, bytes) };
         net_code::OK
@@ -1898,6 +1942,7 @@ pub unsafe extern "C" fn __wolf_rt_net_read_bytes(fd: i64, max: i64, out: i64) -
 /// `hdr` must be a live `List[byte]` header.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_write_bytes(fd: i64, hdr: i64) -> i64 {
+    crate::fs::os_error_clear();
     let Some(bytes) = (unsafe { crate::list::u8_elems(hdr) }) else {
         return net_code::INVALID;
     };
@@ -1917,6 +1962,7 @@ pub unsafe extern "C" fn __wolf_rt_net_write_bytes(fd: i64, hdr: i64) -> i64 {
 /// live `List[byte]` headers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_writev(fd: i64, hdr: i64) -> i64 {
+    crate::fs::os_error_clear();
     let Some(heads) = (unsafe { crate::list::i64_elems(hdr) }) else {
         return net_code::IO;
     };
@@ -1955,6 +2001,7 @@ pub unsafe extern "C" fn __wolf_rt_net_writev(fd: i64, hdr: i64) -> i64 {
 /// headers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_net_writev_head(fd: i64, hp: i64, hl: i64, hdr: i64) -> i64 {
+    crate::fs::os_error_clear();
     let Some(heads) = (unsafe { crate::list::i64_elems(hdr) }) else {
         return net_code::IO;
     };
@@ -1988,6 +2035,7 @@ pub unsafe extern "C" fn __wolf_rt_net_writev_head(fd: i64, hp: i64, hl: i64, hd
 /// or back on, for a TCP stream; anything else is `IO`.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_net_nodelay(fd: i64, on: i64) -> i64 {
+    crate::fs::os_error_clear();
     match tbl().set_nodelay(fd, on != 0) {
         Ok(()) => net_code::OK,
         Err(t) => code_of_tag(t),
@@ -1998,6 +2046,7 @@ pub extern "C" fn __wolf_rt_net_nodelay(fd: i64, on: i64) -> i64 {
 /// double close (or a forged fd) is `io`.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_net_close(fd: i64) -> i64 {
+    crate::fs::os_error_clear();
     match tbl().close(fd) {
         Ok(()) => net_code::OK,
         Err(t) => code_of_tag(t),
@@ -2010,6 +2059,7 @@ pub extern "C" fn __wolf_rt_net_close(fd: i64) -> i64 {
 /// the honest `io` refusal, never a silently-inert deadline.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_net_deadline(fd: i64, ms: i64) -> i64 {
+    crate::fs::os_error_clear();
     match tbl().set_deadline(fd, ms) {
         Ok(()) => net_code::OK,
         Err(t) => code_of_tag(t),
