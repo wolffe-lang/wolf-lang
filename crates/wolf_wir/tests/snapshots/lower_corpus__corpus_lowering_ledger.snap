@@ -1084,6 +1084,9 @@ typecheck/str_slice_assign.lu: not mem-clean (pre-wir rungs own it)
 typecheck/straight_line_as_char.lu: lowers
 typecheck/straight_line_as_narrow.lu: lowers
 typecheck/straight_line_as_sign.lu: lowers
+typecheck/straight_line_shl_assign.lu: lowers
+typecheck/straight_line_shl_const.lu: lowers
+typecheck/straight_line_shr_var.lu: lowers
 typecheck/straight_line_str_eq.lu: lowers
 typecheck/straight_line_str_order.lu: lowers
 typecheck/straight_line_wrap_div.lu: lowers
