@@ -1,0 +1,9 @@
+# s240: the glibc probe image (Ubuntu 24.04: glibc 2.39, dash, GNU
+# coreutils' timeout, strace, clang for wolf's release tier, a German libc
+# translation for strsignal).
+FROM docker.io/library/ubuntu:24.04
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+      gcc clang libc6-dev dash procps strace bsdutils coreutils locales language-pack-de-base \
+ && locale-gen de_DE.UTF-8 \
+ && rm -rf /var/lib/apt/lists/*
