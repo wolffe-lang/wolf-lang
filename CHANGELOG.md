@@ -9940,3 +9940,5 @@ not built. The release tier is built and declared against its gate;
 the registry protocol is built with its hosted half still waiting
 (X7); macros remain the CTFE tier's future. The corpus ledger, not
 this document, stays the authority on completeness.
+
+<!-- tl21: a prose-only example, never merged -->

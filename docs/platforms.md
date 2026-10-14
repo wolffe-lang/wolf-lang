@@ -266,3 +266,5 @@ wins this order:
   through bundled mingw-w64 headers and import libraries (s47, which
   is also the day the Build Tools requirement above retires), and
   DWARF-in-COFF + lldb.
+
+<!-- tl21: a prose-only example, never merged -->
