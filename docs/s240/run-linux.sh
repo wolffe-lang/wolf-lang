@@ -88,6 +88,7 @@ $RUN -v "$SRC":/src:ro -v "$OUT/tc":/tc:ro -v "$OUT/witness":/w -w /w localhost/
   echo "--- checked"; wolf conform-run witness.lu --json --checked; echo "exit checked: $?"
   echo "--- sleeps left after checked:"; ps -eo pid,pgid,stat,comm | grep "[s]leep" || echo none
   rm -f g1.pid g2.pid g1.pid.ps g2.pid.ps
+  echo "--- processes before lupin:"; ps -eo pid,ppid,pgid,stat,comm
   echo "--- lupin"; lupin conform-run witness.lu --json; echo "exit lupin: $?"
-  echo "--- sleeps left in the container:"; ps -eo pid,pgid,stat,comm | grep "[s]leep" || echo none'
+  echo "--- processes after lupin (a job lupin started and left behind shows here):"; ps -eo pid,ppid,pgid,stat,comm'
 log "done"; date -u +%FT%TZ
