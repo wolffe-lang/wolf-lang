@@ -1,0 +1,264 @@
+### host
+ProductName:		macOS
+ProductVersion:		26.6.2
+BuildVersion:		25G83
+Darwin sjc22-bm212-9ec7ab21-57fb-41fe-8aba-b7c1ca1361e1-966BFF6EF03E.local 25.6.0 Darwin Kernel Version 25.6.0: Fri Jul 31 19:16:43 PDT 2026; root:xnu-12377.161.14~5/RELEASE_ARM64_VMAPPLE arm64
+uid=501(runner) gid=20(staff) groups=20(staff),12(everyone),61(localaccounts),79(_appserverusr),80(admin),81(_appserveradm),264(_webdeveloper),33(_appstore),98(_lpadmin),100(_lpoperator),204(_developer),250(_analyticsusers),395(com.apple.access_ftp),398(com.apple.access_screensharing),399(com.apple.access_ssh),400(com.apple.access_remote_ae),701(com.apple.sharepoint.group.1)
+Apple clang version 21.0.0 (clang-2100.1.1.101)
+377b27e34ac7ebc8f36ad4819e737952028d1b463d772bc307992449a94dc04c  out/grp
+208f0584585abcc09211d1d478f02b06fae23518787eabacaf4d9c18c3a36a79  out/sess
+132c6ae027615fd3210ce855a737171b0a1a3ce4a7310f6b134115c58739fa2e  out/sigtab
+### grp as the user
+host: pid=4078 pgid=4078 sid=4078 euid=501 user-uid=1000 root=0 allow_all=0
+kill(0) from a member of A={A,B}, C apart: ret=0 heard=A:,B:,S:
+kill(-A) from outside A={A,B}, C apart: ret=0 heard=A:,B:
+kill(-A, 0) existence: ret=0 heard=-
+kill(-A, 0) after every member is reaped: ret=ESRCH heard=-
+kill(-A) after every member is reaped: ret=ESRCH heard=-
+kill(-A) with the leader reaped, B alive: ret=0 heard=B:
+kill(-A, 0) with every member a zombie: ret=EPERM heard=-
+kill(-A) with every member a zombie: ret=EPERM heard=-
+kill(INT_MIN, 0): ret=ESRCH heard=-
+kill(-INT_MAX, 0): ret=ESRCH heard=-
+kill(-runner's group, 0) from a member of that group: ret=0 heard=-
+perm: skipped by name (not root)
+all: skipped by name (PROBE_ALLOW_ALL is not 1)
+done
+top: after the runner, the top process heard=-
+### grp as root (sudo; the user is SUDO_UID)
+host: pid=4335 pgid=4335 sid=4335 euid=0 user-uid=501 root=1 allow_all=0
+kill(0) from a member of A={A,B}, C apart: ret=0 heard=A:,B:,S:
+kill(-A) from outside A={A,B}, C apart: ret=0 heard=A:,B:
+kill(-A, 0) existence: ret=0 heard=-
+kill(-A, 0) after every member is reaped: ret=ESRCH heard=-
+kill(-A) after every member is reaped: ret=ESRCH heard=-
+kill(-A) with the leader reaped, B alive: ret=0 heard=B:
+kill(-A, 0) with every member a zombie: ret=EPERM heard=-
+kill(-A) with every member a zombie: ret=EPERM heard=-
+kill(INT_MIN, 0): ret=ESRCH heard=-
+kill(-INT_MAX, 0): ret=ESRCH heard=-
+kill(-runner's group, 0) from a member of that group: ret=0 heard=-
+as the user, kill(-G) G={root member, user member}: ret=0 heard=Buser:
+as the user, kill(-G) G={root member} only: ret=EPERM heard=-
+as the user, kill(-G, 0) G={root member} only: ret=EPERM heard=-
+as the user, kill(-G, SIGCONT) G={root member}, same session: ret=0 heard=Aroot+
+as the user, kill(-G, SIGCONT) G={root member}, another session: ret=EPERM heard=-
+as the user, kill(pid, SIGCONT) root, another session: ret=EPERM heard=-
+as root, kill(-G) G={user member}: ret=0 heard=Auser:
+all: skipped by name (PROBE_ALLOW_ALL is not 1)
+done
+top: after the runner, the top process heard=-
+### sess as the user
+host: pid=4610 pgid=4610 sid=4610 euid=501
+setsid by a session leader: EPERM
+setpgid(0,0) by a session leader: EPERM
+setsid by a group leader (not session leader): EPERM
+setsid by a non-leader: sid==pid yes, pgid==pid yes, /dev/tty ENXIO
+setpgid(child, group in another session): EPERM
+setpgid(child, a group that does not exist): EPERM
+setpgid(child, 0) before exec: 0
+setpgid(child, 0) after the child exec'd: EACCES
+setpgid(grandchild, 0): 0
+kill(-G, SIGSTOP): 0
+waitpid(-G, WUNTRACED) reported stopped: 2 of 2
+a second waitpid(-G, WNOHANG|WUNTRACED) for the same stops: 0 (nothing new)
+kill(-G, SIGCONT): 0
+waitpid(-G, WCONTINUED) reported continued: 2 of 2
+waitpid(-G, WNOHANG) with both running: 0
+orphaned group with a stopped member, heard: M2:CONT,M2:HUP -
+open of the slave by a session leader: ctty acquired (tcgetpgrp a group)
+tcgetpgrp == the leader's group: yes
+tcsetpgrp(job) by the leader, SIGTTOU blocked: 0
+tcsetpgrp from the leader's (orphaned) group, SIGTTOU default, returned: EIO
+tcsetpgrp from the leader's (orphaned) group, SIGTTOU default: not stopped
+tcsetpgrp from a non-orphaned background group, SIGTTOU default: stopped by SIGTTOU
+tcsetpgrp from the background, SIGTTOU ignored: 0
+tcsetpgrp(group of another session): EPERM
+tcsetpgrp(a group that does not exist): EINVAL
+tcsetpgrp(0): EPERM
+tcsetpgrp(-1): EINVAL
+interrupt character with the job in the foreground, heard: J2:INT,J1:INT
+done
+### sess as root
+host: pid=4644 pgid=4644 sid=4644 euid=0
+setsid by a session leader: EPERM
+setpgid(0,0) by a session leader: EPERM
+setsid by a group leader (not session leader): EPERM
+setsid by a non-leader: sid==pid yes, pgid==pid yes, /dev/tty ENXIO
+setpgid(child, group in another session): EPERM
+setpgid(child, a group that does not exist): EPERM
+setpgid(child, 0) before exec: 0
+setpgid(child, 0) after the child exec'd: EACCES
+setpgid(grandchild, 0): 0
+kill(-G, SIGSTOP): 0
+waitpid(-G, WUNTRACED) reported stopped: 2 of 2
+a second waitpid(-G, WNOHANG|WUNTRACED) for the same stops: 0 (nothing new)
+kill(-G, SIGCONT): 0
+waitpid(-G, WCONTINUED) reported continued: 2 of 2
+waitpid(-G, WNOHANG) with both running: 0
+orphaned group with a stopped member, heard: M2:CONT,M2:HUP -
+open of the slave by a session leader: ctty acquired (tcgetpgrp a group)
+tcgetpgrp == the leader's group: yes
+tcsetpgrp(job) by the leader, SIGTTOU blocked: 0
+tcsetpgrp from the leader's (orphaned) group, SIGTTOU default, returned: EIO
+tcsetpgrp from the leader's (orphaned) group, SIGTTOU default: not stopped
+tcsetpgrp from a non-orphaned background group, SIGTTOU default: stopped by SIGTTOU
+tcsetpgrp from the background, SIGTTOU ignored: 0
+tcsetpgrp(group of another session): EPERM
+tcsetpgrp(a group that does not exist): EINVAL
+tcsetpgrp(0): EPERM
+tcsetpgrp(-1): EINVAL
+interrupt character with the job in the foreground, heard: J1:INT,J2:INT
+done
+### sigtab, C locale
+NSIG: 32
+SIGRTMIN: none
+SIGRTMAX: none
+-- the 28 POSIX names: name number text
+HUP 1 Hangup: 1
+INT 2 Interrupt: 2
+QUIT 3 Quit: 3
+ILL 4 Illegal instruction: 4
+TRAP 5 Trace/BPT trap: 5
+ABRT 6 Abort trap: 6
+BUS 10 Bus error: 10
+FPE 8 Floating point exception: 8
+KILL 9 Killed: 9
+USR1 30 User defined signal 1: 30
+SEGV 11 Segmentation fault: 11
+USR2 31 User defined signal 2: 31
+PIPE 13 Broken pipe: 13
+ALRM 14 Alarm clock: 14
+TERM 15 Terminated: 15
+CHLD 20 Child exited: 20
+CONT 19 Continued: 19
+STOP 17 Suspended (signal): 17
+TSTP 18 Suspended: 18
+TTIN 21 Stopped (tty input): 21
+TTOU 22 Stopped (tty output): 22
+URG 16 Urgent I/O condition: 16
+XCPU 24 Cputime limit exceeded: 24
+XFSZ 25 Filesize limit exceeded: 25
+VTALRM 26 Virtual timer expired: 26
+PROF 27 Profiling timer expired: 27
+WINCH 28 Window size changes: 28
+SYS 12 Bad system call: 12
+-- host-only names: name number text
+IO 23 I/O possible: 23
+EMT 7 EMT trap: 7
+INFO 29 Information request: 29
+-- every number 0..NSIG: number text
+0 Unknown signal: 0
+1 Hangup: 1
+2 Interrupt: 2
+3 Quit: 3
+4 Illegal instruction: 4
+5 Trace/BPT trap: 5
+6 Abort trap: 6
+7 EMT trap: 7
+8 Floating point exception: 8
+9 Killed: 9
+10 Bus error: 10
+11 Segmentation fault: 11
+12 Bad system call: 12
+13 Broken pipe: 13
+14 Alarm clock: 14
+15 Terminated: 15
+16 Urgent I/O condition: 16
+17 Suspended (signal): 17
+18 Suspended: 18
+19 Continued: 19
+20 Child exited: 20
+21 Stopped (tty input): 21
+22 Stopped (tty output): 22
+23 I/O possible: 23
+24 Cputime limit exceeded: 24
+25 Filesize limit exceeded: 25
+26 Virtual timer expired: 26
+27 Profiling timer expired: 27
+28 Window size changes: 28
+29 Information request: 29
+30 User defined signal 1: 30
+31 User defined signal 2: 31
+32 Unknown signal: 32
+-- out of range: number text
+100 Unknown signal: 100
+-1 Unknown signal: -1
+### sigtab, LANG=de_DE.UTF-8, setlocale
+setlocale(LC_ALL, ""): en_US.UTF-8
+NSIG: 32
+SIGRTMIN: none
+SIGRTMAX: none
+-- the 28 POSIX names: name number text
+HUP 1 Hangup: 1
+INT 2 Interrupt: 2
+QUIT 3 Quit: 3
+ILL 4 Illegal instruction: 4
+TRAP 5 Trace/BPT trap: 5
+ABRT 6 Abort trap: 6
+BUS 10 Bus error: 10
+FPE 8 Floating point exception: 8
+KILL 9 Killed: 9
+USR1 30 User defined signal 1: 30
+SEGV 11 Segmentation fault: 11
+USR2 31 User defined signal 2: 31
+PIPE 13 Broken pipe: 13
+ALRM 14 Alarm clock: 14
+TERM 15 Terminated: 15
+CHLD 20 Child exited: 20
+CONT 19 Continued: 19
+STOP 17 Suspended (signal): 17
+TSTP 18 Suspended: 18
+TTIN 21 Stopped (tty input): 21
+TTOU 22 Stopped (tty output): 22
+URG 16 Urgent I/O condition: 16
+XCPU 24 Cputime limit exceeded: 24
+XFSZ 25 Filesize limit exceeded: 25
+VTALRM 26 Virtual timer expired: 26
+PROF 27 Profiling timer expired: 27
+WINCH 28 Window size changes: 28
+SYS 12 Bad system call: 12
+-- host-only names: name number text
+IO 23 I/O possible: 23
+EMT 7 EMT trap: 7
+INFO 29 Information request: 29
+-- every number 0..NSIG: number text
+0 Unknown signal: 0
+1 Hangup: 1
+2 Interrupt: 2
+3 Quit: 3
+4 Illegal instruction: 4
+5 Trace/BPT trap: 5
+6 Abort trap: 6
+7 EMT trap: 7
+8 Floating point exception: 8
+9 Killed: 9
+10 Bus error: 10
+11 Segmentation fault: 11
+12 Bad system call: 12
+13 Broken pipe: 13
+14 Alarm clock: 14
+15 Terminated: 15
+16 Urgent I/O condition: 16
+17 Suspended (signal): 17
+18 Suspended: 18
+19 Continued: 19
+20 Child exited: 20
+21 Stopped (tty input): 21
+22 Stopped (tty output): 22
+23 I/O possible: 23
+24 Cputime limit exceeded: 24
+25 Filesize limit exceeded: 25
+26 Virtual timer expired: 26
+27 Profiling timer expired: 27
+28 Window size changes: 28
+29 Information request: 29
+30 User defined signal 1: 30
+31 User defined signal 2: 31
+32 Unknown signal: 32
+-- out of range: number text
+100 Unknown signal: 100
+-1 Unknown signal: -1
+217e600c7db494652e93c0f714995b1417b3d9d7b885e6c8e9c5a39eeeae3f7f  out/sigtab-macos-C.txt
+d74e8ea7c99eecc9008828059d478e001fc1fe8ed887b2bbb0ad24ff738692f2  out/sigtab-macos-de-setlocale.txt
+### done
