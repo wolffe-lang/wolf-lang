@@ -32,6 +32,38 @@
   matrix (linux x86-64/aarch64, macOS aarch64, windows x86-64, freebsd
   cross-build) is the arbiter.
 
+## CI tiers and the merge rule (tl21)
+The org has 20 concurrent CI jobs for every repository, 5 of them macOS.
+`.github/workflows/ci.yml` runs in tiers, chosen by its `plan` job
+(`ci/tiers.py`, held by `ci/tiers-test.py`); the run's last job is named
+for the tier and is red unless the plan succeeded, every job it chose
+succeeded and every other job was skipped.
+
+| run | tier | jobs |
+|---|---|---|
+| a pull request's push | `tier pr` | linux lint + test + corpus (the whole `cargo xtask ci`), the fuzz smoke |
+| push to `trunk`, the nightly (02:07 UTC), `gh workflow run ci`, a pull request carrying **`full-matrix`** | `tier full` | those, the macOS native gauntlet's three shards, build + test on macOS and windows, the freebsd cross-check |
+| a pull request that changes **only prose** | `tier noop` | none |
+
+- **A PR merges only with a green `tier full` at its head.** `tier pr` is
+  not the merge gate: it never ran macOS, windows or freebsd, and
+  `lane-audit.sh` fails a head that has no green `tier full`.
+- Open the PR **without** the label (`opened` and `labeled` together start
+  two full runs, and the second cancels the first). Push until the head is
+  the one to merge, then `gh pr edit <N> --add-label full-matrix` and wait.
+  A push after that runs full again, so label last.
+- A new push cancels the same branch's older run of the same tier. Trunk
+  pushes, the nightly and dispatches are never cancelled.
+- Prose is narrow and decided by path: `CHANGELOG.md`, `CONTRIBUTING.md`,
+  `docs/*.md` and `docs/release/*.md`. **Not prose:** anything under
+  `spec/` (`anchors.json` and `prelude.json` included), `README.md`, and
+  the generated `docs/diagnostics.md`, `docs/warnings.md` and `docs/api/`;
+  gates read all of them. A changed path no rule of `ci/tiers.py` names
+  runs the full tier; add the rule in the same PR. A prose-only PR still
+  needs the label's run to merge.
+- A planted break needs one job: `gh workflow run ci --ref <branch> -f
+  jobs=<job id>` (`tier partial`, never a merge gate).
+
 ## Testing conventions
 - Property tests use proptest. Case count follows `PROPTEST_CASES`, which is
   small in PR CI and large in nightly CI. Exemplar: `crates/wolf_span/tests/`.
