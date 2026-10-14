@@ -494,8 +494,10 @@ checked machine entirely.
      a negative count either way. A `>>` by the width or more now
      answers 0 (-1 for a negative value) instead of the masked shift.
   2. Code that wants the old bits says so with `wrapping[T]`
-     (`(x as wrapping[u64] << n) as u64`), where the count masks to
-     the width and the bits that leave are dropped, as before.
+     (`(x as wrapping[u64] << n as wrapping[u64]) as u64` with `x`,
+     `n: u64`; both operands of a shift have one type), where the
+     count masks to the width and the bits that leave are dropped, as
+     before.
   3. Measured downstream before the ruling, the same programs built by
      this compiler and by 0.2.29's trunk (s237's census): wolf-std
      (100 shift sites, all `wrapping`), lobo (95, all `wrapping`),
