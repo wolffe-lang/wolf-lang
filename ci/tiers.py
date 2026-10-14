@@ -82,6 +82,7 @@ RULES = [
     # Prose.
     ("CHANGELOG.md", PROSE),
     ("CONTRIBUTING.md", PROSE),
+    ("spec/**", PROSE),
     ("docs/*.md", PROSE),
     ("docs/release/*.md", PROSE),
     # The compiler, its corpus, its spec, its tools, and CI itself.
