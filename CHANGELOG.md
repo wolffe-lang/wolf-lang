@@ -162,6 +162,28 @@ machine resolved a name for any of it.
   temporary change of the effective id, names for ids (wolf-std's
   `std.os.users` reads the account files).
 
+### A local survives a branch inside an expression in a straight-line function (s755, #755)
+
+wolf 0.2.29 panicked on native and release ("use of a variable with no
+definition on some path") compiling a function with no `if`, loop,
+call or index that declared a local, then used one of these, then read
+the local:
+
+- a narrowing or sign-changing integer `as` (`x as i8`, `x as u64`,
+  `n as int` with `n: u64`, `b as i8` with `b: u8`);
+- `int as char`;
+- a signed `wrapping` `/` or `%` whose divisor is not a constant;
+- `==`, `!=`, `<`, `<=`, `>` or `>=` on two `str`s.
+
+Such a function is lowered as one block, and its locals were kept for
+that block alone; each construct above branches inside the expression
+(to its trap, or a comparison loop), which ended the block under the
+local. The definitions now outlive the block. The checked machine and
+lupin always answered these programs; no program that compiled before
+compiles differently. Measured: the seven rows of
+`corpus/typecheck/straight_line_*` panic on the 0.2.29 archive and run
+on every machine now (`straight_line_lanes`).
+
 ## 0.2.29 — 2026-10-12
 
 THE TWENTY-NINTH. Three compiler lanes land, one with a lupin half, and
