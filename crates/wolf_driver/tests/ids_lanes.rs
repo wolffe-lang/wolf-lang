@@ -40,10 +40,12 @@
 //! `os_set_ids` itself answers `unsupported` (macOS, `host.lu`) or the
 //! corpus rows' `unsupported` side (windows).
 //!
-//! lupin 0.1.52 (`025428b`, the 0.2.29 pairing) predates the mirror — it
-//! resolves none of the eight names — and is pinned by version and
-//! release commit as pre-mirror (s180's design). A lupin with the mirror
-//! serves the two owner calls and refuses the five reads and
+//! lupin 0.1.52 (`025428b`, the 0.2.29 pairing) predated the mirror — it
+//! resolved none of the eight names — and was pinned by version and
+//! release commit as pre-mirror (s180's design). 0.1.53 (the 0.2.30
+//! pairing, r35) carries it, measured on the published archive, so the
+//! pin is dropped and every lupin must carry the mirror. A lupin with
+//! the mirror serves the two owner calls and refuses the five reads and
 //! `os_set_ids` BY NAME (it has no host call for an id without
 //! `unsafe`).
 
@@ -57,9 +59,10 @@ fn wolf() -> &'static str {
 }
 
 /// The lupin releases that predate the mirror, with the commit each
-/// archive reports: 0.1.52 (r34's release, `025428b`), measured —
-/// "`os_uid` does not resolve".
-const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[("0.1.52", Some("025428b"))];
+/// archive reports. Empty since the 0.2.30 pairing: 0.1.53 (r35)
+/// carries wolf-interp's s236, measured; 0.1.52 (`025428b`) did not
+/// ("`os_uid` does not resolve").
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[];
 
 fn pre_mirror(lupin: &Obs) -> bool {
     PRE_MIRROR_LUPIN
