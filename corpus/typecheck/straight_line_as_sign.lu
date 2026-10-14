@@ -17,7 +17,7 @@ fn f(x: u64, w: int, b: u8) -> int {
     let z = x as int
     let v = w as u64
     let c = b as i8
-    y + z + (v as int) + (c as int)
+    y + z + v as int + c as int
 }
 
 fn main() {
