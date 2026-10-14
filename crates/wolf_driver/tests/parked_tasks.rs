@@ -118,10 +118,21 @@ fn fixture(name: &str) -> PathBuf {
 
 /// Copy `src` into its own scratch directory as `main.lu` (one module
 /// per directory, D32), replacing `edit.0` with `edit.1` when given.
+///
+/// The directory is this call's alone: `<dir_name>.<k>`, `k` counted
+/// across the process (s238, #733). libtest runs this file's tests on
+/// parallel threads of one process and two of them build `waitwolf` on
+/// the same tiers; when both staged into `<fixture>_<tier>` and began by
+/// deleting it, one test removed the other's directory while that one
+/// was writing `main.lu`, linking `w` (macOS: dsymutil found it gone) or
+/// starting it (linux: `NotFound`). The names repeat from run to run, so
+/// the deletion below only clears a previous process's copy.
 fn stage(src: &Path, dir_name: &str, edit: Option<(&str, &str)>) -> PathBuf {
+    static STAGED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let k = STAGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let dir = Path::new(env!("CARGO_TARGET_TMPDIR"))
         .join("parked_tasks")
-        .join(dir_name);
+        .join(format!("{dir_name}.{k}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).expect("mkdir");
     let mut body = std::fs::read_to_string(src).expect("read fixture");
