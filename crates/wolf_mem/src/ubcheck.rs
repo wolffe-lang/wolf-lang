@@ -11034,13 +11034,8 @@ impl<'t> Machine<'t> {
             else {
                 return self.refuse("a home-module method without a resolvable body", e.span);
             };
-            // PLANT (s237): the receiver goes last.
-            let mut exprs: Vec<Option<&'t GreenNode>> = args
-                .into_iter()
-                .flat_map(|l| l.args())
-                .map(Arg::value)
-                .collect();
-            exprs.push(Some(recv));
+            let mut exprs: Vec<Option<&'t GreenNode>> = vec![Some(recv)];
+            exprs.extend(args.into_iter().flat_map(|l| l.args()).map(Arg::value));
             return self.call_free(sig, body, &exprs);
         }
         let recv_ty = self.expr_ty(recv.span).cloned();
