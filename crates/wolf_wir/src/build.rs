@@ -502,10 +502,13 @@ impl<'m> FuncBuilder<'m> {
     /// frontier).
     pub fn use_var(&mut self, var: Var) -> Value {
         if self.single_block[var.0 as usize] {
-            // A miss means the block was split under the variable (see
-            // `fill`): its definition is in the global map.
-            if let Some(&v) = self.local_slot.get(&var.0) {
-                return v;
+            match self.local_slot.get(&var.0) {
+                Some(&v) => return v,
+                None => {
+                    // The pre-scan promised a local def; fall through
+                    // to the global path defensively in release.
+                    debug_assert!(false, "single-block var used without a local def");
+                }
             }
         }
         self.use_var_in(var, self.cur)
@@ -1544,16 +1547,7 @@ impl<'m> FuncBuilder<'m> {
 
     fn fill(&mut self, terminator: Inst, succs: &[Block]) {
         self.blocks[self.cur.index()].filled = true;
-        // A single-block variable's definition outlives the block when
-        // an operator in a straight-line body lowers through a branch
-        // of its own (a narrowing `as`, a signed wrapping `/`, a plain
-        // shift): the pre-scan reads the syntax and cannot see those.
-        // The definition moves to the global map at the block's end, so
-        // a later use finds it through the predecessors.
-        let cur = self.cur.as_u32();
-        for (var, val) in self.local_slot.drain() {
-            self.defs.insert((var, cur), val);
-        }
+        self.local_slot.clear();
         for &s in succs {
             debug_assert!(
                 !self.blocks[s.index()].sealed,
