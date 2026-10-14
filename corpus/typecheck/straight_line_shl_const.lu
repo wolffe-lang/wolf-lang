@@ -2,16 +2,16 @@
 //! phase: run
 //! conforms: type.int.shift
 //!
-//! wolf-lang#755 (s237): a function with no `if`, loop, call or index
-//! is lowered as one block, and its locals are kept for that block
-//! alone. A construct that branches in the middle of an expression ends
-//! the block, so a local declared before it and read after it had no
-//! definition: a plain `<<` by a constant count of a value that is not
-//! one (the round trip's check). Native and release panicked at s237's
-//! head `822120f0`, the shift's own branches being new there; trunk had
-//! no branch to split on, "use of a variable with no definition on some
-//! path". The checked machine and lupin 0.1.52 printed what this row
-//! says.
+//! wolf-lang#755 (s237, s755): a function with no `if`, loop, call or
+//! index is lowered as one block, and its locals are kept for that
+//! block alone. A construct that branches in the middle of an
+//! expression ends the block, so a local declared before it and read
+//! after it had no definition: a plain `<<` by a constant count of a
+//! value that is not one (the round trip's check). Native and release
+//! panicked here with s237's shift lowering before the #755 fix (s755)
+//! landed, the shift's own branches being new, "use of a variable with
+//! no definition on some path". The checked machine and lupin 0.1.52
+//! printed what this row says.
 
 fn f(x: u64) -> u64 {
     let y = x + 1
