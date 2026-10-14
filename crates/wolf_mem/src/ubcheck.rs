@@ -12964,7 +12964,13 @@ mod checked_sig {
     #[cfg(unix)]
     static WAKE_W: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(-1);
     #[cfg(unix)]
-    static WAKE_R: std::sync::OnceLock<libc::c_int> = std::sync::OnceLock::new();
+    /// The wake pipe's read end, -1 until a pipe was made (s239: a
+    /// refusal is not remembered — the next wait asks the host again,
+    /// as the runtime's `os_signal_wait_fd` does).
+    static WAKE_R: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(-1);
+    /// Serializes the making of the wake pipe.
+    #[cfg(unix)]
+    static WAKE_MAKING: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
     #[cfg(unix)]
     unsafe fn errno_slot() -> *mut libc::c_int {
@@ -13001,25 +13007,32 @@ mod checked_sig {
         timeout_ms: i32,
     ) -> Result<Woke, &'static str> {
         use std::os::fd::AsRawFd as _;
-        let r = *WAKE_R.get_or_init(|| {
-            let mut fds = [0 as libc::c_int; 2];
-            // SAFETY: a plain pipe; both ends made nonblocking and
-            // close-on-exec before the write end is published.
-            unsafe {
-                if libc::pipe(fds.as_mut_ptr()) != 0 {
-                    return -1;
-                }
-                for &fd in &fds {
-                    let fl = libc::fcntl(fd, libc::F_GETFL);
-                    libc::fcntl(fd, libc::F_SETFL, fl | libc::O_NONBLOCK);
-                    libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC);
-                }
-            }
-            WAKE_W.store(fds[1], Ordering::SeqCst);
-            fds[0]
-        });
+        let mut r = WAKE_R.load(Ordering::SeqCst);
         if r < 0 {
-            return Err("io");
+            let _making = WAKE_MAKING
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            r = WAKE_R.load(Ordering::SeqCst);
+            if r < 0 {
+                let mut fds = [0 as libc::c_int; 2];
+                // SAFETY: a plain pipe; both ends made nonblocking and
+                // close-on-exec before the write end is published.
+                unsafe {
+                    if libc::pipe(fds.as_mut_ptr()) != 0 {
+                        // A process at its descriptor limit: `io` now,
+                        // and the next wait asks again (s239).
+                        return Err("io");
+                    }
+                    for &fd in &fds {
+                        let fl = libc::fcntl(fd, libc::F_GETFL);
+                        libc::fcntl(fd, libc::F_SETFL, fl | libc::O_NONBLOCK);
+                        libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC);
+                    }
+                }
+                WAKE_W.store(fds[1], Ordering::SeqCst);
+                WAKE_R.store(fds[0], Ordering::SeqCst);
+                r = fds[0];
+            }
         }
         let mut buf = [0u8; 16];
         // SAFETY: our own nonblocking pipe; emptied, it answers EAGAIN.
