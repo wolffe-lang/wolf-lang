@@ -1212,8 +1212,7 @@ impl NetTable {
             // answer.
             _ => return Err("io"),
         };
-        addr.map(|a| i64::from(a.port()))
-            .map_err(|e| host_err(&e))
+        addr.map(|a| i64::from(a.port())).map_err(|e| host_err(&e))
     }
 
     /// Park until one connection is this handle's (reactor-routed on
@@ -1722,7 +1721,8 @@ pub(crate) fn wait_ready(handles: &[i64], deadline_ms: i64) -> Result<Vec<i64>, 
     };
     // The poll holds the worker for as long as the caller asked, so the
     // pool compensates (s231; until then it did not).
-    let flags = crate::host_wait(|| crate::poll::readable(&raws, timeout)).map_err(|e| host_io(&e))?;
+    let flags =
+        crate::host_wait(|| crate::poll::readable(&raws, timeout)).map_err(|e| host_io(&e))?;
     Ok(handles
         .iter()
         .zip(flags)

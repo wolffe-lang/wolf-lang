@@ -7307,10 +7307,7 @@ impl<'t> Machine<'t> {
                 #[cfg(unix)]
                 {
                     match std::os::unix::net::UnixListener::bind(&path) {
-                        Err(e) => Ok(tag(&coarse(
-                            &e,
-                            &["exists", "not_found", "denied", "io"],
-                        ))),
+                        Err(e) => Ok(tag(&coarse(&e, &["exists", "not_found", "denied", "io"]))),
                         Ok(l) => {
                             let fd = self.socks.len() as i64;
                             self.socks.push(Some(NetSock::UnixListener(
@@ -7334,10 +7331,7 @@ impl<'t> Machine<'t> {
                 #[cfg(unix)]
                 {
                     match std::os::unix::net::UnixStream::connect(&path) {
-                        Err(e) => Ok(tag(&coarse(
-                            &e,
-                            &["refused", "not_found", "denied", "io"],
-                        ))),
+                        Err(e) => Ok(tag(&coarse(&e, &["refused", "not_found", "denied", "io"]))),
                         Ok(s) => {
                             let fd = self.socks.len() as i64;
                             self.socks.push(Some(NetSock::UnixStream(s)));

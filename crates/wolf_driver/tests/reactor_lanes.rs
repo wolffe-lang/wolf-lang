@@ -204,7 +204,10 @@ fn parse_obs(out: &Output, what: &str) -> Obs {
 /// The checked machine's record for `entry`, run under `n` descriptors.
 fn checked(entry: &Path, dir: &Path, n: u64) -> Obs {
     let mut cmd = Command::new(wolf());
-    cmd.arg("conform-run").arg(entry).arg("--checked").arg("--json");
+    cmd.arg("conform-run")
+        .arg(entry)
+        .arg("--checked")
+        .arg("--json");
     let out = limited(cmd, dir, n);
     assert!(
         out.status.success(),
@@ -328,7 +331,12 @@ fn a_park_at_the_descriptor_limit_does_not_end_the_process() {
         // Pre-mirror: lupin's net family leaves the number alone.
         let n = if pre_mirror(&l) { 0 } else { libc::EMFILE };
         assert_park(&l.stdout, n, &format!("lupin {}", l.version));
-        println!("lupin {} ({}): {}", l.version, l.commit, l.stdout.replace('\n', " | "));
+        println!(
+            "lupin {} ({}): {}",
+            l.version,
+            l.commit,
+            l.stdout.replace('\n', " | ")
+        );
     }
 }
 
@@ -336,7 +344,11 @@ fn a_park_at_the_descriptor_limit_does_not_end_the_process() {
 /// descriptors are back, the file it waits on has a byte (0).
 fn assert_wait(stdout: &str, what: &str) {
     assert_full(stdout, what);
-    assert_eq!(line(stdout, "wait", what), "row=io", "{what}: the wait at the limit");
+    assert_eq!(
+        line(stdout, "wait", what),
+        "row=io",
+        "{what}: the wait at the limit"
+    );
     assert_eq!(
         line(stdout, "after", what),
         "row=answered value=0",
@@ -379,7 +391,11 @@ fn a_signal_wait_at_the_descriptor_limit_is_io() {
     println!("checked: {}", c.stdout.replace('\n', " | "));
     if let Some(l) = lupin(&entry, &dir, LIMIT) {
         if pre_mirror(&l) {
-            assert_eq!(l.verdict, "unsupported", "lupin {} (pre-mirror): {l:?}", l.version);
+            assert_eq!(
+                l.verdict, "unsupported",
+                "lupin {} (pre-mirror): {l:?}",
+                l.version
+            );
         } else {
             assert_eq!(l.verdict, "exit(0)", "lupin: {l:?}");
             assert_wait(&l.stdout, &format!("lupin {}", l.version));
@@ -422,7 +438,11 @@ fn a_program_that_cannot_make_its_readiness_set_does_not_start() {
             "{tier}: names a park, four descriptors: {:?} stderr: {stderr}",
             out.status
         );
-        assert!(out.stdout.is_empty(), "{tier}: `main` ran: {:?}", out.stdout);
+        assert!(
+            out.stdout.is_empty(),
+            "{tier}: `main` ran: {:?}",
+            out.stdout
+        );
         let lines: Vec<&str> = stderr.lines().collect();
         assert_eq!(lines.len(), 1, "{tier}: one stderr line: {stderr}");
         assert!(
@@ -433,12 +453,18 @@ fn a_program_that_cannot_make_its_readiness_set_does_not_start() {
         );
         let out = limited(Command::new(&none), &dir, 4);
         assert_eq!(
-            (out.status.code(), String::from_utf8_lossy(&out.stdout).trim()),
+            (
+                out.status.code(),
+                String::from_utf8_lossy(&out.stdout).trim()
+            ),
             (Some(0), "ready"),
             "{tier}: names no park, four descriptors: stderr {}",
             String::from_utf8_lossy(&out.stderr)
         );
-        println!("{tier}: names a park -> 71, `{}`; names none -> 0", lines[0]);
+        println!(
+            "{tier}: names a park -> 71, `{}`; names none -> 0",
+            lines[0]
+        );
     }
 }
 
