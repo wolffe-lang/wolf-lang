@@ -61,8 +61,16 @@ succeeded and every other job was skipped.
   gates read all of them. A changed path no rule of `ci/tiers.py` names
   runs the full tier; add the rule in the same PR. A prose-only PR still
   needs the label's run to merge.
-- A planted break needs one job: `gh workflow run ci --ref <branch> -f
-  jobs=<job id>` (`tier partial`, never a merge gate).
+- A planted break needs one job, and no pull request. Cut the plant branch
+  from a branch that carries these tiers (trunk since tl21, or your lane
+  branch rebased onto it), commit the break, push the branch, then
+  `gh workflow run ci --ref <plant-branch> -f jobs="<job id> ..."`, e.g.
+  `-f jobs=lint-test` for a gauntlet witness or `-f jobs=native-macos` for
+  a macOS one. The run uses the plant branch's own `ci.yml`, runs only the
+  named jobs, and its last job is `tier partial`: red when a named job
+  failed, never a merge gate. Cite its run id; `gh run list -w ci -b
+  <plant-branch>` finds it. Before tl21 a lane had to open a draft PR for
+  this and cancel the jobs it did not need.
 
 ## Testing conventions
 - Property tests use proptest. Case count follows `PROPTEST_CASES`, which is
