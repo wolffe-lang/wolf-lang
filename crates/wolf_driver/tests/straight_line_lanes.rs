@@ -14,10 +14,13 @@
 //! - a narrowing or sign-changing integer `as` (the range check);
 //! - `int as char` (the scalar range and the surrogate gap);
 //! - a signed `wrapping` `/` or `%` whose divisor may be -1;
-//! - `==`, `!=` and the orderings on two `str`s (compared inline).
+//! - `==`, `!=` and the orderings on two `str`s (compared inline);
+//! - a plain `<<`, `>>` or `<<=` (`[type.int.shift]`'s count and
+//!   round-trip checks, s237).
 //!
-//! Each panicked on native and release in the wolf 0.2.29 release
-//! archive and at trunk `b407c73b`, measured.
+//! Each of the first four panicked on native and release in the wolf
+//! 0.2.29 release archive and at trunk `b407c73b`, measured; the shifts
+//! panicked with s237's lowering before the fix (s755) landed.
 //!
 //! Constructs that branch only in their own operation (a checked `+`, a
 //! plain `/`, a float `as int`, unsigned negation) or that the pre-scan
@@ -200,4 +203,7 @@ rows! {
     a_signed_wrapping_rem_keeps_the_locals_around_it: "wrap_rem";
     a_str_equality_keeps_the_locals_around_it: "str_eq";
     a_str_ordering_keeps_the_locals_around_it: "str_order";
+    a_plain_shr_by_a_variable_keeps_the_locals_around_it: "shr_var";
+    a_plain_shl_by_a_constant_keeps_the_locals_around_it: "shl_const";
+    a_plain_shl_assign_keeps_the_locals_around_it: "shl_assign";
 }
