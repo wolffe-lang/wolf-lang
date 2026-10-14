@@ -800,6 +800,10 @@ fn wait_raw(
         crate::reactor::IoWait::Ready => Ok(()),
         crate::reactor::IoWait::TimedOut => Err("timeout"),
         crate::reactor::IoWait::Cancelled => Err("io"),
+        // s239 (wolf-lang#750): the readiness set could not be made — a
+        // process at its descriptor limit — so nothing waited. `io`,
+        // the call's own row, never an abort.
+        crate::reactor::IoWait::Unavailable(_) => Err("io"),
     }
 }
 

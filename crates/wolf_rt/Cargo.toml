@@ -50,6 +50,13 @@ harness = false
 name = "no_io"
 harness = false
 
+# s239 (wolf-lang#750): the reactor at the descriptor limit — each case
+# re-executes this binary and lowers its own child's limit, so no
+# libtest (the reactor is one per process, made once).
+[[test]]
+name = "reactor_limit"
+harness = false
+
 [[test]]
 name = "spawn_bench"
 harness = false

@@ -87,8 +87,8 @@
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
-use std::sync::atomic::{AtomicU64, Ordering::SeqCst};
-use std::sync::{Arc, Condvar, Mutex, Once, OnceLock};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::SeqCst};
+use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use crate::task::{SchedEvent, blocking, current_scope, kill_teardown_check, sched_point};
@@ -133,21 +133,39 @@ mod sys {
     }
 
     impl Poller {
-        pub fn new() -> Poller {
-            // SAFETY: plain fd creation; results checked below.
+        /// The set and its wake descriptor, or the host's refusal (s239,
+        /// wolf-lang#750: a process at its descriptor limit is answered,
+        /// never aborted). Nothing is left open on a refusal.
+        pub fn new() -> std::io::Result<Poller> {
+            // SAFETY: plain fd creation; result checked below.
             let epfd = unsafe { libc::epoll_create1(libc::EPOLL_CLOEXEC) };
-            assert!(epfd >= 0, "epoll_create1 failed");
+            if epfd < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
             // SAFETY: plain fd creation; result checked below.
             let wakefd = unsafe { libc::eventfd(0, libc::EFD_CLOEXEC | libc::EFD_NONBLOCK) };
-            assert!(wakefd >= 0, "eventfd failed");
+            if wakefd < 0 {
+                let e = std::io::Error::last_os_error();
+                // SAFETY: our own fresh descriptor, closed once.
+                unsafe { libc::close(epfd) };
+                return Err(e);
+            }
             let mut ev = libc::epoll_event {
                 events: libc::EPOLLIN as u32,
                 u64: WAKE_TOKEN,
             };
             // SAFETY: valid epfd/wakefd and a live event struct.
             let rc = unsafe { libc::epoll_ctl(epfd, libc::EPOLL_CTL_ADD, wakefd, &mut ev) };
-            assert_eq!(rc, 0, "epoll_ctl(wakefd) failed");
-            Poller { epfd, wakefd }
+            if rc != 0 {
+                let e = std::io::Error::last_os_error();
+                // SAFETY: our own fresh descriptors, each closed once.
+                unsafe {
+                    libc::close(wakefd);
+                    libc::close(epfd);
+                }
+                return Err(e);
+            }
+            Ok(Poller { epfd, wakefd })
         }
 
         /// Arm an fd interest (oneshot) under `token`. `false` when
@@ -230,10 +248,14 @@ mod sys {
     }
 
     impl Poller {
-        pub fn new() -> Poller {
+        /// The queue and its wake event, or the host's refusal (s239,
+        /// wolf-lang#750). Nothing is left open on a refusal.
+        pub fn new() -> std::io::Result<Poller> {
             // SAFETY: plain kqueue creation; result checked below.
             let kq = unsafe { libc::kqueue() };
-            assert!(kq >= 0, "kqueue failed");
+            if kq < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
             // The wake channel: an EV_CLEAR user event — triggering it
             // wakes the wait, retrieval auto-resets it (no drain).
             let ev = libc::kevent {
@@ -246,8 +268,13 @@ mod sys {
             };
             // SAFETY: valid kq and a live changelist of one.
             let rc = unsafe { libc::kevent(kq, &ev, 1, std::ptr::null_mut(), 0, std::ptr::null()) };
-            assert_eq!(rc, 0, "kevent(EVFILT_USER add) failed");
-            Poller { kq }
+            if rc != 0 {
+                let e = std::io::Error::last_os_error();
+                // SAFETY: our own fresh descriptor, closed once.
+                unsafe { libc::close(kq) };
+                return Err(e);
+            }
+            Ok(Poller { kq })
         }
 
         /// Arm an fd interest (oneshot) under `token`. kqueue keys
@@ -382,15 +409,17 @@ mod sys {
     }
 
     impl Poller {
-        pub fn new() -> Poller {
-            let wake = UdpSocket::bind("127.0.0.1:0").expect("reactor wake socket");
-            let me = wake.local_addr().expect("wake socket addr");
-            wake.connect(me).expect("wake socket self-connect");
-            wake.set_nonblocking(true).expect("wake socket nonblocking");
-            Poller {
+        /// The wake socket, or the host's refusal (s239,
+        /// wolf-lang#750); a refused step drops what was made.
+        pub fn new() -> std::io::Result<Poller> {
+            let wake = UdpSocket::bind("127.0.0.1:0")?;
+            let me = wake.local_addr()?;
+            wake.connect(me)?;
+            wake.set_nonblocking(true)?;
+            Ok(Poller {
                 wake,
                 armed: Mutex::new(Vec::new()),
-            }
+            })
         }
 
         /// Arm a socket interest (oneshot: delivery removes it) under
@@ -514,6 +543,14 @@ pub enum IoWait {
     /// (`[conc.cancel.points]`; on a killed proc's unwindable frame
     /// the task terminates instead — callers never see this then).
     Cancelled,
+    /// The readiness set does not exist and could not be made: the
+    /// host refused a descriptor or the reactor's thread (s239,
+    /// wolf-lang#750). Carries the host's number (0 when it gave none).
+    /// Nothing waited; the next wait asks again. A compiled program
+    /// that names a parking call makes the set before `main`
+    /// ([`start`]), so it meets this only through a caller of this
+    /// module that did not.
+    Unavailable(i32),
 }
 
 /// One parked waiter's completion cell.
@@ -571,33 +608,65 @@ struct Reactor {
 }
 
 static REACTOR: OnceLock<Reactor> = OnceLock::new();
-static THREAD: Once = Once::new();
+/// The reactor thread is running (set once, after a spawn the host
+/// accepted).
+static RUNNING: AtomicBool = AtomicBool::new(false);
+/// Serializes the making: two first waits make one set and one thread.
+static MAKING: Mutex<()> = Mutex::new(());
 
-/// True once the reactor has ever been initialized — the no_io test
-/// family's probe (D15: stays false for a program that performs no
-/// io).
+/// True once the reactor is up — its set made and its thread running —
+/// the no_io test family's probe (D15: stays false for a program that
+/// performs no io).
 pub fn initialized() -> bool {
-    REACTOR.get().is_some()
+    RUNNING.load(SeqCst)
 }
 
-/// Lazy init: first submission creates the platform poller (epoll or
-/// kqueue) with its wake channel, and the one reactor thread.
-fn reactor() -> &'static Reactor {
-    let r = REACTOR.get_or_init(|| Reactor {
-        sys: sys::Poller::new(),
-        next_token: AtomicU64::new(0),
-        state: Mutex::new(State {
-            waiters: HashMap::new(),
-            timers: BinaryHeap::new(),
-        }),
-    });
-    THREAD.call_once(|| {
+/// Make the platform poller (epoll or kqueue) with its wake channel,
+/// and the one reactor thread, if they are not made yet — or answer the
+/// host's refusal. Never asserts (s239, wolf-lang#750: until then a
+/// refused `epoll_create1` was a panic in a function that cannot
+/// unwind, so a process at its descriptor limit ended at its first
+/// park). A refusal leaves nothing half-made that a later call cannot
+/// finish: a set made without its thread keeps its two descriptors and
+/// the next call asks for the thread again.
+fn reactor() -> std::io::Result<&'static Reactor> {
+    if RUNNING.load(SeqCst)
+        && let Some(r) = REACTOR.get()
+    {
+        return Ok(r);
+    }
+    let _making = MAKING
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let r = match REACTOR.get() {
+        Some(r) => r,
+        None => {
+            let sys = sys::Poller::new()?;
+            REACTOR.get_or_init(move || Reactor {
+                sys,
+                next_token: AtomicU64::new(0),
+                state: Mutex::new(State {
+                    waiters: HashMap::new(),
+                    timers: BinaryHeap::new(),
+                }),
+            })
+        }
+    };
+    if !RUNNING.load(SeqCst) {
         std::thread::Builder::new()
             .name("wolf-reactor".into())
-            .spawn(move || reactor_main(r))
-            .expect("spawn reactor thread");
-    });
-    r
+            .spawn(move || reactor_main(r))?;
+        RUNNING.store(true, SeqCst);
+    }
+    Ok(r)
+}
+
+/// Make the reactor now rather than at the first wait (s239,
+/// wolf-lang#750, `[os.net.reactor]`): the host's refusal, if any, is
+/// the caller's to report. Idempotent; a second call after success
+/// costs one atomic load.
+pub fn start() -> std::io::Result<()> {
+    reactor().map(|_| ())
 }
 
 impl Reactor {
@@ -743,7 +812,10 @@ fn submit(fd: Option<(RawFd, Interest)>, deadline: Option<Instant>, cancellable:
         fd.is_some() || deadline.is_some(),
         "a wait needs an fd interest or a deadline"
     );
-    let r = reactor();
+    let r = match reactor() {
+        Ok(r) => r,
+        Err(e) => return IoWait::Unavailable(e.raw_os_error().unwrap_or(0)),
+    };
     let token = r.next_token.fetch_add(1, SeqCst);
     let cell = Arc::new(WaitCell::new());
     {
