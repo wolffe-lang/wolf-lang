@@ -1,0 +1,85 @@
+//! s240 witness (not a corpus row; run by `docs/s240/run-linux.sh` in a
+//! throwaway container): what wolf 0.2.29's builtins give a job-control
+//! program that wants to signal a whole job.
+//!
+//! A job is `/bin/sh -c 'sleep 300 & echo $! > FILE; wait'` started by
+//! `os_spawn_job` as the leader of a new group (its group id is its pid).
+//! The shell's own child, the `sleep`, is in the job's group too, and the
+//! program never learns its pid from wolf. The witness prints what each
+//! send answers and whether the `sleep` outlives a signal to the leader.
+//! TERMINATE is 2 and KILL is 1048576 (`[os.signal.set]`).
+
+fn row(pid: int, m: int) -> str {
+    os_signal_send(pid, m) else |e| {
+        return match e {
+            unsupported => "unsupported",
+            invalid => "invalid",
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+/// Wait (bounded) for the shell to write the sleep's pid, and read it.
+fn read_pid(path: str) -> int {
+    var waited = 0
+    while !fs_exists(path) {
+        if waited > 500 { return -1 }
+        time_sleep_ms(10)
+        waited = waited + 1
+    }
+    time_sleep_ms(50)
+    let text = fs_read_text(path) else |_| { return -1 }
+    text.trim().to_int() else -1
+}
+
+/// The process's state letter from `/proc` (linux): "S" asleep, "Z" a
+/// zombie, "gone" when it has no entry.
+fn state(pid: int) -> str {
+    let s = fs_read_text("/proc/{pid}/stat") else |_| { return "gone" }
+    if s.contains(") S ") { return "S" }
+    if s.contains(") Z ") { return "Z" }
+    if s.contains(") T ") { return "T" }
+    "other"
+}
+
+fn job(path: str) -> int ! {unsupported, invalid, not_found, denied, io} {
+    let script = "sleep 300 & ps -o pid=,pgid=,comm= -p $$,$! > {path}.ps; echo $! > {path}; wait"
+    os_spawn_job("/bin/sh", ["-c", script], List[int](), 0, -1, 0)?
+}
+
+fn main() -> !int {
+    // (No `os_pgid` here: lupin refuses a program that names it, at
+    // resolve, and the send rows below are what lupin is asked.)
+    print("me: pid={os_pid()}")
+
+    // The group-shaped ids are refused by their shape, nothing sent.
+    print("send(0, TERMINATE)={row(0, 2)}")
+    print("send(-1, TERMINATE)={row(-1, 2)}")
+
+    // Job 1: a signal to the leader by pid.
+    let h = job("g1.pid")?
+    let leader = os_proc_pid(h)?
+    let g = read_pid("g1.pid")
+    let ps = fs_read_text("g1.pid.ps") else |_| "?"
+    print("job1: leader={leader} sleep known: {g > 0}; pid pgid comm:\n{ps.trim()}")
+    print("send(-leader, TERMINATE)={row(0 - leader, 2)}")
+    print("send(-leader, 0)={row(0 - leader, 0)}")
+    print("send(leader, TERMINATE)={row(leader, 2)}")
+    let st = os_wait_status(h)?
+    print("job1 leader status={st}")
+    print("job1 sleep after the leader's end: send(sleep, 0)={row(g, 0)} state={state(g)}")
+    print("cleanup send(sleep, KILL)={row(g, 1048576)}")
+
+    // Job 2: os_kill on the handle.
+    let h2 = job("g2.pid")?
+    let g2 = read_pid("g2.pid")
+    os_kill(h2)?
+    let st2 = os_wait_status(h2)?
+    print("job2 leader status after os_kill={st2}")
+    print("job2 sleep after os_kill: send(sleep, 0)={row(g2, 0)} state={state(g2)}")
+    print("cleanup send(sleep, KILL)={row(g2, 1048576)}")
+    0
+}
