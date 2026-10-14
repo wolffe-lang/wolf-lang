@@ -7251,8 +7251,18 @@ impl<'t> Machine<'t> {
                 payload: Vec::new(),
             })
         }
-        fn coarse(kind: std::io::ErrorKind, declared: &[&str]) -> String {
-            let t = net_err_tag(kind);
+        // s239 (#751, `[os.fs.error]`): a host refusal leaves its number
+        // in the task's word, as the fs family's does — the runtime's
+        // `net::host_err`, mirrored. `WouldBlock` is a budget the machine
+        // armed running out (std's socket timeouts), never the host
+        // refusing: 0, as the runtime's timer answers.
+        fn coarse(e: &std::io::Error, declared: &[&str]) -> String {
+            if e.kind() == std::io::ErrorKind::WouldBlock {
+                FS_HOST_ERROR.with(|c| c.set(0));
+            } else {
+                fs_host_error(e);
+            }
+            let t = net_err_tag(e.kind());
             if declared.contains(&t) { t } else { "io" }.to_string()
         }
         let str_arg = |i: usize| -> Option<String> {
@@ -7276,7 +7286,7 @@ impl<'t> Machine<'t> {
                     return self.refuse("this net call shape", span);
                 };
                 match std::net::TcpListener::bind(&addr) {
-                    Err(e) => Ok(tag(&coarse(e.kind(), &["io"]))),
+                    Err(e) => Ok(tag(&coarse(&e, &["io"]))),
                     Ok(l) => {
                         let fd = self.socks.len() as i64;
                         self.socks.push(Some(NetSock::Listener(l)));
@@ -7298,7 +7308,7 @@ impl<'t> Machine<'t> {
                 {
                     match std::os::unix::net::UnixListener::bind(&path) {
                         Err(e) => Ok(tag(&coarse(
-                            e.kind(),
+                            &e,
                             &["exists", "not_found", "denied", "io"],
                         ))),
                         Ok(l) => {
@@ -7325,7 +7335,7 @@ impl<'t> Machine<'t> {
                 {
                     match std::os::unix::net::UnixStream::connect(&path) {
                         Err(e) => Ok(tag(&coarse(
-                            e.kind(),
+                            &e,
                             &["refused", "not_found", "denied", "io"],
                         ))),
                         Ok(s) => {
@@ -7366,7 +7376,7 @@ impl<'t> Machine<'t> {
                     std::net::TcpListener::bind(&addr)
                 };
                 match bound {
-                    Err(e) => Ok(tag(&coarse(e.kind(), &["exists", "denied", "io"]))),
+                    Err(e) => Ok(tag(&coarse(&e, &["exists", "denied", "io"]))),
                     Ok(l) => {
                         let fd = self.socks.len() as i64;
                         self.socks.push(Some(NetSock::Listener(l)));
@@ -7441,8 +7451,12 @@ impl<'t> Machine<'t> {
                     } else {
                         i32::try_from(deadline).unwrap_or(i32::MAX)
                     };
-                    let Ok(flags) = checked_poll_readable(&raws, timeout) else {
-                        return Ok(tag("io"));
+                    let flags = match checked_poll_readable(&raws, timeout) {
+                        Ok(flags) => flags,
+                        Err(e) => {
+                            fs_host_error(&e);
+                            return Ok(tag("io"));
+                        }
                     };
                     let ready: Vec<Value> = handles
                         .iter()
@@ -7465,7 +7479,7 @@ impl<'t> Machine<'t> {
                 };
                 match addr {
                     Ok(a) => Ok(Flow::Val(Value::Int(i64::from(a.port())))),
-                    Err(e) => Ok(tag(&coarse(e.kind(), &["io"]))),
+                    Err(e) => Ok(tag(&coarse(&e, &["io"]))),
                 }
             }
             "net_accept" => {
@@ -7483,7 +7497,7 @@ impl<'t> Machine<'t> {
                     _ => return Ok(tag("io")),
                 };
                 match accepted.and_then(NetSock::under_posture) {
-                    Err(e) => Ok(tag(&coarse(e.kind(), &["timeout", "io"]))),
+                    Err(e) => Ok(tag(&coarse(&e, &["timeout", "io"]))),
                     Ok(s) => {
                         let fd = self.socks.len() as i64;
                         self.socks.push(Some(s));
@@ -7498,7 +7512,7 @@ impl<'t> Machine<'t> {
                 match std::net::TcpStream::connect(&addr)
                     .and_then(|s| NetSock::Stream(s).under_posture())
                 {
-                    Err(e) => Ok(tag(&coarse(e.kind(), &["refused", "timeout", "io"]))),
+                    Err(e) => Ok(tag(&coarse(&e, &["refused", "timeout", "io"]))),
                     Ok(s) => {
                         let fd = self.socks.len() as i64;
                         self.socks.push(Some(s));
@@ -7524,7 +7538,7 @@ impl<'t> Machine<'t> {
                 }
                 let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
                 match s.read(&mut buf) {
-                    Err(e) => Ok(tag(&coarse(e.kind(), &["closed", "timeout", "io"]))),
+                    Err(e) => Ok(tag(&coarse(&e, &["closed", "timeout", "io"]))),
                     Ok(0) => Ok(tag("closed")),
                     Ok(n) => {
                         buf.truncate(n);
@@ -7555,7 +7569,7 @@ impl<'t> Machine<'t> {
                     return Ok(tag("io"));
                 };
                 match s.write_all(payload.as_bytes()) {
-                    Err(e) => Ok(tag(&coarse(e.kind(), &["closed", "io"]))),
+                    Err(e) => Ok(tag(&coarse(&e, &["closed", "io"]))),
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
             }
@@ -7581,7 +7595,7 @@ impl<'t> Machine<'t> {
                 }
                 let mut buf = vec![0u8; (max as u64).min(1 << 20) as usize];
                 match s.read(&mut buf) {
-                    Err(e) => Ok(tag(&coarse(e.kind(), &["closed", "timeout", "io"]))),
+                    Err(e) => Ok(tag(&coarse(&e, &["closed", "timeout", "io"]))),
                     Ok(0) => Ok(tag("closed")),
                     Ok(n) => {
                         buf.truncate(n);
@@ -7603,7 +7617,7 @@ impl<'t> Machine<'t> {
                     return Ok(tag("io"));
                 };
                 match s.write_all(&bytes) {
-                    Err(e) => Ok(tag(&coarse(e.kind(), &["closed", "io"]))),
+                    Err(e) => Ok(tag(&coarse(&e, &["closed", "io"]))),
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
             }
@@ -7631,7 +7645,7 @@ impl<'t> Machine<'t> {
                     return Ok(tag("io"));
                 };
                 match s.write_all_vectored(&parts) {
-                    Err(e) => Ok(tag(&coarse(e.kind(), &["closed", "io"]))),
+                    Err(e) => Ok(tag(&coarse(&e, &["closed", "io"]))),
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
             }
@@ -7663,7 +7677,7 @@ impl<'t> Machine<'t> {
                     return Ok(tag("io"));
                 };
                 match s.write_all_vectored(&parts) {
-                    Err(e) => Ok(tag(&coarse(e.kind(), &["closed", "io"]))),
+                    Err(e) => Ok(tag(&coarse(&e, &["closed", "io"]))),
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
             }
@@ -7677,7 +7691,10 @@ impl<'t> Machine<'t> {
                     return Ok(tag("io"));
                 };
                 match s.set_nodelay(*on) {
-                    Err(_) => Ok(tag("io")),
+                    Err(e) => {
+                        fs_host_error(&e);
+                        Ok(tag("io"))
+                    }
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
             }
@@ -7753,7 +7770,7 @@ impl<'t> Machine<'t> {
                         };
                         Ok(Flow::Val(Value::Unit))
                     }
-                    Err(e) => Ok(tag(&coarse(e.kind(), &["io"]))),
+                    Err(e) => Ok(tag(&coarse(&e, &["io"]))),
                 }
             }
             _ => self.refuse("this net builtin", span),
@@ -10448,7 +10465,13 @@ impl<'t> Machine<'t> {
                         argv.push(x);
                     }
                 }
-                return self.net_builtin(&callee_name, argv, e.span);
+                // s239 (#751): the net family keeps the task's host
+                // number as the fs family does — cleared on entry, a
+                // refusal's left behind.
+                FS_HOST_ERROR.with(|c| c.set(0));
+                let r = self.net_builtin(&callee_name, argv, e.span);
+                self.last_os_error = FS_HOST_ERROR.with(std::cell::Cell::get);
+                return r;
             }
             // The s40 os/env, time, and json builtin tiers: fs/net
             // posture again — the checked machine performs the real
