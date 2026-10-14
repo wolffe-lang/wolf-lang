@@ -409,11 +409,9 @@ the checked machine where lupin trapped.) Witnesses:
   `typecheck/int_not_float.lu` (`fail(E0409)`).
 
 - `[type.int.shift]` **A shift on a plain integer is arithmetic on its
-  value.** *(s237 for wolf-lang#736. **Ruling owed:** the maintainer
-  has not ruled this clause. It is written as the lane recommends and
-  implemented as written, in commits of their own, so a different
-  ruling is a rewording here and a change to those commits; the
-  options are listed at the end.)* For `x` and `n` of one plain integer
+  value.** *(s237 for wolf-lang#736. Ruled by the maintainer,
+  2026-10-14 (ruling #77): option A of those weighed at the end; in
+  wolf 0.2.31.)* For `x` and `n` of one plain integer
   type `T` (`int`, `uint`, `i8`…`i64`, `u8`…`u64`) of width `W`,
   **`x << n` is `x * 2^n` and `x >> n` is the floor of `x / 2^n`**,
   computed on the values, each of type `T`. X3 holds as it does for
@@ -476,31 +474,22 @@ the checked machine where lupin trapped.) Witnesses:
   where (3) answers (its integers are 128 bits wide), and a constant
   initialiser is not checked against its type (`const K: u8 = 200 << 1`
   prints `400`). `shift_lanes` pins the first by version.
-  **The ruling, as options.** *A (this clause):* the value, X3 on the
-  product, no rule about the count but its sign. One sentence, lupin's
-  answer on every measured cell, the constant evaluator's on every
-  in-width one; no interpreter release is owed for the table. *B:* as A,
-  but any count outside `0..W` traps. One fewer path in the compiled
-  code (`>>` past the width needs no answer) and the constant
-  evaluator's old behaviour; lupin answers 55 of the 250 cells
-  differently (`0 << W`, every `>>` past the width) and would change.
-  *C:* the count outside `0..W` traps and the bits that leave are
-  dropped silently (a shift is a bit operation, as `&` is). The
-  cheapest check; it makes `<<` the one plain operator that loses
-  value without a trap, and lupin and the constant evaluator both
-  change. *D:* the masked machine shift, what native and release did.
-  No compiled program changes; `x << 64 == x` on a type that traps on
-  `x * 2`, and a plain integer and its `wrapping` form become the same
-  type for two operators. *E:* no shift on a plain integer at all
-  (a type error naming `wrapping[T]`); every `1 << k` in the corpus,
-  std and downstream is rewritten.
+  **Weighed and not taken** (the ruling's options; A is this clause):
+  *B*, any count outside `0..W` traps (lupin would change on 55 of the
+  250 cells); *C*, a count outside `0..W` traps and the bits that leave
+  are dropped silently, making `<<` the one plain operator that loses
+  value without a trap; *D*, the masked machine shift native and
+  release had, under which `x << 64 == x` on a type that traps on
+  `x * 2`; *E*, no shift on a plain integer at all, a type error
+  naming `wrapping[T]`.
   Witnesses: `typecheck/int_shift_value.lu`,
   `faults/int_shift_left_overflow.lu`,
   `faults/int_shift_left_sign_bit.lu`,
   `faults/int_shift_left_past_width.lu`,
   `faults/int_shift_count_negative.lu`, `comptime/shift_value.lu`,
   `comptime/shift_overflow.lu` (`fail(E0706)`),
-  `kernels/wrap_lshr_fold.lu`, `memory/raw_lshr_top_bits.lu`; the gate
+  `kernels/wrap_lshr_fold.lu`, `memory/raw_lshr_top_bits.lu`,
+  `typecheck/straight_line_{shr_var,shl_const,shl_assign}.lu`; the gate
   `shift_lanes` runs the table on four machines against the rule
   written a second time.
 
