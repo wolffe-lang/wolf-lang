@@ -793,6 +793,39 @@ fn place_elf_functions(
     Ok(())
 }
 
+/// The runtime's start call for the readiness set (s239, wolf-lang#750,
+/// `[os.net.reactor]`).
+pub const REACTOR_START: &str = "__wolf_rt_reactor_start";
+
+/// The runtime calls that can park a task in the reactor: the net calls
+/// that wait for readiness when the kernel answers "not yet" (the take,
+/// the reads, the writes — `[os.net.io]`). `net_wait`, the dial and
+/// `time_sleep_ms` wait elsewhere and are not here.
+pub const PARKING_NET: [&str; 7] = [
+    "__wolf_rt_net_accept",
+    "__wolf_rt_net_read",
+    "__wolf_rt_net_read_bytes",
+    "__wolf_rt_net_write",
+    "__wolf_rt_net_write_bytes",
+    "__wolf_rt_net_writev",
+    "__wolf_rt_net_writev_head",
+];
+
+/// Whether any function of `m` calls one of [`PARKING_NET`] — read off
+/// the call instructions the module still holds after the mid-end, so a
+/// call the optimizer removed costs nothing.
+pub fn names_a_park(m: &WirModule) -> bool {
+    m.funcs.values().any(|f| {
+        f.layout.iter().any(|&b| {
+            f.blocks[b].insts.iter().any(|&i| {
+                let d = &f.insts[i];
+                matches!((d.op, &d.aux), (Opcode::Call, Aux::Callee(ef))
+                    if PARKING_NET.contains(&f.ext_funcs[*ef].name.as_str()))
+            })
+        })
+    })
+}
+
 /// Append the C-entry shim to a WIR module: `main(argc, argv)` — in
 /// truth a niladic CLIF function — that calls wolf's `@main`. A plain
 /// `() -> i64` main truncates its result to the C exit code. An
@@ -805,6 +838,15 @@ fn place_elf_functions(
 /// needed). The returned id must be declared with the UNMANGLED
 /// symbol `main` ([`compile_module`] does).
 pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
+    // s239 (#750, `[os.net.reactor]`): a program that names a call which
+    // can park in the reactor makes the readiness set before `main`.
+    let start_sig = names_a_park(m).then(|| m.make_sig(vec![], vec![]));
+    let start = |f: &mut Function, b0: wolf_wir::ir::Block| {
+        if let Some(sig) = start_sig {
+            let callee = f.import_func(REACTOR_START, sig);
+            f.append_inst(b0, Opcode::Call, &[], &[], Aux::Callee(callee));
+        }
+    };
     let Some((_, entry)) = m.funcs.iter().find(|(_, f)| f.name == "main") else {
         return Err(BackendError::Unsupported(
             "no `main` function to build an executable around".to_string(),
@@ -835,6 +877,7 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
         let shim_sig = m.make_sig(vec![], vec![types::I32]);
         let mut f = Function::new("__wolf_main_shim", shim_sig);
         let b0 = f.make_block(&[]);
+        start(&mut f, b0);
         let callee = f.import_func("main", entry_sig);
         f.append_inst(b0, Opcode::Call, &[], &[], Aux::Callee(callee));
         let (_, z) = f.append_inst(b0, Opcode::Iconst, &[], &[types::I32], Aux::Int(0));
@@ -857,6 +900,7 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
     let shim_sig = m.make_sig(vec![], vec![types::I32]);
     let mut f = Function::new("__wolf_main_shim", shim_sig);
     let b0 = f.make_block(&[]);
+    start(&mut f, b0);
     let callee = f.import_func("main", entry_sig);
     let (_, res) = f.append_inst(b0, Opcode::Call, &[], &[res_ty], Aux::Callee(callee));
 

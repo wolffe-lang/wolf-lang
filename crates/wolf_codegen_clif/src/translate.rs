@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 214] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 215] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -81,6 +81,10 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 214] = [
     // trap(alloc-contract) at the allocating site.
     ("__wolf_rt_region_set_cap", 2, false),
     ("__wolf_rt_main_err", 6, false),
+    // s239 (#750, `[os.net.reactor]`): the readiness set made before
+    // `main` — the entry shim's first call in a program that names a
+    // parking net call; a refusal is one stderr line and exit 71.
+    ("__wolf_rt_reactor_start", 0, false),
     // The s31 print path: `print` lowers to per-segment writes — bytes
     // (ptr, len), decimal i64, `true`/`false` — flushed per call so no
     // buffered bytes outlive the C-shim `main` return.
