@@ -1,0 +1,18 @@
+//! member: false
+//! s239 (wolf-lang#750, `[os.net.reactor]`): a program that NAMES a
+//! call which can park in the reactor (`net_read`) on a branch it never
+//! takes. The entry shim makes the readiness set before `main`; when
+//! the host refuses it, `main` never runs. The gate also counts this
+//! program's descriptors and threads at rest beside `no_park.lu`'s.
+
+fn main() -> int {
+    if env_args().len > 99 {
+        let s = net_read(0, 1) else |e| {
+            ""
+        }
+        print(s)
+    }
+    print("ready")
+    time_sleep_ms(400)
+    0
+}

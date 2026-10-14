@@ -1,0 +1,120 @@
+//! member: false
+//! s239 (wolf-lang#750, #751): out of descriptors, then a park.
+//!
+//! The program makes a loopback pair, then opens a file of its own
+//! until the host refuses, and only then parks for the first time: a
+//! `net_read` with a 50 ms budget on a stream whose peer never writes.
+//! A runtime that makes its readiness set at the first park has no
+//! descriptor left to make it with. Then every descriptor is given back
+//! and the program parks again. The gate runs it with the descriptor
+//! limit lowered for this process alone (`[os.net.reactor]`).
+//!
+//! Lines: `full` (how many opens the host took, and the number of its
+//! refusal: EMFILE, 24 on linux and macOS); `accept` (an accept on the
+//! listener at the limit, which needs a descriptor for the connection
+//! and is refused before any park); `park` (the row the first park
+//! answered); `after` (the same once the descriptors are back). Each
+//! with `os_error()` after the call (`[os.fs.error]`, the net family
+//! since s239).
+
+fn read_row(fd: int) -> str {
+    net_deadline(fd, 50) else |e| {
+        return "deadline-io"
+    }
+    var row = "bytes"
+    net_read(fd, 16) else |e| match e {
+        timeout => {
+            row = "timeout"
+            ""
+        },
+        closed => {
+            row = "closed"
+            ""
+        },
+        _ => {
+            row = "io"
+            ""
+        },
+    }
+    row
+}
+
+fn accept_row(srv: int) -> str {
+    net_deadline(srv, 50) else |e| {
+        return "deadline-io"
+    }
+    var row = "connection"
+    let c = net_accept(srv) else |e| match e {
+        timeout => {
+            row = "timeout"
+            0 - 1
+        },
+        io => {
+            row = "io"
+            0 - 1
+        },
+    }
+    if c >= 0 {
+        net_close(c) else |e| {}
+    }
+    row
+}
+
+fn main() -> int {
+    let path = "park_at_limit.tmp"
+    fs_write_text(path, "x") else |e| {
+        print("scratch io errno={os_error()}")
+        return 3
+    }
+    let srv = net_listen("127.0.0.1:0") else |e| {
+        print("listen io errno={os_error()}")
+        return 3
+    }
+    let port = net_port(srv) else |e| {
+        return 3
+    }
+    let cli = net_connect("127.0.0.1:{port}") else |e| {
+        print("connect io errno={os_error()}")
+        return 3
+    }
+    let conn = net_accept(srv) else |e| {
+        print("pair io errno={os_error()}")
+        return 3
+    }
+    let held = List[int]()
+    var errno = 0
+    var more = true
+    while more {
+        let fd = fs_open(path) else |e| {
+            errno = os_error()
+            more = false
+            0 - 1
+        }
+        if fd >= 0 {
+            (mut held).push(fd)
+        }
+    }
+    print("full held={held.len} errno={errno}")
+    // A successful fs call clears the word, so each line below prints
+    // the net call's own number (`[os.fs.error]`: 0 after a success).
+    fs_size(path) else |e| {
+        0
+    }
+    let taken = accept_row(srv)
+    print("accept row={taken} errno={os_error()}")
+    fs_size(path) else |e| {
+        0
+    }
+    let first = read_row(cli)
+    print("park row={first} errno={os_error()}")
+    for fd in held {
+        fs_close(fd) else |e| {}
+    }
+    let second = read_row(cli)
+    print("after row={second} errno={os_error()}")
+    net_close(conn) else |e| {}
+    net_close(cli) else |e| {}
+    net_close(srv) else |e| {}
+    fs_remove(path) else |e| {}
+    0
+}

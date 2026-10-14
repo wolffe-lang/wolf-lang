@@ -1,0 +1,71 @@
+//! member: false
+//! s239 (wolf-lang#750): the other parking call that asked the host for
+//! descriptors as it parked. `os_signal_wait_fd` duplicates the file it
+//! waits on and makes a wake pipe of its own (and, the first time, the
+//! signal hub's two pipes and its thread). With one descriptor free the
+//! duplicate takes it and the pipe cannot be had: until s239 that was
+//! an assert, and the process ended. The wait answers `io` now.
+//!
+//! Lines: `full` (the opens the host took and its refusal's number);
+//! `wait` (the row with one descriptor free); `after` (the answer once
+//! every descriptor is back: the file has a byte to read, so 0).
+
+fn main() -> int {
+    let path = "wait_fd_at_limit.tmp"
+    fs_write_text(path, "x") else |e| {
+        print("scratch io")
+        return 3
+    }
+    let probe = fs_open(path) else |e| {
+        print("probe io")
+        return 3
+    }
+    let held = List[int]()
+    var errno = 0
+    var more = true
+    while more {
+        let fd = fs_open(path) else |e| {
+            errno = os_error()
+            more = false
+            0 - 1
+        }
+        if fd >= 0 {
+            (mut held).push(fd)
+        }
+    }
+    print("full held={held.len} errno={errno}")
+    // One descriptor back: the wait's duplicate takes it.
+    fs_close(held[0]) else |e| {}
+    var row = "answered"
+    let m = os_signal_wait_fd(probe, 512) else |e| match e {
+        io => {
+            row = "io"
+            0 - 1
+        },
+        unsupported => {
+            row = "unsupported"
+            0 - 1
+        },
+    }
+    print("wait row={row}")
+    var i = 1
+    while i < held.len {
+        fs_close(held[i]) else |e| {}
+        i = i + 1
+    }
+    var after = "answered"
+    let m2 = os_signal_wait_fd(probe, 512) else |e| match e {
+        io => {
+            after = "io"
+            0 - 1
+        },
+        unsupported => {
+            after = "unsupported"
+            0 - 1
+        },
+    }
+    print("after row={after} value={m2}")
+    fs_close(probe) else |e| {}
+    fs_remove(path) else |e| {}
+    0
+}

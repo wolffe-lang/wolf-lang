@@ -1,0 +1,10 @@
+//! member: false
+//! s239 (`[os.net.reactor]`, D15): a program that names no call which
+//! can park in the reactor carries no readiness set and no reactor
+//! thread, before `main` or after it.
+
+fn main() -> int {
+    print("ready")
+    time_sleep_ms(400)
+    0
+}
