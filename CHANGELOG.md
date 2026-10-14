@@ -460,7 +460,7 @@ lupin always answered these programs; no program that compiled before
 compiles differently. Measured: the seven rows of
 `corpus/typecheck/straight_line_*` panic on the 0.2.29 archive and run
 on every machine now (`straight_line_lanes`).
-### The checked machine answers shifts on plain integers and home-module methods (s237, #736, #745; ruling owed)
+### The checked machine answers shifts on plain integers and home-module methods (s237, #736, #745; ruling #77)
 
 Two ordinary shapes had no record on the reference machine: `x << n` on
 a plain integer ("this operator in checked execution") and `m.keys()`,
@@ -469,8 +469,8 @@ method calls in checked execution"). The second kept pelt off the
 checked machine entirely.
 
 - **A shift on a plain integer is arithmetic on its value**
-  (`[type.int.shift]`, **ruling owed**: written and implemented as
-  recommended, five options in the clause). `x << n` is `x * 2^n` and
+  (`[type.int.shift]`, ruled by the maintainer 2026-10-14, ruling #77,
+  option A; the alternatives weighed are a note in the clause). `x << n` is `x * 2^n` and
   traps `overflow` when that leaves the type; `x >> n` is the floor of
   `x / 2^n`; a negative count traps. A count at or past the width is no
   case of its own (`255 >> 8` at `u8` is 0, `0 << 8` is 0, `1 << 8`
@@ -486,10 +486,29 @@ checked machine entirely.
   All four machines agree on the 250 now. A program that shifts a set
   bit out of a plain integer, or shifts by the width or more, or by a
   negative count, traps `overflow` where it wrapped (or, for `>>` past
-  the width, answers 0 or -1). Code that ran on lupin already obeys
-  the rule (wolf-std's shifts are all `wrapping`); code that never did
-  (pax has 138 lines with `<<`) has not been measured by this lane.
-  The spelling for the old bits is `wrapping[T]`.
+  the width, answers 0 or -1).
+- **Upgrading from 0.2.29 or 0.2.30, read this.**
+  1. A shift on a plain integer now traps `overflow` where it used to
+     wrap: a set bit shifted out by `<<` (`1 << 63` on `int`
+     included), a `<<` of a non-zero value by the width or more, and
+     a negative count either way. A `>>` by the width or more now
+     answers 0 (-1 for a negative value) instead of the masked shift.
+  2. Code that wants the old bits says so with `wrapping[T]`
+     (`(x as wrapping[u64] << n) as u64`), where the count masks to
+     the width and the bits that leave are dropped, as before.
+  3. Measured downstream before the ruling, the same programs built by
+     this compiler and by 0.2.29's trunk (s237's census): wolf-std
+     (100 shift sites, all `wrapping`), lobo (95, all `wrapping`),
+     boreutils (7, one plain), pelt (13, eleven plain) and pax (288,
+     all plain) gave no new trap, no changed output and no changed
+     exit status in their own suites (std-test and doc-examples; pelt's
+     difftest and sessions; boreutils' 6,252 differential cases with
+     killtest and roottest in containers; pax's core, net, TCP and UDP
+     suites booted under QEMU). pax's variable-count shifts — signal
+     bits, bitmap bits, retransmit backoff — are where a count of 0 or
+     one past the width would now trap instead of misbehaving quietly.
+  4. The release tier's code changes beyond the shifts themselves,
+     through inlining (a checked shift is larger); behaviour does not.
 - **The constant evaluator computes what the run time does.** It
   faulted on every count at or past the width (E0706) while the
   compiled `let` computed an answer; `const Z: u8 = 255 >> 8` is 0 now,
