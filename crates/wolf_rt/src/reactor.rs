@@ -9,10 +9,15 @@
 //! A task that must wait for io SUBMITS a wait — an fd interest, a
 //! deadline, or both — and parks in a runtime-owned blocking point
 //! until the reactor delivers the completion. The reactor is one
-//! thread, lazily spawned on the FIRST submission (D15: a program
-//! that performs no io carries no reactor thread, no epoll fd, no
-//! timer state — the no_io test family holds it), multiplexing every
-//! pending wait through one `epoll_wait`. v0's posture — each net
+//! thread, made by [`start`] or, failing that, by the FIRST submission
+//! (D15: a program that performs no io carries no reactor thread, no
+//! epoll fd, no timer state — the no_io test family holds it),
+//! multiplexing every pending wait through one `epoll_wait`. Since
+//! s239 (wolf-lang#750, `[os.net.reactor]`) a compiled program that
+//! names a parking net call makes it before `main`
+//! (`__wolf_rt_reactor_start`, from the entry shim), so no park ever
+//! asks the host for a descriptor; a refusal at either point is an
+//! answer, never an assert. v0's posture — each net
 //! call kernel-blocked inside its own syscall, invisible to
 //! cancellation and deadlines — becomes: the SYSCALL never blocks
 //! (readiness is awaited first), the wait is a futex park the task

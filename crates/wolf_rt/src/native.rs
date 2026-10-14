@@ -261,6 +261,38 @@ pub extern "C" fn __wolf_rt_main_err(tag: i64, len: i64, w0: i64, w1: i64, w2: i
     std::process::exit(1)
 }
 
+/// The status of a program whose runtime could not start
+/// (`[os.net.reactor]`, s239): 71, `EX_OSERR` in sysexits(3) — "an
+/// operating system error has been detected", its example a pipe that
+/// cannot be made. Not a trap (no `wolf-trap:` line, never 134): no
+/// line of the program ran.
+pub const START_FAILED_EXIT: i32 = 71;
+
+/// The readiness set, made before `main` (s239, wolf-lang#750,
+/// `[os.net.reactor]`). The entry shim calls this first in a program
+/// that names a call which can park in the reactor (the net calls that
+/// wait: accept, the reads, the writes); a program that names none never
+/// calls it and carries no set and no reactor thread (D15). When the
+/// host refuses the set or its thread the program does not start: one
+/// line on stderr, `wolf: …`, and [`START_FAILED_EXIT`]. Until s239 the
+/// set was made at the first park and its refusal asserted, so a
+/// process that had used its descriptors up before it first parked
+/// ended there, after its own lines had run (lobo 0.1.2 and 0.1.3,
+/// lobo#90). Off the reactor hosts there is no set to make.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_reactor_start() {
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    if let Err(e) = crate::reactor::start() {
+        let mut err = std::io::stderr().lock();
+        let _ = writeln!(
+            err,
+            "wolf: the runtime could not make its readiness set ({e}); the program did not start"
+        );
+        let _ = err.flush();
+        std::process::exit(START_FAILED_EXIT)
+    }
+}
+
 // ---- the v0 print path (s31) ---------------------------------------------
 //
 // `print`/`print_raw` lower to per-segment calls: literal chunks and
