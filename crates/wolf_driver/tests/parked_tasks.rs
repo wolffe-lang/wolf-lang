@@ -323,6 +323,52 @@ fn the_witness_completes_on_every_cpu_set() {
     }
 }
 
+/// #733: libtest runs this file's tests on parallel threads of one
+/// process, and two of them build `waitwolf` on the same tiers. Two
+/// builds of one fixture on one tier, started together, must each keep
+/// an executable of their own that runs: neither may delete, rebuild or
+/// share the directory the other's witness lives in.
+#[test]
+fn two_builds_of_the_witness_at_once_each_keep_their_own() {
+    raise_fd_limit();
+    let go = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let other = {
+        let go = go.clone();
+        std::thread::spawn(move || {
+            go.wait();
+            build("waitwolf", "native")
+        })
+    };
+    go.wait();
+    let mine = build("waitwolf", "native");
+    let theirs = other
+        .join()
+        .unwrap_or_else(|_| panic!("#733: the other build of the witness failed (above)"));
+    let (Some(mine), Some(theirs)) = (mine, theirs) else {
+        return;
+    };
+    assert_ne!(
+        mine, theirs,
+        "#733: two builds of the witness share one output path, so either can delete or \
+         rebuild the file the other is linking or running"
+    );
+    for exe in [&mine, &theirs] {
+        assert!(
+            exe.is_file(),
+            "#733: {} is gone after the other build",
+            exe.display()
+        );
+        let r = run_bounded(exe, None, &["loop", "0", "64"], Duration::from_secs(45));
+        assert_eq!(
+            (last_line(&r.stdout), r.code),
+            (want(64).as_str(), Some(0)),
+            "{}; stderr: {}",
+            exe.display(),
+            r.stderr
+        );
+    }
+}
+
 /// The sibling lupin, found exactly as `pairing.rs` finds it.
 fn sibling_lupin() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("LUPIN") {
