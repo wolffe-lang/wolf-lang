@@ -1,0 +1,54 @@
+36    ioctl(0, TCGETS, 0x7ffdcbc8e020)  = -1 ENOTTY (Inappropriate ioctl for device)
+36    ioctl(3, TIOCGPTN, [0])           = 0
+36    ioctl(3, TIOCSPTLCK, [0])         = 0
+36    ioctl(3, TIOCGPTPEER, 0x102)      = 4
+36    ioctl(4, TCGETS, {c_iflag=ICRNL|IXON, c_oflag=NL0|CR0|TAB0|BS0|VT0|FF0|OPOST|ONLCR, c_cflag=B38400|CS8|CREAD, c_lflag=ISIG|ICANON|ECHO|ECHOE|ECHOK|IEXTEN|ECHOCTL|ECHOKE, ...}) = 0
+36    ioctl(4, TCGETS, {c_iflag=ICRNL|IXON, c_oflag=NL0|CR0|TAB0|BS0|VT0|FF0|OPOST|ONLCR, c_cflag=B38400|CS8|CREAD, c_lflag=ISIG|ICANON|ECHO|ECHOE|ECHOK|IEXTEN|ECHOCTL|ECHOKE, ...}) = 0
+36    ioctl(4, TCSETS, {c_iflag=ICRNL|IXON, c_oflag=NL0|CR0|TAB0|BS0|VT0|FF0|OPOST|ONLCR, c_cflag=B38400|CS8|CREAD, c_lflag=ISIG|ICANON|ECHO|ECHOE|ECHOK|IEXTEN|ECHOCTL|ECHOKE, ...}) = 0
+36    ioctl(4, TCGETS, {c_iflag=ICRNL|IXON, c_oflag=NL0|CR0|TAB0|BS0|VT0|FF0|OPOST|ONLCR, c_cflag=B38400|CS8|CREAD, c_lflag=ISIG|ICANON|ECHO|ECHOE|ECHOK|IEXTEN|ECHOCTL|ECHOKE, ...}) = 0
+37    setsid()                          = 37
+36    ioctl(6, TCGETS <unfinished ...>
+37    ioctl(4, TIOCSCTTY, 1 <unfinished ...>
+36    <... ioctl resumed>, 0x7ffdcbc8dbd0) = -1 ENOTTY (Inappropriate ioctl for device)
+37    <... ioctl resumed>)              = 0
+37    wait4(-1,  <unfinished ...>
+38    ioctl(10, TIOCGPGRP, [37])        = 0
+38    getpgrp()                         = 37
+38    setpgid(0, 38)                    = 0
+38    ioctl(10, TIOCSPGRP, [38])        = 0
+38    setpgid(39, 39)                   = 0
+39    setpgid(0, 39)                    = 0
+38    ioctl(10, TIOCSPGRP, [39])        = 0
+38    kill(-39, SIGCONT)                = 0
+39    --- SIGCONT {si_signo=SIGCONT, si_code=SI_USER, si_pid=38, si_uid=0} ---
+38    wait4(-1, [{WIFEXITED(s) && WEXITSTATUS(s) == 0}], WSTOPPED, NULL) = 39
+38    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=39, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+38    wait4(-1, 0x7ffe7a5000cc, WNOHANG|WSTOPPED, NULL) = -1 ECHILD (No child processes)
+38    ioctl(10, TIOCSPGRP, [38])        = 0
+38    setpgid(40, 40)                   = 0
+40    setpgid(0, 40)                    = 0
+38    kill(-40, SIGSTOP <unfinished ...>
+40    --- SIGSTOP {si_signo=SIGSTOP, si_code=SI_USER, si_pid=38, si_uid=0} ---
+38    <... kill resumed>)               = 0
+40    --- stopped by SIGSTOP ---
+38    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_STOPPED, si_pid=40, si_uid=0, si_status=SIGSTOP, si_utime=0, si_stime=0} ---
+38    wait4(-1, [{WIFSTOPPED(s) && WSTOPSIG(s) == SIGSTOP}], WNOHANG|WSTOPPED, NULL) = 40
+38    wait4(-1, 0x7ffe7a50029c, WNOHANG|WSTOPPED, NULL) = 0
+38    kill(-40, SIGCONT)                = 0
+38    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_CONTINUED, si_pid=40, si_uid=0, si_status=SIGCONT, si_utime=0, si_stime=0} ---
+40    --- SIGCONT {si_signo=SIGCONT, si_code=SI_USER, si_pid=38, si_uid=0} ---
+38    wait4(-1, 0x7ffe7a50029c, WNOHANG|WSTOPPED, NULL) = 0
+38    kill(-40, SIGTERM)                = 0
+40    --- SIGTERM {si_signo=SIGTERM, si_code=SI_USER, si_pid=38, si_uid=0} ---
+38    wait4(-1, 0x7ffe7a50014c, WNOHANG|WSTOPPED, NULL) = 0
+40    +++ killed by SIGTERM +++
+38    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_KILLED, si_pid=40, si_uid=0, si_status=SIGTERM, si_utime=0, si_stime=0} ---
+38    wait4(-1, [{WIFSIGNALED(s) && WTERMSIG(s) == SIGTERM}], WNOHANG|WSTOPPED, NULL) = 40
+38    wait4(-1, 0x7ffe7a50014c, WNOHANG|WSTOPPED, NULL) = -1 ECHILD (No child processes)
+38    ioctl(10, TIOCSPGRP, [37])        = 0
+38    setpgid(0, 37)                    = 0
+37    <... wait4 resumed>[{WIFEXITED(s) && WEXITSTATUS(s) == 0}], 0, NULL) = 38
+37    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=38, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+37    wait4(-1, 0x7ffcd5fbf02c, WNOHANG, NULL) = -1 ECHILD (No child processes)
+36    wait4(37, [{WIFEXITED(s) && WEXITSTATUS(s) == 0}], WNOHANG, NULL) = 37
+36    wait4(-1, 0x7ffdcbc8e074, WNOHANG, NULL) = -1 ECHILD (No child processes)

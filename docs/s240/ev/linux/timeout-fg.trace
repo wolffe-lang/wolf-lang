@@ -1,0 +1,5 @@
+67    --- SIGALRM {si_signo=SIGALRM, si_code=SI_TIMER, si_timerid=0, si_overrun=0, si_int=0, si_ptr=NULL} ---
+67    kill(68, SIGTERM)                 = 0
+68    --- SIGTERM {si_signo=SIGTERM, si_code=SI_USER, si_pid=67, si_uid=0} ---
+68    +++ killed by SIGTERM +++
+67    --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_KILLED, si_pid=68, si_uid=0, si_status=SIGTERM, si_utime=0, si_stime=0} ---

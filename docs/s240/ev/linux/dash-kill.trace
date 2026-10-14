@@ -1,0 +1,18 @@
+5     kill(0, SIGUSR1)                  = 0
+5     --- SIGUSR1 {si_signo=SIGUSR1, si_code=SI_USER, si_pid=5, si_uid=0} ---
+6     --- SIGUSR1 {si_signo=SIGUSR1, si_code=SI_USER, si_pid=5, si_uid=0} ---
+5     --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=8, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+9     --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=10, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+9     --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=12, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+9     --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=13, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+5     --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=9, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---
+5     kill(-7, SIGUSR1)                 = 0
+7     --- SIGUSR1 {si_signo=SIGUSR1, si_code=SI_USER, si_pid=5, si_uid=0} ---
+5     kill(-1, SIGUSR1)                 = 0
+7     --- SIGUSR1 {si_signo=SIGUSR1, si_code=SI_USER, si_pid=5, si_uid=0} ---
+6     --- SIGUSR1 {si_signo=SIGUSR1, si_code=SI_USER, si_pid=5, si_uid=0} ---
+5     kill(6, SIGTERM)                  = 0
+6     --- SIGTERM {si_signo=SIGTERM, si_code=SI_USER, si_pid=5, si_uid=0} ---
+6     +++ killed by SIGTERM +++
+5     --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_KILLED, si_pid=6, si_uid=0, si_status=SIGTERM, si_utime=0, si_stime=0} ---
+5     --- SIGCHLD {si_signo=SIGCHLD, si_code=CLD_EXITED, si_pid=7, si_uid=0, si_status=0, si_utime=0, si_stime=0} ---

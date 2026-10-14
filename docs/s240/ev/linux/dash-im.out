@@ -1,0 +1,17 @@
+sleep 2 &
+jobs
+fg %1
+sleep 30 &
+kill -STOP %1
+jobs
+bg %1
+kill %1
+wait
+exit
+# # [1] + Running                    sleep 2
+# sleep 2
+# # [1] + Stopped (signal)           sleep 30
+# [1] + Stopped (signal)           sleep 30
+# [1] sleep 30
+# # [1] + Terminated                 sleep 30
+# 

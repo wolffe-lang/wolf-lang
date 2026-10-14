@@ -1,0 +1,108 @@
+setlocale(LC_ALL, ""): de_DE.UTF-8
+NSIG: 65
+SIGRTMIN: 35
+SIGRTMAX: 64
+-- the 28 POSIX names: name number text
+HUP 1 Hangup
+INT 2 Interrupt
+QUIT 3 Quit
+ILL 4 Illegal instruction
+TRAP 5 Trace/breakpoint trap
+ABRT 6 Aborted
+BUS 7 Bus error
+FPE 8 Arithmetic exception
+KILL 9 Killed
+USR1 10 User defined signal 1
+SEGV 11 Segmentation fault
+USR2 12 User defined signal 2
+PIPE 13 Broken pipe
+ALRM 14 Alarm clock
+TERM 15 Terminated
+CHLD 17 Child process status
+CONT 18 Continued
+STOP 19 Stopped (signal)
+TSTP 20 Stopped
+TTIN 21 Stopped (tty input)
+TTOU 22 Stopped (tty output)
+URG 23 Urgent I/O condition
+XCPU 24 CPU time limit exceeded
+XFSZ 25 File size limit exceeded
+VTALRM 26 Virtual timer expired
+PROF 27 Profiling timer expired
+WINCH 28 Window changed
+SYS 31 Bad system call
+-- host-only names: name number text
+STKFLT 16 Stack fault
+IO 29 I/O possible
+POLL 29 I/O possible
+PWR 30 Power failure
+-- every number 0..NSIG: number text
+0 Unknown signal
+1 Hangup
+2 Interrupt
+3 Quit
+4 Illegal instruction
+5 Trace/breakpoint trap
+6 Aborted
+7 Bus error
+8 Arithmetic exception
+9 Killed
+10 User defined signal 1
+11 Segmentation fault
+12 User defined signal 2
+13 Broken pipe
+14 Alarm clock
+15 Terminated
+16 Stack fault
+17 Child process status
+18 Continued
+19 Stopped (signal)
+20 Stopped
+21 Stopped (tty input)
+22 Stopped (tty output)
+23 Urgent I/O condition
+24 CPU time limit exceeded
+25 File size limit exceeded
+26 Virtual timer expired
+27 Profiling timer expired
+28 Window changed
+29 I/O possible
+30 Power failure
+31 Bad system call
+32 RT32
+33 RT33
+34 RT34
+35 RT35
+36 RT36
+37 RT37
+38 RT38
+39 RT39
+40 RT40
+41 RT41
+42 RT42
+43 RT43
+44 RT44
+45 RT45
+46 RT46
+47 RT47
+48 RT48
+49 RT49
+50 RT50
+51 RT51
+52 RT52
+53 RT53
+54 RT54
+55 RT55
+56 RT56
+57 RT57
+58 RT58
+59 RT59
+60 RT60
+61 RT61
+62 RT62
+63 RT63
+64 RT64
+65 Unknown signal
+-- out of range: number text
+100 Unknown signal
+-1 Unknown signal

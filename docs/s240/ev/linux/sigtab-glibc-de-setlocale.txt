@@ -1,0 +1,108 @@
+setlocale(LC_ALL, ""): de_DE.UTF-8
+NSIG: 65
+SIGRTMIN: 34
+SIGRTMAX: 64
+-- the 28 POSIX names: name number text
+HUP 1 Aufgelegt
+INT 2 Unterbrechung
+QUIT 3 Verlassen
+ILL 4 Ungültiger Maschinenbefehl
+TRAP 5 Trace/Breakpoint ausgelöst
+ABRT 6 Abgebrochen
+BUS 7 Bus-Zugriffsfehler
+FPE 8 Gleitkomma-Ausnahme
+KILL 9 Getötet
+USR1 10 Benutzerdefiniertes Signal 1
+SEGV 11 Speicherzugriffsfehler
+USR2 12 Benutzerdefiniertes Signal 2
+PIPE 13 Datenübergabe unterbrochen (broken pipe)
+ALRM 14 Wecker
+TERM 15 Beendet
+CHLD 17 Der Kind-Prozess ist beendet
+CONT 18 Fortgesetzt
+STOP 19 Angehalten (Signal)
+TSTP 20 Angehalten
+TTIN 21 Angehalten (tty-Eingabe)
+TTOU 22 Angehalten (tty-Ausgabe)
+URG 23 Dringende Ein-/Ausgabebedingung
+XCPU 24 Rechenzeitbegrenzung überschritten
+XFSZ 25 Die maximale Dateigröße ist überschritten
+VTALRM 26 Der virtuelle Zeitnehmer ist abgelaufen
+PROF 27 Zeitnehmer zur Laufzeitbestimmung ist abgelaufen
+WINCH 28 Die Fenstergröße wurde verändert
+SYS 31 Ungültiger Betriebssystemaufruf
+-- host-only names: name number text
+STKFLT 16 Stackfehler
+IO 29 Ein-/Ausgabe ist möglich
+POLL 29 Ein-/Ausgabe ist möglich
+PWR 30 Fehler in der Stromversorgung
+-- every number 0..NSIG: number text
+0 Unbekanntes Signal 0
+1 Aufgelegt
+2 Unterbrechung
+3 Verlassen
+4 Ungültiger Maschinenbefehl
+5 Trace/Breakpoint ausgelöst
+6 Abgebrochen
+7 Bus-Zugriffsfehler
+8 Gleitkomma-Ausnahme
+9 Getötet
+10 Benutzerdefiniertes Signal 1
+11 Speicherzugriffsfehler
+12 Benutzerdefiniertes Signal 2
+13 Datenübergabe unterbrochen (broken pipe)
+14 Wecker
+15 Beendet
+16 Stackfehler
+17 Der Kind-Prozess ist beendet
+18 Fortgesetzt
+19 Angehalten (Signal)
+20 Angehalten
+21 Angehalten (tty-Eingabe)
+22 Angehalten (tty-Ausgabe)
+23 Dringende Ein-/Ausgabebedingung
+24 Rechenzeitbegrenzung überschritten
+25 Die maximale Dateigröße ist überschritten
+26 Der virtuelle Zeitnehmer ist abgelaufen
+27 Zeitnehmer zur Laufzeitbestimmung ist abgelaufen
+28 Die Fenstergröße wurde verändert
+29 Ein-/Ausgabe ist möglich
+30 Fehler in der Stromversorgung
+31 Ungültiger Betriebssystemaufruf
+32 Unbekanntes Signal 32
+33 Unbekanntes Signal 33
+34 Real-Time Signal 0
+35 Real-Time Signal 1
+36 Real-Time Signal 2
+37 Real-Time Signal 3
+38 Real-Time Signal 4
+39 Real-Time Signal 5
+40 Real-Time Signal 6
+41 Real-Time Signal 7
+42 Real-Time Signal 8
+43 Real-Time Signal 9
+44 Real-Time Signal 10
+45 Real-Time Signal 11
+46 Real-Time Signal 12
+47 Real-Time Signal 13
+48 Real-Time Signal 14
+49 Real-Time Signal 15
+50 Real-Time Signal 16
+51 Real-Time Signal 17
+52 Real-Time Signal 18
+53 Real-Time Signal 19
+54 Real-Time Signal 20
+55 Real-Time Signal 21
+56 Real-Time Signal 22
+57 Real-Time Signal 23
+58 Real-Time Signal 24
+59 Real-Time Signal 25
+60 Real-Time Signal 26
+61 Real-Time Signal 27
+62 Real-Time Signal 28
+63 Real-Time Signal 29
+64 Real-Time Signal 30
+65 Unbekanntes Signal 65
+-- out of range: number text
+100 Unbekanntes Signal 100
+-1 Unbekanntes Signal -1

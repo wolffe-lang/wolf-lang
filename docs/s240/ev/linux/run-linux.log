@@ -1,0 +1,446 @@
+### host
+7.2.8-1-cachyos
+podman version 6.1.3
+2026-10-14T22:03:14Z
+SigBlk:	0000000000000000
+SigIgn:	0000000000000007
+### images
+f87efc8ac62acd878a72e03ecac2da515fa1382ae31cb853ce6bf27d3dde809b
+5cd10476269036d67088375342d4677062942aa5fb0c937318c309f666334cf8
+f87efc8ac62acd878a72e03ecac2da515fa1382ae31cb853ce6bf27d3dde809b [localhost/s240-ubuntu:latest]
+5cd10476269036d67088375342d4677062942aa5fb0c937318c309f666334cf8 [localhost/s240-alpine:latest]
+69f919497cada9a8611f3de61df902d9f94bf20f84552ef5bd93125c38608ef9 [docker.io/library/ubuntu:24.04]
+bf8527eb54c3680e728d5b4b383a8ba730d72dae7236fbc8dff97ed6b224a731 [docker.io/library/alpine:3.20]
+### compile
+ldd (Ubuntu GLIBC 2.39-0ubuntu8.9) 2.39
+WARNING: opening from cache https://dl-cdn.alpinelinux.org/alpine/v3.20/main: No such file or directory
+WARNING: opening from cache https://dl-cdn.alpinelinux.org/alpine/v3.20/community: No such file or directory
+musl: the musl c library (libc) implementation
+e532926bab7dd68920cabd7d7ae26894fdd51c658492146c1ca999b467904929  /home/mfwolffe/lanes/s240/out4/bin/grp-glibc
+0e02ee6e2038bb939054e31d849c864991ca4f0e6d14af97e7746e6e62f00fa8  /home/mfwolffe/lanes/s240/out4/bin/grp-musl
+12470bc33968ba6295cb5d3de7deacc74f96178315f71e2cdeaa3325a81f79ed  /home/mfwolffe/lanes/s240/out4/bin/sess-glibc
+0ca24ea179e16d81ade9d7c2edbc63b73e701fc6a435340e610efc6b7251b971  /home/mfwolffe/lanes/s240/out4/bin/sess-musl
+42156c7de64e7979a7344a5fc5959796051df76c425e180def0b3f3cef76af0c  /home/mfwolffe/lanes/s240/out4/bin/sigtab-glibc
+4286a2a4eb925f85d408e7aa8b16a9cff30d7b22e6558792684093bf09f7d387  /home/mfwolffe/lanes/s240/out4/bin/sigtab-musl
+### grp glibc root (kill(-1) allowed: the container is the probe's)
+host: pid=2 pgid=2 sid=2 euid=0 user-uid=1000 root=1 allow_all=1
+status: SigBlk:	0000000000000000
+status: SigIgn:	0000000000000000
+status: Cpus_allowed_list:	0-3
+kill(0) from a member of A={A,B}, C apart: ret=0 heard=A:,B:,S:
+kill(-A) from outside A={A,B}, C apart: ret=0 heard=A:,B:
+kill(-A, 0) existence: ret=0 heard=-
+kill(-A, 0) after every member is reaped: ret=ESRCH heard=-
+kill(-A) after every member is reaped: ret=ESRCH heard=-
+kill(-A) with the leader reaped, B alive: ret=0 heard=B:
+kill(-A, 0) with every member a zombie: ret=0 heard=-
+kill(-A) with every member a zombie: ret=0 heard=-
+kill(INT_MIN, 0): ret=ESRCH heard=-
+kill(-INT_MAX, 0): ret=ESRCH heard=-
+kill(-runner's group, 0) from a member of that group: ret=0 heard=-
+as the user, kill(-G) G={root member, user member}: ret=0 heard=Buser:
+as the user, kill(-G) G={root member} only: ret=EPERM heard=-
+as the user, kill(-G, 0) G={root member} only: ret=EPERM heard=-
+as the user, kill(-G, SIGCONT) G={root member}, same session: ret=0 heard=Aroot+
+as the user, kill(-G, SIGCONT) G={root member}, another session: ret=EPERM heard=-
+as the user, kill(pid, SIGCONT) root, another session: ret=EPERM heard=-
+as root, kill(-G) G={user member}: ret=0 heard=Auser:
+as root, kill(-1): ret=0 heard=A:,B:,R:,Uuser:
+as the user, kill(-1); one other user process (another session): ret=0 heard=Uuser:
+census (before the user's kill(-1) with no other user process; the sender is forked after this): 1/uid0/S 2/uid0/R 36/uid0/S 37/uid0/S
+as the user, kill(-1); no other user process: ret=0 heard=-
+as the user, kill(-1, 0); no other user process: ret=0 heard=-
+done
+top: after the runner, the top process heard=-
+### grp glibc user 1000 (kill(-1) allowed)
+host: pid=2 pgid=2 sid=2 euid=1000 user-uid=1000 root=0 allow_all=1
+status: SigBlk:	0000000000000000
+status: SigIgn:	0000000000000000
+status: Cpus_allowed_list:	0-3
+kill(0) from a member of A={A,B}, C apart: ret=0 heard=A:,B:,S:
+kill(-A) from outside A={A,B}, C apart: ret=0 heard=A:,B:
+kill(-A, 0) existence: ret=0 heard=-
+kill(-A, 0) after every member is reaped: ret=ESRCH heard=-
+kill(-A) after every member is reaped: ret=ESRCH heard=-
+kill(-A) with the leader reaped, B alive: ret=0 heard=B:
+kill(-A, 0) with every member a zombie: ret=0 heard=-
+kill(-A) with every member a zombie: ret=0 heard=-
+kill(INT_MIN, 0): ret=ESRCH heard=-
+kill(-INT_MAX, 0): ret=ESRCH heard=-
+kill(-runner's group, 0) from a member of that group: ret=0 heard=-
+perm: skipped by name (not root)
+as the caller, kill(-1): ret=0 heard=A:,B:,R:
+done
+top: after the runner, the top process heard=-
+### sess glibc root
+host: pid=2 pgid=2 sid=2 euid=0
+setsid by a session leader: EPERM
+setpgid(0,0) by a session leader: EPERM
+setsid by a group leader (not session leader): EPERM
+setsid by a non-leader: sid==pid yes, pgid==pid yes, /dev/tty ENXIO
+setpgid(child, group in another session): EPERM
+setpgid(child, a group that does not exist): EPERM
+setpgid(child, 0) before exec: 0
+setpgid(child, 0) after the child exec'd: EACCES
+setpgid(grandchild, 0): ESRCH
+kill(-G, SIGSTOP): 0
+waitpid(-G, WUNTRACED) reported stopped: 2 of 2
+a second waitpid(-G, WNOHANG|WUNTRACED) for the same stops: 0 (nothing new)
+kill(-G, SIGCONT): 0
+waitpid(-G, WCONTINUED) reported continued: 2 of 2
+waitpid(-G, WNOHANG) with both running: 0
+orphaned group with a stopped member, heard: M2:CONT,M2:HUP -
+open of the slave by a session leader: ctty acquired (tcgetpgrp a group)
+tcgetpgrp == the leader's group: yes
+tcsetpgrp(job) by the leader, SIGTTOU blocked: 0
+tcsetpgrp from the leader's (orphaned) group, SIGTTOU default, returned: ENOTTY
+tcsetpgrp from the leader's (orphaned) group, SIGTTOU default: not stopped
+tcsetpgrp from a non-orphaned background group, SIGTTOU default: stopped by SIGTTOU
+tcsetpgrp from the background, SIGTTOU ignored: 0
+tcsetpgrp(group of another session): EPERM
+tcsetpgrp(a group that does not exist): ESRCH
+tcsetpgrp(0): ESRCH
+tcsetpgrp(-1): EINVAL
+interrupt character with the job in the foreground, heard: J2:INT,J1:INT
+done
+### sess glibc user 1000
+host: pid=2 pgid=2 sid=2 euid=1000
+setsid by a session leader: EPERM
+setpgid(0,0) by a session leader: EPERM
+setsid by a group leader (not session leader): EPERM
+setsid by a non-leader: sid==pid yes, pgid==pid yes, /dev/tty ENXIO
+setpgid(child, group in another session): EPERM
+setpgid(child, a group that does not exist): EPERM
+setpgid(child, 0) before exec: 0
+setpgid(child, 0) after the child exec'd: EACCES
+setpgid(grandchild, 0): ESRCH
+kill(-G, SIGSTOP): 0
+waitpid(-G, WUNTRACED) reported stopped: 2 of 2
+a second waitpid(-G, WNOHANG|WUNTRACED) for the same stops: 0 (nothing new)
+kill(-G, SIGCONT): 0
+waitpid(-G, WCONTINUED) reported continued: 2 of 2
+waitpid(-G, WNOHANG) with both running: 0
+orphaned group with a stopped member, heard: M2:CONT,M2:HUP -
+open of the slave by a session leader: ctty acquired (tcgetpgrp a group)
+tcgetpgrp == the leader's group: yes
+tcsetpgrp(job) by the leader, SIGTTOU blocked: 0
+tcsetpgrp from the leader's (orphaned) group, SIGTTOU default, returned: ENOTTY
+tcsetpgrp from the leader's (orphaned) group, SIGTTOU default: not stopped
+tcsetpgrp from a non-orphaned background group, SIGTTOU default: stopped by SIGTTOU
+tcsetpgrp from the background, SIGTTOU ignored: 0
+tcsetpgrp(group of another session): EPERM
+tcsetpgrp(a group that does not exist): ESRCH
+tcsetpgrp(0): ESRCH
+tcsetpgrp(-1): EINVAL
+interrupt character with the job in the foreground, heard: J2:INT,J1:INT
+done
+### grp musl root (kill(-1) allowed: the container is the probe's)
+host: pid=2 pgid=2 sid=2 euid=0 user-uid=1000 root=1 allow_all=1
+status: SigBlk:	0000000000000000
+status: SigIgn:	0000000000000000
+status: Cpus_allowed_list:	0-3
+kill(0) from a member of A={A,B}, C apart: ret=0 heard=A:,B:,S:
+kill(-A) from outside A={A,B}, C apart: ret=0 heard=A:,B:
+kill(-A, 0) existence: ret=0 heard=-
+kill(-A, 0) after every member is reaped: ret=ESRCH heard=-
+kill(-A) after every member is reaped: ret=ESRCH heard=-
+kill(-A) with the leader reaped, B alive: ret=0 heard=B:
+kill(-A, 0) with every member a zombie: ret=0 heard=-
+kill(-A) with every member a zombie: ret=0 heard=-
+kill(INT_MIN, 0): ret=ESRCH heard=-
+kill(-INT_MAX, 0): ret=ESRCH heard=-
+kill(-runner's group, 0) from a member of that group: ret=0 heard=-
+as the user, kill(-G) G={root member, user member}: ret=0 heard=Buser:
+as the user, kill(-G) G={root member} only: ret=EPERM heard=-
+as the user, kill(-G, 0) G={root member} only: ret=EPERM heard=-
+as the user, kill(-G, SIGCONT) G={root member}, same session: ret=0 heard=Aroot+
+as the user, kill(-G, SIGCONT) G={root member}, another session: ret=EPERM heard=-
+as the user, kill(pid, SIGCONT) root, another session: ret=EPERM heard=-
+as root, kill(-G) G={user member}: ret=0 heard=Auser:
+as root, kill(-1): ret=0 heard=A:,B:,R:,Uuser:
+as the user, kill(-1); one other user process (another session): ret=0 heard=Uuser:
+census (before the user's kill(-1) with no other user process; the sender is forked after this): 1/uid0/S 2/uid0/R 36/uid0/S 37/uid0/S
+as the user, kill(-1); no other user process: ret=0 heard=-
+as the user, kill(-1, 0); no other user process: ret=0 heard=-
+done
+top: after the runner, the top process heard=-
+### grp musl user 1000 (kill(-1) allowed)
+host: pid=2 pgid=2 sid=2 euid=1000 user-uid=1000 root=0 allow_all=1
+status: SigBlk:	0000000000000000
+status: SigIgn:	0000000000000000
+status: Cpus_allowed_list:	0-3
+kill(0) from a member of A={A,B}, C apart: ret=0 heard=A:,B:,S:
+kill(-A) from outside A={A,B}, C apart: ret=0 heard=A:,B:
+kill(-A, 0) existence: ret=0 heard=-
+kill(-A, 0) after every member is reaped: ret=ESRCH heard=-
+kill(-A) after every member is reaped: ret=ESRCH heard=-
+kill(-A) with the leader reaped, B alive: ret=0 heard=B:
+kill(-A, 0) with every member a zombie: ret=0 heard=-
+kill(-A) with every member a zombie: ret=0 heard=-
+kill(INT_MIN, 0): ret=ESRCH heard=-
+kill(-INT_MAX, 0): ret=ESRCH heard=-
+kill(-runner's group, 0) from a member of that group: ret=0 heard=-
+perm: skipped by name (not root)
+as the caller, kill(-1): ret=0 heard=A:,B:,R:
+done
+top: after the runner, the top process heard=-
+### sess musl root
+host: pid=2 pgid=2 sid=2 euid=0
+setsid by a session leader: EPERM
+setpgid(0,0) by a session leader: EPERM
+setsid by a group leader (not session leader): EPERM
+setsid by a non-leader: sid==pid yes, pgid==pid yes, /dev/tty ENXIO
+setpgid(child, group in another session): EPERM
+setpgid(child, a group that does not exist): EPERM
+setpgid(child, 0) before exec: 0
+setpgid(child, 0) after the child exec'd: EACCES
+setpgid(grandchild, 0): ESRCH
+kill(-G, SIGSTOP): 0
+waitpid(-G, WUNTRACED) reported stopped: 2 of 2
+a second waitpid(-G, WNOHANG|WUNTRACED) for the same stops: 0 (nothing new)
+kill(-G, SIGCONT): 0
+waitpid(-G, WCONTINUED) reported continued: 2 of 2
+waitpid(-G, WNOHANG) with both running: 0
+orphaned group with a stopped member, heard: M2:CONT,M2:HUP -
+open of the slave by a session leader: ctty acquired (tcgetpgrp a group)
+tcgetpgrp == the leader's group: yes
+tcsetpgrp(job) by the leader, SIGTTOU blocked: 0
+tcsetpgrp from the leader's (orphaned) group, SIGTTOU default, returned: ENOTTY
+tcsetpgrp from the leader's (orphaned) group, SIGTTOU default: not stopped
+tcsetpgrp from a non-orphaned background group, SIGTTOU default: stopped by SIGTTOU
+tcsetpgrp from the background, SIGTTOU ignored: 0
+tcsetpgrp(group of another session): EPERM
+tcsetpgrp(a group that does not exist): ESRCH
+tcsetpgrp(0): ESRCH
+tcsetpgrp(-1): EINVAL
+interrupt character with the job in the foreground, heard: J2:INT,J1:INT
+done
+### sess musl user 1000
+host: pid=2 pgid=2 sid=2 euid=1000
+setsid by a session leader: EPERM
+setpgid(0,0) by a session leader: EPERM
+setsid by a group leader (not session leader): EPERM
+setsid by a non-leader: sid==pid yes, pgid==pid yes, /dev/tty ENXIO
+setpgid(child, group in another session): EPERM
+setpgid(child, a group that does not exist): EPERM
+setpgid(child, 0) before exec: 0
+setpgid(child, 0) after the child exec'd: EACCES
+setpgid(grandchild, 0): ESRCH
+kill(-G, SIGSTOP): 0
+waitpid(-G, WUNTRACED) reported stopped: 2 of 2
+a second waitpid(-G, WNOHANG|WUNTRACED) for the same stops: 0 (nothing new)
+kill(-G, SIGCONT): 0
+waitpid(-G, WCONTINUED) reported continued: 2 of 2
+waitpid(-G, WNOHANG) with both running: 0
+orphaned group with a stopped member, heard: M2:CONT,M2:HUP -
+open of the slave by a session leader: ctty acquired (tcgetpgrp a group)
+tcgetpgrp == the leader's group: yes
+tcsetpgrp(job) by the leader, SIGTTOU blocked: 0
+tcsetpgrp from the leader's (orphaned) group, SIGTTOU default, returned: ENOTTY
+tcsetpgrp from the leader's (orphaned) group, SIGTTOU default: not stopped
+tcsetpgrp from a non-orphaned background group, SIGTTOU default: stopped by SIGTTOU
+tcsetpgrp from the background, SIGTTOU ignored: 0
+tcsetpgrp(group of another session): EPERM
+tcsetpgrp(a group that does not exist): ESRCH
+tcsetpgrp(0): ESRCH
+tcsetpgrp(-1): EINVAL
+interrupt character with the job in the foreground, heard: J1:INT,J2:INT
+done
+### sigtab glibc, C locale
+### sigtab glibc, LANG=de_DE.UTF-8, no setlocale
+### sigtab glibc, LANG=de_DE.UTF-8, setlocale
+### sigtab musl, C locale
+### sigtab musl, LANG=de_DE.UTF-8, setlocale
+3f9883723ac79546a3386753d50480aa8d4fa55c30be1b401f038117afe3a17c  /home/mfwolffe/lanes/s240/out4/sigtab-glibc-C.txt
+3f9883723ac79546a3386753d50480aa8d4fa55c30be1b401f038117afe3a17c  /home/mfwolffe/lanes/s240/out4/sigtab-glibc-de-nosetlocale.txt
+6fb0cfa091420880a01ca1a29f8fe52729d42ad3182335f40b8becdfef1f6168  /home/mfwolffe/lanes/s240/out4/sigtab-glibc-de-setlocale.txt
+7310514528cab79131eb290c4b0ff30cd848e35fd81d40cb89e287e530967d93  /home/mfwolffe/lanes/s240/out4/sigtab-musl-C.txt
+c296360f7d3195369380ba8a8f7b1b5afbea3b3a6f26e16e4d1b66a5c1471199  /home/mfwolffe/lanes/s240/out4/sigtab-musl-de-setlocale.txt
+==> /home/mfwolffe/lanes/s240/out4/sigtab-glibc-C.txt <==
+NSIG: 65
+SIGRTMIN: 34
+SIGRTMAX: 64
+-- the 28 POSIX names: name number text
+
+==> /home/mfwolffe/lanes/s240/out4/sigtab-glibc-de-nosetlocale.txt <==
+NSIG: 65
+SIGRTMIN: 34
+SIGRTMAX: 64
+-- the 28 POSIX names: name number text
+
+==> /home/mfwolffe/lanes/s240/out4/sigtab-glibc-de-setlocale.txt <==
+setlocale(LC_ALL, ""): de_DE.UTF-8
+NSIG: 65
+SIGRTMIN: 34
+SIGRTMAX: 64
+
+==> /home/mfwolffe/lanes/s240/out4/sigtab-musl-C.txt <==
+NSIG: 65
+SIGRTMIN: 35
+SIGRTMAX: 64
+-- the 28 POSIX names: name number text
+
+==> /home/mfwolffe/lanes/s240/out4/sigtab-musl-de-setlocale.txt <==
+setlocale(LC_ALL, ""): de_DE.UTF-8
+NSIG: 65
+SIGRTMIN: 35
+SIGRTMAX: 64
+### shells: dash and GNU timeout under strace
+== dash: kill 0, kill -- -PGID and kill -1 as the builtin sends them
+kill 0: 0
+kill -7: 0
+kill -1: 0
+dash: 7: kill: Usage: kill [-s sigspec | -signum | -sigspec] [pid | job]... or
+kill -l [exitstatus]
+      1 kill(-1, SIGUSR1)                 = 0
+      1 kill(-7, SIGUSR1)                 = 0
+      1 kill(0, SIGUSR1)                  = 0
+== dash -m (a script) under a pseudo-terminal: a job, stopped, continued, killed
+      3 setpgid(0, N)                    = 0
+      2 wait4(-1, 0x7ffd5cNdddc, WNOHANG|WSTOPPED, NULL) = 0
+      2 ioctl(N, TIOCSPGRP, [N])        = 0
+      1 wait4(N, [{WIFEXITED(s) && WEXITSTATUS(s) == 0}], WNOHANG, NULL) = N
+      1 wait4(-1, [{WIFSTOPPED(s) && WSTOPSIG(s) == SIGSTOP}], WNOHANG|WSTOPPED, NULL) = N
+      1 wait4(-1, 0x7ffeefa5aecc, WNOHANG, NULL) = -1 ECHILD (No child processes)
+      1 wait4(-1, 0x7ffedNfd1b4, WNOHANG, NULL) = -1 ECHILD (No child processes)
+      1 wait4(-1,  <unfinished ...>
+      1 setpgid(N, N)                   = 0
+      1 kill(-N, SIGTERM)                = 0
+      1 kill(-N, SIGSTOP <unfinished ...>
+      1 kill(-N, SIGCONT)                = 0
+      1 <... wait4 resumed>[{WIFEXITED(s) && WEXITSTATUS(s) == 0}], 0, NULL) = N
+-- what it printed:
+[1] + Stopped (signal)           sleep 30
+[1] + Stopped (signal)           sleep 30
+[1] + Stopped (signal)           sleep 30
+end
+You have stopped jobs.
+== dash -i -m under a pseudo-terminal: fg, bg, jobs
+      4 setpgid(0, N)                    = 0
+      4 ioctl(N, TIOCSPGRP, [N])        = 0
+      3 wait4(-1, 0x7ffe7aNc, WNOHANG|WSTOPPED, NULL) = 0
+      2 setpgid(N, N)                   = 0
+      2 kill(-N, SIGCONT)                = 0
+      1 wait4(N, [{WIFEXITED(s) && WEXITSTATUS(s) == 0}], WNOHANG, NULL) = N
+      1 wait4(-1, [{WIFSTOPPED(s) && WSTOPSIG(s) == SIGSTOP}], WNOHANG|WSTOPPED, NULL) = N
+      1 wait4(-1, [{WIFSIGNALED(s) && WTERMSIG(s) == SIGTERM}], WNOHANG|WSTOPPED, NULL) = N
+      1 wait4(-1, [{WIFEXITED(s) && WEXITSTATUS(s) == 0}], WSTOPPED, NULL) = N
+      1 wait4(-1, 0x7ffe7aNcc, WNOHANG|WSTOPPED, NULL) = -1 ECHILD (No child processes)
+      1 wait4(-1, 0x7ffe7aNc, WNOHANG|WSTOPPED, NULL) = -1 ECHILD (No child processes)
+      1 wait4(-1, 0x7ffdcbc8eN, WNOHANG, NULL) = -1 ECHILD (No child processes)
+      1 wait4(-1, 0x7ffcd5fbfNc, WNOHANG, NULL) = -1 ECHILD (No child processes)
+      1 wait4(-1,  <unfinished ...>
+      1 setsid()                          = N
+      1 kill(-N, SIGTERM)                = 0
+      1 kill(-N, SIGSTOP <unfinished ...>
+      1 ioctl(N, TIOCGPGRP, [N])        = 0
+      1 ioctl(4, TIOCSCTTY, 1 <unfinished ...>
+      1 <... wait4 resumed>[{WIFEXITED(s) && WEXITSTATUS(s) == 0}], 0, NULL) = N
+-- what the session printed:
+sleep 2 &
+jobs
+fg %1
+sleep 30 &
+kill -STOP %1
+jobs
+bg %1
+kill %1
+wait
+exit
+# # [1] + Running                    sleep 2
+# sleep 2
+# # [1] + Stopped (signal)           sleep 30
+# [1] + Stopped (signal)           sleep 30
+# [1] sleep 30
+# # [1] + Terminated                 sleep 30
+# == GNU timeout: its own group, and its command's children
+timeout (GNU coreutils) 9.4
+child=57
+timeout status: 124
+      1 kill(0, SIGCONT)                  = 0
+      1 kill(0, SIGTERM)                  = 0
+      1 kill(N, SIGCONT <unfinished ...>
+      1 kill(N, SIGTERM)                 = 0
+      1 setpgid(0, 0)                     = 0
+child=69
+timeout --foreground status: 124
+      1 kill(N, SIGTERM)                 = 0
+== the same two without strace (strace -f waits for every tracee): who outlives timeout
+timeout status: 124
+-- sleeps left after timeout:
+none
+timeout --foreground status: 124
+-- sleeps left after timeout --foreground:
+     85       1 S<   sleep
+     86       1 S<   sleep
+done
+### wolf 0.2.29 and lupin 0.1.52
+wolf-0.2.29-x86_64-unknown-linux-gnu.tar.gz: OK
+lupin-0.1.52-x86_64-unknown-linux-gnu.tar.gz: OK
+wolf-0.2.29-x86_64-unknown-linux-gnu.tar.gz: OK
+lupin-0.1.52-x86_64-unknown-linux-gnu.tar.gz: OK
+wolf 0.2.29 (wolfgang, pin 6ffe7c6)
+paired with lupin 0.1.52 (reference interpreter), pin 294d626
+lupin 0.1.52 (wolf-interp, reference interpreter at pin 294d626)
+wolf build: note: ld.lld not found on PATH — linking with the system linker (lld ships with the toolchain; packaging is c13)
+build native: 0
+--- run native
+me: pid=15
+send(0, TERMINATE)=invalid
+send(-1, TERMINATE)=invalid
+job1: leader=16 sleep known: true; pid pgid comm:
+16      16 sh
+     17      16 sleep
+send(-leader, TERMINATE)=invalid
+send(-leader, 0)=invalid
+send(leader, TERMINATE)=ok
+job1 leader status=-15
+job1 sleep after the leader's end: send(sleep, 0)=ok state=S
+cleanup send(sleep, KILL)=ok
+job2 leader status after os_kill=-9
+job2 sleep after os_kill: send(sleep, 0)=ok state=S
+cleanup send(sleep, KILL)=ok
+exit native: 0
+--- sleeps left after native:
+none
+wolf build: note: ld.lld not found on PATH — linking with the system linker (lld ships with the toolchain; packaging is c13)
+build release: 0
+--- run release
+me: pid=40
+send(0, TERMINATE)=invalid
+send(-1, TERMINATE)=invalid
+job1: leader=41 sleep known: true; pid pgid comm:
+41      41 sh
+     42      41 sleep
+send(-leader, TERMINATE)=invalid
+send(-leader, 0)=invalid
+send(leader, TERMINATE)=ok
+job1 leader status=-15
+job1 sleep after the leader's end: send(sleep, 0)=ok state=S
+cleanup send(sleep, KILL)=ok
+job2 leader status after os_kill=-9
+job2 sleep after os_kill: send(sleep, 0)=ok state=S
+cleanup send(sleep, KILL)=ok
+exit release: 0
+--- sleeps left after release:
+none
+--- checked
+{"commit":"6ffe7c6","diagnostics":[],"file":"./witness.lu","impl":"wolfgang","impl_version":"0.2.29","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"me: pid=50\nsend(0, TERMINATE)=invalid\nsend(-1, TERMINATE)=invalid\njob1: leader=56 sleep known: true; pid pgid comm:\n56      56 sh\n     57      56 sleep\nsend(-leader, TERMINATE)=invalid\nsend(-leader, 0)=invalid\nsend(leader, TERMINATE)=ok\njob1 leader status=-15\njob1 sleep after the leader's end: send(sleep, 0)=ok state=S\ncleanup send(sleep, KILL)=ok\njob2 leader status after os_kill=-9\njob2 sleep after os_kill: send(sleep, 0)=ok state=S\ncleanup send(sleep, KILL)=ok\n","stdout_sha256":"168b5a6ac97b06f06c2b0a9a490de74ccdc290c7791c593c82e4a6db8a208a2d","verdict":"exit(0)","warnings":[]}
+exit checked: 0
+--- sleeps left after checked:
+none
+--- processes before lupin:
+    PID    PPID    PGID STAT COMMAND
+      1       0       1 S<s  sh
+     65       1       1 R<   ps
+--- lupin
+{"protocol":1,"impl":"lupin","impl_version":"0.1.52","commit":"025428b","file":"witness.lu","phase_reached":"resolve","seeded":false,"diagnostics":[],"warnings":[],"verdict":"unsupported","stdout_sha256":null,"stdout_inline":null,"x-unsupported":"`os_signal_send` signals a process by id: this machine admits no `unsafe` and std has no `kill(pid, sig)` ([os.signal.send], [os.term.note] R8)"}
+exit lupin: 0
+--- processes after lupin (a job lupin started and left behind shows here):
+    PID    PPID    PGID STAT COMMAND
+      1       0       1 S<s  sh
+     70       1      70 S<   sh
+     71      70      70 S<   sleep
+     73       1       1 R<   ps
+### done
+2026-10-14T22:04:43Z
