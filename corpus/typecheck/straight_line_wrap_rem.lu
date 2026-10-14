@@ -1,0 +1,24 @@
+//! check: run(exit=0, stdout="131\n")
+//! phase: run
+//! conforms: type.wrap.div
+//!
+//! wolf-lang#755 (s755): a function with no `if`, loop, call or index
+//! is lowered as one block, and its locals are kept for that block
+//! alone. A construct that branches in the middle of an expression ends
+//! the block, so a local declared before it and read after it had no
+//! definition: a signed `wrapping` `%` by a divisor that may be -1, the
+//! same branch. Native and release panicked at trunk `b407c73b` (wolf
+//! 0.2.29 too), "use of a variable with no definition on some path".
+//! The checked machine and lupin 0.1.52 printed what this row says.
+
+fn f(x: wrapping[i64], d: wrapping[i64]) -> wrapping[i64] {
+    let y = x + x
+    let z = x % d
+    y + z
+}
+
+fn main() {
+    let a: wrapping[i64] = 65
+    let b: wrapping[i64] = 2
+    print("{f(a, b)}")
+}

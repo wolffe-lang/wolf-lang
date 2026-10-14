@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="70\n")
+//! phase: run
+//! conforms: type.numlit.cast.narrow
+//!
+//! wolf-lang#755 (s755): a function with no `if`, loop, call or index
+//! is lowered as one block, and its locals are kept for that block
+//! alone. A construct that branches in the middle of an expression ends
+//! the block, so a local declared before it and read after it had no
+//! definition: a sign-changing `as` (`u64` to `int`, `int` to `u64`,
+//! `u8` to `i8`), each checked on a branch. Native and release panicked
+//! at trunk `b407c73b` (wolf 0.2.29 too), "use of a variable with no
+//! definition on some path". The checked machine and lupin 0.1.52
+//! printed what this row says.
+
+fn f(x: u64, w: int, b: u8) -> int {
+    let y = 1
+    let z = x as int
+    let v = w as u64
+    let c = b as i8
+    y + z + v as int + c as int
+}
+
+fn main() {
+    print("{f(64, 2, 3)}")
+}

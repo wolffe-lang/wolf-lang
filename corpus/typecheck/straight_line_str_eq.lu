@@ -1,0 +1,25 @@
+//! check: run(exit=0, stdout="true\n")
+//! phase: run
+//! conforms: mem.str.order
+//!
+//! wolf-lang#755 (s755): a function with no `if`, loop, call or index
+//! is lowered as one block, and its locals are kept for that block
+//! alone. A construct that branches in the middle of an expression ends
+//! the block, so a local declared before it and read after it had no
+//! definition: `==` and `!=` on two `str`s, compared inline in a loop
+//! of its own. Native and release panicked at trunk `b407c73b` (wolf
+//! 0.2.29 too), "use of a variable with no definition on some path".
+//! The checked machine and lupin 0.1.52 printed what this row says.
+
+fn f(a: str, b: str) -> bool {
+    let y = a.len > 1
+    let e = a == b
+    let n = a != b
+    let k = e != n
+    y == k
+}
+
+fn main() {
+    let a = "ab"
+    print("{f(a, a)}")
+}
