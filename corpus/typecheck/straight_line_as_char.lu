@@ -15,7 +15,7 @@
 fn f(x: int) -> int {
     let y = x + 1
     let c = x as char
-    y + (c as int)
+    y + c as int
 }
 
 fn main() {
