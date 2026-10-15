@@ -231,14 +231,23 @@ fn judge_lupin(obs: &Obs, name: &str, lupin: Lupin, check: &dyn Fn(&str, &str)) 
         obs.version, obs.commit, obs.verdict, obs.reason, obs.stdout
     );
     if pre_mirror(obs) {
+        // 0.1.53 resolves a name when the call is reached: a witness
+        // stops at the first s241 name ("does not resolve"), or earlier
+        // at a call it already refused by name (`os_pgid`, as the mirror
+        // does).
         assert_eq!(
             obs.verdict, "unsupported",
             "lupin {} at {} (pre-mirror, pinned by version) on {name}: {obs:?}",
             obs.version, obs.commit
         );
+        let named = match lupin {
+            Lupin::Refuses(call) => obs.reason.contains(&format!("`{call}`")),
+            Lupin::Mirrors => false,
+        };
         assert!(
-            obs.reason.contains("does not resolve"),
-            "lupin {} (pre-mirror) refuses {name} as an unknown name: {}",
+            obs.reason.contains("does not resolve") || named,
+            "lupin {} (pre-mirror) refuses {name} at an unknown name or the one it refused \
+             before: {}",
             obs.version,
             obs.reason
         );
