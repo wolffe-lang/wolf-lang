@@ -15,7 +15,7 @@ kasumi under `taskset -c 0-3` with four busy loops the old gate was red 8
 of 30 times and the fixed one 0 of 30, interleaved run by run. No runtime
 or compiler change; no assertion, timeout or retry changed.
 
-### A process out of descriptors no longer ends at its first park; a failed net call names its reason (s239, #750, #751; rulings owed)
+### A process out of descriptors no longer ends at its first park; a failed net call names its reason (s239, #750, #751; ruling #80)
 
 The native runtime made its readiness set (epoll and an `eventfd` on
 linux, a `kqueue` on macOS) at the first call that parked, and asserted
@@ -53,8 +53,8 @@ lines had run; a client could end lobo 0.1.2 and 0.1.3 that way
   8th of 30 slow downloads at trunk and serves on now, 12 of 12
   downloads whole. Made at the first park instead, with a refusal `io`
   there (the other design measured), the same lobo stays up but cuts 2
-  of 12 downloads it had begun: the rulings owed (R1–R6,
-  `[os.net.reactor.note]`) recommend the start.
+  of 12 downloads it had begun: ruling #80 (R1–R6,
+  `[os.net.reactor.note]`) takes the start.
 - **Downstream**: lobo's workaround (one parked read at start, ws64) is
   no longer needed from this release; it costs nothing to keep.
 
