@@ -1036,27 +1036,75 @@ mod sys {
         if rc == 0 { sig_code::OK } else { sig_code::IO }
     }
 
-    /// s232 (#141, `[os.signal.send]`): `kill(pid, sig)` for a pid > 0
-    /// and one meaning, or signal 0 for `m == 0` (the existence and
-    /// permission check). Codes are `os::proc_code`'s.
-    pub fn send(pid: i64, m: i64) -> i64 {
-        use crate::os::proc_code;
-        let Ok(p) = libc::pid_t::try_from(pid) else {
-            return proc_code::INVALID;
-        };
-        if p <= 0 || (m != 0 && !super::one_sendable(m)) {
-            return proc_code::INVALID;
+    /// s241 (#740, `[os.signal.host]`): the host's last signal number.
+    /// linux: the C library's `SIGRTMAX` (64 under glibc and musl,
+    /// measured by s240); macOS: 31 (`NSIG` 32, measured by s240); any
+    /// other host is not measured, so it answers `unsupported` rather
+    /// than guess.
+    pub fn last() -> Option<libc::c_int> {
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        {
+            Some(libc::SIGRTMAX())
         }
-        let sig = if m == 0 {
-            0
-        } else {
-            match to_signal(m) {
-                Some(s) => s,
-                None => return proc_code::INVALID,
-            }
-        };
-        // SAFETY: kill with a positive pid and a validated signal.
-        if unsafe { libc::kill(p, sig) } == 0 {
+        #[cfg(target_os = "macos")]
+        {
+            Some(31)
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "android", target_os = "macos")))]
+        {
+            None
+        }
+    }
+
+    /// s241 (`[os.signal.host]`): the C library's real-time range, or
+    /// (0, 0) on a host with none (macOS). `None` where [`last`] is.
+    pub fn realtime() -> Option<(libc::c_int, libc::c_int)> {
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        {
+            Some((libc::SIGRTMIN(), libc::SIGRTMAX()))
+        }
+        #[cfg(target_os = "macos")]
+        {
+            Some((0, 0))
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "android", target_os = "macos")))]
+        {
+            None
+        }
+    }
+
+    /// s241 (#740, `[os.signal.send]`, `[os.signal.host]`): the host
+    /// signal a SENDING call's (or `os_signal_text`'s) meaning names —
+    /// 0 for the meaning 0 when `zero` allows it, one bit of the table
+    /// for its signal, or `-N` for the host's signal `N`, `1 <= N <=`
+    /// [`last`]. Anything else is `INVALID`.
+    pub fn host_signal(m: i64, zero: bool) -> Result<libc::c_int, i64> {
+        use crate::os::proc_code;
+        if m == 0 {
+            return if zero { Ok(0) } else { Err(proc_code::INVALID) };
+        }
+        if m < 0 {
+            let Some(last) = last() else {
+                return Err(proc_code::INVALID);
+            };
+            return match m.checked_neg().map(libc::c_int::try_from) {
+                Some(Ok(n)) if (1..=last).contains(&n) => Ok(n),
+                _ => Err(proc_code::INVALID),
+            };
+        }
+        if !super::one_sendable(m) {
+            return Err(proc_code::INVALID);
+        }
+        to_signal(m).ok_or(proc_code::INVALID)
+    }
+
+    /// `kill(target, sig)` and the host's answer as an `os::proc_code`
+    /// (s232's map: `ESRCH` not_found, `EPERM` denied, `EINVAL` invalid,
+    /// anything else io). The caller has checked the shape.
+    fn kill_code(target: libc::pid_t, sig: libc::c_int) -> i64 {
+        use crate::os::proc_code;
+        // SAFETY: kill with a target and a signal the caller validated.
+        if unsafe { libc::kill(target, sig) } == 0 {
             return proc_code::OK;
         }
         match std::io::Error::last_os_error().raw_os_error() {
@@ -1064,6 +1112,92 @@ mod sys {
             Some(libc::EPERM) => proc_code::DENIED,
             Some(libc::EINVAL) => proc_code::INVALID,
             _ => proc_code::IO,
+        }
+    }
+
+    /// s232 (#141, `[os.signal.send]`): `kill(pid, sig)` for a pid > 0
+    /// and one meaning (s241: or `-N`, a host number), or signal 0 for
+    /// `m == 0` (the existence and permission check). Codes are
+    /// `os::proc_code`'s.
+    pub fn send(pid: i64, m: i64) -> i64 {
+        use crate::os::proc_code;
+        let Ok(p) = libc::pid_t::try_from(pid) else {
+            return proc_code::INVALID;
+        };
+        if p <= 0 {
+            return proc_code::INVALID;
+        }
+        match host_signal(m, true) {
+            Ok(sig) => kill_code(p, sig),
+            Err(c) => c,
+        }
+    }
+
+    /// s241 (#739, `[os.signal.send.group]`): `kill(-pgid, sig)` — every
+    /// member of group `pgid` this process may signal. A `pgid` of 1 or
+    /// less is `INVALID` before the host: `kill`'s `-1` is every process
+    /// (`[os.signal.send.all]`), not group 1, and 0 is the caller's own
+    /// group, which a program names by `os_pgid()`.
+    pub fn send_group(pgid: i64, m: i64) -> i64 {
+        use crate::os::proc_code;
+        let Ok(g) = libc::pid_t::try_from(pgid) else {
+            return proc_code::INVALID;
+        };
+        if g <= 1 {
+            return proc_code::INVALID;
+        }
+        match host_signal(m, true) {
+            Ok(sig) => kill_code(-g, sig),
+            Err(c) => c,
+        }
+    }
+
+    /// s241 (#739, `[os.signal.send.all]`): `kill(-1, sig)` — every
+    /// process this one may signal, itself excepted (the host decides
+    /// which; linux also leaves out its namespace's pid 1).
+    pub fn send_all(m: i64) -> i64 {
+        match host_signal(m, true) {
+            Ok(sig) => kill_code(-1, sig),
+            Err(c) => c,
+        }
+    }
+
+    /// s241 (#741, `[os.signal.text]`): the C library's description of
+    /// one signal, read in the C locale. `strsignal(3)` translates by the
+    /// calling thread's locale (wolf never calls `setlocale`, so the
+    /// global one is "C" already); the read sets the C locale on this
+    /// thread around the call anyway (`uselocale(3)`), so the words do
+    /// not depend on what an embedding process chose. The C library may
+    /// answer from a buffer it reuses, so the read is serialized and
+    /// copied out under one lock.
+    pub fn text(m: i64) -> Result<String, i64> {
+        static READ: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let sig = host_signal(m, false)?;
+        let _one = READ.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        // SAFETY: a locale made from the name "C" (or none), installed
+        // on this thread only for the read and put back; the text is
+        // copied out before the lock is let go.
+        unsafe {
+            let c_locale = libc::newlocale(libc::LC_ALL_MASK, c"C".as_ptr(), std::ptr::null_mut());
+            let before = if c_locale.is_null() {
+                std::ptr::null_mut()
+            } else {
+                libc::uselocale(c_locale)
+            };
+            let p = libc::strsignal(sig);
+            let out = if p.is_null() {
+                None
+            } else {
+                Some(std::ffi::CStr::from_ptr(p).to_string_lossy().into_owned())
+            };
+            if !c_locale.is_null() {
+                libc::uselocale(before);
+                libc::freelocale(c_locale);
+            }
+            // POSIX says `strsignal` always answers a string; a C library
+            // that answered none reads as the empty text, never a row the
+            // call does not declare.
+            Ok(out.unwrap_or_default())
         }
     }
 
@@ -1216,16 +1350,6 @@ mod sys {
         -sig_code::UNSUPPORTED
     }
 
-    /// s232 (`[os.signal.send]`): the console has no signal to send to
-    /// another process — `unsupported` by name, after the shape.
-    pub fn send(pid: i64, m: i64) -> i64 {
-        use crate::os::proc_code;
-        if pid <= 0 || pid > i64::from(i32::MAX) || (m != 0 && !super::one_sendable(m)) {
-            return proc_code::INVALID;
-        }
-        proc_code::UNSUPPORTED
-    }
-
     /// s232 (`[os.signal.number]`): no signal numbers on windows.
     pub fn number(m: i64) -> i64 {
         use crate::os::proc_code;
@@ -1233,6 +1357,73 @@ mod sys {
             return -proc_code::INVALID;
         }
         -proc_code::UNSUPPORTED
+    }
+
+    /// s241 (`[os.signal.host]`): windows has no signal numbers.
+    pub fn last() -> Option<i32> {
+        None
+    }
+
+    /// s241 (`[os.signal.host]`): no real-time range either.
+    pub fn realtime() -> Option<(i32, i32)> {
+        None
+    }
+
+    /// s241 (`[os.signal.send]`, `[os.signal.host]`): the SHAPE of a
+    /// sending call's meaning on a host with no signal numbers — 0 (when
+    /// `zero` allows it), one bit of the table, or any `-N` (windows has
+    /// no last number to hold `N` to: a host number is past the shape
+    /// and the call is `unsupported` with the rest). `Ok` carries no
+    /// signal: nothing is sent here.
+    pub fn host_signal(m: i64, zero: bool) -> Result<i32, i64> {
+        use crate::os::proc_code;
+        if (m == 0 && zero) || m < 0 || super::one_sendable(m) {
+            Ok(0)
+        } else {
+            Err(proc_code::INVALID)
+        }
+    }
+
+    /// s232 (`[os.signal.send]`): the console has no signal to send to
+    /// another process — `unsupported` by name, after the shape.
+    pub fn send(pid: i64, m: i64) -> i64 {
+        use crate::os::proc_code;
+        if pid <= 0 || pid > i64::from(i32::MAX) {
+            return proc_code::INVALID;
+        }
+        match host_signal(m, true) {
+            Ok(_) => proc_code::UNSUPPORTED,
+            Err(c) => c,
+        }
+    }
+
+    /// s241 (`[os.signal.send.group]`): no process groups for signals
+    /// on windows — `unsupported` by name, after the shape.
+    pub fn send_group(pgid: i64, m: i64) -> i64 {
+        use crate::os::proc_code;
+        if pgid <= 1 || pgid > i64::from(i32::MAX) {
+            return proc_code::INVALID;
+        }
+        match host_signal(m, true) {
+            Ok(_) => proc_code::UNSUPPORTED,
+            Err(c) => c,
+        }
+    }
+
+    /// s241 (`[os.signal.send.all]`): `unsupported` after the shape.
+    pub fn send_all(m: i64) -> i64 {
+        use crate::os::proc_code;
+        match host_signal(m, true) {
+            Ok(_) => proc_code::UNSUPPORTED,
+            Err(c) => c,
+        }
+    }
+
+    /// s241 (`[os.signal.text]`): no signal descriptions on windows —
+    /// `unsupported` after the shape.
+    pub fn text(m: i64) -> Result<String, i64> {
+        host_signal(m, false)?;
+        Err(crate::os::proc_code::UNSUPPORTED)
     }
 }
 
@@ -1401,6 +1592,40 @@ pub fn number(m: i64) -> i64 {
     sys::number(m)
 }
 
+/// s241 (#739, `[os.signal.send.group]`): one meaning (or `-N`) to every
+/// member of group `pgid` (> 1) this process may signal; `os::proc_code`'s
+/// codes, as [`send`].
+pub fn send_group(pgid: i64, m: i64) -> i64 {
+    sys::send_group(pgid, m)
+}
+
+/// s241 (#739, `[os.signal.send.all]`): one meaning (or `-N`) to every
+/// process this one may signal, itself excepted.
+pub fn send_all(m: i64) -> i64 {
+    sys::send_all(m)
+}
+
+/// s241 (#740, `[os.signal.host]`): the host's last signal number, or
+/// `-UNSUPPORTED`.
+pub fn last() -> i64 {
+    sys::last().map_or(-crate::os::proc_code::UNSUPPORTED, i64::from)
+}
+
+/// s241 (`[os.signal.host]`): the C library's real-time range, (0, 0)
+/// where there is none, or `Err(UNSUPPORTED)`.
+pub fn realtime() -> Result<(i64, i64), i64> {
+    sys::realtime()
+        .map(|(lo, hi)| (i64::from(lo), i64::from(hi)))
+        .ok_or(crate::os::proc_code::UNSUPPORTED)
+}
+
+/// s241 (#741, `[os.signal.text]`): the C library's words for one
+/// meaning's signal (or `-N`'s), in the C locale; `Err(INVALID)` or
+/// `Err(UNSUPPORTED)`.
+pub fn text(m: i64) -> Result<String, i64> {
+    sys::text(m)
+}
+
 /// The signal numbers of the meanings in `set`, for a child's hook
 /// (s219's spawn `defaults`); 0 slots are unused. Empty on windows.
 #[cfg(unix)]
@@ -1489,6 +1714,64 @@ pub extern "C" fn __wolf_rt_os_signal_send(pid: i64, m: i64) -> i64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_os_signal_number(m: i64) -> i64 {
     number(m)
+}
+
+/// `os_signal_send_group(pgid: int, meaning: int) -> () ! {denied,
+/// invalid, io, not_found, unsupported}` (s241) — 0 ok, else an
+/// `os::proc_code`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_signal_send_group(pgid: i64, m: i64) -> i64 {
+    send_group(pgid, m)
+}
+
+/// `os_signal_send_all(meaning: int) -> () ! {denied, invalid, io,
+/// not_found, unsupported}` (s241) — 0 ok, else an `os::proc_code`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_signal_send_all(m: i64) -> i64 {
+    send_all(m)
+}
+
+/// `os_signal_last() -> int ! {unsupported}` (s241) — the number (> 0),
+/// or `-UNSUPPORTED` (an `os::proc_code`).
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_signal_last() -> i64 {
+    last()
+}
+
+/// `os_signal_realtime() -> (int, int) ! {unsupported}` (s241) — 0 and
+/// the pair (first, last) through `out`, or the code.
+///
+/// # Safety
+///
+/// `out` must address 16 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_signal_realtime(out: i64) -> i64 {
+    match realtime() {
+        Ok((lo, hi)) => {
+            unsafe { crate::str::write_pair(out, lo, hi) };
+            crate::os::proc_code::OK
+        }
+        Err(c) => c,
+    }
+}
+
+/// `os_signal_text(meaning: int) -> str ! {invalid, unsupported}`
+/// (s241) — 0 and the text's (pointer, length) through `out`, the bytes
+/// in the ambient region, or the code.
+///
+/// # Safety
+///
+/// `out` must address 16 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_signal_text(m: i64, out: i64) -> i64 {
+    match text(m) {
+        Ok(t) => {
+            let p = crate::str::ambient_copy(t.as_bytes());
+            unsafe { crate::str::write_pair(out, p as i64, t.len() as i64) };
+            crate::os::proc_code::OK
+        }
+        Err(c) => c,
+    }
 }
 
 #[cfg(test)]
@@ -1827,13 +2110,18 @@ mod tests {
         let _g = serial();
         let me = i64::from(std::process::id());
         assert_eq!(send(me, 0), proc_code::OK, "kill -0 of this process");
+        // s241: a negative meaning is a host number now, so the shape
+        // rows hold `-N` past the host's last (never `-2`, which is
+        // SIGINT to this very process).
+        let past = -(last() + 1);
         for (pid, m) in [
             (0, 0),
             (-1, 0),
             (me, 3),
             (me, 1 << 28),
             (i64::MAX, 0),
-            (me, -2),
+            (me, past),
+            (me, i64::MIN),
         ] {
             assert_eq!(send(pid, m), proc_code::INVALID, "send({pid}, {m})");
         }
@@ -1855,6 +2143,108 @@ mod tests {
             .unwrap();
         assert_eq!(send(i64::from(child.id()), meaning::KILL), proc_code::OK);
         assert_eq!(child.wait().unwrap().signal(), Some(libc::SIGKILL));
+    }
+
+    /// s241 (#739, `[os.signal.send.group]`, `[os.signal.send.all]`):
+    /// the shape rows, decided before the host — nothing is sent. Group
+    /// 1 and below are `invalid` (`kill`'s -1 is every process, not
+    /// group 1). Live sends are witnessed only inside a container
+    /// (wolf_driver's `group_lanes`), never from a test on a host.
+    #[cfg(unix)]
+    #[test]
+    fn group_and_all_shape_rows() {
+        use crate::os::proc_code;
+        let past = -(last() + 1);
+        for (g, m) in [
+            (1, 0),
+            (0, 0),
+            (-5, 0),
+            (i64::from(i32::MAX) + 1, 0),
+            (2, 3),
+            (2, 1 << 28),
+            (2, past),
+            (2, i64::MIN),
+        ] {
+            assert_eq!(send_group(g, m), proc_code::INVALID, "send_group({g}, {m})");
+        }
+        for m in [3, 1 << 28, past, i64::MIN, -(1 << 40)] {
+            assert_eq!(send_all(m), proc_code::INVALID, "send_all({m})");
+        }
+        // A group no process leads: the largest a pid_t holds.
+        assert_eq!(
+            send_group(i64::from(i32::MAX), 0),
+            proc_code::NOT_FOUND,
+            "signal 0 to a group nobody leads"
+        );
+    }
+
+    /// s241 (#762, `[os.term.group]`): the shape rows only — the test
+    /// process is never moved.
+    #[cfg(unix)]
+    #[test]
+    fn set_pgid_shape_rows() {
+        use crate::os::proc_code;
+        for g in [-1, i64::MIN, i64::from(i32::MAX) + 1] {
+            assert_eq!(crate::term::set_pgid(g), Err(proc_code::INVALID), "{g}");
+        }
+    }
+
+    /// s241 (#740, `[os.signal.host]`): the last number, the real-time
+    /// range and how a meaning or `-N` resolves, as s240 measured them.
+    #[cfg(unix)]
+    #[test]
+    fn host_numbers() {
+        use crate::os::proc_code;
+        let last = last();
+        let (lo, hi) = realtime().expect("a measured host");
+        #[cfg(target_os = "linux")]
+        {
+            assert_eq!(last, 64);
+            assert_eq!(hi, 64);
+            assert!(lo == 34 || lo == 35, "glibc 34, musl 35: {lo}");
+        }
+        #[cfg(target_os = "macos")]
+        {
+            assert_eq!(last, 31);
+            assert_eq!((lo, hi), (0, 0));
+        }
+        assert!(last > 0 && (lo, hi) <= (last, last));
+        assert_eq!(sys::host_signal(-1, true), Ok(1));
+        assert_eq!(
+            sys::host_signal(-last, true),
+            Ok(libc::c_int::try_from(last).unwrap())
+        );
+        assert_eq!(sys::host_signal(-(last + 1), true), Err(proc_code::INVALID));
+        assert_eq!(sys::host_signal(0, true), Ok(0));
+        assert_eq!(sys::host_signal(0, false), Err(proc_code::INVALID));
+        assert_eq!(sys::host_signal(meaning::KILL, true), Ok(libc::SIGKILL));
+    }
+
+    /// s241 (#741, `[os.signal.text]`): the C library's words, as s240's
+    /// tables recorded them (docs/s240/ev/*/sigtab-*-C.txt); the shape
+    /// rows `invalid`.
+    #[cfg(unix)]
+    #[test]
+    fn text_rows() {
+        use crate::os::proc_code;
+        #[cfg(all(target_os = "linux", target_env = "gnu"))]
+        {
+            assert_eq!(text(meaning::RELOAD).unwrap(), "Hangup");
+            assert_eq!(text(meaning::TERMINATE).unwrap(), "Terminated");
+            assert_eq!(text(meaning::KILL).unwrap(), "Killed");
+            assert_eq!(text(-34).unwrap(), "Real-time signal 0");
+        }
+        #[cfg(target_os = "macos")]
+        {
+            assert_eq!(text(meaning::RELOAD).unwrap(), "Hangup: 1");
+            assert_eq!(text(meaning::KILL).unwrap(), "Killed: 9");
+        }
+        for i in 0..MEANING_COUNT {
+            assert!(!text(1 << i).unwrap().is_empty(), "bit {i}");
+        }
+        for bad in [0, 3, 1 << 28, -(last() + 1), i64::MIN] {
+            assert_eq!(text(bad), Err(proc_code::INVALID), "text {bad}");
+        }
     }
 
     /// s232 (`[os.signal.number]`): one meaning's number, the table's

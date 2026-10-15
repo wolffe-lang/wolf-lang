@@ -170,6 +170,30 @@ mod sys {
         Ok(i64::from(unsafe { libc::getpgrp() }))
     }
 
+    /// s241 (#762, `[os.term.group]`): `setpgid(0, pgid)` — the CALLING
+    /// process into group `pgid`, or leading a new group of its own for
+    /// 0. The shape (`INVALID`: below 0 or past a pid's width) is
+    /// decided before the host; `EPERM` (a session leader, a group of
+    /// another session or none at all) is `DENIED`, `EINVAL` `INVALID`,
+    /// anything else `IO`.
+    pub fn set_pgid(pgid: i64) -> Result<(), i64> {
+        let Ok(g) = libc::pid_t::try_from(pgid) else {
+            return Err(proc_code::INVALID);
+        };
+        if g < 0 {
+            return Err(proc_code::INVALID);
+        }
+        // SAFETY: setpgid on this process (pid 0) with a checked group id.
+        if unsafe { libc::setpgid(0, g) } == 0 {
+            return Ok(());
+        }
+        Err(match std::io::Error::last_os_error().raw_os_error() {
+            Some(libc::EPERM) => proc_code::DENIED,
+            Some(libc::EINVAL) => proc_code::INVALID,
+            _ => proc_code::IO,
+        })
+    }
+
     /// s234 (`[os.term.size]`): the window's rows and columns as the
     /// terminal reports them (`TIOCGWINSZ`); 0 for a size it was never
     /// told (a fresh pseudo-terminal).
@@ -244,6 +268,12 @@ mod sys {
     pub fn pgid() -> Result<i64, i64> {
         Err(proc_code::UNSUPPORTED)
     }
+    pub fn set_pgid(pgid: i64) -> Result<(), i64> {
+        if pgid < 0 || pgid > i64::from(i32::MAX) {
+            return Err(proc_code::INVALID);
+        }
+        Err(proc_code::UNSUPPORTED)
+    }
     pub fn size(_h: i64) -> Result<(i64, i64), i64> {
         Err(proc_code::UNSUPPORTED)
     }
@@ -252,7 +282,7 @@ mod sys {
     }
 }
 
-pub use sys::{chars, foreground, mode_of, pgid, set_foreground, set_mode, size};
+pub use sys::{chars, foreground, mode_of, pgid, set_foreground, set_mode, set_pgid, size};
 
 // ---- the C entry surface (codes are `os::proc_code`'s) -----------------
 
@@ -289,6 +319,13 @@ pub extern "C" fn __wolf_rt_os_term_set_mode(h: i64, m: i64) -> i64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_os_pgid() -> i64 {
     pgid().unwrap_or_else(|c| -c)
+}
+
+/// `os_set_pgid(pgid) -> () ! {denied, invalid, io, unsupported}` (s241)
+/// — 0 ok, else the code.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_set_pgid(pgid: i64) -> i64 {
+    set_pgid(pgid).map_or_else(|c| c, |()| proc_code::OK)
 }
 
 /// `os_term_size(fd) -> (int, int) ! {io, unsupported}` (s234) — 0 and
