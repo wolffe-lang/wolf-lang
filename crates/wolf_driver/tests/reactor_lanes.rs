@@ -268,16 +268,26 @@ fn assert_full(stdout: &str, what: &str) {
     );
 }
 
-/// `park_at_limit.lu`'s ruled answer: the accept at the limit is `io`
-/// naming EMFILE (#751), the park is the budget's `timeout` (the set
-/// was made before `main`, so the park asks for nothing), and again
-/// once the descriptors are back. `accept_errno` is what the machine
-/// leaves in `os_error()` after the refused accept.
+/// `park_at_limit.lu`'s ruled answer: the park is the budget's
+/// `timeout` (the set was made before `main`, so the park asks for
+/// nothing), and again once the descriptors are back. The accept on an
+/// empty queue at the limit is the HOST's: linux refuses the take
+/// before it would block (`io`, EMFILE beside it — #751), macOS answers
+/// would-block, so the take waits out its budget (`timeout`, 0) —
+/// measured on the runner (`build + test (macos-latest)`, run
+/// 38655502222, the native tier; checked and lupin held to it).
+/// `accept_errno` is what the machine leaves in `os_error()` after
+/// linux's refused accept.
 fn assert_park(stdout: &str, accept_errno: i32, what: &str) {
     assert_full(stdout, what);
+    let accept = if cfg!(target_os = "linux") {
+        format!("row=io errno={accept_errno}")
+    } else {
+        "row=timeout errno=0".to_string()
+    };
     assert_eq!(
         line(stdout, "accept", what),
-        format!("row=io errno={accept_errno}"),
+        accept,
         "{what}: the accept at the limit"
     );
     assert_eq!(
