@@ -11,8 +11,9 @@
 //!
 //! Lines: `full` (how many opens the host took, and the number of its
 //! refusal: EMFILE, 24 on linux and macOS); `accept` (an accept on the
-//! listener at the limit, which needs a descriptor for the connection
-//! and is refused before any park); `park` (the row the first park
+//! listener at the limit with nothing queued: linux refuses the take
+//! before it would block, EMFILE; macOS answers would-block, so the take
+//! waits out its budget); `park` (the row the first park
 //! answered); `after` (the same once the descriptors are back). Each
 //! with `os_error()` after the call (`[os.fs.error]`, the net family
 //! since s239).
