@@ -503,6 +503,51 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`fs_set_owner_fd`",
             "hosted runtime",
         ),
+        // s241 (#739, #740, #741, #762): the group and all sends, the move
+        // into a group, the host's last number, its real-time range and a
+        // signal's words — each a runtime symbol named for its builtin.
+        (
+            "os_signal_send_group",
+            "",
+            "os_signal_send_group(2, 0) else |e| {\n        return 0\n    }\n    1",
+            "`os_signal_send_group`",
+            "hosted runtime",
+        ),
+        (
+            "os_signal_send_all",
+            "",
+            "os_signal_send_all(3) else |e| {\n        return 0\n    }\n    1",
+            "`os_signal_send_all`",
+            "hosted runtime",
+        ),
+        (
+            "os_set_pgid",
+            "",
+            "os_set_pgid(-1) else |e| {\n        return 0\n    }\n    1",
+            "`os_set_pgid`",
+            "hosted runtime",
+        ),
+        (
+            "os_signal_last",
+            "",
+            "let n = os_signal_last() else |e| {\n        return 0\n    }\n    n",
+            "`os_signal_last`",
+            "hosted runtime",
+        ),
+        (
+            "os_signal_realtime",
+            "",
+            "let r = os_signal_realtime() else |e| {\n        return 0\n    }\n    r.0",
+            "`os_signal_realtime`",
+            "hosted runtime",
+        ),
+        (
+            "os_signal_text",
+            "",
+            "let t = os_signal_text(2) else |e| {\n        return 0\n    }\n    t.len",
+            "`os_signal_text`",
+            "hosted runtime",
+        ),
         (
             "float",
             "",

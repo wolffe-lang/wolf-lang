@@ -1496,6 +1496,11 @@ mod builtin_cap_tests {
             ("fs_set_owner", Cap::Fs),
             ("fs_set_owner_fd", Cap::Fs),
             ("os_set_ids", Cap::Exec),
+            // s241 (ruling #79 R6): the group and all sends and the move
+            // into a group charge `exec`, with `os_signal_send`.
+            ("os_signal_send_group", Cap::Exec),
+            ("os_signal_send_all", Cap::Exec),
+            ("os_set_pgid", Cap::Exec),
         ] {
             assert_eq!(builtin_cap(name), Some(cap), "{name}");
         }
