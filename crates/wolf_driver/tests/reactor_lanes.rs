@@ -19,11 +19,13 @@
 //! `taskset -c 0-3` (wolf-lang#570) — the checked machine under
 //! `conform-run --checked` and lupin under `conform-run`.
 //!
-//! lupin 0.1.52 (the pairing) predates the mirror: its net family does
-//! not set `os_error()` (#751's lupin half) and it does not resolve
-//! `os_signal_wait_fd` (s234's R6, refused by name). Its answers are
-//! pinned by version and release commit as pre-mirror (s180's design),
-//! never widened.
+//! lupin 0.1.52 and 0.1.53 (0.2.30's pairing) predate the mirror: their
+//! net family does not set `os_error()` (#751's lupin half). Their
+//! answers are pinned by version and release commit as pre-mirror
+//! (s180's design), never widened. lupin refuses `os_signal_wait_fd` BY
+//! NAME on every version — ruling #73's R6 (it admits no `unsafe` and
+//! std has no `poll`) — so `unsupported` is its ruled answer there, not
+//! a pre-mirror one.
 
 #![cfg(unix)]
 
@@ -43,10 +45,12 @@ fn wolf() -> &'static str {
 /// a table the program then fills itself.
 const LIMIT: u64 = 32;
 
-/// The lupin releases that predate the mirror, each with the commit its
-/// release archive reports (0.1.52's archive, digest f5194b74…, reports
-/// `025428b`, measured on kasumi).
-const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[("0.1.52", Some("025428b"))];
+/// The lupin releases that predate #751's mirror, each with the commit
+/// its release archive reports, measured on kasumi: 0.1.52 (digest
+/// f5194b74…) reports `025428b`, 0.1.53 (digest 5db55332…) `7896edd`;
+/// both leave `os_error()` at 0 after the refused accept.
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] =
+    &[("0.1.52", Some("025428b")), ("0.1.53", Some("7896edd"))];
 
 fn fixture(name: &str) -> PathBuf {
     let p = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -400,16 +404,13 @@ fn a_signal_wait_at_the_descriptor_limit_is_io() {
     assert_wait(&c.stdout, "checked");
     println!("checked: {}", c.stdout.replace('\n', " | "));
     if let Some(l) = lupin(&entry, &dir, LIMIT) {
-        if pre_mirror(&l) {
-            assert_eq!(
-                l.verdict, "unsupported",
-                "lupin {} (pre-mirror): {l:?}",
-                l.version
-            );
-        } else {
-            assert_eq!(l.verdict, "exit(0)", "lupin: {l:?}");
-            assert_wait(&l.stdout, &format!("lupin {}", l.version));
-        }
+        // Ruling #73 R6: lupin refuses the call by name, on every
+        // version — its ruled answer, not a pre-mirror one.
+        assert_eq!(
+            l.verdict, "unsupported",
+            "lupin {} refuses os_signal_wait_fd by name (#73 R6): {l:?}",
+            l.version
+        );
         println!("lupin {} ({}): {}", l.version, l.commit, l.verdict);
     }
 }
