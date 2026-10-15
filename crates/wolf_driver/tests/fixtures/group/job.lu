@@ -11,8 +11,9 @@
 //! group send — is gone (`not_found`), which it would not be after a
 //! send to the leader alone (s240's witness; and this lane's planted
 //! break). The group is then gone too. A group whose only member has ended
-//! and is not yet reaped answers as the host does (`ok` on linux,
-//! `denied` on macOS), and `not_found` once reaped. A host number `-N`
+//! and is not yet reaped answers as the host does, asked by the member's
+//! parent (this program) and by another process (a shell's `kill -0 -G`);
+//! `not_found` once reaped. A host number `-N`
 //! reaches a group and one process, and ends each by `-N`; one past the
 //! host's last number is `invalid`. Red at 0.2.30: none of the calls
 //! existed (a compile error).
@@ -138,7 +139,17 @@ fn main() -> !int {
         zr = group(zg, 0)
         i = i + 1
     }
-    print("a group whose one member ended, not reaped: {zr}")
+    print("a group whose one member ended, not reaped, asked by its parent: {zr}")
+    // The same question from another process (a shell this program
+    // starts, which is not the member's parent): `kill -0 -G`.
+    let (r3, w3) = os_pipe()?
+    let k = os_spawn_fds("sh", ["-c", "kill -0 -{zg} 2>/dev/null; echo $?"], [1, w3])?
+    fs_close(w3)?
+    let ksaid = fs_read(r3, 16)?
+    fs_close(r3)?
+    let _ks = os_wait_status(k)?
+    let other = if ksaid.trim() == "0" { "ok" } else { "refused" }
+    print("the same group asked by another process: {other}")
     let zs = os_wait_status(z)?
     print("reaped ({zs}), then: {group(zg, 0)}")
 

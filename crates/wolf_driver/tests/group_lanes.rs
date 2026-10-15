@@ -441,12 +441,14 @@ fn the_hosts_table_and_its_words() {
 }
 
 /// `job.lu`'s output, the one host-dependent row named: a group whose
-/// one member has ended unreaped is `ok` on linux and `denied` on macOS
-/// (s240 §A; ruling #79 R3).
+/// one member has ended unreaped is `ok` to its parent on both hosts
+/// (macOS measured by this lane's first CI run, 38791729485), and to
+/// another process `ok` on linux and refused on macOS (`EPERM`, s240 §A,
+/// whose sender was not the members' parent; ruling #79 R3).
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn job_want() -> String {
-    let zombie = if cfg!(target_os = "macos") {
-        "denied"
+    let other = if cfg!(target_os = "macos") {
+        "refused"
     } else {
         "ok"
     };
@@ -458,7 +460,8 @@ the leader ended by: -15\n\
 the job's own sleeps, which this program never signalled: not_found not_found\n\
 the group, once its members are gone: not_found\n\
 TERMINATE again: not_found\n\
-a group whose one member ended, not reaped: {zombie}\n\
+a group whose one member ended, not reaped, asked by its parent: ok\n\
+the same group asked by another process: {other}\n\
 reaped (0), then: not_found\n\
 a host number to a group: ok\n\
 it ended by that number: true\n\
