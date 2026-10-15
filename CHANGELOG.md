@@ -58,6 +58,82 @@ lines had run; a client could end lobo 0.1.2 and 0.1.3 that way
 - **Downstream**: lobo's workaround (one parked read at start, ws64) is
   no longer needed from this release; it costs nothing to keep.
 
+### The checked machine answers shifts on plain integers and home-module methods (s237, #736, #745; ruling #77)
+
+Two ordinary shapes had no record on the reference machine: `x << n` on
+a plain integer ("this operator in checked execution") and `m.keys()`,
+a method that resolves to the receiver's home module ("home-module
+method calls in checked execution"). The second kept pelt off the
+checked machine entirely.
+
+- **A shift on a plain integer is arithmetic on its value**
+  (`[type.int.shift]`, ruled by the maintainer 2026-10-14, ruling #77,
+  option A; the alternatives weighed are a note in the clause). `x << n` is `x * 2^n` and
+  traps `overflow` when that leaves the type; `x >> n` is the floor of
+  `x / 2^n`; a negative count traps. A count at or past the width is no
+  case of its own (`255 >> 8` at `u8` is 0, `0 << 8` is 0, `1 << 8`
+  traps). `wrapping[T]` keeps the masked, bit-dropping shift it has
+  always had, and the clause now says so.
+- **This changes compiled programs. Read it before you bump.** The spec
+  had no clause for a shift, and the machines did not agree: measured
+  on 250 programs (ten types by twenty-five edges), native and release
+  at 0.2.29 computed `wrapping[T]`'s answer on plain types and parted
+  from lupin 0.1.52 on 155. `255 << 1` at `u8` printed 254, `1 << 8`
+  printed 1, `255 >> 8` printed 255, `1 << 63` at `int` printed `MIN`,
+  `8 >> -1` printed 0; lupin trapped or answered the value each time.
+  All four machines agree on the 250 now. A program that shifts a set
+  bit out of a plain integer, or shifts by the width or more, or by a
+  negative count, traps `overflow` where it wrapped (or, for `>>` past
+  the width, answers 0 or -1).
+- **Upgrading from 0.2.29 or 0.2.30, read this.**
+  1. A shift on a plain integer now traps `overflow` where it used to
+     wrap: a set bit shifted out by `<<` (`1 << 63` on `int`
+     included), a `<<` of a non-zero value by the width or more, and
+     a negative count either way. A `>>` by the width or more now
+     answers 0 (-1 for a negative value) instead of the masked shift.
+  2. Code that wants the old bits says so with `wrapping[T]`
+     (`(x as wrapping[u64] << n as wrapping[u64]) as u64` with `x`,
+     `n: u64`; both operands of a shift have one type), where the
+     count masks to the width and the bits that leave are dropped, as
+     before.
+  3. Measured downstream before the ruling, the same programs built by
+     this compiler and by 0.2.29's trunk (s237's census): wolf-std
+     (100 shift sites, all `wrapping`), lobo (95, all `wrapping`),
+     boreutils (7, one plain), pelt (13, eleven plain) and pax (288,
+     all plain) gave no new trap, no changed output and no changed
+     exit status in their own suites (std-test and doc-examples; pelt's
+     difftest and sessions; boreutils' 6,252 differential cases with
+     killtest and roottest in containers; pax's core, net, TCP and UDP
+     suites booted under QEMU). pax's variable-count shifts — signal
+     bits, bitmap bits, retransmit backoff — are where a count of 0 or
+     one past the width would now trap instead of misbehaving quietly.
+  4. The release tier's code changes beyond the shifts themselves,
+     through inlining (a checked shift is larger); behaviour does not.
+- **The constant evaluator computes what the run time does.** It
+  faulted on every count at or past the width (E0706) while the
+  compiled `let` computed an answer; `const Z: u8 = 255 >> 8` is 0 now,
+  and a `wrapping[T]` count masks at comptime as at run time. `const
+  K: u8 = 200 << 1` stays E0706.
+- **An ICE fixed on the way:** `x >> n` at `wrapping[u8]`, `[u16]` or
+  `[u32]` with both operands known and a masked count of 0 folded to a
+  constant the verifier refused ("lowered WIR failed verification",
+  `iconst.i8 255`), on native and release.
+- **A home-module method call runs on the checked machine** (#745): it
+  is the free call with the receiver first (`[type.method.resolve]`),
+  through the one path a free call takes. pelt at `00e15ca` then runs:
+  of its 960 differential cases fed on standard input, none meets a
+  refusal that names a construct. 930 run to an exit status, 7 end at
+  the machine's step or call-depth budget, 22 leave no record (in 18
+  the shell's `exec` replaces the machine's own process; in 4 the
+  shell dies of a signal it sent itself) and 1 passed 120 s.
+- **Measured:** `shift_lanes` (the rule written a second time; ten
+  types, every edge, checked, native, release and lupin 0.1.52) and
+  `home_method_lanes` (method and free spellings over a fixture std
+  tree); eight corpus rows. `shr_range_lanes` row 2, which pinned the
+  shift refusal since s214, asserts the answer on four machines.
+  lupin 0.1.52 traps on a count of 128 or more where the rule answers
+  (pinned by version) and does not range-check a constant initialiser.
+
 ## 0.2.30 — 2026-10-15
 
 **wolf 0.2.29's native and release tiers panic on seven constructs in a
@@ -460,82 +536,6 @@ lupin always answered these programs; no program that compiled before
 compiles differently. Measured: the seven rows of
 `corpus/typecheck/straight_line_*` panic on the 0.2.29 archive and run
 on every machine now (`straight_line_lanes`).
-### The checked machine answers shifts on plain integers and home-module methods (s237, #736, #745; ruling #77)
-
-Two ordinary shapes had no record on the reference machine: `x << n` on
-a plain integer ("this operator in checked execution") and `m.keys()`,
-a method that resolves to the receiver's home module ("home-module
-method calls in checked execution"). The second kept pelt off the
-checked machine entirely.
-
-- **A shift on a plain integer is arithmetic on its value**
-  (`[type.int.shift]`, ruled by the maintainer 2026-10-14, ruling #77,
-  option A; the alternatives weighed are a note in the clause). `x << n` is `x * 2^n` and
-  traps `overflow` when that leaves the type; `x >> n` is the floor of
-  `x / 2^n`; a negative count traps. A count at or past the width is no
-  case of its own (`255 >> 8` at `u8` is 0, `0 << 8` is 0, `1 << 8`
-  traps). `wrapping[T]` keeps the masked, bit-dropping shift it has
-  always had, and the clause now says so.
-- **This changes compiled programs. Read it before you bump.** The spec
-  had no clause for a shift, and the machines did not agree: measured
-  on 250 programs (ten types by twenty-five edges), native and release
-  at 0.2.29 computed `wrapping[T]`'s answer on plain types and parted
-  from lupin 0.1.52 on 155. `255 << 1` at `u8` printed 254, `1 << 8`
-  printed 1, `255 >> 8` printed 255, `1 << 63` at `int` printed `MIN`,
-  `8 >> -1` printed 0; lupin trapped or answered the value each time.
-  All four machines agree on the 250 now. A program that shifts a set
-  bit out of a plain integer, or shifts by the width or more, or by a
-  negative count, traps `overflow` where it wrapped (or, for `>>` past
-  the width, answers 0 or -1).
-- **Upgrading from 0.2.29 or 0.2.30, read this.**
-  1. A shift on a plain integer now traps `overflow` where it used to
-     wrap: a set bit shifted out by `<<` (`1 << 63` on `int`
-     included), a `<<` of a non-zero value by the width or more, and
-     a negative count either way. A `>>` by the width or more now
-     answers 0 (-1 for a negative value) instead of the masked shift.
-  2. Code that wants the old bits says so with `wrapping[T]`
-     (`(x as wrapping[u64] << n as wrapping[u64]) as u64` with `x`,
-     `n: u64`; both operands of a shift have one type), where the
-     count masks to the width and the bits that leave are dropped, as
-     before.
-  3. Measured downstream before the ruling, the same programs built by
-     this compiler and by 0.2.29's trunk (s237's census): wolf-std
-     (100 shift sites, all `wrapping`), lobo (95, all `wrapping`),
-     boreutils (7, one plain), pelt (13, eleven plain) and pax (288,
-     all plain) gave no new trap, no changed output and no changed
-     exit status in their own suites (std-test and doc-examples; pelt's
-     difftest and sessions; boreutils' 6,252 differential cases with
-     killtest and roottest in containers; pax's core, net, TCP and UDP
-     suites booted under QEMU). pax's variable-count shifts — signal
-     bits, bitmap bits, retransmit backoff — are where a count of 0 or
-     one past the width would now trap instead of misbehaving quietly.
-  4. The release tier's code changes beyond the shifts themselves,
-     through inlining (a checked shift is larger); behaviour does not.
-- **The constant evaluator computes what the run time does.** It
-  faulted on every count at or past the width (E0706) while the
-  compiled `let` computed an answer; `const Z: u8 = 255 >> 8` is 0 now,
-  and a `wrapping[T]` count masks at comptime as at run time. `const
-  K: u8 = 200 << 1` stays E0706.
-- **An ICE fixed on the way:** `x >> n` at `wrapping[u8]`, `[u16]` or
-  `[u32]` with both operands known and a masked count of 0 folded to a
-  constant the verifier refused ("lowered WIR failed verification",
-  `iconst.i8 255`), on native and release.
-- **A home-module method call runs on the checked machine** (#745): it
-  is the free call with the receiver first (`[type.method.resolve]`),
-  through the one path a free call takes. pelt at `00e15ca` then runs:
-  of its 960 differential cases fed on standard input, none meets a
-  refusal that names a construct. 930 run to an exit status, 7 end at
-  the machine's step or call-depth budget, 22 leave no record (in 18
-  the shell's `exec` replaces the machine's own process; in 4 the
-  shell dies of a signal it sent itself) and 1 passed 120 s.
-- **Measured:** `shift_lanes` (the rule written a second time; ten
-  types, every edge, checked, native, release and lupin 0.1.52) and
-  `home_method_lanes` (method and free spellings over a fixture std
-  tree); eight corpus rows. `shr_range_lanes` row 2, which pinned the
-  shift refusal since s214, asserts the answer on four machines.
-  lupin 0.1.52 traps on a count of 128 or more where the rule answers
-  (pinned by version) and does not range-check a constant initialiser.
-
 ## 0.2.29 — 2026-10-12
 
 THE TWENTY-NINTH. Three compiler lanes land, one with a lupin half, and
