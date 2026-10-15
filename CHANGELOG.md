@@ -15,6 +15,49 @@ kasumi under `taskset -c 0-3` with four busy loops the old gate was red 8
 of 30 times and the fixed one 0 of 30, interleaved run by run. No runtime
 or compiler change; no assertion, timeout or retry changed.
 
+### A process out of descriptors no longer ends at its first park; a failed net call names its reason (s239, #750, #751; rulings owed)
+
+The native runtime made its readiness set (epoll and an `eventfd` on
+linux, a `kqueue` on macOS) at the first call that parked, and asserted
+that the host gave it. A program that had used its descriptors up
+before it first waited for a socket ended there, SIGABRT, after its own
+lines had run; a client could end lobo 0.1.2 and 0.1.3 that way
+(lobo#90). `os_signal_wait_fd` did the same with its wake pipe.
+
+- **The set is made before `main`** (`[os.net.reactor]`), in a program
+  that names a call which can park — `net_accept`, the reads, the
+  writes. The entry shim calls `__wolf_rt_reactor_start` first
+  (RT_SYMBOLS 215). A program that names none makes no set and no
+  reactor thread, as before. Its cost where it is made: two descriptors
+  and one thread from the start (linux), about 13 µs of a 450 µs start
+  natively and 23 µs released.
+- **When the host refuses it, the program does not start**: one line on
+  stderr, `wolf: the runtime could not make its readiness set (Too many
+  open files (os error 24)); the program did not start`, exit status
+  **71** (`EX_OSERR`). Not a trap: no `wolf-trap:` line, not 134.
+- **No park asserts on a host resource.** A wait that finds no set
+  answers its call's `io` and asks again next time; `os_signal_wait_fd`
+  answers `io` when it cannot have its descriptor and wake pipe; the
+  checked machine's descriptor wait no longer remembers a refused pipe
+  (it answered `io` forever after one refusal).
+- **The net family sets `os_error()`** (`[os.net.error]`, #751), as the
+  fs family does: a refused accept at the limit is `io` with 24
+  (EMFILE) or 23 (ENFILE) beside it; a fired budget and an orderly close
+  read 0. Native, release and the checked machine; lupin's half is
+  wolf-interp's.
+- **Measured** (kasumi, a 32-descriptor limit on the program alone): the
+  witness (`fixtures/reactor/park_at_limit.lu`) ends with SIGABRT at
+  `reactor.rs:139` on 0.2.29 and trunk, native and release, and answers
+  the budget's `timeout` now; the checked machine and lupin 0.1.52
+  always answered. lobo 0.1.4 with its workaround removed ends at the
+  8th of 30 slow downloads at trunk and serves on now, 12 of 12
+  downloads whole. Made at the first park instead, with a refusal `io`
+  there (the other design measured), the same lobo stays up but cuts 2
+  of 12 downloads it had begun: the rulings owed (R1–R6,
+  `[os.net.reactor.note]`) recommend the start.
+- **Downstream**: lobo's workaround (one parked read at start, ws64) is
+  no longer needed from this release; it costs nothing to keep.
+
 ## 0.2.30 — 2026-10-15
 
 **wolf 0.2.29's native and release tiers panic on seven constructs in a
@@ -417,49 +460,6 @@ lupin always answered these programs; no program that compiled before
 compiles differently. Measured: the seven rows of
 `corpus/typecheck/straight_line_*` panic on the 0.2.29 archive and run
 on every machine now (`straight_line_lanes`).
-
-### A process out of descriptors no longer ends at its first park; a failed net call names its reason (s239, #750, #751; rulings owed)
-
-The native runtime made its readiness set (epoll and an `eventfd` on
-linux, a `kqueue` on macOS) at the first call that parked, and asserted
-that the host gave it. A program that had used its descriptors up
-before it first waited for a socket ended there, SIGABRT, after its own
-lines had run; a client could end lobo 0.1.2 and 0.1.3 that way
-(lobo#90). `os_signal_wait_fd` did the same with its wake pipe.
-
-- **The set is made before `main`** (`[os.net.reactor]`), in a program
-  that names a call which can park — `net_accept`, the reads, the
-  writes. The entry shim calls `__wolf_rt_reactor_start` first
-  (RT_SYMBOLS 215). A program that names none makes no set and no
-  reactor thread, as before. Its cost where it is made: two descriptors
-  and one thread from the start (linux), about 13 µs of a 450 µs start
-  natively and 23 µs released.
-- **When the host refuses it, the program does not start**: one line on
-  stderr, `wolf: the runtime could not make its readiness set (Too many
-  open files (os error 24)); the program did not start`, exit status
-  **71** (`EX_OSERR`). Not a trap: no `wolf-trap:` line, not 134.
-- **No park asserts on a host resource.** A wait that finds no set
-  answers its call's `io` and asks again next time; `os_signal_wait_fd`
-  answers `io` when it cannot have its descriptor and wake pipe; the
-  checked machine's descriptor wait no longer remembers a refused pipe
-  (it answered `io` forever after one refusal).
-- **The net family sets `os_error()`** (`[os.net.error]`, #751), as the
-  fs family does: a refused accept at the limit is `io` with 24
-  (EMFILE) or 23 (ENFILE) beside it; a fired budget and an orderly close
-  read 0. Native, release and the checked machine; lupin's half is
-  wolf-interp's.
-- **Measured** (kasumi, a 32-descriptor limit on the program alone): the
-  witness (`fixtures/reactor/park_at_limit.lu`) ends with SIGABRT at
-  `reactor.rs:139` on 0.2.29 and trunk, native and release, and answers
-  the budget's `timeout` now; the checked machine and lupin 0.1.52
-  always answered. lobo 0.1.4 with its workaround removed ends at the
-  8th of 30 slow downloads at trunk and serves on now, 12 of 12
-  downloads whole. Made at the first park instead, with a refusal `io`
-  there (the other design measured), the same lobo stays up but cuts 2
-  of 12 downloads it had begun: the rulings owed (R1–R6,
-  `[os.net.reactor.note]`) recommend the start.
-- **Downstream**: lobo's workaround (one parked read at start, ws64) is
-  no longer needed from this release; it costs nothing to keep.
 
 ## 0.2.29 — 2026-10-12
 
