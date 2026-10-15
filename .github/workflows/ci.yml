@@ -161,6 +161,15 @@ jobs:
       # job, never a quiet skip.
       WOLF_IDS_REQUIRE_CONTAINER: "1"
       WOLF_IDS_ENGINE: docker
+      # s241 ([os.signal.send.group], [os.signal.send.all], [os.term.group]):
+      # the witnesses that signal a group, signal every process and move a
+      # process between groups run inside a throwaway `--network none
+      # --init` container with a pid namespace of its own
+      # (group_lanes.rs) — never on the runner itself; `send_all` reaches
+      # every process it may. The same image, so a missing engine here is
+      # a broken job, never a quiet skip.
+      WOLF_GROUP_REQUIRE_CONTAINER: "1"
+      WOLF_GROUP_ENGINE: docker
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -176,6 +185,7 @@ jobs:
           docker pull docker.io/library/ubuntu:24.04
           docker image inspect docker.io/library/ubuntu:24.04 --format '{{.Id}} {{index .RepoDigests 0}}'
           docker run --rm --network none docker.io/library/ubuntu:24.04 sh -c 'id; nproc'
+          docker run --rm --network none --init docker.io/library/ubuntu:24.04 sh -c 'echo pid $$; command -v setsid setpriv taskset'
       - name: install native toolchain (gdb for debug-check, lld for the link
           probe, clang for the s41 release tier — system LLVM is a NAMED
           toolchain requirement per D33, never a build script; strace is the
