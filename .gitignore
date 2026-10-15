@@ -13,3 +13,6 @@ corpus/.lu-cache/
 .claude/
 # The pinned lupin release archive the linux CI job unpacks (r10/#253).
 .lupin/
+# The pinned wolf-std checkout `cargo xtask dist` stages from (tl22: kept out
+# of target/, whose cache cleaner tore it apart).
+.dist-std/
