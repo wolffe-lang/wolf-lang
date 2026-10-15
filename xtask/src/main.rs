@@ -6163,9 +6163,8 @@ mod std_pin_tests {
             !root.starts_with("target"),
             "{STD_CHECKOUT_ROOT} is under target/, where rust-cache's post step cleans"
         );
-        let ignore =
-            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../.gitignore"))
-                .expect(".gitignore");
+        let ignore = std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../.gitignore"))
+            .expect(".gitignore");
         let want = format!("{STD_CHECKOUT_ROOT}/");
         assert!(
             ignore.lines().any(|l| l.trim() == want),
