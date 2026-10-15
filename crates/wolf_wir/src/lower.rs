@@ -10517,6 +10517,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_egid"
                 | "os_groups"
                 | "os_set_ids"
+                // s241 (#739, #740, #741, #762): the group and all sends,
+                // this process into a group, the host's last number, its
+                // real-time range and a signal's words.
+                | "os_signal_send_group"
+                | "os_signal_send_all"
+                | "os_set_pgid"
+                | "os_signal_last"
+                | "os_signal_realtime"
+                | "os_signal_text"
         ) {
             return self.lower_job_builtin(&callee_text, d, e);
         }
@@ -15089,10 +15098,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
         let want = match name {
             "os_pgid" | "os_signal_ignored" | "os_pid" | "os_ppid" => 0,
+            "os_signal_last" | "os_signal_realtime" => 0,
             "os_uid" | "os_euid" | "os_gid" | "os_egid" | "os_groups" => 0,
             "os_set_ids" => 3,
             "os_spawn_job" => 6,
             "os_term_set_foreground" | "os_term_set_mode" | "os_signal_send" => 2,
+            "os_signal_send_group" => 2,
             "os_signal_wait_fd" => 2,
             _ => 1,
         };
@@ -15139,11 +15150,45 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_egid" => ("__wolf_rt_os_egid", PROC),
             "os_groups" => ("__wolf_rt_os_groups", PROC),
             "os_set_ids" => ("__wolf_rt_os_set_ids", PROC),
+            "os_signal_send_group" => ("__wolf_rt_os_signal_send_group", PROC),
+            "os_signal_send_all" => ("__wolf_rt_os_signal_send_all", PROC),
+            "os_set_pgid" => ("__wolf_rt_os_set_pgid", PROC),
+            "os_signal_last" => ("__wolf_rt_os_signal_last", PROC),
+            "os_signal_realtime" => ("__wolf_rt_os_signal_realtime", PROC),
+            "os_signal_text" => ("__wolf_rt_os_signal_text", PROC),
             _ => return Err(refuse("this job builtin", e.span)),
         };
+        // s241 (`[os.signal.text]`): `env_get`'s str shape — rc 0 and the
+        // text's (pointer, length) through a 16-byte slot, else the code.
+        if name == "os_signal_text" {
+            let (region, slot) = self.rt_slot(16);
+            let rc = self
+                .rt_call_slot(sym, &[argv[0]], slot, region, Some(types::I64))
+                .expect("rc");
+            let z = self.b.iconst(types::I64, 0);
+            let hit = self
+                .b
+                .ins(
+                    Opcode::Icmp,
+                    &[rc, z],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
+                .one();
+            let out = self.eu_join(
+                eu,
+                hit,
+                |zz| Ok(Some(zz.load_str_slot(slot, region, e.span)?)),
+                |zz| Ok(zz.code_tag_chain(rc, pairs, "io")),
+            )?;
+            return Ok(Flow::Val(Some(out)));
+        }
         // s234 (`[os.term.size]`): `os_pipe`'s pair shape — rc 0 and the
         // (rows, columns) pair through a 16-byte slot, else the code.
-        if name == "os_term_size" {
+        //
+        // s241 (`[os.signal.host]`): `os_signal_realtime` is the same pair
+        // shape with no argument.
+        if name == "os_term_size" || name == "os_signal_realtime" {
             let Some(sema) = self.expr_sema_ty(e.span) else {
                 return Err(refuse("a window size without a recorded type", e.span));
             };
@@ -15158,7 +15203,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             };
             let (region, slot) = self.rt_slot(16);
             let rc = self
-                .rt_call_slot(sym, &[argv[0]], slot, region, Some(types::I64))
+                .rt_call_slot(sym, &argv, slot, region, Some(types::I64))
                 .expect("rc");
             let z = self.b.iconst(types::I64, 0);
             let hit = self
@@ -15215,6 +15260,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_term_set_mode"
                 | "os_signal_send"
                 | "os_set_ids"
+                | "os_signal_send_group"
+                | "os_signal_send_all"
+                | "os_set_pgid"
         );
         if name == "os_wait_status" {
             let (region, slot) = self.rt_slot(8);

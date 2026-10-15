@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 215] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 221] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -366,6 +366,16 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 215] = [
     ("__wolf_rt_os_signal_ignored", 0, true),
     ("__wolf_rt_os_signal_send", 2, true),
     ("__wolf_rt_os_signal_number", 1, true),
+    // s241 (#739, #740, #741, #762): the group and all sends, this
+    // process into a group, the host's last number, its real-time range
+    // (a 16-byte out slot) and a signal's words (a str through a 16-byte
+    // out slot).
+    ("__wolf_rt_os_signal_send_group", 2, true),
+    ("__wolf_rt_os_signal_send_all", 1, true),
+    ("__wolf_rt_os_set_pgid", 1, true),
+    ("__wolf_rt_os_signal_last", 0, true),
+    ("__wolf_rt_os_signal_realtime", 1, true),
+    ("__wolf_rt_os_signal_text", 2, true),
     ("__wolf_rt_os_pid", 0, true),
     ("__wolf_rt_os_ppid", 0, true),
     // s234 (#719): the window's size (handle in, the pair through a
