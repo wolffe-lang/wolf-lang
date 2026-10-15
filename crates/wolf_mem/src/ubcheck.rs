@@ -8947,15 +8947,88 @@ impl<'t> Machine<'t> {
             // s232 (#141, `[os.signal.send]`): the host's own `kill`, in
             // the runtime's order — the shape (`invalid`), the host, then
             // the target.
+            //
+            // s241 (#740, `[os.signal.host]`): the meaning may be `-N`, the
+            // host's signal N (1 <= N <= `os_signal_last()`).
             "os_signal_send" => {
                 let (Some(pid), Some(m)) = (int_arg(0), int_arg(1)) else {
                     return self.refuse("this os call shape", span);
                 };
-                if pid <= 0 || pid > i64::from(i32::MAX) || (m != 0 && !sig_one_sendable(m)) {
+                if pid <= 0 || pid > i64::from(i32::MAX) {
                     return Ok(tag("invalid"));
                 }
-                match checked_sig::send(pid, m) {
+                let sig = match checked_sig::host_signal(m, true) {
+                    Ok(sig) => sig,
+                    Err(t) => return Ok(tag(t)),
+                };
+                match checked_sig::kill(pid, sig) {
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    Err(t) => Ok(tag(t)),
+                }
+            }
+            // s241 (#739, `[os.signal.send.group]`, `[os.signal.send.all]`):
+            // the host's own `kill(-pgid)` and `kill(-1)`, in the runtime's
+            // order. Group 1 and below are `invalid` before the host
+            // (`kill`'s -1 is every process, not group 1). A `send_all` from
+            // the checked machine reaches what the `wolf` process may
+            // signal: it is the process the program runs as.
+            "os_signal_send_group" | "os_signal_send_all" => {
+                let all = name == "os_signal_send_all";
+                let (target, m) = if all {
+                    let Some(m) = int_arg(0) else {
+                        return self.refuse("this os call shape", span);
+                    };
+                    (-1, m)
+                } else {
+                    let (Some(g), Some(m)) = (int_arg(0), int_arg(1)) else {
+                        return self.refuse("this os call shape", span);
+                    };
+                    if g <= 1 || g > i64::from(i32::MAX) {
+                        return Ok(tag("invalid"));
+                    }
+                    (-g, m)
+                };
+                let sig = match checked_sig::host_signal(m, true) {
+                    Ok(sig) => sig,
+                    Err(t) => return Ok(tag(t)),
+                };
+                match checked_sig::kill(target, sig) {
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    Err(t) => Ok(tag(t)),
+                }
+            }
+            // s241 (#762, `[os.term.group]`): the `wolf` process into a
+            // group — it is the process the program runs as (`os_pid`).
+            "os_set_pgid" => {
+                let Some(g) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                match checked_term::set_pgid(g) {
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    Err(t) => Ok(tag(t)),
+                }
+            }
+            // s241 (#740, `[os.signal.host]`): the host's table.
+            "os_signal_last" => match checked_sig::last() {
+                Some(n) => Ok(Flow::Val(Value::Int(n))),
+                None => Ok(tag("unsupported")),
+            },
+            "os_signal_realtime" => match checked_sig::realtime() {
+                Some((lo, hi)) => Ok(Flow::Val(Value::Struct {
+                    fields: vec![
+                        ("0".to_string(), Value::Int(lo)),
+                        ("1".to_string(), Value::Int(hi)),
+                    ],
+                })),
+                None => Ok(tag("unsupported")),
+            },
+            // s241 (#741, `[os.signal.text]`): the C library's words.
+            "os_signal_text" => {
+                let Some(m) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                match checked_sig::text(m) {
+                    Ok(t) => Ok(Flow::Val(self.mint_str(t, span)?)),
                     Err(t) => Ok(tag(t)),
                 }
             }
@@ -10577,6 +10650,11 @@ impl<'t> Machine<'t> {
             | "os_term_size" | "os_term_chars" | "os_signal_wait_fd"
             // s236 (#633, #742): who the process runs as, and the drop.
             | "os_uid" | "os_euid" | "os_gid" | "os_egid" | "os_groups" | "os_set_ids"
+            // s241 (#739, #740, #741, #762): the group and all sends, the
+            // move into a group, the host's last number, its real-time
+            // range and a signal's words.
+            | "os_signal_send_group" | "os_signal_send_all" | "os_set_pgid" | "os_signal_last"
+            | "os_signal_realtime" | "os_signal_text"
             | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
             | "str_from_utf8"
@@ -13522,20 +13600,88 @@ mod checked_sig {
         let _ = (cmd, ignored);
     }
 
-    /// s232 (#141): `kill(pid, sig)`, `sig` 0 for the meaning 0 (the
-    /// caller has checked the shape); windows `unsupported`.
-    pub(super) fn send(pid: i64, m: i64) -> Result<(), &'static str> {
+    /// s241 (#740, `[os.signal.host]`): the host's last signal number —
+    /// `wolf_rt::signal`'s twin: linux the C library's `SIGRTMAX`, macOS
+    /// 31, any other host not measured (`None`, answered `unsupported`).
+    pub(super) fn last() -> Option<i64> {
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        {
+            Some(i64::from(libc::SIGRTMAX()))
+        }
+        #[cfg(target_os = "macos")]
+        {
+            Some(31)
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "android", target_os = "macos")))]
+        {
+            None
+        }
+    }
+
+    /// s241: the C library's real-time range, (0, 0) on macOS.
+    pub(super) fn realtime() -> Option<(i64, i64)> {
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        {
+            Some((i64::from(libc::SIGRTMIN()), i64::from(libc::SIGRTMAX())))
+        }
+        #[cfg(target_os = "macos")]
+        {
+            Some((0, 0))
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "android", target_os = "macos")))]
+        {
+            None
+        }
+    }
+
+    /// s241 (`[os.signal.send]`, `[os.signal.host]`): the host signal a
+    /// sending call's (or the text's) meaning names, as the runtime
+    /// decides it — 0 (when `zero` allows), one bit of the table, or `-N`
+    /// with `1 <= N <=` [`last`]; anything else `invalid`. Windows, which
+    /// has no numbers, takes any `-N` past the shape and answers the
+    /// call `unsupported`.
+    pub(super) fn host_signal(m: i64, zero: bool) -> Result<i32, &'static str> {
+        if m == 0 {
+            return if zero { Ok(0) } else { Err("invalid") };
+        }
         #[cfg(unix)]
         {
-            let Ok(p) = libc::pid_t::try_from(pid) else {
+            if m < 0 {
+                let Some(last) = last() else {
+                    return Err("invalid");
+                };
+                return match m.checked_neg() {
+                    Some(n) if (1..=last).contains(&n) => {
+                        Ok(i32::try_from(n).expect("a signal number"))
+                    }
+                    _ => Err("invalid"),
+                };
+            }
+            if !super::sig_one_sendable(m) {
+                return Err("invalid");
+            }
+            sig_of(m).ok_or("invalid")
+        }
+        #[cfg(not(unix))]
+        {
+            if m < 0 || super::sig_one_sendable(m) {
+                Err("unsupported")
+            } else {
+                Err("invalid")
+            }
+        }
+    }
+
+    /// s232 (#141), s241: `kill(target, sig)` — a pid above 0, `-pgid`
+    /// for a group, -1 for every process (the caller has checked the
+    /// shape and resolved the signal); the host's answer as a row.
+    pub(super) fn kill(target: i64, sig: i32) -> Result<(), &'static str> {
+        #[cfg(unix)]
+        {
+            let Ok(p) = libc::pid_t::try_from(target) else {
                 return Err("invalid");
             };
-            let sig = if m == 0 {
-                0
-            } else {
-                sig_of(m).ok_or("invalid")?
-            };
-            // SAFETY: kill with a positive pid and a validated signal.
+            // SAFETY: kill with a target and a signal the caller checked.
             if unsafe { libc::kill(p, sig) } == 0 {
                 return Ok(());
             }
@@ -13548,7 +13694,48 @@ mod checked_sig {
         }
         #[cfg(not(unix))]
         {
-            let _ = (pid, m);
+            let _ = (target, sig);
+            Err("unsupported")
+        }
+    }
+
+    /// s241 (#741, `[os.signal.text]`): the C library's `strsignal`
+    /// words, read with the C locale set on this thread (`uselocale`),
+    /// serialized and copied out — the runtime's twin.
+    pub(super) fn text(m: i64) -> Result<String, &'static str> {
+        let sig = host_signal(m, false)?;
+        #[cfg(unix)]
+        {
+            static READ: std::sync::Mutex<()> = std::sync::Mutex::new(());
+            let _one = READ
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            // SAFETY: a locale made from "C", on this thread only for the
+            // read and put back; the text copied before the lock goes.
+            unsafe {
+                let c_locale =
+                    libc::newlocale(libc::LC_ALL_MASK, c"C".as_ptr(), std::ptr::null_mut());
+                let before = if c_locale.is_null() {
+                    std::ptr::null_mut()
+                } else {
+                    libc::uselocale(c_locale)
+                };
+                let p = libc::strsignal(sig);
+                let out = if p.is_null() {
+                    String::new()
+                } else {
+                    std::ffi::CStr::from_ptr(p).to_string_lossy().into_owned()
+                };
+                if !c_locale.is_null() {
+                    libc::uselocale(before);
+                    libc::freelocale(c_locale);
+                }
+                Ok(out)
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = sig;
             Err("unsupported")
         }
     }
@@ -13932,6 +14119,33 @@ mod checked_term {
     #[cfg(not(unix))]
     pub(super) fn pgid() -> Result<i64, &'static str> {
         Err("unsupported")
+    }
+
+    /// s241 (#762, `[os.term.group]`): `setpgid(0, pgid)` on the `wolf`
+    /// process, the runtime's rows: below 0 or past a pid's width
+    /// `invalid` before the host; `EPERM` `denied`, `EINVAL` `invalid`,
+    /// anything else `io`; windows `unsupported` after the shape.
+    pub(super) fn set_pgid(pgid: i64) -> Result<(), &'static str> {
+        if pgid < 0 || pgid > i64::from(i32::MAX) {
+            return Err("invalid");
+        }
+        #[cfg(unix)]
+        {
+            let g = libc::pid_t::try_from(pgid).map_err(|_| "invalid")?;
+            // SAFETY: setpgid on this process with a checked group id.
+            if unsafe { libc::setpgid(0, g) } == 0 {
+                return Ok(());
+            }
+            Err(match std::io::Error::last_os_error().raw_os_error() {
+                Some(libc::EPERM) => "denied",
+                Some(libc::EINVAL) => "invalid",
+                _ => "io",
+            })
+        }
+        #[cfg(not(unix))]
+        {
+            Err("unsupported")
+        }
     }
 
     #[cfg(unix)]
