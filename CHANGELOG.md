@@ -131,8 +131,8 @@ checked machine entirely.
   `home_method_lanes` (method and free spellings over a fixture std
   tree); eight corpus rows. `shr_range_lanes` row 2, which pinned the
   shift refusal since s214, asserts the answer on four machines.
-  lupin 0.1.52 traps on a count of 128 or more where the rule answers
-  (pinned by version) and does not range-check a constant initialiser.
+  lupin 0.1.52 and 0.1.53 trap on a count of 128 or more where the
+  rule answers (pinned by version, measured on both archives) and does not range-check a constant initialiser.
 
 ## 0.2.30 — 2026-10-15
 

@@ -470,7 +470,7 @@ the checked machine where lupin trapped.) Witnesses:
   traps `overflow`, or (for `>>` past the width) prints 0 or -1 where
   it printed the masked shift's answer. The spelling that keeps the old
   bits is `wrapping[T]`.
-  **Not answered by lupin 0.1.52:** a count of 128 or more traps there
+  **Not answered by lupin 0.1.52 or 0.1.53:** a count of 128 or more traps there
   where (3) answers (its integers are 128 bits wide), and a constant
   initialiser is not checked against its type (`const K: u8 = 200 << 1`
   prints `400`). `shift_lanes` pins the first by version.
