@@ -4924,6 +4924,9 @@ fn prune_dist(dir: &Path, host: &str) {
 /// Where `cargo xtask dist` reads the standard library's pin (ruling #29,
 /// wolf-lang#415).
 const STD_PIN_FILE: &str = "crates/wolf_driver/STD-PIN";
+/// Where [`std_checkout`] keeps its fetched wolf-std checkouts, one per
+/// pin. Outside `target/` (tl22): see [`std_checkout`].
+const STD_CHECKOUT_ROOT: &str = ".dist-std";
 
 /// The repository the pinned commit is fetched from.
 const STD_REPO_URL: &str = "https://github.com/wolffe-lang/wolf-std.git";
@@ -4982,9 +4985,17 @@ fn git_head_of(dir: &Path) -> Option<String> {
 /// A wolf-std checkout at exactly `pin`. `WOLF_DIST_STD_SRC` names one a
 /// packager fetched itself (a Homebrew resource, an AUR source), and is
 /// refused unless its HEAD is the pin. Otherwise the pin is fetched by
-/// sha, shallow, into `target/dist-std/<pin>/` and reused while its HEAD
-/// is still the pin; any other directory there is a previous pin's and is
+/// sha, shallow, into `.dist-std/<pin>/` and reused while its HEAD is
+/// still the pin; any other directory there is a previous pin's and is
 /// pruned by name.
+///
+/// Not under `target/` (tl22): `Swatinem/rust-cache`'s post step walks
+/// all of `target/` as cargo's, deletes every file outside a profile
+/// directory, takes the checkout's `tests/` for a profile's and opens
+/// `tests/target` and `tests/trybuild` unawaited, so on every cache miss
+/// it printed two ENOENT error annotations on a green job and saved a
+/// mutilated checkout no build could reuse. `cargo clean` leaves this
+/// directory; it is a shallow fetch of one commit, safe to delete.
 fn std_checkout(pin: &str) -> Result<PathBuf, String> {
     if let Some(src) = std::env::var_os("WOLF_DIST_STD_SRC").filter(|v| !v.is_empty()) {
         let src = PathBuf::from(src);
@@ -5001,7 +5012,7 @@ fn std_checkout(pin: &str) -> Result<PathBuf, String> {
             )),
         };
     }
-    let cache_root = Path::new("target/dist-std");
+    let cache_root = Path::new(STD_CHECKOUT_ROOT);
     if let Ok(entries) = std::fs::read_dir(cache_root) {
         for e in entries.flatten() {
             let name = e.file_name().to_string_lossy().into_owned();
@@ -6124,7 +6135,7 @@ mod version_stamp_tests {
 
 #[cfg(test)]
 mod std_pin_tests {
-    use super::{STD_PIN_FILE, copy_tree, parse_std_pin};
+    use super::{STD_CHECKOUT_ROOT, STD_PIN_FILE, copy_tree, parse_std_pin};
 
     const SHA: &str = "87ba16208da8ea642dd463fa89ff3a1ec80ceba1";
 
@@ -6139,6 +6150,27 @@ mod std_pin_tests {
         .expect(STD_PIN_FILE);
         let pin = parse_std_pin(&text).expect("STD-PIN parses");
         assert_eq!(pin.len(), 40);
+    }
+
+    /// tl22: the fetched std lives outside `target/`, whose cache cleaner
+    /// (`Swatinem/rust-cache`) walks every directory there as cargo's,
+    /// and the checkout is never committed.
+    #[test]
+    fn the_std_checkout_is_outside_target_and_ignored() {
+        let root = std::path::Path::new(STD_CHECKOUT_ROOT);
+        assert!(root.is_relative(), "{STD_CHECKOUT_ROOT}");
+        assert!(
+            !root.starts_with("target"),
+            "{STD_CHECKOUT_ROOT} is under target/, where rust-cache's post step cleans"
+        );
+        let ignore =
+            std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/../.gitignore"))
+                .expect(".gitignore");
+        let want = format!("{STD_CHECKOUT_ROOT}/");
+        assert!(
+            ignore.lines().any(|l| l.trim() == want),
+            ".gitignore does not name {want}"
+        );
     }
 
     /// One key line, comments ignored; every other shape is refused.
