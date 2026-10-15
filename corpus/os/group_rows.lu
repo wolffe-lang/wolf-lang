@@ -1,0 +1,91 @@
+//! check: run(exit=0, stdout="group_one=invalid\ngroup_zero=invalid\ngroup_negative=invalid\ngroup_wide=invalid\ngroup_two_bits=invalid\ngroup_past_table=invalid\nall_two_bits=invalid\nall_past_table=invalid\nset_pgid_negative=invalid\nset_pgid_wide=invalid\ntext_zero=invalid\ntext_two_bits=invalid\ntext_past_table=invalid\nfar_host_number: true")
+//! phase: run
+//! conforms: os.signal.send.group, os.signal.send.all, os.term.group, os.signal.host, os.signal.text, err.union
+//!
+//! s241 (wolf-lang#739, #740, #741, #762; ruling #79) — the rows of the
+//! group send, the move into a group and a signal's words that are
+//! decided by their SHAPE, before any host is asked: one truth on every
+//! host, and nothing is sent or moved. A group is above 1 and fits a
+//! process id (group 1 is `invalid`: `kill`'s -1 is every process, not
+//! group 1); a meaning is 0, one bit of the table, or a host number -N;
+//! a group to move into is 0 or above and fits a process id; a text is
+//! for one meaning or -N, never 0. A host number far past any host's last
+//! signal is `invalid` where the host has numbers and `unsupported` on
+//! windows, which has none. The live witnesses — sends to a group the
+//! test started, `send_all` and the move, in a throwaway container — are
+//! `crates/wolf_driver/tests/group_lanes.rs`.
+
+fn row(e: str) -> str {
+    e
+}
+
+fn group(g: int, m: int) -> str {
+    os_signal_send_group(g, m) else |e| {
+        return row(match e {
+            unsupported => "unsupported",
+            invalid => "invalid",
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        })
+    }
+    "ok"
+}
+
+fn all(m: int) -> str {
+    os_signal_send_all(m) else |e| {
+        return row(match e {
+            unsupported => "unsupported",
+            invalid => "invalid",
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        })
+    }
+    "ok"
+}
+
+fn set_pgid(g: int) -> str {
+    os_set_pgid(g) else |e| {
+        return row(match e {
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        })
+    }
+    "ok"
+}
+
+fn text(m: int) -> str {
+    let t = os_signal_text(m) else |e| {
+        return row(match e {
+            invalid => "invalid",
+            unsupported => "unsupported",
+        })
+    }
+    "words: {t.len > 0}"
+}
+
+fn main() -> !int {
+    print("group_one={group(1, 0)}")
+    print("group_zero={group(0, 0)}")
+    print("group_negative={group(-5, 2)}")
+    print("group_wide={group(1099511627776, 0)}")
+    print("group_two_bits={group(2, 3)}")
+    print("group_past_table={group(2, 268435456)}")
+    print("all_two_bits={all(3)}")
+    print("all_past_table={all(268435456)}")
+    print("set_pgid_negative={set_pgid(-1)}")
+    print("set_pgid_wide={set_pgid(1099511627776)}")
+    print("text_zero={text(0)}")
+    print("text_two_bits={text(3)}")
+    print("text_past_table={text(268435456)}")
+    let far: int = -1099511627776
+    let a = group(2, far)
+    let b = all(far)
+    let c = text(far)
+    let same = a == b && b == c
+    print("far_host_number: {same && (a == "invalid" || a == "unsupported")}")
+    0
+}
