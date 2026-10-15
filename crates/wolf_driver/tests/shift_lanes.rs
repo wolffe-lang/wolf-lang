@@ -28,10 +28,10 @@
 //! disagreed with lupin 0.1.52 on 155 of the table's 250 cells. lupin
 //! 0.1.52 already computed the rule's answer on all 250.
 //!
-//! One corner lupin 0.1.52 does not answer: a count of 128 or more
+//! One corner lupin 0.1.52 and 0.1.53 do not answer: a count of 128 or more
 //! leaves the 128-bit integer it computes in, and it traps where the
 //! rule says 0 or -1 (`255 >> 200` at `u8`). That row is pinned by
-//! version, as s180 designed: 0.1.52 exactly is asserted to trap, and
+//! version, as s180 designed: 0.1.52 and 0.1.53 are asserted to trap, and
 //! any other version is held to the rule.
 
 mod lane_exit;
@@ -394,9 +394,10 @@ fn the_rule_is_the_clauses() {
 
 /// lupin releases measured to trap on a count of 128 or more where the
 /// rule answers (the count leaves its 128-bit integer), by version.
-/// Measured on the 0.1.52 archive (sha256 f5194b74…) on kasumi. Any
+/// Measured on kasumi on the 0.1.52 archive (sha256 f5194b74…) and on
+/// the 0.1.53 archive (sha256 5db55332…, wolf 0.2.30's pairing). Any
 /// other version is held to the rule.
-const LUPIN_TRAPS_PAST_127: &[&str] = &["0.1.52"];
+const LUPIN_TRAPS_PAST_127: &[&str] = &["0.1.52", "0.1.53"];
 
 /// A count past 127: the rule has no ceiling (`255 >> 200` at `u8` is
 /// 0, `0 << 200` is 0, `-5 >> 130` at `i16` is -1).
