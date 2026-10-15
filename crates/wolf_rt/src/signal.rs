@@ -1173,7 +1173,9 @@ mod sys {
     pub fn text(m: i64) -> Result<String, i64> {
         static READ: std::sync::Mutex<()> = std::sync::Mutex::new(());
         let sig = host_signal(m, false)?;
-        let _one = READ.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _one = READ
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         // SAFETY: a locale made from the name "C" (or none), installed
         // on this thread only for the read and put back; the text is
         // copied out before the lock is let go.

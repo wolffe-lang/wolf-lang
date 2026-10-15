@@ -407,10 +407,17 @@ fn the_hosts_table_and_its_words() {
         let mut lines = got.lines();
         let first = lines.next().unwrap_or("");
         assert_eq!(format!("{first}\n"), head, "{what} (s241)");
-        let numbered: Vec<&str> = got.lines().skip(1).filter(|l| !l.starts_with("each ")).collect();
+        let numbered: Vec<&str> = got
+            .lines()
+            .skip(1)
+            .filter(|l| !l.starts_with("each "))
+            .collect();
         if let Some(t) = &table {
             let want: Vec<&str> = t.lines().collect();
-            assert_eq!(numbered, want, "{what}: the words, against s240's table (s241)");
+            assert_eq!(
+                numbered, want,
+                "{what}: the words, against s240's table (s241)"
+            );
         }
         assert!(
             got.ends_with("each meaning's words are its number's: true\n"),
