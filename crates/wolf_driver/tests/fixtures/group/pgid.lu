@@ -1,0 +1,97 @@
+//! member: false
+//! s241 (wolf-lang#762, #739; `[os.term.group]`, `[os.signal.send.group]`)
+//! — this process into a group, and `kill 0`. RUN ONLY INSIDE A THROWAWAY
+//! CONTAINER (linux) OR ON CI'S THROWAWAY RUNNER (macOS): it moves
+//! itself between groups and signals its own group, and sends to its own
+//! group only once it leads it (never the group it was started in, which
+//! is its runner's).
+//!
+//! It leads a group of its own (`os_set_pgid(0)`: its group is its pid),
+//! joins a job's group and leads its own again; a group nobody leads is
+//! `denied`. Then GNU `timeout`'s shape: leading its own group, with a
+//! child started into it and `TERMINATE` listened for, it sends
+//! `TERMINATE` to `os_pgid()` — `kill 0` — and both hear it: the caller
+//! takes the meaning and the child ends by -15. Last it goes back to the
+//! group it was started in (dash at exit). With `S241_SESSION` set it is
+//! run as a session leader (`setsid`), which may not move: `denied`.
+//! Red at 0.2.30: `os_set_pgid` did not exist (a compile error).
+
+fn tag(e: str) -> str {
+    e
+}
+
+fn setp(g: int) -> str {
+    os_set_pgid(g) else |e| {
+        return tag(match e {
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        })
+    }
+    "ok"
+}
+
+fn group(g: int, m: int) -> str {
+    os_signal_send_group(g, m) else |e| {
+        return tag(match e {
+            unsupported => "unsupported",
+            invalid => "invalid",
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        })
+    }
+    "ok"
+}
+
+fn masks() {
+    let text = fs_read_text("/proc/self/status") else |_| ""
+    for line in text.split("\n") {
+        if line.starts_with("SigBlk:") || line.starts_with("SigIgn:") {
+            eprint(line.replace("\t", " "))
+        }
+    }
+}
+
+fn main() -> !int {
+    let me = os_pid()
+    let p0 = os_pgid()?
+    masks()
+    let session = env_get("S241_SESSION") else |_| ""
+    if session != "" {
+        print("a session leader leads its group: {p0 == me}")
+        print("and may not move: {setp(0)}")
+        print("still: {os_pgid()? == p0}")
+        return 0
+    }
+    print("a negative group: {setp(-1)}")
+    print("lead a group of its own: {setp(0)}")
+    print("it leads: {os_pgid()? == me}")
+    let b = os_spawn_job("sleep", ["60"], List[int](), 0, -1, 0)?
+    let bg = os_proc_pid(b)?
+    print("join a job's group: {setp(bg)}")
+    print("it is in the job's group: {os_pgid()? == bg}")
+    print("lead its own again: {setp(0)}")
+    print("it leads again: {os_pgid()? == me}")
+    print("a group nobody leads: {setp(2147483646)}")
+    os_signal_send(bg, 2)?
+    let bs = os_wait_status(b)?
+    print("the job ended by: {bs}")
+
+    os_signal_listen(2)?
+    let c = os_spawn_job("sleep", ["60"], List[int](), -1, -1, 0)?
+    let own = os_pgid()?
+    if own != me {
+        print("refusing: this process does not lead its own group")
+        return 2
+    }
+    print("kill 0, as a send to os_pgid(): {group(own, 2)}")
+    let heard = os_signal_wait(2)?
+    print("the caller heard it: {heard == 2}")
+    let cs = os_wait_status(c)?
+    print("and its child ended by: {cs}")
+    print("back to the group it started in: {setp(p0)}")
+    print("it is there: {os_pgid()? == p0}")
+    0
+}

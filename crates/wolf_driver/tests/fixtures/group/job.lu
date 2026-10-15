@@ -1,0 +1,139 @@
+//! member: false
+//! s241 (wolf-lang#739, #740; `[os.signal.send.group]`, `[os.signal.host]`)
+//! — a signal to a process group. RUN ONLY INSIDE A THROWAWAY CONTAINER
+//! (linux) OR ON CI'S THROWAWAY RUNNER (macOS): it signals the groups it
+//! starts, and refuses to send anything to a group it did not start.
+//!
+//! A job — `sh` leading a group of its own, with two `sleep`s of its own
+//! that this program never names — is sent `TERMINATE` as a group: the
+//! leader ends by -15 and the group is then gone (`not_found`), which it
+//! would not be if the `sleep`s had lived (s240's witness: a send to the
+//! leader alone leaves them running). A group whose only member has ended
+//! and is not yet reaped answers as the host does (`ok` on linux,
+//! `denied` on macOS), and `not_found` once reaped. A host number `-N`
+//! reaches a group and one process, and ends each by `-N`; one past the
+//! host's last number is `invalid`. Red at 0.2.30: none of the calls
+//! existed (a compile error).
+
+fn tag(e: str) -> str {
+    e
+}
+
+fn group(g: int, m: int) -> str {
+    os_signal_send_group(g, m) else |e| {
+        return tag(match e {
+            unsupported => "unsupported",
+            invalid => "invalid",
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        })
+    }
+    "ok"
+}
+
+fn send1(pid: int, m: int) -> str {
+    os_signal_send(pid, m) else |e| {
+        return tag(match e {
+            unsupported => "unsupported",
+            invalid => "invalid",
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        })
+    }
+    "ok"
+}
+
+/// The signal mask and ignored set of this process, where the host lists
+/// them (linux), on standard error — read before any signal is sent, so
+/// no row is called red without them (after `os_pgid`, which lupin
+/// refuses by name before this read could be).
+fn masks() {
+    let text = fs_read_text("/proc/self/status") else |_| ""
+    for line in text.split("\n") {
+        if line.starts_with("SigBlk:") || line.starts_with("SigIgn:") {
+            eprint(line.replace("\t", " "))
+        }
+    }
+}
+
+/// `sh` leading a group of its own with two `sleep`s it started, once
+/// the shell has said they are started.
+fn job() -> !int {
+    let (r, w) = os_pipe()?
+    let h = os_spawn_job("sh", ["-c", "sleep 60 & sleep 60 & echo ready; wait"], [1, w], 0, -1, 0)?
+    fs_close(w)?
+    let said = fs_read(r, 64)?
+    fs_close(r)?
+    if said.trim() != "ready" {
+        print("the job said {said}")
+    }
+    h
+}
+
+/// Signal 0 to group `g` until the host says no process is in it, for
+/// up to five seconds; the last answer.
+fn gone(g: int) -> str {
+    var r = group(g, 0)
+    var i = 0
+    while r == "ok" && i < 500 {
+        time_sleep_ms(10)
+        r = group(g, 0)
+        i = i + 1
+    }
+    r
+}
+
+fn main() -> !int {
+    let h = job()?
+    let g = os_proc_pid(h)?
+    let mine = os_pgid()?
+    masks()
+    if g <= 1 || g == mine {
+        print("refusing: the job does not lead a group of its own")
+        return 2
+    }
+    print("a job of three, started")
+    print("signal 0 to the group: {group(g, 0)}")
+    print("TERMINATE to the group: {group(g, 2)}")
+    let st = os_wait_status(h)?
+    print("the leader ended by: {st}")
+    print("the group, once its members are gone: {gone(g)}")
+    print("TERMINATE again: {group(g, 2)}")
+
+    let (r, w) = os_pipe()?
+    let z = os_spawn_job("true", List[str](), [1, w], 0, -1, 0)?
+    fs_close(w)?
+    let _end = fs_read(r, 8) else |_| ""
+    fs_close(r)?
+    let zg = os_proc_pid(z)?
+    var zr = group(zg, 0)
+    var i = 0
+    while zr == "ok" && i < 100 {
+        time_sleep_ms(10)
+        zr = group(zg, 0)
+        i = i + 1
+    }
+    print("a group whose one member ended, not reaped: {zr}")
+    let zs = os_wait_status(z)?
+    print("reaped ({zs}), then: {group(zg, 0)}")
+
+    let (lo, hi) = os_signal_realtime()?
+    let n = if lo > 0 { lo } else { os_signal_number(512)? }
+    let c = os_spawn_job("sleep", ["60"], List[int](), 0, -1, 0)?
+    let cg = os_proc_pid(c)?
+    print("a host number to a group: {group(cg, -n)}")
+    let cs = os_wait_status(c)?
+    print("it ended by that number: {cs == -n}")
+    let m = if lo > 0 { hi } else { os_signal_number(8)? }
+    let d = os_spawn(["sleep", "60"])?
+    let dp = os_proc_pid(d)?
+    print("a host number to one process: {send1(dp, -m)}")
+    let ds = os_wait_status(d)?
+    print("it ended by that number: {ds == -m}")
+    let last = os_signal_last()?
+    print("one past the host's last, to a group: {group(cg, -(last + 1))}")
+    print("one past the host's last, to a process: {send1(dp, -(last + 1))}")
+    0
+}

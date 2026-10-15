@@ -1,0 +1,98 @@
+//! member: false
+//! s241 (wolf-lang#739; `[os.signal.send.all]`) — a signal to every
+//! process this one may signal (`kill -1`). RUN ONLY INSIDE A THROWAWAY
+//! CONTAINER with a pid namespace of its own: it signals everything it
+//! may, and refuses to start where its own process id is not a small
+//! one (a fresh namespace numbers from 1; a host does not).
+//!
+//! As the super-user it starts two jobs and a child (one job a shell with
+//! a `sleep` of its own), sends `TERMINATE` to everything, and each ends
+//! by -15; once the namespace holds nothing but this process and its
+//! init, linux answers `not_found` (it found no process to try). Run as
+//! user 1000 beside a process of the super-user's (`S241_ROOTPID`), only
+//! its own children end; the super-user's process lives, a signal 0 to
+//! it is `denied`, and a signal 0 to everything is `ok` (the host found a
+//! process, and may not signal it: s240's measured row). Both kept as the
+//! host answers them (ruling #79 R3). Red at
+//! 0.2.30: `os_signal_send_all` did not exist (a compile error).
+
+fn tag(e: str) -> str {
+    e
+}
+
+fn all(m: int) -> str {
+    os_signal_send_all(m) else |e| {
+        return tag(match e {
+            unsupported => "unsupported",
+            invalid => "invalid",
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        })
+    }
+    "ok"
+}
+
+fn send1(pid: int, m: int) -> str {
+    os_signal_send(pid, m) else |e| {
+        return tag(match e {
+            unsupported => "unsupported",
+            invalid => "invalid",
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        })
+    }
+    "ok"
+}
+
+fn masks() {
+    let text = fs_read_text("/proc/self/status") else |_| ""
+    for line in text.split("\n") {
+        if line.starts_with("SigBlk:") || line.starts_with("SigIgn:") {
+            eprint(line.replace("\t", " "))
+        }
+    }
+}
+
+fn main() -> !int {
+    if os_pid() > 64 {
+        print("refusing: process id {os_pid()} is not a fresh pid namespace's")
+        return 2
+    }
+    let rootpid = env_get("S241_ROOTPID") else |_| ""
+    let (r, w) = os_pipe()?
+    let a = os_spawn_job("sh", ["-c", "sleep 60 & echo ready; wait"], [1, w], 0, -1, 0)?
+    fs_close(w)?
+    let _said = fs_read(r, 64)?
+    fs_close(r)?
+    let b = os_spawn_job("sleep", ["60"], List[int](), 0, -1, 0)?
+    let c = os_spawn(["sleep", "60"])?
+    if rootpid == "" {
+        print("as the super-user: two jobs and a child, started")
+    } else {
+        print("as a user, beside the super-user's process: two jobs and a child, started")
+    }
+    print("TERMINATE to everything it may signal: {all(2)}")
+    masks()
+    let sa = os_wait_status(a)?
+    let sb = os_wait_status(b)?
+    let sc = os_wait_status(c)?
+    print("they ended by: {sa} {sb} {sc}")
+    if rootpid != "" {
+        let rp = rootpid.to_int() else 0
+        print("the super-user's process: {send1(rp, 0)}")
+    }
+    // As the super-user the namespace empties as its init reaps the job's
+    // orphaned `sleep`; ask until the host says nothing is left (up to
+    // five seconds). Beside the super-user's process it is never empty.
+    var left = all(0)
+    var i = 0
+    while rootpid == "" && left == "ok" && i < 500 {
+        time_sleep_ms(10)
+        left = all(0)
+        i = i + 1
+    }
+    print("signal 0 with nothing of its own left to reach: {left}")
+    0
+}

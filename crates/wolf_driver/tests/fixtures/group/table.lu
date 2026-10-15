@@ -1,0 +1,34 @@
+//! member: false
+//! s241 (wolf-lang#740, #741; `[os.signal.host]`, `[os.signal.text]`) —
+//! the host's signal table, read: its last number, the C library's
+//! real-time range, and the words for every host number 1..last and for
+//! each of the table's 28 meanings, which must be the words of that
+//! meaning's own number. Nothing is sent. The harness holds the numbered
+//! lines to s240's measured tables (glibc and macOS) and runs the program
+//! again with `LANG` and `LC_ALL` naming a German locale: the words are
+//! the C locale's either way. Red at 0.2.30: none of the three calls
+//! existed (a compile error).
+
+fn main() -> !int {
+    let last = os_signal_last()?
+    let (lo, hi) = os_signal_realtime()?
+    print("last={last} realtime={lo}..{hi}")
+    var n = 1
+    while n <= last {
+        let t = os_signal_text(-n)?
+        print("{n} {t}")
+        n = n + 1
+    }
+    var i = 0
+    var agree = true
+    while i < 28 {
+        let m = 1 << i
+        let num = os_signal_number(m)?
+        let by_meaning = os_signal_text(m)?
+        let by_number = os_signal_text(-num)?
+        agree = agree && by_meaning == by_number
+        i = i + 1
+    }
+    print("each meaning's words are its number's: {agree}")
+    0
+}
