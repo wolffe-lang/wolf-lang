@@ -787,6 +787,7 @@ os/env_roundtrip.lu: lowers
 os/env_unset.lu: lowers
 os/exec_rows.lu: lowers
 os/exit_code.lu: lowers
+os/group_rows.lu: lowers
 os/ids_read.lu: lowers
 os/ids_rows.lu: lowers
 os/job_rows.lu: lowers
