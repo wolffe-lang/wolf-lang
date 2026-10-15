@@ -455,6 +455,7 @@ fn job_want() -> String {
 signal 0 to the group: ok\n\
 TERMINATE to the group: ok\n\
 the leader ended by: -15\n\
+the job's own sleeps, which this program never signalled: not_found not_found\n\
 the group, once its members are gone: not_found\n\
 TERMINATE again: not_found\n\
 a group whose one member ended, not reaped: {zombie}\n\

@@ -6,9 +6,11 @@
 //!
 //! A job — `sh` leading a group of its own, with two `sleep`s of its own
 //! that this program never names — is sent `TERMINATE` as a group: the
-//! leader ends by -15 and the group is then gone (`not_found`), which it
-//! would not be if the `sleep`s had lived (s240's witness: a send to the
-//! leader alone leaves them running). A group whose only member has ended
+//! leader ends by -15, and each `sleep` — asked about by its own pid with
+//! a single-process signal 0, an observer that does not go through the
+//! group send — is gone (`not_found`), which it would not be after a
+//! send to the leader alone (s240's witness; and this lane's planted
+//! break). The group is then gone too. A group whose only member has ended
 //! and is not yet reaped answers as the host does (`ok` on linux,
 //! `denied` on macOS), and `not_found` once reaped. A host number `-N`
 //! reaches a group and one process, and ends each by `-N`; one past the
@@ -58,18 +60,18 @@ fn masks() {
     }
 }
 
-/// `sh` leading a group of its own with two `sleep`s it started, once
-/// the shell has said they are started.
-fn job() -> !int {
-    let (r, w) = os_pipe()?
-    let h = os_spawn_job("sh", ["-c", "sleep 60 & sleep 60 & echo ready; wait"], [1, w], 0, -1, 0)?
-    fs_close(w)?
-    let said = fs_read(r, 64)?
-    fs_close(r)?
-    if said.trim() != "ready" {
-        print("the job said {said}")
+/// Signal 0 to one process until the host says it is gone (ended and
+/// reaped), for up to five seconds; the last answer. A single-process
+/// send, so it observes the group send without depending on it.
+fn gone1(pid: int) -> str {
+    var r = send1(pid, 0)
+    var i = 0
+    while r == "ok" && i < 500 {
+        time_sleep_ms(10)
+        r = send1(pid, 0)
+        i = i + 1
     }
-    h
+    r
 }
 
 /// Signal 0 to group `g` until the host says no process is in it, for
@@ -86,7 +88,27 @@ fn gone(g: int) -> str {
 }
 
 fn main() -> !int {
-    let h = job()?
+    // `sh` leading a group of its own, with two `sleep`s it started and
+    // names (their pids, then `ready`).
+    let (r, w) = os_pipe()?
+    let h = os_spawn_job(
+        "sh",
+        ["-c", "sleep 60 & echo $!; sleep 60 & echo $!; echo ready; wait"],
+        [1, w],
+        0,
+        -1,
+        0,
+    )?
+    fs_close(w)?
+    var said = ""
+    while !said.contains("ready") {
+        let more = fs_read(r, 64)?
+        said = said + more
+    }
+    fs_close(r)?
+    let lines = said.split("\n")
+    let s1 = lines[0].trim().to_int() else 0
+    let s2 = lines[1].trim().to_int() else 0
     let g = os_proc_pid(h)?
     let mine = os_pgid()?
     masks()
@@ -99,6 +121,7 @@ fn main() -> !int {
     print("TERMINATE to the group: {group(g, 2)}")
     let st = os_wait_status(h)?
     print("the leader ended by: {st}")
+    print("the job's own sleeps, which this program never signalled: {gone1(s1)} {gone1(s2)}")
     print("the group, once its members are gone: {gone(g)}")
     print("TERMINATE again: {group(g, 2)}")
 
