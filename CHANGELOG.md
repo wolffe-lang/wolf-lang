@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+### `parked_tasks` no longer races itself (s238, #733)
+
+The gate failed in about one CI test job in five (22 jobs between
+2026-10-12 and 10-14, linux and macOS, trunk too; "the witness starts:
+NotFound", or dsymutil finding `waitwolf_native/w` gone). Two of its
+tests built the same witness into one directory, and each build began by
+deleting it, so one test removed the other's program while that one was
+linking or starting it. Each build now has a directory of its own, and
+`two_builds_of_the_witness_at_once_each_keep_their_own` holds that. On
+kasumi under `taskset -c 0-3` with four busy loops the old gate was red 8
+of 30 times and the fixed one 0 of 30, interleaved run by run. No runtime
+or compiler change; no assertion, timeout or retry changed.
+
 ## 0.2.30 — 2026-10-15
 
 **wolf 0.2.29's native and release tiers panic on seven constructs in a
