@@ -2,6 +2,58 @@
 
 ## Unreleased
 
+### A signal to a process group and to every process; this process into a group; host signal numbers and a signal's words (s241, #739, #740, #741, #762; ruling #79)
+
+`os_signal_send` reaches one process, so `kill 0`, `kill -1`, `kill --
+-PGID` and a shell's `kill %job` could not be written, and a job's own
+children (a script's `sleep`, a `make`'s compilers) outlived a signal to
+its leader. Six host builtins, each on the checked machine, native and
+release, as ruled (#79):
+
+- **`os_signal_send_group(pgid, meaning) -> () ! {denied, invalid, io,
+  not_found, unsupported}`** (`[os.signal.send.group]`) — `kill(-pgid)`:
+  every member of the group this process may signal. `pgid` must be
+  above **1** (`kill`'s -1 is every process, not group 1, so a group id
+  computed wrong can never become a broadcast). `kill 0` is
+  `os_signal_send_group(os_pgid()?, m)`.
+- **`os_signal_send_all(meaning) -> () ! {denied, invalid, io,
+  not_found, unsupported}`** (`[os.signal.send.all]`) — `kill(-1)`.
+- **`os_set_pgid(pgid) -> () ! {denied, invalid, io, unsupported}`**
+  (`[os.term.group]`) — the CALLING process into a group, 0 to lead one of
+  its own (what an interactive shell does at start and GNU `timeout`
+  before its command); a session leader, a group of another session or
+  none is `denied`.
+- **Host numbers `-N`** (`[os.signal.host]`): `os_signal_send`,
+  `os_signal_send_group`, `os_signal_send_all` and `os_signal_text` take
+  `-N` for the host's signal N, `1 <= N <= os_signal_last()` — the
+  real-time and host-only signals (linux `STKFLT`, `IO`, `PWR`, 32–64;
+  macOS `EMT`, `IO`, `INFO`) with no portability promise and **no new
+  meaning bit**. `-N` is `os_wait_status`'s spelling of "ended by N".
+  **`os_signal_last() -> int ! {unsupported}`** (64 linux, 31 macOS) and
+  **`os_signal_realtime() -> (int, int) ! {unsupported}`** ((34, 64)
+  under glibc, (35, 64) under musl, (0, 0) on macOS).
+- **`os_signal_text(meaning) -> str ! {invalid, unsupported}`**
+  (`[os.signal.text]`) — the C library's `strsignal` words, read in the C
+  locale whatever `LANG` says ("Killed" under glibc, "Killed: 9" on
+  macOS).
+
+The rows are the host's, kept rather than evened out (R3): a group some of
+whose members this process may signal is `ok` and reaches only those; a
+group whose members have all ended unreaped is `ok` on linux and `denied`
+on macOS; a linux `send_all` is `ok` when it finds only processes it may
+not signal and `not_found` when it finds none. The sends and `os_set_pgid`
+charge `exec`; `os_signal_last`, `os_signal_realtime` and
+`os_signal_text` are uncharged; all six are refused at comptime. Windows
+answers `unsupported` after the shape; lupin answers the shape rows and
+refuses each well-formed call by name (its half: wolf-interp `s241`).
+**Upgrade note:** `os_signal_send(pid, -N)` was `invalid` and is now a
+send of host signal N; a program that relied on a negative meaning being
+refused must check it. Host table 128 → 134 lines, prelude 135 → 141
+functions, RT_SYMBOLS 215 → 221, anchors 652 → 658. Witnesses
+(`group_lanes.rs`): the live sends and the move run inside a throwaway
+`--init` container on linux, `send_all` only there; on macOS on CI's
+runner, a program signalling only the groups it started.
+
 ### `parked_tasks` no longer races itself (s238, #733)
 
 The gate failed in about one CI test job in five (22 jobs between
