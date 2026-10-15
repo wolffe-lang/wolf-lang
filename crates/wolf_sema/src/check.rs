@@ -14202,6 +14202,36 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         ),
         // s232 (`[os.signal.number]`): the host's number for a meaning.
         "os_signal_number" => (vec![int_], rowed(table, int_, &["unsupported", "invalid"])),
+        // s241 (wolf-lang#739, `[os.signal.send.group]`,
+        // `[os.signal.send.all]`; ruling #79 R1): one meaning (or `-N`, a
+        // host number) to every member of a group (> 1), or to every
+        // process this one may signal — `os_signal_send`'s rows.
+        "os_signal_send_group" => (
+            vec![int_, int_],
+            rowed(
+                table,
+                unit,
+                &["unsupported", "invalid", "not_found", "denied", "io"],
+            ),
+        ),
+        "os_signal_send_all" => (
+            vec![int_],
+            rowed(
+                table,
+                unit,
+                &["unsupported", "invalid", "not_found", "denied", "io"],
+            ),
+        ),
+        // s241 (wolf-lang#740, `[os.signal.host]`; #79 R4): the host's last
+        // signal number and its C library's real-time range.
+        "os_signal_last" => (Vec::new(), rowed(table, int_, &["unsupported"])),
+        "os_signal_realtime" => {
+            let pair = table.intern(TyKind::Tuple(vec![int_, int_]));
+            (Vec::new(), rowed(table, pair, &["unsupported"]))
+        }
+        // s241 (wolf-lang#741, `[os.signal.text]`; #79 R5): the C library's
+        // words for a signal, in the C locale.
+        "os_signal_text" => (vec![int_], rowed(table, str_, &["unsupported", "invalid"])),
         // s219 (`[os.proc.job]`): `os_spawn_fds` plus the job-control
         // trio done in the child before exec — a process group (-1
         // stay, 0 lead, > 0 join), the terminal's foreground (a handle
@@ -14252,6 +14282,12 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // foreground group and its mode (canonical=1, echo=2, signals=4,
         // vmin in bits 8..15, vtime in 16..23). windows: `unsupported`.
         "os_pgid" => (Vec::new(), rowed(table, int_, &["unsupported"])),
+        // s241 (wolf-lang#762, `[os.term.group]`; #79 R2): the CALLING
+        // process into a group (0 leads a new one of its own).
+        "os_set_pgid" => (
+            vec![int_],
+            rowed(table, unit, &["denied", "invalid", "unsupported", "io"]),
+        ),
         "os_term_foreground" | "os_term_mode" => {
             (vec![int_], rowed(table, int_, &["unsupported", "io"]))
         }

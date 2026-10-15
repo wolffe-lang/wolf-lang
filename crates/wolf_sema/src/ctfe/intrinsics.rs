@@ -247,6 +247,13 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // `os_signal_wait`.
         "os_term_size" | "os_term_chars" => SandboxCategory::Io,
         "os_signal_wait_fd" => SandboxCategory::Exec,
+        // s241 (ruling #79 R6, #54's reading): a signal to a group or to
+        // every process is process control, `exec` with `os_signal_send`;
+        // moving this process into a group changes which group every later
+        // signal and terminal hand-over reaches, `exec` with `os_set_ids`.
+        // (`os_signal_last`, `os_signal_realtime` and `os_signal_text`
+        // read the host's table: `pure_builtin`.)
+        "os_signal_send_group" | "os_signal_send_all" | "os_set_pgid" => SandboxCategory::Exec,
         // The s40 time builtin tier: every clock read and sleep is the
         // one Clock category (X12 — two identical builds must not
         // observe different times).
@@ -287,6 +294,10 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
 /// a table like `os_error_text`'s, and reaches no ambient surface; it
 /// stays comptime-refused with the rest — a comptime number would be
 /// the COMPILING host's, not the target's.)
+/// (s241 adds `os_signal_last`, `os_signal_realtime` and
+/// `os_signal_text`, ruling #79 R6: the same table's last number, its
+/// real-time range and its words — no ambient surface, comptime-refused
+/// for the same reason.)
 pub fn pure_builtin(name: &str) -> bool {
     matches!(
         name,
@@ -302,6 +313,9 @@ pub fn pure_builtin(name: &str) -> bool {
             | "os_error"
             | "os_error_text"
             | "os_signal_number"
+            | "os_signal_last"
+            | "os_signal_realtime"
+            | "os_signal_text"
     )
 }
 

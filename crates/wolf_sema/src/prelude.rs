@@ -375,6 +375,18 @@ pub const PRELUDE: &[Ambient] = &[
     host("os_term_size"),
     host("os_term_chars"),
     host("os_signal_wait_fd"),
+    // s241 (wolf-lang#739, #740, #741, #762; ruling #79): a signal to a
+    // process group and to every process this one may signal, this
+    // process into a group, the host's last signal number and its
+    // real-time range, and a signal's words. The sends and the move are
+    // `exec`-tagged with `os_signal_send`; the three reads are PURE (no
+    // capability), `os_signal_number`'s shelf.
+    host("os_signal_send_group"),
+    host("os_signal_send_all"),
+    host("os_set_pgid"),
+    host("os_signal_last"),
+    host("os_signal_realtime"),
+    host("os_signal_text"),
     // the OS random source (s118, wolf-lang#143): `os_random(n)` mints
     // n bytes of OS-provided entropy as a `List[int]` — the ONLY
     // sanctioned source of cryptographic material ([os.random.sole]).

@@ -1823,6 +1823,14 @@ impl<'a> Engine<'a> {
                         "the byte scan at comptime (the engine models no \
                          `List` values; growing the D33 allowlist is a design \
                          decision, not a convenience)"
+                    } else if matches!(
+                        name.as_str(),
+                        "os_signal_last" | "os_signal_realtime" | "os_signal_text"
+                    ) {
+                        // s241: the running host's table, as the number.
+                        "the host's signal table at comptime (`os_signal_last`, \
+                         `os_signal_realtime`, `os_signal_text` read the running \
+                         host's C library, not the compiling one's)"
                     } else if name == "os_signal_number" {
                         // s232: the number is the host's, and the host
                         // that compiles is not the one that runs.
