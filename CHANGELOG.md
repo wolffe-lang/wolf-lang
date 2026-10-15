@@ -1,6 +1,226 @@
 # Changelog
 
-## Unreleased
+## 0.2.30 — 2026-10-15
+
+**wolf 0.2.29's native and release tiers panic on seven constructs in a
+straight-line function. This release fixes it (s755, #755); upgrade.**
+A function with no `if`, loop, call or index that declares a local,
+then uses one of these, then reads the local, made `wolf build`, `wolf
+run` and `conform-run --native`/`--release` panic ("use of a variable
+with no definition on some path", `wolf_wir/src/build.rs`) on 0.2.29:
+
+- `==`, `!=` and `<` (and `<=`, `>`, `>=`) on two `str`s;
+- a narrowing or sign-changing integer `as` (`x as i8`, `x as u64`, `n
+  as int` with `n: u64`);
+- `int as char`;
+- a signed `wrapping` `/` or `%` whose divisor is not a constant.
+
+The checked machine and lupin always answered these programs. The fix
+changes nothing in a program 0.2.29 already compiled (s233's new
+refusals, below, are a separate change); the seven rows of `corpus/typecheck/straight_line_*` panic on the 0.2.29 archive
+and run on every machine here (`straight_line_lanes`).
+
+THE THIRTIETH. Four compiler lanes land, two with a lupin half, and the
+pairing moves to lupin 0.1.53, which mirrors them: the crash fix above
+(s755); a function that may leave a proc running is held to the frame
+rule at every call (s233, #678, ruling #71); what a line editor asks of
+the terminal (s234, #719, ruling #73); who a process runs as, a file's
+owner, and the permanent drop to another user (s236, #633, #701, #742,
+ruling #78). CI runs in tiers (tl21). The bundled standard library
+moves to wolf-std `fd6bcdc`. 89 commits since 0.2.29 (s233 21, s234 29,
+s236 25, s755 8, tl21 6), then r35's release commits.
+
+### Read this before you bump the pin
+
+**The crash fix (s755)** is the reason for this release: any program
+built for native or release on 0.2.29 may hit it, and the fix changes
+nothing else a program can see.
+
+**Some programs that compiled on 0.2.29 are refused now (s233, E1010).**
+A function that spawns a proc whose arguments can name a parameter's
+bytes (a `str`, a fn value) or its caller's region must meet that proc
+on every path out — `p.join()`, an exit received from `p.monitor()`, or
+`p` handed to a function that does so (a kill is not a join). One that
+does not leaves the proc running, and every call to it that hands it
+bytes from a region block, a region value made in the frame or the
+proc's own region is E1010 — on 0.2.29, 17 of the 25 such shapes
+measured printed the bytes the next region reused on native and
+release. **The fix-it:** join the proc (or receive its
+exit) on every path before the function returns, or build the argument
+outside the region. Measured downstream at the memory check: 0 of 1,383
+records moved; lobo compiles unchanged.
+
+**The terminal mode has two more bits (s234, ruling #73 R4):** `FLOW` (8,
+`IXON`) and `EXTENDED` (16, `IEXTEN`). A mode read with `os_term_mode`
+and set back still round-trips. **A mode built by hand without bits 3
+and 4 now turns flow control and the host's extended input processing
+off**, where 0.2.29 left them as found; a program that changes only the
+bits it means to is unaffected. (0.2.29 answers a mode carrying bit 3 or
+4 with `invalid`.) **The bundled std's `std.term` keeps them:** at
+wolf-std `fd6bcdc` (sc61) its `Mode` gains `flow` and `extended`, `pack`
+and `unpack` carry bits 3 and 4, so `term.set_mode(tty, term.mode(tty)?)`
+round-trips exactly, and `term.raw` clears both, as `cfmakeraw(3)` does
+(so Ctrl-S, Ctrl-Q, Ctrl-V and Ctrl-O reach a raw-mode program; sc61's
+ruling R1 is owed, implemented as recommended). A `Mode` struct literal
+must now name the two fields; no package outside wolf-std builds one.
+
+**`os_set_ids` is whole or the process ends (s236, ruling #78 R4).** It
+returns with every id as asked or every id as it was: a refusal before
+any change returns its row; a refusal after one is put back, read back
+and then returned; if the put-back fails, the ids read back are not the
+ones asked for, or an old id can still be taken, the process writes one
+line to standard error and aborts. linux serves it; macOS and freebsd
+answer `unsupported`; windows answers `unsupported` for all eight new
+calls. Set a file's owner before its mode: the host clears set-user-id
+and set-group-id when an owner changes.
+
+**The bundled std is wolf-std `fd6bcdc`** (sc60: std at 0.2.29 / lupin
+0.1.52; then sc61: `std.term` keeps `flow` and `extended`), where 0.2.29
+shipped `d7c2968`. `std.signal` names all twenty-eight meanings (the
+twenty listenable and the eight send-only: `signal.interrupt()` …
+`signal.bad_syscall()`, `continued()` for `CONTINUE`), with
+`signal.send`, `signal.number`, `signal.ignored`, `env.pid` and
+`env.ppid` (ruling #74); `tests/signal/rows.lu`, 0.2.29's one red std
+row, moved its outside bit to 2^62. It has **no wrappers for this
+release's eleven builtins**: s236's eight (wolf-std#65 adds them and
+needs this release) and s234's three (`os_term_size`, `os_term_chars`,
+`os_signal_wait_fd`; owed at the next std pin). Call them directly;
+they are in the prelude.
+
+- **Measured under this release** (kasumi, linux x86-64, the
+  release-head archive with lupin 0.1.53 beside `wolf`, no `WOLF_STD`):
+  wolf-std `fd6bcdc`'s 460 tests on lupin, the checked machine and
+  native, and its 481 doc examples: **all green**. The release machine
+  equals native on 459 of the 460 with no std configured; the one
+  (`list/sort_by_tier.lu`) is refused by name on release, as at 0.2.29.
+  Against the published 0.2.29 on the same std, 0 records moved on any
+  tier.
+
+**New prelude names** (`cargo xtask prelude-diff v0.2.29 HEAD
+--markdown`, after `git fetch --tags`, run at the release head):
+
+> **New prelude names.** HEAD adds `fs_set_owner`, `fs_set_owner_fd`,
+> `os_uid`, `os_euid`, `os_gid`, `os_egid`, `os_groups`, `os_set_ids`,
+> `os_term_size`, `os_term_chars`, and `os_signal_wait_fd` (all eleven:
+> function, `[os.host.sigs]`). A module that declares a function, type
+> or binding named any of them now draws W0304 (it shadows the ambient
+> name), which `--deny-warnings` makes fatal: rename yours.
+
+A grep for the eleven in wolf-std `fd6bcdcb`, boreutils `9819e449`, lobo
+`570e2a95`, pelt `00e15ca4`, pax `c81d464f`, muzzle `44387d08`, the book
+`0a5fecc0` and wolf-lsp `097bbcf0` found **no declaration**; one use, in
+boreutils' `notes/bu21/census/missing/euid/p.lu` (a probe for the
+missing builtin, not built). s233 and s755 add no prelude name.
+
+**Capabilities.** `os_term_size` and `os_term_chars` are `io`
+(uncharged, as `os_term_mode`); `os_signal_wait_fd` and `os_set_ids`
+charge `exec`; the five id reads charge `env`; `fs_set_owner` and
+`fs_set_owner_fd` charge `fs`. A package that calls one without the
+declaration is E1504.
+
+**Every hosted binary's bytes may move:** `libwolf_rt.a` gains s234's and
+s236's shims (`RT_SYMBOLS` 214), and s755 changes how a straight-line
+function's locals are lowered. No handle number, error row or exit
+reason moves.
+
+**Known:** the `parked_tasks` witness build can fail on macOS
+(`dsymutil`, then a missing `waitwolf_native/w`; #733, open), and
+`region_copyout_lanes::a_loop_keeping_a_scalar_is_flat` can exceed its
+RSS bound under load (#652, open); both are test flakes, not program
+behaviour. The plain-integer shift rule (`[type.int.shift]`, ruling #77
+A; #748) is **not** in this release: it lands in 0.2.31.
+
+**For contributors: CI runs in tiers (tl21).** A pull request's push runs
+`tier pr` (linux lint, test and corpus, the fuzz smoke); trunk, the
+nightly (02:07 UTC), a dispatch and the `full-matrix` label run `tier
+full` (adding macOS, windows and the freebsd cross-check); a prose-only
+change runs `tier noop`. **A PR merges only with a green `tier full` at
+its head**: open it without the label, push, then add `full-matrix` last
+(CONTRIBUTING).
+
+**Rulings made, each as implemented:** #71 (s233, `[conc.proc.arg]`'s
+must-join extension, A); #73 (s234, R1–R6: `os_term_size`, `RESIZE`
+unchanged, `os_signal_wait_fd`, `os_term_chars` with `FLOW` and
+`EXTENDED`, the capabilities, lupin refuses the three by name); #78
+(s236, R1–R10 and the std spellings S1–S4: the four id reads and
+`os_groups`, `fs_set_owner`/`fs_set_owner_fd`, one `os_set_ids`, whole
+or fatal, the read-back and the take-back check, the capabilities,
+macOS, windows, the checked machine, lupin).
+
+**Corrections to 0.2.29's notes (#749).** Its head counted 56 commits
+since 0.2.28 (the three lanes); `git rev-list --count v0.2.28..v0.2.29`
+is **70**: the 56 lane commits and r34's 14 release commits. And its
+muzzle line called muzzle#3 open: it was merged on 2026-10-12, before
+0.2.29 was tagged (muzzle moved to 0.2.29 in mz2). `docs/platforms.md`
+still has no windows rows for 0.2.29's signal and pid builtins (#749
+stays open for that).
+
+**What each downstream does to bump.**
+
+- **wolf-std, first:** pins to 0.2.30 / 0.1.53; then **#65** (s236's
+  wrappers: `env.uid`, `euid`, `gid`, `egid`, `groups`, `fs.set_owner`,
+  `process.set_ids`; a draft that is red at the old pin by construction)
+  and wrappers for s234's `os_term_size`, `os_term_chars` and
+  `os_signal_wait_fd`. (`std.term`'s `flow` and `extended` are already in
+  this release's std, sc61.) A later compiler release bumps `STD-PIN` to
+  carry them.
+- **pelt:** the toolchain digests; the line editor adopts the terminal
+  surface (#719, W05): `os_term_size` and `RESIZE` instead of the
+  cursor-position report, `os_signal_wait_fd` instead of `VTIME 1` and a
+  poll, `os_term_chars` for the user's keys, `FLOW`/`EXTENDED` off in
+  raw mode. A hand-built mode there must now name bits 3 and 4 to keep
+  `IXON`/`IEXTEN`.
+- **boreutils:** the toolchain digests; the six identity tools of
+  boreutils#32 — `id`, `whoami`, `groups`, `logname`, `chown`, `chgrp` —
+  can be written on `os_uid` … `os_groups` and `fs_set_owner` (names for
+  ids come from the account files; `logname` also needs the login
+  name). Remove the staged `.wolf-bin/std` before unpacking its own std
+  pin.
+- **lobo:** the toolchain digests; the privilege drop after binding a
+  low port (lobo#52) can be written on `os_set_ids`; `os_euid() == 0`
+  replaces reading `/proc/self/status`.
+- **wolf-book, then the site:** the book pins 0.2.30 / 0.1.53; its
+  signals page is still missing (wolf-book#79: the pages and how a
+  reader spells a meaning, now that `std.signal` names all
+  twenty-eight). Then wolf-web pins the pair and the book, and deploys.
+- **pax:** the pin (it builds from the archive). The eleven new builtins
+  are hosted: the freestanding target refuses each by name.
+- **wolf-lsp and tree-sitter-wolf:** the pin, and the eleven names in
+  their vendored `prelude.json` (prelude functions do not paint as
+  builtins, ruling #77).
+- **muzzle:** the pin; it uses none of the new names.
+- **Homebrew and the AUR:** the std beside the binary moves to `fd6bcdc`
+  (this release's tap change).
+
+### The pairing: lupin 0.1.53
+
+`PAIRING` names **lupin 0.1.53 at pin `294d626`** (wolf-interp release
+413375414; the linux x86-64 archive's sha256 `5db55332…`). The spec
+pin is unchanged (this compiler's v0.2.24 tag). 0.1.53 carries the lupin
+halves of s234 and s236; s233 and s755 have none.
+
+- **Dropped 7 cases in three gates**, each green on the published 0.1.53
+  unpinned: `ids_lanes` 2 and `term_editor_lanes` 4 (s236's and s234's
+  mirrors; each pre-mirror list stays, empty, as the gate's machinery)
+  and `pairing` 1.
+- **Carried to 0.1.53, measured** (each answers as 0.1.52 on the pinned
+  rows; the issues are open): `checked_tasks_lanes`' two partings
+  (wolf-interp#227, #230), `region_kept_arg_lanes`' seven `List` and
+  `Map`-key rows and `chan_sent_arg_lanes`' channel-payload rows (both
+  wolf-interp#232), attr_closed_set's control (lupin still declines its
+  `comptime fn`); the racy counter's `trap(race)` check names 0.1.53 too;
+  `int_truth_lanes`' `PIN_INT_NOT` names 0.1.48 alone and is inert.
+- **Widened 0.** The plant (the 0.1.53 lists against the published
+  0.1.52) is red on exactly those 7 cases.
+- **The ritual** (#87, with #281's control against the 0.1.52 archive,
+  the same corpus and the same release `wolf`, 1141 files):
+  - checked: **moved 2 ledger counts**. Agreements 773 → 775,
+    unsupported 96 → 94; SOUNDNESS 0 and hard 19 unchanged.
+  - native: **moved 2**. Agreements 758 → 760, unsupported 97 → 95;
+    SOUNDNESS 14 and hard 33 unchanged.
+  - The same two files on both, `os/ids_rows.lu` (s236) and
+    `os/term_editor_rows.lu` (s234), from unsupported to agreement.
+    Nothing moved below the ledger.
 
 ### A function that may leave a proc running is asked at every call (s233, #678; ruling #71)
 
@@ -39,7 +259,7 @@ outlive the frame — and the proc may outlive it too.
   through a value the dataflow does not carry, a handle joined out of a
   list.
 
-### What a line editor asks of the terminal: its size, a wait a signal ends, its special characters (s234, #719; rulings owed)
+### What a line editor asks of the terminal: its size, a wait a signal ends, its special characters (s234, #719; ruling #73)
 
 pelt's line editor (sh11) worked around four gaps (#719, W05): it asked
 the terminal for its width with a cursor-position report before every
@@ -86,10 +306,9 @@ the program).
 - Capabilities: the size and the characters are `io` (uncharged, as
   `os_term_mode`); the wait is `exec` (as `os_signal_wait`). Host table
   120, RT_SYMBOLS 206.
-- **Rulings owed** (`[os.term.editor.note]` R1–R6), each implemented as
-  recommended.
+- **Ruled** (#73, `[os.term.editor.note]` R1–R6), each as implemented.
 
-### Who a process runs as, a file's owner, and the drop (s236, #633, #701, #742; rulings owed)
+### Who a process runs as, a file's owner, and the drop (s236, #633, #701, #742; ruling #78)
 
 A wolf program could not tell whether it ran as root (lobo read
 `/proc/self/status`, and on macOS the exit code of a spawned `id`),
@@ -134,8 +353,8 @@ machine resolved a name for any of it.
   the same order; the checked machine sets the real ids of the `wolf`
   process the program runs as, as `os_umask` sets the real mask. lupin
   serves the two owner calls and refuses the five reads and
-  `os_set_ids` by name (wolf-interp's s236; lupin 0.1.52 resolves none
-  of the eight and is pinned as pre-mirror in the gate).
+  `os_set_ids` by name (wolf-interp's s236, released in lupin 0.1.53;
+  0.1.52 resolved none of the eight).
 - **Capabilities.** The five reads charge `env`, the owner calls `fs`,
   `os_set_ids` `exec`.
 - **Witnessed** (`ids_lanes`, checked, native, release and lupin): the
@@ -154,8 +373,8 @@ machine resolved a name for any of it.
   `os_gid`, `os_egid`, `os_groups`, `os_set_ids`, `fs_set_owner` or
   `fs_set_owner_fd` now gets W0304; none of boreutils, pelt, lobo, pax,
   wolf-std or muzzle does.
-- **Rulings owed** (`[os.proc.ids.note]`, R1–R10, each implemented as
-  recommended): the spellings (`fs_set_owner`, where #701 and px38 say
+- **Ruled** (#78, `[os.proc.ids.note]` R1–R10 and the std spellings
+  S1–S4, each as implemented): the spellings (`fs_set_owner`, where #701 and px38 say
   `fs_chown`), one call or three for setting ids, what a failed drop
   does, the check, the capabilities, macOS, windows, the checked
   machine, lupin. **Not done:** `fs_access` (#633's second ask), a
