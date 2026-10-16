@@ -1501,6 +1501,10 @@ mod builtin_cap_tests {
             ("os_signal_send_group", Cap::Exec),
             ("os_signal_send_all", Cap::Exec),
             ("os_set_pgid", Cap::Exec),
+            // s242 (#680; ruling owed): the poll of the children reaps as
+            // `os_wait_status` does — `exec`.
+            ("os_wait_poll", Cap::Exec),
+            ("os_wait_status", Cap::Exec),
         ] {
             assert_eq!(builtin_cap(name), Some(cap), "{name}");
         }

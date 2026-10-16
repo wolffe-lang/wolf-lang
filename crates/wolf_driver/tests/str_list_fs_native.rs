@@ -799,6 +799,8 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_os_signal_last",
         "__wolf_rt_os_signal_realtime",
         "__wolf_rt_os_signal_text",
+        // s242 (#680): `[os.proc.poll]`.
+        "__wolf_rt_os_wait_poll",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS

@@ -548,6 +548,14 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`os_signal_text`",
             "hosted runtime",
         ),
+        // s242 (#680): the poll of the children.
+        (
+            "os_wait_poll",
+            "",
+            "let r = os_wait_poll() else |e| {\n        return 0\n    }\n    r.1",
+            "`os_wait_poll`",
+            "hosted runtime",
+        ),
         (
             "float",
             "",
