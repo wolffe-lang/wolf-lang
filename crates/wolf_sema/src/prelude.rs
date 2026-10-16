@@ -387,6 +387,10 @@ pub const PRELUDE: &[Ambient] = &[
     host("os_signal_last"),
     host("os_signal_realtime"),
     host("os_signal_text"),
+    // s242 (wolf-lang#680; ruling owed): the poll of the children — any
+    // child of the program's that ended or stopped, never a wait.
+    // `exec`-tagged with `os_wait_status`.
+    host("os_wait_poll"),
     // the OS random source (s118, wolf-lang#143): `os_random(n)` mints
     // n bytes of OS-provided entropy as a `List[int]` — the ONLY
     // sanctioned source of cryptographic material ([os.random.sole]).

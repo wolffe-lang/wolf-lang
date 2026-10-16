@@ -224,6 +224,9 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         "os_signal_ignore" | "os_signal_default" | "os_signal_poll" | "os_spawn_job"
         | "os_proc_pid" | "os_wait_status" | "os_term_set_foreground" => SandboxCategory::Exec,
         "os_pgid" => SandboxCategory::Env,
+        // s242 (wolf-lang#680; ruling owed): the poll of the children
+        // reaps as `os_wait_status` does — process control, `exec`.
+        "os_wait_poll" => SandboxCategory::Exec,
         // s232 (ruling owed, #54's reasoning): a signal to another
         // process is process control, `exec` with `os_kill`. This
         // process's id, its parent's and the dispositions it holds are

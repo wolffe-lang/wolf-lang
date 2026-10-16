@@ -14252,6 +14252,13 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // exit code, or -N for a death by signal N.
         "os_proc_pid" => (vec![int_], rowed(table, int_, &["io"])),
         "os_wait_status" => (vec![int_], rowed(table, int_, &["io"])),
+        // s242 (wolf-lang#680, `[os.proc.poll]`; ruling owed): never
+        // blocks — (h, status) for the first child that ended or stopped
+        // (256 + N a stop by host signal N), or (-1, n), n still live.
+        "os_wait_poll" => {
+            let pair = table.intern(TyKind::Tuple(vec![int_, int_]));
+            (Vec::new(), rowed(table, pair, &["io"]))
+        }
         // s232 (wolf-lang#141, `[os.proc.self]`): this process's id
         // (every host has one) and its parent's (windows `unsupported`).
         "os_pid" => (Vec::new(), int_),
