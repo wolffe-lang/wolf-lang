@@ -293,6 +293,30 @@ pub extern "C" fn __wolf_rt_reactor_start() {
     }
 }
 
+/// The signal hub, made before `main` (s243, wolf-lang#763,
+/// `[os.signal.hub]`, ruling #80's rule). The entry shim calls this in a
+/// program that names a call which makes the hub — `os_signal_listen`,
+/// `os_signal_wait`, `os_signal_wait_fd` — after the readiness set when
+/// both are named; a program that names none never calls it and carries
+/// no signal pipe and no drain thread (D15). When the host refuses the
+/// hub's pipes or its thread the program does not start: one line on
+/// stderr, `wolf: …`, and [`START_FAILED_EXIT`], as for the readiness
+/// set. Until s243 the first `os_signal_listen` or `os_signal_wait` made
+/// it and a refusal there aborted the process (134), after its own lines
+/// had run.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_signal_start() {
+    if let Err(e) = crate::signal::start() {
+        let mut err = std::io::stderr().lock();
+        let _ = writeln!(
+            err,
+            "wolf: the runtime could not make its signal hub ({e}); the program did not start"
+        );
+        let _ = err.flush();
+        std::process::exit(START_FAILED_EXIT)
+    }
+}
+
 // ---- the v0 print path (s31) ---------------------------------------------
 //
 // `print`/`print_raw` lower to per-segment calls: literal chunks and
