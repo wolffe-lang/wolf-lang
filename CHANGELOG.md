@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+### The signal hub made before `main`; two test races closed (s243, #763, #765; ruling #80's rule)
+
+A program at its descriptor limit no longer ends at its first
+`os_signal_listen` or `os_signal_wait`. Until now the first of those
+made the signal hub (two pipes and a drain thread) and asserted that the
+host gave it: at the limit the process ended with SIGABRT (134), `the
+signal hub could not be made`, after its own lines had run. Now, by
+ruling #80's rule (`[os.signal.hub]`):
+
+- A program that names `os_signal_listen`, `os_signal_wait` or
+  `os_signal_wait_fd` makes the hub **before `main`** (the entry shim,
+  after the readiness set). A listen, a raise and a wait at a
+  32-descriptor limit answer ok, ok and the meaning on native and
+  release, as the checked machine always did. A program that names none
+  carries no pipe and no thread (D15); one that does carries four
+  descriptors and one thread on linux from its start.
+- **When the host refuses the hub the program does not start**: one
+  stderr line, `wolf: the runtime could not make its signal hub (…); the
+  program did not start`, and exit **71**, as for the readiness set.
+- A caller of the runtime that did not start the hub (no compiled
+  program) gets `io` from `listen` and `wait` instead of an abort.
+- `os_signal_ignore`, `default`, `poll` and `raise` never made the hub
+  on unix and are unchanged. lupin has no signal family.
+
+Tests: `release_determinism` and `bench_hatches` stage each build's
+source in a directory of their own, as `parked_tasks` does since s238
+(#765). Two tests rewrote one witness file while the other built it (a
+guard that does the same thing faster was red 8 of 10 at trunk: the
+build read an empty file, `no main`), and every hatch build read the
+sources the other tests were writing. Neither was ever seen red in CI.
+
 ### A signal to a process group and to every process; this process into a group; host signal numbers and a signal's words (s241, #739, #740, #741, #762; ruling #79)
 
 `os_signal_send` reaches one process, so `kill 0`, `kill -1`, `kill --
