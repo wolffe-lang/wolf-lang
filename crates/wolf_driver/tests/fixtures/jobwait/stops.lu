@@ -4,9 +4,11 @@
 //! CONTAINER (linux) OR ON CI'S THROWAWAY RUNNER (macOS): it stops,
 //! continues and ends only the jobs it starts.
 //!
-//! The program listens for `CHILD` and waits as a shell does: it polls
-//! (`os_wait_poll`, which never blocks) and, with nothing to report,
-//! parks in `os_signal_wait(CHILD)` until the host says a child changed.
+//! The program listens for `CHILD` and polls (`os_wait_poll`, which
+//! never blocks) until a change is reported, for up to five seconds —
+//! bounded, so a poll that never reports a stop is a red row and not a
+//! hang (the parked wait a shell uses is `interrupt.lu`'s and
+//! `idle.lu`'s) — and asks whether the host said `CHILD` for it.
 //! A job is stopped by each of the four stop signals — `STOP`, `SUSPEND`
 //! (SIGTSTP, Ctrl-Z), `BG_READ` (SIGTTIN), `BG_WRITE` (SIGTTOU) — each
 //! reported once as `256 + N` with `N` that signal's host number, and
@@ -26,15 +28,26 @@ const BG_WRITE: int = 128
 const CONTINUE: int = 8192
 const STOP: int = 2097152
 
-/// The next change of any child: poll, and with nothing to report but a
-/// child still live, park until `CHILD` and poll again.
+/// The next change of any child: poll every 10 ms, for up to five
+/// seconds, while a child is live and nothing is reported. `CHILD` is
+/// left on the queue for the caller to ask about.
 fn change() -> (int, int) {
     var r = os_wait_poll() else |_| (-2, 0)
-    while r.0 == -1 && r.1 > 0 {
-        let _m = os_signal_wait(CHILD) else |_| 0
+    var i = 0
+    while r.0 == -1 && r.1 > 0 && i < 500 {
+        time_sleep_ms(10)
         r = os_wait_poll() else |_| (-2, 0)
+        i = i + 1
     }
     r
+}
+
+/// Whether `CHILD` was delivered since the last drain; the queue is
+/// emptied.
+fn said() -> bool {
+    let m = os_signal_poll(CHILD) else |_| 0
+    drain()
+    m != 0
 }
 
 /// The signal mask and ignored set of process `pid` (0: this one), where
@@ -71,6 +84,7 @@ fn stop_and_continue(h: int, pid: int, m: int, name: str) -> !int {
     print("{name} sent: {send(pid, m)}")
     let (ch, st) = change()
     print("{name}: reported for the job: {ch == h}, a stop (above 255): {st > 255}, by its number: {st - 256 == n}")
+    print("{name}: the stop said CHILD: {said()}")
     let (again, live) = os_wait_poll()?
     print("{name}: reported once: {again == -1 && live == 1}")
     drain()
@@ -78,8 +92,7 @@ fn stop_and_continue(h: int, pid: int, m: int, name: str) -> !int {
     // A continue is not reported. Whether the host says CHILD for it is
     // the host's: a wake with nothing to report.
     time_sleep_ms(200)
-    let said = os_signal_poll(CHILD)?
-    print("{name}: the continue said CHILD: {said != 0}")
+    print("{name}: the continue said CHILD: {said()}")
     let (after, live2) = os_wait_poll()?
     print("{name}: the continue reported: {after != -1}, still live: {live2}")
     0
@@ -105,6 +118,7 @@ fn main() -> !int {
     let (eh, est) = change()
     let tn = os_signal_number(TERMINATE)?
     print("ended: reported for the job: {eh == h}, by -TERMINATE's number: {est == -tn}")
+    print("the end said CHILD: {said()}")
     let (n1, live1) = os_wait_poll()?
     print("then nothing, none live: ({n1}, {live1})")
     let late = os_wait_status(h) else |e| {

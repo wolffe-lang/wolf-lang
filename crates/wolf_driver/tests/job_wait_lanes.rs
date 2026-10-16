@@ -402,6 +402,7 @@ a job running, nothing to report: (-1, 1)\n",
         out.push_str(&format!(
             "{name} sent: ok\n\
 {name}: reported for the job: true, a stop (above 255): true, by its number: true\n\
+{name}: the stop said CHILD: true\n\
 {name}: reported once: true\n\
 {name}: CONTINUE sent: ok\n\
 {name}: the continue said CHILD: {said}\n\
@@ -411,6 +412,7 @@ a job running, nothing to report: (-1, 1)\n",
     out.push_str(
         "TERMINATE sent: ok\n\
 ended: reported for the job: true, by -TERMINATE's number: true\n\
+the end said CHILD: true\n\
 then nothing, none live: (-1, 0)\n\
 a wait after the poll reaped it: io\n\
 a group of two stopped, both reported: true, both by STOP: true\n\
