@@ -579,7 +579,12 @@ mod sys {
         }
         // s234 (`[os.signal.wait.fd]`): wake every descriptor wait. A
         // full wake pipe already holds a byte, which is all a wake is.
+        // s242: and every `os_signal_wait`, which parks on the condvar
+        // with no timer — whoever drains (the drain thread, a poll, a
+        // descriptor wait) wakes it, so a meaning another thread's look
+        // moved onto the queue is never left unseen.
         if moved {
+            h.cv.notify_all();
             for &w in &st.waiters {
                 let one = 1u8;
                 // SAFETY: a one-byte write to a nonblocking pipe the
@@ -1516,10 +1521,21 @@ pub fn wait(mask: i64) -> i64 {
                 kill_teardown_check(s);
                 return -sig_code::IO;
             }
-            let (g, _) =
-                h.cv.wait_timeout(st, Duration::from_millis(5))
-                    .unwrap_or_else(|p| p.into_inner());
-            st = g;
+            // s242 (wolf-lang#680, `[os.signal.wait]`): with no scope
+            // that can be killed the wait has no timer — an idle wait
+            // wakes for nothing (it was a 5 ms tick: about 195 context
+            // switches a second, measured at 0.2.30). Whoever moves a
+            // meaning onto the queue wakes it ([`sys::drain`] on unix,
+            // [`deliver`] on windows). Inside a scope that can be killed
+            // it still looks for a kill every 5 ms.
+            st = match scope {
+                Some(_) => {
+                    h.cv.wait_timeout(st, Duration::from_millis(5))
+                        .unwrap_or_else(|p| p.into_inner())
+                        .0
+                }
+                None => h.cv.wait(st).unwrap_or_else(|p| p.into_inner()),
+            };
         }
     })
 }
