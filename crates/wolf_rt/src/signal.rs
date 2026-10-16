@@ -301,16 +301,19 @@ fn try_hub() -> std::io::Result<&'static Hub> {
     Ok(h)
 }
 
-/// The hub for the calls that do not park — `listen`, `ignore`,
-/// `default`, `poll`, `raise`: a refusal to make it still ends the
-/// process there (s239's census: not a park, so not that lane's rule;
-/// named in `[os.net.reactor]`'s note). The one parking call,
-/// `os_signal_wait_fd`, asks [`try_hub`] and answers `io`.
-fn hub() -> &'static Hub {
-    match try_hub() {
-        Ok(h) => h,
-        Err(e) => panic!("the signal hub could not be made: {e}"),
-    }
+/// The hub made before `main` (s243, wolf-lang#763, `[os.signal.hub]`):
+/// the entry shim calls this (through `__wolf_rt_signal_start`) in a
+/// program that names a call which makes the hub — `os_signal_listen`,
+/// `os_signal_wait`, `os_signal_wait_fd` — so none of them asks the host
+/// for a pipe or a thread once the program runs. `Err` is the host's
+/// refusal; nothing is left half-made that a later call cannot finish.
+/// Until s243 the hub was made by the first `listen` or `wait` and its
+/// refusal panicked (an abort: the entry points cannot unwind), so a
+/// process that had used its descriptors up before it first listened
+/// ended there. A caller that did not start it (no compiled program is
+/// one) still meets [`try_hub`] at those calls, and they answer `io`.
+pub fn start() -> std::io::Result<()> {
+    try_hub().map(|_| ())
 }
 
 /// Enqueue a delivered meaning and wake the waiters — the console
@@ -1315,7 +1318,9 @@ mod sys {
         ) {
             return sig_code::IO;
         }
-        let h = super::hub();
+        let Ok(h) = super::try_hub() else {
+            return sig_code::IO;
+        };
         let listened = h.state.lock().unwrap_or_else(|p| p.into_inner()).installed & m != 0;
         if listened {
             deliver(h, m);
@@ -1434,12 +1439,16 @@ mod sys {
 /// Idempotent per meaning. `IO` for a set that is empty or holds a bit
 /// that is not a listenable meaning (s232, #679: before, such a bit was
 /// dropped and the call answered ok), before anything changes; `IO` if
-/// any install fails.
+/// any install fails, or if the host will not give the hub (s243,
+/// #763: a program the entry shim started has it already).
 pub fn listen(mask: i64) -> i64 {
     if !listenable_set(mask) {
         return sig_code::IO;
     }
-    let h = hub();
+    // s243 (#763): a hub the host will not give is `io`, never an abort.
+    let Ok(h) = try_hub() else {
+        return sig_code::IO;
+    };
     let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
     for &bit in &MEANINGS {
         if mask & bit != 0 && st.installed & bit == 0 {
@@ -1475,7 +1484,8 @@ fn installed(h: &Hub) -> i64 {
 /// instead of hanging on a signal that never comes. Plain cancellation
 /// keeps waiting (the net tier's kill-only posture — the `{io}` row
 /// vocabulary has no cancellation row). A set [`listen`] would refuse
-/// is `-IO` (nothing could ever arrive — never a hang). Its first look
+/// is `-IO` (nothing could ever arrive — never a hang), and so is a hub
+/// the host will not give (s243, #763). Its first look
 /// is a poll's (s232, #691): a signal delivered or pending before the
 /// call is taken without parking.
 pub fn wait(mask: i64) -> i64 {
@@ -1483,7 +1493,10 @@ pub fn wait(mask: i64) -> i64 {
         return -sig_code::IO;
     }
     let want = mask;
-    let h = hub();
+    // s243 (#763): a hub the host will not give is `io`, never an abort.
+    let Ok(h) = try_hub() else {
+        return -sig_code::IO;
+    };
     sys::settle(installed(h));
     blocking(|| {
         let scope = current_scope();
