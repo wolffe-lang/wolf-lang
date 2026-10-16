@@ -5,6 +5,7 @@
 # for every repository, 5 of them macOS. A run of every job here is 8 jobs
 # and about 132 job-minutes, 70 of them on macOS (ten green runs,
 # 38201807008 to 38330506230), and every push of every lane paid all of it.
+# (Nine jobs since tl23 split windows build + test into two legs.)
 # So the `plan` job (`ci/tiers.py plan`, proven by `ci/tiers-test.py` in the
 # `plan-test` job) decides which jobs a run runs, every other job runs only
 # when the plan names it, and the run's LAST job says which tier it was:
