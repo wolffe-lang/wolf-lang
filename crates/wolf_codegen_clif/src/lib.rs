@@ -811,19 +811,43 @@ pub const PARKING_NET: [&str; 7] = [
     "__wolf_rt_net_writev_head",
 ];
 
-/// Whether any function of `m` calls one of [`PARKING_NET`] — read off
-/// the call instructions the module still holds after the mid-end, so a
-/// call the optimizer removed costs nothing.
-pub fn names_a_park(m: &WirModule) -> bool {
+/// The runtime's start call for the signal hub (s243, wolf-lang#763,
+/// `[os.signal.hub]`).
+pub const SIGNAL_START: &str = "__wolf_rt_signal_start";
+
+/// The runtime calls that make the signal hub (its two pipes and its
+/// drain thread) when it is not made yet: the listen, the wait and the
+/// wait on a descriptor (`[os.signal.hub]`). `ignore`, `default`,
+/// `poll` and `raise` make nothing on unix and are not here.
+pub const HUB_SIGNAL: [&str; 3] = [
+    "__wolf_rt_os_signal_listen",
+    "__wolf_rt_os_signal_wait",
+    "__wolf_rt_os_signal_wait_fd",
+];
+
+/// Whether any function of `m` calls one of `names` — read off the call
+/// instructions the module still holds after the mid-end, so a call the
+/// optimizer removed costs nothing.
+fn names_any(m: &WirModule, names: &[&str]) -> bool {
     m.funcs.values().any(|f| {
         f.layout.iter().any(|&b| {
             f.blocks[b].insts.iter().any(|&i| {
                 let d = &f.insts[i];
                 matches!((d.op, &d.aux), (Opcode::Call, Aux::Callee(ef))
-                    if PARKING_NET.contains(&f.ext_funcs[*ef].name.as_str()))
+                    if names.contains(&f.ext_funcs[*ef].name.as_str()))
             })
         })
     })
+}
+
+/// Whether any function of `m` calls one of [`PARKING_NET`].
+pub fn names_a_park(m: &WirModule) -> bool {
+    names_any(m, &PARKING_NET)
+}
+
+/// Whether any function of `m` calls one of [`HUB_SIGNAL`] (s243).
+pub fn names_a_hub_call(m: &WirModule) -> bool {
+    names_any(m, &HUB_SIGNAL)
 }
 
 /// Append the C-entry shim to a WIR module: `main(argc, argv)` — in
@@ -839,12 +863,23 @@ pub fn names_a_park(m: &WirModule) -> bool {
 /// symbol `main` ([`compile_module`] does).
 pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
     // s239 (#750, `[os.net.reactor]`): a program that names a call which
-    // can park in the reactor makes the readiness set before `main`.
-    let start_sig = names_a_park(m).then(|| m.make_sig(vec![], vec![]));
+    // can park in the reactor makes the readiness set before `main`;
+    // s243 (#763, `[os.signal.hub]`): one that names a call which makes
+    // the signal hub makes the hub there too, after the set.
+    let starts: Vec<&str> = [
+        (names_a_park(m), REACTOR_START),
+        (names_a_hub_call(m), SIGNAL_START),
+    ]
+    .into_iter()
+    .filter_map(|(named, sym)| named.then_some(sym))
+    .collect();
+    let start_sig = (!starts.is_empty()).then(|| m.make_sig(vec![], vec![]));
     let start = |f: &mut Function, b0: wolf_wir::ir::Block| {
         if let Some(sig) = start_sig {
-            let callee = f.import_func(REACTOR_START, sig);
-            f.append_inst(b0, Opcode::Call, &[], &[], Aux::Callee(callee));
+            for &sym in &starts {
+                let callee = f.import_func(sym, sig);
+                f.append_inst(b0, Opcode::Call, &[], &[], Aux::Callee(callee));
+            }
         }
     };
     let Some((_, entry)) = m.funcs.iter().find(|(_, f)| f.name == "main") else {

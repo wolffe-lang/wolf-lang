@@ -787,6 +787,9 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         // s239 (#750): the readiness set made before `main` —
         // `[os.net.reactor]`.
         "__wolf_rt_reactor_start",
+        // s243 (#763): the signal hub made before `main` —
+        // `[os.signal.hub]`.
+        "__wolf_rt_signal_start",
         // s241 (#739, #740, #741, #762): `[os.signal.send.group]`,
         // `[os.signal.send.all]`, `[os.term.group]`, `[os.signal.host]`,
         // `[os.signal.text]`.
@@ -806,7 +809,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        221,
+        222,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
