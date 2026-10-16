@@ -74,13 +74,19 @@ fn main() -> !int {
 }
 ";
 
+/// Write [`SRC`] as `<tag>.lu` for one build; the build's outputs go
+/// beside it.
+fn stage(tag: &str) -> PathBuf {
+    let src = out_dir().join(format!("{tag}.lu"));
+    std::fs::write(&src, SRC).expect("write source");
+    src
+}
+
 /// Emit the release module, optionally with a hatch set. `None` means the
 /// release tier is unavailable here (no clang) — skip loudly, never green.
 fn emit(tag: &str, env: &[(&str, &str)]) -> Option<String> {
-    let dir = out_dir();
-    let src = dir.join(format!("{tag}.lu"));
-    let ll = dir.join(format!("{tag}.ll"));
-    std::fs::write(&src, SRC).expect("write source");
+    let src = stage(tag);
+    let ll = src.with_extension("ll");
     let mut cmd = Command::new(wolf());
     cmd.arg("build")
         .arg(&src)
@@ -194,9 +200,8 @@ fn strip_facts_removes_every_fact_channel() {
 fn a_stripped_build_still_runs_and_still_traps() {
     // D2: metadata is the BONUS channel. Stripping it may cost speed; it
     // must not change a single verdict.
-    let dir = out_dir();
-    let src = dir.join("facts_run.lu");
-    std::fs::write(&src, SRC).expect("write source");
+    let src = stage("facts_run");
+    let dir = src.parent().expect("the staged source's directory");
     let mut verdicts = Vec::new();
     for env in [None, Some(("WOLF_STRIP_FACTS", "1"))] {
         let bin = dir.join(match env {
