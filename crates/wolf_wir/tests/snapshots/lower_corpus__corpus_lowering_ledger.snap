@@ -790,6 +790,7 @@ os/exit_code.lu: lowers
 os/group_rows.lu: lowers
 os/ids_read.lu: lowers
 os/ids_rows.lu: lowers
+os/job_poll_rows.lu: lowers
 os/job_rows.lu: lowers
 os/pipe_round_trip.lu: lowers
 os/random_differs.lu: lowers
