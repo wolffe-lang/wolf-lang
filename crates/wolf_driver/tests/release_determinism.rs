@@ -218,3 +218,60 @@ fn four_list_witness_binary_is_identical_across_three_builds() {
     ensure_rt_staticlib();
     assert_three_identical(&witness_path(), "four_lists_bin", None);
 }
+
+/// #765 (the shape of #733): the two `four_lists` tests run on parallel
+/// threads of one process and each stages the witness; a staging must
+/// never rewrite the file another test's build is reading. Here one
+/// thread stages the witness as fast as it can while three builds of
+/// an earlier staging run — what the two tests do, without the luck of
+/// their timing.
+#[test]
+fn a_staging_of_the_witness_never_rewrites_a_build_in_flight() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    /// Stops the other stager however this test ends (a failed build
+    /// panics here, and the stager must not outlive the test).
+    struct Stop(Arc<AtomicBool>);
+    impl Drop for Stop {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::Relaxed);
+        }
+    }
+    let src = witness_path();
+    let stop = Arc::new(AtomicBool::new(false));
+    let _stop = Stop(stop.clone());
+    let other = {
+        let (stop, mine) = (stop.clone(), src.clone());
+        std::thread::spawn(move || {
+            let mut n = 0u64;
+            while !stop.load(Ordering::Relaxed) {
+                let theirs = witness_path();
+                n += 1;
+                if theirs.parent() != mine.parent() {
+                    let _ = std::fs::remove_dir_all(theirs.parent().expect("its directory"));
+                }
+            }
+            n
+        })
+    };
+    let ll = src.with_file_name("in_flight.ll");
+    let mut builds = Vec::new();
+    for _ in 0..3 {
+        let _ = std::fs::remove_file(&ll);
+        let b = build(&src, &ll, Some("llvm-ir"));
+        builds.push(b);
+    }
+    stop.store(true, Ordering::Relaxed);
+    let n = other.join().expect("the other stager");
+    println!("#765: {n} stagings while three builds ran");
+    assert!(
+        std::fs::read_to_string(&src).is_ok_and(|t| t == WITNESS),
+        "#765: the witness under the builds was rewritten"
+    );
+    if let [Some(a), Some(b), Some(c)] = builds.as_slice() {
+        assert!(
+            a == b && b == c,
+            "#765: three builds of one staged witness differ while another staging ran"
+        );
+    }
+}
