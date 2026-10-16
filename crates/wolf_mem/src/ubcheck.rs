@@ -13396,7 +13396,11 @@ mod checked_sig {
     /// [`wait_readable`]'s wait proper: `fd` and the wake pipe's read end
     /// `r`, already emptied and the pending set already looked at.
     #[cfg(unix)]
-    fn wait_readable_on(fd: libc::c_int, r: libc::c_int, timeout_ms: i32) -> Result<Woke, &'static str> {
+    fn wait_readable_on(
+        fd: libc::c_int,
+        r: libc::c_int,
+        timeout_ms: i32,
+    ) -> Result<Woke, &'static str> {
         let mut fds = [
             libc::pollfd {
                 fd,

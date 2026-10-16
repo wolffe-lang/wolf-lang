@@ -590,11 +590,23 @@ mod container {
     /// under `conform-run` (process 1 is `wolf`), and the native and
     /// release binaries built on the host (process 1 is the program),
     /// each also under `taskset -c 0-3` when the container has four cpus.
-    fn machines(b: &Throwaway<'_>, entry: &Path, dir: &Path, name: &str, test: &str) -> Vec<(String, Vec<String>)> {
+    fn machines(
+        b: &Throwaway<'_>,
+        entry: &Path,
+        dir: &Path,
+        name: &str,
+        test: &str,
+    ) -> Vec<(String, Vec<String>)> {
         let program = format!("/fx/{name}");
         let mut rows: Vec<(String, Vec<String>)> = vec![(
             "checked".to_string(),
-            strs(&["/machines/wolf", "conform-run", &program, "--checked", "--json"]),
+            strs(&[
+                "/machines/wolf",
+                "conform-run",
+                &program,
+                "--checked",
+                "--json",
+            ]),
         )];
         let four = b.cpus() >= 4;
         if !four {
@@ -620,7 +632,13 @@ mod container {
         rows
     }
 
-    fn throwaway<'a>(engine: &'a str, env: &'a [(&'a str, &'a str)], dir: &Path, entry: &Path, lupin: Option<&PathBuf>) -> Throwaway<'a> {
+    fn throwaway<'a>(
+        engine: &'a str,
+        env: &'a [(&'a str, &'a str)],
+        dir: &Path,
+        entry: &Path,
+        lupin: Option<&PathBuf>,
+    ) -> Throwaway<'a> {
         let fixtures = entry.parent().unwrap().to_path_buf();
         let mut mounts = vec![
             (dir.to_path_buf(), "/w"),
@@ -630,7 +648,11 @@ mod container {
         if let Some(l) = lupin {
             mounts.push((l.clone(), "/machines/lupin"));
         }
-        Throwaway { engine, env, mounts }
+        Throwaway {
+            engine,
+            env,
+            mounts,
+        }
     }
 
     /// `name` (a fixture) on every machine, each in a container of its
@@ -684,7 +706,12 @@ mod container {
         }
         if lupin_bin.is_some() {
             let program = format!("/fx/{name}");
-            let out = b.run(&strs(&["/machines/lupin", "conform-run", &program, "--json"]));
+            let out = b.run(&strs(&[
+                "/machines/lupin",
+                "conform-run",
+                &program,
+                "--json",
+            ]));
             let obs = parse_obs(&out.stdout, "lupin's observation");
             judge_lupin(&obs, name, lupin, check);
         }
@@ -764,7 +791,10 @@ mod container {
                 "{row}: an idle wait made {switches} context switches in three seconds \
                  (at most {IDLE_MOST}; s242)"
             );
-            assert!(text.contains("rc=0"), "{row}: the program ended well: {text}");
+            assert!(
+                text.contains("rc=0"),
+                "{row}: the program ended well: {text}"
+            );
             assert!(
                 text.contains("woke by CHILD: true; the job: true, its status: 0"),
                 "{row}: CHILD woke it and the poll answered: {text}"

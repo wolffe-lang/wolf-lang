@@ -19,7 +19,10 @@ fn the_poll_is_exec_with_the_wait() {
     ] {
         assert_eq!(host_stub(name), Some(cat), "{name}");
     }
-    assert!(!pure_builtin("os_wait_poll"), "the poll is not on the pure shelf");
+    assert!(
+        !pure_builtin("os_wait_poll"),
+        "the poll is not on the pure shelf"
+    );
 }
 
 /// The poll takes nothing and answers a pair or `io`: the table the

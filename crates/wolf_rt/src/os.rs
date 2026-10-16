@@ -2039,10 +2039,7 @@ mod tests {
         std::thread::sleep(std::time::Duration::from_millis(100));
         assert_eq!(t.poll(), Ok((-1, 1)), "a continue is not reported");
         unsafe { libc::kill(pid, libc::SIGTERM) };
-        assert_eq!(
-            poll_until_said(&mut t),
-            (a, -i64::from(libc::SIGTERM))
-        );
+        assert_eq!(poll_until_said(&mut t), (a, -i64::from(libc::SIGTERM)));
         assert_eq!(t.poll(), Ok((-1, 0)));
         assert_eq!(t.wait_status(a), Err("io"));
     }
@@ -2073,9 +2070,7 @@ mod tests {
     fn poll_answers_an_end_on_windows() {
         let mut t = ChildTable::new();
         assert_eq!(t.poll(), Ok((-1, 0)));
-        let a = t
-            .spawn(&["cmd", "/c", "exit 3"])
-            .expect("cmd");
+        let a = t.spawn(&["cmd", "/c", "exit 3"]).expect("cmd");
         let mut got = (-1, 1);
         for _ in 0..500 {
             got = t.poll().expect("the poll answers");
