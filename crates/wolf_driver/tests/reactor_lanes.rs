@@ -605,7 +605,10 @@ fn a_listen_at_the_descriptor_limit_does_not_end_the_process() {
     println!("checked: {}", c.stdout.replace('\n', " | "));
     if let Some(l) = lupin(&entry, &dir, LIMIT) {
         assert_eq!(
-            (l.verdict.as_str(), l.unsupported.contains("os_signal_listen")),
+            (
+                l.verdict.as_str(),
+                l.unsupported.contains("os_signal_listen")
+            ),
             ("unsupported", true),
             "lupin {} refuses os_signal_listen by name: {l:?}",
             l.version
@@ -702,6 +705,8 @@ fn the_signal_hub_costs_a_program_only_when_it_names_a_hub_call() {
             "{tier}: names a hub call (fds {hf}, threads {ht}) against names none (fds {nf}, \
              threads {nt})"
         );
-        println!("{tier}: names a hub call fds={hf} threads={ht}; names none fds={nf} threads={nt}");
+        println!(
+            "{tier}: names a hub call fds={hf} threads={ht}; names none fds={nf} threads={nt}"
+        );
     }
 }
