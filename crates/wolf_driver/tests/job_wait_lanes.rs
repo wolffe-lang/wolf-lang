@@ -424,12 +424,14 @@ nothing left: (-1, 0)\n",
 }
 
 /// Whether the host says `CHILD` when a stopped child is continued:
-/// linux does (measured in the container, s242); macOS as the runner
-/// answered (run cited in the PR).
+/// linux does (measured in the container, s242: `CLD_CONTINUED`); macOS
+/// does not (CI's runner, run 38955877584: four continues, no `CHILD`,
+/// where each stop and the end said it). A continue is never reported by
+/// the poll on either host.
 #[cfg(target_os = "linux")]
 const CONTINUE_SAYS_CHILD: bool = true;
 #[cfg(target_os = "macos")]
-const CONTINUE_SAYS_CHILD: bool = true;
+const CONTINUE_SAYS_CHILD: bool = false;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 const INTERRUPT_WANT: &str = "the wait was cut short by TERMINATE: true\n\
