@@ -2,6 +2,42 @@
 
 ## Unreleased
 
+### The job wait: a poll of the children that reports stops, and a signal wait with no timer (s242, #680; rulings owed)
+
+A shell could wait for one child to end and nothing else: `os_wait_status`
+blocks through a stop, nothing answered "has any child changed?" without
+blocking, and a `wait` could not be cut short by a trapped signal (#680).
+The surface is a **ruling owed** (`[os.proc.wait.note]` R1–R9); this is
+the recommendation, on the checked machine, native and release:
+
+- **`os_wait_poll() -> (int, int) ! {io}`** (`[os.proc.poll]`) — never
+  blocks: `(h, status)` for the first child of the program's that ended
+  or stopped since it was last looked at — an exit code (0..255), `-N`
+  for an end by host signal N (`os_wait_status`'s), or **`256 + N` for a
+  stop** by host signal N (`STOP`, `SUSPEND`, `BG_READ`, `BG_WRITE`:
+  19–22 on linux, 17, 18, 21, 22 on macOS). An end reaps and closes the
+  handle; a stop is reported once and the child stays; a continue is not
+  reported. Nothing to report: `(-1, n)`, `n` the children still live.
+  One `waitpid(pid, WNOHANG | WUNTRACED)` per live child, never
+  `waitpid(-1)`. `exec`, refused at comptime; windows answers ends and
+  never a stop.
+- **The wait a signal cuts short** is the poll with `os_signal_wait` (or
+  `os_signal_wait_fd`) on `CHILD` and the trapped set: `CHILD` comes for
+  a stop and an end. **`os_signal_wait` no longer ticks**: outside a
+  scope that can be killed it parked on a 5 ms timer (about 195 context
+  switches a second, measured at 0.2.30); now an idle wait makes none
+  (0 in 5 s on native, release and checked, measured). The checked
+  machine's `os_signal_wait` with no other task alive now waits on the
+  host for a set a listen armed, instead of refusing by name.
+
+lupin answers the poll with no child, `(-1, 0)`, and refuses it by name
+once a child is live (its half: wolf-interp `s242`). Host table 134 → 135
+lines, prelude 141 → 142 functions, RT_SYMBOLS 221 → 222, anchors 658 →
+660. Witnesses (`job_wait_lanes.rs`): a job stopped by each of the four,
+continued and ended, and a `wait` cut short by `TERMINATE`, in a
+throwaway container with no init on linux (podman's init blocks the stop
+signals and its children inherit the block) and on CI's runner on macOS;
+an idle wait's context switches counted from outside.
 ### The signal hub made before `main`; two test races closed (s243, #763, #765; ruling #80's rule)
 
 A program at its descriptor limit no longer ends at its first
