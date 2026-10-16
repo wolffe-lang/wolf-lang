@@ -31,8 +31,11 @@
 //! One corner lupin 0.1.52 and 0.1.53 do not answer: a count of 128 or more
 //! leaves the 128-bit integer it computes in, and it traps where the
 //! rule says 0 or -1 (`255 >> 200` at `u8`). That row is pinned by
-//! version, as s180 designed: 0.1.52 and 0.1.53 are asserted to trap, and
-//! any other version is held to the rule.
+//! version and release commit, as s180 designed and as `reactor_lanes`
+//! keys its pins: 0.1.52 (`025428b`) and 0.1.53 (`7896edd`) are asserted to
+//! trap, and any other build — a later release, or a build of a branch
+//! that still reports 0.1.53 (wolf-interp is76, the mirror) — is held to
+//! the rule.
 
 mod lane_exit;
 
@@ -48,6 +51,7 @@ struct Obs {
     verdict: String,
     stdout: String,
     version: String,
+    commit: String,
     refusal: String,
 }
 
@@ -68,6 +72,7 @@ fn parse_obs(bytes: &[u8], stderr: &[u8], what: &str) -> Obs {
         verdict: s("verdict"),
         stdout: s("stdout_inline"),
         version: s("impl_version"),
+        commit: s("commit"),
         refusal,
     }
 }
@@ -393,11 +398,20 @@ fn the_rule_is_the_clauses() {
 }
 
 /// lupin releases measured to trap on a count of 128 or more where the
-/// rule answers (the count leaves its 128-bit integer), by version.
-/// Measured on kasumi on the 0.1.52 archive (sha256 f5194b74…) and on
-/// the 0.1.53 archive (sha256 5db55332…, wolf 0.2.30's pairing). Any
-/// other version is held to the rule.
-const LUPIN_TRAPS_PAST_127: &[&str] = &["0.1.52", "0.1.53"];
+/// rule answers (the count leaves its 128-bit integer), by version and the
+/// commit each release archive reports. Measured on kasumi on the 0.1.52
+/// archive (sha256 f5194b74…, `025428b`) and on the 0.1.53 archive (sha256
+/// 5db55332…, `7896edd`, wolf 0.2.30's pairing). Any other build is held to
+/// the rule — keyed by commit because a branch build reports the version
+/// of the release it follows until the next release lane bumps it.
+const LUPIN_TRAPS_PAST_127: &[(&str, Option<&str>)] =
+    &[("0.1.52", Some("025428b")), ("0.1.53", Some("7896edd"))];
+
+fn traps_past_127(o: &Obs) -> bool {
+    LUPIN_TRAPS_PAST_127
+        .iter()
+        .any(|(v, c)| *v == o.version && c.is_none_or(|c| o.commit.starts_with(c)))
+}
 
 /// A count past 127: the rule has no ceiling (`255 >> 200` at `u8` is
 /// 0, `0 << 200` is 0, `-5 >> 130` at `i16` is -1).
@@ -425,7 +439,7 @@ fn a_count_past_127_is_still_the_value() {
     let Some(obs) = lupin_says(&entry) else {
         return;
     };
-    if LUPIN_TRAPS_PAST_127.contains(&obs.version.as_str()) {
+    if traps_past_127(&obs) {
         assert_eq!(
             obs.verdict, "trap(overflow)",
             "lupin {} is pinned as trapping on a count past 127: {obs:?}",
@@ -439,9 +453,10 @@ fn a_count_past_127_is_still_the_value() {
         assert_eq!(
             (obs.verdict.as_str(), obs.stdout.as_str()),
             want,
-            "lupin {} on a count past 127: only {LUPIN_TRAPS_PAST_127:?} are pinned as \
-             trapping; a newer lupin answers the rule",
-            obs.version
+            "lupin {} ({}) on a count past 127: only {LUPIN_TRAPS_PAST_127:?} are pinned \
+             as trapping; any other build answers the rule",
+            obs.version,
+            obs.commit
         );
     }
 }
