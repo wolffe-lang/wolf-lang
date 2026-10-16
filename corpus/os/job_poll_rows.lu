@@ -1,0 +1,35 @@
+//! check: run(exit=0, stdout="no child: (-1, 0)\nagain: (-1, 0)\na spawn the host refused: not_found\nstill none: (-1, 0)")
+//! phase: run
+//! conforms: os.proc.poll, err.union
+//!
+//! s242 (wolf-lang#680; `[os.proc.poll]`) — the poll of the children
+//! with no child: `(-1, 0)`, "nothing to report, none live", decided
+//! without asking the host to wait — one truth on every host, windows
+//! included, and the one row lupin answers (it refuses the poll by name
+//! once a child is live: the standard library's `try_wait` cannot see a
+//! stop). A spawn the host refused leaves no child behind. The live
+//! witnesses — a job stopped, continued and ended, a `wait` cut short by
+//! a trapped signal, an idle wait's context switches — are
+//! `crates/wolf_driver/tests/job_wait_lanes.rs`.
+
+fn spawned(argv: List[str]) -> str {
+    let _h = os_spawn(argv) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    let (h, n) = os_wait_poll()?
+    print("no child: ({h}, {n})")
+    let (h2, n2) = os_wait_poll()?
+    print("again: ({h2}, {n2})")
+    print("a spawn the host refused: {spawned(["/nonexistent/s242-no-such-program"])}")
+    let (h3, n3) = os_wait_poll()?
+    print("still none: ({h3}, {n3})")
+    0
+}
