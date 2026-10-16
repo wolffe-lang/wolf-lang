@@ -7,6 +7,13 @@
 //! row, [`reactor::start`] the error — and the set is made by the first
 //! call after descriptors come back.
 //!
+//!
+//! s243 (wolf-lang#763): the signal hub likewise. Until s243 the first
+//! `listen` or `wait` made its two pipes and its drain thread and
+//! PANICKED at a refusal; now they answer `io`, [`signal::start`] the
+//! error, and the hub is made by the first call after descriptors come
+//! back.
+//!
 //! `harness = false`: the reactor is one per process and is made once,
 //! so each case runs in a child of its own — this binary re-executed —
 //! and the child lowers ITS OWN descriptor limit (never the test
@@ -14,6 +21,7 @@
 
 use std::process::Command;
 use std::time::{Duration, Instant};
+use wolf_rt::signal::{self, meaning, sig_code};
 use wolf_rt::{net, reactor};
 
 const CHILD: &str = "WOLF_RT_REACTOR_LIMIT_CASE";
@@ -23,12 +31,13 @@ pub fn main() {
         match case.as_str() {
             "park" => park(),
             "start" => start(),
+            "hub" => hub(),
             other => panic!("unknown case {other}"),
         }
         return;
     }
     let exe = std::env::current_exe().expect("this test's own binary");
-    for case in ["park", "start"] {
+    for case in ["park", "start", "hub"] {
         let out = Command::new(&exe)
             .env(CHILD, case)
             .output()
@@ -42,7 +51,10 @@ pub fn main() {
         );
         print!("{so}");
     }
-    println!("reactor_limit: ok (no abort at the limit; the set is made once descriptors return)");
+    println!(
+        "reactor_limit: ok (no abort at the limit; the set and the hub are made once descriptors \
+         return)"
+    );
 }
 
 /// This process's own descriptor limit, lowered to `n` (the hard limit
@@ -125,4 +137,38 @@ fn start() {
     assert!(reactor::initialized());
     reactor::start().expect("start again is a no-op");
     println!("start: ok");
+}
+
+/// s243 (#763): the signal hub at the limit, in a process that did not
+/// start it (no compiled program is one: the entry shim starts it).
+fn hub() {
+    lower(64);
+    let held = fill();
+    assert_eq!(
+        signal::listen(meaning::RELOAD),
+        sig_code::IO,
+        "a listen at the limit"
+    );
+    assert_eq!(
+        signal::wait(meaning::RELOAD),
+        -sig_code::IO,
+        "a wait at the limit"
+    );
+    let e = signal::start().expect_err("the hub's start at the limit");
+    assert_eq!(e.raw_os_error(), Some(libc::EMFILE), "start's refusal: {e}");
+    drop(held);
+    signal::start().expect("start with descriptors back");
+    signal::start().expect("start again is a no-op");
+    assert_eq!(
+        signal::listen(meaning::RELOAD),
+        sig_code::OK,
+        "the listen with descriptors back"
+    );
+    assert_eq!(signal::raise(meaning::RELOAD), sig_code::OK, "the raise");
+    assert_eq!(
+        signal::wait(meaning::RELOAD),
+        meaning::RELOAD,
+        "the wait after the raise"
+    );
+    println!("hub: ok");
 }
