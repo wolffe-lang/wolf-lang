@@ -303,9 +303,10 @@ pub extern "C" fn __wolf_rt_reactor_start() {
 /// stderr, `wolf: …`, and [`START_FAILED_EXIT`], as for the readiness
 /// set. Until s243 the first `os_signal_listen` or `os_signal_wait` made
 /// it and a refusal there aborted the process (134), after its own lines
-/// had run.
+/// had run. Off the signal module's hosts there is no hub to make.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_signal_start() {
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     if let Err(e) = crate::signal::start() {
         let mut err = std::io::stderr().lock();
         let _ = writeln!(
