@@ -1,0 +1,62 @@
+//! member: false
+//! s242 (wolf-lang#680, case 1; `[os.proc.poll]`, `[os.signal.wait]`) —
+//! a shell's `wait` cut short by a trapped signal. RUN ONLY INSIDE A
+//! THROWAWAY CONTAINER (linux) OR ON CI'S THROWAWAY RUNNER (macOS): a
+//! child it starts sends `TERMINATE` to this program.
+//!
+//! dash: `trap 'echo t' TERM; sleep 2 & sh -c 'sleep 0.3; kill -TERM
+//! $PPID' & wait; echo st=$?` prints `t` and `st=143` 0.3 s after the
+//! start (XCU `wait`: "return immediately with an exit status greater
+//! than 128"). The wait here is a shell's: poll the children, and with
+//! nothing to report park in `os_signal_wait(CHILD | TERMINATE)` — no
+//! timer — until either comes. `TERMINATE` ends the wait in well under
+//! the job's two seconds, the status a shell gives is `128 + N`, and the
+//! job, still running, is ended and reaped after. Red at 0.2.30:
+//! `os_wait_poll` did not exist (and `os_wait_status`, the only wait,
+//! answers after 2 s).
+
+const CHILD: int = 256
+const TERMINATE: int = 2
+
+fn main() -> !int {
+    os_signal_listen(CHILD | TERMINATE)?
+    let t0 = time_now_ms()
+    let job = os_spawn(["sleep", "2"])?
+    let _killer = os_spawn(["sh", "-c", "sleep 0.3; kill -TERM $PPID"])?
+    var trapped = 0
+    var waited = 0
+    while trapped == 0 && waited < 50 {
+        let (h, st) = os_wait_poll()?
+        if h == job {
+            print("the job ended first: {st}")
+            return 1
+        }
+        if h == -1 {
+            let m = os_signal_wait(CHILD | TERMINATE)?
+            if m == TERMINATE {
+                trapped = m
+            }
+        }
+        waited = waited + 1
+    }
+    let took = time_now_ms() - t0
+    let n = os_signal_number(TERMINATE)?
+    print("the wait was cut short by TERMINATE: {trapped == TERMINATE}")
+    print("before the job's two seconds: {took < 1500}")
+    print("the status a shell gives: {128 + n}")
+    os_kill(job)?
+    var left = 2
+    var rounds = 0
+    while left > 0 && rounds < 500 {
+        let (h, _st) = os_wait_poll()?
+        if h >= 0 {
+            left = left - 1
+        } else {
+            time_sleep_ms(10)
+        }
+        rounds = rounds + 1
+    }
+    let (none, live) = os_wait_poll()?
+    print("the job and the sender reaped: ({none}, {live})")
+    0
+}

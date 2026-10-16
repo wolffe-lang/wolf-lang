@@ -1,0 +1,145 @@
+//! member: false
+//! s242 (wolf-lang#680; `[os.proc.poll]`) — a job stopped, continued and
+//! ended, as a job-control shell sees it. RUN ONLY INSIDE A THROWAWAY
+//! CONTAINER (linux) OR ON CI'S THROWAWAY RUNNER (macOS): it stops,
+//! continues and ends only the jobs it starts.
+//!
+//! The program listens for `CHILD` and waits as a shell does: it polls
+//! (`os_wait_poll`, which never blocks) and, with nothing to report,
+//! parks in `os_signal_wait(CHILD)` until the host says a child changed.
+//! A job is stopped by each of the four stop signals — `STOP`, `SUSPEND`
+//! (SIGTSTP, Ctrl-Z), `BG_READ` (SIGTTIN), `BG_WRITE` (SIGTTOU) — each
+//! reported once as `256 + N` with `N` that signal's host number, and
+//! continued between them (a continue is not reported); then it is
+//! ended (`-N`), the poll reaps it, and a later `os_wait_status` is
+//! `io`. A job of two in one group is stopped by one group send: both
+//! stops are reported, in handle order. An exit is its code. Each
+//! job's SigBlk and SigIgn are read from the host where it lists them
+//! (linux) and written to standard error, so a row is never called red
+//! without them. Red at 0.2.30: `os_wait_poll` did not exist.
+
+const CHILD: int = 256
+const TERMINATE: int = 2
+const SUSPEND: int = 32
+const BG_READ: int = 64
+const BG_WRITE: int = 128
+const CONTINUE: int = 8192
+const STOP: int = 2097152
+
+/// The next change of any child: poll, and with nothing to report but a
+/// child still live, park until `CHILD` and poll again.
+fn change() -> (int, int) {
+    var r = os_wait_poll() else |_| (-2, 0)
+    while r.0 == -1 && r.1 > 0 {
+        let _m = os_signal_wait(CHILD) else |_| 0
+        r = os_wait_poll() else |_| (-2, 0)
+    }
+    r
+}
+
+/// The signal mask and ignored set of process `pid` (0: this one), where
+/// the host lists them (linux), on standard error.
+fn masks(who: str, pid: int) {
+    let path = if pid == 0 { "/proc/self/status" } else { "/proc/{pid}/status" }
+    let text = fs_read_text(path) else |_| ""
+    for line in text.split("\n") {
+        if line.starts_with("SigBlk:") || line.starts_with("SigIgn:") {
+            eprint("{who} {line.replace("\t", " ")}")
+        }
+    }
+}
+
+fn send(pid: int, m: int) -> str {
+    os_signal_send(pid, m) else |_| {
+        return "refused"
+    }
+    "ok"
+}
+
+/// Every `CHILD` already delivered, taken off the queue.
+fn drain() {
+    var m = os_signal_poll(CHILD) else |_| 0
+    while m != 0 {
+        m = os_signal_poll(CHILD) else |_| 0
+    }
+}
+
+/// Stop the job by `m`, read the report, continue it.
+fn stop_and_continue(h: int, pid: int, m: int, name: str) -> !int {
+    let n = os_signal_number(m)?
+    drain()
+    print("{name} sent: {send(pid, m)}")
+    let (ch, st) = change()
+    print("{name}: reported for the job: {ch == h}, a stop (above 255): {st > 255}, by its number: {st - 256 == n}")
+    let (again, live) = os_wait_poll()?
+    print("{name}: reported once: {again == -1 && live == 1}")
+    drain()
+    print("{name}: CONTINUE sent: {send(pid, CONTINUE)}")
+    // A continue is not reported. Whether the host says CHILD for it is
+    // the host's: a wake with nothing to report.
+    time_sleep_ms(200)
+    let said = os_signal_poll(CHILD)?
+    print("{name}: the continue said CHILD: {said != 0}")
+    let (after, live2) = os_wait_poll()?
+    print("{name}: the continue reported: {after != -1}, still live: {live2}")
+    0
+}
+
+fn main() -> !int {
+    os_signal_listen(CHILD)?
+    masks("program", 0)
+    let (none, zero) = os_wait_poll()?
+    print("no children: ({none}, {zero})")
+
+    let h = os_spawn_job("sleep", ["60"], List[int](), 0, -1, 0)?
+    let pid = os_proc_pid(h)?
+    time_sleep_ms(100)
+    masks("job", pid)
+    let (n0, live0) = os_wait_poll()?
+    print("a job running, nothing to report: ({n0}, {live0})")
+    stop_and_continue(h, pid, STOP, "STOP")?
+    stop_and_continue(h, pid, SUSPEND, "SUSPEND")?
+    stop_and_continue(h, pid, BG_READ, "BG_READ")?
+    stop_and_continue(h, pid, BG_WRITE, "BG_WRITE")?
+    print("TERMINATE sent: {send(pid, TERMINATE)}")
+    let (eh, est) = change()
+    let tn = os_signal_number(TERMINATE)?
+    print("ended: reported for the job: {eh == h}, by -TERMINATE's number: {est == -tn}")
+    let (n1, live1) = os_wait_poll()?
+    print("then nothing, none live: ({n1}, {live1})")
+    let late = os_wait_status(h) else |e| {
+        match e {
+            io => -1000,
+        }
+    }
+    print("a wait after the poll reaped it: {if late == -1000 { "io" } else { "{late}" }}")
+
+    // A job of two in one group, stopped by one group send.
+    let a = os_spawn_job("sleep", ["60"], List[int](), 0, -1, 0)?
+    let g = os_proc_pid(a)?
+    let b = os_spawn_job("sleep", ["60"], List[int](), g, -1, 0)?
+    time_sleep_ms(100)
+    drain()
+    os_signal_send_group(g, STOP)?
+    // The two members change at nearly the same moment, in no promised
+    // order: each is reported once, whichever the poll sees first.
+    let (s1, t1) = change()
+    let (s2, t2) = change()
+    let sn = os_signal_number(STOP)?
+    let both = (s1 == a && s2 == b) || (s1 == b && s2 == a)
+    print("a group of two stopped, both reported: {both}, both by STOP: {t1 == 256 + sn && t2 == 256 + sn}")
+    os_signal_send_group(g, CONTINUE)?
+    os_signal_send_group(g, TERMINATE)?
+    let (e1, u1) = change()
+    let (e2, u2) = change()
+    let ended = (e1 == a && e2 == b) || (e1 == b && e2 == a)
+    print("and ended, both reported: {ended}, both by TERMINATE: {u1 == -tn && u2 == -tn}")
+
+    // An exit is its code.
+    let x = os_spawn(["sh", "-c", "exit 3"])?
+    let (xh, xs) = change()
+    print("an exit: {xh == x}, its code: {xs}")
+    let (n2, live2) = os_wait_poll()?
+    print("nothing left: ({n2}, {live2})")
+    0
+}

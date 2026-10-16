@@ -1,0 +1,29 @@
+//! member: false
+//! s242 (wolf-lang#680; `[os.signal.wait]`, `[os.signal.checked]`) — an
+//! idle shell: parked in `os_signal_wait(CHILD | INTERRUPT)` beside a
+//! job that sleeps. The gate counts this process's context switches,
+//! every thread's, from outside while it is parked (linux,
+//! `/proc/<pid>/task/*/status`); none is expected — the wait has no
+//! timer. At 0.2.30 the native wait woke every 5 ms (about 195 switches
+//! a second, measured) and the checked machine refused the wait by name.
+//! When the job ends, `CHILD` arrives and the poll answers it.
+
+const CHILD: int = 256
+const INTERRUPT: int = 16
+
+fn main() -> !int {
+    os_signal_listen(CHILD | INTERRUPT)?
+    let secs = env_get("S242_IDLE_SECS") else |_| "4"
+    let h = os_spawn_job("sleep", [secs], List[int](), 0, -1, 0)?
+    var m = 0
+    var ch = -1
+    var st = 0
+    while ch == -1 {
+        m = os_signal_wait(CHILD | INTERRUPT)?
+        let (c2, s2) = os_wait_poll()?
+        ch = c2
+        st = s2
+    }
+    print("woke by CHILD: {m == CHILD}; the job: {ch == h}, its status: {st}")
+    0
+}
