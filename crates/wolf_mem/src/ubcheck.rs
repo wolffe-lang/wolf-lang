@@ -8520,6 +8520,21 @@ impl<'t> Machine<'t> {
                     _ => Ok(tag("io")),
                 }
             }
+            // s242 (wolf-lang#680, `[os.proc.poll]`): never blocks — the
+            // first child of the machine's table that ended or stopped
+            // since it was last looked at, `(h, status)` (256 + N a stop
+            // by host signal N), or `(-1, n)`, n the children still live.
+            // One `waitpid` per live child, never `waitpid(-1)`: the
+            // `wolf` process may host other runs' children.
+            "os_wait_poll" => match checked_poll(&mut self.children) {
+                Ok((h, st)) => Ok(Flow::Val(Value::Struct {
+                    fields: vec![
+                        ("0".to_string(), Value::Int(h)),
+                        ("1".to_string(), Value::Int(st)),
+                    ],
+                })),
+                Err(t) => Ok(tag(t)),
+            },
             "os_wait_status" => {
                 let Some(h) = int_arg(0) else {
                     return self.refuse("this os call shape", span);
@@ -8861,10 +8876,29 @@ impl<'t> Machine<'t> {
                     }
                     std::thread::sleep(std::time::Duration::from_millis(1));
                 }
+                // s242 (wolf-lang#680): no other task is left, but the
+                // HOST can still deliver — a listen armed it for real
+                // (s219) — so wait in the host's `poll(2)` on the wake
+                // pipe the handler writes, with no timer: a job's stop
+                // or end (`CHILD`) or a trapped signal ends the wait,
+                // and an idle wait wakes for nothing.
+                let armed = want & self.signal_listening;
+                if cfg!(unix) && armed != 0 {
+                    loop {
+                        checked_sig::settle(self.signal_listening);
+                        if let Some(m) = checked_sig::take(armed) {
+                            return Ok(Flow::Val(Value::Int(m)));
+                        }
+                        if let Err(t) = checked_sig::wait_signal(armed) {
+                            return Ok(tag(t));
+                        }
+                    }
+                }
                 // A blocking wait with no pending delivery and no other
-                // task to make one: the machine models signals as its
-                // own queue and has nothing to deliver later. Refused
-                // by name (the honest ledger entry).
+                // task to make one, for a set nothing armed on the host
+                // (windows: the in-machine model only): nothing could
+                // deliver later. Refused by name (the honest ledger
+                // entry).
                 self.refuse(
                     "a blocking signal wait with no pending delivery in checked execution",
                     span,
@@ -10655,6 +10689,8 @@ impl<'t> Machine<'t> {
             // range and a signal's words.
             | "os_signal_send_group" | "os_signal_send_all" | "os_set_pgid" | "os_signal_last"
             | "os_signal_realtime" | "os_signal_text"
+            // s242 (#680): the poll of the children.
+            | "os_wait_poll"
             | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
             | "str_from_utf8"
@@ -13099,6 +13135,67 @@ const TERM_MODE_VALID: i64 = 31 | 0xFF00 | 0xFF_0000;
 /// async-signal-safe) and does nothing else; `take` hands the lowest
 /// pending bit of a set to `wait`/`poll`. Dispositions are the host's
 /// `sigaction`.
+/// `os_wait_poll` on the checked machine's table (s242, wolf-lang#680,
+/// `[os.proc.poll]`) — `wolf_rt::os::ChildTable::poll`'s rule, entry for
+/// entry: in handle order, one `waitpid(pid, WNOHANG | WUNTRACED)` per
+/// live child; an end reaps and closes the handle, a stop is `256 + N`
+/// and the child stays; nothing to say is `(-1, n)`. windows: ends only.
+fn checked_poll(children: &mut [Option<std::process::Child>]) -> Result<(i64, i64), &'static str> {
+    let mut live = 0i64;
+    for (i, slot) in children.iter_mut().enumerate() {
+        let Some(child) = slot.as_mut() else {
+            continue;
+        };
+        live += 1;
+        #[cfg(unix)]
+        {
+            let pid = child.id() as libc::pid_t;
+            let mut st: libc::c_int = 0;
+            let r = loop {
+                // SAFETY: a plain waitpid on a child this machine owns,
+                // never blocking (WNOHANG).
+                let r = unsafe { libc::waitpid(pid, &mut st, libc::WNOHANG | libc::WUNTRACED) };
+                if r < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
+                    continue;
+                }
+                break r;
+            };
+            if r < 0 {
+                *slot = None;
+                return Err("io");
+            }
+            if r > 0 {
+                if libc::WIFSTOPPED(st) {
+                    return Ok((i as i64, 256 + i64::from(libc::WSTOPSIG(st))));
+                }
+                if libc::WIFEXITED(st) {
+                    *slot = None;
+                    return Ok((i as i64, i64::from(libc::WEXITSTATUS(st))));
+                }
+                if libc::WIFSIGNALED(st) {
+                    *slot = None;
+                    return Ok((i as i64, -i64::from(libc::WTERMSIG(st))));
+                }
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            match child.try_wait() {
+                Err(_) => return Err("io"),
+                Ok(None) => {}
+                Ok(Some(status)) => {
+                    *slot = None;
+                    return match status.code() {
+                        Some(c) => Ok((i as i64, i64::from(c))),
+                        None => Err("io"),
+                    };
+                }
+            }
+        }
+    }
+    Ok((-1, live))
+}
+
 mod checked_sig {
     use std::sync::atomic::{AtomicI8, AtomicI64, Ordering};
 
@@ -13216,6 +13313,56 @@ mod checked_sig {
         timeout_ms: i32,
     ) -> Result<Woke, &'static str> {
         use std::os::fd::AsRawFd as _;
+        let r = wake_pipe()?;
+        let mut buf = [0u8; 16];
+        // SAFETY: our own nonblocking pipe; emptied, it answers EAGAIN.
+        while unsafe { libc::read(r, buf.as_mut_ptr().cast(), buf.len()) } > 0 {}
+        if PENDING.load(Ordering::SeqCst) & set != 0 {
+            return Ok(Woke::Signal);
+        }
+        wait_readable_on(f.as_raw_fd(), r, timeout_ms)
+    }
+
+    /// s242 (wolf-lang#680, `[os.signal.checked]`): a blocking
+    /// `os_signal_wait` with no other task alive waits on the HOST for a
+    /// set a listen armed there — `poll(2)` on the wake pipe alone, no
+    /// timer, so an idle checked program makes no context switches. The
+    /// pipe is made and emptied before the pending set is looked at, as
+    /// [`wait_readable`] does.
+    #[cfg(unix)]
+    pub(super) fn wait_signal(set: i64) -> Result<Woke, &'static str> {
+        let r = wake_pipe()?;
+        let mut buf = [0u8; 16];
+        // SAFETY: our own nonblocking pipe; emptied, it answers EAGAIN.
+        while unsafe { libc::read(r, buf.as_mut_ptr().cast(), buf.len()) } > 0 {}
+        if PENDING.load(Ordering::SeqCst) & set != 0 {
+            return Ok(Woke::Signal);
+        }
+        let mut fds = [libc::pollfd {
+            fd: r,
+            events: libc::POLLIN,
+            revents: 0,
+        }];
+        // SAFETY: one live pollfd; no timeout.
+        let n = unsafe { libc::poll(fds.as_mut_ptr(), 1, -1) };
+        if n < 0 {
+            let e = std::io::Error::last_os_error().raw_os_error();
+            if e == Some(libc::EINTR) || e == Some(libc::EAGAIN) {
+                return Ok(Woke::Signal);
+            }
+            return Err("io");
+        }
+        Ok(Woke::Signal)
+    }
+    #[cfg(not(unix))]
+    pub(super) fn wait_signal(_set: i64) -> Result<Woke, &'static str> {
+        Err("unsupported")
+    }
+
+    /// The wake pipe's read end, made once (s234), nonblocking and
+    /// close-on-exec at both ends before the write end is published.
+    #[cfg(unix)]
+    fn wake_pipe() -> Result<libc::c_int, &'static str> {
         let mut r = WAKE_R.load(Ordering::SeqCst);
         if r < 0 {
             let _making = WAKE_MAKING
@@ -13243,15 +13390,16 @@ mod checked_sig {
                 r = fds[0];
             }
         }
-        let mut buf = [0u8; 16];
-        // SAFETY: our own nonblocking pipe; emptied, it answers EAGAIN.
-        while unsafe { libc::read(r, buf.as_mut_ptr().cast(), buf.len()) } > 0 {}
-        if PENDING.load(Ordering::SeqCst) & set != 0 {
-            return Ok(Woke::Signal);
-        }
+        Ok(r)
+    }
+
+    /// [`wait_readable`]'s wait proper: `fd` and the wake pipe's read end
+    /// `r`, already emptied and the pending set already looked at.
+    #[cfg(unix)]
+    fn wait_readable_on(fd: libc::c_int, r: libc::c_int, timeout_ms: i32) -> Result<Woke, &'static str> {
         let mut fds = [
             libc::pollfd {
-                fd: f.as_raw_fd(),
+                fd,
                 events: libc::POLLIN,
                 revents: 0,
             },
@@ -13276,7 +13424,6 @@ mod checked_sig {
             // macOS answers POLLNVAL for a terminal opened by path
             // (`/dev/tty`), measured; `select(2)` on it works — the
             // runtime's `wait_two`, mirrored.
-            let fd = f.as_raw_fd();
             let limit = libc::FD_SETSIZE as i64;
             if i64::from(fd) >= limit || i64::from(r) >= limit {
                 return Err("io");
