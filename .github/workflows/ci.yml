@@ -350,13 +350,27 @@ jobs:
           done
 
   build-test:
-    name: build + test (${{ matrix.os }})
+    # tl23: windows runs in two legs. As one job it ran 28-30 min of its
+    # 30 on a cold cache (build 1.8 min, test 3 min compile + 10 run,
+    # lane-coverage 5.5, dist 7.5 of which the release build is all but
+    # seconds) and was cut at the limit during `dist` (38806507495,
+    # 38796823854, the nightly 38864953006). A cut job never saves its
+    # cache, so a cold trunk stayed cold. The `tests` leg runs build +
+    # test, the `rung` leg build + lane-coverage + dist: each about half
+    # the work, on its own runner and its own cache (the leg is the
+    # cache's `key`). Every step still runs on windows; macOS is one leg.
+    name: build + test (${{ matrix.os }}${{ matrix.leg && format(', {0}', matrix.leg) || '' }})
     needs: plan
     if: contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'build-test')
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest]
+        include:
+          - os: macos-latest
+          - os: windows-latest
+            leg: tests
+          - os: windows-latest
+            leg: rung
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
@@ -365,10 +379,13 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.leg }}
       - name: the freestanding runtime's target (kw12, libwolf_rt_none.a)
         run: rustup target add x86_64-unknown-none
       - run: cargo build --workspace
-      - run: cargo test --workspace
+      - if: matrix.leg != 'rung'
+        run: cargo test --workspace
       # s60a: the windows native rung. The clif gate is open on this
       # host, so the corpus runs natively here — `lane-coverage` is the
       # windows floor line (259/255/0/274/0 at the s60a bring-up with 21
@@ -379,10 +396,10 @@ jobs:
       # somewhere else, and its `wolf.exe` builds and runs
       # corpus/hello.lu. macOS runs both inside its own gauntlet.
       - name: windows native rung — corpus lane coverage (the windows floor line)
-        if: matrix.os == 'windows-latest'
+        if: matrix.leg == 'rung'
         run: cargo xtask lane-coverage
       - name: windows dist — the archive, unpacked, builds and runs hello.exe
-        if: matrix.os == 'windows-latest'
+        if: matrix.leg == 'rung'
         run: cargo xtask dist
 
   freebsd-check:
