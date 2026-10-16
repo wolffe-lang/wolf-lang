@@ -1,0 +1,15 @@
+//! member: false
+//! s243 (wolf-lang#763, `[os.signal.hub]`): a program that NAMES a call
+//! which makes the signal hub (`os_signal_listen`) on a branch it never
+//! takes. The entry shim makes the hub before `main`; when the host
+//! refuses it, `main` never runs. The gate also counts this program's
+//! descriptors and threads at rest beside `no_park.lu`'s.
+
+fn main() -> int {
+    if env_args().len > 99 {
+        os_signal_listen(1) else |e| {}
+    }
+    print("ready")
+    time_sleep_ms(400)
+    0
+}

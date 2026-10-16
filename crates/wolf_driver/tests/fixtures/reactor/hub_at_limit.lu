@@ -1,0 +1,66 @@
+//! member: false
+//! s243 (wolf-lang#763): the signal hub at the descriptor limit. The
+//! hub is two pipes and a drain thread; until s243 the first
+//! `os_signal_listen` or `os_signal_wait` made it and ASSERTED that the
+//! host gave it, so a process that had used its descriptors up first
+//! ended there. Now a program that names a call which makes the hub has
+//! it before `main` (`[os.signal.hub]`), and the listen asks the host
+//! for nothing.
+//!
+//! Lines: `full` (the opens the host took and its refusal's number);
+//! `listen`, `raise`, `wait` (the rows at the limit — the raise only
+//! after a listen that was ok: an unlistened reload would end the
+//! process by the host's default); `after` (a listen once every
+//! descriptor is back).
+
+fn main() -> int {
+    let path = "hub_at_limit.tmp"
+    fs_write_text(path, "x") else |e| {
+        print("scratch io")
+        return 3
+    }
+    let held = List[int]()
+    var errno = 0
+    var more = true
+    while more {
+        let fd = fs_open(path) else |e| {
+            errno = os_error()
+            more = false
+            0 - 1
+        }
+        if fd >= 0 {
+            (mut held).push(fd)
+        }
+    }
+    print("full held={held.len} errno={errno}")
+    var listen = "ok"
+    os_signal_listen(1) else |e| {
+        listen = "io"
+    }
+    print("listen row={listen}")
+    if listen == "ok" {
+        var raised = "ok"
+        os_signal_raise(1) else |e| {
+            raised = "io"
+        }
+        print("raise row={raised}")
+        var waited = "answered"
+        let m = os_signal_wait(1) else |e| {
+            waited = "io"
+            0 - 1
+        }
+        print("wait row={waited} value={m}")
+    }
+    var i = 0
+    while i < held.len {
+        fs_close(held[i]) else |e| {}
+        i = i + 1
+    }
+    var after = "ok"
+    os_signal_listen(512) else |e| {
+        after = "io"
+    }
+    print("after row={after}")
+    fs_remove(path) else |e| {}
+    0
+}
