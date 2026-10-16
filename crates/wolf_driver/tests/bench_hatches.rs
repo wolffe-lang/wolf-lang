@@ -40,9 +40,11 @@ fn out_dir() -> PathBuf {
 /// and the "annotated" lane had nothing left to strip — the sentinel
 /// would have been measuring nothing against nothing, which is the one
 /// thing this test exists to refuse.
-/// The header line opts each staged variant out of module formation:
-/// every `emit` tag lands as a sibling `.lu` in one shared directory,
-/// and they are standalone programs, not one module (D59).
+/// The header line opts each staged variant out of module formation
+/// (D59): until s243 every `emit` tag landed as a sibling `.lu` in one
+/// shared directory; each now has a directory of its own ([`stage`]),
+/// and the header stays so no build could form one module with a stray
+/// sibling.
 const SRC: &str = "\
 //! member: false
 
@@ -74,10 +76,21 @@ fn main() -> !int {
 }
 ";
 
-/// Write [`SRC`] as `<tag>.lu` for one build; the build's outputs go
-/// beside it.
+/// Write [`SRC`] as `<tag>.lu` for one build, in a directory of its own:
+/// `<tag>.<k>/`, `k` counted across the process (s243, #765, as s238 did
+/// for #733); the build's outputs go beside it. libtest runs this
+/// file's tests on parallel threads of one process, and a build loads
+/// every `.lu` beside its entry to learn whether it is a module member
+/// (D59): when every tag shared one directory, each build read the
+/// sources the other tests were writing. The names repeat from run to
+/// run, so the deletion below only clears a previous process's copy.
 fn stage(tag: &str) -> PathBuf {
-    let src = out_dir().join(format!("{tag}.lu"));
+    static STAGED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let k = STAGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = out_dir().join(format!("{tag}.{k}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let src = dir.join(format!("{tag}.lu"));
     std::fs::write(&src, SRC).expect("write source");
     src
 }
