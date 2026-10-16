@@ -102,8 +102,21 @@ fn ensure_rt_staticlib() {
     });
 }
 
+/// Stage the witness for one caller, in a directory of its own:
+/// `four_lists.<k>/four_lists.lu`, `k` counted across the process (s243,
+/// #765, as s238 did for #733). libtest runs this file's tests on
+/// parallel threads of one process, and two of them stage the witness:
+/// when both wrote `four_lists.lu` in one directory, one test's
+/// truncating write could land while the other's build was reading it.
+/// The names repeat from run to run, so the deletion below only clears
+/// a previous process's copy.
 fn witness_path() -> PathBuf {
-    let p = out_dir().join("four_lists.lu");
+    static STAGED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let k = STAGED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let dir = out_dir().join(format!("four_lists.{k}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("mkdir");
+    let p = dir.join("four_lists.lu");
     std::fs::write(&p, WITNESS).expect("write witness");
     p
 }
