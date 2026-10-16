@@ -380,6 +380,9 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 222] = [
     ("__wolf_rt_os_signal_last", 0, true),
     ("__wolf_rt_os_signal_realtime", 1, true),
     ("__wolf_rt_os_signal_text", 2, true),
+    // s242 (#680): the poll of the children — the (handle, status) pair
+    // through a 16-byte out slot.
+    ("__wolf_rt_os_wait_poll", 1, true),
     ("__wolf_rt_os_pid", 0, true),
     ("__wolf_rt_os_ppid", 0, true),
     // s234 (#719): the window's size (handle in, the pair through a

@@ -10526,6 +10526,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_signal_last"
                 | "os_signal_realtime"
                 | "os_signal_text"
+                // s242 (#680): the poll of the children.
+                | "os_wait_poll"
         ) {
             return self.lower_job_builtin(&callee_text, d, e);
         }
@@ -15099,6 +15101,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let want = match name {
             "os_pgid" | "os_signal_ignored" | "os_pid" | "os_ppid" => 0,
             "os_signal_last" | "os_signal_realtime" => 0,
+            "os_wait_poll" => 0,
             "os_uid" | "os_euid" | "os_gid" | "os_egid" | "os_groups" => 0,
             "os_set_ids" => 3,
             "os_spawn_job" => 6,
@@ -15156,6 +15159,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_signal_last" => ("__wolf_rt_os_signal_last", PROC),
             "os_signal_realtime" => ("__wolf_rt_os_signal_realtime", PROC),
             "os_signal_text" => ("__wolf_rt_os_signal_text", PROC),
+            "os_wait_poll" => ("__wolf_rt_os_wait_poll", PROC),
             _ => return Err(refuse("this job builtin", e.span)),
         };
         // s241 (`[os.signal.text]`): `env_get`'s str shape — rc 0 and the
@@ -15187,8 +15191,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // (rows, columns) pair through a 16-byte slot, else the code.
         //
         // s241 (`[os.signal.host]`): `os_signal_realtime` is the same pair
-        // shape with no argument.
-        if name == "os_term_size" || name == "os_signal_realtime" {
+        // shape with no argument, and s242's `os_wait_poll` (`[os.proc.poll]`)
+        // too.
+        if name == "os_term_size" || name == "os_signal_realtime" || name == "os_wait_poll" {
             let Some(sema) = self.expr_sema_ty(e.span) else {
                 return Err(refuse("a window size without a recorded type", e.span));
             };
