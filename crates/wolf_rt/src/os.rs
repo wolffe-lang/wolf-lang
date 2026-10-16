@@ -607,6 +607,79 @@ impl ChildTable {
         }
     }
 
+    /// `os_wait_poll()` (s242, wolf-lang#680, `[os.proc.poll]`): never
+    /// blocks. Looks at every child of the table not yet seen to end, in
+    /// handle order, and answers `(h, status)` for the first that ended
+    /// or stopped since it was last looked at: 0..255 an exit code, `-N`
+    /// an end by host signal N ([`Self::wait_status`]'s), `256 + N` a
+    /// stop by host signal N. An ended child is reaped and its slot
+    /// tombstoned; a stopped one stays, and the host reports each stop
+    /// once. A continue is not asked for. Nothing to report: `(-1, n)`,
+    /// `n` the children still live (0: none left). One `waitpid` per
+    /// live child and nothing else — never `waitpid(-1)`, which would
+    /// reap a child this table does not hold (a host that embeds the
+    /// runtime, a test binary's other children). A child the host
+    /// reaped itself (this process ignores `SIGCHLD`) is `io` once and
+    /// its slot tombstoned.
+    pub fn poll(&mut self) -> Result<(i64, i64), ProcErr> {
+        let mut live = 0i64;
+        for (i, slot) in self.children.iter_mut().enumerate() {
+            let Some(child) = slot.as_mut() else {
+                continue;
+            };
+            live += 1;
+            #[cfg(unix)]
+            {
+                let pid = child.id() as libc::pid_t;
+                let mut st: libc::c_int = 0;
+                let r = loop {
+                    // SAFETY: a plain waitpid on a child this table owns,
+                    // never blocking (WNOHANG).
+                    let r = unsafe { libc::waitpid(pid, &mut st, libc::WNOHANG | libc::WUNTRACED) };
+                    if r < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR)
+                    {
+                        continue;
+                    }
+                    break r;
+                };
+                if r < 0 {
+                    *slot = None;
+                    return Err("io");
+                }
+                if r > 0 {
+                    if libc::WIFSTOPPED(st) {
+                        return Ok((i as i64, STOPPED + i64::from(libc::WSTOPSIG(st))));
+                    }
+                    if libc::WIFEXITED(st) {
+                        *slot = None;
+                        return Ok((i as i64, i64::from(libc::WEXITSTATUS(st))));
+                    }
+                    if libc::WIFSIGNALED(st) {
+                        *slot = None;
+                        return Ok((i as i64, -i64::from(libc::WTERMSIG(st))));
+                    }
+                    // Anything else was not asked for (no WCONTINUED).
+                }
+            }
+            #[cfg(not(unix))]
+            {
+                // No stops on this host: an end, or nothing.
+                match child.try_wait() {
+                    Err(_) => return Err("io"),
+                    Ok(None) => {}
+                    Ok(Some(status)) => {
+                        *slot = None;
+                        return match status.code() {
+                            Some(c) => Ok((i as i64, i64::from(c))),
+                            None => Err("io"),
+                        };
+                    }
+                }
+            }
+        }
+        Ok((-1, live))
+    }
+
     /// Wait for the child and REAP it (the slot tombstones on any
     /// completed wait). The exit code, or `signal` for a child that
     /// died without one (unix); a forged or already-reaped handle is
@@ -799,6 +872,11 @@ pub fn map_of(flat: &[i64]) -> Result<Vec<(i64, Option<i64>)>, ProcErr> {
     }
     Ok(out)
 }
+
+/// `os_wait_poll`'s stop (s242, `[os.proc.poll]`): `256 + N` for a child
+/// stopped by host signal N — above every exit code (0..255) and apart
+/// from every end by signal (`-N`), so no status means two things.
+pub const STOPPED: i64 = 256;
 
 /// The process-wide child table behind the shim trio — the fs
 /// `FILES`/net `NET` precedent.
@@ -1064,6 +1142,28 @@ pub unsafe extern "C" fn __wolf_rt_os_wait_status(h: i64, out: i64) -> i64 {
     match children().wait_status(h) {
         Ok(st) => {
             unsafe { write_word(out, st) };
+            proc_code::OK
+        }
+        Err(t) => proc_code_of_tag(t),
+    }
+}
+
+/// `os_wait_poll() -> (int, int) ! {io}` (s242, wolf-lang#680,
+/// `[os.proc.poll]`) — never blocks: `(h, status)` for the first child
+/// of the table that ended or stopped since it was last looked at, or
+/// `(-1, n)` with `n` the children still live, through `out` on code 0.
+/// The table is taken as every process call takes it; a blocking
+/// `os_wait` or `os_wait_status` on another task holds it until its child
+/// ends (the trade [`__wolf_rt_os_wait`] records).
+///
+/// # Safety
+///
+/// `out` must address 16 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_wait_poll(out: i64) -> i64 {
+    match children().poll() {
+        Ok((h, st)) => {
+            unsafe { write_pair(out, h, st) };
             proc_code::OK
         }
         Err(t) => proc_code_of_tag(t),
@@ -1895,6 +1995,97 @@ mod tests {
             unsafe { __wolf_rt_os_wait_status(h, out.as_mut_ptr() as i64) },
             proc_code::IO
         );
+    }
+
+    /// s242: poll a table of the test's own (the process-wide one is
+    /// shared with the other tests' children) until it has something to
+    /// say, for up to five seconds.
+    #[cfg(unix)]
+    fn poll_until_said(t: &mut ChildTable) -> (i64, i64) {
+        for _ in 0..500 {
+            let r = t.poll().expect("the poll answers");
+            if r.0 >= 0 {
+                return r;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        panic!("nothing to report in five seconds");
+    }
+
+    /// s242 (`[os.proc.poll]`): the poll never blocks; an end is
+    /// reported once and reaps (a later wait is `io`); a stop is `256 +
+    /// N`, reported once, and the child stays; a continue is not
+    /// reported; with nothing to say it answers `(-1, n)`, `n` the
+    /// children still live. Signals go only to the test's own child.
+    #[cfg(unix)]
+    #[test]
+    fn poll_reports_a_stop_once_and_each_end() {
+        let mut t = ChildTable::new();
+        assert_eq!(t.poll(), Ok((-1, 0)));
+        let a = t.spawn(&["sleep", "30"]).expect("sleep");
+        let b = t.spawn(&["sh", "-c", "exit 3"]).expect("sh");
+        assert_eq!(poll_until_said(&mut t), (b, 3));
+        assert_eq!(t.poll(), Ok((-1, 1)));
+        assert_eq!(t.wait_status(b), Err("io"));
+        let pid = t.pid(a).expect("live") as libc::pid_t;
+        // SAFETY: signals to the test's own child.
+        unsafe { libc::kill(pid, libc::SIGSTOP) };
+        assert_eq!(
+            poll_until_said(&mut t),
+            (a, STOPPED + i64::from(libc::SIGSTOP))
+        );
+        assert_eq!(t.poll(), Ok((-1, 1)), "a stop is reported once");
+        unsafe { libc::kill(pid, libc::SIGCONT) };
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        assert_eq!(t.poll(), Ok((-1, 1)), "a continue is not reported");
+        unsafe { libc::kill(pid, libc::SIGTERM) };
+        assert_eq!(
+            poll_until_said(&mut t),
+            (a, -i64::from(libc::SIGTERM))
+        );
+        assert_eq!(t.poll(), Ok((-1, 0)));
+        assert_eq!(t.wait_status(a), Err("io"));
+    }
+
+    /// s242: a stopped child that is then ended while stopped answers its
+    /// end, and a blocking `os_wait_status` never answers a stop.
+    #[cfg(unix)]
+    #[test]
+    fn a_stopped_child_still_ends_for_the_blocking_wait() {
+        let mut t = ChildTable::new();
+        let a = t.spawn(&["sleep", "30"]).expect("sleep");
+        let pid = t.pid(a).expect("live") as libc::pid_t;
+        // SAFETY: signals to the test's own child.
+        unsafe { libc::kill(pid, libc::SIGSTOP) };
+        assert_eq!(
+            poll_until_said(&mut t),
+            (a, STOPPED + i64::from(libc::SIGSTOP))
+        );
+        unsafe { libc::kill(pid, libc::SIGKILL) };
+        assert_eq!(t.wait_status(a), Ok(-i64::from(libc::SIGKILL)));
+        assert_eq!(t.poll(), Ok((-1, 0)));
+    }
+
+    /// s242: the poll on windows answers ends and never a stop (the host
+    /// has none).
+    #[cfg(windows)]
+    #[test]
+    fn poll_answers_an_end_on_windows() {
+        let mut t = ChildTable::new();
+        assert_eq!(t.poll(), Ok((-1, 0)));
+        let a = t
+            .spawn(&["cmd", "/c", "exit 3"])
+            .expect("cmd");
+        let mut got = (-1, 1);
+        for _ in 0..500 {
+            got = t.poll().expect("the poll answers");
+            if got.0 >= 0 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(got, (a, 3));
+        assert_eq!(t.poll(), Ok((-1, 0)));
     }
 
     /// s219: group 0 makes the child the leader of a new group (its
