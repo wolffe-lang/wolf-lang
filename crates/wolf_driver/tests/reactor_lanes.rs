@@ -27,6 +27,15 @@
 //! std has no `poll`) — so `unsupported` is its ruled answer there, not
 //! a pre-mirror one.
 
+//!
+//! s243 (wolf-lang#763, `[os.signal.hub]`): the signal hub (two pipes
+//! and a drain thread) the same way. Until s243 the first
+//! `os_signal_listen` or `os_signal_wait` made it and asserted, so a
+//! process at its descriptor limit ended at its first listen. Now a
+//! program that names a call which makes the hub makes it before `main`
+//! (a refusal is the same line's twin and exit 71). lupin has no signal
+//! family and refuses `os_signal_listen` by name.
+
 #![cfg(unix)]
 
 mod lane_exit;
@@ -187,6 +196,8 @@ struct Obs {
     stdout: String,
     version: String,
     commit: String,
+    /// The record's `x-unsupported` text: what a refusal by name names.
+    unsupported: String,
 }
 
 fn parse_obs(out: &Output, what: &str) -> Obs {
@@ -202,6 +213,7 @@ fn parse_obs(out: &Output, what: &str) -> Obs {
         stdout: rec["stdout_inline"].as_str().unwrap_or("").to_string(),
         version: rec["impl_version"].as_str().unwrap_or("").to_string(),
         commit: rec["commit"].as_str().unwrap_or("").to_string(),
+        unsupported: rec["x-unsupported"].as_str().unwrap_or("").to_string(),
     }
 }
 
@@ -533,5 +545,163 @@ fn the_readiness_set_costs_a_program_only_when_it_names_a_park() {
              threads {nt})"
         );
         println!("{tier}: names a park fds={pf} threads={pt}; names none fds={nf} threads={nt}");
+    }
+}
+
+/// `hub_at_limit.lu`'s ruled answer (`[os.signal.hub]`): the hub was
+/// made before `main`, so at the limit the listen is ok, the raise is
+/// ok, the wait answers the meaning raised, and a listen once the
+/// descriptors are back is ok.
+fn assert_hub(stdout: &str, what: &str) {
+    assert_full(stdout, what);
+    for (key, want) in [
+        ("listen", "row=ok"),
+        ("raise", "row=ok"),
+        ("wait", "row=answered value=1"),
+        ("after", "row=ok"),
+    ] {
+        assert_eq!(
+            line(stdout, key, what),
+            want,
+            "{what}: the {key} at the limit"
+        );
+    }
+}
+
+/// `[os.signal.hub]` (s243, #763): no machine ends the process at a
+/// listen at the descriptor limit, and every wolfgang machine answers
+/// the same rows. lupin refuses `os_signal_listen` by name (it has no
+/// signal family).
+#[test]
+fn a_listen_at_the_descriptor_limit_does_not_end_the_process() {
+    let dir = scratch("hub");
+    let entry = fixture("hub_at_limit.lu");
+    for release in [false, true] {
+        let Some(exe) = build(&entry, &dir, release) else {
+            continue;
+        };
+        for set in cpu_sets() {
+            let what = format!(
+                "{} ({})",
+                if release { "release" } else { "native" },
+                set.map_or("all cores".to_string(), |c| format!("taskset -c {c}"))
+            );
+            let out = limited(compiled(&exe, set), &dir, LIMIT);
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            assert_eq!(
+                out.status.code(),
+                Some(0),
+                "{what}: the process did not finish (until s243: SIGABRT at the first listen, \
+                 `the signal hub could not be made`)\nstdout:\n{stdout}\nstderr:\n{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            assert_hub(&stdout, &what);
+            println!("{what}: {}", stdout.replace('\n', " | "));
+        }
+    }
+    let c = checked(&entry, &dir, LIMIT);
+    assert_eq!(c.verdict, "exit(0)", "checked: {c:?}");
+    assert_hub(&c.stdout, "checked");
+    println!("checked: {}", c.stdout.replace('\n', " | "));
+    if let Some(l) = lupin(&entry, &dir, LIMIT) {
+        assert_eq!(
+            (l.verdict.as_str(), l.unsupported.contains("os_signal_listen")),
+            ("unsupported", true),
+            "lupin {} refuses os_signal_listen by name: {l:?}",
+            l.version
+        );
+        println!("lupin {} ({}): {}", l.version, l.commit, l.unsupported);
+    }
+}
+
+/// `[os.signal.hub]`: a program that names a call which makes the hub,
+/// on a host that refuses it, never reaches `main` — one stderr line,
+/// exit 71 — while a program that names none starts under the same
+/// limit. Linux, at four descriptors (the standard streams and one
+/// more: a pipe needs two), as for the readiness set.
+#[test]
+fn a_program_that_cannot_make_its_signal_hub_does_not_start() {
+    if !cfg!(target_os = "linux") {
+        eprintln!(
+            "NOTE: the start refusal is measured on linux (macOS's loader's needs at a \
+             four-descriptor limit are not measured)"
+        );
+        return;
+    }
+    let dir = scratch("hub_start");
+    for release in [false, true] {
+        let tier = if release { "release" } else { "native" };
+        let Some(hub) = build(&fixture("names_hub.lu"), &dir, release) else {
+            continue;
+        };
+        let Some(none) = build(&fixture("no_park.lu"), &dir, release) else {
+            continue;
+        };
+        let out = limited(Command::new(&hub), &dir, 4);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(
+            out.status.code(),
+            Some(71),
+            "{tier}: names a hub call, four descriptors: {:?} stderr: {stderr}",
+            out.status
+        );
+        assert!(
+            out.stdout.is_empty(),
+            "{tier}: `main` ran: {:?}",
+            out.stdout
+        );
+        let lines: Vec<&str> = stderr.lines().collect();
+        assert_eq!(lines.len(), 1, "{tier}: one stderr line: {stderr}");
+        assert!(
+            lines[0].starts_with("wolf: the runtime could not make its signal hub (")
+                && lines[0].ends_with("); the program did not start")
+                && lines[0].contains(&format!("(os error {})", libc::EMFILE)),
+            "{tier}: the line: {stderr}"
+        );
+        let out = limited(Command::new(&none), &dir, 4);
+        assert_eq!(
+            (
+                out.status.code(),
+                String::from_utf8_lossy(&out.stdout).trim()
+            ),
+            (Some(0), "ready"),
+            "{tier}: names no hub call, four descriptors: stderr {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        println!(
+            "{tier}: names a hub call -> 71, `{}`; names none -> 0",
+            lines[0]
+        );
+    }
+}
+
+/// `[os.signal.hub]`'s cost, D15's rule: a program that names a call
+/// which makes the hub carries its two pipes (four descriptors) and the
+/// drain thread from its start; a program that names none carries
+/// neither.
+#[test]
+fn the_signal_hub_costs_a_program_only_when_it_names_a_hub_call() {
+    if !cfg!(target_os = "linux") {
+        eprintln!("NOTE: the at-rest counts are read from linux's /proc");
+        return;
+    }
+    let dir = scratch("hub_cost");
+    for release in [false, true] {
+        let tier = if release { "release" } else { "native" };
+        let Some(hub) = build(&fixture("names_hub.lu"), &dir, release) else {
+            continue;
+        };
+        let Some(none) = build(&fixture("no_park.lu"), &dir, release) else {
+            continue;
+        };
+        let (hf, ht) = at_rest(&hub);
+        let (nf, nt) = at_rest(&none);
+        assert_eq!(
+            (hf, ht),
+            (nf + 4, nt + 1),
+            "{tier}: names a hub call (fds {hf}, threads {ht}) against names none (fds {nf}, \
+             threads {nt})"
+        );
+        println!("{tier}: names a hub call fds={hf} threads={ht}; names none fds={nf} threads={nt}");
     }
 }
