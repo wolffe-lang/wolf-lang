@@ -378,9 +378,15 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
+      # Saved from trunk only; a pull request's run restores trunk's. The
+      # repo's caches stood at 10.6 of GitHub's 10 GB on 2026-10-16, six
+      # of them this job's windows cache (332 MB each) under a pull
+      # request's or a plant's ref no other branch can read, so each one
+      # pushed toward evicting the cache every branch can.
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.leg }}
+          save-if: ${{ github.ref == 'refs/heads/trunk' }}
       - name: the freestanding runtime's target (kw12, libwolf_rt_none.a)
         run: rustup target add x86_64-unknown-none
       - run: cargo build --workspace
