@@ -171,6 +171,14 @@ jobs:
       # a broken job, never a quiet skip.
       WOLF_GROUP_REQUIRE_CONTAINER: "1"
       WOLF_GROUP_ENGINE: docker
+      # s242 ([os.proc.poll]): the witnesses that stop, continue and end a
+      # job and cut a wait short with a signal run inside a throwaway
+      # `--network none` container with NO init (an init that blocks the
+      # stop signals hands the block to the jobs; job_wait_lanes.rs) —
+      # never on the runner itself. The same image, so a missing engine
+      # here is a broken job, never a quiet skip.
+      WOLF_JOBWAIT_REQUIRE_CONTAINER: "1"
+      WOLF_JOBWAIT_ENGINE: docker
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -187,6 +195,7 @@ jobs:
           docker image inspect docker.io/library/ubuntu:24.04 --format '{{.Id}} {{index .RepoDigests 0}}'
           docker run --rm --network none docker.io/library/ubuntu:24.04 sh -c 'id; nproc'
           docker run --rm --network none --init docker.io/library/ubuntu:24.04 sh -c 'echo pid $$; command -v setsid setpriv taskset'
+          docker run --rm --network none docker.io/library/ubuntu:24.04 sh -c 'echo pid $$ with no init; grep -E "SigBlk|SigIgn" /proc/self/status'
       - name: install native toolchain (gdb for debug-check, lld for the link
           probe, clang for the s41 release tier — system LLVM is a NAMED
           toolchain requirement per D33, never a build script; strace is the
