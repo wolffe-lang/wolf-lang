@@ -231,3 +231,27 @@ fn a_stripped_build_still_runs_and_still_traps() {
          never a correctness input"
     );
 }
+
+/// #765 (the shape of #733): libtest runs this file's tests on parallel
+/// threads of one process, and a build loads every `.lu` beside its
+/// entry (D59's module formation reads each sibling to learn whether it
+/// is a member). Two stagings must each be alone in their directory, so
+/// no build reads, or races, a source another test is writing.
+#[test]
+fn each_staged_source_is_alone_in_its_directory() {
+    let (a, b) = (stage("alone_a"), stage("alone_b"));
+    for src in [&a, &b] {
+        let dir = src.parent().expect("the staged source's directory");
+        let others: Vec<PathBuf> = std::fs::read_dir(dir)
+            .expect("read the staging directory")
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().is_some_and(|x| x == "lu") && p != src)
+            .collect();
+        assert!(
+            others.is_empty(),
+            "#765: {} shares its directory with {others:?}, which a build of it reads while \
+             other tests rewrite them",
+            src.display()
+        );
+    }
+}
