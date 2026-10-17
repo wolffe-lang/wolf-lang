@@ -471,9 +471,10 @@ the checked machine where lupin trapped.) Witnesses:
   it printed the masked shift's answer. The spelling that keeps the old
   bits is `wrapping[T]`.
   **Not answered by lupin 0.1.52 or 0.1.53:** a count of 128 or more traps there
-  where (3) answers (its integers are 128 bits wide), and a constant
+  where (3) answers (their integers are 128 bits wide), and a constant
   initialiser is not checked against its type (`const K: u8 = 200 << 1`
-  prints `400`). `shift_lanes` pins the first by version.
+  prints `400`). lupin 0.1.54 answers both (wolf-interp#251), measured;
+  `shift_lanes` pins no version.
   **Weighed and not taken** (the ruling's options; A is this clause):
   *B*, any count outside `0..W` traps (lupin would change on 55 of the
   250 cells); *C*, a count outside `0..W` traps and the bits that leave
