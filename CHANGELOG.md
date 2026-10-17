@@ -32,12 +32,13 @@ the recommendation, on the checked machine, native and release:
 
 lupin answers the poll with no child, `(-1, 0)`, and refuses it by name
 once a child is live (its half: wolf-interp `s242`). Host table 134 → 135
-lines, prelude 141 → 142 functions, RT_SYMBOLS 221 → 222, anchors 658 →
-660. Witnesses (`job_wait_lanes.rs`): a job stopped by each of the four,
+lines, prelude 141 → 142 functions, RT_SYMBOLS 222 → 223, anchors 659 →
+661 (after s243's hub symbol and anchor). Witnesses (`job_wait_lanes.rs`): a job stopped by each of the four,
 continued and ended, and a `wait` cut short by `TERMINATE`, in a
 throwaway container with no init on linux (podman's init blocks the stop
 signals and its children inherit the block) and on CI's runner on macOS;
 an idle wait's context switches counted from outside.
+
 ### The signal hub made before `main`; two test races closed (s243, #763, #765; ruling #80's rule)
 
 A program at its descriptor limit no longer ends at its first
