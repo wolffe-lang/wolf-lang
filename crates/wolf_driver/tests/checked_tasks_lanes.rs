@@ -25,8 +25,9 @@
 //! Two witnesses part from lupin 0.1.49, 0.1.50 (the 0.2.27 pairing;
 //! measured again on the published 0.1.50 archive at the rebase) and
 //! 0.1.51 (the 0.2.28 pairing, r33, measured on its archive), 0.1.52
-//! (the 0.2.29 pairing, r34, measured on its archive) and 0.1.53 (the
-//! 0.2.30 pairing, r35, measured on its archive), each
+//! (the 0.2.29 pairing, r34, measured on its archive) 0.1.53 (the
+//! 0.2.30 pairing, r35, measured on its archive) and 0.1.54 (the 0.2.31
+//! pairing, r36, measured on its archive), each
 //! pinned by those versions so a newer lupin is held to the clause: the rendezvous back-edge
 //! (`[conc.mm.hb.chan]`, lupin adds none and traps `race`,
 //! wolf-interp#227) and a self-acquisition reached through a closure
@@ -47,7 +48,7 @@ fn wolf() -> &'static str {
 }
 
 /// The lupin releases whose two partings are measured and pinned.
-const PINNED_LUPIN: &[&str] = &["0.1.49", "0.1.50", "0.1.51", "0.1.52", "0.1.53"];
+const PINNED_LUPIN: &[&str] = &["0.1.49", "0.1.50", "0.1.51", "0.1.52", "0.1.53", "0.1.54"];
 
 #[derive(Debug, Clone)]
 struct Obs {
