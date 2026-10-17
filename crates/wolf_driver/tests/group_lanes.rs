@@ -44,8 +44,8 @@
 //! lupin answers the shape rows and refuses each well-formed call by name
 //! (ruling #79 R8: std has no `kill(-pgid)`, no `setpgid` on itself and
 //! no `strsignal`, and lupin admits no `unsafe`). lupin 0.1.53 (the
-//! 0.2.30 pairing) predates the mirror — it resolves none of the six
-//! names — and is pinned here by version as pre-mirror.
+//! 0.2.30 pairing) predated the mirror — it resolved none of the six
+//! names; 0.1.54 (the 0.2.31 pairing) carries it, measured.
 
 mod lane_exit;
 
@@ -57,9 +57,10 @@ fn wolf() -> &'static str {
 }
 
 /// The lupin releases that predate the mirror, with the commit each
-/// archive reports: 0.1.53 (`7896edd`, wolf 0.2.30's pairing) resolves
-/// none of the six names ("`os_signal_send_group` does not resolve").
-const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[("0.1.53", Some("7896edd"))];
+/// archive reports. Empty since the 0.2.31 pairing: 0.1.54 (r36)
+/// carries wolf-interp's s241, measured; 0.1.53 (`7896edd`) did not
+/// ("`os_signal_send_group` does not resolve").
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[];
 
 fn pre_mirror(lupin: &Obs) -> bool {
     PRE_MIRROR_LUPIN
