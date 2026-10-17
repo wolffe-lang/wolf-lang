@@ -48,10 +48,10 @@
 //! lupin answers the poll with no child, `(-1, 0)`, and refuses it by
 //! name once a child is live (`live.lu`, on the host: nothing is
 //! signalled); it resolves no `os_signal_listen` at all, so the live
-//! witnesses that listen for `CHILD` stop there on lupin (ruling owed R9: the standard library's
+//! witnesses that listen for `CHILD` stop there on lupin (ruling #84 R9: the standard library's
 //! `try_wait` cannot see a stop, and lupin admits no `unsafe`). lupin
-//! 0.1.53 (the 0.2.30 pairing) predates the mirror and is pinned here by
-//! version as pre-mirror.
+//! 0.1.53 (the 0.2.30 pairing) predated the mirror; 0.1.54 (the 0.2.31
+//! pairing) carries it, measured.
 
 mod lane_exit;
 
@@ -63,9 +63,10 @@ fn wolf() -> &'static str {
 }
 
 /// The lupin releases that predate the mirror, with the commit each
-/// archive reports: 0.1.53 (`7896edd`, wolf 0.2.30's pairing) does not
+/// archive reports. Empty since the 0.2.31 pairing: 0.1.54 (r36)
+/// carries wolf-interp's s242, measured; 0.1.53 (`7896edd`) did not
 /// resolve `os_wait_poll`.
-const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[("0.1.53", Some("7896edd"))];
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[];
 
 fn pre_mirror(lupin: &Obs) -> bool {
     PRE_MIRROR_LUPIN
