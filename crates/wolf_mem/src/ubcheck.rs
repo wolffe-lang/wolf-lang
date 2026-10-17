@@ -7519,7 +7519,8 @@ impl<'t> Machine<'t> {
                     let left = if deadline < 0 {
                         -1
                     } else {
-                        let spent = i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX);
+                        let spent =
+                            i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX);
                         i32::try_from(deadline.saturating_sub(spent).max(0)).unwrap_or(i32::MAX)
                     };
                     let slice = if alone {
