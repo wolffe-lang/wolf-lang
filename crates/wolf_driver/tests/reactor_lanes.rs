@@ -19,10 +19,10 @@
 //! `taskset -c 0-3` (wolf-lang#570) — the checked machine under
 //! `conform-run --checked` and lupin under `conform-run`.
 //!
-//! lupin 0.1.52 and 0.1.53 (0.2.30's pairing) predate the mirror: their
-//! net family does not set `os_error()` (#751's lupin half). Their
-//! answers are pinned by version and release commit as pre-mirror
-//! (s180's design), never widened. lupin refuses `os_signal_wait_fd` BY
+//! lupin 0.1.52 and 0.1.53 (0.2.30's pairing) predated the mirror: their
+//! net family did not set `os_error()` (#751's lupin half), and their
+//! answers were pinned by version and release commit as pre-mirror
+//! (s180's design). 0.1.54 (0.2.31's pairing) carries it, measured. lupin refuses `os_signal_wait_fd` BY
 //! NAME on every version — ruling #73's R6 (it admits no `unsafe` and
 //! std has no `poll`) — so `unsupported` is its ruled answer there, not
 //! a pre-mirror one.
@@ -55,11 +55,11 @@ fn wolf() -> &'static str {
 const LIMIT: u64 = 32;
 
 /// The lupin releases that predate #751's mirror, each with the commit
-/// its release archive reports, measured on kasumi: 0.1.52 (digest
-/// f5194b74…) reports `025428b`, 0.1.53 (digest 5db55332…) `7896edd`;
-/// both leave `os_error()` at 0 after the refused accept.
-const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] =
-    &[("0.1.52", Some("025428b")), ("0.1.53", Some("7896edd"))];
+/// its release archive reports. Empty since the 0.2.31 pairing: 0.1.54
+/// (r36) carries it (wolf-interp is76, #250), measured; 0.1.52 (digest
+/// f5194b74…, `025428b`) and 0.1.53 (digest 5db55332…, `7896edd`) left
+/// `os_error()` at 0 after the refused accept.
+const PRE_MIRROR_LUPIN: &[(&str, Option<&str>)] = &[];
 
 fn fixture(name: &str) -> PathBuf {
     let p = Path::new(env!("CARGO_MANIFEST_DIR"))
