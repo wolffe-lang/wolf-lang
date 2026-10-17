@@ -1,0 +1,22 @@
+// s244: the deadline still decides beside other tasks. The caller sleeps
+// 300 ms before it dials, so a `0` wait (which asks once and hands
+// nothing on) and a 50 ms wait both answer the empty list, and the
+// unbounded wait answers the door once the caller has run.
+fn main() -> !int {
+    let door = net_listen("127.0.0.1:0")?
+    let addr = "127.0.0.1:{net_port(door)?}"
+    var zero = 0
+    var short = 0
+    var unbounded = 0
+    scope s {
+        s.spawn(fn() {
+            time_sleep_ms(300)
+            net_connect(addr) else |_| 0
+        })
+        zero = net_wait([door], 0)?.len
+        short = net_wait([door], 50)?.len
+        unbounded = net_wait([door], 0 - 1)?.len
+    }
+    print("zero {zero}, short {short}, unbounded {unbounded}")
+    0
+}

@@ -1,0 +1,73 @@
+//! check: run(exit=0, stdout="answered 4 questions on 2 connections")
+//! phase: run
+// Exercise 33-7: two questions per connection. The loop's shape does
+// not change — build the set, wait, answer what is named — and `open`
+// does not change either. What changes is that a connection is no
+// longer finished when it has been answered once: the loop keeps it in
+// the set, and the `closed` row rather than a counter decides when it
+// is done. The two callers are tasks here so that the page's one
+// process can hold both ends; a real caller is another machine.
+struct Doc { title: str, words: int }
+fn words_in(docs: List[Doc], title: str) -> str {
+    for d in docs {
+        if d.title == title { return "{d.words}" }
+    }
+    "unknown"
+}
+fn without(open: List[int], gone: int) -> List[int] {
+    var kept = List[int]()
+    for h in open {
+        if h != gone { (mut kept).push(h) }
+    }
+    kept
+}
+fn ask_twice(addr: str) -> !int {
+    let sock = net_connect(addr)?
+    net_write(sock, "regions")?
+    let _ = net_read(sock, 64)?
+    net_write(sock, "moves")?
+    let _ = net_read(sock, 64)?
+    net_close(sock)?
+    0
+}
+fn main() -> !int {
+    var docs = List[Doc]()
+    (mut docs).push(Doc { title: "regions", words: 900 })
+    (mut docs).push(Doc { title: "moves", words: 640 })
+    let door = net_listen("127.0.0.1:0")?
+    let addr = "127.0.0.1:{net_port(door)?}"
+    var answered = 0
+    var closed = 0
+    scope s {
+        s.spawn(fn() { ask_twice(addr) else |_| 0 })
+        s.spawn(fn() { ask_twice(addr) else |_| 0 })
+        var open = List[int]()
+        while closed < 2 {
+            var watched = List[int]()
+            (mut watched).push(door)
+            for c in open { (mut watched).push(c) }
+            for h in net_wait(watched, 2000)? {
+                if h == door {
+                    (mut open).push(net_accept(door)?)
+                } else {
+                    var gone = false
+                    let q = net_read(h, 64) else |_| {
+                        gone = true
+                        ""
+                    }
+                    if gone {
+                        net_close(h)?
+                        open = without(open, h)
+                        closed = closed + 1
+                    } else {
+                        net_write(h, words_in(docs, q))?
+                        answered = answered + 1
+                    }
+                }
+            }
+        }
+    }
+    print("answered {answered} questions on {closed} connections")
+    net_close(door)?
+    0
+}

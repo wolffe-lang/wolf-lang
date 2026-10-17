@@ -1,0 +1,18 @@
+// s244 (wolf-lang#720): the smallest program that hung the checked
+// machine. One caller is spawned; main waits on the listener until it
+// rings. The wait was one poll(2) for the whole deadline on the thread
+// that holds the baton, so the caller never ran and every wait answered
+// the empty list.
+fn main() -> !int {
+    let door = net_listen("127.0.0.1:0")?
+    let addr = "127.0.0.1:{net_port(door)?}"
+    var empty = 0
+    scope s {
+        s.spawn(fn() { net_connect(addr) else |_| 0 })
+        while net_wait([door], 2000)?.len == 0 {
+            empty = empty + 1
+        }
+    }
+    print("the door rang after {empty} empty waits")
+    0
+}
