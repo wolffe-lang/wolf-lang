@@ -7490,59 +7490,67 @@ impl<'t> Machine<'t> {
                         _ => return self.refuse("a non-int handle in a net_wait set", span),
                     }
                 }
-                {
-                    #[cfg(unix)]
-                    use std::os::fd::AsRawFd as _;
-                    #[cfg(windows)]
-                    use std::os::windows::io::AsRawSocket as _;
-                    if handles.is_empty() {
-                        if deadline < 0 {
-                            return Ok(tag("io"));
-                        }
-                        let id = self.mint_list(Vec::new(), span)?;
-                        return Ok(Flow::Val(Value::List(id)));
+                if handles.is_empty() {
+                    if deadline < 0 {
+                        return Ok(tag("io"));
                     }
-                    let mut raws = Vec::with_capacity(handles.len());
-                    for &h in &handles {
-                        let live = usize::try_from(h)
-                            .ok()
-                            .and_then(|i| self.socks.get(i))
-                            .and_then(|s| s.as_ref());
-                        let Some(sock) = live else {
-                            return Ok(tag("io"));
-                        };
-                        #[cfg(unix)]
-                        raws.push(match sock {
-                            NetSock::Listener(l) => l.as_raw_fd(),
-                            NetSock::Stream(st) => st.as_raw_fd(),
-                            NetSock::UnixListener(l, _) => l.as_raw_fd(),
-                            NetSock::UnixStream(st) => st.as_raw_fd(),
-                        });
-                        #[cfg(windows)]
-                        raws.push(match sock {
-                            NetSock::Listener(l) => l.as_raw_socket(),
-                            NetSock::Stream(st) => st.as_raw_socket(),
-                        });
-                    }
-                    let timeout = if deadline < 0 {
+                    let id = self.mint_list(Vec::new(), span)?;
+                    return Ok(Flow::Val(Value::List(id)));
+                }
+                // s244 (wolf-lang#720): beside other tasks the wait is a
+                // park, as an accept's or a read's is (`net_park`,
+                // `[exec.checked.task]`): the set is polled a millisecond
+                // at a time and the other tasks run between polls. Until
+                // s244 it was one poll(2) for the whole deadline on the
+                // thread that holds the baton, so a task the wait was
+                // waiting FOR (a caller that would connect) never ran, the
+                // deadline answered the empty list, and a serving loop
+                // asked again for ever (wolf-book ex33-7). `0` asks once
+                // and hands nothing on, as lupin's does; with nobody else
+                // to run, the rest of the deadline is one poll, as before.
+                let started = std::time::Instant::now();
+                let mut alone = !self.sched.concurrent || deadline == 0;
+                loop {
+                    // Re-read each pass: a task that ran between polls
+                    // may have closed a handle in the set (`io`).
+                    let Some(raws) = self.wait_raws(&handles) else {
+                        return Ok(tag("io"));
+                    };
+                    let left = if deadline < 0 {
                         -1
                     } else {
-                        i32::try_from(deadline).unwrap_or(i32::MAX)
+                        let spent = i64::try_from(started.elapsed().as_millis()).unwrap_or(i64::MAX);
+                        i32::try_from(deadline.saturating_sub(spent).max(0)).unwrap_or(i32::MAX)
                     };
-                    let flags = match checked_poll_readable(&raws, timeout) {
+                    let slice = if alone {
+                        left
+                    } else if left < 0 {
+                        1
+                    } else {
+                        left.min(1)
+                    };
+                    let flags = match checked_poll_readable(&raws, slice) {
                         Ok(flags) => flags,
                         Err(e) => {
                             fs_host_error(&e);
                             return Ok(tag("io"));
                         }
                     };
-                    let ready: Vec<Value> = handles
-                        .iter()
-                        .zip(flags)
-                        .filter_map(|(&h, r)| r.then_some(Value::Int(h)))
-                        .collect();
-                    let id = self.mint_list(ready, span)?;
-                    Ok(Flow::Val(Value::List(id)))
+                    let expired = deadline >= 0
+                        && started.elapsed()
+                            >= std::time::Duration::from_millis(deadline.unsigned_abs());
+                    if alone || expired || flags.iter().any(|&r| r) {
+                        let ready: Vec<Value> = handles
+                            .iter()
+                            .zip(flags)
+                            .filter_map(|(&h, r)| r.then_some(Value::Int(h)))
+                            .collect();
+                        let id = self.mint_list(ready, span)?;
+                        return Ok(Flow::Val(Value::List(id)));
+                    }
+                    if !self.yield_now(span)? {
+                        alone = true;
+                    }
                 }
             }
             "net_port" => {
@@ -7884,6 +7892,47 @@ impl<'t> Machine<'t> {
                 return Ok(false);
             }
         }
+    }
+
+    /// s244: the host handles of a `net_wait` set, or `None` when one
+    /// of them is forged or closed (the `io` row).
+    #[cfg(unix)]
+    fn wait_raws(&self, handles: &[i64]) -> Option<Vec<std::os::fd::RawFd>> {
+        use std::os::fd::AsRawFd as _;
+        handles
+            .iter()
+            .map(|&h| {
+                let sock = usize::try_from(h)
+                    .ok()
+                    .and_then(|i| self.socks.get(i))
+                    .and_then(|s| s.as_ref())?;
+                Some(match sock {
+                    NetSock::Listener(l) => l.as_raw_fd(),
+                    NetSock::Stream(st) => st.as_raw_fd(),
+                    NetSock::UnixListener(l, _) => l.as_raw_fd(),
+                    NetSock::UnixStream(st) => st.as_raw_fd(),
+                })
+            })
+            .collect()
+    }
+
+    /// s244: the windows twin of the unix `wait_raws`.
+    #[cfg(windows)]
+    fn wait_raws(&self, handles: &[i64]) -> Option<Vec<std::os::windows::io::RawSocket>> {
+        use std::os::windows::io::AsRawSocket as _;
+        handles
+            .iter()
+            .map(|&h| {
+                let sock = usize::try_from(h)
+                    .ok()
+                    .and_then(|i| self.socks.get(i))
+                    .and_then(|s| s.as_ref())?;
+                Some(match sock {
+                    NetSock::Listener(l) => l.as_raw_socket(),
+                    NetSock::Stream(st) => st.as_raw_socket(),
+                })
+            })
+            .collect()
     }
 
     fn sock(&mut self, fd: i64) -> Option<&mut NetSock> {
