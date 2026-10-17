@@ -315,9 +315,9 @@ fn cfg_drops_what_another_target_gates_before_resolution() {
 }
 
 /// The control: the implemented set compiles and runs unchanged. lupin
-/// declines its `comptime fn` (`unsupported`), 0.1.46 through 0.1.53
+/// declines its `comptime fn` (`unsupported`), 0.1.46 through 0.1.54
 /// included (0.1.49 measured at r31, 0.1.50 at r32, 0.1.51 at r33,
-/// 0.1.52 at r34, 0.1.53 at r35; wolf-interp#174).
+/// 0.1.52 at r34, 0.1.53 at r35, 0.1.54 at r36; wolf-interp#174).
 #[test]
 fn the_implemented_attributes_still_compile() {
     every_lane(
@@ -380,6 +380,11 @@ fn the_implemented_attributes_still_compile() {
             },
             Pin {
                 version: "0.1.53",
+                verdict: "unsupported",
+                stdout: "",
+            },
+            Pin {
+                version: "0.1.54",
                 verdict: "unsupported",
                 stdout: "",
             },
