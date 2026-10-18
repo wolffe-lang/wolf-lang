@@ -825,27 +825,18 @@ pub const HUB_SIGNAL: [&str; 3] = [
     "__wolf_rt_os_signal_wait_fd",
 ];
 
-/// Whether a function the program reaches calls one of `names` — read
-/// off the call instructions the module still holds after the mid-end,
-/// so a call the optimizer removed costs nothing, and only in the
-/// functions reachable from `main` and the exports
-/// ([`wolf_wir::midend::live_functions`]), so a library function the
-/// program imports and never calls costs nothing either. s245
-/// (wolf-lang#778): before, the dev tier (no mid-end, so no dead-function
-/// elimination) read every function the module held, and `use
-/// std.signal` alone made the signal hub before `main` there while the
-/// release tier made none.
+/// Whether any function of `m` calls one of `names` — read off the call
+/// instructions the module still holds after the mid-end, so a call the
+/// optimizer removed costs nothing.
 fn names_any(m: &WirModule, names: &[&str]) -> bool {
-    let live = wolf_wir::midend::live_functions(m);
-    m.funcs.iter().any(|(id, f)| {
-        live.as_ref().is_none_or(|l| l.contains(&id))
-            && f.layout.iter().any(|&b| {
-                f.blocks[b].insts.iter().any(|&i| {
-                    let d = &f.insts[i];
-                    matches!((d.op, &d.aux), (Opcode::Call, Aux::Callee(ef))
+    m.funcs.values().any(|f| {
+        f.layout.iter().any(|&b| {
+            f.blocks[b].insts.iter().any(|&i| {
+                let d = &f.insts[i];
+                matches!((d.op, &d.aux), (Opcode::Call, Aux::Callee(ef))
                     if names.contains(&f.ext_funcs[*ef].name.as_str()))
-                })
             })
+        })
     })
 }
 
