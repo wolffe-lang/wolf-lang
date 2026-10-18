@@ -1,5 +1,57 @@
 # Changelog
 
+## Unreleased
+
+### A closed standard descriptor stays closed; the dev tier makes the hub and the set only where they are reached (s245, #778)
+
+A 0.2.31 regression. On the dev tier a program that imported
+`std.signal`, and so every boreutils utility, made the signal hub (two
+pipes) before `main`, and the host put its pipes on the lowest free
+descriptors: a program started `prog >&-` found descriptor 1 open, a pipe
+of the runtime's, `fs_fstat(1)` answered ok and its output went into the
+pipe. The release tier, and 0.2.30 on either, left 1 closed (boreutils'
+`cat` and `wc` with `>&-` failed five dev-tier difftest cases at 0.2.31).
+Two faults, both fixed (`[os.signal.hub]`, `[os.net.reactor]`):
+
+- **The runtime's own descriptors never take 0, 1 or 2.** The hub's two
+  pipes, `os_signal_wait_fd`'s wake pipe and the readiness set's
+  descriptors (epoll and its eventfd on linux, the kqueue on macOS) are
+  moved to 3 or above when the host places one on a closed standard
+  descriptor, and that descriptor is closed again. A program that
+  reaches `os_signal_listen` with 0, 1 or 2 closed now finds it closed on
+  both tiers (at 0.2.31 the release tier put the hub there too, for a
+  program that reached the listen). The readiness set did the same for a
+  program that reached a parking net call, on both tiers.
+- **"Names a call" is what the program reaches, on both tiers.** The
+  entry shim decides whether to make the hub and the readiness set from
+  the functions reachable from `main` and the exports (the release
+  tier's dead-function walk), not every function the build holds. A
+  dev-tier program that imports `std.signal` or `std.net` and reaches no
+  call that makes the hub or can park now carries no pipe, no set and no
+  extra thread, as on the release tier. Ruling #80 stands: where such a
+  call is reached the hub (or the set) is made before `main`, and a
+  refusal is exit 71.
+
+Windows has no descriptor here (the hub is a queue, the set a wake
+socket) and is unchanged: a program started with a null standard handle
+reads that stream closed and the other two open, before and after
+(measured on the dev tier; windows has no release tier).
+
+### The checked machine's big write no longer hangs beside its reader (s245, #777)
+
+On the checked machine (`conform-run --checked`) `net_write`,
+`net_write_bytes`, `net_writev` and `net_writev_head` were one blocking
+write of everything on the thread that runs the tasks, so a write larger
+than the socket's buffers to a task of the same program that would read
+it waited for ever (an 8 MiB write to a spawned reader was killed at
+30 s; lupin and native answer in about 0.1 s). Beside other tasks a write
+now parks as a read does (s244's construction for `net_wait`): it polls
+for room a millisecond at a time, sends what the socket takes, and lets
+the other tasks run between polls. An armed `net_deadline` still ends a
+write no byte of which can go for that long, with the same `io` row; with
+no other task the write is the blocking call it was
+(`[exec.checked.task]`).
+
 ## 0.2.31 — 2026-10-17
 
 **Three things change what a running program does. Read them before you
