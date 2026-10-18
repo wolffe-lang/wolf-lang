@@ -415,8 +415,10 @@ exhausted` arrived — an OOM where an honest refusal was owed.)
   monitor as `error` — wolf-interp#228; ruled A (#63), 2026-10-11.) A run whose root domain is killed
   (`[conc.proc.root]`) exits 121, the native runtime's number. A host
   call that would park the machine's one running thread — an accept, a
-  read on a socket, a readiness wait over a set (`net_wait`), a signal
-  wait, a sleep — waits a millisecond at a time while other tasks exist
+  read on a socket, a readiness wait over a set (`net_wait`), a write
+  to a socket whose buffers are full (`net_write`, `net_write_bytes`,
+  `net_writev`, `net_writev_head`), a signal wait, a sleep — waits a
+  millisecond at a time while other tasks exist
   and lets them run between waits, so the peer that will resolve it gets
   the cpu (`corpus/net/spawn_accept.lu`,
   `corpus/os/signal_supervisor.lu`); a wait's own deadline still
@@ -424,7 +426,15 @@ exhausted` arrived — an OOM where an honest refusal was owed.)
   and hands nothing on, as the reference interpreter's does. (Until
   s244 `net_wait` was one host poll for its whole deadline, so a loop
   waiting on a task it had spawned never let that task run —
-  wolf-lang#720, `crates/wolf_driver/tests/checked_net_wait.rs`.)
+  wolf-lang#720, `crates/wolf_driver/tests/checked_net_wait.rs`.) A
+  parked write sends what the socket takes at once, without blocking,
+  and an armed write deadline (`net_deadline`) still ends it when no
+  byte has gone for that long, with the row the blocking write gave;
+  alone, the write is the one blocking call it always was. (Until s245
+  each write was one blocking call for all its bytes, so a write past
+  the socket's buffers to a task of the same machine that would read
+  them never let that task run — wolf-lang#777,
+  `crates/wolf_driver/tests/checked_net_write.rs`.)
 - `[exec.checked.sched]` **The schedule is deterministic and a seed
   selects it.** The scheduler is the reference interpreter's
   (`sched-ev/0`, spec/07): a first-in-first-out ready queue; a spawn
