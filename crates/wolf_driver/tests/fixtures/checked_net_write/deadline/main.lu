@@ -1,16 +1,31 @@
 // s245 (wolf-lang#777): an armed deadline still ends a write nobody
 // reads. The peer is accepted by a spawned task that sleeps and never
-// reads, so the 8 MiB cannot all go; main's write deadline (300 ms)
-// answers the write's row. A second connection is never accepted at
-// all and main writes to it with no other task left, so that write is
-// the blocking one it always was, ended by its deadline the same way.
+// reads, so the socket's buffers fill; main writes 1 MiB at a time until
+// a write fails, and its write deadline (300 ms) answers that write's
+// row. A second connection is never accepted at all and main fills it
+// with no other task left, so its writes are the blocking ones they
+// always were, ended by the deadline the same way. (One 8 MiB write is
+// not enough everywhere: windows' loopback took it whole, measured.) The
+// fill stops at 1 GiB, so a host whose buffers never fill answers `ok`
+// and fails the gate instead of running on.
+fn fill(c: int, chunk: str) -> str {
+    var sent = 0
+    while sent < 1024 {
+        net_write(c, chunk) else |e| {
+            return "{e}"
+        }
+        sent = sent + 1
+    }
+    "ok"
+}
+
 fn main() -> !int {
     let door = net_listen("127.0.0.1:0")?
     let port = net_port(door)?
-    var big = "x"
+    var chunk = "x"
     var i = 0
-    while i < 23 {
-        big = big + big
+    while i < 20 {
+        chunk = chunk + chunk
         i = i + 1
     }
     var beside = "ok"
@@ -22,17 +37,12 @@ fn main() -> !int {
         })
         let cli = net_connect("127.0.0.1:{port}")?
         net_deadline(cli, 300)?
-        net_write(cli, big) else |e| {
-            beside = "{e}"
-        }
+        beside = fill(cli, chunk)
         net_close(cli)?
     }
     let lone = net_connect("127.0.0.1:{port}")?
     net_deadline(lone, 300)?
-    var alone = "ok"
-    net_write(lone, big) else |e| {
-        alone = "{e}"
-    }
+    let alone = fill(lone, chunk)
     net_close(lone)?
     print("beside {beside}, alone {alone}")
     0
