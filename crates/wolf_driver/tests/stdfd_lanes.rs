@@ -109,6 +109,15 @@ fn build(entry: &Path, dir: &Path, tier: Tier) -> Option<PathBuf> {
         entry.display()
     );
     if lane_exit::environment_refusal(&out, "wolf build") {
+        // The one tier a host may not have: windows' release lane, dark by
+        // design (s60c). Anywhere else a refusal FAILS the gate, so a green
+        // run on linux and macOS is both tiers run, and on windows the dev
+        // tier (wolf-lang#571: a skip line is hidden when the test passes).
+        assert!(
+            cfg!(windows) && matches!(tier, Tier::Release),
+            "the {tier:?} tier refused to build on a host that has it: {}",
+            stderr.trim()
+        );
         eprintln!(
             "SKIP: environment cannot build the {tier:?} tier: {}",
             stderr.trim()
