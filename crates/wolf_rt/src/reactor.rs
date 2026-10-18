@@ -147,25 +147,14 @@ mod sys {
             if epfd < 0 {
                 return Err(std::io::Error::last_os_error());
             }
-            // s245 (wolf-lang#778): the set is made before `main`, so it
-            // must not sit on a standard descriptor the program was
-            // started without (each descriptor moved off 0-2).
-            let epfd = crate::stdfd::off_std(epfd)?;
             // SAFETY: plain fd creation; result checked below.
             let wakefd = unsafe { libc::eventfd(0, libc::EFD_CLOEXEC | libc::EFD_NONBLOCK) };
-            let wakefd = if wakefd < 0 {
-                Err(std::io::Error::last_os_error())
-            } else {
-                crate::stdfd::off_std(wakefd)
-            };
-            let wakefd = match wakefd {
-                Ok(fd) => fd,
-                Err(e) => {
-                    // SAFETY: our own fresh descriptor, closed once.
-                    unsafe { libc::close(epfd) };
-                    return Err(e);
-                }
-            };
+            if wakefd < 0 {
+                let e = std::io::Error::last_os_error();
+                // SAFETY: our own fresh descriptor, closed once.
+                unsafe { libc::close(epfd) };
+                return Err(e);
+            }
             let mut ev = libc::epoll_event {
                 events: libc::EPOLLIN as u32,
                 u64: WAKE_TOKEN,
@@ -272,8 +261,6 @@ mod sys {
             if kq < 0 {
                 return Err(std::io::Error::last_os_error());
             }
-            // s245 (wolf-lang#778): off a closed 0-2, as linux's set.
-            let kq = crate::stdfd::off_std(kq)?;
             // The wake channel: an EV_CLEAR user event — triggering it
             // wakes the wait, retrieval auto-resets it (no drain).
             let ev = libc::kevent {
