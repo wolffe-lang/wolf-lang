@@ -808,6 +808,74 @@ impl NetSock {
         }
     }
 
+    /// s245 (wolf-lang#777): can a write go within `timeout_ms` — room in
+    /// the send buffer, or an error or hang-up the write will report?
+    /// `poll_readable`'s twin.
+    fn poll_writable(&self, timeout_ms: i32) -> std::io::Result<bool> {
+        #[cfg(unix)]
+        let raw = {
+            use std::os::fd::AsRawFd as _;
+            match self {
+                NetSock::Listener(l) => l.as_raw_fd(),
+                NetSock::Stream(st) => st.as_raw_fd(),
+                NetSock::UnixListener(l, _) => l.as_raw_fd(),
+                NetSock::UnixStream(st) => st.as_raw_fd(),
+            }
+        };
+        #[cfg(windows)]
+        let raw = {
+            use std::os::windows::io::AsRawSocket as _;
+            match self {
+                NetSock::Listener(l) => l.as_raw_socket(),
+                NetSock::Stream(st) => st.as_raw_socket(),
+            }
+        };
+        #[cfg(any(unix, windows))]
+        {
+            checked_poll_writable(raw, timeout_ms)
+        }
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = timeout_ms;
+            Ok(true)
+        }
+    }
+
+    /// s245 (wolf-lang#777): one gathered write of what the socket takes
+    /// NOW — the socket nonblocking for this one call, then blocking
+    /// again, as the machine's streams always are. `WouldBlock` is a full
+    /// send buffer.
+    fn write_now(&mut self, bufs: &[std::io::IoSlice<'_>]) -> std::io::Result<usize> {
+        use std::io::Write as _;
+        match self {
+            NetSock::Stream(s) => {
+                s.set_nonblocking(true)?;
+                let r = s.write_vectored(bufs);
+                s.set_nonblocking(false)?;
+                r
+            }
+            #[cfg(unix)]
+            NetSock::UnixStream(s) => {
+                s.set_nonblocking(true)?;
+                let r = s.write_vectored(bufs);
+                s.set_nonblocking(false)?;
+                r
+            }
+            _ => Err(std::io::Error::from(std::io::ErrorKind::Other)),
+        }
+    }
+
+    /// s245: the write budget a stream carries (`net_deadline` arms both
+    /// directions).
+    fn write_budget(&self) -> Option<std::time::Duration> {
+        match self {
+            NetSock::Stream(s) => s.write_timeout().ok().flatten(),
+            #[cfg(unix)]
+            NetSock::UnixStream(s) => s.write_timeout().ok().flatten(),
+            _ => None,
+        }
+    }
+
     /// s226: the read budget a stream carries (`net_deadline`).
     fn read_budget(&self) -> Option<std::time::Duration> {
         match self {
@@ -1156,6 +1224,71 @@ fn checked_poll_readable(
     }
     let ready = POLLRDNORM | POLLHUP | POLLERR | POLLNVAL;
     Ok(pfds.iter().map(|p| p.revents & ready != 0).collect())
+}
+
+/// s245 (wolf-lang#777): [`checked_poll_readable`]'s write twin for one
+/// socket: true when a write will not block (room to send, an error, a
+/// hang-up). `EINTR` retries.
+#[cfg(unix)]
+fn checked_poll_writable(fd: std::os::fd::RawFd, timeout_ms: i32) -> std::io::Result<bool> {
+    let mut p = libc::pollfd {
+        fd,
+        events: libc::POLLOUT,
+        revents: 0,
+    };
+    loop {
+        // SAFETY: one live pollfd.
+        let rc = unsafe { libc::poll(&mut p, 1, timeout_ms) };
+        if rc < 0 {
+            let e = std::io::Error::last_os_error();
+            if e.raw_os_error() == Some(libc::EINTR) {
+                p.revents = 0;
+                continue;
+            }
+            return Err(e);
+        }
+        let ready = libc::POLLOUT | libc::POLLHUP | libc::POLLERR | libc::POLLNVAL;
+        return Ok(p.revents & ready != 0);
+    }
+}
+
+/// The windows twin of the unix `checked_poll_writable` — `WSAPoll`, as
+/// [`checked_poll_readable`]'s.
+#[cfg(windows)]
+fn checked_poll_writable(
+    fd: std::os::windows::io::RawSocket,
+    timeout_ms: i32,
+) -> std::io::Result<bool> {
+    #[repr(C)]
+    struct PollFd {
+        fd: usize,
+        events: i16,
+        revents: i16,
+    }
+    const POLLWRNORM: i16 = 0x0010;
+    const POLLERR: i16 = 0x0001;
+    const POLLHUP: i16 = 0x0002;
+    const POLLNVAL: i16 = 0x0004;
+    #[link(name = "ws2_32")]
+    unsafe extern "system" {
+        fn WSAPoll(fds: *mut PollFd, count: u32, timeout_ms: i32) -> i32;
+        fn WSAGetLastError() -> i32;
+    }
+    let mut p = PollFd {
+        fd: fd as usize,
+        events: POLLWRNORM,
+        revents: 0,
+    };
+    // SAFETY: one live WSAPOLLFD.
+    let rc = unsafe { WSAPoll(&mut p, 1, timeout_ms) };
+    if rc < 0 {
+        // SAFETY: a plain error read.
+        return Err(std::io::Error::from_raw_os_error(unsafe {
+            WSAGetLastError()
+        }));
+    }
+    let ready = POLLWRNORM | POLLHUP | POLLERR | POLLNVAL;
+    Ok(p.revents & ready != 0)
 }
 
 fn accept_deadline(
@@ -7652,10 +7785,22 @@ impl<'t> Machine<'t> {
                 let (Some(fd), Some(payload)) = (int_arg(0), str_arg(1)) else {
                     return self.refuse("this net call shape", span);
                 };
-                let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
+                if !self.sock(fd).is_some_and(|s| s.is_stream()) {
                     return Ok(tag("io"));
+                }
+                // s245 (#777): beside other tasks the write parks.
+                let wrote = if self.sched.concurrent {
+                    match self.net_write_parked(fd, &[payload.as_bytes()], span)? {
+                        Some(r) => r,
+                        None => return Ok(tag("io")),
+                    }
+                } else {
+                    match self.sock(fd) {
+                        Some(s) => s.write_all(payload.as_bytes()),
+                        None => return Ok(tag("io")),
+                    }
                 };
-                match s.write_all(payload.as_bytes()) {
+                match wrote {
                     Err(e) => Ok(tag(&coarse(&e, &["closed", "io"]))),
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
@@ -7700,10 +7845,22 @@ impl<'t> Machine<'t> {
                     Some(Err(())) => return Ok(tag("invalid")),
                     Some(Ok(b)) => b,
                 };
-                let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
+                if !self.sock(fd).is_some_and(|s| s.is_stream()) {
                     return Ok(tag("io"));
+                }
+                // s245 (#777): beside other tasks the write parks.
+                let wrote = if self.sched.concurrent {
+                    match self.net_write_parked(fd, &[&bytes], span)? {
+                        Some(r) => r,
+                        None => return Ok(tag("io")),
+                    }
+                } else {
+                    match self.sock(fd) {
+                        Some(s) => s.write_all(&bytes),
+                        None => return Ok(tag("io")),
+                    }
                 };
-                match s.write_all(&bytes) {
+                match wrote {
                     Err(e) => Ok(tag(&coarse(&e, &["closed", "io"]))),
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
@@ -7728,10 +7885,23 @@ impl<'t> Machine<'t> {
                         _ => return self.refuse("this net call shape", span),
                     }
                 }
-                let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
+                if !self.sock(fd).is_some_and(|s| s.is_stream()) {
                     return Ok(tag("io"));
+                }
+                // s245 (#777): beside other tasks the write parks.
+                let wrote = if self.sched.concurrent {
+                    let views: Vec<&[u8]> = parts.iter().map(Vec::as_slice).collect();
+                    match self.net_write_parked(fd, &views, span)? {
+                        Some(r) => r,
+                        None => return Ok(tag("io")),
+                    }
+                } else {
+                    match self.sock(fd) {
+                        Some(s) => s.write_all_vectored(&parts),
+                        None => return Ok(tag("io")),
+                    }
                 };
-                match s.write_all_vectored(&parts) {
+                match wrote {
                     Err(e) => Ok(tag(&coarse(&e, &["closed", "io"]))),
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
@@ -7760,10 +7930,23 @@ impl<'t> Machine<'t> {
                         _ => return self.refuse("this net call shape", span),
                     }
                 }
-                let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
+                if !self.sock(fd).is_some_and(|s| s.is_stream()) {
                     return Ok(tag("io"));
+                }
+                // s245 (#777): beside other tasks the write parks.
+                let wrote = if self.sched.concurrent {
+                    let views: Vec<&[u8]> = parts.iter().map(Vec::as_slice).collect();
+                    match self.net_write_parked(fd, &views, span)? {
+                        Some(r) => r,
+                        None => return Ok(tag("io")),
+                    }
+                } else {
+                    match self.sock(fd) {
+                        Some(s) => s.write_all_vectored(&parts),
+                        None => return Ok(tag("io")),
+                    }
                 };
-                match s.write_all_vectored(&parts) {
+                match wrote {
                     Err(e) => Ok(tag(&coarse(&e, &["closed", "io"]))),
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
@@ -7893,6 +8076,76 @@ impl<'t> Machine<'t> {
                 return Ok(false);
             }
         }
+    }
+
+    /// s245 (wolf-lang#777): a write beside other tasks parks as a read
+    /// does (`net_park`, `[exec.checked.task]`). Until s245 the four
+    /// writes were one blocking `write(2)`/`writev(2)` of everything on
+    /// the thread that holds the baton, so past the socket's buffers it
+    /// waited for a reader that was a task of the same machine and never
+    /// ran (an 8 MiB write to a spawned reader was killed at 30 s). Now
+    /// the socket is polled for room a millisecond at a time; what it
+    /// takes goes at once, without blocking; and the other tasks run
+    /// between polls. An armed write budget still ends it: no byte taken
+    /// for the budget is `WouldBlock`, the row the blocking write's
+    /// `SO_SNDTIMEO` gave. When nobody else is left the rest is the one
+    /// blocking write it always was. `None`: the handle was closed
+    /// meanwhile (`io`).
+    fn net_write_parked(
+        &mut self,
+        fd: i64,
+        parts: &[&[u8]],
+        span: Span,
+    ) -> E<Option<std::io::Result<()>>> {
+        let budget = self.sock(fd).and_then(|s| s.write_budget());
+        let mut slices: Vec<std::io::IoSlice<'_>> = parts
+            .iter()
+            .filter(|p| !p.is_empty())
+            .map(|p| std::io::IoSlice::new(p))
+            .collect();
+        let mut bufs: &mut [std::io::IoSlice<'_>] = &mut slices;
+        let mut moved = std::time::Instant::now();
+        while !bufs.is_empty() {
+            let Some(s) = self.sock(fd) else {
+                return Ok(None);
+            };
+            match s.poll_writable(1) {
+                Ok(false) => {}
+                Err(e) => return Ok(Some(Err(e))),
+                Ok(true) => match s.write_now(bufs) {
+                    Ok(0) => {
+                        return Ok(Some(Err(std::io::Error::from(
+                            std::io::ErrorKind::WriteZero,
+                        ))));
+                    }
+                    Ok(n) => {
+                        std::io::IoSlice::advance_slices(&mut bufs, n);
+                        moved = std::time::Instant::now();
+                        continue;
+                    }
+                    Err(e)
+                        if matches!(
+                            e.kind(),
+                            std::io::ErrorKind::WouldBlock | std::io::ErrorKind::Interrupted
+                        ) => {}
+                    Err(e) => return Ok(Some(Err(e))),
+                },
+            }
+            if budget.is_some_and(|b| moved.elapsed() >= b) {
+                return Ok(Some(Err(std::io::Error::from(
+                    std::io::ErrorKind::WouldBlock,
+                ))));
+            }
+            if !self.yield_now(span)? {
+                // Nobody else to run: the rest blocks, as it always did.
+                let rest: Vec<Vec<u8>> = bufs.iter().map(|b| b.to_vec()).collect();
+                let Some(s) = self.sock(fd) else {
+                    return Ok(None);
+                };
+                return Ok(Some(s.write_all_vectored(&rest)));
+            }
+        }
+        Ok(Some(Ok(())))
     }
 
     /// s244: the host handles of a `net_wait` set, or `None` when one
