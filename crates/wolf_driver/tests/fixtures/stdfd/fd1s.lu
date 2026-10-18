@@ -1,0 +1,23 @@
+//! member: false
+
+use std.signal
+
+fn main() -> int {
+    let m = signal.terminate()
+    eprint("meaning {m}\n")
+    var fd = 0
+    while fd < 8 {
+        let r = fs_read_link("/proc/self/fd/{fd}") else |_| {
+            fd += 1
+            continue
+        }
+        eprint("fd {fd}: open, {r.len} bytes of link\n")
+        fd += 1
+    }
+    let _ = fs_fstat(1) else |_| {
+        eprint("fs_fstat(1): io\n")
+        return 0
+    }
+    eprint("fs_fstat(1): ok\n")
+    0
+}

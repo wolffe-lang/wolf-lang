@@ -1,0 +1,30 @@
+//! s245 (wolf-lang#778): the gate's stand-in for wolf-std's `std.signal`
+//! (the bundled std, `d37c911`), cut to the shape #778 lives in: meaning
+//! constants a program may call, beside wrappers over the calls that make
+//! the signal hub, which a program calling only a constant never reaches.
+//! The three wrappers' bodies are wolf-std's own, word for word; the doc
+//! lines are shortened. wolf-lang's CI has no wolf-std; on kasumi the
+//! gate's programs were also run against the bundled std itself (the
+//! s245 PR's evidence).
+
+/// Re-read configuration (`SIGHUP`).
+pub fn reload() -> int { 1 }
+
+/// Shut down now (`SIGTERM`).
+pub fn terminate() -> int { 2 }
+
+/// Hear every meaning in `set` as an event (`os_signal_listen`); ends an
+/// ignore of them.
+pub fn listen(set: int) -> () ! {io} {
+    os_signal_listen(set)?
+}
+
+/// Park until a meaning in `set` arrives; that meaning.
+pub fn wait(set: int) -> int ! {io} {
+    os_signal_wait(set)?
+}
+
+/// Send `meaning` to this process (`os_signal_raise`).
+pub fn raise(meaning: int) -> () ! {io} {
+    os_signal_raise(meaning)?
+}

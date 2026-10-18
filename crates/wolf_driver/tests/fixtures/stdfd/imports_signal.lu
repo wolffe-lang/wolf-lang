@@ -1,0 +1,46 @@
+//! member: false
+//! s245 (wolf-lang#778): fd1s.lu's shape — `use std.signal`, one call
+//! that makes nothing (`signal.terminate()` is a constant) — reporting
+//! to a FILE, so a run with descriptor 2 closed can still be read. The
+//! program reaches no call that makes the signal hub, so no tier makes
+//! one, and a standard descriptor the program was started without stays
+//! closed as it sees it. Each line is `fdN open` or `fdN closed` for the
+//! three standard descriptors (`fs_fstat`), then `links …`, the numbers
+//! `/proc/self/fd` names below 16 (linux; empty elsewhere). The report
+//! is written last, so its own descriptor is not counted.
+
+use std.signal
+
+fn row(fd: int) -> str {
+    let _ = fs_fstat(fd) else |_| {
+        return "fd{fd} closed\n"
+    }
+    "fd{fd} open\n"
+}
+
+fn links() -> str {
+    var out = "links"
+    var fd = 0
+    while fd < 16 {
+        let r = fs_read_link("/proc/self/fd/{fd}") else |_| {
+            fd += 1
+            continue
+        }
+        out = out + " {fd}"
+        fd += 1
+    }
+    out + "\n"
+}
+
+fn main() -> int {
+    let args = env_args()
+    if args.len < 1 {
+        return 2
+    }
+    let m = signal.terminate()
+    let text = "meaning {m}\n" + row(0) + row(1) + row(2) + links()
+    fs_write_text(args[0], text) else |_| {
+        return 3
+    }
+    0
+}

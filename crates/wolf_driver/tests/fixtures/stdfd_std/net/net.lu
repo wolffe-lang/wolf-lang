@@ -1,0 +1,26 @@
+//! s245 (wolf-lang#778): the gate's stand-in for wolf-std's `std.net`
+//! (the bundled std, `d37c911`), cut to the readiness set's shape of #778:
+//! a pure function a program may call, beside a wrapper over a call that
+//! can park, which a program calling only the pure one never reaches.
+//! `endpoint` and `loopback` are wolf-std's bodies word for word; `accept`
+//! takes the listener's number where wolf-std's takes its `Listener`.
+
+pub struct Socket {
+    pub fd: int,
+}
+
+/// Wait for the next connection on the listener `fd`.
+pub fn accept(fd: int) -> Socket ! {timeout, io} {
+    Socket { fd: net_accept(fd)? }
+}
+
+/// `host:port`, bracketing an IPv6 host.
+pub fn endpoint(host: str, port_number: int) -> str {
+    if host.contains(":") { return "[{host}]:{port_number}" }
+    "{host}:{port_number}"
+}
+
+/// The loopback address with `port_number` — `endpoint("127.0.0.1", n)`.
+pub fn loopback(port_number: int) -> str {
+    endpoint("127.0.0.1", port_number)
+}
