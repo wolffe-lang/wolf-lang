@@ -355,6 +355,7 @@ fn bu26s_probe_finds_a_closed_standard_descriptor_closed() {
             }
         }
     }
+    panic!("s245 evidence plant: the REPORT lines above are this host's rows (not a failure of the gate)");
 }
 
 /// `use std.signal` and `use std.net`, reaching nothing that makes the
@@ -379,6 +380,7 @@ fn importing_signal_or_net_alone_makes_nothing_on_any_tier() {
             }
         },
     );
+    panic!("s245 evidence plant: the REPORT lines above are this host's rows (not a failure of the gate)");
 }
 
 /// A program that reaches the listen, the raise and the wait: every tier
@@ -409,6 +411,7 @@ fn a_reached_signal_hub_stays_off_a_closed_standard_descriptor() {
             );
         }
     });
+    panic!("s245 evidence plant: the REPORT lines above are this host's rows (not a failure of the gate)");
 }
 
 /// The readiness set's twin: a program that reaches `net_accept` makes
@@ -427,4 +430,5 @@ fn a_reached_readiness_set_stays_off_a_closed_standard_descriptor() {
             );
         }
     });
+    panic!("s245 evidence plant: the REPORT lines above are this host's rows (not a failure of the gate)");
 }
