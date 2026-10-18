@@ -393,7 +393,10 @@ mod sys {
         if rc != 0 {
             return Err(std::io::Error::last_os_error());
         }
-        Ok(fds)
+        // s245 (wolf-lang#778): never on a standard descriptor the
+        // program was started without — the hub is made before `main`,
+        // and a pipe on a closed 1 is a standard output that is open.
+        crate::stdfd::pipe_off_std(fds)
     }
 
     fn set_nonblocking(fd: RawFd) {
