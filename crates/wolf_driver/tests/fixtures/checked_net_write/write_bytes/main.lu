@@ -1,0 +1,30 @@
+// s245 (wolf-lang#777): `net_write_bytes`' twin of `write/`: 8 MiB as a
+// `List[byte]` to a spawned task that accepts and reads.
+fn main() -> !int {
+    let door = net_listen("127.0.0.1:0")?
+    let port = net_port(door)?
+    var big = "x"
+    var i = 0
+    while i < 23 {
+        big = big + big
+        i = i + 1
+    }
+    let payload = big.bytes()
+    var got = 0
+    scope s {
+        s.spawn(fn() {
+            let c = net_accept(door) else |_| 0 - 1
+            var n = 0
+            while n < 8388608 {
+                let part = net_read(c, 65536) else |_| ""
+                if part.len == 0 { n = 8388608 } else { n = n + part.len }
+            }
+        })
+        let cli = net_connect("127.0.0.1:{port}")?
+        net_write_bytes(cli, payload)?
+        net_close(cli)?
+        got = payload.len
+    }
+    print("wrote {got} bytes to a task")
+    0
+}

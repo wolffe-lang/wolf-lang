@@ -1,0 +1,39 @@
+// s245 (wolf-lang#777): an armed deadline still ends a write nobody
+// reads. The peer is accepted by a spawned task that sleeps and never
+// reads, so the 8 MiB cannot all go; main's write deadline (300 ms)
+// answers the write's row. A second connection is never accepted at
+// all and main writes to it with no other task left, so that write is
+// the blocking one it always was, ended by its deadline the same way.
+fn main() -> !int {
+    let door = net_listen("127.0.0.1:0")?
+    let port = net_port(door)?
+    var big = "x"
+    var i = 0
+    while i < 23 {
+        big = big + big
+        i = i + 1
+    }
+    var beside = "ok"
+    scope s {
+        s.spawn(fn() {
+            let c = net_accept(door) else |_| 0 - 1
+            time_sleep_ms(1500)
+            net_close(c) else |_| {}
+        })
+        let cli = net_connect("127.0.0.1:{port}")?
+        net_deadline(cli, 300)?
+        net_write(cli, big) else |e| {
+            beside = "{e}"
+        }
+        net_close(cli)?
+    }
+    let lone = net_connect("127.0.0.1:{port}")?
+    net_deadline(lone, 300)?
+    var alone = "ok"
+    net_write(lone, big) else |e| {
+        alone = "{e}"
+    }
+    net_close(lone)?
+    print("beside {beside}, alone {alone}")
+    0
+}

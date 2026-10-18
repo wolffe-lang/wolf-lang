@@ -1,0 +1,31 @@
+// s245 (wolf-lang#777): `net_writev_head`'s twin of `write/`: a 4 MiB
+// `str` head and one 4 MiB part in one write to a spawned task that
+// accepts and reads.
+fn main() -> !int {
+    let door = net_listen("127.0.0.1:0")?
+    let port = net_port(door)?
+    var half = "x"
+    var i = 0
+    while i < 22 {
+        half = half + half
+        i = i + 1
+    }
+    let parts = [half.bytes()]
+    var got = 0
+    scope s {
+        s.spawn(fn() {
+            let c = net_accept(door) else |_| 0 - 1
+            var n = 0
+            while n < 8388608 {
+                let part = net_read(c, 65536) else |_| ""
+                if part.len == 0 { n = 8388608 } else { n = n + part.len }
+            }
+        })
+        let cli = net_connect("127.0.0.1:{port}")?
+        net_writev_head(cli, half, parts)?
+        net_close(cli)?
+        got = half.len + parts[0].len
+    }
+    print("wrote {got} bytes to a task")
+    0
+}
