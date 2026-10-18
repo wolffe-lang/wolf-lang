@@ -1,6 +1,165 @@
 # Changelog
 
-## Unreleased
+## 0.2.32 — 2026-10-18
+
+**Why this release: a 0.2.31 regression (#778).** At 0.2.31 a program
+on the dev tier (`wolf build`, `wolf run`, `conform-run --native`) that
+imports `std.signal` or `std.net` (every boreutils utility imports
+`std.signal`) and is started with descriptor 0, 1 or 2 closed found that
+descriptor open before `main`: the runtime made its signal hub (or its
+readiness set) at start for every function the build held, and the host
+put the hub's pipes on the lowest free numbers. A program run `prog >&-`
+saw `fs_fstat(1)` answer ok and wrote its output into the runtime's
+pipe instead of failing as it should (boreutils' `cat` and `wc` failed
+five dev-tier difftest cases, which held boreutils at 0.2.30). On
+**either tier**, a program that *reached* `os_signal_listen`,
+`os_signal_wait`, `os_signal_wait_fd` or a parking net call with 0, 1
+or 2 closed had the same fault (`wolf build --release` too, at 0.2.31).
+Now (s245, `[os.signal.hub]`, `[os.net.reactor]`):
+
+- **The runtime's own descriptors never take 0, 1 or 2.** The hub's
+  pipes, `os_signal_wait_fd`'s wake pipe and the readiness set's
+  descriptors move to 3 or above when the host places one on a closed
+  standard descriptor, and that descriptor is closed again: a standard
+  descriptor the program was started without stays closed on both
+  tiers.
+- **The hub and the set are made where they are reached, on both
+  tiers.** The entry shim decides from the functions reachable from
+  `main` and the exports (the release tier's walk), so an import alone
+  makes nothing: no pipe, no set, no extra thread. Ruling #80 stands
+  where a call is reached (made before `main`; a refusal is exit 71).
+
+THE THIRTY-SECOND, a point release. Two compiler lanes land, neither
+with a lupin half: the checked machine's `net_wait` hands over (s244,
+#720) and s245's descriptor fix with the checked machine's big writes
+(#778, #777). The pairing stays lupin 0.1.54 and the bundled std stays
+wolf-std `d37c911`. 22 commits since 0.2.31 (s244 6, s245 16), then
+r37's release commits.
+
+### Read this before you bump the pin
+
+**A closed standard descriptor stays closed (s245, #778).** A program
+started with 0, 1 or 2 closed now finds it closed (`fs_fstat` answers
+`io`, a write to it fails) on both tiers, whatever it imports. A
+dev-tier program that imports `std.signal` or `std.net` but reaches no
+call that makes the hub or can park no longer makes either at start: it
+carries no pipe, no readiness set and no drain thread, and it can no
+longer exit 71 at start for them (a program that reaches such a call
+can, as at 0.2.31). Windows is unchanged (no descriptor here: the hub is
+a queue, the set a wake socket).
+
+**The checked machine's waits and writes hand over (s244, s245; only
+`conform-run --checked`).** `net_wait` beside other tasks polls a
+millisecond at a time and lets them run, so a loop waiting on tasks it
+spawned (the book's ex33-7) answers instead of hanging; a `net_wait`
+with deadline 0 asks once. The four net writes do the same when the
+socket is full, so an 8 MiB write to a spawned reader answers in about
+0.1 s instead of hanging. A deadline still decides each answer; with no
+other task each is the blocking call it was.
+
+**The bundled std is unchanged: wolf-std `d37c911`**, as 0.2.31 shipped.
+
+- **Measured under this release** (kasumi, linux x86-64, the
+  release-head archive with lupin 0.1.54 beside `wolf`, no `WOLF_STD`):
+  wolf-std `d37c911`'s 475 tests on lupin, the checked machine and
+  native, and its 497 doc examples: **all green**. The release machine
+  equals native on 474 of the 475 with no std configured; the one
+  (`list/sort_by_tier.lu`) is refused by name on release, as at 0.2.31.
+  Against the published 0.2.31 on the same std, 0 records moved on any
+  tier.
+
+**New prelude names:** none (`cargo xtask prelude-diff v0.2.31 HEAD
+--markdown`, after `git fetch --tags`, run at the release head).
+
+**Capabilities:** unchanged. **Bytes:** `libwolf_rt.a` gains the move
+off 0–2 (no new exported symbol); a dev-tier program that names but
+does not reach a hub or park call loses its start call. Host table,
+prelude and spec anchors (661) unchanged.
+
+**Known:** `region_copyout_lanes::a_loop_keeping_a_scalar_is_flat` can
+exceed its RSS bound under load (#652, open), a test flake.
+`conform-run --native`/`--release` give the program no terminal on
+standard input (#766, open). Filed by s245, open: the checked machine's
+write gate never blocks on windows (#780); a thread can take a low
+descriptor in the window between `pipe` and the move off 0–2 (#781).
+
+**Rulings:** none new; ruling #80 stands as s245 applies it.
+
+**What each downstream does to bump.** 0.2.31's list, now at 0.2.32
+(0.2.31's section below has each line in full):
+
+- **wolf-std, first:** pins to 0.2.32 / 0.1.54; `process.poll` over
+  `os_wait_poll` (`256 + N` a stop) and the group-call wrappers, as
+  0.2.31's list says.
+- **boreutils:** the toolchain digests, now unblocked: its pin stayed
+  at 0.2.30 because 0.2.31's dev tier failed five `>&-` cases (#778);
+  boreutils `792ad31`'s difftest against this release's candidate
+  archive (lupin 0.1.54 beside it) passes 6383, fails 0, skips 262 on
+  both tiers, as s245 measured its branch build. Then `kill`'s groups
+  and `timeout`, as 0.2.31's list says.
+- **pelt:** the toolchain digests; job control on the poll.
+- **lobo:** the toolchain digests; lobo#92 (retire the descriptor
+  workaround).
+- **wolf-book, then the site:** the book pins 0.2.32 / 0.1.54; **ex33-7's
+  checked record** changes from killed to `answered 4 questions on 2
+  connections` (#720, s244); the TONE.md waiver sentence in chapter 34
+  comes out; then wolf-web pins the pair and the book, and deploys.
+- **wolf-lsp and tree-sitter-wolf:** the pin (no new prelude name since
+  0.2.31; 0.2.31's seven if they have not taken them).
+- **muzzle:** the pin.
+- **pax:** the pin (it builds from the archive).
+- **Homebrew and the AUR:** 0.2.32 / 0.1.54 (this release's tap
+  change); the AUR moves from 0.2.30 / 0.1.53 straight to 0.2.32 /
+  0.1.54.
+
+### The pairing: lupin 0.1.54 (unchanged)
+
+`PAIRING` still names **lupin 0.1.54 at pin `294d626`** (wolf-interp
+release 415937354; the linux x86-64 archive's sha256 `175df238…`). The
+spec pin is unchanged (this compiler's v0.2.24 tag). Neither s244 nor
+s245 has a lupin half: lupin already handed over in `net_wait` and the
+writes (the checked machine now does as lupin does), and the descriptor
+fix is the compiled runtime's.
+
+- **Dropped 0, widened 0, carried every pin unchanged**: each
+  version-keyed list already names 0.1.54 (`checked_tasks_lanes`,
+  `region_kept_arg_lanes`, `chan_sent_arg_lanes`, attr_closed_set's
+  control, the racy counter's check) or is keyed by an older release's
+  commit (`shift_lanes`). Against the published 0.1.54, 88 gate targets
+  (the 87 that name lupin, s244's `checked_net_wait` and s245's
+  `checked_net_write` among them, and s245's `stdfd_lanes`) pass 831 of
+  831. The plant (the same head against the published 0.1.53) is red on
+  exactly 0.2.31's four dropped cases.
+- **The ritual against the published 0.2.31** (the same 1154-file
+  corpus, the same lupin 0.1.54, this release's archive `wolf` against
+  0.2.31's): **0 ledger counts moved** on either tier. checked: 792
+  agreements, 95 unsupported, SOUNDNESS 0, hard 19 on both, the two
+  passes byte-identical. native: 777 agreements, 96 unsupported,
+  SOUNDNESS 14, hard 33 on both; three SOUNDNESS rows changed their
+  printed exit status (`conc/atomic_ub_uaf.lu`,
+  `memory/unsafe_ub_uaf.lu`, `memory/volatile_ub_uaf.lu`): each reads
+  freed memory, and 0.2.31 itself gives a different status on each of
+  five runs.
+
+### The checked machine's `net_wait` hands over (s244, #720)
+
+On the checked machine `net_wait` was one host poll for its whole
+deadline on the only thread that runs the tasks, so a loop waiting on
+connections from tasks it had spawned never let those tasks run: the
+book's ex33-7 (a door that spawns two callers, then loops on
+`net_wait([door] + open, 2000)`) was killed at 120 s and 200 s under
+`conform-run --checked` on three hosts, polling `poll(…, 2000) = 0`
+every two seconds with no `connect`. lupin and native answer `answered
+4 questions on 2 connections`. Now, beside other tasks, `net_wait`
+polls the set for at most a millisecond at a time (never past its
+deadline) and hands the baton on between polls, as the socket reads
+already did; the deadline still decides the empty answer; a deadline of
+0 asks once and hands nothing on, as lupin's does; with no other task it
+is the one blocking poll it was (`[exec.checked.task]`). ex33-7 under
+`--checked` now answers lupin's line in 0.06 s. Witnesses
+(`checked_net_wait.rs`): the reduced door loop, ex33-7 verbatim and the
+deadline rows, the checked machine held to lupin and native under a
+30 s kill.
 
 ### A closed standard descriptor stays closed; the dev tier makes the hub and the set only where they are reached (s245, #778)
 
