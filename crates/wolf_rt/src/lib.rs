@@ -67,10 +67,6 @@ pub mod reactor;
 #[cfg(any(unix, windows))]
 pub(crate) mod poll;
 pub(crate) mod scratch;
-// s245 (wolf-lang#778): the runtime's own descriptors (the signal hub's
-// pipes, the readiness set's) never take a closed 0, 1 or 2.
-#[cfg(unix)]
-pub(crate) mod stdfd;
 // Signal RECEPTION (s114, #126): the meaning-based receive surface
 // over the self-pipe/sigaction trampoline (linux at s114, macOS since
 // s59 — `pipe` + FD_CLOEXEC where pipe2 does not exist, spec
