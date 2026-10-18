@@ -559,25 +559,10 @@ fn optimize_one(
     Ok(())
 }
 
-/// The functions a module's roots reach — its exports and `@main` (the
-/// driver's entry shim imports `main`) — over the edges dead-function
-/// elimination keeps: every `Aux::Callee` (a `call` or a `func.addr`, so
-/// a task entry is reached) and every slot of a vtable a reached
-/// function's `data.addr` loads. `None` is a module with no root at all
-/// (a library shape), where nothing can be said to be unreached.
-///
-/// s245 (wolf-lang#778): public so the entry shim decides "the program
-/// reaches a call that makes the signal hub (or can park)" by this walk
-/// on every tier. Until s245 the dev tier, which runs no mid-end, read
-/// every function the module held, so a program that imported
-/// `std.signal` and reached no hub call still made the hub before `main`.
-pub fn live_functions(m: &Module) -> Option<std::collections::HashSet<FuncId>> {
+fn dead_function_elim(m: &mut Module, stats: &mut OptStats) {
     use std::collections::{HashMap, HashSet};
-    let by_name: HashMap<&str, FuncId> = m
-        .funcs
-        .iter()
-        .map(|(id, f)| (f.name.as_str(), id))
-        .collect();
+    let by_name: HashMap<String, FuncId> =
+        m.funcs.iter().map(|(id, f)| (f.name.clone(), id)).collect();
     let mut live: HashSet<FuncId> = HashSet::new();
     let mut work: Vec<FuncId> = m
         .funcs
@@ -586,7 +571,7 @@ pub fn live_functions(m: &Module) -> Option<std::collections::HashSet<FuncId>> {
         .map(|(id, _)| id)
         .collect();
     if work.is_empty() {
-        return None;
+        return; // no root: a library-shaped module — keep everything
     }
     while let Some(fid) = work.pop() {
         if !live.insert(fid) {
@@ -596,7 +581,7 @@ pub fn live_functions(m: &Module) -> Option<std::collections::HashSet<FuncId>> {
         for &b in &f.layout {
             for &inst in &f.blocks[b].insts {
                 if let crate::ir::Aux::Callee(ef) = f.insts[inst].aux
-                    && let Some(&cid) = by_name.get(f.ext_funcs[ef].name.as_str())
+                    && let Some(&cid) = by_name.get(&f.ext_funcs[ef].name)
                 {
                     work.push(cid);
                 }
@@ -608,7 +593,7 @@ pub fn live_functions(m: &Module) -> Option<std::collections::HashSet<FuncId>> {
                     && let Some(d) = m.data.get(di as usize)
                 {
                     for fname in &d.funcs {
-                        if let Some(&cid) = by_name.get(fname.as_str()) {
+                        if let Some(&cid) = by_name.get(fname) {
                             work.push(cid);
                         }
                     }
@@ -616,13 +601,6 @@ pub fn live_functions(m: &Module) -> Option<std::collections::HashSet<FuncId>> {
             }
         }
     }
-    Some(live)
-}
-
-fn dead_function_elim(m: &mut Module, stats: &mut OptStats) {
-    let Some(live) = live_functions(m) else {
-        return; // no root: a library-shaped module — keep everything
-    };
     if live.len() == m.funcs.len() {
         return;
     }
