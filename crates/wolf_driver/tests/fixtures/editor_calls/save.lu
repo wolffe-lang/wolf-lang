@@ -1,0 +1,34 @@
+//! member: false
+//! s248 (wolf-lang#796, `[os.fs.sync]`; yew's G3, invariant 1) — the
+//! atomic save, five calls: the temporary file made EXCLUSIVELY in the
+//! target's directory (`fs_open_perm(tmp, 4, 0o644)`, `exists` if taken),
+//! its bytes written and `fs_sync`ed, `fs_rename`d over `doc.txt`, and
+//! the directory `fs_sync_dir`ed. Run from a directory holding
+//! `doc.txt`; the test runs it whole and then ended at each storage
+//! boundary in turn (its fault shim) and reads what `doc.txt` holds. The
+//! syncs' times, from `os_clock_ns`, go to standard error.
+//! Expected: `saved`, and `doc.txt` holds `new 0` .. `new 3`.
+
+fn main() -> !int {
+    let tmp = "doc.txt.s248tmp"
+    if fs_exists(tmp) {
+        fs_remove(tmp)?
+    }
+    let t = fs_open_perm(tmp, 4, 420)?
+    var i = 0
+    while i < 4 {
+        fs_write(t, "new {i}\n")?
+        i += 1
+    }
+    let a = os_clock_ns()
+    fs_sync(t)?
+    let b = os_clock_ns()
+    fs_close(t)?
+    fs_rename(tmp, "doc.txt")?
+    let c = os_clock_ns()
+    fs_sync_dir(".")?
+    let d = os_clock_ns()
+    eprint("s248-save sync_ns={b - a} sync_dir_ns={d - c}")
+    print("saved")
+    0
+}

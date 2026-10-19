@@ -357,3 +357,209 @@ dir_dot=ok\ndir_missing=not_found\ndir_file=invalid\ndir_empty=not_found\nagain=
     );
     report(&format!("REPORT sync rows: {got:?}"));
 }
+
+// ------------------------------------------- #796, the save's witness --
+
+/// The fault shim (`fixtures/editor_calls/faultshim.c`) built for this
+/// host: a shared object `LD_PRELOAD` loads on linux, a dylib dyld
+/// interposes on macOS. No C compiler is a loud skip, and a failure on
+/// CI's runners (`GITHUB_ACTIONS`), which carry one.
+#[cfg(unix)]
+fn build_shim(dir: &Path) -> Option<(PathBuf, &'static str)> {
+    let src = fixture("faultshim.c");
+    let (out, var) = if cfg!(target_os = "macos") {
+        (dir.join("faultshim.dylib"), "DYLD_INSERT_LIBRARIES")
+    } else {
+        (dir.join("faultshim.so"), "LD_PRELOAD")
+    };
+    let mut cc = Command::new("cc");
+    if cfg!(target_os = "macos") {
+        cc.arg("-dynamiclib");
+    } else {
+        cc.args(["-shared", "-fPIC"]);
+    }
+    cc.args(["-O1", "-Wall", "-o"]).arg(&out).arg(&src);
+    if cfg!(target_os = "linux") {
+        cc.arg("-ldl");
+    }
+    match cc.output() {
+        Ok(o) if o.status.success() => Some((out, var)),
+        other => {
+            let why = match other {
+                Ok(o) => String::from_utf8_lossy(&o.stderr).into_owned(),
+                Err(e) => e.to_string(),
+            };
+            assert!(
+                std::env::var("GITHUB_ACTIONS").as_deref() != Ok("true"),
+                "CI's runner carries a C compiler and the save's fault shim did not build: {why}"
+            );
+            eprintln!("SKIP: no C compiler built the save's fault shim ({why}) — the witness did not run");
+            None
+        }
+    }
+}
+
+/// One boundary the shim logged: its number and what it was.
+#[cfg(unix)]
+#[derive(Debug, Clone)]
+struct Boundary {
+    n: usize,
+    what: String,
+}
+
+#[cfg(unix)]
+fn read_log(path: &Path) -> Vec<Boundary> {
+    std::fs::read_to_string(path)
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| {
+            let (n, what) = l.split_once(' ')?;
+            Some(Boundary {
+                n: n.parse().ok()?,
+                what: what.to_string(),
+            })
+        })
+        .collect()
+}
+
+/// #796 (`[os.fs.sync]`): the atomic save under a fault shim that ends
+/// the program (`_exit(77)`, a process ending, not a signal) BEFORE each
+/// storage boundary in turn — the opens, writes, duplicates, syncs,
+/// closes and the rename on the save's own files. Whole, the save's
+/// boundaries are in the durable order: the temporary file opened
+/// exclusively, its writes, a sync of IT after the last write and before
+/// the rename, the rename over the target, a sync of the DIRECTORY after
+/// it. Ended at boundary N, `doc.txt` holds the old bytes when N is at or
+/// before the rename and the new ones after it — whole, never a mix and
+/// never neither. On every machine (the checked machine is the `wolf`
+/// process under `conform-run`, its own calls the shim's). Red at s248's
+/// prediction commit: E0301; with `fs_sync` made a no-op, the order is
+/// red (no sync of the temporary file).
+#[cfg(unix)]
+#[test]
+fn the_save_survives_an_end_at_every_storage_boundary() {
+    let dir = scratch("save");
+    let Some((shim, var)) = build_shim(&dir) else {
+        return;
+    };
+    let entry = fixture("save.lu");
+    let old = "old\n";
+    let new = "new 0\nnew 1\nnew 2\nnew 3\n";
+    let mut machines: Vec<(String, Vec<String>)> = vec![(
+        "checked".into(),
+        vec![
+            wolf().into(),
+            "conform-run".into(),
+            entry.to_string_lossy().into_owned(),
+            "--checked".into(),
+            "--json".into(),
+        ],
+    )];
+    for release in [false, true] {
+        if let Some(exe) = build(&entry, &dir, "save", release) {
+            let tier = if release { "release" } else { "native" };
+            machines.push((tier.into(), vec![exe.to_string_lossy().into_owned()]));
+        }
+    }
+    let work = dir.join("w");
+    let log = dir.join("faults.log");
+    let reset = || {
+        let _ = std::fs::remove_dir_all(&work);
+        std::fs::create_dir_all(&work).expect("the save's directory");
+        std::fs::write(work.join("doc.txt"), old).expect("the old file");
+        let _ = std::fs::remove_file(&log);
+    };
+    let run = |argv: &[String], at: Option<usize>| -> Output {
+        let mut cmd = Command::new(&argv[0]);
+        cmd.args(&argv[1..])
+            .env(var, &shim)
+            .env("S248_FAULT_LOG", &log)
+            .env_remove("S248_FAULT_AT");
+        if let Some(n) = at {
+            cmd.env("S248_FAULT_AT", n.to_string());
+        }
+        run_in(cmd, &work)
+    };
+    for (lane, argv) in &machines {
+        reset();
+        let out = run(argv, None);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "the {lane} save, whole: {stderr}\n{}",
+            String::from_utf8_lossy(&out.stdout)
+        );
+        assert_eq!(
+            std::fs::read_to_string(work.join("doc.txt")).expect("doc.txt"),
+            new,
+            "the {lane} save, whole, wrote the new bytes"
+        );
+        let whole = read_log(&log);
+        assert!(!whole.is_empty(), "the {lane} save: the shim saw no boundary");
+        let pos = |want: &dyn Fn(&str) -> bool| whole.iter().position(|b| want(&b.what));
+        let rpos = |want: &dyn Fn(&str) -> bool| whole.iter().rposition(|b| want(&b.what));
+        let open = pos(&|w| w == "open tmp excl=1");
+        let last_write = rpos(&|w| w.starts_with("write tmp "));
+        let sync_tmp = rpos(&|w| w.starts_with("sync tmp "));
+        let rename = pos(&|w| w == "rename tmp target");
+        let sync_dir = rpos(&|w| w.starts_with("sync dir "));
+        let order = format!(
+            "open={open:?} last_write={last_write:?} sync_tmp={sync_tmp:?} rename={rename:?} \
+             sync_dir={sync_dir:?} in {whole:?}"
+        );
+        let (Some(open), Some(last_write), Some(sync_tmp), Some(rename), Some(sync_dir)) =
+            (open, last_write, sync_tmp, rename, sync_dir)
+        else {
+            panic!("the {lane} save is missing a durable boundary: {order}");
+        };
+        assert!(
+            open < last_write && last_write < sync_tmp && sync_tmp < rename && rename < sync_dir,
+            "the {lane} save's boundaries are not in the durable order: {order}"
+        );
+        let times = stderr
+            .lines()
+            .find(|l| l.contains("s248-save "))
+            .unwrap_or("")
+            .to_string();
+        report(&format!(
+            "REPORT save {lane}: {} boundaries {:?}; {times}",
+            whole.len(),
+            whole.iter().map(|b| b.what.as_str()).collect::<Vec<_>>()
+        ));
+        let rename_n = whole[rename].n;
+        for b in &whole {
+            reset();
+            let out = run(argv, Some(b.n));
+            assert_eq!(
+                out.status.code(),
+                Some(77),
+                "the {lane} save ended at boundary {} ({}): {}",
+                b.n,
+                b.what,
+                String::from_utf8_lossy(&out.stderr)
+            );
+            let now = std::fs::read_to_string(work.join("doc.txt"))
+                .unwrap_or_else(|e| panic!("the {lane} save ended at {} left no doc.txt: {e}", b.n));
+            let want = if b.n <= rename_n { old } else { new };
+            assert_eq!(
+                now, want,
+                "the {lane} save ended before boundary {} ({}) left doc.txt torn or wrong",
+                b.n, b.what
+            );
+        }
+        eprintln!("PASS the {lane} save at each of {} boundaries", whole.len());
+    }
+    if let Some(l) = lupin_or_skip() {
+        reset();
+        let mut cmd = Command::new(&l);
+        cmd.arg("conform-run").arg(&entry).arg("--json");
+        let out = run_in(cmd, &work);
+        judge_lupin(
+            &parse_obs(&out.stdout, "lupin's observation"),
+            "save.lu",
+            "saved\n",
+            "fs_sync",
+        );
+    }
+}
