@@ -677,13 +677,16 @@ fn a_bounded_storm_and_the_hosts_refusal() {
         return;
     };
     for (row, prog) in rows(&live, &fixture("storm.lu"), "storm", "storm_limit") {
+        // `exec`, so the shell that lowers the limit forks nothing under
+        // it (macOS: the runner's user already has more processes than 12,
+        // and a `bash` fork there is refused before the program runs).
         let script = if live.engine.is_some() {
             format!(
-                "setpriv --reuid=1000 --regid=1000 --clear-groups bash -c 'ulimit -u 12; {prog}; \
-                 echo rc=$?'"
+                "setpriv --reuid=1000 --regid=1000 --clear-groups bash -c 'ulimit -u 12; exec \
+                 {prog}'; echo rc=$?"
             )
         } else {
-            format!("bash -c 'ulimit -u 12; {prog}; echo rc=$?'")
+            format!("bash -c 'ulimit -u 12; exec {prog}'; echo rc=$?")
         };
         let out = live.sh(&script);
         let stdout = String::from_utf8_lossy(&out.stdout).replace('\r', "");

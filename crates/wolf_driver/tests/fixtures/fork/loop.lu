@@ -2,8 +2,9 @@
 //! s247 (`[os.proc.fork]`) — the pelt shape, timed: fork, run, wait, N
 //! times (argv: the shape, N). `exit`: the child ends at once, 0 (dash's
 //! `x=$(true)`: a fork, a built-in in the child, a wait). `exec`: the
-//! child execs `/bin/true` (dash's `x=$(/bin/true)`). `spawn`:
-//! `os_spawn_fds` of `/bin/true`, the call fork is measured against. The
+//! child execs `true` found along `/usr/bin:/bin` (dash's `x=$(/bin/true)`;
+//! macOS has no `/bin/true`). `spawn`: `os_spawn_fds` of `/usr/bin/true`,
+//! the call fork is measured against. The
 //! program names `os_signal_wait_fd`, as pelt does, so its signal hub (two
 //! pipes, the wake pipe, the drain thread) is live at every fork and is
 //! re-made in every child. Prints the shape, N, every status 0, and the
@@ -19,18 +20,20 @@ fn main() -> !int {
     if args.len > 5 {
         let _ = os_signal_wait_fd(0, 2) else 0
     }
+    // `/usr/bin/true` on linux (merged /usr) and macOS alike.
+    let truth = "/usr/bin/true"
     let t0 = time_now_ms()
     var bad = 0
     var i = 0
     while i < n {
         var h = 0 - 1
         if shape == "spawn" {
-            h = os_spawn_fds("/bin/true", List[str](), List[int]())?
+            h = os_spawn_fds(truth, List[str](), List[int]())?
         } else {
             let (pid, hh) = os_fork()?
             if pid == 0 {
                 if shape == "exec" {
-                    os_exec("/bin/true", ["true"], ["PATH=/usr/bin:/bin"], List[int]()) else |_| {}
+                    os_exec("true", ["true"], ["PATH=/usr/bin:/bin"], List[int]()) else |_| {}
                     os_exit(9)
                 }
                 os_exit(0)
