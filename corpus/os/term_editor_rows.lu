@@ -1,4 +1,4 @@
-//! check: run(exit=0, stdout="wait_empty=io\nwait_send_only=io\nwait_past_table=io\nmode_bit5=invalid\nmode_negative=invalid\nmode_past_vtime=invalid")
+//! check: run(exit=0, stdout="wait_empty=io\nwait_send_only=io\nwait_past_table=io\nmode_negative=invalid\nmode_past_vtime=invalid")
 //! phase: run
 //! conforms: os.signal.wait.fd, os.signal.set, os.term.mode, err.union
 //!
@@ -8,9 +8,11 @@
 //! shape rule every set-taking call does (`[os.signal.set]`): an empty
 //! set, a send-only meaning (`KILL`, 1048576) and a bit past the table
 //! are each `io` before the handle is looked at — on windows too. A mode
-//! is `invalid` before its handle is read for a bit that is no field —
-//! bit 5 (32) now that `FLOW` (8) and `EXTENDED` (16) are fields — a
-//! negative mode, or a bit past `VTIME`. The live witnesses (the size, a
+//! is `invalid` before its handle is read for a bit that is no field — a
+//! negative mode, or a bit past `VTIME` (bit 24; s248, wolf-lang#802, made
+//! bits 5..7 fields, `RAW_CR`, `RAW_OUTPUT` and `STRIP8`, so bit 5's row
+//! that stood here until 0.2.33 moved to `editor_wait_lanes.rs`, where a
+//! terminal reads it back). The live witnesses (the size, a
 //! resize while waiting, a key and a signal ending one wait, the special
 //! characters and the two flags) run under a pseudo-terminal in
 //! `crates/wolf_driver/tests/term_editor_lanes.rs` (unix).
@@ -40,7 +42,6 @@ fn main() {
     print("wait_empty={wait_row(0)}")
     print("wait_send_only={wait_row(1048576)}")
     print("wait_past_table={wait_row(1099511627776)}")
-    print("mode_bit5={mode_row(32)}")
     print("mode_negative={mode_row(-1)}")
     print("mode_past_vtime={mode_row(16777216)}")
 }
