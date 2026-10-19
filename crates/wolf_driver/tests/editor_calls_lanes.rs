@@ -588,3 +588,28 @@ fn the_wait_fds_rows_on_every_machine() {
         },
     );
 }
+
+// ------------------------------------------------------------ #794 --
+
+/// #794 (`[os.term.restore]`): the registration's rows that need no
+/// terminal — a mode outside the bits `invalid` before the handle is read
+/// (windows too), then windows `unsupported`, then a closed, forged or
+/// non-terminal handle `io` (ruling asked R1). The restores themselves are
+/// `editor_restore_lanes.rs`'s (unix, on pseudo-terminals).
+#[test]
+fn the_restore_rows_on_every_machine() {
+    let dir = scratch("restore_rows");
+    every_lane(
+        &fixture("restore_rows.lu"),
+        &dir,
+        &["os_term_restore_at_exit"],
+        &|lane, stdout| {
+            let want = if cfg!(unix) {
+                "bit24=invalid negative=invalid forged=io file=io\n"
+            } else {
+                "bit24=invalid negative=invalid forged=unsupported file=unsupported\n"
+            };
+            assert_eq!(stdout, want, "the {lane} machine's restore rows");
+        },
+    );
+}

@@ -1,0 +1,79 @@
+//! member: false
+//! s248 (wolf-lang#794, `[os.term.restore]`; ruling #93 R1 C; yew's G1)
+//! — the runtime restores the terminal on every exit it owns. RUN ONLY
+//! ON A PSEUDO-TERMINAL A TEST STARTED (`script`, inside a throwaway
+//! container on linux, on CI's throwaway runner on macOS): some modes
+//! fault or end this process by a signal, and nothing else.
+//!
+//! Raw mode on descriptor 0, after `os_term_restore_at_exit(0, saved,
+//! leave)` registers the mode the terminal had and the bytes to write
+//! after it (the alternate screen's leave, the cursor shown, and `LEFT`
+//! so the transcript shows them); then ONE way out, the first argument
+//! (or the file `s248.mode`: the checked machine has no arguments):
+//!
+//! - `none`: no registration, a return from `main` — nothing restores it
+//!   (the program did not ask);
+//! - `return`, `exit` (`os_exit(5)`), `main-err` (an error from `main`,
+//!   exit 1), `trap` (a bounds trap, 134), `guard` (a task overflows its
+//!   stack, the runtime's report, 134), `exit-signal`
+//!   (`os_exit_signal(TERMINATE)`, ends by SIGTERM): each restored;
+//! - `killed`: a TERM sent to itself under the default disposition ends
+//!   it by the host — no runtime code runs, so nothing restores it (the
+//!   clause's stated limit; a program that listens restores itself);
+//! - `last-wins`: two registrations, `LEFT-A` then `LEFT-B`: only the
+//!   second's bytes are written;
+//! - `same-mode`: raw first, then the registration of the mode the
+//!   terminal already has — allowed — and a return: the terminal stays
+//!   raw, the bytes are written.
+
+fn deep(n: int) -> int {
+    if n < 0 { 0 } else { deep(n + 1) + 1 }
+}
+
+fn main() -> !int {
+    let args = env_args()
+    let from_file = fs_read_text("s248.mode") else |_| ""
+    let mode = if args.len > 0 { args[0] } else { from_file }
+    let saved = os_term_mode(0)?
+    let flags = saved & 31
+    let raw = flags & 16 | 256
+    let leave = "\x1b[?1049l\x1b[?25hLEFT\n".bytes()
+    if mode == "last-wins" {
+        os_term_restore_at_exit(0, saved, "LEFT-A\n".bytes())?
+        os_term_restore_at_exit(0, saved, "LEFT-B\n".bytes())?
+    } else if mode == "same-mode" {
+        os_term_set_mode(0, raw)?
+        os_term_restore_at_exit(0, raw, leave)?
+    } else if mode != "none" {
+        os_term_restore_at_exit(0, saved, leave)?
+    }
+    os_term_set_mode(0, raw)?
+    print("raw {mode}")
+    if mode == "trap" {
+        let xs = List[int]()
+        print("{xs[1]}")
+    }
+    if mode == "exit" {
+        os_exit(5)
+    }
+    if mode == "main-err" {
+        let n = "x".to_int()?
+        print("{n}")
+    }
+    if mode == "guard" {
+        scope s {
+            s.spawn(fn() {
+                let x = deep(0)
+                print("unreachable: {x}")
+            })
+        }
+    }
+    if mode == "exit-signal" {
+        os_exit_signal(2)?
+    }
+    if mode == "killed" {
+        os_signal_send(os_pid(), 2)?
+        time_sleep_ms(2000)
+    }
+    0
+}
