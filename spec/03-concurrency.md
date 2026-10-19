@@ -225,18 +225,27 @@ premise by construction.
   cancellation, with no system call meanwhile: one task parked 8 s in
   an unbudgeted `net_accept` made 8 `futex` calls in its whole run,
   against 1,741 before s231, when every parked wait woke each 5 ms to
-  look for a cancellation. `os_signal_wait` still does: **~196 `futex`
-  calls a second, every one an error return**, for as long as it stays
-  parked, and a process with two such waits pays two clocks — lobo's
-  four measurements on ubuntu-latest (4 vcpus) under `strace -c -f`,
-  8 s idle windows: ws30 (wolf 0.2.9 and `fc07cc5`, runs 34553773533,
+  look for a cancellation. **`os_signal_wait` makes none either** since
+  0.2.31 (s242, wolf-lang#680, `[os.signal.wait]`): outside a scope that
+  can be killed it has no timer, and an idle `os_signal_wait(INTERRUPT)`
+  made **0** system calls on any of its threads in an 8 s window —
+  `futex`, `poll`, `ppoll`, `epoll_wait`, `nanosleep`,
+  `clock_nanosleep` and `read` counted under `strace -f -tt` (s246,
+  wolf-lang#788: wolf 0.2.32 on kasumi, linux 7.2.8, in a container,
+  the dev and release tiers on all cpus and under `taskset -c 0-3`,
+  kasumi `~/lanes/s246/ev/idle788-trunk.log`). Inside a scope that can
+  be killed it still looks for a kill every 5 ms. Until 0.2.31 every
+  `os_signal_wait` woke on that 5 ms clock: ~196 `futex` calls a
+  second, every one an error return, for as long as it stayed parked,
+  and a process with two such waits paid two clocks — lobo's four
+  measurements on ubuntu-latest (4 vcpus) under `strace -c -f`, 8 s
+  idle windows: ws30 (wolf 0.2.9 and `fc07cc5`, runs 34553773533,
   34554207566), ws31 (0.2.11, run 34598620069), ws32 (0.2.11, run
   34603180650, 6,273 calls over four hands, and run 34603229602 for
-  the per-wait increment). It is under 0.1% of a serving hand's CPU,
-  and it is a count a server choosing between a poll and a park is
-  owed. (The number written 2026-09-15 by s163 — wolf-lang#302 item 2;
-  item 1, whether a deadline-less park can cost nothing, is answered
-  for every wait above but `os_signal_wait`.)
+  the per-wait increment). (That number was written 2026-09-15 by s163
+  — wolf-lang#302 item 2; item 1, whether a deadline-less park can cost
+  nothing, is now answered for every wait above, `os_signal_wait`
+  included.)
 - `[conc.task.name]` Tasks and procs carry names (spawn-site default,
   user-overridable) surfaced in the structured dump — the dump's
   *contents* are implementation-specified; its *existence* is contract.
