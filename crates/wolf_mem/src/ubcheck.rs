@@ -2353,8 +2353,19 @@ pub fn run_checked_with_input(
 /// `test_*` functions in declaration order, each with its parameter
 /// count (the runner executes zero-parameter tests and reports
 /// parameter-carrying ones as unsupported — never silently skipped).
-pub fn discover_tests(pkg: &Package) -> Vec<(String, usize)> {
-    let file = &pkg.files[0];
+///
+/// s248 (wolf-lang#799; yew G10): `entry` names the test file. The
+/// package built for it is its directory's non-test files and the test
+/// file, in name order, so the test file is not `pkg.files[0]` when a
+/// plain file sorts before it — until s248 discovery read that first
+/// file, ran `z_test.lu`'s `main` instead of its tests, and took a plain
+/// file's helper named `test_*` for a test. A test file's tests are its
+/// own `test_*` ([`entry_file`]).
+pub fn discover_tests(pkg: &Package, entry: &std::path::Path) -> Vec<(String, usize)> {
+    let Some(at) = entry_file(pkg, entry) else {
+        return Vec::new();
+    };
+    let file = &pkg.files[at];
     let src = &file.raw.src;
     let mut out = Vec::new();
     for node in file.parse.root.nodes().filter(|n| n.kind.is_item()) {
@@ -2371,6 +2382,23 @@ pub fn discover_tests(pkg: &Package) -> Vec<(String, usize)> {
         out.push((name, arity));
     }
     out
+}
+
+/// s248 (wolf-lang#799): the index in `pkg.files` of the file `entry`
+/// names — the root module's file of that name (a module's file names
+/// are unique, and the package around an entry has the entry in its
+/// root module).
+pub fn entry_file(pkg: &Package, entry: &std::path::Path) -> Option<usize> {
+    let want = entry.file_name()?.to_str()?;
+    let root = pkg.modules.iter().find(|m| m.path.is_empty())?;
+    root.files.iter().copied().find(|&i| {
+        pkg.files[i]
+            .raw
+            .display
+            .rsplit(['/', '\\'])
+            .next()
+            .is_some_and(|n| n == want)
+    })
 }
 
 /// Does the package declare a top-level `main`? (`wolf test` uses this

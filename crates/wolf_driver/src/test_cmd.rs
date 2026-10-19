@@ -465,7 +465,9 @@ pub fn test_cmd(args: &[String]) {
         }
 
         // ---- the file's tests: `test_*` fns, else black-box main --
-        let discovered = ubcheck::discover_tests(&res.package);
+        // s248 (#799): the test file's own `test_*`, not the package's
+        // first file's.
+        let discovered = ubcheck::discover_tests(&res.package, file);
         let tests: Vec<(String, usize)> = if discovered.is_empty() {
             if ubcheck::has_main(&res.package) {
                 vec![("main".to_string(), 0)]
