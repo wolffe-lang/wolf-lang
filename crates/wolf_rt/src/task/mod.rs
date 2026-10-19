@@ -116,7 +116,6 @@ pub(crate) use hooks::test_hook;
 pub(crate) use parked::{Wake, park_on};
 pub(crate) use pool::compensated;
 pub(crate) use pool::kill_teardown_check;
-// s246 (#783, #784): the stack guard's choice for a SENT fault signal.
 pub use pool::{Body, SendPtr, TaskCtx, blocking, counters, current_scope, initialized};
 pub use proc::{
     __wolf_rt_proc_cancel, __wolf_rt_proc_join, __wolf_rt_proc_kill, __wolf_rt_proc_link,
@@ -126,8 +125,6 @@ pub use proc::{
     set_trap_exit, spawn_proc, supervise, with_handler,
 };
 pub use scope::{ExitReason, ScopeInner, TaskState, dump};
-#[cfg(unix)]
-pub(crate) use stack::{ignored_sent_faults, reinstall_after_exec, set_sent_fault};
 pub use when::{
     __wolf_rt_sync_free, __wolf_rt_sync_new, __wolf_rt_sync_payload, __wolf_rt_when_acquire,
     __wolf_rt_when_release, SyncCell, WhenErr, when, when_acquire, when_release,

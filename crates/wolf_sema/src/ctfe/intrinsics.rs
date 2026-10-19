@@ -223,13 +223,6 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // `os_isatty`.
         "os_signal_ignore" | "os_signal_default" | "os_signal_poll" | "os_spawn_job"
         | "os_proc_pid" | "os_wait_status" | "os_term_set_foreground" => SandboxCategory::Exec,
-        // s246 (#783, #784; ruling asked): one meaning's disposition is
-        // signal control, `exec` with the set calls; ending this process
-        // by a signal is process control, `exec` with `os_exit` (at
-        // comptime it would end the compiler).
-        "os_signal_ignore_one" | "os_signal_default_one" | "os_exit_signal" => {
-            SandboxCategory::Exec
-        }
         "os_pgid" => SandboxCategory::Env,
         // s242 (wolf-lang#680; ruling owed): the poll of the children
         // reaps as `os_wait_status` does — process control, `exec`.

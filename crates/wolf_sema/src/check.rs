@@ -14180,18 +14180,6 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         "os_signal_ignore" | "os_signal_default" => {
             (vec![int_], rowed(table, unit, &["unsupported", "io"]))
         }
-        // s246 (wolf-lang#783, `[os.signal.disp.one]`): ONE meaning in the
-        // sending shape — one bit of the table or `-N` — ignored or back
-        // to its default; 0, `KILL`, `STOP` and every other shape refusal
-        // `invalid`, windows `unsupported`, the host's refusal `io`.
-        "os_signal_ignore_one" | "os_signal_default_one" => (
-            vec![int_],
-            rowed(table, unit, &["unsupported", "invalid", "io"]),
-        ),
-        // s246 (wolf-lang#784, `[os.signal.exit]`): this process ended by one
-        // meaning's signal (the sending shape); it returns only a shape
-        // refusal (`invalid`) or windows' `unsupported`.
-        "os_exit_signal" => (vec![int_], rowed(table, unit, &["unsupported", "invalid"])),
         "os_signal_poll" => (vec![int_], rowed(table, int_, &["io"])),
         // s234 (wolf-lang#719, `[os.signal.wait.fd]`): park until a
         // meaning in the set is delivered (answered) or the descriptor

@@ -808,74 +808,6 @@ impl NetSock {
         }
     }
 
-    /// s245 (wolf-lang#777): can a write go within `timeout_ms` — room in
-    /// the send buffer, or an error or hang-up the write will report?
-    /// `poll_readable`'s twin.
-    fn poll_writable(&self, timeout_ms: i32) -> std::io::Result<bool> {
-        #[cfg(unix)]
-        let raw = {
-            use std::os::fd::AsRawFd as _;
-            match self {
-                NetSock::Listener(l) => l.as_raw_fd(),
-                NetSock::Stream(st) => st.as_raw_fd(),
-                NetSock::UnixListener(l, _) => l.as_raw_fd(),
-                NetSock::UnixStream(st) => st.as_raw_fd(),
-            }
-        };
-        #[cfg(windows)]
-        let raw = {
-            use std::os::windows::io::AsRawSocket as _;
-            match self {
-                NetSock::Listener(l) => l.as_raw_socket(),
-                NetSock::Stream(st) => st.as_raw_socket(),
-            }
-        };
-        #[cfg(any(unix, windows))]
-        {
-            checked_poll_writable(raw, timeout_ms)
-        }
-        #[cfg(not(any(unix, windows)))]
-        {
-            let _ = timeout_ms;
-            Ok(true)
-        }
-    }
-
-    /// s245 (wolf-lang#777): one gathered write of what the socket takes
-    /// NOW — the socket nonblocking for this one call, then blocking
-    /// again, as the machine's streams always are. `WouldBlock` is a full
-    /// send buffer.
-    fn write_now(&mut self, bufs: &[std::io::IoSlice<'_>]) -> std::io::Result<usize> {
-        use std::io::Write as _;
-        match self {
-            NetSock::Stream(s) => {
-                s.set_nonblocking(true)?;
-                let r = s.write_vectored(bufs);
-                s.set_nonblocking(false)?;
-                r
-            }
-            #[cfg(unix)]
-            NetSock::UnixStream(s) => {
-                s.set_nonblocking(true)?;
-                let r = s.write_vectored(bufs);
-                s.set_nonblocking(false)?;
-                r
-            }
-            _ => Err(std::io::Error::from(std::io::ErrorKind::Other)),
-        }
-    }
-
-    /// s245: the write budget a stream carries (`net_deadline` arms both
-    /// directions).
-    fn write_budget(&self) -> Option<std::time::Duration> {
-        match self {
-            NetSock::Stream(s) => s.write_timeout().ok().flatten(),
-            #[cfg(unix)]
-            NetSock::UnixStream(s) => s.write_timeout().ok().flatten(),
-            _ => None,
-        }
-    }
-
     /// s226: the read budget a stream carries (`net_deadline`).
     fn read_budget(&self) -> Option<std::time::Duration> {
         match self {
@@ -1224,71 +1156,6 @@ fn checked_poll_readable(
     }
     let ready = POLLRDNORM | POLLHUP | POLLERR | POLLNVAL;
     Ok(pfds.iter().map(|p| p.revents & ready != 0).collect())
-}
-
-/// s245 (wolf-lang#777): [`checked_poll_readable`]'s write twin for one
-/// socket: true when a write will not block (room to send, an error, a
-/// hang-up). `EINTR` retries.
-#[cfg(unix)]
-fn checked_poll_writable(fd: std::os::fd::RawFd, timeout_ms: i32) -> std::io::Result<bool> {
-    let mut p = libc::pollfd {
-        fd,
-        events: libc::POLLOUT,
-        revents: 0,
-    };
-    loop {
-        // SAFETY: one live pollfd.
-        let rc = unsafe { libc::poll(&mut p, 1, timeout_ms) };
-        if rc < 0 {
-            let e = std::io::Error::last_os_error();
-            if e.raw_os_error() == Some(libc::EINTR) {
-                p.revents = 0;
-                continue;
-            }
-            return Err(e);
-        }
-        let ready = libc::POLLOUT | libc::POLLHUP | libc::POLLERR | libc::POLLNVAL;
-        return Ok(p.revents & ready != 0);
-    }
-}
-
-/// The windows twin of the unix `checked_poll_writable` — `WSAPoll`, as
-/// [`checked_poll_readable`]'s.
-#[cfg(windows)]
-fn checked_poll_writable(
-    fd: std::os::windows::io::RawSocket,
-    timeout_ms: i32,
-) -> std::io::Result<bool> {
-    #[repr(C)]
-    struct PollFd {
-        fd: usize,
-        events: i16,
-        revents: i16,
-    }
-    const POLLWRNORM: i16 = 0x0010;
-    const POLLERR: i16 = 0x0001;
-    const POLLHUP: i16 = 0x0002;
-    const POLLNVAL: i16 = 0x0004;
-    #[link(name = "ws2_32")]
-    unsafe extern "system" {
-        fn WSAPoll(fds: *mut PollFd, count: u32, timeout_ms: i32) -> i32;
-        fn WSAGetLastError() -> i32;
-    }
-    let mut p = PollFd {
-        fd: fd as usize,
-        events: POLLWRNORM,
-        revents: 0,
-    };
-    // SAFETY: one live WSAPOLLFD.
-    let rc = unsafe { WSAPoll(&mut p, 1, timeout_ms) };
-    if rc < 0 {
-        // SAFETY: a plain error read.
-        return Err(std::io::Error::from_raw_os_error(unsafe {
-            WSAGetLastError()
-        }));
-    }
-    let ready = POLLWRNORM | POLLHUP | POLLERR | POLLNVAL;
-    Ok(p.revents & ready != 0)
 }
 
 fn accept_deadline(
@@ -7785,22 +7652,10 @@ impl<'t> Machine<'t> {
                 let (Some(fd), Some(payload)) = (int_arg(0), str_arg(1)) else {
                     return self.refuse("this net call shape", span);
                 };
-                if !self.sock(fd).is_some_and(|s| s.is_stream()) {
+                let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
                     return Ok(tag("io"));
-                }
-                // s245 (#777): beside other tasks the write parks.
-                let wrote = if self.sched.concurrent {
-                    match self.net_write_parked(fd, &[payload.as_bytes()], span)? {
-                        Some(r) => r,
-                        None => return Ok(tag("io")),
-                    }
-                } else {
-                    match self.sock(fd) {
-                        Some(s) => s.write_all(payload.as_bytes()),
-                        None => return Ok(tag("io")),
-                    }
                 };
-                match wrote {
+                match s.write_all(payload.as_bytes()) {
                     Err(e) => Ok(tag(&coarse(&e, &["closed", "io"]))),
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
@@ -7845,22 +7700,10 @@ impl<'t> Machine<'t> {
                     Some(Err(())) => return Ok(tag("invalid")),
                     Some(Ok(b)) => b,
                 };
-                if !self.sock(fd).is_some_and(|s| s.is_stream()) {
+                let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
                     return Ok(tag("io"));
-                }
-                // s245 (#777): beside other tasks the write parks.
-                let wrote = if self.sched.concurrent {
-                    match self.net_write_parked(fd, &[&bytes], span)? {
-                        Some(r) => r,
-                        None => return Ok(tag("io")),
-                    }
-                } else {
-                    match self.sock(fd) {
-                        Some(s) => s.write_all(&bytes),
-                        None => return Ok(tag("io")),
-                    }
                 };
-                match wrote {
+                match s.write_all(&bytes) {
                     Err(e) => Ok(tag(&coarse(&e, &["closed", "io"]))),
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
@@ -7885,23 +7728,10 @@ impl<'t> Machine<'t> {
                         _ => return self.refuse("this net call shape", span),
                     }
                 }
-                if !self.sock(fd).is_some_and(|s| s.is_stream()) {
+                let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
                     return Ok(tag("io"));
-                }
-                // s245 (#777): beside other tasks the write parks.
-                let wrote = if self.sched.concurrent {
-                    let views: Vec<&[u8]> = parts.iter().map(Vec::as_slice).collect();
-                    match self.net_write_parked(fd, &views, span)? {
-                        Some(r) => r,
-                        None => return Ok(tag("io")),
-                    }
-                } else {
-                    match self.sock(fd) {
-                        Some(s) => s.write_all_vectored(&parts),
-                        None => return Ok(tag("io")),
-                    }
                 };
-                match wrote {
+                match s.write_all_vectored(&parts) {
                     Err(e) => Ok(tag(&coarse(&e, &["closed", "io"]))),
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
@@ -7930,23 +7760,10 @@ impl<'t> Machine<'t> {
                         _ => return self.refuse("this net call shape", span),
                     }
                 }
-                if !self.sock(fd).is_some_and(|s| s.is_stream()) {
+                let Some(s) = self.sock(fd).filter(|s| s.is_stream()) else {
                     return Ok(tag("io"));
-                }
-                // s245 (#777): beside other tasks the write parks.
-                let wrote = if self.sched.concurrent {
-                    let views: Vec<&[u8]> = parts.iter().map(Vec::as_slice).collect();
-                    match self.net_write_parked(fd, &views, span)? {
-                        Some(r) => r,
-                        None => return Ok(tag("io")),
-                    }
-                } else {
-                    match self.sock(fd) {
-                        Some(s) => s.write_all_vectored(&parts),
-                        None => return Ok(tag("io")),
-                    }
                 };
-                match wrote {
+                match s.write_all_vectored(&parts) {
                     Err(e) => Ok(tag(&coarse(&e, &["closed", "io"]))),
                     Ok(()) => Ok(Flow::Val(Value::Unit)),
                 }
@@ -8076,76 +7893,6 @@ impl<'t> Machine<'t> {
                 return Ok(false);
             }
         }
-    }
-
-    /// s245 (wolf-lang#777): a write beside other tasks parks as a read
-    /// does (`net_park`, `[exec.checked.task]`). Until s245 the four
-    /// writes were one blocking `write(2)`/`writev(2)` of everything on
-    /// the thread that holds the baton, so past the socket's buffers it
-    /// waited for a reader that was a task of the same machine and never
-    /// ran (an 8 MiB write to a spawned reader was killed at 30 s). Now
-    /// the socket is polled for room a millisecond at a time; what it
-    /// takes goes at once, without blocking; and the other tasks run
-    /// between polls. An armed write budget still ends it: no byte taken
-    /// for the budget is `WouldBlock`, the row the blocking write's
-    /// `SO_SNDTIMEO` gave. When nobody else is left the rest is the one
-    /// blocking write it always was. `None`: the handle was closed
-    /// meanwhile (`io`).
-    fn net_write_parked(
-        &mut self,
-        fd: i64,
-        parts: &[&[u8]],
-        span: Span,
-    ) -> E<Option<std::io::Result<()>>> {
-        let budget = self.sock(fd).and_then(|s| s.write_budget());
-        let mut slices: Vec<std::io::IoSlice<'_>> = parts
-            .iter()
-            .filter(|p| !p.is_empty())
-            .map(|p| std::io::IoSlice::new(p))
-            .collect();
-        let mut bufs: &mut [std::io::IoSlice<'_>] = &mut slices;
-        let mut moved = std::time::Instant::now();
-        while !bufs.is_empty() {
-            let Some(s) = self.sock(fd) else {
-                return Ok(None);
-            };
-            match s.poll_writable(1) {
-                Ok(false) => {}
-                Err(e) => return Ok(Some(Err(e))),
-                Ok(true) => match s.write_now(bufs) {
-                    Ok(0) => {
-                        return Ok(Some(Err(std::io::Error::from(
-                            std::io::ErrorKind::WriteZero,
-                        ))));
-                    }
-                    Ok(n) => {
-                        std::io::IoSlice::advance_slices(&mut bufs, n);
-                        moved = std::time::Instant::now();
-                        continue;
-                    }
-                    Err(e)
-                        if matches!(
-                            e.kind(),
-                            std::io::ErrorKind::WouldBlock | std::io::ErrorKind::Interrupted
-                        ) => {}
-                    Err(e) => return Ok(Some(Err(e))),
-                },
-            }
-            if budget.is_some_and(|b| moved.elapsed() >= b) {
-                return Ok(Some(Err(std::io::Error::from(
-                    std::io::ErrorKind::WouldBlock,
-                ))));
-            }
-            if !self.yield_now(span)? {
-                // Nobody else to run: the rest blocks, as it always did.
-                let rest: Vec<Vec<u8>> = bufs.iter().map(|b| b.to_vec()).collect();
-                let Some(s) = self.sock(fd) else {
-                    return Ok(None);
-                };
-                return Ok(Some(s.write_all_vectored(&rest)));
-            }
-        }
-        Ok(Some(Ok(())))
     }
 
     /// s244: the host handles of a `net_wait` set, or `None` when one
@@ -8862,11 +8609,7 @@ impl<'t> Machine<'t> {
                         {
                             use std::os::unix::process::ExitStatusExt as _;
                             if let Some(sig) = status.signal() {
-                                // s246 (#785, `[os.proc.status]`): a core
-                                // dumped is `-(256 + N)`, the runtime's.
-                                let n = i64::from(sig);
-                                let v = if status.core_dumped() { -(256 + n) } else { -n };
-                                return Ok(Flow::Val(Value::Int(v)));
+                                return Ok(Flow::Val(Value::Int(-i64::from(sig))));
                             }
                         }
                         Ok(tag("io"))
@@ -9276,63 +9019,6 @@ impl<'t> Machine<'t> {
                         self.signal_touched |= mask;
                         Ok(Flow::Val(Value::Unit))
                     }
-                }
-            }
-            // s246 (#783, `[os.signal.disp.one]`): one meaning in the sending
-            // shape, the runtime's order — the shape (`invalid`: 0, `KILL`,
-            // `STOP`, anything the sends refuse), the host (windows
-            // `unsupported`), then the host's own `sigaction`. A listenable
-            // meaning's signal, by bit or by number, is the set call's (it
-            // ends a listen). `SEGMENT_FAULT` and `BUS_ERROR` are refused by
-            // name: they are the `wolf` process's own stack guard's, and
-            // the machine does not model the runtime's sent-fault rule.
-            "os_signal_ignore_one" | "os_signal_default_one" => {
-                let Some(m) = int_arg(0) else {
-                    return self.refuse("this os call shape", span);
-                };
-                let ignore = name == "os_signal_ignore_one";
-                if m == 0 || m == 1 << 20 || m == 1 << 21 {
-                    return Ok(tag("invalid"));
-                }
-                let sig = match checked_sig::host_signal(m, false) {
-                    Ok(sig) => sig,
-                    Err(t) => return Ok(tag(t)),
-                };
-                match checked_sig::disp_one(sig, ignore) {
-                    Ok(checked_sig::DispOne::Meaning(bit)) => {
-                        self.signal_listening &= !bit;
-                        self.signal_touched |= bit;
-                        Ok(Flow::Val(Value::Unit))
-                    }
-                    Ok(checked_sig::DispOne::Signal) => Ok(Flow::Val(Value::Unit)),
-                    Ok(checked_sig::DispOne::Fault) => self.refuse(
-                        "`os_signal_ignore_one`/`os_signal_default_one` of a fault meaning \
-                         (SEGMENT_FAULT, BUS_ERROR: the `wolf` process's own stack guard \
-                         holds them; [os.signal.disp.one])",
-                        span,
-                    ),
-                    Err(t) => Ok(tag(t)),
-                }
-            }
-            // s246 (#784, `[os.signal.exit]`): the shape (`invalid`), the
-            // host (windows `unsupported`), then a refusal by name — the
-            // machine runs inside the `wolf` process and does not end it by
-            // a signal (the record has no verdict for an end by a signal).
-            "os_exit_signal" => {
-                let Some(m) = int_arg(0) else {
-                    return self.refuse("this os call shape", span);
-                };
-                if m == 0 {
-                    return Ok(tag("invalid"));
-                }
-                match checked_sig::host_signal(m, false) {
-                    Err(t) => Ok(tag(t)),
-                    Ok(_) if cfg!(not(unix)) => Ok(tag("unsupported")),
-                    Ok(_) => self.refuse(
-                        "`os_exit_signal` (the checked machine does not end the process it runs \
-                         in by a signal; [os.signal.exit])",
-                        span,
-                    ),
                 }
             }
             // s232 (#681, `[os.signal.ignored]`): the host's disposition,
@@ -11055,9 +10741,6 @@ impl<'t> Machine<'t> {
             | "os_signal_realtime" | "os_signal_text"
             // s242 (#680): the poll of the children.
             | "os_wait_poll"
-            // s246 (#783, #784): one meaning's disposition, the end by a
-            // signal.
-            | "os_signal_ignore_one" | "os_signal_default_one" | "os_exit_signal"
             | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
             | "str_from_utf8"
@@ -13541,10 +13224,7 @@ fn checked_poll(children: &mut [Option<std::process::Child>]) -> Result<(i64, i6
                 }
                 if libc::WIFSIGNALED(st) {
                     *slot = None;
-                    // s246 (#785): `WCOREDUMP` rides the status.
-                    let n = i64::from(libc::WTERMSIG(st));
-                    let v = if libc::WCOREDUMP(st) { -(256 + n) } else { -n };
-                    return Ok((i as i64, v));
+                    return Ok((i as i64, -i64::from(libc::WTERMSIG(st))));
                 }
             }
         }
@@ -13962,51 +13642,6 @@ mod checked_sig {
         }
     }
 
-    /// s246: what `os_signal_ignore_one` / `os_signal_default_one` set.
-    pub(super) enum DispOne {
-        /// A listenable meaning's signal: this bit's disposition is set.
-        Meaning(i64),
-        /// Another signal of the host's: its disposition is set.
-        Signal,
-        /// `SIGSEGV` or `SIGBUS`: nothing set (the caller refuses).
-        Fault,
-    }
-
-    /// s246 (#783): `SIG_IGN` or `SIG_DFL` for one host signal (shape
-    /// checked by the caller, `KILL` and `STOP` excluded) — through the
-    /// set call's path when a listenable meaning has that number; the
-    /// fault signals are left alone. windows `unsupported`.
-    pub(super) fn disp_one(sig: i32, ignore: bool) -> Result<DispOne, &'static str> {
-        #[cfg(unix)]
-        {
-            if sig == libc::SIGKILL || sig == libc::SIGSTOP {
-                return Err("invalid");
-            }
-            if sig == libc::SIGSEGV || sig == libc::SIGBUS {
-                return Ok(DispOne::Fault);
-            }
-            if let Some(bit) = (0..20).map(|i| 1i64 << i).find(|&b| sig_of(b) == Some(sig)) {
-                set_disp(bit, ignore)?;
-                return Ok(DispOne::Meaning(bit));
-            }
-            // SAFETY: a zeroed sigaction with a constant disposition.
-            unsafe {
-                let mut sa: libc::sigaction = std::mem::zeroed();
-                sa.sa_sigaction = if ignore { libc::SIG_IGN } else { libc::SIG_DFL };
-                libc::sigemptyset(&mut sa.sa_mask);
-                if libc::sigaction(sig, &sa, std::ptr::null_mut()) != 0 {
-                    return Err("io");
-                }
-            }
-            Ok(DispOne::Signal)
-        }
-        #[cfg(not(unix))]
-        {
-            let _ = (sig, ignore);
-            Err("unsupported")
-        }
-    }
-
     /// `SIG_IGN` or `SIG_DFL` for every meaning in `set` (validated by
     /// the caller); windows `unsupported`.
     pub(super) fn set_disp(set: i64, ignore: bool) -> Result<(), &'static str> {
@@ -14267,10 +13902,9 @@ mod checked_sig {
 
     /// s241 (#741, `[os.signal.text]`): the C library's `strsignal`
     /// words, read with the C locale set on this thread (`uselocale`),
-    /// serialized and copied out — the runtime's twin (s246, #787: 0 is
-    /// signal 0, `strsignal(0)`'s words).
+    /// serialized and copied out — the runtime's twin.
     pub(super) fn text(m: i64) -> Result<String, &'static str> {
-        let sig = host_signal(m, true)?;
+        let sig = host_signal(m, false)?;
         #[cfg(unix)]
         {
             static READ: std::sync::Mutex<()> = std::sync::Mutex::new(());

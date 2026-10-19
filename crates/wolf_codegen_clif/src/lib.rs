@@ -815,10 +815,6 @@ pub const PARKING_NET: [&str; 7] = [
 /// `[os.signal.hub]`).
 pub const SIGNAL_START: &str = "__wolf_rt_signal_start";
 
-/// The runtime's start call for the descriptor waits' shared wake pipe
-/// (s246, wolf-lang#781, `[os.signal.wait.fd]`), after [`SIGNAL_START`].
-pub const WAIT_FD_START: &str = "__wolf_rt_signal_wait_fd_start";
-
 /// The runtime calls that make the signal hub (its two pipes and its
 /// drain thread) when it is not made yet: the listen, the wait and the
 /// wait on a descriptor (`[os.signal.hub]`). `ignore`, `default`,
@@ -863,12 +859,6 @@ pub fn names_a_hub_call(m: &WirModule) -> bool {
     names_any(m, &HUB_SIGNAL)
 }
 
-/// Whether a function `m` reaches calls `os_signal_wait_fd` (s246,
-/// wolf-lang#781): its shared wake pipe is made before `main` too.
-pub fn names_a_descriptor_wait(m: &WirModule) -> bool {
-    names_any(m, &["__wolf_rt_os_signal_wait_fd"])
-}
-
 /// Append the C-entry shim to a WIR module: `main(argc, argv)` — in
 /// truth a niladic CLIF function — that calls wolf's `@main`. A plain
 /// `() -> i64` main truncates its result to the C exit code. An
@@ -884,13 +874,10 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
     // s239 (#750, `[os.net.reactor]`): a program that names a call which
     // can park in the reactor makes the readiness set before `main`;
     // s243 (#763, `[os.signal.hub]`): one that names a call which makes
-    // the signal hub makes the hub there too, after the set; s246 (#781):
-    // one that names `os_signal_wait_fd` makes the descriptor waits' wake
-    // pipe last, so no wait makes a descriptor once the program runs.
+    // the signal hub makes the hub there too, after the set.
     let starts: Vec<&str> = [
         (names_a_park(m), REACTOR_START),
         (names_a_hub_call(m), SIGNAL_START),
-        (names_a_descriptor_wait(m), WAIT_FD_START),
     ]
     .into_iter()
     .filter_map(|(named, sym)| named.then_some(sym))

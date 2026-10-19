@@ -249,7 +249,9 @@ jobs:
           tar -xzf ".lupin/$asset" -C .lupin --strip-components=1
           .lupin/lupin --version
       - name: full gauntlet (fmt, clippy, test, deps-check, corpus)
-        run: cargo xtask ci
+        # s246 PLANT (never merged): every s246 source change and s245's
+        # hand-over (312e4662) removed; only the gates run, each to the end.
+        run: cargo build -p wolf_rt && cargo test -p wolf_driver --no-fail-fast --test signal_gaps_lanes --test checked_net_write --test reactor_lanes --test str_list_fs_native --test freestanding_target -- --nocapture; a=$?; cargo test -p wolf_sema --no-fail-fast --test sandbox_s246 --test prelude_names --test host_table_spec; b=$?; echo "PLANT: wolf_driver gates rc=$a, wolf_sema gates rc=$b"; exit $((a + b))
       - name: bench smoke (runtime report-only until M2; compile GATES at M1)
         run: |
           cargo xtask bench --track=runtime --runs=3 --out=bench-results/pr-runtime.jsonl
@@ -415,7 +417,9 @@ jobs:
         run: rustup target add x86_64-unknown-none
       - run: cargo build --workspace
       - if: matrix.leg != 'rung'
-        run: cargo test --workspace
+        # s246 PLANT (never merged): the gates only, each to the end.
+        shell: bash
+        run: cargo build -p wolf_rt && cargo test -p wolf_driver --no-fail-fast --test signal_gaps_lanes --test checked_net_write --test reactor_lanes --test str_list_fs_native --test freestanding_target -- --nocapture; a=$?; cargo test -p wolf_sema --no-fail-fast --test sandbox_s246 --test prelude_names --test host_table_spec; b=$?; echo "PLANT: wolf_driver gates rc=$a, wolf_sema gates rc=$b"; exit $((a + b))
       # s60a: the windows native rung. The clif gate is open on this
       # host, so the corpus runs natively here — `lane-coverage` is the
       # windows floor line (259/255/0/274/0 at the s60a bring-up with 21

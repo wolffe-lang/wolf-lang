@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 227] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 223] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -89,10 +89,6 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 227] = [
     // in a program that names a call which makes it; a refusal is one
     // stderr line and exit 71.
     ("__wolf_rt_signal_start", 0, false),
-    // s246 (#781, `[os.signal.wait.fd]`): the descriptor waits' shared
-    // wake pipe, made before `main` after the hub in a program that names
-    // `os_signal_wait_fd`; a refusal is one stderr line and exit 71.
-    ("__wolf_rt_signal_wait_fd_start", 0, false),
     // The s31 print path: `print` lowers to per-segment writes — bytes
     // (ptr, len), decimal i64, `true`/`false` — flushed per call so no
     // buffered bytes outlive the C-shim `main` return.
@@ -359,11 +355,6 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 227] = [
     // this process's group, and the terminal's foreground and mode.
     ("__wolf_rt_os_signal_ignore", 1, true),
     ("__wolf_rt_os_signal_default", 1, true),
-    // s246 (#783, #784): one meaning in the sending shape ignored or set
-    // back to its default, and the end of this process by a signal.
-    ("__wolf_rt_os_signal_ignore_one", 1, true),
-    ("__wolf_rt_os_signal_default_one", 1, true),
-    ("__wolf_rt_os_exit_signal", 1, true),
     ("__wolf_rt_os_signal_poll", 1, true),
     ("__wolf_rt_os_spawn_job", 7, true),
     ("__wolf_rt_os_proc_pid", 1, true),
