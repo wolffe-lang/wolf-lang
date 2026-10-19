@@ -8831,22 +8831,14 @@ impl<'t> Machine<'t> {
             // `wolf` process may host other runs' children.
             // s246 (ruling #88 R3 D): `os_wait_poll_core` is the same poll
             // with a core answered as `-(256 + N)`.
-            // s247 (ruling #90, `[os.proc.fork]`; ruling asked): the machine is
-            // the `wolf` process interpreting the program, so a fork would
+            // s247 (ruling #90, `[os.proc.fork]`; ruling #95 R4 C): the machine
+            // is the `wolf` process interpreting the program, so a fork would
             // fork the compiler with its machine, its buffered print stream
-            // and, under `conform-run`, its observation record — refused by
-            // name on unix; windows has no fork (`unsupported`, the
-            // runtime's answer there).
-            "os_fork" => {
-                if cfg!(not(unix)) {
-                    return Ok(tag("unsupported"));
-                }
-                self.refuse(
-                    "`os_fork` (the checked machine does not fork the `wolf` process it runs \
-                     in; [os.proc.fork])",
-                    span,
-                )
-            }
+            // and, under `conform-run`, its observation record. It answers
+            // `unsupported` on every host instead — the row a program meets on
+            // windows — so a program with an in-process path (pelt's
+            // subshells) takes it and runs to its end here.
+            "os_fork" => Ok(tag("unsupported")),
             "os_wait_poll" | "os_wait_poll_core" => {
                 match checked_poll(&mut self.children, name == "os_wait_poll_core") {
                     Ok((h, st)) => Ok(Flow::Val(Value::Struct {

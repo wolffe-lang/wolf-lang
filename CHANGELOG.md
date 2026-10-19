@@ -4,9 +4,9 @@
 
 s247 — the fork (ruling #90, reversing ruling #69 R1 from B to A): wolf
 gets a user-visible `os_fork` whose child keeps running wolf code, sound
-beside the runtime's own threads. The surface and the protocol are
-rulings asked at audit (`[os.proc.fork.note]` R1–R8); each recommendation
-is what is built.
+beside the runtime's own threads. The surface and the protocol were
+asked (`[os.proc.fork.note]` R1–R8) and ruled by ruling #95: R1–R3 and
+R5–R8 as recommended, R4 C (the checked machine answers `unsupported`).
 
 - **`os_fork() -> (int, int) ! {busy, io, unsupported}`**
   (`[os.proc.fork]`, R1 A). The parent gets `(pid, h)`: the child's
@@ -32,9 +32,10 @@ is what is built.
   inherits a lock a vanished thread held. `io` is the host's refusal
   (`EAGAIN`, `ENOMEM`), its number in `os_error()`; a refusal of the
   child's own hub pipes ends the child with exit 71 (ruling #80's rule).
-- **Machines** (R4 A, R5 A, R6, R8). native and release on linux and
-  macOS; `unsupported` on windows and any host without the task layer;
-  the checked machine refuses it by name on unix; lupin 0.1.54 does not
+- **Machines** (R4 C, ruling #95; R5 A, R6, R8). native and release on
+  linux and macOS; `unsupported` on windows and any host without the task
+  layer; **the checked machine answers `unsupported`** on every host, so a
+  program's in-process path (pelt's subshells) runs there; lupin 0.1.54 does not
   resolve the name (a newer lupin is held to a refusal by name); charged
   `exec`, refused at comptime; the freestanding target refuses it by name.
 - **The cost** (kasumi, a container, release runtime, medians of nine):

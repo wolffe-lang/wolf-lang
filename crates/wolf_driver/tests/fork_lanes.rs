@@ -30,11 +30,12 @@
 //! the readiness-set row (the child's waits ride the parent's epoll set or
 //! a kqueue it was never handed: killed at the cap).
 //!
-//! The checked machine refuses `os_fork` by name (it is the `wolf` process
-//! interpreting the program); lupin 0.1.54, the pairing, does not resolve
-//! the name, and a newer lupin is held to a refusal by name (it admits no
-//! `unsafe`, and Rust's standard library has no fork; a wolf-interp
-//! issue). Both run on the host: neither forks.
+//! The checked machine answers `unsupported` on every host (ruling #95 R4 C:
+//! it is the `wolf` process interpreting the program, and a program's
+//! windows path runs there instead); lupin 0.1.54, the pairing, does not
+//! resolve the name, and a newer lupin is held to a refusal by name (it
+//! admits no `unsafe`, and Rust's standard library has no fork; a
+//! wolf-interp issue). Both run on the host: neither forks.
 
 mod lane_exit;
 
@@ -60,6 +61,7 @@ const PRE_MIRROR_LUPIN: &str = "0.1.54";
 #[derive(Debug)]
 struct Obs {
     verdict: String,
+    stdout: String,
     reason: String,
     version: String,
 }
@@ -77,6 +79,7 @@ fn parse_obs(bytes: &[u8], what: &str) -> Obs {
     let field = |k: &str| rec[k].as_str().unwrap_or("").to_string();
     Obs {
         verdict: field("verdict"),
+        stdout: field("stdout_inline"),
         reason: {
             let r = field("x-unsupported");
             if r.is_empty() {
@@ -175,13 +178,13 @@ fn lupin_or_skip() -> Option<PathBuf> {
 
 // ------------------------------------------------- the checked machine --
 
-/// The checked machine and lupin answer `os_fork` with a refusal by name,
-/// on every host: neither forks the process it runs in. On windows the
-/// checked machine answers `unsupported` as the runtime does there, so
-/// `main.lu` ends 1 after printing the row. lupin 0.1.54 does not resolve
-/// the name; a newer lupin refuses it by name.
+/// The checked machine answers `os_fork` with `unsupported` on every host
+/// (ruling #95 R4 C), the row a program meets on windows: `main.lu` prints
+/// it and ends 1, as a native windows binary does. lupin 0.1.54 does not
+/// resolve the name; a newer lupin refuses it by name. Neither forks the
+/// process it runs in.
 #[test]
-fn the_checked_machine_and_lupin_refuse_by_name() {
+fn the_checked_machine_answers_unsupported_and_lupin_refuses() {
     let dir = scratch("machines");
     let entry = fixture("main.lu");
     let out = Command::new(wolf())
@@ -195,25 +198,14 @@ fn the_checked_machine_and_lupin_refuse_by_name() {
         .expect("conform-run runs");
     let checked = parse_obs(&out.stdout, "the checked machine's record");
     report(&format!(
-        "REPORT checked on main.lu: {} {}",
-        checked.verdict, checked.reason
+        "REPORT checked on main.lu: {} {:?} {}",
+        checked.verdict, checked.stdout, checked.reason
     ));
-    if cfg!(unix) {
-        assert_eq!(
-            checked.verdict, "unsupported",
-            "the checked machine refuses os_fork by name: {checked:?}"
-        );
-        assert!(
-            checked.reason.contains("`os_fork`"),
-            "the checked machine names the call: {}",
-            checked.reason
-        );
-    } else {
-        assert_eq!(
-            checked.verdict, "exit(1)",
-            "the checked machine answers unsupported on windows: {checked:?}"
-        );
-    }
+    assert_eq!(
+        (checked.verdict.as_str(), checked.stdout.as_str()),
+        ("exit(1)", "fork: unsupported\n"),
+        "the checked machine answers os_fork unsupported (ruling #95 R4 C): {checked:?}"
+    );
     let Some(l) = lupin_or_skip() else {
         return;
     };
