@@ -263,6 +263,8 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // `os_signal_wait`.
         "os_term_size" | "os_term_chars" => SandboxCategory::Io,
         "os_signal_wait_fd" => SandboxCategory::Exec,
+        // s248 (#795): its widening is signal control too.
+        "os_signal_wait_fds" => SandboxCategory::Exec,
         // s241 (ruling #79 R6, #54's reading): a signal to a group or to
         // every process is process control, `exec` with `os_signal_send`;
         // moving this process into a group changes which group every later

@@ -387,6 +387,9 @@ pub const PRELUDE: &[Ambient] = &[
     host("os_term_size"),
     host("os_term_chars"),
     host("os_signal_wait_fd"),
+    // s248 (wolf-lang#795; ruling #93 R2 A): the wait over several
+    // descriptors, a signal set and a deadline. `exec`, with the wait.
+    host("os_signal_wait_fds"),
     // s241 (wolf-lang#739, #740, #741, #762; ruling #79): a signal to a
     // process group and to every process this one may signal, this
     // process into a group, the host's last signal number and its
