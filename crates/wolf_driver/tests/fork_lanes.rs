@@ -579,7 +579,11 @@ fn the_hub_is_the_childs_own() {
 }
 
 /// The readiness set across a fork: parent and child each parked in their
-/// own reactor at once, a net round trip between them.
+/// own reactor at once, a net round trip between them, then a deadline in
+/// the child that must fire (its own timer wheel). Under the reactor plant
+/// linux never resolves the child's waits (CI 39316571453); macOS resolves
+/// them at once and the round trip survives, so the deadline is the row
+/// that tells there (the same run's census: killed at the cap).
 #[cfg(unix)]
 #[test]
 fn the_readiness_set_is_the_childs_own() {
@@ -588,6 +592,7 @@ fn the_readiness_set_is_the_childs_own() {
         "reactor.lu",
         &plain,
         "reactor: the child took pong\n\
+         reactor: the child's second read: timeout\n\
          reactor: the parent took ping, child status 0\n\
          rc=0\n",
     );

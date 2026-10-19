@@ -7,11 +7,16 @@
 //! answers `pong`, and waits for the child — both sides parked in a
 //! reactor at once.
 //!
+//! Then the child reads again under a 200 ms deadline with nothing coming:
+//! `timeout`, a timer only the child's own reactor thread can fire.
+//!
 //! With the child's re-making of the set planted out, the child's waits
 //! ride the parent's epoll set (linux: one set across a fork) and no
 //! thread of the child's delivers them, or (macOS) a queue the child was
-//! never handed: the child's read never resolves, and the parent's cap (5
-//! s) kills it by its recorded pid.
+//! never handed — there an arm fails, the wait resolves at once and a read
+//! polls until its bytes come, so the round trip survives, but no deadline
+//! ever fires: the child never ends, and the parent's cap (5 s) kills it
+//! by its recorded pid.
 
 fn main() -> !int {
     let srv = net_listen("127.0.0.1:0")?
@@ -32,6 +37,11 @@ fn main() -> !int {
             ""
         }
         print("reactor: the child took {got}")
+        // A deadline that must expire: nothing more comes, and only the
+        // child's own reactor thread can fire its timer.
+        net_deadline(c, 200) else |_| {}
+        let more = net_read(c, 16) else |e| "{e}"
+        print("reactor: the child's second read: {more}")
         os_exit(0)
     }
     let a = net_accept(srv) else |e| {
