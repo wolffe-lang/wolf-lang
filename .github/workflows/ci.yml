@@ -179,6 +179,12 @@ jobs:
       # here is a broken job, never a quiet skip.
       WOLF_JOBWAIT_REQUIRE_CONTAINER: "1"
       WOLF_JOBWAIT_ENGINE: docker
+      # s246 (#785, [os.proc.status]): the core witness's cores-on row
+      # (signal_gaps_lanes.rs) needs a FILE core pattern, so the core is
+      # written in the container's working directory — the test's own —
+      # and removed there; the step below sets one on this throwaway
+      # runner, so a skip here is a broken job, never a quiet one.
+      WOLF_CORE_REQUIRE: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -196,6 +202,14 @@ jobs:
           docker run --rm --network none docker.io/library/ubuntu:24.04 sh -c 'id; nproc'
           docker run --rm --network none --init docker.io/library/ubuntu:24.04 sh -c 'echo pid $$; command -v setsid setpriv taskset'
           docker run --rm --network none docker.io/library/ubuntu:24.04 sh -c 'echo pid $$ with no init; grep -E "SigBlk|SigIgn" /proc/self/status'
+      - name: a file core pattern for s246's core witness (#785) — a core is
+          written only in the container's working directory, the test's own;
+          the runner's own ulimit -c is left as it is
+        run: |
+          echo "core_pattern was: $(cat /proc/sys/kernel/core_pattern)"
+          echo 'core.%p' | sudo tee /proc/sys/kernel/core_pattern
+          echo "ulimit -c on the runner: $(ulimit -c)"
+          docker run --rm --network none docker.io/library/ubuntu:24.04 sh -c 'echo "in a container: ulimit -c $(ulimit -c), hard $(ulimit -Hc)"'
       - name: install native toolchain (gdb for debug-check, lld for the link
           probe, clang for the s41 release tier — system LLVM is a NAMED
           toolchain requirement per D33, never a build script; strace is the
