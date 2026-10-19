@@ -1515,6 +1515,9 @@ mod builtin_cap_tests {
             // as their siblings do — `exec`.
             ("os_wait_status_core", Cap::Exec),
             ("os_wait_poll_core", Cap::Exec),
+            // s247 (ruling #90; ruling asked): a fork is process control,
+            // `exec`, with `os_spawn` and `os_exec`.
+            ("os_fork", Cap::Exec),
         ] {
             assert_eq!(builtin_cap(name), Some(cap), "{name}");
         }

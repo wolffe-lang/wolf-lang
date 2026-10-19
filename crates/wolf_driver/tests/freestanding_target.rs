@@ -593,6 +593,14 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`os_wait_poll`",
             "hosted runtime",
         ),
+        // s247 (ruling #90): the fork.
+        (
+            "os_fork",
+            "",
+            "let r = os_fork() else |e| {\n        return 0\n    }\n    r.1",
+            "`os_fork`",
+            "hosted runtime",
+        ),
         (
             "float",
             "",
