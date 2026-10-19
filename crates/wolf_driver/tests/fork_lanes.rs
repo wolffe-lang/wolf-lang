@@ -508,6 +508,16 @@ fn a_fork_chain_and_the_wait_tables() {
 /// drain thread unblock it there, and the child's first wait makes a drain
 /// thread of the child's that must unblock it again — without that, the
 /// child's TERMINATE pends for ever and the parent's cap kills it.
+///
+/// Which row tells a child that kept the parent's pipes (the hub plant):
+/// on linux the plain row — the child's trampoline writes the parent's
+/// pipe, the parent's drain thread takes the byte, and the child, parked in
+/// a futex wait the handler does not end, is killed at the cap (CI
+/// 39314575470); on macOS the BLOCKED row — there a handler run on the
+/// child's only thread ends its condvar wait, and the child's own look
+/// drains the inherited pipe before the parent's drain thread does, so the
+/// plain row is a race the child wins, while with TERMINATE blocked nothing
+/// in the child can take it (the same run: killed at the cap).
 #[cfg(unix)]
 #[test]
 fn the_hub_is_the_childs_own() {
