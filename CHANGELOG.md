@@ -1,5 +1,82 @@
 # Changelog
 
+## Unreleased
+
+s246 — the signal gaps 0.2.32 left (wolf-lang#780, #781, #783, #784,
+#785, #787, #788). Three of them add surface, each with its **ruling
+asked** in `[os.signal.gaps.note]` (R1–R3) and its recommendation
+implemented; the ruling is taken at the audit.
+
+- **#783: one meaning's disposition, in the sending shape**
+  (`[os.signal.disp.one]`, R1). `os_signal_ignore_one(meaning) -> () !
+  {invalid, io, unsupported}` and `os_signal_default_one(meaning)` take
+  one bit of the table's 28 or a host number `-N`, so a program can
+  ignore what it is about to send its own group (GNU `timeout -s SEGV`,
+  `-s RTMIN`); 0, `KILL` and `STOP` are `invalid`, windows
+  `unsupported`, the host's refusal `io`. The set calls and their shape
+  rule are unchanged. The checked machine refuses `SEGMENT_FAULT` and
+  `BUS_ERROR` by name; lupin 0.1.54 resolves neither name.
+- **#784: ending by a signal** (`[os.signal.exit]`, R2).
+  `os_exit_signal(meaning) -> () ! {invalid, unsupported}` sets the
+  signal back to the default, unblocks it and raises it on the calling
+  thread, and exits 128 + N if the process lives on; it returns only a
+  shape refusal (or windows' `unsupported`). The runtime's stack guard
+  now passes a SEGV or BUS a process SENT (`si_code`) to the program's
+  own disposition — the default ends it, `os_signal_ignore_one` keeps it
+  alive — while a real fault stays the guard's (the overflow report,
+  exit 134). Until now a program that had run a task lived through the
+  first SEGV it was sent. The guard's handler is installed on `SIGBUS`
+  on linux too (macOS only before). `os_signal_raise` is unchanged. The
+  checked machine refuses the call by name.
+- **#785: a core in the status** (`[os.proc.status]`, `[os.proc.poll]`,
+  R3). `os_wait_status` and `os_wait_poll` answer `-(256 + N)` for a
+  child that dumped core (`WCOREDUMP`), `-N` without one, as before; the
+  checked machine too. lupin 0.1.54 answers `-N` for both.
+- **#787: signal 0 has words** (`[os.signal.text]`).
+  `os_signal_text(0)` is `strsignal(0)`'s, glibc's `Unknown signal 0`
+  (GNU `kill -t 0` and `kill -L` row 0), where it was `invalid`;
+  `unsupported` on windows. lupin 0.1.54 still answers `invalid`.
+- **#781: a descriptor wait makes no descriptor while the program runs**
+  (`[os.signal.wait.fd]`, `[os.signal.hub]`). The descriptor waits
+  share one wake pipe, made before `main` after the hub in a program that
+  names `os_signal_wait_fd` (ruling #80's rule;
+  `__wolf_rt_signal_wait_fd_start`), where each wait made its own and the
+  host could put an end of it on a closed 0, 1 or 2 until the runtime
+  moved it: beside such waits, with 1 closed, another task's
+  `fs_fstat(1)` answered ok 760,739 times in 2 s at 0.2.32 (kasumi), 0
+  now.
+- **#780: the write gate blocks on every host.** `checked_net_write`'s
+  four write fixtures go on writing 1 MiB at a time after the 8 MiB
+  write until their reader has run (its one byte back), and print how
+  far they wrote, so windows' loopback (which took 8 MiB whole) fills
+  too; tests only.
+- **#788: spec/03 `[conc.task.order]`** no longer says `os_signal_wait`
+  makes ~196 futex calls a second: an idle one made 0 system calls in 8
+  s at 0.2.32 (measured, both tiers).
+
+### Read this before you bump the pin
+
+- **Three new prelude names**: `os_signal_ignore_one`,
+  `os_signal_default_one`, `os_exit_signal` (a function of one of these
+  names now shadows a builtin, W0304).
+- **A child that dumped core reads `-(256 + N)`, not `-N`.** On a host
+  whose `kernel.core_pattern` pipes cores to a program (systemd's
+  `systemd-coredump`: kasumi, hasu, most desktop linux) that is every
+  end by a core-dumping signal (`QUIT`, `ABRT`, `SEGV`, `BUS`, `FPE`,
+  `ILL`, `TRAP`, `SYS`, `XCPU`, `XFSZ`), whatever `ulimit -c` says. N is
+  `(-status) & 255` for every signal status and a shell's exit status
+  `(128 - status) & 255`; code that compares with `-N` or reads
+  `-status` as N must move (pelt's `status_of`, wolf-std's
+  `process.Status` accessors, boreutils' `timeout`).
+- **`os_signal_text(0)` answers words** where it answered `invalid`.
+- **A SEGV sent to a program ends it** (the host's default) unless the
+  program ignores `SEGMENT_FAULT` with `os_signal_ignore_one`; a program
+  that had run a task used to live through the first one.
+- **A program that names `os_signal_wait_fd` starts with two more
+  descriptors** (the shared wake pipe) and makes none per wait; a host
+  that refuses them refuses the start (one stderr line, exit 71), as for
+  the hub.
+
 ## 0.2.32 — 2026-10-18
 
 **Why this release: a 0.2.31 regression (#778).** At 0.2.31 a program
