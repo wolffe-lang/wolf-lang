@@ -293,6 +293,15 @@ impl ScopeInner {
     /// A child finished with `reason`. Failures cancel the scope
     /// (`[conc.task.fail]`); the last child out wakes the join.
     pub fn child_done(&self, id: u64, reason: ExitReason) {
+        // s247 (`[os.proc.fork]`): the process-wide count drops FIRST, so a
+        // join that sees this scope's last child done also sees no task
+        // live — a fork right after the join is never `busy` for a task that
+        // has ended. (Dropping it after the lock let `main` leave the join
+        // and fork before the worker got there: 1 to 24 forks of 300 were
+        // `busy` on kasumi, and CI's 4-vcpu runner met it in
+        // `the_busy_rule_and_the_pool`.) The worker still runs the rest of
+        // its task's epilogue; the fork's hold waits for it to come to rest.
+        LIVE_TASKS.fetch_sub(1, SeqCst);
         let mut st = self.state.lock().unwrap();
         st.tasks.remove(&id);
         if reason.is_failure() {
@@ -311,8 +320,6 @@ impl ScopeInner {
         if st.live == 0 {
             self.cv.notify_all();
         }
-        drop(st);
-        LIVE_TASKS.fetch_sub(1, SeqCst);
     }
 
     /// Scope-exit join (`[conc.task.join]`): block until every child
