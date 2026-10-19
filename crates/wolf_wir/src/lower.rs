@@ -10491,6 +10491,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_spawn_job"
                 | "os_proc_pid"
                 | "os_wait_status"
+                // s246 (ruling #88 R3 D): the siblings that report a core.
+                | "os_wait_status_core"
+                | "os_wait_poll_core"
                 | "os_pgid"
                 | "os_term_foreground"
                 | "os_term_set_foreground"
@@ -15106,7 +15109,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let want = match name {
             "os_pgid" | "os_signal_ignored" | "os_pid" | "os_ppid" => 0,
             "os_signal_last" | "os_signal_realtime" => 0,
-            "os_wait_poll" => 0,
+            "os_wait_poll" | "os_wait_poll_core" => 0,
             "os_uid" | "os_euid" | "os_gid" | "os_egid" | "os_groups" => 0,
             "os_set_ids" => 3,
             "os_spawn_job" => 6,
@@ -15165,6 +15168,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_signal_realtime" => ("__wolf_rt_os_signal_realtime", PROC),
             "os_signal_text" => ("__wolf_rt_os_signal_text", PROC),
             "os_wait_poll" => ("__wolf_rt_os_wait_poll", PROC),
+            "os_wait_poll_core" => ("__wolf_rt_os_wait_poll_core", PROC),
+            "os_wait_status_core" => ("__wolf_rt_os_wait_status_core", PROC),
             "os_signal_ignore_one" => ("__wolf_rt_os_signal_ignore_one", PROC),
             "os_signal_default_one" => ("__wolf_rt_os_signal_default_one", PROC),
             "os_exit_signal" => ("__wolf_rt_os_exit_signal", PROC),
@@ -15201,7 +15206,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // s241 (`[os.signal.host]`): `os_signal_realtime` is the same pair
         // shape with no argument, and s242's `os_wait_poll` (`[os.proc.poll]`)
         // too.
-        if name == "os_term_size" || name == "os_signal_realtime" || name == "os_wait_poll" {
+        if name == "os_term_size"
+            || name == "os_signal_realtime"
+            || name == "os_wait_poll"
+            || name == "os_wait_poll_core"
+        {
             let Some(sema) = self.expr_sema_ty(e.span) else {
                 return Err(refuse("a window size without a recorded type", e.span));
             };
@@ -15280,7 +15289,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_signal_default_one"
                 | "os_exit_signal"
         );
-        if name == "os_wait_status" {
+        if name == "os_wait_status" || name == "os_wait_status_core" {
             let (region, slot) = self.rt_slot(8);
             let rc = self
                 .rt_call_slot(sym, &[argv[0]], slot, region, Some(types::I64))
