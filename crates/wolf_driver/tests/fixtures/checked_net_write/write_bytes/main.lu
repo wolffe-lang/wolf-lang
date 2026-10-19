@@ -1,5 +1,15 @@
 // s245 (wolf-lang#777): `net_write_bytes`' twin of `write/`: 8 MiB as a
 // `List[byte]` to a spawned task that accepts and reads.
+// s246 (wolf-lang#780): and then 1 MiB at a time, with the same call,
+// until the reader's one byte back is readable (`net_wait`, deadline 0,
+// which hands nothing on): windows' loopback took the 8 MiB whole, so the
+// write never had to wait for its reader there and the gate never saw the
+// hand-over it is for. On the checked machine, which never preempts
+// (`[exec.checked.sched]`), the reader runs only when a write yields, so
+// a byte back before the last write returned is a write that blocked.
+// The fill stops at 1 GiB: a host that never blocks prints `false` and
+// fails the gate instead of running on. Prints the MiB written, which
+// differs by host and machine, on its own line for the gate to read.
 fn main() -> !int {
     let door = net_listen("127.0.0.1:0")?
     let port = net_port(door)?
@@ -10,21 +20,65 @@ fn main() -> !int {
         i = i + 1
     }
     let payload = big.bytes()
+    var mib = "x"
+    var j = 0
+    while j < 20 {
+        mib = mib + mib
+        j = j + 1
+    }
+    let mib_bytes = mib.bytes()
+    let back = channel[int](1)
+    var written = 0
+    var saw = false
     var got = 0
     scope s {
         s.spawn(fn() {
             let c = net_accept(door) else |_| 0 - 1
             var n = 0
-            while n < 8388608 {
+            var told = false
+            var open = true
+            while open {
                 let part = net_read(c, 65536) else |_| ""
-                if part.len == 0 { n = 8388608 } else { n = n + part.len }
+                if part.len == 0 {
+                    open = false
+                } else {
+                    n = n + part.len
+                    if !told {
+                        // s246 (#780): one byte back, the first time this
+                        // task runs with something read.
+                        net_write(c, "r") else |_| {}
+                        told = true
+                    }
+                }
             }
+            back.send(n) else |_| {}
         })
         let cli = net_connect("127.0.0.1:{port}")?
         net_write_bytes(cli, payload)?
+        written = 8388608
+        var k = 0
+        while !saw && k < 1024 {
+            let ready = net_wait([cli], 0)?
+            if ready.len > 0 {
+                saw = true
+            } else {
+                net_write_bytes(cli, mib_bytes)?
+                written = written + 1048576
+                k = k + 1
+            }
+        }
+        if saw {
+            // Take the byte back before the close: a close that leaves
+            // unread bytes resets the connection, and the reader would
+            // lose what it had not read yet.
+            let _ = net_read(cli, 1)?
+        }
         net_close(cli)?
         got = payload.len
     }
+    let n = back.recv()?
     print("wrote {got} bytes to a task")
+    print("the reader ran before the writes ended: {saw}, and read every byte: {n == written}")
+    print("filled {written / 1048576} MiB")
     0
 }

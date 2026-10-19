@@ -187,15 +187,35 @@ fn native(entry: &Path) -> Option<Rec> {
 }
 
 /// Every machine gives `want` as an `exit(0)` record; the checked
-/// machine also under three seeds.
+/// machine also under three seeds. s246 (wolf-lang#780): a fill
+/// fixture's last line, `filled N MiB`, is how far that machine wrote
+/// before its reader's byte came back — a host's and a machine's own, so
+/// it is read and reported (`REPORT … filled`), held to at least the 8
+/// MiB of the first write, and every line before it held to `want`.
 fn every_machine_answers(name: &str, want: &str) {
     let entry = fixture(name);
     let ok = |r: &Rec, what: &str| {
+        let (head, filled) = match r.stdout.rfind("filled ") {
+            Some(at) if r.stdout.ends_with(" MiB\n") => r.stdout.split_at(at),
+            _ => (r.stdout.as_str(), ""),
+        };
         assert_eq!(
-            (r.verdict.as_str(), r.stdout.as_str()),
+            (r.verdict.as_str(), head),
             ("exit(0)", want),
             "{name}: {what}"
         );
+        if !filled.is_empty() {
+            let mib: u64 = filled
+                .trim_start_matches("filled ")
+                .trim_end_matches(" MiB\n")
+                .parse()
+                .unwrap_or_else(|_| panic!("{name}: {what}: the fill line reads: {filled:?}"));
+            eprintln!("REPORT {name}: {what}: filled {mib} MiB before the reader's byte came back");
+            assert!(
+                mib >= 8,
+                "{name}: {what}: the fill counts the first 8 MiB: {mib}"
+            );
+        }
     };
     ok(&checked(&entry, None), "the checked machine's answer");
     for seed in [1, 7, 42] {
@@ -212,30 +232,38 @@ fn every_machine_answers(name: &str, want: &str) {
     }
 }
 
-const WROTE: &str = "wrote 8388608 bytes to a task\n";
+/// What a write fixture says before its `filled` line: s245's line for
+/// the 8 MiB write (`wrote 8388608 bytes to a task`), and, s246
+/// (wolf-lang#780), that the reader ran that the reader ran (sent its byte back)
+/// before the last write returned, which on the checked machine is a
+/// write that blocked and handed the baton on, and that it read every
+/// byte. Red with s245's hand-over removed: the checked machine is killed
+/// at 30 s on every host (the fill makes even windows' loopback full).
+const FILLED: &str = "wrote 8388608 bytes to a task\n\
+                      the reader ran before the writes ended: true, and read every byte: true\n";
 
-/// s244's witness, byte for byte below its header: `net_write`.
+/// s244's witness (its 8 MiB write, then the s246 fill): `net_write`.
 #[test]
 fn a_big_write_beside_its_reader_hands_the_cpu_on() {
-    every_machine_answers("write", WROTE);
+    every_machine_answers("write", FILLED);
 }
 
 /// The byte twin: `net_write_bytes`.
 #[test]
 fn a_big_byte_write_beside_its_reader_hands_the_cpu_on() {
-    every_machine_answers("write_bytes", WROTE);
+    every_machine_answers("write_bytes", FILLED);
 }
 
 /// The gather: `net_writev`, two 4 MiB parts.
 #[test]
 fn a_big_gathered_write_beside_its_reader_hands_the_cpu_on() {
-    every_machine_answers("writev", WROTE);
+    every_machine_answers("writev", FILLED);
 }
 
 /// The gather with a `str` head: `net_writev_head`.
 #[test]
 fn a_big_headed_write_beside_its_reader_hands_the_cpu_on() {
-    every_machine_answers("writev_head", WROTE);
+    every_machine_answers("writev_head", FILLED);
 }
 
 /// An armed deadline still ends a write nobody reads, beside a task that
