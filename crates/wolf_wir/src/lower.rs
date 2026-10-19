@@ -10519,6 +10519,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_term_size"
                 | "os_term_chars"
                 | "os_signal_wait_fd"
+                // s248 (#795): the wait over several descriptors, a set and
+                // a deadline.
+                | "os_signal_wait_fds"
                 // s236 (#633, #742): who the process runs as, and the
                 // one call that changes it.
                 | "os_uid"
@@ -15136,6 +15139,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_term_set_foreground" | "os_term_set_mode" | "os_signal_send" => 2,
             "os_signal_send_group" => 2,
             "os_signal_wait_fd" => 2,
+            "os_signal_wait_fds" => 3,
             _ => 1,
         };
         if argv.len() != want {
@@ -15175,6 +15179,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_term_size" => ("__wolf_rt_os_term_size", PROC),
             "os_term_chars" => ("__wolf_rt_os_term_chars", PROC),
             "os_signal_wait_fd" => ("__wolf_rt_os_signal_wait_fd", SIG),
+            "os_signal_wait_fds" => ("__wolf_rt_os_signal_wait_fds", PROC),
             "os_uid" => ("__wolf_rt_os_uid", PROC),
             "os_euid" => ("__wolf_rt_os_euid", PROC),
             "os_gid" => ("__wolf_rt_os_gid", PROC),
@@ -15246,6 +15251,45 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let (region, slot) = self.rt_slot(16);
             let rc = self
                 .rt_call_slot(sym, &argv, slot, region, Some(types::I64))
+                .expect("rc");
+            let z = self.b.iconst(types::I64, 0);
+            let hit = self
+                .b
+                .ins(
+                    Opcode::Icmp,
+                    &[rc, z],
+                    &[types::BOOL],
+                    Aux::IntCc(IntCc::Eq),
+                )
+                .one();
+            let out = self.eu_join(
+                eu,
+                hit,
+                |zz| Ok(Some(zz.load_flat(pair_ty, slot, region, e.span)?)),
+                |zz| Ok(zz.code_tag_chain(rc, pairs, "io")),
+            )?;
+            return Ok(Flow::Val(Some(out)));
+        }
+        // s248 (`[os.signal.wait.fds]`): the pair shape with a `List[int]`
+        // argument the shim READS — the foreign chain, as `os_set_ids`'s
+        // groups — rc 0 and the (index, meaning) pair through a 16-byte
+        // slot, else the code.
+        if name == "os_signal_wait_fds" {
+            let Some(sema) = self.expr_sema_ty(e.span) else {
+                return Err(refuse("a wait answer without a recorded type", e.span));
+            };
+            let stripped = self.strip_sema(sema);
+            let TyKind::ErrUnion(ok, _) = self.table.kind(stripped).clone() else {
+                return Err(refuse("a wait answer without a union shape", e.span));
+            };
+            let Some(pair_ty) =
+                wir_ty(&mut self.b.module.types, self.table, self.sigs, ok, e.span)?
+            else {
+                return Err(refuse("a wait answer without a pair type", e.span));
+            };
+            let (region, slot) = self.rt_slot(16);
+            let rc = self
+                .rt_call_foreign(sym, &argv, Some((slot, region)), Some(types::I64))
                 .expect("rc");
             let z = self.b.iconst(types::I64, 0);
             let hit = self
