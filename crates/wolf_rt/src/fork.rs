@@ -136,7 +136,10 @@ fn fork() -> Result<(i64, i64), i64> {
 /// then the caller's mask back. The threads come at the child's first use.
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn child(old: &libc::sigset_t) {
-    crate::reactor::fork_child();
+    // PLANT (s247, never to merge): the child's readiness-set re-making
+    // planted out — the child keeps the parent's epoll set (linux) or a
+    // queue number it was never handed (macOS), and the parent's thread state.
+    let _plant = crate::reactor::fork_child as fn();
     if let Err(e) = crate::signal::fork_child_pipes() {
         refuse("its signal hub", &e);
     }
