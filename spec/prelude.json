@@ -156,6 +156,7 @@
     {"name": "time_now_ms", "kind": "function", "anchor": "os.host.sigs", "w0304": true},
     {"name": "time_unix_ms", "kind": "function", "anchor": "os.host.sigs", "w0304": true},
     {"name": "time_sleep_ms", "kind": "function", "anchor": "os.host.sigs", "w0304": true},
+    {"name": "os_clock_ns", "kind": "function", "anchor": "os.host.sigs", "w0304": true},
     {"name": "json_valid", "kind": "function", "anchor": "os.host.sigs", "w0304": true},
     {"name": "json_get", "kind": "function", "anchor": "os.host.sigs", "w0304": true},
     {"name": "json_type", "kind": "function", "anchor": "os.host.sigs", "w0304": true},
