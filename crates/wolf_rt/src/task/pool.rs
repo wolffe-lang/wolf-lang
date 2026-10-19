@@ -162,6 +162,22 @@ struct Pool {
 
 static POOL: OnceLock<Pool> = OnceLock::new();
 
+/// s247 (ruling #90, `[os.proc.fork]`): the fork's hold on the pool. While
+/// it is set, a worker that reaches its hold point ([`hold_point`]) — the
+/// top of its loop, or the step after an idle park, both places where it
+/// holds no lock — counts itself in [`HELD`] and parks there until the
+/// fork is done. The fork asks only when no task is live, so every worker
+/// is idle and comes to the point in bounded time.
+static HOLD: AtomicBool = AtomicBool::new(false);
+/// Workers parked at their hold point now.
+static HELD: AtomicUsize = AtomicUsize::new(0);
+/// Workers that have decided to retire and have not yet parked their
+/// stack for the join (`os::park_retired`): the fork waits for them and
+/// joins them, so no thread of the pool is in its exit path (its
+/// thread-locals' destructors, the C library's thread teardown) when it
+/// forks.
+static EXITING: AtomicUsize = AtomicUsize::new(0);
+
 impl Pool {
     /// Slot `i`, which must be below `made` (or a core slot).
     fn slot(&self, i: usize) -> &WorkerSlot {
@@ -611,6 +627,8 @@ fn worker_main(p: &'static Pool, slot: usize, extra: bool) {
     *p.slot(slot).thread.lock().unwrap() = Some(std::thread::current());
     let mut rng = SchedRng::for_worker(slot);
     loop {
+        // s247 (`[os.proc.fork]`): no lock is held here.
+        hold_point();
         if let Some(task) = find_task(p, slot, &mut rng) {
             run_task(task);
             continue;
@@ -654,6 +672,8 @@ fn worker_main(p: &'static Pool, slot: usize, extra: bool) {
                 }
                 p.sleepers.fetch_sub(1, SeqCst);
             }
+            // s247: nor here, before the retire check takes the idle lock.
+            hold_point();
             let mut idle = p.idle.lock().unwrap();
             let still_idle = idle.iter().position(|&w| w == slot);
             // Retire only out of SURPLUS unblocked parallelism, and take
@@ -671,10 +691,13 @@ fn worker_main(p: &'static Pool, slot: usize, extra: bool) {
                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
                     .is_ok()
             {
-                // Retire lazily: leave the pool.
+                // Retire lazily: leave the pool. s247: counted as exiting
+                // before it stops counting as running, so a fork waits
+                // for it and joins it (`os::park_retired`).
                 idle.remove(pos);
                 p.idle_count.store(idle.len(), SeqCst);
                 drop(idle);
+                EXITING.fetch_add(1, SeqCst);
                 p.vacate(slot);
                 p.running.fetch_sub(1, SeqCst);
                 return;
@@ -856,6 +879,7 @@ mod os {
     //! the pair (pthread_t, stack) in the store and the NEXT taker
     //! `pthread_join`s the dead thread before reusing the span.
     use super::super::stack::TaskStack;
+    use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
     use std::sync::{Mutex, OnceLock};
 
     // POSIX `pthread_attr_setstack` exists on macOS (pthread.h) but
@@ -908,7 +932,55 @@ mod os {
         // SAFETY: pthread_self of the exiting worker.
         let me = unsafe { libc::pthread_self() };
         store().lock().unwrap().retired.push((me, stack));
+        // s247: parked for the join; a fork may join it now.
+        super::EXITING.fetch_sub(1, SeqCst);
     }
+
+    /// s247 (`[os.proc.fork]`): join every retired worker — each has
+    /// parked its stack and is past its last lock, but may still be in
+    /// its exit path; a join returns once it has ended — and keep its
+    /// stack for the next taker. The fallback workers that retired are
+    /// joined too.
+    pub fn join_retired() {
+        let mut st = store().lock().unwrap();
+        while let Some((thread, stack)) = st.retired.pop() {
+            // SAFETY: the pthread_t was parked by its own thread on
+            // exit and is joined exactly once, here (take_stack pops it
+            // under the same lock, so never both).
+            unsafe { libc::pthread_join(thread, std::ptr::null_mut()) };
+            st.free.push(stack);
+        }
+        drop(st);
+        let mut fb = FALLBACK.lock().unwrap();
+        let mut i = 0;
+        while i < fb.len() {
+            if fb[i].0.load(SeqCst) {
+                let (_, h) = fb.swap_remove(i);
+                let _ = h.join();
+            } else {
+                i += 1;
+            }
+        }
+    }
+
+    /// s247: in a forked child — the parked threads were the parent's
+    /// (joined before the fork, so none is listed), and no fallback
+    /// thread is this process's. The free stacks are mapped here too and
+    /// no thread runs on them: they stay for the child's own workers.
+    pub fn fork_child() {
+        let mut st = store().lock().unwrap();
+        st.retired.clear();
+        drop(st);
+        // The handles name the parent's threads: forgotten, never joined.
+        for (_, h) in FALLBACK.lock().unwrap().drain(..) {
+            std::mem::forget(h);
+        }
+    }
+
+    /// The fallback workers (`std::thread`), each with its "retired"
+    /// flag, so a fork can join the ones that left the pool.
+    static FALLBACK: Mutex<Vec<(std::sync::Arc<AtomicBool>, std::thread::JoinHandle<()>)>> =
+        Mutex::new(Vec::new());
 
     struct Boot {
         run: Box<dyn FnOnce() + Send>,
@@ -963,10 +1035,19 @@ mod os {
     /// The plain `std::thread` worker, when the pooled stack could not
     /// be had; `Err` names both refusals.
     fn fallback(run: Box<dyn FnOnce() + Send>, first: &str) -> Result<(), String> {
-        std::thread::Builder::new()
-            .spawn(run)
-            .map(drop)
-            .map_err(|e| format!("{first}; std::thread: {e}"))
+        // s247: a worker's body returns only when it retires; the flag
+        // says so and the fork joins the thread (`join_retired`).
+        let done = std::sync::Arc::new(AtomicBool::new(false));
+        let flag = done.clone();
+        let h = std::thread::Builder::new()
+            .spawn(move || {
+                run();
+                flag.store(true, SeqCst);
+                super::EXITING.fetch_sub(1, SeqCst);
+            })
+            .map_err(|e| format!("{first}; std::thread: {e}"))?;
+        FALLBACK.lock().unwrap().push((done, h));
+        Ok(())
     }
 }
 
@@ -1030,4 +1111,128 @@ pub fn counters() -> (usize, usize, usize) {
 /// True once the pool has ever been initialized (Target 1 tests).
 pub fn initialized() -> bool {
     POOL.get().is_some()
+}
+
+// ---- the fork (s247, ruling #90, `[os.proc.fork]`) ------------------------
+
+/// Park here while a fork holds the pool. A worker calls it only where it
+/// holds no lock.
+fn hold_point() {
+    if !HOLD.load(SeqCst) {
+        return;
+    }
+    HELD.fetch_add(1, SeqCst);
+    while HOLD.load(SeqCst) {
+        std::thread::park();
+    }
+    HELD.fetch_sub(1, SeqCst);
+}
+
+/// Whether the calling thread is a pool worker — a task's thread, which
+/// may not fork (`busy`: the child would have no `main` to return to).
+#[cfg(unix)]
+pub(crate) fn on_worker() -> bool {
+    WORKER_ID.with(std::cell::Cell::get).is_some()
+}
+
+/// Unpark every worker the pool has a thread for.
+#[cfg(unix)]
+fn unpark_all(p: &Pool) {
+    for i in 0..p.made() {
+        let s = p.slot(i);
+        if s.occupied.load(SeqCst)
+            && let Some(t) = s.thread.lock().unwrap().as_ref()
+        {
+            t.unpark();
+        }
+    }
+}
+
+/// Wait a moment between looks at another thread's progress: a few spins,
+/// then the processor given up, then a short sleep.
+#[cfg(unix)]
+pub(crate) fn backoff(round: &mut u32) {
+    *round += 1;
+    if *round < 64 {
+        std::hint::spin_loop();
+    } else if *round < 256 {
+        std::thread::yield_now();
+    } else {
+        std::thread::sleep(std::time::Duration::from_micros(20));
+    }
+}
+
+/// s247: bring every worker to its hold point and join every retired one,
+/// so that no thread of the pool holds a lock of the runtime's, of Rust's
+/// standard library or of the C library (its allocator's) when the caller
+/// forks. Called only with no task live (the busy rule), from a thread
+/// that is not a worker: each live worker is idle, so it reaches the
+/// point in bounded time. A pool never made has nothing to hold.
+#[cfg(unix)]
+pub(crate) fn fork_hold() {
+    let Some(p) = POOL.get() else {
+        return;
+    };
+    HOLD.store(true, SeqCst);
+    let mut round = 0;
+    loop {
+        unpark_all(p);
+        if HELD.load(SeqCst) == p.running.load(SeqCst) && EXITING.load(SeqCst) == 0 {
+            break;
+        }
+        backoff(&mut round);
+    }
+    os::join_retired();
+}
+
+/// s247: the parent's side after the fork — release the held workers and
+/// wait until each has left its hold point, so the next fork counts afresh.
+#[cfg(unix)]
+pub(crate) fn fork_release() {
+    let Some(p) = POOL.get() else {
+        return;
+    };
+    HOLD.store(false, SeqCst);
+    let mut round = 0;
+    while HELD.load(SeqCst) != 0 {
+        unpark_all(p);
+        backoff(&mut round);
+    }
+}
+
+/// s247: the child's side — the pool's threads were the parent's and none
+/// is this process's, so the pool is emptied in place and made again by
+/// the child's first spawn ([`ensure_workers`]): every slot free, no
+/// worker running, the counts zero. The queues are empty already (no task
+/// was live), every lock is free (no thread held one at the fork), and the
+/// free stacks are kept for the child's own workers.
+#[cfg(unix)]
+pub(crate) fn fork_child() {
+    HOLD.store(false, SeqCst);
+    HELD.store(0, SeqCst);
+    EXITING.store(0, SeqCst);
+    os::fork_child();
+    let Some(p) = POOL.get() else {
+        return;
+    };
+    let made = p.made();
+    let mut free = p.free.lock().unwrap();
+    free.clear();
+    for i in 0..made {
+        let s = p.slot(i);
+        *s.thread.lock().unwrap() = None;
+        s.occupied.store(false, SeqCst);
+        if i >= p.target {
+            free.push(Reverse(i));
+        }
+    }
+    drop(free);
+    {
+        let mut idle = p.idle.lock().unwrap();
+        idle.clear();
+        p.idle_count.store(0, SeqCst);
+    }
+    p.sleepers.store(0, SeqCst);
+    p.running.store(0, SeqCst);
+    p.unblocked.store(0, SeqCst);
 }
