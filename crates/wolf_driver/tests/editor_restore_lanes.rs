@@ -237,7 +237,10 @@ impl Live {
                 }
                 Ok(o) => why.push(format!(
                     "{e}: {}",
-                    String::from_utf8_lossy(&o.stderr).lines().next().unwrap_or("")
+                    String::from_utf8_lossy(&o.stderr)
+                        .lines()
+                        .next()
+                        .unwrap_or("")
                 )),
                 Err(err) => why.push(format!("{e}: {err}")),
             }
@@ -421,7 +424,11 @@ fn pty_row(argv: &[String], dir: &Path) -> (String, String, String, i32) {
             assert_eq!(libc::tcgetattr(fd, &mut t), 0, "tcgetattr");
             format!(
                 "i={:x} o={:x} l={:x} min={} time={}",
-                t.c_iflag, t.c_oflag, t.c_lflag, t.c_cc[libc::VMIN], t.c_cc[libc::VTIME]
+                t.c_iflag,
+                t.c_oflag,
+                t.c_lflag,
+                t.c_cc[libc::VMIN],
+                t.c_cc[libc::VTIME]
             )
         };
         let before = settings(slave.as_raw_fd());
@@ -596,5 +603,9 @@ fn the_terminal_is_restored_on_every_exit_the_runtime_owns() {
         }
         eprintln!("DONE s248 restore [{lane}]");
     }
-    assert!(misses.is_empty(), "restore rows missed:\n{}", misses.join("\n"));
+    assert!(
+        misses.is_empty(),
+        "restore rows missed:\n{}",
+        misses.join("\n")
+    );
 }

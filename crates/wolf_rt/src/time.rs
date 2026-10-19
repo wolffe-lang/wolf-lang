@@ -108,7 +108,10 @@ mod tests {
         let ms = __wolf_rt_time_now_ms();
         let ns = __wolf_rt_os_clock_ns();
         assert!(ns / 1_000_000 >= ms, "the same anchor: {ns} ns, {ms} ms");
-        assert!(ns / 1_000_000 - ms <= 1_000, "the same anchor: {ns} ns, {ms} ms");
+        assert!(
+            ns / 1_000_000 - ms <= 1_000,
+            "the same anchor: {ns} ns, {ms} ms"
+        );
     }
 
     #[test]

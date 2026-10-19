@@ -2913,25 +2913,48 @@ mod tests {
         let t0 = std::time::Instant::now();
         assert_eq!(wait_fds(&[r0, r1], meaning::RESIZE, 25), Ok((-1, 0)));
         let took = t0.elapsed();
-        assert!(took >= Duration::from_millis(25), "the deadline passed: {took:?}");
+        assert!(
+            took >= Duration::from_millis(25),
+            "the deadline passed: {took:?}"
+        );
         let t0 = std::time::Instant::now();
         assert_eq!(wait_fds(&[r0, r1], meaning::RESIZE, 0), Ok((-1, 0)));
-        assert!(t0.elapsed() < Duration::from_millis(20), "a poll never parks");
-        assert_eq!(wait_fds(&[], meaning::RESIZE, 0), Ok((-1, 0)), "no descriptors");
+        assert!(
+            t0.elapsed() < Duration::from_millis(20),
+            "a poll never parks"
+        );
+        assert_eq!(
+            wait_fds(&[], meaning::RESIZE, 0),
+            Ok((-1, 0)),
+            "no descriptors"
+        );
         crate::fs::with_handle(w1, |f| (&*f).write_all(b"b").unwrap()).unwrap();
         assert_eq!(wait_fds(&[r0, r1], meaning::RESIZE, -1), Ok((1, 0)));
         crate::fs::with_handle(w0, |f| (&*f).write_all(b"a").unwrap()).unwrap();
-        assert_eq!(wait_fds(&[r0, r1], meaning::RESIZE, 0), Ok((0, 0)), "the lowest");
+        assert_eq!(
+            wait_fds(&[r0, r1], meaning::RESIZE, 0),
+            Ok((0, 0)),
+            "the lowest"
+        );
         assert_eq!(raise(meaning::RESIZE), sig_code::OK);
         assert_eq!(
             wait_fds(&[r0, r1], meaning::RESIZE, -1),
             Ok((-1, meaning::RESIZE)),
             "the meaning wins"
         );
-        assert_eq!(wait_fds(&[r0], meaning::RESIZE, -2), Err(proc_code::INVALID));
+        assert_eq!(
+            wait_fds(&[r0], meaning::RESIZE, -2),
+            Err(proc_code::INVALID)
+        );
         assert_eq!(wait_fds(&[r0], 0, 5), Err(proc_code::IO), "empty set");
-        assert_eq!(wait_fds(&[r0], meaning::RESIZE, -2), Err(proc_code::INVALID));
-        assert_eq!(wait_fds(&[r0, 1 << 40], meaning::RESIZE, 5), Err(proc_code::IO));
+        assert_eq!(
+            wait_fds(&[r0], meaning::RESIZE, -2),
+            Err(proc_code::INVALID)
+        );
+        assert_eq!(
+            wait_fds(&[r0, 1 << 40], meaning::RESIZE, 5),
+            Err(proc_code::IO)
+        );
         for h in [w0, r0, w1, r1] {
             assert_eq!(crate::fs::__wolf_rt_fs_close(h), 0);
         }
