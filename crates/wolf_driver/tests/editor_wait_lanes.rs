@@ -669,7 +669,7 @@ fn raw_mode_reads_enter_as_cr_and_strips_on_request() {
         ],
         "os_term_mode",
         &|lane, end, text| {
-            for want in ["bits 160\n", "cr 13 then 10\n", "strip 67\n"] {
+            for want in ["bits 160\n", "cr 13 then 10\n", "strip 67 early=-1\n"] {
                 assert!(text.contains(want), "mode_enter on {lane}: no {want:?}: {text}");
             }
             assert_eq!(*end, End::Exit(0), "mode_enter on {lane}: {text}");
@@ -702,7 +702,7 @@ fn raw_output_writes_lf_alone() {
         assert!(has(b"[raw]\n"), "mode_opost on {}: no bare LF: {text}", lane.name);
         assert!(!has(b"[raw]\r\n"), "mode_opost on {}: OPOST still on: {text}", lane.name);
         assert!(has(b"[cooked]\r\n"), "mode_opost on {}: the mode put back: {text}", lane.name);
-        assert!(text.contains("bits 64\n"), "mode_opost on {}: {text}", lane.name);
+        assert!(text.contains("bits 64 early=-1\n"), "mode_opost on {}: {text}", lane.name);
         assert_eq!(end, End::Exit(0), "mode_opost on {}: {text}", lane.name);
         eprintln!("PASS s248 mode_opost [{}]", lane.name);
     }

@@ -1,4 +1,5 @@
 //! member: false
+//! (The terminal call comes before the terminal is opened.)
 //! s248 (wolf-lang#802, `[os.term.mode]`; yew yw01's W1, `notes/
 //! yw01-evidence/witness/opost/`) — what an editor's raw mode writes. A
 //! written LF reaches the wire as LF alone with `RAW_OUTPUT` (64: `OPOST`
@@ -8,6 +9,8 @@
 //! Expected on the wire: `[raw]\n`, `[cooked]\r\n`, `bits 64`.
 
 fn main() -> !int {
+    // The terminal call first, so a machine that refuses it names it.
+    let early = os_term_mode(1000000) else |_| -1
     let t = fs_open_mode("/dev/tty", 3)?
     let saved = os_term_mode(t)?
     fs_write(t, "ready opost\n")?
@@ -16,6 +19,6 @@ fn main() -> !int {
     fs_write(t, "[raw]\n")?
     os_term_set_mode(t, saved)?
     fs_write(t, "[cooked]\n")?
-    fs_write(t, "bits {m & 224}\n")?
+    fs_write(t, "bits {m & 224} early={early}\n")?
     0
 }
