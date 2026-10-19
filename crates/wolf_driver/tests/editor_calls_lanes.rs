@@ -174,9 +174,10 @@ fn lupin_or_skip() -> Option<PathBuf> {
     found
 }
 
-/// lupin 0.1.54 stops at `call`, which it does not resolve; a newer
-/// lupin is held to the compiler's answer.
-fn judge_lupin(obs: &Obs, name: &str, want: &str, call: &str) {
+/// lupin 0.1.54 stops at one of `calls`, which it does not resolve (the
+/// first s248 name it meets); a newer lupin is held to the compiler's
+/// answer.
+fn judge_lupin(obs: &Obs, name: &str, want: &str, calls: &[&str]) {
     eprintln!(
         "== lupin {} on {name}: {} {}\n{}",
         obs.version, obs.verdict, obs.reason, obs.stdout
@@ -188,8 +189,9 @@ fn judge_lupin(obs: &Obs, name: &str, want: &str, call: &str) {
             obs.version
         );
         assert!(
-            obs.reason.contains(&format!("`{call}`")) && obs.reason.contains("does not resolve"),
-            "lupin {} (pre-mirror) does not resolve `{call}`: {}",
+            calls.iter().any(|c| obs.reason.contains(&format!("`{c}`")))
+                && obs.reason.contains("does not resolve"),
+            "lupin {} (pre-mirror) does not resolve one of {calls:?}: {}",
             obs.version,
             obs.reason
         );
@@ -211,7 +213,7 @@ fn judge_lupin(obs: &Obs, name: &str, want: &str, call: &str) {
 /// under `conform-run`, the native and release binaries run directly
 /// (and under `taskset -c 0-3` on linux). Each stdout is held to `want`
 /// as `check` reads it; lupin 0.1.54 to its refusal of `call`.
-fn every_lane(entry: &Path, dir: &Path, call: &str, check: &dyn Fn(&str, &str)) -> String {
+fn every_lane(entry: &Path, dir: &Path, call: &[&str], check: &dyn Fn(&str, &str)) -> String {
     let name = entry.file_name().unwrap().to_string_lossy().to_string();
     let mut cmd = Command::new(wolf());
     cmd.arg("conform-run")
@@ -284,7 +286,7 @@ fn twenty_rounds_of_100_us_are_never_zero_ns() {
     every_lane(
         &fixture("clock_ns.lu"),
         &dir,
-        "os_clock_ns",
+        &["os_clock_ns"],
         &|lane, stdout| {
             assert_eq!(
                 stdout, "clock_ns zeros=0 of 20 behind=0 work=1199940\n",
@@ -311,7 +313,7 @@ dangling=not_found\nloop=io\n";
     let got = every_lane(
         &fixture("realpath.lu"),
         &dir,
-        "fs_realpath",
+        &["fs_realpath"],
         &|lane, stdout| {
             if cfg!(unix) {
                 assert_eq!(stdout, want_unix, "the {lane} machine's canonical paths");
@@ -342,7 +344,7 @@ dir_dot=ok\ndir_missing=not_found\ndir_file=invalid\ndir_empty=not_found\nagain=
     let got = every_lane(
         &fixture("sync_rows.lu"),
         &dir,
-        "fs_sync",
+        &["fs_sync", "fs_sync_dir"],
         &|lane, stdout| {
             if cfg!(unix) {
                 assert_eq!(stdout, want_unix, "the {lane} machine's sync rows");
@@ -559,7 +561,7 @@ fn the_save_survives_an_end_at_every_storage_boundary() {
             &parse_obs(&out.stdout, "lupin's observation"),
             "save.lu",
             "saved\n",
-            "fs_sync",
+            &["os_clock_ns", "fs_sync", "fs_sync_dir"],
         );
     }
 }
