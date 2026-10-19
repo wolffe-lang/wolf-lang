@@ -1246,7 +1246,8 @@ pub unsafe extern "C" fn __wolf_rt_os_wait_poll(out: i64) -> i64 {
 /// `out` must address 8 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_os_wait_status_core(h: i64, out: i64) -> i64 {
-    match children().wait_status(h, true) {
+    // PLANT: the sibling blind to the core.
+    match children().wait_status(h, false) {
         Ok(st) => {
             unsafe { write_word(out, st) };
             proc_code::OK
@@ -1264,7 +1265,8 @@ pub unsafe extern "C" fn __wolf_rt_os_wait_status_core(h: i64, out: i64) -> i64 
 /// `out` must address 16 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_os_wait_poll_core(out: i64) -> i64 {
-    match children().poll(true) {
+    // PLANT: the sibling blind to the core.
+    match children().poll(false) {
         Ok((h, st)) => {
             unsafe { write_pair(out, h, st) };
             proc_code::OK

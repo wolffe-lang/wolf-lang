@@ -249,7 +249,10 @@ jobs:
           tar -xzf ".lupin/$asset" -C .lupin --strip-components=1
           .lupin/lupin --version
       - name: full gauntlet (fmt, clippy, test, deps-check, corpus)
-        run: cargo xtask ci
+        # s246 PLANT (never merged): the _core siblings blind to the core;
+        # only the core gate runs.
+        run: |
+          cargo build -p wolf_rt && cargo test -p wolf_driver --test signal_gaps_lanes a_core_rides_the_status
       - name: bench smoke (runtime report-only until M2; compile GATES at M1)
         run: |
           cargo xtask bench --track=runtime --runs=3 --out=bench-results/pr-runtime.jsonl

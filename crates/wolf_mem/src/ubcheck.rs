@@ -8843,7 +8843,7 @@ impl<'t> Machine<'t> {
                 }
             }
             "os_wait_status" | "os_wait_status_core" => {
-                let core_asked = name == "os_wait_status_core";
+                let core_asked = false; // PLANT: the sibling blind to the core
                 let Some(h) = int_arg(0) else {
                     return self.refuse("this os call shape", span);
                 };
