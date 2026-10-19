@@ -185,6 +185,13 @@ jobs:
       # and removed there; the step below sets one on this throwaway
       # runner, so a skip here is a broken job, never a quiet one.
       WOLF_CORE_REQUIRE: "1"
+      # s247 ([os.proc.fork]): every fork witness runs inside a throwaway
+      # `--network none` container with NO init (fork_lanes.rs) — never on
+      # the runner itself: the hub's and the storm's children are
+      # signalled. The same image, so a missing engine here is a broken
+      # job, never a quiet skip.
+      WOLF_FORK_REQUIRE_CONTAINER: "1"
+      WOLF_FORK_ENGINE: docker
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
