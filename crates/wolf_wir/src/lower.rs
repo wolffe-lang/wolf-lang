@@ -10494,6 +10494,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // s246 (ruling #88 R3 D): the siblings that report a core.
                 | "os_wait_status_core"
                 | "os_wait_poll_core"
+                // s247 (ruling #90): the fork, `os_wait_poll`'s pair shape.
+                | "os_fork"
                 | "os_pgid"
                 | "os_term_foreground"
                 | "os_term_set_foreground"
@@ -15109,7 +15111,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let want = match name {
             "os_pgid" | "os_signal_ignored" | "os_pid" | "os_ppid" => 0,
             "os_signal_last" | "os_signal_realtime" => 0,
-            "os_wait_poll" | "os_wait_poll_core" => 0,
+            "os_wait_poll" | "os_wait_poll_core" | "os_fork" => 0,
             "os_uid" | "os_euid" | "os_gid" | "os_egid" | "os_groups" => 0,
             "os_set_ids" => 3,
             "os_spawn_job" => 6,
@@ -15136,6 +15138,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             (5, "unsupported"),
             (6, "invalid"),
         ];
+        // s247 (`[os.proc.fork]`): the fork's codes — `wolf_rt::os::proc_code`'s
+        // UNSUPPORTED and BUSY, anything else `io`.
+        const FORK: &[(i64, &str)] = &[(5, "unsupported"), (7, "busy")];
         let (sym, pairs): (&str, &[(i64, &str)]) = match name {
             "os_signal_ignore" => ("__wolf_rt_os_signal_ignore", SIG),
             "os_signal_default" => ("__wolf_rt_os_signal_default", SIG),
@@ -15169,6 +15174,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_signal_text" => ("__wolf_rt_os_signal_text", PROC),
             "os_wait_poll" => ("__wolf_rt_os_wait_poll", PROC),
             "os_wait_poll_core" => ("__wolf_rt_os_wait_poll_core", PROC),
+            "os_fork" => ("__wolf_rt_os_fork", FORK),
             "os_wait_status_core" => ("__wolf_rt_os_wait_status_core", PROC),
             "os_signal_ignore_one" => ("__wolf_rt_os_signal_ignore_one", PROC),
             "os_signal_default_one" => ("__wolf_rt_os_signal_default_one", PROC),
@@ -15210,6 +15216,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             || name == "os_signal_realtime"
             || name == "os_wait_poll"
             || name == "os_wait_poll_core"
+            || name == "os_fork"
         {
             let Some(sema) = self.expr_sema_ty(e.span) else {
                 return Err(refuse("a window size without a recorded type", e.span));
