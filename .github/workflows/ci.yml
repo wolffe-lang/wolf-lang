@@ -251,7 +251,8 @@ jobs:
       - name: full gauntlet (fmt, clippy, test, deps-check, corpus)
         # s248 PLANT (never merged): each item's behaviour broken, the
         # surface kept; only the gates run, each to the end.
-        run: cargo build -p wolf_rt && cargo test -p wolf_driver --no-fail-fast --test editor_calls_lanes --test editor_wait_lanes --test editor_restore_lanes --test test_cmd -- --nocapture; a=$?; cargo test -p wolf_rt --lib --no-fail-fast; b=$?; echo "PLANT: wolf_driver gates rc=$a, wolf_rt rc=$b"; exit $((a + b))
+        run: |
+          cargo build -p wolf_rt && cargo test -p wolf_driver --no-fail-fast --test editor_calls_lanes --test editor_wait_lanes --test editor_restore_lanes --test test_cmd -- --nocapture; a=$?; cargo test -p wolf_rt --lib --no-fail-fast; b=$?; echo "PLANT: wolf_driver gates rc=$a, wolf_rt rc=$b"; exit $((a + b))
       - name: bench smoke (runtime report-only until M2; compile GATES at M1)
         run: |
           cargo xtask bench --track=runtime --runs=3 --out=bench-results/pr-runtime.jsonl
@@ -419,7 +420,8 @@ jobs:
       - if: matrix.leg != 'rung'
         # s248 PLANT (never merged): the gates only, each to the end.
         shell: bash
-        run: cargo build -p wolf_rt && cargo test -p wolf_driver --no-fail-fast --test editor_calls_lanes --test editor_wait_lanes --test editor_restore_lanes --test test_cmd -- --nocapture; a=$?; cargo test -p wolf_rt --lib --no-fail-fast; b=$?; echo "PLANT: wolf_driver gates rc=$a, wolf_rt rc=$b"; exit $((a + b))
+        run: |
+          cargo build -p wolf_rt && cargo test -p wolf_driver --no-fail-fast --test editor_calls_lanes --test editor_wait_lanes --test editor_restore_lanes --test test_cmd -- --nocapture; a=$?; cargo test -p wolf_rt --lib --no-fail-fast; b=$?; echo "PLANT: wolf_driver gates rc=$a, wolf_rt rc=$b"; exit $((a + b))
       # s60a: the windows native rung. The clif gate is open on this
       # host, so the corpus runs natively here — `lane-coverage` is the
       # windows floor line (259/255/0/274/0 at the s60a bring-up with 21
