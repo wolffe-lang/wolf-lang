@@ -1,0 +1,31 @@
+//! member: false
+//! s248 (wolf-lang#794, `[os.term.restore]`) — the rows of the restore's
+//! registration that need no terminal, one truth on every host: a mode
+//! outside the bits is `invalid` before the handle is read (windows too);
+//! then windows is `unsupported`; then a handle that is closed, forged or
+//! not a terminal is `io` (ruling asked R1: the family's row).
+//! Expected (unix): `bit24=invalid negative=invalid forged=io file=io`;
+//! windows: `bit24=invalid negative=invalid forged=unsupported file=unsupported`.
+
+fn row(fd: int, mode: int) -> str {
+    os_term_restore_at_exit(fd, mode, List[byte]()) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    let f = fs_open_mode("s248-restore.tmp", 1)?
+    let a = row(0, 16777216)
+    let b = row(0, -1)
+    let c = row(1000000, 3)
+    let d = row(f, 3)
+    fs_close(f)?
+    fs_remove("s248-restore.tmp")?
+    print("bit24={a} negative={b} forged={c} file={d}")
+    0
+}
