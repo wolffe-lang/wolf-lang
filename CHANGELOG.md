@@ -26,8 +26,12 @@ implemented; the ruling is taken at the audit.
   alive — while a real fault stays the guard's (the overflow report,
   exit 134). Until now a program that had run a task lived through the
   first SEGV it was sent. The guard's handler is installed on `SIGBUS`
-  on linux too (macOS only before). `os_signal_raise` is unchanged. The
-  checked machine refuses the call by name.
+  on linux too (macOS only before). macOS gives a sent SEGV a fault's
+  siginfo (measured), so there the runtime takes a delivery at address 0
+  as sent when the program announced a send to itself (its own id, its
+  own group); one from another process ends it under the default and is
+  lived through once under an ignore. `os_signal_raise` is unchanged.
+  The checked machine refuses the call by name.
 - **#785: a core in the status** (`[os.proc.status]`, `[os.proc.poll]`,
   R3). `os_wait_status` and `os_wait_poll` answer `-(256 + N)` for a
   child that dumped core (`WCOREDUMP`), `-N` without one, as before; the
