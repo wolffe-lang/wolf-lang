@@ -857,33 +857,61 @@ mod sys {
 
     /// s234 (#719, `[os.signal.wait.fd]`): park until a meaning in
     /// `want` is queued (answered, taken off the queue) or the file `h`
-    /// names has something to read — a byte, end of input, a hang-up —
-    /// (0; nothing is read). A meaning wins when both are ready. The
-    /// wait is `poll(2)` on the descriptor and the shared wake pipe
-    /// (s246, #781: made before `main`, [`make_wake`]), registered in the
-    /// hub under its lock BEFORE the queue is looked at for the last
-    /// time, so a meaning queued after that look writes the pipe and
-    /// none is missed. With no scope that can be killed the poll has no
-    /// timeout: an idle wait wakes for nothing. Inside one it looks for
-    /// a kill every 100 ms (the teardown point `os_signal_wait` is).
-    /// Codes are `sig_code`'s, negated.
+    /// names has something to read (0; nothing is read). s248 (#795):
+    /// the one-descriptor case of [`wait_fds`] with no deadline, its
+    /// answers and rows unchanged. Codes are `sig_code`'s, negated.
     pub fn wait_fd(h_fd: i64, want: i64) -> i64 {
+        match wait_fds(&[h_fd], want, -1) {
+            Ok((-1, m)) => m,
+            Ok(_) => 0,
+            Err(c) => -c,
+        }
+    }
+
+    /// s248 (#795, `[os.signal.wait.fds]`): park until a meaning in
+    /// `want` is queued — `(-1, m)`, taken off the queue — or one of the
+    /// files `handles` names has something to read (a byte, the end of
+    /// input, a hang-up) — `(i, 0)`, the lowest such index, nothing read
+    /// — or `deadline_ms` passes — `(-1, 0)`. A meaning wins when both
+    /// are ready. `deadline_ms` 0 looks once and never parks; -1 never
+    /// passes. The wait is `poll(2)` on the descriptors (duplicates held
+    /// for the wait) and the shared wake pipe (s246, #781: made before
+    /// `main`, [`make_wake`]), registered in the hub under its lock
+    /// BEFORE the queue is looked at for the last time, so a meaning
+    /// queued after that look writes the pipe and none is missed. With
+    /// no deadline and no scope that can be killed the poll has no
+    /// timeout: an idle wait wakes for nothing. Inside such a scope it
+    /// looks for a kill every 100 ms (the teardown point `os_signal_wait`
+    /// is). `Err` is a `sig_code`: a closed or forged handle, a hub or
+    /// pipe the host will not give, a poll the host refuses — `IO`.
+    pub fn wait_fds(handles: &[i64], want: i64, deadline_ms: i64) -> Result<(i64, i64), i64> {
         use std::os::fd::AsRawFd as _;
-        let Some(file) = crate::fs::dup_of(h_fd) else {
-            return -sig_code::IO;
-        };
-        let fd = file.as_raw_fd();
+        use std::time::{Duration, Instant};
+        let mut files = Vec::with_capacity(handles.len());
+        for &h in handles {
+            let Some(f) = crate::fs::dup_of(h) else {
+                return Err(sig_code::IO);
+            };
+            files.push(f);
+        }
+        let fds: Vec<RawFd> = files.iter().map(|f| f.as_raw_fd()).collect();
         // s239 (wolf-lang#750): a park asks the host for nothing it can
         // refuse with an abort — a hub or a wake pipe the host will not
         // give (a process at its descriptor limit) is `io`. s246: in a
         // compiled program both are made before `main`, so this asks for
         // nothing; only a runtime nothing started makes the pipe here.
         let Ok(h) = super::try_hub() else {
-            return -sig_code::IO;
+            return Err(sig_code::IO);
         };
         let Ok(wake) = make_wake() else {
-            return -sig_code::IO;
+            return Err(sig_code::IO);
         };
+        let end = u64::try_from(deadline_ms)
+            .ok()
+            .map(|ms| Instant::now() + Duration::from_millis(ms));
+        // The time left before the deadline: `None` for none, a zero
+        // duration once it has passed.
+        let left = || end.map(|e| e.saturating_duration_since(Instant::now()));
         let out = crate::task::blocking(|| {
             let scope = crate::task::current_scope();
             let mut registered = false;
@@ -899,7 +927,23 @@ mod sys {
                     if registered {
                         deregister(h, &mut st, &mut seen);
                     }
-                    return m;
+                    return Ok((-1, m));
+                }
+                // s248: the deadline 0 — one look at the descriptors and
+                // no park, so no registration (nothing waits for a wake).
+                if left() == Some(Duration::ZERO) && !registered {
+                    drop(st);
+                    return match wait_many(&fds, wake, 0) {
+                        Ok((Some(i), _)) => {
+                            settle(super::installed(h));
+                            let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+                            drain(h, &mut st);
+                            Ok(super::take(&mut st, want).map_or((i as i64, 0), |m| (-1, m)))
+                        }
+                        Ok((None, _)) => Ok((-1, 0)),
+                        Err(e) if e == libc::EINTR || e == libc::EAGAIN => Ok((-1, 0)),
+                        Err(_) => Err(sig_code::IO),
+                    };
                 }
                 if !registered {
                     st.wake.waiters += 1;
@@ -909,14 +953,26 @@ mod sys {
                 // The pipe still holds the byte of a generation this wait
                 // has looked at: the waits that have not will empty it.
                 // Until then a poll would answer at once, so wait for the
-                // last of them (or a new generation) on the hub's condvar.
+                // last of them (or a new generation, or the deadline) on
+                // the hub's condvar.
+                let mut timed_out = false;
                 while st.wake.full && st.wake.generation == seen {
-                    st = match scope.as_ref() {
-                        Some(s) => {
-                            if s.is_killed() {
-                                break;
-                            }
-                            h.cv.wait_timeout(st, std::time::Duration::from_millis(100))
+                    let cap = match (left(), scope.as_ref()) {
+                        (Some(d), Some(_)) => Some(d.min(Duration::from_millis(100))),
+                        (Some(d), None) => Some(d),
+                        (None, Some(_)) => Some(Duration::from_millis(100)),
+                        (None, None) => None,
+                    };
+                    if scope.as_ref().is_some_and(|s| s.is_killed()) {
+                        break;
+                    }
+                    if left() == Some(Duration::ZERO) {
+                        timed_out = true;
+                        break;
+                    }
+                    st = match cap {
+                        Some(d) => {
+                            h.cv.wait_timeout(st, d)
                                 .unwrap_or_else(|p| p.into_inner())
                                 .0
                         }
@@ -932,79 +988,119 @@ mod sys {
                     deregister(h, &mut st, &mut seen);
                     drop(st);
                     crate::task::kill_teardown_check(s);
-                    return -sig_code::IO;
+                    return Err(sig_code::IO);
+                }
+                if timed_out {
+                    deregister(h, &mut st, &mut seen);
+                    return Ok((-1, 0));
                 }
                 drop(st);
-                let timeout = if scope.is_some() { 100 } else { -1 };
-                let input = match wait_two(fd, wake, timeout) {
-                    Ok((input, _woke)) => input,
+                // The poll's timeout: the time left, capped at the kill
+                // look's 100 ms inside a scope that can be killed; -1
+                // (none) with neither.
+                let timeout = match (left(), scope.is_some()) {
+                    (Some(d), true) => d.min(Duration::from_millis(100)),
+                    (Some(d), false) => d,
+                    (None, true) => Duration::from_millis(100),
+                    (None, false) => Duration::MAX,
+                };
+                let timeout = if timeout == Duration::MAX {
+                    -1
+                } else {
+                    // Rounded UP to whole ms, so a wake never comes early.
+                    i32::try_from(timeout.as_micros().div_ceil(1000)).unwrap_or(i32::MAX)
+                };
+                let ready = match wait_many(&fds, wake, timeout) {
+                    Ok((ready, _woke)) => ready,
                     Err(e) if e == libc::EINTR || e == libc::EAGAIN => continue,
                     Err(_) => {
                         let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
                         deregister(h, &mut st, &mut seen);
-                        return -sig_code::IO;
+                        return Err(sig_code::IO);
                     }
                 };
-                if input {
+                if let Some(i) = ready {
                     // One more look: a meaning that came with the input
                     // wins (the clause's order).
                     settle(super::installed(h));
                     let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
                     drain(h, &mut st);
                     deregister(h, &mut st, &mut seen);
-                    return super::take(&mut st, want).unwrap_or(0);
+                    return Ok(super::take(&mut st, want).map_or((i as i64, 0), |m| (-1, m)));
+                }
+                if left() == Some(Duration::ZERO) {
+                    // The deadline: one last look at the queue.
+                    settle(super::installed(h));
+                    let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+                    drain(h, &mut st);
+                    deregister(h, &mut st, &mut seen);
+                    return Ok(super::take(&mut st, want).map_or((-1, 0), |m| (-1, m)));
                 }
                 // A wake (or the kill look's timeout): the next pass acks
                 // the generation and looks at the queue.
             }
         });
-        drop(file);
+        drop(files);
         out
     }
 
-    /// s234: wait until `fd` has something to read or `wake` has a
-    /// byte (or `timeout_ms` passes; -1 never), answering (input, wake).
-    /// `poll(2)` first; where the host's poll refuses the descriptor —
-    /// macOS answers `POLLNVAL` for a terminal opened by path
-    /// (`/dev/tty`), measured black-box, where `select(2)` on the same
-    /// descriptor works — `select(2)`, for descriptors under
-    /// `FD_SETSIZE`. `Err` is the `errno`.
-    pub fn wait_two(fd: RawFd, wake: RawFd, timeout_ms: i32) -> Result<(bool, bool), i32> {
+    /// s234: wait until one of `fds` has something to read or `wake` has
+    /// a byte (or `timeout_ms` passes; -1 never), answering (the lowest
+    /// ready index, wake). `poll(2)` first; where the host's poll refuses
+    /// a descriptor — macOS answers `POLLNVAL` for a terminal opened by
+    /// path (`/dev/tty`), measured black-box, where `select(2)` on the
+    /// same descriptor works — `select(2)`, for descriptors under
+    /// `FD_SETSIZE`. `Err` is the `errno`. s248 (#795): over several
+    /// descriptors (it took one).
+    pub fn wait_many(
+        fds: &[RawFd],
+        wake: RawFd,
+        timeout_ms: i32,
+    ) -> Result<(Option<usize>, bool), i32> {
         let errno = || {
             std::io::Error::last_os_error()
                 .raw_os_error()
                 .unwrap_or(libc::EIO)
         };
-        let mut fds = [
-            libc::pollfd {
+        let mut pfds: Vec<libc::pollfd> = fds
+            .iter()
+            .chain(std::iter::once(&wake))
+            .map(|&fd| libc::pollfd {
                 fd,
                 events: libc::POLLIN,
                 revents: 0,
-            },
-            libc::pollfd {
-                fd: wake,
-                events: libc::POLLIN,
-                revents: 0,
-            },
-        ];
-        // SAFETY: two live pollfds.
-        if unsafe { libc::poll(fds.as_mut_ptr(), 2, timeout_ms) } < 0 {
+            })
+            .collect();
+        let n = pfds.len();
+        // SAFETY: `n` live pollfds.
+        if unsafe { libc::poll(pfds.as_mut_ptr(), n as libc::nfds_t, timeout_ms) } < 0 {
             return Err(errno());
         }
-        if fds[0].revents & libc::POLLNVAL == 0 {
-            return Ok((fds[0].revents != 0, fds[1].revents != 0));
+        if pfds[..n - 1]
+            .iter()
+            .all(|p| p.revents & libc::POLLNVAL == 0)
+        {
+            let ready = pfds[..n - 1].iter().position(|p| p.revents != 0);
+            return Ok((ready, pfds[n - 1].revents != 0));
         }
         let limit = libc::FD_SETSIZE as i64;
-        if i64::from(fd) >= limit || i64::from(wake) >= limit {
+        if fds
+            .iter()
+            .chain(std::iter::once(&wake))
+            .any(|&fd| i64::from(fd) >= limit)
+        {
             return Err(libc::EBADF);
         }
-        // SAFETY: a zeroed fd_set filled by FD_ZERO/FD_SET with two
+        // SAFETY: a zeroed fd_set filled by FD_ZERO/FD_SET with
         // descriptors under FD_SETSIZE; a timeval or none.
         unsafe {
             let mut set: libc::fd_set = std::mem::zeroed();
             libc::FD_ZERO(&mut set);
-            libc::FD_SET(fd, &mut set);
-            libc::FD_SET(wake, &mut set);
+            let mut top = wake;
+            for &fd in fds.iter().chain(std::iter::once(&wake)) {
+                libc::FD_SET(fd, &mut set);
+                top = top.max(fd);
+            }
             // `suseconds_t` is i64 on linux and i32 on macOS: the conversion
             // is a no-op on one host and a widening on the other.
             #[allow(clippy::useless_conversion)]
@@ -1018,7 +1114,7 @@ mod sys {
                 &raw mut tv
             };
             let n = libc::select(
-                fd.max(wake) + 1,
+                top + 1,
                 &mut set,
                 std::ptr::null_mut(),
                 std::ptr::null_mut(),
@@ -1027,7 +1123,8 @@ mod sys {
             if n < 0 {
                 return Err(errno());
             }
-            Ok((libc::FD_ISSET(fd, &set), libc::FD_ISSET(wake, &set)))
+            let ready = fds.iter().position(|&fd| libc::FD_ISSET(fd, &set));
+            Ok((ready, libc::FD_ISSET(wake, &set)))
         }
     }
 
@@ -1747,6 +1844,12 @@ mod sys {
         -sig_code::UNSUPPORTED
     }
 
+    /// s248 (`[os.signal.wait.fds]`): no descriptor wait beside the
+    /// console — by name, after the shape.
+    pub fn wait_fds(_handles: &[i64], _want: i64, _deadline_ms: i64) -> Result<(i64, i64), i64> {
+        Err(sig_code::UNSUPPORTED)
+    }
+
     /// s232 (`[os.signal.ignored]`): no dispositions to read — by name.
     pub fn ignored() -> i64 {
         -sig_code::UNSUPPORTED
@@ -2040,6 +2143,34 @@ pub fn wait_fd(fd: i64, mask: i64) -> i64 {
     sys::wait_fd(fd, mask)
 }
 
+/// `os_signal_wait_fds(fds, set, deadline_ms)` (s248, wolf-lang#795,
+/// `[os.signal.wait.fds]`; ruling #93 R2 A): park until a meaning in `set`
+/// is delivered — `(-1, m)`, taken off the queue as [`wait`] takes it —
+/// or one of the files `fds` names has something to read — `(i, 0)`, the
+/// lowest such index, nothing read — or `deadline_ms` passes — `(-1, 0)`.
+/// The meaning wins when both are ready. 0 looks once, -1 waits for ever.
+/// The order of refusal: a set [`listen`] would refuse is `IO` (shape
+/// first, as [`wait_fd`]); a deadline below -1 `INVALID`; then windows
+/// `UNSUPPORTED`, by name; then a closed or forged handle, or a hub or
+/// pipe the host will not give, `IO`. Codes are `os::proc_code`'s.
+/// [`wait_fd`] is its one-descriptor case with no deadline.
+pub fn wait_fds(fds: &[i64], mask: i64, deadline_ms: i64) -> Result<(i64, i64), i64> {
+    use crate::os::proc_code;
+    if !listenable_set(mask) {
+        return Err(proc_code::IO);
+    }
+    if deadline_ms < -1 {
+        return Err(proc_code::INVALID);
+    }
+    sys::wait_fds(fds, mask, deadline_ms).map_err(|c| {
+        if c == sig_code::UNSUPPORTED {
+            proc_code::UNSUPPORTED
+        } else {
+            proc_code::IO
+        }
+    })
+}
+
 /// s232 (#681, `[os.signal.ignored]`): the listenable meanings whose
 /// signal is ignored now, or `-UNSUPPORTED` (windows). Read before the
 /// program's first `ignore`, `default` or `listen` of a meaning, it is
@@ -2197,6 +2328,37 @@ pub extern "C" fn __wolf_rt_os_signal_poll(mask: i64) -> i64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_os_signal_wait_fd(fd: i64, mask: i64) -> i64 {
     wait_fd(fd, mask)
+}
+
+/// `os_signal_wait_fds(fds: List[int], set: int, deadline_ms: int) ->
+/// (int, int) ! {invalid, io, unsupported}` (s248, wolf-lang#795) — 0 and
+/// the pair (index or -1, meaning or 0) through `out`, or an
+/// `os::proc_code`. The handles are the `List[int]`'s words, read before
+/// the wait.
+///
+/// # Safety
+///
+/// `fds` must be a live `List[int]` header; `out` must address 16
+/// writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_signal_wait_fds(
+    fds: i64,
+    mask: i64,
+    deadline_ms: i64,
+    out: i64,
+) -> i64 {
+    // Copied out before the wait: the list is the program's, and another
+    // task may change it while this one is parked.
+    let Some(handles) = (unsafe { crate::list::i64_elems(fds) }).map(<[i64]>::to_vec) else {
+        return crate::os::proc_code::IO;
+    };
+    match wait_fds(&handles, mask, deadline_ms) {
+        Ok((i, m)) => {
+            unsafe { crate::str::write_pair(out, i, m) };
+            crate::os::proc_code::OK
+        }
+        Err(c) => c,
+    }
 }
 
 /// `os_signal_ignored() -> int ! {unsupported}` (s232) — the ignored
@@ -2928,5 +3090,49 @@ mod tests {
         assert_eq!(crate::fs::__wolf_rt_fs_close(w), 0);
         assert_eq!(wait_fd(r, meaning::USER), 0, "end of input is ready");
         assert_eq!(set_disposition(meaning::USER, Disp::Default), sig_code::OK);
+    }
+
+    /// s248 (#795, `[os.signal.wait.fds]`): over two pipes — the
+    /// deadline (-1, 0) after it passed, the poll (deadline 0) at once,
+    /// the lowest ready index, the meaning before the input; a deadline
+    /// below -1 `invalid`, a bad set and a forged handle `io`.
+    #[cfg(unix)]
+    #[test]
+    fn wait_fds_answers_the_deadline_an_index_or_the_meaning() {
+        use crate::os::proc_code;
+        use std::io::Write as _;
+        let _g = serial();
+        assert_eq!(listen(meaning::RESIZE), sig_code::OK);
+        let (r0, w0) = table_pipe();
+        let (r1, w1) = table_pipe();
+        let t0 = std::time::Instant::now();
+        assert_eq!(wait_fds(&[r0, r1], meaning::RESIZE, 25), Ok((-1, 0)));
+        let took = t0.elapsed();
+        assert!(took >= Duration::from_millis(25), "the deadline passed: {took:?}");
+        let t0 = std::time::Instant::now();
+        assert_eq!(wait_fds(&[r0, r1], meaning::RESIZE, 0), Ok((-1, 0)));
+        assert!(t0.elapsed() < Duration::from_millis(20), "a poll never parks");
+        assert_eq!(wait_fds(&[], meaning::RESIZE, 0), Ok((-1, 0)), "no descriptors");
+        crate::fs::with_handle(w1, |f| (&*f).write_all(b"b").unwrap()).unwrap();
+        assert_eq!(wait_fds(&[r0, r1], meaning::RESIZE, -1), Ok((1, 0)));
+        crate::fs::with_handle(w0, |f| (&*f).write_all(b"a").unwrap()).unwrap();
+        assert_eq!(wait_fds(&[r0, r1], meaning::RESIZE, 0), Ok((0, 0)), "the lowest");
+        assert_eq!(raise(meaning::RESIZE), sig_code::OK);
+        assert_eq!(
+            wait_fds(&[r0, r1], meaning::RESIZE, -1),
+            Ok((-1, meaning::RESIZE)),
+            "the meaning wins"
+        );
+        assert_eq!(wait_fds(&[r0], meaning::RESIZE, -2), Err(proc_code::INVALID));
+        assert_eq!(wait_fds(&[r0], 0, 5), Err(proc_code::IO), "empty set");
+        assert_eq!(wait_fds(&[r0], meaning::RESIZE, -2), Err(proc_code::INVALID));
+        assert_eq!(wait_fds(&[r0, 1 << 40], meaning::RESIZE, 5), Err(proc_code::IO));
+        for h in [w0, r0, w1, r1] {
+            assert_eq!(crate::fs::__wolf_rt_fs_close(h), 0);
+        }
+        assert_eq!(
+            set_disposition(meaning::RESIZE, Disp::Default),
+            sig_code::OK
+        );
     }
 }
