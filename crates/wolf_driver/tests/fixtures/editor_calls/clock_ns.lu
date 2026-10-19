@@ -1,0 +1,33 @@
+//! member: false
+//! s248 (wolf-lang#798, `[os.clock.ns]`) — yw00's G8 witness at
+//! nanoseconds (yew `notes/yw00-evidence/witness/clock-ms.lu`, where 19
+//! of 20 rounds of the same work read 0 ms at 0.2.32 and 0.2.33): twenty
+//! rounds of about 100 us of work, each timed by `os_clock_ns`, and no
+//! round reads 0. The clock is the ms clock's, from the same anchor:
+//! `os_clock_ns() / 1000000` is never behind a `time_now_ms()` read just
+//! before it.
+//! Expected: `clock_ns zeros=0 of 20 behind=0`.
+fn main() {
+    var zeros = 0
+    var behind = 0
+    var round = 0
+    while round < 20 {
+        let ms = time_now_ms()
+        let a = os_clock_ns()
+        var acc: int = 0
+        var i = 0
+        while i < 20000 {
+            acc += i % 7
+            i += 1
+        }
+        let b = os_clock_ns()
+        if b - a <= 0 {
+            zeros += 1
+        }
+        if a / 1000000 < ms {
+            behind += 1
+        }
+        round += 1
+    }
+    print("clock_ns zeros={zeros} of 20 behind={behind}")
+}
