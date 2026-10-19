@@ -165,7 +165,10 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         | "fs_set_mode" | "fs_open_perm" | "fs_create_dir_mode" | "fs_symlink" | "fs_link"
         | "fs_set_times" | "fs_truncate"
         // s236 (#701): an owner is a change to the filesystem — `fs`.
-        | "fs_set_owner" | "fs_set_owner_fd" => {
+        | "fs_set_owner" | "fs_set_owner_fd"
+        // s248 (#796, #797): the syncs and the canonical path read and
+        // flush the filesystem — `fs`, with the family.
+        | "fs_sync" | "fs_sync_dir" | "fs_realpath" => {
             SandboxCategory::Fs
         }
         // The s39 net builtin tier: every entry point carries the

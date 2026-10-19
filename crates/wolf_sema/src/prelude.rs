@@ -233,6 +233,11 @@ pub const PRELUDE: &[Ambient] = &[
     // by path (a link followed or not) and on a handle.
     host("fs_set_owner"),
     host("fs_set_owner_fd"),
+    // s248 (wolf-lang#796, #797; ruling #93): the atomic save's two syncs
+    // and the canonical path — `[os.fs.sync]`, `[os.fs.realpath]`. `fs`.
+    host("fs_sync"),
+    host("fs_sync_dir"),
+    host("fs_realpath"),
     // s199 (#426): the handle's offset — `[os.fs.seek]`,
     // `[os.fs.tell]`, `[os.fs.read_at]`.
     host("fs_seek"),
