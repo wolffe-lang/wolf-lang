@@ -227,7 +227,47 @@ pub type ProcErr = &'static str;
 /// pid — dense small ints into this table, the NetTable/fs shape.
 #[derive(Debug, Default)]
 pub struct ChildTable {
-    children: Vec<Option<Child>>,
+    children: Vec<Option<Kid>>,
+}
+
+/// One child of the table: a spawn's (Rust's `Child`), or, since s247
+/// (ruling #90, `[os.proc.fork]`), one `os_fork` made, known by its process
+/// id alone — every table call serves both, by `waitpid` and `kill` on the
+/// id for a forked one.
+#[derive(Debug)]
+enum Kid {
+    Spawned(Child),
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    Forked(libc::pid_t),
+}
+
+impl Kid {
+    fn id(&self) -> u32 {
+        match self {
+            Kid::Spawned(c) => c.id(),
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            Kid::Forked(p) => *p as u32,
+        }
+    }
+}
+
+/// A forked child's wait (s247): `waitpid(pid, 0)`, an interrupted call
+/// asked again; the raw status, or `None` when the host has no such child
+/// (`ECHILD`: reaped already, or this process ignores `CHILD`).
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn wait_forked(pid: libc::pid_t) -> Option<libc::c_int> {
+    let mut st: libc::c_int = 0;
+    loop {
+        // SAFETY: a plain blocking waitpid on a child this table owns.
+        let r = unsafe { libc::waitpid(pid, &mut st, 0) };
+        if r == pid {
+            return Some(st);
+        }
+        if r < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
+            continue;
+        }
+        return None;
+    }
 }
 
 impl ChildTable {
@@ -264,7 +304,7 @@ impl ChildTable {
             }),
             Ok(child) => {
                 let h = self.children.len() as i64;
-                self.children.push(Some(child));
+                self.children.push(Some(Kid::Spawned(child)));
                 Ok(h)
             }
         }
@@ -375,7 +415,7 @@ impl ChildTable {
             }),
             Ok(child) => {
                 let h = self.children.len() as i64;
-                self.children.push(Some(child));
+                self.children.push(Some(Kid::Spawned(child)));
                 Ok(h)
             }
         }
@@ -557,7 +597,7 @@ impl ChildTable {
                         }
                     }
                     let h = self.children.len() as i64;
-                    self.children.push(Some(child));
+                    self.children.push(Some(Kid::Spawned(child)));
                     Ok(h)
                 }
             }
@@ -568,10 +608,10 @@ impl ChildTable {
     /// id a job leader gives its group. `io` for a forged or reaped
     /// handle.
     pub fn pid(&self, h: i64) -> Result<i64, ProcErr> {
-        let Some(Some(child)) = usize::try_from(h).ok().and_then(|i| self.children.get(i)) else {
+        let Some(Some(kid)) = usize::try_from(h).ok().and_then(|i| self.children.get(i)) else {
             return Err("io");
         };
-        Ok(i64::from(child.id()))
+        Ok(i64::from(kid.id()))
     }
 
     /// `os_wait_status(h)` (s219, `[os.proc.status]`): [`Self::wait`],
@@ -590,8 +630,27 @@ impl ChildTable {
         else {
             return Err("io");
         };
-        let Some(child) = slot.as_mut() else {
+        let Some(kid) = slot.as_mut() else {
             return Err("io");
+        };
+        let child = match kid {
+            Kid::Spawned(c) => c,
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            Kid::Forked(pid) => {
+                let pid = *pid;
+                *slot = None;
+                let Some(st) = wait_forked(pid) else {
+                    return Err("io");
+                };
+                if libc::WIFEXITED(st) {
+                    return Ok(i64::from(libc::WEXITSTATUS(st)));
+                }
+                if libc::WIFSIGNALED(st) {
+                    let core = core && libc::WCOREDUMP(st);
+                    return Ok(signal_status(libc::WTERMSIG(st), core));
+                }
+                return Err("io");
+            }
         };
         match child.wait() {
             Err(_) => Err("io"),
@@ -634,13 +693,13 @@ impl ChildTable {
         let _ = core;
         let mut live = 0i64;
         for (i, slot) in self.children.iter_mut().enumerate() {
-            let Some(child) = slot.as_mut() else {
+            let Some(kid) = slot.as_mut() else {
                 continue;
             };
             live += 1;
             #[cfg(unix)]
             {
-                let pid = child.id() as libc::pid_t;
+                let pid = kid.id() as libc::pid_t;
                 let mut st: libc::c_int = 0;
                 let r = loop {
                     // SAFETY: a plain waitpid on a child this table owns,
@@ -676,6 +735,7 @@ impl ChildTable {
             #[cfg(not(unix))]
             {
                 // No stops on this host: an end, or nothing.
+                let Kid::Spawned(child) = kid;
                 match child.try_wait() {
                     Err(_) => return Err("io"),
                     Ok(None) => {}
@@ -703,8 +763,23 @@ impl ChildTable {
         else {
             return Err("io");
         };
-        let Some(child) = slot.as_mut() else {
+        let Some(kid) = slot.as_mut() else {
             return Err("io"); // double wait
+        };
+        let child = match kid {
+            Kid::Spawned(c) => c,
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            Kid::Forked(pid) => {
+                let pid = *pid;
+                *slot = None; // reaped (or the host has no such child)
+                let Some(st) = wait_forked(pid) else {
+                    return Err("io");
+                };
+                if libc::WIFEXITED(st) {
+                    return Ok(i64::from(libc::WEXITSTATUS(st)));
+                }
+                return Err("signal");
+            }
         };
         match child.wait() {
             Err(_) => Err("io"),
@@ -724,13 +799,48 @@ impl ChildTable {
     /// to kill anymore); the handle stays live for the wait that
     /// reaps it — kill never tombstones.
     pub fn kill(&mut self, h: i64) -> Result<(), ProcErr> {
-        let Some(Some(child)) = usize::try_from(h)
+        let Some(Some(kid)) = usize::try_from(h)
             .ok()
             .and_then(|i| self.children.get_mut(i))
         else {
             return Err("io");
         };
-        child.kill().map_err(|_| "io")
+        match kid {
+            Kid::Spawned(child) => child.kill().map_err(|_| "io"),
+            // s247: the forked child's id, not reaped yet (a reaped one is
+            // a tombstone above), so the id is still the child's.
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            Kid::Forked(pid) => {
+                // SAFETY: a signal to this table's own unreaped child.
+                if unsafe { libc::kill(*pid, libc::SIGKILL) } == 0 {
+                    Ok(())
+                } else {
+                    Err("io")
+                }
+            }
+        }
+    }
+
+    /// s247 (`[os.proc.fork]`): a child `os_fork` made, as the parent's
+    /// handle for it — the next number, as a spawn's.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    pub(crate) fn adopt_forked(&mut self, pid: libc::pid_t) -> i64 {
+        let h = self.children.len() as i64;
+        self.children.push(Some(Kid::Forked(pid)));
+        h
+    }
+
+    /// s247: in a forked child — the parent's children are not this
+    /// process's (a wait on one would be `ECHILD`), so every slot is a
+    /// tombstone: each handle answers `io` as a reaped one does, and the
+    /// child's own children take the numbers after them. A spawned child's
+    /// `Child` is dropped, which closes only this process's copies of what
+    /// it held.
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    pub(crate) fn fork_child_clear(&mut self) {
+        for slot in &mut self.children {
+            *slot = None;
+        }
     }
 }
 
@@ -893,6 +1003,10 @@ pub mod proc_code {
     /// pairs — decided before any handle is read or child made.
     /// Declared only by `os_spawn_fds`.
     pub const INVALID: i64 = 6;
+    /// s247 (ruling #90, `[os.proc.fork]`): a fork asked of a process
+    /// whose other tasks are live, or from a task — the protocol's rule,
+    /// decided before the host is asked. Declared only by `os_fork`.
+    pub const BUSY: i64 = 7;
 }
 
 /// The most `(target, source)` pairs one `os_spawn_fds` places (s215):
@@ -951,6 +1065,18 @@ static CHILDREN: Mutex<ChildTable> = Mutex::new(ChildTable::new());
 
 fn children() -> std::sync::MutexGuard<'static, ChildTable> {
     CHILDREN.lock().unwrap_or_else(|p| p.into_inner())
+}
+
+/// s247 (`[os.proc.fork]`): the parent's handle for a forked child.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub(crate) fn adopt_forked(pid: libc::pid_t) -> i64 {
+    children().adopt_forked(pid)
+}
+
+/// s247: the child's table, every slot a tombstone.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub(crate) fn fork_child_clear() {
+    children().fork_child_clear();
 }
 
 /// A row tag as its wire code ([`proc_code`]).
