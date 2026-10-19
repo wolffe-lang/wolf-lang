@@ -234,6 +234,9 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // s242 (wolf-lang#680; ruling owed): the poll of the children
         // reaps as `os_wait_status` does — process control, `exec`.
         "os_wait_poll" => SandboxCategory::Exec,
+        // s246 (ruling #88 R3 D): the core-reporting siblings, `exec` with
+        // the wait and the poll they mirror.
+        "os_wait_status_core" | "os_wait_poll_core" => SandboxCategory::Exec,
         // s232 (ruling owed, #54's reasoning): a signal to another
         // process is process control, `exec` with `os_kill`. This
         // process's id, its parent's and the dispositions it holds are

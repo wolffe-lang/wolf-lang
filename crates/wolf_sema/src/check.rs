@@ -14264,10 +14264,15 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // exit code, or -N for a death by signal N.
         "os_proc_pid" => (vec![int_], rowed(table, int_, &["io"])),
         "os_wait_status" => (vec![int_], rowed(table, int_, &["io"])),
+        // s246 (wolf-lang#785; ruling #88 R3 D): the same wait, a core the
+        // host wrote answered as -(256 + N); `os_wait_status` keeps -N.
+        "os_wait_status_core" => (vec![int_], rowed(table, int_, &["io"])),
         // s242 (wolf-lang#680, `[os.proc.poll]`; ruling owed): never
         // blocks — (h, status) for the first child that ended or stopped
         // (256 + N a stop by host signal N), or (-1, n), n still live.
-        "os_wait_poll" => {
+        // s246 (ruling #88 R3 D): `os_wait_poll_core`, the same poll with a
+        // core answered as -(256 + N).
+        "os_wait_poll" | "os_wait_poll_core" => {
             let pair = table.intern(TyKind::Tuple(vec![int_, int_]));
             (Vec::new(), rowed(table, pair, &["io"]))
         }
