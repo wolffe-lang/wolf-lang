@@ -338,7 +338,7 @@ mod unix {
             // ignores (its stack guard's handler, which does not survive the
             // exec, holds that choice) is `SIG_IGN` in the new program, as
             // any ignored signal is; a failed exec gives the handler back.
-            let faults = crate::task::ignored_sent_faults();
+            let faults = crate::os::ignored_faults();
             for sig in faults {
                 if sig != 0 {
                     libc::signal(sig, libc::SIG_IGN);
@@ -346,7 +346,7 @@ mod unix {
             }
             libc::execve(path.as_ptr(), arg_ptrs.as_ptr(), env_ptrs.as_ptr());
             let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
-            crate::task::reinstall_after_exec(faults);
+            crate::os::reinstall_faults(faults);
             restore(&saved, &staged);
             Err(match errno {
                 libc::ENOENT | libc::ENOTDIR => "not_found",

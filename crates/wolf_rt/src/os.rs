@@ -793,6 +793,31 @@ pub type InheritFd = i32;
 /// hands a child more listeners than this.
 pub const MAX_INHERIT: usize = 64;
 
+/// s246: the fault signals this process ignores (the stack guard holds
+/// the choice: `task::ignored_sent_faults`); none where the task layer,
+/// and so the guard, is not built (s61's hosts).
+#[cfg(unix)]
+pub(crate) fn ignored_faults() -> [libc::c_int; 2] {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    {
+        crate::task::ignored_sent_faults()
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    {
+        [0, 0]
+    }
+}
+
+/// s246: the stack guard back on `faults` after a failed exec (nothing
+/// where there is no guard).
+#[cfg(unix)]
+pub(crate) fn reinstall_faults(faults: [libc::c_int; 2]) {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    crate::task::reinstall_after_exec(faults);
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+    let _ = faults;
+}
+
 /// Error codes of the process family (lowering maps them to row tags,
 /// coarsening any the call's row does not declare to `io`).
 /// s232 (`[os.signal.disp]`, wolf-lang#423): a child starts with an
@@ -825,7 +850,7 @@ pub(crate) fn keep_pipe_ignore(cmd: &mut Command) {
         // s246 (`[os.signal.disp.one]`): a fault meaning this process
         // ignores is held by the stack guard's handler, which the child's
         // exec resets to the default; the child sets it ignored instead.
-        let faults = crate::task::ignored_sent_faults();
+        let faults = ignored_faults();
         if faults.iter().any(|&s| s != 0) {
             // SAFETY: `signal` is async-signal-safe; the numbers are copied.
             unsafe {
