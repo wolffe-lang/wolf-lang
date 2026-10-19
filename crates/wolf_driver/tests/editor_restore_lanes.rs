@@ -23,7 +23,8 @@
 //! engine a failure, never a skip.
 //!
 //! **What is read.** The terminal's settings before the program and after
-//! it (`stty -g` in the box; `tcgetattr` on the master on macOS) — equal
+//! it (`stty -g`, the shell that leads the terminal's session reading them
+//! around its child) — equal
 //! is "restored" — and the transcript: the bytes registered (`LEFT`)
 //! follow the program's own last line. Machines: the checked machine
 //! under `conform-run --checked` (its mode from `s248.mode`), the native
@@ -283,9 +284,14 @@ impl Live {
     /// Every row of `ROWS` for one machine, `cmd` the command with the
     /// mode appended (or written to `s248.mode` first for the checked
     /// machine): each row's settings before and after and its transcript.
+    /// A shell is the session leader of the row's terminal and reads the
+    /// settings with `stty -g` before the program and after it (the
+    /// program is the shell's child: a terminal whose session leader has
+    /// ended is revoked on macOS, so its settings cannot be read then).
     fn rows(&self, lane: &str, cmd: &str, by_file: bool) -> Vec<(String, String, String, String)> {
         let tag = lane.replace(' ', "_");
         let mut script = String::from("set -u\n");
+        let mut inner = Vec::new();
         for r in ROWS {
             let n = format!("{tag}.{}", r.mode);
             let run = if by_file {
@@ -293,13 +299,13 @@ impl Live {
             } else {
                 format!("{cmd} {}", r.mode)
             };
-            match self.engine {
-                Some(_) => script.push_str(&format!(
-                    "script -qec 'stty -g > {n}.before; {run}; echo rc=$?; stty -g > {n}.after' \
-                     /dev/null > {n}.log 2>&1 < /dev/null\n"
-                )),
-                None => script.push_str(&format!("{run}\n")),
+            let row = format!("stty -g > {n}.before; {run}; echo rc=$?; stty -g > {n}.after");
+            if self.engine.is_some() {
+                script.push_str(&format!(
+                    "script -qec '{row}' /dev/null > {n}.log 2>&1 < /dev/null\n"
+                ));
             }
+            inner.push(row);
         }
         match &self.engine {
             Some(e) => {
@@ -343,25 +349,15 @@ impl Live {
             }
             None => ROWS
                 .iter()
-                .map(|r| {
-                    if by_file {
-                        std::fs::write(self.dir.join("s248.mode"), r.mode).expect("the mode file");
-                    }
-                    let argv: Vec<String> = if by_file {
-                        cmd.split(' ').map(str::to_string).collect()
-                    } else {
-                        cmd.split(' ')
-                            .map(str::to_string)
-                            .chain(std::iter::once(r.mode.to_string()))
-                            .collect()
+                .zip(inner)
+                .map(|(r, row)| {
+                    let n = format!("{tag}.{}", r.mode);
+                    let text = pty_shell(&row, &self.dir);
+                    let read = |ext: &str| {
+                        std::fs::read_to_string(self.dir.join(format!("{n}.{ext}")))
+                            .unwrap_or_default()
                     };
-                    let (before, after, text, status) = pty_row(&argv, &self.dir);
-                    (
-                        r.mode.to_string(),
-                        before,
-                        after,
-                        format!("{text}rc={status}\n"),
-                    )
+                    (r.mode.to_string(), read("before"), read("after"), text)
                 })
                 .collect(),
         }
@@ -392,16 +388,14 @@ fn bounded(mut cmd: Command, dir: &Path, secs: u64) -> Option<Output> {
     }
 }
 
-/// macOS (CI's runner): one row on a fresh pseudo-terminal this test
-/// opens — the program the session leader, the terminal its controlling
-/// one — and the pair's settings read on the master before and after:
-/// the input, output and local flags and VMIN/VTIME, as one string.
-fn pty_row(argv: &[String], dir: &Path) -> (String, String, String, i32) {
+/// macOS (CI's runner): one row's shell line on a fresh pseudo-terminal
+/// this test opens — `/bin/sh` the session leader, the terminal its
+/// controlling one, a scratch `HOME` — and its transcript, CRs dropped.
+fn pty_shell(line: &str, dir: &Path) -> String {
     use std::io::Read as _;
-    use std::os::fd::{AsRawFd as _, FromRawFd as _};
+    use std::os::fd::FromRawFd as _;
     use std::os::unix::fs::OpenOptionsExt as _;
     use std::os::unix::process::CommandExt as _;
-    use std::os::unix::process::ExitStatusExt as _;
     // SAFETY: the pty calls on descriptors this test owns; the child's
     // hook calls only async-signal-safe functions.
     unsafe {
@@ -419,21 +413,8 @@ fn pty_row(argv: &[String], dir: &Path) -> (String, String, String, i32) {
             .custom_flags(libc::O_NOCTTY)
             .open(&name)
             .expect("the slave");
-        let settings = |fd: i32| -> String {
-            let mut t: libc::termios = std::mem::zeroed();
-            assert_eq!(libc::tcgetattr(fd, &mut t), 0, "tcgetattr");
-            format!(
-                "i={:x} o={:x} l={:x} min={} time={}",
-                t.c_iflag,
-                t.c_oflag,
-                t.c_lflag,
-                t.c_cc[libc::VMIN],
-                t.c_cc[libc::VTIME]
-            )
-        };
-        let before = settings(slave.as_raw_fd());
-        let mut cmd = Command::new(&argv[0]);
-        cmd.args(&argv[1..])
+        let mut cmd = Command::new("/bin/sh");
+        cmd.args(["-c", line])
             .current_dir(dir)
             .env("HOME", dir.join("home"))
             .stdin(Stdio::from(slave.try_clone().unwrap()))
@@ -457,6 +438,7 @@ fn pty_row(argv: &[String], dir: &Path) -> (String, String, String, i32) {
             Ok(())
         });
         let mut child = cmd.spawn().expect("spawn under the pty");
+        drop(slave);
         let buf = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let sink = buf.clone();
         let mut rd = master.try_clone().expect("dup master");
@@ -470,22 +452,21 @@ fn pty_row(argv: &[String], dir: &Path) -> (String, String, String, i32) {
             }
         });
         let end = Instant::now() + Duration::from_secs(60);
-        let status = loop {
-            if let Some(st) = child.try_wait().expect("try_wait") {
-                break st.code().unwrap_or_else(|| 128 + st.signal().unwrap_or(0));
+        loop {
+            if child.try_wait().expect("try_wait").is_some() {
+                break;
             }
             if Instant::now() > end {
                 let _ = child.kill();
                 let _ = child.wait();
-                break -1;
+                break;
             }
             std::thread::sleep(Duration::from_millis(20));
-        };
+        }
         std::thread::sleep(Duration::from_millis(200));
-        let after = settings(slave.as_raw_fd());
-        drop(slave);
         let text = String::from_utf8_lossy(&buf.lock().unwrap()).replace('\r', "");
-        (before, after, text, status)
+        drop(master);
+        text
     }
 }
 
