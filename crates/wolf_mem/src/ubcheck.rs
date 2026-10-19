@@ -8831,6 +8831,22 @@ impl<'t> Machine<'t> {
             // `wolf` process may host other runs' children.
             // s246 (ruling #88 R3 D): `os_wait_poll_core` is the same poll
             // with a core answered as `-(256 + N)`.
+            // s247 (ruling #90, `[os.proc.fork]`; ruling asked): the machine is
+            // the `wolf` process interpreting the program, so a fork would
+            // fork the compiler with its machine, its buffered print stream
+            // and, under `conform-run`, its observation record — refused by
+            // name on unix; windows has no fork (`unsupported`, the
+            // runtime's answer there).
+            "os_fork" => {
+                if cfg!(not(unix)) {
+                    return Ok(tag("unsupported"));
+                }
+                self.refuse(
+                    "`os_fork` (the checked machine does not fork the `wolf` process it runs \
+                     in; [os.proc.fork])",
+                    span,
+                )
+            }
             "os_wait_poll" | "os_wait_poll_core" => {
                 match checked_poll(&mut self.children, name == "os_wait_poll_core") {
                     Ok((h, st)) => Ok(Flow::Val(Value::Struct {
@@ -11066,6 +11082,8 @@ impl<'t> Machine<'t> {
             | "os_wait_poll"
             // s246 (#785, ruling #88 R3 D): the statuses that carry a core.
             | "os_wait_status_core" | "os_wait_poll_core"
+            // s247 (ruling #90): the fork, refused by name.
+            | "os_fork"
             // s246 (#783, #784): one meaning's disposition, the end by a
             // signal.
             | "os_signal_ignore_one" | "os_signal_default_one" | "os_exit_signal"
