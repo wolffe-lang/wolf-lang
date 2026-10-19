@@ -466,6 +466,14 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`os_signal_wait_fd`",
             "hosted runtime",
         ),
+        // s248 (#795): the wait over several descriptors.
+        (
+            "os_signal_wait_fds",
+            "",
+            "let r = os_signal_wait_fds([0], 16384, 25) else |e| {\n        return 0\n    }\n    r.0",
+            "`os_signal_wait_fds`",
+            "hosted runtime",
+        ),
         // s236 (#633, #701, #742): who the process runs as, the drop and
         // a file's owner — each a runtime symbol named for its builtin,
         // so each is refused by that name.

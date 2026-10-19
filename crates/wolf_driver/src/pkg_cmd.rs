@@ -1501,6 +1501,9 @@ mod builtin_cap_tests {
             ("fs_sync", Cap::Fs),
             ("fs_sync_dir", Cap::Fs),
             ("fs_realpath", Cap::Fs),
+            // s248 (#795): the wait over several descriptors is signal
+            // control, `exec` with `os_signal_wait_fd`.
+            ("os_signal_wait_fds", Cap::Exec),
             // s241 (ruling #79 R6): the group and all sends and the move
             // into a group charge `exec`, with `os_signal_send`.
             ("os_signal_send_group", Cap::Exec),
