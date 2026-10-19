@@ -155,7 +155,11 @@ mod tests {
         let h = crate::fs::mint_file(f);
         assert_eq!(__wolf_rt_fs_sync(h), fs_code::OK);
         assert_eq!(__wolf_rt_fs_sync(1_000_000), fs_code::IO);
-        assert_eq!(crate::fs::__wolf_rt_os_error(), 0, "a forged handle has no host number");
+        assert_eq!(
+            crate::fs::__wolf_rt_os_error(),
+            0,
+            "a forged handle has no host number"
+        );
         let mut p = [0i32; 2];
         // SAFETY: a plain pipe this test owns.
         assert_eq!(unsafe { libc::pipe(p.as_mut_ptr()) }, 0);
@@ -164,7 +168,11 @@ mod tests {
             <std::fs::File as std::os::fd::FromRawFd>::from_raw_fd(p[1])
         });
         assert_eq!(__wolf_rt_fs_sync(w), fs_code::IO);
-        assert_ne!(crate::fs::__wolf_rt_os_error(), 0, "the host refused the pipe");
+        assert_ne!(
+            crate::fs::__wolf_rt_os_error(),
+            0,
+            "the host refused the pipe"
+        );
         // SAFETY: the read end, closed.
         unsafe { libc::close(p[0]) };
         let _ = std::fs::remove_dir_all(&d);

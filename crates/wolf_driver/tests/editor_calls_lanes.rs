@@ -233,7 +233,10 @@ fn every_lane(entry: &Path, dir: &Path, call: &[&str], check: &dyn Fn(&str, &str
         "the CHECKED machine on {name}: {checked:?}"
     );
     check("checked", &checked.stdout);
-    report(&format!("REPORT checked {name}: {}", checked.stdout.trim_end()));
+    report(&format!(
+        "REPORT checked {name}: {}",
+        checked.stdout.trim_end()
+    ));
     let want = checked.stdout.clone();
     for release in [false, true] {
         let tier = if release { "release" } else { "native" };
@@ -402,7 +405,9 @@ fn build_shim(dir: &Path) -> Option<(PathBuf, &'static str)> {
                 std::env::var("GITHUB_ACTIONS").as_deref() != Ok("true"),
                 "CI's runner carries a C compiler and the save's fault shim did not build: {why}"
             );
-            eprintln!("SKIP: no C compiler built the save's fault shim ({why}) — the witness did not run");
+            eprintln!(
+                "SKIP: no C compiler built the save's fault shim ({why}) — the witness did not run"
+            );
             None
         }
     }
@@ -505,7 +510,10 @@ fn the_save_survives_an_end_at_every_storage_boundary() {
             "the {lane} save, whole, wrote the new bytes"
         );
         let whole = read_log(&log);
-        assert!(!whole.is_empty(), "the {lane} save: the shim saw no boundary");
+        assert!(
+            !whole.is_empty(),
+            "the {lane} save: the shim saw no boundary"
+        );
         let pos = |want: &dyn Fn(&str) -> bool| whole.iter().position(|b| want(&b.what));
         let rpos = |want: &dyn Fn(&str) -> bool| whole.iter().rposition(|b| want(&b.what));
         let open = pos(&|w| w == "open tmp excl=1");
@@ -548,8 +556,9 @@ fn the_save_survives_an_end_at_every_storage_boundary() {
                 b.what,
                 String::from_utf8_lossy(&out.stderr)
             );
-            let now = std::fs::read_to_string(work.join("doc.txt"))
-                .unwrap_or_else(|e| panic!("the {lane} save ended at {} left no doc.txt: {e}", b.n));
+            let now = std::fs::read_to_string(work.join("doc.txt")).unwrap_or_else(|e| {
+                panic!("the {lane} save ended at {} left no doc.txt: {e}", b.n)
+            });
             let want = if b.n <= rename_n { old } else { new };
             assert_eq!(
                 now, want,

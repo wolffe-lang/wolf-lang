@@ -504,7 +504,10 @@ fn one_wait_hears_the_tty_a_pipe_a_signal_and_a_deadline() {
                 "resized -1 16384\n",
                 "done 1\n",
             ] {
-                assert!(text.contains(want), "wait_fds on {lane}: no {want:?}: {text}");
+                assert!(
+                    text.contains(want),
+                    "wait_fds on {lane}: no {want:?}: {text}"
+                );
             }
             assert_eq!(*end, End::Exit(0), "wait_fds on {lane}: {text}");
         },
@@ -572,7 +575,9 @@ fn every_lane_plain(name: &str, secs: u64, want: &str, first: &[&str]) {
     let checked = bounded(
         {
             let mut c = Command::new(wolf());
-            c.arg("conform-run").arg(&entry).args(["--checked", "--json"]);
+            c.arg("conform-run")
+                .arg(&entry)
+                .args(["--checked", "--json"]);
             c
         },
         &dir,
@@ -581,7 +586,11 @@ fn every_lane_plain(name: &str, secs: u64, want: &str, first: &[&str]) {
     .unwrap_or_else(|| panic!("the checked machine on {name} ran past {secs} s (a lost wake?)"));
     let (verdict, stdout, ..) = record_of(&checked.1);
     eprintln!("s248 {name} [checked] {verdict} {stdout:?}");
-    assert_eq!((verdict.as_str(), stdout.as_str()), ("exit(0)", want), "checked on {name}");
+    assert_eq!(
+        (verdict.as_str(), stdout.as_str()),
+        ("exit(0)", want),
+        "checked on {name}"
+    );
     for release in [false, true] {
         let tier = if release { "release" } else { "native" };
         let Some(exe) = build(&entry, &dir, release) else {
@@ -670,7 +679,10 @@ fn raw_mode_reads_enter_as_cr_and_strips_on_request() {
         "os_term_mode",
         &|lane, end, text| {
             for want in ["bits 160\n", "cr 13 then 10\n", "strip 67 early=-1\n"] {
-                assert!(text.contains(want), "mode_enter on {lane}: no {want:?}: {text}");
+                assert!(
+                    text.contains(want),
+                    "mode_enter on {lane}: no {want:?}: {text}"
+                );
             }
             assert_eq!(*end, End::Exit(0), "mode_enter on {lane}: {text}");
         },
@@ -693,16 +705,41 @@ fn raw_output_writes_lf_alone() {
             );
             continue;
         }
-        assert!(t.wait_for("bits", 60), "mode_opost on {}: {}", lane.name, t.text());
+        assert!(
+            t.wait_for("bits", 60),
+            "mode_opost on {}: {}",
+            lane.name,
+            t.text()
+        );
         std::thread::sleep(Duration::from_millis(200));
         let wire = t.wire();
         let (end, text, _) = t.finish(60);
         let has = |b: &[u8]| wire.windows(b.len()).any(|w| w == b);
-        eprintln!("s248 mode_opost [{}] end={end:?} wire={:?}", lane.name, String::from_utf8_lossy(&wire));
-        assert!(has(b"[raw]\n"), "mode_opost on {}: no bare LF: {text}", lane.name);
-        assert!(!has(b"[raw]\r\n"), "mode_opost on {}: OPOST still on: {text}", lane.name);
-        assert!(has(b"[cooked]\r\n"), "mode_opost on {}: the mode put back: {text}", lane.name);
-        assert!(text.contains("bits 64 early=-1\n"), "mode_opost on {}: {text}", lane.name);
+        eprintln!(
+            "s248 mode_opost [{}] end={end:?} wire={:?}",
+            lane.name,
+            String::from_utf8_lossy(&wire)
+        );
+        assert!(
+            has(b"[raw]\n"),
+            "mode_opost on {}: no bare LF: {text}",
+            lane.name
+        );
+        assert!(
+            !has(b"[raw]\r\n"),
+            "mode_opost on {}: OPOST still on: {text}",
+            lane.name
+        );
+        assert!(
+            has(b"[cooked]\r\n"),
+            "mode_opost on {}: the mode put back: {text}",
+            lane.name
+        );
+        assert!(
+            text.contains("bits 64 early=-1\n"),
+            "mode_opost on {}: {text}",
+            lane.name
+        );
         assert_eq!(end, End::Exit(0), "mode_opost on {}: {text}", lane.name);
         eprintln!("PASS s248 mode_opost [{}]", lane.name);
     }

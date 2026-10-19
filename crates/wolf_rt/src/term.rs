@@ -255,7 +255,8 @@ mod sys {
         }
         apply_bits(&mut t, m);
         // SAFETY: our duplicate and a termios tcgetattr filled.
-        let _ = crate::os::with_ttou_blocked(|| unsafe { libc::tcsetattr(fd, libc::TCSADRAIN, &t) });
+        let _ =
+            crate::os::with_ttou_blocked(|| unsafe { libc::tcsetattr(fd, libc::TCSADRAIN, &t) });
         let mut at = 0;
         while at < bytes.len() {
             // SAFETY: the registration's own bytes, on our duplicate.
@@ -768,7 +769,11 @@ mod tests {
         use std::os::fd::AsRawFd as _;
         let (m, s) = pty();
         let old = mode_of(s).expect("mode");
-        assert_eq!(old & (mode::RAW_CR | mode::RAW_OUTPUT | mode::STRIP8), 0, "usual: {old}");
+        assert_eq!(
+            old & (mode::RAW_CR | mode::RAW_OUTPUT | mode::STRIP8),
+            0,
+            "usual: {old}"
+        );
         let all = old | mode::RAW_CR | mode::RAW_OUTPUT | mode::STRIP8;
         assert_eq!(set_mode(s, all), Ok(()));
         assert_eq!(mode_of(s), Ok(all));

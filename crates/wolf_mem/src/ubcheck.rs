@@ -9486,7 +9486,8 @@ impl<'t> Machine<'t> {
                         return Ok(pair(-1, m));
                     }
                     let left = end.map(|e| e.saturating_duration_since(std::time::Instant::now()));
-                    let left_ms = left.map(|d| i32::try_from(d.as_micros().div_ceil(1000)).unwrap_or(i32::MAX));
+                    let left_ms = left
+                        .map(|d| i32::try_from(d.as_micros().div_ceil(1000)).unwrap_or(i32::MAX));
                     let others = if left_ms == Some(0) {
                         false
                     } else {
@@ -9499,8 +9500,11 @@ impl<'t> Machine<'t> {
                         (None, true) => 1,
                         (None, false) => -1,
                     };
-                    match checked_sig::wait_readable_many(&files, want & self.signal_listening, timeout)
-                    {
+                    match checked_sig::wait_readable_many(
+                        &files,
+                        want & self.signal_listening,
+                        timeout,
+                    ) {
                         Err(t) => return Ok(tag(t)),
                         Ok(Some(i)) => {
                             checked_sig::settle(self.signal_listening);
