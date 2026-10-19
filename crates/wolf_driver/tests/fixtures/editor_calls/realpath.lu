@@ -36,6 +36,10 @@ fn link(target: str, path: str) -> bool {
 
 fn main() -> !int {
     let cwd = fs_realpath(".")?
+    // Every machine runs in the same directory: the tree is made afresh.
+    if fs_exists("rp") {
+        fs_remove_dir_all("rp")?
+    }
     fs_create_dir_all("rp/a/b")?
     fs_write_text("rp/a/f", "f")?
     let links = link("a/b", "rp/l1") && link("nope", "rp/dangle") &&
