@@ -367,13 +367,21 @@ fn a_park_at_the_descriptor_limit_does_not_end_the_process() {
 }
 
 /// The signal wait at the limit: `io`, never an abort; once the
-/// descriptors are back, the file it waits on has a byte (0).
-fn assert_wait(stdout: &str, what: &str) {
+/// descriptors are back, the file it waits on has a byte (0). With ONE
+/// descriptor free (s246, wolf-lang#781) a compiled tier's wait answers
+/// (its wake pipe was made before `main`; the duplicate takes the one),
+/// and the checked machine's, which makes a pipe per wait, is `io`.
+fn assert_wait(stdout: &str, what: &str, one: &str) {
     assert_full(stdout, what);
     assert_eq!(
         line(stdout, "wait", what),
         "row=io",
         "{what}: the wait at the limit"
+    );
+    assert_eq!(
+        line(stdout, "one", what),
+        one,
+        "{what}: the wait with one descriptor free (s246)"
     );
     assert_eq!(
         line(stdout, "after", what),
@@ -382,8 +390,11 @@ fn assert_wait(stdout: &str, what: &str) {
     );
 }
 
-/// `[os.net.reactor]` R4: `os_signal_wait_fd` with one descriptor free
-/// (its duplicate takes it, its pipe cannot be had) answers `io`.
+/// `[os.net.reactor]` R4: `os_signal_wait_fd` that cannot have the
+/// descriptor it waits with answers `io` — with none free on every
+/// machine; with one free on the checked machine (its pipe cannot be
+/// had), while a compiled tier, whose wake pipe was made before `main`
+/// (s246), answers.
 #[test]
 fn a_signal_wait_at_the_descriptor_limit_is_io() {
     let dir = scratch("wait_fd");
@@ -407,13 +418,13 @@ fn a_signal_wait_at_the_descriptor_limit_is_io() {
                  failed`)\nstdout:\n{stdout}\nstderr:\n{}",
                 String::from_utf8_lossy(&out.stderr)
             );
-            assert_wait(&stdout, &what);
+            assert_wait(&stdout, &what, "row=answered value=0");
             println!("{what}: {}", stdout.replace('\n', " | "));
         }
     }
     let c = checked(&entry, &dir, LIMIT);
     assert_eq!(c.verdict, "exit(0)", "checked: {c:?}");
-    assert_wait(&c.stdout, "checked");
+    assert_wait(&c.stdout, "checked", "row=io value=-1");
     println!("checked: {}", c.stdout.replace('\n', " | "));
     if let Some(l) = lupin(&entry, &dir, LIMIT) {
         // Ruling #73 R6: lupin refuses the call by name, on every

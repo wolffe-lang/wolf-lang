@@ -1,14 +1,19 @@
 //! member: false
 //! s239 (wolf-lang#750): the other parking call that asked the host for
 //! descriptors as it parked. `os_signal_wait_fd` duplicates the file it
-//! waits on and makes a wake pipe of its own (and, the first time, the
+//! waits on and made a wake pipe of its own (and, the first time, the
 //! signal hub's two pipes and its thread). With one descriptor free the
-//! duplicate takes it and the pipe cannot be had: until s239 that was
-//! an assert, and the process ended. The wait answers `io` now.
+//! duplicate took it and the pipe could not be had: until s239 that was
+//! an assert, and the process ended; then the wait answered `io`. s246
+//! (wolf-lang#781): the compiled tiers make the wake pipe before `main`,
+//! so a wait asks the host for its duplicate only — `io` with NO
+//! descriptor free, and an answer with one (the checked machine, which
+//! makes a pipe per wait in the `wolf` process, still `io` there).
 //!
 //! Lines: `full` (the opens the host took and its refusal's number);
-//! `wait` (the row with one descriptor free); `after` (the answer once
-//! every descriptor is back: the file has a byte to read, so 0).
+//! `wait` (the row with no descriptor free); `one` (the row with one
+//! free); `after` (the answer once every descriptor is back: the file
+//! has a byte to read, so 0).
 
 fn main() -> int {
     let path = "wait_fd_at_limit.tmp"
@@ -34,8 +39,7 @@ fn main() -> int {
         }
     }
     print("full held={held.len} errno={errno}")
-    // One descriptor back: the wait's duplicate takes it.
-    fs_close(held[0]) else |e| {}
+    // No descriptor free: the wait's duplicate cannot be had.
     var row = "answered"
     let m = os_signal_wait_fd(probe, 512) else |e| match e {
         io => {
@@ -48,6 +52,20 @@ fn main() -> int {
         },
     }
     print("wait row={row}")
+    // One descriptor back: the wait's duplicate takes it.
+    fs_close(held[0]) else |e| {}
+    var one = "answered"
+    let m1 = os_signal_wait_fd(probe, 512) else |e| match e {
+        io => {
+            one = "io"
+            0 - 1
+        },
+        unsupported => {
+            one = "unsupported"
+            0 - 1
+        },
+    }
+    print("one row={one} value={m1}")
     var i = 1
     while i < held.len {
         fs_close(held[i]) else |e| {}
