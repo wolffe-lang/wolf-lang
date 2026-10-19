@@ -9528,6 +9528,12 @@ impl<'t> Machine<'t> {
                 let ms = self.t0.elapsed().as_millis().min(i64::MAX as u128) as i64;
                 Ok(Flow::Val(Value::Int(ms)))
             }
+            // s248 (wolf-lang#798, `[os.clock.ns]`): the same clock from the
+            // same anchor, in nanoseconds — the runtime's shape.
+            "os_clock_ns" => {
+                let ns = self.t0.elapsed().as_nanos().min(i64::MAX as u128) as i64;
+                Ok(Flow::Val(Value::Int(ns)))
+            }
             "time_unix_ms" => {
                 let ms = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -11070,6 +11076,8 @@ impl<'t> Machine<'t> {
             // signal.
             | "os_signal_ignore_one" | "os_signal_default_one" | "os_exit_signal"
             | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
+            // s248 (#798): the clock at nanoseconds.
+            | "os_clock_ns"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
             | "str_from_utf8"
             // s200 (#411, #407): the byte scan, and the task's host code.
@@ -11097,7 +11105,9 @@ impl<'t> Machine<'t> {
                         Ok(Flow::Val(self.mint_str(text, e.span)?))
                     }
                     n if n.starts_with("json_") => self.json_builtin(n, argv, e.span),
-                    n if n.starts_with("time_") => self.time_builtin(n, argv, e.span),
+                    n if n.starts_with("time_") || n == "os_clock_ns" => {
+                        self.time_builtin(n, argv, e.span)
+                    }
                     n => self.os_builtin(n, argv, e.span),
                 };
             }
