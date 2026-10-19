@@ -1,6 +1,178 @@
 # Changelog
 
-## Unreleased
+## 0.2.33 — 2026-10-19
+
+**What this release changes: five new calls and the std that wraps
+0.2.31's.** s246 closes the signal gaps 0.2.32 left (ruling #88): a
+program can ignore or default ONE meaning in the sending shape, a
+send-only meaning or a host number `-N` (`os_signal_ignore_one`,
+`os_signal_default_one`), end itself by a signal
+(`os_exit_signal`), and learn that a child dumped core
+(`os_wait_status_core`, `os_wait_poll_core`). **No released status
+changes** (ruling #88 R3 = D): `os_wait_status` and `os_wait_poll`
+keep answering `-N` for a child ended by signal `N`, core or not; a core
+is `-(256 + N)` only from the two `_core` siblings. What a running
+program can see change:
+
+- **`os_signal_text(0)` answers words** (glibc's `Unknown signal 0`)
+  where it answered `invalid` (#787).
+- **A SEGV or BUS another process sends ends the program** under the
+  default disposition (#784). A program that had run a task used to live
+  through the first one (the runtime's stack guard took it for its own);
+  a real fault is still the guard's (the overflow report, exit 134).
+- **A program that names `os_signal_wait_fd` starts with two more
+  descriptors**, one wake pipe shared by every descriptor wait, made
+  before `main` after the hub (#781); a host that refuses them refuses
+  the start (one stderr line, exit 71), as for the hub.
+- **The bundled std moves to wolf-std `cceda63`** (from `d37c911`):
+  sc64's wrappers for 0.2.31's calls (ruling #85) and sc65's two rows.
+
+THE THIRTY-THIRD. One compiler lane lands, s246 (wolf-lang#789: #780,
+#781, #783, #784, #785, #787, #788), with no lupin half: lupin 0.1.54
+does not resolve the five new names (wolf-interp#261, #262, #263), and
+the pairing stays 0.1.54. `STD-PIN` moves to wolf-std `cceda63`. 37
+commits since 0.2.32, all s246's, then r38's release commits.
+
+### Read this before you bump the pin
+
+- **Five new prelude names**: `os_signal_ignore_one`,
+  `os_signal_default_one`, `os_exit_signal`, `os_wait_status_core`,
+  `os_wait_poll_core` (a function of one of these names now shadows a
+  builtin, W0304, fatal under `--deny-warnings`: rename yours). No
+  released status changes: a core is reported only by the two `_core`
+  siblings, so code that compares a status with `-N` (pelt's `$?`,
+  boreutils' `timeout`) reads what it read at 0.2.32.
+- **`os_signal_text(0)` answers words** where it answered `invalid`
+  (windows: `unsupported`; lupin 0.1.54 still `invalid`). A program
+  that tested `text(0)` for `invalid` must accept either (wolf-std's
+  own row did, and is fixed at `cceda63`, sc65).
+- **A SEGV sent to a program ends it** (the host's default) unless the
+  program ignores `SEGMENT_FAULT` with `os_signal_ignore_one`; a program
+  that had run a task used to live through the first one.
+- **A program that names `os_signal_wait_fd` starts with two more
+  descriptors** (the shared wake pipe) and makes none per wait; a host
+  that refuses them refuses the start (one stderr line, exit 71), as for
+  the hub.
+- **The bundled std is wolf-std `cceda63`**, whose new names (below)
+  are std functions, not prelude names: a program that `use`s
+  `std.process` or `std.signal` and declares one of them itself keeps
+  its own.
+
+### The bundled std: wolf-std `cceda63` (from `d37c911`)
+
+`STD-PIN` moves from `d37c911` (0.2.31 and 0.2.32's) to **`cceda63`**:
+sc64 (wolf-std#71, ruling #85) on wolf 0.2.32, then sc65 (wolf-std#75).
+Under `std/` only `process/process.lu` and `signal/signal.lu` change;
+`std/prelude/prelude.lu` does not (the std adds no prelude name).
+
+- **`std.process`**: `Status { value }` with `status_from`,
+  `is_exited`, `is_signalled`, `is_stopped`, `exit_code`, `signal_of`,
+  `stopped_by`, `shell_code` (S1; `256 + N` is a stop); `poll() ->
+  Change ! {io}`, `Change { changed, child, status, live }` over
+  `os_wait_poll` (S2); `Group`, `group_of(leader)`, `own_group()`,
+  `lead_group()`, `join_group(g)` (#79 R1, G2, G3).
+- **`std.signal`**: `send_group`, `send_all`, `last`, `realtime()` with
+  `Realtime { first, last }` (G4), `text`, `host(n)` (= `-n`, G5).
+- **sc65**: `signal/group_rows.lu`'s `text_zero` row and `signal.text`'s
+  doc example are true at both 0.2.32 and 0.2.33 (`dcf3e89`'s were
+  red under this release on exactly those two rows, s246's #787; no
+  function changed).
+- **Measured under this release** (kasumi, linux x86-64, the
+  release-head archive with lupin 0.1.54 beside `wolf`, no
+  `WOLF_STD`): wolf-std `cceda63`'s 484 tests on lupin, the checked
+  machine and native, and its 511 doc examples: **all green**. The
+  release machine equals native on 483 of the 484 with no std
+  configured; the one (`list/sort_by_tier.lu`) is refused by name on
+  release, as at 0.2.32. Against the published 0.2.32 on the same std,
+  0 records moved on any tier.
+- **Not wrapped yet** (wolf-std#74): the five new calls. A program
+  calls them as builtins until wolf-std's next lane.
+
+**New prelude names:** `os_signal_ignore_one`, `os_signal_default_one`,
+`os_exit_signal`, `os_wait_status_core`, `os_wait_poll_core`, all
+functions at `[os.host.sigs]` (`cargo xtask prelude-diff v0.2.32 HEAD
+--markdown`, after `git fetch --tags`, run at the release head).
+
+**Capabilities:** all five are `exec` (the set calls' and the wait's
+category) and refused at comptime; the freestanding target refuses each
+by name. **Bytes:** `RT_SYMBOLS` 223 → 229 (the five and
+`__wolf_rt_signal_wait_fd_start`); the host table 135 → 140; the
+prelude 142 → 147 functions, 174 → 179 W0304 names; spec anchors 661 →
+664 (`[os.signal.disp.one]`, `[os.signal.exit]`,
+`[os.signal.gaps.note]`).
+
+**Known:** `region_copyout_lanes::a_loop_keeping_a_scalar_is_flat` can
+exceed its RSS bound under load (#652, #731, open), a test flake.
+`conform-run --native`/`--release` give the program no terminal on
+standard input (#766, open). Filed by s246, open: on macOS a SEGV
+another process sends to a program that ignores it is survived only
+once (#790); the checked machine's `os_signal_wait_fd` still makes a
+pipe per wait (#791); suspected, `available_parallelism`/`os_cpus` may
+open cgroup `cpu.max` on a low descriptor (#792). lupin 0.1.54 lags the
+five names and `text(0)` (wolf-interp#261, #262, #263).
+
+**Rulings:** #88 (R1 A, R2 A, R3 D; `[os.signal.gaps.note]`). #86 (group
+1 stays refused) and #87 (boreutils' self-appending filters) change no
+compiler line.
+
+**What each downstream does to bump** (to 0.2.33 / lupin 0.1.54):
+
+- **wolf-std:** the pin; then the wrappers for the five new calls
+  (wolf-std#74): `signal.ignore` and `signal.default` of one meaning
+  over `os_signal_ignore_one` / `os_signal_default_one` (taking
+  `signal.Realtime` and `signal.host(n)`), an exit by signal over
+  `os_exit_signal`, and a core accessor over the `_core` siblings
+  (`process.Status`'s released accessors unchanged).
+- **boreutils:** the toolchain digests; then four refusals retire
+  (boreutils#41): `timeout -s SEGV` / `-s RTMIN` / `-s` a host number
+  without `--foreground` (`os_signal_ignore_one`), `timeout`'s 139 where
+  GNU dies of its command's fault (`os_exit_signal`), the missing
+  "(core dumped)" (`os_wait_poll_core`), and killprobe's signal-0 rows
+  (`os_signal_text(0)`). The 7 `kill 0` cases stay (ruling #86); #37
+  stays a recorded difference (ruling #87).
+- **pelt:** the toolchain digests. Nothing is owed for status decoding:
+  the released wait and poll still answer `-N` (ruling #88 R3 D), so `$?`
+  reads as at 0.2.32.
+- **lobo, muzzle, pax:** the pin.
+- **wolf-lsp and tree-sitter-wolf:** the pin and the five prelude names
+  (the vendored prelude 182 → 187).
+- **wolf-book, then the site:** the book pins 0.2.33 / 0.1.54; §34.5's
+  waiver sentence (the shipped std has no wrappers for the group,
+  numbering and poll calls) comes out, since `cceda63` has them; the new
+  calls (§34.5: one meaning's disposition, the exit by signal, the core
+  siblings, `text(0)`); then wolf-web pins the pair and the book, and
+  deploys.
+- **Homebrew and the AUR:** wolf 0.2.33 with the std at `cceda63`
+  (this release's tap change); lupin unchanged at 0.1.54.
+
+### The pairing: lupin 0.1.54 (unchanged)
+
+`PAIRING` still names **lupin 0.1.54 at pin `294d626`** (the linux
+x86-64 archive's sha256 `175df238…`). s246 has no lupin half; lupin's
+mirror of the five names is wolf-interp#261–#263.
+
+- **Dropped 0, widened 0, carried every pin unchanged**: each
+  version-keyed list already names 0.1.54, or is keyed by an older
+  release's commit (`shift_lanes`); s246's `signal_gaps_lanes` pins
+  0.1.54's measured answers (`PRE_MIRROR_LUPIN`) and holds any other
+  lupin to the mirror. Against the published 0.1.54, 89 gate targets (the
+  88 that name lupin, `signal_gaps_lanes` among them, and `stdfd_lanes`)
+  pass 837 of 837. The plant (the same head against the published 0.1.53)
+  is red on exactly 0.2.31's four dropped cases and the two
+  `signal_gaps_lanes` witnesses pinned to 0.1.54's answers.
+- **The ritual against the published 0.2.32** (the same 1155-file
+  corpus, the same lupin 0.1.54, this release's archive `wolf` against
+  0.2.32's): **one completeness note fewer on each tier and nothing
+  else moved**: `corpus/os/signal_one_rows.lu`, s246's own fixture, which
+  0.2.32 cannot compile (E0301: the new names) and this release runs.
+  checked: 792 agreements, 96 unsupported, SOUNDNESS 0, hard 19 on both.
+  native: 777 agreements, 97 unsupported, SOUNDNESS 14, hard 33 on both;
+  the three SOUNDNESS rows that read freed memory
+  (`conc/atomic_ub_uaf.lu`, `memory/unsafe_ub_uaf.lu`,
+  `memory/volatile_ub_uaf.lu`) printed other exit statuses, as at 0.2.32:
+  0.2.32 itself gives five statuses in five runs of each.
+
+### The signal gaps 0.2.32 left (s246)
 
 s246 — the signal gaps 0.2.32 left (wolf-lang#780, #781, #783, #784,
 #785, #787, #788). Three of them add surface, ruled by the maintainer
@@ -60,22 +232,6 @@ core through new sibling calls; the released statuses unchanged).
 - **#788: spec/03 `[conc.task.order]`** no longer says `os_signal_wait`
   makes ~196 futex calls a second: an idle one made 0 system calls in 8
   s at 0.2.32 (measured, both tiers).
-
-### Read this before you bump the pin
-
-- **Five new prelude names**: `os_signal_ignore_one`,
-  `os_signal_default_one`, `os_exit_signal`, `os_wait_status_core`,
-  `os_wait_poll_core` (a function of one of these names now shadows a
-  builtin, W0304). No released status changes: a core is reported only
-  by the two `_core` siblings.
-- **`os_signal_text(0)` answers words** where it answered `invalid`.
-- **A SEGV sent to a program ends it** (the host's default) unless the
-  program ignores `SEGMENT_FAULT` with `os_signal_ignore_one`; a program
-  that had run a task used to live through the first one.
-- **A program that names `os_signal_wait_fd` starts with two more
-  descriptors** (the shared wake pipe) and makes none per wait; a host
-  that refuses them refuses the start (one stderr line, exit 71), as for
-  the hub.
 
 ## 0.2.32 — 2026-10-18
 
