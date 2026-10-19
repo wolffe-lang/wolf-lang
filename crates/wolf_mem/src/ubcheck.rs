@@ -7100,6 +7100,76 @@ impl<'t> Machine<'t> {
                     Ok(tag("unsupported"))
                 }
             }
+            // s248 (wolf-lang#796, `[os.fs.sync]`): the bytes of the file
+            // behind a handle on the disk — the host's own sync, as the
+            // runtime (`File::sync_all`) — every refusal `io`.
+            "fs_sync" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let Some(f) = self.fs_handle(fd) else {
+                    return Ok(tag("io"));
+                };
+                match f.sync_all() {
+                    Err(e) => Ok(tag(&errtag(&e, &["io"]))),
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                }
+            }
+            // s248 (`[os.fs.sync]`): a directory's entries on the disk, its
+            // path against the machine's own working directory; a name
+            // that is no directory `invalid`; windows `unsupported` by name.
+            "fs_sync_dir" => {
+                let Some(path) = path_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::OpenOptionsExt as _;
+                    let opened = std::fs::OpenOptions::new()
+                        .read(true)
+                        .custom_flags(libc::O_DIRECTORY | libc::O_CLOEXEC)
+                        .open(&path);
+                    let d = match opened {
+                        Ok(d) => d,
+                        Err(e) if e.raw_os_error() == Some(libc::ENOTDIR) => {
+                            fs_host_error(&e);
+                            return Ok(tag("invalid"));
+                        }
+                        Err(e) => {
+                            return Ok(tag(&errtag(&e, &["not_found", "denied", "io"])));
+                        }
+                    };
+                    match d.sync_all() {
+                        Err(e) => Ok(tag(&errtag(&e, &["io"]))),
+                        Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = path;
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s248 (wolf-lang#797, `[os.fs.realpath]`): the canonical path,
+            // as realpath(3) resolves it, a relative path against the
+            // machine's own working directory; a missing name (a dangling
+            // link too) `not_found`, every other refusal and an answer that
+            // is not UTF-8 `io`.
+            "fs_realpath" => {
+                let Some(path) = path_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                match std::fs::canonicalize(&path) {
+                    Err(e) => Ok(tag(&errtag(&e, &["not_found", "io"]))),
+                    Ok(p) => match p.to_str() {
+                        None => Ok(tag("io")),
+                        Some(s) => {
+                            self.charge_mem(s.len() as u64)?;
+                            Ok(Flow::Val(Value::Str(s.to_string())))
+                        }
+                    },
+                }
+            }
             // s230 (wolf-lang#702, `[os.fs.truncate]`): the length of
             // the file behind a handle; every host refusal is `io`.
             "fs_truncate" => {
@@ -11006,7 +11076,9 @@ impl<'t> Machine<'t> {
             | "fs_set_mode" | "fs_open_perm" | "fs_create_dir_mode" | "fs_symlink"
             | "fs_link" | "fs_set_times" | "fs_truncate"
             // s236 (#701): a file's owner, by path and on a handle.
-            | "fs_set_owner" | "fs_set_owner_fd" => {
+            | "fs_set_owner" | "fs_set_owner_fd"
+            // s248 (#796, #797): the syncs and the canonical path.
+            | "fs_sync" | "fs_sync_dir" | "fs_realpath" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
