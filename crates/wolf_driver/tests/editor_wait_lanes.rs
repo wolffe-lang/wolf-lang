@@ -585,8 +585,9 @@ fn record_of(stdout: &str) -> (String, String, String, String, String) {
 /// A fixture with no terminal on every machine, each bounded by `secs`:
 /// the checked machine under `conform-run`, the binaries directly (and
 /// under taskset on linux), lupin under `conform-run` — 0.1.54 refuses,
-/// naming `first`, pinned by version.
-fn every_lane_plain(name: &str, secs: u64, want: &str, first: &str) {
+/// naming one of `first` (the first name it does not resolve), pinned by
+/// version.
+fn every_lane_plain(name: &str, secs: u64, want: &str, first: &[&str]) {
     let entry = fixture(name);
     let dir = scratch(&name.replace('.', "_"));
     let checked = bounded(
@@ -635,7 +636,8 @@ fn every_lane_plain(name: &str, secs: u64, want: &str, first: &str) {
             {
                 assert_eq!(verdict, "unsupported", "pre-mirror lupin on {name}");
                 assert!(
-                    why.contains(&format!("`{first}`")) && why.contains("does not resolve"),
+                    first.iter().any(|f| why.contains(&format!("`{f}`")))
+                        && why.contains("does not resolve"),
                     "pre-mirror lupin {version} on {name}: {why}"
                 );
                 eprintln!("PINNED pre-mirror lupin {version} {commit} on {name}: {why}");
@@ -667,6 +669,7 @@ fn no_meaning_raised_beside_the_wait_is_lost() {
         "wait_fds_race.lu",
         120,
         "race rounds=2000 meanings=2000\n",
-        "os_signal_wait_fds",
+        // lupin has never resolved the listen (s163's measurement).
+        &["os_signal_listen", "os_signal_wait_fds"],
     );
 }
