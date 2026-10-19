@@ -51,6 +51,10 @@ fn main() -> !int {
     print("under_file={row(cwd, "rp/a/f/x")}")
     print("empty={row(cwd, "")}")
     print("dot={row(cwd, ".")}")
+    // The host's own temporary directory, absolute: linux keeps `/tmp`,
+    // macOS answers `/private/tmp` (its `/tmp` is a link).
+    let tmp = fs_realpath("/tmp") else |e| "none"
+    print("tmp={tmp}")
     if links {
         print("links=made")
         print("link={row(cwd, "rp/l1")}")

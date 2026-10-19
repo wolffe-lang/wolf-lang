@@ -307,9 +307,16 @@ fn twenty_rounds_of_100_us_are_never_zero_ns() {
 #[test]
 fn the_canonical_path_on_every_machine() {
     let dir = scratch("realpath");
-    let want_unix = "file=rp/a/f\ndir_slash=rp/a\ndot_dot=rp/a/f\nmissing=not_found\n\
-under_file=io\nempty=not_found\ndot=.\nlinks=made\nlink=rp/a/b\nlink_dot_dot=rp/a\n\
-dangling=not_found\nloop=io\n";
+    let tmp = if cfg!(target_os = "macos") {
+        "/private/tmp"
+    } else {
+        "/tmp"
+    };
+    let want_unix = format!(
+        "file=rp/a/f\ndir_slash=rp/a\ndot_dot=rp/a/f\nmissing=not_found\n\
+under_file=io\nempty=not_found\ndot=.\ntmp={tmp}\nlinks=made\nlink=rp/a/b\n\
+link_dot_dot=rp/a\ndangling=not_found\nloop=io\n"
+    );
     let got = every_lane(
         &fixture("realpath.lu"),
         &dir,
