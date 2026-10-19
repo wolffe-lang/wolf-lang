@@ -415,7 +415,8 @@ jobs:
         run: rustup target add x86_64-unknown-none
       - run: cargo build --workspace
       - if: matrix.leg != 'rung'
-        run: cargo test --workspace
+        # s246 PROBE (never merged): the siginfo of a sent and a real SEGV.
+        run: cargo test -p wolf_driver --test s246_siginfo_probe -- --nocapture
       # s60a: the windows native rung. The clif gate is open on this
       # host, so the corpus runs natively here — `lane-coverage` is the
       # windows floor line (259/255/0/274/0 at the s60a bring-up with 21
