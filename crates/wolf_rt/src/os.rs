@@ -577,9 +577,13 @@ impl ChildTable {
     /// `os_wait_status(h)` (s219, `[os.proc.status]`): [`Self::wait`],
     /// but a death by signal N answers `-N` instead of the `signal` row,
     /// so a shell can say `128 + N`; an exit code is itself (0..255).
-    /// The two never collide. s246 (#785): a death with a core dumped is
-    /// `-(256 + N)` ([`signal_status`]).
-    pub fn wait_status(&mut self, h: i64) -> Result<i64, ProcErr> {
+    /// The two never collide. s246 (#785, ruling #88 R3 D): with `core`
+    /// (`os_wait_status_core`) a death with a core dumped is `-(256 + N)`
+    /// ([`signal_status`]); without it (`os_wait_status`, as released) `-N`
+    /// whether or not the host wrote one.
+    pub fn wait_status(&mut self, h: i64, core: bool) -> Result<i64, ProcErr> {
+        #[cfg(not(unix))]
+        let _ = core;
         let Some(slot) = usize::try_from(h)
             .ok()
             .and_then(|i| self.children.get_mut(i))
@@ -601,7 +605,7 @@ impl ChildTable {
                     use std::os::unix::process::ExitStatusExt as _;
                     if let Some(sig) = status.signal() {
                         // s246 (#785): and whether the host wrote a core.
-                        return Ok(signal_status(sig, status.core_dumped()));
+                        return Ok(signal_status(sig, core && status.core_dumped()));
                     }
                 }
                 Err("io")
@@ -623,7 +627,11 @@ impl ChildTable {
     /// runtime, a test binary's other children). A child the host
     /// reaped itself (this process ignores `SIGCHLD`) is `io` once and
     /// its slot tombstoned.
-    pub fn poll(&mut self) -> Result<(i64, i64), ProcErr> {
+    /// s246 (ruling #88 R3 D): `core` (`os_wait_poll_core`) carries a core
+    /// as `-(256 + N)`; without it the end is `-N`, as released.
+    pub fn poll(&mut self, core: bool) -> Result<(i64, i64), ProcErr> {
+        #[cfg(not(unix))]
+        let _ = core;
         let mut live = 0i64;
         for (i, slot) in self.children.iter_mut().enumerate() {
             let Some(child) = slot.as_mut() else {
@@ -659,7 +667,7 @@ impl ChildTable {
                     if libc::WIFSIGNALED(st) {
                         *slot = None;
                         // s246 (#785): `WCOREDUMP` rides the status.
-                        let core = libc::WCOREDUMP(st);
+                        let core = core && libc::WCOREDUMP(st);
                         return Ok((i as i64, signal_status(libc::WTERMSIG(st), core)));
                     }
                     // Anything else was not asked for (no WCONTINUED).
@@ -1198,7 +1206,7 @@ pub extern "C" fn __wolf_rt_os_proc_pid(h: i64) -> i64 {
 /// `out` must address 8 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_os_wait_status(h: i64, out: i64) -> i64 {
-    match children().wait_status(h) {
+    match children().wait_status(h, false) {
         Ok(st) => {
             unsafe { write_word(out, st) };
             proc_code::OK
@@ -1220,7 +1228,43 @@ pub unsafe extern "C" fn __wolf_rt_os_wait_status(h: i64, out: i64) -> i64 {
 /// `out` must address 16 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_os_wait_poll(out: i64) -> i64 {
-    match children().poll() {
+    match children().poll(false) {
+        Ok((h, st)) => {
+            unsafe { write_pair(out, h, st) };
+            proc_code::OK
+        }
+        Err(t) => proc_code_of_tag(t),
+    }
+}
+
+/// `os_wait_status_core(h: int) -> int ! {io}` (s246, wolf-lang#785,
+/// ruling #88 R3 D, `[os.proc.status]`) — `os_wait_status`, with a core
+/// the host wrote for the child answered as `-(256 + N)`.
+///
+/// # Safety
+///
+/// `out` must address 8 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_wait_status_core(h: i64, out: i64) -> i64 {
+    match children().wait_status(h, true) {
+        Ok(st) => {
+            unsafe { write_word(out, st) };
+            proc_code::OK
+        }
+        Err(t) => proc_code_of_tag(t),
+    }
+}
+
+/// `os_wait_poll_core() -> (int, int) ! {io}` (s246, ruling #88 R3 D,
+/// `[os.proc.poll]`) — `os_wait_poll`, with an end that dumped core
+/// answered as `-(256 + N)`.
+///
+/// # Safety
+///
+/// `out` must address 16 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_wait_poll_core(out: i64) -> i64 {
+    match children().poll(true) {
         Ok((h, st)) => {
             unsafe { write_pair(out, h, st) };
             proc_code::OK
@@ -2062,7 +2106,7 @@ mod tests {
     #[cfg(unix)]
     fn poll_until_said(t: &mut ChildTable) -> (i64, i64) {
         for _ in 0..500 {
-            let r = t.poll().expect("the poll answers");
+            let r = t.poll(false).expect("the poll answers");
             if r.0 >= 0 {
                 return r;
             }
