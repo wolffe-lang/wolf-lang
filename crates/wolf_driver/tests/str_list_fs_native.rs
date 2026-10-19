@@ -814,6 +814,10 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_os_fork",
         // s248 (#798): `[os.clock.ns]`.
         "__wolf_rt_os_clock_ns",
+        // s248 (#796, #797): `[os.fs.sync]`, `[os.fs.realpath]`.
+        "__wolf_rt_fs_sync",
+        "__wolf_rt_fs_sync_dir",
+        "__wolf_rt_fs_realpath",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -824,7 +828,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        230,
+        233,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

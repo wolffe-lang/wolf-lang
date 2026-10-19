@@ -382,6 +382,28 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`fs_truncate`",
             "hosted runtime",
         ),
+        // s248 (#796, #797): the syncs and the canonical path.
+        (
+            "fs_sync",
+            "",
+            "fs_sync(3) else |e| {\n        return 0\n    }\n    1",
+            "`fs_sync`",
+            "hosted runtime",
+        ),
+        (
+            "fs_sync_dir",
+            "",
+            "fs_sync_dir(\".\") else |e| {\n        return 0\n    }\n    1",
+            "`fs_sync_dir`",
+            "hosted runtime",
+        ),
+        (
+            "fs_realpath",
+            "",
+            "let p = fs_realpath(\".\") else |e| {\n        return 0\n    }\n    p.len",
+            "`fs_realpath`",
+            "hosted runtime",
+        ),
         (
             "os_umask",
             "",
