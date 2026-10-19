@@ -8829,16 +8829,21 @@ impl<'t> Machine<'t> {
             // by host signal N), or `(-1, n)`, n the children still live.
             // One `waitpid` per live child, never `waitpid(-1)`: the
             // `wolf` process may host other runs' children.
-            "os_wait_poll" => match checked_poll(&mut self.children) {
-                Ok((h, st)) => Ok(Flow::Val(Value::Struct {
-                    fields: vec![
-                        ("0".to_string(), Value::Int(h)),
-                        ("1".to_string(), Value::Int(st)),
-                    ],
-                })),
-                Err(t) => Ok(tag(t)),
-            },
-            "os_wait_status" => {
+            // s246 (ruling #88 R3 D): `os_wait_poll_core` is the same poll
+            // with a core answered as `-(256 + N)`.
+            "os_wait_poll" | "os_wait_poll_core" => {
+                match checked_poll(&mut self.children, name == "os_wait_poll_core") {
+                    Ok((h, st)) => Ok(Flow::Val(Value::Struct {
+                        fields: vec![
+                            ("0".to_string(), Value::Int(h)),
+                            ("1".to_string(), Value::Int(st)),
+                        ],
+                    })),
+                    Err(t) => Ok(tag(t)),
+                }
+            }
+            "os_wait_status" | "os_wait_status_core" => {
+                let core_asked = name == "os_wait_status_core";
                 let Some(h) = int_arg(0) else {
                     return self.refuse("this os call shape", span);
                 };
@@ -8862,10 +8867,14 @@ impl<'t> Machine<'t> {
                         {
                             use std::os::unix::process::ExitStatusExt as _;
                             if let Some(sig) = status.signal() {
-                                // s246 (#785, `[os.proc.status]`): a core
-                                // dumped is `-(256 + N)`, the runtime's.
+                                // s246 (#785, ruling #88 R3 D): a core is
+                                // `-(256 + N)` only for the `_core` sibling.
                                 let n = i64::from(sig);
-                                let v = if status.core_dumped() { -(256 + n) } else { -n };
+                                let v = if core_asked && status.core_dumped() {
+                                    -(256 + n)
+                                } else {
+                                    -n
+                                };
                                 return Ok(Flow::Val(Value::Int(v)));
                             }
                         }
@@ -11055,6 +11064,8 @@ impl<'t> Machine<'t> {
             | "os_signal_realtime" | "os_signal_text"
             // s242 (#680): the poll of the children.
             | "os_wait_poll"
+            // s246 (#785, ruling #88 R3 D): the statuses that carry a core.
+            | "os_wait_status_core" | "os_wait_poll_core"
             // s246 (#783, #784): one meaning's disposition, the end by a
             // signal.
             | "os_signal_ignore_one" | "os_signal_default_one" | "os_exit_signal"
@@ -13507,7 +13518,12 @@ const TERM_MODE_VALID: i64 = 31 | 0xFF00 | 0xFF_0000;
 /// entry: in handle order, one `waitpid(pid, WNOHANG | WUNTRACED)` per
 /// live child; an end reaps and closes the handle, a stop is `256 + N`
 /// and the child stays; nothing to say is `(-1, n)`. windows: ends only.
-fn checked_poll(children: &mut [Option<std::process::Child>]) -> Result<(i64, i64), &'static str> {
+fn checked_poll(
+    children: &mut [Option<std::process::Child>],
+    core: bool,
+) -> Result<(i64, i64), &'static str> {
+    #[cfg(not(unix))]
+    let _ = core;
     let mut live = 0i64;
     for (i, slot) in children.iter_mut().enumerate() {
         let Some(child) = slot.as_mut() else {
@@ -13541,9 +13557,14 @@ fn checked_poll(children: &mut [Option<std::process::Child>]) -> Result<(i64, i6
                 }
                 if libc::WIFSIGNALED(st) {
                     *slot = None;
-                    // s246 (#785): `WCOREDUMP` rides the status.
+                    // s246 (#785, ruling #88 R3 D): `WCOREDUMP` rides the
+                    // status of the `_core` sibling only.
                     let n = i64::from(libc::WTERMSIG(st));
-                    let v = if libc::WCOREDUMP(st) { -(256 + n) } else { -n };
+                    let v = if core && libc::WCOREDUMP(st) {
+                        -(256 + n)
+                    } else {
+                        -n
+                    };
                     return Ok((i as i64, v));
                 }
             }
