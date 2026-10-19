@@ -249,13 +249,37 @@ struct HubState {
     installed: i64,
     /// Delivered meanings, oldest first (a coalescing edge queue).
     queue: VecDeque<i64>,
-    /// s234 (#719, `[os.signal.wait.fd]`): the write ends of the wake
-    /// pipes of the `os_signal_wait_fd` calls parked now. Whoever moves
-    /// a meaning onto the queue ([`sys::drain`], under this lock) writes
-    /// one byte to each, so a wait blocked in `poll(2)` on its
-    /// descriptor and its pipe learns a meaning came without a timer.
+    /// s234 (#719, `[os.signal.wait.fd]`), s246 (#781): the descriptor
+    /// waits parked now share ONE wake pipe, made before `main` with the
+    /// hub (`__wolf_rt_signal_wait_fd_start`), so no call makes a
+    /// descriptor while the program runs. Whoever moves a meaning onto the
+    /// queue ([`sys::drain`], under this lock) starts a new generation and,
+    /// unless the pipe holds its byte already, writes one; the byte stays
+    /// until every wait registered at that generation has looked at the
+    /// queue (`wake_unacked` reaches 0), and the last one to look empties
+    /// the pipe. A wait blocked in `poll(2)` on its descriptor and the
+    /// pipe therefore learns a meaning came, without a timer, and none
+    /// takes another's wake. Until s246 each call made a pipe of its own,
+    /// and its end could sit on a closed 0, 1 or 2 for the moment before
+    /// the runtime moved it (measured at 0.2.32: `fs_fstat(1)` on another
+    /// task answered ok 760,739 times in 2 s, kasumi).
     #[cfg(unix)]
-    waiters: Vec<std::os::fd::RawFd>,
+    wake: WakeState,
+}
+
+/// s246 (#781): the shared wake pipe's bookkeeping, under the hub lock.
+#[cfg(unix)]
+#[derive(Default)]
+struct WakeState {
+    /// Descriptor waits registered now.
+    waiters: usize,
+    /// Bumped by every move of a meaning onto the queue while a wait is
+    /// registered.
+    generation: u64,
+    /// Waits registered at `generation` that have not looked at the queue since.
+    unacked: usize,
+    /// The pipe holds its byte.
+    full: bool,
 }
 
 static HUB: OnceLock<Hub> = OnceLock::new();
@@ -291,7 +315,7 @@ fn try_hub() -> std::io::Result<&'static Hub> {
                     installed: 0,
                     queue: VecDeque::new(),
                     #[cfg(unix)]
-                    waiters: Vec::new(),
+                    wake: WakeState::default(),
                 }),
                 cv: Condvar::new(),
             })
@@ -314,6 +338,20 @@ fn try_hub() -> std::io::Result<&'static Hub> {
 /// one) still meets [`try_hub`] at those calls, and they answer `io`.
 pub fn start() -> std::io::Result<()> {
     try_hub().map(|_| ())
+}
+
+/// s246 (wolf-lang#781, `[os.signal.wait.fd]`): the shared wake pipe of
+/// the descriptor waits, made before `main` (through
+/// `__wolf_rt_signal_wait_fd_start`, after [`start`]) in a program that
+/// names `os_signal_wait_fd`, so no wait makes a descriptor while other
+/// threads run — the window between `pipe` and the move off 0–2 that
+/// s245 left (wolf-lang#781) has no time to happen in. Windows has no
+/// descriptor wait. `Err` is the host's refusal.
+pub fn start_wait_fd() -> std::io::Result<()> {
+    try_hub()?;
+    #[cfg(unix)]
+    sys::make_wake()?;
+    Ok(())
 }
 
 /// Enqueue a delivered meaning and wake the waiters — the console
@@ -588,28 +626,88 @@ mod sys {
         // moved onto the queue is never left unseen.
         if moved {
             h.cv.notify_all();
-            for &w in &st.waiters {
-                let one = 1u8;
-                // SAFETY: a one-byte write to a nonblocking pipe the
-                // registered wait owns until it deregisters, under the
-                // lock it deregisters under.
-                unsafe { libc::write(w, (&raw const one).cast(), 1) };
+            // s246 (#781): one shared pipe, one byte a generation.
+            if st.wake.waiters > 0 {
+                st.wake.generation += 1;
+                st.wake.unacked = st.wake.waiters;
+                let w = WAKE_W.load(Ordering::Relaxed);
+                if !st.wake.full && w >= 0 {
+                    let one = 1u8;
+                    // SAFETY: a one-byte write to the runtime's own
+                    // nonblocking pipe, under the lock every reader of
+                    // its state holds.
+                    unsafe { libc::write(w, (&raw const one).cast(), 1) };
+                    st.wake.full = true;
+                }
             }
         }
         moved
+    }
+
+    /// s246 (#781): the shared wake pipe's ends (read, write), `-1` until
+    /// made: before `main` in a program that names `os_signal_wait_fd`
+    /// ([`make_wake`], through `__wolf_rt_signal_wait_fd_start`), else by
+    /// the first descriptor wait of a runtime nothing started.
+    static WAKE_R: AtomicI32 = AtomicI32::new(-1);
+    static WAKE_W: AtomicI32 = AtomicI32::new(-1);
+    static WAKE_MAKING: Mutex<()> = Mutex::new(());
+
+    /// s246 (#781): make the shared wake pipe unless it is made — both
+    /// ends nonblocking, close-on-exec and off 0–2 ([`cloexec_pipe`]).
+    /// Made before `main`, nothing else runs while its end is on a closed
+    /// 0, 1 or 2; `Err` is the host's refusal.
+    pub fn make_wake() -> std::io::Result<RawFd> {
+        let _one = WAKE_MAKING.lock().unwrap_or_else(|p| p.into_inner());
+        let r = WAKE_R.load(Ordering::Acquire);
+        if r >= 0 {
+            return Ok(r);
+        }
+        let p = cloexec_pipe()?;
+        set_nonblocking(p[0]);
+        set_nonblocking(p[1]);
+        WAKE_W.store(p[1], Ordering::Release);
+        WAKE_R.store(p[0], Ordering::Release);
+        Ok(p[0])
+    }
+
+    /// s246: a registered wait has looked at the queue at the current
+    /// generation; the last of a generation's waits empties the pipe and
+    /// tells the others, parked in [`wait_fd`]'s condvar wait, to poll.
+    fn ack(h: &Hub, st: &mut HubState, seen: &mut u64) {
+        if *seen == st.wake.generation {
+            return;
+        }
+        *seen = st.wake.generation;
+        st.wake.unacked = st.wake.unacked.saturating_sub(1);
+        if st.wake.unacked == 0 && st.wake.full {
+            let r = WAKE_R.load(Ordering::Relaxed);
+            let mut buf = [0u8; 16];
+            // SAFETY: our own nonblocking pipe; emptied, it answers
+            // EAGAIN.
+            while unsafe { libc::read(r, buf.as_mut_ptr().cast(), buf.len()) } > 0 {}
+            st.wake.full = false;
+            h.cv.notify_all();
+        }
+    }
+
+    /// s246: a wait leaves the shared pipe's bookkeeping.
+    fn deregister(h: &Hub, st: &mut HubState, seen: &mut u64) {
+        ack(h, st, seen);
+        st.wake.waiters = st.wake.waiters.saturating_sub(1);
     }
 
     /// s234 (#719, `[os.signal.wait.fd]`): park until a meaning in
     /// `want` is queued (answered, taken off the queue) or the file `h`
     /// names has something to read — a byte, end of input, a hang-up —
     /// (0; nothing is read). A meaning wins when both are ready. The
-    /// wait is `poll(2)` on the descriptor and a wake pipe of the call's
-    /// own, registered in the hub under its lock BEFORE the queue is
-    /// looked at for the last time, so a meaning queued after that look
-    /// writes the pipe and none is missed. With no scope that can be
-    /// killed the poll has no timeout: an idle wait wakes for nothing.
-    /// Inside one it looks for a kill every 100 ms (the teardown point
-    /// `os_signal_wait` is). Codes are `sig_code`'s, negated.
+    /// wait is `poll(2)` on the descriptor and the shared wake pipe
+    /// (s246, #781: made before `main`, [`make_wake`]), registered in the
+    /// hub under its lock BEFORE the queue is looked at for the last
+    /// time, so a meaning queued after that look writes the pipe and
+    /// none is missed. With no scope that can be killed the poll has no
+    /// timeout: an idle wait wakes for nothing. Inside one it looks for
+    /// a kill every 100 ms (the teardown point `os_signal_wait` is).
+    /// Codes are `sig_code`'s, negated.
     pub fn wait_fd(h_fd: i64, want: i64) -> i64 {
         use std::os::fd::AsRawFd as _;
         let Some(file) = crate::fs::dup_of(h_fd) else {
@@ -618,74 +716,89 @@ mod sys {
         let fd = file.as_raw_fd();
         // s239 (wolf-lang#750): a park asks the host for nothing it can
         // refuse with an abort — a hub or a wake pipe the host will not
-        // give (a process at its descriptor limit) is `io`.
+        // give (a process at its descriptor limit) is `io`. s246: in a
+        // compiled program both are made before `main`, so this asks for
+        // nothing; only a runtime nothing started makes the pipe here.
         let Ok(h) = super::try_hub() else {
             return -sig_code::IO;
         };
-        let Ok(wake) = cloexec_pipe() else {
+        let Ok(wake) = make_wake() else {
             return -sig_code::IO;
         };
-        set_nonblocking(wake[0]);
-        set_nonblocking(wake[1]);
         let out = crate::task::blocking(|| {
             let scope = crate::task::current_scope();
             let mut registered = false;
+            let mut seen = 0u64;
             loop {
                 settle(super::installed(h));
-                {
-                    let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
-                    drain(h, &mut st);
-                    if let Some(m) = super::take(&mut st, want) {
-                        st.waiters.retain(|&w| w != wake[1]);
-                        return m;
+                let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+                drain(h, &mut st);
+                if registered {
+                    ack(h, &mut st, &mut seen);
+                }
+                if let Some(m) = super::take(&mut st, want) {
+                    if registered {
+                        deregister(h, &mut st, &mut seen);
                     }
-                    if !registered {
-                        st.waiters.push(wake[1]);
-                        registered = true;
-                    }
+                    return m;
+                }
+                if !registered {
+                    st.wake.waiters += 1;
+                    seen = st.wake.generation;
+                    registered = true;
+                }
+                // The pipe still holds the byte of a generation this wait
+                // has looked at: the waits that have not will empty it.
+                // Until then a poll would answer at once, so wait for the
+                // last of them (or a new generation) on the hub's condvar.
+                while st.wake.full && st.wake.generation == seen {
+                    st = match scope.as_ref() {
+                        Some(s) => {
+                            if s.is_killed() {
+                                break;
+                            }
+                            h.cv.wait_timeout(st, std::time::Duration::from_millis(100))
+                                .unwrap_or_else(|p| p.into_inner())
+                                .0
+                        }
+                        None => h.cv.wait(st).unwrap_or_else(|p| p.into_inner()),
+                    };
+                }
+                if st.wake.generation != seen {
+                    continue;
                 }
                 if let Some(s) = scope.as_ref()
                     && s.is_killed()
                 {
-                    let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
-                    st.waiters.retain(|&w| w != wake[1]);
+                    deregister(h, &mut st, &mut seen);
                     drop(st);
                     crate::task::kill_teardown_check(s);
                     return -sig_code::IO;
                 }
+                drop(st);
                 let timeout = if scope.is_some() { 100 } else { -1 };
-                let (input, woke) = match wait_two(fd, wake[0], timeout) {
-                    Ok(r) => r,
+                let input = match wait_two(fd, wake, timeout) {
+                    Ok((input, _woke)) => input,
                     Err(e) if e == libc::EINTR || e == libc::EAGAIN => continue,
                     Err(_) => {
                         let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
-                        st.waiters.retain(|&w| w != wake[1]);
+                        deregister(h, &mut st, &mut seen);
                         return -sig_code::IO;
                     }
                 };
-                if woke {
-                    let mut buf = [0u8; 16];
-                    // SAFETY: our own nonblocking pipe; emptied, it
-                    // answers EAGAIN.
-                    while unsafe { libc::read(wake[0], buf.as_mut_ptr().cast(), buf.len()) } > 0 {}
-                }
                 if input {
                     // One more look: a meaning that came with the input
                     // wins (the clause's order).
                     settle(super::installed(h));
                     let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
                     drain(h, &mut st);
-                    st.waiters.retain(|&w| w != wake[1]);
+                    deregister(h, &mut st, &mut seen);
                     return super::take(&mut st, want).unwrap_or(0);
                 }
+                // A wake (or the kill look's timeout): the next pass acks
+                // the generation and looks at the queue.
             }
         });
-        // SAFETY: the wake pipe is ours and deregistered (every return
-        // above removes it under the hub lock).
-        unsafe {
-            libc::close(wake[0]);
-            libc::close(wake[1]);
-        }
         drop(file);
         out
     }
@@ -998,6 +1111,84 @@ mod sys {
         }
     }
 
+    /// s246 (wolf-lang#783, `[os.signal.disp.one]`): one meaning in the
+    /// SENDING shape ([`host_signal`]: one bit of the table or `-N`, never
+    /// 0) set ignored or back to the default. `KILL` and `STOP`, which no
+    /// process can catch or ignore, are `INVALID` with the shape. A
+    /// listenable meaning's signal — named by its bit or by its number —
+    /// is the set call's ([`super::set_disposition`]: it ends a listen).
+    /// `SEGMENT_FAULT` and `BUS_ERROR` are the stack guard's: the choice
+    /// is recorded for a SENT one, and a real fault stays the runtime's
+    /// (`task::stack`). Any other signal is `sigaction` with `SIG_IGN` or
+    /// `SIG_DFL`, so a child inherits an ignore as POSIX says; the host's
+    /// refusal (glibc reserves 32 and 33 for itself, `EINVAL`) is `IO`.
+    /// Codes are `os::proc_code`'s.
+    pub fn set_disp_one(m: i64, d: super::Disp) -> i64 {
+        use crate::os::proc_code;
+        let sig = match host_signal(m, false) {
+            Ok(sig) => sig,
+            Err(c) => return c,
+        };
+        if sig == libc::SIGKILL || sig == libc::SIGSTOP {
+            return proc_code::INVALID;
+        }
+        if let Some(&bit) = super::MEANINGS.iter().find(|&&b| to_signal(b) == Some(sig)) {
+            return match super::set_disposition(bit, d) {
+                sig_code::OK => proc_code::OK,
+                _ => proc_code::IO,
+            };
+        }
+        if crate::task::set_sent_fault(sig, matches!(d, super::Disp::Ignore)) {
+            return proc_code::OK;
+        }
+        // SAFETY: a zeroed sigaction with a constant disposition.
+        unsafe {
+            let mut sa: libc::sigaction = std::mem::zeroed();
+            sa.sa_sigaction = match d {
+                super::Disp::Default => libc::SIG_DFL,
+                super::Disp::Ignore => libc::SIG_IGN,
+            };
+            libc::sigemptyset(&mut sa.sa_mask);
+            if libc::sigaction(sig, &sa, std::ptr::null_mut()) == 0 {
+                proc_code::OK
+            } else {
+                proc_code::IO
+            }
+        }
+    }
+
+    /// s246 (wolf-lang#784, `[os.signal.exit]`): end THIS process by one
+    /// meaning's signal (the sending shape), as a child's end by it reads
+    /// to its parent: the signal set back to the default (the runtime's
+    /// stack guard and any listen's trampoline let go of it), unblocked on
+    /// the calling thread, and raised there — `raise(3)`, which does not
+    /// return while the default ends the process. A process that lives on
+    /// (the default of `CHILD`, `CONTINUE`, `URGENT` or `RESIZE` is to do
+    /// nothing; a stop that is continued; a pid namespace's process 1,
+    /// which the host does not end by a signal it has no handler for)
+    /// exits with 128 + N. Only a shape refusal returns (`INVALID`).
+    pub fn exit_signal(m: i64) -> i64 {
+        let sig = match host_signal(m, false) {
+            Ok(sig) => sig,
+            Err(c) => return c,
+        };
+        crate::prof::dump_on_exit();
+        // SAFETY: a default disposition, an unblock and a raise of a
+        // validated signal number on this thread.
+        unsafe {
+            let mut sa: libc::sigaction = std::mem::zeroed();
+            sa.sa_sigaction = libc::SIG_DFL;
+            libc::sigemptyset(&mut sa.sa_mask);
+            libc::sigaction(sig, &sa, std::ptr::null_mut());
+            let mut set: libc::sigset_t = std::mem::zeroed();
+            libc::sigemptyset(&mut set);
+            libc::sigaddset(&mut set, sig);
+            libc::pthread_sigmask(libc::SIG_UNBLOCK, &set, std::ptr::null_mut());
+            libc::raise(sig);
+        }
+        std::process::exit(128 + sig)
+    }
+
     /// s232 (#681, `[os.signal.ignored]`): the listenable meanings whose
     /// signal is ignored now — `sigaction` with a null new action reads
     /// the disposition and changes nothing.
@@ -1180,10 +1371,12 @@ mod sys {
     /// thread around the call anyway (`uselocale(3)`), so the words do
     /// not depend on what an embedding process chose. The C library may
     /// answer from a buffer it reuses, so the read is serialized and
-    /// copied out under one lock.
+    /// copied out under one lock. s246 (wolf-lang#787): the meaning 0 is
+    /// signal 0, and its words are `strsignal(0)`'s — glibc's `Unknown
+    /// signal 0`, the row GNU `kill -t` and `kill -L` print for `EXIT`.
     pub fn text(m: i64) -> Result<String, i64> {
         static READ: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let sig = host_signal(m, false)?;
+        let sig = host_signal(m, true)?;
         let _one = READ
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -1435,10 +1628,32 @@ mod sys {
     }
 
     /// s241 (`[os.signal.text]`): no signal descriptions on windows —
-    /// `unsupported` after the shape.
+    /// `unsupported` after the shape (s246: 0 is in the shape).
     pub fn text(m: i64) -> Result<String, i64> {
-        host_signal(m, false)?;
+        host_signal(m, true)?;
         Err(crate::os::proc_code::UNSUPPORTED)
+    }
+
+    /// s246 (`[os.signal.disp.one]`): no dispositions on windows —
+    /// `unsupported` after the shape (0, `KILL` and `STOP` are `invalid`).
+    pub fn set_disp_one(m: i64, _d: super::Disp) -> i64 {
+        use crate::os::proc_code;
+        if m == 0 || m == meaning::KILL || m == meaning::STOP {
+            return proc_code::INVALID;
+        }
+        match host_signal(m, false) {
+            Ok(_) => proc_code::UNSUPPORTED,
+            Err(c) => c,
+        }
+    }
+
+    /// s246 (`[os.signal.exit]`): no signal to end by on windows —
+    /// `unsupported` after the shape.
+    pub fn exit_signal(m: i64) -> i64 {
+        match host_signal(m, false) {
+            Ok(_) => crate::os::proc_code::UNSUPPORTED,
+            Err(c) => c,
+        }
     }
 }
 
@@ -1660,6 +1875,19 @@ pub fn text(m: i64) -> Result<String, i64> {
     sys::text(m)
 }
 
+/// s246 (#783, `[os.signal.disp.one]`): one meaning in the sending shape
+/// — one bit of the table or `-N` — ignored or back to its default;
+/// `os::proc_code`'s codes (0 ok, 6 invalid, 5 unsupported, 4 io).
+pub fn set_disposition_one(m: i64, d: Disp) -> i64 {
+    sys::set_disp_one(m, d)
+}
+
+/// s246 (#784, `[os.signal.exit]`): end this process by one meaning's
+/// signal; returns only the shape's `INVALID` (or windows' `UNSUPPORTED`).
+pub fn exit_signal(m: i64) -> i64 {
+    sys::exit_signal(m)
+}
+
 /// The signal numbers of the meanings in `set`, for a child's hook
 /// (s219's spawn `defaults`); 0 slots are unused. Empty on windows.
 #[cfg(unix)]
@@ -1712,6 +1940,28 @@ pub extern "C" fn __wolf_rt_os_signal_ignore(mask: i64) -> i64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_os_signal_default(mask: i64) -> i64 {
     set_disposition(mask, Disp::Default)
+}
+
+/// `os_signal_ignore_one(meaning: int) -> () ! {invalid, io,
+/// unsupported}` (s246) — 0 ok, else an `os::proc_code`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_signal_ignore_one(m: i64) -> i64 {
+    set_disposition_one(m, Disp::Ignore)
+}
+
+/// `os_signal_default_one(meaning: int) -> () ! {invalid, io,
+/// unsupported}` (s246) — 0 ok, else an `os::proc_code`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_signal_default_one(m: i64) -> i64 {
+    set_disposition_one(m, Disp::Default)
+}
+
+/// `os_exit_signal(meaning: int) -> () ! {invalid, unsupported}` (s246)
+/// — never returns for a meaning in the shape on unix; else an
+/// `os::proc_code`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_os_exit_signal(m: i64) -> i64 {
+    exit_signal(m)
 }
 
 /// `os_signal_poll(set: int) -> int ! {io}` (s219) — the meaning taken
@@ -2276,9 +2526,90 @@ mod tests {
         for i in 0..MEANING_COUNT {
             assert!(!text(1 << i).unwrap().is_empty(), "bit {i}");
         }
-        for bad in [0, 3, 1 << 28, -(last() + 1), i64::MIN] {
+        // s246 (#787): signal 0 has words, the C library's.
+        #[cfg(all(target_os = "linux", target_env = "gnu"))]
+        assert_eq!(text(0).unwrap(), "Unknown signal 0");
+        let zero = text(0).expect("signal 0's words");
+        assert!(!zero.is_empty());
+        eprintln!("REPORT os_signal_text(0) = {zero:?}");
+        for bad in [3, 1 << 28, -(last() + 1), i64::MIN] {
             assert_eq!(text(bad), Err(proc_code::INVALID), "text {bad}");
         }
+    }
+
+    /// s246 (#783, `[os.signal.disp.one]`): the sending shape's rows —
+    /// 0, two bits, past the table, a host number past the last, and
+    /// `KILL` and `STOP` by bit or by number are `INVALID` and change
+    /// nothing; a host number with no meaning is set and read back with
+    /// `sigaction`; glibc's own 32 is the host's refusal, `IO`. (The fault
+    /// meanings are the stack guard's, and `exit_signal` ends the process:
+    /// both are the driver's container witnesses, `signal_gaps_lanes.rs`.)
+    #[cfg(unix)]
+    #[test]
+    fn disposition_one_rows() {
+        use crate::os::proc_code;
+        let _g = serial();
+        let disp = |sig: libc::c_int| -> libc::sighandler_t {
+            // SAFETY: a read-only sigaction query into a zeroed struct.
+            unsafe {
+                let mut old: libc::sigaction = std::mem::zeroed();
+                assert_eq!(libc::sigaction(sig, std::ptr::null(), &mut old), 0);
+                old.sa_sigaction
+            }
+        };
+        for bad in [
+            0,
+            3,
+            1 << 28,
+            meaning::KILL,
+            meaning::STOP,
+            -9,
+            -i64::from(libc::SIGSTOP),
+            -(last() + 1),
+            i64::MIN,
+        ] {
+            for d in [Disp::Ignore, Disp::Default] {
+                assert_eq!(
+                    set_disposition_one(bad, d),
+                    proc_code::INVALID,
+                    "one {bad} {d:?}"
+                );
+            }
+        }
+        // (`KILL` and `STOP` are in `os_exit_signal`'s shape: they would
+        // end or stop this test, so only the shape's refusals run here.)
+        for bad in [0, 3, 1 << 28, -(last() + 1), i64::MIN] {
+            assert_eq!(exit_signal(bad), proc_code::INVALID, "exit {bad}");
+        }
+        #[cfg(target_os = "linux")]
+        {
+            let rt = libc::SIGRTMIN() + 6;
+            assert_eq!(
+                set_disposition_one(-i64::from(rt), Disp::Ignore),
+                proc_code::OK
+            );
+            assert_eq!(disp(rt), libc::SIG_IGN, "a host number ignored");
+            assert_eq!(
+                set_disposition_one(-i64::from(rt), Disp::Default),
+                proc_code::OK
+            );
+            assert_eq!(disp(rt), libc::SIG_DFL, "and back to the default");
+        }
+        #[cfg(all(target_os = "linux", target_env = "gnu"))]
+        assert_eq!(
+            set_disposition_one(-32, Disp::Ignore),
+            proc_code::IO,
+            "glibc keeps 32 for itself"
+        );
+        // A listenable meaning by its number is the set call's.
+        let usr1 = -i64::from(libc::SIGUSR1);
+        assert_eq!(set_disposition_one(usr1, Disp::Ignore), proc_code::OK);
+        assert_eq!(disp(libc::SIGUSR1), libc::SIG_IGN);
+        assert_eq!(
+            set_disposition_one(meaning::USER, Disp::Default),
+            proc_code::OK
+        );
+        assert_eq!(disp(libc::SIGUSR1), libc::SIG_DFL);
     }
 
     /// s232 (`[os.signal.number]`): one meaning's number, the table's
