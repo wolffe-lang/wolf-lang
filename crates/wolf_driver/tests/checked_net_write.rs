@@ -80,6 +80,17 @@ fn finish(mut child: Child, t0: Instant, what: &str) -> (String, String, Duratio
     (stdout, stderr, elapsed)
 }
 
+/// s246 (#780): a line for the CI log even when the test passes —
+/// written to the process's own standard error, past libtest's capture
+/// (which takes only the print macros), so a windows run that is green
+/// still says how far each machine wrote.
+fn report(line: &str) {
+    use std::io::Write as _;
+    let mut err = std::io::stderr().lock();
+    let _ = writeln!(err, "{line}");
+    let _ = err.flush();
+}
+
 fn record(mut cmd: Command, what: &str) -> Rec {
     let t0 = Instant::now();
     let child = cmd
@@ -210,7 +221,9 @@ fn every_machine_answers(name: &str, want: &str) {
                 .trim_end_matches(" MiB\n")
                 .parse()
                 .unwrap_or_else(|_| panic!("{name}: {what}: the fill line reads: {filled:?}"));
-            eprintln!("REPORT {name}: {what}: filled {mib} MiB before the reader's byte came back");
+            report(&format!(
+                "REPORT {name}: {what}: filled {mib} MiB before the reader's byte came back"
+            ));
             assert!(
                 mib >= 8,
                 "{name}: {what}: the fill counts the first 8 MiB: {mib}"

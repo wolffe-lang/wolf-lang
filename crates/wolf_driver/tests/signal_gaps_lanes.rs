@@ -67,6 +67,16 @@ fn wolf() -> &'static str {
     env!("CARGO_BIN_EXE_wolf")
 }
 
+/// A `REPORT` line for the CI log even when the test passes: the
+/// process's own standard error, past libtest's capture (which takes
+/// only the print macros).
+fn report(line: &str) {
+    use std::io::Write as _;
+    let mut err = std::io::stderr().lock();
+    let _ = writeln!(err, "{line}");
+    let _ = err.flush();
+}
+
 /// The pairing at this lane, which predates the mirror of every answer
 /// s246 adds (each pinned below by what it was measured to say).
 const PRE_MIRROR_LUPIN: &str = "0.1.54";
@@ -377,7 +387,7 @@ fn signal_zero_has_words_on_every_host() {
             words, "Unknown signal 0",
             "glibc's words for 0 (GNU kill -t 0)"
         );
-        eprintln!("REPORT strsignal(0) on this host: {words:?}");
+        report(&format!("REPORT strsignal(0) on this host: {words:?}"));
         format!("text_zero={words}\n")
     };
     #[cfg(not(unix))]
@@ -478,13 +488,13 @@ fn a_descriptor_wait_makes_no_descriptor_while_the_program_runs() {
             let out_file = dir.join(format!("out-{tier}-{taskset}"));
             let run = run_with_one_closed(&exe, &out_file, taskset);
             let text = std::fs::read_to_string(&out_file).unwrap_or_default();
-            eprintln!(
+            report(&format!(
                 "REPORT race781 {tier}{}: exit {:?}: {}{}",
                 if taskset { " (taskset -c 0-3)" } else { "" },
                 run.status.code(),
                 text.trim(),
                 String::from_utf8_lossy(&run.stderr)
-            );
+            ));
             assert_eq!(run.status.code(), Some(0), "race781 on {tier}: {text}");
             let num = |key: &str| -> u64 {
                 text.split(key)
@@ -779,10 +789,11 @@ fn a_group_send_of_a_fault_the_sender_ignores() {
     for (row, prog) in compiled_rows(&live, &entry, "group", test) {
         let out = live.sh(&[], &format!("ulimit -c 0; {prog}; echo rc=$?"));
         let stdout = String::from_utf8_lossy(&out.stdout).replace('\r', "");
-        eprintln!(
-            "== {row} on group_fault.lu: {stdout}{}",
-            String::from_utf8_lossy(&out.stderr)
-        );
+        report(&format!(
+            "REPORT group_fault.lu {row}: {} || {}",
+            stdout.replace('\n', " | "),
+            String::from_utf8_lossy(&out.stderr).replace('\n', " | ")
+        ));
         assert_eq!(
             stdout,
             format!("{want}rc=0\n"),
@@ -885,7 +896,11 @@ fn a_program_ends_itself_by_a_signal() {
                 let out = live.sh(&[], &format!("ulimit -c 0; {prog}; echo rc=$?"));
                 let stdout = String::from_utf8_lossy(&out.stdout).replace('\r', "");
                 let stderr = String::from_utf8_lossy(&out.stderr);
-                eprintln!("== {row} parent ({how}) of {child_at}: {stdout}{stderr}");
+                report(&format!(
+                    "REPORT parent.lu {row} ({how}) of {child_at}: {} || {}",
+                    stdout.replace('\n', " | "),
+                    stderr.replace('\n', " | ")
+                ));
                 assert_eq!(
                     stdout,
                     format!("{want}rc=0\n"),
@@ -998,10 +1013,11 @@ fn a_core_rides_the_status() {
                     ),
                 );
                 let stdout = String::from_utf8_lossy(&out.stdout).replace('\r', "");
-                eprintln!(
-                    "== {row} core ({leg}, {how}): {stdout}{}",
-                    String::from_utf8_lossy(&out.stderr)
-                );
+                report(&format!(
+                    "REPORT core.lu {row} (cores {leg}, {how}): {} || {}",
+                    stdout.replace('\n', " | "),
+                    String::from_utf8_lossy(&out.stderr).replace('\n', " | ")
+                ));
                 let cores_here = if core && !piped { 1 } else { 0 };
                 assert_eq!(
                     stdout,
