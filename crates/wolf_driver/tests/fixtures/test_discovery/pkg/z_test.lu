@@ -1,0 +1,13 @@
+//! … and not this file's: `z_test.lu` runs as `::main`, because the
+//! package `wolf test` builds for it is `lib.lu` then `z_test.lu` (the
+//! other `_test.lu` files are left out), and `ubcheck::discover_tests`
+//! reads `pkg.files[0]` — `lib.lu` — only
+//! (`crates/wolf_mem/src/ubcheck.rs:2356` at `72de141f`). The two test
+//! files are the same shape.
+fn test_in_z() {
+    assert(two() == 2, "z")
+}
+
+fn main() {
+    test_in_z()
+}

@@ -1,0 +1,5 @@
+//! s248 (wolf-lang#799): the test file. Its one test is `test_own`; the
+//! directory's `b.lu` names a helper `test_shape`, which is not a test.
+fn test_own() {
+    assert(test_shape() == 3, "the shared shape")
+}

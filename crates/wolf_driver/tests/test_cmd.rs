@@ -77,6 +77,46 @@ fn discovers_test_files_and_fns_in_order() {
     assert!(!out.contains("not_a_test"), "non-test files never run");
 }
 
+/// s248 (wolf-lang#799; yew G10): each test file's OWN `test_*` are its
+/// tests, whatever else its directory holds. yw00's witness (`pkg/`, two
+/// test files of one shape beside `lib.lu`) and a directory whose plain
+/// file names a helper `test_*` (`shared/`). Red at 0.2.33 (and at s248's
+/// prediction commit): `z_test.lu::main` ran instead of `test_in_z`, and
+/// `m_test.lu::test_shape` (the helper, from `b.lu`) instead of
+/// `test_own` — discovery read the first file of the package built for
+/// the test file (`ubcheck::discover_tests`, `pkg.files[0]`).
+#[test]
+fn each_test_file_runs_its_own_test_fns() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/test_discovery");
+    for (case, want) in [
+        ("pkg", vec!["a_test.lu::test_in_a", "z_test.lu::test_in_z"]),
+        ("shared", vec!["m_test.lu::test_own"]),
+    ] {
+        let dir = root.join(case);
+        let (code, out, err) = run_test(&dir, &["--list"]);
+        assert_eq!(code, 0, "{case} lists:\n{out}{err}");
+        let listed: Vec<String> = out
+            .lines()
+            .filter_map(|l| l.rsplit('/').next())
+            .map(str::to_string)
+            .collect();
+        assert_eq!(listed, want, "{case}: each test file's own tests:\n{out}");
+        let (code, out, err) = run_test(&dir, &[]);
+        assert_eq!(code, 0, "{case} runs green:\n{out}{err}");
+        for t in &want {
+            assert!(
+                out.lines().any(|l| l.contains(t) && l.ends_with("ok")),
+                "{case}: {t} ran and passed:\n{out}"
+            );
+        }
+        assert!(
+            out.contains(&format!("{} passed; 0 failed", want.len())),
+            "{case}: exactly its tests ran:\n{out}"
+        );
+        eprintln!("PASS {case}: {want:?}");
+    }
+}
+
 #[test]
 fn list_prints_without_running() {
     let dir = fixture("list", &[("alpha_test.lu", PASSING)]);

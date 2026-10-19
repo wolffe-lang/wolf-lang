@@ -1,0 +1,9 @@
+//! G10 witness, file 1 of 3: `wolf test pkg` discovers this file's
+//! `test_*` — it sorts first among the package's files …
+fn test_in_a() {
+    assert(1 == 1, "a")
+}
+
+fn main() {
+    test_in_a()
+}

@@ -1,0 +1,7 @@
+//! s248 (wolf-lang#799): a plain module file of the directory whose
+//! helper happens to be named `test_*`. It sorts before `m_test.lu`.
+
+/// The shape both tests check.
+pub fn test_shape() -> int {
+    3
+}
