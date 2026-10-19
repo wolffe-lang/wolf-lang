@@ -1,0 +1,32 @@
+//! member: false
+//! s247 (ruling #90, `[os.proc.fork]`) — a fork from `main` with nothing
+//! started. The child is a copy of the program at the call: it sees the
+//! parent's value of `me`, its own `os_pid()` and the parent as its
+//! `os_ppid()`, and `(0, -1)` from the call; the parent sees the child's
+//! process id and a handle the child table's calls serve: `os_proc_pid`
+//! names the same process, `os_wait_status` reaps it with its exit code,
+//! and a second wait is `io` as for a reaped spawn. The child prints
+//! before it exits and the parent after its wait, so the lines' order is
+//! fixed.
+
+fn main() -> !int {
+    let me = os_pid()
+    let (pid, h) = os_fork() else |e| {
+        print("fork: {e}")
+        return 1
+    }
+    if pid == 0 {
+        let pp = os_ppid() else 0 - 1
+        print("child: pid is new {os_pid() != me}, ppid is the parent {pp == me}, handle {h}")
+        os_exit(7)
+    }
+    let named = os_proc_pid(h) else 0 - 1
+    let st = os_wait_status(h)?
+    print("parent: pid > 0 {pid > 0}, handle {h}, os_proc_pid names it {named == pid}, status {st}")
+    let again = os_wait_status(h) else |e| {
+        print("parent: a second wait: {e}")
+        return 0
+    }
+    print("parent: a second wait answered {again}")
+    2
+}

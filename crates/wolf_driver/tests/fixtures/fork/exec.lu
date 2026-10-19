@@ -1,0 +1,31 @@
+//! member: false
+//! s247 (`[os.proc.fork]`) — the common shape: fork, then `os_exec` in the
+//! child. The program the child becomes keeps the child's process id: the
+//! shell it execs prints `$$` into a pipe the parent reads, and the parent
+//! compares it with the id the fork answered. The map hands the pipe's
+//! write end to the new program as its 1; the parent closes its copy, so
+//! its read ends when the program does.
+
+fn main() -> !int {
+    let (r, w) = os_pipe()?
+    let (pid, h) = os_fork()?
+    if pid == 0 {
+        fs_close(r) else |_| {}
+        os_exec("/bin/sh", ["sh", "-c", "echo $$"], ["PATH=/usr/bin:/bin"], [1, w]) else |e| {
+            print("child: exec failed: {e}")
+            os_exit(9)
+        }
+        os_exit(8)
+    }
+    fs_close(w)?
+    var got = ""
+    while true {
+        let part = fs_read(r, 64) else |e| {
+            break
+        }
+        got = "{got}{part}"
+    }
+    let st = os_wait_status(h)?
+    print("exec: the new program's pid is the child's {got.trim() == "{pid}"}, status {st}")
+    0
+}

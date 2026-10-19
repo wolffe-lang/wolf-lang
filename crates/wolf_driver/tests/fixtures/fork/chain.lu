@@ -1,0 +1,44 @@
+//! member: false
+//! s247 (`[os.proc.fork]`) — a fork chain and the wait tables. The parent
+//! spawns a program (handle 0) and then forks (handle 1). In the child the
+//! parent's children are not its own: a wait on either handle is `io`, as
+//! `ECHILD` answers it, and the poll sees no live child. The child forks
+//! again; its child (the grandchild) has the child as its parent and the
+//! child's next handle (1, after the spawn's tombstone; the parent's own
+//! handle 1 names the child). Each waits for its own: grandchild 5,
+//! child 9, the spawn 3.
+
+fn main() -> !int {
+    let spawned = os_spawn_fds("/bin/sh", ["-c", "exit 3"], List[int]())?
+    let (pid, h) = os_fork()?
+    if pid == 0 {
+        let a = os_wait_status(spawned) else |e| {
+            print("child: wait on the parent's spawn: {e}")
+            0 - 1
+        }
+        let b = os_wait_status(1) else |e| {
+            print("child: wait on a handle it never had: {e}")
+            0 - 1
+        }
+        let (ph, live) = os_wait_poll() else (0 - 2, 0 - 2)
+        print("child: poll ({ph}, {live})")
+        let mine = os_pid()
+        let (gpid, gh) = os_fork() else |e| {
+            print("child: fork: {e}")
+            os_exit(1)
+            (0, 0)
+        }
+        if gpid == 0 {
+            let pp = os_ppid() else 0 - 1
+            print("grandchild: its parent is the child {pp == mine}")
+            os_exit(5)
+        }
+        let gst = os_wait_status(gh) else 0 - 1
+        print("child: grandchild handle {gh}, status {gst}, a {a} b {b}")
+        os_exit(9)
+    }
+    let st = os_wait_status(h)?
+    let sp = os_wait_status(spawned)?
+    print("parent: child handle {h} status {st}, spawn handle {spawned} status {sp}")
+    0
+}

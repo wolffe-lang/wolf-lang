@@ -1,0 +1,54 @@
+//! member: false
+//! s247 (`[os.proc.fork]`) — a forked child in the foreground group writing
+//! to the terminal. Run on a fresh pseudo-terminal as its session's leader
+//! (`script`). The child leads a group of its own (`os_set_pgid(0)`) and
+//! the parent hands it the terminal (`os_term_set_foreground`); the child
+//! sees itself in the foreground and writes a line to the terminal, then
+//! the parent takes the terminal back. The process group, the session and
+//! the terminal are the parent's until the child changes them.
+
+fn main() -> !int {
+    let tty = os_isatty(1) else false
+    if !tty {
+        print("tty: not a terminal")
+        return 2
+    }
+    let me = os_pid()
+    let lead = os_pgid() else 0 - 1
+    let (pid, h) = os_fork()?
+    if pid == 0 {
+        let inherited = os_pgid() else 0 - 1
+        os_set_pgid(0) else |e| {
+            print("tty: the child's set_pgid: {e}")
+            os_exit(3)
+        }
+        var n = 0
+        var fg = false
+        while n < 300 {
+            let g = os_term_foreground(1) else 0 - 1
+            if g == os_pid() {
+                fg = true
+                break
+            }
+            time_sleep_ms(10)
+            n += 1
+        }
+        fs_write(1, "tty: the child, group {os_pid()}, inherited the parent's group {inherited == lead}, in the foreground {fg}, writes to the terminal\n") else |_| {}
+        os_exit(0)
+    }
+    os_set_pgid(0) else |_| {}
+    var tries = 0
+    while tries < 100 {
+        os_term_set_foreground(1, pid) else |_| {
+            tries += 1
+            time_sleep_ms(5)
+            continue
+        }
+        break
+    }
+    let st = os_wait_status(h)?
+    os_term_set_foreground(1, os_pgid() else me)?
+    let back = os_term_foreground(1) else 0 - 1
+    print("tty: child status {st}, the parent took the terminal back {back == (os_pgid() else 0)}")
+    0
+}

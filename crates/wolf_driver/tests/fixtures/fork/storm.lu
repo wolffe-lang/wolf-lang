@@ -1,0 +1,53 @@
+//! member: false
+//! s247 (`[os.proc.fork]`) — a bounded fork storm. The program forks at
+//! most CAP = 64 children (argv[0] may lower it), each parked in a long
+//! sleep, records every handle, then kills each by its recorded process id
+//! (`os_kill`, the table's own) and reaps it. A host refusal before the cap
+//! (a low `RLIMIT_NPROC`, run under `ulimit -u`) answers `io` with the
+//! host's number in `os_error()`, never a trap; the children made until
+//! then are killed and reaped the same way. Never an unbounded loop.
+
+fn main() -> !int {
+    let args = env_args()
+    var cap = 64
+    if args.len > 0 {
+        cap = args[0].to_int() else 64
+    }
+    var hs = List[int]()
+    var refused = ""
+    var n = 0
+    while n < cap {
+        let (pid, h) = os_fork() else |e| {
+            refused = "{e} (host code {os_error()})"
+            break
+        }
+        if pid == 0 {
+            time_sleep_ms(60000)
+            os_exit(0)
+        }
+        (mut hs).push(h)
+        n += 1
+    }
+    var killed = 0
+    var reaped = 0
+    var nine = 0
+    for h in hs {
+        os_kill(h) else |_| {
+            continue
+        }
+        killed += 1
+        let st = os_wait_status(h) else |_| {
+            continue
+        }
+        reaped += 1
+        if st == 0 - 9 {
+            nine += 1
+        }
+    }
+    if refused == "" {
+        print("storm: {n} forked of a cap of {cap}, {killed} killed by recorded pid, {reaped} reaped, {nine} ended by KILL")
+    } else {
+        print("storm: refused before the cap {n < cap}: {refused}; every child made killed {killed == n}, reaped {reaped == n}, ended by KILL {nine == n}")
+    }
+    0
+}

@@ -1,0 +1,82 @@
+//! member: false
+//! s247 (`[os.proc.fork.note]`'s inventory) — the threads of a program that
+//! names the signal hub and a parking net call (so both are made before
+//! `main`), counted by the host at each state: linux `/proc/self/task`,
+//! macOS `ps -M` of this process. Then a fork: the child is ONE thread,
+//! the caller's (held: `child threads 1`); its first listen makes its drain
+//! thread and its first park its reactor thread, each then counted. The
+//! states' counts are the inventory's, printed for the record.
+
+fn threads() -> int {
+    let tids = fs_read_dir("/proc/self/task") else |_| {
+        return ps_threads()
+    }
+    tids.len
+}
+
+fn ps_threads() -> int {
+    let (r, w) = os_pipe() else (0 - 1, 0 - 1)
+    if r < 0 {
+        return 0 - 1
+    }
+    let h = os_spawn_fds("/bin/ps", ["-M", "-p", "{os_pid()}"], [1, w]) else 0 - 1
+    fs_close(w) else |_| {}
+    var text = ""
+    while true {
+        let part = fs_read(r, 4096) else |_| {
+            break
+        }
+        text = "{text}{part}"
+    }
+    fs_close(r) else |_| {}
+    if h >= 0 {
+        let _ = os_wait_status(h) else 0
+    }
+    var n = 0
+    for line in text.trim().split("\n") {
+        n += 1
+    }
+    n - 1
+}
+
+fn main() -> !int {
+    if env_args().len > 5 {
+        let srv = net_listen("127.0.0.1:0")?
+        let _ = net_accept(srv) else 0
+        let _ = os_signal_wait(2) else 0
+    }
+    print("census: main, the hub and the set made before main, no task: {threads()}")
+    let ch = channel[int](0)
+    var inside = 0
+    let out = channel[int](1)
+    scope s {
+        s.spawn(fn() {
+            out.send(threads()) else |_| {}
+            let _ = ch.recv() else |_| 0
+        })
+        s.spawn(fn() {
+            time_sleep_ms(400)
+        })
+        time_sleep_ms(150)
+        print("census: two tasks live, one parked in recv, one in a sleep: {threads()}")
+        ch.send(1)?
+    }
+    inside = out.recv() else |_| 0 - 1
+    print("census: inside a task: {inside}")
+    time_sleep_ms(200)
+    print("census: every task ended, 200 ms later: {threads()}")
+    let (pid, h) = os_fork()?
+    if pid == 0 {
+        print("census: child threads {threads()}")
+        os_signal_listen(2) else |_| {}
+        print("census: the child after its first listen: {threads()}")
+        let srv = net_listen("127.0.0.1:0") else 0 - 1
+        net_deadline(srv, 50) else |_| {}
+        let _ = net_accept(srv) else 0
+        print("census: the child after its first park: {threads()}")
+        os_exit(0)
+    }
+    let st = os_wait_status(h)?
+    print("census: the parent after the fork: {threads()}, child status {st}")
+    0
+}

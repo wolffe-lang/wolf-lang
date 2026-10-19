@@ -1,0 +1,84 @@
+//! member: false
+//! s247 (`[os.proc.fork]`) — the signal hub across a fork. The parent
+//! listens for TERMINATE, so its hub (two pipes and a drain thread) is
+//! live, and forks twice.
+//!
+//! First child: it waits for TERMINATE; the parent sends one to the
+//! child's pid. The child's own hub takes it (the child prints and ends
+//! 0), and the parent's queue stays empty (its poll answers 0). Second
+//! child: it sends TERMINATE to the parent and looks at its own queue for
+//! 300 ms; the parent takes it with a wait on a descriptor the child holds
+//! (so the wait ends when the child does, whatever came). Neither side
+//! hears the other's signal.
+//!
+//! With the child's re-making of the hub planted out, the child's
+//! trampoline writes into the PARENT's self-pipe: the parent's poll takes
+//! the child's TERMINATE and the child's wait never ends, until the
+//! parent's cap (3 s) kills it by its recorded pid. Nothing here signals a
+//! process the program did not start or is not.
+
+fn main() -> !int {
+    let term = 2
+    os_signal_listen(term)?
+    let (rr, rw) = os_pipe()?
+    let (pid, h) = os_fork()?
+    if pid == 0 {
+        fs_close(rr) else |_| {}
+        fs_write(rw, "r")?
+        let got = os_signal_wait(term) else 0
+        print("hub: the child took its TERMINATE {got == term}")
+        os_exit(0)
+    }
+    fs_close(rw)?
+    let _ready = fs_read(rr, 1) else ""
+    os_signal_send(pid, term) else |e| {
+        print("hub: send to the child: {e}")
+    }
+    var done = false
+    var st = 0
+    var waited = 0
+    while waited < 300 {
+        let (who, s) = os_wait_poll()?
+        if who == h {
+            done = true
+            st = s
+            break
+        }
+        time_sleep_ms(10)
+        waited += 1
+    }
+    if !done {
+        os_kill(h) else |_| {}
+        st = os_wait_status(h) else 0 - 1
+        print("hub: the child was killed at the cap, status {st}")
+    }
+    let heard = os_signal_poll(term)?
+    print("hub: child status {st}, the parent heard the child's TERMINATE {heard != 0}")
+
+    let (r2, w2) = os_pipe()?
+    let me = os_pid()
+    let (pid2, h2) = os_fork()?
+    if pid2 == 0 {
+        fs_close(r2) else |_| {}
+        os_signal_send(me, term) else |e| {
+            print("hub: send to the parent: {e}")
+        }
+        var seen = 0
+        var n = 0
+        while n < 30 {
+            let p = os_signal_poll(term) else 0
+            if p != 0 {
+                seen = p
+            }
+            time_sleep_ms(10)
+            n += 1
+        }
+        print("hub: the second child heard the parent's TERMINATE {seen != 0}")
+        os_exit(0)
+    }
+    fs_close(w2)?
+    let got = os_signal_wait_fd(r2, term) else 0 - 1
+    let st2 = os_wait_status(h2)?
+    print("hub: the parent took its TERMINATE {got == term}, second child status {st2}")
+    0
+}

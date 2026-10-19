@@ -1,0 +1,60 @@
+//! member: false
+//! s247 (`[os.proc.fork]`, `[os.proc.fds]`'s rows) — every descriptor is
+//! shared with the child, offsets included. A file written `a` by the
+//! parent, `b` by the child, `c` by the parent after the wait reads
+//! `abc`: one offset. A file `123` read a byte at a time — the parent
+//! `1`, the child `2`, the parent `3` — is one read offset. A pipe made
+//! before the fork carries the child's bytes to the parent, and ends when
+//! the child (the last other writer) does.
+
+fn main() -> !int {
+    let args = env_args()
+    if args.len < 1 {
+        return 2
+    }
+    let dir = args[0]
+    let f = fs_create("{dir}/shared-w")?
+    fs_write(f, "a")?
+    let (p1, h1) = os_fork()?
+    if p1 == 0 {
+        fs_write(f, "b") else |_| {}
+        os_exit(0)
+    }
+    let _ = os_wait_status(h1)?
+    fs_write(f, "c")?
+    fs_close(f)?
+    let w = fs_read_text("{dir}/shared-w")?
+    print("fds: one write offset: {w}")
+
+    fs_write_text("{dir}/shared-r", "123")?
+    let g = fs_open("{dir}/shared-r")?
+    let one = fs_read(g, 1)?
+    let (p2, h2) = os_fork()?
+    if p2 == 0 {
+        let two = fs_read(g, 1) else "?"
+        print("fds: the child read {two}")
+        os_exit(0)
+    }
+    let _ = os_wait_status(h2)?
+    let three = fs_read(g, 1)?
+    print("fds: one read offset: {one} then the child, then {three}")
+
+    let (r, pw) = os_pipe()?
+    let (p3, h3) = os_fork()?
+    if p3 == 0 {
+        fs_close(r) else |_| {}
+        fs_write(pw, "via the pipe") else |_| {}
+        os_exit(0)
+    }
+    fs_close(pw)?
+    var got = ""
+    while true {
+        let part = fs_read(r, 64) else |_| {
+            break
+        }
+        got = "{got}{part}"
+    }
+    let _ = os_wait_status(h3)?
+    print("fds: a pipe end inherited: {got}")
+    0
+}

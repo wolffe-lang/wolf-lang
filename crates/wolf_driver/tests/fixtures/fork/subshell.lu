@@ -1,0 +1,61 @@
+//! member: false
+//! s247 (`[os.proc.fork]`) — a toy subshell, the shape pelt's sh20 ports.
+//! The parent traps TERMINATE and INTERRUPT (listens) and ignores QUIT. A
+//! subshell is a fork whose child sets every trap that is not ignored back
+//! to the default (XCU 2.12: "traps that are not being ignored shall be set
+//! to the default actions"), runs, and ends with the status of what it
+//! ran; the parent waits and prints the status as a shell would (128 + N
+//! for an end by signal N).
+//!
+//! First subshell: `kill -TERM $$sub` — the child sends itself TERMINATE;
+//! the trap is default there, so it ends by the signal (143), while the
+//! parent's trap stays (its poll is clear). Second: the child runs a
+//! program, `sh -c 'exit 3'`, waits, and ends with its status (3). Third:
+//! QUIT stays ignored in the subshell, so a QUIT it sends itself does
+//! nothing and it ends 0.
+
+fn status_of(st: int) -> int {
+    if st < 0 {
+        return 128 - st
+    }
+    st
+}
+
+fn subshell(body: int) -> !int {
+    let traps = 2 | 16
+    let (pid, h) = os_fork()?
+    if pid == 0 {
+        os_signal_default(traps) else |_| {}
+        if body == 1 {
+            os_signal_send(os_pid(), 2) else |_| {}
+            time_sleep_ms(2000)
+            os_exit(1)
+        }
+        if body == 2 {
+            let p = os_spawn_fds("/bin/sh", ["-c", "exit 3"], List[int]()) else |_| {
+                os_exit(127)
+                0
+            }
+            let st = os_wait_status(p) else 1
+            os_exit(status_of(st))
+        }
+        os_signal_send(os_pid(), 4) else |_| {}
+        time_sleep_ms(50)
+        os_exit(0)
+    }
+    let st = os_wait_status(h)?
+    status_of(st)
+}
+
+fn main() -> !int {
+    os_signal_listen(2 | 16)?
+    os_signal_ignore(4)?
+    let a = subshell(1)?
+    let still = os_signal_poll(2)?
+    print("subshell: the child's own TERMINATE ended it: {a}; the parent's trap held: {still == 0}")
+    let b = subshell(2)?
+    print("subshell: a program run in the child: {b}")
+    let c = subshell(3)?
+    print("subshell: QUIT stays ignored in the child: {c}")
+    0
+}

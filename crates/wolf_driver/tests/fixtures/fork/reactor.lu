@@ -1,0 +1,67 @@
+//! member: false
+//! s247 (`[os.proc.fork]`) — the readiness set across a fork. The program
+//! names `net_accept`, so its set and reactor thread are made before
+//! `main`. The parent listens, forks, and accepts; the child connects to
+//! the parent's listener, writes `ping`, and parks in ITS reactor for the
+//! answer (a 3 s deadline); the parent parks in its own for the `ping`,
+//! answers `pong`, and waits for the child — both sides parked in a
+//! reactor at once.
+//!
+//! With the child's re-making of the set planted out, the child's waits
+//! ride the parent's epoll set (linux: one set across a fork) and no
+//! thread of the child's delivers them, or (macOS) a queue the child was
+//! never handed: the child's read never resolves, and the parent's cap (5
+//! s) kills it by its recorded pid.
+
+fn main() -> !int {
+    let srv = net_listen("127.0.0.1:0")?
+    let port = net_port(srv)?
+    net_deadline(srv, 5000)?
+    let (pid, h) = os_fork()?
+    if pid == 0 {
+        let c = net_connect("127.0.0.1:{port}") else |e| {
+            print("reactor: the child's connect: {e}")
+            os_exit(2)
+            0
+        }
+        net_write(c, "ping") else |_| {}
+        net_deadline(c, 3000) else |_| {}
+        let got = net_read(c, 16) else |e| {
+            print("reactor: the child's read: {e}")
+            os_exit(3)
+            ""
+        }
+        print("reactor: the child took {got}")
+        os_exit(0)
+    }
+    let a = net_accept(srv) else |e| {
+        print("reactor: the parent's accept: {e}")
+        0 - 1
+    }
+    var took = ""
+    if a >= 0 {
+        net_deadline(a, 5000)?
+        took = net_read(a, 16) else |e| "{e}"
+        net_write(a, "pong") else |_| {}
+    }
+    var done = false
+    var st = 0
+    var waited = 0
+    while waited < 500 {
+        let (who, s) = os_wait_poll()?
+        if who == h {
+            done = true
+            st = s
+            break
+        }
+        time_sleep_ms(10)
+        waited += 1
+    }
+    if !done {
+        os_kill(h) else |_| {}
+        st = os_wait_status(h) else 0 - 1
+        print("reactor: the child was killed at the cap")
+    }
+    print("reactor: the parent took {took}, child status {st}")
+    0
+}

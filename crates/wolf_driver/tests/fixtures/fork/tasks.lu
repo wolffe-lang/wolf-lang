@@ -1,0 +1,55 @@
+//! member: false
+//! s247 (`[os.proc.fork]`; ruling asked: the `busy` rule) — the fork and the
+//! pool. While a task is parked in a channel receive, a fork from `main`
+//! answers `busy`; from inside a task it is `busy` too. Once the scope has
+//! ended (every task done, the workers idle and held for the fork), it
+//! forks, and the child's pool — empty, its threads the parent's — is made
+//! again by the child's first spawn: three tasks run and sum to 6.
+
+fn main() -> !int {
+    let ch = channel[int](0)
+    var inner = ""
+    scope s {
+        s.spawn(fn() {
+            let _ = ch.recv() else |_| 0
+        })
+        time_sleep_ms(50)
+        let _ = os_fork() else |e| {
+            print("tasks: a fork with a task parked: {e}")
+            (0, 0)
+        }
+        ch.send(1)?
+    }
+    let out = channel[str](1)
+    scope s {
+        s.spawn(fn() {
+            let _ = os_fork() else |e| {
+                out.send("{e}") else |_| {}
+                (0, 0)
+            }
+        })
+    }
+    inner = out.recv() else |_| "none"
+    print("tasks: a fork from inside a task: {inner}")
+    let (pid, h) = os_fork()?
+    if pid == 0 {
+        let sum = channel[int](3)
+        scope s {
+            for i in 1..=3 {
+                s.spawn(fn() {
+                    sum.send(i) else |_| {}
+                })
+            }
+        }
+        sum.close()
+        var t = 0
+        for v in sum {
+            t += v
+        }
+        print("tasks: the child's own tasks ran, sum {t}")
+        os_exit(0)
+    }
+    let st = os_wait_status(h)?
+    print("tasks: after the scope a fork works, child status {st}")
+    0
+}
