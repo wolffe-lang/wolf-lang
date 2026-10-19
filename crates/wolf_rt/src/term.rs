@@ -12,7 +12,9 @@
 //! (`ECHO`), bit 2 [`mode::SIGNALS`] (`ISIG`), bit 3 [`mode::FLOW`]
 //! (`IXON`) and bit 4 [`mode::EXTENDED`] (`IEXTEN`) — s234, #719 —
 //! `VMIN` in bits 8..15 and `VTIME` (tenths of a second) in bits
-//! 16..23. Any other bit set is `invalid`.
+//! 16..23. s248 (wolf-lang#802) adds bit 5 [`mode::RAW_CR`] (`ICRNL`
+//! cleared), bit 6 [`mode::RAW_OUTPUT`] (`OPOST` cleared) and bit 7
+//! [`mode::STRIP8`] (`ISTRIP` set). Any other bit set is `invalid`.
 //!
 //! **s234 (wolf-lang#719, W05)** adds what a line editor asks of the
 //! terminal beside its mode: the window's size ([`size`], `TIOCGWINSZ`)
@@ -51,8 +53,29 @@ pub mod mode {
     /// keeps Ctrl-V and Ctrl-O from the program even when canonical
     /// input is off.
     pub const EXTENDED: i64 = 16;
-    /// Every bit a mode may carry: the five flags, `VMIN`, `VTIME`.
-    pub const VALID: i64 = CANONICAL | ECHO | SIGNALS | FLOW | EXTENDED | 0xFF00 | 0xFF_0000;
+    /// s248 (wolf-lang#802): a typed carriage return reaches the program as
+    /// CR (`ICRNL` CLEARED) — Enter is a key of its own, not Ctrl-J. The
+    /// three s248 bits name the setting a terminal does NOT usually have,
+    /// so 0 in each is what a terminal is given (`ICRNL` and `OPOST` on,
+    /// `ISTRIP` off) and every mode a program built before them still sets
+    /// what it set (ruling asked R7).
+    pub const RAW_CR: i64 = 32;
+    /// s248 (#802): bytes written reach the terminal as written — no
+    /// output processing, so a LF is a LF and not CR LF (`OPOST` CLEARED).
+    pub const RAW_OUTPUT: i64 = 64;
+    /// s248 (#802): input bytes are stripped to seven bits (`ISTRIP` set).
+    pub const STRIP8: i64 = 128;
+    /// Every bit a mode may carry: the eight flags, `VMIN`, `VTIME`.
+    pub const VALID: i64 = CANONICAL
+        | ECHO
+        | SIGNALS
+        | FLOW
+        | EXTENDED
+        | RAW_CR
+        | RAW_OUTPUT
+        | STRIP8
+        | 0xFF00
+        | 0xFF_0000;
 }
 
 /// s234 (`[os.term.chars]`): how many special characters
@@ -125,6 +148,17 @@ mod sys {
         if t.c_lflag & libc::IEXTEN != 0 {
             m |= mode::EXTENDED;
         }
+        // s248 (#802): the three bits that name what a terminal does not
+        // usually have.
+        if t.c_iflag & libc::ICRNL == 0 {
+            m |= mode::RAW_CR;
+        }
+        if t.c_oflag & libc::OPOST == 0 {
+            m |= mode::RAW_OUTPUT;
+        }
+        if t.c_iflag & libc::ISTRIP != 0 {
+            m |= mode::STRIP8;
+        }
         m |= i64::from(t.c_cc[libc::VMIN]) << 8;
         m |= i64::from(t.c_cc[libc::VTIME]) << 16;
         Ok(m)
@@ -167,6 +201,23 @@ mod sys {
             t.c_iflag |= libc::IXON;
         } else {
             t.c_iflag &= !libc::IXON;
+        }
+        // s248 (#802): ICRNL and ISTRIP are input flags, OPOST the output
+        // one; RAW_CR and RAW_OUTPUT CLEAR theirs.
+        if m & mode::RAW_CR != 0 {
+            t.c_iflag &= !libc::ICRNL;
+        } else {
+            t.c_iflag |= libc::ICRNL;
+        }
+        if m & mode::RAW_OUTPUT != 0 {
+            t.c_oflag &= !libc::OPOST;
+        } else {
+            t.c_oflag |= libc::OPOST;
+        }
+        if m & mode::STRIP8 != 0 {
+            t.c_iflag |= libc::ISTRIP;
+        } else {
+            t.c_iflag &= !libc::ISTRIP;
         }
         t.c_cc[libc::VMIN] = ((m >> 8) & 0xFF) as libc::cc_t;
         t.c_cc[libc::VTIME] = ((m >> 16) & 0xFF) as libc::cc_t;
@@ -597,11 +648,14 @@ mod tests {
         let _ = std::fs::remove_file(&p);
     }
 
-    /// A mode with a bit outside the three flags, VMIN and VTIME is
-    /// `invalid` before the handle is read.
+    /// A mode with a bit outside the eight flags, VMIN and VTIME is
+    /// `invalid` before the handle is read. s248 (#802): bits 5..7 are
+    /// fields now, so a forged handle is `io` for them; bit 24 is the first
+    /// bit that is none.
     #[test]
     fn a_mode_outside_the_bits_is_invalid() {
-        assert_eq!(set_mode(1_000_000, 32), Err(proc_code::INVALID));
+        assert_eq!(set_mode(1_000_000, 32), Err(proc_code::IO));
+        assert_eq!(set_mode(1_000_000, 64 | 128), Err(proc_code::IO));
         assert_eq!(set_mode(1_000_000, 1 << 24), Err(proc_code::INVALID));
         assert_eq!(set_mode(1_000_000, -1), Err(proc_code::INVALID));
     }
@@ -698,11 +752,36 @@ mod tests {
         assert_eq!(set_mode(s, old), Ok(()));
         assert_eq!(mode_of(s), Ok(old));
         assert_eq!(
-            set_mode(s, 32),
+            set_mode(s, 1 << 24),
             Err(proc_code::INVALID),
-            "bit 5 is not a field"
+            "bit 24 is not a field"
         );
         assert_eq!(chars(1_000_000), Err(proc_code::IO));
+    }
+
+    /// s248 (#802, `[os.term.mode]`): RAW_CR clears ICRNL, RAW_OUTPUT
+    /// clears OPOST, STRIP8 sets ISTRIP, each read back; a fresh terminal
+    /// reads 0 in all three (the usual settings); and a mode without them
+    /// gives the usual settings back.
+    #[test]
+    fn the_three_raw_bits() {
+        use std::os::fd::AsRawFd as _;
+        let (m, s) = pty();
+        let old = mode_of(s).expect("mode");
+        assert_eq!(old & (mode::RAW_CR | mode::RAW_OUTPUT | mode::STRIP8), 0, "usual: {old}");
+        let all = old | mode::RAW_CR | mode::RAW_OUTPUT | mode::STRIP8;
+        assert_eq!(set_mode(s, all), Ok(()));
+        assert_eq!(mode_of(s), Ok(all));
+        // SAFETY: a read of the pair's settings on the master.
+        unsafe {
+            let mut t: libc::termios = std::mem::zeroed();
+            assert_eq!(libc::tcgetattr(m.as_raw_fd(), &mut t), 0);
+            assert_eq!(t.c_iflag & libc::ICRNL, 0, "ICRNL off");
+            assert_eq!(t.c_oflag & libc::OPOST, 0, "OPOST off");
+            assert_ne!(t.c_iflag & libc::ISTRIP, 0, "ISTRIP on");
+        }
+        assert_eq!(set_mode(s, old), Ok(()));
+        assert_eq!(mode_of(s), Ok(old), "the usual settings back");
     }
 
     /// s248 (`[os.term.restore]`): the registered mode comes back and the
