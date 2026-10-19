@@ -37,12 +37,13 @@ is what is built.
   the checked machine refuses it by name on unix; lupin 0.1.54 does not
   resolve the name (a newer lupin is held to a refusal by name); charged
   `exec`, refused at comptime; the freestanding target refuses it by name.
-- **The cost** (kasumi, a container, release tier): with a live signal
-  hub, 1,000 fork-and-end loops take 0.20–0.25 s (dash's `x=$(true)`
-  0.13–0.14 s); fork, exec `/bin/true`, wait 0.42–0.47 s (`os_spawn_fds`
-  0.27–0.33 s, dash's `x=$(/bin/true)` 0.37 s). In the parent: two mask
-  calls and the fork; in the child: up to eight descriptors closed and the
-  hub's three pipes made, no thread.
+- **The cost** (kasumi, a container, release runtime, medians of nine):
+  with a live signal hub, 1,000 fork-and-end loops take 0.119 s (dash's
+  `x=$(true)` 0.083 s, C's fork/_exit/wait 0.073 s); fork, exec `true`,
+  wait 0.272 s (`os_spawn_fds` 0.179 s, dash's `x=$(/bin/true)` 0.236 s,
+  C's fork/exec 0.238 s). In the parent: two mask calls and the fork; in
+  the child: up to eight descriptors closed and the hub's three pipes
+  made, no thread.
 - spec/11 gains `[os.proc.fork]` and `[os.proc.fork.note]` (anchors 666);
   the host table is 141 lines.
 
