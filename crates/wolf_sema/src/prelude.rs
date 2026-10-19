@@ -362,6 +362,10 @@ pub const PRELUDE: &[Ambient] = &[
     host("os_term_set_foreground"),
     host("os_term_mode"),
     host("os_term_set_mode"),
+    // s248 (wolf-lang#794; ruling #93 R1 C): the terminal restored on every
+    // exit the runtime owns. `io`, with the set (it acts on a descriptor
+    // the program holds and starts nothing).
+    host("os_term_restore_at_exit"),
     // s232 (wolf-lang#679, #681, #691, #141; pelt's trap, kill, $$ and
     // $PPID): what the disposition was, a signal to any process, a
     // meaning's number on this host, and this process's id and its

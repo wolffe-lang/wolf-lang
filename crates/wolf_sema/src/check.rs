@@ -14361,6 +14361,18 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             vec![int_, int_],
             rowed(table, unit, &["unsupported", "invalid", "io"]),
         ),
+        // s248 (wolf-lang#794, `[os.term.restore]`; ruling #93 R1 C): the
+        // restore at every exit the runtime owns — the handle, the mode the
+        // set takes, and the bytes to write after it. `invalid` the mode's
+        // shape, `io` a handle that is closed, forged or no terminal
+        // (ruling asked R1), `unsupported` windows.
+        "os_term_restore_at_exit" => {
+            let list_byte = byte_list(table);
+            (
+                vec![int_, int_, list_byte],
+                rowed(table, unit, &["invalid", "unsupported", "io"]),
+            )
+        }
         // s234 (wolf-lang#719, `[os.term.size]`): the window's rows and
         // columns, `os_pipe`'s pair shape.
         "os_term_size" => {

@@ -260,6 +260,9 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         "os_uid" | "os_euid" | "os_gid" | "os_egid" | "os_groups" => SandboxCategory::Env,
         "os_set_ids" => SandboxCategory::Exec,
         "os_term_foreground" | "os_term_mode" | "os_term_set_mode" => SandboxCategory::Io,
+        // s248 (#794): the restore at exit acts on a descriptor the
+        // program holds, as the set does — `io`.
+        "os_term_restore_at_exit" => SandboxCategory::Io,
         // s234 (ruling owed, #57 R7's reasoning): the window's size and
         // the special characters are read off a descriptor the program
         // holds and start nothing, `io` with `os_term_mode`; the wait on
