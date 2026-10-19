@@ -10508,6 +10508,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_term_set_foreground"
                 | "os_term_mode"
                 | "os_term_set_mode"
+                // s248 (#794): the terminal restored at every exit.
+                | "os_term_restore_at_exit"
                 // s232 (#679, #681, #691, #141): the disposition read,
                 // the send, a meaning's number, this process's id and
                 // its parent's.
@@ -15142,6 +15144,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_signal_send_group" => 2,
             "os_signal_wait_fd" => 2,
             "os_signal_wait_fds" => 3,
+            "os_term_restore_at_exit" => 3,
             _ => 1,
         };
         if argv.len() != want {
@@ -15177,6 +15180,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_term_set_foreground" => ("__wolf_rt_os_term_set_foreground", PROC),
             "os_term_mode" => ("__wolf_rt_os_term_mode", PROC),
             "os_term_set_mode" => ("__wolf_rt_os_term_set_mode", PROC),
+            "os_term_restore_at_exit" => ("__wolf_rt_os_term_restore_at_exit", PROC),
             "os_signal_ignored" => ("__wolf_rt_os_signal_ignored", SIG),
             "os_signal_send" => ("__wolf_rt_os_signal_send", PROC),
             "os_signal_number" => ("__wolf_rt_os_signal_number", PROC),
@@ -15359,6 +15363,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_signal_ignore_one"
                 | "os_signal_default_one"
                 | "os_exit_signal"
+                | "os_term_restore_at_exit"
         );
         if name == "os_wait_status" || name == "os_wait_status_core" {
             let (region, slot) = self.rt_slot(8);
@@ -15383,7 +15388,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             )?;
             return Ok(Flow::Val(Some(out)));
         }
-        let rc = if name == "os_set_ids" {
+        let rc = if name == "os_set_ids" || name == "os_term_restore_at_exit" {
             // s236 (`[os.proc.ids.set]`): the two ids and the groups'
             // `List[int]` header, which the shim reads — the foreign
             // chain, as the job spawn's lists.
