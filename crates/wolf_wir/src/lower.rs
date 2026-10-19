@@ -10528,6 +10528,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_signal_text"
                 // s242 (#680): the poll of the children.
                 | "os_wait_poll"
+                // s246 (#783, #784): one meaning's disposition, and the
+                // end of this process by a signal.
+                | "os_signal_ignore_one"
+                | "os_signal_default_one"
+                | "os_exit_signal"
         ) {
             return self.lower_job_builtin(&callee_text, d, e);
         }
@@ -15160,6 +15165,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_signal_realtime" => ("__wolf_rt_os_signal_realtime", PROC),
             "os_signal_text" => ("__wolf_rt_os_signal_text", PROC),
             "os_wait_poll" => ("__wolf_rt_os_wait_poll", PROC),
+            "os_signal_ignore_one" => ("__wolf_rt_os_signal_ignore_one", PROC),
+            "os_signal_default_one" => ("__wolf_rt_os_signal_default_one", PROC),
+            "os_exit_signal" => ("__wolf_rt_os_exit_signal", PROC),
             _ => return Err(refuse("this job builtin", e.span)),
         };
         // s241 (`[os.signal.text]`): `env_get`'s str shape — rc 0 and the
@@ -15268,6 +15276,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_signal_send_group"
                 | "os_signal_send_all"
                 | "os_set_pgid"
+                | "os_signal_ignore_one"
+                | "os_signal_default_one"
+                | "os_exit_signal"
         );
         if name == "os_wait_status" {
             let (region, slot) = self.rt_slot(8);
