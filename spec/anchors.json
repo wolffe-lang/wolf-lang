@@ -430,6 +430,7 @@
     "mem.unsafe.volatile.1": "02-memory-model.md",
     "mem.unsafe.volatile.2": "02-memory-model.md",
     "mem.unsafe.volatile.3": "02-memory-model.md",
+    "os.clock.ns": "11-os.md",
     "os.cpus": "11-os.md",
     "os.env.unset": "11-os.md",
     "os.fs": "11-os.md",
