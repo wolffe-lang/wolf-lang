@@ -1487,6 +1487,11 @@ struct Machine<'t> {
     /// sequential loopback (listen→raise→wait) is fully modeled.
     signal_listening: i64,
     signal_queue: std::collections::VecDeque<i64>,
+    /// s248 (wolf-lang#794, `[os.term.restore]`): the registered terminal
+    /// restore — a duplicate of the terminal's descriptor, the mode, the
+    /// bytes — run on the host's terminal when the machine's run ends,
+    /// whatever its verdict ([`Machine::restore_terminal`]).
+    term_restore: Option<(std::fs::File, i64, Vec<u8>)>,
     /// s232 (#681): the meanings whose disposition this program has
     /// set (listen, ignore, default). `os_signal_ignored` reads the host
     /// for each, except `BROKEN_PIPE` before the program touches it —
@@ -2613,6 +2618,9 @@ fn run_checked_fn_here<'t>(
     // s226 (`[conc.task.root]`): whatever is still alive under the root
     // supervisor is reaped before the run answers.
     m.teardown();
+    // s248 (`[os.term.restore]`): the machine's end is an exit it owns —
+    // every verdict, an `unsupported` one too.
+    m.restore_terminal();
     match ran {
         // `[conc.proc.root]`: the root domain died abnormally — a
         // linked partner's abnormal exit killed it. Nonzero,
@@ -2782,6 +2790,7 @@ impl<'t> Machine<'t> {
             children: Vec::new(),
             signal_listening: 0,
             signal_queue: std::collections::VecDeque::new(),
+            term_restore: None,
             signal_touched: 0,
             args: Vec::new(),
             env_overlay: HashMap::new(),
@@ -7485,6 +7494,17 @@ impl<'t> Machine<'t> {
     /// offset is shared and nothing the machine holds is ever closed;
     /// the table's slot otherwise. `None` is a closed or forged handle,
     /// or a standard stream the process does not have (`io`).
+    /// s248 (wolf-lang#794, `[os.term.restore]`): the registered restore, on
+    /// the host's terminal, once — the mode set as `os_term_set_mode` sets
+    /// it, then the bytes. Nothing registered, nothing done.
+    fn restore_terminal(&mut self) {
+        use std::io::Write as _;
+        if let Some((mut f, mode, bytes)) = self.term_restore.take() {
+            let _ = checked_term::set_mode(&f, mode);
+            let _ = f.write_all(&bytes);
+        }
+    }
+
     fn fs_handle(&self, fd: i64) -> Option<FsHandle<'_>> {
         if (0..FS_FIRST_HANDLE as i64).contains(&fd) {
             return std_stream_dup(fd).map(FsHandle::Std);
@@ -9033,6 +9053,36 @@ impl<'t> Machine<'t> {
                     }
                     Err(t) => Ok(tag(t)),
                 }
+            }
+            // s248 (wolf-lang#794, `[os.term.restore]`): the registration —
+            // the runtime's order of refusal (the mode's shape `invalid`,
+            // windows `unsupported`, a closed, forged or non-terminal
+            // handle `io`); a duplicate of the terminal's descriptor kept,
+            // the last registration winning. The machine restores at its
+            // own end, on the host's terminal.
+            "os_term_restore_at_exit" => {
+                let (Some(fd), Some(v)) = (int_arg(0), int_arg(1)) else {
+                    return self.refuse("this os call shape", span);
+                };
+                let bytes = match self.bytes_of(argv.get(2)) {
+                    None => return self.refuse("this os call shape", span),
+                    Some(Err(())) => return Ok(tag("invalid")),
+                    Some(Ok(b)) => b,
+                };
+                if v < 0 || v & !TERM_MODE_VALID != 0 {
+                    return Ok(tag("invalid"));
+                }
+                if !cfg!(unix) {
+                    return Ok(tag("unsupported"));
+                }
+                let Some(f) = self.fs_handle(fd).and_then(|h| h.try_clone().ok()) else {
+                    return Ok(tag("io"));
+                };
+                if checked_term::mode_of(&f).is_err() {
+                    return Ok(tag("io"));
+                }
+                self.term_restore = Some((f, v, bytes));
+                Ok(Flow::Val(Value::Unit))
             }
             "os_term_set_foreground" | "os_term_set_mode" => {
                 let (Some(fd), Some(v)) = (int_arg(0), int_arg(1)) else {
@@ -11242,6 +11292,8 @@ impl<'t> Machine<'t> {
             | "os_signal_ignore" | "os_signal_default" | "os_signal_poll" | "os_spawn_job"
             | "os_proc_pid" | "os_wait_status" | "os_pgid" | "os_term_foreground"
             | "os_term_set_foreground" | "os_term_mode" | "os_term_set_mode"
+            // s248 (#794): the terminal restored at the machine's end.
+            | "os_term_restore_at_exit"
             // s225 (#534): the removal and the exec.
             | "env_unset" | "os_exec"
             // s230 (#704): the file mode creation mask.
