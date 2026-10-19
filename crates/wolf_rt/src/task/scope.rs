@@ -140,6 +140,19 @@ pub struct ScopeInner {
 static NEXT_SCOPE: AtomicU64 = AtomicU64::new(1);
 static NEXT_TASK: AtomicU64 = AtomicU64::new(1);
 
+/// s247 (ruling #90, `[os.proc.fork]`): the tasks live in the whole
+/// process — spawned and not yet done, queued, running or parked — the
+/// count the fork's `busy` rule reads. Every task is a child of a scope
+/// (D16: the only spawn is scoped), so the scope's own bookkeeping keeps
+/// it: up at [`ScopeInner::add_child`], down at [`ScopeInner::child_done`].
+static LIVE_TASKS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// s247: tasks live anywhere in the process now.
+#[cfg(unix)]
+pub(crate) fn live_tasks() -> usize {
+    LIVE_TASKS.load(SeqCst)
+}
+
 /// Global scope registry for the dump. Lazily created on first scope
 /// (a binary that never opens a scope never touches it — D15).
 static REGISTRY: OnceLock<Mutex<Vec<Weak<ScopeInner>>>> = OnceLock::new();
@@ -262,6 +275,7 @@ impl ScopeInner {
     /// spawn path — it is on the sub-microsecond budget).
     pub fn add_child(&self, name: &std::sync::Arc<str>) -> u64 {
         let id = NEXT_TASK.fetch_add(1, SeqCst);
+        LIVE_TASKS.fetch_add(1, SeqCst);
         let mut st = self.state.lock().unwrap();
         st.live += 1;
         st.tasks.insert(id, (name.clone(), TaskState::Queued));
@@ -297,6 +311,8 @@ impl ScopeInner {
         if st.live == 0 {
             self.cv.notify_all();
         }
+        drop(st);
+        LIVE_TASKS.fetch_sub(1, SeqCst);
     }
 
     /// Scope-exit join (`[conc.task.join]`): block until every child
