@@ -747,9 +747,8 @@ mod sys {
         let Ok(wake) = make_wake() else {
             return Err(sig_code::IO);
         };
-        let end = u64::try_from(deadline_ms)
-            .ok()
-            .map(|ms| Instant::now() + Duration::from_millis(ms));
+        // s248 PLANT (never merge): a deadline passes at once.
+        let end = u64::try_from(deadline_ms).ok().map(|_| Instant::now());
         // The time left before the deadline: `None` for none, a zero
         // duration once it has passed.
         let left = || end.map(|e| e.saturating_duration_since(Instant::now()));
@@ -786,16 +785,17 @@ mod sys {
                         Err(_) => Err(sig_code::IO),
                     };
                 }
+                // s248 PLANT (never merge): the registration AFTER the last
+                // look, the lock let go between them and the window widened
+                // to 1 ms — the race the gate is for.
                 if !registered {
+                    drop(st);
+                    std::thread::sleep(Duration::from_millis(1));
+                    st = h.state.lock().unwrap_or_else(|p| p.into_inner());
                     st.wake.waiters += 1;
                     seen = st.wake.generation;
                     registered = true;
                 }
-                // The pipe still holds the byte of a generation this wait
-                // has looked at: the waits that have not will empty it.
-                // Until then a poll would answer at once, so wait for the
-                // last of them (or a new generation, or the deadline) on
-                // the hub's condvar.
                 let mut timed_out = false;
                 while st.wake.full && st.wake.generation == seen {
                     let cap = match (left(), scope.as_ref()) {

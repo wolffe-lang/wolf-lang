@@ -2367,10 +2367,9 @@ pub fn run_checked_with_input(
 /// file's helper named `test_*` for a test. A test file's tests are its
 /// own `test_*` ([`entry_file`]).
 pub fn discover_tests(pkg: &Package, entry: &std::path::Path) -> Vec<(String, usize)> {
-    let Some(at) = entry_file(pkg, entry) else {
-        return Vec::new();
-    };
-    let file = &pkg.files[at];
+    // s248 PLANT (never merge): the package's first file again.
+    let _ = entry_file(pkg, entry);
+    let file = &pkg.files[0];
     let src = &file.raw.src;
     let mut out = Vec::new();
     for node in file.parse.root.nodes().filter(|n| n.kind.is_item()) {
@@ -7147,10 +7146,9 @@ impl<'t> Machine<'t> {
                 let Some(f) = self.fs_handle(fd) else {
                     return Ok(tag("io"));
                 };
-                match f.sync_all() {
-                    Err(e) => Ok(tag(&errtag(&e, &["io"]))),
-                    Ok(()) => Ok(Flow::Val(Value::Unit)),
-                }
+                // s248 PLANT (never merge): the file is not synced.
+                let _ = f;
+                Ok(Flow::Val(Value::Unit))
             }
             // s248 (`[os.fs.sync]`): a directory's entries on the disk, its
             // path against the machine's own working directory; a name
@@ -7176,10 +7174,9 @@ impl<'t> Machine<'t> {
                             return Ok(tag(&errtag(&e, &["not_found", "denied", "io"])));
                         }
                     };
-                    match d.sync_all() {
-                        Err(e) => Ok(tag(&errtag(&e, &["io"]))),
-                        Ok(()) => Ok(Flow::Val(Value::Unit)),
-                    }
+                    // s248 PLANT (never merge): the directory is not synced.
+                    drop(d);
+                    Ok(Flow::Val(Value::Unit))
                 }
                 #[cfg(not(unix))]
                 {
@@ -7196,7 +7193,8 @@ impl<'t> Machine<'t> {
                 let Some(path) = path_arg(0) else {
                     return self.refuse("this fs call shape", span);
                 };
-                match std::fs::canonicalize(&path) {
+                // s248 PLANT (never merge): absolute, nothing resolved.
+                match std::path::absolute(&path) {
                     Err(e) => Ok(tag(&errtag(&e, &["not_found", "io"]))),
                     Ok(p) => match p.to_str() {
                         None => Ok(tag("io")),
@@ -7499,7 +7497,8 @@ impl<'t> Machine<'t> {
     /// it, then the bytes. Nothing registered, nothing done.
     fn restore_terminal(&mut self) {
         use std::io::Write as _;
-        if let Some((mut f, mode, bytes)) = self.term_restore.take() {
+        // s248 PLANT (never merge): the machine restores nothing.
+        if let Some((mut f, mode, bytes)) = self.term_restore.take().filter(|_| false) {
             let _ = checked_term::set_mode(&f, mode);
             let _ = f.write_all(&bytes);
         }
@@ -9464,9 +9463,8 @@ impl<'t> Machine<'t> {
                         ],
                     })
                 };
-                let end = u64::try_from(deadline)
-                    .ok()
-                    .map(|ms| std::time::Instant::now() + std::time::Duration::from_millis(ms));
+                // s248 PLANT (never merge): a deadline passes at once.
+                let end = u64::try_from(deadline).ok().map(|_| std::time::Instant::now());
                 let want = mask;
                 loop {
                     checked_sig::settle(self.signal_listening);
@@ -9774,7 +9772,9 @@ impl<'t> Machine<'t> {
             // s248 (wolf-lang#798, `[os.clock.ns]`): the same clock from the
             // same anchor, in nanoseconds — the runtime's shape.
             "os_clock_ns" => {
-                let ns = self.t0.elapsed().as_nanos().min(i64::MAX as u128) as i64;
+                // s248 PLANT (never merge): milliseconds, scaled.
+                let ns = (self.t0.elapsed().as_millis().min(i64::MAX as u128) as i64)
+                    .saturating_mul(1_000_000);
                 Ok(Flow::Val(Value::Int(ns)))
             }
             "time_unix_ms" => {
@@ -15195,22 +15195,7 @@ mod checked_term {
         } else {
             t.c_iflag &= !libc::IXON;
         }
-        // s248 (#802): the runtime's three, bit for bit.
-        if m & 32 != 0 {
-            t.c_iflag &= !libc::ICRNL;
-        } else {
-            t.c_iflag |= libc::ICRNL;
-        }
-        if m & 64 != 0 {
-            t.c_oflag &= !libc::OPOST;
-        } else {
-            t.c_oflag |= libc::OPOST;
-        }
-        if m & 128 != 0 {
-            t.c_iflag |= libc::ISTRIP;
-        } else {
-            t.c_iflag &= !libc::ISTRIP;
-        }
+        // s248 PLANT (never merge): bits 5-7 change nothing.
         t.c_cc[libc::VMIN] = ((m >> 8) & 0xFF) as libc::cc_t;
         t.c_cc[libc::VTIME] = ((m >> 16) & 0xFF) as libc::cc_t;
         // SAFETY: a descriptor the machine holds; a termios tcgetattr filled.

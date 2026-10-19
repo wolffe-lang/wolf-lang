@@ -38,13 +38,9 @@ pub extern "C" fn __wolf_rt_fs_sync(fd: i64) -> i64 {
     let Some(f) = dup_of(fd) else {
         return fs_code::IO;
     };
-    match crate::host_wait(|| f.sync_all()) {
-        Ok(()) => fs_code::OK,
-        Err(e) => {
-            let _ = code_of(&e);
-            fs_code::IO
-        }
-    }
+    // s248 PLANT (never merge): the file is not synced.
+    let _ = f;
+    fs_code::OK
 }
 
 /// `fs_sync_dir(path) -> () ! {denied, invalid, io, not_found,
@@ -82,7 +78,8 @@ fn sync_dir(path: &str) -> i64 {
         }
         Err(e) => return code_of(&e),
     };
-    match crate::host_wait(|| d.sync_all()) {
+    // s248 PLANT (never merge): the directory is not synced.
+    match Ok::<(), std::io::Error>(drop(d)) {
         Ok(()) => fs_code::OK,
         Err(e) => {
             let _ = code_of(&e);
@@ -115,7 +112,8 @@ fn sync_dir(_path: &str) -> i64 {
 pub unsafe extern "C" fn __wolf_rt_fs_realpath(pp: i64, pl: i64, out: i64) -> i64 {
     os_error_clear();
     let path = unsafe { view(pp, pl) };
-    match std::fs::canonicalize(path) {
+    // s248 PLANT (never merge): absolute, no link followed, no `..` taken.
+    match std::path::absolute(path) {
         Err(e) => match code_of(&e) {
             fs_code::NOT_FOUND => fs_code::NOT_FOUND,
             _ => fs_code::IO,

@@ -204,21 +204,7 @@ mod sys {
         }
         // s248 (#802): ICRNL and ISTRIP are input flags, OPOST the output
         // one; RAW_CR and RAW_OUTPUT CLEAR theirs.
-        if m & mode::RAW_CR != 0 {
-            t.c_iflag &= !libc::ICRNL;
-        } else {
-            t.c_iflag |= libc::ICRNL;
-        }
-        if m & mode::RAW_OUTPUT != 0 {
-            t.c_oflag &= !libc::OPOST;
-        } else {
-            t.c_oflag |= libc::OPOST;
-        }
-        if m & mode::STRIP8 != 0 {
-            t.c_iflag |= libc::ISTRIP;
-        } else {
-            t.c_iflag &= !libc::ISTRIP;
-        }
+        // s248 PLANT (never merge): bits 5-7 change nothing.
         t.c_cc[libc::VMIN] = ((m >> 8) & 0xFF) as libc::cc_t;
         t.c_cc[libc::VTIME] = ((m >> 16) & 0xFF) as libc::cc_t;
     }
@@ -465,6 +451,10 @@ mod at_exit {
     /// Take the registration and restore, in this process only. The
     /// process is ending, so nothing is freed (the handler may not).
     pub(super) fn run(in_handler: bool) {
+        // s248 PLANT (never merge): the restore runs nothing.
+        if in_handler || !in_handler {
+            return;
+        }
         if !claim(!in_handler) {
             return;
         }

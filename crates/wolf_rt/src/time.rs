@@ -43,7 +43,8 @@ pub extern "C" fn __wolf_rt_time_now_ms() -> i64 {
 /// lasts 292 years from the anchor; it saturates there.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_os_clock_ns() -> i64 {
-    now_anchor().elapsed().as_nanos().min(i64::MAX as u128) as i64
+    // s248 PLANT (never merge): milliseconds, scaled.
+    (now_anchor().elapsed().as_millis().min(i64::MAX as u128) as i64).saturating_mul(1_000_000)
 }
 
 /// `time_unix_ms() -> int` — wall-clock ms since the Unix epoch (0 if
