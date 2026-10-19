@@ -1,0 +1,60 @@
+//! member: false
+//! s248 (wolf-lang#797, `[os.fs.realpath]`; yew's G4) — the canonical
+//! path, as `realpath(3)` resolves it. The program builds its own tree in
+//! its working directory (the test's scratch directory) and prints each
+//! answer RELATIVE to the canonical working directory, so the record is
+//! the same on every host: `rp/a/b` a directory, `rp/a/f` a file,
+//! `rp/l1 -> a/b` a link, `rp/dangle -> nope` a link to nothing, and
+//! `rp/loop1 -> loop2 -> loop1` a loop. `rp/l1/..` is `rp/a`, not `rp`:
+//! the `..` is taken after the link, which a walk a component at a time
+//! (boreutils' `paths.lu`) gets wrong. A host with no symbolic links
+//! (windows: `fs_symlink` is `unsupported`) prints `links=unsupported`
+//! and the rows that need none.
+
+fn row(cwd: str, p: str) -> str {
+    let r = fs_realpath(p) else |e| {
+        return match e {
+            not_found => "not_found",
+            io => "io",
+        }
+    }
+    if r == cwd {
+        return "."
+    }
+    if r.starts_with(cwd) {
+        return r[cwd.len + 1..]
+    }
+    "outside:{r}"
+}
+
+fn link(target: str, path: str) -> bool {
+    fs_symlink(target, path) else |e| {
+        return false
+    }
+    true
+}
+
+fn main() -> !int {
+    let cwd = fs_realpath(".")?
+    fs_create_dir_all("rp/a/b")?
+    fs_write_text("rp/a/f", "f")?
+    let links = link("a/b", "rp/l1") && link("nope", "rp/dangle") && link("loop2", "rp/loop1")
+        && link("loop1", "rp/loop2")
+    print("file={row(cwd, "rp/a/f")}")
+    print("dir_slash={row(cwd, "rp/a/")}")
+    print("dot_dot={row(cwd, "rp/a/b/../f")}")
+    print("missing={row(cwd, "rp/none")}")
+    print("under_file={row(cwd, "rp/a/f/x")}")
+    print("empty={row(cwd, "")}")
+    print("dot={row(cwd, ".")}")
+    if links {
+        print("links=made")
+        print("link={row(cwd, "rp/l1")}")
+        print("link_dot_dot={row(cwd, "rp/l1/..")}")
+        print("dangling={row(cwd, "rp/dangle")}")
+        print("loop={row(cwd, "rp/loop1")}")
+    } else {
+        print("links=unsupported")
+    }
+    0
+}

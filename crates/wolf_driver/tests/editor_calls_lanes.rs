@@ -293,3 +293,67 @@ fn twenty_rounds_of_100_us_are_never_zero_ns() {
         },
     );
 }
+
+// ------------------------------------------------------------ #797 --
+
+/// #797 (`[os.fs.realpath]`): the canonical path of a file, a directory
+/// with a trailing slash, a `..` after a directory and after a LINK (taken
+/// after the link: `rp/l1/..` is `rp/a`), a dangling link and a missing
+/// name (`not_found`), a loop and a name under a file (`io`). Every row is
+/// relative to the canonical working directory, so the record is one on
+/// every unix host. Red at s248's prediction commit: E0301.
+#[test]
+fn the_canonical_path_on_every_machine() {
+    let dir = scratch("realpath");
+    let want_unix = "file=rp/a/f\ndir_slash=rp/a\ndot_dot=rp/a/f\nmissing=not_found\n\
+under_file=io\nempty=not_found\ndot=.\nlinks=made\nlink=rp/a/b\nlink_dot_dot=rp/a\n\
+dangling=not_found\nloop=io\n";
+    let got = every_lane(
+        &fixture("realpath.lu"),
+        &dir,
+        "fs_realpath",
+        &|lane, stdout| {
+            if cfg!(unix) {
+                assert_eq!(stdout, want_unix, "the {lane} machine's canonical paths");
+            } else {
+                assert!(
+                    stdout.starts_with("file=rp\\a\\f\n") && stdout.contains("links=unsupported\n"),
+                    "the {lane} machine's canonical paths (windows): {stdout}"
+                );
+            }
+        },
+    );
+    report(&format!("REPORT realpath rows: {got:?}"));
+}
+
+// ------------------------------------------------------------ #796 --
+
+/// #796 (`[os.fs.sync]`): `fs_sync` on a handle open for writing is ok,
+/// a closed or forged handle and a pipe `io`; `fs_sync_dir` of the
+/// working directory ok, of a missing name `not_found`, of a file
+/// `invalid` (windows: `unsupported` by name for every argument); and the
+/// exclusive create the save starts with answers `exists` for a taken
+/// name. Red at s248's prediction commit: E0301.
+#[test]
+fn the_sync_rows_on_every_machine() {
+    let dir = scratch("sync_rows");
+    let want_unix = "written=ok\nexcl_again=exists\nclosed=io\nforged=io\nnegative=io\npipe=io\n\
+dir_dot=ok\ndir_missing=not_found\ndir_file=invalid\ndir_empty=not_found\nagain=-1\n";
+    let got = every_lane(
+        &fixture("sync_rows.lu"),
+        &dir,
+        "fs_sync",
+        &|lane, stdout| {
+            if cfg!(unix) {
+                assert_eq!(stdout, want_unix, "the {lane} machine's sync rows");
+            } else {
+                assert!(
+                    stdout.starts_with("written=ok\nexcl_again=unsupported\nclosed=io\n")
+                        && stdout.contains("dir_dot=unsupported\ndir_missing=unsupported\n"),
+                    "the {lane} machine's sync rows (windows): {stdout}"
+                );
+            }
+        },
+    );
+    report(&format!("REPORT sync rows: {got:?}"));
+}
