@@ -308,11 +308,6 @@ enum Act {
     Type(&'static [u8]),
     /// Resize the window (rows, columns): the kernel signals SIGWINCH.
     Resize(u16, u16),
-    /// Send this signal to the program with `kill`.
-    Kill(libc::c_int),
-    /// Through the master: the interrupt character becomes Ctrl-X,
-    /// literal-next is disabled, IXON goes off.
-    Restyle,
 }
 
 impl Tty {
@@ -329,28 +324,6 @@ impl Tty {
                 // SAFETY: a winsize for the master's ioctl.
                 let r = unsafe { libc::ioctl(self.master.as_raw_fd(), libc::TIOCSWINSZ, &w) };
                 assert_eq!(r, 0, "TIOCSWINSZ");
-            }
-            Act::Kill(sig) => {
-                let pid = libc::pid_t::try_from(self.child.id()).expect("pid");
-                // SAFETY: a signal to the child this test started.
-                assert_eq!(unsafe { libc::kill(pid, *sig) }, 0, "kill");
-            }
-            Act::Restyle => {
-                #[cfg(any(target_os = "linux", target_os = "android"))]
-                const DISABLED: libc::cc_t = 0;
-                #[cfg(not(any(target_os = "linux", target_os = "android")))]
-                const DISABLED: libc::cc_t = 0xFF;
-                // SAFETY: tcgetattr/tcsetattr on the master, which sets
-                // the pair's settings.
-                unsafe {
-                    let fd = self.master.as_raw_fd();
-                    let mut t: libc::termios = std::mem::zeroed();
-                    assert_eq!(libc::tcgetattr(fd, &mut t), 0, "tcgetattr");
-                    t.c_cc[libc::VINTR] = 0x18;
-                    t.c_cc[libc::VLNEXT] = DISABLED;
-                    t.c_iflag &= !libc::IXON;
-                    assert_eq!(libc::tcsetattr(fd, libc::TCSANOW, &t), 0, "tcsetattr");
-                }
             }
         }
     }

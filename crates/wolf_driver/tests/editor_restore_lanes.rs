@@ -564,7 +564,7 @@ fn the_terminal_is_restored_on_every_exit_the_runtime_owns() {
                     }
                 }
             }
-            if *mode == "last-wins" && text.contains("LEFT-A") {
+            if mode == "last-wins" && text.contains("LEFT-A") {
                 miss("the first registration's bytes were written".into());
             }
             if lane == "checked" {
