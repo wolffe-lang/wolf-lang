@@ -801,6 +801,12 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_os_signal_text",
         // s242 (#680): `[os.proc.poll]`.
         "__wolf_rt_os_wait_poll",
+        // s246 (#781, #783, #784): the descriptor waits' wake pipe made
+        // before `main`, `[os.signal.disp.one]`, `[os.signal.exit]`.
+        "__wolf_rt_signal_wait_fd_start",
+        "__wolf_rt_os_signal_ignore_one",
+        "__wolf_rt_os_signal_default_one",
+        "__wolf_rt_os_exit_signal",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -811,7 +817,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        223,
+        227,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

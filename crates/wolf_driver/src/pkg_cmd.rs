@@ -1505,6 +1505,12 @@ mod builtin_cap_tests {
             // `os_wait_status` does — `exec`.
             ("os_wait_poll", Cap::Exec),
             ("os_wait_status", Cap::Exec),
+            // s246 (#783, #784; ruling asked): one meaning's disposition
+            // and the end by a signal charge `exec`, with the set calls and
+            // `os_exit`.
+            ("os_signal_ignore_one", Cap::Exec),
+            ("os_signal_default_one", Cap::Exec),
+            ("os_exit_signal", Cap::Exec),
         ] {
             assert_eq!(builtin_cap(name), Some(cap), "{name}");
         }

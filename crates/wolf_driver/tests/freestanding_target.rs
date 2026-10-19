@@ -548,6 +548,28 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`os_signal_text`",
             "hosted runtime",
         ),
+        // s246 (#783, #784): one meaning's disposition, the end by a signal.
+        (
+            "os_signal_ignore_one",
+            "",
+            "os_signal_ignore_one(4194304) else |e| {\n        return 0\n    }\n    1",
+            "`os_signal_ignore_one`",
+            "hosted runtime",
+        ),
+        (
+            "os_signal_default_one",
+            "",
+            "os_signal_default_one(4194304) else |e| {\n        return 0\n    }\n    1",
+            "`os_signal_default_one`",
+            "hosted runtime",
+        ),
+        (
+            "os_exit_signal",
+            "",
+            "os_exit_signal(4194304) else |e| {\n        return 0\n    }\n    1",
+            "`os_exit_signal`",
+            "hosted runtime",
+        ),
         // s242 (#680): the poll of the children.
         (
             "os_wait_poll",
