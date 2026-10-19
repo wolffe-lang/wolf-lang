@@ -577,7 +577,8 @@ impl ChildTable {
     /// `os_wait_status(h)` (s219, `[os.proc.status]`): [`Self::wait`],
     /// but a death by signal N answers `-N` instead of the `signal` row,
     /// so a shell can say `128 + N`; an exit code is itself (0..255).
-    /// The two never collide.
+    /// The two never collide. s246 (#785): a death with a core dumped is
+    /// `-(256 + N)` ([`signal_status`]).
     pub fn wait_status(&mut self, h: i64) -> Result<i64, ProcErr> {
         let Some(slot) = usize::try_from(h)
             .ok()
@@ -599,7 +600,8 @@ impl ChildTable {
                 {
                     use std::os::unix::process::ExitStatusExt as _;
                     if let Some(sig) = status.signal() {
-                        return Ok(-i64::from(sig));
+                        // s246 (#785): and whether the host wrote a core.
+                        return Ok(signal_status(sig, status.core_dumped()));
                     }
                 }
                 Err("io")
@@ -656,7 +658,9 @@ impl ChildTable {
                     }
                     if libc::WIFSIGNALED(st) {
                         *slot = None;
-                        return Ok((i as i64, -i64::from(libc::WTERMSIG(st))));
+                        // s246 (#785): `WCOREDUMP` rides the status.
+                        let core = libc::WCOREDUMP(st);
+                        return Ok((i as i64, signal_status(libc::WTERMSIG(st), core)));
                     }
                     // Anything else was not asked for (no WCONTINUED).
                 }
@@ -818,6 +822,23 @@ pub(crate) fn keep_pipe_ignore(cmd: &mut Command) {
                 });
             }
         }
+        // s246 (`[os.signal.disp.one]`): a fault meaning this process
+        // ignores is held by the stack guard's handler, which the child's
+        // exec resets to the default; the child sets it ignored instead.
+        let faults = crate::task::ignored_sent_faults();
+        if faults.iter().any(|&s| s != 0) {
+            // SAFETY: `signal` is async-signal-safe; the numbers are copied.
+            unsafe {
+                cmd.pre_exec(move || {
+                    for sig in faults {
+                        if sig != 0 {
+                            libc::signal(sig, libc::SIG_IGN);
+                        }
+                    }
+                    Ok(())
+                });
+            }
+        }
     }
     #[cfg(not(unix))]
     let _ = cmd;
@@ -877,6 +898,19 @@ pub fn map_of(flat: &[i64]) -> Result<Vec<(i64, Option<i64>)>, ProcErr> {
 /// stopped by host signal N — above every exit code (0..255) and apart
 /// from every end by signal (`-N`), so no status means two things.
 pub const STOPPED: i64 = 256;
+
+/// s246 (wolf-lang#785, `[os.proc.status]`): an end by host signal N with
+/// a core dumped is `-(CORE + N)` — below every end without one (`-N`,
+/// N at most 64), the stop range's mirror. `|status| & 255` is N for
+/// every signal status, and `(128 - status) & 255`, a shell's exit
+/// status for the end, is `128 + N` either way.
+pub const CORE: i64 = 256;
+
+/// The status of an end by `sig`: `-N`, or `-(CORE + N)` with a core.
+pub fn signal_status(sig: i32, core: bool) -> i64 {
+    let n = i64::from(sig);
+    if core { -(CORE + n) } else { -n }
+}
 
 /// The process-wide child table behind the shim trio — the fs
 /// `FILES`/net `NET` precedent.
