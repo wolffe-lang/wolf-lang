@@ -13884,6 +13884,23 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             vec![int_, int_, int_],
             rowed(table, unit, &["denied", "invalid", "unsupported", "io"]),
         ),
+        // s248 (wolf-lang#796, `[os.fs.sync]`): the atomic save's syncs —
+        // a handle's bytes on the disk (every refusal `io`), and a
+        // directory's entries (`invalid` a name that is no directory;
+        // `unsupported` windows, by name).
+        "fs_sync" => (vec![int_], rowed(table, unit, &["io"])),
+        "fs_sync_dir" => (
+            vec![str_],
+            rowed(
+                table,
+                unit,
+                &["not_found", "denied", "invalid", "unsupported", "io"],
+            ),
+        ),
+        // s248 (wolf-lang#797, `[os.fs.realpath]`): the canonical path,
+        // as realpath(3) resolves it; a missing name (a dangling link
+        // too) `not_found`, every other refusal `io`.
+        "fs_realpath" => (vec![str_], rowed(table, str_, &["not_found", "io"])),
         // s199 (#426, `[os.fs.seek]`, `[os.fs.tell]`,
         // `[os.fs.read_at]`): the handle's offset. `unseekable` is a
         // pipe, fifo, socket or terminal (ESPIPE) — its own tag
