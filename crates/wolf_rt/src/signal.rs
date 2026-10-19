@@ -235,10 +235,13 @@ pub enum Disp {
 /// meanings awaiting waiters (plus, on unix, the self-pipe's read end
 /// and the control pipe's).
 struct Hub {
+    /// s247 (`[os.proc.fork]`): atomics, because a forked child closes the
+    /// ends it inherited (they are the parent's pipes) and puts its own in
+    /// their place before `os_fork` returns there.
     #[cfg(unix)]
-    read_fd: std::os::fd::RawFd,
+    read_fd: std::sync::atomic::AtomicI32,
     #[cfg(unix)]
-    ctl_fd: std::os::fd::RawFd,
+    ctl_fd: std::sync::atomic::AtomicI32,
     state: Mutex<HubState>,
     cv: Condvar,
 }
@@ -308,9 +311,9 @@ fn try_hub() -> std::io::Result<&'static Hub> {
             let (read_fd, ctl_fd) = sys::make_pipes()?;
             HUB.get_or_init(move || Hub {
                 #[cfg(unix)]
-                read_fd,
+                read_fd: std::sync::atomic::AtomicI32::new(read_fd),
                 #[cfg(unix)]
-                ctl_fd,
+                ctl_fd: std::sync::atomic::AtomicI32::new(ctl_fd),
                 state: Mutex::new(HubState {
                     installed: 0,
                     queue: VecDeque::new(),
@@ -322,6 +325,10 @@ fn try_hub() -> std::io::Result<&'static Hub> {
         }
     };
     sys::init(h)?;
+    // s247 (`[os.proc.fork]`): a forked child's first drain thread
+    // unblocks what the program armed.
+    #[cfg(unix)]
+    sys::unblock_after_fork(h);
     Ok(h)
 }
 
@@ -374,7 +381,7 @@ fn deliver(h: &Hub, m: i64) {
 mod sys {
     use super::{Hub, HubState, meaning, sig_code};
     use std::os::fd::RawFd;
-    use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicUsize, Ordering};
     use std::sync::{Condvar, Mutex};
 
     /// The self-pipe write end, reachable from the async-signal
@@ -406,6 +413,147 @@ mod sys {
     /// itself, and the condvar `unblock` waits on until it has.
     static UNBLOCKED: Mutex<i64> = Mutex::new(0);
     static UNBLOCKED_CV: Condvar = Condvar::new();
+
+    /// s247 (ruling #90, `[os.proc.fork]`): the drain thread's life, as
+    /// the fork reads it — not made; made and not yet at its loop (its
+    /// thread's start is running); at its loop, working; in its kernel
+    /// wait (`poll`), holding nothing; claimed there by a fork (it does
+    /// not go on past its wait until the fork releases it); ended
+    /// (teardown).
+    static READER_STATE: AtomicU8 = AtomicU8::new(READER_NONE);
+    const READER_NONE: u8 = 0;
+    const READER_STARTING: u8 = 1;
+    const READER_LOOPING: u8 = 2;
+    const READER_POLLING: u8 = 3;
+    const READER_HELD: u8 = 4;
+    const READER_GONE: u8 = 5;
+    /// The drain thread itself, for the fork's unpark.
+    static READER: Mutex<Option<std::thread::Thread>> = Mutex::new(None);
+    /// s247: a forked child's drain thread, made at its first wait or
+    /// listen, unblocks the meanings the program armed before it starts
+    /// work (the parent's unblocks were on the parent's thread).
+    static UNBLOCK_AFTER_FORK: AtomicBool = AtomicBool::new(false);
+
+    /// s247: the drain thread back from its kernel wait — on, unless a fork
+    /// claimed it there; then parked, holding nothing, until the fork
+    /// releases it.
+    fn back_from_poll() {
+        while READER_STATE
+            .compare_exchange(
+                READER_POLLING,
+                READER_LOOPING,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            )
+            .is_err()
+        {
+            if READER_STATE.load(Ordering::SeqCst) != READER_HELD {
+                return;
+            }
+            std::thread::park();
+        }
+    }
+
+    /// s247: claim the drain thread for a fork where it holds nothing — in
+    /// its kernel wait — waiting out a start or a moment of work (each
+    /// bounded) first; nothing where there is no drain thread. The thread is
+    /// not woken: if nothing comes it never knows.
+    pub fn fork_hold() {
+        let mut round = 0;
+        loop {
+            match READER_STATE.load(Ordering::SeqCst) {
+                READER_STARTING | READER_LOOPING => crate::task::backoff(&mut round),
+                READER_POLLING => {
+                    if READER_STATE
+                        .compare_exchange(
+                            READER_POLLING,
+                            READER_HELD,
+                            Ordering::SeqCst,
+                            Ordering::SeqCst,
+                        )
+                        .is_ok()
+                    {
+                        return;
+                    }
+                }
+                _ => return,
+            }
+        }
+    }
+
+    /// s247: the parent's side — the claim ends, and a drain thread that
+    /// came back from its wait meanwhile is unparked.
+    pub fn fork_release() {
+        if READER_STATE
+            .compare_exchange(
+                READER_HELD,
+                READER_POLLING,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            )
+            .is_ok()
+            && let Some(t) = READER.lock().unwrap_or_else(|p| p.into_inner()).as_ref()
+        {
+            t.unpark();
+        }
+    }
+
+    /// s247: after a forked child's [`init`] made its drain thread, the
+    /// armed meanings unblocked on it (once).
+    pub fn unblock_after_fork(h: &Hub) {
+        if UNBLOCK_AFTER_FORK.swap(false, Ordering::SeqCst) {
+            unblock(super::installed(h));
+        }
+    }
+
+    /// s247: the child's descriptors — the hub's pipes it inherited are the
+    /// parent's (a byte its trampoline wrote there would be read by the
+    /// parent's drain thread), so each inherited end is closed and new
+    /// pipes take their place (off 0–2, as at start), the wake pipe too if
+    /// the parent had made it; the queue starts empty (a meaning delivered
+    /// before the fork was the parent's; the host clears the child's
+    /// pending signals) and the installed set stays (the dispositions are
+    /// inherited). Runs with signals blocked on the only thread there is.
+    /// The child's drain thread is made at its first wait or listen (a
+    /// byte its trampoline writes before then waits in its own pipe, and a
+    /// poll reads the pipe itself). `Err` is the host's refusal of a pipe.
+    pub fn fork_child_pipes(h: &'static Hub) -> std::io::Result<()> {
+        // A trampoline in flight on a parent's thread at the fork is not
+        // this process's.
+        IN_FLIGHT.store(0, Ordering::SeqCst);
+        let had_wake = WAKE_R.load(Ordering::SeqCst) >= 0;
+        for fd in [
+            h.read_fd.swap(-1, Ordering::SeqCst),
+            h.ctl_fd.swap(-1, Ordering::SeqCst),
+            SELF_PIPE_W.swap(-1, Ordering::SeqCst),
+            CTL_PIPE_W.swap(-1, Ordering::SeqCst),
+            WAKE_R.swap(-1, Ordering::SeqCst),
+            WAKE_W.swap(-1, Ordering::SeqCst),
+        ] {
+            if fd >= 0 {
+                // SAFETY: this process's copy of an end the parent shares;
+                // the parent's own stays open.
+                unsafe { libc::close(fd) };
+            }
+        }
+        READER_UP.store(false, Ordering::SeqCst);
+        READER_STATE.store(READER_NONE, Ordering::SeqCst);
+        *READER.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        *UNBLOCKED.lock().unwrap_or_else(|p| p.into_inner()) = 0;
+        UNBLOCK_AFTER_FORK.store(true, Ordering::SeqCst);
+        {
+            let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
+            st.queue.clear();
+            st.wake = super::WakeState::default();
+        }
+        let (r, c) = make_pipes()?;
+        h.read_fd.store(r, Ordering::SeqCst);
+        h.ctl_fd.store(c, Ordering::SeqCst);
+        if had_wake {
+            make_wake()?;
+        }
+        Ok(())
+    }
 
     /// A close-on-exec pipe: linux `pipe2(O_CLOEXEC)`; macOS has no
     /// pipe2, so `pipe` + two `fcntl(F_SETFD, FD_CLOEXEC)` — the exact
@@ -480,9 +628,14 @@ mod sys {
     /// host's refusal (s239); the hub's making serializes the callers.
     pub fn init(h: &'static Hub) -> std::io::Result<()> {
         if !READER_UP.load(Ordering::SeqCst) {
-            std::thread::Builder::new()
+            READER_STATE.store(READER_STARTING, Ordering::SeqCst);
+            if let Err(e) = std::thread::Builder::new()
                 .name("wolf-signal".into())
-                .spawn(move || reader_main(h))?;
+                .spawn(move || reader_main(h))
+            {
+                READER_STATE.store(READER_NONE, Ordering::SeqCst);
+                return Err(e);
+            }
             READER_UP.store(true, Ordering::SeqCst);
         }
         Ok(())
@@ -604,7 +757,13 @@ mod sys {
         let mut moved = false;
         loop {
             // SAFETY: valid nonblocking read end; buffer live and sized.
-            let n = unsafe { libc::read(h.read_fd, buf.as_mut_ptr().cast(), buf.len()) };
+            let n = unsafe {
+                libc::read(
+                    h.read_fd.load(Ordering::Relaxed),
+                    buf.as_mut_ptr().cast(),
+                    buf.len(),
+                )
+            };
             if n <= 0 {
                 if n < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
                     continue;
@@ -944,14 +1103,23 @@ mod sys {
     /// context — locks, allocates, everything the handler cannot. The
     /// sanctioned "dedicated thread" shape (the reactor thread's twin).
     fn reader_main(h: &'static Hub) {
+        *READER.lock().unwrap_or_else(|p| p.into_inner()) = Some(std::thread::current());
+        READER_STATE.store(READER_LOOPING, Ordering::SeqCst);
+        reader_loop(h);
+        READER_STATE.store(READER_GONE, Ordering::SeqCst);
+    }
+
+    fn reader_loop(h: &'static Hub) {
+        let read_fd = h.read_fd.load(Ordering::Relaxed);
+        let ctl_fd = h.ctl_fd.load(Ordering::Relaxed);
         let mut fds = [
             libc::pollfd {
-                fd: h.read_fd,
+                fd: read_fd,
                 events: libc::POLLIN,
                 revents: 0,
             },
             libc::pollfd {
-                fd: h.ctl_fd,
+                fd: ctl_fd,
                 events: libc::POLLIN,
                 revents: 0,
             },
@@ -959,8 +1127,12 @@ mod sys {
         loop {
             fds[0].revents = 0;
             fds[1].revents = 0;
+            // s247 (`[os.proc.fork]`): in the kernel's wait the thread holds
+            // nothing, so a fork may claim it there without waking it.
+            READER_STATE.store(READER_POLLING, Ordering::SeqCst);
             // SAFETY: two live pollfds; no timeout.
             let n = unsafe { libc::poll(fds.as_mut_ptr(), 2, -1) };
+            back_from_poll();
             if n < 0 {
                 if std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
                     continue;
@@ -970,7 +1142,7 @@ mod sys {
             if fds[1].revents != 0 {
                 let mut buf = [0u8; 64];
                 // SAFETY: the control pipe's read end is readable.
-                let k = unsafe { libc::read(h.ctl_fd, buf.as_mut_ptr().cast(), buf.len()) };
+                let k = unsafe { libc::read(ctl_fd, buf.as_mut_ptr().cast(), buf.len()) };
                 if k == 0 {
                     return; // write end closed (process teardown)
                 }
@@ -1709,6 +1881,32 @@ pub fn listen(mask: i64) -> i64 {
     drop(st);
     sys::unblock(armed);
     sig_code::OK
+}
+
+// ---- the fork (s247, ruling #90, `[os.proc.fork]`) ------------------------
+
+/// s247: hold the hub's drain thread for a fork (nothing where the hub was
+/// never made).
+#[cfg(unix)]
+pub(crate) fn fork_hold() {
+    sys::fork_hold();
+}
+
+/// s247: the parent's side after the fork.
+#[cfg(unix)]
+pub(crate) fn fork_release() {
+    sys::fork_release();
+}
+
+/// s247: the child's hub — its own pipes in place of the inherited ones,
+/// with signals still blocked; its drain thread comes at its first wait
+/// or listen. `Ok(false)`: no hub was made, nothing inherited.
+#[cfg(unix)]
+pub(crate) fn fork_child_pipes() -> std::io::Result<bool> {
+    match HUB.get() {
+        Some(h) => sys::fork_child_pipes(h).map(|()| true),
+        None => Ok(false),
+    }
 }
 
 /// The oldest queued meaning in `want`, taken off the queue.
