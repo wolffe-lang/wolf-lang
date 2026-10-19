@@ -271,8 +271,12 @@ fn sent_flag(sig: libc::c_int) -> Option<&'static AtomicBool> {
 /// signal. linux: every sender's code is at or below 0 (`SI_USER` 0,
 /// `SI_QUEUE`, `SI_TKILL` and the rest negative); a fault's is above 0
 /// (`SEGV_MAPERR`, `SEGV_ACCERR`, `BUS_ADRERR`, … and the kernel's own
-/// `SI_KERNEL`). macOS: `SI_USER` for `kill` and `raise`, `SI_QUEUE` for
-/// `sigqueue`; a fault's code is its kind (1, 2, …).
+/// `SI_KERNEL`). macOS (and the BSDs): a sender's codes are `SI_USER`
+/// (0x10001, `kill` and `raise`) and its neighbours (`SI_QUEUE`, …), far
+/// above a fault's kind (1, 2, 3); the `libc` crate names none of them
+/// for these targets, so the range is written here, and what holds it is
+/// the macOS runner's witness (`signal_gaps_lanes.rs`: a sent SEGV ends
+/// the program, an ignored one does not, a real overflow is reported).
 fn sent(code: libc::c_int) -> bool {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
@@ -280,7 +284,7 @@ fn sent(code: libc::c_int) -> bool {
     }
     #[cfg(not(any(target_os = "linux", target_os = "android")))]
     {
-        code == libc::SI_USER || code == libc::SI_QUEUE
+        code <= 0 || code >= 0x10000
     }
 }
 
