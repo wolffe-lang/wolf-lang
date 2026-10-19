@@ -14214,6 +14214,18 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // meaning in the set is delivered (answered) or the descriptor
         // has something to read (0); windows `unsupported`.
         "os_signal_wait_fd" => (vec![int_, int_], rowed(table, int_, &["unsupported", "io"])),
+        // s248 (wolf-lang#795, `[os.signal.wait.fds]`; ruling #93 R2 A): the
+        // wait over several descriptors, a set and a deadline — (the lowest
+        // ready index or -1, the meaning or 0); a deadline below -1 is
+        // `invalid`.
+        "os_signal_wait_fds" => {
+            let list_int = table.intern(TyKind::List(int_));
+            let pair = table.intern(TyKind::Tuple(vec![int_, int_]));
+            (
+                vec![list_int, int_, int_],
+                rowed(table, pair, &["invalid", "unsupported", "io"]),
+            )
+        }
         // s232 (wolf-lang#681, `[os.signal.ignored]`): the listenable
         // meanings ignored now (before the program's first disposition
         // call, the ones it started with); windows `unsupported`.
