@@ -1,5 +1,69 @@
 # Changelog
 
+## Unreleased
+
+s247 — the fork (ruling #90, reversing ruling #69 R1 from B to A): wolf
+gets a user-visible `os_fork` whose child keeps running wolf code, sound
+beside the runtime's own threads. The surface and the protocol are
+rulings asked at audit (`[os.proc.fork.note]` R1–R8); each recommendation
+is what is built.
+
+- **`os_fork() -> (int, int) ! {busy, io, unsupported}`**
+  (`[os.proc.fork]`, R1 A). The parent gets `(pid, h)`: the child's
+  process id and its handle in the child table, which `os_wait_status`,
+  `os_wait_status_core`, `os_wait_poll`, `os_wait_poll_core`, `os_wait`,
+  `os_proc_pid` and `os_kill` serve as they serve a spawn's; the child
+  gets `(0, -1)`. The child is one thread, the caller's, with the
+  program's memory as it was; every descriptor shared, offsets included;
+  dispositions and the mask kept, nothing pending; its own signal hub
+  (the inherited pipe ends were the parent's) and its own readiness set
+  (linux shares an epoll set across a fork; macOS hands a child no
+  kqueue); an empty pool and empty wait tables (the parent's children are
+  not the child's: `io`, as `ECHILD`). Its threads come at its first use
+  (R3 A): the drain thread at its first wait or listen, the reactor at its
+  first park, the workers at its first spawn.
+- **`busy`, the protocol's rule** (R2 A, R7 A). A fork from a task or a
+  proc handler, or while any task is live anywhere (queued, running,
+  parked), or under the deterministic scheduler, answers `busy` before the
+  host is asked. Otherwise every thread the runtime made is idle, and the
+  fork brings each to rest where it holds no lock (the pool's workers
+  parked, retiring ones joined; the hub's drain thread and the reactor's
+  thread claimed in their kernel wait without a wake), so the child never
+  inherits a lock a vanished thread held. `io` is the host's refusal
+  (`EAGAIN`, `ENOMEM`), its number in `os_error()`; a refusal of the
+  child's own hub pipes ends the child with exit 71 (ruling #80's rule).
+- **Machines** (R4 A, R5 A, R6, R8). native and release on linux and
+  macOS; `unsupported` on windows and any host without the task layer;
+  the checked machine refuses it by name on unix; lupin 0.1.54 does not
+  resolve the name (a newer lupin is held to a refusal by name); charged
+  `exec`, refused at comptime; the freestanding target refuses it by name.
+- **The cost** (kasumi, a container, release tier): with a live signal
+  hub, 1,000 fork-and-end loops take 0.20–0.25 s (dash's `x=$(true)`
+  0.13–0.14 s); fork, exec `/bin/true`, wait 0.42–0.47 s (`os_spawn_fds`
+  0.27–0.33 s, dash's `x=$(/bin/true)` 0.37 s). In the parent: two mask
+  calls and the fork; in the child: up to eight descriptors closed and the
+  hub's three pipes made, no thread.
+- spec/11 gains `[os.proc.fork]` and `[os.proc.fork.note]` (anchors 666);
+  the host table is 141 lines.
+
+### Read this before you bump the pin
+
+- **One new prelude name**, `os_fork` (a function of that name now
+  shadows a builtin, W0304), and **one new mark**, `busy`.
+
+### Downstream
+
+- **pelt** (sh20): subshells, `( … ) &`, `{ …; } &`, command
+  substitutions and the pipeline stages pelt runs itself fork, as dash's
+  do; the toy probe `crates/wolf_driver/tests/fixtures/fork/subshell.lu`
+  is the shape (traps back to default in the child, XCU 2.12).
+- **wolf-std**: a `process.fork()` wrapper, for the sc lane after the
+  release.
+- **wolf-interp**: lupin refuses `os_fork` by name (R5 A).
+- **pax**: the pelt pin that forks on PAX (px17 serves `fork` since
+  2026-10-07); a px lane verifies at sh20's pin.
+- **the book**: a note in the subshell chapter.
+
 ## 0.2.33 — 2026-10-19
 
 **What this release changes: five new calls and the std that wraps
