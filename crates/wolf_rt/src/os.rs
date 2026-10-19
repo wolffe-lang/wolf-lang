@@ -2124,12 +2124,12 @@ mod tests {
     #[test]
     fn poll_reports_a_stop_once_and_each_end() {
         let mut t = ChildTable::new();
-        assert_eq!(t.poll(), Ok((-1, 0)));
+        assert_eq!(t.poll(false), Ok((-1, 0)));
         let a = t.spawn(&["sleep", "30"]).expect("sleep");
         let b = t.spawn(&["sh", "-c", "exit 3"]).expect("sh");
         assert_eq!(poll_until_said(&mut t), (b, 3));
-        assert_eq!(t.poll(), Ok((-1, 1)));
-        assert_eq!(t.wait_status(b), Err("io"));
+        assert_eq!(t.poll(false), Ok((-1, 1)));
+        assert_eq!(t.wait_status(b, false), Err("io"));
         let pid = t.pid(a).expect("live") as libc::pid_t;
         // SAFETY: signals to the test's own child.
         unsafe { libc::kill(pid, libc::SIGSTOP) };
@@ -2137,14 +2137,14 @@ mod tests {
             poll_until_said(&mut t),
             (a, STOPPED + i64::from(libc::SIGSTOP))
         );
-        assert_eq!(t.poll(), Ok((-1, 1)), "a stop is reported once");
+        assert_eq!(t.poll(false), Ok((-1, 1)), "a stop is reported once");
         unsafe { libc::kill(pid, libc::SIGCONT) };
         std::thread::sleep(std::time::Duration::from_millis(100));
-        assert_eq!(t.poll(), Ok((-1, 1)), "a continue is not reported");
+        assert_eq!(t.poll(false), Ok((-1, 1)), "a continue is not reported");
         unsafe { libc::kill(pid, libc::SIGTERM) };
         assert_eq!(poll_until_said(&mut t), (a, -i64::from(libc::SIGTERM)));
-        assert_eq!(t.poll(), Ok((-1, 0)));
-        assert_eq!(t.wait_status(a), Err("io"));
+        assert_eq!(t.poll(false), Ok((-1, 0)));
+        assert_eq!(t.wait_status(a, false), Err("io"));
     }
 
     /// s242: a stopped child that is then ended while stopped answers its
@@ -2162,8 +2162,8 @@ mod tests {
             (a, STOPPED + i64::from(libc::SIGSTOP))
         );
         unsafe { libc::kill(pid, libc::SIGKILL) };
-        assert_eq!(t.wait_status(a), Ok(-i64::from(libc::SIGKILL)));
-        assert_eq!(t.poll(), Ok((-1, 0)));
+        assert_eq!(t.wait_status(a, false), Ok(-i64::from(libc::SIGKILL)));
+        assert_eq!(t.poll(false), Ok((-1, 0)));
     }
 
     /// s242: the poll on windows answers ends and never a stop (the host
@@ -2172,18 +2172,18 @@ mod tests {
     #[test]
     fn poll_answers_an_end_on_windows() {
         let mut t = ChildTable::new();
-        assert_eq!(t.poll(), Ok((-1, 0)));
+        assert_eq!(t.poll(false), Ok((-1, 0)));
         let a = t.spawn(&["cmd", "/c", "exit 3"]).expect("cmd");
         let mut got = (-1, 1);
         for _ in 0..500 {
-            got = t.poll().expect("the poll answers");
+            got = t.poll(false).expect("the poll answers");
             if got.0 >= 0 {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
         assert_eq!(got, (a, 3));
-        assert_eq!(t.poll(), Ok((-1, 0)));
+        assert_eq!(t.poll(false), Ok((-1, 0)));
     }
 
     /// s219: group 0 makes the child the leader of a new group (its
