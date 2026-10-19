@@ -1,0 +1,28 @@
+//! member: false
+//! s248 (wolf-lang#795, `[os.signal.wait.fds]`) — the rows of the wait
+//! that need no terminal and wait for nothing, one truth on every host
+//! (windows too: the shape comes before the host). A set the shape rule
+//! refuses (`[os.signal.set]`) is `io` — empty, a send-only meaning, a
+//! bit past the table — and a deadline below -1 is `invalid`, each before
+//! any handle is looked at.
+//! Expected: `empty=io send_only=io past_table=io below=invalid far_below=invalid`.
+
+fn row(set: int, deadline: int) -> str {
+    let r = os_signal_wait_fds([0], set, deadline) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "{r.0},{r.1}"
+}
+
+fn main() {
+    let a = row(0, 0)
+    let b = row(1048576, 0)
+    let c = row(1099511627776, 0)
+    let d = row(16384, -2)
+    let e = row(16384, -1000)
+    print("empty={a} send_only={b} past_table={c} below={d} far_below={e}")
+}

@@ -1,0 +1,39 @@
+//! member: false
+//! s248 (wolf-lang#795, `[os.signal.wait.fds]`) — the race the wait's
+//! registration closes (yw00's G2 witness asks it of the widened wait as
+//! s246 asked it of `os_signal_wait_fd`): a meaning raised between the
+//! wait's last look at the queue and its park must end the park, never
+//! be lost. A sibling task raises `USER` each time the waiter says it is
+//! about to wait, so each raise lands in or near that window; 2000 rounds,
+//! each answered by the meaning. A lost wake parks the waiter for ever
+//! (no deadline), and the harness's timeout is the red.
+//! Expected: `race rounds=2000 meanings=2000`.
+
+fn main() -> !int {
+    os_signal_listen(512)?
+    let p = os_pipe()?
+    let go = channel[int](0)
+    var meanings = 0
+    scope s {
+        s.spawn(fn() -> !int {
+            var i = 0
+            while i < 2000 {
+                let n = go.recv()?
+                os_signal_raise(512)?
+                i += 1
+            }
+            0
+        })
+        var round = 0
+        while round < 2000 {
+            go.send(round)?
+            let r = os_signal_wait_fds([p.0], 512, -1)?
+            if r.1 == 512 {
+                meanings += 1
+            }
+            round += 1
+        }
+    }
+    print("race rounds=2000 meanings={meanings}")
+    0
+}
