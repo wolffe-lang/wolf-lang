@@ -478,6 +478,8 @@
     "os.proc.exe": "11-os.md",
     "os.proc.exec": "11-os.md",
     "os.proc.fds": "11-os.md",
+    "os.proc.fork": "11-os.md",
+    "os.proc.fork.note": "11-os.md",
     "os.proc.ids": "11-os.md",
     "os.proc.ids.note": "11-os.md",
     "os.proc.ids.set": "11-os.md",
