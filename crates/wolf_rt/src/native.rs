@@ -318,6 +318,27 @@ pub extern "C" fn __wolf_rt_signal_start() {
     }
 }
 
+/// s246 (wolf-lang#781, `[os.signal.wait.fd]`): the descriptor waits'
+/// shared wake pipe, made before `main` after the hub in a program that
+/// names `os_signal_wait_fd`, so a wait makes no descriptor while the
+/// program runs (s245 moved one the host put on a closed 0, 1 or 2, but
+/// the move came after the `pipe`, and another task's `fs_fstat(1)` saw
+/// the pipe there in between). A refusal is the hub's: one stderr line,
+/// [`START_FAILED_EXIT`].
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_signal_wait_fd_start() {
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    if let Err(e) = crate::signal::start_wait_fd() {
+        let mut err = std::io::stderr().lock();
+        let _ = writeln!(
+            err,
+            "wolf: the runtime could not make its signal hub ({e}); the program did not start"
+        );
+        let _ = err.flush();
+        std::process::exit(START_FAILED_EXIT)
+    }
+}
+
 // ---- the v0 print path (s31) ---------------------------------------------
 //
 // `print`/`print_raw` lower to per-segment calls: literal chunks and
