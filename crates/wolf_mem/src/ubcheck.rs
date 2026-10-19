@@ -8862,7 +8862,11 @@ impl<'t> Machine<'t> {
                         {
                             use std::os::unix::process::ExitStatusExt as _;
                             if let Some(sig) = status.signal() {
-                                return Ok(Flow::Val(Value::Int(-i64::from(sig))));
+                                // s246 (#785, `[os.proc.status]`): a core
+                                // dumped is `-(256 + N)`, the runtime's.
+                                let n = i64::from(sig);
+                                let v = if status.core_dumped() { -(256 + n) } else { -n };
+                                return Ok(Flow::Val(Value::Int(v)));
                             }
                         }
                         Ok(tag("io"))
@@ -9272,6 +9276,63 @@ impl<'t> Machine<'t> {
                         self.signal_touched |= mask;
                         Ok(Flow::Val(Value::Unit))
                     }
+                }
+            }
+            // s246 (#783, `[os.signal.disp.one]`): one meaning in the sending
+            // shape, the runtime's order — the shape (`invalid`: 0, `KILL`,
+            // `STOP`, anything the sends refuse), the host (windows
+            // `unsupported`), then the host's own `sigaction`. A listenable
+            // meaning's signal, by bit or by number, is the set call's (it
+            // ends a listen). `SEGMENT_FAULT` and `BUS_ERROR` are refused by
+            // name: they are the `wolf` process's own stack guard's, and
+            // the machine does not model the runtime's sent-fault rule.
+            "os_signal_ignore_one" | "os_signal_default_one" => {
+                let Some(m) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                let ignore = name == "os_signal_ignore_one";
+                if m == 0 || m == 1 << 20 || m == 1 << 21 {
+                    return Ok(tag("invalid"));
+                }
+                let sig = match checked_sig::host_signal(m, false) {
+                    Ok(sig) => sig,
+                    Err(t) => return Ok(tag(t)),
+                };
+                match checked_sig::disp_one(sig, ignore) {
+                    Ok(checked_sig::DispOne::Meaning(bit)) => {
+                        self.signal_listening &= !bit;
+                        self.signal_touched |= bit;
+                        Ok(Flow::Val(Value::Unit))
+                    }
+                    Ok(checked_sig::DispOne::Signal) => Ok(Flow::Val(Value::Unit)),
+                    Ok(checked_sig::DispOne::Fault) => self.refuse(
+                        "`os_signal_ignore_one`/`os_signal_default_one` of a fault meaning \
+                         (SEGMENT_FAULT, BUS_ERROR: the `wolf` process's own stack guard \
+                         holds them; [os.signal.disp.one])",
+                        span,
+                    ),
+                    Err(t) => Ok(tag(t)),
+                }
+            }
+            // s246 (#784, `[os.signal.exit]`): the shape (`invalid`), the
+            // host (windows `unsupported`), then a refusal by name — the
+            // machine runs inside the `wolf` process and does not end it by
+            // a signal (the record has no verdict for an end by a signal).
+            "os_exit_signal" => {
+                let Some(m) = int_arg(0) else {
+                    return self.refuse("this os call shape", span);
+                };
+                if m == 0 {
+                    return Ok(tag("invalid"));
+                }
+                match checked_sig::host_signal(m, false) {
+                    Err(t) => Ok(tag(t)),
+                    Ok(_) if cfg!(not(unix)) => Ok(tag("unsupported")),
+                    Ok(_) => self.refuse(
+                        "`os_exit_signal` (the checked machine does not end the process it runs \
+                         in by a signal; [os.signal.exit])",
+                        span,
+                    ),
                 }
             }
             // s232 (#681, `[os.signal.ignored]`): the host's disposition,
@@ -10994,6 +11055,9 @@ impl<'t> Machine<'t> {
             | "os_signal_realtime" | "os_signal_text"
             // s242 (#680): the poll of the children.
             | "os_wait_poll"
+            // s246 (#783, #784): one meaning's disposition, the end by a
+            // signal.
+            | "os_signal_ignore_one" | "os_signal_default_one" | "os_exit_signal"
             | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
             | "str_from_utf8"
@@ -13477,7 +13541,10 @@ fn checked_poll(children: &mut [Option<std::process::Child>]) -> Result<(i64, i6
                 }
                 if libc::WIFSIGNALED(st) {
                     *slot = None;
-                    return Ok((i as i64, -i64::from(libc::WTERMSIG(st))));
+                    // s246 (#785): `WCOREDUMP` rides the status.
+                    let n = i64::from(libc::WTERMSIG(st));
+                    let v = if libc::WCOREDUMP(st) { -(256 + n) } else { -n };
+                    return Ok((i as i64, v));
                 }
             }
         }
@@ -13895,6 +13962,51 @@ mod checked_sig {
         }
     }
 
+    /// s246: what `os_signal_ignore_one` / `os_signal_default_one` set.
+    pub(super) enum DispOne {
+        /// A listenable meaning's signal: this bit's disposition is set.
+        Meaning(i64),
+        /// Another signal of the host's: its disposition is set.
+        Signal,
+        /// `SIGSEGV` or `SIGBUS`: nothing set (the caller refuses).
+        Fault,
+    }
+
+    /// s246 (#783): `SIG_IGN` or `SIG_DFL` for one host signal (shape
+    /// checked by the caller, `KILL` and `STOP` excluded) — through the
+    /// set call's path when a listenable meaning has that number; the
+    /// fault signals are left alone. windows `unsupported`.
+    pub(super) fn disp_one(sig: i32, ignore: bool) -> Result<DispOne, &'static str> {
+        #[cfg(unix)]
+        {
+            if sig == libc::SIGKILL || sig == libc::SIGSTOP {
+                return Err("invalid");
+            }
+            if sig == libc::SIGSEGV || sig == libc::SIGBUS {
+                return Ok(DispOne::Fault);
+            }
+            if let Some(bit) = (0..20).map(|i| 1i64 << i).find(|&b| sig_of(b) == Some(sig)) {
+                set_disp(bit, ignore)?;
+                return Ok(DispOne::Meaning(bit));
+            }
+            // SAFETY: a zeroed sigaction with a constant disposition.
+            unsafe {
+                let mut sa: libc::sigaction = std::mem::zeroed();
+                sa.sa_sigaction = if ignore { libc::SIG_IGN } else { libc::SIG_DFL };
+                libc::sigemptyset(&mut sa.sa_mask);
+                if libc::sigaction(sig, &sa, std::ptr::null_mut()) != 0 {
+                    return Err("io");
+                }
+            }
+            Ok(DispOne::Signal)
+        }
+        #[cfg(not(unix))]
+        {
+            let _ = (sig, ignore);
+            Err("unsupported")
+        }
+    }
+
     /// `SIG_IGN` or `SIG_DFL` for every meaning in `set` (validated by
     /// the caller); windows `unsupported`.
     pub(super) fn set_disp(set: i64, ignore: bool) -> Result<(), &'static str> {
@@ -14155,9 +14267,10 @@ mod checked_sig {
 
     /// s241 (#741, `[os.signal.text]`): the C library's `strsignal`
     /// words, read with the C locale set on this thread (`uselocale`),
-    /// serialized and copied out — the runtime's twin.
+    /// serialized and copied out — the runtime's twin (s246, #787: 0 is
+    /// signal 0, `strsignal(0)`'s words).
     pub(super) fn text(m: i64) -> Result<String, &'static str> {
-        let sig = host_signal(m, false)?;
+        let sig = host_signal(m, true)?;
         #[cfg(unix)]
         {
             static READ: std::sync::Mutex<()> = std::sync::Mutex::new(());
