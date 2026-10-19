@@ -466,6 +466,14 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`os_signal_wait_fd`",
             "hosted runtime",
         ),
+        // s248 (#794): the terminal restore at exit.
+        (
+            "os_term_restore_at_exit",
+            "",
+            "os_term_restore_at_exit(0, 7, List[byte]()) else |e| {\n        return 0\n    }\n    1",
+            "`os_term_restore_at_exit`",
+            "hosted runtime",
+        ),
         // s248 (#795): the wait over several descriptors.
         (
             "os_signal_wait_fds",

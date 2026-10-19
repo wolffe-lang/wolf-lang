@@ -19,7 +19,11 @@ fn each_s248_builtin_has_its_category() {
         // #795: the wait over several descriptors is signal control —
         // `exec`, with the wait on one.
         ("os_signal_wait_fds", SandboxCategory::Exec),
+        // #794: the restore at exit acts on a descriptor the program
+        // holds and starts nothing — `io`, with `os_term_set_mode`.
+        ("os_term_restore_at_exit", SandboxCategory::Io),
         // The neighbours they join, unchanged.
+        ("os_term_set_mode", SandboxCategory::Io),
         ("time_now_ms", SandboxCategory::Clock),
         ("fs_truncate", SandboxCategory::Fs),
     ] {
@@ -39,6 +43,7 @@ fn each_s248_builtin_has_a_signature() {
         ("fs_sync_dir", 1),
         ("fs_realpath", 1),
         ("os_signal_wait_fds", 3),
+        ("os_term_restore_at_exit", 3),
     ] {
         let (params, _) = wolf_sema::check::host_builtin_sig(&mut table, name)
             .unwrap_or_else(|| panic!("{name} has a signature"));

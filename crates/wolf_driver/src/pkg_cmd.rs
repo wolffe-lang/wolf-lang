@@ -1551,6 +1551,8 @@ mod builtin_cap_tests {
             "os_term_mode",
             "os_term_size",
             "os_term_chars",
+            // s248 (#794): the restore at exit, `io` with the set.
+            "os_term_restore_at_exit",
             "left",
         ] {
             assert_eq!(builtin_cap(name), None, "{name}");
