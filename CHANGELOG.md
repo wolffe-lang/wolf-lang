@@ -48,10 +48,68 @@ R5–R8 as recommended, R4 C (the checked machine answers `unsupported`).
 - spec/11 gains `[os.proc.fork]` and `[os.proc.fork.note]` (anchors 666);
   the host table is 141 lines.
 
+s248 — what the editor asks of the runtime (ruling #93; yew
+`docs/MAP.md` §5 G1–G4, G8, G10; yw01's W1). Six calls, three mode bits
+and one `wolf test` fix; the spellings beyond the contract are rulings
+asked at audit (`[os.editor.calls.note]` R1–R8), each recommendation
+what is built.
+
+- **`os_term_restore_at_exit(fd, mode, bytes: List[byte]) -> () !
+  {invalid, io, unsupported}`** (#794, `[os.term.restore]`; ruling #93 R1
+  C, R1 asked for the `io` row): the runtime sets the registered mode
+  and writes the bytes on every exit it owns — a return from `main`,
+  `os_exit`, an error from `main`, a trap (after its report), the stack
+  guard's report, `os_exit_signal` (before its raise), the proc root's
+  death — in the runtime, never in a handler of the program's. One
+  registration a process, the last wins; a death by a signal nobody
+  listened for restores nothing. The checked machine restores at its
+  own end (R8).
+- **`os_signal_wait_fds(fds: List[int], set, deadline_ms) -> (int, int)
+  ! {invalid, io, unsupported}`** (#795, `[os.signal.wait.fds]`; ruling
+  #93 R2 A): one wait over several descriptors, a signal set and a
+  deadline — `(-1, m)` a meaning (it wins), `(i, 0)` the lowest ready
+  descriptor, `(-1, 0)` the deadline; 0 polls, -1 waits for ever, below
+  -1 `invalid`; windows `unsupported`. `os_signal_wait_fd` is its
+  one-descriptor case, its rows unchanged.
+- **`fs_sync(fd) -> () ! {io}`** and **`fs_sync_dir(path) -> () !
+  {denied, invalid, io, not_found, unsupported}`** (#796, `[os.fs.sync]`):
+  the atomic save's syncs (`fsync`; macOS `F_FULLFSYNC`; windows
+  `FlushFileBuffers`, and no directory sync there: `unsupported`). The
+  save's exclusive create is the one wolf has, open mode 4 and
+  `fs_open_perm(path, 4, perm)` (R3: no `fs_create_new`).
+- **`fs_realpath(path) -> str ! {io, not_found}`** (#797,
+  `[os.fs.realpath]`): the canonical path, as `realpath(3)` resolves it.
+- **`os_clock_ns() -> int`** (#798, `[os.clock.ns]`): the monotonic
+  clock in nanoseconds, from `time_now_ms`'s anchor.
+- **The mode int's bits 5–7** (#802, `[os.term.mode]`; R7): `RAW_CR`
+  (32, `ICRNL` cleared), `RAW_OUTPUT` (64, `OPOST` cleared), `STRIP8`
+  (128, `ISTRIP` set). 0 in each is the usual setting, so on a usual
+  terminal every released mode int reads and sets what it did.
+- **`wolf test` runs each test file's own `test_*`** (#799; R6): it read
+  the first file of the package built for the test file, so a test file
+  that a plain file sorted before ran its `main` instead (yw00's
+  `z_test.lu`), or a helper of that file named `test_*`.
+
 ### Read this before you bump the pin
 
 - **One new prelude name**, `os_fork` (a function of that name now
   shadows a builtin, W0304), and **one new mark**, `busy`.
+- **Six new prelude names**: `os_term_restore_at_exit`,
+  `os_signal_wait_fds`, `fs_sync`, `fs_sync_dir`, `fs_realpath`,
+  `os_clock_ns` (a function of one of these names now shadows a
+  builtin).
+- **A mode with bit 5, 6 or 7 set is no longer `invalid`**: it clears
+  `ICRNL` or `OPOST`, or sets `ISTRIP`. A mode without them now WRITES
+  the usual setting (`ICRNL` and `OPOST` on, `ISTRIP` off) where 0.2.33
+  left each as found: on a terminal set otherwise (`stty -opost`), a
+  hand-built mode puts it back.
+- **`wolf test` may run different tests** in a directory where a plain
+  file sorts before a test file: that file's own `test_*` now, never the
+  plain file's.
+- A program that names `os_signal_wait_fds` makes the signal hub and the
+  wake pipe before `main` (ruling #80), as one that names
+  `os_signal_wait_fd` does; one that calls `os_term_restore_at_exit`
+  holds one more descriptor from the call.
 
 ### Downstream
 
@@ -65,6 +123,19 @@ R5–R8 as recommended, R4 C (the checked machine answers `unsupported`).
 - **pax**: the pelt pin that forks on PAX (px17 serves `fork` since
   2026-10-07); a px lane verifies at sh20's pin.
 - **the book**: a note in the subshell chapter.
+- **wolf-std** (s248): `term.Mode`'s three fields (`raw_cr`,
+  `raw_output`, `strip8`) and a `raw` that sets `raw_cr` and
+  `raw_output`, as C yew's raw mode is; wrappers for
+  `os_term_restore_at_exit`, `os_signal_wait_fds`, `fs.sync`,
+  `fs.sync_dir`, `fs.realpath` and `time.now_ns`.
+- **wolf-interp** (s248): lupin resolves none of the six names; the
+  shape rows and refusals by name for the restore and the wait, `std`'s
+  `File::sync_all`, `fs::canonicalize` and `Instant` for the rest, and
+  bits 5–7 in its mode's shape row.
+- **yew** (s248): at its 0.2.34 pin, the restore at exit, the wait over
+  the tty, its jobs and its signals with the 25 ms deadline (the `VTIME`
+  interim retires), the raw bits, and its tests named `test_*`.
+
 
 ## 0.2.33 — 2026-10-19
 
