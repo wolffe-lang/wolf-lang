@@ -1,4 +1,4 @@
-//! check: run(exit=0, stdout="group_one=invalid\ngroup_zero=invalid\ngroup_negative=invalid\ngroup_wide=invalid\ngroup_two_bits=invalid\ngroup_past_table=invalid\nall_two_bits=invalid\nall_past_table=invalid\nset_pgid_negative=invalid\nset_pgid_wide=invalid\ntext_zero=invalid\ntext_two_bits=invalid\ntext_past_table=invalid\nfar_host_number: true")
+//! check: run(exit=0, stdout="group_one=invalid\ngroup_zero=invalid\ngroup_negative=invalid\ngroup_wide=invalid\ngroup_two_bits=invalid\ngroup_past_table=invalid\nall_two_bits=invalid\nall_past_table=invalid\nset_pgid_negative=invalid\nset_pgid_wide=invalid\ntext_two_bits=invalid\ntext_past_table=invalid\nfar_host_number: true")
 //! phase: run
 //! conforms: os.signal.send.group, os.signal.send.all, os.term.group, os.signal.host, os.signal.text, err.union
 //!
@@ -9,7 +9,10 @@
 //! process id (group 1 is `invalid`: `kill`'s -1 is every process, not
 //! group 1); a meaning is 0, one bit of the table, or a host number -N;
 //! a group to move into is 0 or above and fits a process id; a text is
-//! for one meaning or -N, never 0. A host number far past any host's last
+//! for 0, one meaning or -N (s246, wolf-lang#787: 0 has words since,
+//! `strsignal(0)`'s, so its row is no longer a shape row: it moved to
+//! `crates/wolf_driver/tests/signal_gaps_lanes.rs`, which holds each
+//! machine to its own answer). A host number far past any host's last
 //! signal is `invalid` where the host has numbers and `unsupported` on
 //! windows, which has none. The live witnesses — sends to a group the
 //! test started, `send_all` and the move, in a throwaway container — are
@@ -78,7 +81,6 @@ fn main() -> !int {
     print("all_past_table={all(268435456)}")
     print("set_pgid_negative={set_pgid(-1)}")
     print("set_pgid_wide={set_pgid(1099511627776)}")
-    print("text_zero={text(0)}")
     print("text_two_bits={text(3)}")
     print("text_past_table={text(268435456)}")
     let far: int = -1099511627776

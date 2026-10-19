@@ -2,9 +2,9 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 1330..1361 name=row body=Block
-FnDecl 1363..1665 name=group body=Block
-FnDecl 1667..1954 name=all body=Block
-FnDecl 1956..2203 name=set_pgid body=Block
-FnDecl 2205..2419 name=text body=Block
-FnDecl 2421..3220 name=main body=Block
+FnDecl 1518..1549 name=row body=Block
+FnDecl 1551..1853 name=group body=Block
+FnDecl 1855..2142 name=all body=Block
+FnDecl 2144..2391 name=set_pgid body=Block
+FnDecl 2393..2607 name=text body=Block
+FnDecl 2609..3375 name=main body=Block

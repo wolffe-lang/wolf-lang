@@ -1,0 +1,107 @@
+//! member: false
+//! s246 (wolf-lang#784, `[os.signal.exit]`, `[os.signal.disp.one]`) — a
+//! program that ends itself, or is sent, a signal; started by `parent.lu`
+//! with one MODE as its argument (or in the file `s246.mode`). RUN ONLY AS A CHILD OF `parent.lu`,
+//! INSIDE A THROWAWAY CONTAINER (linux) OR ON CI'S THROWAWAY RUNNER
+//! (macOS), with `ulimit -c 0` where a core would be a file: every mode
+//! but the shape rows signals this process and nothing else.
+//!
+//! - `exit-segv`: `os_exit_signal(SEGMENT_FAULT)` — ends by SIGSEGV, the
+//!   runtime's stack guard letting go of it first (the program has run a
+//!   task, so the guard's handler is installed).
+//! - `exit-rt <n>`: `os_exit_signal(-n)`, a host number (linux: the C
+//!   library's first real-time signal).
+//! - `exit-term-listened`: listens for `TERMINATE`, then ends by it.
+//! - `exit-child`: `os_exit_signal(CHILD)` — its default does nothing,
+//!   so the process lives on and exits with 128 + N.
+//! - `sent-segv`: has run a task, then sends itself SEGV
+//!   (`os_signal_send(os_pid(), SEGMENT_FAULT)`): a SENT fault follows the
+//!   program's disposition, the default, so it ends by SIGSEGV. At 0.2.32
+//!   it wrote `lived` and exited 0 (the guard's handler set the default
+//!   and returned). (What a child writes goes to standard error, so the
+//!   parent's standard output is the same under `conform-run`, whose
+//!   record holds only the program's own.)
+//! - `ignored-sent-segv`: ignores `SEGMENT_FAULT` (`os_signal_ignore_one`),
+//!   has run a task, sends itself SEGV and lives.
+//! - `overflow-ignored`: ignores `SEGMENT_FAULT`, then a task overflows its
+//!   stack: a REAL fault stays the runtime's — the overflow is reported and
+//!   the exit is 134.
+
+fn deep(n: int) -> int {
+    if n < 0 { 0 } else { deep(n + 1) + 1 }
+}
+
+fn a_task() {
+    scope s {
+        s.spawn(fn() { time_sleep_ms(1) })
+    }
+}
+
+fn main() -> !int {
+    let args = env_args()
+    // The mode is the first argument, or the file `s246.mode` (the
+    // checked machine under `conform-run`, which passes no argument).
+    let from_file = fs_read_text("s246.mode") else |_| ""
+    let mode = if args.len > 0 { args[0] } else { from_file }
+    if mode.len == 0 {
+        return 2
+    }
+    if mode == "exit-segv" {
+        a_task()
+        end_by(4194304)
+        return 3
+    }
+    if mode == "exit-rt" {
+        let n = args[1].to_int()?
+        end_by(0 - n)
+        return 3
+    }
+    if mode == "exit-term-listened" {
+        os_signal_listen(2)?
+        end_by(2)
+        return 3
+    }
+    if mode == "exit-child" {
+        end_by(256)
+        return 3
+    }
+    if mode == "sent-segv" {
+        a_task()
+        os_signal_send(os_pid(), 4194304)?
+        time_sleep_ms(300)
+        eprint("lived")
+        return 0
+    }
+    if mode == "ignored-sent-segv" {
+        os_signal_ignore_one(4194304)?
+        a_task()
+        os_signal_send(os_pid(), 4194304)?
+        time_sleep_ms(300)
+        eprint("lived")
+        return 0
+    }
+    if mode == "overflow-ignored" {
+        os_signal_ignore_one(4194304)?
+        scope s {
+            s.spawn(fn() {
+                let x = deep(0)
+                print("unreachable: {x}")
+            })
+        }
+        return 0
+    }
+    4
+}
+
+/// `os_exit_signal(m)`, which does not return for a meaning in its
+/// shape; a row it answers is printed (and the caller exits 3).
+fn end_by(m: int) {
+    os_exit_signal(m) else |e| {
+        eprint(match e {
+            invalid => "exit_signal: invalid",
+            unsupported => "exit_signal: unsupported",
+        })
+        return
+    }
+    eprint("exit_signal: returned ok")
+}

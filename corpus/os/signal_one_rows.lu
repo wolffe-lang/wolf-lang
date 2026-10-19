@@ -1,0 +1,66 @@
+//! check: run(exit=0, stdout="ignore_one_zero=invalid\nignore_one_kill=invalid\nignore_one_stop=invalid\nignore_one_two_bits=invalid\nignore_one_past_table=invalid\ndefault_one_zero=invalid\ndefault_one_kill=invalid\ndefault_one_stop=invalid\ndefault_one_two_bits=invalid\ndefault_one_past_table=invalid\nexit_zero=invalid\nexit_two_bits=invalid\nexit_past_table=invalid\nfar_host_number: true")
+//! phase: run
+//! conforms: os.signal.disp.one, os.signal.exit, err.union
+//!
+//! s246 (wolf-lang#783, #784; ruling asked, recommendation implemented) —
+//! the rows of one meaning's disposition and of the end by a signal that
+//! are decided by their SHAPE, before any host is asked: one truth on
+//! every host, and nothing changes. A meaning is one bit of the table or a
+//! host number -N, never 0; `KILL` (1048576) and `STOP` (2097152), which
+//! no process can catch or ignore, are `invalid` for the dispositions. A
+//! host number far past any host's last signal is `invalid` where the host
+//! has numbers and `unsupported` on windows, which has none. The live
+//! witnesses — a group send of a fault the sender ignores, a program that
+//! ends itself by one — are `crates/wolf_driver/tests/signal_gaps_lanes.rs`.
+
+fn one(ignore: bool, m: int) -> str {
+    if ignore {
+        os_signal_ignore_one(m) else |e| {
+            return match e {
+                invalid => "invalid",
+                unsupported => "unsupported",
+                io => "io",
+            }
+        }
+        return "ok"
+    }
+    os_signal_default_one(m) else |e| {
+        return match e {
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn end(m: int) -> str {
+    os_exit_signal(m) else |e| {
+        return match e {
+            invalid => "invalid",
+            unsupported => "unsupported",
+        }
+    }
+    "returned"
+}
+
+fn main() -> int {
+    for ignore in [true, false] {
+        let name = if ignore { "ignore_one" } else { "default_one" }
+        print("{name}_zero={one(ignore, 0)}")
+        print("{name}_kill={one(ignore, 1048576)}")
+        print("{name}_stop={one(ignore, 2097152)}")
+        print("{name}_two_bits={one(ignore, 3)}")
+        print("{name}_past_table={one(ignore, 268435456)}")
+    }
+    print("exit_zero={end(0)}")
+    print("exit_two_bits={end(3)}")
+    print("exit_past_table={end(268435456)}")
+    let far: int = -1099511627776
+    let a = one(true, far)
+    let b = one(false, far)
+    let c = end(far)
+    let same = a == b && b == c
+    print("far_host_number: {same && (a == "invalid" || a == "unsupported")}")
+    0
+}

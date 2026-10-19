@@ -1,0 +1,63 @@
+//! member: false
+//! s246 (wolf-lang#784, #785; `[os.signal.exit]`, `[os.proc.status]`) —
+//! starts `exit_by.lu`'s binary (`s246.child`) once per mode
+//! (`s246.modes`, space-separated, each `mode` or `mode:arg`) and reports
+//! how each child ended, as `os_wait_status` (`s246.how` = `wait`) or
+//! `os_wait_poll` (`poll`) answers it — files in the working directory,
+//! not argv, so every machine under `conform-run` reads the same settings:
+//! `exit N`, or `signal N` with ` core` when the host wrote one
+//! (`-(256 + N)`, s246). RUN ONLY INSIDE A THROWAWAY CONTAINER (linux)
+//! OR ON CI'S THROWAWAY RUNNER (macOS): its children signal themselves.
+
+/// One setting the test wrote beside the program, `s246.<name>` in the
+/// working directory (not the environment: lupin's `conform-run` answers
+/// `missing` for every variable), or "" when there is none.
+fn conf(name: str) -> str {
+    fs_read_text("s246.{name}") else |_| ""
+}
+
+fn ended(st: int) -> str {
+    if st >= 0 {
+        return "exit {st}"
+    }
+    if st <= -256 {
+        return "signal {0 - st - 256} core"
+    }
+    "signal {0 - st}"
+}
+
+fn status_of(h: int, how: str) -> !int {
+    if how == "wait" {
+        return os_wait_status(h)?
+    }
+    var r = os_wait_poll()?
+    while r.0 != h {
+        time_sleep_ms(5)
+        r = os_wait_poll()?
+    }
+    r.1
+}
+
+fn main() -> !int {
+    let child = conf("child")
+    let how = conf("how")
+    let modes = conf("modes")
+    if child.len == 0 {
+        return 2
+    }
+    let specs = modes.split(" ")
+    var i = 0
+    while i < specs.len {
+        let spec = specs[i]
+        let parts = spec.split(":")
+        var argv = [child, parts[0]]
+        if parts.len > 1 {
+            (mut argv).push(parts[1])
+        }
+        let h = os_spawn(argv)?
+        let st = status_of(h, how)?
+        print("{parts[0]}: {ended(st)}")
+        i += 1
+    }
+    0
+}

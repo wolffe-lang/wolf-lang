@@ -1,0 +1,18 @@
+//! member: false
+//! s246 (wolf-lang#787, `[os.signal.text]`) — signal 0's words. Until
+//! s246 `os_signal_text(0)` was `invalid` on every machine; it is now the
+//! C library's `strsignal(0)`, what GNU `kill -t 0` and `kill -L` print
+//! for row 0 (`EXIT`): glibc's `Unknown signal 0`. windows has no words
+//! (`unsupported`). Nothing is sent.
+
+fn main() -> int {
+    let t = os_signal_text(0) else |e| {
+        print(match e {
+            invalid => "text_zero=invalid",
+            unsupported => "text_zero=unsupported",
+        })
+        return 0
+    }
+    print("text_zero={t}")
+    0
+}

@@ -1,0 +1,48 @@
+//! member: false
+//! s246 (wolf-lang#781, `[os.signal.wait.fd]`) — started with descriptor 1
+//! closed and 0 on `/dev/null`: one task waits on descriptor 0 (ready at
+//! once: the end of input) and a signal set, over and over, while main
+//! asks `fs_fstat(1)` over and over, for the same two seconds. Writes
+//! `waits W ready R, fstat(1) asked A, ok K` to argv[0] (R: the waits
+//! that answered 0, the input; every one should). Until s246 each wait made
+//! a wake pipe of its own and the host put an end of it on the closed 1
+//! until the runtime moved it, so `fs_fstat(1)` answered ok there: 760,739
+//! of 13,607,478 asks on kasumi at 0.2.32. Now the pipe is made before
+//! `main`, and K is 0 by construction. Nothing is sent.
+
+fn main() -> int {
+    let args = env_args()
+    if args.len < 1 {
+        return 2
+    }
+    let out = args[0]
+    let t0 = time_now_ms()
+    var asks = 0
+    var open = 0
+    scope s {
+        s.spawn(fn() {
+            var n = 0
+            var ready = 0
+            while time_now_ms() - t0 < 2000 {
+                let r = os_signal_wait_fd(0, 16) else |_| -1
+                if r == 0 {
+                    ready += 1
+                }
+                n += 1
+            }
+            fs_write_text("{out}.waits", "{n} ready {ready}") else |_| {}
+        })
+        while time_now_ms() - t0 < 2000 {
+            asks += 1
+            let _ = fs_fstat(1) else |_| {
+                continue
+            }
+            open += 1
+        }
+    }
+    let waits = fs_read_text("{out}.waits") else |_| "?"
+    fs_write_text(out, "waits {waits}, fstat(1) asked {asks}, ok {open}\n") else |_| {
+        return 3
+    }
+    0
+}
