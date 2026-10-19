@@ -425,6 +425,9 @@ extern "C" fn overflow_handler(
         put(b"'\n");
         // SAFETY: write to stderr with a valid buffer.
         unsafe { libc::write(2, msg.as_ptr().cast(), n) };
+        // s248 (`[os.term.restore]`): the registered terminal restore,
+        // after the report — async-signal-safe, one try at its claim.
+        crate::term::restore_in_handler();
         // Same exit discipline as __wolf_rt_trap: reported outcome,
         // never a raw signal death. (The trap-kind vocabulary is
         // closed at s06; adding `stack-overflow` to it is a spec

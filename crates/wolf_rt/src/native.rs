@@ -184,6 +184,10 @@ pub extern "C" fn __wolf_rt_trap(kind: i32) -> ! {
     let mut err = std::io::stderr().lock();
     write_trap_report(&mut err, kind, None);
     let _ = err.flush();
+    drop(err);
+    // s248 (`[os.term.restore]`): the registered terminal restore, after
+    // the report, before the process ends.
+    crate::term::restore_now();
     // The fault path dumps too (s45): the counters up to the trap are
     // exactly the execution that happened, and a program that traps is
     // the one you most want a profile of. No-op in a normal build.
@@ -225,6 +229,9 @@ pub unsafe extern "C" fn __wolf_rt_trap_at(
         write_trap_report(&mut err, kind, Some((&name, line as u64, col as u64)));
     }
     let _ = err.flush();
+    drop(err);
+    // s248 (`[os.term.restore]`): the restore after the report.
+    crate::term::restore_now();
     crate::prof::dump_on_exit();
     std::process::exit(TRAP_EXIT_CODE)
 }
@@ -257,6 +264,9 @@ pub extern "C" fn __wolf_rt_main_err(tag: i64, len: i64, w0: i64, w1: i64, w2: i
         let _ = writeln!(out, "error: {name}");
     }
     let _ = out.flush();
+    drop(out);
+    // s248 (`[os.term.restore]`): main's error is an exit the runtime owns.
+    crate::term::restore_now();
     crate::prof::dump_on_exit();
     std::process::exit(1)
 }

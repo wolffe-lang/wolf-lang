@@ -833,6 +833,9 @@ fn root_died(reason: ProcExit) {
     for p in &live {
         wait_exited(p);
     }
+    // s248 (`[os.term.restore]`): the root's death is an exit the runtime
+    // owns.
+    crate::term::restore_now();
     std::process::exit(ROOT_DEATH_EXIT);
 }
 

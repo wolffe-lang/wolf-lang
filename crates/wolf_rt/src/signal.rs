@@ -1270,6 +1270,9 @@ mod sys {
             Err(c) => return c,
         };
         crate::prof::dump_on_exit();
+        // s248 (`[os.term.restore]`): the restore before the raise — the
+        // default ends the process with no runtime code after it.
+        crate::term::restore_now();
         // SAFETY: a default disposition, an unblock and a raise of a
         // validated signal number on this thread.
         unsafe {
