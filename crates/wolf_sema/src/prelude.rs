@@ -341,6 +341,13 @@ pub const PRELUDE: &[Ambient] = &[
     // group and mode.
     host("os_signal_ignore"),
     host("os_signal_default"),
+    // s246 (wolf-lang#783, #784): one meaning in the sending shape — a
+    // send-only meaning or a host number `-N` — ignored or set back to the
+    // default, and the end of this process by a signal (`exec`-tagged with
+    // the dispositions and `os_exit`).
+    host("os_signal_ignore_one"),
+    host("os_signal_default_one"),
+    host("os_exit_signal"),
     host("os_signal_poll"),
     host("os_spawn_job"),
     host("os_proc_pid"),
