@@ -1,0 +1,12 @@
+//! G10 witness, file 2 of 3: a plain module file that sorts between the
+//! two test files.
+
+/// One.
+pub fn one() -> int {
+    1
+}
+
+/// Two.
+pub fn two() -> int {
+    2
+}
