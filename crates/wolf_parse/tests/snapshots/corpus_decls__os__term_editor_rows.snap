@@ -2,6 +2,6 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 1104..1302 name=wait_row body=Block
-FnDecl 1304..1522 name=mode_row body=Block
-FnDecl 1524..1808 name=main body=Block
+FnDecl 1226..1424 name=wait_row body=Block
+FnDecl 1426..1644 name=mode_row body=Block
+FnDecl 1646..1892 name=main body=Block
