@@ -1,0 +1,56 @@
+//! member: false
+//! (The s248 call comes before the terminal is opened.)
+//! s248 (wolf-lang#795, `[os.signal.wait.fds]`; ruling #93 R2 A) — one
+//! wait over the terminal, a pipe and `RESIZE` with a deadline, each
+//! winner seen. Canonical input and echo off, VMIN 1. The handles are
+//! `[tty, pipe's read end]`, so a key is index 0 and the pipe index 1.
+//! - `deadline`: nothing ready, a 25 ms deadline: (-1, 0), and at least
+//!   25 ms passed (`os_clock_ns`).
+//! - `poll`: the deadline 0 looks once: (-1, 0).
+//! - `pipe`: a byte the program wrote to its own pipe: (1, 0).
+//! - `first`: a meaning raised with the pipe still readable: the meaning
+//!   wins, (-1, 16384); the next wait answers the pipe, (1, 0).
+//! - `key`: the harness types `k` after `ready key`: (0, 0), the key
+//!   still there to read.
+//! - `resized`: the harness resizes the window after `ready resize`: the
+//!   kernel's SIGWINCH, (-1, 16384), nothing typed.
+//! The mode is put back. Expected on the terminal, in order:
+//! `deadline -1 0 waited=true`, `poll -1 0`, `pipe 1 0`,
+//! `first -1 16384 then 1 0`, `ready key`, `key 0 0 107`,
+//! `ready resize`, `resized -1 16384`.
+
+fn main() -> !int {
+    let early = os_signal_wait_fds([0], 0, 0) else |_| (-9, -9)
+    os_signal_listen(16384)?
+    let t = fs_open_mode("/dev/tty", 3)?
+    let saved = os_term_mode(t)?
+    let flags = saved & 31
+    os_term_set_mode(t, flags & 28 | 256)?
+    let p = os_pipe()?
+    let fds = [t, p.0]
+    fs_write(t, "early {early.0} {early.1}\n")?
+    let a0 = os_clock_ns()
+    let d = os_signal_wait_fds(fds, 16384, 25)?
+    let waited = os_clock_ns() - a0 >= 25000000
+    fs_write(t, "deadline {d.0} {d.1} waited={waited}\n")?
+    let q = os_signal_wait_fds(fds, 16384, 0)?
+    fs_write(t, "poll {q.0} {q.1}\n")?
+    fs_write(p.1, "x")?
+    let r = os_signal_wait_fds(fds, 16384, -1)?
+    fs_write(t, "pipe {r.0} {r.1}\n")?
+    os_signal_raise(16384)?
+    let f = os_signal_wait_fds(fds, 16384, -1)?
+    let g = os_signal_wait_fds(fds, 16384, -1)?
+    fs_write(t, "first {f.0} {f.1} then {g.0} {g.1}\n")?
+    let x = fs_read_chunk(p.0, 1)?
+    fs_write(t, "ready key\n")?
+    let k = os_signal_wait_fds(fds, 16384, -1)?
+    let kb = fs_read_chunk(t, 1)?
+    fs_write(t, "key {k.0} {k.1} {kb[0] as int}\n")?
+    fs_write(t, "ready resize\n")?
+    let z = os_signal_wait_fds(fds, 16384, -1)?
+    fs_write(t, "resized {z.0} {z.1}\n")?
+    os_term_set_mode(t, saved)?
+    fs_write(t, "done {x.len}\n")?
+    0
+}

@@ -565,3 +565,26 @@ fn the_save_survives_an_end_at_every_storage_boundary() {
         );
     }
 }
+
+// ------------------------------------------------------------ #795 --
+
+/// #795 (`[os.signal.wait.fds]`): the rows of the wait that need no
+/// terminal, one truth on every host, windows too — a set the shape rule
+/// refuses is `io`, a deadline below -1 `invalid`, each before any handle
+/// is looked at. The live rows (the terminal, a pipe, `RESIZE`, the
+/// deadline, the race) are `editor_wait_lanes.rs`'s (unix).
+#[test]
+fn the_wait_fds_rows_on_every_machine() {
+    let dir = scratch("wait_fds_rows");
+    every_lane(
+        &fixture("wait_fds_rows.lu"),
+        &dir,
+        &["os_signal_wait_fds"],
+        &|lane, stdout| {
+            assert_eq!(
+                stdout, "empty=io send_only=io past_table=io below=invalid far_below=invalid\n",
+                "the {lane} machine's wait_fds rows"
+            );
+        },
+    );
+}
