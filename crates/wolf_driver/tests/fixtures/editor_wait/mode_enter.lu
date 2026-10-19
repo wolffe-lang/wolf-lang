@@ -1,0 +1,33 @@
+//! member: false
+//! s248 (wolf-lang#802, `[os.term.mode]`; yew yw01's W1, `notes/
+//! yw01-evidence/witness/enter/`) — what an editor's raw mode reads. A
+//! typed carriage return reaches the program as CR (13) with `RAW_CR`
+//! (32: `ICRNL` cleared, as C yew's raw mode clears it) and as LF (10)
+//! without it, so Enter is a key of its own and not Ctrl-J; a typed byte
+//! with its eighth bit set arrives whole, and stripped to seven bits with
+//! `STRIP8` (128: `ISTRIP`). The new bits read back as set. The harness
+//! types CR after `ready enter`, CR after `ready again` and 0xC3 after
+//! `ready strip`. The mode is put back.
+//! Expected: `bits 160`, `cr 13 then 10`, `strip 67`.
+
+fn main() -> !int {
+    let t = fs_open_mode("/dev/tty", 3)?
+    let saved = os_term_mode(t)?
+    let flags = saved & 31
+    os_term_set_mode(t, flags & 16 | 32 | 256)?
+    let m = os_term_mode(t)?
+    fs_write(t, "ready enter\n")?
+    let a = fs_read_chunk(t, 1)?
+    os_term_set_mode(t, flags & 16 | 256)?
+    fs_write(t, "ready again\n")?
+    let b = fs_read_chunk(t, 1)?
+    os_term_set_mode(t, flags & 16 | 128 | 256)?
+    let s = os_term_mode(t)?
+    fs_write(t, "ready strip\n")?
+    let c = fs_read_chunk(t, 1)?
+    os_term_set_mode(t, saved)?
+    fs_write(t, "bits {(m & 224) + (s & 224)}\n")?
+    fs_write(t, "cr {a[0] as int} then {b[0] as int}\n")?
+    fs_write(t, "strip {c[0] as int}\n")?
+    0
+}

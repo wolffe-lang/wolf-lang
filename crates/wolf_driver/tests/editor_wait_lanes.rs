@@ -233,6 +233,12 @@ impl Tty {
         String::from_utf8_lossy(&self.buf.lock().unwrap()).replace('\r', "")
     }
 
+    /// s248 (#802): the master's bytes as the wire carried them, CRs and
+    /// all.
+    fn wire(&self) -> Vec<u8> {
+        self.buf.lock().unwrap().clone()
+    }
+
     /// Wait until the transcript holds `want`; false at the deadline.
     fn wait_for(&self, want: &str, secs: u64) -> bool {
         let end = Instant::now() + Duration::from_secs(secs);
@@ -672,4 +678,59 @@ fn no_meaning_raised_beside_the_wait_is_lost() {
         // lupin has never resolved the listen (s163's measurement).
         &["os_signal_listen", "os_signal_wait_fds"],
     );
+}
+
+/// #802 (`[os.term.mode]`; yw01's W1 Enter witness): with `RAW_CR` a typed
+/// CR reads CR (13), without it LF (10); with `STRIP8` a typed 0xC3 reads
+/// 0x43 (67); the two bits read back set (32 + 128). Red at s248's
+/// prediction commit and at 0.2.33: bit 5 and bit 7 are `invalid` there
+/// (`[os.term.mode]` had no field for them), so the first set fails.
+#[test]
+fn raw_mode_reads_enter_as_cr_and_strips_on_request() {
+    every_lane(
+        "mode_enter.lu",
+        &[
+            ("ready enter", Act::Type(b"\r")),
+            ("ready again", Act::Type(b"\r")),
+            ("ready strip", Act::Type(b"\xc3")),
+        ],
+        "os_term_mode",
+        &|lane, end, text| {
+            for want in ["bits 160\n", "cr 13 then 10\n", "strip 67\n"] {
+                assert!(text.contains(want), "mode_enter on {lane}: no {want:?}: {text}");
+            }
+            assert_eq!(*end, End::Exit(0), "mode_enter on {lane}: {text}");
+        },
+    );
+}
+
+/// #802 (`[os.term.mode]`; yw01's W1 output witness): with `RAW_OUTPUT` a
+/// written LF reaches the wire alone, without it as CR LF; the bit reads
+/// back set (64). Red at 0.2.33: bit 6 is `invalid` there.
+#[test]
+fn raw_output_writes_lf_alone() {
+    let (dir, ls) = lanes("mode_opost.lu");
+    for lane in ls {
+        let t = Tty::start(&lane.argv, &dir);
+        if lane.lupin {
+            let (_, text, _) = t.finish(60);
+            assert!(
+                text.contains("`os_term_mode`") && text.contains("unsupported"),
+                "lupin refuses mode_opost by name: {text}"
+            );
+            continue;
+        }
+        assert!(t.wait_for("bits", 60), "mode_opost on {}: {}", lane.name, t.text());
+        std::thread::sleep(Duration::from_millis(200));
+        let wire = t.wire();
+        let (end, text, _) = t.finish(60);
+        let has = |b: &[u8]| wire.windows(b.len()).any(|w| w == b);
+        eprintln!("s248 mode_opost [{}] end={end:?} wire={:?}", lane.name, String::from_utf8_lossy(&wire));
+        assert!(has(b"[raw]\n"), "mode_opost on {}: no bare LF: {text}", lane.name);
+        assert!(!has(b"[raw]\r\n"), "mode_opost on {}: OPOST still on: {text}", lane.name);
+        assert!(has(b"[cooked]\r\n"), "mode_opost on {}: the mode put back: {text}", lane.name);
+        assert!(text.contains("bits 64\n"), "mode_opost on {}: {text}", lane.name);
+        assert_eq!(end, End::Exit(0), "mode_opost on {}: {text}", lane.name);
+        eprintln!("PASS s248 mode_opost [{}]", lane.name);
+    }
 }
