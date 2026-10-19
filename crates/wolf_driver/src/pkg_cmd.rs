@@ -1531,6 +1531,8 @@ mod builtin_cap_tests {
             "read_line",
             "clock_ms",
             "time_sleep_ms",
+            // s248 (#798): the clock at nanoseconds, with the ms clock.
+            "os_clock_ns",
             "random_seed",
             "os_random",
             "json_get",

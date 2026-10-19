@@ -810,6 +810,8 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         // s246 (ruling #88 R3 D): `[os.proc.status]`, `[os.proc.poll]`.
         "__wolf_rt_os_wait_status_core",
         "__wolf_rt_os_wait_poll_core",
+        // s248 (#798): `[os.clock.ns]`.
+        "__wolf_rt_os_clock_ns",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -820,7 +822,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        229,
+        230,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }

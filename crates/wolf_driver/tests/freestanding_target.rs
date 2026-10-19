@@ -585,6 +585,14 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`os_wait_poll_core`",
             "hosted runtime",
         ),
+        // s248 (#798): the clock at nanoseconds, a hosted runtime symbol.
+        (
+            "os_clock_ns",
+            "",
+            "os_clock_ns()",
+            "`os_clock_ns`",
+            "hosted runtime",
+        ),
         // s242 (#680): the poll of the children.
         (
             "os_wait_poll",
