@@ -819,6 +819,20 @@ pub const SIGNAL_START: &str = "__wolf_rt_signal_start";
 /// (s246, wolf-lang#781, `[os.signal.wait.fd]`), after [`SIGNAL_START`].
 pub const WAIT_FD_START: &str = "__wolf_rt_signal_wait_fd_start";
 
+/// s248 (wolf-lang#794, `[os.term.restore]`): the runtime's restore on a
+/// return from `main`, which the entry shim calls before it returns in a
+/// program that names [`TERM_RESTORE_AT_EXIT`].
+pub const TERM_RESTORE_EXIT: &str = "__wolf_rt_term_restore_exit";
+
+/// s248: the registration of the terminal restore at exit.
+pub const TERM_RESTORE_AT_EXIT: &str = "__wolf_rt_os_term_restore_at_exit";
+
+/// Whether a function `m` reaches calls `os_term_restore_at_exit` (s248):
+/// its return from `main` then restores the terminal too.
+pub fn names_a_restore(m: &WirModule) -> bool {
+    names_any(m, &[TERM_RESTORE_AT_EXIT])
+}
+
 /// The runtime calls that make the signal hub (its two pipes and its
 /// drain thread) when it is not made yet: the listen, the wait and the
 /// wait on a descriptor (`[os.signal.hub]`). `ignore`, `default`,
@@ -913,6 +927,17 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
             }
         }
     };
+    // s248 (#794, `[os.term.restore]`): a program that names the terminal
+    // restore restores on a return from `main` too — a call before each
+    // return of the shim (main's error path restores in the runtime).
+    // Every other program's shim is unchanged.
+    let restore_sig = names_a_restore(m).then(|| m.make_sig(vec![], vec![]));
+    let restore = |f: &mut Function, b: wolf_wir::ir::Block| {
+        if let Some(sig) = restore_sig {
+            let callee = f.import_func(TERM_RESTORE_EXIT, sig);
+            f.append_inst(b, Opcode::Call, &[], &[], Aux::Callee(callee));
+        }
+    };
     let Some((_, entry)) = m.funcs.iter().find(|(_, f)| f.name == "main") else {
         return Err(BackendError::Unsupported(
             "no `main` function to build an executable around".to_string(),
@@ -946,6 +971,7 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
         start(&mut f, b0);
         let callee = f.import_func("main", entry_sig);
         f.append_inst(b0, Opcode::Call, &[], &[], Aux::Callee(callee));
+        restore(&mut f, b0);
         let (_, z) = f.append_inst(b0, Opcode::Iconst, &[], &[types::I32], Aux::Int(0));
         f.append_inst(b0, Opcode::Ret, &[z[0]], &[], Aux::None);
         return Ok(m.add_func(f));
@@ -973,6 +999,7 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
     let Some(eu_ok) = eu_ok else {
         // Plain `() -> i64`: truncate and return.
         let (_, tr) = f.append_inst(b0, Opcode::Itrunc, &[res[0]], &[types::I32], Aux::None);
+        restore(&mut f, b0);
         f.append_inst(b0, Opcode::Ret, &[tr[0]], &[], Aux::None);
         return Ok(m.add_func(f));
     };
@@ -999,6 +1026,7 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
         let (_, z) = f.append_inst(b_ok, Opcode::Iconst, &[], &[types::I32], Aux::Int(0));
         z[0]
     };
+    restore(&mut f, b_ok);
     f.append_inst(b_ok, Opcode::Ret, &[code], &[], Aux::None);
     // Err path: compile-time dispatch over the module's interned tags
     // (tag id k = index + 1) hands the tag's NAME to the runtime.
