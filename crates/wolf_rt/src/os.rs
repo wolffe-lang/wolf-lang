@@ -207,6 +207,8 @@ pub extern "C" fn __wolf_rt_os_exit(code: i64) -> ! {
     // `ret` cannot fire; this is the s45 counterpart. No-op in a
     // normal build.
     crate::prof::dump_on_exit();
+    // s248 (`[os.term.restore]`): the registered terminal restore.
+    crate::term::restore_now();
     std::process::exit(code.rem_euclid(256) as i32)
 }
 
