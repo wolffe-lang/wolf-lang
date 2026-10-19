@@ -127,7 +127,7 @@ pub use proc::{
 };
 pub use scope::{ExitReason, ScopeInner, TaskState, dump};
 #[cfg(unix)]
-pub(crate) use stack::{ignored_sent_faults, reinstall_after_exec, set_sent_fault};
+pub(crate) use stack::{ignored_sent_faults, note_self_send, reinstall_after_exec, set_sent_fault};
 pub use when::{
     __wolf_rt_sync_free, __wolf_rt_sync_new, __wolf_rt_sync_payload, __wolf_rt_when_acquire,
     __wolf_rt_when_release, SyncCell, WhenErr, when, when_acquire, when_release,

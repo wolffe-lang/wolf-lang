@@ -1330,9 +1330,28 @@ mod sys {
             return proc_code::INVALID;
         }
         match host_signal(m, true) {
+            // s246 (macOS): a fault signal to this process is announced
+            // first, so the stack guard can tell it from a fault.
+            // SAFETY: getpid has no preconditions.
+            Ok(sig) if p == unsafe { libc::getpid() } => self_kill(p, sig),
             Ok(sig) => kill_code(p, sig),
             Err(c) => c,
         }
+    }
+
+    /// s246: `kill_code` of a target that includes this process, the
+    /// fault signals announced to the stack guard first
+    /// (`task::note_self_send`) and the note taken back on a refusal.
+    fn self_kill(target: libc::pid_t, sig: libc::c_int) -> i64 {
+        let fault = sig == libc::SIGSEGV || sig == libc::SIGBUS;
+        if fault {
+            crate::task::note_self_send(sig, true);
+        }
+        let rc = kill_code(target, sig);
+        if fault && rc != crate::os::proc_code::OK {
+            crate::task::note_self_send(sig, false);
+        }
+        rc
     }
 
     /// s241 (#739, `[os.signal.send.group]`): `kill(-pgid, sig)` — every
@@ -1349,6 +1368,9 @@ mod sys {
             return proc_code::INVALID;
         }
         match host_signal(m, true) {
+            // s246 (macOS): a send to this process's own group reaches it.
+            // SAFETY: getpgrp has no preconditions.
+            Ok(sig) if g == unsafe { libc::getpgrp() } => self_kill(-g, sig),
             Ok(sig) => kill_code(-g, sig),
             Err(c) => c,
         }

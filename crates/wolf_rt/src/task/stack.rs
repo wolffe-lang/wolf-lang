@@ -267,25 +267,66 @@ fn sent_flag(sig: libc::c_int) -> Option<&'static AtomicBool> {
     }
 }
 
-/// Whether `code` (a `siginfo_t`'s `si_code`) says a process SENT the
-/// signal. linux: every sender's code is at or below 0 (`SI_USER` 0,
-/// `SI_QUEUE`, `SI_TKILL` and the rest negative); a fault's is above 0
+/// Whether a delivery's `siginfo_t` says a process SENT the signal.
+/// linux: by `si_code` alone — every sender's is at or below 0 (`SI_USER`
+/// 0, `SI_QUEUE`, `SI_TKILL` and the rest negative), a fault's above 0
 /// (`SEGV_MAPERR`, `SEGV_ACCERR`, `BUS_ADRERR`, … and the kernel's own
-/// `SI_KERNEL`). macOS (and the BSDs): a sender's codes are `SI_USER`
-/// (0x10001, `kill` and `raise`) and its neighbours (`SI_QUEUE`, …), far
-/// above a fault's kind (1, 2, 3); the `libc` crate names none of them
-/// for these targets, so the range is written here, and what holds it is
-/// the macOS runner's witness (`signal_gaps_lanes.rs`: a sent SEGV ends
-/// the program, an ignored one does not, a real overflow is reported).
-fn sent(code: libc::c_int) -> bool {
+/// `SI_KERNEL`). **macOS cannot say** (measured on CI's runner, s246 run
+/// 39218842446: a SEGV sent by `kill` and by `raise` arrives with
+/// `si_code` 2, `si_pid` 0 and `si_addr` 0 — the code a write to address
+/// 16 gets, with `si_addr` 0x10), so there a delivery at address 0 is
+/// taken as sent only when this process announced a send of that signal
+/// to itself ([`note_self_send`]: `os_signal_send` to its own id, a group
+/// send to its own group) and it has not been taken yet.
+fn sent(sig: libc::c_int, code: libc::c_int, addr: usize) -> bool {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
+        let _ = (sig, addr);
         code <= 0
     }
     #[cfg(not(any(target_os = "linux", target_os = "android")))]
     {
-        code <= 0 || code >= 0x10000
+        let _ = code;
+        addr == 0 && take_self_send(sig)
     }
+}
+
+/// s246 (macOS): sends of `SIGSEGV`/`SIGBUS` this process made to itself
+/// and the handler has not met yet ([`sent`]).
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+static SELF_SENDS: [std::sync::atomic::AtomicUsize; 2] = [
+    std::sync::atomic::AtomicUsize::new(0),
+    std::sync::atomic::AtomicUsize::new(0),
+];
+
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+fn self_slot(sig: libc::c_int) -> Option<&'static std::sync::atomic::AtomicUsize> {
+    match sig {
+        libc::SIGSEGV => Some(&SELF_SENDS[0]),
+        libc::SIGBUS => Some(&SELF_SENDS[1]),
+        _ => None,
+    }
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+fn take_self_send(sig: libc::c_int) -> bool {
+    self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+}
+
+/// s246: a send of `sig` that reaches this process is about to be made
+/// (`ok` false: it was refused, take the note back). Only macOS reads it
+/// ([`sent`]); linux's siginfo says who sent a signal by itself.
+pub fn note_self_send(sig: libc::c_int, ok: bool) {
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    if let Some(n) = self_slot(sig) {
+        if ok {
+            n.fetch_add(1, SeqCst);
+        } else {
+            let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+        }
+    }
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    let _ = (sig, ok);
 }
 
 /// s246: the program's choice for a SENT `SIGSEGV` or `SIGBUS` —
@@ -340,10 +381,15 @@ extern "C" fn overflow_handler(
     info: *mut libc::siginfo_t,
     _ctx: *mut libc::c_void,
 ) {
+    // SAFETY: si_addr is valid for SIGSEGV/SIGBUS with SA_SIGINFO.
+    #[cfg(target_os = "linux")]
+    let addr = unsafe { (*info).si_addr() } as usize;
+    #[cfg(not(target_os = "linux"))]
+    let addr = unsafe { (*info).si_addr } as usize;
     // s246: a SENT signal is the program's, by the choice it made: none
     // of the guard's business. (`si_code` is valid in every siginfo.)
     // SAFETY: `info` is the kernel's siginfo for this delivery.
-    if sent(unsafe { (*info).si_code }) {
+    if sent(sig, unsafe { (*info).si_code }, addr) {
         if sent_fault_ignored(sig) {
             return;
         }
@@ -359,11 +405,6 @@ extern "C" fn overflow_handler(
         }
         return;
     }
-    // SAFETY: si_addr is valid for SIGSEGV/SIGBUS with SA_SIGINFO.
-    #[cfg(target_os = "linux")]
-    let addr = unsafe { (*info).si_addr() } as usize;
-    #[cfg(not(target_os = "linux"))]
-    let addr = unsafe { (*info).si_addr } as usize;
     if guard_hit(addr) {
         // "wolf-rt: stack overflow in task '<label>'\n" — byte-built,
         // write(2) direct, then a deterministic trap-discipline exit.
@@ -398,6 +439,17 @@ extern "C" fn overflow_handler(
         let mut dfl: libc::sigaction = std::mem::zeroed();
         dfl.sa_sigaction = libc::SIG_DFL;
         libc::sigaction(sig, &dfl, std::ptr::null_mut());
+    }
+    // s246 (macOS, where [`sent`] cannot tell): at address 0 the delivery
+    // is a fault there or a signal another process sent, and under the
+    // default both end the process by it — the signal again makes the
+    // second do so too, as the re-fault does the first. Under an ignore
+    // a sent one from another process lives through this once (the
+    // handler is gone), and a fault re-faults and ends it.
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    if addr == 0 && !sent_fault_ignored(sig) {
+        // SAFETY: raise is async-signal-safe; the default is in place.
+        unsafe { libc::raise(sig) };
     }
 }
 
