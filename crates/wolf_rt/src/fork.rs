@@ -137,9 +137,10 @@ fn fork() -> Result<(i64, i64), i64> {
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 fn child(old: &libc::sigset_t) {
     crate::reactor::fork_child();
-    if let Err(e) = crate::signal::fork_child_pipes() {
-        refuse("its signal hub", &e);
-    }
+    // PLANT (s247, never to merge): the child's hub re-making planted out —
+    // the child keeps the parent's pipes and the parent's drain-thread state.
+    let _plant = crate::signal::fork_child_pipes as fn() -> std::io::Result<bool>;
+    let _keep = refuse as fn(&str, &std::io::Error) -> !;
     crate::task::fork_child();
     crate::os::fork_child_clear();
     restore_signals(old);
