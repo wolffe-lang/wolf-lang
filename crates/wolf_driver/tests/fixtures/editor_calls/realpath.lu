@@ -38,8 +38,8 @@ fn main() -> !int {
     let cwd = fs_realpath(".")?
     fs_create_dir_all("rp/a/b")?
     fs_write_text("rp/a/f", "f")?
-    let links = link("a/b", "rp/l1") && link("nope", "rp/dangle") && link("loop2", "rp/loop1")
-        && link("loop1", "rp/loop2")
+    let links = link("a/b", "rp/l1") && link("nope", "rp/dangle") &&
+        link("loop2", "rp/loop1") && link("loop1", "rp/loop2")
     print("file={row(cwd, "rp/a/f")}")
     print("dir_slash={row(cwd, "rp/a/")}")
     print("dot_dot={row(cwd, "rp/a/b/../f")}")
