@@ -287,7 +287,7 @@ fn twenty_rounds_of_100_us_are_never_zero_ns() {
         "os_clock_ns",
         &|lane, stdout| {
             assert_eq!(
-                stdout, "clock_ns zeros=0 of 20 behind=0\n",
+                stdout, "clock_ns zeros=0 of 20 behind=0 work=1199940\n",
                 "the {lane} machine's clock"
             );
         },
