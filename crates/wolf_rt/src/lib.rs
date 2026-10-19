@@ -17,6 +17,9 @@ pub mod fs;
 // `[os.fs.create.mode]`, `[os.fs.symlink]`, `[os.fs.link]`, `[os.fs.times]`,
 // `[os.fs.truncate]`, `[os.fs.umask]`.
 pub mod fs_change;
+// s248 (wolf-lang#796, #797; ruling #93): the atomic save's two syncs and
+// the canonical path — `[os.fs.sync]`, `[os.fs.realpath]`.
+pub mod fs_save;
 // s228 (wolf-lang#661): the table behind `fs_open`'s and the net
 // calls' handles — numbers never reused, storage always.
 pub(crate) mod handles;
