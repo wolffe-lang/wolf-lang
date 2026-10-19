@@ -14276,6 +14276,18 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             let pair = table.intern(TyKind::Tuple(vec![int_, int_]));
             (Vec::new(), rowed(table, pair, &["io"]))
         }
+        // s247 (ruling #90, `[os.proc.fork]`; ruling asked): a child that
+        // keeps running wolf code — (pid, h) in the parent, the child's id
+        // and its handle in the child table, (0, -1) in the child; `busy`
+        // the protocol's rule (a task, or tasks live), `io` the host's
+        // refusal, `unsupported` a host with no fork the runtime serves.
+        "os_fork" => {
+            let pair = table.intern(TyKind::Tuple(vec![int_, int_]));
+            (
+                Vec::new(),
+                rowed(table, pair, &["busy", "io", "unsupported"]),
+            )
+        }
         // s232 (wolf-lang#141, `[os.proc.self]`): this process's id
         // (every host has one) and its parent's (windows `unsupported`).
         "os_pid" => (Vec::new(), int_),

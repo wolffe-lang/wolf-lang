@@ -237,6 +237,10 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // s246 (ruling #88 R3 D): the core-reporting siblings, `exec` with
         // the wait and the poll they mirror.
         "os_wait_status_core" | "os_wait_poll_core" => SandboxCategory::Exec,
+        // s247 (ruling #90; ruling asked): a fork is process control,
+        // `exec` with `os_spawn` and `os_exec` (at comptime it would fork
+        // the compiler).
+        "os_fork" => SandboxCategory::Exec,
         // s232 (ruling owed, #54's reasoning): a signal to another
         // process is process control, `exec` with `os_kill`. This
         // process's id, its parent's and the dispositions it holds are
