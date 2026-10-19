@@ -561,7 +561,10 @@ fn the_hub_is_the_childs_own() {
             stdout.replace('\n', " | "),
             String::from_utf8_lossy(&out.stderr).replace('\n', " | ")
         ));
-        assert_eq!(stdout, want, "hub.lu with TERMINATE blocked from the start, {row}");
+        assert_eq!(
+            stdout, want,
+            "hub.lu with TERMINATE blocked from the start, {row}"
+        );
     }
 }
 
