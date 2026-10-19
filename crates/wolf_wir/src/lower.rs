@@ -10372,6 +10372,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // s236 (#701): a file's owner, by path and on a handle.
                 | "fs_set_owner"
                 | "fs_set_owner_fd"
+                // s248 (#796, #797): the atomic save's syncs and the
+                // canonical path.
+                | "fs_sync"
+                | "fs_sync_dir"
+                | "fs_realpath"
         ) {
             return self.lower_fs_builtin(&callee_text, d, e);
         }
@@ -13572,19 +13577,20 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     .expect("rc");
                 Ok(Flow::Val(Some(self.nonzero(rc))))
             }
-            "fs_read_text" | "read_line" | "fs_read" => {
+            // s248 (#797, `[os.fs.realpath]`): the canonical path is
+            // `fs_read_text`'s shape — a path pair in, a str pair out.
+            "fs_read_text" | "read_line" | "fs_read" | "fs_realpath" => {
                 let (region, slot) = self.rt_slot(16);
                 let rc = match name {
-                    "fs_read_text" => {
+                    "fs_read_text" | "fs_realpath" => {
                         let s = arg(0)?;
                         let (p, l) = self.str_parts(s);
-                        self.rt_call_slot(
-                            "__wolf_rt_fs_read_text",
-                            &[p, l],
-                            slot,
-                            region,
-                            Some(types::I64),
-                        )
+                        let sym = if name == "fs_realpath" {
+                            "__wolf_rt_fs_realpath"
+                        } else {
+                            "__wolf_rt_fs_read_text"
+                        };
+                        self.rt_call_slot(sym, &[p, l], slot, region, Some(types::I64))
                     }
                     "read_line" => self.rt_call_slot(
                         "__wolf_rt_read_line",
@@ -13815,8 +13821,20 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             | "fs_set_mode" | "fs_create_dir_mode" | "fs_symlink" | "fs_link"
             | "fs_set_times" | "fs_truncate"
             // s236: the owner, the same shape.
-            | "fs_set_owner" | "fs_set_owner_fd" => {
+            | "fs_set_owner" | "fs_set_owner_fd"
+            // s248 (#796): the two syncs, the same shape.
+            | "fs_sync" | "fs_sync_dir" => {
                 let rc = match name {
+                    // s248 (`[os.fs.sync]`): the handle; the path pair.
+                    "fs_sync" => {
+                        let fd = arg(0)?;
+                        self.rt_call("__wolf_rt_fs_sync", &[fd], Some(types::I64))
+                    }
+                    "fs_sync_dir" => {
+                        let path = arg(0)?;
+                        let (pp, pl) = self.str_parts(path);
+                        self.rt_call("__wolf_rt_fs_sync_dir", &[pp, pl], Some(types::I64))
+                    }
                     // s236 (`[os.fs.owner]`): the path pair, the two
                     // ids, `follow` widened; and the handle form.
                     "fs_set_owner" => {
