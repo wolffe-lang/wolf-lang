@@ -137,6 +137,19 @@ mod sys {
         let f = fd_of(h)?;
         let fd = f.as_raw_fd();
         let mut t = get(fd)?;
+        apply_bits(&mut t, m);
+        // TCSADRAIN: output already written lands under the old mode;
+        // input already typed is kept.
+        // SAFETY: a descriptor we hold and a termios tcgetattr filled.
+        let r =
+            crate::os::with_ttou_blocked(|| unsafe { libc::tcsetattr(fd, libc::TCSADRAIN, &t) });
+        if r < 0 { Err(proc_code::IO) } else { Ok(()) }
+    }
+
+    /// The mode's fields written into `t`, every other field as found —
+    /// `set_mode`'s and the exit restore's one encoding (s248: the
+    /// restore runs it in a signal handler too, so it only assigns).
+    pub(super) fn apply_bits(t: &mut libc::termios, m: i64) {
         for (bit, flag) in [
             (mode::CANONICAL, libc::ICANON),
             (mode::ECHO, libc::ECHO),
@@ -157,12 +170,55 @@ mod sys {
         }
         t.c_cc[libc::VMIN] = ((m >> 8) & 0xFF) as libc::cc_t;
         t.c_cc[libc::VTIME] = ((m >> 16) & 0xFF) as libc::cc_t;
-        // TCSADRAIN: output already written lands under the old mode;
-        // input already typed is kept.
-        // SAFETY: a descriptor we hold and a termios tcgetattr filled.
-        let r =
-            crate::os::with_ttou_blocked(|| unsafe { libc::tcsetattr(fd, libc::TCSADRAIN, &t) });
-        if r < 0 { Err(proc_code::IO) } else { Ok(()) }
+    }
+
+    /// s248 (`[os.term.restore]`): a duplicate of the descriptor `h`
+    /// names, at 3 or above and close-on-exec (never one of the standard
+    /// three, s245's rule), checked to be a terminal; `IO` for a closed,
+    /// forged or non-terminal handle, or a duplicate the host refuses.
+    pub fn hold(h: i64) -> Result<libc::c_int, i64> {
+        let f = fd_of(h)?;
+        // SAFETY: a duplicate of a descriptor we hold, owned from here.
+        let d = unsafe { libc::fcntl(f.as_raw_fd(), libc::F_DUPFD_CLOEXEC, 3) };
+        if d < 0 {
+            return Err(proc_code::IO);
+        }
+        if get(d).is_err() {
+            // SAFETY: the duplicate is ours.
+            unsafe { libc::close(d) };
+            return Err(proc_code::IO);
+        }
+        Ok(d)
+    }
+
+    /// s248 (`[os.term.restore]`): the registered mode set on `fd` and the
+    /// bytes written after it. Only async-signal-safe calls (`tcgetattr`,
+    /// `pthread_sigmask`, `tcsetattr`, `write`) and no allocation: the
+    /// stack guard runs this in its handler. A descriptor that is no
+    /// longer a terminal is left alone, bytes and all.
+    pub fn restore_on(fd: libc::c_int, m: i64, bytes: &[u8]) {
+        // SAFETY: a zeroed termios filled by tcgetattr on our duplicate.
+        let mut t: libc::termios = unsafe { std::mem::zeroed() };
+        if unsafe { libc::tcgetattr(fd, &mut t) } < 0 {
+            return;
+        }
+        apply_bits(&mut t, m);
+        // SAFETY: our duplicate and a termios tcgetattr filled.
+        let _ = crate::os::with_ttou_blocked(|| unsafe { libc::tcsetattr(fd, libc::TCSADRAIN, &t) });
+        let mut at = 0;
+        while at < bytes.len() {
+            // SAFETY: the registration's own bytes, on our duplicate.
+            let n = unsafe { libc::write(fd, bytes[at..].as_ptr().cast(), bytes.len() - at) };
+            if n > 0 {
+                at += n as usize;
+                continue;
+            }
+            // SAFETY: errno read after the failed write.
+            if n < 0 && std::io::Error::last_os_error().raw_os_error() == Some(libc::EINTR) {
+                continue;
+            }
+            break;
+        }
     }
 
     pub fn pgid() -> Result<i64, i64> {
@@ -284,6 +340,138 @@ mod sys {
 
 pub use sys::{chars, foreground, mode_of, pgid, set_foreground, set_mode, set_pgid, size};
 
+// ---- s248: the restore at exit (`[os.term.restore]`, wolf-lang#794) ----
+//
+// Ruling #93 R1 C: the runtime restores the terminal on every exit it
+// owns, in the runtime, never in a handler of the program's. ONE
+// registration a process: a duplicate of the terminal's descriptor (>= 3,
+// close-on-exec), the mode, the bytes to write after it, and the pid that
+// registered (a forked child is another process and restores nothing).
+// The last registration wins. It is run — and taken, so once — from each
+// exit the runtime owns, as prof's dump is (explicit sites, no `atexit`):
+// the trap reports (`native.rs`), a main's error, `os_exit`, a return from
+// `main` (the entry shim calls [`__wolf_rt_term_restore_exit`] in a
+// program that names the registration), the proc root's death,
+// `os_exit_signal` before its raise, and the stack guard after its report
+// — the one site in a signal handler, so the registration is guarded by
+// an atomic claim the handler tries once, and the restore allocates and
+// frees nothing.
+
+#[cfg(unix)]
+mod at_exit {
+    use std::cell::UnsafeCell;
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    pub(super) struct Restore {
+        pub pid: libc::pid_t,
+        pub fd: libc::c_int,
+        pub mode: i64,
+        pub bytes: Box<[u8]>,
+    }
+
+    struct Slot(UnsafeCell<Option<Restore>>);
+    // SAFETY: every access to the cell holds `CLAIM`.
+    unsafe impl Sync for Slot {}
+
+    static CLAIM: AtomicBool = AtomicBool::new(false);
+    static SLOT: Slot = Slot(UnsafeCell::new(None));
+
+    /// Claim the slot; `wait` false tries once (a handler may not spin on
+    /// a claim its own thread may hold).
+    fn claim(wait: bool) -> bool {
+        loop {
+            if CLAIM
+                .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+                .is_ok()
+            {
+                return true;
+            }
+            if !wait {
+                return false;
+            }
+            std::thread::yield_now();
+        }
+    }
+
+    fn release() {
+        CLAIM.store(false, Ordering::Release);
+    }
+
+    /// The registration, replacing any before it (whose duplicate is
+    /// closed: no exit is using it — an exit takes the slot first).
+    pub(super) fn register(r: Restore) {
+        claim(true);
+        // SAFETY: `CLAIM` is held.
+        let old = unsafe { (*SLOT.0.get()).replace(r) };
+        release();
+        if let Some(o) = old {
+            // SAFETY: the old registration's own duplicate.
+            unsafe { libc::close(o.fd) };
+        }
+    }
+
+    /// Take the registration and restore, in this process only. The
+    /// process is ending, so nothing is freed (the handler may not).
+    pub(super) fn run(in_handler: bool) {
+        if !claim(!in_handler) {
+            return;
+        }
+        // SAFETY: `CLAIM` is held.
+        let r = unsafe { (*SLOT.0.get()).take() };
+        release();
+        let Some(r) = r else {
+            return;
+        };
+        // SAFETY: getpid cannot fail.
+        if unsafe { libc::getpid() } == r.pid {
+            super::sys::restore_on(r.fd, r.mode, &r.bytes);
+        }
+        std::mem::forget(r);
+    }
+}
+
+/// `os_term_restore_at_exit(fd, mode, bytes)` (s248, `[os.term.restore]`):
+/// register the restore. The order of refusal: a mode outside the bits is
+/// `INVALID` before the handle is read; then windows is `UNSUPPORTED`;
+/// then a closed, forged or non-terminal handle (or a duplicate the host
+/// will not make) is `IO`. A mode the terminal already has is allowed.
+pub fn restore_at_exit(h: i64, m: i64, bytes: &[u8]) -> Result<(), i64> {
+    if m < 0 || m & !mode::VALID != 0 {
+        return Err(proc_code::INVALID);
+    }
+    #[cfg(unix)]
+    {
+        let fd = sys::hold(h)?;
+        at_exit::register(at_exit::Restore {
+            // SAFETY: getpid cannot fail.
+            pid: unsafe { libc::getpid() },
+            fd,
+            mode: m,
+            bytes: bytes.into(),
+        });
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (h, bytes);
+        Err(proc_code::UNSUPPORTED)
+    }
+}
+
+/// s248: run the registered restore, once, from an exit the runtime owns
+/// (not a signal handler). Nothing registered, nothing done.
+pub fn restore_now() {
+    #[cfg(unix)]
+    at_exit::run(false);
+}
+
+/// s248: [`restore_now`] from the stack guard's handler: one try at the
+/// claim, and only async-signal-safe calls.
+pub fn restore_in_handler() {
+    #[cfg(unix)]
+    at_exit::run(true);
+}
+
 // ---- the C entry surface (codes are `os::proc_code`'s) -----------------
 
 /// `os_term_foreground(fd) -> int ! {io, unsupported}` — the foreground
@@ -312,6 +500,29 @@ pub extern "C" fn __wolf_rt_os_term_mode(h: i64) -> i64 {
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_os_term_set_mode(h: i64, m: i64) -> i64 {
     set_mode(h, m).err().unwrap_or(proc_code::OK)
+}
+
+/// `os_term_restore_at_exit(fd, mode, bytes: List[byte]) -> () ! {invalid,
+/// io, unsupported}` (s248, wolf-lang#794) — 0 or the code. The bytes are
+/// copied at the call.
+///
+/// # Safety
+///
+/// `bytes` must be a live `List[byte]` header.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_term_restore_at_exit(h: i64, m: i64, bytes: i64) -> i64 {
+    let Some(b) = (unsafe { crate::list::u8_elems(bytes) }) else {
+        return proc_code::INVALID;
+    };
+    restore_at_exit(h, m, b).err().unwrap_or(proc_code::OK)
+}
+
+/// s248 (`[os.term.restore]`): the restore on a return from `main` — the
+/// entry shim calls this before it returns, in a program that names
+/// `os_term_restore_at_exit`.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_term_restore_exit() {
+    restore_now();
 }
 
 /// `os_pgid() -> int ! {unsupported}` — this process's group (>= 0) or
@@ -492,6 +703,50 @@ mod tests {
             "bit 5 is not a field"
         );
         assert_eq!(chars(1_000_000), Err(proc_code::IO));
+    }
+
+    /// s248 (`[os.term.restore]`): the registered mode comes back and the
+    /// bytes follow it; the last registration wins; it runs once; a mode
+    /// outside the bits is `invalid` and a file `io`.
+    #[test]
+    fn the_restore_sets_the_mode_and_writes_the_bytes_once() {
+        use std::io::Read as _;
+        use std::os::fd::AsRawFd as _;
+        let (mut m, s) = pty();
+        // SAFETY: the master non-blocking, so an empty read answers at once.
+        unsafe {
+            let fl = libc::fcntl(m.as_raw_fd(), libc::F_GETFL);
+            libc::fcntl(m.as_raw_fd(), libc::F_SETFL, fl | libc::O_NONBLOCK);
+        }
+        let saved = mode_of(s).expect("mode");
+        let raw = saved & !(mode::CANONICAL | mode::ECHO) | 256;
+        assert_eq!(restore_at_exit(s, 1 << 24, b"x"), Err(proc_code::INVALID));
+        let p = std::env::temp_dir().join(format!("wolf-rt-restore-{}", std::process::id()));
+        std::fs::write(&p, b"x").unwrap();
+        let file = crate::fs::mint_file(std::fs::File::open(&p).unwrap());
+        assert_eq!(restore_at_exit(file, saved, b"x"), Err(proc_code::IO));
+        assert_eq!(restore_at_exit(1_000_000, saved, b"x"), Err(proc_code::IO));
+        let _ = std::fs::remove_file(&p);
+        assert_eq!(restore_at_exit(s, saved, b"first"), Ok(()));
+        assert_eq!(restore_at_exit(s, saved, b"LEFT"), Ok(()));
+        assert_eq!(set_mode(s, raw), Ok(()));
+        assert_eq!(mode_of(s), Ok(raw));
+        restore_now();
+        assert_eq!(mode_of(s), Ok(saved), "the registered mode is back");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let mut got = Vec::new();
+        let mut b = [0u8; 64];
+        while let Ok(n) = m.read(&mut b) {
+            if n == 0 {
+                break;
+            }
+            got.extend_from_slice(&b[..n]);
+        }
+        assert_eq!(got, b"LEFT", "the last registration's bytes, once");
+        assert_eq!(set_mode(s, raw), Ok(()));
+        restore_now();
+        assert_eq!(mode_of(s), Ok(raw), "taken: a second exit restores nothing");
+        assert_eq!(set_mode(s, saved), Ok(()));
     }
 
     #[cfg(any(target_os = "linux", target_os = "android"))]
