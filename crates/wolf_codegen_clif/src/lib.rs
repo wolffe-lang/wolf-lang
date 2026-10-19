@@ -823,10 +823,12 @@ pub const WAIT_FD_START: &str = "__wolf_rt_signal_wait_fd_start";
 /// drain thread) when it is not made yet: the listen, the wait and the
 /// wait on a descriptor (`[os.signal.hub]`). `ignore`, `default`,
 /// `poll` and `raise` make nothing on unix and are not here.
-pub const HUB_SIGNAL: [&str; 3] = [
+pub const HUB_SIGNAL: [&str; 4] = [
     "__wolf_rt_os_signal_listen",
     "__wolf_rt_os_signal_wait",
     "__wolf_rt_os_signal_wait_fd",
+    // s248 (#795): the wait over several descriptors makes the hub too.
+    "__wolf_rt_os_signal_wait_fds",
 ];
 
 /// Whether a function the program reaches calls one of `names` — read
@@ -864,9 +866,16 @@ pub fn names_a_hub_call(m: &WirModule) -> bool {
 }
 
 /// Whether a function `m` reaches calls `os_signal_wait_fd` (s246,
-/// wolf-lang#781): its shared wake pipe is made before `main` too.
+/// wolf-lang#781) or `os_signal_wait_fds` (s248, #795): their shared wake
+/// pipe is made before `main` too.
 pub fn names_a_descriptor_wait(m: &WirModule) -> bool {
-    names_any(m, &["__wolf_rt_os_signal_wait_fd"])
+    names_any(
+        m,
+        &[
+            "__wolf_rt_os_signal_wait_fd",
+            "__wolf_rt_os_signal_wait_fds",
+        ],
+    )
 }
 
 /// Append the C-entry shim to a WIR module: `main(argc, argv)` — in
