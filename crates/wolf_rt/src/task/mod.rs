@@ -116,6 +116,11 @@ pub(crate) use hooks::test_hook;
 pub(crate) use parked::{Wake, park_on};
 pub(crate) use pool::compensated;
 pub(crate) use pool::kill_teardown_check;
+// s247 (ruling #90, `[os.proc.fork]`): the fork's rule and its hold.
+#[cfg(unix)]
+pub(crate) use pool::{backoff, fork_child, fork_hold, fork_release, on_worker};
+#[cfg(unix)]
+pub(crate) use scope::live_tasks;
 // s246 (#783, #784): the stack guard's choice for a SENT fault signal.
 pub use pool::{Body, SendPtr, TaskCtx, blocking, counters, current_scope, initialized};
 pub use proc::{
