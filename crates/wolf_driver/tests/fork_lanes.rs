@@ -502,10 +502,20 @@ fn a_fork_chain_and_the_wait_tables() {
 
 /// The hub across a fork: a TERMINATE to the child is the child's and
 /// never the parent's, and the reverse. The place's own SigBlk and SigIgn
-/// are printed first (linux), so a red row can be read against them.
+/// are printed first (linux), so a red row can be read against them. Then
+/// again with TERMINATE BLOCKED from the start (`blockexec.c`, the mask a
+/// job inherits from a shell that blocks it): the parent's listen has its
+/// drain thread unblock it there, and the child's first wait makes a drain
+/// thread of the child's that must unblock it again — without that, the
+/// child's TERMINATE pends for ever and the parent's cap kills it.
 #[cfg(unix)]
 #[test]
 fn the_hub_is_the_childs_own() {
+    let want = "hub: the child took its TERMINATE true\n\
+                hub: child status 0, the parent heard the child's TERMINATE false\n\
+                hub: the second child heard the parent's TERMINATE false\n\
+                hub: the parent took its TERMINATE true, second child status 0\n\
+                rc=0\n";
     let mask = |_: &Live, prog: &str| {
         let status = if cfg!(target_os = "linux") {
             "grep -E 'SigBlk|SigIgn' /proc/self/status >&2; "
@@ -514,16 +524,45 @@ fn the_hub_is_the_childs_own() {
         };
         format!("{status}{prog}; echo rc=$?")
     };
-    every_row(
-        "hub",
-        "hub.lu",
-        &mask,
-        "hub: the child took its TERMINATE true\n\
-         hub: child status 0, the parent heard the child's TERMINATE false\n\
-         hub: the second child heard the parent's TERMINATE false\n\
-         hub: the parent took its TERMINATE true, second child status 0\n\
-         rc=0\n",
-    );
+    every_row("hub", "hub.lu", &mask, want);
+    let Some(live) = Live::new("hub_blocked") else {
+        return;
+    };
+    let exe = live.dir.join("blockexec");
+    let mut cc = Command::new("cc");
+    cc.arg("-O2")
+        .arg("-o")
+        .arg(&exe)
+        .arg(fixture("blockexec.c"));
+    if cfg!(target_os = "linux") {
+        cc.arg("-static");
+    }
+    let built = cc.output().map(|o| o.status.success()).unwrap_or(false);
+    if !built {
+        assert!(
+            std::env::var_os("WOLF_FORK_REQUIRE_CONTAINER").is_none(),
+            "no cc built blockexec.c where the fork witnesses are required"
+        );
+        eprintln!("SKIP: the_hub_is_the_childs_own's blocked row: no cc built blockexec.c");
+        return;
+    }
+    // SIGTERM is 15 on linux and macOS.
+    let term = libc::SIGTERM;
+    for (row, prog) in rows(&live, &fixture("hub.lu"), "hub", "hub_blocked") {
+        // `taskset -c 0-3 /w/hub-…` → `taskset -c 0-3 /w/blockexec 15 /w/hub-…`
+        let line = match prog.rsplit_once(' ') {
+            Some((pre, bin)) => format!("{pre} {} {term} {bin}", live.at("blockexec")),
+            None => format!("{} {term} {prog}", live.at("blockexec")),
+        };
+        let out = live.sh(&format!("{line}; echo rc=$?"));
+        let stdout = String::from_utf8_lossy(&out.stdout).replace('\r', "");
+        report(&format!(
+            "REPORT hub.lu with TERMINATE blocked from the start, {row}: {} || {}",
+            stdout.replace('\n', " | "),
+            String::from_utf8_lossy(&out.stderr).replace('\n', " | ")
+        ));
+        assert_eq!(stdout, want, "hub.lu with TERMINATE blocked from the start, {row}");
+    }
 }
 
 /// The readiness set across a fork: parent and child each parked in their
@@ -555,6 +594,7 @@ fn the_busy_rule_and_the_pool() {
          tasks: a fork from inside a task: busy\n\
          tasks: the child's own tasks ran, sum 6\n\
          tasks: after the scope a fork works, child status 0\n\
+         tasks: a fork right after each of 300 one-task scopes: busy 0 times\n\
          rc=0\n",
     );
 }

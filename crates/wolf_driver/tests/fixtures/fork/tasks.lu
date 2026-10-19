@@ -4,7 +4,10 @@
 //! answers `busy`; from inside a task it is `busy` too. Once the scope has
 //! ended (every task done, the workers idle and held for the fork), it
 //! forks, and the child's pool — empty, its threads the parent's — is made
-//! again by the child's first spawn: three tasks run and sum to 6.
+//! again by the child's first spawn: three tasks run and sum to 6. Then
+//! 300 times a scope of one task and, right after it, a fork: a task done
+//! is not live once its scope's join has returned (never `busy`; the count
+//! drops before the join can see the scope's last child done).
 
 fn main() -> !int {
     let ch = channel[int](0)
@@ -51,5 +54,26 @@ fn main() -> !int {
     }
     let st = os_wait_status(h)?
     print("tasks: after the scope a fork works, child status {st}")
+    var busy = 0
+    var n = 0
+    while n < 300 {
+        scope s {
+            s.spawn(fn() {
+                let _ = 1
+            })
+        }
+        let (p2, h2) = os_fork() else |e| {
+            busy += 1
+            (1, 0 - 1)
+        }
+        if p2 == 0 {
+            os_exit(0)
+        }
+        if h2 >= 0 {
+            let _ = os_wait_status(h2) else 0
+        }
+        n += 1
+    }
+    print("tasks: a fork right after each of 300 one-task scopes: busy {busy} times")
     0
 }
