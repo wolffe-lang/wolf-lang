@@ -812,6 +812,8 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_os_wait_poll_core",
         // s247 (ruling #90): `[os.proc.fork]`.
         "__wolf_rt_os_fork",
+        // s248 (#798): `[os.clock.ns]`.
+        "__wolf_rt_os_clock_ns",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
