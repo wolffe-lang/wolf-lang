@@ -2,7 +2,7 @@
 //! s248 (wolf-lang#796, `[os.fs.sync]`; yew's G3) — the rows of the
 //! atomic save's two syncs. `fs_sync` on a handle open for writing is
 //! ok, and on a closed or forged handle `io`; on a pipe the host refuses
-//! (`io`). `fs_sync_dir` of the working directory is ok, of a missing
+//! (`io`; the row is not asked on windows). `fs_sync_dir` of the working directory is ok, of a missing
 //! name `not_found`, of a file `invalid`. windows answers
 //! `fs_sync_dir` `unsupported` by name, whatever it is given. And the
 //! exclusive create the save starts with is the one wolf has:
@@ -53,11 +53,19 @@ fn main() -> !int {
     print("closed={sync_row(w)}")
     print("forged={sync_row(1000000)}")
     print("negative={sync_row(-1)}")
-    let p = os_pipe()?
-    print("pipe={sync_row(p.1)}")
-    fs_close(p.0)?
-    fs_close(p.1)?
-    print("dir_dot={dir_row(".")}")
+    let dir_dot = dir_row(".")
+    // A pipe's sync is the host's to refuse (linux and macOS); windows'
+    // `FlushFileBuffers` on a pipe waits for its reader, so the row is a
+    // unix one — told by the directory's sync, which windows refuses.
+    if dir_dot == "unsupported" {
+        print("pipe=not_asked")
+    } else {
+        let p = os_pipe()?
+        print("pipe={sync_row(p.1)}")
+        fs_close(p.0)?
+        fs_close(p.1)?
+    }
+    print("dir_dot={dir_dot}")
     print("dir_missing={dir_row("s248-none")}")
     print("dir_file={dir_row("s248-sync.tmp")}")
     print("dir_empty={dir_row("")}")
