@@ -1,0 +1,21 @@
+//! member: false
+//! s248 (wolf-lang#802, `[os.term.mode]`; yew yw01's W1, `notes/
+//! yw01-evidence/witness/opost/`) — what an editor's raw mode writes. A
+//! written LF reaches the wire as LF alone with `RAW_OUTPUT` (64: `OPOST`
+//! cleared, as C yew's raw mode clears it) and as CR LF without it (the
+//! terminal's output processing, `ONLCR`). The harness reads the master's
+//! bytes: `[raw]` then LF alone, `[cooked]` then CR LF.
+//! Expected on the wire: `[raw]\n`, `[cooked]\r\n`, `bits 64`.
+
+fn main() -> !int {
+    let t = fs_open_mode("/dev/tty", 3)?
+    let saved = os_term_mode(t)?
+    fs_write(t, "ready opost\n")?
+    os_term_set_mode(t, saved | 64)?
+    let m = os_term_mode(t)?
+    fs_write(t, "[raw]\n")?
+    os_term_set_mode(t, saved)?
+    fs_write(t, "[cooked]\n")?
+    fs_write(t, "bits {m & 224}\n")?
+    0
+}
