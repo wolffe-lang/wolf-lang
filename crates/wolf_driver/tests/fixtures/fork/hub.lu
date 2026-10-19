@@ -4,7 +4,8 @@
 //! live, and forks twice.
 //!
 //! First child: it waits for TERMINATE; the parent sends one to the
-//! child's pid. The child's own hub takes it (the child prints and ends
+//! child's pid, 200 ms after the child said it was ready (so the child is
+//! parked, past its wait's first look). The child's own hub takes it (the child prints and ends
 //! 0), and the parent's queue stays empty (its poll answers 0). Second
 //! child: it sends TERMINATE to the parent and looks at its own queue for
 //! 300 ms; the parent takes it with a wait on a descriptor the child holds
@@ -31,6 +32,9 @@ fn main() -> !int {
     }
     fs_close(rw)?
     let _ready = fs_read(rr, 1) else ""
+    // The child is parked in its wait by now: a TERMINATE that comes after
+    // its first look (which polls) must reach its drain thread.
+    time_sleep_ms(200)
     os_signal_send(pid, term) else |e| {
         print("hub: send to the child: {e}")
     }
