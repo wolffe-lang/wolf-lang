@@ -570,6 +570,21 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`os_exit_signal`",
             "hosted runtime",
         ),
+        // s246 (ruling #88 R3 D): the wait and the poll that report a core.
+        (
+            "os_wait_status_core",
+            "",
+            "let s = os_wait_status_core(4096) else |e| {\n        return 0\n    }\n    s",
+            "`os_wait_status_core`",
+            "hosted runtime",
+        ),
+        (
+            "os_wait_poll_core",
+            "",
+            "let r = os_wait_poll_core() else |e| {\n        return 0\n    }\n    r.1",
+            "`os_wait_poll_core`",
+            "hosted runtime",
+        ),
         // s242 (#680): the poll of the children.
         (
             "os_wait_poll",

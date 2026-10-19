@@ -15,6 +15,9 @@ fn each_s246_builtin_has_its_category() {
         ("os_signal_ignore_one", SandboxCategory::Exec),
         ("os_signal_default_one", SandboxCategory::Exec),
         ("os_exit_signal", SandboxCategory::Exec),
+        // ruling #88 R3 D: the core-reporting wait and poll.
+        ("os_wait_status_core", SandboxCategory::Exec),
+        ("os_wait_poll_core", SandboxCategory::Exec),
         // The neighbours they join, unchanged.
         ("os_signal_ignore", SandboxCategory::Exec),
         ("os_signal_default", SandboxCategory::Exec),
@@ -35,6 +38,8 @@ fn each_s246_builtin_has_a_signature() {
         ("os_signal_ignore_one", 1),
         ("os_signal_default_one", 1),
         ("os_exit_signal", 1),
+        ("os_wait_status_core", 1),
+        ("os_wait_poll_core", 0),
     ] {
         let (params, _) = wolf_sema::check::host_builtin_sig(&mut table, name)
             .unwrap_or_else(|| panic!("{name} has a signature"));

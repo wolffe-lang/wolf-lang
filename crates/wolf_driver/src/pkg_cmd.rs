@@ -1511,6 +1511,10 @@ mod builtin_cap_tests {
             ("os_signal_ignore_one", Cap::Exec),
             ("os_signal_default_one", Cap::Exec),
             ("os_exit_signal", Cap::Exec),
+            // s246 (ruling #88 R3 D): the core-reporting wait and poll reap
+            // as their siblings do — `exec`.
+            ("os_wait_status_core", Cap::Exec),
+            ("os_wait_poll_core", Cap::Exec),
         ] {
             assert_eq!(builtin_cap(name), Some(cap), "{name}");
         }
