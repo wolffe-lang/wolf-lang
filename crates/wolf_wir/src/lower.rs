@@ -10437,6 +10437,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "time_now_ms"
                 | "time_unix_ms"
                 | "time_sleep_ms"
+                // s248 (#798, `[os.clock.ns]`): `time_now_ms`'s shape.
+                | "os_clock_ns"
         ) {
             return self.lower_os_time_builtin(&callee_text, d, e);
         }
@@ -15591,11 +15593,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let out = self.load_flat(types::PTR, slot, region, e.span)?;
                 Ok(Flow::Val(Some(out)))
             }
-            "time_now_ms" | "time_unix_ms" => {
-                let sym = if name == "time_now_ms" {
-                    "__wolf_rt_time_now_ms"
-                } else {
-                    "__wolf_rt_time_unix_ms"
+            "time_now_ms" | "time_unix_ms" | "os_clock_ns" => {
+                let sym = match name {
+                    "time_now_ms" => "__wolf_rt_time_now_ms",
+                    "os_clock_ns" => "__wolf_rt_os_clock_ns",
+                    _ => "__wolf_rt_time_unix_ms",
                 };
                 let r = self.rt_call(sym, &[], Some(types::I64)).expect("ms");
                 Ok(Flow::Val(Some(r)))
