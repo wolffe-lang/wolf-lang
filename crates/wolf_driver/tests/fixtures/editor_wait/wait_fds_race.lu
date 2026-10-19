@@ -15,12 +15,12 @@ fn main() -> !int {
     let go = channel[int](0)
     var meanings = 0
     scope s {
-        s.spawn(fn() -> !int {
+        s.spawn(fn() {
             var i = 0
             while i < 2000 {
                 let n = go.recv()?
                 os_signal_raise(512)?
-                i += 1
+                i += n - n + 1
             }
             0
         })
