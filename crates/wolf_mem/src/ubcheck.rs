@@ -13761,7 +13761,8 @@ pub fn record_inherited_sigpipe(ignored: bool) {
 /// s219: every bit a terminal mode may carry (`wolf_rt::term::mode`):
 /// canonical=1 echo=2 signals=4, vmin in bits 8..15, vtime in 16..23.
 /// s234 (#719): flow=8 (`IXON`) and extended=16 (`IEXTEN`) join them.
-const TERM_MODE_VALID: i64 = 31 | 0xFF00 | 0xFF_0000;
+// s248 (#802): bits 5..7 — RAW_CR, RAW_OUTPUT, STRIP8 — are fields.
+const TERM_MODE_VALID: i64 = 255 | 0xFF00 | 0xFF_0000;
 
 /// s219 (#622): the checked machine's REAL signal arming. A listened
 /// meaning's handler sets its bit in `PENDING` (an atomic `fetch_or`,
@@ -15149,6 +15150,17 @@ mod checked_term {
         if t.c_lflag & libc::IEXTEN != 0 {
             m |= 16;
         }
+        // s248 (#802): RAW_CR (ICRNL clear), RAW_OUTPUT (OPOST clear),
+        // STRIP8 (ISTRIP set) — the runtime's three, bit for bit.
+        if t.c_iflag & libc::ICRNL == 0 {
+            m |= 32;
+        }
+        if t.c_oflag & libc::OPOST == 0 {
+            m |= 64;
+        }
+        if t.c_iflag & libc::ISTRIP != 0 {
+            m |= 128;
+        }
         m |= i64::from(t.c_cc[libc::VMIN]) << 8;
         m |= i64::from(t.c_cc[libc::VTIME]) << 16;
         Ok(m)
@@ -15178,6 +15190,22 @@ mod checked_term {
             t.c_iflag |= libc::IXON;
         } else {
             t.c_iflag &= !libc::IXON;
+        }
+        // s248 (#802): the runtime's three, bit for bit.
+        if m & 32 != 0 {
+            t.c_iflag &= !libc::ICRNL;
+        } else {
+            t.c_iflag |= libc::ICRNL;
+        }
+        if m & 64 != 0 {
+            t.c_oflag &= !libc::OPOST;
+        } else {
+            t.c_oflag |= libc::OPOST;
+        }
+        if m & 128 != 0 {
+            t.c_iflag |= libc::ISTRIP;
+        } else {
+            t.c_iflag &= !libc::ISTRIP;
         }
         t.c_cc[libc::VMIN] = ((m >> 8) & 0xFF) as libc::cc_t;
         t.c_cc[libc::VTIME] = ((m >> 16) & 0xFF) as libc::cc_t;
