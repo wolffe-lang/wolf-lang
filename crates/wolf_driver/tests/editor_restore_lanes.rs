@@ -482,12 +482,16 @@ fn pty_row(argv: &[String], dir: &Path) -> (String, String, String, i32) {
     }
 }
 
-/// The checked machine's verdict in a transcript (its record's line).
-fn verdict_in(text: &str) -> Option<String> {
+/// The checked machine's record in a transcript: its verdict and the
+/// standard output it buffered (`None` for a null one).
+fn record_in(text: &str) -> Option<(String, Option<String>)> {
     text.lines().rev().find_map(|l| {
         let i = l.find('{')?;
         let v: serde_json::Value = serde_json::from_str(l[i..].trim()).ok()?;
-        v["verdict"].as_str().map(str::to_string)
+        Some((
+            v["verdict"].as_str()?.to_string(),
+            v["stdout_inline"].as_str().map(str::to_string),
+        ))
     })
 }
 
@@ -530,7 +534,21 @@ fn the_terminal_is_restored_on_every_exit_the_runtime_owns() {
         for (r, (mode, before, after, text)) in ROWS.iter().zip(got) {
             let restored = !before.is_empty() && before == after;
             let raw_line = format!("raw {mode}\n");
-            let shown = text.find(&raw_line);
+            // The checked machine buffers the program's standard output into
+            // its record, which it prints after its end (and its restore):
+            // there the program's line is in the record, and the bytes come
+            // before it. A row it ends `unsupported` (or the host ends)
+            // carries no output to show.
+            let record = record_in(&text);
+            let shown = if lane == "checked" {
+                match (r.checked, record.as_ref()) {
+                    (Some("unsupported") | None, _) => Some(0),
+                    (_, Some((_, Some(out)))) if out.contains(&raw_line) => Some(0),
+                    _ => None,
+                }
+            } else {
+                text.find(&raw_line)
+            };
             let left_at = r.left.and_then(|l| {
                 text.find(&format!("{l}\n"))
                     .or_else(|| text.find(&format!("{l}\x1b")))
@@ -556,7 +574,7 @@ fn the_terminal_is_restored_on_every_exit_the_runtime_owns() {
                 ));
             }
             match (r.left, left_at, shown) {
-                (Some(_), Some(at), Some(raw)) if at > raw => {}
+                (Some(_), Some(at), Some(raw)) if at > raw || lane == "checked" => {}
                 (Some(l), _, _) => miss(format!("no {l:?} after `raw {mode}`: {text:?}")),
                 (None, _, _) => {
                     if text.contains("LEFT") {
@@ -568,7 +586,7 @@ fn the_terminal_is_restored_on_every_exit_the_runtime_owns() {
                 miss("the first registration's bytes were written".into());
             }
             if lane == "checked" {
-                let v = verdict_in(&text);
+                let v = record.map(|(v, _)| v);
                 if v.as_deref() != r.checked {
                     miss(format!("verdict {v:?}, wanted {:?}", r.checked));
                 }
