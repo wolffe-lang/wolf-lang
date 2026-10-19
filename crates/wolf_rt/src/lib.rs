@@ -11,6 +11,8 @@ pub mod bytes;
 // s225 (wolf-lang#534): replacing the running program and removing a
 // variable — `[os.proc.exec]`, `[os.env.unset]`.
 pub mod exec;
+// s247 (ruling #90): a child that keeps running wolf code — `[os.proc.fork]`.
+pub mod fork;
 pub mod fs;
 // s230 (wolf-lang#346, #698, #699, #700, #702, #704): the calls that
 // change a file without writing its bytes, and the umask — `[os.fs.mode]`,
