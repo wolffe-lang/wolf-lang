@@ -6,11 +6,13 @@
 //! round reads 0. The clock is the ms clock's, from the same anchor:
 //! `os_clock_ns() / 1000000` is never behind a `time_now_ms()` read just
 //! before it.
-//! Expected: `clock_ns zeros=0 of 20 behind=0`.
+//! The work's sum is printed, so no tier may drop the loop.
+//! Expected: `clock_ns zeros=0 of 20 behind=0 work=1199940`.
 fn main() {
     var zeros = 0
     var behind = 0
     var round = 0
+    var work = 0
     while round < 20 {
         let ms = time_now_ms()
         let a = os_clock_ns()
@@ -21,6 +23,7 @@ fn main() {
             i += 1
         }
         let b = os_clock_ns()
+        work += acc
         if b - a <= 0 {
             zeros += 1
         }
@@ -29,5 +32,5 @@ fn main() {
         }
         round += 1
     }
-    print("clock_ns zeros={zeros} of 20 behind={behind}")
+    print("clock_ns zeros={zeros} of 20 behind={behind} work={work}")
 }
