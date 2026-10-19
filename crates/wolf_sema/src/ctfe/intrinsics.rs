@@ -274,7 +274,10 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         // The s40 time builtin tier: every clock read and sleep is the
         // one Clock category (X12 — two identical builds must not
         // observe different times).
-        "clock_ms" | "time_now_ms" | "time_unix_ms" | "time_sleep_ms" => SandboxCategory::Clock,
+        // s248 (#798): the clock at nanoseconds is the same clock.
+        "clock_ms" | "time_now_ms" | "time_unix_ms" | "time_sleep_ms" | "os_clock_ns" => {
+            SandboxCategory::Clock
+        }
         // The OS random source joins `random_seed`'s category (s118,
         // #143): D33's determinism rule — same program + target must
         // give bit-identical comptime results on every host, and OS

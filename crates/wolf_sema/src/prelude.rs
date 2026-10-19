@@ -429,6 +429,9 @@ pub const PRELUDE: &[Ambient] = &[
     host("time_now_ms"),
     host("time_unix_ms"),
     host("time_sleep_ms"),
+    // s248 (wolf-lang#798, `[os.clock.ns]`): the same monotonic clock in
+    // nanoseconds; Clock-tagged and comptime-refused with the tier.
+    host("os_clock_ns"),
     // the json builtin tier (s40, nursery-first per D31: std.x.json
     // wraps these as its query kernels). PURE — no capability tag, no
     // sandbox category; the comptime engine still refuses them (no

@@ -14361,6 +14361,9 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // the Unix epoch, and a blocking sleep.
         "time_now_ms" | "time_unix_ms" => (Vec::new(), int_),
         "time_sleep_ms" => (vec![int_], unit),
+        // s248 (wolf-lang#798, `[os.clock.ns]`): the monotonic clock in
+        // nanoseconds from `time_now_ms`'s anchor; no row, as it.
+        "os_clock_ns" => (Vec::new(), int_),
         // The s40 json builtin tier (pure; std.x.json's query
         // kernels). `parse` is any RFC 8259 violation, `missing`
         // a path that addresses nothing, `kind` a node of the
