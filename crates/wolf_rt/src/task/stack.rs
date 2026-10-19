@@ -40,7 +40,7 @@
 #![cfg(unix)]
 
 use std::cell::UnsafeCell;
-use std::sync::atomic::{AtomicPtr, Ordering::SeqCst};
+use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering::SeqCst};
 
 /// Guard region at the low end. Larger than one page so big frames
 /// cannot leap it undetected in the debug tier.
@@ -245,11 +245,116 @@ pub fn set_fault_label(label: &str) {
     });
 }
 
+// s246 (wolf-lang#783, #784, `[os.signal.disp.one]`, `[os.signal.exit]`):
+// what the PROGRAM chose for a SEGV or a BUS another process (or this
+// one) SENT — a `kill`, `tgkill` or `sigqueue`, never a fault. The
+// handler below owns both signals for the stack guard, so a sent one used
+// to land here, find no guard, set the default and return: the process
+// lived through the first one it was sent (measured at 0.2.32: a program
+// that had run a task survived `os_signal_send(os_pid(), SEGMENT_FAULT)`
+// and exited 0; one that never spawned, so had no handler, died of it).
+// Now a sent one does what the program chose: the default (the host's
+// action, death by the signal) or nothing (`os_signal_ignore_one`). A
+// real fault is still the runtime's.
+static SENT_SEGV_IGNORED: AtomicBool = AtomicBool::new(false);
+static SENT_BUS_IGNORED: AtomicBool = AtomicBool::new(false);
+
+fn sent_flag(sig: libc::c_int) -> Option<&'static AtomicBool> {
+    match sig {
+        libc::SIGSEGV => Some(&SENT_SEGV_IGNORED),
+        libc::SIGBUS => Some(&SENT_BUS_IGNORED),
+        _ => None,
+    }
+}
+
+/// Whether `code` (a `siginfo_t`'s `si_code`) says a process SENT the
+/// signal. linux: every sender's code is at or below 0 (`SI_USER` 0,
+/// `SI_QUEUE`, `SI_TKILL` and the rest negative); a fault's is above 0
+/// (`SEGV_MAPERR`, `SEGV_ACCERR`, `BUS_ADRERR`, … and the kernel's own
+/// `SI_KERNEL`). macOS: `SI_USER` for `kill` and `raise`, `SI_QUEUE` for
+/// `sigqueue`; a fault's code is its kind (1, 2, …).
+fn sent(code: libc::c_int) -> bool {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    {
+        code <= 0
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    {
+        code == libc::SI_USER || code == libc::SI_QUEUE
+    }
+}
+
+/// s246: the program's choice for a SENT `SIGSEGV` or `SIGBUS` —
+/// `ignore` true for nothing at all, false for the host's default. The
+/// handler is installed first (it is the one place a sent fault is
+/// told from a real one), so a later pool start cannot undo the choice.
+pub fn set_sent_fault(sig: libc::c_int, ignore: bool) -> bool {
+    let Some(flag) = sent_flag(sig) else {
+        return false;
+    };
+    install_overflow_handler();
+    flag.store(ignore, SeqCst);
+    true
+}
+
+/// s246: whether the program ignores a sent `SIGSEGV` or `SIGBUS` now.
+pub fn sent_fault_ignored(sig: libc::c_int) -> bool {
+    sent_flag(sig).is_some_and(|f| f.load(SeqCst))
+}
+
+/// s246 (`[os.signal.disp]`'s rule across `exec`): the signals of the
+/// fault meanings this program ignores, which a child or an exec'd image
+/// must start with ignored — the handler that tells a sent one from a
+/// fault does not survive `exec`, so `SIG_IGN` stands in for it there.
+pub fn ignored_sent_faults() -> [libc::c_int; 2] {
+    [
+        if SENT_SEGV_IGNORED.load(SeqCst) {
+            libc::SIGSEGV
+        } else {
+            0
+        },
+        if SENT_BUS_IGNORED.load(SeqCst) {
+            libc::SIGBUS
+        } else {
+            0
+        },
+    ]
+}
+
+/// s246: after a FAILED exec put the handler back on the fault signals
+/// [`ignored_sent_faults`] set to `SIG_IGN` for it.
+pub fn reinstall_after_exec(sigs: [libc::c_int; 2]) {
+    for sig in sigs {
+        if sig != 0 {
+            install_on(sig);
+        }
+    }
+}
+
 extern "C" fn overflow_handler(
     sig: libc::c_int,
     info: *mut libc::siginfo_t,
     _ctx: *mut libc::c_void,
 ) {
+    // s246: a SENT signal is the program's, by the choice it made: none
+    // of the guard's business. (`si_code` is valid in every siginfo.)
+    // SAFETY: `info` is the kernel's siginfo for this delivery.
+    if sent(unsafe { (*info).si_code }) {
+        if sent_fault_ignored(sig) {
+            return;
+        }
+        // The default, and the signal again: blocked while this handler
+        // runs, it is delivered as the handler returns, and the default
+        // ends the process by it (with a core where the host writes one).
+        // SAFETY: sigaction and raise are async-signal-safe.
+        unsafe {
+            let mut dfl: libc::sigaction = std::mem::zeroed();
+            dfl.sa_sigaction = libc::SIG_DFL;
+            libc::sigaction(sig, &dfl, std::ptr::null_mut());
+            libc::raise(sig);
+        }
+        return;
+    }
     // SAFETY: si_addr is valid for SIGSEGV/SIGBUS with SA_SIGINFO.
     #[cfg(target_os = "linux")]
     let addr = unsafe { (*info).si_addr() } as usize;
@@ -292,24 +397,33 @@ extern "C" fn overflow_handler(
     }
 }
 
+/// The guard-fault reporter on one signal.
+fn install_on(sig: libc::c_int) {
+    // SAFETY: installing a handler with a static extern fn.
+    unsafe {
+        let mut sa: libc::sigaction = std::mem::zeroed();
+        sa.sa_sigaction = overflow_handler
+            as extern "C" fn(libc::c_int, *mut libc::siginfo_t, *mut libc::c_void)
+            as usize;
+        sa.sa_flags = libc::SA_SIGINFO | libc::SA_ONSTACK;
+        libc::sigemptyset(&mut sa.sa_mask);
+        libc::sigaction(sig, &sa, std::ptr::null_mut());
+    }
+}
+
 /// Install the guard-fault reporter (idempotent; called at pool init —
-/// a binary that never spawns never installs a handler).
+/// a binary that never spawns never installs a handler — and, s246, by
+/// a program's first choice for a sent `SEGMENT_FAULT` or `BUS_ERROR`).
+/// s246: on `SIGBUS` on every unix host (macOS only before): the sent
+/// rule must hold for both fault meanings the runtime owns, and a real
+/// bus error outside a guard still dies the ordinary way (the handler
+/// sets the default and the fault comes again).
 pub fn install_overflow_handler() {
     use std::sync::Once;
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
-        // SAFETY: installing a handler with a static extern fn.
-        unsafe {
-            let mut sa: libc::sigaction = std::mem::zeroed();
-            sa.sa_sigaction = overflow_handler
-                as extern "C" fn(libc::c_int, *mut libc::siginfo_t, *mut libc::c_void)
-                as usize;
-            sa.sa_flags = libc::SA_SIGINFO | libc::SA_ONSTACK;
-            libc::sigemptyset(&mut sa.sa_mask);
-            libc::sigaction(libc::SIGSEGV, &sa, std::ptr::null_mut());
-            #[cfg(target_os = "macos")]
-            libc::sigaction(libc::SIGBUS, &sa, std::ptr::null_mut());
-        }
+        install_on(libc::SIGSEGV);
+        install_on(libc::SIGBUS);
     });
 }
 
