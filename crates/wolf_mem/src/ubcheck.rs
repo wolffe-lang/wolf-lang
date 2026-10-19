@@ -9368,6 +9368,97 @@ impl<'t> Machine<'t> {
                     }
                 }
             }
+            // s248 (wolf-lang#795, `[os.signal.wait.fds]`): the wait over
+            // several descriptors, a set and a deadline — the runtime's
+            // answers and order of refusal (the set's shape `io`, a deadline
+            // below -1 `invalid`, windows `unsupported`, a closed or forged
+            // handle `io`), the wait `os_signal_wait_fd`'s over the host's
+            // `poll(2)` on every descriptor and the machine's wake pipe.
+            "os_signal_wait_fds" => {
+                let (Some(Value::List(id)), Some(mask), Some(deadline)) =
+                    (argv.first(), int_arg(1), int_arg(2))
+                else {
+                    return self.refuse("this os call shape", span);
+                };
+                let id = *id;
+                if !sig_set_ok(mask) {
+                    return Ok(tag("io"));
+                }
+                if deadline < -1 {
+                    return Ok(tag("invalid"));
+                }
+                if !cfg!(unix) {
+                    return Ok(tag("unsupported"));
+                }
+                let mut handles = Vec::new();
+                for v in self.lists.get(id).into_iter().flatten() {
+                    match v {
+                        Value::Int(h) => handles.push(*h),
+                        _ => return self.refuse("a non-int descriptor element", span),
+                    }
+                }
+                // Owned duplicates: the machine's table must stay free for
+                // the tasks the wait lets run.
+                let mut files = Vec::with_capacity(handles.len());
+                for h in handles {
+                    let Some(f) = self.fs_handle(h).and_then(|f| f.try_clone().ok()) else {
+                        return Ok(tag("io"));
+                    };
+                    files.push(f);
+                }
+                let pair = |i: i64, m: i64| {
+                    Flow::Val(Value::Struct {
+                        fields: vec![
+                            ("0".to_string(), Value::Int(i)),
+                            ("1".to_string(), Value::Int(m)),
+                        ],
+                    })
+                };
+                let end = u64::try_from(deadline)
+                    .ok()
+                    .map(|ms| std::time::Instant::now() + std::time::Duration::from_millis(ms));
+                let want = mask;
+                loop {
+                    checked_sig::settle(self.signal_listening);
+                    if let Some(pos) = self.signal_queue.iter().position(|&m| m & want != 0) {
+                        let m = self.signal_queue.remove(pos).expect("just found it");
+                        return Ok(pair(-1, m));
+                    }
+                    if let Some(m) = checked_sig::take(want & self.signal_listening) {
+                        return Ok(pair(-1, m));
+                    }
+                    let left = end.map(|e| e.saturating_duration_since(std::time::Instant::now()));
+                    let left_ms = left.map(|d| i32::try_from(d.as_micros().div_ceil(1000)).unwrap_or(i32::MAX));
+                    let others = if left_ms == Some(0) {
+                        false
+                    } else {
+                        self.yield_now(span)?
+                    };
+                    let timeout = match (left_ms, others) {
+                        (Some(0), _) => 0,
+                        (Some(ms), true) => ms.min(1),
+                        (Some(ms), false) => ms,
+                        (None, true) => 1,
+                        (None, false) => -1,
+                    };
+                    match checked_sig::wait_readable_many(&files, want & self.signal_listening, timeout)
+                    {
+                        Err(t) => return Ok(tag(t)),
+                        Ok(Some(i)) => {
+                            checked_sig::settle(self.signal_listening);
+                            if let Some(m) = checked_sig::take(want & self.signal_listening) {
+                                return Ok(pair(-1, m));
+                            }
+                            return Ok(pair(i as i64, 0));
+                        }
+                        Ok(None) => {
+                            if left_ms == Some(0) {
+                                return Ok(pair(-1, 0));
+                            }
+                        }
+                    }
+                }
+            }
             // s219 (`[os.signal.disp]`): the host's own disposition.
             "os_signal_ignore" | "os_signal_default" => {
                 let Some(mask) = int_arg(0) else {
@@ -11161,6 +11252,8 @@ impl<'t> Machine<'t> {
             // s234 (#719): the window's size, the special characters, the
             // wait on a descriptor and a signal set.
             | "os_term_size" | "os_term_chars" | "os_signal_wait_fd"
+            // s248 (#795): the wait over several descriptors.
+            | "os_signal_wait_fds"
             // s236 (#633, #742): who the process runs as, and the drop.
             | "os_uid" | "os_euid" | "os_gid" | "os_egid" | "os_groups" | "os_set_ids"
             // s241 (#739, #740, #741, #762): the group and all sends, the
@@ -13822,6 +13915,100 @@ mod checked_sig {
             return Ok(Woke::Signal);
         }
         wait_readable_on(f.as_raw_fd(), r, timeout_ms)
+    }
+
+    /// s248 (wolf-lang#795, `[os.signal.wait.fds]`): [`wait_readable`]
+    /// over several files — `Some(i)` the lowest that has something to
+    /// read, `None` a wake or the timeout (the caller looks at the queue
+    /// and the deadline again). The pipe is emptied and the pending set
+    /// looked at before the poll, as [`wait_readable`] does.
+    #[cfg(unix)]
+    pub(super) fn wait_readable_many(
+        files: &[std::fs::File],
+        set: i64,
+        timeout_ms: i32,
+    ) -> Result<Option<usize>, &'static str> {
+        use std::os::fd::AsRawFd as _;
+        let r = wake_pipe()?;
+        let mut buf = [0u8; 16];
+        // SAFETY: our own nonblocking pipe; emptied, it answers EAGAIN.
+        while unsafe { libc::read(r, buf.as_mut_ptr().cast(), buf.len()) } > 0 {}
+        if PENDING.load(Ordering::SeqCst) & set != 0 {
+            return Ok(None);
+        }
+        let mut fds: Vec<libc::pollfd> = files
+            .iter()
+            .map(|f| f.as_raw_fd())
+            .chain(std::iter::once(r))
+            .map(|fd| libc::pollfd {
+                fd,
+                events: libc::POLLIN,
+                revents: 0,
+            })
+            .collect();
+        let n = fds.len();
+        // SAFETY: `n` live pollfds.
+        let got = unsafe { libc::poll(fds.as_mut_ptr(), n as libc::nfds_t, timeout_ms) };
+        if got < 0 {
+            let e = std::io::Error::last_os_error().raw_os_error();
+            if e == Some(libc::EINTR) || e == Some(libc::EAGAIN) {
+                return Ok(None);
+            }
+            return Err("io");
+        }
+        if fds[..n - 1].iter().all(|p| p.revents & libc::POLLNVAL == 0) {
+            return Ok(fds[..n - 1].iter().position(|p| p.revents != 0));
+        }
+        // macOS answers POLLNVAL for a terminal opened by path; `select(2)`
+        // on it works — the runtime's `wait_many`, mirrored.
+        let limit = libc::FD_SETSIZE as i64;
+        if fds.iter().any(|p| i64::from(p.fd) >= limit) {
+            return Err("io");
+        }
+        // SAFETY: a zeroed fd_set filled by FD_ZERO/FD_SET with
+        // descriptors under FD_SETSIZE; a timeval or none.
+        unsafe {
+            let mut sel: libc::fd_set = std::mem::zeroed();
+            libc::FD_ZERO(&mut sel);
+            let mut top = 0;
+            for p in &fds {
+                libc::FD_SET(p.fd, &mut sel);
+                top = top.max(p.fd);
+            }
+            #[allow(clippy::useless_conversion)]
+            let mut tv = libc::timeval {
+                tv_sec: (timeout_ms.max(0) / 1000).into(),
+                tv_usec: ((timeout_ms.max(0) % 1000) * 1000).into(),
+            };
+            let tvp = if timeout_ms < 0 {
+                std::ptr::null_mut()
+            } else {
+                &raw mut tv
+            };
+            let got = libc::select(
+                top + 1,
+                &mut sel,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                tvp,
+            );
+            if got < 0 {
+                let e = std::io::Error::last_os_error().raw_os_error();
+                if e == Some(libc::EINTR) || e == Some(libc::EAGAIN) {
+                    return Ok(None);
+                }
+                return Err("io");
+            }
+            Ok(fds[..n - 1].iter().position(|p| libc::FD_ISSET(p.fd, &sel)))
+        }
+    }
+    #[cfg(not(unix))]
+    pub(super) fn wait_readable_many(
+        _files: &[std::fs::File],
+        _set: i64,
+        _timeout_ms: i32,
+    ) -> Result<Option<usize>, &'static str> {
+        Err("unsupported")
     }
 
     /// s242 (wolf-lang#680, `[os.signal.checked]`): a blocking
