@@ -3,9 +3,9 @@
 ## Unreleased
 
 s246 — the signal gaps 0.2.32 left (wolf-lang#780, #781, #783, #784,
-#785, #787, #788). Three of them add surface, each with its **ruling
-asked** in `[os.signal.gaps.note]` (R1–R3) and its recommendation
-implemented; the ruling is taken at the audit.
+#785, #787, #788). Three of them add surface, ruled by the maintainer
+(ruling #88, `[os.signal.gaps.note]`): R1 A and R2 A as built, R3 D (a
+core through new sibling calls; the released statuses unchanged).
 
 - **#783: one meaning's disposition, in the sending shape**
   (`[os.signal.disp.one]`, R1). `os_signal_ignore_one(meaning) -> () !
@@ -32,10 +32,13 @@ implemented; the ruling is taken at the audit.
   own group); one from another process ends it under the default and is
   lived through once under an ignore. `os_signal_raise` is unchanged.
   The checked machine refuses the call by name.
-- **#785: a core in the status** (`[os.proc.status]`, `[os.proc.poll]`,
-  R3). `os_wait_status` and `os_wait_poll` answer `-(256 + N)` for a
-  child that dumped core (`WCOREDUMP`), `-N` without one, as before; the
-  checked machine too. lupin 0.1.54 answers `-N` for both.
+- **#785: a core, through new siblings** (`[os.proc.status]`,
+  `[os.proc.poll]`, ruling #88 R3 D). `os_wait_status_core(h) -> int !
+  {io}` and `os_wait_poll_core() -> (int, int) ! {io}` are the released
+  wait and poll with a child that dumped core (`WCOREDUMP`) answered
+  `-(256 + N)`; `os_wait_status` and `os_wait_poll` keep answering `-N`,
+  core or not. The checked machine answers both; lupin 0.1.54 resolves
+  neither.
 - **#787: signal 0 has words** (`[os.signal.text]`).
   `os_signal_text(0)` is `strsignal(0)`'s, glibc's `Unknown signal 0`
   (GNU `kill -t 0` and `kill -L` row 0), where it was `invalid`;
@@ -60,18 +63,11 @@ implemented; the ruling is taken at the audit.
 
 ### Read this before you bump the pin
 
-- **Three new prelude names**: `os_signal_ignore_one`,
-  `os_signal_default_one`, `os_exit_signal` (a function of one of these
-  names now shadows a builtin, W0304).
-- **A child that dumped core reads `-(256 + N)`, not `-N`.** On a host
-  whose `kernel.core_pattern` pipes cores to a program (systemd's
-  `systemd-coredump`: kasumi, hasu, most desktop linux) that is every
-  end by a core-dumping signal (`QUIT`, `ABRT`, `SEGV`, `BUS`, `FPE`,
-  `ILL`, `TRAP`, `SYS`, `XCPU`, `XFSZ`), whatever `ulimit -c` says. N is
-  `(-status) & 255` for every signal status and a shell's exit status
-  `(128 - status) & 255`; code that compares with `-N` or reads
-  `-status` as N must move (pelt's `status_of`, wolf-std's
-  `process.Status` accessors, boreutils' `timeout`).
+- **Five new prelude names**: `os_signal_ignore_one`,
+  `os_signal_default_one`, `os_exit_signal`, `os_wait_status_core`,
+  `os_wait_poll_core` (a function of one of these names now shadows a
+  builtin, W0304). No released status changes: a core is reported only
+  by the two `_core` siblings.
 - **`os_signal_text(0)` answers words** where it answered `invalid`.
 - **A SEGV sent to a program ends it** (the host's default) unless the
   program ignores `SEGMENT_FAULT` with `os_signal_ignore_one`; a program
