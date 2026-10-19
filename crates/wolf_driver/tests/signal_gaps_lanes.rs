@@ -245,6 +245,8 @@ enum Lupin<'a> {
     /// answer is this stdout (a newer lupin's the compiler's), its
     /// refusal names this call.
     AnswersOrRefuses(&'a str, &'a str),
+    /// Every lupin refuses by name; the reason names one of these calls.
+    RefusesOneOf(&'a [&'a str]),
 }
 
 fn judge_lupin(obs: &Obs, name: &str, want: &str, lupin: &Lupin<'_>) {
@@ -296,6 +298,19 @@ fn judge_lupin(obs: &Obs, name: &str, want: &str, lupin: &Lupin<'_>) {
             } else {
                 refuses(call);
             }
+        }
+        Lupin::RefusesOneOf(calls) => {
+            assert_eq!(
+                obs.verdict, "unsupported",
+                "lupin {} refuses {name} by name: {obs:?}",
+                obs.version
+            );
+            assert!(
+                calls.iter().any(|c| obs.reason.contains(&format!("`{c}`"))),
+                "lupin {}'s refusal of {name} names one of {calls:?}: {}",
+                obs.version,
+                obs.reason
+            );
         }
         Lupin::AnswersOrRefuses(old, call) => {
             if obs.verdict == "unsupported" {
@@ -827,12 +842,13 @@ fn a_group_send_of_a_fault_the_sender_ignores() {
     }
 }
 
-/// What `parent.lu` prints for each of `exit_by.lu`'s modes on this host,
-/// `core` the host's answer for a SEGV death under `ulimit -c 0` (a pipe
-/// pattern dumps one anyway; a file pattern does not).
+/// What `parent.lu` prints for each of `exit_by.lu`'s modes on this host.
+/// Its waits are the released `os_wait_status` and `os_wait_poll`, which
+/// answer `-N` whether or not the host wrote a core (ruling #88 R3 D), so
+/// a SEGV is `signal 11` on every host, a pipe pattern's included.
 #[cfg(unix)]
-fn exit_by_want(core: bool) -> (String, String) {
-    let segv = if core { "signal 11 core" } else { "signal 11" };
+fn exit_by_want() -> (String, String) {
+    let segv = "signal 11";
     let child = if cfg!(target_os = "linux") { 17 } else { 20 };
     let mut modes = vec!["exit-segv".to_string()];
     let mut want = format!("exit-segv: {segv}\n");
@@ -877,9 +893,7 @@ fn a_program_ends_itself_by_a_signal() {
     };
     let child = fixture("exit_by.lu");
     let parent = fixture("parent.lu");
-    let core = live.cores_piped();
-    let (modes, want) = exit_by_want(core);
-    let (_, want_lupin) = exit_by_want(false);
+    let (modes, want) = exit_by_want();
     for release in [false, true] {
         let Some(c) = build(&child, &live.dir, "child", release) else {
             continue;
@@ -925,18 +939,13 @@ fn a_program_ends_itself_by_a_signal() {
             if let Some(l) = live.lupin_at() {
                 let obs = record_in(&live, &l, "", "parent.lu", &env);
                 if how == "wait" {
-                    judge_lupin(
-                        &obs,
-                        "parent.lu (wait)",
-                        &want,
-                        &Lupin::Answers(&want_lupin),
-                    );
+                    judge_lupin(&obs, "parent.lu (wait)", &want, &Lupin::Answers(&want));
                 } else {
                     judge_lupin(
                         &obs,
                         "parent.lu (poll)",
                         &want,
-                        &Lupin::AnswersOrRefuses(&want_lupin, "os_wait_poll"),
+                        &Lupin::AnswersOrRefuses(&want, "os_wait_poll"),
                     );
                 }
             }
@@ -963,14 +972,16 @@ fn a_program_ends_itself_by_a_signal() {
     );
 }
 
-/// #785: a child that dumps core reads `-(256 + N)` from `os_wait_status`
-/// and from `os_wait_poll`, one that dumps none `-N` (`TERM`), on every
-/// compiled machine and the checked one; lupin 0.1.54 answers `-N` for
-/// both through the wait and refuses the poll by name. Cores on (`ulimit
-/// -c unlimited`, a core file written in the test's own directory, found
-/// and removed there) only where the host's pattern is a file; cores off
-/// everywhere (`ulimit -c 0`), which a pipe pattern dumps anyway. Red at
-/// 0.2.32: `segv -11` with the core written.
+/// #785 (ruling #88 R3 D): a child that dumps core reads `-N` from the
+/// released `os_wait_status` and `os_wait_poll`, as it always did, and
+/// `-(256 + N)` from their siblings `os_wait_status_core` and
+/// `os_wait_poll_core`; one that dumps none (`TERM`) `-N` from all four —
+/// on every compiled machine and the checked one. lupin 0.1.54 resolves
+/// neither sibling. Cores on (`ulimit -c unlimited`, two core files written
+/// in the test's own directory, found and removed there) only where the
+/// host's pattern is a file; cores off everywhere (`ulimit -c 0`), which a
+/// pipe pattern dumps anyway. Red at 0.2.32: E0301, no sibling; red with
+/// the siblings blind to the core: `segv core -11` with the core written.
 #[cfg(unix)]
 #[test]
 fn a_core_rides_the_status() {
@@ -999,7 +1010,7 @@ fn a_core_rides_the_status() {
     let rows = compiled_rows(&live, &entry, "core", test);
     for (leg, limit, core) in legs {
         let segv = if core { -267 } else { -11 };
-        let want = format!("segv {segv}\nterm -15\n");
+        let want = format!("segv -11\nterm -15\nsegv core {segv}\nterm core -15\n");
         for how in ["wait", "poll"] {
             let env = [("how", how)];
             for (row, prog) in &rows {
@@ -1018,7 +1029,7 @@ fn a_core_rides_the_status() {
                     stdout.replace('\n', " | "),
                     String::from_utf8_lossy(&out.stderr).replace('\n', " | ")
                 ));
-                let cores_here = if core && !piped { 1 } else { 0 };
+                let cores_here = if core && !piped { 2 } else { 0 };
                 assert_eq!(
                     stdout,
                     format!("{want}rc=0\n{cores_here}\n"),
@@ -1039,14 +1050,17 @@ fn a_core_rides_the_status() {
                             &obs,
                             "core.lu (wait)",
                             &want,
-                            &Lupin::Answers("segv -11\nterm -15\n"),
+                            &Lupin::Unresolved("os_wait_status_core"),
                         );
                     } else {
+                        // lupin's poll refuses while a child is live (R9 of
+                        // ruling #84) and 0.1.54 does not resolve the
+                        // sibling: which it meets first is timing.
                         judge_lupin(
                             &obs,
                             "core.lu (poll)",
                             &want,
-                            &Lupin::AnswersOrRefuses("segv -11\nterm -15\n", "os_wait_poll"),
+                            &Lupin::RefusesOneOf(&["os_wait_poll", "os_wait_poll_core"]),
                         );
                     }
                 }

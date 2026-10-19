@@ -1,11 +1,15 @@
 //! member: false
-//! s246 (wolf-lang#785, `[os.proc.status]`, `[os.proc.poll]`) — a child
-//! that dumps core: `sh -c 'kill -s SEGV $$'` (and one ended by `TERM`,
-//! which dumps none), reported as `os_wait_status` (`s246.how`, a file in
-//! the working directory, `wait`) or `os_wait_poll` (`poll`) answers it. A core reads `-(256 + N)` since
-//! s246 (it read `-N` before, as it still does without one). RUN ONLY
-//! INSIDE A THROWAWAY CONTAINER whose working directory is the test's
-//! own, with `ulimit -c` set by the test: a core is a file there.
+//! s246 (wolf-lang#785, ruling #88 R3 D; `[os.proc.status]`,
+//! `[os.proc.poll]`) — a child that dumps core, `sh -c 'kill -s SEGV $$'`,
+//! and one ended by `TERM`, which dumps none, each reported twice: by the
+//! released calls, `os_wait_status` (`s246.how`, a file in the working
+//! directory, `wait`) or `os_wait_poll` (`poll`), which answer `-N`
+//! whether or not the host wrote a core — as released, so a program that
+//! compares with `-N` reads every host alike — and by their s246
+//! siblings, `os_wait_status_core` or `os_wait_poll_core`, which answer
+//! `-(256 + N)` when it did. RUN ONLY INSIDE A THROWAWAY CONTAINER whose
+//! working directory is the test's own, with `ulimit -c` set by the test:
+//! a core is a file there (two a run, one per SEGV child).
 
 /// One setting the test wrote beside the program, `s246.<name>` in the
 /// working directory (not the environment: lupin's `conform-run` answers
@@ -14,6 +18,7 @@ fn conf(name: str) -> str {
     fs_read_text("s246.{name}") else |_| ""
 }
 
+/// The released answer.
 fn status_of(h: int, how: str) -> !int {
     if how == "wait" {
         return os_wait_status(h)?
@@ -26,11 +31,28 @@ fn status_of(h: int, how: str) -> !int {
     r.1
 }
 
+/// The answer that carries a core.
+fn core_status_of(h: int, how: str) -> !int {
+    if how == "wait" {
+        return os_wait_status_core(h)?
+    }
+    var r = os_wait_poll_core()?
+    while r.0 != h {
+        time_sleep_ms(5)
+        r = os_wait_poll_core()?
+    }
+    r.1
+}
+
 fn main() -> !int {
     let how = conf("how")
     let segv = os_spawn(["sh", "-c", "kill -s SEGV $$"])?
     print("segv {status_of(segv, how)?}")
     let term = os_spawn(["sh", "-c", "kill -s TERM $$"])?
     print("term {status_of(term, how)?}")
+    let segv2 = os_spawn(["sh", "-c", "kill -s SEGV $$"])?
+    print("segv core {core_status_of(segv2, how)?}")
+    let term2 = os_spawn(["sh", "-c", "kill -s TERM $$"])?
+    print("term core {core_status_of(term2, how)?}")
     0
 }
