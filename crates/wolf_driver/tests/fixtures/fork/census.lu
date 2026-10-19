@@ -5,7 +5,8 @@
 //! macOS `ps -M` of this process. Then a fork: the child is ONE thread,
 //! the caller's (held: `child threads 1`); its first listen makes its drain
 //! thread and its first park its reactor thread, each then counted. The
-//! states' counts are the inventory's, printed for the record.
+//! states' counts are the inventory's, printed for the record. The parent
+//! waits for the child with a cap and kills it there by its recorded pid.
 
 fn threads() -> int {
     let tids = fs_read_dir("/proc/self/task") else |_| {
@@ -76,7 +77,26 @@ fn main() -> !int {
         print("census: the child after its first park: {threads()}")
         os_exit(0)
     }
-    let st = os_wait_status(h)?
+    // The child is waited for with a cap (10 s), so a child that never
+    // ends (its first park never resolving) is a red row, never a hang.
+    var done = false
+    var st = 0
+    var waited = 0
+    while waited < 1000 {
+        let (who, s) = os_wait_poll()?
+        if who == h {
+            done = true
+            st = s
+            break
+        }
+        time_sleep_ms(10)
+        waited += 1
+    }
+    if !done {
+        os_kill(h) else |_| {}
+        st = os_wait_status(h) else 0 - 1
+        print("census: the child was killed at the cap")
+    }
     print("census: the parent after the fork: {threads()}, child status {st}")
     0
 }
