@@ -501,7 +501,11 @@ mod sys {
     /// s247: after a forked child's [`init`] made its drain thread, the
     /// armed meanings unblocked on it (once).
     pub fn unblock_after_fork(h: &Hub) {
-        if UNBLOCK_AFTER_FORK.swap(false, Ordering::SeqCst) {
+        // PLANT (s247, never to merge): the child's drain thread never
+        // unblocks what the program armed.
+        if UNBLOCK_AFTER_FORK.swap(false, Ordering::SeqCst)
+            && std::env::var_os("S247_PLANT_NEVER").is_some()
+        {
             unblock(super::installed(h));
         }
     }
