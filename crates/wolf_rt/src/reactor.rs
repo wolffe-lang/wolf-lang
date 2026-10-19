@@ -92,7 +92,7 @@
 
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::SeqCst};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -128,13 +128,17 @@ pub type RawFd = std::os::windows::io::RawSocket;
 #[cfg(target_os = "linux")]
 mod sys {
     use super::{Interest, RawFd};
+    use std::sync::atomic::{AtomicI32, Ordering::SeqCst};
 
     /// Reserved epoll user-data for the wake eventfd.
     const WAKE_TOKEN: u64 = u64::MAX;
 
+    /// s247 (`[os.proc.fork]`): atomics, because a forked child closes the
+    /// pair it inherited — an epoll set is shared across a fork, and the
+    /// parent's registrations are in it — and makes its own.
     pub struct Poller {
-        epfd: RawFd,
-        wakefd: RawFd,
+        epfd: AtomicI32,
+        wakefd: AtomicI32,
     }
 
     impl Poller {
@@ -181,7 +185,30 @@ mod sys {
                 }
                 return Err(e);
             }
-            Ok(Poller { epfd, wakefd })
+            Ok(Poller {
+                epfd: AtomicI32::new(epfd),
+                wakefd: AtomicI32::new(wakefd),
+            })
+        }
+
+        /// s247: in a forked child, before anything else is opened — close
+        /// this process's copies of the parent's set (its registrations are
+        /// the parent's) and wake descriptor.
+        pub fn close_inherited(&self) {
+            for fd in [self.epfd.swap(-1, SeqCst), self.wakefd.swap(-1, SeqCst)] {
+                if fd >= 0 {
+                    // SAFETY: this process's copy; the parent's stays open.
+                    unsafe { libc::close(fd) };
+                }
+            }
+        }
+
+        /// s247: the child's own set and wake descriptor, at its first wait.
+        pub fn remake(&self) -> std::io::Result<()> {
+            let fresh = Poller::new()?;
+            self.epfd.store(fresh.epfd.load(SeqCst), SeqCst);
+            self.wakefd.store(fresh.wakefd.load(SeqCst), SeqCst);
+            Ok(())
         }
 
         /// Arm an fd interest (oneshot) under `token`. `false` when
@@ -197,7 +224,8 @@ mod sys {
             };
             // SAFETY: valid epfd and a live event struct; fd is the
             // caller's open descriptor.
-            let rc = unsafe { libc::epoll_ctl(self.epfd, libc::EPOLL_CTL_ADD, fd, &mut ev) };
+            let epfd = self.epfd.load(SeqCst);
+            let rc = unsafe { libc::epoll_ctl(epfd, libc::EPOLL_CTL_ADD, fd, &mut ev) };
             if rc == 0 {
                 return true;
             }
@@ -206,7 +234,7 @@ mod sys {
                 // (resolution raced the DEL): re-arm in place. One
                 // pending wait per fd at a time is the v1 contract.
                 // SAFETY: as above.
-                let rc = unsafe { libc::epoll_ctl(self.epfd, libc::EPOLL_CTL_MOD, fd, &mut ev) };
+                let rc = unsafe { libc::epoll_ctl(epfd, libc::EPOLL_CTL_MOD, fd, &mut ev) };
                 return rc == 0;
             }
             false
@@ -216,14 +244,21 @@ mod sys {
         /// already-gone fd is fine — the set self-heals under oneshot).
         pub fn del(&self, fd: RawFd) {
             // SAFETY: valid epfd; DEL takes no event struct.
-            unsafe { libc::epoll_ctl(self.epfd, libc::EPOLL_CTL_DEL, fd, std::ptr::null_mut()) };
+            unsafe {
+                libc::epoll_ctl(
+                    self.epfd.load(SeqCst),
+                    libc::EPOLL_CTL_DEL,
+                    fd,
+                    std::ptr::null_mut(),
+                )
+            };
         }
 
         /// Kick the poller out of its wait.
         pub fn wake(&self) {
             let one: u64 = 1;
             // SAFETY: valid eventfd; 8-byte write is the contract.
-            unsafe { libc::write(self.wakefd, (&raw const one).cast(), 8) };
+            unsafe { libc::write(self.wakefd.load(SeqCst), (&raw const one).cast(), 8) };
         }
 
         /// Block up to `timeout_ms` (-1 = until an event); hand every
@@ -232,7 +267,11 @@ mod sys {
             // SAFETY: zeroed epoll_event array is a valid buffer.
             let mut events: [libc::epoll_event; 64] = unsafe { std::mem::zeroed() };
             // SAFETY: valid epfd and a live, correctly-sized buffer.
-            let n = unsafe { libc::epoll_wait(self.epfd, events.as_mut_ptr(), 64, timeout_ms) };
+            super::enter_kernel_wait();
+            let n = unsafe {
+                libc::epoll_wait(self.epfd.load(SeqCst), events.as_mut_ptr(), 64, timeout_ms)
+            };
+            super::leave_kernel_wait();
             if n < 0 {
                 return; // EINTR: the caller loops.
             }
@@ -242,7 +281,7 @@ mod sys {
                     let mut buf: u64 = 0;
                     // SAFETY: valid nonblocking eventfd; 8-byte read
                     // is the contract, EAGAIN ends the drain.
-                    unsafe { libc::read(self.wakefd, (&raw mut buf).cast(), 8) };
+                    unsafe { libc::read(self.wakefd.load(SeqCst), (&raw mut buf).cast(), 8) };
                     continue;
                 }
                 deliver(ev.u64);
@@ -254,13 +293,17 @@ mod sys {
 #[cfg(target_os = "macos")]
 mod sys {
     use super::{Interest, RawFd};
+    use std::sync::atomic::{AtomicI32, Ordering::SeqCst};
 
     /// The `EVFILT_USER` wake event's ident (arbitrary; the user
     /// filter namespaces idents separately from fds).
     const WAKE_IDENT: usize = 0;
 
+    /// s247 (`[os.proc.fork]`): an atomic, because a forked child makes its
+    /// own queue — kqueue(2): a queue is not inherited by a child of
+    /// `fork`.
     pub struct Poller {
-        kq: RawFd,
+        kq: AtomicI32,
     }
 
     impl Poller {
@@ -292,7 +335,27 @@ mod sys {
                 unsafe { libc::close(kq) };
                 return Err(e);
             }
-            Ok(Poller { kq })
+            Ok(Poller {
+                kq: AtomicI32::new(kq),
+            })
+        }
+
+        /// s247: in a forked child, before anything else is opened — the
+        /// parent's queue is not this process's (its number is closed here
+        /// whatever the host left at it).
+        pub fn close_inherited(&self) {
+            let old = self.kq.swap(-1, SeqCst);
+            if old >= 0 {
+                // SAFETY: this process's number for the parent's queue.
+                unsafe { libc::close(old) };
+            }
+        }
+
+        /// s247: the child's own queue and wake event, at its first wait.
+        pub fn remake(&self) -> std::io::Result<()> {
+            let fresh = Poller::new()?;
+            self.kq.store(fresh.kq.load(SeqCst), SeqCst);
+            Ok(())
         }
 
         /// Arm an fd interest (oneshot) under `token`. kqueue keys
@@ -317,7 +380,9 @@ mod sys {
             let mut out: libc::kevent = unsafe { std::mem::zeroed() };
             // SAFETY: valid kq, one-entry changelist, one-entry
             // receipt buffer.
-            let rc = unsafe { libc::kevent(self.kq, &ev, 1, &mut out, 1, std::ptr::null()) };
+            let rc = unsafe {
+                libc::kevent(self.kq.load(SeqCst), &ev, 1, &mut out, 1, std::ptr::null())
+            };
             rc == 1 && (out.flags & libc::EV_ERROR) != 0 && out.data == 0
         }
 
@@ -335,7 +400,16 @@ mod sys {
                     udata: std::ptr::null_mut(),
                 };
                 // SAFETY: valid kq and a live changelist of one.
-                unsafe { libc::kevent(self.kq, &ev, 1, std::ptr::null_mut(), 0, std::ptr::null()) };
+                unsafe {
+                    libc::kevent(
+                        self.kq.load(SeqCst),
+                        &ev,
+                        1,
+                        std::ptr::null_mut(),
+                        0,
+                        std::ptr::null(),
+                    )
+                };
             }
         }
 
@@ -351,7 +425,16 @@ mod sys {
                 udata: std::ptr::null_mut(),
             };
             // SAFETY: valid kq and a live changelist of one.
-            unsafe { libc::kevent(self.kq, &ev, 1, std::ptr::null_mut(), 0, std::ptr::null()) };
+            unsafe {
+                libc::kevent(
+                    self.kq.load(SeqCst),
+                    &ev,
+                    1,
+                    std::ptr::null_mut(),
+                    0,
+                    std::ptr::null(),
+                )
+            };
         }
 
         /// Block up to `timeout_ms` (-1 = until an event); hand every
@@ -370,8 +453,18 @@ mod sys {
                 &ts as *const libc::timespec
             };
             // SAFETY: valid kq and a live, correctly-sized buffer.
-            let n =
-                unsafe { libc::kevent(self.kq, std::ptr::null(), 0, events.as_mut_ptr(), 64, tsp) };
+            super::enter_kernel_wait();
+            let n = unsafe {
+                libc::kevent(
+                    self.kq.load(SeqCst),
+                    std::ptr::null(),
+                    0,
+                    events.as_mut_ptr(),
+                    64,
+                    tsp,
+                )
+            };
+            super::leave_kernel_wait();
             if n < 0 {
                 return; // EINTR: the caller loops.
             }
@@ -627,8 +720,47 @@ struct Reactor {
 
 static REACTOR: OnceLock<Reactor> = OnceLock::new();
 /// The reactor thread is running (set once, after a spawn the host
-/// accepted).
+/// accepted; s247: cleared in a forked child, which makes its own).
 static RUNNING: AtomicBool = AtomicBool::new(false);
+/// s247 (ruling #90, `[os.proc.fork]`): the reactor thread's life as the
+/// fork reads it — the hub's drain thread's states: not made; starting;
+/// at its loop, working; in its kernel wait, holding nothing; claimed
+/// there by a fork — and its handle for the fork's unpark.
+static THREAD_STATE: AtomicU8 = AtomicU8::new(THREAD_NONE);
+const THREAD_NONE: u8 = 0;
+const THREAD_STARTING: u8 = 1;
+const THREAD_LOOPING: u8 = 2;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+const THREAD_WAITING: u8 = 3;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+const THREAD_HELD: u8 = 4;
+static THREAD: Mutex<Option<std::thread::Thread>> = Mutex::new(None);
+/// s247: a forked child closed the set it inherited; its first wait makes
+/// its own ([`reactor`]).
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+static REMAKE: AtomicBool = AtomicBool::new(false);
+
+/// s247: the reactor thread into its kernel wait (the poller's
+/// `epoll_wait` or `kevent`), where a fork may claim it.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn enter_kernel_wait() {
+    THREAD_STATE.store(THREAD_WAITING, SeqCst);
+}
+
+/// s247: back from the kernel's wait — on, unless a fork claimed the
+/// thread there; then parked, holding nothing, until the fork releases it.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn leave_kernel_wait() {
+    while THREAD_STATE
+        .compare_exchange(THREAD_WAITING, THREAD_LOOPING, SeqCst, SeqCst)
+        .is_err()
+    {
+        if THREAD_STATE.load(SeqCst) != THREAD_HELD {
+            return;
+        }
+        std::thread::park();
+    }
+}
 /// Serializes the making: two first waits make one set and one thread.
 static MAKING: Mutex<()> = Mutex::new(());
 
@@ -657,7 +789,16 @@ fn reactor() -> std::io::Result<&'static Reactor> {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let r = match REACTOR.get() {
-        Some(r) => r,
+        Some(r) => {
+            // s247 (`[os.proc.fork]`): a forked child's own set, at its
+            // first wait.
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
+            if REMAKE.load(SeqCst) {
+                r.sys.remake()?;
+                REMAKE.store(false, SeqCst);
+            }
+            r
+        }
         None => {
             let sys = sys::Poller::new()?;
             REACTOR.get_or_init(move || Reactor {
@@ -671,12 +812,78 @@ fn reactor() -> std::io::Result<&'static Reactor> {
         }
     };
     if !RUNNING.load(SeqCst) {
-        std::thread::Builder::new()
+        THREAD_STATE.store(THREAD_STARTING, SeqCst);
+        if let Err(e) = std::thread::Builder::new()
             .name("wolf-reactor".into())
-            .spawn(move || reactor_main(r))?;
+            .spawn(move || reactor_main(r))
+        {
+            THREAD_STATE.store(THREAD_NONE, SeqCst);
+            return Err(e);
+        }
         RUNNING.store(true, SeqCst);
     }
     Ok(r)
+}
+
+// ---- the fork (s247, ruling #90, `[os.proc.fork]`) ------------------------
+
+/// s247: claim the reactor thread for a fork where it holds nothing — in
+/// its kernel wait — waiting out a start or a moment of work (each bounded:
+/// no wait is pending, since no task is live) first; nothing where there is
+/// no thread. The thread is not woken.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub(crate) fn fork_hold() {
+    let mut round = 0;
+    loop {
+        match THREAD_STATE.load(SeqCst) {
+            THREAD_STARTING | THREAD_LOOPING => crate::task::backoff(&mut round),
+            THREAD_WAITING => {
+                if THREAD_STATE
+                    .compare_exchange(THREAD_WAITING, THREAD_HELD, SeqCst, SeqCst)
+                    .is_ok()
+                {
+                    return;
+                }
+            }
+            _ => return,
+        }
+    }
+}
+
+/// s247: the parent's side after the fork — the claim ends, and a thread
+/// that came back from its wait meanwhile is unparked.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub(crate) fn fork_release() {
+    if THREAD_STATE
+        .compare_exchange(THREAD_HELD, THREAD_WAITING, SeqCst, SeqCst)
+        .is_ok()
+        && let Some(t) = THREAD.lock().unwrap_or_else(|p| p.into_inner()).as_ref()
+    {
+        t.unpark();
+    }
+}
+
+/// s247: the child's readiness set — the inherited descriptors closed
+/// (linux shares an epoll set across a fork and its registrations are the
+/// parent's; macOS hands a child no kqueue at all), with signals still
+/// blocked, before anything else is opened. No wait is pending (no task was
+/// live), so the table is empty. The child's own set and thread are made at
+/// its first wait ([`reactor`]); a host refusal there is the wait's `io`.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub(crate) fn fork_child() {
+    let Some(r) = REACTOR.get() else {
+        return;
+    };
+    RUNNING.store(false, SeqCst);
+    THREAD_STATE.store(THREAD_NONE, SeqCst);
+    *THREAD.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    {
+        let mut st = r.state.lock().unwrap_or_else(|p| p.into_inner());
+        st.waiters.clear();
+        st.timers.clear();
+    }
+    r.sys.close_inherited();
+    REMAKE.store(true, SeqCst);
 }
 
 /// Make the reactor now rather than at the first wait (s239,
@@ -754,6 +961,8 @@ impl Reactor {
 /// cost: one thread asleep in the kernel, zero when no io ever
 /// happens — D15's lazy contract).
 fn reactor_main(r: &'static Reactor) {
+    *THREAD.lock().unwrap_or_else(|p| p.into_inner()) = Some(std::thread::current());
+    THREAD_STATE.store(THREAD_LOOPING, SeqCst);
     loop {
         let timeout = r.next_timeout_ms();
         r.sys.wait(timeout, |token| {
