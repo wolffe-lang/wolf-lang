@@ -1496,6 +1496,11 @@ mod builtin_cap_tests {
             ("fs_set_owner", Cap::Fs),
             ("fs_set_owner_fd", Cap::Fs),
             ("os_set_ids", Cap::Exec),
+            // s248 (#796, #797): the syncs and the canonical path read and
+            // flush the filesystem — `fs`.
+            ("fs_sync", Cap::Fs),
+            ("fs_sync_dir", Cap::Fs),
+            ("fs_realpath", Cap::Fs),
             // s241 (ruling #79 R6): the group and all sends and the move
             // into a group charge `exec`, with `os_signal_send`.
             ("os_signal_send_group", Cap::Exec),

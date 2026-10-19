@@ -11,8 +11,14 @@ fn each_s248_builtin_has_its_category() {
         // #798: the clock at nanoseconds is the clock — Clock, refused at
         // comptime and charged nothing in a manifest, as `time_now_ms`.
         ("os_clock_ns", SandboxCategory::Clock),
+        // #796, #797: the syncs and the canonical path read and flush the
+        // filesystem — `fs`, with the family.
+        ("fs_sync", SandboxCategory::Fs),
+        ("fs_sync_dir", SandboxCategory::Fs),
+        ("fs_realpath", SandboxCategory::Fs),
         // The neighbours they join, unchanged.
         ("time_now_ms", SandboxCategory::Clock),
+        ("fs_truncate", SandboxCategory::Fs),
     ] {
         assert_eq!(host_stub(name), Some(cat), "{name}");
         assert!(!pure_builtin(name), "{name} is not on the pure shelf");
@@ -24,7 +30,12 @@ fn each_s248_builtin_has_its_category() {
 #[test]
 fn each_s248_builtin_has_a_signature() {
     let mut table = wolf_sema::TypeTable::new();
-    for (name, arity) in [("os_clock_ns", 0)] {
+    for (name, arity) in [
+        ("os_clock_ns", 0),
+        ("fs_sync", 1),
+        ("fs_sync_dir", 1),
+        ("fs_realpath", 1),
+    ] {
         let (params, _) = wolf_sema::check::host_builtin_sig(&mut table, name)
             .unwrap_or_else(|| panic!("{name} has a signature"));
         assert_eq!(params.len(), arity, "{name}");
