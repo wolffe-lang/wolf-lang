@@ -45,7 +45,10 @@
 //! trampoline) reset to the default at the exec, as POSIX says of any
 //! caught signal; an IGNORED signal stays ignored, as POSIX also says —
 //! a native program leaves `SIGPIPE` as it inherited it, so this
-//! touches no disposition.
+//! touches no disposition but one: s246, a fault meaning the program
+//! ignores (`os_signal_ignore_one(SEGMENT_FAULT)`), which the stack
+//! guard's handler holds, is set `SIG_IGN` just before `execve` (and the
+//! handler put back if it fails).
 
 #[cfg(unix)]
 use crate::os::InheritFd;
@@ -331,8 +334,19 @@ mod unix {
                     libc::close(t);
                 }
             }
+            // s246 (`[os.signal.disp.one]`): a fault meaning this program
+            // ignores (its stack guard's handler, which does not survive the
+            // exec, holds that choice) is `SIG_IGN` in the new program, as
+            // any ignored signal is; a failed exec gives the handler back.
+            let faults = crate::task::ignored_sent_faults();
+            for sig in faults {
+                if sig != 0 {
+                    libc::signal(sig, libc::SIG_IGN);
+                }
+            }
             libc::execve(path.as_ptr(), arg_ptrs.as_ptr(), env_ptrs.as_ptr());
             let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
+            crate::task::reinstall_after_exec(faults);
             restore(&saved, &staged);
             Err(match errno {
                 libc::ENOENT | libc::ENOTDIR => "not_found",
