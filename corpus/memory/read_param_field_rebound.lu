@@ -1,0 +1,40 @@
+//! check: fail(E1001)
+//! phase: typecheck
+//! conforms: mem.tier0.move.1, mem.tier0.mode.read, mem.tier0.move.2
+//!
+//! s252 (wolf-lang#822, yew's fuzz fork): by design. `let tb =
+//! run.ec.tb` on a `read` parameter moves the field out in this frame
+//! — a lend, so the caller keeps its value (`[mem.tier0.mode.read]`)
+//! — and `run.ec.tb.xs.len` afterwards reads a moved-from place. To
+//! read it twice, read through `run.ec.tb` each time without binding
+//! it, or keep using `tb` from the binding on; `copy` at the move is a
+//! deep copy. lupin 0.1.54: `trap(use-after-move)`, the same answer.
+
+struct Tb {
+    xs: List[int],
+}
+
+struct Ec {
+    tb: Tb,
+}
+
+struct Run {
+    ec: Ec,
+}
+
+fn total(tb: Tb) -> int {
+    tb.xs.len
+}
+
+fn check(run: Run) -> int {
+    let tb = run.ec.tb
+    let n = total(tb)
+    n + run.ec.tb.xs.len
+}
+
+fn main() {
+    var xs = List[int]()
+    (mut xs).push(1)
+    let run = Run { ec: Ec { tb: Tb { xs: xs } } }
+    print("{check(run)}")
+}

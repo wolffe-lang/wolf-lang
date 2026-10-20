@@ -73,6 +73,32 @@ fn e1001_whole_value_move() {
     );
 }
 
+/// s252 (wolf-lang#822, yew's fuzz fork): `let tb = run.ec.tb` on a
+/// `read` parameter, then a read through `run.ec.tb`. By design
+/// ([mem.tier0.move.1], [mem.tier0.mode.read]): the binding moves the
+/// field out in this frame (a lend; the caller keeps its value), so the
+/// second read is E1001. The report says which parameter and how to read
+/// twice.
+#[test]
+fn e1001_read_param_field_rebound() {
+    snap(
+        "e1001_read_param_field_rebound",
+        "struct Tb { xs: List[int] }\n\
+         struct Ec { tb: Tb }\n\
+         struct Run { ec: Ec }\n\
+         fn total(tb: Tb) -> int { tb.xs.len }\n\
+         fn check(run: Run) -> int {\n    \
+             let tb = run.ec.tb\n    \
+             let n = total(tb)\n    \
+             n + run.ec.tb.xs.len\n\
+         }\n\
+         fn main() -> !int {\n    \
+             let run = Run { ec: Ec { tb: Tb { xs: List[int]() } } }\n    \
+             check(run)\n\
+         }\n",
+    );
+}
+
 #[test]
 fn e1001_field_granular_partial_move() {
     // p.x moves; p.y stays live; p.x.n is the error; whole-p is too.
