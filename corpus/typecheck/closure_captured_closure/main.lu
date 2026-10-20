@@ -1,0 +1,28 @@
+//! check: run(exit=0, stdout="dumb\n")
+//! phase: run
+//! conforms: abi.native.closure.object
+//!
+//! s251 (wolf-lang#806): a closure captured by a closure, the pair
+//! handed to a module. `get` is capture-free (a static record);
+//! `wrapped` captures `get`'s record pointer and calls through it.
+//! `lib.apply` makes the same capture-free closure over its own lookup
+//! (the dedup twin): at 808ce11a the release tier's dedup kept
+//! `lib.apply.cls0` and merged `main.cls0` away while `get`'s static
+//! record — the word `wrapped` captures — still named it. The native
+//! tier ran the program.
+
+use lib
+
+fn lookup(name: str) -> (str, bool) {
+    if name == "TERM" then ("dumb", true) else ("", false)
+}
+
+fn main() -> int {
+    var key = "TE"
+    key = "{key}RM"
+    let (_, seen) = lib.apply(key)
+    if seen == false { return 2 }
+    let get = fn(k: str) lookup(k)
+    let wrapped = fn(k: str) get(k)
+    lib.tier(wrapped, key)
+}

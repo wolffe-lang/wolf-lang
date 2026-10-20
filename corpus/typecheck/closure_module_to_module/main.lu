@@ -1,0 +1,18 @@
+//! check: run(exit=0, stdout="dumb\n")
+//! phase: run
+//! conforms: abi.native.closure.object
+//!
+//! s251 (wolf-lang#806): a capture-free closure made in one MODULE and
+//! called from another, on every tier. `src.run` makes the closure and
+//! hands it to `tty.tier`; `src.probe` makes the same closure for its
+//! own call (the dedup twin). At 808ce11a the release tier's dedup kept
+//! `src.probe.cls0` and merged `src.run.cls0` away while `run`'s static
+//! record still named it; the native tier ran the program.
+
+use src
+
+fn main() -> int {
+    var key = "TE"
+    key = "{key}RM"
+    src.run(key)
+}

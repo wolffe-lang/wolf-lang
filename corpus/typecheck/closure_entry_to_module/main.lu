@@ -1,0 +1,26 @@
+//! check: run(exit=0, stdout="dumb\n")
+//! phase: run
+//! conforms: abi.native.closure.object
+//!
+//! s251 (wolf-lang#806; yew G20, witness `e`): a capture-free closure
+//! made in the ENTRY and called from a module, on every tier. The
+//! entry's closure and `lib.tier_env`'s are one body once each has
+//! inlined its own `lookup`; at 808ce11a the release tier's dedup
+//! merged the entry's away (the representative is the smallest name,
+//! `lib.tier_env.cls0`) while the entry's static record still named
+//! it, and the emitter refused `a vtable slot @main.cls0 outside this
+//! object's subset`. The native tier, which runs no mid-end, built and
+//! ran the same program. The runtime-built key keeps CTFE from folding
+//! the call.
+
+use lib
+
+fn lookup(name: str) -> (str, bool) {
+    if name == "TERM" then ("dumb", true) else ("", false)
+}
+
+fn main() -> int {
+    var key = "TE"
+    key = "{key}RM"
+    lib.tier(fn(k: str) lookup(k), key)
+}

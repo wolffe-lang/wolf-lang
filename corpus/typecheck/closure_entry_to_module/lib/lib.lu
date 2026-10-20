@@ -1,0 +1,20 @@
+//! member: true
+//!
+//! The module: a tier over a lookup VALUE, and its own closure over its
+//! own lookup — the same body as the entry's (the dedup twin).
+
+fn lookup(name: str) -> (str, bool) {
+    if name == "TERM" then ("dumb", true) else ("", false)
+}
+
+/// Tier over a lookup: prints what it finds; 0 when the terminal is dumb.
+pub fn tier(getv: fn(str) -> (str, bool), key: str) -> int {
+    let (t, has) = getv(key)
+    if has { print(t) }
+    if has && t == "dumb" then 0 else 1
+}
+
+/// Tier over this module's own lookup.
+pub fn tier_env(key: str) -> int {
+    tier(fn(k: str) lookup(k), key)
+}

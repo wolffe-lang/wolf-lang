@@ -1,0 +1,146 @@
+//! member: true
+//!
+//! The module: the lookup, the render over a lookup VALUE, the one-line
+//! `render_env` that makes the closure and calls `render`, and two
+//! ballast functions so the whole-program phase cuts the program into
+//! two clusters (`cluster_target_size` 512 WIR instructions).
+
+fn lookup(name: str) -> (str, bool) {
+    if name == "TERM" then ("dumb", true) else ("", false)
+}
+
+/// Render over a lookup: prints what it finds; 0 when the terminal is dumb.
+pub fn render(getv: fn(str) -> (str, bool), key: str) -> int {
+    let (t, has) = getv(key)
+    if has { print(t) }
+    if has && t == "dumb" then 0 else 1
+}
+
+/// One line: make the closure, call `render` — the inliner's prey.
+pub fn render_env(key: str) -> int {
+    render(fn(k: str) lookup(k), key)
+}
+
+/// Ballast: with its twin, enough WIR that the whole-program phase cuts
+/// the program into two clusters, the entry's full before `render_env`.
+pub fn pad_a(n: int) -> int {
+    var acc = n
+    acc = (acc * 3 + 1) % 1000003
+    acc = (acc * 3 + 2) % 1000003
+    acc = (acc * 3 + 3) % 1000003
+    acc = (acc * 3 + 4) % 1000003
+    acc = (acc * 3 + 5) % 1000003
+    acc = (acc * 3 + 6) % 1000003
+    acc = (acc * 3 + 7) % 1000003
+    acc = (acc * 3 + 8) % 1000003
+    acc = (acc * 3 + 9) % 1000003
+    acc = (acc * 3 + 10) % 1000003
+    acc = (acc * 3 + 11) % 1000003
+    acc = (acc * 3 + 12) % 1000003
+    acc = (acc * 3 + 13) % 1000003
+    acc = (acc * 3 + 14) % 1000003
+    acc = (acc * 3 + 15) % 1000003
+    acc = (acc * 3 + 16) % 1000003
+    acc = (acc * 3 + 17) % 1000003
+    acc = (acc * 3 + 18) % 1000003
+    acc = (acc * 3 + 19) % 1000003
+    acc = (acc * 3 + 20) % 1000003
+    acc = (acc * 3 + 21) % 1000003
+    acc = (acc * 3 + 22) % 1000003
+    acc = (acc * 3 + 23) % 1000003
+    acc = (acc * 3 + 24) % 1000003
+    acc = (acc * 3 + 25) % 1000003
+    acc = (acc * 3 + 26) % 1000003
+    acc = (acc * 3 + 27) % 1000003
+    acc = (acc * 3 + 28) % 1000003
+    acc = (acc * 3 + 29) % 1000003
+    acc = (acc * 3 + 30) % 1000003
+    acc = (acc * 3 + 31) % 1000003
+    acc = (acc * 3 + 32) % 1000003
+    acc = (acc * 3 + 33) % 1000003
+    acc = (acc * 3 + 34) % 1000003
+    acc = (acc * 3 + 35) % 1000003
+    acc = (acc * 3 + 36) % 1000003
+    acc = (acc * 3 + 37) % 1000003
+    acc = (acc * 3 + 38) % 1000003
+    acc = (acc * 3 + 39) % 1000003
+    acc = (acc * 3 + 40) % 1000003
+    acc = (acc * 3 + 41) % 1000003
+    acc = (acc * 3 + 42) % 1000003
+    acc = (acc * 3 + 43) % 1000003
+    acc = (acc * 3 + 44) % 1000003
+    acc = (acc * 3 + 45) % 1000003
+    acc = (acc * 3 + 46) % 1000003
+    acc = (acc * 3 + 47) % 1000003
+    acc = (acc * 3 + 48) % 1000003
+    acc = (acc * 3 + 49) % 1000003
+    acc = (acc * 3 + 50) % 1000003
+    acc = (acc * 3 + 51) % 1000003
+    acc = (acc * 3 + 52) % 1000003
+    acc = (acc * 3 + 53) % 1000003
+    acc = (acc * 3 + 54) % 1000003
+    acc = (acc * 3 + 55) % 1000003
+    acc
+}
+
+/// Ballast: with its twin, enough WIR that the whole-program phase cuts
+/// the program into two clusters, the entry's full before `render_env`.
+pub fn pad_b(n: int) -> int {
+    var acc = n
+    acc = (acc * 5 + 2) % 1000003
+    acc = (acc * 5 + 3) % 1000003
+    acc = (acc * 5 + 4) % 1000003
+    acc = (acc * 5 + 5) % 1000003
+    acc = (acc * 5 + 6) % 1000003
+    acc = (acc * 5 + 7) % 1000003
+    acc = (acc * 5 + 8) % 1000003
+    acc = (acc * 5 + 9) % 1000003
+    acc = (acc * 5 + 10) % 1000003
+    acc = (acc * 5 + 11) % 1000003
+    acc = (acc * 5 + 12) % 1000003
+    acc = (acc * 5 + 13) % 1000003
+    acc = (acc * 5 + 14) % 1000003
+    acc = (acc * 5 + 15) % 1000003
+    acc = (acc * 5 + 16) % 1000003
+    acc = (acc * 5 + 17) % 1000003
+    acc = (acc * 5 + 18) % 1000003
+    acc = (acc * 5 + 19) % 1000003
+    acc = (acc * 5 + 20) % 1000003
+    acc = (acc * 5 + 21) % 1000003
+    acc = (acc * 5 + 22) % 1000003
+    acc = (acc * 5 + 23) % 1000003
+    acc = (acc * 5 + 24) % 1000003
+    acc = (acc * 5 + 25) % 1000003
+    acc = (acc * 5 + 26) % 1000003
+    acc = (acc * 5 + 27) % 1000003
+    acc = (acc * 5 + 28) % 1000003
+    acc = (acc * 5 + 29) % 1000003
+    acc = (acc * 5 + 30) % 1000003
+    acc = (acc * 5 + 31) % 1000003
+    acc = (acc * 5 + 32) % 1000003
+    acc = (acc * 5 + 33) % 1000003
+    acc = (acc * 5 + 34) % 1000003
+    acc = (acc * 5 + 35) % 1000003
+    acc = (acc * 5 + 36) % 1000003
+    acc = (acc * 5 + 37) % 1000003
+    acc = (acc * 5 + 38) % 1000003
+    acc = (acc * 5 + 39) % 1000003
+    acc = (acc * 5 + 40) % 1000003
+    acc = (acc * 5 + 41) % 1000003
+    acc = (acc * 5 + 42) % 1000003
+    acc = (acc * 5 + 43) % 1000003
+    acc = (acc * 5 + 44) % 1000003
+    acc = (acc * 5 + 45) % 1000003
+    acc = (acc * 5 + 46) % 1000003
+    acc = (acc * 5 + 47) % 1000003
+    acc = (acc * 5 + 48) % 1000003
+    acc = (acc * 5 + 49) % 1000003
+    acc = (acc * 5 + 50) % 1000003
+    acc = (acc * 5 + 51) % 1000003
+    acc = (acc * 5 + 52) % 1000003
+    acc = (acc * 5 + 53) % 1000003
+    acc = (acc * 5 + 54) % 1000003
+    acc = (acc * 5 + 55) % 1000003
+    acc = (acc * 5 + 56) % 1000003
+    acc
+}
