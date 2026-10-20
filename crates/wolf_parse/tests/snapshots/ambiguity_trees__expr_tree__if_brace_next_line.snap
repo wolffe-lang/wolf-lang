@@ -1,0 +1,78 @@
+---
+source: crates/wolf_parse/tests/ambiguity_trees.rs
+assertion_line: 34
+expression: out
+---
+== tree ==
+SourceFile 704..810
+  FnDecl 704..809
+    FnKw 704..706 "fn"
+    Ident 707..711 "main"
+    ParamList 711..713
+      LParen 711..712 "("
+      RParen 712..713 ")"
+    Block 714..809
+      LBrace 714..715 "{"
+      LetDecl 720..730
+        LetKw 720..723 "let"
+        IdentPat 724..725
+          Ident 724..725 "a"
+        Eq 726..727 "="
+        LiteralExpr 728..729
+          Int 728..729 "3"
+        Term 729..730 "\n"
+      LetDecl 734..744
+        LetKw 734..737 "let"
+        IdentPat 738..739
+          Ident 738..739 "b"
+        Eq 740..741 "="
+        LiteralExpr 742..743
+          Int 742..743 "4"
+        Term 743..744 "\n"
+      ExprStmt 748..774
+        IfExpr 748..773
+          IfKw 748..750 "if"
+          BinExpr 751..773
+            BinExpr 751..756
+              PathExpr 751..752
+                Ident 751..752 "a"
+              Gt 753..754 ">"
+              LiteralExpr 755..756
+                Int 755..756 "2"
+            AmpAmp 757..759 "&&"
+            BinExpr 768..773
+              PathExpr 768..769
+                Ident 768..769 "b"
+              Gt 770..771 ">"
+              LiteralExpr 772..773
+                Int 772..773 "3"
+          Missing 773..773 ""
+        Term 773..774 "\n"
+      ExprStmt 778..808
+        Block 778..807
+          LBrace 778..779 "{"
+          ExprStmt 788..802
+            CallExpr 788..801
+              PathExpr 788..793
+                Ident 788..793 "print"
+              ArgList 793..801
+                LParen 793..794 "("
+                Arg 794..800
+                  StringExpr 794..800
+                    StrBegin 794..795 "\""
+                    StrFragment 795..799 "both"
+                    StrEnd 799..800 "\""
+                RParen 800..801 ")"
+            Term 801..802 "\n"
+          RBrace 806..807 "}"
+        Term 807..808 "\n"
+      RBrace 808..809 "}"
+  Term 809..810 "\n"
+  Eof 810..810 ""
+== diagnostics ==
+E0201 [Error] 773..774 expected `{` or `then` after the `if` condition
+    secondary 778..779 this `{` is on the next line
+    note an `if` is written `if c { a } else { b }`, or on one line `if c then a else b` — braces or `then`, never neither, and both branches the same way ([gram.expr.if])
+    note a newline after the header's last token ends the statement ([gram.lex.newline]), so the `{` on the line below opens a block of its own, not this one. The opening brace goes on the header's line ([gram.fmt.brace]); a header that runs over several lines breaks after an operator (`a &&` / `b {`).
+    help [MachineApplicable] put the `{` at the end of the header's line
+        edit 773..778 -> " "
