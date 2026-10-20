@@ -6,8 +6,8 @@ expression: render_mem(src)
 error[E1012]: `cfg.limit` is frozen, so it cannot be assigned through
  --> mem:///main.lu:4:5
   |
-3 |     var cfg = freeze region { Config { limit: 42 } }
-  |               -------------------------------------- the freeze happens here — the promotion to `imm` is deep and permanent
+3 |     var cfg = freeze region { Config { limit: 42, name: "cfg" } }
+  |               --------------------------------------------------- the freeze happens here — the promotion to `imm` is deep and permanent
 4 |     cfg.limit = 7
   |     ^^^^^^^^^ this needs the data to be mutable
   |

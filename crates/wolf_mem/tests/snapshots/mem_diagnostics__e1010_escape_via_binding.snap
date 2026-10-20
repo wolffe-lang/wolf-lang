@@ -7,9 +7,9 @@ error[E1010]: `out` still holds a value allocated in region `tmp` when the regio
   |
 4 |     region tmp {
   |            --- region `tmp` is created here
-5 |         out = Node { value: 7 }
+5 |         out = Node { value: 7, tag: "b" }
   |         ^^^ the value flows out of the region here
-  |               ----------------- allocated here, into region `tmp`
+  |               --------------------------- allocated here, into region `tmp`
 6 |     }
   |     - the region is freed here — everything in it is freed wholesale, as one unit
   |

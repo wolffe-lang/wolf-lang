@@ -359,16 +359,18 @@ fn e1004_param_param_store() {
     // The Cyclone equality-constraint case: storing one parameter's
     // data into another's region. Rare by measurement; no annotation
     // surface exists, so the demand reports with a restructure hint.
+    // s252: `Item` holds a `str` — a scalar-only one names no region
+    // (`[mem.region.scalar]`).
     snap(
         "e1004_params_independent",
-        "struct Item { value: int }\n\
+        "struct Item { value: int, tag: str }\n\
          struct Holder { item: Item }\n\
          fn stash(mut holder: Holder, take item: Item) {\n    \
              holder.item = item\n\
          }\n\
          fn main() -> !int {\n    \
-             var h = Holder { item: Item { value: 1 } }\n    \
-             let i = Item { value: 2 }\n    \
+             var h = Holder { item: Item { value: 1, tag: \"a\" } }\n    \
+             let i = Item { value: 2, tag: \"b\" }\n    \
              stash(mut h, take i)\n    \
              0\n\
          }\n",
@@ -379,14 +381,15 @@ fn e1004_param_param_store() {
 fn e1004_cross_region_store() {
     // Region-local data embedded into a caller-region container: the
     // [mem.region.edge] table's ❌ column, in allocation-site words.
+    // s252: over an `Item` with a `str` field (`[mem.region.scalar]`).
     snap(
         "e1004_cross_region_store",
-        "struct Item { value: int }\n\
+        "struct Item { value: int, tag: str }\n\
          struct Holder { item: Item }\n\
          fn main() -> !int {\n    \
-             var h = Holder { item: Item { value: 1 } }\n    \
+             var h = Holder { item: Item { value: 1, tag: \"a\" } }\n    \
              region tmp {\n        \
-                 h.item = Item { value: 2 }\n    \
+                 h.item = Item { value: 2, tag: \"b\" }\n    \
              }\n    \
              0\n\
          }\n",
@@ -398,14 +401,15 @@ fn e1004_cross_region_store() {
 #[test]
 fn e1010_region_local_outlives_free() {
     // The sprint's headline error shape: allocated in `tmp`, freed at
-    // the block end, still reachable from `out`.
+    // the block end, still reachable from `out`. s252: over a
+    // `Node` with a `str` field (`[mem.region.scalar]`).
     snap(
         "e1010_escape_via_binding",
-        "struct Node { value: int }\n\
+        "struct Node { value: int, tag: str }\n\
          fn main() -> !int {\n    \
-             var out = Node { value: 0 }\n    \
+             var out = Node { value: 0, tag: \"a\" }\n    \
              region tmp {\n        \
-                 out = Node { value: 7 }\n    \
+                 out = Node { value: 7, tag: \"b\" }\n    \
              }\n    \
              if out.value == 7 { 0 } else { 1 }\n\
          }\n",
@@ -414,12 +418,13 @@ fn e1010_region_local_outlives_free() {
 
 #[test]
 fn e1010_region_block_value_escapes() {
-    // The block's own value is allocated in the dying region.
+    // The block's own value is allocated in the dying region. s252:
+    // over a `Node` with a `str` field (`[mem.region.scalar]`).
     snap(
         "e1010_escape_via_value",
-        "struct Node { value: int }\n\
+        "struct Node { value: int, tag: str }\n\
          fn main() -> !int {\n    \
-             let n = region tmp { Node { value: 3 } }\n    \
+             let n = region tmp { Node { value: 3, tag: \"c\" } }\n    \
              n.value\n\
          }\n",
     );
@@ -528,12 +533,13 @@ fn e1011_open_child_of_open_owner() {
 #[test]
 fn e1012_write_through_frozen() {
     // `freeze` is deep and permanent: the write reaches data a
-    // freeze promoted ([mem.region.freeze.1]).
+    // freeze promoted ([mem.region.freeze.1]). s252: over a
+    // `Config` with a `str` field (`[mem.region.scalar]`).
     snap(
         "e1012_write_through_frozen",
-        "struct Config { limit: int }\n\
+        "struct Config { limit: int, name: str }\n\
          fn main() -> !int {\n    \
-             var cfg = freeze region { Config { limit: 42 } }\n    \
+             var cfg = freeze region { Config { limit: 42, name: \"cfg\" } }\n    \
              cfg.limit = 7\n    \
              cfg.limit\n\
          }\n",
