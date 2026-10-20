@@ -11,10 +11,11 @@
 //! shim of the save's witness ends the program by `_exit` at a storage
 //! boundary, which is a process ending, not a signal.
 //!
-//! **lupin 0.1.54**, the pairing, predates every s248 name: each is
-//! "does not resolve", pinned here by version exactly as measured
-//! (s248's §2); a newer lupin is held to the mirror (the wolf-interp
-//! debts are listed in the PR).
+//! **lupin 0.1.54** (the 0.2.33 pairing) and **0.1.55** (the 0.2.34
+//! pairing, r39) predate every s248 name: each is "does not resolve",
+//! pinned here by version exactly as measured (s248's §2; r39 on the
+//! published 0.1.55 archive); a newer lupin is held to the mirror
+//! (wolf-interp#268).
 
 mod lane_exit;
 
@@ -34,8 +35,9 @@ fn report(line: &str) {
     let _ = err.flush();
 }
 
-/// The pairing at this lane, which predates every s248 name.
-const PRE_MIRROR_LUPIN: &str = "0.1.54";
+/// The lupin releases that predate every s248 name: 0.1.54, the pairing
+/// at this lane, and 0.1.55, the 0.2.34 pairing (r39, wolf-interp#268).
+const PRE_MIRROR_LUPIN: &[&str] = &["0.1.54", "0.1.55"];
 
 #[derive(Debug)]
 struct Obs {
@@ -174,15 +176,15 @@ fn lupin_or_skip() -> Option<PathBuf> {
     found
 }
 
-/// lupin 0.1.54 stops at one of `calls`, which it does not resolve (the
-/// first s248 name it meets); a newer lupin is held to the compiler's
-/// answer.
+/// lupin 0.1.54 and 0.1.55 stop at one of `calls`, which they do not
+/// resolve (the first s248 name each meets); a newer lupin is held to the
+/// compiler's answer.
 fn judge_lupin(obs: &Obs, name: &str, want: &str, calls: &[&str]) {
     eprintln!(
         "== lupin {} on {name}: {} {}\n{}",
         obs.version, obs.verdict, obs.reason, obs.stdout
     );
-    if obs.version == PRE_MIRROR_LUPIN {
+    if PRE_MIRROR_LUPIN.contains(&obs.version.as_str()) {
         assert_eq!(
             obs.verdict, "unsupported",
             "lupin {} refuses {name}: {obs:?}",
@@ -212,7 +214,7 @@ fn judge_lupin(obs: &Obs, name: &str, want: &str, calls: &[&str]) {
 /// `entry` on every machine, in `dir`: the checked machine and lupin
 /// under `conform-run`, the native and release binaries run directly
 /// (and under `taskset -c 0-3` on linux). Each stdout is held to `want`
-/// as `check` reads it; lupin 0.1.54 to its refusal of `call`.
+/// as `check` reads it; lupin 0.1.54 and 0.1.55 to the refusal of `call`.
 fn every_lane(entry: &Path, dir: &Path, call: &[&str], check: &dyn Fn(&str, &str)) -> String {
     let name = entry.file_name().unwrap().to_string_lossy().to_string();
     let mut cmd = Command::new(wolf());
