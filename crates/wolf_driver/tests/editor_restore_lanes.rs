@@ -364,6 +364,30 @@ impl Live {
     }
 }
 
+/// The terminal's settings as `stty -g` prints them, less what is the
+/// kernel's state and not a mode: macOS sets `PENDIN` (`lflag` bit
+/// 0x20000000, "retype pending input") when input goes back to canonical,
+/// measured on CI's runner (run 39338977636: a restored terminal read
+/// `lflag=200005cb` where it was `5cb`, every other field equal), as any
+/// `stty icanon` does there. linux's `stty -g` never showed it.
+fn mode_only(settings: &str) -> String {
+    if !cfg!(target_os = "macos") {
+        return settings.to_string();
+    }
+    settings
+        .trim_end()
+        .split(':')
+        .map(|f| match f.strip_prefix("lflag=") {
+            Some(hex) => match u64::from_str_radix(hex, 16) {
+                Ok(v) => format!("lflag={:x}", v & !0x2000_0000),
+                Err(_) => f.to_string(),
+            },
+            None => f.to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(":")
+}
+
 /// A command's output, or `None` past `secs` (killed: the child the test
 /// started).
 fn bounded(mut cmd: Command, dir: &Path, secs: u64) -> Option<Output> {
@@ -520,7 +544,7 @@ fn the_terminal_is_restored_on_every_exit_the_runtime_owns() {
     for (lane, cmd, by_file) in &lanes {
         let got = live.rows(lane, cmd, *by_file);
         for (r, (mode, before, after, text)) in ROWS.iter().zip(got) {
-            let restored = !before.is_empty() && before == after;
+            let restored = !before.is_empty() && mode_only(&before) == mode_only(&after);
             let raw_line = format!("raw {mode}\n");
             // The checked machine buffers the program's standard output into
             // its record, which it prints after its end (and its restore):
