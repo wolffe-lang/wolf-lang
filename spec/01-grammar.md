@@ -448,7 +448,10 @@ its own.
 Nominal traits, checked generics (D28). Adapter types are `distinct`
 types (`type Cover = distinct Song`): same layout as the base, free
 bidirectional `as` casts, an *own* empty impl set — the sanctioned
-orphan-rule escape, with no dedicated keyword. The impl subject is a *type*
+orphan-rule escape, with no dedicated keyword. An adapter of a `Copy`
+scalar is `Copy` (`[mem.tier0.move.3]`, s252): a `distinct int`
+coordinate crosses a function boundary and is read twice without a
+`copy`. The impl subject is a *type*
 (so `impl[T] List[T] { … }` works); when `for` is present the first
 type is the trait path applied to its arguments.
 
