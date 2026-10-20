@@ -1,0 +1,10 @@
+// s250 (wolf-lang#810): a `test_*` fn runs only on the checked machine,
+// which under `wolf test` refuses `os_exe()` by name: the test is
+// `unsupported`, never a pass over the `wolf` binary's path.
+fn test_names_its_executable() {
+    let exe = os_exe() else |_| {
+        assert(false, "os_exe answered a row")
+        return
+    }
+    assert(exe.len > 0, "a path")
+}

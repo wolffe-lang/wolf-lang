@@ -220,6 +220,11 @@ jobs:
       # job, never a quiet skip.
       WOLF_FORK_REQUIRE_CONTAINER: "1"
       WOLF_FORK_ENGINE: docker
+      # s250 (wolf-lang#817, #810): `wolf test`'s native rows
+      # (test_truth_lanes.rs) build with the runtime the gauntlet's own
+      # `cargo test --workspace` builds, so a native tier that cannot
+      # build here is a broken job, never a quiet skip.
+      WOLF_TEST_NATIVE_REQUIRE: "1"
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
@@ -352,6 +357,9 @@ jobs:
     timeout-minutes: ${{ matrix.timeout }}
     env:
       WOLF_RT_NONE_REQUIRE: "1"
+      # s250: the native rows of `wolf test` (test_truth_lanes.rs), as
+      # on linux: the build shard's tests build the runtime first.
+      WOLF_TEST_NATIVE_REQUIRE: "1"
     strategy:
       fail-fast: false
       matrix:

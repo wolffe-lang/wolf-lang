@@ -1,0 +1,6 @@
+// s250 (wolf-lang#810, #571): a passing test's SKIP lines, one on each
+// stream. Captured, they are never shown; `--nocapture` shows them.
+fn test_skips_loudly() {
+    print("SKIP: on stdout, from a passing test")
+    eprint("SKIP: on stderr, from a passing test")
+}

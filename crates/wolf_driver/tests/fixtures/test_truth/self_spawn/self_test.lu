@@ -1,0 +1,19 @@
+// s250 (wolf-lang#810; yew G23): a test that re-spawns the program under
+// test. The child is this program with `--child`, and it answers 7. On the
+// checked machine `os_exe()` was the `wolf` binary, so the child was the
+// compiler ("`--child` is not a wolf command", exit 2); under `wolf test`
+// the checked machine now refuses `os_exe()` by name and the test runs
+// natively, where `os_exe()` is the test's own executable.
+fn main() -> !int {
+    for a in env_args() {
+        if a == "--child" {
+            return 7
+        }
+    }
+    let exe = os_exe()?
+    let kid = os_spawn_with(exe, ["--child"], List[int]())?
+    let code = os_wait(kid)?
+    print("self: child exited {code}")
+    assert(code == 7, "the child is this test")
+    0
+}

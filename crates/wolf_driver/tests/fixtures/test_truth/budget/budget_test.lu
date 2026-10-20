@@ -1,0 +1,14 @@
+// s250 (wolf-lang#817; yew yw02 §3): a `main` test past the checked
+// machine's step budget. The checked machine refuses it and `wolf test`
+// runs it natively, where it passes. Until s250 the row read `ok` and the
+// only trace was `[native]` in `--json`'s detail.
+fn main() -> !int {
+    var i = 0
+    var s = 0
+    while i < 10000000 {
+        s = s + i % 7
+        i += 1
+    }
+    print("budget: done {s}")
+    0
+}

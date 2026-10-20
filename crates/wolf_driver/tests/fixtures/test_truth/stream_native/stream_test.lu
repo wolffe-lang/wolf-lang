@@ -1,0 +1,32 @@
+// s250 (wolf-lang#810): the native half of `--nocapture`'s streaming
+// (stream_checked's shape, as a `main`). Its first call is `os_exe()`,
+// which the checked machine refuses under `wolf test`, so it runs
+// natively, its output pumped from the binary's pipes as it arrives.
+fn exists(p: str) -> bool {
+    let _ = fs_size(p) else |_| return false
+    true
+}
+
+fn wait_for_go() -> bool {
+    let go = env_get("S250_GO") else |_| return false
+    var i = 0
+    while i < 600 {
+        if exists(go) {
+            return true
+        }
+        time_sleep_ms(100)
+        i += 1
+    }
+    false
+}
+
+fn main() -> !int {
+    let _ = os_exe()?
+    print("early: on stdout, before the test ends")
+    eprint("SKIP: on stderr, before the test ends")
+    if wait_for_go() {
+        0
+    } else {
+        1
+    }
+}
