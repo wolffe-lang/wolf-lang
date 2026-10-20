@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TypeDecl 355..385 name=Ids def=PrefixType
+FnDecl 386..489 name=twice body=Block
+FnDecl 491..582 name=main body=Block

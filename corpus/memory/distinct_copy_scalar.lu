@@ -1,0 +1,43 @@
+//! check: run(exit=0, stdout="6 6 14 49 49\n")
+//! phase: run
+//! conforms: mem.tier0.move.3
+//! s252 (wolf-lang#813, yew G24): an adapter of a `Copy` scalar is
+//! `Copy`. `type ByteOff = distinct int` has `int`'s layout (D28) and
+//! now its copy semantics with it: `a as int` twice reads `a` twice,
+//! and `twice(off)` twice passes the same value twice. Before s252
+//! every compiling machine moved `a` at the first cast and refused the
+//! second read (E1001, "`a` is used here after its value moved away"),
+//! and nothing could opt the adapter in; lupin copied. The same for an
+//! adapter of `u32` and of `wrapping[u64]`.
+
+type ByteOff = distinct int
+
+type Col = distinct u32
+
+type Hash = distinct wrapping[u64]
+
+fn twice(a: ByteOff) -> int {
+    let x = a as int
+    let y = a as int
+    x + y
+}
+
+fn both(c: Col) -> u32 {
+    let a = c
+    let b = c
+    a as u32 + b as u32
+}
+
+fn mix(h: Hash) -> int {
+    let a = h as wrapping[u64]
+    let b = h as wrapping[u64]
+    (a * b & 255) as int
+}
+
+fn main() {
+    let off = 3 as ByteOff
+    let c = 7 as Col
+    let v: wrapping[u64] = 7
+    let h = v as Hash
+    print("{twice(off)} {twice(off)} {both(c)} {mix(h)} {mix(h)}")
+}
