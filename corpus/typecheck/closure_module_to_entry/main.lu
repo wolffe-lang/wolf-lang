@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="dumb\n")
+//! phase: run
+//! conforms: abi.native.closure.object
+//!
+//! s251 (wolf-lang#806): a capture-free closure made in a MODULE and
+//! called from the entry, on every tier. `tty.getter` answers its
+//! closure as a value; `tty.apply` makes the same closure for its own
+//! use. At 808ce11a the release tier's dedup kept `tty.apply.cls0` (the
+//! smallest name) and merged `tty.getter.cls0` away while `getter`'s
+//! static record still named it: `a vtable slot @tty.getter.cls0
+//! outside this object's subset`. The native tier ran the program.
+
+use tty
+
+fn tier(getv: fn(str) -> (str, bool), key: str) -> int {
+    let (t, has) = getv(key)
+    if has { print(t) }
+    if has && t == "dumb" then 0 else 1
+}
+
+fn main() -> int {
+    var key = "TE"
+    key = "{key}RM"
+    let (_, seen) = tty.apply(key)
+    if seen == false { return 2 }
+    tier(tty.getter(), key)
+}

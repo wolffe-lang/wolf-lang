@@ -1,0 +1,16 @@
+//! member: true
+//!
+//! The second file: the tier, and the sibling's function read by name
+//! as the value it takes.
+
+/// Tier over a lookup: prints what it finds; 0 when the terminal is dumb.
+fn tier(getv: fn(str) -> (str, bool), key: str) -> int {
+    let (t, has) = getv(key)
+    if has { print(t) }
+    if has && t == "dumb" then 0 else 1
+}
+
+/// Tier over the sibling file's lookup, read as a value.
+pub fn tier_env(key: str) -> int {
+    tier(getv, key)
+}

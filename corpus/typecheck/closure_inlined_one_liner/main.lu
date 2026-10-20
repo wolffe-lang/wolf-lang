@@ -1,0 +1,33 @@
+//! check: run(exit=0, stdout="dumb\n613069\n")
+//! phase: run
+//! conforms: abi.native.closure.object
+//!
+//! s251 (wolf-lang#806; yew's `term.render_new_env` twin): a one-line
+//! module function that makes a closure and calls another function
+//! with it, IMPORTED into the entry's cluster and inlined there by the
+//! release tier's cross-cluster round. The ballast, called under a
+//! loop so its edges weigh more than `render_env`'s, fills the entry's
+//! cluster to the target size before the `render_env` edge is
+//! considered; `tty.render_env` and its closure's entry
+//! `tty.render_env.cls0` land in the other cluster. The import
+//! decision then brings `render_env`'s body across (it is small and
+//! single-use), the inliner splices it into `main`, and the entry's
+//! object builds the static record of an entry it does not own: at
+//! 808ce11a `a vtable slot @tty.render_env.cls0 outside this object's
+//! subset` (`--codegen-report` lists the slot under `fn main`). The
+//! native tier ran the program.
+
+use tty
+
+fn main() -> int {
+    var key = "TE"
+    key = "{key}RM"
+    let r = tty.render_env(key)
+    var s = 0
+    for i in 0..2 {
+        s = (s + tty.pad_a(i)) % 1000003
+        s = (s + tty.pad_b(i)) % 1000003
+    }
+    print("{s}")
+    r
+}

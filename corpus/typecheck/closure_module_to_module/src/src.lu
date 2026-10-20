@@ -1,0 +1,23 @@
+//! member: true
+//!
+//! The making module: its lookup, the closure over it handed to `tty`,
+//! and a second making of the same closure (the dedup twin).
+
+use tty
+
+fn lookup(name: str) -> (str, bool) {
+    if name == "TERM" then ("dumb", true) else ("", false)
+}
+
+/// Make the closure here, call it in `tty`.
+pub fn run(key: str) -> int {
+    if probe(key) == false { return 2 }
+    tty.tier(fn(k: str) lookup(k), key)
+}
+
+/// The same closure, called here.
+fn probe(key: str) -> bool {
+    let f = fn(k: str) lookup(k)
+    let (_, has) = f(key)
+    has
+}

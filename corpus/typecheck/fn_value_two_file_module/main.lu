@@ -1,0 +1,22 @@
+//! check: run(exit=0, stdout="dumb\n")
+//! phase: run
+//! conforms: abi.native.closure.object
+//!
+//! s251 (wolf-lang#807; yew G19): a NAMED function of one file of a
+//! module read as a value in another file of the same module.
+//! `tty.getv` lives in `tty/env.lu`; `tty/input.lu` passes it to its
+//! tier by name. The value's slot is the shim `tty.getv.fv`, a
+//! synthetic function with no source file; at 808ce11a the native
+//! tier's per-module partition put every such shim in the ROOT
+//! module's object while the record that names it was built in
+//! `tty`'s, and the emitter refused `a vtable slot @tty.getv.fv
+//! outside this object's subset`. A single-file program, where the
+//! root's object is the only one, accepted the same read.
+
+use tty
+
+fn main() -> int {
+    var key = "TE"
+    key = "{key}RM"
+    tty.tier_env(key)
+}

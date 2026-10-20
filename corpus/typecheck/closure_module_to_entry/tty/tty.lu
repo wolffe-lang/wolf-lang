@@ -1,0 +1,19 @@
+//! member: true
+//!
+//! The module: the lookup, a getter that hands it out as a closure
+//! VALUE, and a second making of the same closure (the dedup twin).
+
+fn lookup(name: str) -> (str, bool) {
+    if name == "TERM" then ("dumb", true) else ("", false)
+}
+
+/// The closure, made here, handed to the entry.
+pub fn getter() -> fn(str) -> (str, bool) {
+    fn(k: str) lookup(k)
+}
+
+/// The same closure, made again for this module's own call.
+pub fn apply(key: str) -> (str, bool) {
+    let f = fn(k: str) lookup(k)
+    f(key)
+}
