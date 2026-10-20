@@ -259,6 +259,7 @@ jobs:
         # s252 PLANT (never merged): each item's fix taken out, the rows
         # and gates kept; only the gates run, each to the end.
         run: |
+          set +e
           cargo build -p wolf_driver -p wolf_rt -p wolf_cimport && cargo test -p wolf_driver --no-fail-fast --test small_gaps_lanes -- --nocapture; a=$?
           cargo test -p wolf_mem --no-fail-fast --test mem_diagnostics --test cfg_dumps; b=$?
           cargo test -p wolf_parse --no-fail-fast --test diagnostics --test corpus_parse; c=$?
