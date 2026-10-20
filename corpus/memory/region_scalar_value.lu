@@ -1,0 +1,73 @@
+//! check: run(exit=0, stdout="7 1 2 3 4 5 9\n")
+//! phase: run
+//! conforms: mem.region.scalar, mem.region.escape, mem.model.alloc
+//!
+//! s252 (wolf-lang#822's first finding, yew's fuzz fork): a value
+//! whose type reaches no storage is its own inline words and names no
+//! region, so it leaves a `region` block like an `int`. Each line
+//! below was E1010 on every compiling machine before s252 ("`keep`
+//! still holds a value allocated in region `tmp` when the region is
+//! freed"), while a tuple of the same scalars always crossed:
+//! - `keep = Node { … }`: a struct literal built in the region;
+//! - `snap = t`: the same through a binding;
+//! - `st = St { m: Mode.Busy(3), … }`: an enum payload field;
+//! - `last = p`: a `for` binding of a `List[P]` element, the list
+//!   itself the region's;
+//! - `got = make(5)`: a call answering a scalar-only struct;
+//! - `pair = (4, 5)`: the tuple, which never needed this.
+//! lupin 0.1.54 traps `region-fault` on the struct and enum shapes
+//! (its debt: wolf-interp, `[mem.region.scalar]`).
+
+struct Node {
+    value: int,
+}
+
+struct Snap {
+    a: int,
+    b: int,
+}
+
+enum Mode {
+    Idle,
+    Busy(int),
+}
+
+struct St {
+    m: Mode,
+    n: int,
+}
+
+struct P {
+    x: int,
+}
+
+fn make(n: int) -> Snap {
+    Snap { a: n, b: n + 4 }
+}
+
+fn main() {
+    var keep = Node { value: 0 }
+    var snap = Snap { a: 0, b: 0 }
+    var st = St { m: Mode.Idle, n: 0 }
+    var last = P { x: 0 }
+    var got = Snap { a: 0, b: 0 }
+    var pair = (0, 0)
+    region tmp {
+        keep = Node { value: 7 }
+        let t = Snap { a: 1, b: 2 }
+        snap = t
+        st = St { m: Mode.Busy(3), n: 3 }
+        var ps = List[P]()
+        (mut ps).push(P { x: 4 })
+        for p in ps {
+            last = p
+        }
+        got = make(5)
+        pair = (4, 5)
+    }
+    let busy = match st.m {
+        Mode.Busy(k) => k,
+        Mode.Idle => 0,
+    }
+    print("{keep.value} {snap.a} {snap.b} {busy} {last.x} {got.a} {got.b}")
+}

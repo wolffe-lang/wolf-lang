@@ -1,0 +1,18 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 1070..1109 name=Snap fields=2
+StructDecl 1111..1143 name=Tb fields=1
+StructDecl 1145..1173 name=Meta fields=1
+StructDecl 1175..1206 name=Item fields=1
+StructDecl 1208..1241 name=Holder fields=1
+StructDecl 1243..1288 name=Bag fields=2
+StructDecl 1290..1320 name=Shelf fields=1
+FnDecl 1322..1403 name=g body=Block
+FnDecl 1405..1463 name=set body=Block
+FnDecl 1465..1524 name=set_plain body=Block
+FnDecl 1526..1598 name=stash body=Block
+FnDecl 1600..1693 name=fill body=Block
+FnDecl 1695..1762 name=keep body=Block
+FnDecl 1764..2293 name=main body=Block

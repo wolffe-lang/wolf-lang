@@ -1,0 +1,41 @@
+//! check: fail(E1004)
+//! phase: typecheck
+//! conforms: mem.region.scalar, mem.region.edge
+//!
+//! s252 (wolf-lang#816): what E1004 still refuses. `fill` answers a
+//! `Bag` holding a `List`, which may be `t`'s storage (the callee's
+//! result lands where its caller decides and may view an argument), so
+//! storing it into `sh`'s region ties two parameter regions together.
+//! The fix E1004 names is `copy`, and since s252 it works on a call
+//! result too (`region_scalar_store.lu`'s `keep`). Never unsound,
+//! sometimes strict: lupin 0.1.54, which tracks the list itself, runs
+//! this one.
+
+struct Tb {
+    xs: List[int],
+}
+
+struct Bag {
+    n: int,
+    ys: List[int],
+}
+
+struct Shelf {
+    bag: Bag,
+}
+
+fn fill(mut t: Tb) -> Bag {
+    (mut t.xs).push(2)
+    Bag { n: t.xs.len, ys: List[int]() }
+}
+
+fn keep(mut sh: Shelf, mut t: Tb) {
+    sh.bag = fill(mut t)
+}
+
+fn main() {
+    var w = Tb { xs: List[int]() }
+    var sh = Shelf { bag: Bag { n: 0, ys: List[int]() } }
+    keep(mut sh, mut w)
+    print("{sh.bag.n}")
+}

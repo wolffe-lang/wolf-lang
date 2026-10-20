@@ -1,0 +1,27 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.scalar, mem.region.escape, mem.tier0.mode.mut
+//!
+//! s252 (wolf-lang#801): what the `mut` rule still refuses. `grow`
+//! may replace `h.xs` with a list it builds in its caller's region,
+//! which inside `turn` is `turn` itself, so `h`, declared outside,
+//! would hold storage the region frees. A struct that holds a `List`
+//! is not scalar-only. Conservative, not exact: this `push` grows the
+//! caller's list in place, and lupin 0.1.54, which tracks the list
+//! itself, runs it.
+
+struct Hist {
+    xs: List[int],
+}
+
+fn grow(mut h: Hist) {
+    (mut h.xs).push(1)
+}
+
+fn main() {
+    var h = Hist { xs: List[int]() }
+    region turn {
+        grow(mut h)
+    }
+    print("{h.xs.len}")
+}
