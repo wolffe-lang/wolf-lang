@@ -27,8 +27,9 @@
 //! carrying no diagnostic (wolf-lang#606). It still traps `race` on the
 //! plain counter, measured, so that check names 0.1.49 too, and 0.1.50
 //! (the 0.2.27 pairing, r32), 0.1.51 (the 0.2.28 pairing, r33),
-//! 0.1.52 (the 0.2.29 pairing, r34), 0.1.53 (the 0.2.30 pairing, r35)
-//! and 0.1.54 (the 0.2.31 pairing, r36), measured the same.
+//! 0.1.52 (the 0.2.29 pairing, r34), 0.1.53 (the 0.2.30 pairing, r35),
+//! 0.1.54 (the 0.2.31 pairing, r36) and 0.1.55 (the 0.2.34 pairing,
+//! r39), measured the same.
 
 mod lane_exit;
 
@@ -479,6 +480,7 @@ fn the_plain_counter_is_a_race_and_asserts_nothing() {
             | "0.1.52"
             | "0.1.53"
             | "0.1.54"
+            | "0.1.55"
     ) {
         assert_eq!(
             lupin.verdict, "trap(race)",
