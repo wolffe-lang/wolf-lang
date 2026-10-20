@@ -216,6 +216,7 @@ grammar/else_chain.lu: lowers
 grammar/else_default.lu: lowers
 grammar/else_default_newline.lu: lowers
 grammar/extern_abi_interrupt.lu: not mem-clean (pre-wir rungs own it)
+grammar/if_brace_next_line.lu: not mem-clean (pre-wir rungs own it)
 grammar/if_then_arm.lu: lowers
 grammar/if_then_block.lu: lowers
 grammar/if_then_chain.lu: lowers
@@ -348,6 +349,7 @@ lints/region_never_allocates.lu: lowers
 lints/safety_comment_missing.lu: lowers
 lints/shadow_prelude.lu: lowers
 lints/shadow_prelude_call.lu: lowers
+lints/shadow_prelude_local.lu: lowers
 lints/tag_case_payload.lu: lowers
 lints/tag_name_collision.lu: lowers
 lints/take_returned.lu: lowers
@@ -397,6 +399,8 @@ memory/defer_order.lu: lowers
 memory/destructure_bind.lu: lowers
 memory/destructure_partial_live.lu: lowers
 memory/destructure_partial_move.lu: not mem-clean (pre-wir rungs own it)
+memory/distinct_container_moves.lu: not mem-clean (pre-wir rungs own it)
+memory/distinct_copy_scalar.lu: lowers
 memory/div_zero.lu: lowers
 memory/elem_char_bool_key_revive.lu: lowers
 memory/elem_claim_whole_read.lu: not mem-clean (pre-wir rungs own it)
@@ -598,6 +602,7 @@ memory/read_param_escape_generic.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_local.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_static.lu: not mem-clean (pre-wir rungs own it)
+memory/read_param_field_rebound.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_move_legal.lu: lowers
 memory/read_param_rebind_take.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_rebind_write.lu: not mem-clean (pre-wir rungs own it)
@@ -675,6 +680,13 @@ memory/region_multiopen_values_ok.lu: lowers
 memory/region_net_read_charged.lu: lowers
 memory/region_net_read_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_open_ancestor.lu: not mem-clean (pre-wir rungs own it)
+memory/region_scalar_freeze.lu: lowers
+memory/region_scalar_list_mut.lu: not mem-clean (pre-wir rungs own it)
+memory/region_scalar_list_store.lu: not mem-clean (pre-wir rungs own it)
+memory/region_scalar_mut.lu: lowers
+memory/region_scalar_store.lu: lowers
+memory/region_scalar_str_escape.lu: not mem-clean (pre-wir rungs own it)
+memory/region_scalar_value.lu: lowers
 memory/region_str_call_block_value.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_call_held.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_call_index_store.lu: not mem-clean (pre-wir rungs own it)
@@ -724,6 +736,7 @@ memory/static_var.lu: lowers
 memory/static_var_call_deep.lu: lowers
 memory/static_var_call_writes.lu: lowers
 memory/static_var_outside_unsafe.lu: not mem-clean (pre-wir rungs own it)
+memory/static_wrapping.lu: lowers
 memory/store_rhs_first_list.lu: lowers
 memory/store_rhs_first_map.lu: lowers
 memory/store_rhs_first_pool.lu: lowers
@@ -1021,6 +1034,7 @@ typecheck/int_not_byte.lu: lowers
 typecheck/int_not_float.lu: not mem-clean (pre-wir rungs own it)
 typecheck/int_not_mask.lu: lowers
 typecheck/int_not_signed.lu: lowers
+typecheck/int_not_tilde.lu: not mem-clean (pre-wir rungs own it)
 typecheck/int_shift_value.lu: lowers
 typecheck/int_truth_signed_print.lu: lowers
 typecheck/int_truth_u64_arith.lu: lowers
@@ -1078,6 +1092,7 @@ typecheck/numlit_list_element_width.lu: lowers
 typecheck/numlit_radix.lu: lowers
 typecheck/numlit_u64_edge.lu: lowers
 typecheck/numlit_value_refused.lu: not mem-clean (pre-wir rungs own it)
+typecheck/numlit_wrapping_countdown.lu: lowers
 typecheck/pattern_shape.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_bare_mut.lu: not mem-clean (pre-wir rungs own it)
 typecheck/receiver_bare_mut_param.lu: not mem-clean (pre-wir rungs own it)
