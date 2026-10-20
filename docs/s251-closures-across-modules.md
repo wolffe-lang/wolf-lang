@@ -203,9 +203,12 @@ and none is needed once the pin carries this change:
 - `src/term/input.lu` — `input_enable` reads `YEW_MOUSE` directly
   instead of passing `env_getv` as a value (yew `7acaa89`, G19): the
   cross-file read by name builds on both tiers now (row 5).
-- `src/text/cset.lu` (line 93) and the yw02/yw03 name tables — a
-  registry written as one `match` per name where C yew holds function
-  pointers, because "no function value crosses a module boundary"
-  (`docs/MAP.md` §1, the injected-clock row: `undo.fake_mono`,
-  `undo.fake_wall` as values in the owner): a table of fn values
-  across modules is the direct port again.
+- `src/text/cset.lu` — `sort_items` (line 93), a local copy of
+  `util.sort_stable`'s bottom-up merge written "so no function value
+  crosses a module boundary (G19/G20)": `util.sort_stable(mut xs,
+  item_less)` with the comparison passed as a value is the direct port
+  again. The same rule shaped the yw02/yw03 name tables (a registry as
+  one `match` per name where C yew holds function pointers) and the
+  injected clock (`docs/MAP.md` §1: `undo.fake_mono`, `undo.fake_wall`
+  as values in the owner): a table of fn values across modules builds
+  on both tiers now; yw04 decides which of those the port wants back.
