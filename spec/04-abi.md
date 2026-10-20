@@ -111,6 +111,33 @@ AAPCS64, win64, Apple arm64 deltas).
   same word whether a named function, a capture-free closure or a
   capturing one stands behind it.) Same stability status as everything
   in this section: `[abi.native.unstable]` governs.
+- `[abi.native.closure.object]` **A static callable record names its
+  entry by symbol, and no object boundary separates them.** The slot of
+  a static one-slot record — a capture-free closure's entry, the `.fv`
+  shim behind a named function read as a value, a trait table's shim
+  (`[abi.native.dyn]`) — is a link-time constant exactly as a function's
+  address is: an object that builds the record where the slot's
+  function lowered into another object imports that function's mangled
+  symbol, on both compiling tiers and under every partition (the native
+  tier's per-module objects, the release tier's clusters, and
+  `WOLF_MIDEND=0`). The release tier's mid-end keeps the invariant from
+  its side: a function a record names is never merged into another body
+  by deduplication (its identity is pinned as an address-taken
+  function's is), and the cross-cluster import and inline of a record's
+  maker into another cluster is permitted — the record is then built in
+  the importing object and its slot resolved by symbol. A capture-free
+  closure made in any module and called from any other, a closure
+  captured by a closure, a named function of one file of a module read
+  as a value in another file of it, and a one-line maker inlined into
+  the entry therefore build and run on the release tier with the native
+  tier's semantics. (Added 2026-10-20, s251 — wolf-lang#806, #807:
+  until then the emitters resolved a record's slot only inside the
+  object's own subset and refused `a vtable slot @f outside this
+  object's subset` when dedup had merged the entry away, when the
+  inliner had moved the record's construction across a cluster, or when
+  the native tier's partition had filed the synthetic `.fv` shim under
+  the root module's object.) Same stability status as everything in
+  this section: `[abi.native.unstable]` governs.
 
 ## §2 C membranes `[abi.c]`
 
