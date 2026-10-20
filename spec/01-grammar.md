@@ -262,6 +262,16 @@ Exceptions (grammar-level):
   is retired.)
 - A terminator may be omitted before a closing `}` (Go's rule 2): the
   final statement of a single-line block needs no `;`.
+- **A `{` on its own line after an `if`, `while`, `for` or `loop`
+  header is E0201, by design** (s252, wolf-lang#822, yew's fuzz fork):
+  the header's last token took the terminator, and a `{` that begins a
+  line begins a block statement, so the lookahead `else` has is not
+  extended to `{` — the formatter's one shape is `[gram.fmt.brace]`. A
+  header that runs over several lines breaks after an operator (`if a
+  &&` / `b {`). E0201's report there says why, labels the brace, and
+  offers the machine-applicable edit that joins the brace to the
+  header's line (none when a comment lies between). Witness
+  `corpus/grammar/if_brace_next_line.lu`.
 
 Counter-example (does not parse; diagnostic points at the break):
 
@@ -660,8 +670,11 @@ chain (`a < b < c` is a parse error with a "did you mean `&&`" diagnostic).
 | 14 | `..` `..=` ranges (endpoints may be `^n` from-end forms) | none |
 | 15 | `else` defaulting (`expr else expr`, `expr else \|p\| expr-or-block`) | right |
 
-Prefix `&`/`&mut` create Tier-0 **local** borrows (second-class at
-function boundaries; 02-memory-model). Prefix `*` is raw-pointer deref
+Prefix `!` is logical not on `bool` and the bitwise not on an integer
+(`[type.int.not]`); there is no `~` (s252, wolf-lang#800: `~x` is the
+stray character E0107, whose report offers `!x`). Prefix `&`/`&mut`
+create Tier-0 **local** borrows (second-class at function boundaries;
+02-memory-model). Prefix `*` is raw-pointer deref
 (unsafe tier). `move` transfers a region/value; `copy` forces a copy of a
 non-`Copy` value; `shared` creates a Tier-2 RC cell from a value
 (`let a = shared (Cfg { limit: 7 })`).
