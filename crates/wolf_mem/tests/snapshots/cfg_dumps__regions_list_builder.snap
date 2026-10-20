@@ -5,7 +5,7 @@ expression: "regions_dump(&corpus(\"memory/region_infer_list_builder.lu\"))"
 ---
 regions fn build
   ambient caller (implicit parameter)
-  alloc Row @457..486 -> caller (escapes: returned)
+  alloc Row @457..486 -> caller [stack]
 
 regions fn score
   ambient caller (implicit parameter)

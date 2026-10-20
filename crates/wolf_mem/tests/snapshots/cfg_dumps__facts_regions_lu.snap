@@ -16,6 +16,7 @@ facts fn build_ring
 
 facts fn build_config
   alloc Config @1556..1576 -> caller
+  stack-alloc Config @1556..1576 (never escapes)
 
 facts fn main
   move r @1855..1856 -> memcpy-and-forget

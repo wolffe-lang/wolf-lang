@@ -12,7 +12,7 @@ regions fn respond
   ambient caller (implicit parameter)
   param r -> own (generalized)
   param-data Request @619..620 -> own (generalized)
-  alloc Response @649..693 -> caller (escapes: returned)
+  alloc Response @649..693 -> caller [stack]
 
 regions fn main
   ambient caller (implicit parameter)
