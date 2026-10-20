@@ -205,6 +205,29 @@ fn a_call_broken_after_the_dot_is_a_last_resort() {
 }
 
 #[test]
+fn a_braced_block_in_an_argument_list_is_the_lists_break_not_the_dots() {
+    // wolf-lang#809 (s250; yew G22). A bare `if` too wide for its line
+    // is broken to the braced form (`[gram.fmt.if]`) inside the call's
+    // argument list, and the chain stays joined. The braced `if` this
+    // produces carries hard newlines; read as forcing the CHAIN, they
+    // laid `t.` / `g(` on the next pass, and `wolf fmt` was not a fixed
+    // point. A hard break inside an argument list is that list's break:
+    // the dots are a last resort and the line `t.g(` is inside the
+    // width, so both spellings come to one layout in one pass.
+    let want = "fn f() -> int {\n    t.g(\n        c,\n        if k == \"a string long enough that this bare if cannot stay on the line it is on\" {\n            1\n        } else {\n            2\n        },\n    )\n}\n";
+    check(
+        "fn f() -> int {\n    t.g(c, if k == \"a string long enough that this bare if cannot stay on the line it is on\" then 1 else 2)\n}\n",
+        want,
+    );
+    check(want, want);
+    // The braced form written by hand, too wide for one line or not.
+    check(
+        "fn f() -> int {\n    t.g(c, if k {\n        1\n    } else {\n        2\n    })\n}\n",
+        "fn f() -> int {\n    t.g(\n        c,\n        if k {\n            1\n        } else {\n            2\n        },\n    )\n}\n",
+    );
+}
+
+#[test]
 fn a_chain_with_nothing_to_break_still_breaks_at_every_dot() {
     // The last resort is still a resort: empty argument lists offer no
     // break, so the dots take it — and take it as one, not greedily.
