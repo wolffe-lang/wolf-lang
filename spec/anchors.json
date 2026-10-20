@@ -361,6 +361,7 @@
     "mem.region.promote": "02-memory-model.md",
     "mem.region.promote.1": "02-memory-model.md",
     "mem.region.root": "02-memory-model.md",
+    "mem.region.scalar": "02-memory-model.md",
     "mem.shared": "02-memory-model.md",
     "mem.shared.drop": "02-memory-model.md",
     "mem.shared.drop.1": "02-memory-model.md",
