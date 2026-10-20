@@ -116,7 +116,7 @@ argv. The exit code is the program's.",
         summary: "discover and run `*_test.lu` files",
         usage: &[
             "test [<dir>|<file.lu>]… [--std-root <dir>] [--deny-warnings]",
-            "[--error-limit=N]",
+            "[--error-limit=N] [--json] [--nocapture] [--no-native-fallback]",
         ],
         about: "\
 No registration and no life-before-main: a file whose name ends
@@ -127,7 +127,16 @@ test file with no `test_*` but a `main` runs black-box as one test.
 A row is `ok`, `FAILED` (it ran and found something), `REJECTED` (the
 compiler rejected the file, so it never ran) or `unsupported` (the
 checked machine refused a construct). Exit codes: 0 every test passed,
-1 any row was not `ok`, 2 a usage or environment error.",
+1 any row was not `ok`, 2 a usage or environment error.
+
+Tests run on the checked machine. A `main` test it refuses (a budget, a
+construct outside its surface) runs once natively instead, and its row
+says so: `ok [native: step budget exhausted]`, counted in the summary
+(`N passed, M of them native`) and still a pass; `--no-native-fallback`
+reports it `unsupported`. `--nocapture` shows each test's stdout and
+stderr as it writes them (both on stderr under `--json`). Under `wolf
+test` the checked machine refuses `os_exe()` by name, so a test that
+re-spawns itself runs natively, where `os_exe()` is its own binary.",
     },
     Cmd {
         name: "fmt",
