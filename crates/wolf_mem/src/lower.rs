@@ -199,8 +199,11 @@ impl<'a> Ty<'a> {
 /// (`[mem.tier0.move.3]`, POD-shaped only)? The set mirrors the
 /// reference interpreter's dynamic judgement exactly: scalars, `str`
 /// (immutable views, D25), ranges, fn values, `handle`, raw pointers.
-/// Aggregates — structs, enums, tuples, rows — are not.
-fn is_copy(t: Ty<'_>, depth: u32) -> bool {
+/// Aggregates — structs, enums, tuples, rows — are not. s252
+/// (wolf-lang#813): a nominal adapter (`type ByteOff = distinct int`)
+/// is `Copy` when its base is a `Copy` scalar ([`copy_scalar`]); `sigs`
+/// resolves the adapter's recorded base.
+fn is_copy(sigs: &SigTables, t: Ty<'_>, depth: u32) -> bool {
     if depth > 32 {
         return false;
     }
@@ -223,12 +226,54 @@ fn is_copy(t: Ty<'_>, depth: u32) -> bool {
         | TyKind::Proc(_)
         | TyKind::ExitReason => true,
         TyKind::Distinct(inner) => is_copy(
+            sigs,
             Ty {
                 table: t.table,
                 id: *inner,
             },
             depth + 1,
         ),
+        TyKind::Nominal { .. } => copy_scalar(sigs, t, depth),
+        _ => false,
+    }
+}
+
+/// s252 (wolf-lang#813, `[mem.tier0.move.3]`): is the type a `Copy`
+/// SCALAR — an integer type, `wrapping[T]`, a float, `bool`, `char`,
+/// `byte`, or an adapter of one (inline `distinct T` or a nominal
+/// `type X = distinct T`, resolved through its recorded base)? This is
+/// what makes an adapter `Copy`: layout identity (D28) carries the
+/// base's copy semantics. A `str` is `Copy` but is no scalar here: a
+/// `str` read carries its bytes' sites only where the place is typed
+/// `str` (`is_str_expr`), so an adapter of `str` keeps moving rather
+/// than becoming a site-free copy of region bytes; an adapter of a
+/// container or a struct moves as its base does.
+fn copy_scalar(sigs: &SigTables, t: Ty<'_>, depth: u32) -> bool {
+    if depth > 32 {
+        return false;
+    }
+    match t.kind() {
+        TyKind::Prim(p) => !matches!(p, Prim::Str),
+        TyKind::Wrapping(_) => true,
+        TyKind::Distinct(inner) => copy_scalar(
+            sigs,
+            Ty {
+                table: t.table,
+                id: *inner,
+            },
+            depth + 1,
+        ),
+        TyKind::Nominal { module, name, .. } => match sigs.get(*module as usize, name) {
+            Some(ItemSig::Distinct { base, .. }) => copy_scalar(
+                sigs,
+                Ty {
+                    table: &sigs.table,
+                    id: *base,
+                },
+                depth + 1,
+            ),
+            _ => false,
+        },
         _ => false,
     }
 }
@@ -248,8 +293,8 @@ fn is_copy(t: Ty<'_>, depth: u32) -> bool {
 /// unknown and conservatively keeps one too. This mirrors `ret_region`
 /// at the call site below, which already reads the ok half through the
 /// row for exactly the same reason.
-fn result_is_copy(t: Ty<'_>) -> bool {
-    if is_copy(t, 0) {
+fn result_is_copy(sigs: &SigTables, t: Ty<'_>) -> bool {
+    if is_copy(sigs, t, 0) {
         return true;
     }
     let TyKind::ErrUnion(ok, row) = t.kind() else {
@@ -259,11 +304,11 @@ fn result_is_copy(t: Ty<'_>) -> bool {
     let TyKind::Row { tags, tail } = t.table.kind(*row) else {
         return false;
     };
-    is_copy(at(*ok), 0)
+    is_copy(sigs, at(*ok), 0)
         && tail.is_none()
         && tags
             .iter()
-            .all(|(_, payload)| payload.iter().all(|&p| is_copy(at(p), 0)))
+            .all(|(_, payload)| payload.iter().all(|&p| is_copy(sigs, at(p), 0)))
 }
 
 /// s207 (wolf-lang#540): may a value of this type name bytes some
@@ -706,7 +751,7 @@ impl<'t> Lowerer<'t> {
             name: name.to_string(),
             span,
             ty: rendered,
-            is_copy: ty.map(|t| is_copy(t, 0)).unwrap_or(false),
+            is_copy: ty.map(|t| is_copy(self.sigs, t, 0)).unwrap_or(false),
             param_mode: None,
         });
         self.tys.push(ty);
@@ -3673,7 +3718,7 @@ impl<'t> Lowerer<'t> {
             base: Base::Global(module as u32, name),
             proj: Vec::new(),
         };
-        let copy = ty.map(|t| is_copy(t, 0)).unwrap_or(false);
+        let copy = ty.map(|t| is_copy(self.sigs, t, 0)).unwrap_or(false);
         Some((self.places.intern(place, copy), ty))
     }
 
@@ -3696,7 +3741,7 @@ impl<'t> Lowerer<'t> {
                         base: Base::Local(local.0),
                         proj: Vec::new(),
                     };
-                    let copy = ty.map(|t| is_copy(t, 0)).unwrap_or(false);
+                    let copy = ty.map(|t| is_copy(self.sigs, t, 0)).unwrap_or(false);
                     return Some((self.places.intern(place, copy), ty));
                 }
                 // A module-level `let`/`var`/`const` item: a place for
@@ -3731,7 +3776,7 @@ impl<'t> Lowerer<'t> {
                             base: base_place.base.clone(),
                             proj,
                         };
-                        self.places.intern(sibling, is_copy(*fty, 0));
+                        self.places.intern(sibling, is_copy(self.sigs, *fty, 0));
                         if *name == fname {
                             field_ty = Some(*fty);
                         }
@@ -3747,7 +3792,7 @@ impl<'t> Lowerer<'t> {
                 // the checker's recorded type answers for them, so a
                 // copy read never masquerades as a move (#6).
                 let field_ty = field_ty.or_else(|| self.expr_ty(e.span));
-                let copy = field_ty.map(|t| is_copy(t, 0)).unwrap_or(false);
+                let copy = field_ty.map(|t| is_copy(self.sigs, t, 0)).unwrap_or(false);
                 Some((self.places.intern(place, copy), field_ty))
             }
             // s21 — container element access: `pool[h]` / `xs[i]`.
@@ -3813,6 +3858,7 @@ impl<'t> Lowerer<'t> {
                 // thirteen-line witness.
                 let copy = match (&container, base_ty) {
                     (Some(TyKind::Map(_, v)), Some(bt)) => is_copy(
+                        self.sigs,
                         Ty {
                             table: bt.table,
                             id: *v,
@@ -3820,13 +3866,14 @@ impl<'t> Lowerer<'t> {
                         0,
                     ),
                     (Some(TyKind::List(el) | TyKind::Pool(el)), Some(bt)) => is_copy(
+                        self.sigs,
                         Ty {
                             table: bt.table,
                             id: *el,
                         },
                         0,
                     ),
-                    _ => elem_ty.map(|t| is_copy(t, 0)).unwrap_or(false),
+                    _ => elem_ty.map(|t| is_copy(self.sigs, t, 0)).unwrap_or(false),
                 };
                 let pid = self.places.intern(place, copy);
                 match container {
@@ -3950,7 +3997,7 @@ impl<'t> Lowerer<'t> {
                 return Proj::Opaque;
             };
             return match self.tys[local.0 as usize] {
-                Some(ty) if is_copy(ty, 0) => Proj::Sym(local.0),
+                Some(ty) if is_copy(self.sigs, ty, 0) => Proj::Sym(local.0),
                 _ => Proj::Opaque,
             };
         }
@@ -5239,7 +5286,7 @@ impl<'t> Lowerer<'t> {
         if let Some(t) = ty {
             if let Some(what) = self.copy_out_refusal(t, 0) {
                 self.refuse_copy_out(rid, &what, copy_span, close_span);
-            } else if !is_copy(t, 0) || may_name_bytes(t) {
+            } else if !is_copy(self.sigs, t, 0) || may_name_bytes(t) {
                 let rendered = self.rendered_expr_ty(copy_span);
                 let site = self.alloc_site(rendered, SiteKind::Lit, copy_span);
                 out = Val::site(site, copy_span);
@@ -6243,7 +6290,7 @@ impl<'t> Lowerer<'t> {
         }
         let ret_heap = self
             .expr_ty(e.span)
-            .map(|t| !result_is_copy(t))
+            .map(|t| !result_is_copy(self.sigs, t))
             .unwrap_or(false);
         if !ret_heap {
             return Ok(Val::none());
@@ -7162,7 +7209,10 @@ impl<'t> Lowerer<'t> {
         };
         // #192: allocation-free reads THROUGH the error row, the way
         // `ret_region` just did — see [`result_is_copy`].
-        let ret_heap = !ret_region && ret_ty.map(|t| !result_is_copy(t)).unwrap_or(false);
+        let ret_heap = !ret_region
+            && ret_ty
+                .map(|t| !result_is_copy(self.sigs, t))
+                .unwrap_or(false);
         let mut_targets: Vec<PlaceId> = surface
             .mut_args
             .iter()
@@ -7518,7 +7568,7 @@ impl<'t> Lowerer<'t> {
                                         base: base_place.base.clone(),
                                         proj,
                                     },
-                                    fty.map(|t| is_copy(t, 0)).unwrap_or(false),
+                                    fty.map(|t| is_copy(self.sigs, t, 0)).unwrap_or(false),
                                 );
                                 surface.mut_args.push((id, recv_span));
                             }
@@ -7922,7 +7972,7 @@ impl<'t> Lowerer<'t> {
                                 self.locals[local.0 as usize].param_mode = Some(mode);
                                 if mode.is_none()
                                     && let Some(ty) = self.tys[local.0 as usize]
-                                    && !is_copy(ty, 0)
+                                    && !is_copy(self.sigs, ty, 0)
                                     && !matches!(ty.kind(), TyKind::Shared(_) | TyKind::Weak(_))
                                 {
                                     self.lent_params.insert(local.0);
@@ -8165,7 +8215,7 @@ impl<'t> Lowerer<'t> {
                     base: base_place.base.clone(),
                     proj,
                 },
-                ety.map(|t| is_copy(t, 0)).unwrap_or(false),
+                ety.map(|t| is_copy(self.sigs, t, 0)).unwrap_or(false),
             );
             eplaces.push((ep, ety));
         }
@@ -8228,7 +8278,7 @@ impl<'t> Lowerer<'t> {
                         base: base_place.base.clone(),
                         proj,
                     },
-                    is_copy(*fty, 0),
+                    is_copy(self.sigs, *fty, 0),
                 );
                 fplaces.push((fname.clone(), ep, Some(*fty)));
             }
@@ -8778,7 +8828,7 @@ impl<'t> Lowerer<'t> {
                     let rid = self.new_region(&p.name, RegionKind::Param, Strategy::Arena, p.span);
                     self.region_local.insert(local.0, Some(rid));
                 }
-                _ if !is_copy(ty, 0) => {
+                _ if !is_copy(self.sigs, ty, 0) => {
                     // s165 (#366): a non-`Copy` `read` parameter is a
                     // lent value. `shared`/`weak` cells are the
                     // sanctioned alias (RC-owned, [mem.shared]) and
