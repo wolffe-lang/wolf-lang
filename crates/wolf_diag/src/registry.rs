@@ -248,7 +248,10 @@ BOM-less UTF-8, and an editor that writes one has not made the file
 wrong; a BOM in the middle of a file is a stray character, D74).
 Delete the character. A related case is a lone `}` inside a string:
 `}` closes an interpolation there, so a literal closing brace must be
-written `}}` (just as `{{` is a literal `{`).
+written `}}` (just as `{{` is a literal `{`). A `~` is C's bitwise
+not, and wolf has one under another spelling: the prefix `!` on an
+integer flips every bit at the operand's own width ([type.int.not]),
+so `~x` is `!x` and `e & ~m` is `e & !m`. The report offers that edit.
 "#);
 
 code!(E0108, "string/interpolation nesting exceeds the lexer's 32-level rail", r#"
@@ -300,6 +303,14 @@ carries its own insertion point. The parser then inserts a zero-width
 placeholder and continues, so one miss does not cascade into a
 screenful. Fix the flagged spot first: later errors in the same region
 may be echoes of this one.
+
+A common one: the opening `{` of an `if`, `while`, `for` or `loop` put
+on the line after its header. The header's last token ended the line,
+so a terminator was inserted there ([gram.lex.newline]), and a `{` that
+begins a line begins a block of its own. The brace goes on the
+header's line ([gram.fmt.brace]); a header that needs several lines
+breaks after an operator (`if a &&` / `b {`). The report offers the
+edit that joins the brace to the header.
 "#);
 
 code!(E0202, "an opening delimiter is never closed", r#"
@@ -1616,6 +1627,15 @@ field, an element, a map value — is fine as long as a value is stored
 back on every path before the function returns, the `?` error edge and
 an early `return` included. The refusal points at the move that is not
 put back on some path.
+
+A plain (`read`) parameter is the caller's value lent for the call:
+binding a piece of it — `let tb = run.ec.tb` — moves that piece out in
+this frame (a lend; the caller keeps its value), so reading
+`run.ec.tb` again afterwards is this error ([mem.tier0.mode.read]). To
+read it twice, read through the path each time without binding it, or
+keep using the binding from the move on; `copy` at the move works and
+is a deep copy. A value of a scalar type, or an adapter of one
+(`type ByteOff = distinct int`), is copied, never moved.
 "#);
 
 code!(E1002, "this needs exclusive access, but the value is in use here", r#"
@@ -1656,7 +1676,10 @@ fresh allocation in the ambient region, so it lands where the
 container lives. When the two sides are different *parameters*, their
 regions are independent by default (that independence is what lets
 callers pass arguments from anywhere without annotations), and the
-same two fixes apply.
+same two fixes apply. A `copy` of a call's result is such a fresh
+allocation too (`m.s = copy g(mut t)`). A value whose type reaches no
+storage — scalars, and tuples, structs and enums of them — lives in no
+region and is never this error ([mem.region.scalar]).
 "#);
 
 code!(E1005, "the region is open here, so its handle cannot move or freeze", r#"
@@ -1740,7 +1763,10 @@ is copied into the region the block was entered from, and then the
 block's region is freed ([mem.region.copyout]). For a value that genuinely must
 outlive the region, `freeze` makes the whole region immortal and
 immutable and `shared` gives a counted escape — both are spellings
-this compiler takes today. A `str` built inside the block — by `+`, `+=`, or an
+this compiler takes today. A value whose type reaches no storage —
+scalars, and tuples, structs and enums of them, a one-`int` RNG state
+passed `mut` included — lives in no region and leaves any block freely
+([mem.region.scalar]). A `str` built inside the block — by `+`, `+=`, or an
 interpolation with a hole — is such a value too: the two-word view
 copies out freely, but the bytes it points at were allocated in the
 region ([mem.region.escape]). A call can carry it out as well: a
@@ -2362,7 +2388,11 @@ loss is invisible at every use site: a module that declares its own
 `assert` severs itself from the assertion trap entirely, and calls
 that read as the intrinsic quietly run the local one. Pick another
 name; the prelude's inventory is small, fixed, and worth avoiding
-wholesale.
+wholesale. A local `let` or `var` is a declaration too: `let clock_ms
+= 5` hides the prelude's `clock_ms` for the rest of its scope
+([conf.resolve.ambient]). `wolf prelude` lists every ambient name and
+whether declaring it draws this warning; `#[allow(w0304)]` on the
+enclosing item states a deliberate shadow.
 "#);
 
 code!(W0305, "this row tag shares its name with something else in scope", r#"
