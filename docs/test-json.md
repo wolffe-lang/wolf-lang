@@ -53,18 +53,45 @@ rejects unknown *events*.
   the schema version is not, and every non-`pass` status has always
   been a red row.
 - `detail` (string): the verdict. `exit(N)`, `trap(kind)`,
-  `ub(mem.ub)`, a refusal construct, or `does not compile`.
+  `ub(mem.ub)`, a refusal construct, or `does not compile`. A verdict a
+  native run gave ends ` [native]` (see `native`).
+- `native` (string, optional; s250, wolf-lang#817): present when the
+  checked machine refused a `main` test and the verdict is the one
+  native run that stood in for it; the value is the checked machine's
+  refusal, verbatim (`"step budget exhausted"`, or the construct it
+  named). A `pass` with this key is green on the native tier, not
+  checked. `--no-native-fallback` turns the refusal into the verdict
+  (`unsupported`) instead, and the key is absent.
 - `stdout`, `stderr` (strings): present when `status != "pass"`, and
-  they hold what the test printed.
+  under `--nocapture` on every test, a passing one too (s250,
+  wolf-lang#810: the record a passing test's `SKIP:` lines are counted
+  from); they hold what the test printed.
 
 ### `summary`: exactly one, always the last line
 
 ```json
 {"schema":"wolf-test/0","event":"summary","passed":3,"failed":1,
- "rejected":0,"unsupported":0,"filtered_out":0,"stopped_early":false}
+ "rejected":0,"unsupported":0,"filtered_out":0,"stopped_early":false,
+ "native":0}
 ```
 
 - Counters are integers; `stopped_early` is true under `--fail-fast`.
+- `native` (s250, wolf-lang#817): how many of `passed` carry the
+  `native` key — passes the checked machine refused and a native run
+  gave. It counts toward nothing else: the exit status is the one the
+  run would have without it (reporting, not a new failure). The human
+  summary says `N passed, M of them native` when it is nonzero.
+
+## `--nocapture`
+
+s250 (wolf-lang#810). A test's standard output and standard error are
+shown as the test writes them — the checked machine echoes each write,
+a native run's pipes are pumped — instead of only on a failing row. In
+the human output each stream goes to its own (and a failing row does not
+repeat what was shown); under `--json` both go to stderr, since stdout
+is this stream, and every `test` event carries `stdout` and `stderr`. A
+test the checked machine refuses partway runs again natively, so under
+`--nocapture` its output can appear twice; a stderr line says when.
 
 ## Exit codes
 
