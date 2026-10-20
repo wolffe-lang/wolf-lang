@@ -1,0 +1,25 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1001]: `run.ec.tb.xs.len` is used here after its value moved away
+ --> mem:///main.lu:8:9
+  |
+6 |     let tb = run.ec.tb
+  |              --------- `run.ec.tb` moved here
+7 |     let n = total(tb)
+8 |     n + run.ec.tb.xs.len
+  |         ^^^^^^^^^^^^^^^^ used after the move
+  |
+  = note: `run.ec.tb.xs.len` is part of `run.ec.tb`; moving one empties the other. Disjoint fields
+    stay usable.
+  = note: `run` is a `read` parameter: the move lends `run.ec.tb` to its new binding and the
+    caller keeps its value ([mem.tier0.mode.read]), but the place is empty in this frame
+    from the move on ([mem.tier0.move.1]). To read it twice, read through `run.ec.tb` each
+    time without binding it, or use the binding from here on; `copy` at the move is a deep
+    copy.
+  = note: re-initializing the place (assigning to it) also makes it usable again.
+help: to keep the original, copy it at the move
+  |
+6 |     let tb = copy run.ec.tb
+  |
