@@ -5,13 +5,16 @@
 //! from an outer binding when the region is freed wholesale. The
 //! checker speaks in the allocation, the escape, and the free — never
 //! lifetimes. Dynamically this is a region-fault after the free.
+//! s252: `Node` holds a `List`, storage the region owns. A scalar-only
+//! `Node` is its own words and leaves freely (`[mem.region.scalar]`,
+//! `region_scalar_value.lu`).
 
-struct Node { value: int }
+struct Node { value: int, kids: List[int] }
 
 fn main() -> !int {
-    var keep = Node { value: 0 }
+    var keep = Node { value: 0, kids: List[int]() }
     region tmp {
-        keep = Node { value: 7 }   // ERROR E1010: outlives tmp's free
+        keep = Node { value: 7, kids: List[int]() }   // ERROR E1010: outlives tmp's free
     }
     if keep.value == 7 { 0 } else { 1 }
 }

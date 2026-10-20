@@ -2,12 +2,15 @@
 //! phase: typecheck
 //! conforms: mem.region.freeze.1
 //! `freeze` is deep and permanent: writes through any path into
-//! frozen data are rejected.
+//! frozen data are rejected. s252: `Config` holds a `List`, so `cfg`
+//! is the frozen region's data. A scalar-only `Config` is its own
+//! words in `cfg`, never the region's (`[mem.region.scalar]`,
+//! `region_scalar_freeze.lu`).
 
-struct Config { limit: int }
+struct Config { limit: int, names: List[int] }
 
 fn main() -> !int {
-    var cfg = freeze region { Config { limit: 42 } }
+    var cfg = freeze region { Config { limit: 42, names: List[int]() } }
     cfg.limit = 7                  // ERROR E1012: the data is imm forever
     cfg.limit
 }
