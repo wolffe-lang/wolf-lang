@@ -250,6 +250,47 @@ impl Default for Budget {
     }
 }
 
+/// Where a checked run's program output goes AS IT IS WRITTEN (s250,
+/// wolf-lang#810's `--nocapture`). The machine always captures — the
+/// verdict, the record and a failing test's report read the capture —
+/// and an echo also hands every write to the `wolf` process's own
+/// stream at the moment the program makes it, so a passing test's
+/// `SKIP:` lines are seen (#571's evidence rule) and a slow one is
+/// watched rather than waited on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Echo {
+    /// Capture only: the default, and every machine's posture before s250.
+    #[default]
+    Off,
+    /// The program's standard output to the process's, its standard
+    /// error to the process's.
+    Split,
+    /// Both to the process's standard error: a `--json` run, whose
+    /// standard output is the event stream.
+    Stderr,
+}
+
+/// What a checked run is FOR, beyond its budget and its entry (s250).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct RunOpts {
+    /// See [`Echo`].
+    pub echo: Echo,
+    /// The run is a `wolf test` test (s250, wolf-lang#810): `os_exe()`
+    /// refuses by name ([`OS_EXE_UNDER_TEST`]) instead of answering the
+    /// `wolf` binary, the executable this machine runs inside, so a test
+    /// that re-spawns the program under test never starts the compiler
+    /// with the program's arguments. `[os.proc.exe]`; outside `wolf test`
+    /// (`conform-run --checked`, `wolf run --checked`) `os_exe()` is
+    /// unchanged.
+    pub under_test: bool,
+}
+
+/// The refusal `os_exe()` answers on the checked machine under `wolf
+/// test` ([`RunOpts::under_test`]). `wolf test` runs a refused `main`
+/// test natively, where `os_exe()` is the test's own executable.
+pub const OS_EXE_UNDER_TEST: &str = "`os_exe()` under `wolf test`: the checked machine runs \
+     inside the `wolf` binary, so it has no test executable to name ([os.proc.exe])";
+
 /// Render a UB finding as the user-facing E1401 diagnostic: the row,
 /// the responsible operation, and the licensed optimization it would
 /// break (the D2 pairing, executable).
@@ -1420,6 +1461,13 @@ struct Machine<'t> {
     /// What the program wrote through `eprint`/`eprint_raw` (s38), and
     /// since s200 through `fs_write*` on descriptor 2, as bytes.
     stderr: Vec<u8>,
+    /// s250 (wolf-lang#810): the capture above, also echoed as written
+    /// ([`Echo`]); every write to either capture goes through
+    /// [`Machine::emit`].
+    echo: Echo,
+    /// s250 (wolf-lang#810): this run is a `wolf test` test
+    /// ([`RunOpts::under_test`]).
+    under_test: bool,
     /// s200 (#407, `[os.fs.error]`): the host's number for the most recent
     /// fallible fs-family call, 0 when it succeeded or failed before the
     /// host. This machine is one task, so the word is the task's.
@@ -1520,6 +1568,33 @@ const STATIC_FRAME: usize = usize::MAX;
 
 // The ubiquitous helpers.
 impl<'t> Machine<'t> {
+    /// Append `bytes` to the program's standard output (`err == false`)
+    /// or standard error, and echo them as written when the run asked
+    /// for it (s250, [`Echo`]). The one door to both captures.
+    fn emit(&mut self, err: bool, bytes: &[u8]) {
+        use std::io::Write as _;
+        if err {
+            self.stderr.extend_from_slice(bytes);
+        } else {
+            self.stdout.extend_from_slice(bytes);
+        }
+        // An echo that cannot be written is the reader's loss, never
+        // the program's: the capture above is the run's truth.
+        match (self.echo, err) {
+            (Echo::Off, _) => {}
+            (Echo::Split, false) => {
+                let mut o = std::io::stdout().lock();
+                let _ = o.write_all(bytes);
+                let _ = o.flush();
+            }
+            (Echo::Split, true) | (Echo::Stderr, _) => {
+                let mut o = std::io::stderr().lock();
+                let _ = o.write_all(bytes);
+                let _ = o.flush();
+            }
+        }
+    }
+
     fn refuse<T>(&self, construct: &'static str, span: Span) -> E<T> {
         Err(Stop::Refuse(NotYet { construct, span }))
     }
@@ -2440,6 +2515,20 @@ pub fn run_checked_fn(
     run_checked_seeded(pkg, tc, budget, stdin, entry, 0)
 }
 
+/// [`run_checked_fn`] with the run's [`RunOpts`] — `wolf test`'s seam
+/// (s250, wolf-lang#810): the echo `--nocapture` asks for, and the
+/// `os_exe()` refusal every test run carries.
+pub fn run_checked_fn_with(
+    pkg: &Package,
+    tc: &Typecheck,
+    budget: Budget,
+    stdin: &str,
+    entry: &str,
+    opts: RunOpts,
+) -> Result<RunOutcome, NotYet> {
+    run_checked_with_opts(pkg, tc, budget, stdin, entry, 0, opts)
+}
+
 /// [`run_checked_fn`] under a schedule seed (s226, `[exec.checked.sched]`,
 /// `[sched.seed]`): 0 takes the first candidate at every decision, any
 /// other seed selects one schedule, and equal seeds are equal runs.
@@ -2450,6 +2539,18 @@ pub fn run_checked_seeded(
     stdin: &str,
     entry: &str,
     seed: u64,
+) -> Result<RunOutcome, NotYet> {
+    run_checked_with_opts(pkg, tc, budget, stdin, entry, seed, RunOpts::default())
+}
+
+fn run_checked_with_opts(
+    pkg: &Package,
+    tc: &Typecheck,
+    budget: Budget,
+    stdin: &str,
+    entry: &str,
+    seed: u64,
+    opts: RunOpts,
 ) -> Result<RunOutcome, NotYet> {
     // #382: the machine runs on a thread whose stack it sizes itself,
     // never on its caller's. The call-depth budget is a depth the
@@ -2485,7 +2586,7 @@ pub fn run_checked_seeded(
                 checked_sig::restore_here(machine_mask);
                 let conc = Some((root_hub.clone(), tx));
                 let run = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    run_checked_fn_here(pkg, tc, budget, stdin, entry, seed, conc)
+                    run_checked_fn_here(pkg, tc, budget, stdin, entry, seed, opts, conc)
                 }));
                 match run {
                     Ok(out) => Some(out),
@@ -2513,7 +2614,7 @@ pub fn run_checked_seeded(
             Err(_) => {
                 checked_sig::restore_here(machine_mask);
                 Some(run_checked_fn_here(
-                    pkg, tc, budget, stdin, entry, seed, None,
+                    pkg, tc, budget, stdin, entry, seed, opts, None,
                 ))
             }
         }
@@ -2543,7 +2644,7 @@ pub const CALL_DEPTH_BUDGET: usize = 128;
 /// only the frames a program reaches.
 pub const CHECKED_STACK_BYTES: usize = 64 << 20;
 
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn run_checked_fn_here<'t>(
     pkg: &'t Package,
     tc: &'t Typecheck,
@@ -2551,6 +2652,7 @@ fn run_checked_fn_here<'t>(
     stdin: &str,
     entry: &str,
     seed: u64,
+    opts: RunOpts,
     conc: Option<(
         std::sync::Arc<tasks::Hub<'t>>,
         std::sync::mpsc::Sender<tasks::SpawnReq<'t>>,
@@ -2583,6 +2685,8 @@ fn run_checked_fn_here<'t>(
     }
     let mut m = Machine::new(pkg, tc);
     m.budget = budget;
+    m.echo = opts.echo;
+    m.under_test = opts.under_test;
     m.stdin = stdin.to_string();
     m.sched = tasks::Sched::new(seed);
     if let Some((hub, spawner)) = conc {
@@ -2639,8 +2743,7 @@ fn run_checked_fn_here<'t>(
                 // the native `__wolf_rt_main_err` path) — the tag on
                 // stdout, exit 1.
                 Value::ErrTag { ref tag, .. } => {
-                    m.stdout
-                        .extend_from_slice(format!("error: {tag}\n").as_bytes());
+                    m.emit(false, format!("error: {tag}\n").as_bytes());
                     1
                 }
                 _ => 0,
@@ -2781,6 +2884,8 @@ impl<'t> Machine<'t> {
             ambient: Vec::new(),
             stdout: Vec::new(),
             stderr: Vec::new(),
+            echo: Echo::Off,
+            under_test: false,
             last_os_error: 0,
             stdin: String::new(),
             stdin_pos: 0,
@@ -7442,11 +7547,11 @@ impl<'t> Machine<'t> {
         use std::io::Write as _;
         match fd {
             1 => {
-                self.stdout.extend_from_slice(bytes);
+                self.emit(false, bytes);
                 Some(Ok(()))
             }
             2 => {
-                self.stderr.extend_from_slice(bytes);
+                self.emit(true, bytes);
                 Some(Ok(()))
             }
             _ => {
@@ -8482,6 +8587,13 @@ impl<'t> Machine<'t> {
             // host, not the wolf program; that is the same asymmetry
             // `env_args` already carries and it is what makes the
             // answer spawnable on both lanes.
+            // s250 (wolf-lang#810, `[os.proc.exe]`): under `wolf test`
+            // the answer above would be the `wolf` binary, and a test
+            // re-spawning the program under test would start the
+            // compiler with its arguments. Refused by name instead; the
+            // driver runs a refused `main` test natively, where
+            // `os_exe()` is the test's own binary.
+            "os_exe" if self.under_test => self.refuse(OS_EXE_UNDER_TEST, span),
             "os_exe" => match std::env::current_exe() {
                 Err(_) => Ok(tag("io")),
                 Ok(p) => match p.to_str() {
@@ -11215,11 +11327,7 @@ impl<'t> Machine<'t> {
                 if callee_name.ends_with("print") {
                     out.push('\n');
                 }
-                if callee_name.starts_with('e') {
-                    self.stderr.extend_from_slice(out.as_bytes());
-                } else {
-                    self.stdout.extend_from_slice(out.as_bytes());
-                }
+                self.emit(callee_name.starts_with('e'), out.as_bytes());
                 return Ok(Flow::Val(Value::Unit));
             }
             // The s38 io/fs builtin tier. Errors are D30 payload rows,

@@ -1146,7 +1146,8 @@ impl<'t> Machine<'t> {
     /// `[conc.deadlock.trap]`: the roster goes to stderr (its existence
     /// is contract, its contents implementation-specified).
     fn deadlock_trap<T>(&mut self, roster: &str, span: Span) -> E<T> {
-        self.stderr.extend_from_slice(
+        self.emit(
+            true,
             format!(
                 "wolf: deadlock: every live task is blocked and no timer is pending: {roster}\n"
             )
@@ -2291,7 +2292,7 @@ impl<'t> Machine<'t> {
                 if other_write { "write" } else { "read" },
                 sched.tasks[other].name,
             );
-            self.stderr.extend_from_slice(line.as_bytes());
+            self.emit(true, line.as_bytes());
             return self.trap("race", "conc.mm.race.3", span);
         }
         let tick = my_vc.get(me).copied().unwrap_or(0);
