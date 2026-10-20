@@ -28,6 +28,5 @@ fn main
     init p @583..584
     call bump [mut p.a.n, mut p.b.n] @634..660
     call wide [mut p.a, mut p.a.n] @688..712
-    alloc wide(..) -> caller @688..712
     -> b1
   b1:

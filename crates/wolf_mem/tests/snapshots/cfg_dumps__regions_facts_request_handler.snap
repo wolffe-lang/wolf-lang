@@ -11,6 +11,7 @@ facts fn cost_of
 facts fn respond
   read r -> immutable-for-call (frozen)
   alloc Response @649..693 -> caller
+  stack-alloc Response @649..693 (never escapes)
 
 facts fn main
   alloc Request @780..810 -> caller

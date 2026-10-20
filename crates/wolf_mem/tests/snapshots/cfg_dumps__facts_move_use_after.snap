@@ -9,3 +9,4 @@ facts fn consume
 facts fn main
   move b @568..569 -> memcpy-and-forget
   alloc Big @527..542 -> caller
+  stack-alloc Big @527..542 (never escapes)

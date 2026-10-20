@@ -22,4 +22,7 @@ facts fn main
   alloc V @1050..1072 -> caller
   alloc Pair @1013..1074 -> caller
   alloc V @1601..1623 -> caller
+  stack-alloc V @1023..1045 (never escapes)
+  stack-alloc V @1050..1072 (never escapes)
+  stack-alloc Pair @1013..1074 (never escapes)
   stack-alloc V @1601..1623 (never escapes)
