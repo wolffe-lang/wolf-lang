@@ -7,9 +7,12 @@
 //! that independence is the zero-annotation contract — and no
 //! equality surface exists yet, so the checker demands restructuring.
 //! Dynamically the call below ties tmp-region data into a caller-
-//! region container: a region-fault once tmp is freed.
+//! region container: a region-fault once tmp is freed. s252: `Item`
+//! holds a `List` — the data this rule is about. A scalar-only `Item`
+//! names no region, and the same store is legal
+//! (`[mem.region.scalar]`, `region_scalar_store.lu`).
 
-struct Item { value: int }
+struct Item { value: int, seen: List[int] }
 
 struct Holder { item: Item }
 
@@ -18,9 +21,9 @@ fn stash(mut holder: Holder, take item: Item) {
 }
 
 fn main() -> !int {
-    var h = Holder { item: Item { value: 1 } }
+    var h = Holder { item: Item { value: 1, seen: List[int]() } }
     region tmp {
-        let i = Item { value: 2 }
+        let i = Item { value: 2, seen: List[int]() }
         stash(mut h, take i)
     }
     if h.item.value == 2 { 0 } else { 1 }
