@@ -58,6 +58,85 @@ better report and a row.
   wrapping shift, where the three compiling machines say E0401).
   `small_gaps_lanes.rs` asserts its column.
 
+s250 — `wolf test` tells the truth (wolf-lang#817, #810, #809; yew
+yw02 §3, G22, G23, G29). Where a test ran and what it printed, said by
+the runner; and `wolf fmt` a fixed point, with a gate.
+
+- **The native fallback is named and counted** (#817). A `main` test
+  the checked machine refuses (its 20M-step budget, a construct outside
+  its surface) runs once natively, as since s73 — and now its row says
+  so: `ok [native: step budget exhausted]`, the refusal verbatim; the
+  summary counts it (`N passed, M of them native`, the line unchanged
+  when none is); a stderr note says what a native pass is. `--json`
+  keeps `detail: "exit(0) [native]"` and gains `native` (the refusal) on
+  the event and a `native` count in the summary. **The exit status is
+  unchanged**: this is reporting, not a new failure. `--no-native-fallback`
+  makes the refusal the verdict (`unsupported`, exit 1) for a suite that
+  wants the checked machine or nothing. yw02 read ten of twenty files
+  green that the checked machine never finished; each now reads
+  `[native: step budget exhausted]`.
+- **`--nocapture`** (#810; RULES.md §5, #571). A test's standard output
+  and standard error are shown as the test writes them, a passing test's
+  `SKIP:` lines included: the checked machine echoes each write, a
+  native run's pipes are pumped, and each stream goes to its own (under
+  `--json` both to stderr, and every test event carries `stdout` and
+  `stderr`, a passing one too). 0.2.34 answers `unknown flag`.
+- **The child role: `os_exe()` under `wolf test`** (#810, yew G23,
+  `[os.proc.exe]`). On the checked machine it named the `wolf` binary,
+  so a test re-spawning the program under test started the compiler
+  ("`--child` is not a wolf command"). Under `wolf test` the checked
+  machine now refuses it by name; a `main` test then runs natively,
+  where `os_exe()` is the test's own executable — spawn it with an
+  argument of your own and read the child's status — and its row says
+  `[native: …]`. A `test_*` fn, which runs only on the checked machine,
+  is `unsupported`. Outside `wolf test` (`conform-run --checked`, `wolf
+  run --checked`) nothing changes. Doctests run with the same posture.
+- **`wolf fmt` is a fixed point on a member call over a block** (#809,
+  yew G22, `[gram.fmt.break]` (2)). A call like `log.put(if k { a } else
+  { b })` or `t.g(c, if k == "…" then 1 else 2)` whose argument breaks
+  multiline (an inline block that no longer fits, a bare `if` broken to
+  braces) kept `t.g(` on the first pass; the second read the braces' hard
+  newlines as forcing the receiver-dot break and laid `t.` / `g(`. A hard
+  break inside an argument list is now that list's break: the receiver
+  dot stays a last resort. Over every `.lu` file of the org's thirteen other
+  repositories (3,602, kasumi), the first pass is byte-identical to
+  0.2.33's (0.2.34's formatter is 0.2.33's) on every one; eight pax
+  kernel files that 0.2.33 did not
+  bring to a fixed point (`kernel/pci/pci.lu`'s `log.put(if …)`, and
+  seven more) now converge in one pass; yew's `src/term_render_test.lu`
+  at 688613c (the issue's file) too.
+- **`cargo xtask fmt-fixpoint`**, the gauntlet's second step: `wolf fmt`
+  twice over every corpus file, the std at STD-PIN and the formatter's
+  regression corpus (1,232 files), the second pass changing nothing; any
+  extra path is formatted too. `fmt-lu` asks whether the corpus is
+  canonical; this asks whether canonical is where the formatter stops.
+
+### Read this before you bump the pin
+
+- **`wolf test`'s rows and summary** (s250): a native pass reads `ok
+  [native: …]` and the summary `N passed, M of them native; …`; a tool
+  reading the human output for `N passed;` sees the count only when a
+  test fell back, and `--json` is the stable surface (`native`, new
+  keys only). Under `wolf test` the checked machine refuses `os_exe()`:
+  a `test_*` fn that called it is now `unsupported`, a `main` test runs
+  natively. Exit statuses are unchanged.
+- **`wolf fmt`** (s250): a member call over an argument that breaks
+  across lines keeps `t.g(` where 0.2.34 sometimes laid `t.` / `g(` on a
+  second pass; no file in the org moved on its first pass.
+
+### Downstream
+
+- **yew** (s250): the guard and invalid-cell self-spawns' loud SKIP on
+  the checked machine (`self_reexecutes`) retires at this pin — those
+  files run natively under `wolf test`, their rows say so; `tools/
+  check-test` can add `--no-native-fallback` for a checked-only lane and
+  `--nocapture` for its SKIP count.
+- **wolf-interp** (s250): lupin has no test runner; nothing to mirror in
+  the language. If lupin's test surface grows, it mirrors `--nocapture`,
+  the `native`-key shape (lupin has no native tier: its refusal is the
+  verdict, as `--no-native-fallback`'s), and `os_exe()` refused by name
+  under test.
+
 ## 0.2.34 — 2026-10-20
 
 **What this release changes: the fork, and what an editor asks of the
