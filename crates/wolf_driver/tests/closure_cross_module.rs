@@ -123,7 +123,12 @@ fn the_six_rows_run_on_release_under_the_per_module_partition() {
         let Some(r) = lane(dir, "--release", false) else {
             return;
         };
-        check(dir, stdout, "release, per-module partition (WOLF_MIDEND=0)", &r);
+        check(
+            dir,
+            stdout,
+            "release, per-module partition (WOLF_MIDEND=0)",
+            &r,
+        );
     }
 }
 
@@ -149,7 +154,11 @@ fn the_checked_machine_runs_the_six_rows() {
             .args(["--json", "--checked"])
             .output()
             .expect("wolf runs");
-        assert!(out.status.success(), "{dir}: conform-run --checked exited {:?}", out.status.code());
+        assert!(
+            out.status.success(),
+            "{dir}: conform-run --checked exited {:?}",
+            out.status.code()
+        );
         let r: serde_json::Value = serde_json::from_slice(&out.stdout).expect("a record");
         assert_eq!(r["phase_reached"], "run", "{dir}: record {r}");
         check(dir, stdout, "checked", &r);
