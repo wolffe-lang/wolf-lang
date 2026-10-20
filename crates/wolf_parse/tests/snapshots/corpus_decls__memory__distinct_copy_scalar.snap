@@ -1,0 +1,11 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+TypeDecl 633..661 name=ByteOff def=PrefixType
+TypeDecl 662..686 name=Col def=PrefixType
+TypeDecl 687..722 name=Hash def=PrefixType
+FnDecl 723..806 name=twice body=Block
+FnDecl 808..886 name=both body=Block
+FnDecl 888..1001 name=mix body=Block
+FnDecl 1003..1182 name=main body=Block
