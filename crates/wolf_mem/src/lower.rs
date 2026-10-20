@@ -5531,7 +5531,46 @@ impl<'t> Lowerer<'t> {
                     }
                     Ok(Val::none())
                 } else {
-                    self.eval_value(operand)
+                    // s252 (wolf-lang#816, `[mem.tier0.move.3]`): `copy e`
+                    // of a non-place — a call result, a block — is the
+                    // same duplicate as a place's: the lowering deep-copies
+                    // it into the ambient region (wolf_wir's
+                    // `deep_copy_in`), so it is a fresh allocation there
+                    // and shares only the `str` bytes it reaches, never
+                    // the operand's placement. Before s252 the operand's
+                    // sites passed through, so `m.s = copy g(mut t)` was
+                    // E1004 "from `t`'s region" — the store E1004's own
+                    // note says `copy` repairs.
+                    let inner = self.eval_value(operand)?;
+                    let ty = self.expr_ty(e.span).or_else(|| self.expr_ty(operand.span));
+                    let Some(t) = ty else {
+                        return Ok(inner);
+                    };
+                    if is_copy(self.sigs, t, 0) {
+                        // A `Copy` value is its own copy; a `str` shares
+                        // its bytes and carries their sites, a
+                        // parameter's pseudo-site excepted (s207).
+                        let mut v = inner;
+                        v.sites
+                            .retain(|s| !self.sites[s.0 as usize].kind.is_param());
+                        return Ok(v);
+                    }
+                    let rendered = self.rendered_expr_ty(e.span);
+                    let site = self.alloc_site(rendered, SiteKind::Lit, e.span);
+                    let mut out = Val::site(site, e.span);
+                    if self.may_lend_bytes(t, 0) {
+                        for s in inner.sites.iter().chain(inner.views.iter()).copied() {
+                            if self.sites[s.0 as usize].kind.is_param() {
+                                continue;
+                            }
+                            if let Err(i) = out.views.binary_search(&s) {
+                                out.views.insert(i, s);
+                            }
+                        }
+                    }
+                    out.borrowed = inner.borrowed;
+                    out.sends = inner.sends;
+                    Ok(out)
                 }
             }
             Some(SyntaxKind::MoveKw) => {
