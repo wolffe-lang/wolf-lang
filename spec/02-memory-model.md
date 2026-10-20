@@ -346,6 +346,17 @@ law: `.docs/refs/papers/swift-ownership-manifesto.md`.
   receiver.
   Witnesses `corpus/memory/read_param_return.lu`, `read_param_escape_*`,
   `read_param_rebind_*` and `read_param_move_legal.lu`.
+  **A move out of a `read` parameter still moves, in this frame** (by
+  design; s252, wolf-lang#822, yew's fuzz fork): `let tb = run.ec.tb`
+  lends the field to `tb` and the caller keeps its value, but
+  `run.ec.tb` is empty here from the binding on (`[mem.tier0.move.1]`),
+  so a later `run.ec.tb.xs.len` is E1001 — on every compiling machine,
+  and `trap(use-after-move)` on lupin. A reader who meant a read reads
+  through the path each time (`run.ec.tb.xs.len`, no binding), or
+  binds once and uses the binding from there on; `copy` at the move is
+  a deep copy and the costly answer. E1001's report names the `read`
+  parameter and these two ways. Witness
+  `corpus/memory/read_param_field_rebound.lu` (`fail(E1001)`).
 - `[mem.tier0.mode.mut]` `mut` parameters are **exclusive inout**: for the
   duration of the call no other access (read or write) to the argument
   place or any conflicting path may occur. Call sites must write `mut`
