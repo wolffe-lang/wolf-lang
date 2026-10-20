@@ -259,6 +259,21 @@ law: `.docs/refs/papers/swift-ownership-manifesto.md`.
 - `[mem.tier0.move.3]` `copy x` produces an independent value from any
   type; types opting into `Copy` copy implicitly on what would otherwise
   move. POD-shaped types only (no destructor, no Tier-2 members).
+  **An adapter of a `Copy` scalar is `Copy`** (s252, wolf-lang#813,
+  yew G24): `type ByteOff = distinct int` copies on what would
+  otherwise move, as `int` does — an adapter has its base's layout
+  (D28) and a scalar's copy semantics come with it. The same holds for
+  an adapter of any integer type, `wrapping[T]`, a float, `bool`,
+  `char`, `byte`, or of another such adapter. An adapter of a `str`, a
+  container or a struct moves as its base's value does: a `str`'s bytes
+  carry their region's sites through a `str`-typed read only
+  (`[mem.region.escape]`), and an aggregate is not `Copy`. Nothing else
+  opts in: there is no `Copy` to implement (E0301). Before 0.2.35 every
+  nominal adapter moved, so `let x = a as int` followed by `let y = a
+  as int` was E1001 on every compiling machine while lupin copied.
+  **Cost:** none; a scalar is its own copy. Witnesses
+  `corpus/memory/distinct_copy_scalar.lu` and
+  `distinct_container_moves.lu` (`fail(E1001)`).
   **Independent means deep** (stated 2026-09-15, wolf-lang#384): a
   `List` copies its elements, a `Map` its entries, a struct or tuple its
   fields, each by this same rule, so no storage reachable from the copy
