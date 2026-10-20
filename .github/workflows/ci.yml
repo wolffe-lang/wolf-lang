@@ -389,12 +389,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # s248 PROBE (never merged): macOS alone.
         include:
           - os: macos-latest
-          - os: windows-latest
-            leg: tests
-          - os: windows-latest
-            leg: rung
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     env:
@@ -415,7 +412,16 @@ jobs:
         run: rustup target add x86_64-unknown-none
       - run: cargo build --workspace
       - if: matrix.leg != 'rung'
-        run: cargo test --workspace
+        # s248 PROBE (never merged): the s248 gates and their neighbours on
+        # macOS, each to the end.
+        shell: bash
+        run: |
+          cargo build -p wolf_rt
+          set +e
+          cargo test -p wolf_driver --no-fail-fast --test editor_calls_lanes --test editor_wait_lanes --test editor_restore_lanes --test test_cmd --test term_editor_lanes --test ctrl_c_lanes -- --nocapture; a=$?
+          cargo test -p wolf_rt --lib --no-fail-fast; b=$?
+          echo "PROBE: wolf_driver rc=$a, wolf_rt rc=$b"
+          exit $((a + b))
       # s60a: the windows native rung. The clif gate is open on this
       # host, so the corpus runs natively here — `lane-coverage` is the
       # windows floor line (259/255/0/274/0 at the s60a bring-up with 21
