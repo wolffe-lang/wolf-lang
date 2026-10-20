@@ -1494,6 +1494,30 @@ impl<'a> Fx<'a> {
 
     /// Ensure a `declare` exists for `symbol` (skipped when defined in
     /// this module).
+    /// A module function's symbol as this object sees it: its own
+    /// entry when it lowered here, else a `declare` of its mangled
+    /// symbol (s134; s251 extends it from `func.addr` to a static
+    /// callable record's slot, `[abi.native.closure.object]`). `None`
+    /// when no module function carries the name.
+    fn module_func_symbol(&mut self, callee: &str) -> Result<Option<String>, BackendError> {
+        if let Some(entry) = self.funcs.get(callee) {
+            return Ok(Some(entry.symbol.clone()));
+        }
+        let Some(target) = self.m.funcs.values().find(|f| f.name == callee) else {
+            return Ok(None);
+        };
+        let sig = target.sig;
+        let symbol = wolf_backend::mangle(self.m, callee, sig);
+        let si = sig_info(self.m, sig, Conv::Wolf, &self.cx.opts.clone())?;
+        let decl = format!(
+            "declare {} @\"{symbol}\"({}) nounwind",
+            si.ret_ty(),
+            si.ll_params.join(", ")
+        );
+        self.ensure_decl(&symbol, decl);
+        Ok(Some(symbol))
+    }
+
     fn ensure_decl(&mut self, symbol: &str, line: String) {
         if self.defined.contains(symbol) {
             return;
@@ -2031,20 +2055,7 @@ impl<'a> Fx<'a> {
                     return Err(ice("func.addr without callee"));
                 };
                 let callee = self.f.ext_funcs[ef].name.clone();
-                let symbol = if let Some(entry) = self.funcs.get(&callee) {
-                    entry.symbol.clone()
-                } else if let Some(target) = self.m.funcs.values().find(|f| f.name == callee) {
-                    let sig = target.sig;
-                    let symbol = wolf_backend::mangle(self.m, &callee, sig);
-                    let si = sig_info(self.m, sig, Conv::Wolf, &self.cx.opts.clone())?;
-                    let decl = format!(
-                        "declare {} @\"{symbol}\"({}) nounwind",
-                        si.ret_ty(),
-                        si.ll_params.join(", ")
-                    );
-                    self.ensure_decl(&symbol, decl);
-                    symbol
-                } else {
+                let Some(symbol) = self.module_func_symbol(&callee)? else {
                     return Err(nyi(format!(
                         "func.addr of `@{callee}` names no module function"
                     )));
@@ -2538,14 +2549,21 @@ impl<'a> Fx<'a> {
                         // address of a module function
                         // ([abi.native.dyn]); the symbols are link-time
                         // constants exactly like `func.addr`'s.
+                        //
+                        // s251 (#806, #807): a slot's function need
+                        // not live in this object's subset — the
+                        // symbol is a link-time constant exactly as
+                        // `func.addr`'s is (s134), so an out-of-subset
+                        // slot is declared and named
+                        // (`[abi.native.closure.object]`).
                         let mut slots = Vec::with_capacity(d.funcs.len());
                         for fname in &d.funcs {
-                            let Some(entry) = self.funcs.get(fname) else {
+                            let Some(symbol) = self.module_func_symbol(fname)? else {
                                 return Err(nyi(format!(
-                                    "a vtable slot `@{fname}` outside this object's subset"
+                                    "a vtable slot `@{fname}` names no module function"
                                 )));
                             };
-                            slots.push(format!("ptr @\"{}\"", entry.symbol));
+                            slots.push(format!("ptr @\"{symbol}\""));
                         }
                         format!(
                             "@\"{sym}\" = private unnamed_addr constant [{} x ptr] [{}], align 8",
