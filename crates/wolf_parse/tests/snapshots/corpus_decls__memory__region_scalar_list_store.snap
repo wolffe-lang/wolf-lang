@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 600..632 name=Tb fields=1
+StructDecl 634..679 name=Bag fields=2
+StructDecl 681..711 name=Shelf fields=1
+FnDecl 713..806 name=fill body=Block
+FnDecl 808..870 name=keep body=Block
+FnDecl 872..1026 name=main body=Block

@@ -1,0 +1,23 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.scalar, mem.region.escape
+//!
+//! s252: a struct with a `str` field is not scalar-only — a built
+//! `str`'s bytes live in the region that built them
+//! (`[mem.region.escape]`) — so this `Named` built inside `tmp` and
+//! held by `keep` outside it is still E1010 (lupin 0.1.54:
+//! `trap(region-fault)`).
+
+struct Named {
+    name: str,
+    n: int,
+}
+
+fn main() {
+    var keep = Named { name: "a", n: 0 }
+    region tmp {
+        let t = Named { name: "b" + "c", n: 1 }
+        keep = t
+    }
+    print("{keep.n}")
+}

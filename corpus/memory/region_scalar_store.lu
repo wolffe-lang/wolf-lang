@@ -1,0 +1,92 @@
+//! check: run(exit=0, stdout="1 1 2 1\n")
+//! phase: run
+//! conforms: mem.region.scalar, mem.region.edge, mem.tier0.move.3
+//!
+//! s252 (wolf-lang#816, yew G28): E1004's conservatism narrowed to the
+//! data it is about. A scalar-only value stored into another
+//! parameter's region ties the two regions together through nothing,
+//! so `set` (yew's witness, `m.s = copy g(mut t)`), `set_plain` (the
+//! same without the `copy`) and `stash` (`holder.item = item`, the old
+//! `region_conflict_params` shape over a scalar-only `Item`) build.
+//! And `copy e` of a call result is the fresh copy in the ambient
+//! region its lowering makes, so `keep` — a `List` field this time —
+//! builds with the `copy` E1004's note asks for. Before s252 all four
+//! were E1004 ("this stores a value from `t`'s region into `m`'s
+//! region") on every compiling machine. lupin 0.1.54 runs `set`,
+//! `set_plain` and `keep` and traps `region-fault` after `stash` (its
+//! debt: a scalar-only struct names no region). What E1004 still
+//! refuses: `region_scalar_list_store.lu`.
+
+struct Snap {
+    a: int,
+    b: int,
+}
+
+struct Tb {
+    xs: List[int],
+}
+
+struct Meta {
+    s: Snap,
+}
+
+struct Item {
+    value: int,
+}
+
+struct Holder {
+    item: Item,
+}
+
+struct Bag {
+    n: int,
+    ys: List[int],
+}
+
+struct Shelf {
+    bag: Bag,
+}
+
+fn g(mut t: Tb) -> Snap {
+    (mut t.xs).push(1)
+    Snap { a: t.xs.len, b: 2 }
+}
+
+fn set(mut m: Meta, mut t: Tb) {
+    m.s = copy g(mut t)
+}
+
+fn set_plain(mut m: Meta, mut t: Tb) {
+    m.s = g(mut t)
+}
+
+fn stash(mut holder: Holder, take item: Item) {
+    holder.item = item
+}
+
+fn fill(mut t: Tb) -> Bag {
+    (mut t.xs).push(2)
+    Bag { n: t.xs.len, ys: List[int]() }
+}
+
+fn keep(mut sh: Shelf, mut t: Tb) {
+    sh.bag = copy fill(mut t)
+}
+
+fn main() {
+    var t = Tb { xs: List[int]() }
+    var m = Meta { s: Snap { a: 0, b: 0 } }
+    set(mut m, mut t)
+    var u = Tb { xs: List[int]() }
+    var m2 = Meta { s: Snap { a: 0, b: 0 } }
+    set_plain(mut m2, mut u)
+    var h = Holder { item: Item { value: 1 } }
+    region tmp {
+        let i = Item { value: 2 }
+        stash(mut h, take i)
+    }
+    var w = Tb { xs: List[int]() }
+    var sh = Shelf { bag: Bag { n: 0, ys: List[int]() } }
+    keep(mut sh, mut w)
+    print("{m.s.a} {m2.s.a} {h.item.value} {sh.bag.n}")
+}

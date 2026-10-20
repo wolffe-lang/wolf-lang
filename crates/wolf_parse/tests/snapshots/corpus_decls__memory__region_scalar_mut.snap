@@ -1,0 +1,9 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 764..790 name=Rng fields=1
+StructDecl 792..840 name=Sim fields=2
+FnDecl 842..878 name=bump body=Block
+FnDecl 880..947 name=step body=Block
+FnDecl 949..1230 name=main body=Block

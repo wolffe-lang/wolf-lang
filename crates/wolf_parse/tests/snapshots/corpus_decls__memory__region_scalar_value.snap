@@ -1,0 +1,11 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 1055..1086 name=Node fields=1
+StructDecl 1088..1127 name=Snap fields=2
+EnumDecl 1129..1167 name=Mode variants=2
+StructDecl 1169..1207 name=St fields=2
+StructDecl 1209..1233 name=P fields=1
+FnDecl 1235..1290 name=make body=Block
+FnDecl 1292..1964 name=main body=Block

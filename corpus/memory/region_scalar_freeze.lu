@@ -1,0 +1,21 @@
+//! check: run(exit=0, stdout="7\n")
+//! phase: run
+//! conforms: mem.region.scalar, mem.region.freeze.1
+//!
+//! s252 (`[mem.region.scalar]`): a scalar-only value read out of a
+//! frozen region is its own words in the binding, never the region's
+//! data, so writing the binding writes nothing frozen. This was the
+//! old `region_freeze_write` shape (E1012 on every compiling machine,
+//! the native tiers having copied the words all along); that row now
+//! holds a `List`, the data `freeze` keeps immutable. lupin 0.1.54
+//! traps `region-fault`.
+
+struct Config {
+    limit: int,
+}
+
+fn main() {
+    var cfg = freeze region { Config { limit: 42 } }
+    cfg.limit = 7
+    print("{cfg.limit}")
+}

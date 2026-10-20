@@ -1,0 +1,48 @@
+//! check: run(exit=0, stdout="3 2 1\n")
+//! phase: run
+//! conforms: mem.region.scalar, mem.tier0.mode.mut, mem.region.escape
+//!
+//! s252 (wolf-lang#801, yew G18): a `mut` argument of a scalar-only
+//! type gains nothing from the call. A callee may replace its words,
+//! never with storage, so passing it inside a `region` block ties it
+//! to no region. Before s252 each call below was E1010 on every
+//! compiling machine ("`g` still holds a value allocated in region
+//! `turn` when the region is freed") — a local, a `mut` parameter
+//! passed on (`step`), and a scalar-only field of a struct that DOES
+//! hold storage (`st.rng`, whose sibling `log` is a `List`). yew's
+//! fuzzers threaded the RNG state functionally instead. lupin 0.1.54
+//! runs it.
+
+struct Rng {
+    s: int,
+}
+
+struct Sim {
+    rng: Rng,
+    log: List[int],
+}
+
+fn bump(mut g: Rng) {
+    g.s += 1
+}
+
+fn step(mut g: Rng) {
+    region turn {
+        bump(mut g)
+    }
+}
+
+fn main() {
+    var g = Rng { s: 1 }
+    region turn {
+        bump(mut g)
+    }
+    step(mut g)
+    var h = Rng { s: 1 }
+    step(mut h)
+    var st = Sim { rng: Rng { s: 0 }, log: List[int]() }
+    region turn {
+        bump(mut st.rng)
+    }
+    print("{g.s} {h.s} {st.rng.s}")
+}
