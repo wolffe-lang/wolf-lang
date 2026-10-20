@@ -134,6 +134,7 @@ pub fn run(
     surface: &crate::doc_cmd::DoctestSurface,
     std_root: Option<&Path>,
     scratch: &Path,
+    opts: ubcheck::RunOpts,
 ) -> Outcome {
     // A `std`-backed run is one where the documented tree IS the std
     // facade: `--std-root <tree>` with the tree as the package. A `std`
@@ -224,7 +225,16 @@ pub fn run(
         if dt.fence.no_run() {
             return Outcome::Pass("compiles (no_run)".to_string());
         }
-        return match ubcheck::run_checked_fn(&res.package, &tc, Budget::default(), "", "main") {
+        // s250: a doctest is a `wolf test` test — `--nocapture`'s echo
+        // and the `os_exe()` refusal reach it as they reach a test file.
+        return match ubcheck::run_checked_fn_with(
+            &res.package,
+            &tc,
+            Budget::default(),
+            "",
+            "main",
+            opts,
+        ) {
             Ok(out) => match &out.verdict {
                 Verdict::Exit(0) => Outcome::Pass("exit(0)".to_string()),
                 Verdict::Exit(n) => Outcome::Fail(format!("exit({n})")),
