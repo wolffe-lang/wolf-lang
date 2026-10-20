@@ -97,12 +97,13 @@ fn main() -> ExitCode {
         Some("diag-catalog") => diag_catalog(args.iter().any(|a| a == "--check")),
         Some("doc-catalog") => doc_catalog(args.iter().any(|a| a == "--check")),
         Some("fmt-lu") => fmt_lu(),
+        Some("fmt-fixpoint") => fmt_fixpoint(&args[1..]),
         Some("peel") => peel_cmd(&args[1..]),
         Some("audit-surface") => audit_surface(),
         Some("prelude-diff") => prelude_diff_cmd(&args[1..]),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci [--shard <name>] [--plan]|deps-check|corpus|peel|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|release-notes|spec-extract|conformance|differ|lane-coverage|print-gate|diag-catalog|doc-catalog|fmt-lu|audit-surface|midend-rate|prelude-diff>"
+                "usage: cargo xtask <ci [--shard <name>] [--plan]|deps-check|corpus|peel|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|release-notes|spec-extract|conformance|differ|lane-coverage|print-gate|diag-catalog|doc-catalog|fmt-lu|fmt-fixpoint|audit-surface|midend-rate|prelude-diff>"
             );
             eprintln!(
                 "       cargo xtask release-notes <TAG> [--out FILE]\n\
@@ -146,6 +147,11 @@ fn main() -> ExitCode {
 /// The gauntlet's steps, in the fixed order every host runs them.
 const CI_STEPS: &[(&str, &[&str])] = &[
     ("fmt", &["fmt", "--all", "--check"]),
+    // s250 (wolf-lang#809): `wolf fmt` is a fixed point over the corpus
+    // and the std it ships. Second, before the tests: a formatter that
+    // is not idempotent is named by its own gate, not by whichever
+    // property test reaches the file first.
+    ("fmt-fixpoint", &["xtask", "fmt-fixpoint"]),
     (
         "clippy",
         &[
@@ -217,6 +223,7 @@ const CI_SHARDS: &[(&str, &[&str])] = &[
         "build",
         &[
             "fmt",
+            "fmt-fixpoint",
             "clippy",
             "rt-none",
             "test",
@@ -3820,6 +3827,174 @@ fn fmt_lu() -> ExitCode {
         eprintln!(
             "fmt-lu: unformatted .lu files — run `wolf fmt <file>` on each named file \
              (not `wolf fmt corpus`: the `fmt: relaid` witnesses must keep their layout)"
+        );
+        ExitCode::FAILURE
+    }
+}
+
+// ---------------------------------------------------------- fmt-fixpoint --
+
+/// `xtask fmt-fixpoint [<file.lu>…]` — the corpus format gate's
+/// fixed-point half (s250, wolf-lang#809; yew G22): `wolf fmt` twice
+/// over every corpus file and every `.lu` file of the std this wolf
+/// ships (the wolf-std commit STD-PIN names, fetched as `dist` fetches
+/// it) and every fixture of the formatter's own regression corpus
+/// (`crates/wolf_fmt/tests/regressions/`, the classes it has closed),
+/// and the second pass changes nothing. `fmt-lu` asks whether the
+/// committed corpus is canonical; this asks whether canonical is a
+/// place the formatter stops — a question `fmt-lu` cannot see, since a
+/// file that a second pass changes can be committed in either layout
+/// and `--check` accepts whichever `wolf fmt` last wrote. The `fmt:
+/// relaid` witnesses are formatted too: their source is not canonical
+/// by design, their formatting must still be a fixed point
+/// (`[gram.fmt.canon]`). Paths given are formatted as well, never
+/// instead: a lane points the gate at a file from another repository
+/// (yew's `src/term_render_test.lu` at 688613c was red here before the
+/// fix). Through the `wolf` binary on stdin, as an editor's save hook
+/// calls it; a pass that exits nonzero on a file with syntax errors is
+/// still a pass whose output is compared.
+/// The formatter's regression corpus, read by [`fmt_fixpoint`].
+const FMT_REGRESSIONS: &str = "crates/wolf_fmt/tests/regressions";
+
+fn fmt_fixpoint(args: &[String]) -> ExitCode {
+    if !run_ok("cargo", &["build", "-p", "wolf_driver", "--quiet"]) {
+        eprintln!("fmt-fixpoint: failed to build wolf");
+        return ExitCode::FAILURE;
+    }
+    let wolf = Path::new("target/debug").join(format!("wolf{}", std::env::consts::EXE_SUFFIX));
+    let mut corpus_files = Vec::new();
+    collect_wolf_files(Path::new("corpus"), &mut corpus_files);
+    corpus_files.sort();
+    let pin = match std::fs::read_to_string(STD_PIN_FILE)
+        .map_err(|e| format!("read {STD_PIN_FILE}: {e}"))
+        .and_then(|t| parse_std_pin(&t))
+    {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("fmt-fixpoint: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let std_dir = match std_checkout(&pin) {
+        Ok(d) => d.join("std"),
+        Err(e) => {
+            eprintln!("fmt-fixpoint: the std at the pin: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let mut std_files = Vec::new();
+    collect_wolf_files(&std_dir, &mut std_files);
+    std_files.sort();
+    // The closed classes only: `unfixed/` banks the open ones, which
+    // are not fixed points by definition.
+    let mut regressions: Vec<PathBuf> = std::fs::read_dir(FMT_REGRESSIONS)
+        .map(|rd| {
+            rd.flatten()
+                .map(|e| e.path())
+                .filter(|p| p.is_file() && p.extension().is_some_and(|x| x == "lu"))
+                .collect()
+        })
+        .unwrap_or_default();
+    regressions.sort();
+    if corpus_files.len() < 50 || std_files.len() < 50 || regressions.len() < 20 {
+        eprintln!(
+            "fmt-fixpoint: {} corpus, {} std and {} regression file(s) — a tree went missing",
+            corpus_files.len(),
+            std_files.len(),
+            regressions.len()
+        );
+        return ExitCode::FAILURE;
+    }
+    let extra: Vec<PathBuf> = args.iter().map(PathBuf::from).collect();
+    let pass = |src: &[u8]| -> Result<Vec<u8>, String> {
+        use std::io::Write as _;
+        let mut child = Command::new(&wolf)
+            .args(["fmt", "-"])
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|e| format!("wolf fmt -: {e}"))?;
+        let mut stdin = child.stdin.take().expect("piped");
+        let src = src.to_vec();
+        let writer = std::thread::spawn(move || stdin.write_all(&src));
+        let out = child
+            .wait_with_output()
+            .map_err(|e| format!("wolf fmt -: {e}"))?;
+        let _ = writer.join();
+        match out.status.code() {
+            Some(_) => Ok(out.stdout),
+            None => Err("wolf fmt - died without an exit code".to_string()),
+        }
+    };
+    let mut bad = 0usize;
+    let groups: [(&str, &[PathBuf]); 4] = [
+        ("corpus", &corpus_files),
+        ("std", &std_files),
+        ("fmt regressions", &regressions),
+        ("named", &extra),
+    ];
+    for (group, files) in groups {
+        for f in files {
+            let src = match std::fs::read(f) {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("fmt-fixpoint: {}: unreadable: {e}", f.display());
+                    bad += 1;
+                    continue;
+                }
+            };
+            let once = pass(&src);
+            let twice = once.as_ref().map_err(String::clone).and_then(|o| pass(o));
+            match (once, twice) {
+                (Ok(a), Ok(b)) if a == b => {}
+                (Ok(a), Ok(b)) => {
+                    bad += 1;
+                    let (la, lb) = (String::from_utf8_lossy(&a), String::from_utf8_lossy(&b));
+                    let at = la
+                        .lines()
+                        .zip(lb.lines())
+                        .position(|(x, y)| x != y)
+                        .unwrap_or_else(|| la.lines().count().min(lb.lines().count()));
+                    eprintln!(
+                        "fmt-fixpoint: {} ({group}) is not a fixed point: the second pass \
+                         changes line {} of the first's output",
+                        f.display(),
+                        at + 1
+                    );
+                    eprintln!(
+                        "  first:  {}",
+                        la.lines().nth(at).unwrap_or("<end of file>")
+                    );
+                    eprintln!(
+                        "  second: {}",
+                        lb.lines().nth(at).unwrap_or("<end of file>")
+                    );
+                }
+                (Err(e), _) | (_, Err(e)) => {
+                    bad += 1;
+                    eprintln!("fmt-fixpoint: {}: {e}", f.display());
+                }
+            }
+        }
+    }
+    let total = corpus_files.len() + std_files.len() + regressions.len() + extra.len();
+    if bad == 0 {
+        eprintln!(
+            "fmt-fixpoint: {total} file(s) formatted twice — {} corpus, {} std (wolf-std {}), \
+             {} fmt regressions, {} named — every one a fixed point",
+            corpus_files.len(),
+            std_files.len(),
+            &pin[..pin.len().min(10)],
+            regressions.len(),
+            extra.len()
+        );
+        ExitCode::SUCCESS
+    } else {
+        eprintln!(
+            "fmt-fixpoint: {bad} of {total} file(s) not a fixed point: `wolf fmt` must reach its \
+             layout in one pass ([gram.fmt.canon]) — reduce the construct the lines above \
+             name and fix the formatter, never the file"
         );
         ExitCode::FAILURE
     }
