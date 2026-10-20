@@ -1,0 +1,46 @@
+//! check: run(exit=0, stdout="turns=40 acc=3\nturns=16 acc=13\n")
+//! phase: run
+//! conforms: type.numlit.value, type.int.shift
+//!
+//! s252 (wolf-lang#822, yew's `wrapping-infer` witness): by design.
+//! `var i = 15` takes its type from its first deciding use
+//! (`[type.numlit.value]`), here a shift count of a `wrapping[u64]`,
+//! which has the operand's type (`[type.int.shift]`): `i` is
+//! `wrapping[u64]`, `i >= 0` never fails, `i -= 1` wraps, and the loop
+//! stops only at its own guard of 40 turns. Annotated `int` and cast at
+//! the shift, the countdown ends after sixteen. lupin 0.1.54 accepts an
+//! `int` count on a wrapping shift and runs the first loop sixteen
+//! turns too (`turns=16 acc=13` twice): lupin's divergence, filed.
+
+fn inferred(h: wrapping[u64]) -> str {
+    var i = 15
+    var turns = 0
+    var acc: wrapping[u64] = 0
+    while i >= 0 {
+        acc = acc ^ h >> i * 4 & 15
+        i -= 1
+        turns += 1
+        if turns == 40 {
+            break
+        }
+    }
+    "turns={turns} acc={(acc & 15) as int}"
+}
+
+fn annotated(h: wrapping[u64]) -> str {
+    var i: int = 15
+    var turns = 0
+    var acc: wrapping[u64] = 0
+    while i >= 0 {
+        acc = acc ^ h >> (i * 4) as wrapping[u64] & 15
+        i -= 1
+        turns += 1
+    }
+    "turns={turns} acc={(acc & 15) as int}"
+}
+
+fn main() {
+    let h: wrapping[u64] = 4952883123889572249
+    print(inferred(h))
+    print(annotated(h))
+}
