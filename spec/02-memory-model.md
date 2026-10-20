@@ -1434,13 +1434,19 @@ Simpler than the safe tier, not stricter (anti-Stacked-Borrows lesson).
     function, ambient IO, a read of a `var` — is **E0705**, as is an
     initializer that depends on itself; an initializer may name any
     other `const` or `let` of its module, before or after it. The types
-    module state holds at this cut are the integers, `byte`, `bool` and
-    the floats (and `str` for a `const` or `let`); any other type (a
-    `List`, a struct) is refused by name, `unsupported`: it is not
-    static data yet (a fixed-size array is a separate type question; a
-    table a kernel needs lives in `.bss` reserved by assembly and named
-    with `extern "c" let`, `[abi.link.extern]`). Witnesses:
-    `memory/static_*.lu`.
+    module state holds at this cut are the integers — `wrapping[T]`
+    over an integer type among them — `byte`, `bool` and the floats
+    (and `str` for a `const` or `let`); any other type (a `List`, a
+    struct) is refused by name, `unsupported`: it is not static data
+    yet (a fixed-size array is a separate type question; a table a
+    kernel needs lives in `.bss` reserved by assembly and named with
+    `extern "c" let`, `[abi.link.extern]`). A `wrapping[T]` item is
+    its width's bits, as the plain type's is, and its initializer folds
+    with the type's own wrap (`const B: wrapping[u8] = A + 100` with
+    `A` at `200` is `44`). (s252, wolf-lang#814, yew G25: until 0.2.35
+    every machine refused a `wrapping[T]` item by name, read or not,
+    where the same literal typed `u64` was accepted.) Witnesses:
+    `memory/static_*.lu`, `memory/static_wrapping.lu` among them.
   - `[mem.static.4]` A `pub` module item is read through its module's
     name — `m.K` after `use m` — exactly as the bare name reads inside
     its own module: a `const` is its value, a `let` its immutable data,
