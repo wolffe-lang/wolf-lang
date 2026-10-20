@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 607..615 path=lib
+FnDecl 616..714 name=lookup body=Block
+FnDecl 716..942 name=main body=Block

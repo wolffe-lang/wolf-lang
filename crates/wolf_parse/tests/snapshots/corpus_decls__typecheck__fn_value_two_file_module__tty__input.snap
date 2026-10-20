@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 195..346 name=tier body=Block
+FnDecl 406..462 name=tier_env pub body=Block

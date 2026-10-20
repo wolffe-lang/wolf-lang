@@ -1014,6 +1014,11 @@ typecheck/cast_int_to_float.lu: lowers
 typecheck/cast_narrow_in_range.lu: lowers
 typecheck/cast_narrow_wrapping_truncates.lu: lowers
 typecheck/cast_set.lu: lowers
+typecheck/closure_captured_closure/main.lu: lowers
+typecheck/closure_entry_to_module/main.lu: lowers
+typecheck/closure_inlined_one_liner/main.lu: lowers
+typecheck/closure_module_to_entry/main.lu: lowers
+typecheck/closure_module_to_module/main.lu: lowers
 typecheck/closure_param_call.lu: lowers
 typecheck/closure_return.lu: lowers
 typecheck/coerce_no_widening.lu: not mem-clean (pre-wir rungs own it)
@@ -1031,6 +1036,7 @@ typecheck/fn_value_captured_int.lu: lowers
 typecheck/fn_value_captured_var_write.lu: not mem-clean (pre-wir rungs own it)
 typecheck/fn_value_capturing.lu: lowers
 typecheck/fn_value_import/main.lu: lowers
+typecheck/fn_value_two_file_module/main.lu: lowers
 typecheck/generic_bind_once.lu: not mem-clean (pre-wir rungs own it)
 typecheck/generic_bind_scalar.lu: not mem-clean (pre-wir rungs own it)
 typecheck/if_branch.lu: not mem-clean (pre-wir rungs own it)

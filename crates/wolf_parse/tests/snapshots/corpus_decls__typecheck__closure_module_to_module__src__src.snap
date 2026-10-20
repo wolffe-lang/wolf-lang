@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+UseDecl 156..164 path=tty
+FnDecl 165..263 name=lookup body=Block
+FnDecl 310..421 name=run pub body=Block
+FnDecl 458..555 name=probe body=Block

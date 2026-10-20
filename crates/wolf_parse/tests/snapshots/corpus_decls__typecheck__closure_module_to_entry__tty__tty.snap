@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 159..257 name=lookup body=Block
+FnDecl 308..378 name=getter pub body=Block
+FnDecl 441..526 name=apply pub body=Block
