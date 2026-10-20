@@ -74,9 +74,16 @@ fn sibling_lupin() -> Option<PathBuf> {
 }
 
 /// The lupin builds that predate the mirror, by version and the commit
-/// their records report: 0.1.54, the pairing (`0e536e8`), does not resolve
-/// `os_signal_wait_fds` (measured, s248's §2).
-const PRE_MIRROR_LUPIN: &[(&str, &str)] = &[("0.1.54", "0e536e8")];
+/// their records report: 0.1.54, the 0.2.33 pairing (`0e536e8`), and
+/// 0.1.55, the 0.2.34 pairing (`e642f26`, r39), do not resolve
+/// `os_signal_wait_fds` (measured, s248's §2 and r39; wolf-interp#268).
+const PRE_MIRROR_LUPIN: &[(&str, &str)] = &[("0.1.54", "0e536e8"), ("0.1.55", "e642f26")];
+
+/// Of those, the versions that resolve `os_signal_listen` and refuse it by
+/// name (is77, wolf-interp#259): on a fixture that listens before its first
+/// s248 name they stop at the listen, refused by name, not "does not
+/// resolve" (0.1.55 on `wait_fds_race.lu`, measured, r39).
+const LISTEN_REFUSED_BY_NAME: &[&str] = &["0.1.55"];
 
 /// The native or release binary of `entry`. A compile error FAILS the
 /// gate (it is the defect at a pre-fix head, never an environment).
@@ -566,9 +573,9 @@ fn record_of(stdout: &str) -> (String, String, String, String, String) {
 
 /// A fixture with no terminal on every machine, each bounded by `secs`:
 /// the checked machine under `conform-run`, the binaries directly (and
-/// under taskset on linux), lupin under `conform-run` — 0.1.54 refuses,
-/// naming one of `first` (the first name it does not resolve), pinned by
-/// version.
+/// under taskset on linux), lupin under `conform-run` — 0.1.54 and
+/// 0.1.55 refuse, naming one of `first` (the first name each does not
+/// resolve), pinned by version.
 fn every_lane_plain(name: &str, secs: u64, want: &str, first: &[&str]) {
     let entry = fixture(name);
     let dir = scratch(&name.replace('.', "_"));
@@ -623,11 +630,15 @@ fn every_lane_plain(name: &str, secs: u64, want: &str, first: &[&str]) {
                 .any(|(v, c)| *v == version && commit.starts_with(c))
             {
                 assert_eq!(verdict, "unsupported", "pre-mirror lupin on {name}");
-                assert!(
+                let measured = if LISTEN_REFUSED_BY_NAME.contains(&version.as_str()) {
+                    first.contains(&"os_signal_listen")
+                        && why.contains("`os_signal_listen`")
+                        && !why.contains("does not resolve")
+                } else {
                     first.iter().any(|f| why.contains(&format!("`{f}`")))
-                        && why.contains("does not resolve"),
-                    "pre-mirror lupin {version} on {name}: {why}"
-                );
+                        && why.contains("does not resolve")
+                };
+                assert!(measured, "pre-mirror lupin {version} on {name}: {why}");
                 eprintln!("PINNED pre-mirror lupin {version} {commit} on {name}: {why}");
             } else {
                 assert_eq!(
@@ -657,7 +668,8 @@ fn no_meaning_raised_beside_the_wait_is_lost() {
         "wait_fds_race.lu",
         120,
         "race rounds=2000 meanings=2000\n",
-        // lupin has never resolved the listen (s163's measurement).
+        // lupin 0.1.54 does not resolve the listen (s163's measurement);
+        // 0.1.55 resolves it and refuses it by name (is77).
         &["os_signal_listen", "os_signal_wait_fds"],
     );
 }
