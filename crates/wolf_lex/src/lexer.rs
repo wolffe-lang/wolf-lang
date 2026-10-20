@@ -794,6 +794,29 @@ impl Lexer<'_> {
                         vec![(span, String::new())],
                         Applicability::MachineApplicable,
                     ))
+                } else if self.src[lo..self.pos].iter().all(|&b| b == b'~') {
+                    // s252 (wolf-lang#800, yew G11): `~` is C's bitwise
+                    // not, and wolf has one — the prefix `!` on an integer
+                    // (`[type.int.not]`, ruling #51: `!` over a `~`
+                    // operator). By design no `~`; the refusal names the
+                    // spelling and offers it.
+                    let n = self.pos - lo;
+                    Diagnostic::error(
+                        codes::STRAY_BYTE,
+                        span,
+                        "the character `~` is not part of wolf syntax",
+                    )
+                    .with_label("wolf's bitwise not is `!`")
+                    .with_note(
+                        "`!` on an integer is its bitwise complement at the operand's own width \
+                         ([type.int.not]): `!x` for `~x`, and `e & !m` clears the bits of `m`. \
+                         wolf spells it `!` by ruling and has no `~` operator.",
+                    )
+                    .with_suggestion(Suggestion::new(
+                        "write `!` for the bitwise not",
+                        vec![(span, "!".repeat(n))],
+                        Applicability::MachineApplicable,
+                    ))
                 } else {
                     Diagnostic::error(
                         codes::STRAY_BYTE,
