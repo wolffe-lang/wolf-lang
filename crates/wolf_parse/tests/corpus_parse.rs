@@ -237,8 +237,11 @@ fn corpus_parse_expectations() {
     // (grammar/type_position_keyword — `p: proc`, a token that cannot
     // begin a type, `[gram.type.start]`, wolf-lang#320). Plus s203's
     // six `[proto.record.first]` witnesses (rows/negative/first_*.lu,
-    // ruling #28), pinned by their first diagnostic.
-    assert_eq!(fail, 35, "syntax-tier fail-file count drifted");
+    // ruling #28), pinned by their first diagnostic. Plus s252's two
+    // by-design refusals with a fix-it: grammar/if_brace_next_line
+    // (E0201, a header's `{` on the next line, wolf-lang#822) and
+    // typecheck/int_not_tilde (E0107, `~` for wolf's `!`, wolf-lang#800).
+    assert_eq!(fail, 37, "syntax-tier fail-file count drifted");
     assert_eq!(
         member_fail, 2,
         "member-sibling fail-file count drifted (the broken_sibling \

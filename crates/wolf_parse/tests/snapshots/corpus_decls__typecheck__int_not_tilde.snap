@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 586..669 name=main body=Block
+-- diagnostics --
+E0107 [Error] 634..635 the character `~` is not part of wolf syntax
