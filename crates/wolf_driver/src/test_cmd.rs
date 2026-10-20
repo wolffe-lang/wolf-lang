@@ -78,7 +78,7 @@ use std::path::PathBuf;
 
 use wolf_diag::lint::{Level, LintLevels};
 use wolf_diag::{Diagnostic, RenderOptions, Sources};
-use wolf_mem::ubcheck::{self, Budget, Verdict};
+use wolf_mem::ubcheck::{self, Budget, Echo, RunOpts, Verdict};
 
 /// One test's outcome.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -129,6 +129,12 @@ struct Tally {
     /// tool used to promise one anyway.
     explored: usize,
     unexplored: usize,
+    /// s250 (wolf-lang#817): PASSED tests whose verdict is a native
+    /// run's, because the checked machine refused them — green, but not
+    /// checked. Counted beside `passed` and never against the run: the
+    /// fallback is reporting, not a new failure (`--no-native-fallback`
+    /// is the suite that wants the checked machine or nothing).
+    native: usize,
 }
 
 pub fn test_cmd(args: &[String]) {
@@ -153,6 +159,11 @@ pub fn test_cmd(args: &[String]) {
     let mut only_doc = false;
     let mut schedules: Option<u32> = None;
     let mut replay: Option<String> = None;
+    // s250 (wolf-lang#810): the tests' own output shown as it runs.
+    let mut nocapture = false;
+    // s250 (wolf-lang#817): a `main` the checked machine refuses fails
+    // (`unsupported`) instead of running natively.
+    let mut no_native_fallback = false;
     let mut lints = LintLevels::new();
     // #75, s169: `wolf test` honours `--error-limit`. `build` and `run`
     // have capped their reports since s63 and this surface did not, so
@@ -177,6 +188,10 @@ pub fn test_cmd(args: &[String]) {
             list = true;
         } else if a == "--json" {
             json = true;
+        } else if a == "--nocapture" {
+            nocapture = true;
+        } else if a == "--no-native-fallback" {
+            no_native_fallback = true;
         } else if a == "--no-doc" {
             no_doc = true;
         } else if a == "--doc" {
@@ -244,8 +259,9 @@ pub fn test_cmd(args: &[String]) {
         } else if a.starts_with('-') {
             fail(&format!(
                 "unknown flag `{a}` (usage: wolf test [<dir>|<file.lu>]… \
-                 [--filter=SUBSTR] [--fail-fast] [--list] [--json] \
-                 [--schedules=N] [--replay=<seed|w1-token|ev:stream>] [--chaos] \
+                 [--filter=SUBSTR] [--fail-fast] [--list] [--json] [--nocapture] \
+                 [--no-native-fallback] [--schedules=N] \
+                 [--replay=<seed|w1-token|ev:stream>] [--chaos] \
                  [--allow|--warn|--deny <sel>] [--deny-warnings] [--std-root <dir>])"
             ));
         } else {
@@ -298,6 +314,21 @@ pub fn test_cmd(args: &[String]) {
     if no_doc && only_doc {
         fail("--doc and --no-doc are exclusive: one says only doctests, the other says none");
     }
+    // s250 (wolf-lang#810): every checked run here is a test's. Under
+    // `--nocapture` its output is echoed as it is written — to stdout and
+    // stderr as the program chose, or both to stderr under `--json`,
+    // whose stdout is the event stream — and `os_exe()` refuses by name
+    // on the checked machine (`[os.proc.exe]`), so a `main` test that
+    // re-spawns itself runs natively, where `os_exe()` is its own binary.
+    let echo = match (nocapture, json) {
+        (false, _) => Echo::Off,
+        (true, false) => Echo::Split,
+        (true, true) => Echo::Stderr,
+    };
+    let opts = RunOpts {
+        echo,
+        under_test: true,
+    };
 
     // ---- discovery: `*_test.lu` files, sorted (deterministic order) --
     let mut files: Vec<PathBuf> = Vec::new();
@@ -331,6 +362,7 @@ pub fn test_cmd(args: &[String]) {
         filtered_out: 0,
         explored: 0,
         unexplored: 0,
+        native: 0,
     };
     let emit = |v: serde_json::Value| {
         println!("{v}");
@@ -505,25 +537,31 @@ pub fn test_cmd(args: &[String]) {
             // survives, no ordering coupling. Parallel execution is
             // the s32-task story and lands with the native test
             // harness; v0 is serial and deterministic.
-            let run_once =
-                || match ubcheck::run_checked_fn(&res.package, &tc, Budget::default(), "", name) {
-                    Ok(out) => {
-                        let (status, detail) = match &out.verdict {
-                            Verdict::Exit(0) => (Status::Pass, "exit(0)".to_string()),
-                            Verdict::Exit(n) => (Status::Fail, format!("exit({n})")),
-                            Verdict::Trap(t) => (Status::Fail, format!("trap({})", t.kind)),
-                            Verdict::Ub(f) => {
-                                // The D22 bar: a UB verdict renders its
-                                // full E1401, not a one-liner.
-                                let d = ubcheck::ub_diagnostic(f);
-                                render(&sources, std::slice::from_ref(&d));
-                                (Status::Fail, "ub(mem.ub)".to_string())
-                            }
-                        };
-                        (status, detail, Some(out))
-                    }
-                    Err(nyc) => (Status::Unsupported, nyc.construct.to_string(), None),
-                };
+            let run_once = || match ubcheck::run_checked_fn_with(
+                &res.package,
+                &tc,
+                Budget::default(),
+                "",
+                name,
+                opts,
+            ) {
+                Ok(out) => {
+                    let (status, detail) = match &out.verdict {
+                        Verdict::Exit(0) => (Status::Pass, "exit(0)".to_string()),
+                        Verdict::Exit(n) => (Status::Fail, format!("exit({n})")),
+                        Verdict::Trap(t) => (Status::Fail, format!("trap({})", t.kind)),
+                        Verdict::Ub(f) => {
+                            // The D22 bar: a UB verdict renders its
+                            // full E1401, not a one-liner.
+                            let d = ubcheck::ub_diagnostic(f);
+                            render(&sources, std::slice::from_ref(&d));
+                            (Status::Fail, "ub(mem.ub)".to_string())
+                        }
+                    };
+                    (status, detail, Some(out))
+                }
+                Err(nyc) => (Status::Unsupported, nyc.construct.to_string(), None),
+            };
             // s170 (wolf-lang#159's X12 row): how many DISTINCT SEEDED
             // schedules this test actually ran. Only the native lane
             // feeds a seed to the runtime's scheduler PRNG
@@ -531,6 +569,10 @@ pub fn test_cmd(args: &[String]) {
             // is serial and seed-blind, so it is repetition, not
             // exploration, and must not earn a replay line.
             let mut seeded_runs: usize = 0;
+            // s250 (wolf-lang#817): why the checked machine refused a
+            // `main` this verdict came from a native run in place of —
+            // the row names it, the count counts it.
+            let mut native: Option<String> = None;
             let (status, detail, out) = if *arity != 0 {
                 (
                     Status::Unsupported,
@@ -559,7 +601,7 @@ pub fn test_cmd(args: &[String]) {
                     }
                     _ => unreachable!("guard requires schedules or a decimal replay"),
                 };
-                match native_schedule_runs(file, std_root.as_deref(), &seeds) {
+                match native_schedule_runs(file, std_root.as_deref(), &seeds, echo) {
                     Err((s, d)) => (s, d, None),
                     Ok(runs) => {
                         seeded_runs = runs.iter().filter(|r| r.0.is_some()).count();
@@ -649,12 +691,34 @@ pub fn test_cmd(args: &[String]) {
             } else {
                 // s73: a main-shaped test the checked machine refuses
                 // (it was concurrency until s226 retired C1; today a
-                // construct outside its surface) falls back to one
-                // native black-box run — the conservatism ledger stays
-                // for `test_*` fns, but a runnable program runs.
+                // construct outside its surface, or a budget) falls back
+                // to one native black-box run — the conservatism ledger
+                // stays for `test_*` fns, but a runnable program runs.
+                // s250 (wolf-lang#817): and says so. Until s250 the only
+                // trace was `[native]` in `--json`'s detail, and yw02
+                // read `ok` for ten files of twenty the checked machine
+                // never finished; the row now names the refusal, the
+                // summary counts it, and `--no-native-fallback` makes it
+                // the failure it is for a suite that wants the checked
+                // machine or nothing.
                 let r = run_once();
-                if r.0 == Status::Unsupported && name == "main" {
-                    match native_schedule_runs(file, std_root.as_deref(), &[None]) {
+                if r.0 == Status::Unsupported && name == "main" && no_native_fallback {
+                    (
+                        Status::Unsupported,
+                        format!("{} — no native fallback (--no-native-fallback)", r.1),
+                        None,
+                    )
+                } else if r.0 == Status::Unsupported && name == "main" {
+                    let reason = r.1;
+                    if nocapture {
+                        eprintln!(
+                            "wolf test: {qualified}: the checked machine refused it ({reason}); \
+                             running it natively"
+                        );
+                    }
+                    let ran = native_schedule_runs(file, std_root.as_deref(), &[None], echo);
+                    native = Some(reason);
+                    match ran {
                         Ok(runs) => {
                             let (_, s, d, stdout, stderr) = runs.into_iter().next().expect("one");
                             (
@@ -667,7 +731,7 @@ pub fn test_cmd(args: &[String]) {
                                 }),
                             )
                         }
-                        Err((s, d)) => (s, d, None),
+                        Err((s, d)) => (s, format!("{d} [native]"), None),
                     }
                 } else {
                     r
@@ -678,6 +742,9 @@ pub fn test_cmd(args: &[String]) {
                 Status::Fail => tally.failed += 1,
                 Status::Rejected => tally.rejected += 1,
                 Status::Unsupported => tally.unsupported += 1,
+            }
+            if status == Status::Pass && native.is_some() {
+                tally.native += 1;
             }
             if schedules.is_some() {
                 if seeded_runs > 1 {
@@ -691,7 +758,15 @@ pub fn test_cmd(args: &[String]) {
                     "schema": "wolf-test/0", "event": "test", "file": display,
                     "name": name, "status": status.as_str(), "detail": detail,
                 });
-                if status != Status::Pass
+                // s250 (wolf-lang#817): the refusal a native verdict
+                // stands in for; `detail` keeps its `[native]` mark.
+                if let Some(reason) = &native {
+                    ev["native"] = serde_json::json!(reason);
+                }
+                // s250 (wolf-lang#810): under `--nocapture` every test
+                // carries its output, a passing one too — the record a
+                // lane counts its SKIP lines from (#571).
+                if (status != Status::Pass || nocapture)
                     && let Some(out) = &out
                 {
                     ev["stdout"] = serde_json::json!(out.stdout);
@@ -699,7 +774,23 @@ pub fn test_cmd(args: &[String]) {
                 }
                 emit(ev);
             } else {
+                // s250 (wolf-lang#817): a native verdict says why the
+                // checked machine did not give it.
+                let detail = match &native {
+                    Some(reason) if detail.contains("[native]") => {
+                        detail.replacen("[native]", &format!("[native: {reason}]"), 1)
+                    }
+                    Some(reason) => format!("{detail} [native: {reason}]"),
+                    None => detail,
+                };
                 match status {
+                    Status::Pass if native.is_some() => {
+                        let mark = detail
+                            .find("[native")
+                            .map(|i| &detail[i..])
+                            .unwrap_or("[native]");
+                        println!("test {qualified} ... ok {mark}")
+                    }
                     Status::Pass => println!("test {qualified} ... ok"),
                     Status::Fail => println!("test {qualified} ... FAILED ({detail})"),
                     Status::Rejected => println!("test {qualified} ... REJECTED ({detail})"),
@@ -707,7 +798,9 @@ pub fn test_cmd(args: &[String]) {
                         println!("test {qualified} ... unsupported ({detail})")
                     }
                 }
+                // Under `--nocapture` the output was shown as it ran.
                 if status != Status::Pass
+                    && !nocapture
                     && let Some(out) = &out
                 {
                     for line in out.stdout.lines() {
@@ -739,6 +832,7 @@ pub fn test_cmd(args: &[String]) {
             list,
             json,
             fail_fast,
+            opts,
             &mut tally,
             &mut stopped_early,
         );
@@ -759,6 +853,8 @@ pub fn test_cmd(args: &[String]) {
             "rejected": tally.rejected,
             "unsupported": tally.unsupported, "filtered_out": tally.filtered_out,
             "stopped_early": stopped_early,
+            // s250 (wolf-lang#817): how many of `passed` ran natively.
+            "native": tally.native,
         });
         if schedules.is_some() {
             summary["explored"] = tally.explored.into();
@@ -766,9 +862,16 @@ pub fn test_cmd(args: &[String]) {
         }
         emit(summary);
     } else {
+        // s250 (wolf-lang#817): `N passed, M of them native` when any
+        // passing verdict is a native run's; the line is unchanged when
+        // none is.
+        let passed = if tally.native > 0 {
+            format!("{} passed, {} of them native", tally.passed, tally.native)
+        } else {
+            format!("{} passed", tally.passed)
+        };
         println!(
-            "wolf test: {} passed; {} failed; {} rejected; {} unsupported; {} filtered out{}",
-            tally.passed,
+            "wolf test: {passed}; {} failed; {} rejected; {} unsupported; {} filtered out{}",
             tally.failed,
             tally.rejected,
             tally.unsupported,
@@ -787,6 +890,17 @@ pub fn test_cmd(args: &[String]) {
     // had. Only the seeded native lane counts as exploration
     // ([sched.seed]); a body the checked machine runs serially N
     // times ran once, N times.
+    // s250 (wolf-lang#817): what a native pass is, said once. Reporting,
+    // not a new failure: the exit status is the one the run had before.
+    if tally.native > 0 && !json {
+        eprintln!(
+            "wolf test: {} passing test(s) ran natively because the checked machine refused \
+             them (each row names the refusal): green on the native tier, not checked — \
+             the exit status counts them as passes; --no-native-fallback makes such a test \
+             fail as unsupported",
+            tally.native
+        );
+    }
     if schedules.is_some() && tally.unexplored > 0 && !json {
         eprintln!(
             "wolf test: {} of {} test(s) explored under derived seeds; {} ran without one \
@@ -812,6 +926,7 @@ fn run_doctests(
     list: bool,
     json: bool,
     fail_fast: bool,
+    opts: RunOpts,
     tally: &mut Tally,
     stopped_early: &mut bool,
 ) {
@@ -867,7 +982,7 @@ fn run_doctests(
                 println!("{qualified}");
                 continue;
             }
-            let outcome = crate::doctest_cmd::run(dt, &surface, std_root, &scratch);
+            let outcome = crate::doctest_cmd::run(dt, &surface, std_root, &scratch, opts);
             match outcome.status() {
                 "pass" => tally.passed += 1,
                 "unsupported" => tally.unsupported += 1,
@@ -955,7 +1070,7 @@ fn native_replay_scope(
     want: &str,
 ) -> String {
     let probe = vec![Some(seed); NATIVE_REPLAY_PROBE];
-    let Ok(runs) = native_schedule_runs(file, std_root, &probe) else {
+    let Ok(runs) = native_schedule_runs(file, std_root, &probe, Echo::Off) else {
         return String::new(); // the probe itself failed: claim nothing
     };
     let hits = runs.iter().filter(|(_, _, d, _, _)| d == want).count();
@@ -988,6 +1103,7 @@ fn native_schedule_runs(
     file: &std::path::Path,
     std_root: Option<&std::path::Path>,
     seeds: &[Option<u64>],
+    echo: Echo,
 ) -> Result<Vec<(Option<u64>, Status, String, String, String)>, (Status, String)> {
     let dir = std::env::temp_dir().join(format!(
         "wolf-test-native-{}-{}",
@@ -1018,7 +1134,7 @@ fn native_schedule_runs(
                 if let Some(s) = seed {
                     cmd.env("WOLF_SCHED_SEED", s.to_string());
                 }
-                let run = cmd.output();
+                let run = run_child(&mut cmd, echo);
                 match run {
                     Err(e) => {
                         let _ = std::fs::remove_dir_all(&dir);
@@ -1052,6 +1168,64 @@ fn native_schedule_runs(
     };
     let _ = std::fs::remove_dir_all(&dir);
     out
+}
+
+/// Run a test binary to its end with its output captured — and, under
+/// `--nocapture` (s250, wolf-lang#810), echoed as it arrives: the
+/// test's standard output to this process's (to its standard error when
+/// [`Echo::Stderr`], `--json`'s case) and its standard error to this
+/// process's. The capture is the verdict's either way (the trap line is
+/// read from it). Standard input is the null device, as `output()`'s.
+fn run_child(cmd: &mut std::process::Command, echo: Echo) -> std::io::Result<std::process::Output> {
+    use std::process::Stdio;
+    if echo == Echo::Off {
+        return cmd.output();
+    }
+    fn pump(mut from: impl std::io::Read, to_stderr: bool) -> Vec<u8> {
+        use std::io::Write as _;
+        let mut all = Vec::new();
+        let mut buf = [0u8; 8192];
+        loop {
+            match from.read(&mut buf) {
+                Ok(0) => break,
+                Ok(n) => {
+                    all.extend_from_slice(&buf[..n]);
+                    // An echo that cannot be written is the reader's
+                    // loss; the capture is the run's truth.
+                    if to_stderr {
+                        let mut e = std::io::stderr().lock();
+                        let _ = e.write_all(&buf[..n]);
+                        let _ = e.flush();
+                    } else {
+                        let mut o = std::io::stdout().lock();
+                        let _ = o.write_all(&buf[..n]);
+                        let _ = o.flush();
+                    }
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                Err(_) => break,
+            }
+        }
+        all
+    }
+    let mut child = cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let out = child.stdout.take().expect("stdout is piped");
+    let err = child.stderr.take().expect("stderr is piped");
+    let out_to_stderr = echo == Echo::Stderr;
+    let t_out = std::thread::spawn(move || pump(out, out_to_stderr));
+    let t_err = std::thread::spawn(move || pump(err, true));
+    let status = child.wait()?;
+    let stdout = t_out.join().unwrap_or_default();
+    let stderr = t_err.join().unwrap_or_default();
+    Ok(std::process::Output {
+        status,
+        stdout,
+        stderr,
+    })
 }
 
 /// Split a per-run seed from the root (SplitMix64 over root, test
