@@ -1,0 +1,11 @@
+// wolf-lang#809 (s250; yew G22): a member call whose argument is a bare
+// `if` too wide for its line. Pass one broke the `if` to braces inside
+// the argument list and kept `t.g(`; pass two read the braces' hard
+// newlines as forcing the chain and laid `t.` / `g(`.
+fn tier_of(forced: str, has_forced: bool, termv: str, has_term: bool, truecolor: bool) -> int {
+    term.render_tier(caps, fn(k: str) (if k == "YEW_COLORS" then (forced, has_forced) else (if k == "TERM" then (termv, has_term) else ("", false))))
+}
+
+fn main() {
+    (mut xs).push(if pick == "a sentence long enough that this bare if cannot stay on its own line" then 1 else 2)
+}
