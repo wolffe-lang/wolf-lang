@@ -216,7 +216,8 @@ vocabulary.
   struct literals, collection constructors, and closures whose values the
   implementation places in memory; whether a given value lives in a
   register, on the stack, or in its region is unobservable except as §3
-  and §7 permit.
+  and §7 permit. A value whose type reaches no storage — a struct of
+  scalars among them — is no site for §3's rules (`[mem.region.scalar]`).
 - `[mem.model.order]` Evaluation is strict and **left-to-right**
   everywhere: operands before operators, arguments left-to-right before
   the call, receivers before arguments, struct-literal fields in written
@@ -510,7 +511,8 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   returned from the frame that owns the region, sent on a channel
   (`[conc.chan.payload]`), stored into module state, or held by a
   binding declared outside the region's block. The sites are
-  `[mem.model.alloc]`'s — struct and enum literals, container
+  `[mem.model.alloc]`'s — struct and enum literals (of a type that
+  reaches storage, `[mem.region.scalar]`), container
   constructors and their growth, closures, non-`Copy` call results —
   **and every built `str`**: `s + u`, `s += u` (`[type.str.concat]`) and
   an interpolation with at least one hole. A built `str` is an
@@ -837,6 +839,58 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   `List[int]()` was E1010 all along — the escape rule saw the list and
   not the `str`. Witnesses `corpus/memory/region_str_concat_return.lu`
   and `region_str_concat_send.lu`.)
+- `[mem.region.scalar]` **A value whose type reaches no storage names
+  no region.** (s252, wolf-lang#816, #801 and #822's first finding;
+  yew `docs/MAP.md` G18, G28.) A type **reaches no storage** when it is
+  a scalar — an integer type, `wrapping[T]`, a float, `bool`, `char`,
+  `byte` — or unit, or an adapter of one (`[mem.tier0.move.3]`), or a
+  tuple, struct, enum or row all of whose fields and payloads reach no
+  storage, transitively. A `str` reaches storage (its bytes live where
+  they were built), and so do a container, a closure, a fn value, a
+  handle, a region, a `shared` cell and a type parameter. A value of
+  such a type is its own inline words on every machine — the compiling
+  tiers keep it in registers or the frame, the checked machine as a
+  value — so no region holds it and none can free it. It is no site
+  for this section: built inside a region block and bound outside it,
+  returned, stored into another parameter's region
+  (`[mem.region.edge]`'s field store), passed `mut` to a call made
+  inside a region (the callee may replace its words, never with
+  storage), bound by a `for` over a region's `List` of them, or read
+  out of a frozen region (the binding holds a copy of the words, never
+  the region's data, so `[mem.region.freeze.1]` has nothing of it to
+  keep immutable), it ties itself to no region: no E1010, E1004 or
+  E1012 is about it. A struct with one `str` or `List` field keeps
+  every rule. W1001's account is unchanged: a struct literal inside a
+  region still counts as the region's work. **`copy e` of a non-place**
+  — a call's result, a block — is the same fresh value in the ambient
+  region a place's copy is (`[mem.tier0.move.3]`; the native tiers
+  always made it so), sharing only the `str` bytes it reaches: so
+  `copy`, E1004's own fix-it, repairs a call's result too (`sh.bag =
+  copy fill(mut t)`). **What it replaced:** every struct and enum
+  literal was a site and every non-`Copy` `mut` argument gained the
+  call's ambient site, whatever the type held, so `bump(mut g)` of a
+  one-`int` RNG state inside a region was E1010 (yew's fuzzers threaded
+  the state functionally instead), a `Snap` of two `int`s assigned past
+  a region was E1010 while the tuple `(1, 2)` crossed freely, and `m.s
+  = copy g(mut t)` was E1004 "from `t`'s region" — a `copy` of a
+  non-place passed its operand's sites through. **The cost, stated:**
+  none at run time; refusals removed. **lupin** 0.1.54 runs the `mut`
+  shapes and the copied call result, and traps `region-fault` on the
+  literal, binding, enum, `for`, `take`-store and frozen-write shapes:
+  wolf-interp owes this clause. Witnesses
+  `corpus/memory/region_scalar_value.lu`, `region_scalar_mut.lu`,
+  `region_scalar_store.lu`, `region_scalar_freeze.lu`, and what is
+  still refused: `region_scalar_list_store.lu` (E1004),
+  `region_scalar_str_escape.lu` and `region_scalar_list_mut.lu`
+  (E1010). The rows that had used a scalar-only struct as a stand-in
+  for region data (`region_conflict_params.lu`,
+  `region_escape_local.lu`, `region_freeze_write.lu`) hold a `List`
+  now. **Measured before it landed** (kasumi, trunk `808ce11a` against
+  the head, `conform-run --json --phase=mem` over every `.lu` file of
+  boreutils, lobo, pelt, wolf-std and yew at their 2026-10-20 trunks,
+  1,013 files): two verdicts moved, yew's `distinct-copy` and
+  `region-copy` witnesses, from refused to accepted; no other verdict,
+  diagnostic or warning moved.
 
 ### Copy-out `[mem.region.copyout]`
 
@@ -1068,7 +1122,10 @@ Edge legality (source stores a reference to target):
 
 - `[mem.region.freeze.1]` `freeze r` consumes the region value and
   promotes the entire graph to `imm` — deep, in place, no copy. Frozen
-  data is immutable **forever** and shareable across threads (s05).
+  data is immutable **forever** and shareable across threads (s05). A
+  value whose type reaches no storage, read out of a frozen region, is
+  its binding's own words and not the region's data
+  (`[mem.region.scalar]`).
 - `[mem.region.freeze.2]` `move r` transfers the region value (affine
   move); cross-thread semantics in spec 03. After transfer, any use of
   the old binding is `[mem.tier0.move.2]`.
