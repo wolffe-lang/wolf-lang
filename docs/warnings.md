@@ -115,7 +115,11 @@ loss is invisible at every use site: a module that declares its own
 `assert` severs itself from the assertion trap entirely, and calls
 that read as the intrinsic quietly run the local one. Pick another
 name; the prelude's inventory is small, fixed, and worth avoiding
-wholesale.
+wholesale. A local `let` or `var` is a declaration too: `let clock_ms
+= 5` hides the prelude's `clock_ms` for the rest of its scope
+([conf.resolve.ambient]). `wolf prelude` lists every ambient name and
+whether declaring it draws this warning; `#[allow(w0304)]` on the
+enclosing item states a deliberate shadow.
 
 ## W0305 — this row tag shares its name with something else in scope
 
