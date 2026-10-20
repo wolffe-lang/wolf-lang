@@ -1124,6 +1124,37 @@ impl<'a, 'b> Tx<'a, 'b> {
         ))
     }
 
+    /// A module function's reference as this object sees it: its own
+    /// entry when it lowered here, else an `Import` of its mangled
+    /// symbol (#116; s134 for the LLVM tier; s251 extends it from
+    /// `func.addr` to a static callable record's slot,
+    /// `[abi.native.closure.object]`). `None` when no module function
+    /// carries the name.
+    fn module_func_ref(
+        &mut self,
+        callee: &str,
+    ) -> Result<Option<cranelift_module::FuncId>, BackendError> {
+        if let Some(entry) = self.funcs.get(callee) {
+            return Ok(Some(entry.fid));
+        }
+        if let Some(&fid) = self.imports.get(callee) {
+            return Ok(Some(fid));
+        }
+        let Some(target) = self.m.funcs.values().find(|f| f.name == callee) else {
+            return Ok(None);
+        };
+        let sig = target.sig;
+        let cc = self.om.isa().default_call_conv();
+        let si_w = sig_info(self.m, sig, Conv::Wolf, cc)?;
+        let symbol = wolf_backend::mangle(self.m, callee, sig);
+        let fid = self
+            .om
+            .declare_function(&symbol, cranelift_module::Linkage::Import, &si_w.clif)
+            .map_err(|e| ice(e.to_string()))?;
+        self.imports.insert(callee.to_string(), fid);
+        Ok(Some(fid))
+    }
+
     fn scalar(&self, v: wolf_wir::ir::Value) -> Result<CValue, BackendError> {
         match self.vals.get(&v) {
             Some(Repr::Scalar(c)) => Ok(*c),
@@ -2058,13 +2089,19 @@ impl<'a, 'b> Tx<'a, 'b> {
                             // on the default 1 and unaligned function
                             // pointers are wrong everywhere).
                             desc.set_align(8);
+                            // s251 (#806, #807): a slot's function
+                            // need not live in this object's subset
+                            // — the symbol is a link-time constant
+                            // exactly as `func.addr`'s is (#116), so
+                            // an out-of-subset slot imports the
+                            // mangled name (`[abi.native.closure.object]`).
                             for (i, fname) in d.funcs.iter().enumerate() {
-                                let Some(entry) = self.funcs.get(fname) else {
+                                let Some(fid) = self.module_func_ref(fname)? else {
                                     return Err(nyi(format!(
-                                        "a vtable slot `@{fname}` outside this object's subset"
+                                        "a vtable slot `@{fname}` names no module function"
                                     )));
                                 };
-                                let fref = self.om.declare_func_in_data(entry.fid, &mut desc);
+                                let fref = self.om.declare_func_in_data(fid, &mut desc);
                                 desc.write_function_addr((i * 8) as u32, fref);
                             }
                         }
@@ -2140,38 +2177,16 @@ impl<'a, 'b> Tx<'a, 'b> {
                     return Err(ice("func.addr without callee"));
                 };
                 let callee = self.f.ext_funcs[ef].name.clone();
-                let fr = if let Some(entry) = self.funcs.get(&callee) {
-                    self.om.declare_func_in_func(entry.fid, self.b.func)
-                } else if let Some(target) = self.m.funcs.values().find(|f| f.name == callee) {
-                    // #116: a wolf function OUTSIDE this object's
-                    // subset (s31 per-module objects) — the same
-                    // mangled-symbol import the CALL fallback takes;
-                    // an address is just the import without the call.
-                    let sig = target.sig;
-                    let cc = self.om.isa().default_call_conv();
-                    let si_w = sig_info(self.m, sig, Conv::Wolf, cc)?;
-                    let symbol = wolf_backend::mangle(self.m, &callee, sig);
-                    let fid = match self.imports.get(callee.as_str()) {
-                        Some(&fid) => fid,
-                        None => {
-                            let fid = self
-                                .om
-                                .declare_function(
-                                    &symbol,
-                                    cranelift_module::Linkage::Import,
-                                    &si_w.clif,
-                                )
-                                .map_err(|e| ice(e.to_string()))?;
-                            self.imports.insert(callee.clone(), fid);
-                            fid
-                        }
-                    };
-                    self.om.declare_func_in_func(fid, self.b.func)
-                } else {
+                // #116: a wolf function OUTSIDE this object's subset
+                // (s31 per-module objects) takes the same
+                // mangled-symbol import the CALL fallback takes; an
+                // address is just the import without the call.
+                let Some(fid) = self.module_func_ref(&callee)? else {
                     return Err(nyi(format!(
-                        "func.addr of `@{callee}` outside this object's subset"
+                        "func.addr of `@{callee}` names no module function"
                     )));
                 };
+                let fr = self.om.declare_func_in_func(fid, self.b.func);
                 let p = self.b.ins().func_addr(ctypes::I64, fr);
                 self.vals.insert(results[0], Repr::Scalar(p));
             }
