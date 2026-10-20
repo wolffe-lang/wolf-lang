@@ -446,6 +446,22 @@ fn report(cfg: &Cfg, use_span: Span, place: PlaceId, why: Emptied, moved: PlaceI
         };
         d = d.with_note(note);
     }
+    // s252 (wolf-lang#822, `[mem.tier0.mode.read]`): a move out of a
+    // `read` parameter is a lend — the caller keeps its value — but the
+    // place is empty in this frame all the same; say which parameter,
+    // and how to read twice without a deep copy.
+    if let Base::Local(l) = cfg.places.get(moved).base
+        && cfg.locals[l as usize].param_mode == Some(None)
+    {
+        let param = &cfg.locals[l as usize].name;
+        d = d.with_note(format!(
+            "`{param}` is a `read` parameter: the move lends `{shown_moved}` to its new \
+             binding and the caller keeps its value ([mem.tier0.mode.read]), but the place is \
+             empty in this frame from the move on ([mem.tier0.move.1]). To read it twice, read \
+             through `{shown_moved}` each time without binding it, or use the binding from \
+             here on; `copy` at the move is a deep copy."
+        ));
+    }
     // A destructure's element move happens at a binding PATTERN, where
     // `copy` is not grammar (s128 #173) — the fix-it would not parse.
     if !cfg.pattern_moves.contains(&why.span) {
