@@ -252,12 +252,6 @@ impl<'a> Parser<'a> {
         &self.src[s.lo as usize..s.hi as usize]
     }
 
-    /// The source bytes between two offsets (s252: the gap a fix-it
-    /// may only rewrite when it holds no comment).
-    pub(crate) fn text_between(&self, lo: u32, hi: u32) -> &'a [u8] {
-        &self.src[lo as usize..hi.max(lo) as usize]
-    }
-
     /// The `n`-th lookahead token's text (the D25 negative-index hint
     /// quotes the literal).
     pub(crate) fn nth_text(&self, n: usize) -> &'a [u8] {

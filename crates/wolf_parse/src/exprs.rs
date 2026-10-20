@@ -343,64 +343,16 @@ fn block_required(p: &mut Parser<'_>) {
         block(p);
     } else {
         // Folded when the construct's condition already reported.
-        let d = wolf_diag::Diagnostic::error(
+        p.error_unless_folded(
             codes::EXPECTED_TOKEN,
             p.here(),
             "expected `{` to open the block",
         );
-        let d = brace_on_next_line(p, d);
-        p.push_diag_unless_folded(d);
         p.missing();
         // One report for the truncated construct; fold the follow-up
         // missing-terminator diagnostic.
         p.fold_line_end();
     }
-}
-
-/// s252 (wolf-lang#822, `[gram.lex.newline]`): the header of an `if`,
-/// `while`, `for` or `loop` ended at a newline and its `{` waits at the
-/// start of the next line — the shape a multi-line condition in C's
-/// style takes. It is not grammar: the line's last token took a
-/// terminator, a `{` that begins a line begins a block statement, and
-/// `[gram.fmt.brace]` keeps the brace on the construct's line. So the
-/// refusal stays E0201, and this names why and, when nothing but
-/// whitespace lies between the header and the brace (a comment would
-/// swallow a joined `{`), offers the edit that joins them.
-fn brace_on_next_line(p: &Parser<'_>, d: wolf_diag::Diagnostic) -> wolf_diag::Diagnostic {
-    if !(p.at(TokenKind::Term)
-        && p.current_text() == b"\n"
-        && p.nth(1) == TokenKind::Punct(Punct::LBrace))
-    {
-        return d;
-    }
-    let Some(end) = p.prev_end() else {
-        return d;
-    };
-    let brace = p.nth_span(1);
-    let d = d
-        .with_secondary(brace, "this `{` is on the next line")
-        .with_note(
-            "a newline after the header's last token ends the statement \
-             ([gram.lex.newline]), so the `{` on the line below opens a block of its own, \
-             not this one. The opening brace goes on the header's line \
-             ([gram.fmt.brace]); a header that runs over several lines breaks after an \
-             operator (`a &&` / `b {`).",
-        );
-    let gap = p.text_between(end.hi, brace.lo);
-    if !gap
-        .iter()
-        .all(|b| matches!(b, b' ' | b'\t' | b'\r' | b'\n'))
-    {
-        return d;
-    }
-    d.with_suggestion(wolf_diag::Suggestion::new(
-        "put the `{` at the end of the header's line".to_string(),
-        vec![(
-            wolf_span::Span::new(end.file, end.hi, brace.lo),
-            " ".to_string(),
-        )],
-        wolf_diag::Applicability::MachineApplicable,
-    ))
 }
 
 // ---------------------------------------------------------- statements --
@@ -965,18 +917,6 @@ fn primary(p: &mut Parser<'_>, ctx: Ctx) -> Option<(CompletedMarker, bool)> {
         TokenKind::Punct(Punct::LBrace) if ctx.no_struct_lit => return None,
         TokenKind::Punct(Punct::LBrace) => block(p),
         TokenKind::Punct(Punct::Not | Punct::Minus | Punct::Star) => prefix_expr(p, ctx),
-        // s252 (wolf-lang#800): a `~` the lexer refused (E0107, whose
-        // report offers `!`, wolf's bitwise not) recovers as the prefix
-        // operator it stands for — an error node over the operand — so
-        // the operand still parses and nothing cascades.
-        TokenKind::Error
-            if !p.current_text().is_empty() && p.current_text().iter().all(|&b| b == b'~') =>
-        {
-            let m = p.start();
-            p.bump(); // the refused `~`
-            prefix_operand(p, ctx);
-            m.complete(p, SyntaxKind::ErrorNode)
-        }
         TokenKind::Punct(Punct::Amp) => {
             let m = p.start();
             p.bump(); // `&`
@@ -1683,14 +1623,14 @@ fn bare_branch(p: &mut Parser<'_>, ctx: Ctx, after: &str) {
 /// one E0201 naming both spellings, folded when the condition already
 /// reported.
 fn if_body_required(p: &mut Parser<'_>) {
-    let d = wolf_diag::Diagnostic::error(
-        codes::EXPECTED_TOKEN,
-        p.here(),
-        "expected `{` or `then` after the `if` condition",
-    )
-    .with_note(IF_FORMS_NOTE);
-    let d = brace_on_next_line(p, d);
-    p.push_diag_unless_folded(d);
+    p.push_diag_unless_folded(
+        wolf_diag::Diagnostic::error(
+            codes::EXPECTED_TOKEN,
+            p.here(),
+            "expected `{` or `then` after the `if` condition",
+        )
+        .with_note(IF_FORMS_NOTE),
+    );
     p.missing();
     // One report for the truncated construct; fold the follow-up
     // missing-terminator diagnostic.

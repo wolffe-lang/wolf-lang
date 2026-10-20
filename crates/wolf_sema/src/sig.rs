@@ -225,11 +225,7 @@ pub enum GlobalKind {
 /// integers, `byte`, `bool` and the floats for every form, and `str`
 /// for a `const` or `let` (its literal; a `var` of `str` would store a
 /// region's view in state every task shares). Anything else is
-/// refused by name where the item is executed or lowered. s252
-/// (wolf-lang#814): "the integers" include `wrapping[T]` over an
-/// integer type, whose value is its width's bits exactly as the plain
-/// type's is — yew's `const PRIME: wrapping[u64] = …` was refused
-/// where the same literal typed `u64` was accepted.
+/// refused by name where the item is executed or lowered.
 pub fn is_static_data(table: &TypeTable, ty: TyId, kind: GlobalKind) -> bool {
     match table.kind(ty) {
         TyKind::Prim(p) => match p {
@@ -237,9 +233,6 @@ pub fn is_static_data(table: &TypeTable, ty: TyId, kind: GlobalKind) -> bool {
             Prim::Char => false,
             _ => true,
         },
-        TyKind::Wrapping(inner) => {
-            matches!(table.kind(*inner), TyKind::Prim(p) if p.is_integer())
-        }
         _ => false,
     }
 }
