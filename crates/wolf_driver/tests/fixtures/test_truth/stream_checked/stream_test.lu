@@ -1,0 +1,28 @@
+// s250 (wolf-lang#810): `--nocapture` shows a test's output AS IT RUNS.
+// The test prints a line and then waits for the file `S250_GO` names; the
+// runner makes that file only once it has read the line, so the test
+// passes only when its output reached the reader before it ended. Here
+// on the checked machine (a `test_*` fn).
+fn exists(p: str) -> bool {
+    let _ = fs_size(p) else |_| return false
+    true
+}
+
+fn wait_for_go() -> bool {
+    let go = env_get("S250_GO") else |_| return false
+    var i = 0
+    while i < 600 {
+        if exists(go) {
+            return true
+        }
+        time_sleep_ms(100)
+        i += 1
+    }
+    false
+}
+
+fn test_streams_as_it_runs() {
+    print("early: on stdout, before the test ends")
+    eprint("SKIP: on stderr, before the test ends")
+    assert(wait_for_go(), "the runner read the early line and made the go file")
+}

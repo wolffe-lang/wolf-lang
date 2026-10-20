@@ -1,0 +1,7 @@
+// s250: outside `wolf test` the checked machine's `os_exe()` is unchanged
+// ([os.proc.exe]): it names the `wolf` binary it runs inside.
+fn main() -> !int {
+    let exe = os_exe()?
+    print(exe)
+    0
+}
