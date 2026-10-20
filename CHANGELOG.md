@@ -221,6 +221,62 @@ name); lupin's halves of s247 and s248 are wolf-interp#268 and #269.
 
 ### The fork (s247)
 
+s252 — the small gaps (wolf-lang#800, #813, #814, #816, #822, #801; yew
+`docs/MAP.md` §5 G11, G18, G24, G25, G28 and the fuzz fork's findings).
+Three behaviour changes, each a refusal removed with the spec's clause
+saying why, and the rest decided by design with the spec's sentence, a
+better report and a row.
+
+- **An adapter of a `Copy` scalar is `Copy`** (#813,
+  `[mem.tier0.move.3]`): `type ByteOff = distinct int` copies on what
+  would otherwise move, as `int` does, and so does an adapter of any
+  integer type, `wrapping[T]`, a float, `bool`, `char` or `byte`. An
+  adapter of `str`, a container or a struct still moves. Before, `let x
+  = a as int` then `let y = a as int` was E1001 and nothing could opt
+  in.
+- **Module state of `wrapping[T]` is static data** (#814,
+  `[mem.static.3]`): `const PRIME: wrapping[u64] =
+  11400714819323198485`, and a `let` or `var` of a wrapping type, build
+  on every machine; a `const` folds with the type's wrap. Before, the
+  package was refused by name ("not static data", `unsupported`), read
+  or not.
+- **A value whose type reaches no storage names no region** (#816,
+  #801, #822's first finding; `[mem.region.scalar]`, anchors 673): a
+  scalar, unit, an adapter of one, or a tuple, struct, enum or row of
+  such. Built inside a region and held outside, returned, stored into
+  another parameter's region, passed `mut` inside a region block (a
+  one-`int` RNG state), bound by a `for` over a region's list of them,
+  or read out of a frozen region, it ties itself to no region: no
+  E1010, E1004 or E1012 is about it. A struct with a `str` or `List`
+  field keeps every rule. And `copy e` of a non-place (a call result) is
+  the fresh ambient value its lowering always made, so `m.s = copy
+  g(mut t)` — the `copy` E1004's note asks for — builds. Measured over
+  boreutils, lobo, pelt, wolf-std and yew (1,013 files, trunk against
+  head at `--phase=mem`): two verdicts moved, yew's two witnesses; no
+  diagnostic or warning moved anywhere else. Three old rows that had
+  used a scalar-only struct as a stand-in for region data hold a `List`
+  now.
+- **By design, with the report saying so**: `~x` (#800) is E0107 —
+  wolf's bitwise not is `!` on an integer (`[type.int.not]`, ruling #51;
+  ruling #99 R1 withdrawn), and the report offers `!x` as a
+  machine-applicable edit and the parser reads on without a second
+  error; `let tb = run.ec.tb` then `run.ec.tb` again on a `read`
+  parameter (#822) is E1001, whose report now names the parameter and
+  the two ways to read twice; a `{` on the line after an `if`, `while`,
+  `for` or `loop` header (#822) is E0201 (`[gram.lex.newline]`,
+  `[gram.fmt.brace]`), whose report labels the brace and joins it to
+  the header with a machine-applicable edit; a local `let clock_ms`
+  (#822) is W0304 (`[conf.resolve.ambient]`); a counter inferred
+  `wrapping[u64]` from a shift count never ends a `>= 0` countdown
+  (#822, `[type.numlit.value]`: annotate it and cast at the use).
+  `wolf --explain` carries each.
+- **lupin** (0.1.54): owes `[mem.static.3]`'s `wrapping[T]` (it answers
+  `unsupported`) and `[mem.region.scalar]` (it traps `region-fault` on
+  the literal, binding, enum, `for`, `take`-store and frozen-write
+  shapes); diverges on the countdown (it accepts an `int` count on a
+  wrapping shift, where the three compiling machines say E0401).
+  `small_gaps_lanes.rs` asserts its column.
+
 s247 — the fork (ruling #90, reversing ruling #69 R1 from B to A): wolf
 gets a user-visible `os_fork` whose child keeps running wolf code, sound
 beside the runtime's own threads. The surface and the protocol were
