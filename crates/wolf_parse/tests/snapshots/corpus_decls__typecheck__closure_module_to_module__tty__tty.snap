@@ -2,4 +2,5 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 164..319 name=tier pub body=Block
+FnDecl 203..357 name=tier pub body=Block
+FnDecl 396..446 name=is_dumb pub body=Block

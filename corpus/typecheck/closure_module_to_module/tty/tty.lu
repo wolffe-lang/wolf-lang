@@ -1,10 +1,16 @@
 //! member: true
 //!
-//! The calling module: a tier over a lookup VALUE made elsewhere.
+//! The calling module: a tier over a lookup VALUE made elsewhere, and
+//! the predicate it answers with.
 
 /// Tier over a lookup: prints what it finds; 0 when the terminal is dumb.
 pub fn tier(getv: fn(str) -> (str, bool), key: str) -> int {
     let (t, has) = getv(key)
     if has { print(t) }
-    if has && t == "dumb" then 0 else 1
+    if has && is_dumb(t) then 0 else 1
+}
+
+/// The terminal that draws nothing.
+pub fn is_dumb(t: str) -> bool {
+    t == "dumb"
 }
