@@ -281,6 +281,57 @@ by name; the spellings beyond the contract are rulings asked at audit
   confirm `os_name` answers `pax` there, `os_core_limit` `(0, -1)`, the
   set `denied` (`prlimit64`'s -EPERM) and `os_core_off` `ok`.
 
+s251 — closures across modules on the release tier (wolf-lang#806,
+#807; yew G19/G20). The cause is written before the fix
+(`docs/s251-closures-across-modules.md`); the clause is
+`[abi.native.closure.object]`.
+
+- **What was refused.** On the release tier of a multi-module program a
+  capture-free closure made in one module and called from another could
+  refuse `a vtable slot @main.cls0 outside this object's subset`; a
+  one-line module function that makes a closure and calls another with
+  it could refuse the same after the inliner moved it into the entry;
+  and on the native tier a function of one file of a module read as a
+  value in another file of it refused `@term.env_getv.fv` the same way.
+  The value of a capture-free closure, of a named function read as a
+  value and of a trait object's dispatch is a STATIC one-slot record
+  (`[abi.native.closure]`, `[abi.native.dyn]`), and its slot was the one
+  reference to a module function the emitters resolved only inside the
+  object being emitted — a cluster's members on the release tier, a
+  module's functions on the native tier — where a call and a
+  `func.addr` had imported the mangled symbol since #116 and s134.
+  Three things put a slot outside the object that builds the record:
+  **dedup** merged a closure's entry into a body-identical twin while
+  the record still named it (it pinned `func.addr` referees and never
+  read the data table, though the summary had claimed since s98 that it
+  did); the **import decision and the inliner** brought a small maker
+  across a cluster cut, so the record is built in an object that does
+  not own the entry; and the native tier's **per-module partition**
+  filed the synthetic `.fv` shim under the root module's object.
+- **The fix.** Both emitters resolve an out-of-subset slot through the
+  mangled-symbol import `func.addr` takes (a `declare` in the LLVM
+  text, an `Import` in the Cranelift object), and dedup pins every name
+  a record carries. The partition, the import decision and the inliner
+  are untouched — the inliner keeps relocating a closure's maker and
+  the slot is placed where every caller can reach it, by symbol — so
+  every previously-green object is byte-identical, and the release
+  build's size and time on the corpus move only where a program was
+  refused before. The native tier's semantics are the oracle: every row
+  prints the native tier's output on the release tier and the checked
+  machine.
+- **Witnesses.** Six corpus rows under `corpus/typecheck/`
+  (`closure_entry_to_module`, `closure_module_to_entry`,
+  `closure_module_to_module`, `closure_captured_closure`,
+  `fn_value_two_file_module`, `closure_inlined_one_liner`), each
+  refused at `808ce11a` by the mechanism it pins; yew's seven witnesses
+  green on both tiers; `wolf_driver/tests/closure_cross_module.rs` (the
+  six under clusters, under `WOLF_MIDEND=0`, on native and on the
+  checked machine) and the dedup pin in `wolf_wir/tests/dedup_instances.rs`.
+  Anchors 672 → 673. yew can retire `term.Env` (`src/term/tty.lu`),
+  the direct `YEW_MOUSE` read (`src/term/input.lu`), the local
+  `sort_items` (`src/text/cset.lu`) and the one-`match`-per-registry
+  name tables at its next pin.
+
 ## 0.2.34 — 2026-10-20
 
 **What this release changes: the fork, and what an editor asks of the
