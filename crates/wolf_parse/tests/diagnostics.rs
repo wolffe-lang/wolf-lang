@@ -179,6 +179,55 @@ fn e0201_expected_token() {
 /// NAME in pattern position — `lo..` at its missing high end, `..hi`
 /// at the operator — each with the note that spells the closed form.
 /// (The book's ch03 papercut was a diagnostic that never said "range".)
+/// s252 (wolf-lang#822, yew's fuzz fork): a header whose `{` waits at
+/// the start of the next line — C's shape for a multi-line condition —
+/// is E0201 by `[gram.lex.newline]` (the line's last token took a
+/// terminator) and `[gram.fmt.brace]`. The refusal names why, points at
+/// the brace, and joins the two lines with a machine-applicable edit
+/// when only whitespace lies between them; a comment there gets the
+/// note and no edit (a joined `{` would land inside the comment).
+#[test]
+fn e0201_brace_on_next_line() {
+    let cases = [
+        (
+            "e0201_if_brace_next_line",
+            "fn main() {\n    let a = 3\n    if a > 2 &&\n        a < 9\n    {\n        print(\"in\")\n    }\n}\n",
+        ),
+        (
+            "e0201_while_brace_next_line",
+            "fn main() {\n    var i = 0\n    while i < 3\n    {\n        i += 1\n    }\n}\n",
+        ),
+        (
+            "e0201_for_brace_next_line",
+            "fn main() {\n    var n = 0\n    for x in 0..3\n    {\n        n += x\n    }\n}\n",
+        ),
+    ];
+    for (name, src) in cases {
+        snap(name, src, codes::EXPECTED_TOKEN);
+        // The edit applies and the joined source parses clean.
+        let parse = util::parse(src);
+        let d = parse
+            .diagnostics
+            .iter()
+            .find(|d| d.code == codes::EXPECTED_TOKEN)
+            .expect("the E0201");
+        assert_eq!(d.suggestions.len(), 1, "{name}: one edit");
+        let fixed = wolf_diag::suggest::apply_edits(src.as_bytes(), &d.suggestions[0].edits)
+            .expect("the edit applies");
+        let again = util::parse_bytes(&fixed);
+        assert!(
+            again.diagnostics.is_empty(),
+            "{name}: the joined source parses clean, got {:?}",
+            again.diagnostics
+        );
+    }
+    snap(
+        "e0201_brace_next_line_comment",
+        "fn main() {\n    let a = 3\n    if a > 2 // the limit\n    {\n        print(\"in\")\n    }\n}\n",
+        codes::EXPECTED_TOKEN,
+    );
+}
+
 #[test]
 fn e0201_open_range_patterns() {
     snap(

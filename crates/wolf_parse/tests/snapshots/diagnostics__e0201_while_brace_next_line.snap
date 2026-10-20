@@ -1,0 +1,52 @@
+---
+source: crates/wolf_parse/tests/diagnostics.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: E0201,
+    severity: Error,
+    message: "expected `{` to open the block",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 41,
+            hi: 42,
+        },
+        label: "",
+    },
+    secondary: [
+        LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 46,
+                hi: 47,
+            },
+            label: "this `{` is on the next line",
+        },
+    ],
+    notes: [
+        "a newline after the header's last token ends the statement ([gram.lex.newline]), so the `{` on the line below opens a block of its own, not this one. The opening brace goes on the header's line ([gram.fmt.brace]); a header that runs over several lines breaks after an operator (`a &&` / `b {`).",
+    ],
+    suggestions: [
+        Suggestion {
+            message: "put the `{` at the end of the header's line",
+            edits: [
+                (
+                    Span {
+                        file: FileId(
+                            0,
+                        ),
+                        lo: 41,
+                        hi: 46,
+                    },
+                    " ",
+                ),
+            ],
+            applicability: MachineApplicable,
+        },
+    ],
+}

@@ -1,0 +1,24 @@
+//! check: fail(E0201)
+//! phase: lex
+//! conforms: gram.lex.newline, gram.fmt.brace
+//!
+//! s252 (wolf-lang#822, yew's fuzz fork): a multi-line `if` condition
+//! with its `{` at the start of the next line, C's shape, is E0201 by
+//! design. The line ending in `3` takes a terminator
+//! (`[gram.lex.newline]`: a literal ends the statement), a `{` that
+//! begins a line begins a block statement of its own, and the
+//! formatter keeps the brace on the construct's line
+//! (`[gram.fmt.brace]`). The refusal says so and offers the edit that
+//! joins the lines (`b > 3 {`); the multi-line condition itself is
+//! legal, broken after its operator (`a > 2 &&`). lupin 0.1.54 refuses
+//! it at E0201 too.
+
+fn main() {
+    let a = 3
+    let b = 4
+    if a > 2 &&
+        b > 3
+    {
+        print("both")
+    }
+}
