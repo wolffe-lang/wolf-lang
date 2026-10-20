@@ -186,9 +186,75 @@ The six rows (each `check: run(exit=0, stdout=…)`), the same build:
 
 ## 4. Measurements
 
-Filled in after the fix (kasumi, `taskset -c 0-3`, dist builds of
-`808ce11a` and the branch head): see the PR's "Measurement" section and
-the CHANGELOG entry; the table is reproduced here at the final head.
+kasumi (16 cpus, other lanes' load present), dist builds of `808ce11a`
+(`wolf 0.2.33+dev.808ce11`) and the branch head (`+dev.e3ab4e1`; the
+later commits are tests, snapshots and docs), the head's corpus tree
+for both compilers, `taskset -c 0-3` for every timed build.
+
+**The corpus, release tier** (`wolf build --release`, the 689 run-phase
+entries, `~/lanes/s251/measure-{base,head}.tsv`, `measure2.tsv`):
+
+| | base `808ce11a` | head |
+|---|---|---|
+| entries that build | 683 | 689 (+6: the five rows refused at base, and `typecheck/closure_param_call.lu`, see below) |
+| `--codegen-report` (clusters, imports, dedup counts, summary digest) on the 682 green on both | — | identical on all 682 |
+| `--emit=llvm-ir` on the 683 that build on both | — | byte-identical on all 683 (`ir-compare`) |
+| binary size, the 682 green on both | 8,140,025,040 B | 8,140,036,656 B (+11,616 B: 434 entries +16..+112 B each) |
+| build time, interleaved A/B, pass 1 (689 each) | 64,233 ms (median 89) | 64,124 ms (median 89), −0.2 % |
+| build time, interleaved A/B, pass 2 | 52,039 ms (median 69) | 52,356 ms (median 69), +0.6 % |
+| the six rows at head | refused (rows 1–4, 6) / 93 ms (row 5) | 59–102 ms each, 13.55–13.56 MB each |
+
+The size delta is not codegen: the per-program IR is byte-identical,
+and the two dist builds' `libwolf_rt.a` differ (44,784,280 vs
+44,784,600 B; the same sources, built in two clones whose paths differ
+— sixteen embedded path strings each — and under two version stamps),
+which every binary links. The time delta is inside the pass-to-pass
+noise (the first pass ran under the other lanes' load; the second was
+quieter for both).
+
+**A seventh entry moved.** `corpus/typecheck/closure_param_call.lu`
+(s157), a single-file row, was refused on the release lane at
+`808ce11a` — `a vtable slot @main.cls3 outside this object's subset`:
+its `inc` and the literal `fn(n) n + 1` are one body — and runs there
+now; its checked verdict (`unsupported`, "calls into unresolvable
+bodies") is the checked machine's and unchanged. It is the same cause
+as rows 1–4, found by the measurement, not by the contract.
+
+**lane-coverage** (`cargo xtask lane-coverage`, the head's gates):
+
+| lane | base (1,102 entries) | head (1,108) | moved |
+|---|---|---|---|
+| checked | 703 | 709 | +6 (the rows) |
+| native | 708 | 714 | +6 (the rows) |
+| release | 707 | 714 | +7 (the rows and `closure_param_call`) |
+| union | 716 | 722 | +6 |
+| all three | 695 | 701 | +6 |
+
+"The other lanes reach and it does not": release 9 → 8
+(`closure_param_call` left it); checked 13, native 8 unchanged. Floors
+221/242/242/256/207 held at both.
+
+**The differ** (`cargo xtask differ --self`): base 1,155 files, head
+1,169 (+14, the rows' files); 0 divergences at both; the conservatism
+ledger 21 at both, 3 forward pins at both. No count moved but the
+file count.
+
+**yew `ab8bab0`** (`src/yew.lu` and the `tools/demo-paint` fixture
+staged as `tools/build-demo` stages it, `--no-cache --deny-warnings`,
+the archive's std `cceda63` = yew's pin; `yew-base2.tsv`,
+`yew-head.tsv`, built back to back):
+
+| program | tier | base ms / B | head ms / B |
+|---|---|---|---|
+| yew | native | 456 / 14,467,048 | 413 / 14,467,144 |
+| yew | release | 2,573 / 13,628,224 | 2,605 / 13,628,248 |
+| demo | native | 1,407 / 15,978,992 | 1,380 / 15,979,032 |
+| demo | release | 17,423 / 14,028,176 | 16,616 / 14,028,232 |
+
+Every build green with both compilers (yew carries its workarounds, so
+nothing there was refused at base); the sizes move by the runtime
+archive's +24..+96 B, the times by noise. yew's own seven witnesses:
+a–g green on both tiers at head (`e` was refused on release at base).
 
 ## 5. yew workarounds that can be retired (yw04)
 
