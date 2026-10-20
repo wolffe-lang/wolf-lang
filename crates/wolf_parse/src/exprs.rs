@@ -965,6 +965,18 @@ fn primary(p: &mut Parser<'_>, ctx: Ctx) -> Option<(CompletedMarker, bool)> {
         TokenKind::Punct(Punct::LBrace) if ctx.no_struct_lit => return None,
         TokenKind::Punct(Punct::LBrace) => block(p),
         TokenKind::Punct(Punct::Not | Punct::Minus | Punct::Star) => prefix_expr(p, ctx),
+        // s252 (wolf-lang#800): a `~` the lexer refused (E0107, whose
+        // report offers `!`, wolf's bitwise not) recovers as the prefix
+        // operator it stands for — an error node over the operand — so
+        // the operand still parses and nothing cascades.
+        TokenKind::Error
+            if !p.current_text().is_empty() && p.current_text().iter().all(|&b| b == b'~') =>
+        {
+            let m = p.start();
+            p.bump(); // the refused `~`
+            prefix_operand(p, ctx);
+            m.complete(p, SyntaxKind::ErrorNode)
+        }
         TokenKind::Punct(Punct::Amp) => {
             let m = p.start();
             p.bump(); // `&`
