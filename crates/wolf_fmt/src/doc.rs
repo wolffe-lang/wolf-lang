@@ -102,6 +102,27 @@ impl Doc {
     }
 }
 
+/// Does this sequence force a break of ITS OWN — a hard break in it,
+/// not in a group nested below it? A [`Doc::LastResort`] asks this
+/// rather than [`Doc::forced`] (s250, wolf-lang#809): a hard newline
+/// inside an argument list (a braced block written multiline) is that
+/// list's break, which the list takes, and `[gram.fmt.break]` (2) makes
+/// the receiver-dot break a last resort — taken only when breaking the
+/// argument lists cannot bring the line inside the width. Read through
+/// `forced`, a member call over a braced `if` laid `t.` / `g(`, while
+/// the same call over a bare `if` too wide for its line (which the
+/// formatter breaks to the braced form, `[gram.fmt.if]`) kept `t.g(`:
+/// two layouts of one program, one per pass. A group below decides its
+/// own breaks and is not this sequence's.
+pub(crate) fn own_forced(ds: &[Doc]) -> bool {
+    ds.iter().any(|d| match d {
+        Doc::Hardline | Doc::FreshLine | Doc::Blankline | Doc::BreakParent => true,
+        Doc::Raw(bytes) => bytes.contains(&b'\n'),
+        Doc::Concat(cs) | Doc::Indent(cs) | Doc::IndentIfBroken(cs) => own_forced(cs),
+        _ => false,
+    })
+}
+
 /// Will this doc certainly render with a newline, wherever it is
 /// placed? Unlike [`Doc::forced`] this PIERCES shields — a hug shield
 /// keeps enclosing groups flat, but the newlines inside it are still
@@ -232,7 +253,7 @@ fn fits(
                     stack.push((mode, c));
                 }
             }
-            Doc::Group(ds) | Doc::LastResort(ds) => {
+            Doc::Group(ds) => {
                 // A group whose content forces a break will break
                 // wherever it lands; otherwise it inherits — flat
                 // inside the docs under question, and the renderer's
@@ -243,6 +264,23 @@ fn fits(
                 let m = if ds.iter().any(Doc::forced) || (probe_breaks_nested && mode == Mode::Flat)
                 {
                     Mode::Broken
+                } else {
+                    mode
+                };
+                for c in ds.iter().rev() {
+                    stack.push((m, c));
+                }
+            }
+            Doc::LastResort(ds) => {
+                // The renderer's own choice (s250, wolf-lang#809): only
+                // a break of its own sequence forces a last resort
+                // ([`own_forced`]); a forced group nested inside it
+                // breaks by itself, and the chain around it is laid
+                // FlatOpen — measured so here.
+                let m = if own_forced(ds) || (probe_breaks_nested && mode == Mode::Flat) {
+                    Mode::Broken
+                } else if ds.iter().any(Doc::forced) {
+                    Mode::FlatOpen
                 } else {
                     mode
                 };
@@ -452,9 +490,13 @@ pub fn render(doc: &Doc) -> Vec<u8> {
                 // and then those lists must actually be free to break,
                 // which is what `FlatOpen` preserves. Under a flat
                 // parent the whole subtree is already committed flat.
+                // s250 (wolf-lang#809): a break FORCED inside a nested
+                // group (an argument list over a braced block) is that
+                // group's, so only the sequence's own forced breaks
+                // ([`own_forced`]) take the dots unmeasured.
                 let m = if mode == Mode::Flat {
                     Mode::Flat
-                } else if ds.iter().any(Doc::forced) {
+                } else if own_forced(ds) {
                     Mode::Broken
                 } else if fits(
                     &ds.iter().collect::<Vec<_>>(),
