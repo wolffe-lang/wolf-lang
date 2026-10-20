@@ -575,5 +575,5 @@ resolver.)
   `let clock_ms = 5` hides the prelude's `clock_ms` for the rest of its
   scope and is W0304, fatal under `--deny-warnings`. Rename the local
   (`now_ms`); `wolf prelude` lists every ambient name and whether
-  declaring it draws W0304; an item-level `#[allow(W0304)]`
+  declaring it draws W0304; `#[allow(w0304)]` on the enclosing item
   (`[diag.level.attr]`) states a deliberate shadow.
