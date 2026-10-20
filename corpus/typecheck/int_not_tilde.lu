@@ -1,0 +1,18 @@
+//! check: fail(E0107)
+//! phase: none
+//! conforms: type.int.not, gram.expr.prec
+//!
+//! s252 (wolf-lang#800, yew G11): by design. wolf's bitwise not is the
+//! prefix `!` on an integer (`[type.int.not]`, ruling #51: `!` on
+//! integers, over a `~` operator), so `~2 & flags` is the stray
+//! character E0107 — whose report since s252 names `!` and offers the
+//! machine-applicable edit to `!2 & flags`, which prints `5` here
+//! (`int_not_mask.lu` holds the idioms). yew's port had written
+//! `v - (v & m)` for the missing operator it had not found. lupin
+//! 0.1.54: E0107 too.
+
+fn main() {
+    let flags = 7
+    let cleared = ~2 & flags
+    print("{cleared}")
+}

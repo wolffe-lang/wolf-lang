@@ -94,6 +94,35 @@ fn e0107_stray_byte() {
     diag_snapshot("e0107", "let $ = 1\n");
 }
 
+/// s252 (wolf-lang#800, yew G11): `~` is not wolf's bitwise not — `!`
+/// on an integer is (`[type.int.not]`, ruling #51 A over B `~`). The
+/// refusal says so and offers the spelling, machine-applicable; the
+/// fixed source lexes clean (`~~x` becomes `!!x`).
+#[test]
+fn e0107_tilde_is_bang() {
+    diag_snapshot("e0107_tilde", "let cleared = ~2 & flags\n");
+    for (src, want) in [
+        ("let cleared = ~2 & flags\n", "let cleared = !2 & flags\n"),
+        ("let x = ~~y\n", "let x = !!y\n"),
+    ] {
+        let lexed = util::lex(src);
+        assert_eq!(lexed.diagnostics.len(), 1, "{src:?}: one report");
+        let d = &lexed.diagnostics[0];
+        assert_eq!(d.code, "E0107");
+        assert_eq!(d.suggestions.len(), 1, "{src:?}: one edit");
+        let fixed = wolf_diag::suggest::apply_edits(src.as_bytes(), &d.suggestions[0].edits)
+            .expect("the edit applies");
+        assert_eq!(String::from_utf8(fixed.clone()).unwrap(), want);
+        assert!(
+            util::lex_bytes(&fixed).diagnostics.is_empty(),
+            "{want:?} lexes clean"
+        );
+    }
+    // A `~` beside another stray character is the run's report, no edit.
+    let lexed = util::lex("let x = ~$y\n");
+    assert!(lexed.diagnostics[0].suggestions.is_empty());
+}
+
 #[test]
 fn e0107_lone_brace_in_string() {
     diag_snapshot("e0107_lone_brace", r#"let s = "a}b""#);

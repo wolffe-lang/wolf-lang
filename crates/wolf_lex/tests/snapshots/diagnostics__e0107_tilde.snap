@@ -1,0 +1,43 @@
+---
+source: crates/wolf_lex/tests/diagnostics.rs
+expression: "format!(\"{:#?}\", lexed.diagnostics)"
+---
+[
+    Diagnostic {
+        code: E0107,
+        severity: Error,
+        message: "the character `~` is not part of wolf syntax",
+        primary: LabeledSpan {
+            span: Span {
+                file: FileId(
+                    0,
+                ),
+                lo: 14,
+                hi: 15,
+            },
+            label: "wolf's bitwise not is `!`",
+        },
+        secondary: [],
+        notes: [
+            "`!` on an integer is its bitwise complement at the operand's own width ([type.int.not]): `!x` for `~x`, and `e & !m` clears the bits of `m`. wolf spells it `!` by ruling and has no `~` operator.",
+        ],
+        suggestions: [
+            Suggestion {
+                message: "write `!` for the bitwise not",
+                edits: [
+                    (
+                        Span {
+                            file: FileId(
+                                0,
+                            ),
+                            lo: 14,
+                            hi: 15,
+                        },
+                        "!",
+                    ),
+                ],
+                applicability: MachineApplicable,
+            },
+        ],
+    },
+]
