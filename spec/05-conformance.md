@@ -570,4 +570,10 @@ resolver.)
   surface, and a declaration cannot shadow them. Shadowing an ambient
   name is a WARNING and not an error (W0304 names the declaration and
   the name it covers), because the program is unambiguous — a reader
-  is what is at risk, not the semantics.
+  is what is at risk, not the semantics. A local binding is a
+  declaration too, by design (s252, wolf-lang#822, yew's fuzz fork):
+  `let clock_ms = 5` hides the prelude's `clock_ms` for the rest of its
+  scope and is W0304, fatal under `--deny-warnings`. Rename the local
+  (`now_ms`); `wolf prelude` lists every ambient name and whether
+  declaring it draws W0304; an item-level `#[allow(W0304)]`
+  (`[diag.level.attr]`) states a deliberate shadow.
