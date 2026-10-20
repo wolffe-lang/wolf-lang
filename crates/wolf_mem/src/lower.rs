@@ -943,6 +943,15 @@ impl<'t> Lowerer<'t> {
         // binding beside the sites it holds — unless the binding's
         // type can name no bytes at all (an `int` read out of a list
         // that shares a string's bytes shares nothing).
+        // s252 (`[mem.region.scalar]`): a binding of a scalar-only type
+        // holds its own words — a `for` binding of a `List[P]` element,
+        // a match binding, a `mut` argument's writeback — and nothing of
+        // a region.
+        if (!val.sites.is_empty() || !val.views.is_empty())
+            && self.tys[local as usize].is_some_and(|t| self.scalar_only(t, 0))
+        {
+            return;
+        }
         if !val.views.is_empty()
             && self.tys[local as usize]
                 .map(|t| self.may_lend_bytes(t, 0))
@@ -2053,6 +2062,88 @@ impl<'t> Lowerer<'t> {
         }
     }
 
+    /// s252 (wolf-lang#816, #801, #822, `[mem.region.scalar]`): does a
+    /// value of this type reach no storage at all — a scalar (every
+    /// integer type, `wrapping[T]`, the floats, `bool`, `char`, `byte`),
+    /// unit, an adapter of one, or a tuple, struct, enum or row all of
+    /// whose fields and payloads are such, transitively? Such a value is
+    /// its own inline words on every machine: it is no allocation site,
+    /// it names no region's storage, and nothing a callee builds can
+    /// land in it. A `str`, a container, a fn value, a handle, a type
+    /// parameter or anything unresolved answers no.
+    fn scalar_only(&self, t: Ty<'t>, depth: u32) -> bool {
+        if depth > 16 {
+            return false;
+        }
+        let sub = |id: TyId| Ty { table: t.table, id };
+        match t.kind() {
+            TyKind::Unit | TyKind::Never | TyKind::Wrapping(_) => true,
+            TyKind::Prim(p) => !matches!(p, Prim::Str),
+            TyKind::Distinct(i) => self.scalar_only(sub(*i), depth + 1),
+            TyKind::Tuple(es) => es.iter().all(|e| self.scalar_only(sub(*e), depth + 1)),
+            TyKind::ErrUnion(ok, row) => {
+                self.scalar_only(sub(*ok), depth + 1) && self.scalar_only(sub(*row), depth + 1)
+            }
+            TyKind::Row { tags, tail } => {
+                tail.is_none()
+                    && tags
+                        .iter()
+                        .flat_map(|(_, ps)| ps.iter())
+                        .all(|p| self.scalar_only(sub(*p), depth + 1))
+            }
+            TyKind::Nominal { module, name, args } => match self.sigs.get(*module as usize, name) {
+                Some(ItemSig::Struct(_)) => self.fields_of(t).is_some_and(|fs| {
+                    fs.into_iter()
+                        .all(|(_, ft)| self.scalar_only(ft, depth + 1))
+                }),
+                Some(ItemSig::Enum {
+                    generics, variants, ..
+                }) => variants.iter().flat_map(|v| v.payload.iter()).all(|&p| {
+                    match self.sigs.table.kind(p) {
+                        TyKind::Rigid(r) => match generics.iter().position(|g| g == r) {
+                            Some(i) if i < args.len() => self.scalar_only(sub(args[i]), depth + 1),
+                            _ => false,
+                        },
+                        _ if mentions_rigid(&self.sigs.table, p) => false,
+                        _ => self.scalar_only(
+                            Ty {
+                                table: &self.sigs.table,
+                                id: p,
+                            },
+                            depth + 1,
+                        ),
+                    }
+                }),
+                Some(ItemSig::Distinct { base, .. }) => self.scalar_only(
+                    Ty {
+                        table: &self.sigs.table,
+                        id: *base,
+                    },
+                    depth + 1,
+                ),
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    /// s252 (`[mem.region.scalar]`): a value of a scalar-only type
+    /// carries no site and shares no bytes, whatever its expression
+    /// passed through — the one rule behind the struct literal, the
+    /// call result, the element read and the `copy` below. Only the
+    /// region facts are dropped; a lend (`lent`), a borrow and a
+    /// sending closure are not region content and ride as they were.
+    fn scalar_strip(&self, ty: Option<Ty<'t>>, mut v: Val) -> Val {
+        if (v.sites.is_empty() && v.views.is_empty()) || !ty.is_some_and(|t| self.scalar_only(t, 0))
+        {
+            return v;
+        }
+        v.sites.clear();
+        v.views.clear();
+        v.origin = None;
+        v
+    }
+
     /// s227 (wolf-lang#660, `[mem.tier0.move.3]`): a `copy` of a
     /// non-`Copy` value is a fresh allocation in the ambient region,
     /// and "a `str`'s bytes are immutable and the copy shares them" —
@@ -3077,7 +3168,8 @@ impl<'t> Lowerer<'t> {
         let ambient = self.ambient();
         for (ti, t) in flows.iter().enumerate() {
             for &(place, pty) in &t.muts {
-                if self.places.is_copy(place) {
+                // s252 (`[mem.region.scalar]`): nor can a scalar-only one.
+                if self.places.is_copy(place) || pty.is_some_and(|t| self.scalar_only(t, 0)) {
                     continue;
                 }
                 let Base::Local(l) = self.places.get(place).base else {
@@ -4502,7 +4594,15 @@ impl<'t> Lowerer<'t> {
     /// copies); everything else recurses structurally in evaluation
     /// order (`[mem.model.order]`). Returns the value's region
     /// provenance (s19).
+    /// An expression's value and its region provenance. s252
+    /// (`[mem.region.scalar]`): a scalar-only value carries none, so the
+    /// rule is applied once here, over every form below.
     fn eval_value(&mut self, e: &'t GreenNode) -> R<Val> {
+        let v = self.eval_value_inner(e)?;
+        Ok(self.scalar_strip(self.expr_ty(e.span), v))
+    }
+
+    fn eval_value_inner(&mut self, e: &'t GreenNode) -> R<Val> {
         match e.kind {
             SyntaxKind::LiteralExpr => Ok(Val::none()),
             SyntaxKind::PathExpr | SyntaxKind::MemberExpr | SyntaxKind::BracketApply => {
@@ -7098,6 +7198,15 @@ impl<'t> Lowerer<'t> {
                     // s227 (#660): what this argument put on the
                     // call, by itself.
                     let ty = self.value_ty(v);
+                    // s252 (`[mem.region.scalar]`): a scalar-only
+                    // argument names nothing — not a parameter's
+                    // pseudo-site either — for the result or another
+                    // argument to carry.
+                    if ty.is_some_and(|t| self.scalar_only(t, 0)) {
+                        carry.truncate(before.0);
+                        read_sites.truncate(before.1);
+                        arg_views.truncate(before.3);
+                    }
                     let mut sites: Vec<SiteId> = carry[before.0..].to_vec();
                     sites.extend(read_sites[before.1..].iter().copied());
                     sites.extend(arg_views[before.3..].iter().copied());
@@ -7252,11 +7361,20 @@ impl<'t> Lowerer<'t> {
             && ret_ty
                 .map(|t| !result_is_copy(self.sigs, t))
                 .unwrap_or(false);
+        // s252 (#801, `[mem.region.scalar]`): a `mut` argument of a
+        // scalar-only type can hold nothing the callee builds — the
+        // callee may replace its words, never with storage.
+        let scalar_muts: BTreeSet<PlaceId> = flows
+            .iter()
+            .flat_map(|f| f.muts.iter())
+            .filter(|(_, ty)| ty.is_some_and(|t| self.scalar_only(t, 0)))
+            .map(|(p, _)| *p)
+            .collect();
         let mut_targets: Vec<PlaceId> = surface
             .mut_args
             .iter()
             .map(|(p, _)| *p)
-            .filter(|p| !self.places.is_copy(*p))
+            .filter(|p| !self.places.is_copy(*p) && !scalar_muts.contains(p))
             .collect();
         let has_surface = !surface.mut_args.is_empty()
             || !surface.read_args.is_empty()
