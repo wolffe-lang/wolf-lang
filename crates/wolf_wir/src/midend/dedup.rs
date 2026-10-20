@@ -39,6 +39,18 @@
 //! - **Address-taken** functions (`func.addr`, i.e. every task entry):
 //!   merging them would make two distinct entries compare equal as
 //!   pointers. Conservative and cheap — task entries are few.
+//! - **Names a static callable record carries** (`data.funcs`: a
+//!   capture-free closure's entry, a `.fv` shim, a trait table's
+//!   shim; s251, wolf-lang#806). The reference lives in the DATA
+//!   table, not in any callee table, so a merge would leave the record
+//!   naming a body that no longer exists — [`retarget`] rewrites
+//!   callee tables only, and nothing rewrites `data.funcs`. The
+//!   summary has flagged these `A` since s98 on the claim that dedup
+//!   pinned them; until s251 this pass never read the data table, and
+//!   two closures that became one body after the module phase inlined
+//!   their callees merged into the smallest name while the other's
+//!   record still named it (`a vtable slot @main.cls0 outside this
+//!   object's subset`, yew's G20).
 //!
 //! Survivors keep their name; the merged duplicates' call sites are
 //! retargeted to the representative (direct calls, no PLT-style
@@ -110,6 +122,15 @@ pub fn dedup(m: &mut Module) -> DedupStats {
                     pinned.insert(f.ext_funcs[ef].name.clone());
                 }
             }
+        }
+    }
+    // s251 (#806): a static callable record's slot pins the same way —
+    // see the module docs. Every table, used or not: a record a dead
+    // function built is dropped with it later, and pinning its slot
+    // costs one body.
+    for d in &m.data {
+        for fname in &d.funcs {
+            pinned.insert(fname.clone());
         }
     }
     // Classes: content hash → mergeable member names (sorted).
