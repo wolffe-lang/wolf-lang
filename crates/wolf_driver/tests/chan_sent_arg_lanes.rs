@@ -176,8 +176,10 @@ const RULED_LUPIN: &str = "trap(region-fault)";
 /// r34; #232 still open), the same; and on the published 0.1.53 archive
 /// (the 0.2.30 pairing, r35; #232 still open), the same; and on the
 /// published 0.1.54 archive (the 0.2.31 pairing, r36; #232 still open),
-/// the same.
-const LUPIN_MISSES_CHANNEL_PAYLOADS: &[&str] = &["0.1.50", "0.1.51", "0.1.52", "0.1.53", "0.1.54"];
+/// the same; and on the published 0.1.55 archive (the 0.2.34 pairing,
+/// r39; #232 still open), the same.
+const LUPIN_MISSES_CHANNEL_PAYLOADS: &[&str] =
+    &["0.1.50", "0.1.51", "0.1.52", "0.1.53", "0.1.54", "0.1.55"];
 
 fn base_version(v: &str) -> &str {
     v.split('+').next().unwrap_or(v)
