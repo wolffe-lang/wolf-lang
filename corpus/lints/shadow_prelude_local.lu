@@ -1,0 +1,26 @@
+//! check: run(exit=0, stdout="5 7\n")
+//! phase: run
+//! conforms: conf.resolve.ambient, diag.sev.warn, diag.level.attr
+//! warns: W0304
+//!
+//! s252 (wolf-lang#822, yew's fuzz fork): by design, a LOCAL binding
+//! is a declaration too. `let clock_ms = 5` in `tick` hides the
+//! prelude's `clock_ms` for the rest of its scope, so it draws W0304
+//! (fatal under `--deny-warnings`) — the fuzz fork met it as a build
+//! failure. The fixes: another name, or `#[allow(w0304)]` on the
+//! enclosing item when the shadow is meant (`settle` is quiet).
+
+fn tick() -> int {
+    let clock_ms = 5
+    clock_ms
+}
+
+#[allow(w0304)]
+fn settle() -> int {
+    let clock_ms = 7
+    clock_ms
+}
+
+fn main() {
+    print("{tick()} {settle()}")
+}
