@@ -1,5 +1,5 @@
 //! check: fail(E1001)
-//! phase: mem
+//! phase: typecheck
 //! conforms: mem.tier0.move.3, mem.tier0.move.2
 //! s252 (wolf-lang#813): what the adapter rule leaves alone. An
 //! adapter copies only when its base is a `Copy` scalar; an adapter of
