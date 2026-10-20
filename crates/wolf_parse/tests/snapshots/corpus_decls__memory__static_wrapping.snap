@@ -1,0 +1,14 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ConstDecl 810..860 name=PRIME init=LiteralExpr
+ConstDecl 861..912 name=UNREAD init=LiteralExpr
+LetDecl 913..950 pat=SEED init=LiteralExpr
+ConstDecl 951..979 name=A init=LiteralExpr
+ConstDecl 980..1012 name=B init=BinExpr
+ConstDecl 1013..1048 name=LOW init=BinExpr
+VarDecl 1049..1087 pat=STATE init=LiteralExpr
+FnDecl 1088..1147 name=mix body=Block
+FnDecl 1149..1289 name=bump body=Block
+FnDecl 1291..1441 name=main body=Block

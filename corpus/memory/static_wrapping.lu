@@ -1,0 +1,46 @@
+//! check: run(exit=0, stdout="63 0 44 127 1\n")
+//! phase: run
+//! conforms: mem.static.3, mem.static.1, mem.static.2
+//!
+//! s252 (wolf-lang#814, yew G25): module state of a `wrapping[T]` type
+//! is static data — `[mem.static.3]`'s "the integers" include it, as
+//! they do everywhere else. yew's undo hash primes are a `const` of
+//! `wrapping[u64]` past `i64::MAX`; a `let` and a `var` hold the same
+//! types, a `const` initializer folds with the type's own wrap (`200 +
+//! 100` at `u8` is `44`), and a const no function reads (`UNREAD`) is
+//! static data too. Before s252 every compiling machine refused the
+//! package by name ("module state of a type that is not static data",
+//! `unsupported`), read or not, while the same literal typed `u64` was
+//! accepted; lupin 0.1.54 refuses it as well.
+
+const PRIME: wrapping[u64] = 11400714819323198485
+
+const UNREAD: wrapping[u64] = 14029467366897019727
+
+let SEED: wrapping[u32] = 4294967295
+
+const A: wrapping[u8] = 200
+
+const B: wrapping[u8] = A + 100
+
+const LOW: wrapping[i8] = -127 - 1
+
+var STATE: wrapping[u32] = 4294967295
+
+fn mix(x: wrapping[u64]) -> wrapping[u64] {
+    x * PRIME
+}
+
+fn bump() -> int {
+    // # Safety: one thread; nothing else touches the state.
+    unsafe {
+        STATE += 2
+        STATE as int
+    }
+}
+
+fn main() {
+    let v: wrapping[u64] = 3
+    let s = SEED + 1
+    print("{(mix(v) & 255) as int} {s as int} {B as int} {(LOW - 1) as int} {bump()}")
+}
