@@ -20,3 +20,9 @@ error[E1004]: this value is allocated in region `tmp`, but it is being stored in
     before the free ([mem.region.copyout]). Two keep-alive alternatives change the ownership
     instead: `freeze` the region (immutable forever) or make the value a `shared` cell
     (reference-counted, never dangles).
+  = note: this stores into a value declared outside the open `region` block. Such a store keeps
+    nothing of the block when the stored value names no region (a scalar, a literal) or is
+    written `copy e` at the store: that `copy` is a deep copy made in the outer value's
+    region — the container's own for a `push`, an index or `Map` store or a `List`/`Map`
+    replaced, the region ambient where the binding was declared for any other field
+    [mem.region.outer-write].
