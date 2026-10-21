@@ -1071,7 +1071,7 @@ fn the_c_librarys_handler_and_numbers() {
             );
             live.conf(&sub, &[("child", kid.as_str())]);
             let out = live.sh(&format!(
-                "ulimit -c 0; cd {} && {prog}; echo rc=$?",
+                "ulimit -c 0; grep -E 'SigIgn|SigCgt' /proc/self/status >&2; grep -E 'SigIgn' /proc/1/status >&2; cd {} && {prog}; echo rc=$?",
                 live.at(&sub)
             ));
             let stdout = String::from_utf8_lossy(&out.stdout).replace('\r', "");

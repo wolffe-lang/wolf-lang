@@ -20,6 +20,12 @@ fn ended(st: int) -> str {
 }
 
 fn main() -> !int {
+    let status = fs_read_text("/proc/self/status") else |_| ""
+    for line in status.split("\n") {
+        if line.starts_with("SigBlk:") || line.starts_with("SigIgn:") || line.starts_with("SigCgt:") {
+            eprint("parent: {line.replace("\t", " ")}")
+        }
+    }
     let child = conf("child")
     if child.len == 0 {
         return 2
