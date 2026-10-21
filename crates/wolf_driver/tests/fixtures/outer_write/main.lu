@@ -1,0 +1,51 @@
+//! member: false
+//! s255 (wolf-lang#839, #856; `[mem.region.outer-write]`): yew's editor
+//! loop at its smallest, as `corpus/memory/region_outer_write_call.lu`
+//! has it, taking the turn count from the command line (`x` is 100,000
+//! turns, `xx` 200,000 — the second argument's length, so nothing is
+//! parsed) — the resident-set row of `region_outer_write_lanes.rs` runs
+//! it N and 2N turns and divides the difference by N. `region` opens the
+//! per-turn block; `none` is the control without one (the shape yew
+//! measured: every turn's string kept to the end).
+
+struct S {
+    v: List[int],
+    frame: List[byte],
+    n: int,
+}
+
+fn render(mut s: S, i: int) {
+    let t = "row {i}: {s.n} {i * 7}"
+    while s.frame.len != 0 {
+        let _ = (mut s.frame).pop() else 0 as byte
+    }
+    for b in t.bytes() {
+        (mut s.frame).push(b)
+    }
+    s.v[0] = t.len
+    s.n += 1
+}
+
+fn main() -> int {
+    let args = env_args()
+    let mode = args[0]
+    let n = args[1].len * 100000
+    var s = S { v: List[int](), frame: List[byte](), n: 0 }
+    (mut s.v).push(0)
+    var i = 0
+    if mode == "none" {
+        while i < n {
+            render(mut s, i)
+            i += 1
+        }
+    } else {
+        while i < n {
+            region turn {
+                render(mut s, i)
+            }
+            i += 1
+        }
+    }
+    print("{s.n} {s.v[0]} {s.frame.len}")
+    0
+}

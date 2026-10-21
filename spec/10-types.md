@@ -1323,6 +1323,47 @@ substrate.)
   2026-09-11, wolf-lang#101) — the literal is sugar for a container,
   and the container is the thing the evaluator does not have.
 
+### The list's storage `[type.list.storage]`
+
+(s255, wolf-lang#844 and #821 — aspen's walk paying per-element growth
+for a count it already knew, and yew's grapheme index holding 670 KB an
+edit because a `List` field replaced by assignment keeps its old buffer
+until the value's region ends, `[mem.region.intra.2]`: there is no
+per-object free, so a program that rebuilds a long-lived list every turn
+must REUSE the list's storage rather than replace it. yew wrote that by
+hand as a spare pair of lists swapped each rebuild; these two methods
+are that pattern, named.)
+
+- `[type.list.reserve]` **`xs.reserve(n)`** (`mut` receiver, `n: int`,
+  unit-valued) grows the list's capacity to at least `n` elements, in
+  the list's OWN region — the one its header remembers and its growth
+  uses (`[mem.region.create.3]`, s76) — leaving the length and every
+  element as they were; a capacity already at or past `n` (a zero or
+  negative `n` included, and an `n` under the length) is a no-op. After
+  `reserve(n)`, `n` pushes grow nothing on the native tiers: one
+  buffer, no doubling history. The charge is the tier's
+  (`[mem.region.account.1]`): the native arena charges the buffer at
+  the reservation, the checked machine charges what is stored (a push
+  charges its slot) and nothing at the reservation. Witness
+  `corpus/memory/list_reserve.lu`.
+- `[type.list.reset]` **`xs.reset()`** (`mut` receiver, unit-valued)
+  empties the list and **keeps its buffer**: the length goes to 0, the
+  capacity and the storage stay, the next pushes reuse it in the
+  list's own region, and the reset itself allocates nothing and
+  charges nothing on any machine. `clear()` empties too and promises
+  nothing of the buffer (what it keeps is the implementation's; today
+  every machine keeps it). The rule the two names state: **a `List`
+  field replaced by assignment holds its old storage until its region
+  ends**, so a rebuild that must not grow the region resets and
+  refills. With `[mem.region.outer-write]` the refill may run inside a
+  per-turn `region` block — `reset` stores nothing and a push of a
+  scalar or a `copy` lands in the list's own region — which is yew's
+  index rebuild and aspen's level buffers as one method each. Witness
+  `corpus/memory/list_reset.lu`, and
+  `corpus/memory/region_outer_write_reset.lu` for the rebuild inside a
+  turn. **lupin** 0.1.55 resolves neither name (`unsupported`):
+  wolf-interp owes both.
+
 ## §13 The range type `[type.range]`
 
 (s158, wolf-lang#24 / BACKLOG B19 — ruled 2026-09-11. `range` was the
@@ -1504,7 +1545,8 @@ reaches them. wolf-lang#154 is the book's filing of the same gap.)
   args)`.** Resolution of a method call on a receiver with a home
   module, in order, stopping at the first step that finds `name`:
   (1) the language's builtin methods on the type (`push`, `pop`,
-  `get`, `first`, `last`, `is_empty`, `count`, `clear` on `List`;
+  `get`, `first`, `last`, `is_empty`, `count`, `clear`, `reserve`,
+  `reset` on `List` — the last two `[type.list.storage]`, s255;
   `pairs`, `is_empty`, `clear` on `Map`; the `[mem.str]` family on
   `str`; `par`, `[conc.task.par]`); (2) the home module's method
   candidates named `name`; (3) trait methods from traits in scope,
