@@ -888,11 +888,17 @@ mod sys {
         use std::os::fd::AsRawFd as _;
         use std::time::{Duration, Instant};
         let mut files = Vec::with_capacity(handles.len());
+        let mut write = Vec::with_capacity(handles.len());
         for &h in handles {
-            let Some(f) = crate::fs::dup_of(h) else {
+            // s254 (#818, `[os.signal.wait.write]`): bit 62 asks whether the
+            // handle in the other bits takes a write; a negative element
+            // names no handle (`io`, as before).
+            let (base, w) = super::split_write_interest(h);
+            let Some(f) = crate::fs::dup_of(base) else {
                 return Err(sig_code::IO);
             };
             files.push(f);
+            write.push(w);
         }
         let fds: Vec<RawFd> = files.iter().map(|f| f.as_raw_fd()).collect();
         // s239 (wolf-lang#750): a park asks the host for nothing it can
@@ -933,7 +939,7 @@ mod sys {
                 // no park, so no registration (nothing waits for a wake).
                 if left() == Some(Duration::ZERO) && !registered {
                     drop(st);
-                    return match wait_many(&fds, wake, 0) {
+                    return match wait_many(&fds, &write, wake, 0) {
                         Ok((Some(i), _)) => {
                             settle(super::installed(h));
                             let mut st = h.state.lock().unwrap_or_else(|p| p.into_inner());
@@ -1010,7 +1016,7 @@ mod sys {
                     // Rounded UP to whole ms, so a wake never comes early.
                     i32::try_from(timeout.as_micros().div_ceil(1000)).unwrap_or(i32::MAX)
                 };
-                let ready = match wait_many(&fds, wake, timeout) {
+                let ready = match wait_many(&fds, &write, wake, timeout) {
                     Ok((ready, _woke)) => ready,
                     Err(e) if e == libc::EINTR || e == libc::EAGAIN => continue,
                     Err(_) => {
@@ -1051,9 +1057,13 @@ mod sys {
     /// path (`/dev/tty`), measured black-box, where `select(2)` on the
     /// same descriptor works — `select(2)`, for descriptors under
     /// `FD_SETSIZE`. `Err` is the `errno`. s248 (#795): over several
-    /// descriptors (it took one).
+    /// descriptors (it took one). s254 (#818, `[os.signal.wait.write]`):
+    /// `write[i]` asks whether `fds[i]` takes a write (`POLLOUT`; select's
+    /// write set) instead of whether it has something to read; a reader
+    /// gone (`POLLERR`, `POLLHUP`) answers ready, and the write its error.
     pub fn wait_many(
         fds: &[RawFd],
+        write: &[bool],
         wake: RawFd,
         timeout_ms: i32,
     ) -> Result<(Option<usize>, bool), i32> {
@@ -1064,10 +1074,11 @@ mod sys {
         };
         let mut pfds: Vec<libc::pollfd> = fds
             .iter()
-            .chain(std::iter::once(&wake))
-            .map(|&fd| libc::pollfd {
+            .zip(write.iter().copied())
+            .chain(std::iter::once((&wake, false)))
+            .map(|(&fd, w)| libc::pollfd {
                 fd,
-                events: libc::POLLIN,
+                events: if w { libc::POLLOUT } else { libc::POLLIN },
                 revents: 0,
             })
             .collect();
@@ -1095,10 +1106,16 @@ mod sys {
         // descriptors under FD_SETSIZE; a timeval or none.
         unsafe {
             let mut set: libc::fd_set = std::mem::zeroed();
+            let mut wset: libc::fd_set = std::mem::zeroed();
             libc::FD_ZERO(&mut set);
+            libc::FD_ZERO(&mut wset);
             let mut top = wake;
-            for &fd in fds.iter().chain(std::iter::once(&wake)) {
-                libc::FD_SET(fd, &mut set);
+            for (&fd, &w) in fds.iter().zip(write).chain(std::iter::once((&wake, &false))) {
+                if w {
+                    libc::FD_SET(fd, &mut wset);
+                } else {
+                    libc::FD_SET(fd, &mut set);
+                }
                 top = top.max(fd);
             }
             // `suseconds_t` is i64 on linux and i32 on macOS: the conversion
@@ -1116,14 +1133,20 @@ mod sys {
             let n = libc::select(
                 top + 1,
                 &mut set,
-                std::ptr::null_mut(),
+                &mut wset,
                 std::ptr::null_mut(),
                 tvp,
             );
             if n < 0 {
                 return Err(errno());
             }
-            let ready = fds.iter().position(|&fd| libc::FD_ISSET(fd, &set));
+            let ready = fds.iter().zip(write).position(|(&fd, &w)| {
+                if w {
+                    libc::FD_ISSET(fd, &wset)
+                } else {
+                    libc::FD_ISSET(fd, &set)
+                }
+            });
             Ok((ready, libc::FD_ISSET(wake, &set)))
         }
     }
@@ -2146,6 +2169,21 @@ pub fn wait_fd(fd: i64, mask: i64) -> i64 {
     sys::wait_fd(fd, mask)
 }
 
+/// s254 (wolf-lang#818, `[os.signal.wait.write]`): bit 62 of an element of
+/// `os_signal_wait_fds`'s list asks whether the handle in the other bits
+/// TAKES A WRITE (`POLLOUT`) instead of whether it has something to read.
+/// A negative element keeps its sign (no handle: `io`, as before).
+pub const WAIT_WRITE: i64 = 1 << 62;
+
+/// An element of the wait's list as (the handle, a write interest).
+pub fn split_write_interest(h: i64) -> (i64, bool) {
+    if h >= 0 && h & WAIT_WRITE != 0 {
+        (h & !WAIT_WRITE, true)
+    } else {
+        (h, false)
+    }
+}
+
 /// `os_signal_wait_fds(fds, set, deadline_ms)` (s248, wolf-lang#795,
 /// `[os.signal.wait.fds]`; ruling #93 R2 A): park until a meaning in `set`
 /// is delivered — `(-1, m)`, taken off the queue as [`wait`] takes it —
@@ -3154,6 +3192,56 @@ mod tests {
             Err(proc_code::IO)
         );
         for h in [w0, r0, w1, r1] {
+            assert_eq!(crate::fs::__wolf_rt_fs_close(h), 0);
+        }
+        assert_eq!(
+            set_disposition(meaning::RESIZE, Disp::Default),
+            sig_code::OK
+        );
+    }
+
+    /// s254 (#818, `[os.signal.wait.write]`): bit 62 asks for write
+    /// readiness — an empty pipe's write end answers at once, a full one
+    /// (non-blocking, filled to `busy`) waits out the deadline, and a byte
+    /// read makes room; the write interest and a read interest in one list
+    /// answer the lowest ready index.
+    #[cfg(unix)]
+    #[test]
+    fn wait_fds_answers_write_readiness() {
+        let _g = serial();
+        assert_eq!(listen(meaning::RESIZE), sig_code::OK);
+        let (r, w) = table_pipe();
+        assert_eq!(split_write_interest(w | WAIT_WRITE), (w, true));
+        assert_eq!(split_write_interest(-5), (-5, false));
+        assert_eq!(wait_fds(&[w | WAIT_WRITE], meaning::RESIZE, 0), Ok((0, 0)));
+        assert_eq!(crate::fs_gaps::__wolf_rt_fs_set_nonblock(w, 1), 0);
+        let chunk = crate::list::from_bytes(&[b'x'; 4096]) as i64;
+        let mut out = [0i64; 1];
+        // SAFETY: a live List[byte] and an 8-byte slot.
+        while unsafe {
+            crate::fs_gaps::__wolf_rt_fs_write_some(w, chunk, out.as_mut_ptr() as i64)
+        } == 0
+        {}
+        let t0 = std::time::Instant::now();
+        assert_eq!(wait_fds(&[w | WAIT_WRITE], meaning::RESIZE, 25), Ok((-1, 0)));
+        assert!(t0.elapsed() >= Duration::from_millis(25), "the deadline passed");
+        assert_eq!(
+            wait_fds(&[w | WAIT_WRITE, r], meaning::RESIZE, 0),
+            Ok((1, 0)),
+            "the full pipe's reader is ready, its writer is not"
+        );
+        let mut buf = [0u8; 8192];
+        crate::fs::with_handle(r, |f| {
+            use std::io::Read as _;
+            (&*f).read_exact(&mut buf).unwrap()
+        })
+        .unwrap();
+        assert_eq!(
+            wait_fds(&[w | WAIT_WRITE], meaning::RESIZE, 1000),
+            Ok((0, 0)),
+            "room made"
+        );
+        for h in [w, r] {
             assert_eq!(crate::fs::__wolf_rt_fs_close(h), 0);
         }
         assert_eq!(
