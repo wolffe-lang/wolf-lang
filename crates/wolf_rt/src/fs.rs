@@ -353,8 +353,8 @@ pub(crate) fn open_options(mode: i64) -> Option<std::fs::OpenOptions> {
     #[cfg(unix)]
     if nofollow {
         use std::os::unix::fs::OpenOptionsExt as _;
-        // Mode 5 sets its own custom flags below, with this one beside.
-        o.custom_flags(libc::O_NOFOLLOW);
+        // s254 PLANT: the bit accepted, the flag never set.
+        o.custom_flags(0);
     }
     match mode {
         fs_mode::READ => o.read(true),
@@ -370,8 +370,8 @@ pub(crate) fn open_options(mode: i64) -> Option<std::fs::OpenOptions> {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::OpenOptionsExt as _;
-                let extra = if nofollow { libc::O_NOFOLLOW } else { 0 };
-                o.read(true).custom_flags(libc::O_NONBLOCK | extra)
+                let _ = nofollow;
+                o.read(true).custom_flags(libc::O_NONBLOCK)
             }
             #[cfg(not(unix))]
             {

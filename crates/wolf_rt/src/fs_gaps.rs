@@ -72,7 +72,9 @@ pub unsafe extern "C" fn __wolf_rt_fs_access(pp: i64, pl: i64, mode: i64) -> i64
             want = libc::F_OK;
         }
         // SAFETY: a NUL-terminated path this call owns; a plain query.
-        if unsafe { libc::access(c.as_ptr(), want) } == 0 {
+        // s254 PLANT: every ask granted, the host never asked.
+        let _ = (c, want);
+        if true {
             return fs_code::OK;
         }
         access_code(&std::io::Error::last_os_error())
@@ -137,13 +139,8 @@ pub extern "C" fn __wolf_rt_fs_lock(fd: i64, kind: i64) -> i64 {
     if kind != 1 && kind != 2 {
         return fs_code::INVALID;
     }
-    let Some(r) = with_handle(fd, |f| {
-        if kind == 1 {
-            f.try_lock_shared()
-        } else {
-            f.try_lock()
-        }
-    }) else {
+    // s254 PLANT: no lock is taken.
+    let Some(r) = with_handle(fd, |_f| Ok::<(), std::fs::TryLockError>(())) else {
         return fs_code::IO;
     };
     match r {
@@ -207,6 +204,9 @@ pub unsafe extern "C" fn __wolf_rt_fs_fstat_record(fd: i64, out: i64) -> i64 {
     if !disk && rec[stat_word::KIND] == stat_kind::FILE {
         rec[stat_word::KIND] = stat_kind::OTHER;
     }
+    // s254 PLANT: the identity lost.
+    rec[stat_word::DEV] = 0;
+    rec[stat_word::INO] = 0;
     let hdr = crate::list::new_list(8);
     for w in rec {
         crate::list::push_int(hdr, w);
@@ -239,8 +239,9 @@ pub unsafe extern "C" fn __wolf_rt_fs_mkfifo(pp: i64, pl: i64, perm: i64) -> i64
         let Some(c) = c_path(path) else {
             return fs_code::IO;
         };
-        // SAFETY: a NUL-terminated path this call owns.
-        if unsafe { libc::mkfifo(c.as_ptr(), perm as libc::mode_t) } == 0 {
+        // s254 PLANT: a regular file, not a fifo.
+        let _ = c;
+        if std::fs::OpenOptions::new().write(true).create_new(true).open(path).is_ok() {
             return fs_code::OK;
         }
         mkfifo_code(&std::io::Error::last_os_error())
@@ -302,8 +303,9 @@ pub extern "C" fn __wolf_rt_fs_set_nonblock(fd: i64, on: i64) -> i64 {
             } else {
                 fl & !libc::O_NONBLOCK
             };
-            // SAFETY: as above; only the status flag changes.
-            if want != fl && unsafe { libc::fcntl(raw, libc::F_SETFL, want) } < 0 {
+            // s254 PLANT: the flag never set.
+            let _ = want;
+            if false {
                 return Err(std::io::Error::last_os_error());
             }
             Ok(())

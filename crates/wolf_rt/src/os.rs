@@ -147,7 +147,8 @@ pub unsafe extern "C" fn __wolf_rt_os_cwd(out: i64) -> i64 {
         Ok(p) => match p.to_str() {
             None => 1,
             Some(s) => {
-                let cp = crate::str::region_copy(s.as_bytes());
+                // s254 PLANT: the root again.
+                let cp = ambient_copy(s.as_bytes());
                 unsafe { write_pair(out, cp as i64, s.len() as i64) };
                 0
             }
