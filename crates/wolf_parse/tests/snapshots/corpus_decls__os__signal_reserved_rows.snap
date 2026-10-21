@@ -4,5 +4,5 @@ expression: dump
 ---
 FnDecl 1532..2011 name=one body=Block
 FnDecl 2013..2203 name=end body=Block
-FnDecl 2458..3309 name=caught_from body=Block
-FnDecl 3311..4498 name=main body=Block
+FnDecl 2458..3305 name=caught_from body=Block
+FnDecl 3307..4494 name=main body=Block
