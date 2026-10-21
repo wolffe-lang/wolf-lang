@@ -1,0 +1,52 @@
+//! check: run(exit=0, stdout="100000 23 7 2\n")
+//! phase: run
+//! conforms: mem.region.outer-write, mem.region.escape, mem.region.create.3
+//!
+//! s255 (wolf-lang#839, #856; `[mem.region.outer-write]`, R1): yew's
+//! editor loop and aspen's walk at their smallest — a session-long value
+//! mutated once a turn through a `mut` parameter, by a callee that
+//! builds its temporaries in its caller's region (D12) and stores into
+//! the value only what the clause admits: `byte` pushes into storage the
+//! value already owns, an `int` index store, a scalar field. Such a
+//! parameter is AMBIENT-CLEAN, proven by the callee's own lowering, so
+//! the call inside `region turn { }` gives `s` no site: the turn's
+//! strings die with the turn and the loop runs flat (the driver gate
+//! `region_outer_write_lanes` reads the resident set at this count and
+//! twice it).
+//!
+//! yew `notes/yw03-evidence/witness/turn-region/with-region.lu` is this
+//! program. Before s255 every compiling machine refused it at the call:
+//! "`s` still holds a value allocated in region `turn` when the region
+//! is freed" — the signature rule's conservatism (`[mem.region.escape]`,
+//! s227), not a leak. lupin 0.1.55 ran it all along.
+
+struct S {
+    v: List[int],
+    frame: List[byte],
+    n: int,
+}
+
+fn render(mut s: S, i: int) {
+    let t = "row {i}: {s.n} {i * 7}"
+    while s.frame.len != 0 {
+        let _ = (mut s.frame).pop() else 0 as byte
+    }
+    for b in t.bytes() {
+        (mut s.frame).push(b)
+    }
+    s.v[0] = t.len
+    s.n += 1
+}
+
+fn main() {
+    var s = S { v: List[int](), frame: List[byte](), n: 0 }
+    (mut s.v).push(0)
+    var i = 0
+    while i < 100000 {
+        region turn {
+            render(mut s, i)
+        }
+        i += 1
+    }
+    print("{s.n} {s.v[0]} {s.frame[0] - 107} {s.frame.len - 21}")
+}

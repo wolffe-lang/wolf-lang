@@ -1,0 +1,36 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.outer-write, mem.region.escape, mem.region.create.3
+//!
+//! s255 (`[mem.region.outer-write]`, R1): the call the clause still
+//! refuses. `stash` stores a `str` it builds — in its caller's region,
+//! which inside `turn` is `turn` itself — into a flat field of its `mut`
+//! parameter, so the parameter is not ambient-clean and the call gives
+//! `s` the block's site: E1010 at the block's end, as before s255, and
+//! the report now names the callee's store that keeps the bytes. (A
+//! `copy` at that store would not make it clean either: a flat field's
+//! copy lands in the callee's entry ambient, which is this very block.)
+//! The repair is to build the title where `s` lives — outside the block
+//! — or to keep it in storage `s` owns (`List[byte]` pushes).
+
+struct S {
+    title: str,
+    n: int,
+}
+
+fn stash(mut s: S, i: int) {
+    s.title = "t{i}"
+    s.n += 1
+}
+
+fn main() {
+    var s = S { title: "", n: 0 }
+    var i = 0
+    while i < 10 {
+        region turn {
+            stash(mut s, i)               // ERROR E1010: `stash` keeps `turn`'s bytes in `s`
+        }
+        i += 1
+    }
+    print("{s.title} {s.n}")
+}

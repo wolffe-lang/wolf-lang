@@ -1,0 +1,40 @@
+//! check: run(exit=0, stdout="0 1000 0 999 3 7 8 9 true\n")
+//! phase: run
+//! conforms: type.list.reserve, mem.region.account.1
+//!
+//! s255 (wolf-lang#844; `[type.list.reserve]`): `reserve(n)` grows a
+//! list's capacity to at least `n` in the list's own region, leaves its
+//! length and elements alone, and is a no-op when the capacity is
+//! already there (so `reserve(0)` and a smaller `n` than the length
+//! change nothing). A thousand pushes after `reserve(1000)` grow nothing
+//! on the native tiers (one buffer, no doubling history); the ledger
+//! only ever rises (`[mem.region.account.1]`), read as a relation here
+//! because its units are the tier's.
+
+fn main() {
+    var xs = List[int]()
+    (mut xs).reserve(1000)
+    let len0 = xs.len
+    var i = 0
+    while i < 1000 {
+        (mut xs).push(i)
+        i += 1
+    }
+    var ys = List[int]()
+    (mut ys).push(7)
+    (mut ys).push(8)
+    (mut ys).push(9)
+    (mut ys).reserve(2)
+    (mut ys).reserve(0)
+    var charged_ok = true
+    region r {
+        var zs = List[byte]()
+        let a = region_bytes(r)
+        (mut zs).reserve(64)
+        let b = region_bytes(r)
+        (mut zs).push(1 as byte)
+        let c = region_bytes(r)
+        charged_ok = b >= a && c >= b
+    }
+    print("{len0} {xs.len} {xs[0]} {xs[999]} {ys.len} {ys[0]} {ys[1]} {ys[2]} {charged_ok}")
+}

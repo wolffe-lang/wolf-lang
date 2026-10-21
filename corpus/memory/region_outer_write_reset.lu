@@ -1,0 +1,48 @@
+//! check: run(exit=0, stdout="300 3 299 0 6\n")
+//! phase: run
+//! conforms: mem.region.outer-write, type.list.reset, mem.region.create.3
+//!
+//! s255 (wolf-lang#821, yew G33; `[mem.region.outer-write]`,
+//! `[type.list.reset]`): the index-rebuild shape. A long-lived value's
+//! list is rebuilt every turn; replacing the field with a fresh list
+//! each time would hold every old buffer until the value's region ends
+//! (670 KB an edit in yew's grapheme index, 134 MB over 200 appends).
+//! `reset()` empties the list and keeps its buffer, the pushes that
+//! follow reuse it in the list's own region, and the turn's temporaries
+//! die with the block — the spare-pair swap yew wrote by hand, as one
+//! method. `reset` stores nothing and `push` stores `int`s, so the
+//! callee's parameter is ambient-clean and the call runs inside the
+//! block.
+
+struct Doc {
+    index: List[int],
+    rebuilt: int,
+}
+
+fn rebuild(mut d: Doc, turn: int) {
+    var tmp = List[int]()
+    var i = 0
+    while i < 3 {
+        (mut tmp).push(turn * 3 + i)
+        i += 1
+    }
+    (mut d.index).reset()
+    for x in tmp {
+        (mut d.index).push(x)
+    }
+    d.rebuilt += 1
+}
+
+fn main() {
+    var d = Doc { index: List[int](), rebuilt: 0 }
+    var t = 0
+    while t < 300 {
+        region turn {
+            rebuild(mut d, t)
+        }
+        t += 1
+    }
+    var empty = copy d.index
+    (mut empty).reset()
+    print("{d.rebuilt} {d.index.len} {d.index[0] - 598} {empty.len} {d.index[2] - 893}")
+}

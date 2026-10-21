@@ -1,0 +1,39 @@
+//! check: run(exit=0, stdout="100 turn 0 turn 99 42 true\n")
+//! phase: run
+//! conforms: mem.region.outer-write, mem.region.escape, mem.region.copyout
+//!
+//! s255 (wolf-lang#839, #856; `[mem.region.outer-write]`): a `str` built
+//! inside a `region` block is pushed into a list declared outside it
+//! with `copy` at the store. In that position `copy` is the
+//! materializing copy `copy region { }` makes — the bytes are re-made in
+//! the LIST's own region (the one its header remembers), never the
+//! block's — so the list outlives the block holding its own bytes. The
+//! string read back at the end is read after a hundred regions have been
+//! freed and reused.
+//!
+//! Before s255 this was E1010 on every compiling machine: a `copy` of a
+//! `str` shares the bytes (ruling #35) and the push's receiver gained the
+//! call's ambient site. lupin 0.1.55 shares the bytes too and traps
+//! `region-fault` here: wolf-interp owes this clause.
+
+struct Log {
+    lines: List[str],
+    total: int,
+}
+
+fn main() {
+    var log = Log { lines: List[str](), total: 0 }
+    var i = 0
+    while i < 100 {
+        region turn {
+            let scratch = "scratch {i} {i * 3}"
+            (mut log.lines).push(copy "turn {i}")
+            log.total += scratch.len
+        }
+        i += 1
+    }
+    // Read the first and the last after the regions are gone, and a byte
+    // of the middle: the bytes are the list's, not a freed chunk's.
+    let mid = log.lines[42]
+    print("{log.lines.len} {log.lines[0]} {log.lines[99]} {mid.len + 35} {log.total > 0}")
+}

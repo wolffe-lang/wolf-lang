@@ -1,0 +1,31 @@
+//! check: run(exit=0, stdout="40 v7 v39 true\n")
+//! phase: run
+//! conforms: mem.region.outer-write, mem.region.copyout, mem.region.escape
+//!
+//! s255 (`[mem.region.outer-write]`): a `Map` store from inside the
+//! block keeps its KEY as well as its value (s227: "a `Map` store keeps
+//! its key"), so both are written `copy` and both are materialized in
+//! the map's own region. The lookups at the end run after the forty
+//! regions are gone. Before s255: E1010 (the key's and the value's bytes
+//! were the block's).
+
+struct Tab {
+    m: Map[str, str],
+}
+
+fn main() {
+    var tab = Tab { m: Map[str, str]() }
+    var i = 0
+    while i < 40 {
+        region turn {
+            let k = "k{i}"
+            let v = "v{i}"
+            tab.m[copy k] = copy v
+        }
+        i += 1
+    }
+    let a = tab.m["k7"] else "?"
+    let b = tab.m["k39"] else "?"
+    let missing = tab.m["k40"] else "none"
+    print("{tab.m.count()} {a} {b} {missing == "none"}")
+}

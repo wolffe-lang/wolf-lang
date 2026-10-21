@@ -1,27 +1,35 @@
 //! check: fail(E1010)
 //! phase: typecheck
-//! conforms: mem.region.scalar, mem.region.escape, mem.tier0.mode.mut
+//! conforms: mem.region.scalar, mem.region.escape, mem.tier0.mode.mut, mem.region.outer-write
 //!
-//! s252 (wolf-lang#801): what the `mut` rule still refuses. `grow`
-//! may replace `h.xs` with a list it builds in its caller's region,
-//! which inside `turn` is `turn` itself, so `h`, declared outside,
-//! would hold storage the region frees. A struct that holds a `List`
-//! is not scalar-only. Conservative, not exact: this `push` grows the
-//! caller's list in place, and lupin 0.1.54, which tracks the list
-//! itself, runs it.
+//! s252 (wolf-lang#801): what the `mut` rule still refuses. A struct
+//! that holds a `List` is not scalar-only, and `grow` keeps bytes it
+//! builds in its caller's region — which inside `turn` is `turn` itself
+//! — in that list: a plain push of a `str` shares the bytes
+//! (`[mem.tier0.move.3]`), so `h`, declared outside, would hold storage
+//! the region frees. The parameter is not ambient-clean
+//! (`[mem.region.outer-write]`, s255), so the call gives `h` the
+//! block's site: E1010 at the block's end, naming `grow`'s push.
+//!
+//! Until s255 this row pushed an `int`, and that shape was refused by
+//! the signature rule alone ("conservative, not exact"); s255's
+//! `region_outer_write_call.lu` holds it as a run row now. lupin 0.1.55
+//! tracks the list itself and traps `region-fault` here.
 
 struct Hist {
     xs: List[int],
+    names: List[str],
 }
 
 fn grow(mut h: Hist) {
     (mut h.xs).push(1)
+    (mut h.names).push("n{h.xs.len}")
 }
 
 fn main() {
-    var h = Hist { xs: List[int]() }
+    var h = Hist { xs: List[int](), names: List[str]() }
     region turn {
-        grow(mut h)
+        grow(mut h)                       // ERROR E1010: `grow` keeps `turn`'s bytes in `h`
     }
-    print("{h.xs.len}")
+    print("{h.xs.len} {h.names.len}")
 }

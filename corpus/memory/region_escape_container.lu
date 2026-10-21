@@ -6,8 +6,13 @@
 //! ambient region at its site, a `List` that outlives that region is a
 //! DANGLING POINTER — the fast version of the old leak. Keeping it out
 //! is the region checker's job, not the allocator's, and this is the
-//! witness that it does: both the header (`List[int]()`) and the growth
-//! (`push`) are allocation sites in `tmp`, and both are reported.
+//! witness that it does: the header (`List[int]()`) is an allocation
+//! site in `tmp`, and the assignment that hands it to `keep` is
+//! reported. The growth (`push`) is not a second site in `tmp` since
+//! s255 (`[mem.region.outer-write]`): a list grows in the region its
+//! header remembers, so a `push` into an outer list is the OUTER
+//! region's business — it is the reassigned header that escapes here,
+//! and the push is reported with it only because it grows that header.
 //!
 //! The sibling `region_escape_local.lu` says the same thing about a
 //! struct. This file exists because the CONTAINER is the case a reader

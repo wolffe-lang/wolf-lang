@@ -1,0 +1,27 @@
+//! check: run(exit=0, stdout="4 n28 n29 n30 n31\n")
+//! phase: run
+//! conforms: mem.region.outer-write, mem.region.edge.elem, mem.region.copyout
+//!
+//! s255 (`[mem.region.outer-write]`): a store THROUGH an index of an
+//! outer list from inside the block, with `copy` at the store. A plain
+//! index store already copies (`[mem.region.edge.elem]`, wolf-lang#438)
+//! but shares a `str`'s bytes; written `copy` in this position it
+//! materializes them in the list's own region. The four slots are read
+//! back after the regions are gone. Before s255: E1010.
+
+fn main() {
+    var names = List[str]()
+    (mut names).push("a")
+    (mut names).push("b")
+    (mut names).push("c")
+    (mut names).push("d")
+    var i = 0
+    while i < 32 {
+        region turn {
+            let t = "n{i}"
+            names[i % 4] = copy t
+        }
+        i += 1
+    }
+    print("{names.len} {names[0]} {names[1]} {names[2]} {names[3]}")
+}
