@@ -5652,7 +5652,21 @@ impl<'t> Lowerer<'t> {
     /// read through the declaration, an applied generic's bare
     /// parameter as its argument.
     fn copy_out_refusal(&self, t: Ty<'t>, depth: u32) -> Option<String> {
-        self.copy_out_refusal_in(t, depth, &mut Vec::new())
+        self.copy_out_refusal_in(t, depth, &mut Vec::new(), false)
+    }
+
+    /// s255 (`[mem.region.outer-write]`): the same question for the
+    /// materializing copy a store into an outer value makes, where a
+    /// TYPE PARAMETER is admitted: this tier lowers a generic body once
+    /// with its parameters rigid (std's `map.set` is `m[k] = copy v`
+    /// over `V`), while the native tiers lower each instantiation and
+    /// `deep_copy_out` there refuses a part no copy can make
+    /// independent, by name, exactly as `deep_copy_in` did for the
+    /// same stores before this clause. `copy region { }` keeps its
+    /// static refusal of a parameter: its copy is made once, by the
+    /// block, in the body that names the parameter.
+    fn copy_out_refusal_for_store(&self, t: Ty<'t>) -> Option<String> {
+        self.copy_out_refusal_in(t, 0, &mut Vec::new(), true)
     }
 
     fn copy_out_refusal_in(
@@ -5660,12 +5674,16 @@ impl<'t> Lowerer<'t> {
         t: Ty<'t>,
         depth: u32,
         seen: &mut Vec<(u32, String)>,
+        params_ok: bool,
     ) -> Option<String> {
         if depth > 32 {
             return Some("a type nested too deep to copy".to_string());
         }
         let at = |id: TyId| Ty { table: t.table, id };
         let shown = || render(t.table, t.id, &|_| Err("_"));
+        if params_ok && matches!(t.kind(), TyKind::Rigid(_) | TyKind::Var(_) | TyKind::Proj(..)) {
+            return None;
+        }
         match t.kind() {
             TyKind::Error
             | TyKind::Never
@@ -5677,21 +5695,21 @@ impl<'t> Lowerer<'t> {
             | TyKind::ExitReason
             | TyKind::InferredRow { .. }
             | TyKind::OpenTail => None,
-            TyKind::Distinct(inner) => self.copy_out_refusal_in(at(*inner), depth + 1, seen),
-            TyKind::List(e) => self.copy_out_refusal_in(at(*e), depth + 1, seen),
+            TyKind::Distinct(inner) => self.copy_out_refusal_in(at(*inner), depth + 1, seen, params_ok),
+            TyKind::List(e) => self.copy_out_refusal_in(at(*e), depth + 1, seen, params_ok),
             TyKind::Map(k, v) => self
-                .copy_out_refusal_in(at(*k), depth + 1, seen)
-                .or_else(|| self.copy_out_refusal_in(at(*v), depth + 1, seen)),
+                .copy_out_refusal_in(at(*k), depth + 1, seen, params_ok)
+                .or_else(|| self.copy_out_refusal_in(at(*v), depth + 1, seen, params_ok)),
             TyKind::Tuple(items) => items
                 .iter()
-                .find_map(|&id| self.copy_out_refusal_in(at(id), depth + 1, seen)),
+                .find_map(|&id| self.copy_out_refusal_in(at(id), depth + 1, seen, params_ok)),
             TyKind::ErrUnion(ok, row) => self
-                .copy_out_refusal_in(at(*ok), depth + 1, seen)
-                .or_else(|| self.copy_out_refusal_in(at(*row), depth + 1, seen)),
+                .copy_out_refusal_in(at(*ok), depth + 1, seen, params_ok)
+                .or_else(|| self.copy_out_refusal_in(at(*row), depth + 1, seen, params_ok)),
             TyKind::Row { tags, .. } => tags
                 .iter()
                 .flat_map(|(_, ps)| ps.iter())
-                .find_map(|&id| self.copy_out_refusal_in(at(id), depth + 1, seen)),
+                .find_map(|&id| self.copy_out_refusal_in(at(id), depth + 1, seen, params_ok)),
             TyKind::Nominal { module, name, args } => {
                 // A recursive type is answered by its first visit.
                 if seen.iter().any(|(m, n)| m == module && n == name) {
@@ -5712,7 +5730,7 @@ impl<'t> Lowerer<'t> {
                 };
                 match self.sigs.get(*module as usize, name) {
                     Some(ItemSig::Struct(ss)) => ss.fields.iter().find_map(|f| {
-                        self.copy_out_refusal_in(member(&ss.generics, f.ty), depth + 1, seen)
+                        self.copy_out_refusal_in(member(&ss.generics, f.ty), depth + 1, seen, params_ok)
                     }),
                     Some(ItemSig::Enum {
                         generics, variants, ..
@@ -5720,7 +5738,7 @@ impl<'t> Lowerer<'t> {
                         .iter()
                         .flat_map(|v| v.payload.iter())
                         .find_map(|&p| {
-                            self.copy_out_refusal_in(member(generics, p), depth + 1, seen)
+                            self.copy_out_refusal_in(member(generics, p), depth + 1, seen, params_ok)
                         }),
                     Some(ItemSig::Distinct { base, .. }) => self.copy_out_refusal_in(
                         Ty {
@@ -5729,6 +5747,7 @@ impl<'t> Lowerer<'t> {
                         },
                         depth + 1,
                         seen,
+                        params_ok,
                     ),
                     _ => None,
                 }
@@ -5848,7 +5867,7 @@ impl<'t> Lowerer<'t> {
                     let Some(t) = ty else {
                         return Ok(inner);
                     };
-                    if let Some(what) = self.copy_out_refusal(t, 0) {
+                    if let Some(what) = self.copy_out_refusal_for_store(t) {
                         self.conflicted = true;
                         let region = self.show_region(target);
                         self.diags.push(

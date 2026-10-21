@@ -188,6 +188,17 @@ recommendation implemented (RULES §9).
 - Anchors 681 (`spec/anchors.json`, `version` 1); `RT_SYMBOLS` 244
   (`crates/wolf_codegen_clif/src/translate.rs`); PAIRING lupin 0.1.55 pin
   `294d626`; workspace version 0.2.34.
+- Rebased onto `b308dafc` (s253 merged, 2026-10-22, the orchestrator's
+  word) after the prediction was committed: s253 touched none of
+  `crates/wolf_mem/src/lower.rs`, `regions.rs`, `wolf_rt/src/list.rs`,
+  `map.rs`, `native.rs` (`git diff --stat 0cb954a8 b308dafc` over them
+  is empty), so the `0cb954a8` dist built on kasumi stays the "before"
+  compiler for every measurement. At `b308dafc` the counts are anchors
+  686, `RT_SYMBOLS` 250, host table 160 (s253's), and P8's deltas are
+  read from there: anchors 686 → 690 (`mem.region.outer-write`,
+  `type.list.storage`, `type.list.reserve`, `type.list.reset`: one more
+  than predicted, the subsection's own anchor), `RT_SYMBOLS` 250 → 251.
+  s251 (#823) lands later; one more rebase then.
 - yew trunk `77c10839` (`ab8bab0` is its ancestor: yw02's head); aspen
   trunk `476edee` (ap01 merged 2026-10-22). Both public.
 - The four issues, read in full: #839 (yew, the editor loop, 337 B a key /
