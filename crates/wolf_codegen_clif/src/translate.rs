@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 244] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 250] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -458,6 +458,17 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 244] = [
     // s248 (#798, `[os.clock.ns]`): the monotonic clock in nanoseconds,
     // `time_now_ms`'s shape.
     ("__wolf_rt_os_clock_ns", 0, true),
+    // s253 (#819, `[os.uname]`): the OS and the architecture, each a str
+    // pair through a slot, no row (`os_error_text`'s shape); (#811,
+    // `[os.proc.core]`) the core limit's pair through a slot, its set and
+    // the end with no core, each a code; (#815, `[os.proc.adopt]`) an
+    // inherited descriptor's handle, or the negated code (`fs_open`'s).
+    ("__wolf_rt_os_name", 1, false),
+    ("__wolf_rt_os_arch", 1, false),
+    ("__wolf_rt_os_core_limit", 1, true),
+    ("__wolf_rt_os_set_core_limit", 2, true),
+    ("__wolf_rt_os_core_off", 0, true),
+    ("__wolf_rt_fs_adopt", 1, true),
     ("__wolf_rt_time_sleep_ms", 1, false),
     // The s73 conc families (wolf_rt::task, the frozen s32–s36 ABI +
     // the conc_abi additions): handles/ids/words as i64|ptr; the
