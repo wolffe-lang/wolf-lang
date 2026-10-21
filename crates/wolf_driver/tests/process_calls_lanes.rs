@@ -802,7 +802,7 @@ fn record_in(
     sub: &str,
     limit: &str,
     conf: &[(&str, &str)],
-) -> Obs {
+) -> (Obs, String) {
     live.conf(sub, conf);
     let out = live.sh(&format!(
         "{limit}; cd {} && {machine} conform-run {} {flags} --json",
@@ -810,14 +810,39 @@ fn record_in(
         live.fixture_at(name)
     ));
     let obs = parse_obs(&out.stdout, &format!("{machine} on {name}"));
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     eprintln!(
-        "== {machine} on {name} {conf:?}: {} {}\n{}{}",
-        obs.verdict,
-        obs.reason,
-        obs.stdout,
-        String::from_utf8_lossy(&out.stderr)
+        "== {machine} on {name} {conf:?}: {} {}\n{}{stderr}",
+        obs.verdict, obs.reason, obs.stdout,
     );
-    obs
+    (obs, stderr)
+}
+
+/// The bits `mode`'s child reported for `field` (`SigIgn`, `SigCgt`) in a
+/// run's standard error (`reserved_child.lu` writes them before it says it
+/// is ready), or `None` when it wrote none.
+#[cfg(unix)]
+fn child_mask(stderr: &str, mode: &str, field: &str) -> Option<u64> {
+    let key = format!("{mode}: {field}: ");
+    let line = stderr.lines().find(|l| l.starts_with(&key))?;
+    u64::from_str_radix(line[key.len()..].trim(), 16).ok()
+}
+
+/// How a `wait` child that was sent 33 ends, by the masks it had at the
+/// send: with 33 caught (glibc's handler, a thread started) or ignored (as
+/// glibc's `posix_spawn` starts a child where the kernel refuses `clone3`:
+/// CI's docker runner, measured) it lives and exits 0; at the default it
+/// dies of 33.
+#[cfg(unix)]
+fn end_by_masks(stderr: &str, mode: &str) -> &'static str {
+    let bit = 1u64 << 32;
+    let ign = child_mask(stderr, mode, "SigIgn").expect("the child's SigIgn");
+    let cgt = child_mask(stderr, mode, "SigCgt").expect("the child's SigCgt");
+    if ign & bit != 0 || cgt & bit != 0 {
+        "exit 0"
+    } else {
+        "signal 33"
+    }
 }
 
 /// The limit a `read` reported against the shell's own, read by the
@@ -907,7 +932,7 @@ fn a_core_limit_and_an_end_with_no_core() {
             "#811: {kid} lowers its limit and is denied a raise: {stdout:?}"
         );
     }
-    let checked = record_in(
+    let (checked, _) = record_in(
         &live,
         &live.wolf_at(),
         "--checked",
@@ -979,7 +1004,7 @@ fn a_core_limit_and_an_end_with_no_core() {
             }
             if *leg == "off" {
                 let sub = format!("{leg}-{}-checked", kid.rsplit('/').next().unwrap());
-                let checked = record_in(
+                let (checked, _) = record_in(
                     &live,
                     &live.wolf_at(),
                     "--checked",
@@ -995,7 +1020,7 @@ fn a_core_limit_and_an_end_with_no_core() {
                 );
                 if let Some(l) = live.lupin_at() {
                     let sub = format!("{leg}-{}-lupin", kid.rsplit('/').next().unwrap());
-                    let obs = record_in(
+                    let (obs, _) = record_in(
                         &live,
                         &l,
                         "",
@@ -1029,9 +1054,13 @@ fn a_core_limit_and_an_end_with_no_core() {
 /// `reserved_parent.lu`, on every machine, starts `reserved_child.lu`'s
 /// binary: `os_exit_signal(-32)` and `(-33)`, with and without a task,
 /// are refused by name (`invalid`: the child exits 3); a 33 sent to a
-/// child with no thread ends it, and one that ran a task lives (glibc's
-/// handler takes it). linux only, in a container (macOS has no real-time
-/// signals). Red at 0.2.34: the four exits were 160 and 161.
+/// `wait` child ends it at the default and not where the child holds 33
+/// caught (glibc's handler, after a task) or ignored (glibc's
+/// `posix_spawn` starts a child with 32 and 33 ignored where the kernel
+/// refuses `clone3`: CI's docker runner; at the default under kasumi's
+/// podman — s253's M3), each row held to the masks the child wrote at the
+/// send. linux only, in a container (macOS has no real-time signals). Red
+/// at 0.2.34: the four exits were 160 and 161.
 #[cfg(target_os = "linux")]
 #[test]
 fn the_c_librarys_handler_and_numbers() {
@@ -1056,8 +1085,25 @@ fn the_c_librarys_handler_and_numbers() {
             );
         }
     }
-    let want = "exit32: exit 3\nexit32-task: exit 3\nexit33: exit 3\nexit33-task: exit 3\n\
-                wait, sent 33: signal 33\nwait-task, sent 33: exit 0\n";
+    let exits = "exit32: exit 3\nexit32-task: exit 3\nexit33: exit 3\nexit33-task: exit 3\n";
+    // The two `wait` rows by the masks the child had at the send, and
+    // glibc's handler on 33 after the task.
+    let want_of = |stderr: &str| -> String {
+        if glibc {
+            let cgt = child_mask(stderr, "wait-task", "SigCgt").expect("wait-task's SigCgt");
+            assert_ne!(
+                cgt & (1u64 << 32),
+                0,
+                "#812: after a task the child catches 33 (glibc's handler): {stderr}"
+            );
+        }
+        let (a, b) = (end_by_masks(stderr, "wait"), end_by_masks(stderr, "wait-task"));
+        report(&format!(
+            "REPORT the wait children's ends by their masks: wait {a} (SigIgn {:x?}), wait-task {b}",
+            child_mask(stderr, "wait", "SigIgn")
+        ));
+        format!("{exits}wait, sent 33: {a}\nwait-task, sent 33: {b}\n")
+    };
     for release in [false, true] {
         let Some(c) = build(&fixture("reserved_child.lu"), &live.dir, "child", release) else {
             continue;
@@ -1082,6 +1128,7 @@ fn the_c_librarys_handler_and_numbers() {
                 stderr.replace('\n', " | ")
             ));
             if glibc {
+                let want = want_of(&stderr);
                 assert_eq!(
                     stdout,
                     format!("{want}rc=0\n"),
@@ -1095,7 +1142,7 @@ fn the_c_librarys_handler_and_numbers() {
             }
         }
         let sub = format!("{}-checked", kid.rsplit('/').next().unwrap());
-        let checked = record_in(
+        let (checked, checked_err) = record_in(
             &live,
             &live.wolf_at(),
             "--checked",
@@ -1105,15 +1152,16 @@ fn the_c_librarys_handler_and_numbers() {
             &[("child", kid.as_str())],
         );
         if glibc {
+            let want = want_of(&checked_err);
             assert_eq!(
                 (checked.verdict.as_str(), checked.stdout.as_str()),
-                ("exit(0)", want),
+                ("exit(0)", want.as_str()),
                 "#812: the CHECKED machine as the parent of {kid}"
             );
         }
         if let Some(l) = live.lupin_at() {
             let sub = format!("{}-lupin", kid.rsplit('/').next().unwrap());
-            let obs = record_in(
+            let (obs, _) = record_in(
                 &live,
                 &l,
                 "",
