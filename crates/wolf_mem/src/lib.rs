@@ -187,22 +187,13 @@ pub fn check_package(pkg: &Package, tc: &Typecheck) -> MemCheck {
     // s233 (wolf-lang#678's helper half): every body is lowered before
     // any is judged, because the must-join check reads the whole
     // package — a call is refused by what its callee leaves running.
+    // s255 (`[mem.region.outer-write]`): and in callee-first order,
+    // because a call reads its callee's ambient-clean verdicts.
     let mut lowered_all: Vec<(&wolf_sema::BodyOutcome, Lowered)> = Vec::new();
-    for outcome in &tc.bodies {
-        let BodyResult::Checked(tb) = &outcome.result else {
-            continue;
-        };
-        match lower_body(
-            pkg,
-            &tc.sigs,
-            tb,
-            &outcome.body,
-            is_proc_entry(tc, &outcome.body),
-            &statics,
-        ) {
-            None => {}
-            Some(Err(nyc)) => out.not_yet.push(nyc),
-            Some(Ok(lowered)) => lowered_all.push((outcome, lowered)),
+    for (outcome, lowered) in lower_all(pkg, tc, &statics) {
+        match lowered {
+            Err(nyc) => out.not_yet.push(nyc),
+            Ok(lowered) => lowered_all.push((outcome, lowered)),
         }
     }
     let must_join = procjoin::solve(
@@ -284,18 +275,11 @@ pub fn check_cfg(cfg: &cfg::Cfg) -> Vec<Diagnostic> {
 pub fn dump_package(pkg: &Package, tc: &Typecheck) -> String {
     let mut out = String::new();
     let statics = strres::static_str_fns(pkg, tc);
-    for outcome in &tc.bodies {
-        let BodyResult::Checked(tb) = &outcome.result else {
-            continue;
-        };
-        if let Some(Ok(lowered)) = lower_body(
-            pkg,
-            &tc.sigs,
-            tb,
-            &outcome.body,
-            is_proc_entry(tc, &outcome.body),
-            &statics,
-        ) {
+    // s255: the same callee-first lowering `check_package` runs, so a
+    // dump shows the sites the check saw (a clean parameter's call
+    // mints none); the output stays in body order.
+    for (_, lowered) in lower_all(pkg, tc, &statics) {
+        if let Ok(lowered) = lowered {
             out.push_str(&lowered.cfg.dump());
             out.push('\n');
         }
@@ -308,18 +292,8 @@ pub fn dump_package(pkg: &Package, tc: &Typecheck) -> String {
 pub fn dump_regions_package(pkg: &Package, tc: &Typecheck) -> String {
     let mut out = String::new();
     let statics = strres::static_str_fns(pkg, tc);
-    for outcome in &tc.bodies {
-        let BodyResult::Checked(tb) = &outcome.result else {
-            continue;
-        };
-        if let Some(Ok(lowered)) = lower_body(
-            pkg,
-            &tc.sigs,
-            tb,
-            &outcome.body,
-            is_proc_entry(tc, &outcome.body),
-            &statics,
-        ) {
+    for (_, lowered) in lower_all(pkg, tc, &statics) {
+        if let Ok(lowered) = lowered {
             out.push_str(&lowered.regions.render());
             out.push('\n');
         }
@@ -345,6 +319,222 @@ fn is_proc_entry(tc: &Typecheck, body: &BodyRef) -> bool {
 
 /// Lower one checked body. `None`: the item has no lowerable body
 /// (extern fn, broken tree).
+/// s255 (wolf-lang#839, #856, `[mem.region.outer-write]`): lower every
+/// checked body of the package, callee-first, filling the ambient-clean
+/// table as it goes — the answer each `mut` parameter's own lowering
+/// gives, read by every call that passes a `mut` argument.
+///
+/// The bodies form a call graph (a declared call's `decl_span` is its
+/// callee's name span, the key `strres` uses too); its strongly
+/// connected components are lowered in reverse topological order, so a
+/// callee's verdicts are final before its callers read them. A
+/// component with a cycle (a recursive walk like aspen's `walk_dir`, or
+/// mutual recursion) starts from the optimistic answer — every `mut`
+/// parameter clean — and is re-lowered until no verdict moves: the
+/// verdicts only ever go from clean to unclean, so the fixpoint is
+/// reached in at most one step per parameter that falls (bounded here,
+/// with every member marked unclean past the bound). A component with
+/// no cycle is lowered once. The result is each body's lowering (the
+/// last one of its component), in the package's body order.
+fn lower_all<'a>(
+    pkg: &'a Package,
+    tc: &'a Typecheck,
+    statics: &std::collections::HashSet<wolf_span::Span>,
+) -> Vec<(&'a wolf_sema::BodyOutcome, Result<Lowered, NotYet>)> {
+    use std::collections::HashMap;
+    // The lowerable bodies, each with its key (a fn's name span) and
+    // its parameter modes (for the optimistic start).
+    struct Node<'a> {
+        outcome: &'a wolf_sema::BodyOutcome,
+        tb: &'a TypedBody,
+        key: Option<wolf_span::Span>,
+        mut_params: Vec<u32>,
+    }
+    let mut nodes: Vec<Node<'a>> = Vec::new();
+    for outcome in &tc.bodies {
+        let BodyResult::Checked(tb) = &outcome.result else {
+            continue;
+        };
+        let (key, mut_params) = match body_fn_node(pkg, &outcome.body) {
+            Some((node, outer)) => {
+                let key = wolf_ast::FnDecl::cast(node).and_then(|d| d.name().map(|t| t.span));
+                let params = fn_params(pkg, &tc.sigs, &outcome.body, outer).unwrap_or_default();
+                let muts = params
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, p)| p.mode == Some(wolf_ast::ParamMode::Mut))
+                    .map(|(i, _)| i as u32)
+                    .collect();
+                (key, muts)
+            }
+            None => (None, Vec::new()),
+        };
+        nodes.push(Node {
+            outcome,
+            tb,
+            key,
+            mut_params,
+        });
+    }
+    let by_key: HashMap<wolf_span::Span, usize> = nodes
+        .iter()
+        .enumerate()
+        .filter_map(|(i, n)| n.key.map(|k| (k, i)))
+        .collect();
+    let edges: Vec<Vec<usize>> = nodes
+        .iter()
+        .map(|n| {
+            let mut out: Vec<usize> = n
+                .tb
+                .calls
+                .iter()
+                .filter_map(|(_, c)| c.decl_span.and_then(|d| by_key.get(&d).copied()))
+                .collect();
+            out.sort_unstable();
+            out.dedup();
+            out
+        })
+        .collect();
+    // Tarjan's SCCs, emitted in reverse topological order (callees
+    // before callers), iteratively (a deep call chain is not a deep
+    // recursion here).
+    let n = nodes.len();
+    let mut index = vec![usize::MAX; n];
+    let mut low = vec![0usize; n];
+    let mut on_stack = vec![false; n];
+    let mut stack: Vec<usize> = Vec::new();
+    let mut sccs: Vec<Vec<usize>> = Vec::new();
+    let mut next = 0usize;
+    for root in 0..n {
+        if index[root] != usize::MAX {
+            continue;
+        }
+        let mut work: Vec<(usize, usize)> = vec![(root, 0)];
+        index[root] = next;
+        low[root] = next;
+        next += 1;
+        stack.push(root);
+        on_stack[root] = true;
+        while let Some(&mut (v, ref mut ei)) = work.last_mut() {
+            if *ei < edges[v].len() {
+                let w = edges[v][*ei];
+                *ei += 1;
+                if index[w] == usize::MAX {
+                    index[w] = next;
+                    low[w] = next;
+                    next += 1;
+                    stack.push(w);
+                    on_stack[w] = true;
+                    work.push((w, 0));
+                } else if on_stack[w] {
+                    low[v] = low[v].min(index[w]);
+                }
+            } else {
+                work.pop();
+                if let Some(&(u, _)) = work.last() {
+                    low[u] = low[u].min(low[v]);
+                }
+                if low[v] == index[v] {
+                    let mut comp = Vec::new();
+                    while let Some(w) = stack.pop() {
+                        on_stack[w] = false;
+                        comp.push(w);
+                        if w == v {
+                            break;
+                        }
+                    }
+                    comp.sort_unstable();
+                    sccs.push(comp);
+                }
+            }
+        }
+    }
+    let mut table: lower::MutClean = HashMap::new();
+    let mut results: Vec<Option<Result<Lowered, NotYet>>> = (0..n).map(|_| None).collect();
+    let lower_one = |i: usize, table: &lower::MutClean| -> Option<Result<Lowered, NotYet>> {
+        let nd = &nodes[i];
+        lower_body(
+            pkg,
+            &tc.sigs,
+            nd.tb,
+            &nd.outcome.body,
+            is_proc_entry(tc, &nd.outcome.body),
+            statics,
+            table,
+        )
+    };
+    for comp in &sccs {
+        let cyclic = comp.len() > 1 || comp.iter().any(|&v| edges[v].contains(&v));
+        // The optimistic start: every `mut` parameter of the component
+        // clean, so a recursive call inside it reads "clean" first.
+        if cyclic {
+            for &i in comp {
+                if let Some(k) = nodes[i].key {
+                    for &pi in &nodes[i].mut_params {
+                        table.insert((k, pi), Ok(()));
+                    }
+                }
+            }
+        }
+        let mut rounds = 0usize;
+        loop {
+            rounds += 1;
+            let mut moved = false;
+            for &i in comp {
+                let r = lower_one(i, &table);
+                if let (Some(Ok(l)), Some(k)) = (&r, nodes[i].key) {
+                    for &(pi, ref verdict) in &l.mut_clean {
+                        let prev = table.get(&(k, pi)).cloned();
+                        if prev.as_ref() != Some(verdict) {
+                            moved = true;
+                            table.insert((k, pi), verdict.clone());
+                        }
+                    }
+                }
+                results[i] = r;
+            }
+            if !cyclic || !moved {
+                break;
+            }
+            if rounds >= 16 {
+                // Past the bound: every member unclean, one last pass.
+                for &i in comp {
+                    if let Some(k) = nodes[i].key {
+                        for &pi in &nodes[i].mut_params {
+                            let at = k;
+                            table.insert((k, pi), Err(at));
+                        }
+                    }
+                }
+                for &i in comp {
+                    results[i] = lower_one(i, &table);
+                }
+                break;
+            }
+        }
+    }
+    nodes
+        .into_iter()
+        .zip(results)
+        .filter_map(|(nd, r)| r.map(|r| (nd.outcome, r)))
+        .collect()
+}
+
+/// The declaration node a body lowers from, with its enclosing item
+/// for an impl or trait member — `None` when the body is not a fn.
+fn body_fn_node<'a>(pkg: &'a Package, body: &BodyRef) -> Option<(&'a GreenNode, Option<&'a GreenNode>)> {
+    let root = &pkg.files[body.file].parse.root;
+    let node = root.nodes().filter(|n| n.kind.is_item()).nth(body.decl)?;
+    let (node, outer) = match body.member {
+        None => (node, None),
+        Some(mi) => {
+            let inner = node.nodes().filter(|n| n.kind.is_item()).nth(mi)?;
+            (inner, Some(node))
+        }
+    };
+    (node.kind == SyntaxKind::FnDecl).then_some((node, outer))
+}
+
 fn lower_body(
     pkg: &Package,
     sigs: &SigTables,
@@ -352,6 +542,7 @@ fn lower_body(
     body: &BodyRef,
     proc_entry: bool,
     statics: &std::collections::HashSet<wolf_span::Span>,
+    mut_clean: &lower::MutClean,
 ) -> Option<Result<Lowered, NotYet>> {
     let root = &pkg.files[body.file].parse.root;
     let node = root.nodes().filter(|n| n.kind.is_item()).nth(body.decl)?;
@@ -362,8 +553,9 @@ fn lower_body(
             (inner, Some(node))
         }
     };
-    let lowerer =
-        lower::Lowerer::new(pkg, sigs, tb, body.module, body.file).with_static_strs(statics);
+    let lowerer = lower::Lowerer::new(pkg, sigs, tb, body.module, body.file)
+        .with_static_strs(statics)
+        .with_mut_clean(mut_clean);
     match node.kind {
         SyntaxKind::FnDecl => {
             let d = wolf_ast::FnDecl::cast(node)?;
