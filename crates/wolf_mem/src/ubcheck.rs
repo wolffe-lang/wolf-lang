@@ -8559,6 +8559,10 @@ impl<'t> Machine<'t> {
             },
             // s215: once the program has moved its working directory,
             // the answer is the machine-local one (`[os.fs.chdir]`).
+            // s254 (wolf-lang#834): the name is a materialization in the
+            // ambient region (`[mem.region.escape]`), charged to its
+            // ledger as the native tiers charge it — `net_read`'s rule
+            // (s228), so a `cap:` breach on it traps here too.
             "os_cwd" if self.cwd.is_some() => {
                 let s = self
                     .cwd
@@ -8566,6 +8570,8 @@ impl<'t> Machine<'t> {
                     .map(|p| p.to_string_lossy().into_owned())
                     .unwrap_or_default();
                 self.charge_mem(s.len() as u64)?;
+                let rid = self.ambient.last().copied().unwrap_or(0);
+                self.charge_region_bytes(rid, s.len() as u64, span)?;
                 Ok(Flow::Val(Value::Str(s)))
             }
             "os_cwd" => match std::env::current_dir() {
@@ -8576,6 +8582,8 @@ impl<'t> Machine<'t> {
                     None => Ok(tag("io")),
                     Some(s) => {
                         self.charge_mem(s.len() as u64)?;
+                        let rid = self.ambient.last().copied().unwrap_or(0);
+                        self.charge_region_bytes(rid, s.len() as u64, span)?;
                         Ok(Flow::Val(Value::Str(s.to_string())))
                     }
                 },
