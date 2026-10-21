@@ -1110,7 +1110,11 @@ mod sys {
             libc::FD_ZERO(&mut set);
             libc::FD_ZERO(&mut wset);
             let mut top = wake;
-            for (&fd, &w) in fds.iter().zip(write).chain(std::iter::once((&wake, &false))) {
+            for (&fd, &w) in fds
+                .iter()
+                .zip(write)
+                .chain(std::iter::once((&wake, &false)))
+            {
                 if w {
                     libc::FD_SET(fd, &mut wset);
                 } else {
@@ -1130,13 +1134,7 @@ mod sys {
             } else {
                 &raw mut tv
             };
-            let n = libc::select(
-                top + 1,
-                &mut set,
-                &mut wset,
-                std::ptr::null_mut(),
-                tvp,
-            );
+            let n = libc::select(top + 1, &mut set, &mut wset, std::ptr::null_mut(), tvp);
             if n < 0 {
                 return Err(errno());
             }
@@ -3218,13 +3216,18 @@ mod tests {
         let chunk = crate::list::from_bytes(&[b'x'; 4096]) as i64;
         let mut out = [0i64; 1];
         // SAFETY: a live List[byte] and an 8-byte slot.
-        while unsafe {
-            crate::fs_gaps::__wolf_rt_fs_write_some(w, chunk, out.as_mut_ptr() as i64)
-        } == 0
+        while unsafe { crate::fs_gaps::__wolf_rt_fs_write_some(w, chunk, out.as_mut_ptr() as i64) }
+            == 0
         {}
         let t0 = std::time::Instant::now();
-        assert_eq!(wait_fds(&[w | WAIT_WRITE], meaning::RESIZE, 25), Ok((-1, 0)));
-        assert!(t0.elapsed() >= Duration::from_millis(25), "the deadline passed");
+        assert_eq!(
+            wait_fds(&[w | WAIT_WRITE], meaning::RESIZE, 25),
+            Ok((-1, 0))
+        );
+        assert!(
+            t0.elapsed() >= Duration::from_millis(25),
+            "the deadline passed"
+        );
         assert_eq!(
             wait_fds(&[w | WAIT_WRITE, r], meaning::RESIZE, 0),
             Ok((1, 0)),

@@ -13932,7 +13932,14 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
             rowed(
                 table,
                 unit,
-                &["not_found", "denied", "exists", "invalid", "unsupported", "io"],
+                &[
+                    "not_found",
+                    "denied",
+                    "exists",
+                    "invalid",
+                    "unsupported",
+                    "io",
+                ],
             ),
         ),
         // s254 (#818, `[os.fs.nonblock]`): the handle's O_NONBLOCK, set or
