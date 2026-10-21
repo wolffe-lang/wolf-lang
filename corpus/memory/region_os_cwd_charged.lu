@@ -1,0 +1,33 @@
+//! check: run(exit=0, stdout="charged true | reclaimed true | got true")
+//! phase: run
+//! conforms: mem.region.account.1, mem.region.account.2, mem.region.create.3
+//!
+//! s254 (wolf-lang#834; pelt sh22) — `region_net_read_charged.lu` for the
+//! working directory's name: `[mem.region.create.3]` charges every
+//! materialization to the ambient region, and `os_cwd`'s answer is one,
+//! so a thousand names asked inside `region pass { }` appear in that
+//! region's ledger and vanish with it.
+//!
+//! Until s254 every machine placed the name outside the region: `charged`
+//! read false here on the checked machine, native, release and lupin
+//! 0.1.55, and a shell that asked the name every turn inside a region of
+//! its own kept every answer for the life of the process (pelt sh22: 48 B
+//! a call in the root). The booleans are the portable claim
+//! (`[mem.region.account.1]`: the ledger's units are a per-tier fact);
+//! `got` says the names were non-empty, whatever directory the run is in.
+
+fn main() -> !int {
+    let before = live_region_bytes()
+    var charged = 0
+    var got = 0
+    region pass {
+        for _ in 0..1000 {
+            let c = os_cwd()?
+            got = got + c.len
+        }
+        charged = region_bytes(pass)
+    }
+    let reclaimed = live_region_bytes() == before
+    print_raw("charged {charged >= got} | reclaimed {reclaimed} | got {got > 0}")
+    0
+}

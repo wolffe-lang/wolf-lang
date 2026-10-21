@@ -1,0 +1,31 @@
+//! member: false
+//! s254 (wolf-lang#834) — pelt sh22's `cwdregion` witness, its shape kept:
+//! `main MODE X…` runs 100,000 turns per byte of its second argument, and
+//! the harness reads the peak resident set at N and at 2N turns.
+//!   cwd     `os_cwd()` asked inside `region r { }`, its length kept
+//!   interp  a `str` of the same length built by interpolation inside the
+//!           region (the control: the region gives it back)
+//!   none    the loop alone
+fn main() {
+    let args = env_args()
+    let mode = args[0]
+    let n = args[1].len * 100000
+    let here = os_cwd() else ""
+    var t = 0
+    var i = 0
+    while i < n {
+        if mode == "cwd" {
+            region r {
+                let c = os_cwd() else ""
+                t += c.len
+            }
+        } else if mode == "interp" {
+            region r {
+                let c = "{here}{i % 2}"
+                t += c.len
+            }
+        }
+        i += 1
+    }
+    print("{t}")
+}
