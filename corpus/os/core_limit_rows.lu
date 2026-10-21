@@ -43,7 +43,7 @@ fn main() -> int {
     }
     let soft = read.0
     let hard = read.1
-    let shaped = soft >= -1 && hard >= -1 && (hard == -1 || (soft >= 0 && soft <= hard))
+    let shaped = soft >= -1 && hard >= -1 && (hard == -1 || soft >= 0 && soft <= hard)
     print("read_is_a_limit: {shaped}")
     print("set_as_it_is: {set(soft, hard) == "ok"}")
     0
