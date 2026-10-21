@@ -58,6 +58,81 @@ better report and a row.
   wrapping shift, where the three compiling machines say E0401).
   `small_gaps_lanes.rs` asserts its column.
 
+s254 — the fs gaps and the pipe write (wolf-lang#820, #818, #834; yew
+yw02 G30, G32; pelt sh22). What an editor's save path, journal and
+clipboard met as absences, and a shell's working directory kept in the
+root; the spellings beyond the contract are rulings asked at audit
+(`[os.fs.gaps.note]` R1–R8), each recommendation what is built.
+
+- **`fs_access(path, mode) -> () ! {denied, invalid, io, not_found,
+  unsupported}`** (#820, `[os.fs.access]`; R1): `access(2)` with the real
+  ids — 0 exists, 4 read, 2 write, 1 execute; `EROFS` is `denied`;
+  windows `unsupported`.
+- **Bit 16 of the open mode, `O_NOFOLLOW`** (#820,
+  `[os.fs.open.nofollow]`; R2): `fs_open_mode` and `fs_open_perm` refuse
+  a FINAL symbolic link `invalid` (`ELOOP` in `os_error()`) and follow a
+  middle one; windows refuses the bit.
+- **`fs_lock(fd, kind) -> () ! {busy, invalid, io, unsupported}`** and
+  **`fs_unlock(fd) -> () ! {io, unsupported}`** (#820, `[os.fs.lock]`;
+  R3): an advisory lock on the open file (`flock`; `LockFileEx` on
+  windows, mandatory there), 1 shared, 2 exclusive, tried once — `busy`
+  held through another open, in this process or another.
+- **`fs_fstat_record(fd) -> List[int] ! {io}`** (#820,
+  `[os.fs.fstat.record]`; R4): `fs_stat`'s twenty words from a handle —
+  its identity (`dev`, `ino`) with no path walked.
+- **`fs_mkfifo(path, perm) -> () ! {denied, exists, invalid, io,
+  not_found, unsupported}`** (#820, `[os.fs.mkfifo]`): `mkfifo(3)`; a
+  file system that makes no fifo (`EPERM`, `ENOSYS`, `EOPNOTSUPP`) and
+  windows `unsupported`.
+- **`fs_set_nonblock(fd, on) -> () ! {invalid, io, unsupported}`** and
+  **`fs_write_some(fd, bytes) -> int ! {busy, invalid, io}`** (#818,
+  `[os.fs.nonblock]`; R5, R7): `O_NONBLOCK` on a handle (0..2 `invalid`,
+  windows `unsupported`), and one write that answers the count taken —
+  `busy` (`EAGAIN`) when a non-blocking handle takes nothing.
+- **`os_signal_wait_fds` waits for write readiness** (#818,
+  `[os.signal.wait.write]`; R6): an element `h + (1 << 62)` asks whether
+  `h` takes a write (`POLLOUT`; a reader gone is ready). yew's clipboard
+  witness, which parked for ever at 0.2.34, now takes the pipe's 65536
+  bytes, answers `busy`, waits out a 25 ms deadline and gives up.
+- **`os_cwd()`'s answer lands in the region it is asked in** (#834,
+  `[mem.region.escape]`): it went to the process root, so a loop asking
+  it inside `region { }` kept the name every turn — 32 B a call for a
+  28-byte directory on both tiers, 0 now (pelt sh22 read 48 B for 39).
+  `os_cwd` is a site first (#374's order), so its answer returned out of
+  the region it was asked in is E1010; the checked machine charges it to
+  the region.
+
+### Read this before you bump the pin
+
+- **Seven new prelude names**: `fs_access`, `fs_lock`, `fs_unlock`,
+  `fs_fstat_record`, `fs_mkfifo`, `fs_set_nonblock`, `fs_write_some` (a
+  function of one of these names now shadows a builtin, W0304). The
+  `busy` mark is answered by `fs_lock` and `fs_write_some` beside
+  `os_fork`.
+- **An open mode with bit 16 set is no longer `invalid`** on unix: it
+  opens without following a final link. Any other bit above the mode
+  stays `invalid`; windows refuses bit 16.
+- **An element of `os_signal_wait_fds`'s list with bit 62 set is no
+  longer `io`**: it waits for the handle to take a write.
+- **`os_cwd()` asked inside a region and kept past it is E1010.** Its
+  bytes now live in that region; make the call outside the region, or
+  copy the answer out with `copy region { }`. Measured before it landed:
+  pelt, boreutils, yew and lobo (341 builds, the published 0.2.34 against the head) answer with the same verdicts and diagnostics — no site newly refused.
+
+### Downstream
+
+- wolf-interp: resolve the seven names and the open's bit 16 (0.1.55
+  refuses the bit as a mode outside its set), the wait's bit 62, and
+  `os_cwd`'s place in the region — or refuse each by name.
+- wolf-std: wrappers (`fs.access`, `fs.lock`/`fs.unlock`,
+  `fs.stat_handle`, `fs.mkfifo`, `fs.set_nonblock`, `fs.write_some`, a
+  `signal.WAIT_WRITE`), and `fs.open`'s no-follow flag.
+- yew: at its 0.2.35 pin, retire `directory_writable`, the `fs_lstat`
+  before the open, the path stat after it, the `mkfifo` utility, and the
+  blocking clipboard write (G30, G32).
+- pax: `flock` and `mknodat` of a fifo are the two absences the runtime
+  answers `unsupported` (px lane).
+
 ## 0.2.34 — 2026-10-20
 
 **What this release changes: the fork, and what an editor asks of the
