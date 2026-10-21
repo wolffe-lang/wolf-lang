@@ -132,7 +132,9 @@ pub unsafe extern "C" fn __wolf_rt_fs_open_perm(pp: i64, pl: i64, open: i64, mod
         use std::os::unix::fs::OpenOptionsExt as _;
         let path = unsafe { view(pp, pl) };
         match opts.mode(mode as u32).open(path) {
-            Err(e) => -code_of(&e),
+            // s254 (`[os.fs.open.nofollow]`): a final link refused under the
+            // no-follow bit is `invalid`, as in `fs_open_mode`.
+            Err(e) => -crate::fs::open_code(&e, open),
             Ok(f) => mint_file(f),
         }
     }

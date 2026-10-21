@@ -87,6 +87,12 @@ pub mod fs_code {
     /// host refusal BY NAME; only the calls that declare the tag
     /// produce it.
     pub const UNSUPPORTED: i64 = 10;
+    /// s254 (wolf-lang#820, #818; `[os.fs.lock]`, `[os.fs.nonblock]`): the
+    /// host would have to wait, and the call does not — another open of
+    /// the file holds a conflicting lock, or a non-blocking handle can
+    /// take nothing now. Both are the host's `EWOULDBLOCK`/`EAGAIN`; only
+    /// `fs_lock` and `fs_write_some` produce it, and both declare it.
+    pub const BUSY: i64 = 11;
 }
 
 /// `fs_open_mode`'s mode argument. The set is deliberately small and
@@ -124,6 +130,14 @@ pub mod fs_mode {
     /// this path and serves the mode as [`READ`], by name in the
     /// clause.
     pub const READ_NONBLOCK: i64 = 5;
+    /// s254 (wolf-lang#820, `[os.fs.open.nofollow]`): a FLAG, not a mode —
+    /// added to any of the six, it refuses a FINAL symbolic link
+    /// (`O_NOFOLLOW`: the host's `ELOOP`, answered `invalid`) where the same
+    /// open without it follows the link. A link in a middle component is
+    /// followed either way. `mode & 15` is the mode; any other bit above it
+    /// is `invalid`. windows has no such open on this path and refuses the
+    /// flag `invalid`, by name, before the host is asked.
+    pub const NOFOLLOW: i64 = 16;
 }
 
 /// The open files, by handle. 0, 1 and 2 are never in it: those three
@@ -326,9 +340,22 @@ pub unsafe extern "C" fn __wolf_rt_fs_write_text(pp: i64, pl: i64, cp: i64, cl: 
 /// The `OpenOptions` of one of [`fs_mode`]'s six modes, or `None` for a
 /// mode outside the set (`invalid`). Shared by the open family and by
 /// `fs_open_perm` (s230, [`crate::fs_change`]), which adds the
-/// creation's permission bits to the same options.
+/// creation's permission bits to the same options. s254: the mode may
+/// carry [`fs_mode::NOFOLLOW`] (`O_NOFOLLOW` beside the mode's own flags;
+/// windows: `None`, the flag refused by name).
 pub(crate) fn open_options(mode: i64) -> Option<std::fs::OpenOptions> {
+    let nofollow = mode & fs_mode::NOFOLLOW != 0;
+    let mode = mode & !fs_mode::NOFOLLOW;
+    if nofollow && !cfg!(unix) {
+        return None;
+    }
     let mut o = std::fs::OpenOptions::new();
+    #[cfg(unix)]
+    if nofollow {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        // Mode 5 sets its own custom flags below, with this one beside.
+        o.custom_flags(libc::O_NOFOLLOW);
+    }
     match mode {
         fs_mode::READ => o.read(true),
         fs_mode::WRITE => o.write(true).create(true).truncate(true),
@@ -343,7 +370,8 @@ pub(crate) fn open_options(mode: i64) -> Option<std::fs::OpenOptions> {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::OpenOptionsExt as _;
-                o.read(true).custom_flags(libc::O_NONBLOCK)
+                let extra = if nofollow { libc::O_NOFOLLOW } else { 0 };
+                o.read(true).custom_flags(libc::O_NONBLOCK | extra)
             }
             #[cfg(not(unix))]
             {
@@ -375,9 +403,30 @@ pub unsafe extern "C" fn __wolf_rt_fs_open(pp: i64, pl: i64, mode: i64) -> i64 {
         return -fs_code::INVALID;
     };
     match opts.open(path) {
-        Err(e) => -code_of(&e),
+        Err(e) => -open_code(&e, mode),
         Ok(f) => mint_file(f),
     }
+}
+
+/// The code of a failed open of `mode` (s254, `[os.fs.open.nofollow]`):
+/// under [`fs_mode::NOFOLLOW`] the host's refusal of a final symbolic link
+/// — `ELOOP` (linux, macOS; freebsd's `EMLINK`) — is `invalid`, its number
+/// in `os_error()`; everything else is the family's mapping.
+pub(crate) fn open_code(e: &std::io::Error, mode: i64) -> i64 {
+    #[cfg(unix)]
+    if mode & fs_mode::NOFOLLOW != 0 {
+        let link = if cfg!(target_os = "freebsd") {
+            libc::EMLINK
+        } else {
+            libc::ELOOP
+        };
+        if e.raw_os_error() == Some(link) {
+            os_error_record(e);
+            return fs_code::INVALID;
+        }
+    }
+    let _ = mode;
+    code_of(e)
 }
 
 /// `fs_read(fd, max) -> str ! {eof, io, utf8}` — one read of at most
@@ -1160,7 +1209,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_read_dir_entries(pp: i64, pl: i64, out: i6
 /// `None` is a host that hands the process no such stream (windows'
 /// null std handle); a descriptor that is merely closed reaches the
 /// host call and answers its error there (`EBADF`, the `io` row).
-fn std_stream(fd: i64) -> Option<std::mem::ManuallyDrop<File>> {
+pub(crate) fn std_stream(fd: i64) -> Option<std::mem::ManuallyDrop<File>> {
     #[cfg(unix)]
     {
         use std::os::unix::io::FromRawFd as _;
@@ -1222,7 +1271,7 @@ pub(crate) fn with_handle<R>(fd: i64, f: impl FnOnce(&File) -> R) -> Option<R> {
 static STDIN_BUFFERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Is `fd` one of the three standard streams?
-fn is_std(fd: i64) -> bool {
+pub(crate) fn is_std(fd: i64) -> bool {
     (0..FIRST_HANDLE as i64).contains(&fd)
 }
 
@@ -1290,7 +1339,7 @@ fn seek_code(e: &std::io::Error) -> i64 {
 /// (measured on the windows runner, wolf-lang CI run 37062798818, job
 /// 111023227162: `fstat0 kind=0 size=19` with standard input a pipe).
 #[cfg(windows)]
-fn is_disk(f: &File) -> bool {
+pub(crate) fn is_disk(f: &File) -> bool {
     use std::os::windows::io::AsRawHandle as _;
     #[link(name = "kernel32")]
     unsafe extern "system" {
@@ -1302,7 +1351,7 @@ fn is_disk(f: &File) -> bool {
 }
 
 #[cfg(not(windows))]
-fn is_disk(_f: &File) -> bool {
+pub(crate) fn is_disk(_f: &File) -> bool {
     true
 }
 
