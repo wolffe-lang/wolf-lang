@@ -1,5 +1,87 @@
 # Changelog
 
+## Unreleased
+
+s253 — the process calls (wolf-lang#811, #812, #815, #819; boreutils
+bu28, yew yw02 G26 and G31, pax's sigwolf). Five calls and one refusal
+by name; the spellings beyond the contract are rulings asked at audit
+(`[os.process.calls.note]` R1–R7), each recommendation what is built.
+
+- **`os_core_limit() -> (int, int) ! {unsupported}`**,
+  **`os_set_core_limit(soft, hard) -> () ! {denied, invalid,
+  unsupported}`** and **`os_core_off() -> () ! {unsupported}`** (#811,
+  `[os.proc.core]`; R1, R2): the core limit read (-1 unlimited; read
+  first, the limit the process was born with) and set (the shape first:
+  each -1 or 0 and up, the soft at most the hard; `denied` for a raise
+  the host refuses), and an end that dumps no core on any host or
+  pattern — on linux the "dumpable" attribute 0, GNU `timeout`'s own call
+  (measured), the one switch a pattern that pipes cores obeys (core(5):
+  the limit is not enforced there), set back by `exec`; elsewhere the
+  soft limit 0. `[os.proc.status]` now says what a core in a status means
+  when the child's limit is 0 (ruling #88 R3): a dump the host piped to a
+  program, which may keep nothing.
+- **The C library's own signals are refused by name** (#812,
+  `[os.signal.host.reserved]`; R3): the handler on 33 a wolf program
+  holds is glibc's, installed when a process starts its second thread
+  (nptl(7); measured black-box on glibc 2.39 and 2.44, none on musl) —
+  the runtime installs nothing on 32–34. `os_signal_ignore_one`,
+  `os_signal_default_one` and `os_exit_signal` answer **`invalid`** for
+  the C library's numbers (linux: 32 up to `os_signal_realtime()`'s
+  first; glibc's 32 and 33, musl's 32 to 34) on every machine; the sends
+  and `os_signal_text` take them as before.
+- **`fs_adopt(fd) -> int ! {invalid, io, unsupported}`** (#815,
+  `[os.proc.adopt]`; R4): a descriptor this process inherited, 3 or
+  above, made an fs handle that owns it and closes it at `fs_close`,
+  marked close-on-exec on adoption. What may be adopted is open and not
+  close-on-exec; every descriptor the runtime makes is close-on-exec, so
+  its own and one adopted before answer `io`; 0–2 and numbers past i32
+  are `invalid`; windows `unsupported`.
+- **`os_name() -> str`** and **`os_arch() -> str`** (#819, `[os.uname]`;
+  R5): the OS and the architecture the program runs on, as the kernel
+  answers (`uname(2)`, lowercased; Darwin is `macos`, `arm64` is
+  `aarch64`, `amd64` is `x86_64`) — `linux`, `macos`, `freebsd`, `pax` on
+  PAX; windows `windows` and the build's architecture.
+- Charges (R6): the three reads `env`, the limit's set and `os_core_off`
+  `exec`, `fs_adopt` `fs`; all six refused at comptime. The checked
+  machine answers each on the `wolf` process it runs in (R7).
+- spec/11 gains `[os.proc.core]`, `[os.proc.adopt]`,
+  `[os.signal.host.reserved]`, §11 `[os.uname]` and
+  `[os.process.calls.note]` (anchors 677); the host table is 153 lines.
+
+### Read this before you bump the pin
+
+- **Six new prelude names**: `os_core_limit`, `os_set_core_limit`,
+  `os_core_off`, `fs_adopt`, `os_name`, `os_arch` (a function of one of
+  these names now shadows a builtin, W0304).
+- **`os_signal_ignore_one(-32)`, `(-33)` and `os_signal_default_one` of
+  them answer `invalid`** under glibc where 0.2.33 and 0.2.34 answered
+  `io` (glibc's `sigaction` refused them); under musl so does `-34`.
+- **`os_exit_signal(-32)` and `(-33)` return `invalid`** where 0.2.33 and
+  0.2.34 exited 160 and 161 (glibc never delivered them; measured on both
+  tiers, with a thread and without).
+
+### Downstream
+
+- **wolf-std**: wrappers for the six (`process.core_limit`,
+  `process.set_core_limit`, `process.core_off`, `fs.adopt`, `os.name`,
+  `os.arch`, or the std's spellings), and `signal.host(n)` refusing the
+  C library's numbers by name (ruling #85's spelling).
+- **wolf-interp**: lupin 0.1.55 resolves none of the six names; it owes
+  the shape rows and then `getrlimit`/`setrlimit` (std has neither: a
+  refusal by name), `os_core_off` refused by name, `fs_adopt` refused by
+  name (no `fcntl` in std), `os_name` and `os_arch` from
+  `std::env::consts` or refused by name; the reserved numbers' `invalid`
+  rows where its one-meaning calls answer the shape.
+- **boreutils**: `timeout` may call `os_core_off()` before it ends itself
+  by its command's signal, retiring the three `design` rows `core:` in
+  `tests/timeout/cases.toml` (GNU's own call, measured); the `-s 33` row
+  stays by design (glibc's handler, `[os.signal.host.reserved]`).
+- **yew**: `fs_adopt` for the torture child's ready descriptor (G26) and
+  `os_name`/`os_arch` for the clipboard's choice (G31), at its 0.2.35 pin.
+- **pax**: sigwolf's `L:` rows may read `os_core_limit`; a px lane to
+  confirm `os_name` answers `pax` there, `os_core_limit` `(0, -1)`, the
+  set `denied` (`prlimit64`'s -EPERM) and `os_core_off` `ok`.
+
 ## 0.2.34 — 2026-10-20
 
 **What this release changes: the fork, and what an editor asks of the
