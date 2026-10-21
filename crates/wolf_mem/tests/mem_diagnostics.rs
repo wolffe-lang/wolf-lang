@@ -2719,9 +2719,12 @@ fn e1010_a_kept_aggregate_argument_has_no_fix_it() {
 }
 
 #[test]
-fn e1010_a_copy_of_an_aggregate_shares_its_strs() {
-    // No call at all: `copy d` is placed in `st`, and its `title`
-    // still names bytes in `pass`.
+fn a_copy_at_a_store_into_an_outer_value_materializes() {
+    // s227's door, admitted by s255 (`[mem.region.outer-write]`): no
+    // call at all, and `copy d` is written AT A STORE into `o`, declared
+    // outside `pass` — so it is the materializing copy, made in the
+    // region ambient where `o` was declared (`st`), and its `title`
+    // names bytes there, not in `pass`. Clean.
     snap(
         "e1010_copy_shares_str",
         "struct Doc { title: str, n: int }\n\
@@ -2733,6 +2736,35 @@ fn e1010_a_copy_of_an_aggregate_shares_its_strs() {
                      let d = Doc { title: \"built {o.n}\", n: 1 }\n            \
                      in st {\n                \
                          o = copy d\n            \
+                     }\n        \
+                 }\n        \
+                 print(\"{o.title}\")\n    \
+             }\n    \
+             0\n\
+         }\n",
+    );
+}
+
+#[test]
+fn e1010_a_copy_bound_inside_the_block_still_shares_its_strs() {
+    // s227's rule where s255 leaves it: a `copy` in any position but a
+    // store into an outer value shares the original's `str` bytes.
+    // Bound inside `pass` and assigned on to `o` plainly, the copy's
+    // title still names bytes in `pass`: E1010 at the block's end,
+    // with the clause's note naming the repair (`o = copy d` — the
+    // copy at the store).
+    snap(
+        "e1010_copy_bound_in_block_shares_str",
+        "struct Doc { title: str, n: int }\n\
+         fn main() -> !int {\n    \
+             let st = region()\n    \
+             in st {\n        \
+                 var o = Doc { title: \"\", n: 0 }\n        \
+                 region pass {\n            \
+                     let d = Doc { title: \"built {o.n}\", n: 1 }\n            \
+                     let kept = copy d\n            \
+                     in st {\n                \
+                         o = kept\n            \
                      }\n        \
                  }\n        \
                  print(\"{o.title}\")\n    \

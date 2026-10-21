@@ -157,9 +157,10 @@ fn run_row(rel: &str, want: &str, lupin: Lupin, why: &str) {
     }
 }
 
-/// A refusal row: `code` on every compiling machine, with every
-/// `needle` in some diagnostic's text (the message, a label or a note);
-/// lupin's column as measured.
+/// A refusal row: `code` on every compiling machine (the observation
+/// record carries the code and the span), and every `needle` in the
+/// RENDERED report `wolf build` prints (the message, the labels and the
+/// notes — what a reader sees); lupin's column as measured.
 fn fail_row(rel: &str, code: &str, needles: &[&str], lupin: Lupin, why: &str) {
     let entry = corpus(rel);
     for flag in ["--checked", "--native", "--release"] {
@@ -167,13 +168,27 @@ fn fail_row(rel: &str, code: &str, needles: &[&str], lupin: Lupin, why: &str) {
             continue;
         };
         assert_eq!(obs.verdict, format!("fail({code})"), "{rel} on {flag}: {why}");
-        let text = serde_json::to_string(&obs.diags).unwrap_or_default();
-        for needle in needles {
-            assert!(
-                text.contains(needle),
-                "{rel} on {flag}: the report should say {needle:?}; got {text}"
-            );
-        }
+        assert!(
+            obs.diags.iter().any(|d| d["code"].as_str() == Some(code)),
+            "{rel} on {flag}: a {code} in the record"
+        );
+    }
+    let dir = scratch(&format!("report-{}", rel.replace('/', "-")));
+    let out = Command::new(wolf())
+        .arg("build")
+        .arg(&entry)
+        .arg("-o")
+        .arg(dir.join("refused"))
+        .arg("--no-cache")
+        .output()
+        .expect("wolf build runs");
+    assert!(!out.status.success(), "{rel}: `wolf build` should refuse it");
+    let text = String::from_utf8_lossy(&out.stderr);
+    for needle in needles {
+        assert!(
+            text.contains(needle),
+            "{rel}: the report should say {needle:?}; got:\n{text}"
+        );
     }
     if let Some(l) = lupin_says(&entry) {
         match lupin {

@@ -2,6 +2,71 @@
 
 ## Unreleased
 
+s255 — the loop's region (wolf-lang#839, #856, #821, #844; ruling #112,
+the maintainer: "if we've hit the same wall twice in real projects,
+maybe it's time for the language adjustment"). The wall, met by yew's
+editor loop and aspen's directory walk: a `region` block refused every
+write into a value living outside it, so a loop whose turn builds
+temporaries could not open a region per turn when the turn also wrote
+to something long-lived. One clause, two `List` methods, two witnesses.
+
+- **A write into an outer value keeps nothing of the block when the
+  stored value names no region or is written `copy`**
+  (`[mem.region.outer-write]`). Inside a `region`/`in` block, a field
+  store, a store through a `mut` parameter, a `push`, an index store or
+  a `Map` store into a value declared outside the block is admitted when
+  the stored value is a scalar or a literal, or is written `copy e` at
+  the store — and that `copy` is the materializing copy `copy region
+  { }` makes (every `str` re-made, every container a fresh buffer),
+  made in the OUTER value's region: a container's own (the region its
+  header remembers and its growth uses) for a `push`, an index or `Map`
+  store (the key included) or a `List`/`Map` replaced; the region
+  ambient where the binding was declared for any other field (a
+  parameter's: the caller's region). A container's growth inside the
+  block is its own region's too ("even a byte push" was E1010 before).
+  A call inside the block passing a `mut` argument gives it the
+  block's region unless the callee's parameter is **ambient-clean** —
+  proven by the callee's own lowering: scalar stores, container stores
+  of scalars or `copy`s, containers replaced by `copy`, calls to clean
+  parameters and the storing-nothing mutators only, and never moved
+  from; computed callee-first over the build with a fixpoint per
+  recursive component (aspen's `walk_dir`). Everything else stays
+  E1010/E1004, and the report names the store and the one-word repair,
+  or the callee's keeping store. The checked machine charges the copies
+  to the outer region's ledger (`region_outer_write_charged.lu`); the
+  turn region runs flat at 100,000 and 200,000 turns on both native
+  tiers (`region_outer_write_lanes`). Cost: a `copy` at an outer store
+  pays one deep copy in the outer region where it used to share a
+  `str`'s bytes; nothing for a program without such a write.
+- **`List.reserve(n)` and `List.reset()`** (`[type.list.storage]`,
+  #844, #821): `reserve` grows the capacity to at least `n` in the
+  list's own region, the length and elements untouched, a no-op when
+  the capacity is there; `reset` empties the list and KEEPS its buffer
+  (`clear` promises nothing of it), so a long-lived list is rebuilt by
+  `reset` then pushes — yew's spare-pair swap as one method — and with
+  the clause the rebuild runs inside a per-turn block. The rule the
+  names state: a `List` field replaced by assignment holds its old
+  storage until its region ends. `RT_SYMBOLS` 251
+  (`__wolf_rt_list_reserve`); host table and prelude unchanged.
+- **Corpus**: `region_outer_write_{scalar,str_push,struct,field,map,
+  index,call,reset,charged}.lu` run on every machine; `_refused.lu`
+  (a plain `str` push, E1010), `_refused_field.lu` (a plain field store,
+  E1004), `_call_refused.lu` (an unclean callee, E1010 naming its
+  store); `list_reserve.lu`, `list_reset.lu`. `region_scalar_list_mut.lu`
+  holds an unclean callee now (its `int`-push shape, refused by the
+  signature rule alone, is `region_outer_write_call.lu`'s run row);
+  `region_escape_container.lu` reports one site (the reassigned header),
+  not two. No other row moved verdict.
+- **lupin 0.1.55** shares `copy`'s bytes: `region-fault` where a copied
+  `str` is read back after its block (`_str_push`, `_struct`, `_field`,
+  `_map`); the same answers on the scalar, index, clean-call and ledger
+  rows; `reserve` and `reset` unresolved (`unsupported`). wolf-interp
+  owes the clause and the two methods.
+- **Measured** (s255's note, `docs/s255-the-loops-region.md`): the
+  downstream census at `--phase=mem` over boreutils, lobo, pelt,
+  wolf-std, yew and aspen; yew's editor loop and aspen's walk before and
+  after on their `s255-witness` branches.
+
 s252 — the small gaps (wolf-lang#800, #813, #814, #816, #822, #801; yew
 `docs/MAP.md` §5 G11, G18, G24, G25, G28 and the fuzz fork's findings).
 Three behaviour changes, each a refusal removed with the spec's clause
