@@ -937,6 +937,122 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   1,013 files): two verdicts moved, yew's `distinct-copy` and
   `region-copy` witnesses, from refused to accepted; no other verdict,
   diagnostic or warning moved.
+- `[mem.region.outer-write]` **A write into an outer value keeps
+  nothing of the block when the stored value names no region or is
+  written `copy`.** (s255, wolf-lang#839, #856, #821, #844; ruling
+  #112, the maintainer, 2026-10-22: "if we've hit the same wall twice
+  in real projects, maybe it's time for the language adjustment".)
+  The wall: a loop whose turn builds temporaries cannot open a
+  `region` block per turn when the turn also writes to something
+  long-lived — an editor's window and cursor set (yew yw03: 337 B kept
+  a typed key, 631 B a line move, ~63 MB over a 100,000-key session,
+  where C yew is flat), a directory walk's output writer (aspen ap01:
+  59.9–157.6 MB on a 100,000-file tree against C aspen's 2.6–18.7) —
+  because the block refused every write into a value living outside
+  it, and `copy` was no repair (the copy landed in the dying region
+  and, for a `str`, shared the bytes). Inside a `region` or `in` block,
+  a write into an OUTER value — a field store or whole assignment to a
+  binding declared before the block opened, a store through a `mut`
+  parameter (always outer: its storage is the caller's), a `push`, an
+  index store or a `Map` store into such a container — is admitted
+  when the stored value **names no region** (`[mem.region.scalar]`; a
+  literal's bytes are static and name none either) or is written
+  **`copy e` at the store**. `copy` in that position is the
+  **materializing** copy `copy region { }` makes
+  (`[mem.region.copyout]`: every `str` reached has its bytes re-made,
+  every `List` and `Map` gets a fresh buffer, structs, tuples, enums
+  and rows are rebuilt around their copied parts — not ruling #35's
+  sharing copy, which is the one for every other position), made in
+  the **outer value's region**, never the block's: for a container
+  store — a `push`, an index or `Map` store (the key included, since a
+  map keeps its key, s227), a `List` or `Map` field or binding
+  replaced — the container's OWN region, the one its header remembers
+  and its growth already uses (`[mem.region.create.3]`'s birth region,
+  s76); for any other store, the region that was **ambient where the
+  outer binding was declared** — a parameter's is the function's entry
+  ambient, the caller's current region, which the caller's own call
+  site keeps longer-lived than the argument (below). A container's
+  growth inside the block is its own region's too, never the block's:
+  a `byte` pushed into an outer `List[byte]` was E1010 before this
+  clause ("even a byte push", ap01 §6.8) because the push's receiver
+  was modelled as an allocation at the push site, where the runtime
+  had grown the list in its birth region since s76. Every other store
+  from inside the block into an outer value is refused as before — a
+  plain `str` push or index store shares the block's bytes (E1010), a
+  plain field store of a block-built value is the cross-region field
+  store (E1004) — with the report naming the store and the one-word
+  repair. A value no copy can make independent (a region value, a fn
+  value, a cell, a channel, a handle, a `Pool`, a raw pointer, a trait
+  object, a type parameter) is E1010 at the `copy`, naming the part, as
+  `copy region { }` refuses it. **A call inside the block passing a
+  `mut` argument** (yew's turn is ten such calls; aspen's level
+  recurses with the writer) gives the argument the call's region
+  (`[mem.region.escape]`, D12: the callee builds in its caller's
+  region, which is the block) **unless the callee's parameter is
+  ambient-clean** — proven by the callee's own lowering, over its whole
+  body: the parameter's root never holds or shares an allocation of
+  the callee's entry ambient (the caller's region; a `spawn proc`
+  entry's own) and is never moved from, whole or in part (the alias a
+  move makes could write the caller's storage past the record). Under
+  this clause that is exactly: scalar stores; container stores of
+  scalars or of `copy`s (the container's own region); containers
+  replaced by `copy` (the old header's region); calls handing the
+  parameter, or a place in it, to an ambient-clean parameter; and the
+  mutators that store nothing (`pop`, `clear`, `reset`, `reserve`). A
+  flat (non-container) field or whole store of anything else makes it
+  unclean — a `copy` there included, since that copy lands in the
+  callee's entry ambient, which IS the block when the call is inside
+  one. The verdicts are computed once per build over every checked
+  body, callee-first; a recursive component starts from the optimistic
+  answer and is re-lowered until no verdict moves (aspen's `walk_dir`
+  calls itself inside its level). A fn value, a trait method, a C
+  call, a host builtin and a callee whose body is not in the build are
+  not clean. The diagnostic at the block's end names the callee's
+  first keeping store, so the caller knows what to spell. **Why this
+  is sound.** A scalar is its own inline words. A materialized copy
+  shares no byte with the block: it was made in a region that outlives
+  the block, before the free. A container's buffer lives in its birth
+  region and so do its elements once copied there. The entry ambient
+  of a callee outlives every `mut` parameter's storage because the
+  caller's call site pins the argument to its own ambient whenever the
+  call sits inside a block (this clause's refusal) — the pin is what
+  makes the entry ambient safe, and an ambient-clean parameter never
+  needs it because nothing of the entry ambient reaches it. A value
+  placed by `in r { }` and written from a block is still E1004 (the
+  copy lands at the binding's ambient, not in `r`; the placement
+  demand conflicts): strict, not unsound. The contract's fourth write
+  form, "a captured `mut`", has no instance: a closure borrows its
+  captures and a write through one is refused by name. **The cost,
+  stated.** Nothing for a program with no such write. A `copy` at an
+  outer store pays one deep copy of the value in the outer region —
+  proportional to the value, not to the block's work — where before
+  the same `copy` (into a `mut` parameter's place, outside any block)
+  shared a `str`'s bytes: a byte copy per `str` reached, charged to
+  the ledger of the region it lands in on every machine (the checked
+  machine charges each `str` its length and each container its slots;
+  the native arena its 16-byte-rounded bytes and 40-byte headers). The
+  verdict pass lowers a recursive component's members once more per
+  verdict that falls (measured over yew's and aspen's trees in s255's
+  note). The repair for a refused program is one word at the store, or
+  `reset` then pushes into storage the value already owns. **lupin**
+  0.1.55 shares `copy`'s bytes: it traps `region-fault` where a copied
+  `str` is read back after its block (`region_outer_write_str_push`,
+  `_struct`, `_map`, `_field`), runs the scalar-push, index and clean-call
+  rows to the same answer, and resolves neither `reserve` nor `reset`
+  (`unsupported`): wolf-interp owes this clause and
+  `[type.list.reserve]`/`[type.list.reset]`. Witnesses
+  `corpus/memory/region_outer_write_scalar.lu`, `_str_push.lu`,
+  `_struct.lu`, `_field.lu`, `_map.lu`, `_index.lu`, `_call.lu`
+  (yew's turn, 100,000 turns flat), `_reset.lu` (#821's rebuild),
+  `_charged.lu` (the ledger: the copies in the outer region, the
+  scratch in the turn's), and the refusals `_refused.lu` (a plain
+  `str` push, E1010), `_refused_field.lu` (a plain field store, E1004),
+  `_call_refused.lu` (an unclean callee, E1010 naming its store);
+  `region_scalar_list_mut.lu` holds an unclean callee now (its `int`
+  push, refused by the signature rule alone, is `_call.lu`'s run row).
+  Measured before it landed (s255's note §5): the downstream census at
+  `--phase=mem` over boreutils, lobo, pelt, wolf-std, yew and aspen,
+  and the two witnesses' memory rows before and after.
 
 ### Copy-out `[mem.region.copyout]`
 
