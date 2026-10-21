@@ -511,12 +511,12 @@ impl Place {
         }
     }
 
-    /// `argv` in the place's directory under a 20 s watchdog: `timeout` in
-    /// the container (the shell is its process 1, the program its child),
+    /// `argv` in the place's directory under a watchdog of `secs`: `timeout`
+    /// in the container (the shell is its process 1, the program its child),
     /// perl's `alarm` on CI's macOS runner, plain on windows (nothing there
     /// can park: the descriptor flags are `unsupported`). The answer is the
     /// exit code (124 the watchdog), stdout and stderr.
-    fn run(&self, argv: &[String]) -> (Option<i32>, String, String) {
+    fn run(&self, argv: &[String], secs: u32) -> (Option<i32>, String, String) {
         let mut cmd = match &self.engine {
             Some(e) => {
                 let mut c = Command::new(e);
@@ -526,13 +526,16 @@ impl Place {
                 }
                 c.arg("-v").arg(format!("{}:/w", self.dir.display()));
                 c.arg("-v").arg(format!("{}:/wolf:ro", wolf()));
-                c.args(["-w", "/w"]).arg(image()).arg("timeout").arg("20");
+                c.args(["-w", "/w"])
+                    .arg(image())
+                    .arg("timeout")
+                    .arg(secs.to_string());
                 c.args(argv);
                 c
             }
             None if cfg!(target_os = "macos") => {
                 let mut c = Command::new("perl");
-                c.args(["-e", "alarm 20; exec @ARGV or die"]);
+                c.args(["-e", &format!("alarm {secs}; exec @ARGV or die")]);
                 c.args(argv);
                 c.current_dir(&self.dir);
                 c
@@ -561,10 +564,15 @@ impl Place {
         if !cfg!(target_os = "linux") {
             return false;
         }
-        let (_, out, _) = self.run(&["nproc".to_string()]);
+        let (_, out, _) = self.run(&["nproc".to_string()], 20);
         out.trim().parse::<usize>().unwrap_or(1) >= 4
     }
 }
+
+/// The watchdogs: a compiled binary's rows take milliseconds, the checked
+/// machine's interpretation of the same program seconds.
+const BINARY_SECS: u32 = 20;
+const CHECKED_SECS: u32 = 60;
 
 /// `name` on every machine in the place: the checked machine under
 /// `conform-run` there, the native and release binaries (and under
@@ -577,13 +585,28 @@ fn every_place_lane(test: &str, name: &str, calls: &[&str], check: &dyn Fn(&str,
     let entry = fixture(name);
     let local = place.dir.join(name);
     std::fs::copy(&entry, &local).expect("the fixture copied into the place");
-    let (code, out, err) = place.run(&[
-        place.wolf(),
-        "conform-run".into(),
-        place.at(name),
-        "--checked".into(),
-        "--json".into(),
-    ]);
+    // The checked machine interprets: 60 s, a park's bound and not its
+    // speed's (the gauntlet runs it beside every other test).
+    let (code, out, err) = place.run(
+        &[
+            place.wolf(),
+            "conform-run".into(),
+            place.at(name),
+            "--checked".into(),
+            "--json".into(),
+        ],
+        CHECKED_SECS,
+    );
+    assert_ne!(
+        code,
+        Some(124),
+        "the checked machine on {name} was still running at {CHECKED_SECS} s (the watchdog \
+         ended it): {err}"
+    );
+    assert!(
+        out.contains('{'),
+        "the checked machine on {name} left no record (exit {code:?}): {err}"
+    );
     let checked = parse_obs(out.as_bytes(), "the checked observation");
     eprintln!(
         "== checked on {name} (exit {code:?}): {}\n{}{err}",
@@ -617,7 +640,7 @@ fn every_place_lane(test: &str, name: &str, calls: &[&str], check: &dyn Fn(&str,
             ));
         }
         for (lane, argv) in rows {
-            let (code, stdout, stderr) = place.run(&argv);
+            let (code, stdout, stderr) = place.run(&argv, BINARY_SECS);
             report(&format!(
                 "REPORT {lane} {name} (exit {code:?}): {} || {}",
                 stdout.trim_end().replace('\n', " | "),
@@ -626,7 +649,8 @@ fn every_place_lane(test: &str, name: &str, calls: &[&str], check: &dyn Fn(&str,
             assert_ne!(
                 code,
                 Some(124),
-                "the {lane} binary on {name} was still parked at 20 s (the watchdog ended it)"
+                "the {lane} binary on {name} was still parked at {BINARY_SECS} s (the watchdog \
+                 ended it)"
             );
             assert_eq!(code, Some(0), "the {lane} binary on {name}: {stderr}");
             check(&lane, &stdout);

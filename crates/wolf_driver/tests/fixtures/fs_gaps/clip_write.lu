@@ -15,12 +15,9 @@ const WAIT_WRITE: int = 4611686018427387904
 
 fn main() -> !int {
     let p = os_pipe()?
-    var big = List[byte]()
-    var i = 0
-    while i < 1048576 {
-        (mut big).push(120 as byte)
-        i += 1
-    }
+    // One builtin call makes the 1 MiB (the checked machine interprets a
+    // loop of a million pushes in seconds; the witness is about the write).
+    let big = "x".repeat(1048576).bytes()
     print("rg1: writing 1 MiB into a pipe nobody reads")
     fs_set_nonblock(p.1, true)?
     var at = 0
