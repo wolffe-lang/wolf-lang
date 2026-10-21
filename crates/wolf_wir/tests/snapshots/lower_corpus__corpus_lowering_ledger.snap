@@ -782,6 +782,7 @@ net/writev_gather.lu: lowers
 net/writev_head_gather.lu: lowers
 os/args_cwd.lu: lowers
 os/chdir_relative.lu: lowers
+os/core_limit_rows.lu: lowers
 os/cpus.lu: lowers
 os/env_roundtrip.lu: lowers
 os/env_unset.lu: lowers
@@ -798,6 +799,7 @@ os/random_edges.lu: lowers
 os/random_negative_trap.lu: lowers
 os/signal_loopback.lu: lowers
 os/signal_one_rows.lu: lowers
+os/signal_reserved_rows.lu: lowers
 os/signal_shell_rows.lu: lowers
 os/signal_supervisor.lu: lowers
 os/spawn_fds_rows.lu: lowers
