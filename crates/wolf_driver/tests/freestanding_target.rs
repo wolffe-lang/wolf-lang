@@ -631,6 +631,50 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`os_clock_ns`",
             "hosted runtime",
         ),
+        // s253 (#819, #811, #815): the host's words, the core limit, its
+        // set, the end with no core, the adoption — each a hosted symbol.
+        (
+            "os_name",
+            "",
+            "os_name().len",
+            "`os_name`",
+            "hosted runtime",
+        ),
+        (
+            "os_arch",
+            "",
+            "os_arch().len",
+            "`os_arch`",
+            "hosted runtime",
+        ),
+        (
+            "os_core_limit",
+            "",
+            "let l = os_core_limit() else |e| {\n        return 0\n    }\n    l.0",
+            "`os_core_limit`",
+            "hosted runtime",
+        ),
+        (
+            "os_set_core_limit",
+            "",
+            "os_set_core_limit(0, 0) else |e| {\n        return 0\n    }\n    1",
+            "`os_set_core_limit`",
+            "hosted runtime",
+        ),
+        (
+            "os_core_off",
+            "",
+            "os_core_off() else |e| {\n        return 0\n    }\n    1",
+            "`os_core_off`",
+            "hosted runtime",
+        ),
+        (
+            "fs_adopt",
+            "",
+            "let h = fs_adopt(5) else |e| {\n        return 0\n    }\n    h",
+            "`fs_adopt`",
+            "hosted runtime",
+        ),
         // s242 (#680): the poll of the children.
         (
             "os_wait_poll",

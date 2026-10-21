@@ -824,6 +824,14 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         // restore on a return from `main`.
         "__wolf_rt_os_term_restore_at_exit",
         "__wolf_rt_term_restore_exit",
+        // s253 (#819): `[os.uname]`; (#811) `[os.proc.core]`; (#815)
+        // `[os.proc.adopt]`.
+        "__wolf_rt_os_name",
+        "__wolf_rt_os_arch",
+        "__wolf_rt_os_core_limit",
+        "__wolf_rt_os_set_core_limit",
+        "__wolf_rt_os_core_off",
+        "__wolf_rt_fs_adopt",
     ] {
         assert!(
             wolf_codegen_clif::RT_SYMBOLS
@@ -834,7 +842,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        237,
+        243,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
