@@ -87,7 +87,7 @@ PR_JOBS = ("plan-test", "lint-test", "fuzz-smoke")
 # release lane's label): tl30, the macOS cap. The org's five macOS slots
 # were busy 55% of the time after the Team plan (tl29), and the native
 # gauntlet held three of them for 49 minutes at every merge, twice.
-MERGE_OMITS = ("native-macos",)
+MERGE_OMITS = ()  # the plant: the merge runs the native macOS gauntlet again, its shape before tl30
 TIERS = ("release", "full", "pr", "noop", "partial")
 DISPATCH_TIERS = ("full", "release")
 
