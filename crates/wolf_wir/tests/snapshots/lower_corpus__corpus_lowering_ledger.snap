@@ -680,6 +680,8 @@ memory/region_multiopen_values_ok.lu: lowers
 memory/region_net_read_charged.lu: lowers
 memory/region_net_read_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_open_ancestor.lu: not mem-clean (pre-wir rungs own it)
+memory/region_os_cwd_charged.lu: lowers
+memory/region_os_cwd_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_scalar_freeze.lu: lowers
 memory/region_scalar_list_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/region_scalar_list_store.lu: not mem-clean (pre-wir rungs own it)
