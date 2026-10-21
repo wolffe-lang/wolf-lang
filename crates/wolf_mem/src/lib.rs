@@ -287,6 +287,63 @@ pub fn dump_package(pkg: &Package, tc: &Typecheck) -> String {
     out
 }
 
+/// s255 (`[mem.region.outer-write]`): every `mut` parameter's
+/// ambient-clean verdict, one line each, in body order — the
+/// `--dump=mut-clean` debug surface a port reads to see at once which
+/// calls a per-turn `region` block will refuse and why:
+/// `fn <name> #<index> <param>: clean` or `… unclean at <file>:<line>:<col>`.
+/// A body that did not lower prints `fn <name>: (not lowered)`.
+pub fn dump_mut_clean_package(pkg: &Package, tc: &Typecheck) -> String {
+    let mut out = String::new();
+    let statics = strres::static_str_fns(pkg, tc);
+    for (outcome, lowered) in lower_all(pkg, tc, &statics) {
+        let name = &outcome.body.name;
+        let Ok(lowered) = lowered else {
+            out.push_str(&format!("fn {name}: (not lowered)\n"));
+            continue;
+        };
+        let params = body_fn_node(pkg, &outcome.body)
+            .and_then(|(_, outer)| fn_params(pkg, &tc.sigs, &outcome.body, outer))
+            .unwrap_or(&[]);
+        for (idx, verdict) in &lowered.mut_clean {
+            let pname = params
+                .get(*idx as usize)
+                .map(|p| p.name.as_str())
+                .unwrap_or("?");
+            match verdict {
+                Ok(()) => out.push_str(&format!("fn {name} #{idx} {pname}: clean\n")),
+                Err(at) => {
+                    // The store is in the body's own file (the verdict
+                    // reads this body's holds), so the body's file index
+                    // names it; a span's `FileId` is the loader's.
+                    let Some(f) = pkg.files.get(outcome.body.file) else {
+                        out.push_str(&format!(
+                            "fn {name} #{idx} {pname}: unclean at file#{}\n",
+                            outcome.body.file
+                        ));
+                        continue;
+                    };
+                    let src = &f.raw.src;
+                    let lo = (at.lo as usize).min(src.len());
+                    let hi = (at.hi as usize).min(src.len()).max(lo);
+                    let line = 1 + src[..lo].iter().filter(|&&b| b == b'\n').count();
+                    let col = 1 + lo - src[..lo].iter().rposition(|&b| b == b'\n').map_or(0, |p| p + 1);
+                    let snippet = String::from_utf8_lossy(&src[lo..hi])
+                        .lines()
+                        .next()
+                        .unwrap_or("")
+                        .to_string();
+                    out.push_str(&format!(
+                        "fn {name} #{idx} {pname}: unclean at {}:{line}:{col} `{snippet}`\n",
+                        f.raw.display
+                    ));
+                }
+            }
+        }
+    }
+    out
+}
+
 /// The region-inference dumps of every lowerable body, in body order
 /// (the `--dump=regions` debug surface, snapshot-pinned).
 pub fn dump_regions_package(pkg: &Package, tc: &Typecheck) -> String {
