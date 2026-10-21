@@ -128,6 +128,15 @@ pub extern "C" fn __wolf_rt_env_vars() -> i64 {
 /// `os_cwd() -> str ! {io}` — a non-UTF-8 cwd is `io` (unreachable
 /// through the str tier, the fs coarsening rule).
 ///
+/// s254 (wolf-lang#834; pelt sh22): the name is copied into the CURRENT
+/// region ([`crate::str::region_copy`]), as every materializing builtin
+/// since s160 and `net_read` since s228 — until here it went to the
+/// process root whatever region was open, so a shell asking it every
+/// turn inside a region of its own kept every answer (48 B a call for a
+/// 39-byte directory: the length rounded up to the root's 16-byte step).
+/// The mem tier names `os_cwd` a `[mem.region.escape]` site, so a name
+/// cannot leave the region it was asked in.
+///
 /// # Safety
 ///
 /// `out` must address 16 writable bytes.
@@ -138,7 +147,7 @@ pub unsafe extern "C" fn __wolf_rt_os_cwd(out: i64) -> i64 {
         Ok(p) => match p.to_str() {
             None => 1,
             Some(s) => {
-                let cp = ambient_copy(s.as_bytes());
+                let cp = crate::str::region_copy(s.as_bytes());
                 unsafe { write_pair(out, cp as i64, s.len() as i64) };
                 0
             }
