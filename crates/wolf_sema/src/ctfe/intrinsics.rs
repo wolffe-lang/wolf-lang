@@ -168,7 +168,9 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         | "fs_set_owner" | "fs_set_owner_fd"
         // s248 (#796, #797): the syncs and the canonical path read and
         // flush the filesystem — `fs`, with the family.
-        | "fs_sync" | "fs_sync_dir" | "fs_realpath" => {
+        | "fs_sync" | "fs_sync_dir" | "fs_realpath"
+        // s253 (#815): an inherited descriptor made an fs handle — `fs`.
+        | "fs_adopt" => {
             SandboxCategory::Fs
         }
         // The s39 net builtin tier: every entry point carries the
@@ -191,7 +193,10 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         "env_var" | "env_get" | "env_set" | "env_args" | "env_vars" | "os_cwd" | "os_exe"
         // s137 (#233): the core count is machine state that differs
         // per host — `env`, with the rest of the process-context reads.
-        | "os_cpus" => SandboxCategory::Env,
+        | "os_cpus"
+        // s253 (#819, #811): the OS and architecture the kernel answers,
+        // and this process's core limit — machine and process state, `env`.
+        | "os_name" | "os_arch" | "os_core_limit" => SandboxCategory::Env,
         "os_spawn" | "os_spawn_with" | "os_wait" | "os_kill" | "os_exit" => SandboxCategory::Exec,
         // s215, ruling #54: the spawn with a descriptor map starts a
         // program and the pipe exists to plumb one — both `exec`, with
@@ -233,6 +238,10 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         "os_signal_ignore_one" | "os_signal_default_one" | "os_exit_signal" => {
             SandboxCategory::Exec
         }
+        // s253 (#811; ruling asked R6): setting the core limit and an end
+        // that dumps no core are process control over how this process
+        // ends — `exec`, with `os_exit_signal`.
+        "os_set_core_limit" | "os_core_off" => SandboxCategory::Exec,
         "os_pgid" => SandboxCategory::Env,
         // s242 (wolf-lang#680; ruling owed): the poll of the children
         // reaps as `os_wait_status` does — process control, `exec`.
