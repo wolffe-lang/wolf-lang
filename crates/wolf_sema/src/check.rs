@@ -14036,6 +14036,14 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // already adopted: `io`; the host (windows) `unsupported`,
         // by name.
         "net_adopt_listener" => (vec![int_], rowed(table, int_, &["unsupported", "io"])),
+        // s253 (wolf-lang#815, `[os.proc.adopt]`; ruling asked R4): an
+        // inherited descriptor made an fs handle — 0..2 and a number past
+        // i32 `invalid`, one not open or this process's own `io`, windows
+        // `unsupported`.
+        "fs_adopt" => (
+            vec![int_],
+            rowed(table, int_, &["unsupported", "invalid", "io"]),
+        ),
         // s137 (#127, `[os.net.wait]`): readiness over a SET —
         // which of these handles can be read without blocking.
         // The answer is the subset, in the caller's order; an
@@ -14264,6 +14272,22 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // meaning's signal (the sending shape); it returns only a shape
         // refusal (`invalid`) or windows' `unsupported`.
         "os_exit_signal" => (vec![int_], rowed(table, unit, &["unsupported", "invalid"])),
+        // s253 (wolf-lang#811, `[os.proc.core]`; ruling asked R1): the core
+        // limit (soft, hard; -1 unlimited), its set — the shape `invalid`,
+        // windows `unsupported`, a raise the host refuses `denied` — and an
+        // end that dumps no core.
+        "os_core_limit" => {
+            let pair = table.intern(TyKind::Tuple(vec![int_, int_]));
+            (Vec::new(), rowed(table, pair, &["unsupported"]))
+        }
+        "os_set_core_limit" => (
+            vec![int_, int_],
+            rowed(table, unit, &["unsupported", "invalid", "denied"]),
+        ),
+        "os_core_off" => (Vec::new(), rowed(table, unit, &["unsupported"])),
+        // s253 (wolf-lang#819, `[os.uname]`; ruling asked R5): the OS and the
+        // architecture the program runs on, as the kernel answers; no row.
+        "os_name" | "os_arch" => (Vec::new(), str_),
         "os_signal_poll" => (vec![int_], rowed(table, int_, &["io"])),
         // s234 (wolf-lang#719, `[os.signal.wait.fd]`): park until a
         // meaning in the set is delivered (answered) or the descriptor

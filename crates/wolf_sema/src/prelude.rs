@@ -286,6 +286,9 @@ pub const PRELUDE: &[Ambient] = &[
     // inheritance (`[os.proc.inherit]`).
     host("net_listen_with"),
     host("net_adopt_listener"),
+    // s253 (wolf-lang#815, `[os.proc.adopt]`): the adopt half for any
+    // inherited descriptor, as an fs handle — `fs`-tagged with the family.
+    host("fs_adopt"),
     // s137 (#127): readiness over a set, `[os.net.wait]` — the
     // primitive a spawn-free serving loop blocks on.
     host("net_wait"),
@@ -316,6 +319,10 @@ pub const PRELUDE: &[Ambient] = &[
     // s137 (#233, `[os.cpus]`): the schedulable core count — a
     // machine-state read, `env`-tagged with `os_cwd`/`os_exe`.
     host("os_cpus"),
+    // s253 (wolf-lang#819, `[os.uname]`): the OS and the architecture the
+    // program runs on — machine-state reads, `env`-tagged with `os_cpus`.
+    host("os_name"),
+    host("os_arch"),
     host("os_exit"),
     host("os_spawn"),
     // s137 (#235, `[os.proc.inherit]`): the spawn that hands
@@ -363,6 +370,12 @@ pub const PRELUDE: &[Ambient] = &[
     host("os_signal_ignore_one"),
     host("os_signal_default_one"),
     host("os_exit_signal"),
+    // s253 (wolf-lang#811, `[os.proc.core]`): the core limit, read
+    // (`env`-tagged with the other reads of this process) and set, and an
+    // end that dumps no core (`exec`-tagged with `os_exit_signal`).
+    host("os_core_limit"),
+    host("os_set_core_limit"),
+    host("os_core_off"),
     host("os_signal_poll"),
     host("os_spawn_job"),
     host("os_proc_pid"),
