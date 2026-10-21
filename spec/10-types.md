@@ -119,16 +119,7 @@ operand has that operand's type as its own context, so `packed /
 a call argument, a comparison operand or a block inside the
 initializer has that position's context instead.
 The spelling that means a wider literal is the annotation, `let big:
-int = 5000000000`.
-**The countdown this makes** (by design; s252, wolf-lang#822, yew's
-`wrapping-infer` witness): `var i = 15` whose first deciding use is
-a shift count of a `wrapping[u64]` (`h >> (i * 4)`, the count having
-the operand's type, `[type.int.shift]`) is `wrapping[u64]`, so `while
-i >= 0` never fails and `i -= 1` wraps past zero. Annotate the
-counter (`var i: int = 15`) and cast at the use (`h >> (i * 4) as
-wrapping[u64]`). lupin 0.1.54 accepts an `int` count on a wrapping
-shift and so ends that loop after sixteen turns where the three
-compiling machines do not: lupin's divergence, filed against it. This is the X3 safety posture and the closed-coercion-set
+int = 5000000000`. This is the X3 safety posture and the closed-coercion-set
 discipline of the memory model (`[mem.dyn.unsize]`'s "the coercion table
 grows by addition, never by a new implicit mechanism"): C's
 usual-arithmetic-conversions and Swift's exponential-search overloading
@@ -157,6 +148,16 @@ boreutils or lobo build moved. Witnesses:
 `typecheck/numlit_binding_literal.lu`, `numlit_binding_literal_call.lu`,
 `numlit_binding_literal_term.lu`, and the control
 `numlit_binding_value_later_use.lu`.)
+
+**The countdown this makes** (by design; s252, wolf-lang#822, yew's
+`wrapping-infer` witness): `var i = 15` whose first deciding use is
+a shift count of a `wrapping[u64]` (`h >> (i * 4)`, the count having
+the operand's type, `[type.int.shift]`) is `wrapping[u64]`, so `while
+i >= 0` never fails and `i -= 1` wraps past zero. Annotate the
+counter (`var i: int = 15`) and cast at the use (`h >> (i * 4) as
+wrapping[u64]`). lupin 0.1.54 and 0.1.55 accept an `int` count on a wrapping
+shift and so end that loop after sixteen turns where the three
+compiling machines do not: lupin's divergence, listed for wolf-interp.
 
 ## §3 The numeric cast `[type.numlit.cast]`
 
@@ -418,9 +419,10 @@ the checked machine where lupin trapped.) Witnesses:
   since s252 (wolf-lang#800, yew G11, which had not found `!`) the
   report names `!` and offers the machine-applicable edit `~x` → `!x`;
   the parser then reads the operand on as `!`'s, so nothing cascades.
-  Witness `typecheck/int_not_tilde.lu` (`fail(E0107)`). Witnesses: `typecheck/int_not_mask.lu`,
+  Witnesses: `typecheck/int_not_mask.lu`,
   `typecheck/int_not_signed.lu`, `typecheck/int_not_byte.lu`,
-  `typecheck/int_not_float.lu` (`fail(E0409)`).
+  `typecheck/int_not_float.lu` (`fail(E0409)`), `typecheck/int_not_tilde.lu`
+  (`fail(E0107)`).
 
 - `[type.int.shift]` **A shift on a plain integer is arithmetic on its
   value.** *(s237 for wolf-lang#736. Ruled by the maintainer,

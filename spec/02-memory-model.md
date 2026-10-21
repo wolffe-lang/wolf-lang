@@ -885,8 +885,8 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   a region was E1010 while the tuple `(1, 2)` crossed freely, and `m.s
   = copy g(mut t)` was E1004 "from `t`'s region" — a `copy` of a
   non-place passed its operand's sites through. **The cost, stated:**
-  none at run time; refusals removed. **lupin** 0.1.54 runs the `mut`
-  shapes and the copied call result, and traps `region-fault` on the
+  none at run time; refusals removed. **lupin** 0.1.54 and 0.1.55 run the `mut`
+  shapes and the copied call result, and trap `region-fault` on the
   literal, binding, enum, `for`, `take`-store and frozen-write shapes:
   wolf-interp owes this clause. Witnesses
   `corpus/memory/region_scalar_value.lu`, `region_scalar_mut.lu`,
