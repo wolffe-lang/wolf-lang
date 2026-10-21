@@ -200,7 +200,7 @@ by name; the spellings beyond the contract are rulings asked at audit
   machine answers each on the `wolf` process it runs in (R7).
 - spec/11 gains `[os.proc.core]`, `[os.proc.adopt]`,
   `[os.signal.host.reserved]`, §11 `[os.uname]` and
-  `[os.process.calls.note]` (anchors 678, with s252's `mem.region.scalar`); the host table is 153 lines.
+  `[os.process.calls.note]` (anchors 686 with s252's and s254's); the host table is 160 lines with s254's seven.
 
 ### Read this before you bump the pin
 
