@@ -29,8 +29,11 @@ fn row(fd: int) -> str {
 
 /// The last component of what `/proc/self/fd/<fd>` names, or `none`.
 fn link(fd: int) -> str {
-    let target = fs_read_link("/proc/self/fd/{fd}") else |_| {
+    let raw = fs_read_link("/proc/self/fd/{fd}") else |_| {
         return "none"
+    }
+    let target = str_from_utf8(raw) else |_| {
+        return "not utf-8"
     }
     let parts = target.split("/")
     parts[parts.len - 1]
