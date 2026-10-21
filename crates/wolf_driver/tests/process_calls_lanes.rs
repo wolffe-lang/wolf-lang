@@ -347,7 +347,11 @@ fn host_words() -> (String, String) {
         u
     };
     let field = |f: &[libc::c_char]| -> String {
-        let b: Vec<u8> = f.iter().take_while(|&&c| c != 0).map(|&c| c as u8).collect();
+        let b: Vec<u8> = f
+            .iter()
+            .take_while(|&&c| c != 0)
+            .map(|&c| c as u8)
+            .collect();
         String::from_utf8_lossy(&b).to_ascii_lowercase()
     };
     let os = match field(&u.sysname).as_str() {
@@ -376,7 +380,9 @@ fn host_words() -> (String, String) {
 fn the_host_names_its_kernel() {
     let dir = scratch("host");
     let (os, arch) = host_words();
-    report(&format!("REPORT the host's words here: name={os} arch={arch}"));
+    report(&format!(
+        "REPORT the host's words here: name={os} arch={arch}"
+    ));
     #[cfg(target_os = "linux")]
     assert_eq!(os, "linux", "a linux test binary on a linux kernel");
     #[cfg(target_os = "macos")]
@@ -417,12 +423,7 @@ fn the_c_librarys_numbers_on_every_host() {
     let dir = scratch("reserved_rows");
     let entry = corpus("os/signal_reserved_rows.lu");
     let want = declared_stdout(&entry);
-    every_lane_answers_on_the_host(
-        &entry,
-        &dir,
-        &want,
-        Lupin::Refuses(&["os_signal_realtime"]),
-    );
+    every_lane_answers_on_the_host(&entry, &dir, &want, Lupin::Refuses(&["os_signal_realtime"]));
 }
 
 // ------------------------------------------------------------ unix --
@@ -525,7 +526,10 @@ fn an_inherited_descriptor_is_adopted() {
         let (stdout, bytes, name) = check(tier, &out, &file);
         assert_eq!(out.status.code(), Some(0), "the {tier} binary");
         assert_eq!(stdout, adopt_want(&name), "#815: the {tier} binary");
-        assert_eq!(bytes, "X\nR", "#815: the {tier} binary's child and its own write");
+        assert_eq!(
+            bytes, "X\nR",
+            "#815: the {tier} binary's child and its own write"
+        );
     }
     let file = dir.join("out-checked");
     let entry_s = entry.display().to_string();
@@ -537,13 +541,19 @@ fn an_inherited_descriptor_is_adopted() {
     );
     let checked = parse_obs(&out.stdout, "the checked observation");
     let (_, bytes, name) = check("checked", &out, &file);
-    eprintln!("== checked: {} {}\n{}", checked.verdict, checked.reason, checked.stdout);
+    eprintln!(
+        "== checked: {} {}\n{}",
+        checked.verdict, checked.reason, checked.stdout
+    );
     assert_eq!(
         (checked.verdict.as_str(), checked.stdout.as_str()),
         ("exit(0)", adopt_want(&name).as_str()),
         "#815: the CHECKED machine adopts the wolf process's 5: {checked:?}"
     );
-    assert_eq!(bytes, "X\nR", "#815: the checked machine's child and its own write");
+    assert_eq!(
+        bytes, "X\nR",
+        "#815: the checked machine's child and its own write"
+    );
     if let Some(l) = lupin_or_skip() {
         let file = dir.join("out-lupin");
         let out = run_with_five(&l, &["conform-run", &entry_s, "--json"], &dir, &file);
@@ -869,12 +879,16 @@ fn a_core_limit_and_an_end_with_no_core() {
             String::from_utf8_lossy(&out.stderr).replace('\n', " | ")
         ));
         let first = stdout.lines().next().unwrap_or("");
-        let born: Vec<i64> = first
-            .split(' ')
-            .filter_map(|w| w.parse().ok())
-            .collect();
-        assert_eq!(born.len(), 2, "#811: {kid} read prints two numbers: {first:?}");
-        assert_eq!(born[0], 0, "#811: {kid} was born with the shell's soft limit 0");
+        let born: Vec<i64> = first.split(' ').filter_map(|w| w.parse().ok()).collect();
+        assert_eq!(
+            born.len(),
+            2,
+            "#811: {kid} read prints two numbers: {first:?}"
+        );
+        assert_eq!(
+            born[0], 0,
+            "#811: {kid} was born with the shell's soft limit 0"
+        );
         if cfg!(target_os = "linux") {
             let shell = limits_line(&stdout).expect("the shell's /proc/self/limits");
             assert_eq!(
@@ -883,7 +897,10 @@ fn a_core_limit_and_an_end_with_no_core() {
                 "#811: {kid} reads the limit it was born with, the shell's"
             );
         } else {
-            assert!(born[1] == -1 || born[1] >= 0, "#811: a hard limit: {first:?}");
+            assert!(
+                born[1] == -1 || born[1] >= 0,
+                "#811: a hard limit: {first:?}"
+            );
         }
         assert!(
             stdout.ends_with(lower_raise),
@@ -925,7 +942,11 @@ fn a_core_limit_and_an_end_with_no_core() {
     let rows = compiled_rows(&live, &parent, "parent", test);
     for kid in &kids {
         for (leg, limit, dumps) in &legs {
-            let first = if *dumps { "signal 11 core" } else { "signal 11" };
+            let first = if *dumps {
+                "signal 11 core"
+            } else {
+                "signal 11"
+            };
             let second = if *leg == "off" && piped {
                 "signal 11 core"
             } else {
@@ -983,7 +1004,10 @@ fn a_core_limit_and_an_end_with_no_core() {
                         limit,
                         &[("child", kid.as_str())],
                     );
-                    eprintln!("== lupin {} as the parent: {} {}", obs.version, obs.verdict, obs.reason);
+                    eprintln!(
+                        "== lupin {} as the parent: {} {}",
+                        obs.version, obs.verdict, obs.reason
+                    );
                     assert_eq!(
                         (obs.verdict.as_str(), obs.stdout.as_str()),
                         ("exit(0)", want.as_str()),
