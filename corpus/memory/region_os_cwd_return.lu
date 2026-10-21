@@ -1,0 +1,27 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.escape, mem.region.account.1, mem.region.intra.2
+//!
+//! s254 (wolf-lang#834; pelt sh22) — `os_cwd` is a site. It copies the
+//! working directory's name into the ambient region, an ordinary owned
+//! `str`, so a name asked inside a region and returned out of it is the
+//! escape `net_read`'s is (`region_net_read_return.lu`); the row on its
+//! type (`str ! {io}`) is why the mem tier could not see it by asking
+//! whether the result is `str`.
+//!
+//! #374's order again: while the runtime put the name's bytes in the
+//! process root whatever region was open, this program leaked one name a
+//! call and printed fine (48 B a call for pelt's 39-byte directory,
+//! sh22's `cwdregion`). s254 routes the bytes to the region they were
+//! asked in, so that the region gives them back — and without this
+//! refusal the same program would then print freed memory.
+
+fn here() -> str {
+    region scratch {
+        os_cwd() else "?"   // ERROR E1010: asked in scratch
+    }
+}
+
+fn main() {
+    print("{here()}\n")
+}
