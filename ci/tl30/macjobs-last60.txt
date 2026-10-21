@@ -1,0 +1,145 @@
+=== aspen (2 runs)
+  tier tier full (push)                       runs   1  macOS-min/run median    0.2  max    0.2  sum     0.2
+  tier tier full (schedule)                   runs   1  macOS-min/run median    0.2  max    0.2  sum     0.2
+  job macOS arm64                                             ran   2  median   0.2  ok-median   0.2  p90   0.2  | tier full (push):1, tier full (schedule):1
+=== boreutils (82 runs)
+  tier tier full (pull_request)               runs   3  macOS-min/run median   21.2  max   21.7  sum    64.2
+  tier tier full (push)                       runs   2  macOS-min/run median   21.8  max   21.8  sum    43.3
+  tier tier full (workflow_dispatch)          runs   1  macOS-min/run median   19.7  max   19.7  sum    19.7
+  tier tier nightly (schedule)                runs   1  macOS-min/run median   41.4  max   41.4  sum    41.4
+  tier tier pr (pull_request)                 runs   3  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier tier unplanned (pull_request)          runs   1  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier untiered:pull_request (pull_request)   runs  25  macOS-min/run median   13.0  max   21.0  sum   307.2
+  tier untiered:push (push)                   runs   6  macOS-min/run median   17.2  max   21.1  sum    87.1
+  tier untiered:workflow_dispatch (workflow_dispatch) runs  34  macOS-min/run median    4.3  max   29.5  sum   287.4
+  job gauntlet (macos-latest, g)                              ran  42  median  15.5  ok-median  18.2  p90  21.2  | tier full (pull_request):3, tier full (push):2, tier full (workflow_dispatch):1, tier nightly (schedule):1, untiered:pull_request (pull_request):27, untiered:push (push):6, untiered:workflow_dispatch (workflow_dispatch):2
+  job kill, measured and repeated (boreutils#36,              ran   7  median  22.8  ok-median  22.8  p90  28.0  | untiered:workflow_dispatch (workflow_dispatch):7
+  job the ls suite, repeated (boreutils#27)                   ran   5  median   4.8  ok-median   4.8  p90   5.1  | untiered:workflow_dispatch (workflow_dispatch):5
+  job the terminal read, measured (boreutils#27)              ran   4  median  29.5  ok-median  19.6  p90  29.5  | tier nightly (schedule):1, untiered:workflow_dispatch (workflow_dispatch):3
+  job timeout, repeated (bu27)                                ran   3  median   0.5  ok-median  10.6  p90   0.5  | untiered:workflow_dispatch (workflow_dispatch):3
+=== homebrew-wolf (57 runs)
+  tier untiered:pull_request (pull_request)   runs  28  macOS-min/run median    8.4  max   11.7  sum   238.9
+  tier untiered:push (push)                   runs  27  macOS-min/run median    7.8  max   11.6  sum   220.7
+  job lobo                                                    ran   7  median   0.5  ok-median   0.6  p90   0.6  | untiered:pull_request (pull_request):4, untiered:push (push):3
+  job lobo (macos-latest)                                     ran  49  median   0.6  ok-median   0.6  p90   0.8  | untiered:pull_request (pull_request):25, untiered:push (push):24
+  job lupin                                                   ran   7  median   2.1  ok-median   2.4  p90   2.8  | untiered:pull_request (pull_request):4, untiered:push (push):3
+  job lupin (macos-latest)                                    ran  49  median   2.3  ok-median   2.3  p90   3.0  | untiered:pull_request (pull_request):25, untiered:push (push):24
+  job wolf                                                    ran   7  median   5.6  ok-median   5.7  p90   6.1  | untiered:pull_request (pull_request):4, untiered:push (push):3
+  job wolf (macos-latest)                                     ran  49  median   5.3  ok-median   5.3  p90   8.2  | untiered:pull_request (pull_request):25, untiered:push (push):24
+=== lobo (100 runs)
+  tier tier full (pull_request)               runs   6  macOS-min/run median   26.0  max   28.9  sum   153.0
+  tier tier full (push)                       runs   4  macOS-min/run median   26.2  max   28.0  sum   101.7
+  tier tier full (schedule)                   runs   1  macOS-min/run median   25.7  max   25.7  sum    25.7
+  tier tier full (workflow_dispatch)          runs   1  macOS-min/run median   23.5  max   23.5  sum    23.5
+  tier tier pr (pull_request)                 runs  11  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier tier pr (workflow_dispatch)            runs   5  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier tier unplanned (pull_request)          runs   1  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier untiered:pull_request (pull_request)   runs  19  macOS-min/run median   19.2  max   26.0  sum   369.3
+  tier untiered:push (push)                   runs  13  macOS-min/run median   20.1  max   25.4  sum   252.0
+  tier untiered:workflow_dispatch (workflow_dispatch) runs  32  macOS-min/run median    0.0  max   24.2  sum   236.0
+  job gauntlet-macos                                          ran  60  median  19.4  ok-median  22.4  p90  25.9  | tier full (pull_request):6, tier full (push):4, tier full (schedule):1, tier full (workflow_dispatch):1, untiered:pull_request (pull_request):20, untiered:push (push):13, untiered:workflow_dispatch (workflow_dispatch):15
+=== lope (18 runs)
+  tier tier full (pull_request)               runs   3  macOS-min/run median    0.8  max    0.8  sum     2.2
+  tier tier full (push)                       runs   1  macOS-min/run median    0.7  max    0.7  sum     0.7
+  tier tier full (schedule)                   runs   1  macOS-min/run median    0.7  max    0.7  sum     0.7
+  tier tier pr (pull_request)                 runs   8  macOS-min/run median    0.0  max    0.0  sum     0.0
+  job macOS arm64                                             ran   5  median   0.7  ok-median   0.7  p90   0.8  | tier full (pull_request):3, tier full (push):1, tier full (schedule):1
+=== pax (119 runs)
+  tier tier all (push)                        runs   2  macOS-min/run median    0.7  max    0.7  sum     1.1
+  tier tier all (schedule)                    runs   1  macOS-min/run median    0.7  max    0.7  sum     0.7
+  tier tier full (pull_request)               runs  20  macOS-min/run median    0.7  max    0.9  sum    13.1
+  tier tier full (push)                       runs  13  macOS-min/run median    0.5  max    0.9  sum     7.9
+  tier tier full (schedule)                   runs   7  macOS-min/run median    0.7  max    0.8  sum     4.6
+  tier tier full (workflow_dispatch)          runs  18  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier tier pr (pull_request)                 runs  22  macOS-min/run median    0.5  max    0.9  sum     9.4
+  tier tier pr (workflow_dispatch)            runs  13  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier tier unplanned (workflow_dispatch)     runs   2  macOS-min/run median    0.0  max    0.0  sum     0.0
+  job macos-run                                               ran  60  median   0.7  ok-median   0.7  p90   0.8  | (no verdict) (pull_request):3, tier all (push):2, tier all (schedule):1, tier full (pull_request):20, tier full (push):13, tier full (schedule):7, tier pr (pull_request):14
+=== pelt (76 runs)
+  tier tier full (pull_request)               runs   3  macOS-min/run median   38.3  max   48.9  sum   124.3
+  tier tier full (push)                       runs   3  macOS-min/run median   38.8  max   44.9  sum   121.3
+  tier tier full (schedule)                   runs   1  macOS-min/run median   39.7  max   39.7  sum    39.7
+  tier tier full (workflow_dispatch)          runs   2  macOS-min/run median   41.1  max   41.1  sum    78.8
+  tier tier pr (pull_request)                 runs   5  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier tier pr (workflow_dispatch)            runs   4  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier tier unplanned (pull_request)          runs   1  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier untiered:pull_request (pull_request)   runs  28  macOS-min/run median   26.1  max   40.9  sum   734.0
+  tier untiered:push (push)                   runs   8  macOS-min/run median   26.9  max   41.4  sum   224.4
+  tier untiered:workflow_dispatch (workflow_dispatch) runs  10  macOS-min/run median    1.4  max   45.3  sum   102.2
+  job gauntlet (macos-latest, true)                           ran  48  median  25.1  ok-median  26.6  p90  37.2  | (no verdict) (pull_request):1, (no verdict) (workflow_dispatch):1, tier full (workflow_dispatch):1, untiered:pull_request (pull_request):33, untiered:push (push):8, untiered:workflow_dispatch (workflow_dispatch):4
+  job gauntlet (macos-latest, true, native)                   ran   8  median  21.6  ok-median  21.6  p90  22.8  | tier full (pull_request):3, tier full (push):3, tier full (schedule):1, tier full (workflow_dispatch):1
+  job gauntlet (macos-latest, true, release)                  ran   8  median  19.7  ok-median  19.7  p90  22.1  | tier full (pull_request):3, tier full (push):3, tier full (schedule):1, tier full (workflow_dispatch):1
+  job macdiag                                                 ran   2  median   0.9  ok-median   0.9  p90   0.8  | untiered:workflow_dispatch (workflow_dispatch):2
+  job macdiag (macos-latest)                                  ran   2  median   1.4  ok-median   1.4  p90   1.2  | untiered:workflow_dispatch (workflow_dispatch):2
+=== wolf-book (89 runs)
+  tier tier full (pull_request)               runs   1  macOS-min/run median    9.7  max    9.7  sum     9.7
+  tier tier full (push)                       runs   1  macOS-min/run median    7.5  max    7.5  sum     7.5
+  tier tier full (schedule)                   runs   1  macOS-min/run median    8.0  max    8.0  sum     8.0
+  tier tier full (workflow_dispatch)          runs   1  macOS-min/run median    6.6  max    6.6  sum     6.6
+  tier tier pr (pull_request)                 runs   2  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier tier unplanned (pull_request)          runs   1  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier untiered:pull_request (pull_request)   runs  39  macOS-min/run median    8.1  max   14.3  sum   317.0
+  tier untiered:push (push)                   runs  13  macOS-min/run median    8.1  max   11.6  sum   108.6
+  tier untiered:schedule (schedule)           runs  20  macOS-min/run median    0.0  max    0.0  sum     0.0
+  job samples (macos-latest)                                  ran  59  median   7.2  ok-median   7.0  p90  10.0  | tier full (pull_request):1, tier full (push):1, tier full (schedule):1, tier full (workflow_dispatch):1, untiered:pull_request (pull_request):42, untiered:push (push):13
+  job test (macos-latest)                                     ran  59  median   0.8  ok-median   0.9  p90   1.1  | tier full (pull_request):1, tier full (push):1, tier full (schedule):1, tier full (workflow_dispatch):1, untiered:pull_request (pull_request):42, untiered:push (push):13
+=== wolf-interp (69 runs)
+  tier tier full (pull_request)               runs  10  macOS-min/run median  369.0  max  405.6  sum  2964.5
+  tier tier full (push)                       runs   9  macOS-min/run median  371.1  max  412.0  sum  3388.4
+  tier tier full (schedule)                   runs   6  macOS-min/run median  384.6  max  400.3  sum  2294.0
+  tier tier noop (pull_request)               runs   2  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier tier partial (workflow_dispatch)       runs   7  macOS-min/run median    0.0  max  376.9  sum   379.9
+  tier tier pr (pull_request)                 runs  12  macOS-min/run median   11.0  max   13.2  sum   130.8
+  tier tier release (pull_request)            runs   2  macOS-min/run median  363.7  max  363.7  sum   715.1
+  tier tier release (schedule)                runs   1  macOS-min/run median  365.0  max  365.0  sum   365.0
+  tier untiered:pull_request (pull_request)   runs   4  macOS-min/run median  322.4  max  377.8  sum   723.5
+  tier untiered:push (push)                   runs   3  macOS-min/run median  379.4  max  381.2  sum  1117.7
+  tier untiered:schedule (schedule)           runs   2  macOS-min/run median  381.0  max  381.0  sum   740.6
+  job test (macos-latest, smoke)                              ran  20  median  11.0  ok-median  11.1  p90  11.9  | (no verdict) (pull_request):3, tier full (pull_request):2, tier pr (pull_request):12, untiered:pull_request (pull_request):3
+  job test (macos-latest, test shard 1 of 3)                  ran  40  median 117.3  ok-median 118.3  p90 127.1  | (no verdict) (pull_request):3, (no verdict) (workflow_dispatch):1, tier full (pull_request):8, tier full (push):9, tier full (schedule):6, tier partial (workflow_dispatch):3, tier release (pull_request):2, tier release (schedule):1, untiered:pull_request (pull_request):2, untiered:push (push):3, untiered:schedule (schedule):2
+  job test (macos-latest, test shard 2 of 3)                  ran  37  median  91.4  ok-median  92.2  p90 101.3  | (no verdict) (pull_request):2, (no verdict) (workflow_dispatch):1, tier full (pull_request):8, tier full (push):9, tier full (schedule):6, tier partial (workflow_dispatch):1, tier release (pull_request):2, tier release (schedule):1, untiered:pull_request (pull_request):2, untiered:push (push):3, untiered:schedule (schedule):2
+  job test (macos-latest, test shard 3 of 3)                  ran  38  median  90.7  ok-median  91.7  p90 100.7  | (no verdict) (pull_request):3, (no verdict) (workflow_dispatch):1, tier full (pull_request):8, tier full (push):9, tier full (schedule):6, tier partial (workflow_dispatch):1, tier release (pull_request):2, tier release (schedule):1, untiered:pull_request (pull_request):2, untiered:push (push):3, untiered:schedule (schedule):2
+  job test (macos-latest, the ladder and the bundle)          ran  37  median  74.7  ok-median  74.7  p90  81.3  | (no verdict) (pull_request):2, (no verdict) (workflow_dispatch):1, tier full (pull_request):8, tier full (push):9, tier full (schedule):6, tier partial (workflow_dispatch):1, tier release (pull_request):2, tier release (schedule):1, untiered:pull_request (pull_request):2, untiered:push (push):3, untiered:schedule (schedule):2
+=== wolf-lang (113 runs)
+  tier tier full (pull_request)               runs  21  macOS-min/run median   71.2  max   79.0  sum  1508.4
+  tier tier full (push)                       runs  13  macOS-min/run median   72.1  max   77.4  sum   928.2
+  tier tier full (schedule)                   runs   4  macOS-min/run median   78.1  max   80.8  sum   298.1
+  tier tier partial (workflow_dispatch)       runs  33  macOS-min/run median    1.5  max   82.8  sum   422.1
+  tier tier pr (pull_request)                 runs  20  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier untiered:push (push)                   runs   3  macOS-min/run median    0.0  max    0.0  sum     0.0
+  job build + test (macos-latest)                             ran  54  median  23.2  ok-median  23.8  p90  27.6  | (no verdict) (pull_request):2, tier full (pull_request):21, tier full (push):13, tier full (schedule):5, tier partial (workflow_dispatch):13
+  job native gauntlet (macOS aarch64, build)                  ran  50  median  25.4  ok-median  26.1  p90  29.5  | (no verdict) (pull_request):2, (no verdict) (workflow_dispatch):2, tier full (pull_request):21, tier full (push):13, tier full (schedule):5, tier partial (workflow_dispatch):7
+  job native gauntlet (macOS aarch64, coverage)               ran  50  median  15.0  ok-median  15.0  p90  16.1  | (no verdict) (pull_request):2, (no verdict) (workflow_dispatch):2, tier full (pull_request):21, tier full (push):13, tier full (schedule):5, tier partial (workflow_dispatch):7
+  job native gauntlet (macOS aarch64, gates)                  ran  50  median   8.6  ok-median   8.7  p90   9.5  | (no verdict) (pull_request):2, (no verdict) (workflow_dispatch):2, tier full (pull_request):21, tier full (push):13, tier full (schedule):5, tier partial (workflow_dispatch):7
+=== wolf-lsp (105 runs)
+  tier tier full (pull_request)               runs   1  macOS-min/run median    4.5  max    4.5  sum     4.5
+  tier tier full (push)                       runs   1  macOS-min/run median    4.3  max    4.3  sum     4.3
+  tier tier full (schedule)                   runs   1  macOS-min/run median    4.8  max    4.8  sum     4.8
+  tier tier full (workflow_dispatch)          runs   1  macOS-min/run median    4.4  max    4.4  sum     4.4
+  tier tier pr (pull_request)                 runs   2  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier tier unplanned (pull_request)          runs   1  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier untiered:pull_request (pull_request)   runs  37  macOS-min/run median    4.2  max    5.0  sum   147.5
+  tier untiered:push (push)                   runs  15  macOS-min/run median    4.5  max    5.3  sum    67.6
+  tier untiered:schedule (schedule)           runs  34  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier untiered:workflow_dispatch (workflow_dispatch) runs   2  macOS-min/run median    0.0  max    0.0  sum     0.0
+  job emacs mode (macos-latest)                               ran  59  median   0.3  ok-median   0.3  p90   0.4  | (no verdict) (pull_request):1, tier full (pull_request):1, tier full (push):1, tier full (schedule):1, tier full (workflow_dispatch):1, untiered:pull_request (pull_request):39, untiered:push (push):15
+  job helix config (macos-latest)                             ran  59  median   0.5  ok-median   0.5  p90   0.6  | (no verdict) (pull_request):1, tier full (pull_request):1, tier full (push):1, tier full (schedule):1, tier full (workflow_dispatch):1, untiered:pull_request (pull_request):39, untiered:push (push):15
+  job nvim plugin (macos-latest)                              ran  58  median   0.6  ok-median   0.6  p90   0.7  | tier full (pull_request):1, tier full (push):1, tier full (schedule):1, tier full (workflow_dispatch):1, untiered:pull_request (pull_request):39, untiered:push (push):15
+  job server lane (macos-latest)                              ran  59  median   2.0  ok-median   2.1  p90   2.5  | tier full (pull_request):1, tier full (push):1, tier full (schedule):1, tier full (workflow_dispatch):1, untiered:pull_request (pull_request):40, untiered:push (push):15
+  job test (macos-latest)                                     ran  59  median   1.0  ok-median   1.0  p90   1.2  | tier full (pull_request):1, tier full (push):1, tier full (schedule):1, tier full (workflow_dispatch):1, untiered:pull_request (pull_request):40, untiered:push (push):15
+=== wolf-std (71 runs)
+  tier tier full (pull_request)               runs   3  macOS-min/run median   39.4  max   39.6  sum   113.0
+  tier tier full (push)                       runs   3  macOS-min/run median   39.9  max   40.2  sum   113.5
+  tier tier full (schedule)                   runs   1  macOS-min/run median   38.2  max   38.2  sum    38.2
+  tier tier full (workflow_dispatch)          runs   3  macOS-min/run median   39.4  max   40.7  sum   118.8
+  tier tier pr (pull_request)                 runs   6  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier tier unplanned (pull_request)          runs   1  macOS-min/run median    0.0  max    0.0  sum     0.0
+  tier untiered:pull_request (pull_request)   runs   8  macOS-min/run median   39.1  max   45.4  sum   315.8
+  tier untiered:push (push)                   runs  31  macOS-min/run median   39.9  max   45.9  sum  1237.5
+  job gates (macos-latest)                                    ran  58  median   6.0  ok-median   6.1  p90   6.6  | (no verdict) (workflow_dispatch):1, tier full (pull_request):3, tier full (push):3, tier full (workflow_dispatch):3, untiered:pull_request (pull_request):9, untiered:push (push):39
+  job rig (macos-latest)                                      ran  58  median  33.1  ok-median  33.9  p90  37.6  | tier full (pull_request):3, tier full (push):3, tier full (schedule):1, tier full (workflow_dispatch):3, untiered:pull_request (pull_request):10, untiered:push (push):38
+=== yew (37 runs)
+  tier untiered:pull_request (pull_request)   runs  23  macOS-min/run median   11.3  max   30.4  sum   282.3
+  tier untiered:push (push)                   runs   4  macOS-min/run median    9.1  max   26.8  sum    40.0
+  job oracle (macos-latest, --cc clang, true)                 ran  29  median   3.8  ok-median   9.3  p90  13.5  | untiered:pull_request (pull_request):26, untiered:push (push):3
+  job port (macos-latest, true)                               ran  30  median   1.5  ok-median   0.6  p90  13.5  | untiered:pull_request (pull_request):27, untiered:push (push):3
