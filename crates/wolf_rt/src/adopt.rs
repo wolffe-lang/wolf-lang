@@ -41,6 +41,10 @@ pub fn adopt(fd: i64) -> i64 {
         // only one of them can find the flag clear.
         static ADOPT: Mutex<()> = Mutex::new(());
         let _held = ADOPT.lock().unwrap_or_else(|p| p.into_inner());
+        // s253 PLANT (never merge): every descriptor refused, as before s253.
+        if fd >= 3 {
+            return -fs_code::IO;
+        }
         let raw = fd as std::os::fd::RawFd;
         // SAFETY: F_GETFD reads the descriptor's flags and nothing else.
         let flags = unsafe { libc::fcntl(raw, libc::F_GETFD) };

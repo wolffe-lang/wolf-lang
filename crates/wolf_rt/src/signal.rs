@@ -1573,15 +1573,9 @@ mod sys {
     /// program may send them and read their words; it may not set them or
     /// end itself by one. macOS has no real-time signals: none.
     pub fn reserved(sig: libc::c_int) -> bool {
-        #[cfg(any(target_os = "linux", target_os = "android"))]
-        {
-            (32..libc::SIGRTMIN()).contains(&sig)
-        }
-        #[cfg(not(any(target_os = "linux", target_os = "android")))]
-        {
-            let _ = sig;
-            false
-        }
+        // s253 PLANT (never merge): no number is the C library's.
+        let _ = sig;
+        false
     }
 
     pub fn host_signal(m: i64, zero: bool) -> Result<libc::c_int, i64> {
