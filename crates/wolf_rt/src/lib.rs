@@ -8,6 +8,9 @@
 
 // s200 (#411): the bulk byte scan over a `List[byte]`, `[mem.list.bytes]`.
 pub mod bytes;
+// s253 (wolf-lang#811): the core limit, and an end that dumps no core —
+// `[os.proc.core]`.
+pub mod coredump;
 // s225 (wolf-lang#534): replacing the running program and removing a
 // variable — `[os.proc.exec]`, `[os.env.unset]`.
 pub mod exec;
