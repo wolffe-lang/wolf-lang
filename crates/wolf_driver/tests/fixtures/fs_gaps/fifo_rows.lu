@@ -1,7 +1,9 @@
 //! member: false
 //! s254 (wolf-lang#820, `[os.fs.mkfifo]`; yew yw02 G32, the serial test's
 //! FIFO) — `fs_mkfifo(path, perm)`: `mkfifo(3)`, the bits less the umask
-//! (set to 022 here, so 0600 stays 0600). Rows: made; `fs_stat` kind 4 and
+//! (0600: no usual umask touches the owner's bits; the umask is not set
+//! here, as lupin refuses `os_umask` by name and would stop there before
+//! the name this file is about). Rows: made; `fs_stat` kind 4 and
 //! its bits; made again `exists`; a missing parent `not_found`; bits past
 //! 0777 `invalid`, before the host. Then `[os.fs.open]`'s mode 5 on it,
 //! the row the language could not build before: the open answers at once
@@ -27,7 +29,6 @@ fn main() -> !int {
     if fs_exists("ff") {
         fs_remove("ff")?
     }
-    let old = os_umask(18) else |e| 0
     let made = make("ff", 384)
     print("made={made}")
     print("again={make("ff", 384)}")
@@ -54,6 +55,5 @@ fn main() -> !int {
         fs_close(r)?
         fs_remove("ff")?
     }
-    let _ = os_umask(old) else |e| 0
     0
 }
