@@ -1,0 +1,28 @@
+//! check: fail(E1010)
+//! phase: typecheck
+//! conforms: mem.region.outer-write, mem.region.escape
+//!
+//! s255 (`[mem.region.outer-write]`): what the clause still refuses. A
+//! `str` built inside the block and pushed PLAINLY into an outer list
+//! would leave the list viewing the block's bytes (a plain push of a
+//! `str` shares them, `[mem.tier0.move.3]`), so the push is E1010 at the
+//! block's end, exactly as before s255 — now with the report naming the
+//! store and the one-word repair: `copy` at the store, which
+//! materializes the bytes in the list's own region.
+
+struct Log {
+    lines: List[str],
+}
+
+fn main() {
+    var log = Log { lines: List[str]() }
+    var i = 0
+    while i < 10 {
+        region turn {
+            let t = "turn {i}"
+            (mut log.lines).push(t)        // ERROR E1010: `log` would view `turn`'s bytes
+        }
+        i += 1
+    }
+    print("{log.lines.len}")
+}

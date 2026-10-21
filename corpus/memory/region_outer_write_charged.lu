@@ -1,0 +1,53 @@
+//! check: run(exit=0, stdout="outer true | turn true | lines 200 | reclaimed true\n")
+//! phase: run
+//! conforms: mem.region.outer-write, mem.region.account.1, mem.region.account.2
+//!
+//! s255 (`[mem.region.outer-write]`): the ledger is the proof of where
+//! the copies land. Two hundred turns each push a `copy` of a built
+//! `str` into a list that lives in `outer`, and build a longer scratch
+//! string that dies with the turn. Read inside the last turn,
+//! `region_bytes(turn)` holds that turn's scratch (at least its bytes);
+//! read after the loop, `region_bytes(outer)` holds every copied line
+//! (at least their bytes together — the native arena rounds each up,
+//! the checked machine charges them exactly, `[mem.region.account.1]`:
+//! the units are the tier's, the relation is the clause's). Freeing
+//! `outer` returns `live_region_bytes()` to its entry reading: nothing
+//! leaked into the root.
+//!
+//! Before s255 this was E1010 (the copy shared the bytes and the push
+//! gained the block's site); lupin 0.1.55 traps `region-fault`.
+
+struct Log {
+    lines: List[str],
+}
+
+fn main() -> !int {
+    let before = live_region_bytes()
+    var charged_outer = 0
+    var charged_turn = 0
+    var scratch_len = 0
+    var line_bytes = 0
+    var count = 0
+    region outer {
+        var log = Log { lines: List[str]() }
+        var i = 0
+        while i < 200 {
+            region turn {
+                let scratch = "scratch {i} {i * 7} {i * 11} {i * 13} padding padding padding"
+                let line = "line {i}"
+                line_bytes += line.len
+                (mut log.lines).push(copy line)
+                if i == 199 {
+                    scratch_len = scratch.len
+                    charged_turn = region_bytes(turn)
+                }
+            }
+            i += 1
+        }
+        count = log.lines.len
+        charged_outer = region_bytes(outer)
+    }
+    let reclaimed = live_region_bytes() == before
+    print_raw("outer {charged_outer >= line_bytes} | turn {charged_turn >= scratch_len} | lines {count} | reclaimed {reclaimed}")
+    0
+}

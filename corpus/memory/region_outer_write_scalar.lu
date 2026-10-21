@@ -1,0 +1,45 @@
+//! check: run(exit=0, stdout="1000 1000 7 4\n")
+//! phase: run
+//! conforms: mem.region.outer-write, mem.region.scalar, mem.region.create.3
+//!
+//! s255 (wolf-lang#839, #856; `[mem.region.outer-write]`): a write into a
+//! value declared outside a `region` block keeps nothing of the block
+//! when the stored value names no region. A scalar field store (`s.n`),
+//! an `int` index store into an outer list (`s.v[0]`), a `byte` push
+//! into an outer `List[byte]` (the growth is the LIST's region's, the
+//! one its header remembers, never the block's) and a `List[int]` push
+//! are all admitted; the block's own temporary (`t`) dies with it.
+//!
+//! Before s255 the push was E1010 on every compiling machine: `push`'s
+//! `mut` receiver gained the call's ambient site ("`s` still holds a
+//! value allocated in region `turn`"), aspen's "even a byte push" (ap01
+//! §6.8). lupin 0.1.55 tracks the list itself and ran this all along.
+
+struct S {
+    n: int,
+    v: List[int],
+    hist: List[int],
+    frame: List[byte],
+}
+
+fn main() {
+    var s = S { n: 0, v: List[int](), hist: List[int](), frame: List[byte]() }
+    (mut s.v).push(0)
+    var i = 0
+    while i < 1000 {
+        region turn {
+            let t = "row {i}"
+            s.n += 1
+            s.v[0] = t.len
+            (mut s.hist).push(i % 7)
+            while s.frame.len != 0 {
+                let _ = (mut s.frame).pop() else 0 as byte
+            }
+            for b in t.bytes() {
+                (mut s.frame).push(b)
+            }
+        }
+        i += 1
+    }
+    print("{s.n} {s.hist.len} {s.v[0]} {s.hist[998]}")
+}

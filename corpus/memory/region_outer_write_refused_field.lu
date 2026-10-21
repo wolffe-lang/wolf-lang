@@ -1,0 +1,25 @@
+//! check: fail(E1004)
+//! phase: typecheck
+//! conforms: mem.region.outer-write, mem.region.edge
+//!
+//! s255 (`[mem.region.outer-write]`): a `str` built inside the block and
+//! stored PLAINLY into a field of a value declared outside it is the
+//! cross-region field store it always was — E1004, the two regions must
+//! be one — and the report now names the repair this clause admits:
+//! `copy` at the store, which materializes the bytes in the region that
+//! was ambient where `acc` was declared.
+
+struct Acc {
+    title: str,
+    n: int,
+}
+
+fn main() {
+    var acc = Acc { title: "", n: 0 }
+    region r {
+        let name = "x{1}"
+        acc.title = name               // ERROR E1004: `name` lives in `r`
+        acc.n += 1
+    }
+    print("{acc.title} {acc.n}")
+}

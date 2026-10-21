@@ -1,0 +1,39 @@
+//! check: run(exit=0, stdout="50 r0 r49 3 49 98 147\n")
+//! phase: run
+//! conforms: mem.region.outer-write, mem.region.copyout, mem.region.edge.elem
+//!
+//! s255 (`[mem.region.outer-write]`): a struct holding a `str` and a
+//! `List[int]`, both built inside the block, is pushed into an outer
+//! list with `copy` at the store. The copy is deep and materializing
+//! (`[mem.region.copyout]`'s copy): the name's bytes are re-made and the
+//! list gets a fresh buffer, both in the outer list's region, so nothing
+//! the block owned is reachable from `acc.rows` once the block is gone.
+//! Before s255: E1010 (the copy shared the `str` and the receiver gained
+//! the block's site).
+
+struct Row {
+    name: str,
+    vals: List[int],
+}
+
+struct Acc {
+    rows: List[Row],
+}
+
+fn main() {
+    var acc = Acc { rows: List[Row]() }
+    var i = 0
+    while i < 50 {
+        region turn {
+            var vals = List[int]()
+            (mut vals).push(i)
+            (mut vals).push(i * 2)
+            (mut vals).push(i * 3)
+            let row = Row { name: "r{i}", vals: vals }
+            (mut acc.rows).push(copy row)
+        }
+        i += 1
+    }
+    let last = acc.rows[49]
+    print("{acc.rows.len} {acc.rows[0].name} {last.name} {last.vals.len} {last.vals[0]} {last.vals[1]} {last.vals[2]}")
+}

@@ -1,0 +1,56 @@
+//! check: run(exit=0, stdout="t9 1 9 x1 2 7\n")
+//! phase: run
+//! conforms: mem.region.outer-write, mem.region.copyout, mem.tier0.mode.mut
+//!
+//! s255 (`[mem.region.outer-write]`): a `str` field and a `List` field
+//! of a `mut` parameter are replaced from inside the callee's own
+//! `region` block, each with `copy` at the store. The `str` is
+//! materialized into the region that was ambient where the parameter
+//! was bound — the function's entry ambient, the caller's region, which
+//! the caller's own call site keeps longer-lived than the argument —
+//! and the `List` into the region its old header remembers. A local
+//! declared outside a block in `main` is written the same way: its
+//! region is the ambient at its declaration. Before s255 the parameter
+//! shape was E1010 at the block's end (the copy landed in the dying
+//! region) and the local's E1004.
+
+struct S {
+    title: str,
+    last: List[int],
+    n: int,
+}
+
+fn tick(mut s: S, i: int) {
+    region turn {
+        let t = "t{i}"
+        var xs = List[int]()
+        (mut xs).push(i)
+        s.title = copy t
+        s.last = copy xs
+        s.n += 1
+    }
+}
+
+struct Acc {
+    title: str,
+    vals: List[int],
+}
+
+fn main() {
+    var s = S { title: "", last: List[int](), n: 0 }
+    var i = 0
+    while i < 10 {
+        tick(mut s, i)
+        i += 1
+    }
+    var acc = Acc { title: "", vals: List[int]() }
+    region r {
+        let name = "x{1}"
+        var vs = List[int]()
+        (mut vs).push(2)
+        (mut vs).push(7)
+        acc.title = copy name
+        acc.vals = copy vs
+    }
+    print("{s.title} {s.last.len} {s.last[0]} {acc.title} {acc.vals[0]} {acc.vals[1]}")
+}
