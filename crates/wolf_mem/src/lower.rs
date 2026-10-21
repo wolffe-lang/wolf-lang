@@ -6244,6 +6244,15 @@ impl<'t> Lowerer<'t> {
         if callee.kind == SyntaxKind::PathExpr && self.text(callee.span) == "net_read" {
             return self.is_str_or_str_row(e.span);
         }
+        // s254 (wolf-lang#834; pelt sh22): `os_cwd() -> str ! {io}` copies
+        // the working directory's name into the ambient region — a site
+        // BEFORE the runtime routes the bytes there, #374's order as
+        // `net_read`'s: with the site, a name returned out of the region
+        // it was asked in is E1010; without it, moving the bytes would
+        // turn sh22's 48 B a call in the root into a read of freed memory.
+        if callee.kind == SyntaxKind::PathExpr && self.text(callee.span) == "os_cwd" {
+            return self.is_str_or_str_row(e.span);
+        }
         if !self.is_str_expr(e.span) {
             return false;
         }
