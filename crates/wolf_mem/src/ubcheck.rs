@@ -739,6 +739,12 @@ struct Frame<'t> {
     read_moves: Vec<(ReadStorage, Vec<PStep>)>,
     locals: Vec<Value>,
     scopes: Vec<Scope<'t>>,
+    /// s255 (`[mem.region.outer-write]`): per local, the ambient
+    /// stack's depth at its declaration — the region ambient there is
+    /// `ambient[depth - 1]` (a parameter's: the frame's entry ambient,
+    /// the caller's current region), and a store into the local from a
+    /// deeper stack is a write into an OUTER value.
+    decl_depth: Vec<usize>,
 }
 
 /// Per-body evaluation context: the typed side tables, span-keyed.
@@ -1494,6 +1500,14 @@ struct Machine<'t> {
     /// The dynamic ambient-region stack; `[0]` is the run's root
     /// region (never freed while the run lives).
     ambient: Vec<usize>,
+    /// s255 (`[mem.region.outer-write]`): the region the next `copy e`
+    /// evaluated is charged to — set by a store into an outer value
+    /// around its right-hand side (a `Map` store's key too), taken by
+    /// the prefix's `copy` arm, cleared after. That copy is `copy_out`'s
+    /// materializing one, made with the region ambient, so the bytes of
+    /// every `str` reached and every container re-minted charge the
+    /// outer value's ledger.
+    copy_target: Option<usize>,
     /// What the program wrote to standard output, as BYTES (s200,
     /// wolf-lang#405: `fs_write_chunk(1, …)` writes octets that need not
     /// be UTF-8). Decoded once, lossily, at the end of the run — the
@@ -2911,6 +2925,7 @@ impl<'t> Machine<'t> {
             regions: Vec::new(),
             lists: Vec::new(),
             list_region: Vec::new(),
+            copy_target: None,
             maps: Vec::new(),
             map_region: Vec::new(),
             pools: Vec::new(),
@@ -3130,7 +3145,11 @@ impl<'t> Machine<'t> {
                 names: Vec::new(),
                 cleanup: Vec::new(),
             }],
+            decl_depth: Vec::new(),
         };
+        // s255: a parameter is declared at the frame's entry — the
+        // caller's current region is the ambient there.
+        let entry_depth = self.ambient.len();
         // Parameter names from the declaration, values from the call.
         let mut names: Vec<String> = Vec::new();
         if let Some(params) = decl.params() {
@@ -3159,6 +3178,7 @@ impl<'t> Machine<'t> {
             let name = names.get(i).cloned().unwrap_or_else(|| format!("_{i}"));
             frame.scopes[0].names.push((name, frame.locals.len()));
             frame.locals.push(v);
+            frame.decl_depth.push(entry_depth);
         }
         self.frames.push(frame);
         self.self_tys.push(self.pending_self_ty.take());
@@ -3195,10 +3215,58 @@ impl<'t> Machine<'t> {
         });
     }
 
+    // ------------------------------------ the outer write (s255) ----
+
+    /// s255: is this expression `copy e` (and not `copy region { }`)?
+    fn is_copy_prefix(&self, v: &'t GreenNode) -> bool {
+        v.kind == SyntaxKind::PrefixExpr
+            && PrefixExpr::cast(v).is_some_and(|p| {
+                p.op().map(|t| t.kind) == Some(SyntaxKind::CopyKw)
+                    && p.operand().is_some_and(|o| o.kind != SyntaxKind::RegionBlock)
+            })
+    }
+
+    /// s255 (`[mem.region.outer-write]`): is a store into `place` a
+    /// write into an OUTER value — a `mut` parameter's place (a
+    /// `Value::Ref` root: the caller's, whatever block is open), or a
+    /// local declared when the ambient stack was shorter than it is
+    /// now (a `region`/`in` block opened since)?
+    fn place_is_outer(&self, place: &Place) -> bool {
+        if place.frame == STATIC_FRAME {
+            return false;
+        }
+        let f = &self.frames[place.frame];
+        matches!(f.locals.get(place.local), Some(Value::Ref(_)))
+            || f.decl_depth
+                .get(place.local)
+                .is_some_and(|&d| self.ambient.len() > d)
+    }
+
+    /// s255: the region a `copy` stored into `place` is charged to —
+    /// a container's birth region when the stored value replaces or
+    /// grows a `List`/`Map` (`container`: the container's current
+    /// value), else the region ambient where the root binding was
+    /// declared (a parameter's: the frame's entry ambient).
+    fn outer_region(&mut self, place: &Place, container: Option<&Value>, span: Span) -> E<usize> {
+        match container {
+            Some(Value::List(id)) => return Ok(self.list_region.get(*id).copied().unwrap_or(0)),
+            Some(Value::Map(id)) => return Ok(self.map_region.get(*id).copied().unwrap_or(0)),
+            _ => {}
+        }
+        let f = &self.frames[place.frame];
+        let depth = f.decl_depth.get(place.local).copied().unwrap_or(1).max(1);
+        match self.ambient.get(depth - 1) {
+            Some(&r) => Ok(r),
+            None => self.refuse("an outer store with no ambient region", span),
+        }
+    }
+
     fn declare(&mut self, name: &str, v: Value) -> usize {
+        let depth = self.ambient.len();
         let f = self.frames.last_mut().expect("frame");
         let idx = f.locals.len();
         f.locals.push(v);
+        f.decl_depth.push(depth);
         f.scopes
             .last_mut()
             .expect("scope")
@@ -4228,10 +4296,54 @@ impl<'t> Machine<'t> {
         // run, so a right-hand side that grows or rehashes the
         // container still stores into the container as it is after
         // the call.
-        let Some(place) = found!(self.place_of(place_expr)) else {
+        // s255 (`[mem.region.outer-write]`): `m[copy k] = v` into an
+        // outer map — the map keeps its key (s227), so the key's copy is
+        // charged to the map's own region. The container is read
+        // before the key runs; the place itself resolves below as
+        // before.
+        self.copy_target = None;
+        if place_expr.kind == SyntaxKind::BracketApply
+            && let Some(b) = BracketApply::cast(place_expr)
+            && let Some(recv) = b.callee()
+            && let Some(key) = b
+                .args()
+                .into_iter()
+                .flat_map(|l| l.args())
+                .find_map(Arg::value)
+            && self.is_copy_prefix(key)
+            && let Found::At(cplace) = self.place_of(recv)?
+            && self.place_is_outer(&cplace)
+        {
+            let cval = self.read_place(&cplace, recv.span)?;
+            self.copy_target = Some(self.outer_region(&cplace, Some(&cval), place_expr.span)?);
+        }
+        let resolved = self.place_of(place_expr);
+        self.copy_target = None;
+        let Some(place) = found!(resolved) else {
             return self.refuse("assignment through this place shape", place_expr.span);
         };
         let elem_store = !compound && place_expr.kind == SyntaxKind::BracketApply;
+        // s255: `p.f = copy e`, `p = copy e`, `xs[i] = copy e` into an
+        // outer value — the copy charges the outer value's region: a
+        // container's own when the value replaces or grows one, else
+        // the root binding's ambient.
+        if let Some(e) = d.value()
+            && !compound
+            && self.is_copy_prefix(e)
+            && self.place_is_outer(&place)
+        {
+            let container = if elem_store {
+                let mut cplace = place.clone();
+                cplace.path.pop();
+                Some(self.read_place(&cplace, place_expr.span)?)
+            } else {
+                match self.read_place(&place, place_expr.span) {
+                    Ok(v @ (Value::List(_) | Value::Map(_))) => Some(v),
+                    _ => None,
+                }
+            };
+            self.copy_target = Some(self.outer_region(&place, container.as_ref(), place_expr.span)?);
+        }
         let copied = match d.value() {
             Some(e) if elem_store && !d.takes() => self.eval_elem_copy(e)?,
             _ => None,
@@ -4252,6 +4364,7 @@ impl<'t> Machine<'t> {
             },
             (None, None) => Value::Unit,
         };
+        self.copy_target = None;
         if compound {
             let cur = self.read_place(&place, place_expr.span)?;
             let op = d.op().map(|t| t.kind).expect("compound op");
@@ -5520,12 +5633,24 @@ impl<'t> Machine<'t> {
                 self.eval_copied_block(operand)
             }
             Some(SyntaxKind::CopyKw) => {
+                // s255 (`[mem.region.outer-write]`): aimed by the store
+                // this copy is the right-hand side of — a write into an
+                // outer value — the copy is `copy_out`'s materializing
+                // one, charged to the outer value's region. Taken before
+                // the operand runs, so a `copy` nested in it is today's.
+                let aimed = self.copy_target.take();
                 // `copy x`: an independent deep duplicate.
                 let v = if let Some(place) = found!(self.place_of(operand)) {
                     self.read_place(&place, operand.span)?
                 } else {
                     val!(self.eval(operand))
                 };
+                if let Some(target) = aimed {
+                    self.ambient.push(target);
+                    let copied = self.copy_out(v, operand.span);
+                    self.ambient.pop();
+                    return Ok(Flow::Val(copied?));
+                }
                 let copied = self.deep_copy(v, operand.span)?;
                 Ok(Flow::Val(copied))
             }
@@ -12613,7 +12738,9 @@ impl<'t> Machine<'t> {
                 // there is no write path at all (s77: a str's bytes are
                 // immutable, a literal's live in rodata), which is why
                 // `wolf_wir` refuses the same three spellings.
-                if matches!(method, "push" | "pop" | "clear") && recv_place.is_none() {
+                if matches!(method, "push" | "pop" | "clear" | "reset" | "reserve")
+                    && recv_place.is_none()
+                {
                     return self.refuse(
                         "mutating a temporary List (a `bytes()` view is read-only)",
                         e.span,
@@ -12644,6 +12771,19 @@ impl<'t> Machine<'t> {
                                 // so each arm unwraps through `val!`.
                                 let x = if a.mode() == Some(wolf_ast::ParamMode::Take) {
                                     val!(self.eval_arg(v, Some(wolf_ast::ParamMode::Take)))
+                                } else if self.is_copy_prefix(v)
+                                    && recv_place.as_ref().is_some_and(|p| self.place_is_outer(p))
+                                {
+                                    // s255 (`[mem.region.outer-write]`):
+                                    // `push(copy e)` into an outer list —
+                                    // the copy is materialized once, in
+                                    // the list's birth region, by the
+                                    // `copy` arm; no second copy here.
+                                    self.copy_target =
+                                        Some(self.list_region.get(id).copied().unwrap_or(0));
+                                    let x = self.eval_arg(v, None);
+                                    self.copy_target = None;
+                                    val!(x)
                                 } else {
                                     let x = val!(self.eval_arg(v, None));
                                     self.deep_copy(x, v.span)?
@@ -12657,6 +12797,37 @@ impl<'t> Machine<'t> {
                                 self.charge_region_bytes(rid, slot, e.span)?;
                                 self.lists[id].push(x);
                             }
+                        }
+                        Ok(Flow::Val(Value::Unit))
+                    }
+                    // s255 (wolf-lang#821, `[type.list.reset]`): the
+                    // emptying that keeps the buffer — the length to 0,
+                    // the capacity kept (`Vec::clear`), no charge.
+                    "reset" => {
+                        self.lists[id].clear();
+                        Ok(Flow::Val(Value::Unit))
+                    }
+                    // s255 (wolf-lang#844, `[type.list.reserve]`): the
+                    // capacity hint — the buffer grown in place, the
+                    // length and elements untouched; this machine's
+                    // ledger charges what is STORED (a push charges its
+                    // slot), so a reservation charges nothing here and
+                    // the native arena's buffer charge is that tier's
+                    // ([mem.region.account.1]: the units are the
+                    // tier's). A negative count is a no-op, as a count
+                    // under the length is.
+                    "reserve" => {
+                        let Some(nx) =
+                            args.into_iter().flat_map(|l| l.args()).find_map(Arg::value)
+                        else {
+                            return self.refuse("List.reserve without a count", e.span);
+                        };
+                        let Value::Int(n) = val!(self.eval(nx)) else {
+                            return self.refuse("List.reserve with a non-int count", e.span);
+                        };
+                        let have = self.lists[id].len();
+                        if n > have as i64 {
+                            self.lists[id].reserve((n as usize) - have);
                         }
                         Ok(Flow::Val(Value::Unit))
                     }
