@@ -107,9 +107,10 @@ the runner; and `wolf fmt` a fixed point, with a gate.
   at 688613c (the issue's file) too.
 - **`cargo xtask fmt-fixpoint`**, the gauntlet's second step: `wolf fmt`
   twice over every corpus file, the std at STD-PIN and the formatter's
-  regression corpus (1,232 files), the second pass changing nothing; any
-  extra path is formatted too. `fmt-lu` asks whether the corpus is
-  canonical; this asks whether canonical is where the formatter stops.
+  regression corpus (1,247 files at this pin: 1,170, 54 and 23), the
+  second pass changing nothing; any extra path is formatted too.
+  `fmt-lu` asks whether the corpus is canonical; this asks whether
+  canonical is where the formatter stops.
 
 ### Read this before you bump the pin
 
