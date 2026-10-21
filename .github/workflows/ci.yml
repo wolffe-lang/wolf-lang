@@ -324,9 +324,12 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # worst measured: test 744 s + clippy 33 s + setup ≈ 14 min
+          # worst measured: test 744 s + clippy 33 s + setup ≈ 14 min;
+          # wolf-lang#837: ~29 min when it passed on 2026-10-20 (runs
+          # 39380940132, 39364850695), cancelled at 30 on s251's and
+          # s252's full runs, so 45 (tl23's windows margin)
           - shard: build
-            timeout: 30
+            timeout: 45
           # worst measured: corpus 160 s + dist-smoke 146 s + the rest
           # ≈ 6 min, plus this job's own build of wolf
           - shard: gates
