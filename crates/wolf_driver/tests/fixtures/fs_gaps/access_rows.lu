@@ -1,0 +1,65 @@
+//! member: false
+//! s254 (wolf-lang#820, `[os.fs.access]`; yew yw02 G32) — `access(2)`: may
+//! this process (its REAL ids) do what the mode asks of a name? The program
+//! builds its own tree in its working directory: `acc/` (0700) holding
+//! `acc/f` (0644), `acc/ro/` (0500), `acc/dangle -> nope`. Rows: the file
+//! exists, reads, writes, does not execute (0644: no execute bit, so root
+//! is refused too); `acc/ro` refuses a write (`ro_write`: `ok` when the
+//! process is root, which writes anywhere — the harness reads the ids);
+//! a missing name and a dangling link are `not_found`; a name under a file
+//! is `io` (`ENOTDIR`); a mode outside 0..7 is `invalid`, before the host.
+//! windows answers `unsupported` by name for every mode the shape allows.
+
+fn row(p: str, mode: int) -> str {
+    fs_access(p, mode) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            io => "io",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn link(target: str, path: str) -> bool {
+    fs_symlink(target, path) else |e| {
+        return false
+    }
+    true
+}
+
+fn main() -> !int {
+    if fs_exists("acc") {
+        fs_set_mode("acc/ro", 448) else |_| {}
+        fs_remove_dir_all("acc")?
+    }
+    fs_create_dir_all("acc/ro")?
+    fs_write_text("acc/f", "f")?
+    fs_set_mode("acc/f", 420) else |_| {}
+    fs_set_mode("acc/ro", 320) else |_| {}
+    fs_set_mode("acc", 448) else |_| {}
+    let linked = link("nope", "acc/dangle")
+    print("exists={row("acc/f", 0)}")
+    print("read={row("acc/f", 4)}")
+    print("write={row("acc/f", 2)}")
+    print("read_write={row("acc/f", 6)}")
+    print("exec={row("acc/f", 1)}")
+    print("dir_write={row("acc", 2)}")
+    print("dir_search={row("acc", 1)}")
+    print("ro_write={row("acc/ro", 2)}")
+    print("ro_read={row("acc/ro", 4)}")
+    print("missing={row("acc/none", 0)}")
+    print("under_file={row("acc/f/x", 0)}")
+    if linked {
+        print("dangle={row("acc/dangle", 0)}")
+    } else {
+        print("dangle=no_link")
+    }
+    print("mode8={row("acc/f", 8)}")
+    print("negative={row("acc/f", -1)}")
+    fs_set_mode("acc/ro", 448) else |_| {}
+    fs_remove_dir_all("acc")?
+    0
+}

@@ -1,0 +1,116 @@
+//! member: false
+//! s254 (wolf-lang#818, `[os.fs.nonblock]`, `[os.signal.wait.write]`; yew
+//! yw02 G30) — the pipe a clipboard writer feeds. The write end made
+//! non-blocking, `fs_write_some` takes what the pipe holds (`taken`, the
+//! host's pipe capacity) and then answers `busy` (the host's `EAGAIN` in
+//! `os_error()`); a write wait on it (`h + WAIT_WRITE`, bit 62) answers the
+//! 25 ms deadline, waited for; the reader takes 8 KiB and the wait answers
+//! the index at once, and a write is taken again; the end made blocking
+//! again; with the reader gone (and BROKEN_PIPE ignored, so the host's
+//! SIGPIPE does not end the program) the wait answers the index and the
+//! write `io` (`EPIPE`). And the shape: 0..2 `invalid` to
+//! `fs_set_nonblock`, a forged handle `io` to both calls and to the wait,
+//! an empty list 0. windows: `fs_set_nonblock` and the wait `unsupported`.
+
+const WAIT_WRITE: int = 4611686018427387904
+
+const RESIZE: int = 16384
+
+fn nb(fd: int, on: bool) -> str {
+    fs_set_nonblock(fd, on) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn some(fd: int, bytes: List[byte]) -> str {
+    let n = fs_write_some(fd, bytes) else |e| {
+        return match e {
+            busy => "busy",
+            invalid => "invalid",
+            io => "io",
+        }
+    }
+    "{n}"
+}
+
+fn wait(fds: List[int], deadline: int) -> str {
+    let r = os_signal_wait_fds(fds, RESIZE, deadline) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "{r.0},{r.1}"
+}
+
+fn main() -> !int {
+    var chunk = List[byte]()
+    var i = 0
+    while i < 4096 {
+        (mut chunk).push(120 as byte)
+        i += 1
+    }
+    let p = os_pipe()?
+    let on = nb(p.1, true)
+    print("set_nonblock={on}")
+    if on == "ok" {
+        var taken = 0
+        var last = ""
+        var rounds = 0
+        while rounds < 4096 {
+            let n = fs_write_some(p.1, chunk) else |e| {
+                last = match e {
+                    busy => "busy",
+                    invalid => "invalid",
+                    io => "io",
+                }
+                break
+            }
+            taken += n
+            rounds += 1
+        }
+        print("full_at={last} taken_positive={taken > 0}")
+        print("REPORT taken={taken}")
+        print("busy_errno_set={os_error() != 0}")
+        let t0 = os_clock_ns()
+        print("wait_full={wait([p.1 + WAIT_WRITE], 25)}")
+        print("waited_25ms={os_clock_ns() - t0 >= 25000000}")
+        print("read_wait={wait([p.0], 0)}")
+        // The reader takes 8 KiB, or what the pipe took if it took less:
+        // never more than is there, so this read cannot park.
+        let want = if taken < 8192 then taken else 8192
+        var drained = 0
+        while drained < want {
+            let got = fs_read_chunk(p.0, want - drained)?
+            drained += got.len
+        }
+        print("drained={drained == want}")
+        print("wait_room={wait([p.1 + WAIT_WRITE], 1000)}")
+        print("both_lowest={wait([p.0, p.1 + WAIT_WRITE], 0)}")
+        let again = some(p.1, [121 as byte])
+        print("again={again}")
+        print("set_blocking={nb(p.1, false)}")
+        print("empty={some(p.1, List[byte]())}")
+        os_signal_ignore(2048) else |e| {}
+        fs_close(p.0)?
+        print("wait_reader_gone={wait([p.1 + WAIT_WRITE], 1000)}")
+        print("write_reader_gone={some(p.1, [122 as byte])}")
+        fs_close(p.1)?
+    } else {
+        print("write_some={some(p.1, [120 as byte])}")
+        print("wait={wait([p.1 + WAIT_WRITE], 0)}")
+        fs_close(p.0)?
+        fs_close(p.1)?
+    }
+    print("std0={nb(0, true)} std1={nb(1, true)} std2={nb(2, false)}")
+    print("forged_nb={nb(1000000, true)}")
+    print("forged_some={some(1000000, [120 as byte])}")
+    print("forged_wait={wait([1000000 + WAIT_WRITE], 0)}")
+    0
+}

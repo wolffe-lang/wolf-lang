@@ -1,0 +1,66 @@
+//! member: false
+//! s254 (wolf-lang#820, `[os.fs.lock]`; yew yw02 G32, the journal owner) —
+//! the advisory lock, flock-shaped: it belongs to the OPEN FILE, so two
+//! opens of one file conflict even in one process (`a`, `b`, `c` below are
+//! three opens of `lk`). Never waits: a conflicting lock is `busy`, the
+//! host's `EWOULDBLOCK` in `os_error()`. Rows: `a` exclusive, then `b`
+//! refused both kinds; `a` unlocked, `b` and `a` shared together, `c`'s
+//! exclusive refused; both unlocked and `c`'s taken; closing `c` releases
+//! it; unlocking an unlocked handle is ok; kind 0 and 3 `invalid` before the
+//! handle is looked at; a closed and a forged handle `io`. A handle is
+//! never locked twice here: what a second lock on a handle that holds one
+//! does is the host's (unix converts, windows refuses), and the clause
+//! says so.
+
+fn lock(fd: int, kind: int) -> str {
+    fs_lock(fd, kind) else |e| {
+        return match e {
+            busy => "busy",
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn unlock(fd: int) -> str {
+    fs_unlock(fd) else |e| {
+        return match e {
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn main() -> !int {
+    fs_write_text("lk", "journal")?
+    let a = fs_open_mode("lk", 3)?
+    let b = fs_open_mode("lk", 3)?
+    let c = fs_open_mode("lk", 3)?
+    print("a_excl={lock(a, 2)}")
+    print("b_excl={lock(b, 2)}")
+    print("busy_errno_set={os_error() != 0}")
+    print("b_shared={lock(b, 1)}")
+    print("a_unlock={unlock(a)}")
+    print("b_shared_again={lock(b, 1)}")
+    print("a_shared={lock(a, 1)}")
+    print("c_excl={lock(c, 2)}")
+    print("a_unlock_again={unlock(a)}")
+    print("b_unlock={unlock(b)}")
+    print("c_excl_free={lock(c, 2)}")
+    fs_close(c)?
+    print("a_excl_after_close={lock(a, 2)}")
+    print("a_unlock_third={unlock(a)}")
+    print("a_unlock_unlocked={unlock(a)}")
+    print("kind0={lock(a, 0)}")
+    print("kind3={lock(a, 3)}")
+    print("closed={lock(c, 1)}")
+    print("forged_unlock={unlock(1000000)}")
+    print("forged_lock={lock(1000000, 2)}")
+    fs_close(a)?
+    fs_close(b)?
+    fs_remove("lk")?
+    0
+}

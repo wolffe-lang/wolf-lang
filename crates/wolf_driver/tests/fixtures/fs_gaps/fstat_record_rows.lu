@@ -1,0 +1,57 @@
+//! member: false
+//! s254 (wolf-lang#820, `[os.fs.fstat.record]`; yew yw02 G32, wolf-lang#536's
+//! other half) — `fs_fstat_record(fd)`: `[os.fs.stat]`'s twenty words from
+//! ONE metadata read on the handle. Rows: the record's length; on a file,
+//! its kind, size, mode, nlink, dev, ino and nanosecond mtime against
+//! `fs_stat` of the path; after the file is renamed, the handle's identity
+//! (dev, ino) is the new name's — the same-file check an editor makes
+//! after a rename, with no path walked between the open and the check; a
+//! directory handle is kind 1 (unix: windows opens no directory); a pipe's
+//! end is kind 4, a fifo (windows: 2, no disk file); a closed and a forged
+//! handle `io`. `dev_have` is the `have` word's bit 9: 1 where the host
+//! answers the identity (linux, macOS), 0 where it refuses it (windows).
+
+fn main() -> !int {
+    if fs_exists("fr") {
+        fs_remove_dir_all("fr")?
+    }
+    fs_create_dir_all("fr")?
+    fs_write_text("fr/a", "twelve bytes")?
+    let fd = fs_open("fr/a")?
+    let rec = fs_fstat_record(fd)?
+    let st = fs_stat("fr/a")?
+    print("len={rec.len}")
+    print("kind={rec[0]} size={rec[1]}")
+    print("same_mode={rec[4] == st[4]} same_nlink={rec[5] == st[5]}")
+    print("same_identity={rec[9] == st[9] && rec[10] == st[10]}")
+    print("same_mtime={rec[14] == st[14] && rec[15] == st[15]}")
+    print("same_have={rec[3] == st[3]}")
+    print("dev_have={(rec[3] >> 9) & 1}")
+    fs_rename("fr/a", "fr/b")?
+    let moved = fs_stat("fr/b")?
+    print("after_rename={rec[9] == moved[9] && rec[10] == moved[10]}")
+    fs_close(fd)?
+    let closed = fs_fstat_record(fd) else |e| match e {
+        io => [-1],
+    }
+    print("closed={closed[0]}")
+    let forged = fs_fstat_record(1000000) else |e| match e {
+        io => [-1],
+    }
+    print("forged={forged[0]}")
+    let p = os_pipe()?
+    let pr = fs_fstat_record(p.0)?
+    print("pipe_kind={pr[0]}")
+    fs_close(p.0)?
+    fs_close(p.1)?
+    let dfd = fs_open("fr") else |e| -1
+    if dfd >= 0 {
+        let dr = fs_fstat_record(dfd)?
+        print("dir_kind={dr[0]}")
+        fs_close(dfd)?
+    } else {
+        print("dir_kind=not_opened")
+    }
+    fs_remove_dir_all("fr")?
+    0
+}
