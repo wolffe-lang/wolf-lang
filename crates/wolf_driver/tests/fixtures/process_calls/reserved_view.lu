@@ -30,7 +30,7 @@ fn caught_rt() -> str {
                 } else if c >= 97 && c <= 102 {
                     d = c - 87
                 }
-                if (d >> ((n - 1) % 4)) & 1 == 1 {
+                if d >> (n - 1) % 4 & 1 == 1 {
                     out = out + " {n}"
                 }
                 n += 1
