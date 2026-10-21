@@ -168,7 +168,12 @@ pub fn host_stub(name: &str) -> Option<SandboxCategory> {
         | "fs_set_owner" | "fs_set_owner_fd"
         // s248 (#796, #797): the syncs and the canonical path read and
         // flush the filesystem — `fs`, with the family.
-        | "fs_sync" | "fs_sync_dir" | "fs_realpath" => {
+        | "fs_sync" | "fs_sync_dir" | "fs_realpath"
+        // s254 (#820, #818): access, the lock, the handle's record, the
+        // fifo, the descriptor's flag and the one write — `fs`, with the
+        // family.
+        | "fs_access" | "fs_lock" | "fs_unlock" | "fs_fstat_record" | "fs_mkfifo"
+        | "fs_set_nonblock" | "fs_write_some" => {
             SandboxCategory::Fs
         }
         // The s39 net builtin tier: every entry point carries the

@@ -13901,6 +13901,54 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // as realpath(3) resolves it; a missing name (a dangling link
         // too) `not_found`, every other refusal `io`.
         "fs_realpath" => (vec![str_], rowed(table, str_, &["not_found", "io"])),
+        // s254 (wolf-lang#820, `[os.fs.access]`): access(2) — the path and
+        // the mode bits (0 exists; 4 read, 2 write, 1 execute); `invalid` a
+        // mode outside 0..7; `unsupported` windows, by name.
+        "fs_access" => (
+            vec![str_, int_],
+            rowed(
+                table,
+                unit,
+                &["not_found", "denied", "invalid", "unsupported", "io"],
+            ),
+        ),
+        // s254 (#820, `[os.fs.lock]`): the advisory lock on a handle (1
+        // shared, 2 exclusive), tried once — `busy` held elsewhere;
+        // `unsupported` a host with no lock (PAX); and its release.
+        "fs_lock" => (
+            vec![int_, int_],
+            rowed(table, unit, &["busy", "invalid", "unsupported", "io"]),
+        ),
+        "fs_unlock" => (vec![int_], rowed(table, unit, &["unsupported", "io"])),
+        // s254 (#820, `[os.fs.fstat.record]`): `[os.fs.stat]`'s twenty words
+        // from the handle; every refusal `io`.
+        "fs_fstat_record" => {
+            let list_int = table.intern(TyKind::List(int_));
+            (vec![int_], rowed(table, list_int, &["io"]))
+        }
+        // s254 (#820, `[os.fs.mkfifo]`): a fifo, `fs_create_dir_mode`'s rows.
+        "fs_mkfifo" => (
+            vec![str_, int_],
+            rowed(
+                table,
+                unit,
+                &["not_found", "denied", "exists", "invalid", "unsupported", "io"],
+            ),
+        ),
+        // s254 (#818, `[os.fs.nonblock]`): the handle's O_NONBLOCK, set or
+        // cleared (`invalid` 0..2; `unsupported` windows); and one write,
+        // the count taken, `busy` when a non-blocking handle takes nothing.
+        "fs_set_nonblock" => (
+            vec![int_, bool_],
+            rowed(table, unit, &["invalid", "unsupported", "io"]),
+        ),
+        "fs_write_some" => {
+            let list_byte = byte_list(table);
+            (
+                vec![int_, list_byte],
+                rowed(table, int_, &["busy", "invalid", "io"]),
+            )
+        }
         // s199 (#426, `[os.fs.seek]`, `[os.fs.tell]`,
         // `[os.fs.read_at]`): the handle's offset. `unseekable` is a
         // pipe, fifo, socket or terminal (ESPIPE) — its own tag

@@ -238,6 +238,16 @@ pub const PRELUDE: &[Ambient] = &[
     host("fs_sync"),
     host("fs_sync_dir"),
     host("fs_realpath"),
+    // s254 (wolf-lang#820, #818): what an editor's save path, journal and
+    // clipboard met — `[os.fs.access]`, `[os.fs.lock]`,
+    // `[os.fs.fstat.record]`, `[os.fs.mkfifo]`, `[os.fs.nonblock]`. `fs`.
+    host("fs_access"),
+    host("fs_lock"),
+    host("fs_unlock"),
+    host("fs_fstat_record"),
+    host("fs_mkfifo"),
+    host("fs_set_nonblock"),
+    host("fs_write_some"),
     // s199 (#426): the handle's offset — `[os.fs.seek]`,
     // `[os.fs.tell]`, `[os.fs.read_at]`.
     host("fs_seek"),
