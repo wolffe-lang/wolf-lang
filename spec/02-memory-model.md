@@ -737,6 +737,41 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   the same diagnostics — no site newly refused. Witnesses
   `corpus/memory/region_net_read_return.lu` and
   `region_net_read_charged.lu`.)
+  (Extended 2026-10-21 by s254 for wolf-lang#834. **`os_cwd` is a
+  site.** It was one of s228's "environment and argument family" — a
+  host producer whose bytes the runtime placed in the process root — and
+  that placement was the defect pelt's sh22 measured: a shell that asked
+  the working directory's name every turn inside a region of its own
+  kept every answer, 48 B a call for a 39-byte directory (the name
+  rounded up to the root arena's 16-byte step; 32 B for a 28-byte one),
+  native and release alike, where a string of the same length built by
+  interpolation in the same region kept nothing. `os_cwd`'s bytes are
+  now built in the ambient region like every other materialization
+  (`[mem.region.create.3]`), and so the call is a site exactly as
+  `net_read` is — by name, because its row (`str ! {io}`) hides it from
+  "is the result `str`" — in #374's order: the site first, then the
+  bytes. The rest of that family (`env_get`, `env_args`, `os_exe`,
+  `fs_read_text`, `fs_read`, `read_line`, `fs_realpath`, the json
+  accessors) still places its bytes in the root and is still no site.
+  **The cost, stated.** Nothing at run time but where the copy lands;
+  the checked machine charges the name to the ambient region's ledger as
+  the native tiers do, so a `cap:` breach on it traps on all three.
+  Measured before it landed, the published 0.2.34 against the head's
+  dist build: every entry of the org's trees that reaches `os_cwd` —
+  pelt's 4 entries, boreutils' 56, yew's 58 and lobo's 84, built as they
+  stand (131 compile on both; 70 of lobo's tests and one pelt module
+  refuse identically outside their package) and lobo's 139 directive
+  tests staged as its corpus runner stages them (34 call `os_cwd`) —
+  build with the same verdicts and the same diagnostics, 0 of 341
+  differing: no site newly refused (wolf-std's one caller,
+  `std/env/env.lu`'s `cwd`, returns the answer from no region). Measured
+  after: sh22's `cwdregion` keeps 0 B a turn on both tiers
+  (`crates/wolf_driver/tests/cwd_region_lanes.rs`, 4 B the bound; 79 B a
+  turn for a 67-byte directory at the gate commit). Witnesses
+  `corpus/memory/region_os_cwd_return.lu` and
+  `region_os_cwd_charged.lu`; lupin 0.1.55 runs the first to `exit(0)`
+  and reads `charged false` on the second, the old placement
+  (wolf-interp owes both).)
   (Extended 2026-10-10 by s227 for wolf-lang#660; ruled A (#64), 2026-10-11. **What
   a call can keep, it is taken to keep.** `in r { … }` sets the
   current region, so it decides where the callee ALLOCATES
