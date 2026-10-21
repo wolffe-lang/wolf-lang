@@ -22,6 +22,11 @@ pub mod fs_change;
 // s248 (wolf-lang#796, #797; ruling #93): the atomic save's two syncs and
 // the canonical path — `[os.fs.sync]`, `[os.fs.realpath]`.
 pub mod fs_save;
+// s254 (wolf-lang#820, #818): access(2), the advisory lock, the handle's
+// full record, the fifo, and the non-blocking write — `[os.fs.access]`,
+// `[os.fs.lock]`, `[os.fs.fstat.record]`, `[os.fs.mkfifo]`,
+// `[os.fs.nonblock]`.
+pub mod fs_gaps;
 // s228 (wolf-lang#661): the table behind `fs_open`'s and the net
 // calls' handles — numbers never reused, storage always.
 pub(crate) mod handles;
