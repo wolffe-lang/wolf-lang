@@ -6599,6 +6599,13 @@ impl<'t> Machine<'t> {
                     _ => &["not_found", "denied", "exists", "invalid", "io"],
                 };
                 match opts.open(&path) {
+                    // s254 (`[os.fs.open.nofollow]`): a final link refused
+                    // under the bit is `invalid`, the runtime's
+                    // `open_code`.
+                    Err(e) if fs_nofollow_refused(&e, mode) => {
+                        fs_host_error(&e);
+                        Ok(tag("invalid"))
+                    }
                     Err(e) => Ok(tag(&errtag(&e, declared))),
                     Ok(f) => {
                         // s199 (#424, `[os.fs.std]`): 0, 1 and 2 are the
@@ -7079,6 +7086,10 @@ impl<'t> Machine<'t> {
                     use std::os::unix::fs::OpenOptionsExt as _;
                     let mut opts = opts;
                     match opts.mode(mode as u32).open(&path) {
+                        Err(e) if fs_nofollow_refused(&e, open) => {
+                            fs_host_error(&e);
+                            Ok(tag("invalid"))
+                        }
                         Err(e) => Ok(tag(&errtag(&e, &["not_found", "denied", "exists", "io"]))),
                         Ok(f) => {
                             if self.files.len() < FS_FIRST_HANDLE {
@@ -7310,6 +7321,248 @@ impl<'t> Machine<'t> {
                             Ok(Flow::Val(Value::Str(s.to_string())))
                         }
                     },
+                }
+            }
+            // s254 (wolf-lang#820, `[os.fs.access]`): access(2) with the
+            // real ids, the path against the machine's own working
+            // directory; the runtime's rows, mode first; windows
+            // `unsupported` by name.
+            "fs_access" => {
+                let (Some(path), Some(mode)) = (path_arg(0), int_arg(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                if !(0..=7).contains(&mode) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    let Ok(c) = std::ffi::CString::new(path) else {
+                        return Ok(tag("io"));
+                    };
+                    let mut want = 0;
+                    if mode & 4 != 0 {
+                        want |= libc::R_OK;
+                    }
+                    if mode & 2 != 0 {
+                        want |= libc::W_OK;
+                    }
+                    if mode & 1 != 0 {
+                        want |= libc::X_OK;
+                    }
+                    if mode == 0 {
+                        want = libc::F_OK;
+                    }
+                    // SAFETY: a NUL-terminated path this arm owns.
+                    if unsafe { libc::access(c.as_ptr(), want) } == 0 {
+                        return Ok(Flow::Val(Value::Unit));
+                    }
+                    let e = std::io::Error::last_os_error();
+                    fs_host_error(&e);
+                    Ok(tag(match e.raw_os_error() {
+                        Some(libc::EACCES | libc::EPERM | libc::EROFS | libc::ETXTBSY) => "denied",
+                        Some(libc::ENOENT) => "not_found",
+                        _ => "io",
+                    }))
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = path;
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s254 (#820, `[os.fs.lock]`): the advisory lock on the file
+            // behind a handle, tried once — Rust's `File::try_lock` family,
+            // as the runtime: `busy` with the host's `EWOULDBLOCK`, `ENOSYS`
+            // and `EOPNOTSUPP` `unsupported`; the kind first.
+            "fs_lock" | "fs_unlock" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let kind = if name == "fs_lock" {
+                    match int_arg(1) {
+                        Some(k @ (1 | 2)) => k,
+                        Some(_) => return Ok(tag("invalid")),
+                        None => return self.refuse("this fs call shape", span),
+                    }
+                } else {
+                    0
+                };
+                let Some(f) = self.fs_handle(fd) else {
+                    return Ok(tag("io"));
+                };
+                let lock_tag = |e: &std::io::Error| -> &'static str {
+                    fs_host_error(e);
+                    #[cfg(unix)]
+                    if matches!(e.raw_os_error(), Some(libc::ENOSYS | libc::EOPNOTSUPP)) {
+                        return "unsupported";
+                    }
+                    "io"
+                };
+                let r = match kind {
+                    0 => match f.unlock() {
+                        Ok(()) => Ok(()),
+                        Err(e) if cfg!(windows) && e.raw_os_error() == Some(158) => Ok(()),
+                        Err(e) => Err(lock_tag(&e)),
+                    },
+                    k => match if k == 1 {
+                        f.try_lock_shared()
+                    } else {
+                        f.try_lock()
+                    } {
+                        Ok(()) => Ok(()),
+                        Err(std::fs::TryLockError::WouldBlock) => {
+                            #[cfg(unix)]
+                            let n = i64::from(libc::EWOULDBLOCK);
+                            #[cfg(not(unix))]
+                            let n = 33;
+                            FS_HOST_ERROR.with(|c| c.set(n));
+                            Err("busy")
+                        }
+                        Err(std::fs::TryLockError::Error(e)) => Err(lock_tag(&e)),
+                    },
+                };
+                match r {
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    Err(t) => Ok(tag(t)),
+                }
+            }
+            // s254 (#820, `[os.fs.fstat.record]`): `fs_stat`'s twenty words
+            // from the handle's one metadata read (`fs_stat_record`); a
+            // handle that is no disk file is kind 2 on windows; every
+            // refusal `io`.
+            "fs_fstat_record" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let Some(f) = self.fs_handle(fd) else {
+                    return Ok(tag("io"));
+                };
+                let md = match f.metadata() {
+                    Err(e) => return Ok(tag(&errtag(&e, &["io"]))),
+                    Ok(m) => m,
+                };
+                let disk = fs_is_disk(&f);
+                drop(f);
+                let Some(mut rec) = fs_stat_record(&md) else {
+                    return Ok(tag("io"));
+                };
+                if !disk && rec[0] == 0 {
+                    rec[0] = 2;
+                }
+                self.charge_mem(8 * rec.len() as u64)?;
+                let items: Vec<Value> = rec.into_iter().map(Value::Int).collect();
+                let id = self.mint_list(items, span)?;
+                Ok(Flow::Val(Value::List(id)))
+            }
+            // s254 (#820, `[os.fs.mkfifo]`): mkfifo(3), the bits first;
+            // `ENOSYS` `unsupported`; windows `unsupported` by name.
+            "fs_mkfifo" => {
+                let (Some(path), Some(perm)) = (path_arg(0), int_arg(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                if !(0..=0o777).contains(&perm) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    let Ok(c) = std::ffi::CString::new(path) else {
+                        return Ok(tag("io"));
+                    };
+                    // SAFETY: a NUL-terminated path this arm owns.
+                    if unsafe { libc::mkfifo(c.as_ptr(), perm as libc::mode_t) } == 0 {
+                        return Ok(Flow::Val(Value::Unit));
+                    }
+                    let e = std::io::Error::last_os_error();
+                    if e.raw_os_error() == Some(libc::ENOSYS) {
+                        fs_host_error(&e);
+                        return Ok(tag("unsupported"));
+                    }
+                    Ok(tag(&errtag(&e, &["not_found", "denied", "exists", "io"])))
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = path;
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s254 (#818, `[os.fs.nonblock]`): O_NONBLOCK on the open file
+            // behind a table handle; 0..2 `invalid` by name; windows
+            // `unsupported`.
+            "fs_set_nonblock" => {
+                let (Some(fd), Some(Value::Bool(on))) = (int_arg(0), argv.get(1)) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let on = *on;
+                if fs_is_std(fd) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::fd::AsRawFd as _;
+                    let Some(f) = self.fs_handle(fd) else {
+                        return Ok(tag("io"));
+                    };
+                    let raw = f.as_raw_fd();
+                    // SAFETY: the machine's own live descriptor.
+                    let fl = unsafe { libc::fcntl(raw, libc::F_GETFL) };
+                    let want = if on {
+                        fl | libc::O_NONBLOCK
+                    } else {
+                        fl & !libc::O_NONBLOCK
+                    };
+                    // SAFETY: as above; only the status flag changes.
+                    if fl < 0 || (want != fl && unsafe { libc::fcntl(raw, libc::F_SETFL, want) } < 0)
+                    {
+                        fs_host_error(&std::io::Error::last_os_error());
+                        return Ok(tag("io"));
+                    }
+                    Ok(Flow::Val(Value::Unit))
+                }
+                #[cfg(not(unix))]
+                {
+                    let _ = on;
+                    Ok(tag("unsupported"))
+                }
+            }
+            // s254 (#818, `[os.fs.nonblock]`): ONE write, the count taken;
+            // `busy` a non-blocking handle that takes nothing. 1 and 2 are
+            // the machine's record (`std_write`): a buffer takes it all.
+            "fs_write_some" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                let bytes = match self.bytes_of(argv.get(1)) {
+                    None => return self.refuse("this fs call shape", span),
+                    Some(Err(())) => return Ok(tag("invalid")),
+                    Some(Ok(b)) => b,
+                };
+                if fd == 1 || fd == 2 {
+                    return match self.std_write(fd, &bytes) {
+                        None => Ok(tag("io")),
+                        Some(Err(e)) => Ok(tag(&errtag(&e, &["io"]))),
+                        Some(Ok(())) => Ok(Flow::Val(Value::Int(bytes.len() as i64))),
+                    };
+                }
+                let Some(f) = self.fs_handle(fd) else {
+                    return Ok(tag("io"));
+                };
+                if bytes.is_empty() {
+                    return Ok(Flow::Val(Value::Int(0)));
+                }
+                let r = loop {
+                    use std::io::Write as _;
+                    match (&*f).write(&bytes) {
+                        Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+                        r => break r,
+                    }
+                };
+                match r {
+                    Ok(n) => Ok(Flow::Val(Value::Int(n as i64))),
+                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                        fs_host_error(&e);
+                        Ok(tag("busy"))
+                    }
+                    Err(e) => Ok(tag(&errtag(&e, &["io"]))),
                 }
             }
             // s230 (wolf-lang#702, `[os.fs.truncate]`): the length of
@@ -9576,13 +9829,22 @@ impl<'t> Machine<'t> {
                     }
                 }
                 // Owned duplicates: the machine's table must stay free for
-                // the tasks the wait lets run.
+                // the tasks the wait lets run. s254 (#818,
+                // `[os.signal.wait.write]`): bit 62 asks for write
+                // readiness of the handle in the other bits.
                 let mut files = Vec::with_capacity(handles.len());
+                let mut write = Vec::with_capacity(handles.len());
                 for h in handles {
-                    let Some(f) = self.fs_handle(h).and_then(|f| f.try_clone().ok()) else {
+                    let (base, w) = if h >= 0 && h & (1 << 62) != 0 {
+                        (h & !(1 << 62), true)
+                    } else {
+                        (h, false)
+                    };
+                    let Some(f) = self.fs_handle(base).and_then(|f| f.try_clone().ok()) else {
                         return Ok(tag("io"));
                     };
                     files.push(f);
+                    write.push(w);
                 }
                 let pair = |i: i64, m: i64| {
                     Flow::Val(Value::Struct {
@@ -9622,6 +9884,7 @@ impl<'t> Machine<'t> {
                     };
                     match checked_sig::wait_readable_many(
                         &files,
+                        &write,
                         want & self.signal_listening,
                         timeout,
                     ) {
@@ -11367,7 +11630,11 @@ impl<'t> Machine<'t> {
             // s236 (#701): a file's owner, by path and on a handle.
             | "fs_set_owner" | "fs_set_owner_fd"
             // s248 (#796, #797): the syncs and the canonical path.
-            | "fs_sync" | "fs_sync_dir" | "fs_realpath" => {
+            | "fs_sync" | "fs_sync_dir" | "fs_realpath"
+            // s254 (#820, #818): access, the lock, the handle's record, the
+            // fifo, the descriptor's flag and the one write.
+            | "fs_access" | "fs_lock" | "fs_unlock" | "fs_fstat_record" | "fs_mkfifo"
+            | "fs_set_nonblock" | "fs_write_some" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
@@ -14105,9 +14372,13 @@ mod checked_sig {
     /// read, `None` a wake or the timeout (the caller looks at the queue
     /// and the deadline again). The pipe is emptied and the pending set
     /// looked at before the poll, as [`wait_readable`] does.
+    /// s254 (#818, `[os.signal.wait.write]`): `write[i]` asks whether
+    /// `files[i]` takes a write (`POLLOUT`; select's write set) — the
+    /// runtime's `wait_many`, mirrored.
     #[cfg(unix)]
     pub(super) fn wait_readable_many(
         files: &[std::fs::File],
+        write: &[bool],
         set: i64,
         timeout_ms: i32,
     ) -> Result<Option<usize>, &'static str> {
@@ -14122,10 +14393,11 @@ mod checked_sig {
         let mut fds: Vec<libc::pollfd> = files
             .iter()
             .map(|f| f.as_raw_fd())
-            .chain(std::iter::once(r))
-            .map(|fd| libc::pollfd {
+            .zip(write.iter().copied())
+            .chain(std::iter::once((r, false)))
+            .map(|(fd, w)| libc::pollfd {
                 fd,
-                events: libc::POLLIN,
+                events: if w { libc::POLLOUT } else { libc::POLLIN },
                 revents: 0,
             })
             .collect();
@@ -14152,10 +14424,16 @@ mod checked_sig {
         // descriptors under FD_SETSIZE; a timeval or none.
         unsafe {
             let mut sel: libc::fd_set = std::mem::zeroed();
+            let mut wsel: libc::fd_set = std::mem::zeroed();
             libc::FD_ZERO(&mut sel);
+            libc::FD_ZERO(&mut wsel);
             let mut top = 0;
             for p in &fds {
-                libc::FD_SET(p.fd, &mut sel);
+                if p.events == libc::POLLOUT {
+                    libc::FD_SET(p.fd, &mut wsel);
+                } else {
+                    libc::FD_SET(p.fd, &mut sel);
+                }
                 top = top.max(p.fd);
             }
             #[allow(clippy::useless_conversion)]
@@ -14171,7 +14449,7 @@ mod checked_sig {
             let got = libc::select(
                 top + 1,
                 &mut sel,
-                std::ptr::null_mut(),
+                &mut wsel,
                 std::ptr::null_mut(),
                 tvp,
             );
@@ -14182,12 +14460,19 @@ mod checked_sig {
                 }
                 return Err("io");
             }
-            Ok(fds[..n - 1].iter().position(|p| libc::FD_ISSET(p.fd, &sel)))
+            Ok(fds[..n - 1].iter().position(|p| {
+                if p.events == libc::POLLOUT {
+                    libc::FD_ISSET(p.fd, &wsel)
+                } else {
+                    libc::FD_ISSET(p.fd, &sel)
+                }
+            }))
         }
     }
     #[cfg(not(unix))]
     pub(super) fn wait_readable_many(
         _files: &[std::fs::File],
+        _write: &[bool],
         _set: i64,
         _timeout_ms: i32,
     ) -> Result<Option<usize>, &'static str> {
@@ -15424,6 +15709,30 @@ impl std::ops::Deref for FsHandle<'_> {
     }
 }
 
+/// s254 (`[os.fs.open.nofollow]`): the open mode's no-follow bit —
+/// `wolf_rt::fs::fs_mode::NOFOLLOW`.
+const FS_NOFOLLOW: i64 = 16;
+
+/// Did an open of `mode` fail because the bit refused a final link? The
+/// host's `ELOOP` (freebsd's `EMLINK`) under the bit — the runtime's
+/// `open_code`.
+fn fs_nofollow_refused(e: &std::io::Error, mode: i64) -> bool {
+    #[cfg(unix)]
+    {
+        let link = if cfg!(target_os = "freebsd") {
+            libc::EMLINK
+        } else {
+            libc::ELOOP
+        };
+        mode & FS_NOFOLLOW != 0 && e.raw_os_error() == Some(link)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (e, mode);
+        false
+    }
+}
+
 /// s200 (#405): is `fd` one of the three standard streams?
 fn fs_is_std(fd: i64) -> bool {
     (0..FS_FIRST_HANDLE as i64).contains(&fd)
@@ -15517,9 +15826,21 @@ fn fs_is_disk(_f: &std::fs::File) -> bool {
 
 /// The `OpenOptions` of one of `[os.fs.open]`'s six modes, or `None`
 /// for a mode outside the set — `wolf_rt::fs::open_options`'s twin,
-/// shared by the open family and `fs_open_perm` (s230).
+/// shared by the open family and `fs_open_perm` (s230). s254
+/// (`[os.fs.open.nofollow]`): bit 16 adds `O_NOFOLLOW` to any of them;
+/// windows refuses the bit (`None`).
 fn fs_open_options(mode: i64) -> Option<std::fs::OpenOptions> {
+    let nofollow = mode & FS_NOFOLLOW != 0;
+    let mode = mode & !FS_NOFOLLOW;
+    if nofollow && !cfg!(unix) {
+        return None;
+    }
     let mut o = std::fs::OpenOptions::new();
+    #[cfg(unix)]
+    if nofollow {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        o.custom_flags(libc::O_NOFOLLOW);
+    }
     match mode {
         0 => o.read(true),
         1 => o.write(true).create(true).truncate(true),
@@ -15535,7 +15856,8 @@ fn fs_open_options(mode: i64) -> Option<std::fs::OpenOptions> {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::OpenOptionsExt as _;
-                o.read(true).custom_flags(libc::O_NONBLOCK)
+                let extra = if nofollow { libc::O_NOFOLLOW } else { 0 };
+                o.read(true).custom_flags(libc::O_NONBLOCK | extra)
             }
             #[cfg(not(unix))]
             {
