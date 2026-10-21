@@ -10,11 +10,17 @@
 # `plan-test` job) decides which jobs a run runs, every other job runs only
 # when the plan names it, and the run's LAST job says which tier it was:
 #
-#   tier full     every job: linux lint + test + corpus, the macOS native
+#   tier release  every job: linux lint + test + corpus, the macOS native
 #                 gauntlet's three shards, the fuzz smoke, build + test on
-#                 macOS and windows, the freebsd cross-check. A push to
-#                 trunk, the nightly `schedule`, a `workflow_dispatch`, a
-#                 pull request carrying the `full-matrix` label; and a
+#                 macOS and windows, the freebsd cross-check. The nightly
+#                 `schedule`, `workflow_dispatch -f tier=release`, a pull
+#                 request carrying the `release-matrix` label (a release
+#                 lane, at the head it tags). A red nightly opens an issue.
+#   tier full     the merge gate: every job but the macOS native
+#                 gauntlet's three shards; `build + test (macos-latest)` is
+#                 the merge's macOS smoke. A pull request carrying the
+#                 `full-matrix` label, a push to trunk, a
+#                 `workflow_dispatch` with neither jobs nor a tier; and a
 #                 pull request with a changed path no rule of
 #                 `ci/tiers.py` names, or whose change cannot be read.
 #   tier pr       any other pull-request run: linux lint + test + corpus
@@ -28,35 +34,56 @@
 #   tier partial  a `workflow_dispatch` naming jobs (`-f jobs=plan-test`):
 #                 a planted break needs one job.
 #
-# Nothing a job checks changed and no job left the full tier: a pull
-# request's push no longer runs the macOS, windows and freebsd jobs, and
-# they run in full before the merge. The `tier` job fails unless the plan
+# THE macOS CAP (tl30): the org has five macOS slots for every repository,
+# busy 55% of the time after the Team plan (tl29), and the merge here held
+# four of them, the native gauntlet's three shards 49 minutes together,
+# twice a merge (the label's run and the trunk push's). In the last 60 runs
+# with a macOS job, the macOS jobs caught two defects no linux job caught
+# (s246: wolf_rt did not compile for apple; a sent SIGSEGV read as a fault
+# there), both in `build + test (macos-latest)` and the native build shard
+# alike (ci/tl30.md). So `build + test` on macOS stays at the merge, the
+# smoke, and the native gauntlet runs every night and before every release
+# tag (`tier release`) instead of twice a merge.
+#
+# Nothing a job checks changed and no job left the nightly: a pull
+# request's push runs the linux gauntlet, the fuzz smoke and the planner's
+# test; the merge every job but the native macOS gauntlet; the nightly and
+# a release lane every job. The `tier` job fails unless the plan
 # succeeded, the jobs it chose are that tier's, every one of them succeeded
-# and every other job was skipped; so a green `tier full` is "every job,
-# green", and a green `tier pr` is never that.
+# and every other job was skipped; so a green `tier release` is "every job,
+# green", a green `tier full` the merge's jobs, and a green `tier pr` is
+# never either.
 #
 # THE MERGE RULE: a lane's PR merges only with a green `tier full` at its
 # head. Add the `full-matrix` label once the head is the one to merge
 # (never when opening the PR: `opened` and `labeled` would start two full
-# runs and the second would cancel the first). `lane-audit.sh` reads the
+# runs and the second would cancel the first). A release lane adds
+# `release-matrix` instead, at the head it tags. `lane-audit.sh` reads the
 # job's name.
 name: ci
 
 on:
   pull_request:
-    # `labeled` so adding `full-matrix` starts the full run at once; any
-    # other label's run is a noop (the plan, then nothing).
+    # `labeled` so adding `full-matrix` or `release-matrix` starts that
+    # tier's run at once; any other label's run is a noop (the plan, then
+    # nothing).
     types: [opened, synchronize, reopened, labeled]
   push:
     branches: [trunk]
   schedule:
-    # Nightly, the full tier, on trunk. (nightly.yml is the deep sweeps:
-    # property tests, long fuzzing, benchmarks. It runs none of these jobs.)
+    # Nightly, the release tier, on trunk: every job, the native macOS
+    # gauntlet the merge leaves (tl30) among them; a red night opens the
+    # `nightly-red` issue. (nightly.yml is the deep sweeps: property tests,
+    # long fuzzing, benchmarks. It runs none of these jobs.)
     - cron: "7 2 * * *"
   workflow_dispatch:
     inputs:
       jobs:
-        description: "the jobs to run (job ids, space-separated); empty: every job"
+        description: "the jobs to run (job ids, space-separated); empty: a tier"
+        type: string
+        default: ""
+      tier:
+        description: "with no jobs: full (the default; the merge gate) or release (every job, the native macOS gauntlet too)"
         type: string
         default: ""
 
@@ -64,16 +91,16 @@ permissions:
   contents: read
 
 # A pull request's runs: one group per branch and tier, cancel-in-progress,
-# so a new push frees the slots of the run it supersedes. The full run and
-# the pr run live in SEPARATE groups (adding the label must not cancel the
-# pr run at the same head: lane-audit.sh reads a cancelled run there as a
-# FAIL), and another label's noop run gets a group of its own so it cancels
-# nothing. Every other run (a trunk push, the nightly, a dispatch) gets a
+# so a new push frees the slots of the run it supersedes. The release, full
+# and pr runs live in SEPARATE groups (adding a label must not cancel the
+# run of another tier at the same head: lane-audit.sh reads a cancelled run
+# there as a FAIL), and a noop run (another label, or `full-matrix` added
+# beside `release-matrix`) gets a group of its own so it cancels nothing. Every other run (a trunk push, the nightly, a dispatch) gets a
 # group of its OWN run id: never cancelled, and never replaced while it
 # waits (in a shared group GitHub keeps a single pending run, and each
 # trunk push's full run is the coverage that merge is owed).
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}-{1}', github.head_ref, (github.event.action == 'labeled' && github.event.label.name != 'full-matrix') && format('noop-{0}', github.run_id) || (contains(github.event.pull_request.labels.*.name, 'full-matrix') && 'full' || 'pr')) || format('ci-{0}-{1}', github.event_name, github.run_id) }}
+  group: ${{ github.event_name == 'pull_request' && format('ci-pr-{0}-{1}', github.head_ref, (github.event.action == 'labeled' && (github.event.label.name != 'full-matrix' && github.event.label.name != 'release-matrix' || github.event.label.name == 'full-matrix' && contains(github.event.pull_request.labels.*.name, 'release-matrix'))) && format('noop-{0}', github.run_id) || (contains(github.event.pull_request.labels.*.name, 'release-matrix') && 'release' || contains(github.event.pull_request.labels.*.name, 'full-matrix') && 'full' || 'pr')) || format('ci-{0}-{1}', github.event_name, github.run_id) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -107,6 +134,7 @@ jobs:
           LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           IN_JOBS: ${{ inputs.jobs }}
+          IN_TIER: ${{ inputs.tier }}
         run: python3 ci/tiers.py plan --merge --github-output "$GITHUB_OUTPUT"
 
   # The planner can say no: its tiers by event, its classes by path, the
@@ -313,6 +341,10 @@ jobs:
     # twice its shard's worst measured wall. The linux job still runs
     # the whole list in one process, so the gauntlet's content is one
     # list on both hosts; only the macOS wall is divided.
+    #
+    # tl30 (the macOS cap): `tier release` alone runs it, the nightly and a
+    # release lane's label; the merge (`tier full`) leaves it out and keeps
+    # `build + test (macos-latest)` as its macOS smoke (ci/tl30.md).
     name: native gauntlet (macOS aarch64, ${{ matrix.shard }})
     needs: plan
     if: contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'native-macos')
@@ -393,6 +425,8 @@ jobs:
     # test, the `rung` leg build + lane-coverage + dist: each about half
     # the work, on its own runner and its own cache (the leg is the
     # cache's `key`). Every step still runs on windows; macOS is one leg.
+    # tl30: the macOS leg is the merge's macOS smoke (the native gauntlet
+    # is `tier release`'s): it caught both of s246's macOS defects.
     name: build + test (${{ matrix.os }}${{ matrix.leg && format(', {0}', matrix.leg) || '' }})
     needs: plan
     if: contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'build-test')
@@ -484,3 +518,27 @@ jobs:
         env:
           NEEDS: ${{ toJSON(needs) }}
         run: python3 ci/tiers.py verdict
+
+  # tl30 (tl28's shape): a red NIGHTLY opens one issue (`ci/nightly-red.sh`,
+  # its dedupe the title `nightly red: ci on trunk`, label `nightly-red`),
+  # or comments on it while it is open, so what the merge leaves to the
+  # nightly reaches the next lane on wolf-lang instead of the Actions tab.
+  # A `schedule` run only: a red dispatch or pull request opens nothing.
+  nightly-red:
+    name: nightly red, an issue
+    needs: tier
+    if: ${{ failure() && github.event_name == 'schedule' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: open or update the nightly-red issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          WORKFLOW: ${{ github.workflow }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: ci/nightly-red.sh
