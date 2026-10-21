@@ -27,6 +27,9 @@ pub mod fs_save;
 // `[os.fs.lock]`, `[os.fs.fstat.record]`, `[os.fs.mkfifo]`,
 // `[os.fs.nonblock]`.
 pub mod fs_gaps;
+// s253 (wolf-lang#819): which OS and architecture the program runs on, as
+// the kernel answers — `[os.uname]`.
+pub mod host;
 // s228 (wolf-lang#661): the table behind `fs_open`'s and the net
 // calls' handles — numbers never reused, storage always.
 pub(crate) mod handles;
