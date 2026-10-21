@@ -255,7 +255,7 @@ pub unsafe extern "C" fn __wolf_rt_fs_mkfifo(pp: i64, pl: i64, perm: i64) -> i64
 /// `mkfifo(3)`'s refusals as the call's rows: `EPERM` is "the file system
 /// does not support the type of node requested" (`mknod(2)`: for a fifo it
 /// asks no privilege, so nothing else can mean it), `ENOSYS` a kernel with
-/// no such call and `EOPNOTSUPP` (macOS's `ENOTSUP`) a file system that
+/// no such call and `EOPNOTSUPP` a file system that
 /// makes none — each `unsupported`, by name (PAX refuses a fifo `EPERM`,
 /// pax `kernel/user/user.lu`); the rest the family's mapping.
 #[cfg(unix)]
