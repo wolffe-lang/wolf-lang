@@ -3,36 +3,50 @@
 
     ci/tiers.py plan [--event E] [--action A] [--label L] [--labels L1,L2]
                      [--merge [--head-sha SHA] | --paths-from FILE]
-                     [--jobs "J ..."] [--repo DIR]
+                     [--jobs "J ..." | --tier full|release] [--repo DIR]
                      [--github-output FILE] [--json]
     ci/tiers.py verdict        (NEEDS: the `tier` job's `toJSON(needs)`)
     ci/tiers.py classify PATH...
 
 `plan` options also read an environment variable of their name in capitals
-(EVENT, ACTION, LABEL, LABELS, HEAD_SHA, IN_JOBS), which is how the
-workflow's `plan` job passes the event in.
+(EVENT, ACTION, LABEL, LABELS, HEAD_SHA, IN_JOBS, IN_TIER), which is how
+the workflow's `plan` job passes the event in.
 
-THE TIERS. A job is a job of .github/workflows/ci.yml other than `plan`
-and `tier`.
+THE TIERS. A job is a job of .github/workflows/ci.yml other than `plan`,
+`tier` and `nightly-red` (which runs after the verdict).
 
-  full     every job: lint + test + corpus on linux, the macOS native
+  release  every job: lint + test + corpus on linux, the macOS native
            gauntlet's three shards, the fuzz smoke, build + test on macOS
            and windows, the freebsd cross-check, the planner's own test.
-           A push to trunk, the nightly `schedule`, a `workflow_dispatch`
-           with no `jobs` input, a pull request carrying the `full-matrix`
-           label; and a pull request with a changed path no rule below
-           names, or whose changed paths cannot be read: what is not
-           understood never shrinks a run.
+           The nightly `schedule`, a `workflow_dispatch` with `tier`
+           release, and a pull request carrying the `release-matrix` label
+           (a release lane, before its tag: lane-audit.sh asks an rNN
+           branch for a green `tier release` at the head it tags). A red
+           nightly opens the `nightly-red` issue.
+  full     the merge gate: every job but MERGE_OMITS, the macOS native
+           gauntlet's three shards. `build + test (macos-latest)` is the
+           merge's macOS smoke: the workspace built for aarch64-apple-darwin
+           and every crate's tests, the signal and terminal lanes among
+           them. A pull request carrying the `full-matrix` label, a push to
+           trunk, a `workflow_dispatch` with neither `jobs` nor `tier`; and
+           a pull request with a changed path no rule below names, or whose
+           changed paths cannot be read: what is not understood never
+           shrinks a run below the merge's. (tl30, the macOS cap: of the
+           macOS jobs here only `build + test` and the native build shard
+           caught a red no linux job did in the last 60 runs with one,
+           s246's two, and `build + test` caught both; ci/tl30.md.)
   pr       any other pull-request run: PR_JOBS, the linux lint + test +
            corpus job (the whole gauntlet, `cargo xtask ci`), the fuzz
            smoke and the planner's test. No path picks among them: almost
            any change to a compiler can move any test.
   noop     nothing but the plan and the verdict: a pull request whose
-           changed paths are ALL prose, and a `labeled` event for a label
-           other than `full-matrix`.
+           changed paths are ALL prose, a `labeled` event for a label other
+           than `full-matrix` and `release-matrix`, and `full-matrix` added
+           beside `release-matrix` (whose run covers it).
   partial  a `workflow_dispatch` that names jobs (`-f jobs="plan-test"`):
-           those jobs alone, for a planted break. It is never `full`,
-           whatever it names: `tier full` green says every job ran.
+           those jobs alone, for a planted break. It is never `full` or
+           `release`, whatever it names: `tier full` green says the merge's
+           jobs ran, `tier release` every job.
 
 PROSE IS NARROW (RULES, below): the CHANGELOG, CONTRIBUTING and the
 hand-written pages of docs/. Not prose, because a gate or a test reads
@@ -62,11 +76,20 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORKFLOW = ".github/workflows/ci.yml"
 FULL_LABEL = "full-matrix"
-NOT_SELECTABLE = ("plan", "tier")
+RELEASE_LABEL = "release-matrix"
+# The plan, the verdict, and what runs after the verdict (the nightly's
+# issue) are no tier's choice.
+NOT_SELECTABLE = ("plan", "tier", "nightly-red")
 # The jobs of a pull-request run. A job the workflow gains is the full
 # tier's alone until it is named here.
 PR_JOBS = ("plan-test", "lint-test", "fuzz-smoke")
-TIERS = ("full", "pr", "noop", "partial")
+# The jobs the merge tier leaves to the release tier (the nightly, a
+# release lane's label): tl30, the macOS cap. The org's five macOS slots
+# were busy 55% of the time after the Team plan (tl29), and the native
+# gauntlet held three of them for 49 minutes at every merge, twice.
+MERGE_OMITS = ("native-macos",)
+TIERS = ("release", "full", "pr", "noop", "partial")
+DISPATCH_TIERS = ("full", "release")
 
 PROSE, PR, FULL = "prose", "pr", "full"
 
@@ -153,8 +176,10 @@ def workflow_jobs():
 
 def jobs_of(tier, every):
     """The jobs a tier runs, of `every` selectable job, in order."""
-    if tier == "full":
+    if tier == "release":
         return list(every)
+    if tier == "full":
+        return [j for j in every if j not in MERGE_OMITS]
     if tier == "pr":
         return [j for j in every if j in PR_JOBS]
     return []
@@ -183,9 +208,9 @@ def merge_paths(repo, head_sha):
 def plan(a):
     needs = workflow_jobs()
     every = [j for j in needs if j not in NOT_SELECTABLE]
-    for j in PR_JOBS:
+    for j in PR_JOBS + MERGE_OMITS:
         if j not in every:
-            die("PR_JOBS names %s, which is no job of %s" % (j, WORKFLOW))
+            die("PR_JOBS or MERGE_OMITS names %s, which is no job of %s" % (j, WORKFLOW))
     log = []
 
     def result(tier, chosen=None):
@@ -197,9 +222,16 @@ def plan(a):
     ev = a.event or "workflow_dispatch"
     log.append("event=%s action=%s label=%s labels=%s" % (ev, a.action or "-", a.label or "-", ",".join(labels) or "-"))
 
-    if ev == "pull_request" and a.action == "labeled" and a.label != FULL_LABEL:
-        log.append("a label other than %s was added: noop" % FULL_LABEL)
+    if ev == "pull_request" and a.action == "labeled" and a.label not in (FULL_LABEL, RELEASE_LABEL):
+        log.append("a label other than %s and %s was added: noop" % (FULL_LABEL, RELEASE_LABEL))
         return result("noop")
+    if ev == "pull_request" and a.action == "labeled" and a.label == FULL_LABEL and RELEASE_LABEL in labels:
+        log.append("%s was added beside %s, whose run covers it: noop" % (FULL_LABEL, RELEASE_LABEL))
+        return result("noop")
+    if ev == "workflow_dispatch" and asked and a.tier:
+        die("--jobs and --tier: a dispatch names jobs (partial) or a tier, not both")
+    if ev == "workflow_dispatch" and a.tier and a.tier not in DISPATCH_TIERS:
+        die("--tier: %s is no tier a dispatch can ask for (%s)" % (a.tier, ", ".join(DISPATCH_TIERS)))
     if ev == "workflow_dispatch" and asked:
         for j in asked:
             if j not in every:
@@ -210,9 +242,18 @@ def plan(a):
                     die("--jobs: %s needs %s; name both" % (j, n))
         log.append("dispatch naming %s: partial" % " ".join(asked))
         return result("partial", asked)
+    if ev == "workflow_dispatch" and a.tier:
+        log.append("dispatch asking for tier %s: %s" % (a.tier, a.tier))
+        return result(a.tier)
+    if ev == "schedule":
+        log.append("the nightly: release")
+        return result("release")
     if ev != "pull_request":
         log.append("%s: full" % ev)
         return result("full")
+    if RELEASE_LABEL in labels:
+        log.append("the %s label: release" % RELEASE_LABEL)
+        return result("release")
     if FULL_LABEL in labels:
         log.append("the %s label: full" % FULL_LABEL)
         return result("full")
@@ -305,6 +346,7 @@ def main():
     ap.add_argument("--labels", default=env("LABELS"))
     ap.add_argument("--head-sha", default=env("HEAD_SHA"))
     ap.add_argument("--jobs", default=env("IN_JOBS"))
+    ap.add_argument("--tier", default=env("IN_TIER") or None)
     ap.add_argument("--merge", action="store_true")
     ap.add_argument("--paths-from")
     ap.add_argument("--repo")
