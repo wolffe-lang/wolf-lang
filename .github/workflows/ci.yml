@@ -256,7 +256,14 @@ jobs:
           tar -xzf ".lupin/$asset" -C .lupin --strip-components=1
           .lupin/lupin --version
       - name: full gauntlet (fmt, clippy, test, deps-check, corpus)
-        run: cargo xtask ci
+        # s253 PROBE (never merged): the s253 head's gate alone, on this
+        # runner, each test to the end, with every REPORT line.
+        run: |
+          a=0
+          cargo build -p wolf_rt
+          cargo test -p wolf_driver --no-fail-fast --test process_calls_lanes -- --nocapture || a=$?
+          echo "PROBE: process_calls_lanes rc=$a"
+          exit $a
       - name: bench smoke (runtime report-only until M2; compile GATES at M1)
         run: |
           cargo xtask bench --track=runtime --runs=3 --out=bench-results/pr-runtime.jsonl
