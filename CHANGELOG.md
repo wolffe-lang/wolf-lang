@@ -51,7 +51,7 @@ better report and a row.
   `wrapping[u64]` from a shift count never ends a `>= 0` countdown
   (#822, `[type.numlit.value]`: annotate it and cast at the use).
   `wolf --explain` carries each.
-- **lupin** (0.1.54): owes `[mem.static.3]`'s `wrapping[T]` (it answers
+- **lupin** (0.1.55, the pairing, and 0.1.54 alike): owes `[mem.static.3]`'s `wrapping[T]` (it answers
   `unsupported`) and `[mem.region.scalar]` (it traps `region-fault` on
   the literal, binding, enum, `for`, `take`-store and frozen-write
   shapes); diverges on the countdown (it accepts an `int` count on a
