@@ -6,6 +6,9 @@
 //! `cargo xtask deps-check` enforces it. Deterministic-scheduler hooks
 //! (s36) are part of this crate's v1 spec surface.
 
+// s253 (wolf-lang#815): an inherited descriptor made an fs handle —
+// `[os.proc.adopt]`.
+pub mod adopt;
 // s200 (#411): the bulk byte scan over a `List[byte]`, `[mem.list.bytes]`.
 pub mod bytes;
 // s253 (wolf-lang#811): the core limit, and an end that dumps no core —
