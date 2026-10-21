@@ -231,6 +231,34 @@ pub unsafe extern "C" fn __wolf_rt_list_push(hdr: i64, elem_ptr: i64) {
     push_raw(hdr as *mut ListHdr, elem_ptr as *const u8);
 }
 
+/// `reserve(n)` (s255, wolf-lang#844, `[type.list.reserve]`): grow the
+/// capacity to at least `n` elements, in the list's OWN region (the one
+/// `push_raw`'s growth uses: a region frees as a unit, so the buffer
+/// must not migrate), copying the live prefix once. The length and the
+/// elements are untouched; a capacity already at or past `n` — `n`
+/// zero or negative included — is a no-op, so a thousand pushes after
+/// `reserve(1000)` grow nothing. The old buffer is abandoned to the
+/// arena as growth's is.
+///
+/// # Safety
+///
+/// `hdr` from [`__wolf_rt_list_new`] (or any live list header).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_list_reserve(hdr: i64, n: i64) {
+    unsafe {
+        let h = &mut *(hdr as *mut ListHdr);
+        if n <= h.cap {
+            return;
+        }
+        let ndata = alloc_in(h.region, (n * h.elem) as usize);
+        if h.len > 0 {
+            core::ptr::copy_nonoverlapping(h.data, ndata, (h.len * h.elem) as usize);
+        }
+        h.data = ndata;
+        h.cap = n;
+    }
+}
+
 /// `copy xs` (wolf-lang#384, `[mem.tier0.move.3]`): a fresh list in
 /// the AMBIENT region holding a byte copy of every live element, at
 /// exact capacity. This is the whole copy for an element type that
