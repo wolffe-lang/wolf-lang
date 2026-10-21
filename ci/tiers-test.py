@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
-"""ci/tiers-test.py — the planner's own proof (tl21). python3 and git only.
+"""ci/tiers-test.py — the planner's own proof (tl21; tl30's release tier and
+the nightly's issue). python3, git and bash only.
 
     ci/tiers-test.py
 
-  T1  the tiers by event: a trunk push, the nightly, a dispatch and the
-      `full-matrix` label are full; another label's `labeled` event is a
-      noop; a dispatch that names jobs is partial, and refuses a job that
-      is none of the workflow's or whose needs it leaves out.
+  T1  the tiers by event: the nightly, a dispatch with tier release and
+      the `release-matrix` label are release, every job; a trunk push, a
+      dispatch with no input or tier full, and the `full-matrix` label are
+      full, every job but the native macOS gauntlet (tl30); another label's
+      `labeled` event is a noop, and so is `full-matrix` added beside
+      `release-matrix`; a dispatch that names jobs is partial, and refuses
+      a job that is none of the workflow's or whose needs it leaves out, a
+      tier no dispatch can ask for, and jobs and a tier together.
   T2  the pull-request tiers by path: code is pr (the linux gauntlet, the
       fuzz smoke, this test); prose alone is noop; prose beside code is
       pr. What a gate reads is never prose: everything under spec/
@@ -19,23 +24,30 @@
       default; the `tier` job needs every job, runs on `!cancelled()` and
       checks with `ci/tiers.py verdict`; cancel-in-progress is for pull
       requests only and every other run has a concurrency group of its own
-      run id; the trunk push, the nightly, the label and the dispatch's
-      `jobs` input are there; the macOS, windows and freebsd jobs are no
-      pull-request job.
+      run id, each label's run its own; the trunk push, the nightly, both
+      labels and the dispatch's `jobs` and `tier` inputs are there; the
+      macOS, windows and freebsd jobs are no pull-request job; the native
+      macOS gauntlet is the release tier's alone, and the merge keeps
+      `build + test` on macOS (the smoke); a red nightly, and only a red
+      nightly, runs ci/nightly-red.sh.
   T5  the tripwire: the tracked paths the planner calls prose that a line
       of crates/, xtask/ or fuzz/ reading a file names are exactly the
       one ruled so (CHANGELOG.md: one xtask unit test pins its 0.2.2
       entry). The search is shown to fire on the three it must find.
       (A WARN, not a failure: a tracked path no rule names; its pull
       request runs full.)
-  T6  the verdict: green for a full, a pr, a noop and a partial run; red
-      for a chosen job failed, skipped or cancelled, a job that ran
-      unasked, a failed plan, a plan with no tier, a tier whose jobs are
-      not that tier's (a `full` that chose less), and green when GitHub
-      drops an output that would have been empty.
+  T6  the verdict: green for a release, a full, a pr, a noop and a
+      partial run; red for a chosen job failed, skipped or cancelled, a job
+      that ran unasked, a failed plan, a plan with no tier, a tier whose
+      jobs are not that tier's (a `full` that chose less, or the native
+      gauntlet; a `release` that chose less), and green when GitHub drops an
+      output that would have been empty.
   T7  the change read from git: a real merge commit against its first
       parent, with the base moved on meanwhile; red-to-full when HEAD is no
       merge or its second parent is not the pull request's head.
+  T8  ci/nightly-red.sh against a stand-in `gh`: no open issue opens one,
+      labelled, under the one title; an open one gets a comment and no new
+      issue; a label that already exists is no failure.
 
 Exit 0 when every check passes, 1 otherwise.
 """
@@ -50,7 +62,8 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PLAN = os.path.join(ROOT, "ci", "tiers.py")
 WORKFLOW = os.path.join(ROOT, ".github", "workflows", "ci.yml")
-ENV_KEYS = ("EVENT", "ACTION", "LABEL", "LABELS", "HEAD_SHA", "IN_JOBS", "NEEDS")
+RED = os.path.join(ROOT, "ci", "nightly-red.sh")
+ENV_KEYS = ("EVENT", "ACTION", "LABEL", "LABELS", "HEAD_SHA", "IN_JOBS", "IN_TIER", "NEEDS")
 fails = 0
 
 
@@ -82,8 +95,11 @@ def plan(paths=None, **kw):
 
 wf = open(WORKFLOW, encoding="utf-8").read()
 JOBS = re.findall(r"^  ([A-Za-z0-9_-]+):\s*$", wf[wf.index("\njobs:\n"):], re.M)
-EVERY = [j for j in JOBS if j not in ("plan", "tier")]
+EVERY = [j for j in JOBS if j not in ("plan", "tier", "nightly-red")]
 PR_JOBS = ["plan-test", "lint-test", "fuzz-smoke"]
+# tl30, the macOS cap: the merge's jobs are every job but the native macOS
+# gauntlet, which the release tier (the nightly, a release lane) runs.
+MERGE = [j for j in EVERY if j != "native-macos"]
 
 
 def expect(name, got, tier, jobs):
@@ -92,26 +108,43 @@ def expect(name, got, tier, jobs):
         why.append("tier %s, wanted %s" % (got["tier"], tier))
     if got["jobs"] != jobs:
         why.append("jobs %s, wanted %s" % (" ".join(got["jobs"]) or "none", " ".join(jobs) or "none"))
-    shown = "every job (%d)" % len(EVERY) if jobs == EVERY else (" ".join(jobs) or "no job")
+    shown = "every job (%d)" % len(EVERY) if jobs == EVERY else (
+        "the merge's jobs (%d, the native macOS gauntlet left out)" % len(MERGE) if jobs == MERGE else (" ".join(jobs) or "no job"))
     say(not why, "%s: %s%s" % (name, tier, (" (" + "; ".join(why) + ")") if why else ", " + shown))
 
 
 # --- T1 the tiers by event ---------------------------------------------------
-say(EVERY == ["plan-test", "lint-test", "native-macos", "fuzz-smoke", "build-test", "freebsd-check"],
+say(EVERY == ["plan-test", "lint-test", "native-macos", "fuzz-smoke", "build-test", "freebsd-check"] and JOBS[-1] == "nightly-red",
     "T1 the workflow's jobs between plan and tier: %s" % " ".join(EVERY))
-expect("T1 a push to trunk", plan(event="push"), "full", EVERY)
-expect("T1 the nightly", plan(event="schedule"), "full", EVERY)
-expect("T1 a dispatch, no input", plan(event="workflow_dispatch"), "full", EVERY)
+expect("T1 a push to trunk", plan(event="push"), "full", MERGE)
+expect("T1 the nightly", plan(event="schedule"), "release", EVERY)
+expect("T1 a dispatch, no input", plan(event="workflow_dispatch"), "full", MERGE)
+expect("T1 a dispatch, tier full", plan(event="workflow_dispatch", tier="full"), "full", MERGE)
+expect("T1 a dispatch, tier release", plan(event="workflow_dispatch", tier="release"), "release", EVERY)
+say(plan(event="workflow_dispatch", tier="pr")["tier"].startswith("ERROR rc=2"), "T1 a dispatch's tier is full or release, nothing else")
+say(plan(event="workflow_dispatch", tier="release", jobs="plan-test")["tier"].startswith("ERROR rc=2"),
+    "T1 a dispatch names jobs or a tier, not both")
 expect("T1 a dispatch naming the planner's test", plan(event="workflow_dispatch", jobs="plan-test"), "partial", ["plan-test"])
 expect("T1 a dispatch naming two jobs, in the workflow's order",
        plan(event="workflow_dispatch", jobs="freebsd-check plan-test"), "partial", ["plan-test", "freebsd-check"])
 expect("T1 a dispatch naming every job is still partial",
        plan(event="workflow_dispatch", jobs=" ".join(EVERY)), "partial", EVERY)
+say(plan(event="workflow_dispatch", jobs="nightly-red")["tier"].startswith("ERROR rc=2"), "T1 a dispatch cannot name the nightly's issue")
 say(plan(event="workflow_dispatch", jobs="lint")["tier"].startswith("ERROR rc=2"), "T1 a dispatch naming no job of the workflow is refused")
 expect("T1 a pull request labelled full-matrix, prose only",
-       plan(["CHANGELOG.md"], event="pull_request", action="synchronize", labels="bug,full-matrix"), "full", EVERY)
+       plan(["CHANGELOG.md"], event="pull_request", action="synchronize", labels="bug,full-matrix"), "full", MERGE)
 expect("T1 the full-matrix label added",
-       plan(["CHANGELOG.md"], event="pull_request", action="labeled", label="full-matrix", labels="full-matrix"), "full", EVERY)
+       plan(["CHANGELOG.md"], event="pull_request", action="labeled", label="full-matrix", labels="full-matrix"), "full", MERGE)
+expect("T1 the release-matrix label added",
+       plan(["crates/wolf_sema/src/lib.rs"], event="pull_request", action="labeled", label="release-matrix", labels="release-matrix"), "release", EVERY)
+expect("T1 a pull request labelled release-matrix, pushed",
+       plan(["crates/wolf_sema/src/lib.rs"], event="pull_request", action="synchronize", labels="release-matrix"), "release", EVERY)
+expect("T1 both labels: release",
+       plan(["crates/wolf_sema/src/lib.rs"], event="pull_request", action="synchronize", labels="full-matrix,release-matrix"), "release", EVERY)
+expect("T1 full-matrix added beside release-matrix (whose run covers it)",
+       plan(["crates/wolf_sema/src/lib.rs"], event="pull_request", action="labeled", label="full-matrix", labels="release-matrix,full-matrix"), "noop", [])
+expect("T1 release-matrix added beside full-matrix",
+       plan(["crates/wolf_sema/src/lib.rs"], event="pull_request", action="labeled", label="release-matrix", labels="full-matrix,release-matrix"), "release", EVERY)
 expect("T1 another label added", plan(["crates/wolf_sema/src/lib.rs"], event="pull_request", action="labeled", label="bug", labels="bug"), "noop", [])
 expect("T1 another label added to a labelled pull request",
        plan(["crates/wolf_sema/src/lib.rs"], event="pull_request", action="labeled", label="bug", labels="bug,full-matrix"), "noop", [])
@@ -140,15 +173,15 @@ expect("T2 the CHANGELOG beside the spec", plan(["CHANGELOG.md", "spec/anchors.j
 expect("T2 prose beside a generated page", plan(["docs/platforms.md", "docs/diagnostics.md"], **pr), "pr", PR_JOBS)
 
 # --- T3 full wins ---------------------------------------------------------------
-expect("T3 a path no rule names", plan(["newplace/thing.rs"], **pr), "full", EVERY)
-expect("T3 a new file at the root", plan(["build.rs"], **pr), "full", EVERY)
-expect("T3 a markdown file at the root no rule names", plan(["NOTES.md"], **pr), "full", EVERY)
-expect("T3 an unknown path beside prose", plan(["CHANGELOG.md", "newplace/notes.md"], **pr), "full", EVERY)
-expect("T3 an unknown path beside code", plan(["crates/wolf_sema/src/lib.rs", "newplace/thing.rs"], **pr), "full", EVERY)
-expect("T3 no changed paths to read", plan(**pr), "full", EVERY)
-expect("T3 a change that names no path", plan([], **pr), "full", EVERY)
+expect("T3 a path no rule names", plan(["newplace/thing.rs"], **pr), "full", MERGE)
+expect("T3 a new file at the root", plan(["build.rs"], **pr), "full", MERGE)
+expect("T3 a markdown file at the root no rule names", plan(["NOTES.md"], **pr), "full", MERGE)
+expect("T3 an unknown path beside prose", plan(["CHANGELOG.md", "newplace/notes.md"], **pr), "full", MERGE)
+expect("T3 an unknown path beside code", plan(["crates/wolf_sema/src/lib.rs", "newplace/thing.rs"], **pr), "full", MERGE)
+expect("T3 no changed paths to read", plan(**pr), "full", MERGE)
+expect("T3 a change that names no path", plan([], **pr), "full", MERGE)
 expect("T3 a merge that cannot be read (no repository there)",
-       plan(repo=os.path.join(ROOT, "no", "such", "dir"), flags=["--merge"], **pr), "full", EVERY)
+       plan(repo=os.path.join(ROOT, "no", "such", "dir"), flags=["--merge"], **pr), "full", MERGE)
 
 # --- T6 the verdict -------------------------------------------------------------
 def verdict(needs):
@@ -173,12 +206,16 @@ def vexpect(name, needs, want):
 
 
 failed = {"result": "failure", "outputs": {}}
-vexpect("a green full run", run_of("full", EVERY), 0)
+vexpect("a green full run", run_of("full", MERGE), 0)
+vexpect("a green release run", run_of("release", EVERY), 0)
+vexpect("a full run that ran the native macOS gauntlet (the merge before tl30)", run_of("full", EVERY), 1)
+vexpect("a release run without the native macOS gauntlet", run_of("release", MERGE), 1)
 vexpect("a green pr run", run_of("pr", PR_JOBS), 0)
 vexpect("a noop run", run_of("noop", []), 0)
 vexpect("a noop run whose jobs output is absent", run_of("noop", [], drop=["jobs"]), 0)
 vexpect("a partial run of the planner's test", run_of("partial", ["plan-test"]), 0)
-vexpect("a chosen job failed", run_of("full", EVERY, {"native-macos": failed}), 1)
+vexpect("a chosen job failed", run_of("release", EVERY, {"native-macos": failed}), 1)
+vexpect("the merge's macOS smoke failed", run_of("full", MERGE, {"build-test": failed}), 1)
 vexpect("the planner's test failed", run_of("pr", PR_JOBS, {"plan-test": failed}), 1)
 vexpect("a chosen job was skipped", run_of("pr", PR_JOBS, {"fuzz-smoke": {"result": "skipped", "outputs": {}}}), 1)
 vexpect("a chosen job was cancelled", run_of("pr", PR_JOBS, {"lint-test": {"result": "cancelled", "outputs": {}}}), 1)
@@ -186,7 +223,7 @@ vexpect("a job ran unasked", run_of("pr", PR_JOBS, {"build-test": {"result": "su
 vexpect("a job ran in a noop run", run_of("noop", [], {"freebsd-check": {"result": "success", "outputs": {}}}), 1)
 vexpect("a full run that chose less than every job", run_of("full", PR_JOBS), 1)
 vexpect("a pr run that chose every job", run_of("pr", EVERY), 1)
-vexpect("a full run whose jobs output is absent", run_of("full", EVERY, drop=["jobs"]), 1)
+vexpect("a full run whose jobs output is absent", run_of("full", MERGE, drop=["jobs"]), 1)
 vexpect("a pr run that chose one job", run_of("pr", ["plan-test"]), 1)
 vexpect("a partial run that chose nothing", run_of("partial", []), 1)
 vexpect("the plan failed", {"plan": {"result": "failure", "outputs": {}}, "lint-test": {"result": "skipped", "outputs": {}}}, 1)
@@ -200,7 +237,7 @@ blocks = {}
 for j in JOBS:
     m = re.search(r"^  %s:\s*\n(.*?)(?=^  [A-Za-z0-9_-]+:\s*$|\Z)" % re.escape(j), wf, re.M | re.S)
     blocks[j] = m.group(1) if m else ""
-say(JOBS[:1] == ["plan"] and JOBS[-1:] == ["tier"], "T4 the plan is the first job and the tier is the last")
+say(JOBS[:1] == ["plan"] and JOBS[-2:] == ["tier", "nightly-red"], "T4 the plan is the first job, the tier the last but the nightly's issue")
 for j in EVERY:
     b = blocks[j]
     needs = re.search(r"^    needs: (.*)$", b, re.M)
@@ -234,11 +271,26 @@ say("&& 'full' || 'pr'" in g and "format('noop-{0}', github.run_id)" in g,
 say(re.search(r"^  push:\n    branches: \[trunk\]", wf, re.M) is not None, "T4 a push to trunk runs")
 say(re.search(r"^  schedule:\n(\s+#.*\n)*\s+- cron: ", wf, re.M) is not None, "T4 the nightly runs")
 say("    types: [opened, synchronize, reopened, labeled]\n" in wf, "T4 adding a label starts a run")
-say(re.search(r"^  workflow_dispatch:\n    inputs:\n      jobs:\n", wf, re.M) is not None and "IN_JOBS: ${{ inputs.jobs }}" in blocks["plan"],
-    "T4 a dispatch takes the jobs input")
-for j in ("native-macos", "build-test", "freebsd-check"):
-    say(j in EVERY and j not in PR_JOBS and j not in plan(["crates/wolf_sema/src/lib.rs"], **pr)["jobs"] and j in plan(event="push")["jobs"],
-        "T4 %s is the full tier's: no pull-request push runs it, a trunk push does" % j)
+say(re.search(r"^  workflow_dispatch:\n    inputs:\n      jobs:\n(?:        .*\n)+      tier:\n", wf, re.M) is not None
+    and "IN_JOBS: ${{ inputs.jobs }}" in blocks["plan"] and "IN_TIER: ${{ inputs.tier }}" in blocks["plan"],
+    "T4 a dispatch takes the jobs input and the tier input")
+for j in ("build-test", "freebsd-check"):
+    say(j in EVERY and j not in PR_JOBS and j not in plan(["crates/wolf_sema/src/lib.rs"], **pr)["jobs"] and j in plan(event="push")["jobs"]
+        and j in plan(event="schedule")["jobs"], "T4 %s is the merge's: no pull-request push runs it, the label, a trunk push and the nightly do" % j)
+say("native-macos" in EVERY and "native-macos" not in plan(["crates/wolf_sema/src/lib.rs"], **pr)["jobs"]
+    and "native-macos" not in plan(event="push")["jobs"]
+    and "native-macos" not in plan(["CHANGELOG.md"], event="pull_request", action="labeled", label="full-matrix", labels="full-matrix")["jobs"]
+    and "native-macos" in plan(event="schedule")["jobs"]
+    and "native-macos" in plan(["CHANGELOG.md"], event="pull_request", action="labeled", label="release-matrix", labels="release-matrix")["jobs"],
+    "T4 the native macOS gauntlet is the release tier's alone: the nightly and the release-matrix label run it, the merge does not (tl30)")
+say(re.findall(r"^    runs-on: (.*)$", blocks["build-test"], re.M) == ["${{ matrix.os }}"] and "          - os: macos-latest\n" in blocks["build-test"],
+    "T4 the merge keeps a macOS smoke: build + test on macos-latest (tl30)")
+say("contains(github.event.pull_request.labels.*.name, 'release-matrix') && 'release'" in g
+    and "github.event.label.name != 'release-matrix'" in g, "T4 the release-matrix run is a concurrency group of its own, and the label starts it")
+n = blocks.get("nightly-red", "")
+say("    needs: tier\n" in n and "    if: ${{ failure() && github.event_name == 'schedule' }}\n" in n
+    and "      issues: write\n" in n and "        run: ci/nightly-red.sh\n" in n and "WORKFLOW: ${{ github.workflow }}" in n,
+    "T4 a red nightly, and only a red nightly, runs ci/nightly-red.sh with issues: write")
 runs_on = {j: re.findall(r"^    runs-on: (.*)$", blocks[j], re.M) for j in PR_JOBS}
 say(all(v == ["ubuntu-latest"] for v in runs_on.values()), "T4 every pull-request job runs on ubuntu (%s)" % runs_on)
 
@@ -287,9 +339,9 @@ try:
            plan(repo=repo, head_sha=head, flags=["--merge"], **pr), "noop", [])
     expect("T7 the same merge, the head not given", plan(repo=repo, flags=["--merge"], **pr), "noop", [])
     expect("T7 the merge's second parent is not the pull request's head",
-           plan(repo=repo, head_sha="0" * 40, flags=["--merge"], **pr), "full", EVERY)
+           plan(repo=repo, head_sha="0" * 40, flags=["--merge"], **pr), "full", MERGE)
     git(repo, "checkout", "-q", "topic")
-    expect("T7 HEAD is the branch, not a merge commit", plan(repo=repo, head_sha=head, flags=["--merge"], **pr), "full", EVERY)
+    expect("T7 HEAD is the branch, not a merge commit", plan(repo=repo, head_sha=head, flags=["--merge"], **pr), "full", MERGE)
     repo, head = merged(["docs/platforms.md", "crates/a/src/lib.rs"])
     made.append(repo)
     expect("T7 a merge that changes code and prose", plan(repo=repo, head_sha=head, flags=["--merge"], **pr), "pr", PR_JOBS)
@@ -298,12 +350,59 @@ try:
     expect("T7 a merge that changes the CHANGELOG and spec/anchors.json", plan(repo=repo, head_sha=head, flags=["--merge"], **pr), "pr", PR_JOBS)
     repo, head = merged(["CHANGELOG.md", "somewhere/new.txt"])
     made.append(repo)
-    expect("T7 a merge that adds a path no rule names", plan(repo=repo, head_sha=head, flags=["--merge"], **pr), "full", EVERY)
+    expect("T7 a merge that adds a path no rule names", plan(repo=repo, head_sha=head, flags=["--merge"], **pr), "full", MERGE)
 except (subprocess.CalledProcessError, OSError) as e:
     say(False, "T7 could not build its repositories: %s %s" % (e, getattr(e, "stderr", "")))
 finally:
     for d in made:
         shutil.rmtree(d, ignore_errors=True)
+
+# --- T8 the nightly's issue -------------------------------------------------------
+FAKE_GH = r"""#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$FAKE_LOG"
+case "$1 $2" in
+  "label create") exit "${FAKE_LABEL_RC:-0}" ;;
+  "issue list") printf '%s' "${FAKE_EXISTING:-}"; [ -n "${FAKE_EXISTING:-}" ] && echo; exit 0 ;;
+esac
+exit 0
+"""
+
+
+def nightly_red(existing="", label_rc=0):
+    d = tempfile.mkdtemp(prefix="tiers-test-gh-")
+    try:
+        with open(os.path.join(d, "gh"), "w") as f:
+            f.write(FAKE_GH)
+        os.chmod(os.path.join(d, "gh"), 0o755)
+        log = os.path.join(d, "log")
+        env = dict(os.environ, PATH=d + os.pathsep + os.environ.get("PATH", ""), FAKE_LOG=log, FAKE_EXISTING=existing,
+                   FAKE_LABEL_RC=str(label_rc), REPO="wolffe-lang/wolf-lang", WORKFLOW="ci",
+                   RUN_URL="https://github.com/wolffe-lang/wolf-lang/actions/runs/1")
+        r = subprocess.run(["bash", RED], capture_output=True, text=True, env=env)
+        calls = open(log).read().splitlines() if os.path.exists(log) else []
+        return r.returncode, calls
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
+TITLE = "nightly red: ci on trunk"
+rc, calls = nightly_red()
+creates = [c for c in calls if c.startswith("issue create")]
+say(rc == 0 and len(creates) == 1 and "--title %s" % TITLE in creates[0] and "--label nightly-red" in creates[0]
+    and not [c for c in calls if c.startswith("issue comment")],
+    "T8 no open issue: one is opened, labelled nightly-red, titled '%s'" % TITLE)
+lists = [c for c in calls if c.startswith("issue list")]
+say(len(lists) == 1 and "--state open" in lists[0] and "--label nightly-red" in lists[0] and TITLE in lists[0],
+    "T8 the dedupe asks for an open nightly-red issue under the title")
+rc, calls = nightly_red(existing="41")
+say(rc == 0 and [c for c in calls if c.startswith("issue comment 41 ")] and not [c for c in calls if c.startswith("issue create")],
+    "T8 an open issue: a comment on it, no new issue")
+rc, calls = nightly_red(label_rc=1)
+say(rc == 0 and [c for c in calls if c.startswith("issue create")], "T8 a label that already exists is no failure")
+r = subprocess.run(["bash", RED], capture_output=True, text=True, env=clean_env(PATH=os.environ.get("PATH", "")))
+say(r.returncode != 0, "T8 the script refuses to run without REPO, WORKFLOW and RUN_URL")
+say(re.search(r"^name: ci$", wf, re.M) is not None, "T8 the workflow's name is ci, the title's")
+
 
 # --- T5 the tripwire: what the planner calls prose, nothing reads ---------------------
 READS = re.compile(r"read_to_string|include_str!|include_bytes!|File::open|fs::read\b|read_dir|\.join\(|Path::new|PathBuf::from")
