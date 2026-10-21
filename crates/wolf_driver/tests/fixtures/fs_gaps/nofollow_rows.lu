@@ -1,0 +1,83 @@
+//! member: false
+//! s254 (wolf-lang#820, `[os.fs.open.nofollow]`; yew yw02 G32) — bit 16 of
+//! the open mode, `O_NOFOLLOW`: a FINAL symbolic link is refused, `invalid`
+//! (the host's `ELOOP`, its number in `os_error()`), where the same open
+//! without the bit follows it; a link in a middle component is followed
+//! (the bit names the last one only); a plain file opens with the bit in
+//! every mode it combines with; the exclusive create (mode 4) answers
+//! `exists` on a link with or without the bit, as `O_EXCL` never follows;
+//! any other bit above the mode is `invalid`, before the host. The tree is
+//! the program's own: `nf/t` a file, `nf/l -> t`, `nf/d -> .`. A host with
+//! no symbolic links (windows: `fs_symlink` is `unsupported`) prints
+//! `links=unsupported`; windows refuses the bit itself `invalid` by name.
+
+fn open_row(p: str, mode: int) -> str {
+    let fd = fs_open_mode(p, mode) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+        }
+    }
+    fs_close(fd) else |_| {}
+    "ok"
+}
+
+fn perm_row(p: str, mode: int) -> str {
+    let fd = fs_open_perm(p, mode, 384) else |e| {
+        return match e {
+            not_found => "not_found",
+            denied => "denied",
+            exists => "exists",
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    fs_close(fd) else |_| {}
+    "ok"
+}
+
+fn link(target: str, path: str) -> bool {
+    fs_symlink(target, path) else |e| {
+        return false
+    }
+    true
+}
+
+fn main() -> !int {
+    if fs_exists("nf") {
+        fs_remove_dir_all("nf")?
+    }
+    fs_create_dir_all("nf")?
+    fs_write_text("nf/t", "target")?
+    print("file_read={open_row("nf/t", 16)}")
+    print("file_rw={open_row("nf/t", 19)}")
+    print("file_nonblock={open_row("nf/t", 21)}")
+    print("file_append={open_row("nf/t", 18)}")
+    print("bit32={open_row("nf/t", 32)}")
+    print("bit48={open_row("nf/t", 48)}")
+    print("negative={open_row("nf/t", -16)}")
+    if link("t", "nf/l") && link(".", "nf/d") {
+        print("links=made")
+        print("link_follows={open_row("nf/l", 0)}")
+        print("link_refused={open_row("nf/l", 16)}")
+        print("link_errno_set={os_error() != 0}")
+        print("link_rw_refused={open_row("nf/l", 19)}")
+        print("link_write_refused={open_row("nf/l", 17)}")
+        print("middle_followed={open_row("nf/d/t", 16)}")
+        print("excl_on_link={open_row("nf/l", 4)}")
+        print("excl_nofollow_on_link={open_row("nf/l", 20)}")
+        print("perm_link_refused={perm_row("nf/l", 19)}")
+        print("perm_excl_on_link={perm_row("nf/l", 20)}")
+        // The refused write open truncated nothing: the target is whole.
+        let left = fs_read_text("nf/t")?
+        print("target_intact={left == "target"}")
+    } else {
+        print("links=unsupported")
+    }
+    fs_remove_dir_all("nf")?
+    0
+}

@@ -1,0 +1,52 @@
+//! member: false
+//! s254 (wolf-lang#818) — yew yw02's `clip-pipe-write-blocks` witness
+//! (rg1), written with the calls it lacked. sagitta's clipboard writer
+//! sets `O_NONBLOCK` on the pipe it feeds a tool (`clipboard.c`), so a
+//! tool that never reads costs the editor nothing: here 1 MiB goes to a
+//! pipe nobody reads, the pipe takes what it holds, the rest is `busy`,
+//! and a write wait with a 25 ms deadline (sagitta's own poll step is
+//! 20 ms) answers the deadline — the writer gives up, where at 0.2.34
+//! `fs.write_chunk` parked for ever (the witness exited 124 under
+//! `timeout 3`). Expected: `rg1: writing 1 MiB into a pipe nobody reads`,
+//! then `rg1: took T of 1048576, then busy; the write wait answered the
+//! deadline`.
+
+const WAIT_WRITE: int = 4611686018427387904
+
+fn main() -> !int {
+    let p = os_pipe()?
+    var big = List[byte]()
+    var i = 0
+    while i < 1048576 {
+        (mut big).push(120 as byte)
+        i += 1
+    }
+    print("rg1: writing 1 MiB into a pipe nobody reads")
+    fs_set_nonblock(p.1, true)?
+    var at = 0
+    var waits = 0
+    while at < big.len && waits < 3 {
+        let n = fs_write_some(p.1, big[at..]) else |e| match e {
+            busy => 0,
+            invalid => -1,
+            io => -1,
+        }
+        if n < 0 {
+            print("rg1: write failed")
+            return 1
+        }
+        if n == 0 {
+            let r = os_signal_wait_fds([p.1 + WAIT_WRITE], 16384, 25)?
+            if r.0 == -1 {
+                print("rg1: took {at} of {big.len}, then busy; the write wait answered the deadline")
+                fs_close(p.1)?
+                fs_close(p.0)?
+                return 0
+            }
+            waits += 1
+        }
+        at += n
+    }
+    print("rg1: the pipe took all of it (not expected)")
+    1
+}
