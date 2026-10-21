@@ -256,7 +256,17 @@ jobs:
           tar -xzf ".lupin/$asset" -C .lupin --strip-components=1
           .lupin/lupin --version
       - name: full gauntlet (fmt, clippy, test, deps-check, corpus)
-        run: cargo xtask ci
+        # s253 PLANT (never merged): each item's behaviour broken, the
+        # surface kept; only the gates run, each to the end (`|| x=$?`:
+        # the runner's `bash -e` would end the step at the first red).
+        run: |
+          a=0; b=0; c=0
+          cargo build -p wolf_rt
+          cargo test -p wolf_driver --no-fail-fast --test process_calls_lanes -- --nocapture || a=$?
+          cargo test -p wolf_rt --lib --no-fail-fast -- host:: coredump:: adopt:: signal::tests::disposition_one_rows || b=$?
+          cargo xtask corpus || c=$?
+          echo "PLANT: wolf_driver gates rc=$a, wolf_rt units rc=$b, corpus rc=$c"
+          exit $((a + b + c))
       - name: bench smoke (runtime report-only until M2; compile GATES at M1)
         run: |
           cargo xtask bench --track=runtime --runs=3 --out=bench-results/pr-runtime.jsonl
