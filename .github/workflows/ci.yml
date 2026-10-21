@@ -422,7 +422,16 @@ jobs:
         run: rustup target add x86_64-unknown-none
       - run: cargo build --workspace
       - if: matrix.leg != 'rung'
-        run: cargo test --workspace
+        # s253 PROBE (never merged): the s253 gates, units and counts on
+        # this host, each to the end, with every REPORT line.
+        shell: bash
+        run: |
+          a=0; b=0; c=0
+          cargo test -p wolf_driver --no-fail-fast --test process_calls_lanes --test freestanding_target --test str_list_fs_native -- --nocapture || a=$?
+          cargo test -p wolf_rt --lib --no-fail-fast -- host:: coredump:: adopt:: signal:: || b=$?
+          cargo test -p wolf_sema --no-fail-fast --test sandbox_s253 --test host_table_spec --test prelude_names || c=$?
+          echo "PROBE: driver rc=$a, wolf_rt rc=$b, sema rc=$c"
+          exit $((a + b + c))
       # s60a: the windows native rung. The clif gate is open on this
       # host, so the corpus runs natively here — `lane-coverage` is the
       # windows floor line (259/255/0/274/0 at the s60a bring-up with 21
