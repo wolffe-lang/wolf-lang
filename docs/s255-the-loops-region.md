@@ -415,6 +415,138 @@ there too; its red is the positive twin), the E1010 note test (no
 
 Filled in as the work lands (kasumi `~/lanes/s255/`).
 
+## 6. The guide's memory paragraph (handed back, not written here)
+
+`AN_AGENTS_GUIDE_TO_WRITING_GOOD_WOLF.md` §"Memory: let the regions
+work" lives in the planning repo; this lane writes nothing there. The
+paragraph to add after "The fix is to build the value in the caller's
+region … (`[mem.region.proc]`).", and the rule-7 line to amend:
+
+> A loop whose turn builds temporaries can open a region per turn and
+> still write to the long-lived values the turn updates
+> (`[mem.region.outer-write]`, 0.2.35): inside the block, a store into
+> a value declared outside it — a field, a `push`, an index or `Map`
+> store, a store through a `mut` parameter — is fine when the stored
+> value is a scalar or a literal, or is written `copy e` at the store.
+> That `copy` is a deep copy made in the outer value's region (the
+> list's own for a push, the binding's for a field), so nothing of the
+> block survives in it; a plain `str` push or field store from the
+> block is still E1010/E1004, and the report names the `copy`. A call
+> inside the block may pass the long-lived value `mut` when the callee's
+> parameter is ambient-clean — every write through it is one of those
+> stores, or a call to another clean parameter, or `pop`/`clear`/
+> `reset`/`reserve` — which the compiler proves from the callee's body;
+> when it is not, the report names the callee's store that keeps the
+> block's bytes (a `str` field assigned a built string is the usual
+> one: keep it in a `List[byte]` the value owns instead).
+>
+> ```wolf
+> struct Ed { frame: List[byte], names: List[str], n: int }
+>
+> fn turn(mut ed: Ed, i: int) {
+>     let line = "turn {i}"
+>     (mut ed.frame).reset()
+>     for b in line.bytes() { (mut ed.frame).push(b) }
+>     (mut ed.names).push(copy line)
+>     ed.n += 1
+> }
+>
+> fn main() {
+>     var ed = Ed { frame: List[byte](), names: List[str](), n: 0 }
+>     var i = 0
+>     while i < 1000 {
+>         region scratch { turn(mut ed, i) }
+>         i += 1
+>     }
+>     print("{ed.n} {ed.names[999]}")
+> }
+> ```
+>
+> ```output
+> 1000 turn 999
+> ```
+>
+> A long-lived `List` rebuilt every turn is reset and refilled, never
+> replaced: a `List` field replaced by assignment keeps its old buffer
+> until the value's region ends (`xs.reset()` empties and keeps the
+> buffer; `xs.reserve(n)` sizes it once for a count you know).
+
+Rule 7 ("Regions are the allocator"): "Write no region syntax until a
+loop's scratch must die per iteration; then one `region scratch { }`
+does it — around the turn, even when the turn writes the loop's state
+through `mut` parameters (`[mem.region.outer-write]`)."
+
 ## 5. Measured
 
-Filled in as the work lands.
+All on kasumi (linux 7.2.8-cachyos, x86-64), `~/lanes/s255/`; the base
+compiler is the `0cb954a8` dist (`base/target/dist/…/wolf`, "wolf
+0.2.34+dev.0cb954a"), the head the branch's debug driver at each step
+and the head dist for the witnesses.
+
+**P1 held** (`ev/rows-trunk.txt`, `ev/witness-trunk.txt`): at the base,
+every run row is refused on the checked machine, native and release —
+E1010 for the scalar, str-push, struct, call, reset-shape, charged and
+refused rows, E1004 for the index and field-store rows (the field row
+carries both), E0403 for `reserve`/`reset` — and the three witness
+programs (yew's `with-region.lu`, aspen's two probes) are E1010 at the
+call ("`s`/`a` still holds a value allocated in region `turn`/`lv`");
+yew's no-region control holds 200,000 turns at 8,620 KB (`maxrss`).
+
+**The rows at the head** (`ev/rows-head.txt`, then `ev/rows-head2.txt`
+after the type-parameter fix): every run row `exit(0)` with its exact
+stdout on all three machines; every refusal its code; `region_escape_
+container` one E1010 (was two). lupin 0.1.55's column, as P7 said:
+`region-fault` on `_str_push`, `_struct`, `_field`, `_map`,
+`_refused_field`, `_call_refused` and the rewritten `region_scalar_list_
+mut`'s twin shape; the same answer on `_scalar`, `_index`, `_call`,
+`_charged`; `exit(0)` where nothing copied is read back (`_refused`,
+`region_scalar_list_mut`); `unsupported` for `reserve`, `reset` and the
+reset-shape row.
+
+**The resident set** (`region_outer_write_lanes`, `wait4`'s `ru_maxrss`,
+the fixture at 100,000 and 200,000 turns): native `region` 3,660 KB →
+3,660 KB, **0 B a turn**; release the same; the control without the
+block 5,508 → 8,676 KB (32 B a turn) native, 5,572 → 8,620 KB (31 B a
+turn) release. P4's claim for the witness shape holds exactly: the
+turn's string (23 bytes, arena-rounded) is what the control keeps.
+
+**The suites** (`t1.log`, `snap.log`): wolf_mem `mem_diagnostics` moved
+seven snapshots — six gained the clause's note under an E1004 or E1010
+report, and `e1010_copy_shares_str` went `(clean)`: s227's door `in st
+{ o = copy d }` is a `copy` at a store into an outer value, so it
+materializes into `st` — a mover P5 did not list, sound by the clause,
+recorded in the spec's s227 paragraph; the sharing copy bound inside the
+block (`let kept = copy d; in st { o = kept }`) keeps s227's E1010
+(`e1010_copy_bound_in_block_shares_str`). 144/0 after; wolf_wir, sema,
+diag green; `region_copyout_lanes` 10/0, `cwd_region_lanes` 1/0,
+`small_gaps_lanes` 5/0, `region_outer_write_lanes` 17/0.
+
+**The downstream census** (`ev/m-base.tsv`, `ev/m-head.tsv`,
+`ev/m-diff.txt`; `measure.py` after s252's, aspen added; the six trees
+at their 2026-10-22 trunks, 1,154 `.lu` files, `conform-run --json
+--phase=mem --std-root` wolf-std's): **no program newly refused**;
+movers: aspen's `region-per-level.lu` and `region-first-class.lu`
+(`fail(E1010)` → `pass`, as P9 said), and yew's `witness/host-os/
+main.lu` (`fail(E0301)` at resolve → `pass`: s253's `os_hostname`, in
+the head and not in the `0cb954a8` base — not this lane's). yew's
+`turn-region` witness cannot show in the census (its two files share a
+directory and build as one module, E0302 on both sides); built alone
+(`ev/witness-head.txt`) it runs: `with-region.lu` 200,000 turns at
+**2,580 KB** against the no-region control's **8,744 KB**; aspen's
+probes run at 3,000 and 3,960 KB. The first census run found the
+regression the fix above removes: `std/map/map.lu:134` `m[k] = copy v`
+over `V` — 180 programs refused at one span — because the
+materializing copy refused a type parameter as `copy region { }` does;
+the clause admits one (the per-instantiation lowering keeps refusing an
+uncopyable part by name), and the dist's own smoke (`use std.env` on the
+checked tier) caught it too.
+
+**Counts**: anchors 686 → 690 (`mem.region.outer-write`,
+`type.list.storage`, `type.list.reserve`, `type.list.reset`; key sets
+diffed both ways against `b308dafc`: four added, none dropped, none
+moved — `regen.log`); `RT_SYMBOLS` 250 → 251; host table 160 and the
+prelude unchanged; `docs/diagnostics.md` regenerated (187 codes).
+
+**The witnesses** (yew `s255-witness` at `60eb12b`, aspen `s255-witness`
+at `00e5335`, both pushed, never merged by this lane): see below as
+the builds and the memory rows land.
