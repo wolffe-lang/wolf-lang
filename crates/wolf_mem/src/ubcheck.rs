@@ -7140,6 +7140,55 @@ impl<'t> Machine<'t> {
             // s248 (wolf-lang#796, `[os.fs.sync]`): the bytes of the file
             // behind a handle on the disk — the host's own sync, as the
             // runtime (`File::sync_all`) — every refusal `io`.
+            // s253 (wolf-lang#815, `[os.proc.adopt]`): a descriptor the
+            // `wolf` process inherited — it is the process the program runs
+            // as — made a handle of this machine's table, as the runtime
+            // does: 0..2 and a number past i32 `invalid`; one not open, or
+            // close-on-exec (every descriptor this process made, and one
+            // adopted before), `io`; then marked close-on-exec and owned by
+            // the handle. Windows `unsupported` after the shape.
+            "fs_adopt" => {
+                let Some(fd) = int_arg(0) else {
+                    return self.refuse("this fs call shape", span);
+                };
+                if fd < FS_FIRST_HANDLE as i64 || fd > i64::from(i32::MAX) {
+                    return Ok(tag("invalid"));
+                }
+                #[cfg(unix)]
+                {
+                    use std::os::fd::FromRawFd as _;
+                    let raw = fd as std::os::fd::RawFd;
+                    // SAFETY: F_GETFD reads the descriptor's flags.
+                    let flags = unsafe { libc::fcntl(raw, libc::F_GETFD) };
+                    if flags < 0 {
+                        fs_host_error(&std::io::Error::last_os_error());
+                        return Ok(tag("io"));
+                    }
+                    if flags & libc::FD_CLOEXEC != 0 {
+                        return Ok(tag("io"));
+                    }
+                    // SAFETY: F_SETFD on a descriptor the kernel just said is
+                    // open.
+                    if unsafe { libc::fcntl(raw, libc::F_SETFD, flags | libc::FD_CLOEXEC) } < 0 {
+                        fs_host_error(&std::io::Error::last_os_error());
+                        return Ok(tag("io"));
+                    }
+                    // SAFETY: an open descriptor nothing in this process held
+                    // (it was not close-on-exec until the line above); the
+                    // table becomes its one owner.
+                    let f = unsafe { std::fs::File::from_raw_fd(raw) };
+                    if self.files.len() < FS_FIRST_HANDLE {
+                        self.files.resize_with(FS_FIRST_HANDLE, || None);
+                    }
+                    let h = self.files.len() as i64;
+                    self.files.push(Some(f));
+                    Ok(Flow::Val(Value::Int(h)))
+                }
+                #[cfg(not(unix))]
+                {
+                    Ok(tag("unsupported"))
+                }
+            }
             "fs_sync" => {
                 let Some(fd) = int_arg(0) else {
                     return self.refuse("this fs call shape", span);
@@ -9558,6 +9607,11 @@ impl<'t> Machine<'t> {
                     Ok(sig) => sig,
                     Err(t) => return Ok(tag(t)),
                 };
+                // s253 (#812, `[os.signal.host.reserved]`): the C library's
+                // own numbers, refused by name before the host is asked.
+                if checked_sig::reserved(sig) {
+                    return Ok(tag("invalid"));
+                }
                 match checked_sig::disp_one(sig, ignore) {
                     Ok(checked_sig::DispOne::Meaning(bit)) => {
                         self.signal_listening &= !bit;
@@ -9587,6 +9641,8 @@ impl<'t> Machine<'t> {
                 }
                 match checked_sig::host_signal(m, false) {
                     Err(t) => Ok(tag(t)),
+                    // s253 (#812): the C library's numbers are the shape's.
+                    Ok(sig) if checked_sig::reserved(sig) => Ok(tag("invalid")),
                     Ok(_) if cfg!(not(unix)) => Ok(tag("unsupported")),
                     Ok(_) => self.refuse(
                         "`os_exit_signal` (the checked machine does not end the process it runs \
@@ -9679,6 +9735,40 @@ impl<'t> Machine<'t> {
                     ],
                 })),
                 None => Ok(tag("unsupported")),
+            },
+            // s253 (wolf-lang#819, `[os.uname]`): the host's words — the
+            // kernel's, through the `wolf` process's own `uname`, as the
+            // runtime reads them.
+            "os_name" | "os_arch" => {
+                let (os, arch) = checked_host::words();
+                let w = if name == "os_name" { os } else { arch };
+                Ok(Flow::Val(self.mint_str(w, span)?))
+            }
+            // s253 (wolf-lang#811, `[os.proc.core]`): the `wolf` process's own
+            // core limit — it is the process the program runs as — read and
+            // set as the runtime does (the shape first), and its end made
+            // core-free, as the dispositions are set on it.
+            "os_core_limit" => match checked_host::core_limit() {
+                Some((soft, hard)) => Ok(Flow::Val(Value::Struct {
+                    fields: vec![
+                        ("0".to_string(), Value::Int(soft)),
+                        ("1".to_string(), Value::Int(hard)),
+                    ],
+                })),
+                None => Ok(tag("unsupported")),
+            },
+            "os_set_core_limit" => {
+                let (Some(soft), Some(hard)) = (int_arg(0), int_arg(1)) else {
+                    return self.refuse("this os call shape", span);
+                };
+                match checked_host::set_core_limit(soft, hard) {
+                    Ok(()) => Ok(Flow::Val(Value::Unit)),
+                    Err(t) => Ok(tag(t)),
+                }
+            }
+            "os_core_off" => match checked_host::core_off() {
+                Ok(()) => Ok(Flow::Val(Value::Unit)),
+                Err(t) => Ok(tag(t)),
             },
             // s241 (#741, `[os.signal.text]`): the C library's words.
             "os_signal_text" => {
@@ -11251,7 +11341,9 @@ impl<'t> Machine<'t> {
             // s236 (#701): a file's owner, by path and on a handle.
             | "fs_set_owner" | "fs_set_owner_fd"
             // s248 (#796, #797): the syncs and the canonical path.
-            | "fs_sync" | "fs_sync_dir" | "fs_realpath" => {
+            | "fs_sync" | "fs_sync_dir" | "fs_realpath"
+            // s253 (#815): an inherited descriptor made a handle.
+            | "fs_adopt" => {
                 let mut argv = Vec::new();
                 for a in d.args().into_iter().flat_map(|l| l.args()) {
                     if let Some(v) = Arg::value(a) {
@@ -11337,6 +11429,9 @@ impl<'t> Machine<'t> {
             | "os_signal_wait" | "os_signal_raise" | "os_random" | "time_now_ms" | "time_unix_ms"
             // s248 (#798): the clock at nanoseconds.
             | "os_clock_ns"
+            // s253 (#811, #819): the core limit, its set, the end with no
+            // core; the OS and the architecture.
+            | "os_core_limit" | "os_set_core_limit" | "os_core_off" | "os_name" | "os_arch"
             | "time_sleep_ms" | "json_valid" | "json_get" | "json_type" | "json_len"
             | "str_from_utf8"
             // s200 (#411, #407): the byte scan, and the task's host code.
@@ -13857,6 +13952,147 @@ fn checked_poll(
     Ok((-1, live))
 }
 
+/// s253 (wolf-lang#811, #819): the host's words and the `wolf` process's
+/// core limit, as `wolf_rt::host` and `wolf_rt::coredump` read and set
+/// them (the runtime's shape, written apart: the locked graph keeps the
+/// runtime out of this crate's reach).
+mod checked_host {
+    /// `[os.uname]`'s words: `uname(2)`'s sysname lowercased (Darwin is
+    /// `macos`) and its machine lowercased (`arm64` is `aarch64`, `amd64`
+    /// `x86_64`); windows `windows` and the build's architecture.
+    pub(super) fn words() -> (String, String) {
+        let os = |s: &str| match s.to_ascii_lowercase().as_str() {
+            "darwin" => "macos".to_string(),
+            other => other.to_string(),
+        };
+        let arch = |m: &str| match m.to_ascii_lowercase().as_str() {
+            "arm64" => "aarch64".to_string(),
+            "amd64" => "x86_64".to_string(),
+            other => other.to_string(),
+        };
+        #[cfg(unix)]
+        {
+            // SAFETY: `uname` fills a zeroed struct; each field is a
+            // NUL-terminated array the read stops inside.
+            let u = unsafe {
+                let mut u: libc::utsname = std::mem::zeroed();
+                (libc::uname(&mut u) == 0).then_some(u)
+            };
+            if let Some(u) = u {
+                let field = |f: &[libc::c_char]| -> String {
+                    let b: Vec<u8> = f.iter().take_while(|&&c| c != 0).map(|&c| c as u8).collect();
+                    String::from_utf8_lossy(&b).into_owned()
+                };
+                let (sn, m) = (field(&u.sysname), field(&u.machine));
+                if !sn.is_empty() && !m.is_empty() {
+                    return (os(&sn), arch(&m));
+                }
+            }
+        }
+        (os(std::env::consts::OS), arch(std::env::consts::ARCH))
+    }
+
+    #[cfg(unix)]
+    fn word(v: libc::rlim_t) -> i64 {
+        if v == libc::RLIM_INFINITY {
+            -1
+        } else {
+            i64::try_from(v).unwrap_or(i64::MAX)
+        }
+    }
+
+    #[cfg(unix)]
+    fn rlim(v: i64) -> libc::rlim_t {
+        if v < 0 {
+            libc::RLIM_INFINITY
+        } else {
+            v as libc::rlim_t
+        }
+    }
+
+    #[cfg(unix)]
+    fn get() -> Option<libc::rlimit> {
+        let mut r = libc::rlimit {
+            rlim_cur: 0,
+            rlim_max: 0,
+        };
+        // SAFETY: getrlimit fills the struct it is handed.
+        (unsafe { libc::getrlimit(libc::RLIMIT_CORE, &mut r) } == 0).then_some(r)
+    }
+
+    /// The core limit, soft and hard, -1 unlimited; `None` on windows.
+    pub(super) fn core_limit() -> Option<(i64, i64)> {
+        #[cfg(unix)]
+        {
+            get().map(|r| (word(r.rlim_cur), word(r.rlim_max)))
+        }
+        #[cfg(not(unix))]
+        {
+            None
+        }
+    }
+
+    /// The shape (each -1 or 0 and up, the soft at most the hard), then
+    /// windows, then the host's answer (`denied` for a refused raise).
+    pub(super) fn set_core_limit(soft: i64, hard: i64) -> Result<(), &'static str> {
+        let shaped =
+            soft >= -1 && hard >= -1 && (hard == -1 || (soft != -1 && soft <= hard));
+        if !shaped {
+            return Err("invalid");
+        }
+        #[cfg(unix)]
+        {
+            let r = libc::rlimit {
+                rlim_cur: rlim(soft),
+                rlim_max: rlim(hard),
+            };
+            // SAFETY: setrlimit reads the struct it is handed.
+            if unsafe { libc::setrlimit(libc::RLIMIT_CORE, &r) } == 0 {
+                return Ok(());
+            }
+            match std::io::Error::last_os_error().raw_os_error() {
+                Some(libc::EINVAL) => Err("invalid"),
+                _ => Err("denied"),
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            Err("unsupported")
+        }
+    }
+
+    /// The end with no core: linux's dumpable attribute 0, elsewhere the
+    /// soft limit 0; windows `unsupported`.
+    pub(super) fn core_off() -> Result<(), &'static str> {
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        {
+            // SAFETY: PR_SET_DUMPABLE 0 changes one attribute of this process.
+            if unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } == 0 {
+                Ok(())
+            } else {
+                Err("unsupported")
+            }
+        }
+        #[cfg(all(unix, not(any(target_os = "linux", target_os = "android"))))]
+        {
+            let Some(mut r) = get() else {
+                return Err("unsupported");
+            };
+            r.rlim_cur = 0;
+            // SAFETY: setrlimit reads the struct it is handed.
+            if unsafe { libc::setrlimit(libc::RLIMIT_CORE, &r) } == 0 {
+                Ok(())
+            } else {
+                Err("unsupported")
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            Err("unsupported")
+        }
+    }
+}
+
 mod checked_sig {
     use std::sync::atomic::{AtomicI8, AtomicI64, Ordering};
 
@@ -14566,6 +14802,22 @@ mod checked_sig {
         #[cfg(not(any(target_os = "linux", target_os = "android", target_os = "macos")))]
         {
             None
+        }
+    }
+
+    /// s253 (#812, `[os.signal.host.reserved]`): `wolf_rt::signal`'s twin —
+    /// on linux the kernel's real-time signals from 32 up to the C
+    /// library's first (`SIGRTMIN()`) are the C library's own; none
+    /// elsewhere.
+    pub(super) fn reserved(sig: i32) -> bool {
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        {
+            (32..libc::SIGRTMIN()).contains(&sig)
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
+        {
+            let _ = sig;
+            false
         }
     }
 
