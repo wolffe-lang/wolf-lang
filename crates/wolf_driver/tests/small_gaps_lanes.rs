@@ -4,7 +4,8 @@
 //! `cargo xtask corpus` runs a `phase: run` row natively and a refusal
 //! row on the default lane; this gate runs each of s252's rows on the
 //! checked machine, native and release, and asserts one answer. lupin
-//! (the PAIRING sibling) is asserted at what 0.1.54 answers: where it
+//! (the PAIRING sibling) is asserted at what 0.1.54 answered and 0.1.55,
+//! the pairing since 0.2.34, answers alike on every row: where it
 //! agrees, the same answer; where it owes a clause (`[mem.static.3]`'s
 //! `wrapping[T]`, `[mem.region.scalar]`) or diverges
 //! (`numlit_wrapping_countdown.lu`: it accepts an `int` count on a
@@ -114,7 +115,7 @@ fn corpus(rel: &str) -> PathBuf {
     p
 }
 
-/// What lupin 0.1.54 answers, when it is not the three lanes' answer.
+/// What lupin (0.1.54 and 0.1.55) answers, when it is not the three lanes'.
 enum Lupin {
     Same,
     Verdict(&'static str),
@@ -185,7 +186,7 @@ fn an_adapter_of_a_copy_scalar_is_copy() {
 }
 
 /// #814: module state of `wrapping[T]` is static data
-/// (`[mem.static.3]`). lupin 0.1.54 refuses it as unsupported.
+/// (`[mem.static.3]`). lupin 0.1.55 refuses it as unsupported, as 0.1.54 did.
 #[test]
 fn wrapping_module_state_is_static_data() {
     run_row(
