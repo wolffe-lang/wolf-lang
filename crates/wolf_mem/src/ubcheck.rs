@@ -13980,7 +13980,11 @@ mod checked_host {
             };
             if let Some(u) = u {
                 let field = |f: &[libc::c_char]| -> String {
-                    let b: Vec<u8> = f.iter().take_while(|&&c| c != 0).map(|&c| c as u8).collect();
+                    let b: Vec<u8> = f
+                        .iter()
+                        .take_while(|&&c| c != 0)
+                        .map(|&c| c as u8)
+                        .collect();
                     String::from_utf8_lossy(&b).into_owned()
                 };
                 let (sn, m) = (field(&u.sysname), field(&u.machine));
@@ -14035,8 +14039,7 @@ mod checked_host {
     /// The shape (each -1 or 0 and up, the soft at most the hard), then
     /// windows, then the host's answer (`denied` for a refused raise).
     pub(super) fn set_core_limit(soft: i64, hard: i64) -> Result<(), &'static str> {
-        let shaped =
-            soft >= -1 && hard >= -1 && (hard == -1 || (soft != -1 && soft <= hard));
+        let shaped = soft >= -1 && hard >= -1 && (hard == -1 || (soft != -1 && soft <= hard));
         if !shaped {
             return Err("invalid");
         }

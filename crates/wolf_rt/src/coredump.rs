@@ -200,7 +200,10 @@ mod tests {
     #[test]
     fn the_limit_reads_and_sets_to_itself() {
         let (soft, hard) = limit().expect("a unix host has a core limit");
-        assert!(shape_ok(soft, hard), "the read is in the shape: ({soft}, {hard})");
+        assert!(
+            shape_ok(soft, hard),
+            "the read is in the shape: ({soft}, {hard})"
+        );
         assert_eq!(set(soft, hard), proc_code::OK, "the limit set to itself");
         assert_eq!(limit(), Some((soft, hard)));
     }
