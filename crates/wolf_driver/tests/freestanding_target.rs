@@ -404,6 +404,57 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "`fs_realpath`",
             "hosted runtime",
         ),
+        // s254 (#820, #818): access, the lock, the handle's record, the
+        // fifo, the descriptor's flag and the one write.
+        (
+            "fs_access",
+            "",
+            "fs_access(\".\", 0) else |e| {\n        return 0\n    }\n    1",
+            "`fs_access`",
+            "hosted runtime",
+        ),
+        (
+            "fs_lock",
+            "",
+            "fs_lock(3, 2) else |e| {\n        return 0\n    }\n    1",
+            "`fs_lock`",
+            "hosted runtime",
+        ),
+        (
+            "fs_unlock",
+            "",
+            "fs_unlock(3) else |e| {\n        return 0\n    }\n    1",
+            "`fs_unlock`",
+            "hosted runtime",
+        ),
+        (
+            "fs_fstat_record",
+            "",
+            "let r = fs_fstat_record(3) else |e| {\n        return 0\n    }\n    r.len",
+            "`fs_fstat_record`",
+            "hosted runtime",
+        ),
+        (
+            "fs_mkfifo",
+            "",
+            "fs_mkfifo(\"f\", 384) else |e| {\n        return 0\n    }\n    1",
+            "`fs_mkfifo`",
+            "hosted runtime",
+        ),
+        (
+            "fs_set_nonblock",
+            "",
+            "fs_set_nonblock(3, true) else |e| {\n        return 0\n    }\n    1",
+            "`fs_set_nonblock`",
+            "hosted runtime",
+        ),
+        (
+            "fs_write_some",
+            "",
+            "let n = fs_write_some(3, List[byte]()) else |e| {\n        return 0\n    }\n    n",
+            "`fs_write_some`",
+            "hosted runtime",
+        ),
         (
             "os_umask",
             "",

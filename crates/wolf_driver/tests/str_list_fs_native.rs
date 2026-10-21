@@ -818,6 +818,15 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
         "__wolf_rt_fs_sync",
         "__wolf_rt_fs_sync_dir",
         "__wolf_rt_fs_realpath",
+        // s254 (#820, #818): `[os.fs.access]`, `[os.fs.lock]`,
+        // `[os.fs.fstat.record]`, `[os.fs.mkfifo]`, `[os.fs.nonblock]`.
+        "__wolf_rt_fs_access",
+        "__wolf_rt_fs_lock",
+        "__wolf_rt_fs_unlock",
+        "__wolf_rt_fs_fstat_record",
+        "__wolf_rt_fs_mkfifo",
+        "__wolf_rt_fs_set_nonblock",
+        "__wolf_rt_fs_write_some",
         // s248 (#795): `[os.signal.wait.fds]`.
         "__wolf_rt_os_signal_wait_fds",
         // s248 (#794): `[os.term.restore]`, the registration and the
@@ -834,7 +843,7 @@ fn the_runtime_symbol_table_covers_the_s40_families() {
     }
     assert_eq!(
         wolf_codegen_clif::RT_SYMBOLS.len(),
-        237,
+        244,
         "RT_SYMBOLS count moved — keep the s40/s73 families in sync with wolf_rt"
     );
 }
