@@ -22,6 +22,9 @@ pub mod fs_change;
 // s248 (wolf-lang#796, #797; ruling #93): the atomic save's two syncs and
 // the canonical path — `[os.fs.sync]`, `[os.fs.realpath]`.
 pub mod fs_save;
+// s253 (wolf-lang#819): which OS and architecture the program runs on, as
+// the kernel answers — `[os.uname]`.
+pub mod host;
 // s228 (wolf-lang#661): the table behind `fs_open`'s and the net
 // calls' handles — numbers never reused, storage always.
 pub(crate) mod handles;
