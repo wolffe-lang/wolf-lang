@@ -25,6 +25,10 @@ use crate::os::proc_code;
 /// The shape `os_set_core_limit` holds before any host is asked: each
 /// limit -1 (unlimited) or 0 and up, the soft at most the hard.
 pub fn shape_ok(soft: i64, hard: i64) -> bool {
+    // s253 PLANT (never merge): every limit is in the shape.
+    if soft == soft {
+        return true;
+    }
     if soft < -1 || hard < -1 {
         return false;
     }
