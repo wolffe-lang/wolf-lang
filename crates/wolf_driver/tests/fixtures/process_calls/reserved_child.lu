@@ -8,7 +8,10 @@
 //!   end by the signal never kept; at s253 the C library's numbers are
 //!   refused by name, `invalid`, and the child exits 3.
 //! - `wait`: writes `ready-wait` and sleeps 3 s with no thread, then exits
-//!   0; `wait-task` the same after a task (`ready-wait-task`).
+//!   0; `wait-task` the same after a task (`ready-wait-task`). Before it
+//!   says it is ready it writes its own `SigBlk`, `SigIgn` and `SigCgt`
+//!   (linux's `/proc/self/status`) to standard error, so a row is read
+//!   with the masks the child had when the parent sent.
 //!
 //! RUN ONLY AS A CHILD OF `reserved_parent.lu` INSIDE A THROWAWAY
 //! CONTAINER: the parent sends the `wait` children 33.
@@ -35,6 +38,12 @@ fn main() -> !int {
             return 3
         }
         return 4
+    }
+    let status = fs_read_text("/proc/self/status") else |_| ""
+    for line in status.split("\n") {
+        if line.starts_with("SigBlk:") || line.starts_with("SigIgn:") || line.starts_with("SigCgt:") {
+            eprint("{mode}: {line.replace("\t", " ")}")
+        }
     }
     fs_write_text("ready-{mode}", "ready")?
     time_sleep_ms(3000)
