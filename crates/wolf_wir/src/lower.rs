@@ -10377,6 +10377,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "fs_sync"
                 | "fs_sync_dir"
                 | "fs_realpath"
+                // s253 (#815): an inherited descriptor made a handle.
+                | "fs_adopt"
         ) {
             return self.lower_fs_builtin(&callee_text, d, e);
         }
@@ -10550,6 +10552,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_signal_ignore_one"
                 | "os_signal_default_one"
                 | "os_exit_signal"
+                // s253 (#811): the core limit, its set and an end with no
+                // core; (#819) the OS and the architecture.
+                | "os_core_limit"
+                | "os_set_core_limit"
+                | "os_core_off"
+                | "os_name"
+                | "os_arch"
         ) {
             return self.lower_job_builtin(&callee_text, d, e);
         }
@@ -14002,11 +14011,18 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // permission bits (`[os.fs.create.mode]`), and `os_umask`
             // answers the old mask the same way (`[os.fs.umask]`) — a
             // word >= 0, or the negated code.
-            "fs_open" | "fs_create" | "fs_open_mode" | "fs_open_perm" | "os_umask" => {
+            //
+            // s253 (#815, `[os.proc.adopt]`): `fs_adopt` answers a handle the
+            // same way — the adopted descriptor's handle, or the negated code.
+            "fs_open" | "fs_create" | "fs_open_mode" | "fs_open_perm" | "os_umask" | "fs_adopt" => {
                 let rc = match name {
                     "os_umask" => {
                         let mask = arg(0)?;
                         self.rt_call("__wolf_rt_os_umask", &[mask], Some(types::I64))
+                    }
+                    "fs_adopt" => {
+                        let fd = arg(0)?;
+                        self.rt_call("__wolf_rt_fs_adopt", &[fd], Some(types::I64))
                     }
                     "fs_open_perm" => {
                         let path = arg(0)?;
@@ -15136,6 +15152,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let want = match name {
             "os_pgid" | "os_signal_ignored" | "os_pid" | "os_ppid" => 0,
             "os_signal_last" | "os_signal_realtime" => 0,
+            "os_core_limit" | "os_core_off" | "os_name" | "os_arch" => 0,
+            "os_set_core_limit" => 2,
             "os_wait_poll" | "os_wait_poll_core" | "os_fork" => 0,
             "os_uid" | "os_euid" | "os_gid" | "os_egid" | "os_groups" => 0,
             "os_set_ids" => 3,
@@ -15156,6 +15174,20 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 .rt_call("__wolf_rt_os_pid", &[], Some(types::I64))
                 .expect("pid");
             return Ok(Flow::Val(Some(v)));
+        }
+        // s253 (#819, `[os.uname]`): the OS and the architecture have no
+        // row either — `os_error_text`'s shape, the text's (pointer,
+        // length) through a 16-byte slot.
+        if name == "os_name" || name == "os_arch" {
+            let sym = if name == "os_name" {
+                "__wolf_rt_os_name"
+            } else {
+                "__wolf_rt_os_arch"
+            };
+            let (region, slot) = self.rt_slot(16);
+            self.rt_call_slot(sym, &[], slot, region, None);
+            let out = self.load_str_slot(slot, region, e.span)?;
+            return Ok(Flow::Val(Some(out)));
         }
         let eu = self.eu_ty_of(e.span)?;
         const SIG: &[(i64, &str)] = &[(2, "unsupported")];
@@ -15208,6 +15240,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "os_signal_ignore_one" => ("__wolf_rt_os_signal_ignore_one", PROC),
             "os_signal_default_one" => ("__wolf_rt_os_signal_default_one", PROC),
             "os_exit_signal" => ("__wolf_rt_os_exit_signal", PROC),
+            "os_core_limit" => ("__wolf_rt_os_core_limit", PROC),
+            "os_set_core_limit" => ("__wolf_rt_os_set_core_limit", PROC),
+            "os_core_off" => ("__wolf_rt_os_core_off", PROC),
             _ => return Err(refuse("this job builtin", e.span)),
         };
         // s241 (`[os.signal.text]`): `env_get`'s str shape — rc 0 and the
@@ -15243,6 +15278,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // too.
         if name == "os_term_size"
             || name == "os_signal_realtime"
+            // s253 (#811, `[os.proc.core]`): the limit's (soft, hard).
+            || name == "os_core_limit"
             || name == "os_wait_poll"
             || name == "os_wait_poll_core"
             || name == "os_fork"
@@ -15364,6 +15401,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "os_signal_default_one"
                 | "os_exit_signal"
                 | "os_term_restore_at_exit"
+                | "os_set_core_limit"
+                | "os_core_off"
         );
         if name == "os_wait_status" || name == "os_wait_status_core" {
             let (region, slot) = self.rt_slot(8);
