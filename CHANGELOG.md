@@ -1,6 +1,225 @@
 # Changelog
 
-## Unreleased
+## 0.2.34 — 2026-10-20
+
+**What this release changes: the fork, and what an editor asks of the
+runtime.** s247 gives wolf a fork whose child keeps running wolf code
+(ruling #90; its shape ruling #95): `os_fork`, for pelt's subshells
+(sh20), which fork from 0.2.34 as dash's do. The fork's rule is
+**`busy`**: it answers `busy`, before the host is asked, while any task
+is live, from a task or a proc handler, or under the deterministic
+scheduler, so a fork never copies a lock another thread holds. **The
+checked machine answers `unsupported`** (ruling #95 R4 C), so a program's
+in-process path (pelt's) runs there to its end; windows answers
+`unsupported`. s248 builds the calls yew asks for (ruling #93): the
+terminal restored at every exit the runtime owns
+(`os_term_restore_at_exit`), one wait over the terminal, its jobs'
+pipes, its signals and a deadline (`os_signal_wait_fds`), the atomic
+save's syncs (`fs_sync`, `fs_sync_dir`), the canonical path
+(`fs_realpath`) and a nanosecond clock (`os_clock_ns`); then the mode
+int's three new bits and `wolf test`'s discovery. What a running program
+can see change:
+
+- **A mode int without bits 5–7 now writes the usual setting** —
+  `ICRNL` and `OPOST` on, `ISTRIP` off — where 0.2.33 left each as found;
+  0 in each bit is the usual setting (`RAW_CR` 32, `RAW_OUTPUT` 64,
+  `STRIP8` 128; #802, ruling #97 R7), so on a usual terminal every
+  released mode int reads and sets what it did.
+- **`wolf test` runs a test file's own `test_*`** (#799): it read the
+  first file of the package built for the test file, so a test file that
+  a plain file sorted before ran its `main` instead.
+- **A program that names `os_signal_wait_fds` makes the signal hub and
+  the wake pipe before `main`** (ruling #80), as one that names
+  `os_signal_wait_fd` does; one that calls `os_term_restore_at_exit`
+  holds one more descriptor from the call.
+- **The bundled std moves to wolf-std `e036bec`** (from `cceda63`): sc66's
+  wrappers for 0.2.33's five calls (ruling #94), sc67's `net.Addr` and
+  the accounts' documented limit, and sc68's lupin lines at the 0.1.55
+  pin.
+
+THE THIRTY-FOURTH. Two compiler lanes land, s247 (wolf-lang#803; rulings
+#90, #95) and s248 (wolf-lang#804: #794, #795, #796, #797, #798, #799,
+#802; rulings #93, #97). **The pairing moves to lupin 0.1.55** (is77:
+lupin learns 0.2.33's five calls and refuses the signal family by name;
+is78: wolf-interp's CI tiers); lupin 0.1.55 does not resolve 0.2.34's
+seven new names (wolf-interp#268, #269), which is expected. `STD-PIN`
+moves to wolf-std `e036bec`. 97 commits since 0.2.33 (s247 29, s248 68),
+then r39's release commits.
+
+### Read this before you bump the pin
+
+- **Seven new prelude names**: `os_fork` (s247) and
+  `os_term_restore_at_exit`, `os_signal_wait_fds`, `fs_sync`,
+  `fs_sync_dir`, `fs_realpath`, `os_clock_ns` (s248) — a function of one
+  of these names now shadows a builtin (W0304, fatal under
+  `--deny-warnings`: rename yours) — and **one new mark**, `busy`.
+- **A test file's own `test_*` now run** under `wolf test`, never a
+  plain file's that sorted before it: a directory where one did may run
+  different tests.
+- **`[os.term.mode]`'s bits 5–7 read 0 as the usual setting.** A mode
+  with bit 5, 6 or 7 set is no longer `invalid`: it clears `ICRNL` or
+  `OPOST`, or sets `ISTRIP`. A mode without them now WRITES the usual
+  setting where 0.2.33 left each as found: on a terminal set otherwise
+  (`stty -opost`), a hand-built mode puts it back.
+- **`os_fork` answers `busy` while any task is live**, from a task or a
+  proc handler, and under the deterministic scheduler: fork before the
+  first spawn, or after every task has joined. The child is one thread,
+  the caller's; its threads come at its first use.
+- **The pairing is lupin 0.1.55.** A downstream that keys a pin on the
+  lupin version meets 0.1.55's answers: 0.2.33's five calls resolve
+  (the shape rows, the core siblings answered, the rest refused by
+  name), the listen, wait and raise resolve and are refused by name,
+  and `os_signal_text(0)` is refused by name where 0.1.54 answered
+  `invalid`.
+- **The bundled std is wolf-std `e036bec`**, whose new names (below) are
+  std functions, not prelude names.
+
+### The bundled std: wolf-std `e036bec` (from `cceda63`)
+
+`STD-PIN` moves from `cceda63` (0.2.33's) to **`e036bec`**: sc66
+(wolf-std#78, ruling #94) on wolf 0.2.33, sc67 (wolf-std#4, #68; ruling
+#99 R2), then sc68 (wolf-std#83: #80, #76) at the lupin 0.1.55 pin.
+Under `std/` only `process/process.lu` and `signal/signal.lu` (sc66),
+`net/net.lu` and `os/users/users.lu` (sc67) change; sc68 changes nothing
+there; `std/prelude/prelude.lu` does not change (the std adds no prelude
+name).
+
+- **`std.signal`**: `ignore_one(m)`, `reset_one(m)` (one meaning's
+  disposition, over `os_signal_ignore_one` / `os_signal_default_one`).
+- **`std.process`**: `exit_signal(m)` (over `os_exit_signal`); the core
+  read beside `Status`, never inside it: `wait_status_core`,
+  `status_from_core`, `dumped_core`, `poll_core() -> CoreChange !
+  {io}` with `CoreChange { change, core }`.
+- **`std.net`** (sc67, wolf-std#4): `Addr { version: int, text: str }`,
+  the value a resolver will answer (an address and its IP version); no
+  builtin resolves a name without dialling it at this release
+  (wolf-lang#217), so std ships the value and names the builtin it waits
+  on. `connect`'s doc says its resolve has no deadline.
+- **`std.os.users`** (sc67, wolf-std#68, ruling #99 R2): no signature or
+  answer changes; the header and every reader's doc say what the two
+  files cannot see (macOS's directory service, LDAP, NIS, SSSD, systemd's
+  dynamic users) and what that costs `id`, `whoami`, `chown`, `chgrp`
+  and `groups`.
+- **sc68**: at the lupin 0.1.55 pin, the five lines sc66 marked to flip
+  the day a lupin that answers them is pinned: `tests/signal/text_zero.lu`'s
+  lupin column (`divergent(stdout)` → `unsupported`, `text(0)` refused by
+  name; wolf-std#76), `signal/one_rows.lu`'s and
+  `process/poll_core_none.lu`'s (`unsupported` → `run`), and the
+  doc-example gate's two `LUPIN_MIRROR_LAG` entries (`signal.ignore_one`,
+  `signal.reset_one`; wolf-interp#261) retired; and five windows cells
+  (`text_zero`, `one_host`, `one_fault`, `exit_signal_lives`,
+  `wait_core_rows`) that run on lupin 0.1.55 there, where the host's row
+  comes before lupin's refusal by name. `std/` is unchanged by sc68.
+- **Measured under this release** (kasumi, linux x86-64, the
+  release-head archive with the published lupin 0.1.55 beside `wolf`, no
+  `WOLF_STD`): wolf-std `e036bec`'s 497 tests on lupin, the checked
+  machine and native, and its 519 doc examples: **all green** (1,557
+  lane runs). The release machine equals native on 496 of the 497 with
+  no std configured; the one (`list/sort_by_tier.lu`) is refused by name
+  on release, as at 0.2.33. Against the published 0.2.33 on the same
+  std, 0 records moved on any tier.
+- **Not wrapped yet** (the sc lane after this release): `process.fork()`;
+  `term.Mode`'s three fields (`raw_cr`, `raw_output`, `strip8`) and a
+  `raw` that sets `raw_cr` and `raw_output`, as C yew's raw mode is;
+  wrappers for `os_term_restore_at_exit`, `os_signal_wait_fds`,
+  `fs.sync`, `fs.sync_dir`, `fs.realpath` and `time.now_ns`.
+
+**New prelude names:** `os_fork`, `os_term_restore_at_exit`,
+`os_signal_wait_fds`, `fs_sync`, `fs_sync_dir`, `fs_realpath`,
+`os_clock_ns`, all functions at `[os.host.sigs]`, and the mark `busy`
+(`cargo xtask prelude-diff v0.2.33 HEAD --markdown`, after `git fetch
+--tags`). No downstream declares or calls any of the seven at its trunk
+(wolf-std, boreutils, lobo, pelt, pax, muzzle, wolf-book, wolf-lsp, yew,
+lope; `.lu` files; the control word `os_signal_wait_fd` is found in
+wolf-std, pelt and yew, so the search sees).
+
+**Capabilities:** `os_fork` and `os_signal_wait_fds` are `exec` (with
+`os_spawn` and `os_signal_wait_fd`); `fs_sync`, `fs_sync_dir` and
+`fs_realpath` are `fs`; `os_term_restore_at_exit` (stdio's `io`) and
+`os_clock_ns` (the clock, with `time_now_ms`) are charged nothing in a
+manifest; every one is refused at comptime, and the freestanding target
+refuses each by name. **Bytes:** `RT_SYMBOLS` 229 → 237; the host table
+140 → 147; the prelude 147 → 154 functions, 179 → 186 W0304 names; spec
+anchors 664 → 672 (`[os.proc.fork]`, `[os.proc.fork.note]`,
+`[os.term.restore]`, `[os.signal.wait.fds]`, `[os.fs.sync]`,
+`[os.fs.realpath]`, `[os.clock.ns]`, `[os.editor.calls.note]`).
+
+**Known:** `region_copyout_lanes::a_loop_keeping_a_scalar_is_flat` can
+exceed its RSS bound under load (#652, #731, open), a test flake.
+`conform-run --native`/`--release` give the program no terminal on
+standard input (#766). Carried from 0.2.33, open: #790, #791, #792.
+Filed since 0.2.33, open: by yew's lanes, #800 (no bitwise not), #801,
+#806–#810, #813–#822; by lobo's ws67, #805; by boreutils' bu28, #811
+(no undumpable or core-limit call), #812. lupin 0.1.55 lags 0.2.34's
+seven names (wolf-interp#268, #269).
+
+**Rulings:** #90 (the fork, reversing #69 R1), #95 (`[os.proc.fork.note]`:
+R1–R3 and R5–R8 as built, R4 C), #93 (yew's G1–G4: R1 C, R2 A, R3–R5),
+#97 (`[os.editor.calls.note]` R1–R8 as built). #94 is wolf-std's
+spellings; #96 (lope) and #98 (pelt's hook) change no compiler line.
+
+**What each downstream does to bump** (to 0.2.34 / lupin 0.1.55):
+
+- **wolf-std:** the pin; then the wrappers for the restore, the wait over
+  many descriptors, `fs.sync`, `fs.sync_dir`, `fs.realpath`,
+  `time.now_ns`, `term.Mode`'s three fields (and `raw`) and
+  `process.fork()`. The lupin column at 0.1.55 is sc68's, already in the
+  bundled std (wolf-std#76, #80).
+- **pelt** (sh20): subshells, `( … ) &`, `{ …; } &`, command
+  substitutions and the pipeline stages pelt runs itself fork, as dash's
+  do; the toy probe `crates/wolf_driver/tests/fixtures/fork/subshell.lu`
+  is the shape (traps back to default in the child, XCU 2.12); the pin.
+  The checked lane keeps running in process (`unsupported`, ruling #95 R4
+  C).
+- **boreutils, muzzle:** the pin.
+- **lobo:** the pin (ws68 is at 0.2.33).
+- **yew** (yw02's pin bump): G3 adopted (the atomic save's syncs), the
+  restore at exit, the wait over the tty, its jobs and its signals with
+  the 25 ms deadline (the `VTIME` interim retires), the raw bits, and its
+  tests named `test_*`.
+- **lope:** `fs_sync` for the store's temp-and-rename (ruling #96 D9).
+- **pax:** px54 with lope; the forking pelt on PAX (px17 serves `fork`
+  since 2026-10-07).
+- **wolf-lsp and tree-sitter-wolf:** the pin and the seven prelude names
+  (the vendored prelude 187 → 194).
+- **wolf-book, then the site:** the book pins 0.2.34 / 0.1.55: the fork
+  (a note in the subshell chapter) and the editor's calls; then wolf-web
+  pins the pair and the book, and deploys.
+- **wolf-interp:** lupin's mirror of s248's six names and the mode's
+  bits 5–7 (wolf-interp#268), and `os_fork` refused by name (#269).
+- **Homebrew and the AUR:** wolf 0.2.34 with the std at `e036bec`, lupin
+  0.1.55.
+
+### The pairing: lupin 0.1.55 (from 0.1.54)
+
+`PAIRING` names **lupin 0.1.55 at pin `294d626`** (the linux x86-64
+archive's sha256 `1152abc0…`; its records report `commit e642f26`). is77 is lupin's half of 0.2.33 (the five
+calls, `text(0)`, the core siblings, the listen, wait and raise refused by
+name); lupin's halves of s247 and s248 are wolf-interp#268 and #269.
+
+- **Carried to 0.1.55, dropped 0, widened 0**: `checked_tasks_lanes`
+  (#227, #230), `chan_sent_arg_lanes` and `region_kept_arg_lanes` (#232),
+  `attr_closed_set_lanes`' control, `atomic_lanes`' race check, and
+  s248's two pre-mirror pins, `editor_calls_lanes` (now a list, 0.1.54
+  and 0.1.55) and `editor_wait_lanes` (`("0.1.55", "e642f26")`, whose
+  race fixture 0.1.55 stops at the listen, refused by name). Nothing for
+  `signal_gaps_lanes`, `fork_lanes` or `shift_lanes`. Against the
+  published 0.1.55, 92 gate targets (the 91 that name lupin and
+  `stdfd_lanes`) pass 861 of 861; the plant (the same head against the
+  published 0.1.54) is red on exactly `pairing` (every carried list still
+  names 0.1.54).
+- **The ritual against the published 0.2.33** (the same 1155-file
+  corpus, the same lupin 0.1.55, this release's archive `wolf` against
+  0.2.33's): **no count moved on either tier.** checked: 793 agreements,
+  241 completeness notes, 95 unsupported, SOUNDNESS 0, hard 19 on both;
+  native: 778, 241, 96, SOUNDNESS 14, hard 33 on both. s247 and s248 add
+  no corpus file (their witnesses are the gates'). Below the ledger only
+  the three SOUNDNESS rows that read freed memory
+  (`conc/atomic_ub_uaf.lu`, `memory/unsafe_ub_uaf.lu`,
+  `memory/volatile_ub_uaf.lu`) printed other exit statuses, as at 0.2.32
+  and 0.2.33.
+
+### The fork (s247)
 
 s247 — the fork (ruling #90, reversing ruling #69 R1 from B to A): wolf
 gets a user-visible `os_fork` whose child keeps running wolf code, sound
@@ -35,8 +254,9 @@ R5–R8 as recommended, R4 C (the checked machine answers `unsupported`).
 - **Machines** (R4 C, ruling #95; R5 A, R6, R8). native and release on
   linux and macOS; `unsupported` on windows and any host without the task
   layer; **the checked machine answers `unsupported`** on every host, so a
-  program's in-process path (pelt's subshells) runs there; lupin 0.1.54 does not
-  resolve the name (a newer lupin is held to a refusal by name); charged
+  program's in-process path (pelt's subshells) runs there; lupin 0.1.54 and
+  0.1.55 do not resolve the name (its refusal by name is wolf-interp#269;
+  a newer lupin is held to a refusal by name); charged
   `exec`, refused at comptime; the freestanding target refuses it by name.
 - **The cost** (kasumi, a container, release runtime, medians of nine):
   with a live signal hub, 1,000 fork-and-end loops take 0.119 s (dash's
@@ -47,6 +267,8 @@ R5–R8 as recommended, R4 C (the checked machine answers `unsupported`).
   made, no thread.
 - spec/11 gains `[os.proc.fork]` and `[os.proc.fork.note]` (anchors 666);
   the host table is 141 lines.
+
+### What the editor asks of the runtime (s248)
 
 s248 — what the editor asks of the runtime (ruling #93; yew
 `docs/MAP.md` §5 G1–G4, G8, G10; yw01's W1). Six calls, three mode bits
@@ -89,52 +311,6 @@ what is built.
   the first file of the package built for the test file, so a test file
   that a plain file sorted before ran its `main` instead (yw00's
   `z_test.lu`), or a helper of that file named `test_*`.
-
-### Read this before you bump the pin
-
-- **One new prelude name**, `os_fork` (a function of that name now
-  shadows a builtin, W0304), and **one new mark**, `busy`.
-- **Six new prelude names**: `os_term_restore_at_exit`,
-  `os_signal_wait_fds`, `fs_sync`, `fs_sync_dir`, `fs_realpath`,
-  `os_clock_ns` (a function of one of these names now shadows a
-  builtin).
-- **A mode with bit 5, 6 or 7 set is no longer `invalid`**: it clears
-  `ICRNL` or `OPOST`, or sets `ISTRIP`. A mode without them now WRITES
-  the usual setting (`ICRNL` and `OPOST` on, `ISTRIP` off) where 0.2.33
-  left each as found: on a terminal set otherwise (`stty -opost`), a
-  hand-built mode puts it back.
-- **`wolf test` may run different tests** in a directory where a plain
-  file sorts before a test file: that file's own `test_*` now, never the
-  plain file's.
-- A program that names `os_signal_wait_fds` makes the signal hub and the
-  wake pipe before `main` (ruling #80), as one that names
-  `os_signal_wait_fd` does; one that calls `os_term_restore_at_exit`
-  holds one more descriptor from the call.
-
-### Downstream
-
-- **pelt** (sh20): subshells, `( … ) &`, `{ …; } &`, command
-  substitutions and the pipeline stages pelt runs itself fork, as dash's
-  do; the toy probe `crates/wolf_driver/tests/fixtures/fork/subshell.lu`
-  is the shape (traps back to default in the child, XCU 2.12).
-- **wolf-std**: a `process.fork()` wrapper, for the sc lane after the
-  release.
-- **wolf-interp**: lupin refuses `os_fork` by name (R5 A).
-- **pax**: the pelt pin that forks on PAX (px17 serves `fork` since
-  2026-10-07); a px lane verifies at sh20's pin.
-- **the book**: a note in the subshell chapter.
-- **wolf-std** (s248): `term.Mode`'s three fields (`raw_cr`,
-  `raw_output`, `strip8`) and a `raw` that sets `raw_cr` and
-  `raw_output`, as C yew's raw mode is; wrappers for
-  `os_term_restore_at_exit`, `os_signal_wait_fds`, `fs.sync`,
-  `fs.sync_dir`, `fs.realpath` and `time.now_ns`.
-- **wolf-interp** (s248): lupin resolves none of the six names; the
-  shape rows and refusals by name for the restore and the wait, `std`'s
-  `File::sync_all`, `fs::canonicalize` and `Instant` for the rest, and
-  bits 5–7 in its mode's shape row.
-- **yew** (s248): at its 0.2.34 pin, the restore at exit, the wait over
-  the tty, its jobs and its signals with the 25 ms deadline (the `VTIME`
-  interim retires), the raw bits, and its tests named `test_*`.
 
 
 ## 0.2.33 — 2026-10-19
