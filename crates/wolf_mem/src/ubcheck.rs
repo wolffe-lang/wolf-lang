@@ -7350,7 +7350,8 @@ impl<'t> Machine<'t> {
                 Ok(Flow::Val(Value::List(id)))
             }
             // s254 (#820, `[os.fs.mkfifo]`): mkfifo(3), the bits first;
-            // `ENOSYS` `unsupported`; windows `unsupported` by name.
+            // a file system or kernel that makes none `unsupported`;
+            // windows `unsupported` by name.
             "fs_mkfifo" => {
                 let (Some(path), Some(perm)) = (path_arg(0), int_arg(1)) else {
                     return self.refuse("this fs call shape", span);
@@ -7367,8 +7368,14 @@ impl<'t> Machine<'t> {
                     if unsafe { libc::mkfifo(c.as_ptr(), perm as libc::mode_t) } == 0 {
                         return Ok(Flow::Val(Value::Unit));
                     }
+                    // `EPERM` (a file system that makes no fifo: PAX
+                    // too), `ENOSYS` and `EOPNOTSUPP` are `unsupported`,
+                    // the runtime's `mkfifo_code`.
                     let e = std::io::Error::last_os_error();
-                    if e.raw_os_error() == Some(libc::ENOSYS) {
+                    if matches!(
+                        e.raw_os_error(),
+                        Some(libc::EPERM | libc::ENOSYS | libc::EOPNOTSUPP)
+                    ) {
                         fs_host_error(&e);
                         return Ok(tag("unsupported"));
                     }

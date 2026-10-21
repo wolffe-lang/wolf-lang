@@ -221,8 +221,8 @@ pub unsafe extern "C" fn __wolf_rt_fs_fstat_record(fd: i64, out: i64) -> i64 {
 /// rule); `perm` outside `0..=0o777` is `invalid`, before the host. A taken
 /// name (a dangling link included) is `exists`, a missing parent
 /// `not_found`, a refused write of the directory `denied`. windows has no
-/// fifo in its file system and answers `unsupported` by name; a host whose
-/// kernel has no `mknod` for it (PAX: `ENOSYS`) answers `unsupported` too.
+/// fifo in its file system and answers `unsupported` by name; so does a
+/// file system or kernel that makes none ([`mkfifo_code`]).
 ///
 /// # Safety
 ///
@@ -243,18 +243,31 @@ pub unsafe extern "C" fn __wolf_rt_fs_mkfifo(pp: i64, pl: i64, perm: i64) -> i64
         if unsafe { libc::mkfifo(c.as_ptr(), perm as libc::mode_t) } == 0 {
             return fs_code::OK;
         }
-        let e = std::io::Error::last_os_error();
-        if e.raw_os_error() == Some(libc::ENOSYS) {
-            os_error_record(&e);
-            return fs_code::UNSUPPORTED;
-        }
-        code_of(&e)
+        mkfifo_code(&std::io::Error::last_os_error())
     }
     #[cfg(not(unix))]
     {
         let _ = (pp, pl);
         fs_code::UNSUPPORTED
     }
+}
+
+/// `mkfifo(3)`'s refusals as the call's rows: `EPERM` is "the file system
+/// does not support the type of node requested" (`mknod(2)`: for a fifo it
+/// asks no privilege, so nothing else can mean it), `ENOSYS` a kernel with
+/// no such call and `EOPNOTSUPP` (macOS's `ENOTSUP`) a file system that
+/// makes none — each `unsupported`, by name (PAX refuses a fifo `EPERM`,
+/// pax `kernel/user/user.lu`); the rest the family's mapping.
+#[cfg(unix)]
+pub(crate) fn mkfifo_code(e: &std::io::Error) -> i64 {
+    if matches!(
+        e.raw_os_error(),
+        Some(libc::EPERM | libc::ENOSYS | libc::EOPNOTSUPP)
+    ) {
+        os_error_record(e);
+        return fs_code::UNSUPPORTED;
+    }
+    code_of(e)
 }
 
 /// `fs_set_nonblock(fd, on: bool) -> () ! {invalid, io, unsupported}`
@@ -558,6 +571,17 @@ mod tests {
         }
         use std::os::unix::fs::FileTypeExt as _;
         assert!(std::fs::metadata(&p).unwrap().file_type().is_fifo());
+        for n in [libc::EPERM, libc::ENOSYS, libc::EOPNOTSUPP] {
+            assert_eq!(
+                mkfifo_code(&std::io::Error::from_raw_os_error(n)),
+                fs_code::UNSUPPORTED,
+                "a file system or kernel that makes no fifo ({n})"
+            );
+        }
+        assert_eq!(
+            mkfifo_code(&std::io::Error::from_raw_os_error(libc::EACCES)),
+            fs_code::DENIED
+        );
         let _ = std::fs::remove_dir_all(&d);
     }
 
