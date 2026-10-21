@@ -1305,7 +1305,11 @@ impl<'t> Machine<'t> {
                 names: Vec::new(),
                 cleanup: Vec::new(),
             }],
+            decl_depth: Vec::new(),
         };
+        // s255: a capture and a parameter are declared at the frame's
+        // entry — the caller's current region is the ambient there.
+        let entry_depth = self.ambient.len();
         for (name, v) in &inst.captures {
             if owns && matches!(v, Value::Region(_)) {
                 frame.scopes[0]
@@ -1316,6 +1320,7 @@ impl<'t> Machine<'t> {
                 .names
                 .push((name.clone(), frame.locals.len()));
             frame.locals.push(v.clone());
+            frame.decl_depth.push(entry_depth);
         }
         let self_ty = inst.self_ty.clone();
         let rigids = inst.rigids.clone();
@@ -1334,6 +1339,7 @@ impl<'t> Machine<'t> {
             let name = names.get(i).cloned().unwrap_or_else(|| format!("_{i}"));
             frame.scopes[0].names.push((name, frame.locals.len()));
             frame.locals.push(v);
+            frame.decl_depth.push(entry_depth);
         }
         self.frames.push(frame);
         self.self_tys.push(self_ty);
