@@ -281,7 +281,6 @@ by name; the spellings beyond the contract are rulings asked at audit
   confirm `os_name` answers `pax` there, `os_core_limit` `(0, -1)`, the
   set `denied` (`prlimit64`'s -EPERM) and `os_core_off` `ok`.
 
-
 ## 0.2.34 — 2026-10-20
 
 **What this release changes: the fork, and what an editor asks of the
