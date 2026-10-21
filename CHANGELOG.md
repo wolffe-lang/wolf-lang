@@ -28,9 +28,11 @@ to something long-lived. One clause, two `List` methods, two witnesses.
   block's region unless the callee's parameter is **ambient-clean** —
   proven by the callee's own lowering: scalar stores, container stores
   of scalars or `copy`s, containers replaced by `copy`, calls to clean
-  parameters and the storing-nothing mutators only, and never moved
-  from; computed callee-first over the build with a fixpoint per
-  recursive component (aspen's `walk_dir`). Everything else stays
+  parameters and the storing-nothing mutators only (a part moved out
+  and given back is judged by what comes back); computed callee-first
+  over the build with a fixpoint per recursive component (aspen's
+  `walk_dir`). `wolf conform-run --dump=mut-clean` prints every
+  parameter's verdict with its first keeping store. Everything else stays
   E1010/E1004, and the report names the store and the one-word repair,
   or the callee's keeping store. The checked machine charges the copies
   to the outer region's ledger (`region_outer_write_charged.lu`); the

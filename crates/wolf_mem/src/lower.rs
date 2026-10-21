@@ -736,13 +736,13 @@ pub(crate) struct Lowerer<'t> {
     /// s255: the package's ambient-clean table (`[`MutClean`]`).
     mut_clean: Option<&'t MutClean>,
     /// s255: the `mut` parameters of this body — `(local, declared
-    /// index)` — whose verdict `finish` computes.
+    /// index)` — whose verdict `finish` computes. A move out of such a
+    /// parameter (`take`, `move`, a binding that moves a field out)
+    /// needs no rule of its own: the move checker's exit rule (s184,
+    /// `[mem.tier0.mode.mut]`) makes every moved-out part re-initialized
+    /// before the return, and that store carries whatever the alias
+    /// gathered meanwhile.
     param_locals: Vec<(u32, u32)>,
-    /// s255: a `mut` parameter moved from, whole or in part (`take`,
-    /// `move`, a binding that moves a field out), with the move's span:
-    /// the alias a move makes could write the caller's storage past
-    /// the summary, so such a parameter is not clean.
-    moved_param: BTreeMap<u32, Span>,
     /// s255: the call sites whose `mut` argument gained the call's
     /// site because the callee's parameter is not ambient-clean —
     /// keyed by that site, for E1010 at the region's close.
@@ -1820,11 +1820,11 @@ impl<'t> Lowerer<'t> {
                      scalar or of a `copy` (made in the container's own region), a \
                      container replaced by `copy`, a call handing it to a clean \
                      parameter, or a mutator that stores nothing (`pop`, `clear`, `reset`, \
-                     `reserve`); and the parameter is never moved from. A flat field or \
-                     whole store of anything else — a `copy` included, which lands in the \
-                     callee's entry ambient — is what `{}` does here. Keep that value in \
-                     storage `{}` already owns (`List[byte]` pushes, `reset` then pushes), \
-                     or build it outside the block [mem.region.outer-write].",
+                     `reserve`). A flat field or whole store of anything else — a `copy` \
+                     included, which lands in the callee's entry ambient — is what `{}` \
+                     does here. Keep that value in storage `{}` already owns (`List[byte]` \
+                     pushes, `reset` then pushes), or build it outside the block \
+                     [mem.region.outer-write].",
                     u.callee, u.param
                 ));
         } else if binding.is_some() {
@@ -4429,15 +4429,6 @@ impl<'t> Lowerer<'t> {
         {
             self.check_transfer_closed(rid, span);
             self.moved_region[rid.0 as usize] = true;
-        }
-        // s255 (`[mem.region.outer-write]`): a `mut` parameter moved
-        // from, whole or in part, is not ambient-clean — the alias the
-        // move makes (a list header under a second name) could be
-        // written past what the parameter's own holds record.
-        if let Base::Local(l) = self.places.get(place).base
-            && self.is_mut_param(l)
-        {
-            self.moved_param.entry(l).or_insert(span);
         }
         self.push(Stmt::Move { place, span });
     }
@@ -9141,6 +9132,15 @@ impl<'t> Lowerer<'t> {
             return self.eval_value(v);
         }
         self.emit_read(place, v.span);
+        // s255 (`[mem.region.scalar]`): the copy a plain index store makes
+        // of a scalar-only value — a struct of scalars, yew's `Cell`,
+        // `Timer`, `Sel` — is its own inline words: no allocation, no
+        // site, no region named. Before this it minted the same ambient
+        // site a heap-reaching value's copy does, which pinned every
+        // `g.back[i] = cell` to the block it ran in.
+        if ty.is_some_and(|t| self.scalar_only(t, 0)) {
+            return Ok(Val::none());
+        }
         let rendered = ty
             .map(|t| render(t.table, t.id, &|_| Err("_")))
             .unwrap_or_else(|| "?".to_string());
@@ -9394,7 +9394,6 @@ impl<'t> Lowerer<'t> {
             copy_target: None,
             mut_clean: None,
             param_locals: Vec::new(),
-            moved_param: BTreeMap::new(),
             call_unclean: HashMap::new(),
         }
     }
@@ -9587,20 +9586,23 @@ impl<'t> Lowerer<'t> {
     /// parameter is clean when, over the whole body, its root never
     /// held or shared a site of the body's ambient region — the
     /// caller's region, where every temporary the callee builds lands
-    /// (D12), or the proc's own for a `spawn proc` entry — and was never
-    /// moved from. Under the clause that is exactly: scalar stores,
-    /// container stores of scalars or of `copy`s (the container's own
-    /// region), containers replaced by `copy` (the old header's), calls
-    /// handing the parameter to a clean parameter, and the mutators
-    /// that store nothing; a flat field or whole store of anything else
-    /// — a `copy` included, whose target is the entry ambient — is not.
+    /// (D12), or the proc's own for a `spawn proc` entry. Under the
+    /// clause that is exactly: scalar stores, container stores of
+    /// scalars or of `copy`s (the container's own region), containers
+    /// replaced by `copy` (the old header's), calls handing the
+    /// parameter to a clean parameter, and the mutators that store
+    /// nothing; a flat field or whole store of anything else — a `copy`
+    /// included, whose target is the entry ambient — is not. A move out
+    /// of the parameter is covered by its re-initialization (the move
+    /// checker demands one before every return): that store is read
+    /// here like any other.
     fn mut_clean_verdicts(&self) -> Vec<(u32, Result<(), Span>)> {
         let ambient_root = self.ambient.first().copied();
         let is_ambient = |r: RegionId| Some(r) == ambient_root || Some(r) == self.proc_region;
         self.param_locals
             .iter()
             .map(|&(l, idx)| {
-                let mut first: Option<Span> = self.moved_param.get(&l).copied();
+                let mut first: Option<Span> = None;
                 let held = self.holds.get(&l).into_iter().flat_map(|m| m.iter());
                 let shared = self.shares.get(&l).into_iter().flat_map(|m| m.iter());
                 for (&s, &sp) in held.chain(shared) {

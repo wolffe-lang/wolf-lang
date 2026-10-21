@@ -998,9 +998,13 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   ambient-clean** — proven by the callee's own lowering, over its whole
   body: the parameter's root never holds or shares an allocation of
   the callee's entry ambient (the caller's region; a `spawn proc`
-  entry's own) and is never moved from, whole or in part (the alias a
-  move makes could write the caller's storage past the record). Under
-  this clause that is exactly: scalar stores; container stores of
+  entry's own). A move out of the parameter, whole or in part, needs
+  no rule of its own: the move checker's exit rule (s184,
+  `[mem.tier0.mode.mut]`) makes every moved-out part re-initialized
+  before the return, and that store is read like any other — yew's
+  take-the-cursor-set-and-give-it-back pattern is clean when what comes
+  back is. Under this clause that is exactly: scalar stores; container
+  stores of
   scalars or of `copy`s (the container's own region); containers
   replaced by `copy` (the old header's region); calls handing the
   parameter, or a place in it, to an ambient-clean parameter; and the
