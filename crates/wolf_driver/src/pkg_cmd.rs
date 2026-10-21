@@ -1535,6 +1535,17 @@ mod builtin_cap_tests {
             // s247 (ruling #90; ruling asked): a fork is process control,
             // `exec`, with `os_spawn` and `os_exec`.
             ("os_fork", Cap::Exec),
+            // s253 (#811, #815, #819; ruling asked R6): the OS, the
+            // architecture and the core limit are reads of the machine and
+            // the process — `env`, with `os_cpus`; the limit's set and the
+            // end with no core are process control — `exec`, with
+            // `os_exit_signal`; the adoption of a descriptor — `fs`.
+            ("os_name", Cap::Env),
+            ("os_arch", Cap::Env),
+            ("os_core_limit", Cap::Env),
+            ("os_set_core_limit", Cap::Exec),
+            ("os_core_off", Cap::Exec),
+            ("fs_adopt", Cap::Fs),
         ] {
             assert_eq!(builtin_cap(name), Some(cap), "{name}");
         }
