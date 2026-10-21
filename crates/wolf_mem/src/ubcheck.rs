@@ -7518,7 +7518,8 @@ impl<'t> Machine<'t> {
                         fl & !libc::O_NONBLOCK
                     };
                     // SAFETY: as above; only the status flag changes.
-                    if fl < 0 || (want != fl && unsafe { libc::fcntl(raw, libc::F_SETFL, want) } < 0)
+                    if fl < 0
+                        || (want != fl && unsafe { libc::fcntl(raw, libc::F_SETFL, want) } < 0)
                     {
                         fs_host_error(&std::io::Error::last_os_error());
                         return Ok(tag("io"));
@@ -14453,13 +14454,7 @@ mod checked_sig {
             } else {
                 &raw mut tv
             };
-            let got = libc::select(
-                top + 1,
-                &mut sel,
-                &mut wsel,
-                std::ptr::null_mut(),
-                tvp,
-            );
+            let got = libc::select(top + 1, &mut sel, &mut wsel, std::ptr::null_mut(), tvp);
             if got < 0 {
                 let e = std::io::Error::last_os_error().raw_os_error();
                 if e == Some(libc::EINTR) || e == Some(libc::EAGAIN) {

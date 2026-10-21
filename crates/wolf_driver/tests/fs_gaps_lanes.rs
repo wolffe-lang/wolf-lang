@@ -158,7 +158,10 @@ fn build(entry: &Path, dir: &Path, stem: &str, release: bool) -> Option<PathBuf>
         entry.display()
     );
     if lane_exit::environment_refusal(&out, "wolf build") {
-        eprintln!("SKIP: environment cannot build the {tier} tier: {}", stderr.trim());
+        eprintln!(
+            "SKIP: environment cannot build the {tier} tier: {}",
+            stderr.trim()
+        );
         return None;
     }
     assert!(out.status.success(), "wolf build failed: {stderr}");
@@ -358,7 +361,11 @@ dangle=no_link\nmode8=invalid\nnegative=invalid\n";
         &dir,
         &["fs_access"],
         &|lane, stdout| {
-            let want = if cfg!(unix) { want_unix.as_str() } else { want_windows };
+            let want = if cfg!(unix) {
+                want_unix.as_str()
+            } else {
+                want_windows
+            };
             assert_eq!(stdout, want, "the {lane} machine's access rows");
         },
     );
@@ -377,15 +384,10 @@ middle_followed=ok\nexcl_on_link=exists\nexcl_nofollow_on_link=exists\n\
 perm_link_refused=invalid\nperm_excl_on_link=exists\ntarget_intact=true\n";
     let want_windows = "file_read=invalid\nfile_rw=invalid\nfile_nonblock=invalid\n\
 file_append=invalid\nbit32=invalid\nbit48=invalid\nnegative=invalid\nlinks=unsupported\n";
-    every_lane(
-        &fixture("nofollow_rows.lu"),
-        &dir,
-        &[],
-        &|lane, stdout| {
-            let want = if cfg!(unix) { want_unix } else { want_windows };
-            assert_eq!(stdout, want, "the {lane} machine's no-follow rows");
-        },
-    );
+    every_lane(&fixture("nofollow_rows.lu"), &dir, &[], &|lane, stdout| {
+        let want = if cfg!(unix) { want_unix } else { want_windows };
+        assert_eq!(stdout, want, "the {lane} machine's no-follow rows");
+    });
 }
 
 /// `[os.fs.fstat.record]`: the twenty words from the handle, the path's
@@ -473,7 +475,10 @@ impl Place {
                 }
                 Ok(o) => why.push(format!(
                     "{e}: {}",
-                    String::from_utf8_lossy(&o.stderr).lines().next().unwrap_or("")
+                    String::from_utf8_lossy(&o.stderr)
+                        .lines()
+                        .next()
+                        .unwrap_or("")
                 )),
                 Err(err) => why.push(format!("{e}: {err}")),
             }
@@ -651,18 +656,24 @@ fn the_advisory_lock_on_every_machine() {
 b_shared_again=ok\na_shared=ok\nc_excl=busy\na_unlock_again=ok\nb_unlock=ok\nc_excl_free=ok\n\
 a_excl_after_close=ok\na_unlock_third=ok\na_unlock_unlocked=ok\nkind0=invalid\nkind3=invalid\n\
 closed=io\nforged_unlock=io\nforged_lock=io\n";
-    every_place_lane("lock", "lock_rows.lu", &["fs_lock", "fs_unlock"], &|lane, stdout| {
-        if cfg!(windows) {
-            let relaxed = stdout.replace("a_excl_after_close=busy\n", "a_excl_after_close=ok\n");
-            assert_eq!(
-                relaxed.replace("a_unlock_third=io\n", "a_unlock_third=ok\n"),
-                want,
-                "the {lane} machine's lock rows (windows)"
-            );
-        } else {
-            assert_eq!(stdout, want, "the {lane} machine's lock rows");
-        }
-    });
+    every_place_lane(
+        "lock",
+        "lock_rows.lu",
+        &["fs_lock", "fs_unlock"],
+        &|lane, stdout| {
+            if cfg!(windows) {
+                let relaxed =
+                    stdout.replace("a_excl_after_close=busy\n", "a_excl_after_close=ok\n");
+                assert_eq!(
+                    relaxed.replace("a_unlock_third=io\n", "a_unlock_third=ok\n"),
+                    want,
+                    "the {lane} machine's lock rows (windows)"
+                );
+            } else {
+                assert_eq!(stdout, want, "the {lane} machine's lock rows");
+            }
+        },
+    );
 }
 
 /// `[os.fs.mkfifo]`: made, its kind and bits, `exists`, `not_found`,
@@ -675,10 +686,15 @@ negative=invalid\nstat_kind=4 bits=384\nopen_nonblock=ok fstat_kind=2 record_kin
 no_writer_read=eof\nread_back=x\n";
     let want_windows = "made=unsupported\nagain=unsupported\nmissing_parent=unsupported\n\
 perm512=invalid\nnegative=invalid\n";
-    every_place_lane("fifo", "fifo_rows.lu", &["fs_mkfifo", "fs_fstat_record"], &|lane, stdout| {
-        let want = if cfg!(unix) { want_unix } else { want_windows };
-        assert_eq!(stdout, want, "the {lane} machine's fifo rows");
-    });
+    every_place_lane(
+        "fifo",
+        "fifo_rows.lu",
+        &["fs_mkfifo", "fs_fstat_record"],
+        &|lane, stdout| {
+            let want = if cfg!(unix) { want_unix } else { want_windows };
+            assert_eq!(stdout, want, "the {lane} machine's fifo rows");
+        },
+    );
 }
 
 /// `[os.fs.nonblock]`, `[os.signal.wait.write]`: the clipboard writer's
@@ -716,19 +732,24 @@ forged_wait=unsupported\n";
 #[cfg(unix)]
 #[test]
 fn yews_clipboard_writer_gives_up_instead_of_parking() {
-    every_place_lane("clip", "clip_write.lu", &["fs_set_nonblock", "fs_write_some"], &|lane, stdout| {
-        assert!(
-            stdout.starts_with("rg1: writing 1 MiB into a pipe nobody reads\nrg1: took ")
-                && stdout.ends_with(
-                    " of 1048576, then busy; the write wait answered the deadline\n"
-                ),
-            "the {lane} machine's clipboard writer: {stdout}"
-        );
-        if cfg!(target_os = "linux") {
+    every_place_lane(
+        "clip",
+        "clip_write.lu",
+        &["fs_set_nonblock", "fs_write_some"],
+        &|lane, stdout| {
             assert!(
-                stdout.contains("took 65536 of"),
-                "the {lane} machine: linux's pipe takes 65536 bytes: {stdout}"
+                stdout.starts_with("rg1: writing 1 MiB into a pipe nobody reads\nrg1: took ")
+                    && stdout.ends_with(
+                        " of 1048576, then busy; the write wait answered the deadline\n"
+                    ),
+                "the {lane} machine's clipboard writer: {stdout}"
             );
-        }
-    });
+            if cfg!(target_os = "linux") {
+                assert!(
+                    stdout.contains("took 65536 of"),
+                    "the {lane} machine: linux's pipe takes 65536 bytes: {stdout}"
+                );
+            }
+        },
+    );
 }
