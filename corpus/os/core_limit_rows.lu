@@ -1,0 +1,50 @@
+//! check: run(exit=0, stdout="soft_below=invalid\nhard_below=invalid\nsoft_above_hard=invalid\nsoft_unlimited_under_a_finite_hard=invalid\nfar_below=invalid\nread_is_a_limit: true\nset_as_it_is: true")
+//! phase: run
+//! conforms: os.proc.core, err.union
+//!
+//! s253 (wolf-lang#811; ruling asked, recommendation implemented) — the
+//! rows of `os_set_core_limit` decided by their SHAPE, before any host is
+//! asked: one truth on every host (windows' `unsupported` comes after
+//! them), and nothing changes. A limit is a count of bytes, 0 or more, or
+//! -1 for unlimited; the soft limit is at most the hard one, so an
+//! unlimited soft under a finite hard is refused. Then the reader: the
+//! limit this process was born with is a limit in that shape (or
+//! `unsupported` on windows), and setting it to itself is `ok` (or
+//! `unsupported`). The live witnesses — a child that ends by SEGV after
+//! the limit 0 or `os_core_off`, read by its parent's `_core` wait — are
+//! `crates/wolf_driver/tests/process_calls_lanes.rs`.
+
+fn set(soft: int, hard: int) -> str {
+    os_set_core_limit(soft, hard) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn main() -> int {
+    print("soft_below={set(-2, 0)}")
+    print("hard_below={set(0, -2)}")
+    print("soft_above_hard={set(5, 4)}")
+    print("soft_unlimited_under_a_finite_hard={set(-1, 4096)}")
+    let far: int = -1099511627776
+    print("far_below={set(far, -1)}")
+    let read = os_core_limit() else |e| {
+        match e {
+            unsupported => {
+                print("read_is_a_limit: true")
+                print("set_as_it_is: {set(0, 0) == "unsupported"}")
+                return 0
+            },
+        }
+    }
+    let soft = read.0
+    let hard = read.1
+    let shaped = soft >= -1 && hard >= -1 && (hard == -1 || (soft >= 0 && soft <= hard))
+    print("read_is_a_limit: {shaped}")
+    print("set_as_it_is: {set(soft, hard) == "ok"}")
+    0
+}

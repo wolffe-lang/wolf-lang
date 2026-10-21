@@ -1,0 +1,10 @@
+//! member: false
+//! s253 (wolf-lang#819, `[os.uname]`) — which OS and which architecture
+//! the program runs on, as the kernel answers (`uname(2)` on unix): the
+//! two words, printed. Nothing is changed. yew's witness asked
+//! `os_name()` at 0.2.33 and met E0301 (`notes/yw02-evidence/witness/host-os`).
+
+fn main() {
+    print("name={os_name()}")
+    print("arch={os_arch()}")
+}
