@@ -1501,6 +1501,15 @@ mod builtin_cap_tests {
             ("fs_sync", Cap::Fs),
             ("fs_sync_dir", Cap::Fs),
             ("fs_realpath", Cap::Fs),
+            // s254 (#820, #818): access, the lock, the handle's record, the
+            // fifo, the descriptor's flag and the one write — `fs`.
+            ("fs_access", Cap::Fs),
+            ("fs_lock", Cap::Fs),
+            ("fs_unlock", Cap::Fs),
+            ("fs_fstat_record", Cap::Fs),
+            ("fs_mkfifo", Cap::Fs),
+            ("fs_set_nonblock", Cap::Fs),
+            ("fs_write_some", Cap::Fs),
             // s248 (#795): the wait over several descriptors is signal
             // control, `exec` with `os_signal_wait_fd`.
             ("os_signal_wait_fds", Cap::Exec),
