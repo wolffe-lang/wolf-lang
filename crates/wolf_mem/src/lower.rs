@@ -6250,7 +6250,8 @@ impl<'t> Lowerer<'t> {
         // `net_read`'s: with the site, a name returned out of the region
         // it was asked in is E1010; without it, moving the bytes would
         // turn sh22's 48 B a call in the root into a read of freed memory.
-        if callee.kind == SyntaxKind::PathExpr && self.text(callee.span) == "os_cwd" {
+        // s254 PLANT B: os_cwd is no site.
+        if callee.kind == SyntaxKind::PathExpr && self.text(callee.span) == "os_cwd!" {
             return self.is_str_or_str_row(e.span);
         }
         if !self.is_str_expr(e.span) {

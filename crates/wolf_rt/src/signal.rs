@@ -1078,7 +1078,8 @@ mod sys {
             .chain(std::iter::once((&wake, false)))
             .map(|(&fd, w)| libc::pollfd {
                 fd,
-                events: if w { libc::POLLOUT } else { libc::POLLIN },
+                // s254 PLANT B: a write interest waits for input.
+                events: if w { libc::POLLIN } else { libc::POLLIN },
                 revents: 0,
             })
             .collect();
