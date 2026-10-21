@@ -1,6 +1,5 @@
 ---
 source: crates/wolf_mem/tests/mem_diagnostics.rs
-assertion_line: 54
 expression: render_mem(src)
 ---
 error[E1004]: this stores a value from `item`'s region into `holder`'s region — parameter regions are independent by default
@@ -16,3 +15,9 @@ error[E1004]: this stores a value from `item`'s region into `holder`'s region �
     keeps signatures annotation-free. A signature surface for declaring two parameters share
     a region is planned; today, `copy` the value into its container's region, or restructure
     so the allocation happens alongside the container.
+  = note: this stores into a value declared outside the open `region` block. Such a store keeps
+    nothing of the block when the stored value names no region (a scalar, a literal) or is
+    written `copy e` at the store: that `copy` is a deep copy made in the outer value's
+    region — the container's own for a `push`, an index or `Map` store or a `List`/`Map`
+    replaced, the region ambient where the binding was declared for any other field
+    [mem.region.outer-write].

@@ -14,6 +14,11 @@ error[E1010]: `keep` still holds a value allocated in region `scratch` when the 
 6 |     }
   |     - the region is freed here — everything in it is freed wholesale, as one unit
   |
+  = note: a store into a value declared outside the block keeps nothing of the block when the
+    stored value names no region (a scalar, a literal) or is written `copy e` at the store:
+    that `copy` is a deep copy made in the outer value's region — the container's own for a
+    `push`, an index or `Map` store or a `List`/`Map` replaced, the region ambient where the
+    binding was declared for any other field [mem.region.outer-write].
   = note: to keep the value, allocate it where it must live: build it outside the region block, or
     aim the allocation at a longer-lived region explicitly (`let r = region()` … `in r { …
     }`); widening the region block to cover every use also works. When the block's own value

@@ -1,0 +1,31 @@
+---
+source: crates/wolf_mem/tests/mem_diagnostics.rs
+expression: render_mem(src)
+---
+error[E1010]: `o` still holds a value allocated in region `pass` when the region is freed
+  --> mem:///main.lu:10:17
+   |
+ 6 |         region pass {
+   |                ---- region `pass` is created here
+ 7 |             let d = Doc { title: "built {o.n}", n: 1 }
+ 8 |             let kept = copy d
+   |                        ------ allocated here, into region `pass`
+ 9 |             in st {
+10 |                 o = kept
+   |                 ^ the value flows out of the region here
+11 |             }
+12 |         }
+   |         - the region is freed here — everything in it is freed wholesale, as one unit
+   |
+   = note: a store into a value declared outside the block keeps nothing of the block when the
+     stored value names no region (a scalar, a literal) or is written `copy e` at the store:
+     that `copy` is a deep copy made in the outer value's region — the container's own for a
+     `push`, an index or `Map` store or a `List`/`Map` replaced, the region ambient where the
+     binding was declared for any other field [mem.region.outer-write].
+   = note: to keep the value, allocate it where it must live: build it outside the region block, or
+     aim the allocation at a longer-lived region explicitly (`let r = region()` … `in r { …
+     }`); widening the region block to cover every use also works. When the block's own value
+     is what must outlive it, `copy region { … }` copies that value into the enclosing region
+     before the free ([mem.region.copyout]). Two keep-alive alternatives change the ownership
+     instead: `freeze` the region (immutable forever) or make the value a `shared` cell
+     (reference-counted, never dangles).
