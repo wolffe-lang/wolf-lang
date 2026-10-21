@@ -820,7 +820,13 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   (`[mem.tier0.move.3]` says so of a `str`, and it holds at every
   depth: `in st { out = copy d }` handed `out.title` bytes in the block
   `d` was built in), and so does the copy a plain index store makes
-  (`xs[i] = d`, `[mem.region.edge.elem]`). And **a `Map` store keeps
+  (`xs[i] = d`, `[mem.region.edge.elem]`). (Narrowed 2026-10-22 by
+  s255: a `copy` written AT A STORE INTO AN OUTER VALUE is the
+  materializing copy, made in the outer value's region
+  (`[mem.region.outer-write]`), so that very witness — `o` declared
+  under `in st { }`, `o = copy d` inside `pass` — re-makes the title's
+  bytes in `st` and runs; `region_copy_shares_str.lu` is its run row
+  now. A `copy` in any other position still shares.) And **a `Map` store keeps
   its key**: `m[k] = v` may insert, the map then holds `k`, and a `str`
   key's bytes are shared, so the map shares the bytes its key names —
   as it shares an argument a callee may store. This one never needed
@@ -1049,7 +1055,10 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   `str` push, E1010), `_refused_field.lu` (a plain field store, E1004),
   `_call_refused.lu` (an unclean callee, E1010 naming its store);
   `region_scalar_list_mut.lu` holds an unclean callee now (its `int`
-  push, refused by the signature rule alone, is `_call.lu`'s run row).
+  push, refused by the signature rule alone, is `_call.lu`'s run row),
+  and s227's `region_copy_shares_str.lu` — `o = copy d` under
+  `in st { }`, `o` declared there — is a run row: that `copy` sits at a
+  store into an outer value and materializes the title in `st`.
   Measured before it landed (s255's note §5): the downstream census at
   `--phase=mem` over boreutils, lobo, pelt, wolf-std, yew and aspen,
   and the two witnesses' memory rows before and after.

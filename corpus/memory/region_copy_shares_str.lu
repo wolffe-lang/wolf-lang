@@ -1,13 +1,19 @@
-//! check: fail(E1010)
-//! phase: typecheck
-//! conforms: mem.region.escape, mem.tier0.move.3
+//! check: run(exit=0, stdout="28\nbuilt in pass, 0 uses\n")
+//! phase: run
+//! conforms: mem.region.outer-write, mem.region.escape, mem.tier0.move.3
 //!
-//! s227 (wolf-lang#660's door, no call at all): `copy d` is a fresh
-//! allocation in the ambient region, and the `str` inside it still
-//! names the original's bytes (`[mem.tier0.move.3]`: "the copy shares
-//! them"). Trunk a027b643 built it and read freed bytes on native and release
-//! (`ZZZZZZZZZZZZZZZZZZZZZ`, the chunk `other` reused), stale ones on the
-//! checked machine; lupin traps `region-fault`.
+//! s227 (wolf-lang#660's door, no call at all), admitted by s255: until
+//! `[mem.region.outer-write]`, `copy d` here was a fresh allocation in
+//! the ambient region whose `str` still named the original's bytes
+//! (`[mem.tier0.move.3]`: "the copy shares them"), so `o`, living in
+//! `st`, viewed bytes `pass` freed — trunk a027b643 read them back
+//! (`ZZZZZZZZZZZZZZZZZZZZZ`, the chunk `other` reused), and s227 made
+//! the shape E1010. A `copy` written AT A STORE INTO AN OUTER VALUE is
+//! the materializing copy now, made in the outer value's region — `o`
+//! was declared under `in st { }`, so the title's bytes are re-made in
+//! `st` — and the read after `other` reused `pass`'s chunk answers the
+//! title. lupin 0.1.55 still shares the bytes and traps `region-fault`
+//! (wolf-interp owes the clause).
 
 struct Doc {
     title: str,
