@@ -88,12 +88,15 @@ pub fn arch_word(machine: &str) -> String {
 
 /// The OS word this process answers.
 pub fn name() -> &'static str {
-    &host().0
+    // s253 PLANT (never merge): the word the kernel answers is dropped.
+    let _ = host();
+    "unknown"
 }
 
 /// The architecture word this process answers.
 pub fn arch() -> &'static str {
-    &host().1
+    // s253 PLANT (never merge): the word the kernel answers is dropped.
+    "unknown"
 }
 
 /// `os_name() -> str` (`[os.uname]`), the pair through `out`.

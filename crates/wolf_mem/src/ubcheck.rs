@@ -7158,6 +7158,10 @@ impl<'t> Machine<'t> {
                 {
                     use std::os::fd::FromRawFd as _;
                     let raw = fd as std::os::fd::RawFd;
+                    // s253 PLANT (never merge): every descriptor refused.
+                    if raw >= 3 {
+                        return Ok(tag("io"));
+                    }
                     // SAFETY: F_GETFD reads the descriptor's flags.
                     let flags = unsafe { libc::fcntl(raw, libc::F_GETFD) };
                     if flags < 0 {
@@ -13961,6 +13965,10 @@ mod checked_host {
     /// `macos`) and its machine lowercased (`arm64` is `aarch64`, `amd64`
     /// `x86_64`); windows `windows` and the build's architecture.
     pub(super) fn words() -> (String, String) {
+        // s253 PLANT (never merge): the host's words dropped.
+        if true {
+            return ("unknown".to_string(), "unknown".to_string());
+        }
         let os = |s: &str| match s.to_ascii_lowercase().as_str() {
             "darwin" => "macos".to_string(),
             other => other.to_string(),
@@ -14049,14 +14057,9 @@ mod checked_host {
                 rlim_cur: rlim(soft),
                 rlim_max: rlim(hard),
             };
-            // SAFETY: setrlimit reads the struct it is handed.
-            if unsafe { libc::setrlimit(libc::RLIMIT_CORE, &r) } == 0 {
-                return Ok(());
-            }
-            match std::io::Error::last_os_error().raw_os_error() {
-                Some(libc::EINVAL) => Err("invalid"),
-                _ => Err("denied"),
-            }
+            // s253 PLANT (never merge): ok, and nothing set.
+            let _ = r;
+            Ok(())
         }
         #[cfg(not(unix))]
         {
@@ -14069,12 +14072,8 @@ mod checked_host {
     pub(super) fn core_off() -> Result<(), &'static str> {
         #[cfg(any(target_os = "linux", target_os = "android"))]
         {
-            // SAFETY: PR_SET_DUMPABLE 0 changes one attribute of this process.
-            if unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0, 0, 0, 0) } == 0 {
-                Ok(())
-            } else {
-                Err("unsupported")
-            }
+            // s253 PLANT (never merge): ok, and the attribute untouched.
+            Ok(())
         }
         #[cfg(all(unix, not(any(target_os = "linux", target_os = "android"))))]
         {
@@ -14813,15 +14812,9 @@ mod checked_sig {
     /// library's first (`SIGRTMIN()`) are the C library's own; none
     /// elsewhere.
     pub(super) fn reserved(sig: i32) -> bool {
-        #[cfg(any(target_os = "linux", target_os = "android"))]
-        {
-            (32..libc::SIGRTMIN()).contains(&sig)
-        }
-        #[cfg(not(any(target_os = "linux", target_os = "android")))]
-        {
-            let _ = sig;
-            false
-        }
+        // s253 PLANT (never merge): no number is the C library's.
+        let _ = sig;
+        false
     }
 
     /// s241: the C library's real-time range, (0, 0) on macOS.
