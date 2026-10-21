@@ -1,0 +1,43 @@
+//! member: false
+//! s253 (wolf-lang#812, `[os.signal.host.reserved]`) — starts
+//! `reserved_child.lu`'s binary (`s253.child`, a file in the working
+//! directory) in each mode and says how it ended (`os_wait_status`). The
+//! `wait` children are sent the C library's 33 once they say they are
+//! ready: one with no thread dies of it (no handler is there), one that
+//! ran a task lives (glibc's handler is). RUN ONLY INSIDE A THROWAWAY
+//! CONTAINER on linux.
+
+fn conf(name: str) -> str {
+    let t = fs_read_text("s253.{name}") else |_| ""
+    t.trim()
+}
+
+fn ended(st: int) -> str {
+    if st >= 0 {
+        return "exit {st}"
+    }
+    "signal {0 - st}"
+}
+
+fn main() -> !int {
+    let child = conf("child")
+    if child.len == 0 {
+        return 2
+    }
+    for mode in ["exit32", "exit32-task", "exit33", "exit33-task"] {
+        let h = os_spawn([child, mode])?
+        print("{mode}: {ended(os_wait_status(h)?)}")
+    }
+    for mode in ["wait", "wait-task"] {
+        fs_remove("ready-{mode}") else |_| {}
+        let h = os_spawn([child, mode])?
+        var waited = 0
+        while !fs_exists("ready-{mode}") && waited < 10000 {
+            time_sleep_ms(5)
+            waited += 5
+        }
+        os_signal_send(os_proc_pid(h)?, -33)?
+        print("{mode}, sent 33: {ended(os_wait_status(h)?)}")
+    }
+    0
+}

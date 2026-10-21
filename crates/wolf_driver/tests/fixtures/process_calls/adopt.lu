@@ -1,0 +1,93 @@
+//! member: false
+//! s253 (wolf-lang#815, `[os.proc.adopt]`) — a program started with
+//! descriptor 5 open on a file (`5>out`; the test opens it) adopts 5 as an
+//! fs handle, writes `R` through it and closes it; around that, the rows
+//! of every other number. yew's witness wrote to 5 with `fs_write_chunk(5,
+//! …)` at 0.2.33 and met `io` (`notes/yw02-evidence/witness/inherited-fd`).
+//! A child spawned before the adoption holds 5 (it was inherited without
+//! close-on-exec) and writes `X` there; one spawned after does not. The
+//! program listens for `INTERRUPT`, so the runtime's own descriptors (the
+//! signal hub's, made before main) are among the numbers 3..63 it asks
+//! about. linux reads `/proc/self/fd/5`; another host prints `none` there.
+//! Windows answers the shape rows and then `unsupported` for 5, and stops
+//! there (no `sh` to spawn). The test starts the program with nothing open
+//! above 2 but 5.
+
+fn row(fd: int) -> str {
+    let h = fs_adopt(fd) else |e| {
+        return match e {
+            invalid => "invalid",
+            io => "io",
+            unsupported => "unsupported",
+        }
+    }
+    // An adoption a row did not expect is the defect; its handle is
+    // closed so the row asks the next number as it found it.
+    fs_close(h) else |_| {}
+    "ok"
+}
+
+/// The last component of what `/proc/self/fd/<fd>` names, or `none`.
+fn link(fd: int) -> str {
+    let target = fs_read_link("/proc/self/fd/{fd}") else |_| {
+        return "none"
+    }
+    let parts = target.split("/")
+    parts[parts.len - 1]
+}
+
+/// Whether a child spawned now holds descriptor 5 (it writes `X` there).
+fn child_holds_five() -> !str {
+    let h = os_spawn(["sh", "-c", "exec 2>/dev/null; echo X >&5"])?
+    let st = os_wait_status(h)?
+    if st == 0 {
+        return "yes"
+    }
+    "no"
+}
+
+fn main() -> !int {
+    // windows: a listen for INTERRUPT is `io` there; nothing to adopt.
+    os_signal_listen(16) else |_| {}
+    print("zero={row(0)} one={row(1)} two={row(2)} negative={row(-1)} past={row(4294967296)}")
+    if os_name() == "windows" {
+        print("adopt 5: {row(5)}")
+        return 0
+    }
+    print("link before: {link(5)}")
+    print("a child before the adopt holds 5: {child_holds_five()?}")
+    let h = fs_adopt(5) else |e| {
+        print(match e {
+            invalid => "adopt: invalid",
+            io => "adopt: io",
+            unsupported => "adopt: unsupported",
+        })
+        return 0
+    }
+    print("adopted as handle {h}")
+    print("link after the adopt: {link(5)}")
+    print("5 again while it is a handle: {row(5)}")
+    var other = ""
+    var n = 3
+    while n < 64 {
+        if n != 5 {
+            let r = row(n)
+            if r != "io" {
+                other = other + " {n}={r}"
+            }
+        }
+        n += 1
+    }
+    if other == "" {
+        other = " none"
+    }
+    print("every other number in 3..63 not io:{other}")
+    print("a child after the adopt holds 5: {child_holds_five()?}")
+    var r = List[byte]()
+    (mut r).push(82 as byte)
+    fs_write_chunk(h, r)?
+    fs_close(h)?
+    print("5 after the close: {row(5)}")
+    print("link after the close: {link(5)}")
+    0
+}

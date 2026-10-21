@@ -1,0 +1,119 @@
+//! check: run(exit=0, stdout="the C library's numbers, set or ended by: invalid, every one\ntheir words: answered, every one\nthe first number a program may use: its own\na real-time handler this program did not make: none")
+//! phase: run
+//! conforms: os.signal.host.reserved, os.signal.disp.one, os.signal.exit, os.signal.host
+//!
+//! s253 (wolf-lang#812; ruling asked, recommendation implemented) — the
+//! C library's own signals and a program's view of its handlers. On
+//! linux the numbers from the kernel's first real-time signal, 32, up to
+//! the C library's first (`os_signal_realtime()`'s, 34 under glibc, 35
+//! under musl) are the C library's (nptl(7): glibc's threads use 32 and
+//! 33): `os_signal_ignore_one`, `os_signal_default_one` and
+//! `os_exit_signal` refuse them by name, `invalid`, before the host is
+//! asked, and `os_signal_text` answers their words as for any `-N`. The
+//! first number a program may use is its own to ignore and set back. And
+//! the program's view: of the real-time numbers a program may use, it
+//! catches none it did not listen for (linux's `/proc/self/status`
+//! `SigCgt`; glibc's own handler on 33, installed with a process's second
+//! thread, is the C library's number and not among them). macOS has no
+//! real-time signals and windows no numbers, so each line holds there by
+//! having nothing to check. The live witness — which handler a program
+//! holds on 33 and when, and a 33 another process sends — is
+//! `crates/wolf_driver/tests/process_calls_lanes.rs`.
+
+fn one(ignore: bool, m: int) -> str {
+    if ignore {
+        os_signal_ignore_one(m) else |e| {
+            return match e {
+                invalid => "invalid",
+                unsupported => "unsupported",
+                io => "io",
+            }
+        }
+        return "ok"
+    }
+    os_signal_default_one(m) else |e| {
+        return match e {
+            invalid => "invalid",
+            unsupported => "unsupported",
+            io => "io",
+        }
+    }
+    "ok"
+}
+
+fn end(m: int) -> str {
+    os_exit_signal(m) else |e| {
+        return match e {
+            invalid => "invalid",
+            unsupported => "unsupported",
+        }
+    }
+    "returned"
+}
+
+/// Whether `SigCgt` (linux) sets the bit of any number in `lo..64`, read
+/// one hex digit at a time from the right (digit p holds signals 4p + 1
+/// .. 4p + 4), so no 64-bit mask is ever built. No `/proc` (macOS,
+/// windows): nothing to read, false.
+fn caught_from(lo: int) -> bool {
+    let text = fs_read_text("/proc/self/status") else |_| {
+        return false
+    }
+    for line in text.split("\n") {
+        if line.starts_with("SigCgt:") {
+            let hex = line.replace("SigCgt:", "").trim().bytes()
+            var n = lo
+            while n <= 64 {
+                let p = (n - 1) / 4
+                if p < hex.len {
+                    let c = hex[hex.len - 1 - p] as int
+                    var d = 0
+                    if c >= 48 && c <= 57 {
+                        d = c - 48
+                    } else if c >= 97 && c <= 102 {
+                        d = c - 87
+                    }
+                    if (d >> ((n - 1) % 4)) & 1 == 1 {
+                        return true
+                    }
+                }
+                n += 1
+            }
+        }
+    }
+    false
+}
+
+fn main() -> int {
+    let rt = os_signal_realtime() else |_| (0, 0)
+    let first = rt.0
+    var refused = true
+    var words = true
+    if first > 32 {
+        var n = 32
+        while n < first {
+            refused = refused && one(true, 0 - n) == "invalid"
+            refused = refused && one(false, 0 - n) == "invalid"
+            refused = refused && end(0 - n) == "invalid"
+            let t = os_signal_text(0 - n) else |_| ""
+            words = words && t.len > 0
+            n += 1
+        }
+    }
+    var own = true
+    if first > 0 {
+        own = one(true, 0 - first) == "ok" && one(false, 0 - first) == "ok"
+    }
+    let refused_line = if refused { "invalid, every one" } else { "NOT REFUSED" }
+    print("the C library's numbers, set or ended by: {refused_line}")
+    let words_line = if words { "answered, every one" } else { "MISSING" }
+    print("their words: {words_line}")
+    let own_line = if own { "its own" } else { "NOT ITS OWN" }
+    print("the first number a program may use: {own_line}")
+    var view = "none"
+    if first > 0 && caught_from(first) {
+        view = "CAUGHT"
+    }
+    print("a real-time handler this program did not make: {view}")
+    0
+}

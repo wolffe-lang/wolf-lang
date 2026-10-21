@@ -1,0 +1,37 @@
+//! member: false
+//! s253 (wolf-lang#811, ruling #88 R3 D; `[os.proc.core]`,
+//! `[os.proc.status]`) — starts `core_child.lu`'s binary (`s253.child`)
+//! in its three `segv` modes and reports each end through
+//! `os_wait_status_core`, which answers `-(256 + N)` when the host dumped
+//! a core: `signal N core` or `signal N` (or `exit N`). Settings are files
+//! in the working directory (`s253.<name>`), not argv, so every machine
+//! under `conform-run` reads the same ones. RUN ONLY INSIDE A THROWAWAY
+//! CONTAINER (linux) OR ON CI'S THROWAWAY RUNNER (macOS): its children end
+//! by SEGV.
+
+fn conf(name: str) -> str {
+    let t = fs_read_text("s253.{name}") else |_| ""
+    t.trim()
+}
+
+fn ended(st: int) -> str {
+    if st >= 0 {
+        return "exit {st}"
+    }
+    if st <= -256 {
+        return "signal {0 - st - 256} core"
+    }
+    "signal {0 - st}"
+}
+
+fn main() -> !int {
+    let child = conf("child")
+    if child.len == 0 {
+        return 2
+    }
+    for mode in ["segv", "segv-limit0", "segv-off"] {
+        let h = os_spawn([child, mode])?
+        print("{mode}: {ended(os_wait_status_core(h)?)}")
+    }
+    0
+}

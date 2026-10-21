@@ -1,0 +1,88 @@
+//! member: false
+//! s253 (wolf-lang#811, `[os.proc.core]`) — a child by MODE (its first
+//! argument, or the file `s253.mode` under `conform-run`, which passes
+//! none):
+//!
+//! - `read`: prints the core limit it was born with, `soft hard` (-1 is
+//!   unlimited), and changes nothing.
+//! - `lower-raise`: lowers its limit to 0 and 0, reads it, then asks for
+//!   a hard limit above the one it has — `denied` unless the super-user
+//!   with the host's privilege for it — and reads it again.
+//! - `segv`: ends itself by `SEGMENT_FAULT` (`os_exit_signal`), as it was
+//!   born.
+//! - `segv-limit0`: the same after `os_set_core_limit(0, 0)`.
+//! - `segv-off`: the same after `os_core_off()`.
+//!
+//! The `segv` modes signal this process and nothing else: RUN THEM ONLY
+//! AS A CHILD OF `core_parent.lu`, INSIDE A THROWAWAY CONTAINER (linux) OR
+//! ON CI'S THROWAWAY RUNNER (macOS), with the core limit the test set. A
+//! row a call answers goes to standard error and the exit is 3.
+
+fn limit() -> str {
+    let l = os_core_limit() else |e| {
+        return match e {
+            unsupported => "unsupported",
+        }
+    }
+    "{l.0} {l.1}"
+}
+
+fn set(soft: int, hard: int) -> str {
+    os_set_core_limit(soft, hard) else |e| {
+        return match e {
+            denied => "denied",
+            invalid => "invalid",
+            unsupported => "unsupported",
+        }
+    }
+    "ok"
+}
+
+fn end() -> int {
+    os_exit_signal(4194304) else |e| {
+        eprint(match e {
+            invalid => "exit_signal: invalid",
+            unsupported => "exit_signal: unsupported",
+        })
+        return 3
+    }
+    4
+}
+
+fn main() -> int {
+    let args = env_args()
+    let from_file = fs_read_text("s253.mode") else |_| ""
+    let mode = if args.len > 0 { args[0] } else { from_file.trim() }
+    if mode == "read" {
+        print(limit())
+        return 0
+    }
+    if mode == "lower-raise" {
+        print("lower to 0 0: {set(0, 0)}")
+        print("now: {limit()}")
+        print("raise the hard to 4096: {set(0, 4096)}")
+        print("now: {limit()}")
+        return 0
+    }
+    if mode == "segv" {
+        return end()
+    }
+    if mode == "segv-limit0" {
+        let r = set(0, 0)
+        if r != "ok" {
+            eprint("set_core_limit: {r}")
+            return 3
+        }
+        return end()
+    }
+    if mode == "segv-off" {
+        os_core_off() else |e| {
+            eprint(match e {
+                unsupported => "core_off: unsupported",
+            })
+            return 3
+        }
+        return end()
+    }
+    2
+}

@@ -1,0 +1,42 @@
+//! member: false
+//! s253 (wolf-lang#812, `[os.signal.host.reserved]`) — a child by MODE
+//! (its first argument):
+//!
+//! - `exitN`: `os_exit_signal(-N)` with no thread of its own; `exitN-task`
+//!   the same after a task (the C library's handler on 33 is installed
+//!   then). At 0.2.34 both exited 128 + N for 32 and 33, the clause's
+//!   end by the signal never kept; at s253 the C library's numbers are
+//!   refused by name, `invalid`, and the child exits 3.
+//! - `wait`: writes `ready-wait` and sleeps 3 s with no thread, then exits
+//!   0; `wait-task` the same after a task (`ready-wait-task`).
+//!
+//! RUN ONLY AS A CHILD OF `reserved_parent.lu` INSIDE A THROWAWAY
+//! CONTAINER: the parent sends the `wait` children 33.
+
+fn a_task() {
+    scope s {
+        s.spawn(fn() { time_sleep_ms(1) })
+    }
+}
+
+fn main() -> !int {
+    let args = env_args()
+    let mode = args[0]
+    if mode.ends_with("-task") {
+        a_task()
+    }
+    if mode.starts_with("exit") {
+        let n = mode.replace("exit", "").replace("-task", "").to_int()?
+        os_exit_signal(0 - n) else |e| {
+            eprint(match e {
+                invalid => "exit_signal: invalid",
+                unsupported => "exit_signal: unsupported",
+            })
+            return 3
+        }
+        return 4
+    }
+    fs_write_text("ready-{mode}", "ready")?
+    time_sleep_ms(3000)
+    0
+}

@@ -1,0 +1,53 @@
+//! member: false
+//! s253 (wolf-lang#812, `[os.signal.host.reserved]`) — this program's own
+//! view of which of 32..34 it catches (linux's `/proc/self/status`
+//! `SigCgt`), when it starts and after its first task. It names no
+//! signal call, so nothing makes the runtime's signal hub before main and
+//! the program starts with one thread. The runtime installs no handler on
+//! any of them; the C library (glibc) installs its own on 33 when the
+//! process starts its second thread (nptl(7): 32 and 33 are its own).
+//! Nothing is sent or changed. Another host prints `no /proc/self/status`.
+
+/// The numbers in 32..34 whose bit `SigCgt` sets, one hex digit at a time
+/// from the right (digit p holds signals 4p + 1 .. 4p + 4), so no 64-bit
+/// mask is ever built.
+fn caught_rt() -> str {
+    let text = fs_read_text("/proc/self/status") else |_| {
+        return "no /proc/self/status"
+    }
+    for line in text.split("\n") {
+        if line.starts_with("SigCgt:") {
+            let hex = line.replace("SigCgt:", "").trim().bytes()
+            var out = ""
+            var n = 32
+            while n <= 34 {
+                let p = (n - 1) / 4
+                let i = hex.len - 1 - p
+                let c = hex[i] as int
+                var d = 0
+                if c >= 48 && c <= 57 {
+                    d = c - 48
+                } else if c >= 97 && c <= 102 {
+                    d = c - 87
+                }
+                if (d >> ((n - 1) % 4)) & 1 == 1 {
+                    out = out + " {n}"
+                }
+                n += 1
+            }
+            if out == "" {
+                return "none"
+            }
+            return out.trim()
+        }
+    }
+    "no SigCgt line"
+}
+
+fn main() {
+    print("start: {caught_rt()}")
+    scope s {
+        s.spawn(fn() { time_sleep_ms(1) })
+    }
+    print("after a task: {caught_rt()}")
+}
