@@ -72,7 +72,7 @@ fn build(dir: &Path, release: bool) -> PathBuf {
 /// One run: the program's stdout and the child's peak resident set in
 /// bytes, from `wait4(2)` on exactly this child.
 fn peak(exe: &Path, dir: &Path, mode: &str, size: &str) -> (String, u64) {
-    let child = Command::new(exe)
+    let mut child = Command::new(exe)
         .args([mode, size])
         .current_dir(dir)
         .stdin(Stdio::null())
@@ -80,13 +80,25 @@ fn peak(exe: &Path, dir: &Path, mode: &str, size: &str) -> (String, u64) {
         .stderr(Stdio::null())
         .spawn()
         .expect("spawn the witness");
-    let pid = child.id() as libc::pid_t;
     let mut stdout = String::new();
     {
         use std::io::Read as _;
-        let mut out = child.stdout.expect("piped stdout");
+        let mut out = child.stdout.take().expect("piped stdout");
         out.read_to_string(&mut stdout).expect("read stdout");
     }
+    let (status, bytes) = reap_with_peak(child);
+    assert!(
+        libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
+        "the witness {} {mode} {size} did not exit 0 (status {status})",
+        exe.display()
+    );
+    (stdout, bytes)
+}
+
+/// Reap `child` with `wait4(2)`: its raw status and its peak resident set
+/// in bytes (`ru_maxrss`: kibibytes on linux, bytes on macOS).
+fn reap_with_peak(child: std::process::Child) -> (libc::c_int, u64) {
+    let pid = child.id() as libc::pid_t;
     let mut status: libc::c_int = 0;
     // SAFETY: a zeroed `rusage` is a valid out-parameter; `wait4` fills it
     // for the child this test spawned and has not waited for.
@@ -94,18 +106,13 @@ fn peak(exe: &Path, dir: &Path, mode: &str, size: &str) -> (String, u64) {
     // SAFETY: plain FFI on a pid this process spawned.
     let reaped = unsafe { libc::wait4(pid, &mut status, 0, &mut ru) };
     assert_eq!(reaped, pid, "wait4 reaps exactly the child");
-    assert!(
-        libc::WIFEXITED(status) && libc::WEXITSTATUS(status) == 0,
-        "the witness {} {mode} {size} did not exit 0 (status {status})",
-        exe.display()
-    );
     let maxrss = ru.ru_maxrss as u64;
     let bytes = if cfg!(target_os = "macos") {
         maxrss
     } else {
         maxrss * 1024
     };
-    (stdout, bytes)
+    (status, bytes)
 }
 
 /// N = 200,000 turns and 2N = 400,000: the bytes a turn keeps.
