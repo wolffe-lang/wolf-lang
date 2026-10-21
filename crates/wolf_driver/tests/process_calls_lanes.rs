@@ -1097,7 +1097,10 @@ fn the_c_librarys_handler_and_numbers() {
                 "#812: after a task the child catches 33 (glibc's handler): {stderr}"
             );
         }
-        let (a, b) = (end_by_masks(stderr, "wait"), end_by_masks(stderr, "wait-task"));
+        let (a, b) = (
+            end_by_masks(stderr, "wait"),
+            end_by_masks(stderr, "wait-task"),
+        );
         report(&format!(
             "REPORT the wait children's ends by their masks: wait {a} (SigIgn {:x?}), wait-task {b}",
             child_mask(stderr, "wait", "SigIgn")
