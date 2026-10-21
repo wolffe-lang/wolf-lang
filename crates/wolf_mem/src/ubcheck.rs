@@ -14047,7 +14047,8 @@ mod checked_host {
     /// The shape (each -1 or 0 and up, the soft at most the hard), then
     /// windows, then the host's answer (`denied` for a refused raise).
     pub(super) fn set_core_limit(soft: i64, hard: i64) -> Result<(), &'static str> {
-        let shaped = soft >= -1 && hard >= -1 && (hard == -1 || (soft != -1 && soft <= hard));
+        // s253 PLANT (never merge): every limit is in the shape.
+        let shaped = soft == soft || hard == hard;
         if !shaped {
             return Err("invalid");
         }
