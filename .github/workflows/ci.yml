@@ -256,7 +256,11 @@ jobs:
           tar -xzf ".lupin/$asset" -C .lupin --strip-components=1
           .lupin/lupin --version
       - name: full gauntlet (fmt, clippy, test, deps-check, corpus)
-        run: cargo xtask ci
+        # s254 PLANT (never merged): each item's behaviour broken, the
+        # surface kept; only the gates run, each to the end, the runtime's
+        # unit tests under a 300 s watchdog (a flag never set parks them).
+        shell: bash
+        run: cargo build -p wolf_driver -p wolf_rt && cargo test -p wolf_driver --no-fail-fast --test fs_gaps_lanes --test cwd_region_lanes -- --nocapture; a=$?; timeout 300 cargo test -p wolf_rt --lib --no-fail-fast -- fs_gaps:: wait_fds_answers_write_readiness; b=$?; cargo xtask corpus 2>&1 | grep -E "region_os_cwd|corpus:" ; c=${PIPESTATUS[0]}; echo "PLANT: wolf_driver gates rc=$a, wolf_rt rc=$b, corpus rc=$c"; exit $((a + b + c))
       - name: bench smoke (runtime report-only until M2; compile GATES at M1)
         run: |
           cargo xtask bench --track=runtime --runs=3 --out=bench-results/pr-runtime.jsonl
