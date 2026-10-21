@@ -1,4 +1,4 @@
-//! check: run(exit=0, stdout="100000 23 7 2\n")
+//! check: run(exit=0, stdout="2000 20 7 2\n")
 //! phase: run
 //! conforms: mem.region.outer-write, mem.region.escape, mem.region.create.3
 //!
@@ -10,9 +10,10 @@
 //! value already owns, an `int` index store, a scalar field. Such a
 //! parameter is AMBIENT-CLEAN, proven by the callee's own lowering, so
 //! the call inside `region turn { }` gives `s` no site: the turn's
-//! strings die with the turn and the loop runs flat (the driver gate
-//! `region_outer_write_lanes` reads the resident set at this count and
-//! twice it).
+//! strings die with the turn and the loop runs flat. Two thousand turns
+//! here (the checked machine's step budget); the driver gate
+//! `region_outer_write_lanes` runs this program 100,000 and 200,000
+//! turns on the native tiers and reads the resident set.
 //!
 //! yew `notes/yw03-evidence/witness/turn-region/with-region.lu` is this
 //! program. Before s255 every compiling machine refused it at the call:
@@ -42,11 +43,11 @@ fn main() {
     var s = S { v: List[int](), frame: List[byte](), n: 0 }
     (mut s.v).push(0)
     var i = 0
-    while i < 100000 {
+    while i < 2000 {
         region turn {
             render(mut s, i)
         }
         i += 1
     }
-    print("{s.n} {s.v[0]} {s.frame[0] - 107} {s.frame.len - 21}")
+    print("{s.n} {s.v[0]} {s.frame[0] - 107} {s.frame.len - 18}")
 }
