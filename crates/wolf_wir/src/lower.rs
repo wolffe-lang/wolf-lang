@@ -10377,6 +10377,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 | "fs_sync"
                 | "fs_sync_dir"
                 | "fs_realpath"
+                // s254 (#820, #818): access, the lock and its release, the
+                // handle's record, the fifo, the descriptor's flag and the
+                // one write.
+                | "fs_access"
+                | "fs_lock"
+                | "fs_unlock"
+                | "fs_fstat_record"
+                | "fs_mkfifo"
+                | "fs_set_nonblock"
+                | "fs_write_some"
         ) {
             return self.lower_fs_builtin(&callee_text, d, e);
         }
@@ -12394,6 +12404,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // (windows: a mode, a symbolic link, the umask); only the
             // calls that declare it produce it.
             (10, "unsupported", false),
+            // s254 (#820, #818): `busy` — a conflicting lock, a
+            // non-blocking handle that takes nothing; only `fs_lock` and
+            // `fs_write_some` produce it and each declares it.
+            (11, "busy", false),
         ]
         .into_iter()
         .map(|(c, name, coarsen)| {
@@ -13739,6 +13753,33 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 )?;
                 Ok(Flow::Val(Some(out)))
             }
+            // s254 (#818, `[os.fs.nonblock]`): the count taken as one word
+            // through the slot; the `List[byte]` header through the foreign
+            // chain, as `fs_write_chunk`'s (the shim reads the caller's
+            // buffer).
+            "fs_write_some" => {
+                let fd = arg(0)?;
+                let hdr = arg(1)?;
+                let (region, slot) = self.rt_slot(8);
+                let rc = self
+                    .rt_call_foreign(
+                        "__wolf_rt_fs_write_some",
+                        &[fd, hdr],
+                        Some((slot, region)),
+                        Some(types::I64),
+                    )
+                    .expect("rc");
+                let hit = zero_eq(self, rc);
+                let eu = self.eu_ty_of(e.span)?;
+                let declared = self.row_tag_names(e.span);
+                let out = self.eu_join(
+                    eu,
+                    hit,
+                    |z| Ok(Some(z.load_flat(types::I64, slot, region, e.span)?)),
+                    |z| Ok(z.fs_code_tag(rc, &declared)),
+                )?;
+                Ok(Flow::Val(Some(out)))
+            }
             "fs_size" | "fs_modified_ms" => {
                 let s = arg(0)?;
                 let (p, l) = self.str_parts(s);
@@ -13798,12 +13839,19 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // — kind, size and mtime from ONE `metadata()` on the file
             // the program holds, minted as a three-word `List[int]`
             // through the foreign chain (the shim allocates the list).
-            "fs_fstat" => {
+            // s254 (#820, `[os.fs.fstat.record]`): the twenty-word record on
+            // the handle is `fs_fstat`'s shape, a longer list.
+            "fs_fstat" | "fs_fstat_record" => {
                 let fd = arg(0)?;
                 let (region, slot) = self.rt_slot(8);
+                let sym = if name == "fs_fstat_record" {
+                    "__wolf_rt_fs_fstat_record"
+                } else {
+                    "__wolf_rt_fs_fstat"
+                };
                 let rc = self
                     .rt_call_foreign(
-                        "__wolf_rt_fs_fstat",
+                        sym,
                         &[fd],
                         Some((slot, region)),
                         Some(types::I64),
@@ -13830,8 +13878,40 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // s236: the owner, the same shape.
             | "fs_set_owner" | "fs_set_owner_fd"
             // s248 (#796): the two syncs, the same shape.
-            | "fs_sync" | "fs_sync_dir" => {
+            | "fs_sync" | "fs_sync_dir"
+            // s254 (#820, #818): access, the lock and its release, the
+            // fifo and the descriptor's flag, the same shape.
+            | "fs_access" | "fs_lock" | "fs_unlock" | "fs_mkfifo" | "fs_set_nonblock" => {
                 let rc = match name {
+                    // s254 (`[os.fs.access]`, `[os.fs.mkfifo]`): the path
+                    // pair and a word (the mode, the bits).
+                    "fs_access" | "fs_mkfifo" => {
+                        let path = arg(0)?;
+                        let word = arg(1)?;
+                        let (pp, pl) = self.str_parts(path);
+                        let sym = if name == "fs_access" {
+                            "__wolf_rt_fs_access"
+                        } else {
+                            "__wolf_rt_fs_mkfifo"
+                        };
+                        self.rt_call(sym, &[pp, pl, word], Some(types::I64))
+                    }
+                    // s254 (`[os.fs.lock]`): the handle and the kind; the
+                    // handle alone.
+                    "fs_lock" => {
+                        let (fd, kind) = (arg(0)?, arg(1)?);
+                        self.rt_call("__wolf_rt_fs_lock", &[fd, kind], Some(types::I64))
+                    }
+                    "fs_unlock" => {
+                        let fd = arg(0)?;
+                        self.rt_call("__wolf_rt_fs_unlock", &[fd], Some(types::I64))
+                    }
+                    // s254 (`[os.fs.nonblock]`): the handle and `on` widened.
+                    "fs_set_nonblock" => {
+                        let fd = arg(0)?;
+                        let on = self.widen_to_wire(arg(1)?, e.span)?;
+                        self.rt_call("__wolf_rt_fs_set_nonblock", &[fd, on], Some(types::I64))
+                    }
                     // s248 (`[os.fs.sync]`): the handle; the path pair.
                     "fs_sync" => {
                         let fd = arg(0)?;
