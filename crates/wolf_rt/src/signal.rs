@@ -1411,7 +1411,10 @@ mod sys {
     /// is recorded for a SENT one, and a real fault stays the runtime's
     /// (`task::stack`). Any other signal is `sigaction` with `SIG_IGN` or
     /// `SIG_DFL`, so a child inherits an ignore as POSIX says; the host's
-    /// refusal (glibc reserves 32 and 33 for itself, `EINVAL`) is `IO`.
+    /// refusal is `IO`. s253 (wolf-lang#812, `[os.signal.host.reserved]`):
+    /// the C library's own numbers ([`reserved`]: glibc's 32 and 33, whose
+    /// `sigaction` refused them as `IO` until s253) are `INVALID`, by name,
+    /// before the host is asked — the same on every C library.
     /// Codes are `os::proc_code`'s.
     pub fn set_disp_one(m: i64, d: super::Disp) -> i64 {
         use crate::os::proc_code;
@@ -1419,7 +1422,7 @@ mod sys {
             Ok(sig) => sig,
             Err(c) => return c,
         };
-        if sig == libc::SIGKILL || sig == libc::SIGSTOP {
+        if sig == libc::SIGKILL || sig == libc::SIGSTOP || reserved(sig) {
             return proc_code::INVALID;
         }
         if let Some(&bit) = super::MEANINGS.iter().find(|&&b| to_signal(b) == Some(sig)) {
@@ -1457,11 +1460,19 @@ mod sys {
     /// nothing; a stop that is continued; a pid namespace's process 1,
     /// which the host does not end by a signal it has no handler for)
     /// exits with 128 + N. Only a shape refusal returns (`INVALID`).
+    /// s253 (wolf-lang#812, `[os.signal.host.reserved]`): the C library's
+    /// own numbers ([`reserved`]) are refused so, by name — until s253
+    /// glibc's 32 and 33 never ended the process (its `sigaction` refuses
+    /// the default and its `raise` does not deliver them: exit 160 and
+    /// 161, measured on both tiers with and without a thread).
     pub fn exit_signal(m: i64) -> i64 {
         let sig = match host_signal(m, false) {
             Ok(sig) => sig,
             Err(c) => return c,
         };
+        if reserved(sig) {
+            return crate::os::proc_code::INVALID;
+        }
         crate::prof::dump_on_exit();
         // s248 (`[os.term.restore]`): the restore before the raise — the
         // default ends the process with no runtime code after it.
@@ -1573,6 +1584,27 @@ mod sys {
     /// 0 for the meaning 0 when `zero` allows it, one bit of the table
     /// for its signal, or `-N` for the host's signal `N`, `1 <= N <=`
     /// [`last`]. Anything else is `INVALID`.
+    /// s253 (wolf-lang#812, `[os.signal.host.reserved]`): whether host
+    /// signal `sig` is the C library's own — on linux the kernel's
+    /// real-time signals from its first, 32, up to the C library's first
+    /// (`SIGRTMIN()`, which signal(7) says the library moves past the ones
+    /// it keeps): glibc's 32 and 33 (nptl(7): its threads' cancellation
+    /// and set-id signals; glibc installs its own handler on 33 when a
+    /// process starts its second thread, measured), musl's 32 to 34. A
+    /// program may send them and read their words; it may not set them or
+    /// end itself by one. macOS has no real-time signals: none.
+    pub fn reserved(sig: libc::c_int) -> bool {
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        {
+            (32..libc::SIGRTMIN()).contains(&sig)
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "android")))]
+        {
+            let _ = sig;
+            false
+        }
+    }
+
     pub fn host_signal(m: i64, zero: bool) -> Result<libc::c_int, i64> {
         use crate::os::proc_code;
         if m == 0 {
@@ -3016,12 +3048,24 @@ mod tests {
             );
             assert_eq!(disp(rt), libc::SIG_DFL, "and back to the default");
         }
-        #[cfg(all(target_os = "linux", target_env = "gnu"))]
-        assert_eq!(
-            set_disposition_one(-32, Disp::Ignore),
-            proc_code::IO,
-            "glibc keeps 32 for itself"
-        );
+        // s253 (#812, `[os.signal.host.reserved]`): the C library's numbers
+        // are refused by name, `invalid` (until s253 glibc's `sigaction`
+        // refused 32 and 33 as `io`), and so is an end by one.
+        #[cfg(target_os = "linux")]
+        for n in 32..libc::SIGRTMIN() {
+            let m = -i64::from(n);
+            assert_eq!(
+                set_disposition_one(m, Disp::Ignore),
+                proc_code::INVALID,
+                "the C library keeps {n} for itself"
+            );
+            assert_eq!(
+                set_disposition_one(m, Disp::Default),
+                proc_code::INVALID,
+                "the C library keeps {n} for itself"
+            );
+            assert_eq!(exit_signal(m), proc_code::INVALID, "no end by {n}");
+        }
         // A listenable meaning by its number is the set call's.
         let usr1 = -i64::from(libc::SIGUSR1);
         assert_eq!(set_disposition_one(usr1, Disp::Ignore), proc_code::OK);
