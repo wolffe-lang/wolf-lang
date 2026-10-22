@@ -21514,7 +21514,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// caller has tested the tag that makes `want` the active member.
     fn slot_view(&mut self, v: Value, want: TypeId) -> Value {
         let vt = self.b.func.value_ty(v);
-        if vt == want || !self.b.module.types.is_union(vt) {
+        // PLANT (s257): a union slot read without its view.
+        if vt == want || !self.b.module.types.is_union(vt) || true {
             return v;
         }
         self.b
