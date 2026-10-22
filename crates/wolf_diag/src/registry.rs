@@ -659,7 +659,10 @@ which formats any primitive and never surprises you with a numeric
 `+` overload. An error union is outside every family: a `!T` is two
 values, never one, and no operator reads it (spec/10
 `[type.row.operand]`) — handle the row first, with `?`, `else`, or a
-`match`, and operate on the `T`. Operators on user types come from
+`match`, and operate on the `T`. A member read (`r.len`, `r.field`)
+and a method call (`r.f(…)`) on a `!T` are the same refusal: a call
+that answers `str ! {none}` has not given you a `str` yet, so write
+`r?.len` or `(r else "").len`. Operators on user types come from
 traits, and need the trait in scope.
 "#);
 
