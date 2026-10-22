@@ -547,6 +547,87 @@ diffed both ways against `b308dafc`: four added, none dropped, none
 moved — `regen.log`); `RT_SYMBOLS` 250 → 251; host table 160 and the
 prelude unchanged; `docs/diagnostics.md` regenerated (187 codes).
 
-**The witnesses** (yew `s255-witness` at `60eb12b`, aspen `s255-witness`
-at `00e5335`, both pushed, never merged by this lane): see below as
-the builds and the memory rows land.
+**The verdict's second reading (after the pause).** The first census
+and the targeted suites were green, but the gauntlet had not run: at
+`994162a1` (the rebase onto s251) `cargo test -p wolf_driver --test
+region_kept_arg_lanes` was red on five tests (`gate1.log`: the callee's
+push, the generic callee's push, the closure argument's captures, the
+`take` argument kept, the copy of a struct sharing a region `str`), and
+`conform-run` on s227's `region_kept_arg_take.lu` and
+`region_kept_arg_closure.lu` answered `pass` — a soundness hole in R1 as
+first implemented, not in the rule as worded. The verdict had read only
+the callee's AMBIENT: a `mut` parameter was clean when its root held
+no site of the entry ambient. Three things it could not see: (a)
+another parameter's value — `(mut ds).push(take d)` makes `ds` keep
+`d`'s bytes, whose region is the caller's block when the call sits in
+one (`region_kept_arg_take`); (b) a fn value stored flat (`h.f = g`,
+`region_kept_arg_closure`), whose captures the callee cannot see at all;
+(c) a store under a region PARAMETER's region (`in keep { (mut
+a.names).push("…") }`, aspen's `region-first-class.lu`), which the
+callee cannot know outlives `a`. Before this lane, the call-site pin
+covered all three; a clean verdict skips the pin, so the verdict must
+cover them itself. The reading now (`49d6f681`, `6ebc243b`): a
+parameter is clean when at exit its root holds or shares only its own
+entry sites, sites in its OWN generalized region (its containers'
+growth, the copies aimed at it) and static ones — everything else is
+the caller's. For (a) the parameter pseudo-sites now RIDE into a `mut`
+argument's `shares` at a call inside the callee (they were skipped as
+"escaping no region in this frame", true for the escape rules, wrong
+for the verdict; they are still never a kept flow to report); for (b)
+a fn-typed value stored through a `mut` parameter marks it unclean by
+type (`reaches_fn`); (c) falls out of the own-region reading. Probes
+(`probes/p3.lu`, `p5.lu`, `p6.lu`, the dump): a `str` parameter stored
+flat, or its `copy`, unclean; `push(copy d)` and a scalar push clean;
+`h.f = g`, `let k = g; h.f = k`, `h.f = dflt` unclean; `h.n = 1` clean;
+self- and mutual recursion clean (the fixpoint); and the dump names the
+store a recursive self-call would otherwise mask (`e5`'s `probe_byte`:
+its own pinned call hid `t.prefix = kept`). After the fix every
+`region_kept_arg_*` and `region_kept_result_*` row is refused again
+with its code, `region_conflict_params` keeps E1004,
+`region_outer_write_call` and `region_scalar_list_mut` keep theirs, and
+`region_str_call_index_store.lu` (s216's, #612's first witness: `st.vals
+["x"] = copy v` inside the callee's own block) is a second legitimate
+mover to `run` — the same door as `region_copy_shares_str` — with its
+gate (`region_str_call_lanes`) and the kept-arg gate's assertion on
+`region_copy_shares_str` moved to run assertions that pin lupin's
+`region-fault` column. The lowering ledger carries both as `lowers`.
+
+**P5 scored**: `region_scalar_list_mut` and `region_escape_container`
+as predicted; two movers P5 did not list, both `copy`-at-an-outer-store
+doors (`region_copy_shares_str`, `region_str_call_index_store`); no row
+refused anew; the two rows the first verdict let through are back.
+**P9 scored** (`ev/m-head3.tsv` against `m-base.tsv`, the frozen fixed
+driver, 1,154 files): no program newly refused; newly accepted: aspen's
+`region-per-level.lu` (as predicted) and yew's `host-os` witness (s253's
+`os_hostname`, not this lane's); aspen's `region-first-class.lu` is NOT
+accepted — P9 was wrong there, and rightly so: `level`'s pushes under
+`in keep { }` land in a region parameter's region the callee cannot
+prove outlives `a` (the caller would have to pass `a` placed in `keep`,
+which no signature says yet — the E1004 note's planned surface).
+
+**The witnesses** (yew `s255-witness`, aspen `s255-witness` at
+`8fce150`, both pushed, never merged by this lane). aspen builds with
+the fixed compiler unchanged (`wit-build-b9.txt`: its six one-line
+edits were copies at container stores and a `reset`). yew needed the
+dump three times over (`mutclean-yew-d4/d5/d6.txt`: 414 clean / 473
+unclean at the pause, 628 / 267 at the build). The turn is TWO region
+blocks, not one: `wait` (the poll, the signal, the burst's bytes, the
+probe's tick) and `turn` (the timers, the layout, the render), with the
+key dispatch between them in the session's region — a command reaches
+the text engine (the undo tree, the journal, the registers, std's list
+helpers), where ~200 `mut` parameters are still #821's shape, and that
+port is yw05's with the dump as its list. What the two blocks needed,
+all #821's shape or P4's `str` fields: the message (`Msg.text` →
+`List[byte]`, set and cleared in place, `msg_text` for the tests), the
+dispatch message and the drawn tab marks (`List[byte]`), the input
+buffer's compaction, the probe prefix (four sites) and `pending`, the
+oob queue, the grid's three tables, the gutter's sign table (and a sign's
+entry copied at its index store), the cursor set's three tables (five
+sites, `cset_refill`), the grapheme index (its data/motion pair at four
+sites, the pending journal, the spare-pair swap retired for `reset`,
+the backing stores), the text iterator's stack, the overlay signature,
+the interner and the strmap (a new key `copy`d), the clipboard (two
+values assigned in place, the reap list, `clip_init`/`clip_shutdown`
+emptied in place rather than `c = clip_new()`) and `feed_bytes` no
+longer seeding inside the read (the seeding between the blocks takes
+the burst through `tty_pending`). The memory rows follow.
