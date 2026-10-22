@@ -1,0 +1,34 @@
+struct Node {
+    kind: int,
+    a: int,
+    b: int,
+}
+
+fn walk(nodes: List[Node], i: int, mut acc: int) -> int {
+    if i < 0 {
+        return 0
+    }
+    acc += 1
+    let l = walk(nodes, nodes[i].a, mut acc)
+    let r = walk(nodes, nodes[i].b, mut acc)
+    l + r + nodes[i].kind
+}
+
+fn main() -> int {
+    let args = env_args()
+    let n = (args[0]).to_int() else 200000
+    var nodes = List[Node]()
+    var i = 0
+    while i < n {
+        (mut nodes).push(Node { kind: 1, a: i - 1, b: -1 })
+        i += 1
+    }
+    scope s {
+        s.spawn(fn() {
+            var count = 0
+            let t = walk(nodes, n - 1, mut count)
+            print("depth {n}: {t} {count}")
+        })
+    }
+    0
+}

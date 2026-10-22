@@ -1,0 +1,39 @@
+//! check: run(exit=0, stdout="1 1 1\n")
+//! phase: run
+//! conforms: mem.tier0.mode.read
+
+// yw04-search witness: binding a nested field of a `read` parameter
+// (`let tb = ed.bufs[b].tb`) builds natively with warnings denied, runs
+// natively, and traps `use-after-move` on the checked machine when the
+// caller reads the field again. edit.cmdparse's pattern address did this
+// (fixed by reading the field in place).
+struct Tb {
+    bytes: List[byte],
+}
+
+struct Buf {
+    tb: Tb,
+}
+
+struct Ed {
+    bufs: List[Buf],
+}
+
+fn len_of(t: Tb) -> int {
+    t.bytes.len
+}
+
+fn probe(ed: Ed, b: int) -> int {
+    let tb = ed.bufs[b].tb
+    len_of(tb)
+}
+
+fn main() {
+    var bytes = List[byte]()
+    (mut bytes).push(97 as byte)
+    var ed = Ed { bufs: List[Buf]() }
+    (mut ed.bufs).push(Buf { tb: Tb { bytes: bytes } })
+    let a = probe(ed, 0)
+    let b = probe(ed, 0)
+    print("{a} {b} {ed.bufs[0].tb.bytes.len}")
+}
