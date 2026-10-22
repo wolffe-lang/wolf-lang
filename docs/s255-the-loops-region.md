@@ -5,8 +5,17 @@ planning `0262725`; rules `sprints/RULES.md`; ruling #112 (the
 maintainer, 2026-10-22): `[mem.region.outer-write]` as the contract words
 it, `List.reserve` and `List.reset`, yew's editor loop and aspen's walk as
 the before/after witnesses on `s255-witness` branches never merged by this
-lane. Branch point wolf-lang trunk `0cb954a8` (s254 merged); s253 (#847)
-and s251 (#823) land ahead and this branch rebases over them.
+lane. Branch point wolf-lang trunk `0cb954a8` (s254 merged); s253 (#847),
+s251 (#823) and s256 (#869, `94cd52bc`) landed ahead and this branch
+rebased over each (the last at the hand-back: six shared files, one
+textual conflict — the runtime symbol table, 250 → 252 with s256's
+`__wolf_rt_stack_start` and this lane's `__wolf_rt_list_reserve`;
+the ledger, `tasks.rs`, `ubcheck.rs` and the anchors merged clean and
+were read; the anchors regenerated and their key sets diffed both ways
+against both parents: 692 = trunk's 688 + four, = the pre-rebase 691 +
+`conf.trap.stack`, none dropped). The shas in this note are the
+pre-rebase ones where a measurement cites them; the rebased compiler
+head is `f00bb936` (was `0c041c2d`), the gauntlet at it `ci11.log`.
 
 This note is written in two passes. §1 (the cause) and §3 (the
 prediction) were written before the first change, in the commit that
@@ -437,6 +446,9 @@ job's `NAME.{log,pid,rc}` from `job.sh`).
   `0c041c2d` — the final code head — **all steps green**, the differ in
   it: 1,202 files, 0 divergences, 21 in the conservatism ledger
   (`unsupported`), 3 forward pins; lane-coverage's floors held;
+  `ci11.log` the same gauntlet at the rebased head (`f00bb936` + the
+  note commits, over s256's `94cd52bc`) under `taskset -c 4-7`, its
+  verdict in §5;
   `snapall.log` the whole workspace under `INSTA_UPDATE=always` (36
   snapshot files, no `cfg_dumps` move); `sig1.log` the descriptor-wait
   test green alone (red once under load in `snapall`); `xclippy.log` —
@@ -871,7 +883,8 @@ it cannot make, the same answer on the scalar and clean-call rows,
 `unsupported` on the two methods). P8 missed on its counts: anchors 686
 → 690, not 681 → 683 (four anchors, the two methods got one each beside
 `[type.list.storage]`; s253 and s251 moved the base), `RT_SYMBOLS` 250 →
-251, not 244 → 245 (the base again); the host table and the prelude
+251, not 244 → 245 (the base again; 252 after the rebase over s256's
+`__wolf_rt_stack_start`); the host table and the prelude
 unchanged as predicted; the mem tier's time over yew (`ev/memtime-yew.
 txt`: `conform-run src/yew.lu --phase=mem` at `77c10839`, three runs
 each) is 0.69–0.74 s with the base dist and 0.70–0.75 s with the head's,
