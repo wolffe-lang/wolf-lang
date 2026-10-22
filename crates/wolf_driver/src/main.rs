@@ -3974,10 +3974,8 @@ fn conform_run(args: &[String]) {
             continue;
         }
         if let Some(d) = a.strip_prefix("--dump=") {
-            if d != "regions" && d != "cfg" && d != "wir" && d != "peel" && d != "mut-clean" {
-                eprintln!(
-                    "wolf conform-run: unknown dump `{d}` (regions, cfg, wir, peel, mut-clean)"
-                );
+            if d != "regions" && d != "cfg" && d != "wir" && d != "peel" {
+                eprintln!("wolf conform-run: unknown dump `{d}` (regions, cfg, wir, peel)");
                 std::process::exit(2);
             }
             dump = Some(d.to_string());
@@ -4353,11 +4351,6 @@ fn conform_run(args: &[String]) {
             let tc = wolf_sema::typecheck_package(&res);
             let text = match kind.as_str() {
                 "regions" => wolf_mem::dump_regions_package(&res.package, &tc),
-                // s255 (`[mem.region.outer-write]`): every `mut`
-                // parameter's ambient-clean verdict, with the first
-                // keeping store — what a per-turn `region` block will
-                // refuse, all at once.
-                "mut-clean" => wolf_mem::dump_mut_clean_package(&res.package, &tc),
                 // The lowered WIR of every lowerable body (s25);
                 // refusals are listed so the dump is never silently
                 // partial.

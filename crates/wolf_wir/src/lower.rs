@@ -1000,7 +1000,6 @@ fn lower_body(
         pending_arm_binds: Vec::new(),
         scopes: Vec::new(),
         visible: None,
-        copy_target: None,
         loops: Vec::new(),
         pending_for_pat: None,
         fn_eu: None,
@@ -1147,7 +1146,6 @@ fn lower_task_body<'t>(
         pending_arm_binds: Vec::new(),
         scopes: Vec::new(),
         visible: None,
-        copy_target: None,
         loops: Vec::new(),
         pending_for_pat: None,
         fn_eu: None,
@@ -1784,9 +1782,6 @@ fn membrane_sig_check(table: &TypeTable, sigs: &SigTables, fsig: &FnSig) -> R<()
 const LIST_DATA_OFF: u64 = 0;
 const LIST_LEN_OFF: u64 = 8;
 const LIST_CAP_OFF: u64 = 16;
-/// The birth region (s255): `{data, len, cap, elem, region}`, the
-/// list's and the map's fifth word alike.
-const LIST_REGION_OFF: u64 = 32;
 
 /// A `Map[K, V]`'s entry layout at the native tier (s152): see
 /// `wolf_rt::map` — the `(K, V)` tuple's flat layout is the entry.
@@ -3169,19 +3164,6 @@ struct DeferEntry<'t> {
     fence: (usize, usize),
 }
 
-/// s255 (`[mem.region.outer-write]`): where a `copy` written at a store
-/// into an outer value lands — `Enter(h)`: with region handle `h` made
-/// ambient for the copy (a container's birth region, or the ambient
-/// saved where the binding's enclosing block opened); `Here`: in the
-/// current ambient (a `mut` parameter's place with no region block
-/// open: the entry ambient is the current one), materialized all the
-/// same.
-#[derive(Clone, Copy)]
-enum CopyTarget {
-    Enter(Value),
-    Here,
-}
-
 /// One lexical scope: its bindings, its cleanup entries, and — for
 /// `region name { }` sugar — the region to free wholesale on every
 /// exit edge (X4: the free is the scope's outermost cleanup entry).
@@ -3530,13 +3512,6 @@ struct Lowerer<'t, 'b, 'm> {
     /// exit site: (scope index, binds visible there, stack depth when
     /// installed — the defer body's own deeper scopes stay visible).
     visible: Option<(usize, usize, usize)>,
-    /// s255 (`[mem.region.outer-write]`): where the next `copy e`
-    /// lowered lands when it is written at a store into an OUTER value
-    /// — set by the store around its right-hand side (a `Map` store's
-    /// key too), taken by the prefix's `copy` arm, cleared after. The
-    /// copy is then `deep_copy_out`'s materializing one, made with that
-    /// region ambient.
-    copy_target: Option<CopyTarget>,
     loops: Vec<LoopFrame>,
     /// A destructuring `for` pattern waiting for its body frame (s152):
     /// `for (k, v) in m.pairs()` binds the element's fields, so
@@ -4804,102 +4779,6 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.lookup_at(name).map(|(_, _, b)| b)
     }
 
-    // ------------------------------------ the outer write (s255) ----
-
-    /// s255: is this expression `copy e` (and not `copy region { }`)?
-    fn is_copy_prefix(&self, v: &'t GreenNode) -> bool {
-        v.kind == SyntaxKind::PrefixExpr
-            && PrefixExpr::cast(v).is_some_and(|p| {
-                p.op().map(|t| t.kind) == Some(SyntaxKind::CopyKw)
-                    && p.operand()
-                        .is_some_and(|o| o.kind != SyntaxKind::RegionBlock)
-            })
-    }
-
-    /// s255: the name at the root of a place expression (a path, a
-    /// member chain, an index chain, parentheses).
-    fn place_root_name(&self, e: &'t GreenNode) -> Option<String> {
-        let mut cur = e;
-        loop {
-            match cur.kind {
-                SyntaxKind::PathExpr => return Some(self.text(cur.span)),
-                SyntaxKind::MemberExpr => cur = wolf_ast::MemberExpr::cast(cur)?.base()?,
-                SyntaxKind::BracketApply => cur = BracketApply::cast(cur)?.callee()?,
-                SyntaxKind::ParenExpr => cur = ParenExpr::cast(cur)?.expr()?,
-                _ => return None,
-            }
-        }
-    }
-
-    /// s255 (`[mem.region.outer-write]`): is a store into a place rooted
-    /// at `name` a write into an OUTER value, and where does a flat
-    /// (non-container) copy stored there land? A `mut` parameter's
-    /// place is always outer: its region is the caller's, which is the
-    /// function's entry ambient — the saved handle of the outermost
-    /// region scope open, or the current ambient when none is
-    /// (`CopyTarget::Here`). A local is outer when a `region`/`in`
-    /// block was opened after its scope: the copy lands in the ambient
-    /// that block saved, the one the binding was declared in. `None`:
-    /// not an outer write — the copy keeps today's lowering.
-    fn outer_scope_target(&self, name: &str) -> Option<CopyTarget> {
-        let (scope_idx, _, bind) = self.lookup_at(name)?;
-        let saved = self.scopes[scope_idx + 1..]
-            .iter()
-            .find_map(|s| s.ambient_prev);
-        match (bind, saved) {
-            (_, Some(h)) => Some(CopyTarget::Enter(h)),
-            (LocalBind::MutRef { .. }, None) => Some(CopyTarget::Here),
-            _ => None,
-        }
-    }
-
-    /// s255: aim the next `copy e` lowered — the right-hand side of a
-    /// store into a place rooted at `name` — at the outer value's
-    /// region: a container's own (`hdr` given: the header's birth
-    /// region) when the store replaces or grows a `List`/`Map`, else
-    /// the binding's ambient. A no-op when the value is not written
-    /// `copy`, or the store is not an outer write.
-    fn aim_copy(&mut self, name: Option<String>, value: &'t GreenNode, hdr: Option<Value>) {
-        self.copy_target = None;
-        let Some(name) = name else { return };
-        if !self.is_copy_prefix(value) {
-            return;
-        }
-        let Some(scope) = self.outer_scope_target(&name) else {
-            return;
-        };
-        self.copy_target = Some(match hdr {
-            Some(h) => {
-                let region = self.list_region_of(h);
-                CopyTarget::Enter(region)
-            }
-            None => scope,
-        });
-    }
-
-    /// s255: the materializing copy (`deep_copy_out`: every `str`
-    /// re-made, every container a fresh buffer) made with `target`
-    /// ambient — the enter/leave bracket `in r { }` emits, around the
-    /// copy alone.
-    fn copy_into(
-        &mut self,
-        v: Value,
-        table: &'t TypeTable,
-        ty: TyId,
-        span: Span,
-        target: CopyTarget,
-    ) -> R<Value> {
-        let prev = match target {
-            CopyTarget::Enter(h) => self.open_ambient(h),
-            CopyTarget::Here => None,
-        };
-        let out = self.deep_copy_out(v, table, ty, span, 0)?;
-        if let Some(p) = prev {
-            self.rt_call("__wolf_rt_region_ambient_leave", &[p], None);
-        }
-        Ok(out)
-    }
-
     /// [`Self::lookup`] with the resolution point: (scope index, bind
     /// index, bind). The capture classifier's input (s105).
     fn lookup_at(&self, name: &str) -> Option<(usize, usize, LocalBind)> {
@@ -5089,26 +4968,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let Some(value_expr) = d.value() else {
                     return Ok(Flow::Val(None));
                 };
-                // s255 (`[mem.region.outer-write]`): `xs = copy e` on a
-                // binding declared before an open block — a container
-                // lands in its old header's region, anything else in the
-                // binding's ambient.
-                if self.is_copy_prefix(value_expr) {
-                    let container = self.expr_sema_ty(value_expr.span).is_some_and(|t| {
-                        matches!(
-                            self.table.kind(self.strip_sema(t)),
-                            TyKind::List(_) | TyKind::Map(..)
-                        )
-                    });
-                    let hdr = if container && self.outer_scope_target(&name).is_some() {
-                        Some(self.b.use_var(var))
-                    } else {
-                        None
-                    };
-                    self.aim_copy(Some(name.clone()), value_expr, hdr);
-                }
                 let rhs = flow_val!(self.lower_expr(value_expr));
-                self.copy_target = None;
                 let Some(rhs) = rhs else {
                     return Err(refuse(
                         "assignment of a valueless expression",
@@ -5147,25 +5007,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let Some(value_expr) = d.value() else {
                     return Ok(Flow::Val(None));
                 };
-                // s255 (`[mem.region.outer-write]`): `p = copy e` on a
-                // `mut` parameter — a container lands in its old
-                // header's region, anything else in the entry ambient.
-                if self.is_copy_prefix(value_expr) {
-                    let container = self.expr_sema_ty(value_expr.span).is_some_and(|t| {
-                        matches!(
-                            self.table.kind(self.strip_sema(t)),
-                            TyKind::List(_) | TyKind::Map(..)
-                        )
-                    });
-                    let hdr = if container {
-                        Some(self.read_mut_ref(ptr, region, elem, stmt.span)?)
-                    } else {
-                        None
-                    };
-                    self.aim_copy(Some(name.clone()), value_expr, hdr);
-                }
                 let rhs = flow_val!(self.lower_expr(value_expr));
-                self.copy_target = None;
                 let Some(rhs) = rhs else {
                     return Err(refuse(
                         "assignment of a valueless expression",
@@ -5432,30 +5274,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(value_expr) = d.value() else {
             return Ok(Flow::Val(None));
         };
-        // s255 (`[mem.region.outer-write]`): `s.f = copy e` into an
-        // outer value — a `List`/`Map` field replaced lands in the old
-        // header's region, any other field in the binding's ambient.
-        if self.is_copy_prefix(value_expr) {
-            let root = self.place_root_name(place);
-            let container = self.expr_sema_ty(value_expr.span).is_some_and(|t| {
-                matches!(
-                    self.table.kind(self.strip_sema(t)),
-                    TyKind::List(_) | TyKind::Map(..)
-                )
-            });
-            let hdr = if container
-                && root
-                    .as_deref()
-                    .is_some_and(|n| self.outer_scope_target(n).is_some())
-            {
-                Some(self.place_load(&p, span)?)
-            } else {
-                None
-            };
-            self.aim_copy(root, value_expr, hdr);
-        }
         let rhs = flow_val!(self.lower_expr(value_expr));
-        self.copy_target = None;
         let Some(rhs) = rhs else {
             return Err(refuse(
                 "assignment of a valueless expression",
@@ -8920,12 +8739,6 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 self.lower_copied_block(operand, e)
             }
             Some(SyntaxKind::CopyKw) => {
-                // s255 (`[mem.region.outer-write]`): aimed by the store
-                // this copy is the right-hand side of — a write into an
-                // outer value — the copy is the materializing one, made
-                // in the outer value's region. Taken before the operand
-                // lowers, so a `copy` nested in the operand is today's.
-                let aimed = self.copy_target.take();
                 let v = match self.lower_expr(operand)? {
                     Flow::Val(Some(v)) => v,
                     other => return Ok(other),
@@ -8937,11 +8750,6 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     return Err(refuse("`copy` of a value without a recorded type", e.span));
                 };
                 let table = self.table;
-                if let Some(target) = aimed {
-                    return Ok(Flow::Val(Some(
-                        self.copy_into(v, table, ty, e.span, target)?,
-                    )));
-                }
                 Ok(Flow::Val(Some(self.deep_copy_in(v, table, ty, e.span, 0)?)))
             }
             Some(SyntaxKind::MoveKw) => self.lower_expr(operand),
@@ -13361,17 +13169,6 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         self.b.ins_load(types::I64, addr, r)
     }
 
-    /// `load.ptr %hdr+32` (s255, `[mem.region.outer-write]`): the region
-    /// a `List` or `Map` was born in — the header's fifth word, the one
-    /// the runtime's growth already reads (`wolf_rt::list::ListHdr`,
-    /// `MapHdr`: the same offset) — null for the process root. A copy
-    /// stored into the container is made there.
-    fn list_region_of(&mut self, hdr: Value) -> Value {
-        let r = self.foreign_hdr_region();
-        let addr = self.field_addr(hdr, LIST_REGION_OFF);
-        self.b.ins_load(types::PTR, addr, r)
-    }
-
     /// `store.i64 %n, %hdr+8` — publish a new element count.
     fn list_set_len(&mut self, hdr: Value, n: Value) {
         let r = self.foreign_hdr_region();
@@ -13564,7 +13361,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // because the loan forbids writes while the closure lives;
         // writes from inside are the one spelling left, refused by
         // name (borrow-only closures).
-        if matches!(mname, "push" | "pop" | "clear" | "reset" | "reserve") {
+        if matches!(mname, "push" | "pop" | "clear") {
             self.check_capture_write(recv_place, "mutating")?;
         }
         let Some(ewty) = wir_ty(
@@ -13610,30 +13407,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 let Some(vx) = arg_exprs.first() else {
                     return Err(refuse("`push` without a value", e.span));
                 };
-                // s255 (`[mem.region.outer-write]`): `push(copy e)` into
-                // an outer list materializes the element in the list's
-                // own region — the copy is made once, there, and the
-                // plain-element copy below is skipped for it.
-                let root = self.place_root_name(recv_place);
-                self.aim_copy(root, vx, Some(hdr));
-                let aimed = self.copy_target.is_some();
-                let v = match self.lower_expr(vx) {
-                    Ok(Flow::Val(Some(v))) => v,
-                    Ok(Flow::Val(None)) => {
-                        self.copy_target = None;
-                        return Err(refuse("unit-typed List elements", vx.span));
-                    }
-                    Ok(Flow::Diverged) => {
-                        self.copy_target = None;
-                        return Ok(Flow::Diverged);
-                    }
-                    Err(e) => {
-                        self.copy_target = None;
-                        return Err(e);
-                    }
+                let v = match self.lower_expr(vx)? {
+                    Flow::Val(Some(v)) => v,
+                    Flow::Val(None) => return Err(refuse("unit-typed List elements", vx.span)),
+                    Flow::Diverged => return Ok(Flow::Diverged),
                 };
-                let materialized = aimed && self.copy_target.is_none();
-                self.copy_target = None;
                 // wolf-lang#385, ruled option 3: a PLAIN element is
                 // COPIED into the container — the caller keeps an
                 // independent value, which is what `[mem.tier0.excl.1]`
@@ -13649,7 +13427,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     .next()
                     .and_then(Arg::mode)
                     == Some(wolf_ast::ParamMode::Take);
-                let v = if moves_in || materialized {
+                let v = if moves_in {
                     v
                 } else {
                     let table = self.table;
@@ -13773,30 +13551,6 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             "clear" => {
                 let z = self.b.iconst(types::I64, 0);
                 self.list_set_len(hdr, z);
-                Ok(Flow::Val(None))
-            }
-            // s255 (wolf-lang#821, `[type.list.reset]`): the emptying
-            // that keeps the buffer — the length to 0 in place, the
-            // capacity and the buffer untouched, no call and no
-            // allocation; the next pushes reuse the storage.
-            "reset" => {
-                let z = self.b.iconst(types::I64, 0);
-                self.list_set_len(hdr, z);
-                Ok(Flow::Val(None))
-            }
-            // s255 (wolf-lang#844, `[type.list.reserve]`): the capacity
-            // hint — the runtime grows the buffer in the list's birth
-            // region, or does nothing when the capacity is there.
-            "reserve" => {
-                let Some(nx) = arg_exprs.first() else {
-                    return Err(refuse("`reserve` without a count", e.span));
-                };
-                let n = match self.lower_expr(nx)? {
-                    Flow::Val(Some(v)) => v,
-                    Flow::Val(None) => return Err(refuse("a unit-typed `reserve` count", nx.span)),
-                    Flow::Diverged => return Ok(Flow::Diverged),
-                };
-                self.rt_call_foreign("__wolf_rt_list_reserve", &[hdr, n], None, None);
                 Ok(Flow::Val(None))
             }
             _ => Err(refuse("this List method", e.span)),
@@ -16483,24 +16237,13 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .filter_map(Arg::value)
             .next()
             .ok_or_else(|| refuse("an index without a key", span))?;
-        // s255 (`[mem.region.outer-write]`): `m[copy k] = copy v` into
-        // an outer map materializes the key and the value in the map's
-        // own region — the map keeps its key (s227) as it keeps the
-        // value.
-        let root = self.place_root_name(recv);
-        self.aim_copy(root.clone(), kx, Some(hdr));
-        let kval = flow_val!(self.lower_expr(kx));
-        self.copy_target = None;
-        let Some(kval) = kval else {
+        let Some(kval) = flow_val!(self.lower_expr(kx)) else {
             return Err(refuse("a valueless Map key", kx.span));
         };
         let Some(vx) = d.value() else {
             return Ok(Flow::Val(None));
         };
-        self.aim_copy(root, vx, Some(hdr));
-        let vval = flow_val!(self.lower_expr(vx));
-        self.copy_target = None;
-        let Some(vval) = vval else {
+        let Some(vval) = flow_val!(self.lower_expr(vx)) else {
             return Err(refuse("assignment of a valueless expression", vx.span));
         };
         let vval = self.elem_store_copy(d, vx, vval, v)?;
@@ -17938,13 +17681,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         let Some(vx) = d.value() else {
             return Ok(Flow::Val(None));
         };
-        // s255 (`[mem.region.outer-write]`): `xs[i] = copy e` into an
-        // outer list materializes the element in the list's own region.
-        let root = self.place_root_name(recv);
-        self.aim_copy(root, vx, Some(hdr));
-        let rhs = flow_val!(self.lower_expr(vx));
-        self.copy_target = None;
-        let Some(rhs) = rhs else {
+        let Some(rhs) = flow_val!(self.lower_expr(vx)) else {
             return Err(refuse("assignment of a valueless expression", vx.span));
         };
         // One bounds check for the whole statement: `l[i] op= v` reads
@@ -18771,7 +18508,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             // one. Refusing is the honest answer — the alternative is
             // materializing silently, which would make `push` write a
             // copy nobody can read.
-            "push" | "pop" | "clear" | "reset" | "reserve" => Err(refuse(
+            "push" | "pop" | "clear" => Err(refuse(
                 "mutation through a `bytes()` view (a byte view is read-only)",
                 e.span,
             )),

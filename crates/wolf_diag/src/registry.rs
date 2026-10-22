@@ -1673,13 +1673,7 @@ still points in). The diagnostic marks where each side was allocated;
 make the two placements one: build the value inside the same
 `region`/`in` block as its container, or `copy` it — a copy is a
 fresh allocation in the ambient region, so it lands where the
-container lives. When the store is INTO a value declared outside an
-open `region`/`in` block (a field of it, a `push`, an index or `Map`
-store, a store through a `mut` parameter), `copy` at the store is a
-deep copy made in the outer value's region — the container's own, or
-the region ambient where the binding was declared — so it lands
-exactly where the value lives ([mem.region.outer-write]). When the
-two sides are different *parameters*, their
+container lives. When the two sides are different *parameters*, their
 regions are independent by default (that independence is what lets
 callers pass arguments from anywhere without annotations), and the
 same two fixes apply. A `copy` of a call's result is such a fresh
@@ -1760,36 +1754,13 @@ After the free, that holder would point at nothing. Keep value and
 region together: build the value outside the region block so it lands
 in the caller's region, aim the allocation at a longer-lived region
 explicitly (`let r = region()` … `in r { … }`), or widen the region
-block so it covers every use. A write INTO a value that lives outside
-the block is a different case, and it is admitted when what is stored
-names no region (a scalar, a literal) or is written `copy e` at the
-store: there `copy` is a deep copy made in the OUTER value's region —
-a `push`, an index or `Map` store or a `List`/`Map` replaced copies
-into the container's own region, any other field into the region
-ambient where the binding was declared ([mem.region.outer-write]). So
-`xs.push(copy t)`, `m[copy k] = copy v` and `s.title = copy t` into
-values outside the block keep nothing of the block, and a `push` of a
-scalar grows the list in its own region, never the block's. A `copy`
-anywhere else inside the block does not help — it is a fresh
-allocation in the *current* ambient region, which is still the dying
-one, and for a `str` it shares the bytes. A call inside the block that
-passes a `mut` argument gives that argument the block's region, unless
-the callee's parameter is ambient-clean — every write through it in
-the callee's body is a scalar store, a container store of a scalar or
-of a `copy`, a container replaced by `copy`, a call to another clean
-parameter, or a mutator that stores nothing (`pop`, `clear`, `reset`,
-`reserve`); a flat field or whole store of anything else — a `copy`
-included, and another argument's value, whose region the callee does
-not own — makes it unclean, and this report then names that store in
-the callee (a part moved out and given back is judged by what comes
-back). Keep such a
-value in storage the parameter already owns (`List[byte]` pushes,
-`reset` then pushes) or build it outside the block. When it is the
-block's VALUE that must outlive it — a loop keeping each turn's
-result and freeing the rest — write `copy region { … }`: at the
-closing brace the value is copied into the region the block was
-entered from, and then the block's region is freed
-([mem.region.copyout]). For a value that genuinely must
+block so it covers every use. Note that `copy` inside the block does
+not help — a copy is a fresh allocation in the *current* ambient
+region, which is still the dying one. When it is the block's VALUE
+that must outlive it — a loop keeping each turn's result and freeing
+the rest — write `copy region { … }`: at the closing brace the value
+is copied into the region the block was entered from, and then the
+block's region is freed ([mem.region.copyout]). For a value that genuinely must
 outlive the region, `freeze` makes the whole region immortal and
 immutable and `shared` gives a counted escape — both are spellings
 this compiler takes today. A value whose type reaches no storage —

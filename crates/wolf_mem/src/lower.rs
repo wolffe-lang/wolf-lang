@@ -345,31 +345,6 @@ pub struct Lowered {
     pub rc_cells: Vec<(SiteId, bool)>,
     /// s233 (wolf-lang#678): the must-join check's record of this body.
     pub(crate) procs: crate::procjoin::BodyProcs,
-    /// s255 (wolf-lang#839, #856, `[mem.region.outer-write]`): each
-    /// `mut` parameter of this body, by declared index (the receiver is
-    /// 0), with its AMBIENT-CLEAN verdict — `Ok(())` when nothing the
-    /// callee builds in its caller's region can be reached from the
-    /// parameter after the call, `Err(span)` naming the first store (or
-    /// move) that keeps such a value. Read by [`check_package`]'s
-    /// fixpoint into the [`MutClean`] table the callers consult.
-    pub(crate) mut_clean: Vec<(u32, Result<(), Span>)>,
-}
-
-/// s255 (`[mem.region.outer-write]`): the package's ambient-clean
-/// table — `(the callee's name span, the parameter's declared index)`
-/// → `Ok(())` clean, `Err(span)` the callee's first keeping store. A
-/// pair absent from the table is not clean (a callee outside the
-/// build, a fn value, a trait method, a body that did not lower).
-pub(crate) type MutClean = HashMap<(Span, u32), Result<(), Span>>;
-
-/// s255: what a call site records about a `mut` argument it had to
-/// pin because the callee's parameter is not ambient-clean — read at
-/// the region's close so E1010 names the callee's own store.
-#[derive(Clone)]
-struct UncleanCall {
-    callee: String,
-    param: String,
-    at: Span,
 }
 
 /// s227 (wolf-lang#660, `[mem.region.escape]`): one argument of a
@@ -717,41 +692,8 @@ pub(crate) struct Lowerer<'t> {
     /// s233: each non-`Copy` parameter's generalized region, with the
     /// parameter's declared index.
     param_regions: Vec<(RegionId, u32)>,
-    /// s255: a fn value stored through a `mut` parameter, by its root
-    /// local — a closure borrows its captures and names bytes this
-    /// frame cannot see, so the store keeps the parameter unclean
-    /// whatever its sites say (`region_kept_arg_closure.lu`).
-    param_fn_store: BTreeMap<u32, Span>,
     /// s233: the obligation the last `spawn proc` lowered raised.
     last_spawn: Option<u32>,
-
-    // ------------------------------ the outer write (s255) ----
-    /// s255 (`[mem.region.outer-write]`): per local, `ambient.len()` at
-    /// its declaration — the region that was ambient where the binding
-    /// was declared is `ambient[depth - 1]`, and a store into the local
-    /// from a deeper ambient (a `region` or `in` block opened since) is
-    /// a write into an OUTER value.
-    local_depth: Vec<usize>,
-    /// s255: the region the next `copy e` evaluated lands in, when the
-    /// copy is written at a store into an outer value (a materializing
-    /// copy into the outer value's region). Set by the store around its
-    /// right-hand side (and around a `Map` store's key), taken by
-    /// `eval_prefix`'s `copy` arm, cleared after.
-    copy_target: Option<RegionId>,
-    /// s255: the package's ambient-clean table (`[`MutClean`]`).
-    mut_clean: Option<&'t MutClean>,
-    /// s255: the `mut` parameters of this body — `(local, declared
-    /// index)` — whose verdict `finish` computes. A move out of such a
-    /// parameter (`take`, `move`, a binding that moves a field out)
-    /// needs no rule of its own: the move checker's exit rule (s184,
-    /// `[mem.tier0.mode.mut]`) makes every moved-out part re-initialized
-    /// before the return, and that store carries whatever the alias
-    /// gathered meanwhile.
-    param_locals: Vec<(u32, u32)>,
-    /// s255: the call sites whose `mut` argument gained the call's
-    /// site because the callee's parameter is not ambient-clean —
-    /// keyed by that site, for E1010 at the region's close.
-    call_unclean: HashMap<SiteId, UncleanCall>,
 }
 
 /// Where the statement stream stood before one call argument lowered
@@ -813,9 +755,6 @@ impl<'t> Lowerer<'t> {
             param_mode: None,
         });
         self.tys.push(ty);
-        // s255: the ambient depth at the declaration — the region that
-        // was ambient here is the binding's own ([mem.region.outer-write]).
-        self.local_depth.push(self.ambient.len());
         if let Some(scope) = self.scopes.last_mut() {
             scope.names.push((name.to_string(), id));
         }
@@ -872,26 +811,11 @@ impl<'t> Lowerer<'t> {
     /// statement — the no-hidden-allocations law: every allocation is
     /// attributable in the dump.
     fn alloc_site(&mut self, ty: String, kind: SiteKind, span: Span) -> SiteId {
-        let region = self.ambient();
-        self.alloc_site_in(ty, kind, span, region)
-    }
-
-    /// s255 (`[mem.region.outer-write]`): an allocation attributed to a
-    /// NAMED region rather than the ambient one — a container's growth
-    /// (the region its header remembers) and the materializing copy a
-    /// store into an outer value makes (the outer value's region).
-    fn alloc_site_in(
-        &mut self,
-        ty: String,
-        kind: SiteKind,
-        span: Span,
-        region: RegionId,
-    ) -> SiteId {
         let id = SiteId(self.sites.len() as u32);
         self.sites.push(AllocSite {
             span,
             ty,
-            region,
+            region: self.ambient(),
             kind,
         });
         self.site_escape.push(None);
@@ -899,122 +823,6 @@ impl<'t> Lowerer<'t> {
             self.push(Stmt::Alloc { site: id, span });
         }
         id
-    }
-
-    // ---------------------------------- the outer write (s255) ----
-
-    /// s255: the root local of a place expression, read off the syntax
-    /// alone (a path, a member chain, an index chain, parentheses) —
-    /// before the place is interned, so a store can aim its right-hand
-    /// side's `copy` without evaluating the place first.
-    fn root_local_of(&self, e: &'t GreenNode) -> Option<u32> {
-        let mut cur = e;
-        loop {
-            match cur.kind {
-                SyntaxKind::PathExpr => return self.path_local(cur),
-                SyntaxKind::MemberExpr => cur = MemberExpr::cast(cur)?.base()?,
-                SyntaxKind::BracketApply => cur = wolf_ast::BracketApply::cast(cur)?.callee()?,
-                SyntaxKind::ParenExpr => cur = ParenExpr::cast(cur)?.expr()?,
-                _ => return None,
-            }
-        }
-    }
-
-    /// s255: is this local a `mut` parameter of the body?
-    fn is_mut_param(&self, l: u32) -> bool {
-        self.locals[l as usize].param_mode == Some(Some(ParamMode::Mut))
-    }
-
-    /// s255 (`[mem.region.outer-write]`): is a store into a place rooted
-    /// at `l` a write into an OUTER value — a `mut` parameter's place
-    /// (the caller's, whatever block is open), or a binding declared
-    /// before a `region`/`in` block that is open now?
-    fn is_outer_write(&self, l: u32) -> bool {
-        self.is_mut_param(l) || self.ambient.len() > self.local_depth[l as usize]
-    }
-
-    /// s255: does a value of this type have a container's own region —
-    /// a `List` or a `Map` (an adapter of one included), whose header
-    /// remembers where its storage lives?
-    fn is_container_ty(&self, t: Ty<'t>, depth: u32) -> bool {
-        if depth > 16 {
-            return false;
-        }
-        match t.kind() {
-            TyKind::List(_) | TyKind::Map(..) => true,
-            TyKind::Distinct(i) => self.is_container_ty(
-                Ty {
-                    table: t.table,
-                    id: *i,
-                },
-                depth + 1,
-            ),
-            TyKind::Nominal { module, name, .. } => match self.sigs.get(*module as usize, name) {
-                Some(ItemSig::Distinct { base, .. }) => self.is_container_ty(
-                    Ty {
-                        table: &self.sigs.table,
-                        id: *base,
-                    },
-                    depth + 1,
-                ),
-                _ => false,
-            },
-            _ => false,
-        }
-    }
-
-    /// s255 (`[mem.region.outer-write]`): the OUTER value's region for a
-    /// store into a place rooted at `l`. A container store — a `push`,
-    /// an index or `Map` store, a `List`/`Map` field or binding replaced
-    /// (`container` true) — lands in the container's own region: the
-    /// region of the storage the root already holds (a `mut`
-    /// parameter's generalized region; a local's first allocation).
-    /// Any other store lands in the region that was ambient where the
-    /// binding was declared (a parameter's: the function's entry
-    /// ambient, the caller's region — which the caller's own call site
-    /// keeps longer-lived than the argument).
-    fn outer_target(&self, l: u32, container: bool) -> RegionId {
-        if container
-            && let Some(m) = self.holds.get(&l)
-            && let Some((&s, _)) = m.iter().next()
-        {
-            return self.sites[s.0 as usize].region;
-        }
-        let depth = self.local_depth[l as usize].max(1);
-        self.ambient[depth - 1]
-    }
-
-    /// s255: aim the next `copy e` the right-hand side of a store into
-    /// an outer value evaluates — `None` when the store is not an outer
-    /// write, or the value is written without `copy` (today's rules).
-    /// s255: is this expression `copy e` (and not `copy region { }`)?
-    fn is_copy_prefix(&self, v: &'t GreenNode) -> bool {
-        v.kind == SyntaxKind::PrefixExpr
-            && PrefixExpr::cast(v).is_some_and(|p| {
-                p.op().map(|t| t.kind) == Some(SyntaxKind::CopyKw)
-                    && p.operand()
-                        .is_some_and(|o| o.kind != SyntaxKind::RegionBlock)
-            })
-    }
-
-    fn aim_copy(&mut self, place_expr: &'t GreenNode, value: Option<&'t GreenNode>) {
-        self.copy_target = None;
-        let Some(v) = value else { return };
-        if !self.is_copy_prefix(v) {
-            return;
-        }
-        let Some(l) = self.root_local_of(place_expr) else {
-            return;
-        };
-        if !self.is_outer_write(l) {
-            return;
-        }
-        // A `List`/`Map` replaced by the copy: the old header's region.
-        let container = self
-            .expr_ty(v.span)
-            .is_some_and(|t| self.is_container_ty(t, 0))
-            || place_expr.kind == SyntaxKind::BracketApply;
-        self.copy_target = Some(self.outer_target(l, container));
     }
 
     fn mark_escape(&mut self, site: SiteId, why: &'static str) {
@@ -1775,19 +1583,6 @@ impl<'t> Lowerer<'t> {
                     Applicability::Maybe,
                 ));
             }
-            // s255 (`[mem.region.outer-write]`): a builtin container
-            // store into a value outside the block has a one-word
-            // repair — `copy` at the store, materialized in the
-            // container's own region.
-            if k.callee == "push" {
-                d = d.with_note(format!(
-                    "a `push` into a value declared outside the block keeps nothing of the \
-                     block when the pushed value names no region or is written `copy`: \
-                     `push(copy {})` re-makes the bytes in the list's own region, the one \
-                     its growth already uses [mem.region.outer-write].",
-                    k.arg_text
-                ));
-            }
             self.diags.push(d);
             return;
         }
@@ -1814,44 +1609,6 @@ impl<'t> Lowerer<'t> {
             close_span,
             "the region is freed here — everything in it is freed wholesale, as one unit",
         );
-        // s255 (`[mem.region.outer-write]`, R1): the site is a call
-        // whose `mut` argument was pinned because the callee's
-        // parameter is not ambient-clean — name the callee's own store.
-        if let Some(u) = self.call_unclean.get(&site).cloned() {
-            d = d
-                .with_secondary(
-                    u.at,
-                    format!(
-                        "`{}` keeps a value built in its caller's region in its `mut` \
-                         parameter `{}` here — inside the block, that region is the block's",
-                        u.callee, u.param
-                    ),
-                )
-                .with_note(format!(
-                    "a call inside a `region` block gives a `mut` argument the block's \
-                     region unless the callee's parameter is ambient-clean: every write \
-                     through it in the callee is a scalar store, a container store of a \
-                     scalar or of a `copy` (made in the container's own region), a \
-                     container replaced by `copy`, a call handing it to a clean \
-                     parameter, or a mutator that stores nothing (`pop`, `clear`, `reset`, \
-                     `reserve`). A flat field or whole store of anything else — a `copy` \
-                     included, which lands in the callee's entry ambient; another \
-                     argument's value, whose region the callee does not own — is what \
-                     `{}` does here. Keep that value in storage `{}` already owns (`List[byte]` \
-                     pushes, `reset` then pushes), or build it outside the block \
-                     [mem.region.outer-write].",
-                    u.callee, u.param
-                ));
-        } else if binding.is_some() {
-            d = d.with_note(
-                "a store into a value declared outside the block keeps nothing of the \
-                 block when the stored value names no region (a scalar, a literal) or is \
-                 written `copy e` at the store: that `copy` is a deep copy made in the \
-                 outer value's region — the container's own for a `push`, an index or \
-                 `Map` store or a `List`/`Map` replaced, the region ambient where the \
-                 binding was declared for any other field [mem.region.outer-write].",
-            );
-        }
         d = d.with_note(Self::ladder());
         self.diags.push(d);
     }
@@ -2302,41 +2059,6 @@ impl<'t> Lowerer<'t> {
             // A fn value, a type parameter, a trait object, an
             // unresolved type: unknown, so yes.
             _ => true,
-        }
-    }
-
-    /// s255 (`[mem.region.outer-write]`): does a value of this type carry
-    /// a fn value — a closure, whose captures this frame cannot see (it
-    /// borrows them, `[type.fn.value]`), or a named fn read as a value?
-    /// Such a value stored through a `mut` parameter keeps the parameter
-    /// unclean by type: its pseudo-site does not ride a flat store.
-    fn reaches_fn(&self, t: Ty<'t>, depth: u32) -> bool {
-        if depth > 16 {
-            return true;
-        }
-        let sub = |id: TyId| Ty { table: t.table, id };
-        match t.kind() {
-            TyKind::Fn(..) => true,
-            TyKind::Wrapping(i)
-            | TyKind::Distinct(i)
-            | TyKind::List(i)
-            | TyKind::Pool(i)
-            | TyKind::Mutex(i)
-            | TyKind::Shared(i)
-            | TyKind::Weak(i) => self.reaches_fn(sub(*i), depth + 1),
-            TyKind::Map(k, v) => {
-                self.reaches_fn(sub(*k), depth + 1) || self.reaches_fn(sub(*v), depth + 1)
-            }
-            TyKind::Tuple(es) => es.iter().any(|e| self.reaches_fn(sub(*e), depth + 1)),
-            TyKind::ErrUnion(ok, row) => {
-                self.reaches_fn(sub(*ok), depth + 1) || self.reaches_fn(sub(*row), depth + 1)
-            }
-            TyKind::Nominal { .. } => match self.fields_of(t) {
-                Some(fs) => fs.into_iter().any(|(_, ft)| self.reaches_fn(ft, depth + 1)),
-                // An enum's payloads: as conservative as the bytes rule.
-                None => self.may_lend_bytes(t, depth + 1),
-            },
-            _ => false,
         }
     }
 
@@ -3463,6 +3185,12 @@ impl<'t> Lowerer<'t> {
                         continue;
                     }
                     for &s in &a.sites {
+                        // A parameter's pseudo-site does not ride: its
+                        // bytes outlive this frame and escape no region
+                        // in it (s207's rule for `copy`).
+                        if self.sites[s.0 as usize].kind.is_param() {
+                            continue;
+                        }
                         if self.holds.get(&l).is_some_and(|m| m.contains_key(&s)) {
                             continue;
                         }
@@ -3471,17 +3199,6 @@ impl<'t> Lowerer<'t> {
                             continue;
                         }
                         entry.insert(s, a.span);
-                        // A parameter's pseudo-site rides for the
-                        // ambient-clean verdict alone (s255: `(mut
-                        // ds).push(take d)` makes `ds` another
-                        // parameter's keeper, which the verdict must
-                        // see); its bytes outlive this frame and
-                        // escape no region in it (s207's rule for
-                        // `copy`), so it is never a kept flow to
-                        // report.
-                        if self.sites[s.0 as usize].kind.is_param() {
-                            continue;
-                        }
                         let arg_text = self.text(a.span);
                         let rebuild = a.is_str
                             && !a.owned
@@ -5698,21 +5415,7 @@ impl<'t> Lowerer<'t> {
     /// read through the declaration, an applied generic's bare
     /// parameter as its argument.
     fn copy_out_refusal(&self, t: Ty<'t>, depth: u32) -> Option<String> {
-        self.copy_out_refusal_in(t, depth, &mut Vec::new(), false)
-    }
-
-    /// s255 (`[mem.region.outer-write]`): the same question for the
-    /// materializing copy a store into an outer value makes, where a
-    /// TYPE PARAMETER is admitted: this tier lowers a generic body once
-    /// with its parameters rigid (std's `map.set` is `m[k] = copy v`
-    /// over `V`), while the native tiers lower each instantiation and
-    /// `deep_copy_out` there refuses a part no copy can make
-    /// independent, by name, exactly as `deep_copy_in` did for the
-    /// same stores before this clause. `copy region { }` keeps its
-    /// static refusal of a parameter: its copy is made once, by the
-    /// block, in the body that names the parameter.
-    fn copy_out_refusal_for_store(&self, t: Ty<'t>) -> Option<String> {
-        self.copy_out_refusal_in(t, 0, &mut Vec::new(), true)
+        self.copy_out_refusal_in(t, depth, &mut Vec::new())
     }
 
     fn copy_out_refusal_in(
@@ -5720,21 +5423,12 @@ impl<'t> Lowerer<'t> {
         t: Ty<'t>,
         depth: u32,
         seen: &mut Vec<(u32, String)>,
-        params_ok: bool,
     ) -> Option<String> {
         if depth > 32 {
             return Some("a type nested too deep to copy".to_string());
         }
         let at = |id: TyId| Ty { table: t.table, id };
         let shown = || render(t.table, t.id, &|_| Err("_"));
-        if params_ok
-            && matches!(
-                t.kind(),
-                TyKind::Rigid(_) | TyKind::Var(_) | TyKind::Proj(..)
-            )
-        {
-            return None;
-        }
         match t.kind() {
             TyKind::Error
             | TyKind::Never
@@ -5746,23 +5440,21 @@ impl<'t> Lowerer<'t> {
             | TyKind::ExitReason
             | TyKind::InferredRow { .. }
             | TyKind::OpenTail => None,
-            TyKind::Distinct(inner) => {
-                self.copy_out_refusal_in(at(*inner), depth + 1, seen, params_ok)
-            }
-            TyKind::List(e) => self.copy_out_refusal_in(at(*e), depth + 1, seen, params_ok),
+            TyKind::Distinct(inner) => self.copy_out_refusal_in(at(*inner), depth + 1, seen),
+            TyKind::List(e) => self.copy_out_refusal_in(at(*e), depth + 1, seen),
             TyKind::Map(k, v) => self
-                .copy_out_refusal_in(at(*k), depth + 1, seen, params_ok)
-                .or_else(|| self.copy_out_refusal_in(at(*v), depth + 1, seen, params_ok)),
+                .copy_out_refusal_in(at(*k), depth + 1, seen)
+                .or_else(|| self.copy_out_refusal_in(at(*v), depth + 1, seen)),
             TyKind::Tuple(items) => items
                 .iter()
-                .find_map(|&id| self.copy_out_refusal_in(at(id), depth + 1, seen, params_ok)),
+                .find_map(|&id| self.copy_out_refusal_in(at(id), depth + 1, seen)),
             TyKind::ErrUnion(ok, row) => self
-                .copy_out_refusal_in(at(*ok), depth + 1, seen, params_ok)
-                .or_else(|| self.copy_out_refusal_in(at(*row), depth + 1, seen, params_ok)),
+                .copy_out_refusal_in(at(*ok), depth + 1, seen)
+                .or_else(|| self.copy_out_refusal_in(at(*row), depth + 1, seen)),
             TyKind::Row { tags, .. } => tags
                 .iter()
                 .flat_map(|(_, ps)| ps.iter())
-                .find_map(|&id| self.copy_out_refusal_in(at(id), depth + 1, seen, params_ok)),
+                .find_map(|&id| self.copy_out_refusal_in(at(id), depth + 1, seen)),
             TyKind::Nominal { module, name, args } => {
                 // A recursive type is answered by its first visit.
                 if seen.iter().any(|(m, n)| m == module && n == name) {
@@ -5783,12 +5475,7 @@ impl<'t> Lowerer<'t> {
                 };
                 match self.sigs.get(*module as usize, name) {
                     Some(ItemSig::Struct(ss)) => ss.fields.iter().find_map(|f| {
-                        self.copy_out_refusal_in(
-                            member(&ss.generics, f.ty),
-                            depth + 1,
-                            seen,
-                            params_ok,
-                        )
+                        self.copy_out_refusal_in(member(&ss.generics, f.ty), depth + 1, seen)
                     }),
                     Some(ItemSig::Enum {
                         generics, variants, ..
@@ -5796,12 +5483,7 @@ impl<'t> Lowerer<'t> {
                         .iter()
                         .flat_map(|v| v.payload.iter())
                         .find_map(|&p| {
-                            self.copy_out_refusal_in(
-                                member(generics, p),
-                                depth + 1,
-                                seen,
-                                params_ok,
-                            )
+                            self.copy_out_refusal_in(member(generics, p), depth + 1, seen)
                         }),
                     Some(ItemSig::Distinct { base, .. }) => self.copy_out_refusal_in(
                         Ty {
@@ -5810,7 +5492,6 @@ impl<'t> Lowerer<'t> {
                         },
                         depth + 1,
                         seen,
-                        params_ok,
                     ),
                     _ => None,
                 }
@@ -5903,71 +5584,6 @@ impl<'t> Lowerer<'t> {
                 self.eval_copied_block(operand, e.span)
             }
             Some(SyntaxKind::CopyKw) => {
-                // s255 (`[mem.region.outer-write]`): `copy e` written at
-                // a store into an OUTER value — a `mut` parameter's
-                // place, or a binding outside an enclosing `region`/`in`
-                // block — is the MATERIALIZING copy `copy region { }`
-                // makes, aimed at the outer value's region (a
-                // container's own, or the region ambient where the
-                // binding was declared): every `str` reached is re-made
-                // there, every `List`/`Map` gets a fresh buffer there.
-                // So the copy is a fresh site in that region and shares
-                // no byte with anything — not the operand's `str`s
-                // (ruling #35's sharing copy is the one for every other
-                // position), not the block's. A value a copy cannot make
-                // independent (a region value, a fn value, a cell, a
-                // handle, a type parameter) is refused by name, as
-                // `copy region { }` refuses it.
-                if let Some(target) = self.copy_target.take() {
-                    let (inner, ty) = if let Some((place, ty)) = self.as_place(operand) {
-                        self.emit_read(place, operand.span);
-                        (self.val_of_place(place, operand.span), ty)
-                    } else {
-                        let v = self.eval_value(operand)?;
-                        let ty = self.expr_ty(e.span).or_else(|| self.expr_ty(operand.span));
-                        (v, ty)
-                    };
-                    let Some(t) = ty else {
-                        return Ok(inner);
-                    };
-                    if let Some(what) = self.copy_out_refusal_for_store(t) {
-                        self.conflicted = true;
-                        let region = self.show_region(target);
-                        self.diags.push(
-                            Diagnostic::error(
-                                codes::E1010,
-                                e.span,
-                                format!(
-                                    "this `copy` cannot make the value independent of the \
-                                     block: {what}"
-                                ),
-                            )
-                            .with_label(format!(
-                                "a store into a value outside the block copies into {region}, \
-                                 and this part has no copy there"
-                            ))
-                            .with_note(
-                                "`copy` at a store into an outer value is a deep copy made in \
-                                 the outer value's region ([mem.region.outer-write]), the one \
-                                 `copy region { … }` makes; a region value, a fn value, a \
-                                 `shared`/`weak` cell, a channel, a task or proc handle, a \
-                                 `Pool`, a raw pointer, a trait object or a type parameter has \
-                                 no such copy. Build the value where the outer value lives, or \
-                                 keep it in storage the outer value already owns.",
-                            ),
-                        );
-                        return Ok(Val::none());
-                    }
-                    if self.scalar_only(t, 0) {
-                        return Ok(Val::none());
-                    }
-                    let rendered = self.rendered_expr_ty(e.span);
-                    let site = self.alloc_site_in(rendered, SiteKind::Lit, e.span, target);
-                    let mut out = Val::site(site, e.span);
-                    out.borrowed = inner.borrowed;
-                    out.sends = inner.sends;
-                    return Ok(out);
-                }
                 // `copy x`: an independent value from any type —
                 // never a move ([mem.tier0.move.3]). The duplicate is
                 // a fresh allocation in the ambient region: `copy`
@@ -7316,13 +6932,6 @@ impl<'t> Lowerer<'t> {
         let mut pj_recv: Option<crate::procjoin::Ev> = None;
         // s233: how many of `arg_views` are the receiver's.
         let mut recv_views = 0usize;
-        // s255 (`[mem.region.outer-write]`): the root local of a `mut`
-        // `List`/`Map` receiver — its growth, and a `copy` pushed into
-        // it, land in the container's own region.
-        let mut recv_container_root: Option<u32> = None;
-        // s255: each `mut` argument's place with the callee's declared
-        // index for it (the receiver is 0), for the ambient-clean table.
-        let mut mut_arg_index: Vec<(PlaceId, u32)> = Vec::new();
         if let Some(cs) = cs
             && cs.has_self
             && let Some(callee) = d.callee()
@@ -7354,18 +6963,6 @@ impl<'t> Lowerer<'t> {
                 // s227 (#660): the receiver is the call's first
                 // argument in the kept-argument rule too.
                 let ty = self.value_ty(recv_expr);
-                // s255: a `mut` receiver is parameter 0; a `mut`
-                // container receiver's root is where its growth lands.
-                if selfp.mode == Some(ParamMode::Mut)
-                    && let Some(&(place, _)) = surface.mut_args.first()
-                {
-                    mut_arg_index.push((place, 0));
-                    if ty.is_some_and(|t| self.is_container_ty(t, 0))
-                        && let Base::Local(l) = self.places.get(place).base
-                    {
-                        recv_container_root = Some(l);
-                    }
-                }
                 let mut sites: Vec<SiteId> = carry.clone();
                 sites.extend(recv_sites.iter().copied());
                 sites.extend(arg_views.iter().copied());
@@ -7593,17 +7190,7 @@ impl<'t> Lowerer<'t> {
                         arg_views.len(),
                     );
                     self.arg_sends = None;
-                    // s255 (`[mem.region.outer-write]`): a `copy` pushed
-                    // into an outer container is aimed at the
-                    // container's own region.
-                    if param.store
-                        && let Some(l) = recv_container_root
-                        && self.is_outer_write(l)
-                        && self.is_copy_prefix(v)
-                    {
-                        self.copy_target = Some(self.outer_target(l, true));
-                    }
-                    let lowered = self.lower_arg(
+                    self.lower_arg(
                         cs,
                         param,
                         *arg,
@@ -7615,15 +7202,8 @@ impl<'t> Lowerer<'t> {
                         &mut arg_views,
                         &mut arg_muts,
                         chan_send,
-                    );
-                    self.copy_target = None;
-                    lowered?;
+                    )?;
                     let arg_sends = self.arg_sends.take();
-                    // s255: this argument's `mut` places, by the
-                    // callee's declared index.
-                    for &(p, _) in &surface.mut_args[before.2..] {
-                        mut_arg_index.push((p, (i + offset) as u32));
-                    }
                     // s227 (#660): what this argument put on the
                     // call, by itself.
                     let ty = self.value_ty(v);
@@ -7799,47 +7379,12 @@ impl<'t> Lowerer<'t> {
             .filter(|(_, ty)| ty.is_some_and(|t| self.scalar_only(t, 0)))
             .map(|(p, _)| *p)
             .collect();
-        // s255 (`[mem.region.outer-write]`): a `mut` argument to a
-        // parameter the callee's own lowering proved AMBIENT-CLEAN gains
-        // nothing from the call — nothing the callee builds in this
-        // ambient can be reached from it afterwards — so it is neither
-        // pinned to the call's region nor made to share the other
-        // arguments' bytes. The table is keyed by the callee's name
-        // span and the parameter's declared index; a callee it does not
-        // know (a fn value, a trait method, a C call, a body outside the
-        // build) is not clean. The unclean verdict's span is kept for
-        // the region's close: E1010 there names the callee's own store.
-        let decl = cs.and_then(|c| c.decl_span);
-        let mut clean_places: BTreeSet<PlaceId> = BTreeSet::new();
-        let mut unclean_at: Vec<(PlaceId, u32, Span)> = Vec::new();
-        if let (Some(ds), Some(table)) = (decl, self.mut_clean) {
-            for &(p, idx) in &mut_arg_index {
-                match table.get(&(ds, idx)) {
-                    Some(Ok(())) => {
-                        clean_places.insert(p);
-                    }
-                    Some(Err(at)) => unclean_at.push((p, idx, *at)),
-                    None => {}
-                }
-            }
-        }
         let mut_targets: Vec<PlaceId> = surface
             .mut_args
             .iter()
             .map(|(p, _)| *p)
-            .filter(|p| {
-                !self.places.is_copy(*p) && !scalar_muts.contains(p) && !clean_places.contains(p)
-            })
+            .filter(|p| !self.places.is_copy(*p) && !scalar_muts.contains(p))
             .collect();
-        // s255: a builtin container method's receiver grows in the
-        // container's own region (the one its header remembers), never
-        // in the block open at the call: the site that stands for the
-        // growth is attributed there.
-        let builtin_recv_early = receiver_done && self.recv_is_builtin(&d);
-        let site_region = match recv_container_root {
-            Some(l) if builtin_recv_early => Some(self.outer_target(l, true)),
-            _ => None,
-        };
         let has_surface = !surface.mut_args.is_empty()
             || !surface.read_args.is_empty()
             || !surface.take_args.is_empty();
@@ -7889,23 +7434,7 @@ impl<'t> Lowerer<'t> {
             } else {
                 format!("{callee}(..)")
             };
-            let site = match site_region {
-                Some(r) => self.alloc_site_in(ty, SiteKind::CallResult, e.span, r),
-                None => self.alloc_site(ty, SiteKind::CallResult, e.span),
-            };
-            // s255: what E1010 at the region's close says of this site.
-            for &(p, idx, at) in &unclean_at {
-                if mut_targets.contains(&p)
-                    && let Some(cs) = cs
-                    && let Some(param) = cs.params.get(idx as usize)
-                {
-                    self.call_unclean.entry(site).or_insert(UncleanCall {
-                        callee: callee.clone(),
-                        param: param.name.clone(),
-                        at,
-                    });
-                }
-            }
+            let site = self.alloc_site(ty, SiteKind::CallResult, e.span);
             if ret_heap && self.is_str_view_call(e) {
                 self.view_lists.insert(site);
             }
@@ -8004,12 +7533,6 @@ impl<'t> Lowerer<'t> {
         }
         if builtin_method && let Some(ev) = pj_recv.take() {
             self.proc_event(ev);
-        }
-        // s255: a clean parameter keeps no other argument's bytes either.
-        if !clean_places.is_empty() {
-            for f in &mut flows {
-                f.muts.retain(|(p, _)| !clean_places.contains(p));
-            }
         }
         self.flow_kept_arguments(
             &flows,
@@ -9031,33 +8554,14 @@ impl<'t> Lowerer<'t> {
         let elem_store = d.op().map(|t| t.kind) == Some(SyntaxKind::Eq)
             && d.place()
                 .is_some_and(|p| p.kind == SyntaxKind::BracketApply && !self.is_raw_index(p));
-        // s255 (`[mem.region.outer-write]`): a `copy` on the right of a
-        // store into an outer value is aimed at that value's region.
-        if let Some(p) = d.place() {
-            self.aim_copy(p, d.value());
-        }
         let val = match d.value() {
             Some(v) if elem_store => self.eval_elem_stored(v, d.takes())?,
             Some(v) => self.eval_value(v)?,
             None => Val::none(),
         };
-        self.copy_target = None;
         let Some(place_expr) = d.place() else {
             return Ok(());
         };
-        // s255: a `Map` store keeps its key (s227), so `m[copy k] = v`
-        // into an outer map materializes the key in the map's region.
-        if place_expr.kind == SyntaxKind::BracketApply
-            && !self.is_raw_index(place_expr)
-            && let Some(b) = wolf_ast::BracketApply::cast(place_expr)
-            && let Some(key) = b
-                .args()
-                .into_iter()
-                .flat_map(|l| l.args())
-                .find_map(Arg::value)
-        {
-            self.aim_copy(place_expr, Some(key));
-        }
         // s22: `p[i] = v` / `p[i] op= v` through a raw pointer is a
         // raw-tier write (compound also reads), not a place effect;
         // kw06: so is `*p = v` / `*p op= v`.
@@ -9096,23 +8600,12 @@ impl<'t> Lowerer<'t> {
             return Ok(());
         }
         self.last_index = Val::none();
-        let resolved = self.as_place(place_expr);
-        self.copy_target = None;
-        let Some((place, _)) = resolved else {
+        let Some((place, _)) = self.as_place(place_expr) else {
             return Err(NotYet {
                 construct: "assignment through this place shape",
                 span: place_expr.span,
             });
         };
-        // s255 (`[mem.region.outer-write]`): a fn value stored through a
-        // `mut` parameter keeps it unclean by type (see `reaches_fn`).
-        if let Base::Local(l) = self.places.get(place).base
-            && self.locals[l as usize].param_mode == Some(Some(ParamMode::Mut))
-            && let Some(v) = d.value()
-            && self.expr_ty(v.span).is_some_and(|t| self.reaches_fn(t, 0))
-        {
-            self.param_fn_store.entry(l).or_insert(place_expr.span);
-        }
         // s227 (wolf-lang#660's door, `[mem.region.escape]`): a store
         // through a `Map` index may INSERT, and the map keeps the key —
         // a `str` key's bytes are shared, never copied. So the map
@@ -9213,15 +8706,6 @@ impl<'t> Lowerer<'t> {
             return self.eval_value(v);
         }
         self.emit_read(place, v.span);
-        // s255 (`[mem.region.scalar]`): the copy a plain index store makes
-        // of a scalar-only value — a struct of scalars, yew's `Cell`,
-        // `Timer`, `Sel` — is its own inline words: no allocation, no
-        // site, no region named. Before this it minted the same ambient
-        // site a heap-reaching value's copy does, which pinned every
-        // `g.back[i] = cell` to the block it ran in.
-        if ty.is_some_and(|t| self.scalar_only(t, 0)) {
-            return Ok(Val::none());
-        }
         let rendered = ty
             .map(|t| render(t.table, t.id, &|_| Err("_")))
             .unwrap_or_else(|| "?".to_string());
@@ -9310,27 +8794,7 @@ impl<'t> Lowerer<'t> {
                             .proj
                             .last()
                             .is_some_and(Proj::is_index);
-                        let before = self.diags.len();
                         self.demand_store(val, target, Some(cspan), place_expr.span, lend);
-                        // s255 (`[mem.region.outer-write]`): the store
-                        // refused is into a value outside an open block
-                        // — name the one-word repair the clause admits.
-                        if self.diags.len() > before
-                            && self.is_outer_write(l)
-                            && let Some(d) = self.diags.last_mut()
-                        {
-                            d.notes.push(
-                                "this stores into a value declared outside the open `region` \
-                                 block. Such a store keeps nothing of the block when the stored \
-                                 value names no region (a scalar, a literal) or is written `copy \
-                                 e` at the store: that `copy` is a deep copy made in the outer \
-                                 value's region — the container's own for a `push`, an index or \
-                                 `Map` store or a `List`/`Map` replaced, the region ambient where \
-                                 the binding was declared for any other field \
-                                 [mem.region.outer-write]."
-                                    .to_string(),
-                            );
-                        }
                     }
                 } else if let Some(rid) = val.region {
                     match self.region_local.get(&l).copied() {
@@ -9470,21 +8934,8 @@ impl<'t> Lowerer<'t> {
             procs: crate::procjoin::BodyProcs::default(),
             param_index: HashMap::new(),
             param_regions: Vec::new(),
-            param_fn_store: BTreeMap::new(),
             last_spawn: None,
-            local_depth: Vec::new(),
-            copy_target: None,
-            mut_clean: None,
-            param_locals: Vec::new(),
-            call_unclean: HashMap::new(),
         }
-    }
-
-    /// s255 (`[mem.region.outer-write]`): the package's ambient-clean
-    /// table, consulted at every call that passes a `mut` argument.
-    pub(crate) fn with_mut_clean(mut self, table: &'t MutClean) -> Self {
-        self.mut_clean = Some(table);
-        self
     }
 
     /// Lower a function body. `params` come from the elaborated
@@ -9534,11 +8985,6 @@ impl<'t> Lowerer<'t> {
                 && let Some(view) = &p.view
             {
                 self.view = Some((local, view.clone(), p.span));
-            }
-            // s255 (`[mem.region.outer-write]`): every `mut` parameter
-            // gets an ambient-clean verdict at `finish`.
-            if p.mode == Some(ParamMode::Mut) {
-                self.param_locals.push((local.0, pi));
             }
             // Cyclone defaults: every heap-reaching parameter position
             // gets a fresh, generalized region variable — a C-shaped
@@ -9663,77 +9109,8 @@ impl<'t> Lowerer<'t> {
         }
     }
 
-    /// s255 (`[mem.region.outer-write]`): the ambient-clean verdict of
-    /// each `mut` parameter, read off this body's own lowering. A
-    /// parameter is clean when, over the whole body, its root never
-    /// held or shared a site outside ITS OWN region — the generalized
-    /// parameter region its storage arrived in, where its containers
-    /// grow and the copies aimed at it land — other than its own entry
-    /// sites and the static region's. Everything else is the caller's
-    /// and the callee cannot know it outlives the parameter: the body's
-    /// ambient (the caller's region, where every temporary the callee
-    /// builds lands, D12; the proc's own for a `spawn proc` entry),
-    /// another parameter's bytes or region (a `take` argument pushed, a
-    /// `str` or fn-value argument stored: `region_kept_arg_take`,
-    /// `region_kept_arg_closure` — the first verdict read only the
-    /// ambient and let both through), a region parameter's region
-    /// (`in keep { }`), a block's. Under the clause that is exactly:
-    /// scalar stores, container stores of scalars or of `copy`s (the
-    /// container's own region), containers replaced by `copy` (the old
-    /// header's), calls handing the parameter to a clean parameter, and
-    /// the mutators that store nothing; a flat field or whole store of
-    /// anything else — a `copy` included, whose target is the entry
-    /// ambient — is not. A move out of the parameter is covered by its
-    /// re-initialization (the move checker demands one before every
-    /// return): that store is read here like any other.
-    fn mut_clean_verdicts(&self, name: &str) -> Vec<(u32, Result<(), Span>)> {
-        self.param_locals
-            .iter()
-            .map(|&(l, idx)| {
-                let own: Option<RegionId> = self
-                    .param_regions
-                    .iter()
-                    .find(|&&(_, pi)| pi == idx)
-                    .map(|&(r, _)| r);
-                let mut first: Option<Span> = None;
-                // A recursive call pinned by this body's own unclean
-                // verdict from an earlier round of the fixpoint masks
-                // the store that made it; that store is reported first.
-                let mut first_self: Option<Span> = None;
-                let held = self.holds.get(&l).into_iter().flat_map(|m| m.iter());
-                let shared = self.shares.get(&l).into_iter().flat_map(|m| m.iter());
-                for (&s, &sp) in held.chain(shared) {
-                    let site = &self.sites[s.0 as usize];
-                    let own_entry = self.param_index.get(&s) == Some(&idx);
-                    let own_region = own == Some(site.region);
-                    let is_static =
-                        self.rt.regions[site.region.0 as usize].kind == RegionKind::Static;
-                    if own_entry || own_region || is_static {
-                        continue;
-                    }
-                    let self_call = self.call_unclean.get(&s).is_some_and(|u| u.callee == name);
-                    let slot = if self_call {
-                        &mut first_self
-                    } else {
-                        &mut first
-                    };
-                    if slot.is_none_or(|f| (sp.file, sp.lo) < (f.file, f.lo)) {
-                        *slot = Some(sp);
-                    }
-                }
-                if let Some(&sp) = self.param_fn_store.get(&l)
-                    && first.is_none_or(|f| (sp.file, sp.lo) < (f.file, f.lo))
-                {
-                    first = Some(sp);
-                }
-                (idx, first.or(first_self).map_or(Ok(()), Err))
-            })
-            .collect()
-    }
-
     fn finish(self, name: &str) -> Lowered {
         let _ = (self.pkg, self.file);
-        let mut_clean = self.mut_clean_verdicts(name);
         // s21: the static atomicity bit — non-atomic unless a freeze
         // (the one statically-visible sharing point checkable today;
         // cross-thread transfer refuses until c05/c07) reaches the
@@ -9772,7 +9149,6 @@ impl<'t> Lowerer<'t> {
             regions,
             rc_cells,
             procs: self.procs,
-            mut_clean,
         }
     }
 }

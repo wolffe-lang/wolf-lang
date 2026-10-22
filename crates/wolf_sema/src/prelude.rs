@@ -541,8 +541,7 @@ pub const HOME_MODULES: &[(&str, &[&str])] = &[
     (
         "list",
         &[
-            "push", "pop", "get", "first", "last", "is_empty", "count", "clear", "par", "reserve",
-            "reset",
+            "push", "pop", "get", "first", "last", "is_empty", "count", "clear", "par",
         ],
     ),
     ("map", &["count", "is_empty", "clear", "pairs"]),

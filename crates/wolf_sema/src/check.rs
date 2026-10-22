@@ -6915,19 +6915,6 @@ impl<'a> Checker<'a> {
                 let u = self.lo.table.unit();
                 (vec![pm("self", recv_ty)], u)
             }
-            // s255 (wolf-lang#844, #821; `[type.list.reserve]`,
-            // `[type.list.reset]`): the capacity hint and the emptying
-            // that keeps the buffer — both on a `mut` receiver, both
-            // unit-valued.
-            (TyKind::List(_), "reserve") => {
-                let u = self.lo.table.unit();
-                let int_ = self.lo.table.prim(Prim::Int);
-                (vec![pm("self", recv_ty), p("n", int_)], u)
-            }
-            (TyKind::List(_), "reset") => {
-                let u = self.lo.table.unit();
-                (vec![pm("self", recv_ty)], u)
-            }
             // s152 — the `Map` surface (`[type.map]`): the entry
             // count, the emptiness probe, the drain, and `pairs()` —
             // every entry as a `(K, V)` tuple in the map's iteration
