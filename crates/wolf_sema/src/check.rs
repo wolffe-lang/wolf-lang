@@ -9788,6 +9788,21 @@ impl<'a> Checker<'a> {
         e: &GreenNode,
         args: Option<ArgList<'_>>,
     ) -> R<TyId> {
+        // o1 (wolf-lang#879, `[type.row.operand]`): a method call reads
+        // its receiver as a member read does, so `rest.starts_with("4")`
+        // on a `str ! {none}` is E0409 at the receiver — never the
+        // "methods on builtin types" refusal at the foot of this
+        // function, and ahead of every resolution step, so no impl (a
+        // blanket one included) reads a row the clause says nothing
+        // reads. The arguments are typed loosely, as every refusal
+        // here types them, so an error inside one is still reported.
+        if matches!(self.kind_of(recv_ty), TyKind::ErrUnion(..)) {
+            self.report_row_member(base.span, recv_ty, &format!(".{mname}(…)"));
+            if let Some(a) = args {
+                self.synth_args_loosely(a)?;
+            }
+            return Ok(self.error_ty());
+        }
         // (1) Inherent methods win — the type's own impl blocks.
         if let Some(idx) = self.find_inherent_impl(recv_ty, mname, true) {
             let map = self.instantiate_impl(idx, recv_ty, base.span);
