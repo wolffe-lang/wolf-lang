@@ -920,6 +920,8 @@ rows/negative/payload_mismatch.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/pub_inferred.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/row_operand_add.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/row_operand_compare.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/row_operand_member.lu: not mem-clean (pre-wir rungs own it)
+rows/negative/row_operand_method.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/row_operand_rhs.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/tag_undeclared_arg.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/try_in_defer.lu: not mem-clean (pre-wir rungs own it)
@@ -932,6 +934,7 @@ rows/open_row_growth.lu: lowers
 rows/propagate/main.lu: lowers
 rows/qmark_defer.lu: lowers
 rows/raised_call_arg_position.lu: lowers
+rows/row_member_handled.lu: lowers
 rows/tag_arg_position.lu: lowers
 rows/tag_let_position.lu: lowers
 rows/tag_shadow_local.lu: lowers
