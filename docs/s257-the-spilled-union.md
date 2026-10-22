@@ -216,8 +216,180 @@ reach nothing never arrives: `copy_reaches_heap` answers first.
 
 ## 4. Measurements
 
-(written after the change)
+kasumi (16 cpus, the other lanes' load present: `uptime` beside each
+table), everything under `taskset -c 12-15` (CI's width), dist builds
+(`cargo xtask dist`) of 0.2.34 (the release archive,
+`88a9dd3d…`), of trunk `0477ce62` (`~/lanes/s257/base/`) and of the
+head; lupin 0.1.55 from its release archive (`1152abc0…`); every sha
+read twice. The numbers below were taken at `07c3ce33`; the final
+head differs from it by a rename and the formatting the gauntlet
+asked for, and §4.6 re-takes the differ there.
+
+### 4.1 The rows, red then green
+
+Seven rows, written before the change and run at 0.2.34 (`~/lanes/
+s257/rows/`): `typecheck/enum_union_two.lu`, `enum_union_three.lu`,
+`enum_union_tree.lu`, `rows/row_union_payloads.lu`,
+`memory/enum_union_take.lu`, `enum_union_copy.lu` — each `unsupported`
+natively at 0.2.34, phase `mem`, with the named refusal (`enum payload
+slots with conflicting types across variants`; the row file `row
+payload slots with conflicting types across tags`), and `exit(0)` with
+the claimed stdout on the checked machine and on lupin 0.1.55 — and
+`memory/enum_union_str_escape.lu`, E1004 on every wolf tier at both
+ends (lupin: `trap(region-fault)` at the same store). At the head all
+six run rows are `exit(0)` with the claimed bytes on native, release
+and checked. Two of them (`three`, `tree`) went green only after
+§3.3: at `544a8396` they were refused at `(mut all).push(W.N(5))` —
+"`copy` of an enum whose payload reaches heap storage" — the refusal
+under the refusal.
+
+The eighth row the contract named, a generic enum with a union slot
+(`enum Res[T] { None, Some(T), Fail(str) }`), is listed, not a row:
+every wolf lane stops at resolve on `a generic enum's variants
+(generic data)` (and `Res[int].Some(4)` is `indexing / generic
+application`), at 0.2.34 and at the head alike — generics do not
+reach the layout. The layout is ready for it: `wir_ty_frame` unifies
+an applied generic enum's slots under its rigid frame exactly as a
+plain enum's.
+
+### 4.2 `std.json` natively (wolf-std `3bacc5f`, `tests/json/*.lu`)
+
+`wolf conform-run --native --std-root …/wolf-std/std`, the head's
+debug driver (`~/lanes/s257/stdjson1.log`, load 31):
+
+| test | native | release | checked | lupin 0.1.55 |
+|---|---|---|---|---|
+| navigation | exit 0 | exit 0 | exit 0 | exit 0 |
+| navigation_rows | exit 1 | exit 1 | exit 1 | exit 1 |
+| number_posture_and_depth | exit 0 | exit 0 | unsupported: call depth budget exhausted | exit 0 |
+| parse_misses | exit 1 | exit 1 | unsupported: call depth budget exhausted | exit 1 |
+| parse_shapes | exit 0 | exit 0 | exit 0 | exit 0 |
+| pretty_and_escape | exit 0 | exit 0 | unsupported: a tag pattern over this value in checked execution | exit 0 |
+| stringify_shapes | exit 0 | exit 0 | exit 0 | exit 0 |
+| unescape_shapes | exit 1 | exit 1 | exit 1 | exit 1 |
+| values_and_accessors | exit 0 | exit 0 | exit 0 | exit 0 |
+
+All nine build and run natively and on the release tier with lupin's
+verdict and bytes (the three `exit 1` are the tests' own claims: a
+`main` returning its row). The checked machine's three stops are its
+own, pre-existing limits (the depth budget on two deep-recursion
+tests, a tag pattern it does not execute), unchanged by this lane and
+listed in §5 to file. The module header's "the wolfc lane is dark for
+this module, by construction" is false from this head on; the std
+lane that re-pins retires the sentence.
+
+### 4.3 wolf-lang#268 (the book's inventory)
+
+`cargo xtask samples` in wolf-book `f1fd824` with `WOLF`/`LUPIN` at
+the dist binaries (`~/lanes/s257/book-{base,head}-full.log`, 535
+samples each):
+
+| | 0.2.34 | head |
+|---|---|---|
+| passed / pending / failed / flips | 532 / 3 / 0 / 0 | 528 / 3 / 11 / **1** |
+
+The one FLIP is `ch27/ex27-3` — `lupin-run(exit=0)` holds and the
+compiler no longer declines it — the inventory's row 1 and the sample
+the prediction named; its count goes 1 → 0 and the inventory 42 → 41
+`lupin-run` fences at `f1fd824` (the issue's table counts 133 at its
+opening; the orchestrator moves the row). The 11 failures are the
+pin bump's, not this lane's: seven console blocks drifted on the
+version string (`wolf 0.2.34+dev.07c3ce3`), and four verdicts
+(`ch08/ex8-3`, `ex8-9`, `book/ch08/s4`, `s12`: `fail(E1010)`/
+`fail(E1012)` expected, `pass` now) that trunk `0477ce62` already
+answers `pass` — s252's `[mem.region.scalar]` (a struct of scalars
+names no region), measured with the trunk dist on the same four files.
+
+### 4.4 The differ (`cargo xtask differ <wolf> <lupin 0.1.55> --native --triage`, the head's 1,195-file corpus)
+
+| impl A | agreements | completeness | SOUNDNESS | unsupported (fwd) | hard div. | A ran / both ran of 1,134 | load |
+|---|---|---|---|---|---|---|---|
+| 0.2.34 `9da7bdcf` | 791 | 248 | 14 | 108 (3) | 34 | 719 / 688 | 29.9 |
+| trunk `0477ce62` | 790 | 246 | 17 | 107 (3) | 37 | 726 / 693 | 15.9–24.5 |
+| head `07c3ce33` | 796 | 246 | 17 | 101 (3) | 37 | 732 / 699 | 21.9 |
+
+Trunk → head, per file: **no finding changes class**; the only three
+lines that differ are the exit codes of three UB-reading rows
+(`conc/atomic_ub_uaf`, `memory/unsafe_ub_uaf`, `memory/volatile_ub_uaf`:
+garbage reads, the same SOUNDNESS class at both ends). This lane's
+whole effect is +6 agreements, −6 unsupported, +6 executed on A and
+on both: the six run rows (`str_escape` was a static E1004 at both
+ends and never in the ledger). 0.2.34 → trunk is s252–s254's: the
+three `region_scalar_*` rows now run natively where lupin 0.1.55
+still traps (`[mem.region.scalar]`), `distinct_copy_scalar` and
+`core_limit_rows` agree, `region_os_cwd_return` and
+`region_scalar_mut` move between completeness and agreement — none of
+it this lane's, all of it measured rather than assumed because the
+first comparison (0.2.34 vs head) showed +3 SOUNDNESS that this lane
+did not make. The conservatism ledger never carried the refusal: no
+corpus file at `0477ce62` mentioned it.
+
+### 4.5 The prediction, scored
+
+1. Per slot — as predicted, and for the predicted reason: zero
+   movement outside the rows (§4.4, the snapshots: one ledger
+   snapshot grew seven lines, nothing else changed).
+2. The type form — `TypeData::Union`, `union.make`/`union.view`,
+   `load.union`/`store.union` as written.
+3. Both backends — the two arms and `is_agg`, no bitcast; the ABI
+   leaf. As predicted.
+4. The checked machine unchanged — as predicted; and the region
+   ledger and the move checker needed nothing (E1004 at the store,
+   `take` through a match, `copy`: all three rows as the uniform
+   enum behaves).
+5. #268 — exactly 1 sample (`ch27/ex27-3`), as predicted.
+6. The differ — the counts move by the rows alone, as predicted;
+   the prediction said "+ the new rows' files" and the count is +6,
+   not +7, because the E1004 row was never in the ledger.
+7. `std.json` — all nine, as predicted; neither named risk bit.
+
+**What the prediction missed**: the refusal under the refusal
+(§2.2). `copy` of an enum with a heap payload, and of a `Map` whose
+values reach the heap, were refused by name for every enum, uniform
+or not, and a recursive enum needed a copy *function*, not an inline
+rebuild. That is a third of the diff and was not in §1.
+
+### 4.6 The final head
+
+(the gauntlet, the differ and the run ids at the final head are in
+the PR's sections; the numbers above do not move for a rename.)
 
 ## 5. Rulings and what is left
 
-(written after the change)
+**R-s257-1 — the union is per slot** (recommended: keep). A slot
+every variant agrees on keeps its layout; only a disagreeing slot is
+a union. Whole-blob would re-lay every mixed-arity enum and need a
+tag switch at every move.
+
+**R-s257-2 — `copy` of an enum is a function per layout**
+(recommended: keep). `{Enum}.copy.m{module}.t{wir type id}`, queued
+as a pending task of the body that first asks, built once per
+module; a recursive enum copies by recursion. The alternative — an
+inline rebuild — unrolls a recursive type to the depth guard and
+refuses, which is what trunk did for every recursive enum pushed
+into a list.
+
+**R-s257-3 — `union.view` is never a trap** (recommended: keep).
+The lowering reads a slot only under the tag it tested; the checked
+machine has no slot to misread. A trap-on-wrong-member would need a
+runtime member tag the layout does not carry, for a read the
+compiler never emits.
+
+Issues to file (listed, not filed):
+
+- wolf-lang: a generic enum's variants refuse at resolve on every
+  lane ("a generic enum's variants (generic data)"; `Res[int].Some(4)`
+  is "indexing / generic application"); the union layout is ready
+  for it (§4.1).
+- wolf-lang: the checked machine stops on `std.json`'s
+  `number_posture_and_depth` and `parse_misses` ("call depth budget
+  exhausted") and `pretty_and_escape` ("a tag pattern over this value
+  in checked execution") where native, release and lupin run (§4.2).
+- wolf-lang: enum `==` is still refused by name ("comparison outside
+  integers, floats, `bool` and `str`"); a union slot compares through
+  the tag, never by bytes, when a lane takes it.
+- wolf-std: `std/json/json.lu`'s header ("the wolfc lane is dark for
+  this module, by construction") retires at the re-pin; the nine
+  tests' records gain the native lane.
+- wolf-book: `ch27/ex27-3` graduates `lupin-run(…)` → `run(…)` at the
+  pin bump (the FLIP), and #268's row 1 moves.
