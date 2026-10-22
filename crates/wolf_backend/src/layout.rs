@@ -12,6 +12,9 @@
 //! - `eu{OK, S…}` error unions: laid out exactly as the aggregate
 //!   `{i64 tag, OK?, S…}` (tag first; `[abi.err.repr]`'s register-pair
 //!   contract is s29's — memory layout is this).
+//! - `union{A, B, …}` slots (s257, `[abi.native.enum]`): size is the
+//!   largest member's, rounded up to the strictest member alignment,
+//!   which is the slot's alignment; every member sits at offset 0.
 //! - effect tokens (`mem.rN`, `io`): NO layout — they erase at codegen
 //!   and asking is a caller bug ([`layout_of`] returns `None`).
 //!
@@ -39,6 +42,19 @@ pub fn layout_of(types: &TypeInterner, ty: TypeId) -> Option<Layout> {
         TypeData::Mem(_) | TypeData::Io => return None,
         TypeData::Agg(fields) => fields_layout(types, fields)?.0,
         TypeData::Eu { .. } => fields_layout(types, &eu_fields(types, ty))?.0,
+        TypeData::Union(members) => {
+            let mut size = 0u32;
+            let mut align = 1u32;
+            for &m in members {
+                let l = layout_of(types, m)?;
+                size = size.max(l.size);
+                align = align.max(l.align);
+            }
+            Layout {
+                size: size.next_multiple_of(align),
+                align,
+            }
+        }
     };
     Some(l)
 }
@@ -143,6 +159,26 @@ mod tests {
         let unit = it.eu(None, vec![]);
         assert_eq!(layout_of(&it, unit), Some(Layout { size: 8, align: 8 }));
         assert_eq!(eu_ok_offset(&it, unit), None);
+    }
+
+    #[test]
+    fn union_is_the_widest_member_at_the_strictest_alignment() {
+        let mut it = TypeInterner::new();
+        let s = it.intern(TypeData::Agg(vec![types::PTR, types::I64]));
+        // int | str: 16 bytes, aligned 8.
+        let u = it.union_of(&[types::I64, s]);
+        assert_eq!(layout_of(&it, u), Some(Layout { size: 16, align: 8 }));
+        // bool | i32: 4 bytes aligned 4 — the bool's byte rounds up.
+        let w = it.union_of(&[types::BOOL, types::I32]);
+        assert_eq!(layout_of(&it, w), Some(Layout { size: 4, align: 4 }));
+        // {i8, i8, i8} | i64: 8 bytes aligned 8 (3 rounds to 8).
+        let t = it.intern(TypeData::Agg(vec![types::I8, types::I8, types::I8]));
+        let v = it.union_of(&[t, types::I64]);
+        assert_eq!(layout_of(&it, v), Some(Layout { size: 8, align: 8 }));
+        // An enum over it: tag first, the union at 8.
+        let e = it.intern(TypeData::Agg(vec![types::I64, u]));
+        assert_eq!(layout_of(&it, e), Some(Layout { size: 24, align: 8 }));
+        assert_eq!(field_offsets(&it, &[types::I64, u]), Some(vec![0, 8]));
     }
 
     #[test]

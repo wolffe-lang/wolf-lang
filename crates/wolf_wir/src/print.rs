@@ -206,7 +206,9 @@ pub(crate) fn render_inst(m: &Module, f: &Function, canon: &Canon, inst: Inst) -
         let rendered: Vec<String> = results
             .iter()
             .map(|&v| {
-                if data.op.explicit_results() {
+                if data.op.explicit_results()
+                    || (data.op == Opcode::Load && m.types.is_union(f.value_ty(v)))
+                {
                     format!("{}: {}", canon.value(v), m.types.display(f.value_ty(v)))
                 } else {
                     canon.value(v)
@@ -229,12 +231,22 @@ pub(crate) fn render_inst(m: &Module, f: &Function, canon: &Canon, inst: Inst) -
         | Opcode::FtouiChk
         | Opcode::Load => {
             if let Some(&r) = results.first() {
-                write!(s, ".{}", m.types.display(f.value_ty(r))).unwrap();
+                // s257: a union blob's type rides the result
+                // annotation (the suffix is one token).
+                if m.types.is_union(f.value_ty(r)) {
+                    s.push_str(".union");
+                } else {
+                    write!(s, ".{}", m.types.display(f.value_ty(r))).unwrap();
+                }
             }
         }
         Opcode::Store => {
             if let Some(&a) = args.first() {
-                write!(s, ".{}", m.types.display(f.value_ty(a))).unwrap();
+                if m.types.is_union(f.value_ty(a)) {
+                    s.push_str(".union");
+                } else {
+                    write!(s, ".{}", m.types.display(f.value_ty(a))).unwrap();
+                }
             }
         }
         Opcode::Icmp => {

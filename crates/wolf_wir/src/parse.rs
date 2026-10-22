@@ -834,6 +834,29 @@ fn parse_type(line: &mut Line, module: &mut Module) -> PResult<TypeId> {
             line.expect(Tok::RBrace)?;
             Ok(module.types.intern(TypeData::Agg(fields)))
         }
+        Some(Tok::Ident(name)) if name == "union" => {
+            // `union{A, B, …}` (s257) — the members of one union slot;
+            // interned through `union_of`, so order and repeats in the
+            // text never make a second type.
+            line.next();
+            line.expect(Tok::LBrace)?;
+            let mut members = Vec::new();
+            if line.peek() != Some(&Tok::RBrace) {
+                loop {
+                    members.push(parse_type(line, module)?);
+                    if line.peek() == Some(&Tok::Comma) {
+                        line.next();
+                    } else {
+                        break;
+                    }
+                }
+            }
+            line.expect(Tok::RBrace)?;
+            if members.len() < 2 {
+                return line.fail("`union{…}` needs at least two member types");
+            }
+            Ok(module.types.union_of(&members))
+        }
         Some(Tok::Ident(name)) if name == "eu" => {
             // `eu{OK, SLOTS…}` — first position is the ok type
             // (`unit` when the ok half carries no value), the rest
@@ -1194,6 +1217,8 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
         ("eu.is_err", Opcode::EuIsErr),
         ("eu.ok", Opcode::EuOk),
         ("eu.err", Opcode::EuErr),
+        ("union.make", Opcode::UnionMake),
+        ("union.view", Opcode::UnionView),
     ];
     if let Some(&(_, op)) = fixed.iter().find(|&&(m, _)| m == name) {
         return Ok(Mnemonic {
@@ -1219,6 +1244,18 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
             ("store", Opcode::Store),
         ];
         if let Some(&(_, op)) = typed.iter().find(|&&(m, _)| m == prefix) {
+            // s257: a union slot moves as one blob. `load.union` takes
+            // its type from the result annotation and `store.union`
+            // from the stored value, since the suffix is one token.
+            if suffix == "union" && matches!(op, Opcode::Load | Opcode::Store) {
+                return Ok(Mnemonic {
+                    op,
+                    ty: None,
+                    icc: None,
+                    fcc: None,
+                    trap: None,
+                });
+            }
             let Some(ty) = scalar_type(suffix) else {
                 return line.fail(format!(
                     "`{prefix}` needs a scalar type suffix, got `{suffix}`"
@@ -1524,7 +1561,18 @@ fn parse_inst(
                 let lex = line.num()?;
                 aux = Aux::Int(parse_u64(line, &lex)? as i64);
             }
-            vec![mn.ty.expect("typed mnemonic")]
+            match mn.ty {
+                Some(t) => vec![t],
+                None => match result_annots.first() {
+                    Some(Some(t)) if p.module.types.is_union(*t) => vec![*t],
+                    _ => {
+                        return line.fail(
+                            "`load.union` needs its union type on the result, e.g. \
+                             `%r: union{i64, {ptr, i64}} = load.union %p, %m`",
+                        );
+                    }
+                },
+            }
         }
         Opcode::Store => {
             args = parse_val_list(line, values, func)?;
@@ -1535,7 +1583,16 @@ fn parse_inst(
                 let lex = line.num()?;
                 aux = Aux::Int(parse_u64(line, &lex)? as i64);
             }
-            let sty = mn.ty.expect("typed mnemonic");
+            let sty = match mn.ty {
+                Some(t) => t,
+                None => {
+                    let t = func.value_ty(args[0]);
+                    if !p.module.types.is_union(t) {
+                        return line.fail("`store.union` stores a union-typed value");
+                    }
+                    t
+                }
+            };
             if func.value_ty(args[0]) != sty {
                 return line.fail(format!(
                     "store type suffix `{}` does not match the stored value's type `{}`",

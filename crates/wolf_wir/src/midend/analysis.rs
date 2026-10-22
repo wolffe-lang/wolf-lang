@@ -331,6 +331,8 @@ pub(crate) fn is_gvn_pure(op: Opcode) -> bool {
             | Opcode::EuIsErr
             | Opcode::EuOk
             | Opcode::EuErr
+            | Opcode::UnionMake
+            | Opcode::UnionView
     )
 }
 
@@ -382,6 +384,8 @@ pub(crate) fn is_removable(op: Opcode) -> bool {
             | Opcode::EuIsErr
             | Opcode::EuOk
             | Opcode::EuErr
+            | Opcode::UnionMake
+            | Opcode::UnionView
             // A dead load is removable: safe-tier WIR loads cannot
             // trap (a live token is structural proof of validity),
             // and reading memory has no effect.

@@ -57,6 +57,16 @@ pub enum TypeData {
         /// tags (payload-free rows have none).
         slots: Vec<TypeId>,
     },
+    /// A union slot (s257, `[abi.native.enum]`): one enum or row
+    /// payload position whose types DISAGREE across the variants or
+    /// tags. The members are the distinct types that share the slot,
+    /// sorted by id so one set interns to one type. Storage is the
+    /// largest member at the strictest member alignment; a variant
+    /// writes and reads its own member at offset 0 through `union.make`
+    /// / `union.view`, and the bytes a member does not cover are
+    /// unspecified. Never a scalar: it moves as a blob (`load.union`,
+    /// `store.union`, block params, call units) like an aggregate.
+    Union(Vec<TypeId>),
 }
 
 /// Deduplicating type interner. Scalars are pre-interned so their
@@ -132,6 +142,39 @@ impl TypeInterner {
         self.intern(TypeData::Eu { ok, slots })
     }
 
+    /// Intern the union slot over `members` (s257): the distinct
+    /// member types sorted by id. One member is no union — the type
+    /// itself comes back, so a slot every variant agrees on keeps its
+    /// plain layout. A member that is itself a union is flattened.
+    pub fn union_of(&mut self, members: &[TypeId]) -> TypeId {
+        let mut flat: Vec<TypeId> = Vec::with_capacity(members.len());
+        for &m in members {
+            match self.get(m) {
+                TypeData::Union(inner) => flat.extend(inner.iter().copied()),
+                _ => flat.push(m),
+            }
+        }
+        flat.sort_by_key(|t| t.0);
+        flat.dedup();
+        match flat.as_slice() {
+            [one] => *one,
+            _ => self.intern(TypeData::Union(flat)),
+        }
+    }
+
+    /// True for a union slot.
+    pub fn is_union(&self, id: TypeId) -> bool {
+        matches!(self.get(id), TypeData::Union(_))
+    }
+
+    /// The members of a union slot, or `None` for any other type.
+    pub fn union_members(&self, id: TypeId) -> Option<&[TypeId]> {
+        match self.get(id) {
+            TypeData::Union(ms) => Some(ms),
+            _ => None,
+        }
+    }
+
     pub fn get(&self, id: TypeId) -> &TypeData {
         &self.types[id]
     }
@@ -202,6 +245,10 @@ impl TypeInterner {
                 }
                 format!("eu{{{}}}", parts.join(", "))
             }
+            TypeData::Union(members) => {
+                let inner: Vec<String> = members.iter().map(|&f| self.display(f)).collect();
+                format!("union{{{}}}", inner.join(", "))
+            }
         }
     }
 }
@@ -260,5 +307,21 @@ mod tests {
         assert_eq!(it.display(a), "{f64, i64}");
         assert!(it.is_token(m0));
         assert!(!it.is_token(a));
+    }
+
+    #[test]
+    fn union_interns_one_set_once() {
+        let mut it = TypeInterner::new();
+        let s = it.intern(TypeData::Agg(vec![PTR, I64]));
+        let u = it.union_of(&[I64, s]);
+        assert_eq!(it.union_of(&[s, I64, I64]), u);
+        assert_eq!(it.display(u), "union{i64, {ptr, i64}}");
+        assert!(it.is_union(u));
+        assert_eq!(it.union_members(u), Some(&[I64, s][..]));
+        // One member is the member itself; a nested union flattens.
+        assert_eq!(it.union_of(&[F64]), F64);
+        let w = it.union_of(&[u, F64]);
+        assert_eq!(it.union_members(w), Some(&[I64, F64, s][..]));
+        assert!(!it.is_union(s));
     }
 }
