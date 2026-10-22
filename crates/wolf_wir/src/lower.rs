@@ -4811,7 +4811,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         v.kind == SyntaxKind::PrefixExpr
             && PrefixExpr::cast(v).is_some_and(|p| {
                 p.op().map(|t| t.kind) == Some(SyntaxKind::CopyKw)
-                    && p.operand().is_some_and(|o| o.kind != SyntaxKind::RegionBlock)
+                    && p.operand()
+                        .is_some_and(|o| o.kind != SyntaxKind::RegionBlock)
             })
     }
 
@@ -5094,7 +5095,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // binding's ambient.
                 if self.is_copy_prefix(value_expr) {
                     let container = self.expr_sema_ty(value_expr.span).is_some_and(|t| {
-                        matches!(self.table.kind(self.strip_sema(t)), TyKind::List(_) | TyKind::Map(..))
+                        matches!(
+                            self.table.kind(self.strip_sema(t)),
+                            TyKind::List(_) | TyKind::Map(..)
+                        )
                     });
                     let hdr = if container && self.outer_scope_target(&name).is_some() {
                         Some(self.b.use_var(var))
@@ -5148,7 +5152,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 // header's region, anything else in the entry ambient.
                 if self.is_copy_prefix(value_expr) {
                     let container = self.expr_sema_ty(value_expr.span).is_some_and(|t| {
-                        matches!(self.table.kind(self.strip_sema(t)), TyKind::List(_) | TyKind::Map(..))
+                        matches!(
+                            self.table.kind(self.strip_sema(t)),
+                            TyKind::List(_) | TyKind::Map(..)
+                        )
                     });
                     let hdr = if container {
                         Some(self.read_mut_ref(ptr, region, elem, stmt.span)?)
@@ -5430,10 +5437,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // header's region, any other field in the binding's ambient.
         if self.is_copy_prefix(value_expr) {
             let root = self.place_root_name(place);
-            let container = self
-                .expr_sema_ty(value_expr.span)
-                .is_some_and(|t| matches!(self.table.kind(self.strip_sema(t)), TyKind::List(_) | TyKind::Map(..)));
-            let hdr = if container && root.as_deref().is_some_and(|n| self.outer_scope_target(n).is_some()) {
+            let container = self.expr_sema_ty(value_expr.span).is_some_and(|t| {
+                matches!(
+                    self.table.kind(self.strip_sema(t)),
+                    TyKind::List(_) | TyKind::Map(..)
+                )
+            });
+            let hdr = if container
+                && root
+                    .as_deref()
+                    .is_some_and(|n| self.outer_scope_target(n).is_some())
+            {
                 Some(self.place_load(&p, span)?)
             } else {
                 None
@@ -8924,7 +8938,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 };
                 let table = self.table;
                 if let Some(target) = aimed {
-                    return Ok(Flow::Val(Some(self.copy_into(v, table, ty, e.span, target)?)));
+                    return Ok(Flow::Val(Some(
+                        self.copy_into(v, table, ty, e.span, target)?,
+                    )));
                 }
                 Ok(Flow::Val(Some(self.deep_copy_in(v, table, ty, e.span, 0)?)))
             }
