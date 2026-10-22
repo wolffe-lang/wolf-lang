@@ -2,7 +2,9 @@
 
 Lane note. **Opus 5.5. Crawl 54.** Branch `s258` off the orchestrator's
 `o1-row-member` (`8bc97f65`: the spec sentence, the E0409 explain text
-and the two corpus witnesses, three commits on trunk `94cd52bc`).
+and the two corpus witnesses, three commits on trunk `94cd52bc`),
+rebased onto trunk `76a3c8b6` (s255) before the final head; the
+orchestrator's three commits ride along as `f44da8a7`..`6414aa6a`.
 Contract: `sprints/compiler/s258-the-row-member.md`. Toolchains: wolf
 0.2.34 (`9da7bdcf`) the control, lupin 0.1.55 the reference.
 
@@ -109,14 +111,21 @@ method surface) and `unsupported` on lupin. Not touched here (the
 contract's one construct); listed for the orchestrator to file.
 
 **The ledgers.** `spec/anchors.json` regenerated is byte-identical to
-trunk's: 688 keys on both sides, nothing in either difference.
+trunk's: 688 keys on both sides at `94cd52bc`, nothing in either
+difference. After the rebase it is byte-identical to `76a3c8b6`'s (692
+keys, nothing either way); against the old parent `94cd52bc` the head
+holds s255's four new keys (`mem.region.outer-write`,
+`type.list.reserve`, `type.list.reset`, `type.list.storage`) and loses
+none. The clause gained no tag.
 `spec-extract --check` was green before and after. The lowering ledger
 gained exactly three lines (the witnesses `not mem-clean (pre-wir rungs
 own it)`, `row_member_handled.lu: lowers`). `docs/diagnostics.md` was
 out of sync at `8bc97f65` (`diag-catalog --check` red: the explain text)
 and regenerated carries the text and six new fixtures (the two
-witnesses' token streams, four sema snapshots). Every snapshot was
-written as `.snap.new` and read before it was moved into place.
+witnesses' token streams, four sema snapshots). Each row also has a
+`wolf_parse` declaration snapshot (`corpus_decls`, every corpus file has
+one; found missing at the rebase, before any gauntlet). Every snapshot
+was written as `.snap.new` and read before it was moved into place.
 
 **The differ.** Every wolf in one configuration, the corpus's own (no
 `std/` beside the binary: with the release archive's `std/` in reach,
@@ -132,13 +141,25 @@ without it). `cargo xtask differ <wolf>
     checked  0.2.34 9da7bdc  802 agreement(s), 256 completeness note(s), 0 SOUNDNESS finding(s), 102 unsupported (3 forward pin(s)); 21 hard divergence(s)
     native   0.2.34 9da7bdc  786 agreement(s), 256 completeness note(s), 14 SOUNDNESS finding(s), 105 unsupported (3 forward pin(s)); 34 hard divergence(s)
 
-Coverage is unchanged by the arms (checked A 717, BOTH 691; native A
-721, BOTH 689). Between before and head the ledgers differ by exactly
+At the rebased base (trunk `76a3c8b6`; before = `6414aa6a`, the
+orchestrator's three commits rebased, head = this branch's code at
+`343c3993`, measured as `a4530e89` plus its three declaration snapshots,
+which no binary reads), 1,207 files, 1,146 entries:
+
+    checked  before 6414aa6  805 agreement(s), 255 completeness note(s), 9 SOUNDNESS finding(s), 105 unsupported (3 forward pin(s)); 29 hard divergence(s)
+    checked  head   a4530e8  805 agreement(s), 257 completeness note(s), 9 SOUNDNESS finding(s), 103 unsupported (3 forward pin(s)); 29 hard divergence(s)
+    native   before 6414aa6  789 agreement(s), 255 completeness note(s), 23 SOUNDNESS finding(s), 107 unsupported (3 forward pin(s)); 43 hard divergence(s)
+    native   head   a4530e8  789 agreement(s), 257 completeness note(s), 23 SOUNDNESS finding(s), 105 unsupported (3 forward pin(s)); 43 hard divergence(s)
+
+Coverage is unchanged by the arms at either base (at `94cd52bc`
+checked A 717, BOTH 691, native A 721, BOTH 689; at `76a3c8b6` checked
+A 730, BOTH 701, native A 734, BOTH 699). At both bases, between before and head the ledgers differ by exactly
 two lines on each tier, the two witnesses, `unsupported` → `Completeness`
 (`a: fail(E0409)`, `b: exit(0)`). On native the three use-after-free UB
 rows (`unsafe_ub_uaf`, `atomic_ub_uaf`, `volatile_ub_uaf`) print a
 different exit status on every run inside the same SOUNDNESS class: UB,
-not a move. The plain pass head against before reports 0 divergences.
+not a move. The plain pass head against before reports 0 divergences at
+both bases.
 Head against 0.2.34 and before against 0.2.34 report the same seven
 divergences, all trunk's since the tag (s252's region-scalar rows,
 `distinct_copy_scalar`, `region_os_cwd_return`, `core_limit_rows`), so
