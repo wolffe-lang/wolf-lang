@@ -1543,7 +1543,7 @@ fn load_flat_raw(
     region: RegionId,
     span: Span,
 ) -> R<Value> {
-    if scalar_size(ty).is_some() {
+    if scalar_size(ty).is_some() || b.module.types.is_union(ty) {
         return Ok(b.ins_load(ty, ptr, region));
     }
     let types::TypeData::Agg(fields) = b.module.types.get(ty).clone() else {
@@ -1620,7 +1620,7 @@ fn store_flat_raw(
     span: Span,
 ) -> R<()> {
     let ty = b.func.value_ty(val);
-    if scalar_size(ty).is_some() {
+    if scalar_size(ty).is_some() || b.module.types.is_union(ty) {
         b.ins_store(val, ptr, region);
         return Ok(());
     }
@@ -2410,8 +2410,11 @@ fn wir_ty_frame(
                     let frame = if *generic { Some(&inner) } else { frame };
                     // Enum values: the variant tag (declaration index,
                     // i64) alone when payload-free, else tag + the
-                    // position-unified payload slots.
-                    let mut slots: Vec<TypeId> = Vec::new();
+                    // position-unified payload slots. A slot whose
+                    // types disagree across variants is a union of
+                    // them (s257, `[abi.native.enum]`); a slot every
+                    // variant agrees on is that type, as before.
+                    let mut slots: Vec<Vec<TypeId>> = Vec::new();
                     for v in variants {
                         for (i, &p) in v.payload.iter().enumerate() {
                             let Some(w) =
@@ -2419,16 +2422,9 @@ fn wir_ty_frame(
                             else {
                                 return Err(refuse("unit-typed enum payloads", span));
                             };
-                            match slots.get(i) {
-                                None => slots.push(w),
-                                Some(&s) if s == w => {}
-                                Some(_) => {
-                                    return Err(refuse(
-                                        "enum payload slots with conflicting types across \
-                                         variants (spilled union layout, c06)",
-                                        span,
-                                    ));
-                                }
+                            match slots.get_mut(i) {
+                                None => slots.push(vec![w]),
+                                Some(members) => members.push(w),
                             }
                         }
                     }
@@ -2436,7 +2432,9 @@ fn wir_ty_frame(
                         Ok(Some(types::I64))
                     } else {
                         let mut fields = vec![types::I64];
-                        fields.extend(slots);
+                        for members in &slots {
+                            fields.push(it.union_of(members));
+                        }
                         Ok(Some(it.intern(types::TypeData::Agg(fields))))
                     }
                 }
@@ -2639,9 +2637,10 @@ fn wir_ty_frame(
 }
 
 /// The position-unified error-payload slot types of a row (s27): slot
-/// `i` is the type every tag's `i`-th payload agrees on; disagreement
-/// refuses (spilled union layout is c06's). Open tails are admitted —
-/// unknown tags carry no payloads we could name; generic tails refuse.
+/// `i` is the type every tag's `i`-th payload agrees on, or the union
+/// of the types they carry there (s257, `[abi.native.enum]`). Open
+/// tails are admitted — unknown tags carry no payloads we could name;
+/// generic tails refuse.
 fn row_slot_tys(
     it: &mut types::TypeInterner,
     table: &TypeTable,
@@ -2659,26 +2658,19 @@ fn row_slot_tys(
         return Err(refuse("generic row tails (monomorphization)", span));
     }
     let tags = tags.clone();
-    let mut slots: Vec<TypeId> = Vec::new();
+    let mut slots: Vec<Vec<TypeId>> = Vec::new();
     for (_, payloads) in &tags {
         for (i, &p) in payloads.iter().enumerate() {
             let Some(w) = wir_ty_depth(it, table, sigs, p, span, depth + 1)? else {
                 return Err(refuse("unit-typed tag payloads", span));
             };
-            match slots.get(i) {
-                None => slots.push(w),
-                Some(&s) if s == w => {}
-                Some(_) => {
-                    return Err(refuse(
-                        "row payload slots with conflicting types across tags \
-                         (spilled union layout, c06)",
-                        span,
-                    ));
-                }
+            match slots.get_mut(i) {
+                None => slots.push(vec![w]),
+                Some(members) => members.push(w),
             }
         }
     }
-    Ok(slots)
+    Ok(slots.iter().map(|members| it.union_of(members)).collect())
 }
 
 /// Is the sema type an unsigned integer (through wrappers)? Decides
@@ -2770,6 +2762,64 @@ fn flat_size(it: &types::TypeInterner, t: TypeId) -> Option<u64> {
             }
             Some(sum)
         }
+        // s257: a union slot is one blob in every layout, sized as the
+        // backends size it (`wolf_backend::layout`'s rule, mirrored in
+        // [`natural_layout`]), because `load.union`/`store.union` copy
+        // exactly that many bytes.
+        types::TypeData::Union(_) => natural_layout(it, t).map(|(size, _)| size),
+        _ => None,
+    }
+}
+
+/// The natural (C-like) size and alignment of a type — the rule
+/// `wolf_backend::layout::layout_of` owns, mirrored here for the one
+/// place lowering needs a backend size: a union slot's blob
+/// ([`flat_size`]). Scalars at their width; aggregates with fields at
+/// the next multiple of their alignment, the size rounded to the
+/// strictest; a union the largest member rounded to the strictest
+/// member alignment. `None` for tokens.
+fn natural_layout(it: &types::TypeInterner, t: TypeId) -> Option<(u64, u64)> {
+    if let Some(s) = scalar_size(t) {
+        return Some((s, s));
+    }
+    match it.get(t) {
+        types::TypeData::Agg(fields) => {
+            let mut size = 0u64;
+            let mut align = 1u64;
+            for f in fields.clone() {
+                let (fs, fa) = natural_layout(it, f)?;
+                size = size.next_multiple_of(fa);
+                size += fs;
+                align = align.max(fa);
+            }
+            Some((size.next_multiple_of(align), align))
+        }
+        types::TypeData::Eu { .. } => {
+            let mut size = 0u64;
+            let mut align = 1u64;
+            let mut fields = vec![types::I64];
+            if let types::TypeData::Eu { ok, slots } = it.get(t) {
+                fields.extend(ok.iter().copied());
+                fields.extend(slots.iter().copied());
+            }
+            for f in fields {
+                let (fs, fa) = natural_layout(it, f)?;
+                size = size.next_multiple_of(fa);
+                size += fs;
+                align = align.max(fa);
+            }
+            Some((size.next_multiple_of(align), align))
+        }
+        types::TypeData::Union(members) => {
+            let mut size = 0u64;
+            let mut align = 1u64;
+            for m in members.clone() {
+                let (ms, ma) = natural_layout(it, m)?;
+                size = size.max(ms);
+                align = align.max(ma);
+            }
+            Some((size.next_multiple_of(align), align))
+        }
         _ => None,
     }
 }
@@ -2787,6 +2837,7 @@ fn flat_align(it: &types::TypeInterner, t: TypeId) -> u64 {
             .map(|f| flat_align(it, f))
             .max()
             .unwrap_or(1),
+        types::TypeData::Union(_) => natural_layout(it, t).map(|(_, a)| a).unwrap_or(0),
         _ => 0,
     }
 }
@@ -10826,6 +10877,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         }
                         let id = self.b.module.tag_id(&callee_text);
                         let tag = self.b.iconst(types::I64, id);
+                        let payloads = self.into_eu_slots(eu, &payloads, e.span)?;
                         return Ok(Flow::Val(Some(self.b.ins_eu_make_err(eu, tag, &payloads))));
                     }
                     return Err(refuse("calls outside the resolved surface", e.span));
@@ -21364,7 +21416,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Err(refuse("an enum without an aggregate shape", span));
         };
         let mut parts = vec![tag];
-        parts.extend(payloads.iter().copied());
+        for (k, &pv) in payloads.iter().enumerate() {
+            let Some(&slot) = fields.get(k + 1) else {
+                return Err(refuse("a payload the enum's slots do not carry", span));
+            };
+            parts.push(self.into_slot(pv, slot));
+        }
         for &fty in &fields[parts.len()..] {
             let z = self.zero_of(fty, span)?;
             parts.push(z);
@@ -21372,6 +21429,120 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         Ok(Flow::Val(Some(
             self.b.ins(Opcode::AggMake, &parts, &[wty], Aux::None).one(),
         )))
+    }
+
+    /// A payload value written into slot type `slot` (s257): the value
+    /// itself when the slot is its type, else the slot's union holding
+    /// it (`union.make`). A value that is already a union of a subset
+    /// of the slot's members widens by the same op.
+    fn into_slot(&mut self, v: Value, slot: TypeId) -> Value {
+        let vt = self.b.func.value_ty(v);
+        if vt == slot || !self.b.module.types.is_union(slot) {
+            return v;
+        }
+        self.b
+            .ins(Opcode::UnionMake, &[v], &[slot], Aux::None)
+            .one()
+    }
+
+    /// A slot value read as `want` (s257): the value itself unless its
+    /// type is a union slot and `want` is one of the members, in which
+    /// case the typed view at the slot's offset 0 (`union.view`). The
+    /// caller has tested the tag that makes `want` the active member.
+    fn slot_view(&mut self, v: Value, want: TypeId) -> Value {
+        let vt = self.b.func.value_ty(v);
+        if vt == want || !self.b.module.types.is_union(vt) {
+            return v;
+        }
+        self.b
+            .ins(Opcode::UnionView, &[v], &[want], Aux::None)
+            .one()
+    }
+
+    /// [`Self::slot_view`] with `want` named as a sema type in `table`.
+    fn slot_view_as(
+        &mut self,
+        v: Value,
+        table: &'t TypeTable,
+        want: TyId,
+        span: Span,
+    ) -> R<Value> {
+        if !self.b.module.types.is_union(self.b.func.value_ty(v)) {
+            return Ok(v);
+        }
+        let Some(wt) = self.wir_ty_in(table, want, span)? else {
+            return Err(refuse("a unit-typed view of a union slot", span));
+        };
+        Ok(self.slot_view(v, wt))
+    }
+
+    /// The view type of each payload bind of a tag arm (s257): the
+    /// arm's variant decides what its payload slots hold, so a bind
+    /// of a union slot is typed by the variant's payload, not the
+    /// slot. `None` keeps the slot's own type (every non-union slot).
+    fn view_binds(
+        &mut self,
+        consts: &[ScalarTest],
+        binds: &[(usize, String)],
+        domain: &MatchDomain,
+        scrut_sema: TyId,
+        sv: Value,
+        span: Span,
+    ) -> R<Vec<(usize, String, Option<TypeId>)>> {
+        if binds.is_empty() {
+            return Ok(Vec::new());
+        }
+        let sv_ty = self.b.func.value_ty(sv);
+        let slot_tys: Vec<TypeId> = match self.b.module.types.get(sv_ty) {
+            types::TypeData::Agg(fields) => fields[1..].to_vec(),
+            _ => Vec::new(),
+        };
+        let any_union = binds
+            .iter()
+            .any(|(k, _)| slot_tys.get(*k).is_some_and(|t| self.b.module.types.is_union(*t)));
+        if !any_union {
+            return Ok(binds.iter().map(|(k, n)| (*k, n.clone(), None)).collect());
+        }
+        let [ScalarTest::Eq(c)] = consts else {
+            return Err(refuse(
+                "a payload bound by an or-pattern over a union slot",
+                span,
+            ));
+        };
+        let c = *c;
+        let name: String = match domain {
+            MatchDomain::Enum(vs) => vs
+                .iter()
+                .find(|(_, i, _)| *i == c)
+                .map(|(n, ..)| n.clone())
+                .unwrap_or_default(),
+            MatchDomain::Row(ts) => {
+                let mut found = String::new();
+                for (n, _) in ts {
+                    if self.b.module.tag_id(n) == c {
+                        found = n.clone();
+                        break;
+                    }
+                }
+                found
+            }
+            _ => String::new(),
+        };
+        let payload_tys = self.payload_sema_tys(scrut_sema, domain, c, &name, span)?;
+        let mut out = Vec::with_capacity(binds.len());
+        for (k, n) in binds {
+            let view = match slot_tys.get(*k) {
+                Some(t) if self.b.module.types.is_union(*t) => {
+                    let Some(&(ptbl, pid)) = payload_tys.get(*k) else {
+                        return Err(refuse("a payload slot the variant does not carry", span));
+                    };
+                    self.wir_ty_in(ptbl, pid, span)?
+                }
+                _ => None,
+            };
+            out.push((*k, n.clone(), view));
+        }
+        Ok(out)
     }
 
     /// An inherent method call (s27): the receiver marshals under its
@@ -21867,17 +22038,58 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         else {
             return Err(refuse("propagating into a non-union type", span));
         };
-        if sslots.len() > tslots.len() || sslots[..] != tslots[..sslots.len()] {
-            return Err(refuse(
-                "row widening with non-prefix payload slots (spilled union layout)",
-                span,
-            ));
+        if sslots.len() > tslots.len() {
+            return Err(refuse("row widening into a row with fewer payload slots", span));
         }
+        // s257: a source slot rides into the target's slot as itself
+        // when the types agree, else into the target's union of which
+        // it is a member (a narrower union widens by the same op).
         let tag = self.b.ins_eu_err_tag(v);
-        let payloads: Vec<Value> = (0..sslots.len())
-            .map(|k| self.b.ins_eu_err_slot(v, k))
-            .collect();
+        let mut payloads: Vec<Value> = Vec::with_capacity(sslots.len());
+        for k in 0..sslots.len() {
+            let sv = self.b.ins_eu_err_slot(v, k);
+            payloads.push(sv);
+        }
+        let payloads = self.into_eu_slots(target, &payloads, span)?;
         Ok(self.b.ins_eu_make_err(target, tag, &payloads))
+    }
+
+    /// Payload values written into the error-payload slots of `eu`
+    /// (s257): each through [`Self::into_slot`]; a value whose type is
+    /// neither the slot nor a member of the slot's union refuses by
+    /// name rather than mistype the write.
+    fn into_eu_slots(&mut self, eu: TypeId, payloads: &[Value], span: Span) -> R<Vec<Value>> {
+        let types::TypeData::Eu { slots, .. } = self.b.module.types.get(eu).clone() else {
+            return Err(refuse("payloads for a non-union type", span));
+        };
+        let mut out = Vec::with_capacity(payloads.len());
+        for (k, &pv) in payloads.iter().enumerate() {
+            let Some(&slot) = slots.get(k) else {
+                return Err(refuse("a payload the row's slots do not carry", span));
+            };
+            let vt = self.b.func.value_ty(pv);
+            let fits = vt == slot
+                || match self.b.module.types.union_members(slot) {
+                    Some(ms) => {
+                        ms.contains(&vt)
+                            || self
+                                .b
+                                .module
+                                .types
+                                .union_members(vt)
+                                .is_some_and(|vs| vs.iter().all(|m| ms.contains(m)))
+                    }
+                    None => false,
+                };
+            if !fits {
+                return Err(refuse(
+                    "row widening between payload slots of unrelated types",
+                    span,
+                ));
+            }
+            out.push(self.into_slot(pv, slot));
+        }
+        Ok(out)
     }
 
     /// Postfix `?` (D30): `br eu.is_err, b_err, b_ok`. The ok path
@@ -22021,6 +22233,70 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         }
     }
 
+    /// The view type of each eu payload slot an `else |Tag(p…)|`
+    /// handler binds (s257): the tag's own payload types, read from
+    /// the scrutinee's row. Sema proved the pattern covers the row
+    /// (E0809), so the row has the one tag the pattern names; `None`
+    /// per slot when the slot is not a union (its type stands).
+    fn handler_slot_views(
+        &mut self,
+        d: ElseExpr<'t>,
+        pat: &'t GreenNode,
+        slots: &[TypeId],
+    ) -> R<Vec<Option<TypeId>>> {
+        if !slots.iter().any(|&t| self.b.module.types.is_union(t)) {
+            return Ok(vec![None; slots.len()]);
+        }
+        let Some(scrut) = d.scrutinized() else {
+            return Err(refuse("a handler pattern without a scrutinee", pat.span));
+        };
+        let Some(sema) = self.expr_sema_ty(scrut.span) else {
+            return Err(refuse("a handler pattern without a recorded type", pat.span));
+        };
+        let mut ty = strip_sema_in(self.table, sema);
+        for _ in 0..32 {
+            match self.table.kind(ty) {
+                TyKind::Distinct(inner) => ty = strip_sema_in(self.table, *inner),
+                _ => break,
+            }
+        }
+        let TyKind::ErrUnion(_, row) = self.table.kind(ty).clone() else {
+            return Err(refuse("a handler pattern over a non-fallible value", pat.span));
+        };
+        let TyKind::Row { tags, .. } = self.table.kind(row).clone() else {
+            return Err(refuse("a handler pattern over a generic row", pat.span));
+        };
+        // The pattern's tag: its text up to the payload list.
+        let end = pat
+            .nodes()
+            .find(|n| wolf_ast::is_pattern_kind(n.kind))
+            .map(|n| n.span.lo)
+            .unwrap_or(pat.span.hi);
+        let raw = String::from_utf8_lossy(&self.src[pat.span.lo as usize..end as usize])
+            .into_owned();
+        let name: String = raw.trim_end().trim_end_matches('(').trim_end().to_string();
+        let last = name.rsplit('.').next().unwrap_or(&name).to_string();
+        let payloads: Vec<TyId> = match tags.iter().find(|(n, _)| *n == name || *n == last) {
+            Some((_, ps)) => ps.clone(),
+            None if tags.len() == 1 => tags[0].1.clone(),
+            None => return Err(refuse("a handler tag the row does not carry", pat.span)),
+        };
+        let mut out = Vec::with_capacity(slots.len());
+        for (k, &slot) in slots.iter().enumerate() {
+            if !self.b.module.types.is_union(slot) {
+                out.push(None);
+                continue;
+            }
+            let Some(&pid) = payloads.get(k) else {
+                out.push(None);
+                continue;
+            };
+            let table = self.table;
+            out.push(self.wir_ty_in(table, pid, pat.span)?);
+        }
+        Ok(out)
+    }
+
     /// The `else` handler side: bind `|err|` to the caught row value
     /// (tag alone, or tag + payload slots as an aggregate — the enum
     /// mirror), then lower the fallback.
@@ -22082,11 +22358,16 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                             p.span,
                         ));
                     }
+                    let views = self.handler_slot_views(d, p, slots)?;
                     for (k, sub) in subs.iter().enumerate() {
                         match sub.kind {
                             SyntaxKind::IdentPat => {
                                 let name = self.text(sub.span);
                                 let pv = self.b.ins_eu_err_slot(v, k);
+                                let pv = match views.get(k).copied().flatten() {
+                                    Some(want) => self.slot_view(pv, want),
+                                    None => pv,
+                                };
                                 let fty = self.b.func.value_ty(pv);
                                 let var = self.b.declare_var(fty);
                                 self.b.def_var(var, pv);
@@ -22451,6 +22732,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         .b
                         .ins(Opcode::AggGet, &[sv], &[fty], Aux::Int((j + 1) as i64))
                         .one();
+                    let pv = self.slot_view_as(pv, ptbl, pid, s.span)?;
                     self.product_sub(s, pv, ptbl, pid, conds, binds, dead)?;
                     if *dead {
                         return Ok(());
@@ -22797,6 +23079,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 .b
                 .ins(Opcode::AggGet, &[v], &[fty], Aux::Int((j + 1) as i64))
                 .one();
+            let pv = self.slot_view_as(pv, ptbl, pid, s.span)?;
             self.product_sub(s, pv, ptbl, pid, conds, binds, dead)?;
             if *dead {
                 return Ok(());
@@ -23658,6 +23941,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     }
                 }
                 PatShape::Tests(consts, binds) => {
+                    let binds = self.view_binds(&consts, &binds, domain, scrut_sema, sv, span)?;
                     // The arm constants live at the DISCRIMINANT's type,
                     // not `int`'s (s74, #67). A scalar scrutinee can be
                     // any integer width — a `for` induction variable, a
@@ -24059,7 +24343,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         &mut self,
         arm: &MatchArm<'t>,
         sv: Value,
-        payload_binds: &[(usize, String)],
+        payload_binds: &[(usize, String, Option<TypeId>)],
         whole_bind: Option<String>,
         want_v: bool,
         merge_eu: Option<TypeId>,
@@ -24090,7 +24374,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         &mut self,
         arm: &MatchArm<'t>,
         sv: Value,
-        payload_binds: &[(usize, String)],
+        payload_binds: &[(usize, String, Option<TypeId>)],
         whole_bind: Option<String>,
         want_v: bool,
         merge_eu: Option<TypeId>,
@@ -24113,7 +24397,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // Payload bindings: field 1+slot of the scrutinee aggregate,
         // licensed by the dominating tag test.
         let sv_ty = self.b.func.value_ty(sv);
-        for (slot, name) in payload_binds {
+        for (slot, name, view) in payload_binds {
             let types::TypeData::Agg(fields) = self.b.module.types.get(sv_ty).clone() else {
                 return Err(refuse("payload bindings on a payload-free scrutinee", span));
             };
@@ -24124,6 +24408,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 .b
                 .ins(Opcode::AggGet, &[sv], &[fty], Aux::Int((slot + 1) as i64))
                 .one();
+            // s257: a union slot binds as the arm's variant sees it.
+            let pv = match view {
+                Some(want) => self.slot_view(pv, *want),
+                None => pv,
+            };
+            let fty = self.b.func.value_ty(pv);
             let var = self.b.declare_var(fty);
             self.b.def_var(var, pv);
             self.scopes.last_mut().expect("scope").binds.push((
@@ -24660,7 +24950,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
 
     /// Load a flat value (scalar, or aggregate rebuilt field-wise).
     fn load_flat(&mut self, ty: TypeId, ptr: Value, region: RegionId, span: Span) -> R<Value> {
-        if scalar_size(ty).is_some() {
+        // s257: a union slot is one blob (`load.union`).
+        if scalar_size(ty).is_some() || self.b.module.types.is_union(ty) {
             return Ok(self.b.ins_load(ty, ptr, region));
         }
         let types::TypeData::Agg(fields) = self.b.module.types.get(ty).clone() else {
@@ -24758,7 +25049,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// text format's typed mnemonics are scalar).
     fn store_flat(&mut self, val: Value, ptr: Value, region: RegionId, span: Span) -> R<()> {
         let ty = self.b.func.value_ty(val);
-        if scalar_size(ty).is_some() {
+        if scalar_size(ty).is_some() || self.b.module.types.is_union(ty) {
             self.b.ins_store(val, ptr, region);
             return Ok(());
         }
@@ -24782,7 +25073,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// Read a whole `mut`-parameter value (scalars load directly;
     /// aggregates rebuild field-wise).
     fn read_mut_ref(&mut self, ptr: Value, region: RegionId, elem: TypeId, span: Span) -> R<Value> {
-        if scalar_size(elem).is_some() {
+        if scalar_size(elem).is_some() || self.b.module.types.is_union(elem) {
             return Ok(self.b.ins_load(elem, ptr, region));
         }
         self.load_flat(elem, ptr, region, span)
@@ -24806,6 +25097,14 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 parts.push(self.zero_of(f, span)?);
             }
             return Ok(self.b.ins(Opcode::AggMake, &parts, &[t], Aux::None).one());
+        }
+        // s257: a union slot a variant does not fill holds the zero of
+        // its first member; the bytes beyond it are unspecified, as
+        // for any member write.
+        if let Some(members) = self.b.module.types.union_members(t) {
+            let first = members[0];
+            let z = self.zero_of(first, span)?;
+            return Ok(self.into_slot(z, t));
         }
         Err(refuse("a zero value of this type", span))
     }
