@@ -432,7 +432,11 @@ job's `NAME.{log,pid,rc}` from `job.sh`).
   token-stream snapshot (the row's `print` at `75fa9411` came after the
   snapshots at `354be600`; `381100de`), `ci8.log` at `66d1d519` red on
   the same row's declaration snapshot (`a3056c0c`), `ci9.log` at
-  `a3056c0c` the gauntlet at the final code head (its verdict in §5);
+  `a3056c0c` red on `diag-catalog --check` (the new rows' token-stream
+  snapshots are E1004's and E1010's fixtures; `0c041c2d`), `ci10.log` at
+  `0c041c2d` — the final code head — **all steps green**, the differ in
+  it: 1,202 files, 0 divergences, 21 in the conservatism ledger
+  (`unsupported`), 3 forward pins; lane-coverage's floors held;
   `snapall.log` the whole workspace under `INSTA_UPDATE=always` (36
   snapshot files, no `cfg_dumps` move); `sig1.log` the descriptor-wait
   test green alone (red once under load in `snapall`); `xclippy.log` —
@@ -467,7 +471,11 @@ job's `NAME.{log,pid,rc}` from `job.sh`).
   (`s255-ywtest2.sh`): red on `text_coords_test`; `coordsbase.log` the
   same test green at `77c10839` with the base dist; `ev/yew-test-t5.txt`
   the move checker on the second builder (E1001); `ev/yew-test-t6.txt`
-  the suite at `ad88c06` (its verdict in §5).
+  the suite at `ad88c06`: the checked tier green on every file, the
+  native phase broken from its 36th file by `ci10`'s `dist-smoke` step
+  pruning `target/dist`, which `toolchain/std` symlinked into (E0301,
+  `std` with no `process`) — the toolchain is copies since; `ev/yew-
+  test-t7.txt` the suite again, alone (its verdict in §5).
 - `t1.log`, `snap.log`, `regen.log` — the targeted suites, the
   mem_diagnostics snapshots, the anchors (the first pass).
 - `s255-plant` (`ee215a59`): CI run 39709618577 (`-f jobs=lint-test`,
@@ -718,9 +726,16 @@ dist-smoke, differ-self, lane-coverage). Seven runs went red on their
 own fixes in turn (§4); `ci7` at `8521a0e0` and `ci8` at `66d1d519`
 were the two snapshots the charged row's `print` had moved (the lexer's
 token stream, the parser's declaration structure), `381100de` and
-`a3056c0c`; `ci9` runs at `a3056c0c`, the final code head — its verdict
-and the differ's counts are below. The `tier pr` runs mirrored each red
-(39717013172 at `8521a0e0` on the token stream).
+`a3056c0c`; `ci9` at `a3056c0c` was red on `diag-catalog --check` (the
+catalog lists each code's fixtures, and the new rows' token-stream
+snapshots joined E1004's and E1010's after its last regeneration;
+`0c041c2d`); **`ci10` at `0c041c2d`, the final code head, is green on
+every step** (`ci10.log`): the differ moved no count — 1,202 files, 0
+divergences, 21 in the conservatism ledger (`unsupported`), 3 forward
+pins, as at trunk — and the fourteen new rows are in its file set;
+lane-coverage's floors held (checked/native/release/union 733/738/738/
+746 of 1,141). The `tier pr` runs mirrored each red (39717013172 at
+`8521a0e0` on the token stream).
 
 **The yew witness's suite, and the builder.** The suite on the witness
 at `f16e8ea` (`ev/yew-test-t3.txt`) was red on one test on both tiers:
@@ -751,8 +766,11 @@ stays ambient-clean with no placeholder and nothing allocated in the
 caller's region. The lesson for yw05 and the guide: `reset` plus pushes
 is right for a list the value refills; a list the value REBUILDS from a
 scratch needs the scratch owned by the value too, or the scratch is the
-caller's to keep. The suite at `ad88c06` (`ev/yew-test-t6.txt`): its
-verdict below.
+caller's to keep. The suite at `ad88c06` (`ev/yew-test-t6.txt`): the
+checked tier green on every file, `text_coords_test` among them; the
+native phase lost its `std` to the gauntlet's `dist-smoke` prune at its
+36th file (the toolchain dir symlinked into `target/dist`; copies now)
+and was run again alone (`ev/yew-test-t7.txt`): its verdict below.
 
 **yew's rows** (`ptymem.py`, 4,000 keys typed into a 10,000-line file
 in I mode, then 4,000 line moves; the container, `taskset -c 0-3`,
