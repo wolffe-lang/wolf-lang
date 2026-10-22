@@ -3815,7 +3815,11 @@ enum PendingKind {
     /// instead of unrolling at compile time. `sema` is the enum's type
     /// in the body's table, or in the signature table when `in_sig`;
     /// `out` picks the `copy region` rebuild (a `str` materialized).
-    Copy { sema: TyId, in_sig: bool, out: bool },
+    Copy {
+        sema: TyId,
+        in_sig: bool,
+        out: bool,
+    },
 }
 
 /// One queued task body (s73): the entry shim `fn(env) -> i64` plus —
@@ -16708,7 +16712,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     ) -> R<Value> {
         let in_sig = std::ptr::eq(table, self.sig_table);
         if !in_sig && !std::ptr::eq(table, self.table) {
-            return Err(refuse("`copy` of an enum typed through another body's table", span));
+            return Err(refuse(
+                "`copy` of an enum typed through another body's table",
+                span,
+            ));
         }
         let wty = self.b.func.value_ty(v);
         let kind = if out { "copyout" } else { "copy" };
@@ -16735,7 +16742,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 body_ret: Some(wty),
                 span,
                 proc: false,
-                kind: PendingKind::Copy { sema: ty, in_sig, out },
+                kind: PendingKind::Copy {
+                    sema: ty,
+                    in_sig,
+                    out,
+                },
             });
         }
         let ext = self.rt_like_import(&fname, sig);
@@ -21523,13 +21534,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     }
 
     /// [`Self::slot_view`] with `want` named as a sema type in `table`.
-    fn slot_view_as(
-        &mut self,
-        v: Value,
-        table: &'t TypeTable,
-        want: TyId,
-        span: Span,
-    ) -> R<Value> {
+    fn slot_view_as(&mut self, v: Value, table: &'t TypeTable, want: TyId, span: Span) -> R<Value> {
         if !self.b.module.types.is_union(self.b.func.value_ty(v)) {
             return Ok(v);
         }
@@ -21560,9 +21565,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             types::TypeData::Agg(fields) => fields[1..].to_vec(),
             _ => Vec::new(),
         };
-        let any_union = binds
-            .iter()
-            .any(|(k, _)| slot_tys.get(*k).is_some_and(|t| self.b.module.types.is_union(*t)));
+        let any_union = binds.iter().any(|(k, _)| {
+            slot_tys
+                .get(*k)
+                .is_some_and(|t| self.b.module.types.is_union(*t))
+        });
         if !any_union {
             return Ok(binds.iter().map(|(k, n)| (*k, n.clone(), None)).collect());
         }
@@ -22102,7 +22109,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Err(refuse("propagating into a non-union type", span));
         };
         if sslots.len() > tslots.len() {
-            return Err(refuse("row widening into a row with fewer payload slots", span));
+            return Err(refuse(
+                "row widening into a row with fewer payload slots",
+                span,
+            ));
         }
         // s257: a source slot rides into the target's slot as itself
         // when the types agree, else into the target's union of which
@@ -22314,7 +22324,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             return Err(refuse("a handler pattern without a scrutinee", pat.span));
         };
         let Some(sema) = self.expr_sema_ty(scrut.span) else {
-            return Err(refuse("a handler pattern without a recorded type", pat.span));
+            return Err(refuse(
+                "a handler pattern without a recorded type",
+                pat.span,
+            ));
         };
         let mut ty = strip_sema_in(self.table, sema);
         for _ in 0..32 {
@@ -22324,7 +22337,10 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             }
         }
         let TyKind::ErrUnion(_, row) = self.table.kind(ty).clone() else {
-            return Err(refuse("a handler pattern over a non-fallible value", pat.span));
+            return Err(refuse(
+                "a handler pattern over a non-fallible value",
+                pat.span,
+            ));
         };
         let TyKind::Row { tags, .. } = self.table.kind(row).clone() else {
             return Err(refuse("a handler pattern over a generic row", pat.span));
@@ -22335,8 +22351,8 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             .find(|n| wolf_ast::is_pattern_kind(n.kind))
             .map(|n| n.span.lo)
             .unwrap_or(pat.span.hi);
-        let raw = String::from_utf8_lossy(&self.src[pat.span.lo as usize..end as usize])
-            .into_owned();
+        let raw =
+            String::from_utf8_lossy(&self.src[pat.span.lo as usize..end as usize]).into_owned();
         let name: String = raw.trim_end().trim_end_matches('(').trim_end().to_string();
         let last = name.rsplit('.').next().unwrap_or(&name).to_string();
         let payloads: Vec<TyId> = match tags.iter().find(|(n, _)| *n == name || *n == last) {
