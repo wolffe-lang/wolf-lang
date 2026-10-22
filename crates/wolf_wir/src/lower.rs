@@ -1066,6 +1066,30 @@ fn lower_body(
                 Err(e) => return Err(body_verdict(survey.as_deref_mut(), e)),
             }
         }
+        // s257: an enum's copy function. Another body may have queued
+        // and built the same one already; the name is the identity.
+        if matches!(task.kind, PendingKind::Copy { .. })
+            && !module.funcs.iter().any(|(_, f)| f.name == task.body_name)
+        {
+            match lower_copy_body(
+                pkg,
+                sigs,
+                tb,
+                body,
+                fns,
+                module,
+                &task,
+                &mut pending,
+                lender,
+                specs,
+                &mut dyn_shims,
+                statics,
+                survey.as_deref_mut(),
+            ) {
+                Ok(s) => stats.add(s),
+                Err(e) => return Err(body_verdict(survey.as_deref_mut(), e)),
+            }
+        }
         // s105: a closure ENTRY is one function — no runtime shim.
         if matches!(task.kind, PendingKind::Task)
             && let Err(e) = build_task_shim(module, &task)
@@ -1337,6 +1361,90 @@ fn lower_task_body<'t>(
             }
         }
     }
+    lo.scopes.pop();
+    let stats = b.stats;
+    let func = b.finish();
+    module.add_func(func);
+    Ok(stats)
+}
+
+/// Lower one queued enum copy function (s257, [`PendingKind::Copy`]):
+/// `(T) -> T`, the body [`Lowerer::deep_copy_enum`]'s switch over the
+/// value's tag, under the SAME typed body as the function that asked
+/// for it (a generic enum's arguments live in that body's table).
+#[allow(clippy::too_many_arguments)]
+fn lower_copy_body<'t>(
+    pkg: &'t Package,
+    sigs: &'t SigTables,
+    tb: &'t TypedBody,
+    body: &wolf_sema::BodyRef,
+    fns: &'t HashMap<&'t str, Vec<(usize, &'t FnSig)>>,
+    module: &mut Module,
+    task: &PendingTask<'t>,
+    pending: &mut Vec<PendingTask<'t>>,
+    lender: &'t Lender<'t>,
+    specs: &mut Vec<SpecRequest>,
+    dyn_shims: &mut Vec<DynShim>,
+    statics: &Statics,
+    survey: Option<&mut Vec<NotYet>>,
+) -> R<Stats> {
+    let PendingKind::Copy { sema, in_sig, out } = task.kind else {
+        return Err(refuse("a copy task without its type", task.span));
+    };
+    let mut b = FuncBuilder::new(module, task.body_name.clone(), task.body_sig);
+    b.func.src_file = Some(task.span.file.index() as u32);
+    b.set_span(task.span.lo, task.span.hi);
+    let module_binds: HashMap<String, usize> =
+        wolf_sema::module_bindings(pkg, body.module, body.file)
+            .into_iter()
+            .collect();
+    let mut lo = Lowerer {
+        src: &pkg.files[body.file].raw.src,
+        module_binds: &module_binds,
+        table: &tb.table,
+        sig_table: &sigs.table,
+        sigs,
+        calls: tb.calls.iter().map(|(s, c)| (*s, c)).collect(),
+        folds: tb.comptime_folds.iter().map(|(s, f)| (*s, f)).collect(),
+        expr_tys: tb.exprs.iter().map(|(s, t)| (*s, *t)).collect(),
+        local_tys: tb.locals.iter().map(|(_, s, t)| (*s, *t)).collect(),
+        casts: tb
+            .casts
+            .iter()
+            .map(|(s, f, t, k)| (*s, (*f, *t, *k)))
+            .collect(),
+        fns,
+        dispatch: tb.dispatch.iter().map(|(s, d)| (*s, d)).collect(),
+        matches: tb.matches.iter().copied().collect(),
+        pending_arm_binds: Vec::new(),
+        scopes: Vec::new(),
+        visible: None,
+        loops: Vec::new(),
+        pending_for_pat: None,
+        fn_eu: None,
+        fn_tail: None,
+        callees: HashMap::new(),
+        straight_line: false,
+        capture_binds: 0,
+        task_captures: tb.task_captures.iter().map(|(s, c)| (*s, &c[..])).collect(),
+        pending_tasks: pending,
+        foreign: None,
+        lender,
+        pending_specs: specs,
+        pending_dyn_shims: dyn_shims,
+        survey,
+        statics,
+        body_module: body.module,
+        b: &mut b,
+    };
+    let entry_params = lo.b.block_params(lo.b.current_block());
+    let Some(&v) = entry_params.first() else {
+        return Err(refuse("a copy function without its value", task.span));
+    };
+    lo.scopes.push(ScopeFrame::default());
+    let table: &'t TypeTable = if in_sig { &sigs.table } else { &tb.table };
+    let r = lo.copy_enum_inline(v, table, sema, task.span, out)?;
+    lo.b.ins_ret(&[r]);
     lo.scopes.pop();
     let stats = b.stats;
     let func = b.finish();
@@ -3721,6 +3829,13 @@ enum PendingKind {
         /// parameter; empty for a closure (every parameter by value).
         modes: Vec<Option<ParamMode>>,
     },
+    /// s257: the deep copy of one enum type as a function of its own
+    /// (`{Enum}.copy.t{N}`, `(T) -> T`), so a recursive enum (a JSON
+    /// value tree: `Arr(List[Value])`) copies by recursion at run time
+    /// instead of unrolling at compile time. `sema` is the enum's type
+    /// in the body's table, or in the signature table when `in_sig`;
+    /// `out` picks the `copy region` rebuild (a `str` materialized).
+    Copy { sema: TyId, in_sig: bool, out: bool },
 }
 
 /// One queued task body (s73): the entry shim `fn(env) -> i64` plus —
@@ -16669,16 +16784,40 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 }
                 Ok(out)
             }
-            TyKind::Map(_, val) => {
-                if self.copy_reaches_heap(table, val, 0) {
-                    return Err(refuse(
-                        "`copy` of a Map whose values reach heap storage",
-                        span,
-                    ));
-                }
-                Ok(self
+            // s257: a map whose values reach the heap (`Map[str, Value]`,
+            // `std.json`'s objects) is a fresh header and entry buffer,
+            // then each entry's value replaced by its own copy — the
+            // entries are `(K, V)` tuples at the list prefix's stride,
+            // exactly as `deep_copy_out` walks them.
+            TyKind::Map(k, val) => {
+                let out = self
                     .rt_call_foreign("__wolf_rt_map_copy", &[v], None, Some(types::PTR))
-                    .expect("hdr"))
+                    .expect("hdr");
+                if self.copy_reaches_heap(table, val, 0) {
+                    let Some(kwt) = self.wir_ty_in(table, k, span)? else {
+                        return Err(refuse("unit-typed Map keys", span));
+                    };
+                    let Some(vwt) = self.wir_ty_in(table, val, span)? else {
+                        return Err(refuse("unit-typed Map values", span));
+                    };
+                    let pair = self
+                        .b
+                        .module
+                        .types
+                        .intern(types::TypeData::Agg(vec![kwt, vwt]));
+                    let n = self.list_len_of(out);
+                    self.count_loop(n, |z, i| {
+                        let e = z.list_load_at(out, i, pair, span)?;
+                        let kx = z.b.ins(Opcode::AggGet, &[e], &[kwt], Aux::Int(0)).one();
+                        let vx = z.b.ins(Opcode::AggGet, &[e], &[vwt], Aux::Int(1)).one();
+                        let vx = z.deep_copy_in(vx, table, val, span, depth + 1)?;
+                        let ne =
+                            z.b.ins(Opcode::AggMake, &[kx, vx], &[pair], Aux::None)
+                                .one();
+                        z.list_store_at(out, i, ne, span)
+                    })?;
+                }
+                Ok(out)
             }
             TyKind::Tuple(es) => {
                 let wty = self.b.func.value_ty(v);
@@ -16728,8 +16867,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     let base = *base;
                     self.deep_copy_in(v, &sigs.table, base, span, depth + 1)
                 }
+                Some(ItemSig::Enum { .. }) => {
+                    self.enum_copy_call(v, table, ty, module as usize, &name, false, span)
+                }
                 _ => Err(refuse(
-                    "`copy` of an enum whose payload reaches heap storage",
+                    "`copy` of this enum shape (a generic enum's payload inside another type)",
                     span,
                 )),
             },
@@ -16797,6 +16939,182 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             TyKind::Rigid(_) | TyKind::Var(_) | TyKind::Proj(..) => true,
             _ => false,
         }
+    }
+
+    /// A call to the enum's copy function (s257): `{Enum}.copy.t{N}`
+    /// (`.copyout.` for the `copy region` rebuild), `(T) -> T` over the
+    /// enum's WIR type, queued once per layout as a [`PendingKind::Copy`]
+    /// task of the body that first asked and built after it. A
+    /// recursive enum copies by recursion through this call instead
+    /// of unrolling at compile time.
+    #[allow(clippy::too_many_arguments)]
+    fn enum_copy_call(
+        &mut self,
+        v: Value,
+        table: &'t TypeTable,
+        ty: TyId,
+        module: usize,
+        name: &str,
+        out: bool,
+        span: Span,
+    ) -> R<Value> {
+        let in_sig = std::ptr::eq(table, self.sig_table);
+        if !in_sig && !std::ptr::eq(table, self.table) {
+            return Err(refuse("`copy` of an enum typed through another body's table", span));
+        }
+        let wty = self.b.func.value_ty(v);
+        let kind = if out { "copyout" } else { "copy" };
+        let fname = format!("{name}.{kind}.m{module}.t{}", wty.as_u32());
+        let sig = self.b.module.make_sig(
+            vec![Param {
+                ty: wty,
+                mode: Mode::Val,
+            }],
+            vec![wty],
+        );
+        let known = self.b.module.funcs.iter().any(|(_, f)| f.name == fname)
+            || self.pending_tasks.iter().any(|t| t.body_name == fname)
+            || self.b.func.name == fname;
+        if !known {
+            self.pending_tasks.push(PendingTask {
+                shim_name: fname.clone(),
+                body_name: fname.clone(),
+                body_sig: sig,
+                closure: None,
+                caps: Vec::new(),
+                cap_wtys: Vec::new(),
+                cap_offs: Vec::new(),
+                body_ret: Some(wty),
+                span,
+                proc: false,
+                kind: PendingKind::Copy { sema: ty, in_sig, out },
+            });
+        }
+        let ext = self.rt_like_import(&fname, sig);
+        Ok(self.b.ins_call(ext, &[v])[0])
+    }
+
+    /// The body of an enum's copy function (s257): the enum's parts
+    /// resolved from its sema type, then [`Self::deep_copy_enum`].
+    fn copy_enum_inline(
+        &mut self,
+        v: Value,
+        table: &'t TypeTable,
+        ty: TyId,
+        span: Span,
+        out: bool,
+    ) -> R<Value> {
+        let sigs = self.sigs;
+        let ty = strip_sema_in(table, ty);
+        let TyKind::Nominal { module, name, args } = table.kind(ty).clone() else {
+            return Err(refuse("a copy function over a non-enum type", span));
+        };
+        let Some(ItemSig::Enum {
+            generics, variants, ..
+        }) = sigs.get(module as usize, &name)
+        else {
+            return Err(refuse("a copy function over a non-enum type", span));
+        };
+        let generics = generics.clone();
+        let variants = variants.clone();
+        self.deep_copy_enum(v, table, &args, &generics, &variants, span, 0, out)
+    }
+
+    /// The independent duplicate of an enum value (s257): a switch on
+    /// the tag, and under each variant the payloads that reach storage
+    /// are copied one by one — read through the variant's view of
+    /// their slot, rebuilt, written back through it — while the slots
+    /// the variant does not own ride unchanged. `out` picks
+    /// [`Self::deep_copy_out`]'s rebuild (a `str` materialized) over
+    /// [`Self::deep_copy_in`]'s. A payload-free enum, or one whose
+    /// payloads reach nothing, is its own copy and never arrives here.
+    #[allow(clippy::too_many_arguments)]
+    fn deep_copy_enum(
+        &mut self,
+        v: Value,
+        table: &'t TypeTable,
+        args: &[TyId],
+        generics: &[String],
+        variants: &[wolf_sema::sig::VariantSig],
+        span: Span,
+        depth: u32,
+        out: bool,
+    ) -> R<Value> {
+        let sigs = self.sigs;
+        let wty = self.b.func.value_ty(v);
+        let types::TypeData::Agg(fields) = self.b.module.types.get(wty).clone() else {
+            return Ok(v);
+        };
+        let tag = self
+            .b
+            .ins(Opcode::AggGet, &[v], &[types::I64], Aux::Int(0))
+            .one();
+        let var = self.b.declare_var(wty);
+        self.b.def_var(var, v);
+        let keys: Vec<i64> = (0..variants.len() as i64).collect();
+        self.emit_switch(
+            tag,
+            &keys,
+            |z, i| {
+                let variant = &variants[i];
+                if variant.payload.is_empty() {
+                    return Ok(());
+                }
+                let mut parts = vec![tag];
+                for (k, &pid) in variant.payload.iter().enumerate() {
+                    let Some(&slot) = fields.get(k + 1) else {
+                        return Err(refuse("a payload the enum's slots do not carry", span));
+                    };
+                    let x = z
+                        .b
+                        .ins(Opcode::AggGet, &[v], &[slot], Aux::Int((k + 1) as i64))
+                        .one();
+                    let (ftab, fty): (&'t TypeTable, TyId) = match sigs.table.kind(pid) {
+                        TyKind::Rigid(r) => match generics.iter().position(|g| g == r) {
+                            Some(gi) if gi < args.len() => (table, args[gi]),
+                            _ => {
+                                return Err(refuse("`copy` of this generic enum", span));
+                            }
+                        },
+                        _ if sig_mentions_rigid(&sigs.table, pid, 0) => {
+                            return Err(refuse(
+                                "`copy` of a generic enum whose payload spells its parameter inside another type",
+                                span,
+                            ));
+                        }
+                        _ => (&sigs.table, pid),
+                    };
+                    let reaches = if out {
+                        z.copy_out_reaches(ftab, fty, 0)
+                    } else {
+                        z.copy_reaches_heap(ftab, fty, 0)
+                    };
+                    if !reaches {
+                        parts.push(x);
+                        continue;
+                    }
+                    let x = z.slot_view_as(x, ftab, fty, span)?;
+                    let c = if out {
+                        z.deep_copy_out(x, ftab, fty, span, depth + 1)?
+                    } else {
+                        z.deep_copy_in(x, ftab, fty, span, depth + 1)?
+                    };
+                    parts.push(z.into_slot(c, slot));
+                }
+                for (k, &slot) in fields.iter().enumerate().skip(parts.len()) {
+                    let x = z
+                        .b
+                        .ins(Opcode::AggGet, &[v], &[slot], Aux::Int(k as i64))
+                        .one();
+                    parts.push(x);
+                }
+                let nv = z.b.ins(Opcode::AggMake, &parts, &[wty], Aux::None).one();
+                z.b.def_var(var, nv);
+                Ok(())
+            },
+            |_| Ok(()),
+        )?;
+        Ok(self.b.use_var(var))
     }
 
     /// The copy `copy region { … }` hands out (s216,
@@ -16946,8 +17264,11 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     let base = *base;
                     self.deep_copy_out(v, &sigs.table, base, span, depth + 1)
                 }
+                Some(ItemSig::Enum { .. }) => {
+                    self.enum_copy_call(v, table, ty, module as usize, &name, true, span)
+                }
                 _ => Err(refuse(
-                    "`copy region` of an enum whose payload is a string or reaches heap storage",
+                    "`copy region` of this enum shape (a generic enum's payload inside another type)",
                     span,
                 )),
             },
