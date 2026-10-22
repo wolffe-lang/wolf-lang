@@ -18,6 +18,9 @@ const RT_STUB: &str = r#"
 #include <stdio.h>
 #include <stdlib.h>
 
+/* Startup ABI only; actual guard faults are the driver's isolated tests. */
+void __wolf_rt_stack_start(void) {}
+
 void __wolf_rt_trap(int kind) {
     const char *name =
         kind == 1 ? "overflow" :
