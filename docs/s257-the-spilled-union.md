@@ -239,7 +239,7 @@ the claimed stdout on the checked machine and on lupin 0.1.55 — and
 ends (lupin: `trap(region-fault)` at the same store). At the head all
 six run rows are `exit(0)` with the claimed bytes on native, release
 and checked. Two of them (`three`, `tree`) went green only after
-§3.3: at `544a8396` they were refused at `(mut all).push(W.N(5))` —
+§3.3: at `76499b3b` they were refused at `(mut all).push(W.N(5))` —
 "`copy` of an enum whose payload reaches heap storage" — the refusal
 under the refusal.
 
