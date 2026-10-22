@@ -239,13 +239,19 @@ fn a_call_s_str_copied_into_a_mut_parameter_s_map_runs() {
             assert_ne!(flag, "--checked", "the checked lane always runs");
             continue;
         };
-        assert_eq!(obs.verdict, "exit(0)", "{flag} on the admitted row: {:?}", obs.codes);
-        assert_eq!(obs.stdout, "[piece 7 3-7]\n", "{flag} stdout on the admitted row");
+        assert_eq!(
+            obs.verdict, "exit(0)",
+            "{flag} on the admitted row: {:?}",
+            obs.codes
+        );
+        assert_eq!(
+            obs.stdout, "[piece 7 3-7]\n",
+            "{flag} stdout on the admitted row"
+        );
     }
     if let Some(lupin) = lupin_says(&entry) {
         assert_eq!(
-            lupin.verdict,
-            "trap(region-fault)",
+            lupin.verdict, "trap(region-fault)",
             "lupin {} shares a copied str's bytes (its column in docs/s255)",
             lupin.version
         );

@@ -2324,7 +2324,9 @@ impl<'t> Lowerer<'t> {
             | TyKind::Mutex(i)
             | TyKind::Shared(i)
             | TyKind::Weak(i) => self.reaches_fn(sub(*i), depth + 1),
-            TyKind::Map(k, v) => self.reaches_fn(sub(*k), depth + 1) || self.reaches_fn(sub(*v), depth + 1),
+            TyKind::Map(k, v) => {
+                self.reaches_fn(sub(*k), depth + 1) || self.reaches_fn(sub(*v), depth + 1)
+            }
             TyKind::Tuple(es) => es.iter().any(|e| self.reaches_fn(sub(*e), depth + 1)),
             TyKind::ErrUnion(ok, row) => {
                 self.reaches_fn(sub(*ok), depth + 1) || self.reaches_fn(sub(*row), depth + 1)
@@ -9709,11 +9711,12 @@ impl<'t> Lowerer<'t> {
                     if own_entry || own_region || is_static {
                         continue;
                     }
-                    let self_call = self
-                        .call_unclean
-                        .get(&s)
-                        .is_some_and(|u| u.callee == name);
-                    let slot = if self_call { &mut first_self } else { &mut first };
+                    let self_call = self.call_unclean.get(&s).is_some_and(|u| u.callee == name);
+                    let slot = if self_call {
+                        &mut first_self
+                    } else {
+                        &mut first
+                    };
                     if slot.is_none_or(|f| (sp.file, sp.lo) < (f.file, f.lo)) {
                         *slot = Some(sp);
                     }
