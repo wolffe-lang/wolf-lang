@@ -448,6 +448,8 @@ job's `NAME.{log,pid,rc}` from `job.sh`).
   `rows-head3.txt` but for the charged row's trailing newline.
 - `probes/p7/p7.lu`, `p7b.log` — P6's per-copy bytes on the four
   machines (its own directory: wolf reads a directory as one module).
+- `ev/memtime-yew.txt` — the mem tier's time over yew, base against head
+  (`s255-memtime.sh`), P8.
 - `ev/m-base.tsv`, `m-head.tsv`, `m-head3.tsv`, `m-diff.txt` — the
   census (`measure.py`, `census.sh`): 1,154 files; `m-head3.tsv` with
   the fixed driver.
@@ -737,6 +739,25 @@ lane-coverage's floors held (checked/native/release/union 733/738/738/
 746 of 1,141). The `tier pr` runs mirrored each red (39717013172 at
 `8521a0e0` on the token stream).
 
+**R3 asked (implemented as recommended): the lint job's budget.** The
+`tier pr` runs at `b9f16316` and `22ac0106` — docs-only commits after
+the green `0c041c2d` — were both "cancelled" at 45 minutes: the job's
+`timeout-minutes`, hit with the gauntlet step green (37 min at
+`22ac0106`, cut during `bench smoke`). The green run took 44:43; trunk's
+own job takes 31:42 (the nightly, gauntlet 27:44) and this branch's
+gauntlet 32–37 min (fourteen rows through every corpus-wide step; not
+the mem tier, above, and not the new gate, which is under 30 s in
+`ci10.log` — the slow binaries are trunk's `release_native` 162 s and
+`checked_tasks_lanes` 155 s); the runner's setup steps swing 1–11 min
+on top. The merge's `tier full` and the trunk push after it carry the
+same job, so a rerun alone would leave trunk at the same coin flip.
+(A) rerun and hope; (B) `timeout-minutes` 45 → 60 for `lint-test`,
+with the s226 comment amended; (C) move the corpus-wide steps to their
+own job. **Recommend B** (`ac5e3956`, `0ce6f9c4`): the budget was set
+by s226 at 29:42 + 3.5 min and has not moved while the corpus grew;
+(C) is a CI lane's. The `tier pr` at the final head is the first run
+under 60.
+
 **The yew witness's suite, and the builder.** The suite on the witness
 at `f16e8ea` (`ev/yew-test-t3.txt`) was red on one test on both tiers:
 `text_coords_test.lu:607`, 200 appends to a 1 MiB non-ASCII buffer
@@ -851,9 +872,11 @@ it cannot make, the same answer on the scalar and clean-call rows,
 → 690, not 681 → 683 (four anchors, the two methods got one each beside
 `[type.list.storage]`; s253 and s251 moved the base), `RT_SYMBOLS` 250 →
 251, not 244 → 245 (the base again); the host table and the prelude
-unchanged as predicted; the mem tier's time over yew was not timed (the
-fixpoint ran ≤ 2 steps on every recursive component in the census, so
-the 1.1× claim stands untested, not refuted). P10 held on the gate the
+unchanged as predicted; the mem tier's time over yew (`ev/memtime-yew.
+txt`: `conform-run src/yew.lu --phase=mem` at `77c10839`, three runs
+each) is 0.69–0.74 s with the base dist and 0.70–0.75 s with the head's,
+~1.02× — within the 1.1× predicted (the fixpoint ran ≤ 2 steps on every
+recursive component). P10 held on the gate the
 run reached: the plant's `lint-test` job goes red at the kept-arg
 gate's admitted row, and `cargo test` stops there; the rest of the
 list is seen red locally (`ev/rows-trunk.txt`, every row), not in that
