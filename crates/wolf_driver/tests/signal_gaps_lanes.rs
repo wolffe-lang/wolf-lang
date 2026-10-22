@@ -760,10 +760,15 @@ fn compiled_rows(live: &Live, entry: &Path, stem: &str, test: &str) -> Vec<(Stri
 #[cfg(unix)]
 fn record_in(live: &Live, machine: &str, flags: &str, name: &str, conf: &[(&str, &str)]) -> Obs {
     live.conf("", conf);
+    // `exit $?` keeps the machine a child of the container's shell: bash
+    // 5.3 execs the last command of `-c` in place, and the container's
+    // pid 1 is a session leader under crun, where `os_set_pgid(0)` is
+    // EPERM (`denied`) before any row is reached. The compiled rows
+    // already end in `echo rc=$?`.
     let out = live.sh(
         &[],
         &format!(
-            "ulimit -c 0; {machine} conform-run {} {flags} --json",
+            "ulimit -c 0; {machine} conform-run {} {flags} --json; exit $?",
             live.fixture_at(name)
         ),
     );
