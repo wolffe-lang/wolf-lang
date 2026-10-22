@@ -298,6 +298,41 @@ fn e0409_row_on_either_side() {
     );
 }
 
+/// o1 (wolf-lang#879, `[type.row.operand]`): a member read and a method
+/// call read their base as an operator reads its operand, so on a `!T`
+/// each is E0409 at the base — never the std-surface refusal, never the
+/// payload read through the row. The note spells the handlings for the
+/// dot, naming the base when it is a name (`rest?.len`) and `r` when it
+/// is not (a call), with the `else` fallback the value half takes (`""`
+/// for a `str`, `…` for a tuple). One report per read: the `<error>` it
+/// answers never cascades into the hole that prints it.
+#[test]
+fn e0409_row_member_and_method() {
+    const STRIP: &str = "fn strip(s: str) -> str ! {none} {\n    if s.len > 2 {\n        return s[2..]\n    }\n    none\n}\n\n";
+    snap_one(
+        "e0409_row_member_len",
+        &format!(
+            "{STRIP}fn main() -> int {{\n    let rest = strip(\"-j4\")\n    let n = rest.len\n    print(\"n: {{n}}\")\n    0\n}}\n"
+        ),
+    );
+    snap_one(
+        "e0409_row_method_call",
+        &format!(
+            "{STRIP}fn main() -> int {{\n    let rest = strip(\"-j4\")\n    if rest.starts_with(\"4\") {{\n        print(\"yes\")\n    }}\n    0\n}}\n"
+        ),
+    );
+    snap_one(
+        "e0409_row_member_call_base",
+        &format!(
+            "{STRIP}fn main() -> int {{\n    let n = strip(\"-j4\").len\n    print(\"n: {{n}}\")\n    0\n}}\n"
+        ),
+    );
+    snap_one(
+        "e0409_row_member_tuple",
+        "fn pair() -> (int, int) ! {none} {\n    (1, 2)\n}\n\nfn main() -> int {\n    let t = pair()\n    let a = t.0\n    print(\"{a}\")\n    0\n}\n",
+    );
+}
+
 #[test]
 fn e0409_logic_on_numbers() {
     snap_one(

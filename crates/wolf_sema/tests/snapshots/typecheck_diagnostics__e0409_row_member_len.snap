@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0409]: `.len` cannot be applied to `str ! {none}`
+  --> mem:///main.lu:10:13
+   |
+10 |     let n = rest.len
+   |             ^^^^ this is `str ! {none}`
+   |
+   = note: a `!T` is two values, never one, and no operator reads it ([type.row.operand]): a member
+     read and a method call read their base as an operator reads its operand, and `?`, `else`
+     and `match` are the whole of how a row is handled. Handle it first — `rest?.len`, `(rest
+     else "").len` — and read what it yields.
