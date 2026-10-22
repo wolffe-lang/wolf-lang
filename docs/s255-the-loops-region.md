@@ -425,13 +425,25 @@ job's `NAME.{log,pid,rc}` from `job.sh`).
   (the first verdict's hole); `gate2.log` the suites and gates green at
   `49d6f681` but for the ledger line; `probes/p3.lu`, `p5.lu`, `p6.lu`
   the verdict probes (one module; read with `--dump=mut-clean`).
-- `ci1.log` … `ci7.log` — the full gauntlet (`cargo xtask ci`) at each
+- `ci1.log` … `ci9.log` — the full gauntlet (`cargo xtask ci`) at each
   head: clippy (`verdict.clone()`), the lexer/parser snapshots of the
   new rows, `wolf fmt` on two rows, the charged row's newline, each
-  fixed in turn; `ci7.log` the green one; `snapall.log` the whole
-  workspace under `INSTA_UPDATE=always` (36 snapshot files, no
-  `cfg_dumps` move); `sig1.log` the descriptor-wait test green alone
-  (red once under load in `snapall`).
+  fixed in turn; `ci7.log` at `8521a0e0` red on the charged row's
+  token-stream snapshot (the row's `print` at `75fa9411` came after the
+  snapshots at `354be600`; `381100de`), `ci8.log` at `66d1d519` red on
+  the same row's declaration snapshot (`a3056c0c`), `ci9.log` at
+  `a3056c0c` the gauntlet at the final code head (its verdict in §5);
+  `snapall.log` the whole workspace under `INSTA_UPDATE=always` (36
+  snapshot files, no `cfg_dumps` move); `sig1.log` the descriptor-wait
+  test green alone (red once under load in `snapall`); `xclippy.log` —
+  #868's cross-clippy for `aarch64-apple-darwin` cannot run here (the
+  target is not installed and a lane installs nothing): the fix stands
+  on the cfg reading in its commit.
+- `ev/rows-head4.txt` — every row at the final dist (`wolf
+  0.2.34+dev.66d1d51`, `dist2` in `chain1.log`): identical to
+  `rows-head3.txt` but for the charged row's trailing newline.
+- `probes/p7/p7.lu`, `p7b.log` — P6's per-copy bytes on the four
+  machines (its own directory: wolf reads a directory as one module).
 - `ev/m-base.tsv`, `m-head.tsv`, `m-head3.tsv`, `m-diff.txt` — the
   census (`measure.py`, `census.sh`): 1,154 files; `m-head3.tsv` with
   the fixed driver.
@@ -443,12 +455,27 @@ job's `NAME.{log,pid,rc}` from `job.sh`).
 - `ev/witness-trunk.txt`, `witness-head.txt` — yew's `with-region.lu` and
   aspen's two probes refused at the base, run at the head.
 - `ev/aspen-mem.txt` — aspen's rows (`aspen-mem.sh`, the final dist).
-- `ev/yew-mem.txt` — yew's rows (`s255-ywmem.sh`, the final dist).
-- `ev/yew-test-t3.txt` — yew's own suite on the witness (`s255-ywtest2.sh`).
+- `ev/yew-mem-f16e8ea.txt` — yew's rows at the witness's first green
+  build (`f16e8ea`, the `abf108d` dist); `ev/yew-mem-final.txt` — at the
+  witness's final head `8c653fa` with the final dist (`s255-ywmem.sh`,
+  `ywmem4.log`); `ev/yew-mem2.txt` — the "before" two ways (yew at yw03's
+  note commit `9bd219c` with the base dist; trunk `77c10839` without a
+  region with the final dist; `s255-ywmem2.sh`); `ev/yew-mem3.txt` —
+  yew at `9bd219c` with yw03's own pin, wolf 0.2.33 (`tc/wolf-0.2.33/`,
+  the release archive, digest `4f955e8d…`; `s255-ywmem3.sh`).
+- `ev/yew-test-t3.txt` — yew's own suite on the witness at `f16e8ea`
+  (`s255-ywtest2.sh`): red on `text_coords_test`; `coordsbase.log` the
+  same test green at `77c10839` with the base dist; `ev/yew-test-t5.txt`
+  the move checker on the second builder (E1001); `ev/yew-test-t6.txt`
+  the suite at `ad88c06` (its verdict in §5).
 - `t1.log`, `snap.log`, `regen.log` — the targeted suites, the
   mem_diagnostics snapshots, the anchors (the first pass).
-- `s255-plant`: CI run 39709618577 (`-f jobs=lint-test`, `tier
-  partial`), red.
+- `s255-plant` (`ee215a59`): CI run 39709618577 (`-f jobs=lint-test`,
+  `tier partial`), red in `lint + test + corpus (linux x86-64)` at
+  `region_kept_arg_lanes::a_copy_of_a_struct_at_a_store_into_an_outer_value_runs`
+  (`fail(E1010)` where the admitted row runs); `cargo test` stops at the
+  first red binary, so the rest of P10's list is seen red locally
+  (`ev/rows-trunk.txt`) and not in that run.
 
 ## 6. The guide's memory paragraph (handed back, not written here)
 
@@ -682,3 +709,147 @@ emitting, and the arena is the floor (116–125 MB; ap02's, with the
 arena's own layout); `-pugsD` under 30 — missed (75 MB; the id-name
 caches and the columns). The level region recovers what the walk
 builds per level; what the modes keep is theirs.
+
+**The gauntlet.** `cargo xtask ci` is the whole list (fmt, fmt-fixpoint,
+clippy, rt-none, test, fuzz-check, deps-check, corpus, abi-check,
+debug-check, midend-rate, bench-gates, spec-extract, conformance,
+print-gate, diag-catalog, doc-catalog, fmt-lu, fmt-fuzz, audit-surface,
+dist-smoke, differ-self, lane-coverage). Seven runs went red on their
+own fixes in turn (§4); `ci7` at `8521a0e0` and `ci8` at `66d1d519`
+were the two snapshots the charged row's `print` had moved (the lexer's
+token stream, the parser's declaration structure), `381100de` and
+`a3056c0c`; `ci9` runs at `a3056c0c`, the final code head — its verdict
+and the differ's counts are below. The `tier pr` runs mirrored each red
+(39717013172 at `8521a0e0` on the token stream).
+
+**The yew witness's suite, and the builder.** The suite on the witness
+at `f16e8ea` (`ev/yew-test-t3.txt`) was red on one test on both tiers:
+`text_coords_test.lu:607`, 200 appends to a 1 MiB non-ASCII buffer
+inside one `region probe` must allocate under 16 MiB — green at
+`77c10839` with the base dist (`coordsbase.log`: "10 cases pass, and the
+port's own 1"), so the witness had regressed it. The cause was the one
+edit that went past #821's shape: `39fac8f` retired the grapheme index's
+spare-pair swap (its placeholder `tb.graphemes.spare_data = List[T]()`,
+stored while the pair was out, was the store the verdict refused) for a
+fresh `Builder` per edit copied into the index's own lists. The copy is
+bounded; the builder is not: it lives in the CALLER's region, a turn's
+temporary only when the caller sits in a per-turn region (the render),
+and the text engine's other callers — its tests, a script, the key
+dispatch between the two blocks — have none, so each edit kept a
+builder the size of the index. Three readings to the fix: a `Builder`
+over shared handles (E1001 — a `List` field is move-only, `t4`); the
+pair moved out and back crosswise (E1001 at every read of `tb` while a
+field is out — "a moved field empties `tb`; disjoint fields stay
+usable", the checker's own note, `t5`; and E1010 back at `ed_render`,
+since the moved lists made `tb` keep a value the verdict could not
+place); the index OWNING its builder (`GraphemeIndex.spare: Builder`,
+`ad88c06`): the scan that builds takes `mut tb` and consumes into
+`mut tb.graphemes.spare` (pushes of scalar-only checkpoints into `tb`'s
+own containers), and `index_swap` moves the two pairs crosswise through
+a local — every store is of `tb`'s own entry sites, so the parameter
+stays ambient-clean with no placeholder and nothing allocated in the
+caller's region. The lesson for yw05 and the guide: `reset` plus pushes
+is right for a list the value refills; a list the value REBUILDS from a
+scratch needs the scratch owned by the value too, or the scratch is the
+caller's to keep. The suite at `ad88c06` (`ev/yew-test-t6.txt`): its
+verdict below.
+
+**yew's rows** (`ptymem.py`, 4,000 keys typed into a 10,000-line file
+in I mode, then 4,000 line moves; the container, `taskset -c 0-3`,
+`ulimit -c 0`, `VmRSS` before and after, the quarters). Before is yew
+trunk `77c10839` with the base dist; after is `s255-witness` at
+`8c653fa` with the final dist (`ev/yew-mem-final.txt`):
+
+| | typing, native | typing, release | moves, native | moves, release |
+|---|---|---|---|---|
+| before, B a key | 16,492 | 16,359 | 71,239 | 71,027 |
+| before, quarters (KB) | 32,848 / 48,540 / 64,228 / 79,928 | 29,008 / 44,692 / 60,376 / 76,076 | 85,540 / 154,976 / 224,376 / 293,764 | 81,772 / 151,208 / 220,608 / 289,756 |
+| after, B a key | **584** | **435** | **303** | **230** |
+| after, quarters (KB) | 16,608 / 17,008 / 17,408 / 17,800 | 12,976 / 13,376 / 13,776 / 14,168 | 16,188 / 16,404 / 16,472 / 16,520 | 12,572 / 12,788 / 12,992 / 13,192 |
+
+The two region blocks take 28× off a typed key and 235× off a line
+move (the release tier 38× and 309×); the after rows at the witness's
+first green build (`f16e8ea`, `ev/yew-mem-f16e8ea.txt`: 566 / 435 /
+414 / 229) agree with the final ones within the run-to-run noise but
+for the native moves (414 → 303: the builder no longer kept per
+pending-edit apply). What remains is linear, not flat: ~400 B a typed
+key at every quarter on both tiers, and the moves' quarters still rise
+(16,188 → 16,520). That is the key dispatch between the blocks —
+`loop_dispatch_event` runs in the session's region, and a command
+reaches the text engine, whose ~200 `mut` parameters are still #821's
+shape (`ev/mutclean-yew-d6.txt`: 628 clean / 267 unclean) — yw05's port
+with the dump as its list; the render and the wait keep nothing now.
+
+The "before" is not yw03's. yw03 §4.6 measured 337 B a typed key and
+631 B a line move with the same `ptymem.py`; this lane measures 16,492
+and 71,239 at `77c10839`, and the gap is neither the compiler nor the
+editor: yew at yw03's own note commit `9bd219c` gives 16,488 / 71,207
+with the base dist (`ev/yew-mem2.txt`), 16,459 / 71,197 with yw03's own
+pin, wolf 0.2.33 (`ev/yew-mem3.txt`), and trunk `77c10839` without a
+region gives 16,572 / 71,334 with this branch's dist. Three compilers
+and two yew commits agree to 1%; what differs is the driver's input,
+which yw03's evidence does not record (this lane's file is 10,000 lines
+of 55 bytes, `s255-ywmem.sh` writes it; `tools/run-perf-editor`, which
+the contract names for the memory rows, has no memory rows — `ptymem.py`
+is the instrument, a contract correction). 16 KB a typed key over a
+10,000-line file is one byte a line grown to a 16,384 capacity, and 71
+KB a line move is near 65,536 plus a page: a per-line table rebuilt per
+key is the shape, and which table is yw05's to find (the dump does not
+say; it lists stores, not sizes). **P4 scored for yew**: the blocks are
+admitted (held); the ≤ 25 unclean sites was wrong by an order (the
+dump named 473 unclean parameters at the pause and the port touched
+~40 sites in 12 commits, most of them #821's shape in the text engine's
+caches rather than `str` fields); "under 48 B a key" missed — the
+numbers land between, and the path is the one P4 allowed for: the
+dispatch, which this lane's two blocks do not cover.
+
+**P2, P3, P6, P7, P8, P10 scored.** P2 held for the rule as worded (no
+admitted store reaches a block byte; the ledger row and the resident-set
+rows say so on every machine); R1's first implementation did not (the
+verdict's second reading above) — the hole was in the summary, not the
+clause, and the kept-arg gate caught it before any merge. P3 held: at
+`0cb954a8` neither witness could open a region at its loop (every write
+is through a `mut` call), and under (A) alone the numbers would not have
+moved. P6 measured (`probes/p7/p7.lu`, 1,000 pushes of a `copy`d 32-byte
+`str` into a list born in `outer`, then 1,000 `copy`d structs holding
+that `str` and a 4-`int` list, then 1,000 `int` pushes, `region_bytes
+(outer)` read between): the checked machine charges **48 B** a copied
+`str` (the 16-byte view and its 32 bytes, exactly) and **112 B** the
+struct (48 + the list's 32 bytes of slots + its 32-byte header words),
+16 B an `int` push (its slot, the growth doubling); native and release
+**64 B** a `str` (the bytes 16-byte-rounded plus the view) and **160 B**
+the struct, 16 B an `int` push; lupin 32 B a copy either way (it shares
+the bytes and counts the view) — P6's units and relations as predicted,
+the native header at 40 B read as the arena's 48. P7 held (lupin's
+column in `rows-head4.txt`: `region-fault` on every materializing copy
+it cannot make, the same answer on the scalar and clean-call rows,
+`unsupported` on the two methods). P8 missed on its counts: anchors 686
+→ 690, not 681 → 683 (four anchors, the two methods got one each beside
+`[type.list.storage]`; s253 and s251 moved the base), `RT_SYMBOLS` 250 →
+251, not 244 → 245 (the base again); the host table and the prelude
+unchanged as predicted; the mem tier's time over yew was not timed (the
+fixpoint ran ≤ 2 steps on every recursive component in the census, so
+the 1.1× claim stands untested, not refuted). P10 held on the gate the
+run reached: the plant's `lint-test` job goes red at the kept-arg
+gate's admitted row, and `cargo test` stops there; the rest of the
+list is seen red locally (`ev/rows-trunk.txt`, every row), not in that
+run.
+
+**#868** (the nightly `ci` run 39740812507 at trunk `0477ce62`, `tier
+release`): the macOS aarch64 gauntlet denies `child_mask` and
+`end_by_masks` as dead — both `#[cfg(unix)]`, their one caller
+`the_c_librarys_handler_and_numbers` `#[cfg(target_os = "linux")]`.
+`66d1d519` gates both to linux. The proof is the cfg reading: on linux
+the three are built together as before (the `tier pr` job builds the
+test with warnings denied); on every other target none of the three is
+compiled. The cross-clippy for the macOS target could not run on
+kasumi (`xclippy.log`); this PR's `tier full` does not run that job
+either (it is `tier release`'s), so the nightly is what closes #868.
+
+**To file, found on the way** (listed, not filed): wolf-std's generic
+list helpers (`set`, `swap`, `truncate`, `clear`, `reverse`, `sort_by`,
+…) rebuild into a fresh `List[T]()` and assign `xs = out` — #821's
+shape in std itself, correctly unclean, so a program that calls them
+through a `mut` parameter inside a block is refused by name; in-place
+versions with `reset`/`reserve` are a wolf-std lane. And for yew: the
+per-line table above (yw05's list carries it with the dump).
