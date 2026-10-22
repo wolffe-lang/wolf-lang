@@ -981,6 +981,12 @@ pub unsafe extern "C" fn __wolf_rt_region_free(handle: *mut core::ffi::c_void) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_region_freeze(_handle: *mut core::ffi::c_void) {}
 
+/// Runtime startup before user main; no workers or other descriptors are made.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_stack_start() {
+    crate::task::enter_runtime_thread();
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1117,10 +1123,4 @@ mod tests {
         }
         assert_eq!(trap_kind_name(999), "unknown");
     }
-}
-
-/// Runtime startup before user main; no workers or other descriptors are made.
-#[unsafe(no_mangle)]
-pub extern "C" fn __wolf_rt_stack_start() {
-    crate::task::enter_runtime_thread();
 }
