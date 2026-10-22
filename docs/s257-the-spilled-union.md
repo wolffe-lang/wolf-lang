@@ -351,8 +351,26 @@ rebuild. That is a third of the diff and was not in §1.
 
 ### 4.6 The final head
 
-(the gauntlet, the differ and the run ids at the final head are in
-the PR's sections; the numbers above do not move for a rename.)
+The differ re-taken at `0a4ca806` (the last code commit; what follows
+it is this note): 796 / 246 / 17 / 101 (3) / 37, A ran 732, both 699
+— the `07c3ce33` row to the digit. The gauntlet (`cargo xtask ci`,
+`taskset -c 12-15`, the s256 envs: podman containers for the job-wait,
+id, group and fork rows, `WOLF_TEST_REQUIRE_NATIVE=1`) is green
+through `fmt`, `fmt-fixpoint`, `clippy`, `rt-none` and red in `test`
+on ONE test that is not this lane's:
+`signal_gaps_lanes::a_group_send_of_a_fault_the_sender_ignores`
+(#783) expects the checked machine to refuse `os_signal_ignore_one`
+by name and gets `error: denied`, exit 1 — and trunk `0477ce62`,
+built in its own clone on the same host, fails it with the same
+bytes (`~/lanes/s257/sig-base.log`; s256's nine runs of it on this
+host were green). The driver, the runtime and the checker are
+untouched by this branch (`git diff 0477ce62 -- crates/wolf_driver
+crates/wolf_rt crates/wolf_mem` is empty). The steps behind it ran
+on their own: the workspace tests with that one test skipped,
+`fuzz-check`, `deps-check`, the `gates` shard (the corpus with the
+seven rows, abi-check, debug-check, the snapshots, differ-self) and
+the `coverage` shard; their results and the CI run ids are in the
+PR. The host's answer is listed in §5 to file.
 
 ## 5. Rulings and what is left
 
@@ -393,3 +411,10 @@ Issues to file (listed, not filed):
   tests' records gain the native lane.
 - wolf-book: `ch27/ex27-3` graduates `lupin-run(…)` → `run(…)` at the
   pin bump (the FLIP), and #268's row 1 moves.
+- wolf-lang (or the host): `a_group_send_of_a_fault_the_sender_ignores`
+  is red on kasumi at trunk `0477ce62` today — the checked machine's
+  `group_fault.lu` answers `error: denied` where the test wants
+  `unsupported` (`os_signal_ignore_one`); green nine times on the same
+  host for s256. If CI's `tier pr` is green at this head, it is the
+  host's state (podman, the container's signal permissions), not
+  the tree's.
