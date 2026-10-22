@@ -291,7 +291,7 @@ fn reset_then_pushes_rebuild_a_long_lived_list_inside_the_turn() {
 fn the_ledger_charges_the_copies_to_the_outer_region() {
     run_row(
         "memory/region_outer_write_charged.lu",
-        "outer true | turn true | lines 200 | reclaimed true",
+        "outer true | turn true | lines 200 | reclaimed true\n",
         Lupin::Same,
         "region_bytes(outer) holds the copied lines, region_bytes(turn) the scratch; the root \
          gets nothing",
