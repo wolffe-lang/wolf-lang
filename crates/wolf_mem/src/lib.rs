@@ -547,7 +547,7 @@ fn lower_all<'a>(
                         let prev = table.get(&(k, pi)).cloned();
                         if prev.as_ref() != Some(verdict) {
                             moved = true;
-                            table.insert((k, pi), verdict.clone());
+                            table.insert((k, pi), *verdict);
                         }
                     }
                 }
