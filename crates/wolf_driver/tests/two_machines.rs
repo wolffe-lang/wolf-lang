@@ -10,10 +10,14 @@ fn root() -> PathBuf {
 }
 
 fn unavailable(out: &Output, tier: &str) -> bool {
-    if !lane_exit::environment_refusal(out, tier) { return false; }
+    if !lane_exit::environment_refusal(out, tier) {
+        return false;
+    }
     let msg = String::from_utf8_lossy(&out.stderr);
-    assert!(msg.contains("release tier targets") || msg.contains("cannot run the release tier"),
-        "{tier}: compile error is not a skip: {msg}");
+    assert!(
+        msg.contains("release tier targets") || msg.contains("cannot run the release tier"),
+        "{tier}: compile error is not a skip: {msg}"
+    );
     true
 }
 

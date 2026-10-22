@@ -39,9 +39,9 @@
 
 #![cfg(unix)]
 
-use std::cell::{Cell, UnsafeCell};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use std::cell::RefCell;
+use std::cell::{Cell, UnsafeCell};
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 
 /// Guard region at the low end. Larger than one page so big frames

@@ -21,7 +21,7 @@ fn walk(nodes: List[Node], i: int, mut acc: int) -> int {
 
 fn main() -> int {
     let args = env_args()
-    let n = (args[0]).to_int() else 200000
+    let n = args[0].to_int() else 200000
     var nodes = List[Node]()
     var i = 0
     while i < n {

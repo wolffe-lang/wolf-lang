@@ -158,6 +158,7 @@ faults/overflow_list_pop_i32.lu: lowers
 faults/overflow_list_pop_i64.lu: lowers
 faults/region_cap_breach.lu: lowers
 faults/repeat_negative.lu: lowers
+faults/stack_overflow.lu: lowers
 faults/trap_skips_root_defers.lu: lowers
 faults/use_after_move_field.lu: not mem-clean (pre-wir rungs own it)
 faults/wrap_high_as_i32.lu: lowers
@@ -603,6 +604,7 @@ memory/read_param_escape_local.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_static.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_field_rebound.lu: not mem-clean (pre-wir rungs own it)
+memory/read_param_indexed_caller.lu: lowers
 memory/read_param_move_legal.lu: lowers
 memory/read_param_rebind_take.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_rebind_write.lu: not mem-clean (pre-wir rungs own it)

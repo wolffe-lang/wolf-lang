@@ -1,0 +1,10 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 421..457 name=Tb fields=1
+StructDecl 459..485 name=Buf fields=1
+StructDecl 487..521 name=Ed fields=1
+FnDecl 523..566 name=len_of body=Block
+FnDecl 568..645 name=probe body=Block
+FnDecl 647..913 name=main body=Block
