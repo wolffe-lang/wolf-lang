@@ -981,9 +981,13 @@ pub unsafe extern "C" fn __wolf_rt_region_free(handle: *mut core::ffi::c_void) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_region_freeze(_handle: *mut core::ffi::c_void) {}
 
-/// Runtime startup before user main; no workers or other descriptors are made.
+/// Runtime startup before user main; no workers or other descriptors are
+/// made. Defined on every host (the entry shim always calls it); it
+/// registers the main thread only where `task` and its guard reporter
+/// exist (linux, macOS, windows: `lib.rs`'s gate on `pub mod task`).
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_stack_start() {
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     crate::task::enter_runtime_thread();
 }
 
