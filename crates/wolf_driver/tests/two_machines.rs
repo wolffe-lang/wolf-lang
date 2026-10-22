@@ -44,7 +44,11 @@ fn indexed_read_keeps_the_callers_field() {
 fn fault_run(dir: &Path, exe: &str, depth: &str, fallback: bool) -> Option<Output> {
     // Four EiB cannot fit in any supported user address space: mmap
     // fails without committing memory, exercising the std::thread fallback.
-    let reserve = if fallback { "4611686018427387904" } else { "8388608" };
+    let reserve = if fallback {
+        "4611686018427387904"
+    } else {
+        "8388608"
+    };
     if cfg!(target_os = "macos") {
         if std::env::var_os("GITHUB_ACTIONS").is_none() {
             eprintln!("SKIP: stack_overflow on macOS requires a disposable CI runner");
@@ -107,8 +111,7 @@ fn stack_overflow_is_named_on_both_tiers_and_threads() {
         } else {
             root().join("crates/wolf_driver/tests/fixtures/two_machines/task.lu")
         };
-        std::fs::copy(source, dir.join("main.lu"))
-        .unwrap();
+        std::fs::copy(source, dir.join("main.lu")).unwrap();
         for tier in ["native", "release"] {
             let mut build = Command::new(env!("CARGO_BIN_EXE_wolf"));
             build
@@ -128,7 +131,10 @@ fn stack_overflow_is_named_on_both_tiers_and_threads() {
                     continue;
                 };
                 let stderr = String::from_utf8_lossy(&out.stderr);
-                eprintln!("s256 {fixture}/{tier}/{depth} fallback={fallback}: {:?}\n{stderr}", out.status);
+                eprintln!(
+                    "s256 {fixture}/{tier}/{depth} fallback={fallback}: {:?}\n{stderr}",
+                    out.status
+                );
                 assert_eq!(
                     out.status.code(),
                     Some(134),
