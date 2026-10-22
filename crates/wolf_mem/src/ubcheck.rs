@@ -693,8 +693,50 @@ struct Scope<'t> {
     cleanup: Vec<Cleanup<'t>>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum ReadStorage {
+    List(usize),
+    Map(usize),
+    Pool(usize),
+}
+
+fn read_storage(v: &Value) -> Option<ReadStorage> {
+    match v {
+        Value::List(id) => Some(ReadStorage::List(*id)),
+        Value::Map(id) => Some(ReadStorage::Map(*id)),
+        Value::Pool(id) => Some(ReadStorage::Pool(*id)),
+        _ => None,
+    }
+}
+
+// Source spans are diagnostic coordinates, not part of a place's identity.
+fn same_step(a: &PStep, b: &PStep) -> bool {
+    match (a, b) {
+        (PStep::Field(a), PStep::Field(b)) => a == b,
+        (PStep::ListIdx { index: a, .. }, PStep::ListIdx { index: b, .. }) => a == b,
+        (PStep::MapKey { key: a, .. }, PStep::MapKey { key: b, .. }) => a == b,
+        (
+            PStep::PoolIdx {
+                index: a,
+                generation: ag,
+                ..
+            },
+            PStep::PoolIdx {
+                index: b,
+                generation: bg,
+                ..
+            },
+        ) => a == b && ag == bg,
+        _ => false,
+    }
+}
+
 struct Frame<'t> {
     body: usize,
+    // A read parameter's arena storage remains the caller's. Moves out
+    // of it are tombstones in THIS activation, never writes to the arena.
+    read_roots: Vec<Value>,
+    read_moves: Vec<(ReadStorage, Vec<PStep>)>,
     locals: Vec<Value>,
     scopes: Vec<Scope<'t>>,
 }
@@ -3081,6 +3123,8 @@ impl<'t> Machine<'t> {
         };
         let mut frame = Frame {
             body,
+            read_roots: Vec::new(),
+            read_moves: Vec::new(),
             locals: Vec::new(),
             scopes: vec![Scope {
                 names: Vec::new(),
@@ -3102,7 +3146,16 @@ impl<'t> Machine<'t> {
                 }
             }
         }
+        let read_params: Vec<bool> = decl
+            .params()
+            .into_iter()
+            .flat_map(|p| p.params())
+            .map(|p| p.mode().is_none())
+            .collect();
         for (i, v) in args.into_iter().enumerate() {
+            if read_params.get(i) == Some(&true) {
+                frame.read_roots.push(v.clone());
+            }
             let name = names.get(i).cloned().unwrap_or_else(|| format!("_{i}"));
             frame.scopes[0].names.push((name, frame.locals.len()));
             frame.locals.push(v);
@@ -3443,6 +3496,15 @@ impl<'t> Machine<'t> {
     }
 
     fn walk_read(&mut self, cur: Value, path: &[PStep], span: Span) -> E<Value> {
+        if let Some(storage) = read_storage(&cur)
+            && self.frames.last().is_some_and(|f| {
+                f.read_moves.iter().any(|(s, moved)| {
+                    *s == storage && moved.iter().zip(path).all(|(a, b)| same_step(a, b))
+                })
+            })
+        {
+            return self.trap("use-after-move", "mem.tier0.move.2", span);
+        }
         let Some(step) = path.first() else {
             return Ok(cur);
         };
@@ -3655,6 +3717,74 @@ impl<'t> Machine<'t> {
         r
     }
 
+    /// Whether an arena belongs to this activation's read views. Most
+    /// hits are at the first List handle; an alias to a nested container
+    /// may require walking its ancestors. Iterative and cycle-safe, and
+    /// only asked on a partial move, never on ordinary reads or calls.
+    fn lent_storage(&self, storage: ReadStorage) -> bool {
+        let Some(frame) = self.frames.last() else {
+            return false;
+        };
+        let mut todo: Vec<&Value> = frame.read_roots.iter().collect();
+        let mut seen = std::collections::HashSet::new();
+        while let Some(v) = todo.pop() {
+            if let Some(key) = read_storage(v) {
+                if key == storage {
+                    return true;
+                }
+                if !seen.insert(key) {
+                    continue;
+                }
+            }
+            match v {
+                Value::Struct { fields } => todo.extend(fields.iter().map(|(_, v)| v)),
+                Value::Enum { payload, .. } | Value::ErrTag { payload, .. } => todo.extend(payload),
+                Value::Dyn { inner, .. } => todo.push(inner),
+                Value::List(id) => todo.extend(&self.lists[*id]),
+                Value::Map(id) => todo.extend(self.maps[*id].iter().map(|(_, v)| v)),
+                Value::Pool(id) => {
+                    todo.extend(self.pools[*id].iter().filter(|s| s.live).map(|s| &s.value))
+                }
+                _ => {}
+            }
+        }
+        false
+    }
+
+    /// Canonicalize the last container crossing, so aliases and different
+    /// source spans still name one moved place. `read_place` has already
+    /// checked every bound and the liveness of this exact path.
+    fn lent_move(&self, place: &Place) -> Option<(ReadStorage, Vec<PStep>)> {
+        let mut cur = self.frames[place.frame].locals[place.local].clone();
+        if matches!(cur, Value::Ref(_)) {
+            return None;
+        }
+        let mut found = None;
+        for (i, step) in place.path.iter().enumerate() {
+            if let Some(key) = read_storage(&cur) {
+                found = Some((key, i));
+            }
+            cur = match (step, cur) {
+                (PStep::Field(f), Value::Struct { fields }) => {
+                    fields.into_iter().find(|(n, _)| n == f)?.1
+                }
+                (PStep::ListIdx { index, .. }, Value::List(id)) => {
+                    self.lists[id].get(*index as usize)?.clone()
+                }
+                (PStep::MapKey { key, .. }, Value::Map(id)) => {
+                    self.maps[id].iter().find(|(k, _)| k == key)?.1.clone()
+                }
+                (PStep::PoolIdx { index, .. }, Value::Pool(id)) => {
+                    self.pools[id].get(*index)?.value.clone()
+                }
+                _ => return None,
+            };
+        }
+        let (storage, start) = found?;
+        self.lent_storage(storage)
+            .then(|| (storage, place.path[start..].to_vec()))
+    }
+
     /// Use a place in value position: `Copy` copies, everything else
     /// moves out (`[mem.tier0.move.1]`; the static tier already
     /// guaranteed no later use).
@@ -3671,8 +3801,13 @@ impl<'t> Machine<'t> {
                 *root = Value::Moved;
             }
         } else if !v.is_copy() {
-            // Partial move: mark the field.
-            self.write_place(place, Value::Moved, span)?;
+            if let Some(mark) = self.lent_move(place) {
+                self.frame().read_moves.push(mark);
+            } else {
+                // An owned/mut place really is emptied; only read views
+                // keep their tombstones off the shared arena.
+                self.write_place(place, Value::Moved, span)?;
+            }
         }
         Ok(v)
     }

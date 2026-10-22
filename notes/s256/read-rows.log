@@ -1,0 +1,72 @@
+direct control 0 {"commit":"9da7bdc","diagnostics":[],"file":"/home/mfwolffe/lanes/s256/w/read-variants/direct/main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"trap(use-after-move)","warnings":[],"x-trap-clause":"mem.tier0.move.2","x-trap-pos":[23,5],"x-trap-span":[553,564]} 
+direct head 0 {"commit":"0477ce6","diagnostics":[],"file":"/home/mfwolffe/lanes/s256/w/read-variants/direct/main.lu","impl":"wolfgang","impl_version":"0.2.34+dev.0477ce6","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"1 1 1\n","stdout_sha256":"a7c6882a45dbaefd37c17f1da98fee82c0ba4fa5d79908d624741725ff887328","verdict":"exit(0)","warnings":[]} 
+alias control 0 {"commit":"9da7bdc","diagnostics":[],"file":"/home/mfwolffe/lanes/s256/w/read-variants/alias/main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"trap(use-after-move)","warnings":[],"x-trap-clause":"mem.tier0.move.2","x-trap-pos":[23,5],"x-trap-span":[553,564]} 
+alias head 0 {"commit":"0477ce6","diagnostics":[],"file":"/home/mfwolffe/lanes/s256/w/read-variants/alias/main.lu","impl":"wolfgang","impl_version":"0.2.34+dev.0477ce6","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"1 1 1\n","stdout_sha256":"a7c6882a45dbaefd37c17f1da98fee82c0ba4fa5d79908d624741725ff887328","verdict":"exit(0)","warnings":[]} 
+repeat control 0 {"commit":"9da7bdc","diagnostics":[{"code":"E1001","severity":"error","span":[646,669]}],"file":"/home/mfwolffe/lanes/s256/w/read-variants/repeat/main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"mem","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E1001)","warnings":[]} error[E1001]: `ed.bufs[b].tb.bytes.len` is used here after its value moved away
+  --> /home/mfwolffe/lanes/s256/w/read-variants/repeat/main.lu:28:18
+   |
+27 |     let tb = ed.bufs[b].tb
+   |              ------------- `ed.bufs[b].tb` moved here
+28 |     len_of(tb) + ed.bufs[b].tb.bytes.len
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^ used after the move
+   |
+   = note: `ed.bufs[b].tb.bytes.len` is part of `ed.bufs[b].tb`; moving one empties the other.
+     Disjoint fields stay usable.
+   = note: re-initializing the place (assigning to it) also makes it usable again.
+help: to keep the original, copy it at the move
+   |
+27 |     let tb = copy ed.bufs[b].tb
+   |
+repeat head 0 {"commit":"0477ce6","diagnostics":[{"code":"E1001","severity":"error","span":[646,669]}],"file":"/home/mfwolffe/lanes/s256/w/read-variants/repeat/main.lu","impl":"wolfgang","impl_version":"0.2.34+dev.0477ce6","phase_reached":"mem","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E1001)","warnings":[]} error[E1001]: `ed.bufs[b].tb.bytes.len` is used here after its value moved away
+  --> /home/mfwolffe/lanes/s256/w/read-variants/repeat/main.lu:28:18
+   |
+27 |     let tb = ed.bufs[b].tb
+   |              ------------- `ed.bufs[b].tb` moved here
+28 |     len_of(tb) + ed.bufs[b].tb.bytes.len
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^ used after the move
+   |
+   = note: `ed.bufs[b].tb.bytes.len` is part of `ed.bufs[b].tb`; moving one empties the other.
+     Disjoint fields stay usable.
+   = note: `ed` is a `read` parameter: the move lends `ed.bufs[b].tb` to its new binding and the
+     caller keeps its value ([mem.tier0.mode.read]), but the place is empty in this frame
+     from the move on ([mem.tier0.move.1]). To read it twice, read through `ed.bufs[b].tb`
+     each time without binding it, or use the binding from here on; `copy` at the move is a
+     deep copy.
+   = note: re-initializing the place (assigning to it) also makes it usable again.
+help: to keep the original, copy it at the move
+   |
+27 |     let tb = copy ed.bufs[b].tb
+   |
+twice control 0 {"commit":"9da7bdc","diagnostics":[{"code":"E1001","severity":"error","span":[645,658]}],"file":"/home/mfwolffe/lanes/s256/w/read-variants/twice/main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"mem","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E1001)","warnings":[]} error[E1001]: `ed.bufs[b].tb` is used here after its value moved away
+  --> /home/mfwolffe/lanes/s256/w/read-variants/twice/main.lu:28:17
+   |
+27 |     let tb = ed.bufs[b].tb
+   |              ------------- `ed.bufs[b].tb` moved here
+28 |     let again = ed.bufs[b].tb
+   |                 ^^^^^^^^^^^^^ used after the move
+   |
+   = note: re-initializing the place (assigning to it) also makes it usable again.
+help: to keep the original, copy it at the move
+   |
+27 |     let tb = copy ed.bufs[b].tb
+   |
+twice head 0 {"commit":"0477ce6","diagnostics":[{"code":"E1001","severity":"error","span":[645,658]}],"file":"/home/mfwolffe/lanes/s256/w/read-variants/twice/main.lu","impl":"wolfgang","impl_version":"0.2.34+dev.0477ce6","phase_reached":"mem","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E1001)","warnings":[]} error[E1001]: `ed.bufs[b].tb` is used here after its value moved away
+  --> /home/mfwolffe/lanes/s256/w/read-variants/twice/main.lu:28:17
+   |
+27 |     let tb = ed.bufs[b].tb
+   |              ------------- `ed.bufs[b].tb` moved here
+28 |     let again = ed.bufs[b].tb
+   |                 ^^^^^^^^^^^^^ used after the move
+   |
+   = note: `ed` is a `read` parameter: the move lends `ed.bufs[b].tb` to its new binding and the
+     caller keeps its value ([mem.tier0.mode.read]), but the place is empty in this frame
+     from the move on ([mem.tier0.move.1]). To read it twice, read through `ed.bufs[b].tb`
+     each time without binding it, or use the binding from here on; `copy` at the move is a
+     deep copy.
+   = note: re-initializing the place (assigning to it) also makes it usable again.
+help: to keep the original, copy it at the move
+   |
+27 |     let tb = copy ed.bufs[b].tb
+   |
+copy control 0 {"commit":"9da7bdc","diagnostics":[],"file":"/home/mfwolffe/lanes/s256/w/read-variants/copy/main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"1 1 1\n","stdout_sha256":"a7c6882a45dbaefd37c17f1da98fee82c0ba4fa5d79908d624741725ff887328","verdict":"exit(0)","warnings":[]} 
+copy head 0 {"commit":"0477ce6","diagnostics":[],"file":"/home/mfwolffe/lanes/s256/w/read-variants/copy/main.lu","impl":"wolfgang","impl_version":"0.2.34+dev.0477ce6","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"1 1 1\n","stdout_sha256":"a7c6882a45dbaefd37c17f1da98fee82c0ba4fa5d79908d624741725ff887328","verdict":"exit(0)","warnings":[]} 

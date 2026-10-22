@@ -24,7 +24,10 @@ fn indexed_read_caller_survives() {
 
 #[test]
 fn indexed_read_rebound_root_survives() {
-    let src = SOURCE.replace("let tb = ed.bufs[b].tb", "let view = ed\n    let tb = view.bufs[b].tb");
+    let src = SOURCE.replace(
+        "    let tb = ed.bufs[b].tb",
+        "    let view = ed\n    let tb = view.bufs[b].tb",
+    );
     let out = checked(&src);
     assert!(matches!(out.verdict, Verdict::Exit(0)), "{:?}", out.verdict);
     assert_eq!(out.stdout, "1 1 1\n");
@@ -39,14 +42,20 @@ fn indexed_read_still_moves_inside_its_activation() {
 
 #[test]
 fn indexed_read_different_source_spans_name_the_same_place() {
-    let src = SOURCE.replace("len_of(tb)\n}", "let again = ed.bufs[b].tb\n    len_of(tb) + len_of(again)\n}");
+    let src = SOURCE.replace(
+        "len_of(tb)\n}",
+        "let again = ed.bufs[b].tb\n    len_of(tb) + len_of(again)\n}",
+    );
     let out = checked(&src);
     assert!(matches!(out.verdict, Verdict::Trap(t) if t.kind == "use-after-move"));
 }
 
 #[test]
 fn copied_container_is_not_a_read_view() {
-    let src = SOURCE.replace("let tb = ed.bufs[b].tb", "let view = copy ed\n    let tb = view.bufs[b].tb");
+    let src = SOURCE.replace(
+        "    let tb = ed.bufs[b].tb",
+        "    let view = copy ed\n    let tb = view.bufs[b].tb",
+    );
     let out = checked(&src);
     assert!(matches!(out.verdict, Verdict::Exit(0)), "{:?}", out.verdict);
     assert_eq!(out.stdout, "1 1 1\n");

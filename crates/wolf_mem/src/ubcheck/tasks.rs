@@ -1300,6 +1300,8 @@ impl<'t> Machine<'t> {
         let d = wolf_ast::ClosureExpr::cast(node).expect("closure node");
         let mut frame = Frame {
             body,
+            read_roots: Vec::new(),
+            read_moves: Vec::new(),
             locals: Vec::new(),
             scopes: vec![Scope {
                 names: Vec::new(),
@@ -1330,7 +1332,16 @@ impl<'t> Machine<'t> {
                 None => "_".to_string(),
             })
             .collect();
+        let read_params: Vec<bool> = d
+            .params()
+            .into_iter()
+            .flat_map(|p| p.params())
+            .map(|p| p.mode().is_none())
+            .collect();
         for (i, v) in args.into_iter().enumerate() {
+            if read_params.get(i) == Some(&true) {
+                frame.read_roots.push(v.clone());
+            }
             let name = names.get(i).cloned().unwrap_or_else(|| format!("_{i}"));
             frame.scopes[0].names.push((name, frame.locals.len()));
             frame.locals.push(v);

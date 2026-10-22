@@ -1,0 +1,46 @@
+   Compiling crossbeam-utils v0.8.22
+   Compiling libc v0.2.189
+   Compiling crossbeam-epoch v0.9.20
+   Compiling wolf_span v0.2.34 (/home/mfwolffe/lanes/s256/wolf-lang/crates/wolf_span)
+   Compiling crossbeam-deque v0.8.7
+   Compiling cfg-if v1.0.4
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.10
+   Compiling cc v1.4.2
+   Compiling rayon-core v1.13.0
+   Compiling wolf_diag v0.2.34 (/home/mfwolffe/lanes/s256/wolf-lang/crates/wolf_diag)
+   Compiling unicode-ident v1.0.24
+   Compiling rustix v1.1.4
+   Compiling getrandom v0.4.3
+   Compiling wolf_lex v0.2.34 (/home/mfwolffe/lanes/s256/wolf-lang/crates/wolf_lex)
+   Compiling wolf_ast v0.2.34 (/home/mfwolffe/lanes/s256/wolf-lang/crates/wolf_ast)
+   Compiling linux-raw-sys v0.12.1
+   Compiling blake3 v1.8.6
+   Compiling cpufeatures v0.3.0
+   Compiling either v1.17.0
+   Compiling arrayvec v0.7.8
+   Compiling arrayref v0.3.9
+   Compiling constant_time_eq v0.4.2
+   Compiling bitflags v2.13.1
+   Compiling wolf_parse v0.2.34 (/home/mfwolffe/lanes/s256/wolf-lang/crates/wolf_parse)
+   Compiling rayon v1.12.0
+   Compiling fastrand v2.5.0
+   Compiling once_cell v1.21.4
+   Compiling console v0.16.4
+   Compiling similar v2.7.0
+   Compiling tempfile v3.27.0
+   Compiling insta v1.48.0
+   Compiling wolf_sema v0.2.34 (/home/mfwolffe/lanes/s256/wolf-lang/crates/wolf_sema)
+   Compiling wolf_mem v0.2.34 (/home/mfwolffe/lanes/s256/wolf-lang/crates/wolf_mem)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 43.86s
+     Running tests/read_views.rs (target/debug/deps/read_views-3cea05955cc3b270)
+
+running 5 tests
+test copied_container_is_not_a_read_view ... ok
+test indexed_read_different_source_spans_name_the_same_place ... ok
+test indexed_read_rebound_root_survives ... ok
+test indexed_read_caller_survives ... ok
+test indexed_read_still_moves_inside_its_activation ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
