@@ -1,0 +1,14 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0409]: `.starts_with(…)` cannot be applied to `str ! {none}`
+  --> mem:///main.lu:10:8
+   |
+10 |     if rest.starts_with("4") {
+   |        ^^^^ this is `str ! {none}`
+   |
+   = note: a `!T` is two values, never one, and no operator reads it ([type.row.operand]): a member
+     read and a method call read their base as an operator reads its operand, and `?`, `else`
+     and `match` are the whole of how a row is handled. Handle it first —
+     `rest?.starts_with(…)`, `(rest else "").starts_with(…)` — and read what it yields.
