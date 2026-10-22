@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+s257 — the spilled union (wolf-lang#268 row 1, c06's residue). An enum
+whose variants carry payloads of different types, and a row whose tags
+do, compile on every tier.
+
+- **A payload slot whose types disagree is a union** (`[abi.native.enum]`):
+  `enum V { Int(int), Text(str) }`, `error E = {Parse(int), Io(str)}`
+  and `std.json`'s `Value` (null/bool/int/float/str/list/map, recursive)
+  build and run natively and on the release tier. The slot's storage is
+  the largest member at the strictest alignment; each variant writes
+  and reads its own member through a typed view at the slot's start.
+  Per slot: a slot every variant agrees on keeps the layout it had, so
+  every program that built before builds to the same objects. Before,
+  every compiled tier refused by name ("enum payload slots with
+  conflicting types across variants", "row payload slots with
+  conflicting types across tags", `unsupported`); the checked machine
+  and lupin ran such programs all along. WIR gains `union{A, B}`,
+  `union.make`, `union.view` and the blob forms `load.union`/
+  `store.union`; row widening at `?` moves a payload into the wider
+  row's union instead of refusing a non-prefix. Rows:
+  `typecheck/enum_union_{two,three,tree}.lu`,
+  `rows/row_union_payloads.lu`, `memory/enum_union_{take,copy,str_escape}.lu`.
+
 s252 — the small gaps (wolf-lang#800, #813, #814, #816, #822, #801; yew
 `docs/MAP.md` §5 G11, G18, G24, G25, G28 and the fuzz fork's findings).
 Three behaviour changes, each a refusal removed with the spec's clause
