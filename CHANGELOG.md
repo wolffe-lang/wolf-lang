@@ -31,7 +31,12 @@ to something long-lived. One clause, two `List` methods, two witnesses.
   parameters and the storing-nothing mutators only (a part moved out
   and given back is judged by what comes back); computed callee-first
   over the build with a fixpoint per recursive component (aspen's
-  `walk_dir`). `wolf conform-run --dump=mut-clean` prints every
+  `walk_dir`). A parameter is judged against its OWN region: another
+  argument's value (a `take` struct pushed, a fn value stored) or a
+  region parameter's region is not the parameter's and keeps it unclean
+  — the first verdict read only the callee's ambient and let s227's
+  `region_kept_arg_take` and `region_kept_arg_closure` through, which
+  `cargo xtask corpus` at the head caught. `wolf conform-run --dump=mut-clean` prints every
   parameter's verdict with its first keeping store. Everything else stays
   E1010/E1004, and the report names the store and the one-word repair,
   or the callee's keeping store. The checked machine charges the copies
@@ -58,7 +63,12 @@ to something long-lived. One clause, two `List` methods, two witnesses.
   holds an unclean callee now (its `int`-push shape, refused by the
   signature rule alone, is `region_outer_write_call.lu`'s run row);
   `region_escape_container.lu` reports one site (the reassigned header),
-  not two. No other row moved verdict.
+  not two. Two refusals are run rows now, each a `copy` at a store into
+  an outer value that the clause makes the materializing copy:
+  `region_copy_shares_str.lu` (s227's door, `in st { o = copy d }`) and
+  `region_str_call_index_store.lu` (s216's, #612's first witness,
+  `st.vals["x"] = copy v` inside the callee's own block); lupin's
+  column on both is `region-fault`. No other row moved verdict.
 - **lupin 0.1.55** shares `copy`'s bytes: `region-fault` where a copied
   `str` is read back after its block (`_str_push`, `_struct`, `_field`,
   `_map`); the same answers on the scalar, index, clean-call and ledger
