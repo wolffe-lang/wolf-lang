@@ -1440,6 +1440,7 @@ fn lower_copy_body<'t>(
         survey,
         statics,
         body_module: body.module,
+        copy_target: None,
         b: &mut b,
     };
     let entry_params = lo.b.block_params(lo.b.current_block());

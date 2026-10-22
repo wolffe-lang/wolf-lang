@@ -1761,7 +1761,7 @@ allocation too (`m.s = copy g(mut t)`). A value whose type reaches no
 storage — scalars, and tuples, structs and enums of them — lives in no
 region and is never this error ([mem.region.scalar]).
 
-Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_conflict_params.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_outer_write_field.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_outer_write_refused_field.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_scalar_list_store.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_scalar_store.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1004_cross_region_store.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1004_params_independent.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__enum_union_str_escape.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_conflict_params.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_outer_write_field.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_outer_write_refused_field.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_scalar_list_store.snap, crates/wolf_lex/tests/snapshots/corpus_snapshots__memory__region_scalar_store.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1004_cross_region_store.snap, crates/wolf_mem/tests/snapshots/mem_diagnostics__e1004_params_independent.snap
 
 ## E1005 — the region is open here, so its handle cannot move or freeze
 
