@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+ErrorDecl 436..468 name=E tags={Parse,Io}
+FnDecl 469..587 name=read body=Block
+FnDecl 589..739 name=describe body=Block
+FnDecl 741..1110 name=main body=Block

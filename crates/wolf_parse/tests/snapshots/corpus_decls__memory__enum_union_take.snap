@@ -1,0 +1,8 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+EnumDecl 334..374 name=V variants=2
+FnDecl 376..428 name=consume body=Block
+FnDecl 430..599 name=drain body=Block
+FnDecl 601..732 name=main body=Block
