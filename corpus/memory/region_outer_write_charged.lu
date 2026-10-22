@@ -48,7 +48,7 @@ fn main() -> !int {
         charged_outer = region_bytes(outer)
     }
     let reclaimed = live_region_bytes() == before
-    print_raw(
+    print(
         "outer {charged_outer >= line_bytes} | turn {charged_turn >= scratch_len} | lines {count} | reclaimed {reclaimed}",
     )
     0
