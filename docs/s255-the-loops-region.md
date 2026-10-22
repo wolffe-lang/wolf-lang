@@ -749,7 +749,14 @@ divergences, 21 in the conservatism ledger (`unsupported`), 3 forward
 pins, as at trunk — and the fourteen new rows are in its file set;
 lane-coverage's floors held (checked/native/release/union 733/738/738/
 746 of 1,141). The `tier pr` runs mirrored each red (39717013172 at
-`8521a0e0` on the token stream).
+`8521a0e0` on the token stream). **`ci11` at the rebased head (over
+s256's `94cd52bc`, compiler head `f00bb936`), `taskset -c 4-7`: all
+steps green** — the differ 1,204 files (s256's two rows joined), 0
+divergences, 21 conservatism, 3 forward pins; the ir-volume gate held
+(kernel suite 91.1% against the 92.4% ratchet; this lane's three new
+paths `list_reserve` 0.969, `list_reset` 0.957, `region_copy_shares_str`
+0.980 reported, not gated, so the table is not re-recorded);
+lane-coverage's floors held.
 
 **R3 asked (implemented as recommended): the lint job's budget.** The
 `tier pr` runs at `b9f16316` and `22ac0106` — docs-only commits after
