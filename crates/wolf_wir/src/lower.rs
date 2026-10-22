@@ -1207,6 +1207,11 @@ fn lower_task_body<'t>(
     lo.scopes.push(ScopeFrame::default());
     lo.capture_binds = task.caps.len();
     match &task.kind {
+        // A copy function has no closure; the drain routes it to
+        // `lower_copy_body` and never here.
+        PendingKind::Copy { .. } => {
+            return Err(refuse("a copy task lowered as a closure", task.span));
+        }
         PendingKind::Task => {
             for (i, (name, sema)) in task.caps.iter().enumerate() {
                 let wty = task.cap_wtys[i];
