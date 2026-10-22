@@ -327,7 +327,11 @@ pub fn dump_mut_clean_package(pkg: &Package, tc: &Typecheck) -> String {
                     let lo = (at.lo as usize).min(src.len());
                     let hi = (at.hi as usize).min(src.len()).max(lo);
                     let line = 1 + src[..lo].iter().filter(|&&b| b == b'\n').count();
-                    let col = 1 + lo - src[..lo].iter().rposition(|&b| b == b'\n').map_or(0, |p| p + 1);
+                    let col = 1 + lo
+                        - src[..lo]
+                            .iter()
+                            .rposition(|&b| b == b'\n')
+                            .map_or(0, |p| p + 1);
                     let snippet = String::from_utf8_lossy(&src[lo..hi])
                         .lines()
                         .next()
@@ -441,12 +445,11 @@ fn lower_all<'a>(
     let edges: Vec<Vec<usize>> = nodes
         .iter()
         .map(|n| {
-            let mut out: Vec<usize> = n
-                .tb
-                .calls
-                .iter()
-                .filter_map(|(_, c)| c.decl_span.and_then(|d| by_key.get(&d).copied()))
-                .collect();
+            let mut out: Vec<usize> =
+                n.tb.calls
+                    .iter()
+                    .filter_map(|(_, c)| c.decl_span.and_then(|d| by_key.get(&d).copied()))
+                    .collect();
             out.sort_unstable();
             out.dedup();
             out
@@ -579,7 +582,10 @@ fn lower_all<'a>(
 
 /// The declaration node a body lowers from, with its enclosing item
 /// for an impl or trait member — `None` when the body is not a fn.
-fn body_fn_node<'a>(pkg: &'a Package, body: &BodyRef) -> Option<(&'a GreenNode, Option<&'a GreenNode>)> {
+fn body_fn_node<'a>(
+    pkg: &'a Package,
+    body: &BodyRef,
+) -> Option<(&'a GreenNode, Option<&'a GreenNode>)> {
     let root = &pkg.files[body.file].parse.root;
     let node = root.nodes().filter(|n| n.kind.is_item()).nth(body.decl)?;
     let (node, outer) = match body.member {

@@ -167,7 +167,11 @@ fn fail_row(rel: &str, code: &str, needles: &[&str], lupin: Lupin, why: &str) {
         let Some(obs) = lane(&entry, flag) else {
             continue;
         };
-        assert_eq!(obs.verdict, format!("fail({code})"), "{rel} on {flag}: {why}");
+        assert_eq!(
+            obs.verdict,
+            format!("fail({code})"),
+            "{rel} on {flag}: {why}"
+        );
         assert!(
             obs.diags.iter().any(|d| d["code"].as_str() == Some(code)),
             "{rel} on {flag}: a {code} in the record"
@@ -182,7 +186,10 @@ fn fail_row(rel: &str, code: &str, needles: &[&str], lupin: Lupin, why: &str) {
         .arg("--no-cache")
         .output()
         .expect("wolf build runs");
-    assert!(!out.status.success(), "{rel}: `wolf build` should refuse it");
+    assert!(
+        !out.status.success(),
+        "{rel}: `wolf build` should refuse it"
+    );
     let text = String::from_utf8_lossy(&out.stderr);
     for needle in needles {
         assert!(
@@ -469,8 +476,16 @@ fn per_turn(release: bool) {
         ));
         rows.push((mode, cost));
     }
-    let region = rows.iter().find(|(m, _)| *m == "region").map(|(_, c)| *c).unwrap();
-    let none = rows.iter().find(|(m, _)| *m == "none").map(|(_, c)| *c).unwrap();
+    let region = rows
+        .iter()
+        .find(|(m, _)| *m == "region")
+        .map(|(_, c)| *c)
+        .unwrap();
+    let none = rows
+        .iter()
+        .find(|(m, _)| *m == "none")
+        .map(|(_, c)| *c)
+        .unwrap();
     // The block keeps nothing of the turn: at most the measurement's
     // noise (4 B a turn, the bound cwd_region_lanes uses). The control
     // keeps the turn's string (a 23-byte interpolation and the

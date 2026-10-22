@@ -3169,7 +3169,8 @@ impl<'t> Machine<'t> {
         v.kind == SyntaxKind::PrefixExpr
             && PrefixExpr::cast(v).is_some_and(|p| {
                 p.op().map(|t| t.kind) == Some(SyntaxKind::CopyKw)
-                    && p.operand().is_some_and(|o| o.kind != SyntaxKind::RegionBlock)
+                    && p.operand()
+                        .is_some_and(|o| o.kind != SyntaxKind::RegionBlock)
             })
     }
 
@@ -4204,7 +4205,8 @@ impl<'t> Machine<'t> {
                     _ => None,
                 }
             };
-            self.copy_target = Some(self.outer_region(&place, container.as_ref(), place_expr.span)?);
+            self.copy_target =
+                Some(self.outer_region(&place, container.as_ref(), place_expr.span)?);
         }
         let copied = match d.value() {
             Some(e) if elem_store && !d.takes() => self.eval_elem_copy(e)?,
@@ -12679,8 +12681,7 @@ impl<'t> Machine<'t> {
                     // tier's). A negative count is a no-op, as a count
                     // under the length is.
                     "reserve" => {
-                        let Some(nx) =
-                            args.into_iter().flat_map(|l| l.args()).find_map(Arg::value)
+                        let Some(nx) = args.into_iter().flat_map(|l| l.args()).find_map(Arg::value)
                         else {
                             return self.refuse("List.reserve without a count", e.span);
                         };

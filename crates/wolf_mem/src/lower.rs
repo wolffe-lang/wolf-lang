@@ -875,7 +875,13 @@ impl<'t> Lowerer<'t> {
     /// NAMED region rather than the ambient one — a container's growth
     /// (the region its header remembers) and the materializing copy a
     /// store into an outer value makes (the outer value's region).
-    fn alloc_site_in(&mut self, ty: String, kind: SiteKind, span: Span, region: RegionId) -> SiteId {
+    fn alloc_site_in(
+        &mut self,
+        ty: String,
+        kind: SiteKind,
+        span: Span,
+        region: RegionId,
+    ) -> SiteId {
         let id = SiteId(self.sites.len() as u32);
         self.sites.push(AllocSite {
             span,
@@ -981,7 +987,8 @@ impl<'t> Lowerer<'t> {
         v.kind == SyntaxKind::PrefixExpr
             && PrefixExpr::cast(v).is_some_and(|p| {
                 p.op().map(|t| t.kind) == Some(SyntaxKind::CopyKw)
-                    && p.operand().is_some_and(|o| o.kind != SyntaxKind::RegionBlock)
+                    && p.operand()
+                        .is_some_and(|o| o.kind != SyntaxKind::RegionBlock)
             })
     }
 
@@ -991,7 +998,9 @@ impl<'t> Lowerer<'t> {
         if !self.is_copy_prefix(v) {
             return;
         }
-        let Some(l) = self.root_local_of(place_expr) else { return };
+        let Some(l) = self.root_local_of(place_expr) else {
+            return;
+        };
         if !self.is_outer_write(l) {
             return;
         }
@@ -5672,7 +5681,12 @@ impl<'t> Lowerer<'t> {
         }
         let at = |id: TyId| Ty { table: t.table, id };
         let shown = || render(t.table, t.id, &|_| Err("_"));
-        if params_ok && matches!(t.kind(), TyKind::Rigid(_) | TyKind::Var(_) | TyKind::Proj(..)) {
+        if params_ok
+            && matches!(
+                t.kind(),
+                TyKind::Rigid(_) | TyKind::Var(_) | TyKind::Proj(..)
+            )
+        {
             return None;
         }
         match t.kind() {
@@ -5686,7 +5700,9 @@ impl<'t> Lowerer<'t> {
             | TyKind::ExitReason
             | TyKind::InferredRow { .. }
             | TyKind::OpenTail => None,
-            TyKind::Distinct(inner) => self.copy_out_refusal_in(at(*inner), depth + 1, seen, params_ok),
+            TyKind::Distinct(inner) => {
+                self.copy_out_refusal_in(at(*inner), depth + 1, seen, params_ok)
+            }
             TyKind::List(e) => self.copy_out_refusal_in(at(*e), depth + 1, seen, params_ok),
             TyKind::Map(k, v) => self
                 .copy_out_refusal_in(at(*k), depth + 1, seen, params_ok)
@@ -5721,7 +5737,12 @@ impl<'t> Lowerer<'t> {
                 };
                 match self.sigs.get(*module as usize, name) {
                     Some(ItemSig::Struct(ss)) => ss.fields.iter().find_map(|f| {
-                        self.copy_out_refusal_in(member(&ss.generics, f.ty), depth + 1, seen, params_ok)
+                        self.copy_out_refusal_in(
+                            member(&ss.generics, f.ty),
+                            depth + 1,
+                            seen,
+                            params_ok,
+                        )
                     }),
                     Some(ItemSig::Enum {
                         generics, variants, ..
@@ -5729,7 +5750,12 @@ impl<'t> Lowerer<'t> {
                         .iter()
                         .flat_map(|v| v.payload.iter())
                         .find_map(|&p| {
-                            self.copy_out_refusal_in(member(generics, p), depth + 1, seen, params_ok)
+                            self.copy_out_refusal_in(
+                                member(generics, p),
+                                depth + 1,
+                                seen,
+                                params_ok,
+                            )
                         }),
                     Some(ItemSig::Distinct { base, .. }) => self.copy_out_refusal_in(
                         Ty {
