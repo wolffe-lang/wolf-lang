@@ -60,3 +60,14 @@ fn copied_container_is_not_a_read_view() {
     assert!(matches!(out.verdict, Verdict::Exit(0)), "{:?}", out.verdict);
     assert_eq!(out.stdout, "1 1 1\n");
 }
+
+#[test]
+fn borrowed_header_methods_do_not_read_moved_elements() {
+    let src = SOURCE
+        .replace("    len_of(tb)\n", "    if ed.bufs.is_empty() { return 0 }\n    len_of(tb) + ed.bufs.count()\n")
+        .replace("    let b = probe(ed, 0)\n", "")
+        .replace("{a} {b} {ed.bufs[0].tb.bytes.len}", "{a}");
+    let out = checked(&src);
+    assert!(matches!(out.verdict, Verdict::Exit(0)), "{:?}", out.verdict);
+    assert_eq!(out.stdout, "2\n");
+}
