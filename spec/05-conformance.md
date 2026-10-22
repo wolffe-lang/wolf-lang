@@ -183,7 +183,7 @@ parser contract):
   (kind unspecified), or `trap(kind)` with kind from the closed
   set: `overflow`, `div-zero`, `bounds`, `use-after-move`, `exclusivity`,
   `region-fault`, `stale-handle`, `alloc-contract`, `assert`, `race`,
-  `ub`, `deadlock`. The set is closed; extension requires revising this
+  `ub`, `deadlock`, `stack-overflow`. The set is closed; extension requires revising this
   spec. (Revised 2026-08-10, deliberately: `deadlock` added by the
   spec/03 amendment `[conc.deadlock.trap]` — is06 finding S-3 showed
   the vocabulary had no spelling for an all-tasks-blocked outcome.)
@@ -214,11 +214,23 @@ read-mode write barrier, D39), `region-fault`
   blocked with no pending timer or I/O, and the self-acquisition case
   `[conc.deadlock.self]`; detection required in deterministic test
   modes, permitted elsewhere).
+- `[conf.trap.stack]` Exhausting a native thread's stack on linux or
+  macOS is `stack-overflow`, including the main thread and task threads.
+  The runtime reports `wolf-trap: stack-overflow` from an alternate
+  signal stack and exits 134, without unwinding or proc containment:
+  exhausted machine frames cannot safely execute that protocol. A fault
+  outside the current thread's stack guard retains the host's signal
+  disposition; a sent signal retains `[os.signal.disp.one]`'s meaning.
+  A source site is best effort (a fault PC may stand in for it). This is
+  distinct from the checked machine's 128-frame instrument budget below:
+  that remains `unsupported` (`call depth budget exhausted`), not a
+  program trap. The bound of a native stack is host-dependent, not 128.
+  Witness: the driver's `two_machines` recursive main and task rows.
 - `[conf.trap.exit]` A trap terminates the process with a nonzero,
   implementation-specified exit status — unless it fires on a task
   inside a proc, where `[conc.proc.exit]`'s containment (D68, s132)
   turns it into the proc's `fault(kind)` reason and the process
-  lives; this clause governs the root domain and every uncontained
+  lives (except `stack-overflow`, `[conf.trap.stack]`); this clause governs the root domain and every uncontained
   trap. **A trap runs no `defer` or `errdefer`, anywhere**: in the
   root domain death is immediate, so the pending scope-exit effects
   of the trapping scope and of every scope enclosing it are
