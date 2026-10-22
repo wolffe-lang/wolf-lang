@@ -399,7 +399,9 @@ premise by construction.
   reached the proc), `fault(kind)` (a trap fired on a task inside the
   proc and was contained at the boundary — `kind` is one name from
   `[conf.trap.set]`'s closed vocabulary, so containment adds **no**
-  new trap kind). Reasons are values (D30) — never unwinding.
+  new trap kind). Physical stack exhaustion is the exception:
+  `[conf.trap.stack]` ends the process without entering containment,
+  even on a task inside a proc. Reasons are values (D30) — never unwinding.
   (Amended 2026-09-01, s132 — D68, the ruled fourth shape: the trap
   fires at its site, the proc is the failure domain that absorbs it.)
   The fault mapping: a contained trap runs the killed-proc sequence
