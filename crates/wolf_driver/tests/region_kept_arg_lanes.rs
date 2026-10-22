@@ -368,17 +368,19 @@ fn a_copy_of_a_struct_at_a_store_into_an_outer_value_runs() {
             assert_ne!(flag, "--checked", "the checked lane always runs");
             continue;
         };
-        assert_eq!(obs.verdict, "exit(0)", "{flag} on the admitted row: {:?}", obs.codes);
         assert_eq!(
-            obs.stdout,
-            "28\nbuilt in pass, 0 uses\n",
+            obs.verdict, "exit(0)",
+            "{flag} on the admitted row: {:?}",
+            obs.codes
+        );
+        assert_eq!(
+            obs.stdout, "28\nbuilt in pass, 0 uses\n",
             "{flag} stdout on the admitted row"
         );
     }
     if let Some(lupin) = lupin_says(&entry) {
         assert_eq!(
-            lupin.verdict,
-            "trap(region-fault)",
+            lupin.verdict, "trap(region-fault)",
             "lupin {} shares a copied str's bytes (its column in docs/s255)",
             lupin.version
         );
