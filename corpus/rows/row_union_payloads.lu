@@ -1,0 +1,41 @@
+//! check: run(exit=0, stdout="ok 12\nparse at 2\nio disk full\nhandled Io\n")
+//! phase: run
+//! conforms: abi.native.enum, err.rows, type.row.match
+//!
+//! s257 — a declared row whose tags carry payloads of different types
+//! (`Parse(int)` against `Io(str)`): the eu's first payload slot is a
+//! union, written by the raise through the tag's own type and read
+//! back through it in a `match` arm and in an `else |err|` handler.
+
+error E = {Parse(int), Io(str)}
+
+fn read(s: str) -> int ! E {
+    if s == "" { return Io("disk full") }
+    if s == "x" { return Parse(2) }
+    s.len
+}
+
+fn describe(s: str) -> str {
+    match read(s) {
+        Parse(at) => "parse at {at}",
+        Io(what) => "io {what}",
+        n => "ok {n}",
+    }
+}
+
+fn main() -> !int {
+    let a = describe("twelve chars")
+    print("{a}")
+    let b = describe("x")
+    print("{b}")
+    let c = describe("")
+    print("{c}")
+    let d = read("") else |err| {
+        match err {
+            Io(_) => { print("handled Io") }
+            Parse(_) => { print("handled Parse") }
+        }
+        0
+    }
+    if d == 0 { 0 } else { 1 }
+}
