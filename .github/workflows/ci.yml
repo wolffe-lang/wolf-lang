@@ -449,7 +449,8 @@ jobs:
           - os: windows-latest
             leg: rung
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    # s255 (#878): build + test (macos-latest) ran 25:38 at 89cf0437 (s255 alone), 22:51 at 94cd52bc's PR run (s256 alone) and was cut at 30 on the trunk push of 94cd52bc (an orphan `soak`); the two together sit within minutes of 30. The windows legs share the line and ran well under it.
+    timeout-minutes: 45
     env:
       WOLF_RT_NONE_REQUIRE: "1"
     steps:

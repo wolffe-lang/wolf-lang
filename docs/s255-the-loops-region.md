@@ -775,7 +775,17 @@ with the s226 comment amended; (C) move the corpus-wide steps to their
 own job. **Recommend B** (`ac5e3956`, `0ce6f9c4`): the budget was set
 by s226 at 29:42 + 3.5 min and has not moved while the corpus grew;
 (C) is a CI lane's. The `tier pr` at the final head is the first run
-under 60.
+under 60. The same shape for the macOS leg (wolf-lang#878, the
+orchestrator's item after s256 merged): `build + test` (one matrix job
+for macOS and the two windows legs) has `timeout-minutes: 30`, and the
+macOS leg ran 25:38 in this lane's pre-rebase `tier full` (39824599934
+at `89cf0437`, this lane's code alone), 22:51 in s256's PR run at
+`94cd52bc` (its code alone) and was cut at 30 on the trunk push of
+`94cd52bc` (the runner killed an orphan `soak`); the two together at
+the rebased head sit within minutes of 30, so the cap is 45 (the
+measured durations in the commit's message); the `tier full` at the
+final head times the leg once more, for the report. No test moved or
+disabled for it.
 
 **The yew witness's suite, and the builder.** The suite on the witness
 at `f16e8ea` (`ev/yew-test-t3.txt`) was red on one test on both tiers:
