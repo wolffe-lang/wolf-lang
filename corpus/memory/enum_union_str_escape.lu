@@ -26,8 +26,8 @@ fn main() -> !int {
             }
         }
         match o {
-            Int(n) => { print("{n}") }
-            Text(t) => { print("{t}") }
+            Int(n) => { print("{n}") },
+            Text(t) => { print("{t}") },
         }
     }
     0

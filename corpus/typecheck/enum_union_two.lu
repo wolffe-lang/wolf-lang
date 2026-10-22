@@ -22,8 +22,8 @@ fn show(v: V) -> str {
 
 fn negate(mut v: V) {
     match v {
-        Int(n) => { v = V.Int(0 - n) }
-        Text(_) => {}
+        Int(n) => { v = V.Int(0 - n) },
+        Text(_) => {},
     }
 }
 

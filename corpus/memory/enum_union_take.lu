@@ -20,7 +20,7 @@ fn drain(take v: V) -> str {
         L(xs) => {
             let n = consume(take xs)
             "taken {n}"
-        }
+        },
         N(n) => "kept {n}",
     }
 }
