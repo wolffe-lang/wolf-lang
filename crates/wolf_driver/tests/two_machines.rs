@@ -41,7 +41,10 @@ fn indexed_read_keeps_the_callers_field() {
 }
 
 #[cfg(unix)]
-fn fault_run(dir: &Path, exe: &str, depth: &str) -> Option<Output> {
+fn fault_run(dir: &Path, exe: &str, depth: &str, fallback: bool) -> Option<Output> {
+    // Four EiB cannot fit in any supported user address space: mmap
+    // fails without committing memory, exercising the std::thread fallback.
+    let reserve = if fallback { "4611686018427387904" } else { "8388608" };
     if cfg!(target_os = "macos") {
         if std::env::var_os("GITHUB_ACTIONS").is_none() {
             eprintln!("SKIP: stack_overflow on macOS requires a disposable CI runner");
@@ -49,6 +52,7 @@ fn fault_run(dir: &Path, exe: &str, depth: &str) -> Option<Output> {
         }
         return Some(
             Command::new("sh")
+                .env("WOLF_TASK_STACK", reserve)
                 .current_dir(dir)
                 .args(["-c", "ulimit -c 0; ulimit -s 8192; \"$1\" \"$2\"", "s256"])
                 .arg(format!("./{exe}"))
@@ -73,6 +77,7 @@ fn fault_run(dir: &Path, exe: &str, depth: &str) -> Option<Output> {
         return Some(Command::new(engine)
             .args(["run", "--rm", "--network", "none", "--cpuset-cpus", "0-3", "-v"])
             .arg(format!("{}:/w", dir.display()))
+            .args(["-e", &format!("WOLF_TASK_STACK={reserve}")])
             .args(["-w", "/w", &image, "sh", "-c",
                 "ulimit -c 0; ulimit -s 8192; grep -E 'SigBlk|SigIgn' /proc/self/status; \"$1\" \"$2\"", "s256"])
             .arg(format!("./{exe}")).arg(depth).output().unwrap());
@@ -94,15 +99,15 @@ fn stack_overflow_is_named_on_both_tiers_and_threads() {
         .unwrap();
     assert!(status.success());
     let base = Path::new(env!("CARGO_TARGET_TMPDIR")).join("s256-overflow");
-    for fixture in ["deep", "task"] {
-        let dir = base.join(fixture);
+    for (fixture, fallback) in [("deep", false), ("task", false), ("task", true)] {
+        let dir = base.join(format!("{fixture}-{fallback}"));
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::copy(
-            root().join(format!(
-                "crates/wolf_driver/tests/fixtures/two_machines/{fixture}.lu"
-            )),
-            dir.join("main.lu"),
-        )
+        let source = if fixture == "deep" {
+            root().join("corpus/faults/stack_overflow.lu")
+        } else {
+            root().join("crates/wolf_driver/tests/fixtures/two_machines/task.lu")
+        };
+        std::fs::copy(source, dir.join("main.lu"))
         .unwrap();
         for tier in ["native", "release"] {
             let mut build = Command::new(env!("CARGO_BIN_EXE_wolf"));
@@ -119,11 +124,11 @@ fn stack_overflow_is_named_on_both_tiers_and_threads() {
             }
             assert!(out.status.success(), "{fixture}/{tier} build: {out:?}");
             for depth in ["200000", "250000", "300000"] {
-                let Some(out) = fault_run(&dir, tier, depth) else {
+                let Some(out) = fault_run(&dir, tier, depth, fallback) else {
                     continue;
                 };
                 let stderr = String::from_utf8_lossy(&out.stderr);
-                eprintln!("s256 {fixture}/{tier}/{depth}: {:?}\n{stderr}", out.status);
+                eprintln!("s256 {fixture}/{tier}/{depth} fallback={fallback}: {:?}\n{stderr}", out.status);
                 assert_eq!(
                     out.status.code(),
                     Some(134),

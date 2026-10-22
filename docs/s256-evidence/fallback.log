@@ -1,0 +1,22 @@
+control/fallback/native
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+rc=139
+control/fallback/release
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+rc=139
+handler/fallback/native
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x0000557a96e94338
+wolf-rt: stack overflow in task 'main.task0.entry'
+rc=134
+handler/fallback/release
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x000056510b4c70ea
+wolf-rt: stack overflow in task 'main.task0.entry'
+rc=134
