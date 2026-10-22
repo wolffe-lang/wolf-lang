@@ -499,6 +499,8 @@ memory/list_elem_copy_loop.lu: lowers
 memory/list_mixed_width_struct.lu: lowers
 memory/list_mutate_while_iter.lu: not mem-clean (pre-wir rungs own it)
 memory/list_pop_empty.lu: lowers
+memory/list_reserve.lu: lowers
+memory/list_reset.lu: lowers
 memory/list_session_struct.lu: lowers
 memory/list_slice.lu: lowers
 memory/list_slice_edges.lu: lowers
@@ -682,6 +684,18 @@ memory/region_net_read_return.lu: not mem-clean (pre-wir rungs own it)
 memory/region_open_ancestor.lu: not mem-clean (pre-wir rungs own it)
 memory/region_os_cwd_charged.lu: lowers
 memory/region_os_cwd_return.lu: not mem-clean (pre-wir rungs own it)
+memory/region_outer_write_call.lu: lowers
+memory/region_outer_write_call_refused.lu: not mem-clean (pre-wir rungs own it)
+memory/region_outer_write_charged.lu: lowers
+memory/region_outer_write_field.lu: lowers
+memory/region_outer_write_index.lu: lowers
+memory/region_outer_write_map.lu: lowers
+memory/region_outer_write_refused.lu: not mem-clean (pre-wir rungs own it)
+memory/region_outer_write_refused_field.lu: not mem-clean (pre-wir rungs own it)
+memory/region_outer_write_reset.lu: lowers
+memory/region_outer_write_scalar.lu: lowers
+memory/region_outer_write_str_push.lu: lowers
+memory/region_outer_write_struct.lu: lowers
 memory/region_scalar_freeze.lu: lowers
 memory/region_scalar_list_mut.lu: not mem-clean (pre-wir rungs own it)
 memory/region_scalar_list_store.lu: not mem-clean (pre-wir rungs own it)
