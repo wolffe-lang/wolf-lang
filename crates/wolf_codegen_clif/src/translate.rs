@@ -607,12 +607,21 @@ fn scalar_clif_ty(m: &WModule, ty: TypeId) -> Option<cranelift_codegen::ir::Type
         TypeData::I64 | TypeData::Ptr => ctypes::I64,
         TypeData::F32 => ctypes::F32,
         TypeData::F64 => ctypes::F64,
-        TypeData::Mem(_) | TypeData::Io | TypeData::Agg(_) | TypeData::Eu { .. } => return None,
+        TypeData::Mem(_)
+        | TypeData::Io
+        | TypeData::Agg(_)
+        | TypeData::Eu { .. }
+        | TypeData::Union(_) => return None,
     })
 }
 
+/// Aggregates, error unions and union slots (s257): every value with
+/// no CLIF type, addressed through a stack slot.
 fn is_agg(m: &WModule, ty: TypeId) -> bool {
-    matches!(m.types.get(ty), TypeData::Agg(_) | TypeData::Eu { .. })
+    matches!(
+        m.types.get(ty),
+        TypeData::Agg(_) | TypeData::Eu { .. } | TypeData::Union(_)
+    )
 }
 
 /// The CLIF value type carrying one eightbyte unit: INTEGER units ride
@@ -1952,6 +1961,22 @@ impl<'a, 'b> Tx<'a, 'b> {
                 self.vals.insert(results[0], repr);
             }
 
+            // ---- union slots (s257): the member at offset 0 ----
+            Opcode::UnionMake => {
+                let rty = self.f.value_ty(results[0]);
+                let l = self.layout_of(rty)?;
+                let slot = self.new_slot(l);
+                let dst = self.b.ins().stack_addr(ctypes::I64, slot, 0);
+                self.store_field(dst, 0, self.f.value_ty(args[0]), args[0])?;
+                self.vals.insert(results[0], Repr::Addr(dst));
+            }
+            Opcode::UnionView => {
+                let rty = self.f.value_ty(results[0]);
+                let base = self.addr(args[0])?;
+                let repr = self.load_field(base, 0, rty)?;
+                self.vals.insert(results[0], repr);
+            }
+
             // ---- error unions (value ops; branching is plain br) ----
             Opcode::EuMakeOk => {
                 let rty = self.f.value_ty(results[0]);
@@ -2915,7 +2940,11 @@ fn debug_ty(m: &WModule, ty: TypeId) -> Option<DebugTy> {
         TypeData::F32 => DebugTy::F32,
         TypeData::F64 => DebugTy::F64,
         TypeData::Ptr => DebugTy::Ptr,
-        TypeData::Mem(_) | TypeData::Io | TypeData::Agg(_) | TypeData::Eu { .. } => return None,
+        TypeData::Mem(_)
+        | TypeData::Io
+        | TypeData::Agg(_)
+        | TypeData::Eu { .. }
+        | TypeData::Union(_) => return None,
     })
 }
 

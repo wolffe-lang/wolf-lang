@@ -253,12 +253,19 @@ fn scalar_class(types: &TypeInterner, ty: TypeId) -> Option<RegClass> {
         | TypeData::Bool
         | TypeData::Ptr => RegClass::Int,
         TypeData::F32 | TypeData::F64 => RegClass::Sse,
-        TypeData::Mem(_) | TypeData::Io | TypeData::Agg(_) | TypeData::Eu { .. } => return None,
+        TypeData::Mem(_)
+        | TypeData::Io
+        | TypeData::Agg(_)
+        | TypeData::Eu { .. }
+        | TypeData::Union(_) => return None,
     })
 }
 
 fn is_agg(types: &TypeInterner, ty: TypeId) -> bool {
-    matches!(types.get(ty), TypeData::Agg(_) | TypeData::Eu { .. })
+    matches!(
+        types.get(ty),
+        TypeData::Agg(_) | TypeData::Eu { .. } | TypeData::Union(_)
+    )
 }
 
 /// Recursively record every scalar leaf's `(offset, class, size)`.
@@ -266,6 +273,14 @@ fn scalar_leaves(types: &TypeInterner, ty: TypeId, base: u32, out: &mut Vec<(u32
     let fields: Vec<TypeId> = match types.get(ty) {
         TypeData::Agg(fs) => fs.clone(),
         TypeData::Eu { .. } => layout::eu_fields(types, ty),
+        // s257: a union slot is one INTEGER leaf of its whole size —
+        // its bytes may hold any member (a float among them), so the
+        // eightbytes it covers are integer units, moved as bits.
+        TypeData::Union(_) => {
+            let size = layout::layout_of(types, ty).expect("union layout").size;
+            out.push((base, RegClass::Int, size));
+            return;
+        }
         _ => {
             if let Some(class) = scalar_class(types, ty) {
                 let size = layout::layout_of(types, ty).expect("scalar layout").size;

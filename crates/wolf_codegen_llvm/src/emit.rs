@@ -346,12 +346,21 @@ fn scalar_ty(m: &WModule, ty: TypeId) -> Option<&'static str> {
         TypeData::F32 => "float",
         TypeData::F64 => "double",
         TypeData::Ptr => "ptr",
-        TypeData::Mem(_) | TypeData::Io | TypeData::Agg(_) | TypeData::Eu { .. } => return None,
+        TypeData::Mem(_)
+        | TypeData::Io
+        | TypeData::Agg(_)
+        | TypeData::Eu { .. }
+        | TypeData::Union(_) => return None,
     })
 }
 
+/// Aggregates, error unions and union slots (s257): every value with
+/// no LLVM first-class form here, addressed through an entry alloca.
 fn is_agg(m: &WModule, ty: TypeId) -> bool {
-    matches!(m.types.get(ty), TypeData::Agg(_) | TypeData::Eu { .. })
+    matches!(
+        m.types.get(ty),
+        TypeData::Agg(_) | TypeData::Eu { .. } | TypeData::Union(_)
+    )
 }
 
 /// Natural alignment claimed for a scalar access (parity with the
@@ -2426,6 +2435,24 @@ impl<'a> Fx<'a> {
                     .ok_or_else(|| ice("aggregate with token field"))?;
                 let base = self.addr(args[0])?;
                 let repr = self.load_field(&base, offs[k as usize], fields[k as usize])?;
+                self.vals.insert(results[0], repr);
+            }
+
+            // ---- union slots (s257): the member at offset 0; no
+            // bitcast — the members differ in size and an aggregate
+            // member has no scalar form, so this is the alloca round
+            // trip SROA removes.
+            Opcode::UnionMake => {
+                let rty = self.f.value_ty(results[0]);
+                let l = self.layout_of(rty)?;
+                let slot = self.new_slot(l);
+                self.store_field(&slot, 0, self.f.value_ty(args[0]), args[0])?;
+                self.vals.insert(results[0], Repr::Addr(slot));
+            }
+            Opcode::UnionView => {
+                let rty = self.f.value_ty(results[0]);
+                let base = self.addr(args[0])?;
+                let repr = self.load_field(&base, 0, rty)?;
                 self.vals.insert(results[0], repr);
             }
 
