@@ -2,6 +2,6 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-StructDecl 555..589 name=Hist fields=1
-FnDecl 591..638 name=grow body=Block
-FnDecl 640..758 name=main body=Block
+StructDecl 955..1011 name=Hist fields=2
+FnDecl 1013..1098 name=grow body=Block
+FnDecl 1100..1325 name=main body=Block

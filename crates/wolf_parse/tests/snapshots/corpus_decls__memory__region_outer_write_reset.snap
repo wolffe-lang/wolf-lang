@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 854..908 name=Doc fields=2
+FnDecl 910..1163 name=rebuild body=Block
+FnDecl 1165..1488 name=main body=Block

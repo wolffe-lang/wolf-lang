@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+StructDecl 582..618 name=Log fields=1
+FnDecl 620..911 name=main body=Block
