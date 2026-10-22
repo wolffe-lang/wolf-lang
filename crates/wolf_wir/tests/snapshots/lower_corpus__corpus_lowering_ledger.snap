@@ -707,7 +707,7 @@ memory/region_scalar_str_escape.lu: not mem-clean (pre-wir rungs own it)
 memory/region_scalar_value.lu: lowers
 memory/region_str_call_block_value.lu: not mem-clean (pre-wir rungs own it)
 memory/region_str_call_held.lu: not mem-clean (pre-wir rungs own it)
-memory/region_str_call_index_store.lu: not mem-clean (pre-wir rungs own it)
+memory/region_str_call_index_store.lu: lowers
 memory/region_str_call_inside.lu: lowers
 memory/region_str_call_static.lu: lowers
 memory/region_str_call_view.lu: not mem-clean (pre-wir rungs own it)

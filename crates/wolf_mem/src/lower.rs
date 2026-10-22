@@ -717,6 +717,11 @@ pub(crate) struct Lowerer<'t> {
     /// s233: each non-`Copy` parameter's generalized region, with the
     /// parameter's declared index.
     param_regions: Vec<(RegionId, u32)>,
+    /// s255: a fn value stored through a `mut` parameter, by its root
+    /// local — a closure borrows its captures and names bytes this
+    /// frame cannot see, so the store keeps the parameter unclean
+    /// whatever its sites say (`region_kept_arg_closure.lu`).
+    param_fn_store: BTreeMap<u32, Span>,
     /// s233: the obligation the last `spawn proc` lowered raised.
     last_spawn: Option<u32>,
 
@@ -2300,6 +2305,39 @@ impl<'t> Lowerer<'t> {
         }
     }
 
+    /// s255 (`[mem.region.outer-write]`): does a value of this type carry
+    /// a fn value — a closure, whose captures this frame cannot see (it
+    /// borrows them, `[type.fn.value]`), or a named fn read as a value?
+    /// Such a value stored through a `mut` parameter keeps the parameter
+    /// unclean by type: its pseudo-site does not ride a flat store.
+    fn reaches_fn(&self, t: Ty<'t>, depth: u32) -> bool {
+        if depth > 16 {
+            return true;
+        }
+        let sub = |id: TyId| Ty { table: t.table, id };
+        match t.kind() {
+            TyKind::Fn(..) => true,
+            TyKind::Wrapping(i)
+            | TyKind::Distinct(i)
+            | TyKind::List(i)
+            | TyKind::Pool(i)
+            | TyKind::Mutex(i)
+            | TyKind::Shared(i)
+            | TyKind::Weak(i) => self.reaches_fn(sub(*i), depth + 1),
+            TyKind::Map(k, v) => self.reaches_fn(sub(*k), depth + 1) || self.reaches_fn(sub(*v), depth + 1),
+            TyKind::Tuple(es) => es.iter().any(|e| self.reaches_fn(sub(*e), depth + 1)),
+            TyKind::ErrUnion(ok, row) => {
+                self.reaches_fn(sub(*ok), depth + 1) || self.reaches_fn(sub(*row), depth + 1)
+            }
+            TyKind::Nominal { .. } => match self.fields_of(t) {
+                Some(fs) => fs.into_iter().any(|(_, ft)| self.reaches_fn(ft, depth + 1)),
+                // An enum's payloads: as conservative as the bytes rule.
+                None => self.may_lend_bytes(t, depth + 1),
+            },
+            _ => false,
+        }
+    }
+
     /// s252 (wolf-lang#816, #801, #822, `[mem.region.scalar]`): does a
     /// value of this type reach no storage at all — a scalar (every
     /// integer type, `wrapping[T]`, the floats, `bool`, `char`, `byte`),
@@ -3423,12 +3461,6 @@ impl<'t> Lowerer<'t> {
                         continue;
                     }
                     for &s in &a.sites {
-                        // A parameter's pseudo-site does not ride: its
-                        // bytes outlive this frame and escape no region
-                        // in it (s207's rule for `copy`).
-                        if self.sites[s.0 as usize].kind.is_param() {
-                            continue;
-                        }
                         if self.holds.get(&l).is_some_and(|m| m.contains_key(&s)) {
                             continue;
                         }
@@ -3437,6 +3469,17 @@ impl<'t> Lowerer<'t> {
                             continue;
                         }
                         entry.insert(s, a.span);
+                        // A parameter's pseudo-site rides for the
+                        // ambient-clean verdict alone (s255: `(mut
+                        // ds).push(take d)` makes `ds` another
+                        // parameter's keeper, which the verdict must
+                        // see); its bytes outlive this frame and
+                        // escape no region in it (s207's rule for
+                        // `copy`), so it is never a kept flow to
+                        // report.
+                        if self.sites[s.0 as usize].kind.is_param() {
+                            continue;
+                        }
                         let arg_text = self.text(a.span);
                         let rebuild = a.is_str
                             && !a.owned
@@ -9059,6 +9102,15 @@ impl<'t> Lowerer<'t> {
                 span: place_expr.span,
             });
         };
+        // s255 (`[mem.region.outer-write]`): a fn value stored through a
+        // `mut` parameter keeps it unclean by type (see `reaches_fn`).
+        if let Base::Local(l) = self.places.get(place).base
+            && self.locals[l as usize].param_mode == Some(Some(ParamMode::Mut))
+            && let Some(v) = d.value()
+            && self.expr_ty(v.span).is_some_and(|t| self.reaches_fn(t, 0))
+        {
+            self.param_fn_store.entry(l).or_insert(place_expr.span);
+        }
         // s227 (wolf-lang#660's door, `[mem.region.escape]`): a store
         // through a `Map` index may INSERT, and the map keeps the key —
         // a `str` key's bytes are shared, never copied. So the map
@@ -9416,6 +9468,7 @@ impl<'t> Lowerer<'t> {
             procs: crate::procjoin::BodyProcs::default(),
             param_index: HashMap::new(),
             param_regions: Vec::new(),
+            param_fn_store: BTreeMap::new(),
             last_spawn: None,
             local_depth: Vec::new(),
             copy_target: None,
@@ -9654,6 +9707,11 @@ impl<'t> Lowerer<'t> {
                     {
                         first = Some(sp);
                     }
+                }
+                if let Some(&sp) = self.param_fn_store.get(&l)
+                    && first.is_none_or(|f| (sp.file, sp.lo) < (f.file, f.lo))
+                {
+                    first = Some(sp);
                 }
                 (idx, first.map_or(Ok(()), Err))
             })
