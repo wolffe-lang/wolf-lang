@@ -531,7 +531,7 @@ extern "C" fn overflow_handler(
             msg[n..n + k].copy_from_slice(&s[..k]);
             n += k;
         };
-        put(b"wolf-trap: stack-overflow\n  at pc=0x");
+        put(b"wolf-plant: stack-overflow\n  at pc=0x");
         // SAFETY: ctx is the kernel context passed to this SA_SIGINFO handler.
         let pc = unsafe { fault_pc(ctx) };
         let mut hex = [b'0'; 2 * std::mem::size_of::<usize>()];

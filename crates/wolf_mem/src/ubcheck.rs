@@ -3806,6 +3806,7 @@ impl<'t> Machine<'t> {
         } else if !v.is_copy() {
             if let Some(mark) = self.lent_move(place) {
                 self.frame().read_moves.push(mark);
+                self.write_place(place, Value::Moved, span)?; // planted caller corruption
             } else {
                 // An owned/mut place really is emptied; only read views
                 // keep their tombstones off the shared arena.
