@@ -5414,6 +5414,58 @@ impl<'a> Checker<'a> {
         false
     }
 
+    /// `[type.row.operand]` (o1, wolf-lang#879): a member read (`r.len`,
+    /// `r.field`) and a method call (`r.f(…)`) read their base as an
+    /// operator reads its operand, so on a `!T` each is the operator's
+    /// refusal — E0409 at the base, with `row_operand`'s handle-first
+    /// note spelled for the dot. `what` is the member as written after
+    /// the base (`.len`, `.starts_with(…)`). The one text for both
+    /// sites, `synth_member` and `concrete_method_call`.
+    fn report_row_member(&mut self, span: Span, found: TyId, what: &str) {
+        let f = self.show(found);
+        // The fix-its name the base when it is a name or a field path
+        // (`rest`, `cfg.rest`); anything longer is `r`.
+        let text = self.text(span);
+        let base = if !text.is_empty()
+            && text.len() <= 32
+            && !text.starts_with(|c: char| c.is_ascii_digit() || c == '.')
+            && text
+                .chars()
+                .all(|c| c.is_alphanumeric() || c == '_' || c == '.')
+        {
+            text
+        } else {
+            "r".to_string()
+        };
+        // The `else` fallback a reader would type for the value half.
+        let fallback = match self.kind_of(found) {
+            TyKind::ErrUnion(ok, _) => match self.kind_of(ok) {
+                TyKind::Prim(Prim::Str) => "\"\"",
+                TyKind::Prim(Prim::Bool) => "false",
+                TyKind::Prim(p) if p.is_integer() => "0",
+                TyKind::Prim(p) if p.is_float() => "0.0",
+                _ => "…",
+            },
+            _ => "…",
+        };
+        self.diags.push(
+            Diagnostic::error(
+                codes::E0409,
+                span,
+                format!("`{what}` cannot be applied to `{f}`"),
+            )
+            .with_label(format!("this is `{f}`"))
+            .with_note(format!(
+                "a `!T` is two values, never one, and no operator reads it \
+                 ([type.row.operand]): a member read and a method call read their \
+                 base as an operator reads its operand, and `?`, `else` and `match` \
+                 are the whole of how a row is handled. Handle it first — \
+                 `{base}?{what}`, `({base} else {fallback}){what}` — and read what \
+                 it yields."
+            )),
+        );
+    }
+
     fn synth_bin(&mut self, e: &GreenNode) -> R<TyId> {
         let d = BinExpr::cast(e).expect("kind");
         let (Some(lhs), Some(rhs)) = (d.lhs(), d.rhs()) else {
@@ -10639,6 +10691,16 @@ impl<'a> Checker<'a> {
             return Ok(self.error_ty());
         };
         match self.kind_of(base_ty) {
+            // o1 (wolf-lang#879, `[type.row.operand]`): a member read is
+            // a read, and no read takes a `!T` — `rest.len` on a
+            // `str ! {none}` is E0409 at the base, never the std-surface
+            // refusal below (and never the payload read through the
+            // row, lupin 0.1.55's answer). `<error>` stops the cascade.
+            TyKind::ErrUnion(..) => {
+                let what = format!(".{}", self.text(member.span));
+                self.report_row_member(base.span, base_ty, &what);
+                Ok(self.error_ty())
+            }
             TyKind::Nominal { module, name, args } => {
                 match self.sigs.get(module as usize, &name).cloned() {
                     Some(ItemSig::Struct(s)) => {
