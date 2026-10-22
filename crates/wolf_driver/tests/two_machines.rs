@@ -9,6 +9,14 @@ fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+fn unavailable(out: &Output, tier: &str) -> bool {
+    if !lane_exit::environment_refusal(out, tier) { return false; }
+    let msg = String::from_utf8_lossy(&out.stderr);
+    assert!(msg.contains("release tier targets") || msg.contains("cannot run the release tier"),
+        "{tier}: compile error is not a skip: {msg}");
+    true
+}
+
 #[test]
 fn indexed_read_keeps_the_callers_field() {
     for lane in ["--checked", "--native", "--release"] {
@@ -17,7 +25,7 @@ fn indexed_read_keeps_the_callers_field() {
             .arg(root().join("corpus/memory/read_param_indexed_caller.lu"))
             .output()
             .expect("wolf runs");
-        if lane != "--checked" && lane_exit::environment_refusal(&out, lane) {
+        if lane != "--checked" && unavailable(&out, lane) {
             eprintln!("SKIP: indexed_read_keeps_the_callers_field {lane}");
             continue;
         }
@@ -101,7 +109,7 @@ fn stack_overflow_is_named_on_both_tiers_and_threads() {
                 build.arg("--release");
             }
             let out = build.output().unwrap();
-            if lane_exit::environment_refusal(&out, tier) {
+            if unavailable(&out, tier) {
                 eprintln!("SKIP: stack_overflow {tier}");
                 continue;
             }

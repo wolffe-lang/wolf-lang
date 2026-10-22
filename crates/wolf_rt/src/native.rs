@@ -84,6 +84,8 @@ pub mod trap_code {
     /// closed `[conf.trap.set]` by the spec/03 amendment (s33: the
     /// `when` runtime's self-acquisition detection fires it).
     pub const DEADLOCK: i32 = 12;
+    /// Physical stack exhaustion, uncontained ([conf.trap.stack]).
+    pub const STACK_OVERFLOW: i32 = 13;
 }
 
 /// The vocabulary name of a trap code (`trap(<name>)` in verdicts).
@@ -101,6 +103,7 @@ pub fn trap_kind_name(code: i32) -> &'static str {
         trap_code::RACE => "race",
         trap_code::UB => "ub",
         trap_code::DEADLOCK => "deadlock",
+        trap_code::STACK_OVERFLOW => "stack-overflow",
         _ => "unknown",
     }
 }
@@ -157,6 +160,9 @@ pub(crate) fn install_trap_containment(hook: fn(i32)) {
 /// Give the proc layer its chance to contain `kind` — diverges if it
 /// does; returns if the trap belongs to the process.
 fn try_contain_trap(kind: i32) {
+    if kind == trap_code::STACK_OVERFLOW {
+        return; // [conf.trap.stack]: exhausted frames never enter containment.
+    }
     let p = TRAP_CONTAIN.load(std::sync::atomic::Ordering::SeqCst);
     if !p.is_null() {
         // SAFETY: only ever null or the fn(i32) stored above.

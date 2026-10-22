@@ -39,7 +39,9 @@
 
 #![cfg(unix)]
 
-use std::cell::{Cell, RefCell, UnsafeCell};
+use std::cell::{Cell, UnsafeCell};
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use std::cell::RefCell;
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 
 /// Guard region at the low end. Larger than one page so big frames
@@ -190,6 +192,7 @@ pub fn trim_range(lo: usize, len: usize, sp: usize) {
 // a wild pointer into another worker's guard is not this thread overflowing.
 thread_local! {
     static CURRENT_GUARD: Cell<(usize, usize)> = const { Cell::new((0, 0)) };
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     static OWN_ALT: RefCell<Option<AltStack>> = const { RefCell::new(None) };
 }
 
@@ -204,7 +207,9 @@ fn guard_hit(addr: usize) -> bool {
     })
 }
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 struct AltStack(*mut libc::c_void);
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 impl Drop for AltStack {
     fn drop(&mut self) {
         // SAFETY: our thread is leaving, outside any handler. Disable
@@ -224,6 +229,7 @@ impl Drop for AltStack {
 /// Register a system-provided stack (main, fallback, signal or reactor
 /// thread). The pooled pthread path registers its own explicit guard.
 /// Reuse an existing altstack, notably a Rust thread's, without owning it.
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn enter_thread() {
     if CURRENT_GUARD.with(|g| g.get().1 != 0) {
         return;

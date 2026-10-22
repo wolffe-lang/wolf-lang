@@ -108,7 +108,7 @@ impl ExitExpect {
 /// `deadlock` added by the spec/03 amendment `[conc.deadlock.trap]` —
 /// the deliberate `[conf.trap.set]` revision, s33 aligning the
 /// harness with spec/05's 12-kind set).
-pub const TRAP_KINDS: [&str; 12] = [
+pub const TRAP_KINDS: [&str; 13] = [
     "overflow",
     "div-zero",
     "bounds",
@@ -121,6 +121,7 @@ pub const TRAP_KINDS: [&str; 12] = [
     "race",
     "ub",
     "deadlock",
+    "stack-overflow",
 ];
 
 /// Parsed header block of one corpus file.
