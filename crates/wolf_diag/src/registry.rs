@@ -1778,8 +1778,9 @@ the callee's parameter is ambient-clean — every write through it in
 the callee's body is a scalar store, a container store of a scalar or
 of a `copy`, a container replaced by `copy`, a call to another clean
 parameter, or a mutator that stores nothing (`pop`, `clear`, `reset`,
-`reserve`); a flat field or whole store of anything else, a `copy`
-included, makes it unclean, and this report then names that store in
+`reserve`); a flat field or whole store of anything else — a `copy`
+included, and another argument's value, whose region the callee does
+not own — makes it unclean, and this report then names that store in
 the callee (a part moved out and given back is judged by what comes
 back). Keep such a
 value in storage the parameter already owns (`List[byte]` pushes,

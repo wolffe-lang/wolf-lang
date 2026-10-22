@@ -996,9 +996,16 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   (`[mem.region.escape]`, D12: the callee builds in its caller's
   region, which is the block) **unless the callee's parameter is
   ambient-clean** — proven by the callee's own lowering, over its whole
-  body: the parameter's root never holds or shares an allocation of
-  the callee's entry ambient (the caller's region; a `spawn proc`
-  entry's own). A move out of the parameter, whole or in part, needs
+  body: the parameter's root never holds or shares an allocation
+  outside its own region (the generalized region its storage arrived
+  in, where its containers grow and the copies aimed at it land) other
+  than its own entry storage and the static region's. The callee's
+  entry ambient (the caller's region; a `spawn proc` entry's own),
+  another parameter's bytes or region (a `take` argument pushed, a
+  `str` or fn-value argument stored), a region parameter's region
+  (`in keep { }`) and a block's are all the caller's, and the callee
+  cannot know that any of them outlives the parameter. A move out of
+  the parameter, whole or in part, needs
   no rule of its own: the move checker's exit rule (s184,
   `[mem.tier0.mode.mut]`) makes every moved-out part re-initialized
   before the return, and that store is read like any other — yew's
@@ -1027,7 +1034,9 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   caller's call site pins the argument to its own ambient whenever the
   call sits inside a block (this clause's refusal) — the pin is what
   makes the entry ambient safe, and an ambient-clean parameter never
-  needs it because nothing of the entry ambient reaches it. A value
+  needs it because nothing of the entry ambient reaches it — and
+  nothing of another argument's either, which the pin also covered
+  (s227's `take` and closure rows). A value
   placed by `in r { }` and written from a block is still E1004 (the
   copy lands at the binding's ambient, not in `r`; the placement
   demand conflicts): strict, not unsound. The contract's fourth write
