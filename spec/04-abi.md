@@ -24,6 +24,34 @@ AAPCS64, win64, Apple arm64 deltas).
   a non-null raw pointer wrapper, or `shared T` occupies exactly the
   payload's size — the null/absent case is the niche. This list may
   grow; it may not shrink.
+- `[abi.native.enum]` **An enum value is its variant tag, then its
+  payload slots** (s27, s257): the tag is one word (the variant's
+  declaration index; an error row's tag is the module-interned tag id,
+  `[abi.err.row]`), and the payloads of every variant unify BY
+  POSITION into slots — slot `i` is shared by every variant's `i`-th
+  payload. A slot whose payloads all have one type is that type. A
+  slot whose payloads disagree (`enum V { Int(int), Text(str) }`; a
+  row `{Parse(int), Io(str)}`) is a **union slot**: its storage is the
+  largest member's size rounded up to the strictest member's
+  alignment, every member sits at the slot's start, and each variant
+  writes and reads its own member through a typed view at that offset
+  — the write and the read are both the variant's, licensed by the tag
+  the program tested, so no slot is ever read as a member the tag
+  does not name. The bytes a member does not cover are unspecified
+  and never read; a variant that does not fill a slot leaves the zero
+  of the slot's first member there. A payload-free enum is the tag
+  alone. The union is per slot, never one blob for the whole payload:
+  a slot every variant agrees on keeps its plain type and layout.
+  Everything here is `wolf-abi-0` internal (`[abi.native.layout]`,
+  `[abi.native.unstable]`): an enum never crosses a C membrane by
+  value (`[abi.c.types]`), and the checked machine and the reference
+  interpreter keep the variant and its typed payloads and have no
+  slot to read through. Witnesses: `typecheck/enum_union_two.lu`,
+  `typecheck/enum_union_three.lu`, `typecheck/enum_union_tree.lu`
+  (the JSON-shaped value tree), `rows/row_union_payloads.lu`,
+  `memory/enum_union_take.lu`, `memory/enum_union_copy.lu`,
+  `memory/enum_union_str_escape.lu` (a `str` member is still a
+  region-tracked pointer: E1004 at the store).
 - `[abi.native.call]` Calls may use multiple return registers, pass
   small aggregates in registers, and omit shadow space and frame
   pointers where the target permits. Callee/caller-save split is
@@ -324,9 +352,11 @@ AAPCS64, win64, Apple arm64 deltas).
   else via sret-style memory. Observable contract only: callers branch
   on the discriminant; there is no unwinding, no landing pads, no
   side-channel (errno-shaped) state — ever.
-- `[abi.err.row]` Error rows lower to a tag + payload union whose layout
-  is `wolf-abi-0` internal (rows never cross C membranes; an `export`ed
-  function returning `!T` is E1201 with a fix-it to flatten).
+- `[abi.err.row]` Error rows lower to a tag + payload slots whose
+  layout is `wolf-abi-0` internal — `[abi.native.enum]`'s slots, a
+  union slot where the tags' payloads disagree (rows never cross C
+  membranes; an `export`ed function returning `!T` is E1201 with a
+  fix-it to flatten).
 - `[abi.err.trace]` Debug builds accrete error return traces at each `?`
   propagation and `else` observation point, into trace storage disjoint
   from the value path. Normative: debug and release differ **only in
