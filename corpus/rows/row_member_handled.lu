@@ -1,0 +1,33 @@
+//! check: run(exit=0, stdout="n: 1 four: true jobs: 2 none: 0\n")
+//! phase: run
+//! conforms: type.row.operand, type.row.else, gram.type.row
+//!
+//! wolf-lang#879 (o1): the handled twin of `row_operand_member.lu` and
+//! `row_operand_method.lu`. `[type.row.operand]` refuses a member read
+//! and a method call on a `!T`; the note it answers with names the two
+//! handlings, and each reads what it yields. `(rest else "").len` and
+//! `(… else "").starts_with("4")` take the value half or the fallback;
+//! `strip(s)?.len` in a fallible fn hands the row to the caller, whose
+//! `else` handles it; the `none` case reads the fallback's length.
+
+fn strip(s: str) -> str ! {none} {
+    if s.starts_with("-j") {
+        return s[2..]
+    }
+    none
+}
+
+fn jobs(s: str) -> int ! {none} {
+    let n = strip(s)?.len
+    n
+}
+
+fn main() -> int {
+    let rest = strip("-j4")
+    let n = (rest else "").len
+    let four = (strip("-j4") else "").starts_with("4")
+    let j = jobs("-j42") else 0
+    let none_len = (strip("x") else "").len
+    print("n: {n} four: {four} jobs: {j} none: {none_len}")
+    0
+}
