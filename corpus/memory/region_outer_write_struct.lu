@@ -35,5 +35,7 @@ fn main() {
         i += 1
     }
     let last = acc.rows[49]
-    print("{acc.rows.len} {acc.rows[0].name} {last.name} {last.vals.len} {last.vals[0]} {last.vals[1]} {last.vals[2]}")
+    print(
+        "{acc.rows.len} {acc.rows[0].name} {last.name} {last.vals.len} {last.vals[0]} {last.vals[1]} {last.vals[2]}",
+    )
 }
