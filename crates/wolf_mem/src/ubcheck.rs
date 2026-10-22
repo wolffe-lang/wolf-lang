@@ -3496,7 +3496,10 @@ impl<'t> Machine<'t> {
     }
 
     fn walk_read(&mut self, cur: Value, path: &[PStep], span: Span) -> E<Value> {
-        if let Some(storage) = read_storage(&cur)
+        // An empty projection reads a container header, not its elements
+        // (count/is_empty and nested header reads, [mem.model.place.elem]).
+        if !path.is_empty()
+            && let Some(storage) = read_storage(&cur)
             && self.frames.last().is_some_and(|f| {
                 f.read_moves.iter().any(|(s, moved)| {
                     *s == storage && moved.iter().zip(path).all(|(a, b)| same_step(a, b))
