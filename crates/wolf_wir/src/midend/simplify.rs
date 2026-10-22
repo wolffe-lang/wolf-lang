@@ -576,6 +576,21 @@ fn fold_inst(f: &Function, types: &TypeInterner, inst: Inst) -> Fold {
                 None => Fold::None,
             }
         }
+        Opcode::UnionView => {
+            // `union.view` of a visible `union.make` of the SAME member
+            // type → the member value (s257). Another member's view
+            // reads the bytes as written and never folds.
+            let Some(src) = analysis::def_inst(f, args[0]) else {
+                return Fold::None;
+            };
+            if f.insts[src].op != Opcode::UnionMake {
+                return Fold::None;
+            }
+            match f.vpool.get(f.insts[src].args).first() {
+                Some(&v) if f.value_ty(v) == f.value_ty(results[0]) => Fold::Value(v),
+                _ => Fold::None,
+            }
+        }
         Opcode::EuIsErr => {
             let Some(src) = analysis::def_inst(f, args[0]) else {
                 return Fold::None;

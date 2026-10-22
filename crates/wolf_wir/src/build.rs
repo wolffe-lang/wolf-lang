@@ -1935,6 +1935,8 @@ impl<'m> FuncBuilder<'m> {
                 | Opcode::EuIsErr
                 | Opcode::EuOk
                 | Opcode::EuErr
+                | Opcode::UnionMake
+                | Opcode::UnionView
         );
         if !pure {
             return None;

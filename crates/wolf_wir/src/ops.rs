@@ -525,6 +525,17 @@ pub enum Opcode {
     /// `%t: i64 = eu.err %e` — extract the error tag; with a slot
     /// index (`eu.err %e, K`) extract error-payload slot K instead.
     EuErr,
+
+    // ---- union slots (s257, `[abi.native.enum]`) ------------------------
+    /// `%u: union{…} = union.make %v` — the slot holding member `%v`
+    /// (its type one of the union's members) at offset 0; the bytes
+    /// the member does not cover are unspecified. Pure.
+    UnionMake,
+    /// `%v: T = union.view %u` — the member `T` read at the slot's
+    /// offset 0. The active member is the lowering's responsibility
+    /// (the variant tag it tested); viewing another member reads that
+    /// member's bytes as written, never a trap. Pure.
+    UnionView,
 }
 
 impl Opcode {
@@ -570,6 +581,8 @@ impl Opcode {
                     | Opcode::EuIsErr
                     | Opcode::EuOk
                     | Opcode::EuErr
+                    | Opcode::UnionMake
+                    | Opcode::UnionView
             )
     }
 
@@ -647,6 +660,8 @@ impl Opcode {
             Opcode::EuIsErr => "eu.is_err",
             Opcode::EuOk => "eu.ok",
             Opcode::EuErr => "eu.err",
+            Opcode::UnionMake => "union.make",
+            Opcode::UnionView => "union.view",
         }
     }
 }

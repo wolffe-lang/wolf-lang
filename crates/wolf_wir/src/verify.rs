@@ -669,8 +669,10 @@ impl<'a> Verifier<'a> {
                     return Err(self.type_err(inst, "load needs a mem token operand"));
                 }
                 let rty = self.f.value_ty(results[0]);
+                // s257: a union slot loads as one blob (`load.union`);
+                // aggregates still load field-wise.
                 if types.is_token(rty) || matches!(types.get(rty), TypeData::Agg(_)) {
-                    return Err(self.type_err(inst, "load result must be a scalar"));
+                    return Err(self.type_err(inst, "load result must be a scalar or a union"));
                 }
                 self.check_under_align(inst, data.aux)?;
             }
@@ -678,7 +680,7 @@ impl<'a> Verifier<'a> {
                 self.expect_counts(inst, 3, 1)?;
                 let vty = self.f.value_ty(args[0]);
                 if types.is_token(vty) || matches!(types.get(vty), TypeData::Agg(_)) {
-                    return Err(self.type_err(inst, "store value must be a scalar"));
+                    return Err(self.type_err(inst, "store value must be a scalar or a union"));
                 }
                 if self.f.value_ty(args[1]) != crate::types::PTR {
                     return Err(self.type_err(inst, "store address must be ptr"));
@@ -722,6 +724,31 @@ impl<'a> Verifier<'a> {
                 };
                 if fty != self.f.value_ty(results[0]) {
                     return Err(self.type_err(inst, "agg.get result type mismatch"));
+                }
+            }
+            // ---- union slots (s257) -----------------------------------
+            Opcode::UnionMake => {
+                self.expect_counts(inst, 1, 1)?;
+                let Some(members) = types.union_members(self.f.value_ty(results[0])) else {
+                    return Err(self.type_err(inst, "union.make's result must be a union slot"));
+                };
+                if !members.contains(&self.f.value_ty(args[0])) {
+                    return Err(self.type_err(
+                        inst,
+                        "union.make's operand must have one of the union's member types",
+                    ));
+                }
+            }
+            Opcode::UnionView => {
+                self.expect_counts(inst, 1, 1)?;
+                let Some(members) = types.union_members(self.f.value_ty(args[0])) else {
+                    return Err(self.type_err(inst, "union.view's operand must be a union slot"));
+                };
+                if !members.contains(&self.f.value_ty(results[0])) {
+                    return Err(self.type_err(
+                        inst,
+                        "union.view's result must have one of the union's member types",
+                    ));
                 }
             }
             Opcode::DataAddr => {
