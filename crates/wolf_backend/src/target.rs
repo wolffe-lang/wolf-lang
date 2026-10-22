@@ -253,6 +253,7 @@ fn float_in(m: &Module, ty: TypeId) -> Option<&'static str> {
         TypeData::F64 => Some("`f64`"),
         TypeData::Agg(fields) => fields.iter().find_map(|&t| float_in(m, t)),
         TypeData::Eu { ok, slots } => ok.iter().chain(slots.iter()).find_map(|&t| float_in(m, t)),
+        TypeData::Union(members) => members.iter().find_map(|&t| float_in(m, t)),
         _ => None,
     }
 }
