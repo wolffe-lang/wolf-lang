@@ -979,9 +979,19 @@ carrying a rule about operators. The rule is written here, beside
   same span on all three witnesses (wolf `--checked` and lupin 0.1.36);
   the s148 split — the compiler's E0401 with the row on the right,
   lupin 0.1.31's E0401 for a comparison — is closed on both sides.
-  Witnesses: `rows/negative/row_operand_add.lu`,
+  **A member read is a read (o1, #879):** `r.len`, `r.field` and a
+  method call `r.f(…)` on a `!T` are the same refusal, E0409 at the
+  base, with the same handle-first note (`r?.len`, `(r else "").len`);
+  "no operator reads it" was always the whole of the rule, and the
+  dot is not an exception the clause failed to name. Status at
+  0.2.34: the compiler filed both under conservatism ("members on
+  this type", "methods on builtin types") and lupin 0.1.55 ran them,
+  reading the payload through the row; o1 closes the compiler's side,
+  wolf-interp owes lupin's. Witnesses: `rows/negative/row_operand_add.lu`,
   `rows/negative/row_operand_compare.lu`,
-  `rows/negative/row_operand_rhs.lu`.
+  `rows/negative/row_operand_rhs.lu`,
+  `rows/negative/row_operand_member.lu`,
+  `rows/negative/row_operand_method.lu`.
 - `[type.row.else]` **An `else` handles its scrutinee's own row, and
   nothing else.** In `e else f` and `e else |p| f`, the handler runs
   when `e` itself yields an error of `e`'s row — a fallible call's
