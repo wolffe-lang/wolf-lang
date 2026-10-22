@@ -356,26 +356,49 @@ rebuild. That is a third of the diff and was not in §1.
 
 ### 4.6 The final head
 
-The differ re-taken at `0a4ca806` (the last code commit; what follows
-it is this note): 796 / 246 / 17 / 101 (3) / 37, A ran 732, both 699
-— the `07c3ce33` row to the digit. The gauntlet (`cargo xtask ci`,
-`taskset -c 12-15`, the s256 envs: podman containers for the job-wait,
-id, group and fork rows, `WOLF_TEST_REQUIRE_NATIVE=1`) is green
-through `fmt`, `fmt-fixpoint`, `clippy`, `rt-none` and red in `test`
-on ONE test that is not this lane's:
-`signal_gaps_lanes::a_group_send_of_a_fault_the_sender_ignores`
-(#783) expects the checked machine to refuse `os_signal_ignore_one`
-by name and gets `error: denied`, exit 1 — and trunk `0477ce62`,
-built in its own clone on the same host, fails it with the same
-bytes (`~/lanes/s257/sig-base.log`; s256's nine runs of it on this
-host were green). The driver, the runtime and the checker are
-untouched by this branch (`git diff 0477ce62 -- crates/wolf_driver
-crates/wolf_rt crates/wolf_mem` is empty). The steps behind it ran
-on their own: the workspace tests with that one test skipped,
-`fuzz-check`, `deps-check`, the `gates` shard (the corpus with the
-seven rows, abi-check, debug-check, the snapshots, differ-self) and
-the `coverage` shard; their results and the CI run ids are in the
-PR. The host's answer is listed in §5 to file.
+The differ re-taken at `0a4ca806` (the last code commit before the
+rebase; what follows it is snapshots, the regenerated anchors and
+catalog, and this note): 796 / 246 / 17 / 101 (3) / 37, A ran 732,
+both 699 — the `07c3ce33` row to the digit.
+
+The gauntlet (`cargo xtask ci`, `taskset -c 12-15`, the s256 envs:
+podman containers for the job-wait, id, group and fork rows,
+`WOLF_TEST_REQUIRE_NATIVE=1`), at the heads on the way and at the
+rebased head (`~/lanes/s257/gauntlet{3..10}.log`, `chain{5..10}.log`):
+
+- Before the rebase (`0a4ca806`…`bf72cbf3`) the `test` step was red on
+  ONE test that was not this lane's —
+  `signal_gaps_lanes::a_group_send_of_a_fault_the_sender_ignores`
+  (#783): the checked machine answered `error: denied` where the test
+  wants `unsupported`, and trunk `0477ce62`, built in its own clone on
+  the same host, failed it with the same bytes (`sig-base.log`). s256
+  met it too: its `e667a2ad` runs the checked machine as the container
+  shell's child, and after the rebase onto `94cd52bc` the test is
+  green here (chain 8, 9, 10).
+- At the rebased head: fmt, fmt-fixpoint, clippy, rt-none green; the
+  `test` step green in chain 8 (`b83a8455`) and red once in chain 9
+  (`d6db046c`) on `a_descriptor_wait_makes_no_descriptor_while_the_
+  program_runs`, which passed in the same chain's full workspace run
+  minutes later and 11 of 12 times on this host — a parallel-test
+  descriptor race, as `an_inherited_descriptor_is_adopted` was on the
+  runner (`tier pr` 39823640342: `link before: pipe:[…]` where the
+  inherited file was expected; 12 of 12 green here). Neither test is
+  this branch's (the driver, runtime and checker have no diff against
+  trunk). `cargo test --workspace --no-fail-fast`: green (321 result
+  lines, rc 0, `test8.log`, `test9.log`); fuzz-check and deps-check
+  green; the `gates` shard green — the corpus (1,195 entries, 0 bad)
+  with the seven rows, abi-check, debug-check, midend-rate,
+  bench-gates, spec-extract (anchors 687 → 688), conformance,
+  print-gate, diag-catalog (after its regen: E1004's fixture list
+  gains the `str_escape` lexer snapshot), doc-catalog, fmt-lu,
+  fmt-fuzz, audit-surface, dist-smoke, differ-self; the `coverage`
+  shard green, floors held (release executes 733, the union 741 of
+  1,136).
+- CI's own reds on the way, each fixed by its commit: the six rows'
+  block arms without the comma `wolf fmt` writes (`a59dd89a`); the
+  anchors out of sync (`bf72cbf3`); the rows' lexer and parser
+  snapshots (`18836e70`, 14 files, none changed); the catalog
+  (`d6db046c`).
 
 ## 5. Rulings and what is left
 
@@ -416,10 +439,8 @@ Issues to file (listed, not filed):
   tests' records gain the native lane.
 - wolf-book: `ch27/ex27-3` graduates `lupin-run(…)` → `run(…)` at the
   pin bump (the FLIP), and #268's row 1 moves.
-- wolf-lang (or the host): `a_group_send_of_a_fault_the_sender_ignores`
-  is red on kasumi at trunk `0477ce62` today — the checked machine's
-  `group_fault.lu` answers `error: denied` where the test wants
-  `unsupported` (`os_signal_ignore_one`); green nine times on the same
-  host for s256. If CI's `tier pr` is green at this head, it is the
-  host's state (podman, the container's signal permissions), not
-  the tree's.
+- wolf-lang: two descriptor tests race under parallel test execution
+  — `a_descriptor_wait_makes_no_descriptor_while_the_program_runs`
+  (1 of 12 red on kasumi) and `an_inherited_descriptor_is_adopted`
+  (red once on the runner, `pipe:[…]` at the inherited number) —
+  neither this branch's; a retry was green each time.
