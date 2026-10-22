@@ -352,10 +352,37 @@ fn a_result_keeping_its_read_receiver_is_refused() {
     refused_everywhere(&corpus("memory/region_kept_result_method.lu"));
 }
 
-/// No call at all: `copy d` shares the `str` inside `d`.
+/// No call at all: `copy d` shares the `str` inside `d` — until s255.
+/// Admitted by `[mem.region.outer-write]`: the `copy` at the store into
+/// the outer `o` (`in st { o = copy d }`) is the materializing copy, made
+/// in `st`, so the row runs on checked, native and release and reads its
+/// own bytes back; the sharing copy bound inside the block keeps s227's
+/// refusal (`e1010_copy_bound_in_block_shares_str`). lupin 0.1.55 shares
+/// the copy's bytes and traps `region-fault` — the is-lane's column,
+/// pinned so a lupin that mirrors the clause moves it on purpose.
 #[test]
-fn a_copy_of_a_struct_sharing_a_region_str_is_refused() {
-    refused_everywhere(&corpus("memory/region_copy_shares_str.lu"));
+fn a_copy_of_a_struct_at_a_store_into_an_outer_value_runs() {
+    let entry = corpus("memory/region_copy_shares_str.lu");
+    for flag in ["--checked", "--native", "--release"] {
+        let Some(obs) = lane(&entry, flag) else {
+            assert_ne!(flag, "--checked", "the checked lane always runs");
+            continue;
+        };
+        assert_eq!(obs.verdict, "exit(0)", "{flag} on the admitted row: {:?}", obs.codes);
+        assert_eq!(
+            obs.stdout,
+            "28\nbuilt in pass, 0 uses\n",
+            "{flag} stdout on the admitted row"
+        );
+    }
+    if let Some(lupin) = lupin_says(&entry) {
+        assert_eq!(
+            lupin.verdict,
+            "trap(region-fault)",
+            "lupin {} shares a copied str's bytes (its column in docs/s255)",
+            lupin.version
+        );
+    }
 }
 
 /// The copy a plain index store makes.

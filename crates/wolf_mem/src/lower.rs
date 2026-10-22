@@ -9684,7 +9684,7 @@ impl<'t> Lowerer<'t> {
     /// ambient — is not. A move out of the parameter is covered by its
     /// re-initialization (the move checker demands one before every
     /// return): that store is read here like any other.
-    fn mut_clean_verdicts(&self) -> Vec<(u32, Result<(), Span>)> {
+    fn mut_clean_verdicts(&self, name: &str) -> Vec<(u32, Result<(), Span>)> {
         self.param_locals
             .iter()
             .map(|&(l, idx)| {
@@ -9694,6 +9694,10 @@ impl<'t> Lowerer<'t> {
                     .find(|&&(_, pi)| pi == idx)
                     .map(|&(r, _)| r);
                 let mut first: Option<Span> = None;
+                // A recursive call pinned by this body's own unclean
+                // verdict from an earlier round of the fixpoint masks
+                // the store that made it; that store is reported first.
+                let mut first_self: Option<Span> = None;
                 let held = self.holds.get(&l).into_iter().flat_map(|m| m.iter());
                 let shared = self.shares.get(&l).into_iter().flat_map(|m| m.iter());
                 for (&s, &sp) in held.chain(shared) {
@@ -9702,10 +9706,16 @@ impl<'t> Lowerer<'t> {
                     let own_region = own == Some(site.region);
                     let is_static =
                         self.rt.regions[site.region.0 as usize].kind == RegionKind::Static;
-                    if !(own_entry || own_region || is_static)
-                        && first.is_none_or(|f| (sp.file, sp.lo) < (f.file, f.lo))
-                    {
-                        first = Some(sp);
+                    if own_entry || own_region || is_static {
+                        continue;
+                    }
+                    let self_call = self
+                        .call_unclean
+                        .get(&s)
+                        .is_some_and(|u| u.callee == name);
+                    let slot = if self_call { &mut first_self } else { &mut first };
+                    if slot.is_none_or(|f| (sp.file, sp.lo) < (f.file, f.lo)) {
+                        *slot = Some(sp);
                     }
                 }
                 if let Some(&sp) = self.param_fn_store.get(&l)
@@ -9713,14 +9723,14 @@ impl<'t> Lowerer<'t> {
                 {
                     first = Some(sp);
                 }
-                (idx, first.map_or(Ok(()), Err))
+                (idx, first.or(first_self).map_or(Ok(()), Err))
             })
             .collect()
     }
 
     fn finish(self, name: &str) -> Lowered {
         let _ = (self.pkg, self.file);
-        let mut_clean = self.mut_clean_verdicts();
+        let mut_clean = self.mut_clean_verdicts(name);
         // s21: the static atomicity bit — non-atomic unless a freeze
         // (the one statically-visible sharing point checkable today;
         // cross-thread transfer refuses until c05/c07) reaches the
