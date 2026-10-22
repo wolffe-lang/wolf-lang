@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+s258 — a member read on a `!T` is E0409 (wolf-lang#879). `rest.len`
+and `rest.starts_with("4")` on a `str ! {none}` were refused as "cannot
+compile this yet" (members on this type, methods on builtin types; exit
+4); they are E0409 at the base now (`[type.row.operand]`: a member read
+and a method call read their base as an operator reads its operand),
+with the note naming `rest?.len` and `(rest else "").len`. The method
+refusal comes before any impl is consulted, a blanket one included.
+Rows: `rows/negative/row_operand_member.lu`, `row_operand_method.lu`,
+`rows/row_member_handled.lu`; `row_member_lanes.rs` holds the checked
+machine, native and release to them. lupin 0.1.55 runs both witnesses
+(pinned pre-mirror; wolf-interp owes the mirror). A `shared` cell of a
+`!T` still answers its own refusal (`docs/s258-row-member.md`).
+
 s252 — the small gaps (wolf-lang#800, #813, #814, #816, #822, #801; yew
 `docs/MAP.md` §5 G11, G18, G24, G25, G28 and the fuzz fork's findings).
 Three behaviour changes, each a refusal removed with the spec's clause
