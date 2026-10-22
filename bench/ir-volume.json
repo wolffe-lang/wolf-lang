@@ -1,1773 +1,3478 @@
 {
-  "note": "The per-file IR-volume ratchet (wolf-lang#270, s143). `files` maps every run-phase corpus path the release tier emits to its LLVM IR instruction counts with the mid-end on (`midend`) and off (`naive`) and their ratio, measured on the linux/x86-64 CI lane (D5: gates are rig-pinned). `cargo xtask bench-gates` reds BY NAME when an existing path's ratio rises past its record by more than `slack` (relative: the ratios span 0.5 to 2.4, so one absolute tick would gate noise on the large and nothing on the small); a path absent from `files` is reported and never red; a recorded path the run cannot emit is reported as conservatism. `cargo xtask bench-gates --record` rewrites `files` from a run on the rig; the rest of this document is carried through. The corpus geomean that gated before s143 is printed as a reference only (bench/gates.json `corpus_geomean_reference`, and its history).",
-  "lane": "linux/x86-64",
-  "slack": 0.05,
   "files": {
     "corpus/comptime.lu": {
-      "midend": 18,
-      "naive": 40,
-      "ratio": 0.45
+      "midend": 19,
+      "naive": 41,
+      "ratio": 0.463
     },
     "corpus/comptime/fold_reaches_lane.lu": {
-      "midend": 11,
-      "naive": 11,
+      "midend": 12,
+      "naive": 12,
+      "ratio": 1.0
+    },
+    "corpus/comptime/layout_query_repr_c.lu": {
+      "midend": 99,
+      "naive": 99,
+      "ratio": 1.0
+    },
+    "corpus/comptime/shift_value.lu": {
+      "midend": 20,
+      "naive": 20,
+      "ratio": 1.0
+    },
+    "corpus/conc/atomic_counter.lu": {
+      "midend": 128,
+      "naive": 152,
+      "ratio": 0.842
+    },
+    "corpus/conc/atomic_fence.lu": {
+      "midend": 44,
+      "naive": 44,
+      "ratio": 1.0
+    },
+    "corpus/conc/atomic_orders.lu": {
+      "midend": 237,
+      "naive": 237,
+      "ratio": 1.0
+    },
+    "corpus/conc/atomic_widths.lu": {
+      "midend": 397,
+      "naive": 397,
       "ratio": 1.0
     },
     "corpus/conc/cancel_sibling.lu": {
-      "midend": 172,
-      "naive": 211,
-      "ratio": 0.815
+      "midend": 173,
+      "naive": 212,
+      "ratio": 0.816
     },
     "corpus/conc/chan_closed_row.lu": {
-      "midend": 290,
-      "naive": 301,
-      "ratio": 0.963
+      "midend": 291,
+      "naive": 302,
+      "ratio": 0.964
+    },
+    "corpus/conc/chan_default_rendezvous.lu": {
+      "midend": 202,
+      "naive": 202,
+      "ratio": 1.0
     },
     "corpus/conc/chan_drain_after_inclusive_loop.lu": {
-      "midend": 113,
-      "naive": 113,
-      "ratio": 1.0
+      "midend": 239,
+      "naive": 245,
+      "ratio": 0.976
     },
     "corpus/conc/chan_param_for.lu": {
-      "midend": 330,
-      "naive": 304,
-      "ratio": 1.086
+      "midend": 703,
+      "naive": 677,
+      "ratio": 1.038
+    },
+    "corpus/conc/chan_payload_proc_param.lu": {
+      "midend": 180,
+      "naive": 197,
+      "ratio": 0.914
+    },
+    "corpus/conc/chan_root_task.lu": {
+      "midend": 970,
+      "naive": 929,
+      "ratio": 1.044
     },
     "corpus/conc/chan_send_closed_row.lu": {
-      "midend": 391,
-      "naive": 377,
+      "midend": 392,
+      "naive": 378,
       "ratio": 1.037
     },
+    "corpus/conc/chan_sent_arg_legal.lu": {
+      "midend": 989,
+      "naive": 963,
+      "ratio": 1.027
+    },
+    "corpus/conc/chan_sent_arg_legal_tasks.lu": {
+      "midend": 567,
+      "naive": 600,
+      "ratio": 0.945
+    },
     "corpus/conc/chan_struct_payload.lu": {
-      "midend": 477,
-      "naive": 488,
-      "ratio": 0.977
+      "midend": 478,
+      "naive": 489,
+      "ratio": 0.978
+    },
+    "corpus/conc/freeze_proc_snapshot.lu": {
+      "midend": 361,
+      "naive": 301,
+      "ratio": 1.199
     },
     "corpus/conc/freeze_publish.lu": {
-      "midend": 261,
-      "naive": 261,
-      "ratio": 1.0
+      "midend": 338,
+      "naive": 336,
+      "ratio": 1.006
     },
     "corpus/conc/message_passing.lu": {
-      "midend": 136,
-      "naive": 138,
-      "ratio": 0.986
+      "midend": 175,
+      "naive": 176,
+      "ratio": 0.994
+    },
+    "corpus/conc/par_fail_reraises.lu": {
+      "midend": 184,
+      "naive": 203,
+      "ratio": 0.906
+    },
+    "corpus/conc/par_order.lu": {
+      "midend": 180,
+      "naive": 161,
+      "ratio": 1.118
     },
     "corpus/conc/proc_cancel_defers.lu": {
-      "midend": 161,
-      "naive": 163,
+      "midend": 165,
+      "naive": 167,
       "ratio": 0.988
     },
     "corpus/conc/proc_cap_fault_join.lu": {
-      "midend": 151,
-      "naive": 146,
+      "midend": 153,
+      "naive": 148,
       "ratio": 1.034
     },
     "corpus/conc/proc_cross_module/main.lu": {
-      "midend": 236,
-      "naive": 174,
-      "ratio": 1.356
+      "midend": 240,
+      "naive": 178,
+      "ratio": 1.348
+    },
+    "corpus/conc/proc_join_param.lu": {
+      "midend": 108,
+      "naive": 119,
+      "ratio": 0.908
+    },
+    "corpus/conc/proc_join_value.lu": {
+      "midend": 205,
+      "naive": 205,
+      "ratio": 1.0
     },
     "corpus/conc/proc_kill_defers.lu": {
-      "midend": 125,
-      "naive": 124,
+      "midend": 127,
+      "naive": 126,
       "ratio": 1.008
     },
     "corpus/conc/proc_link.lu": {
-      "midend": 262,
-      "naive": 188,
-      "ratio": 1.394
+      "midend": 269,
+      "naive": 195,
+      "ratio": 1.379
+    },
+    "corpus/conc/proc_link_root.lu": {
+      "midend": 64,
+      "naive": 64,
+      "ratio": 1.0
+    },
+    "corpus/conc/proc_link_root_death.lu": {
+      "midend": 152,
+      "naive": 189,
+      "ratio": 0.804
+    },
+    "corpus/conc/proc_must_join_legal.lu": {
+      "midend": 596,
+      "naive": 835,
+      "ratio": 0.714
     },
     "corpus/conc/proc_spawn_loop.lu": {
-      "midend": 40,
-      "naive": 44,
-      "ratio": 0.909
+      "midend": 43,
+      "naive": 46,
+      "ratio": 0.935
     },
     "corpus/conc/reason_interp.lu": {
-      "midend": 969,
-      "naive": 840,
-      "ratio": 1.154
+      "midend": 970,
+      "naive": 841,
+      "ratio": 1.153
     },
     "corpus/conc/select_seeded.lu": {
-      "midend": 85,
-      "naive": 85,
+      "midend": 232,
+      "naive": 232,
       "ratio": 1.0
     },
     "corpus/conc/select_single_arm_loop.lu": {
-      "midend": 75,
-      "naive": 82,
-      "ratio": 0.915
+      "midend": 114,
+      "naive": 120,
+      "ratio": 0.95
     },
     "corpus/conc/select_two_timeouts.lu": {
-      "midend": 98,
-      "naive": 98,
+      "midend": 260,
+      "naive": 260,
       "ratio": 1.0
     },
     "corpus/conc/spawn_cluster_split.lu": {
-      "midend": 3346,
-      "naive": 4741,
-      "ratio": 0.706
+      "midend": 3385,
+      "naive": 4779,
+      "ratio": 0.708
     },
     "corpus/conc/spawn_fanout_loop.lu": {
-      "midend": 221,
-      "naive": 223,
-      "ratio": 0.991
+      "midend": 260,
+      "naive": 261,
+      "ratio": 0.996
     },
     "corpus/conc/spawn_tail_send_raised_row.lu": {
-      "midend": 216,
-      "naive": 360,
-      "ratio": 0.6
+      "midend": 217,
+      "naive": 361,
+      "ratio": 0.601
     },
     "corpus/conc/when_multi.lu": {
-      "midend": 157,
-      "naive": 163,
+      "midend": 158,
+      "naive": 164,
       "ratio": 0.963
     },
     "corpus/ct/public_len.lu": {
-      "midend": 26,
-      "naive": 31,
-      "ratio": 0.839
+      "midend": 27,
+      "naive": 32,
+      "ratio": 0.844
     },
     "corpus/entry_no_return.lu": {
-      "midend": 7,
-      "naive": 7,
+      "midend": 8,
+      "naive": 8,
       "ratio": 1.0
     },
     "corpus/faults/assert_fails.lu": {
-      "midend": 5,
-      "naive": 5,
+      "midend": 6,
+      "naive": 6,
       "ratio": 1.0
+    },
+    "corpus/faults/assert_msg_effect_fails.lu": {
+      "midend": 28,
+      "naive": 65,
+      "ratio": 0.431
     },
     "corpus/faults/assert_msg_holds.lu": {
-      "midend": 21,
-      "naive": 29,
-      "ratio": 0.724
-    },
-    "corpus/faults/bounds_slice.lu": {
-      "midend": 26,
-      "naive": 27,
-      "ratio": 0.963
-    },
-    "corpus/faults/byte_view_slice_reversed.lu": {
-      "midend": 19,
-      "naive": 32,
-      "ratio": 0.594
-    },
-    "corpus/faults/cast_float_nan_trap.lu": {
-      "midend": 14,
-      "naive": 14,
-      "ratio": 1.0
-    },
-    "corpus/faults/cast_float_overflow_trap.lu": {
-      "midend": 13,
-      "naive": 13,
-      "ratio": 1.0
-    },
-    "corpus/faults/cast_float_to_int_truncate.lu": {
-      "midend": 40,
-      "naive": 40,
-      "ratio": 1.0
-    },
-    "corpus/faults/char_cast_negative_trap.lu": {
-      "midend": 5,
-      "naive": 5,
-      "ratio": 1.0
-    },
-    "corpus/faults/char_cast_range_trap.lu": {
-      "midend": 5,
-      "naive": 5,
-      "ratio": 1.0
-    },
-    "corpus/faults/char_cast_surrogate_trap.lu": {
-      "midend": 5,
-      "naive": 5,
-      "ratio": 1.0
-    },
-    "corpus/faults/div_zero_rem.lu": {
-      "midend": 5,
-      "naive": 5,
-      "ratio": 1.0
-    },
-    "corpus/faults/index_origin_min_overflow.lu": {
-      "midend": 24,
-      "naive": 24,
-      "ratio": 1.0
-    },
-    "corpus/faults/index_origin_zero.lu": {
-      "midend": 33,
-      "naive": 33,
-      "ratio": 1.0
-    },
-    "corpus/faults/list_slice_oob.lu": {
-      "midend": 32,
-      "naive": 32,
-      "ratio": 1.0
-    },
-    "corpus/faults/list_slice_reversed.lu": {
-      "midend": 21,
-      "naive": 21,
-      "ratio": 1.0
-    },
-    "corpus/faults/overflow_add.lu": {
-      "midend": 5,
-      "naive": 5,
-      "ratio": 1.0
-    },
-    "corpus/faults/overflow_call_result.lu": {
-      "midend": 7,
-      "naive": 17,
-      "ratio": 0.412
-    },
-    "corpus/faults/overflow_elem_read.lu": {
-      "midend": 44,
-      "naive": 44,
-      "ratio": 1.0
-    },
-    "corpus/faults/overflow_elem_write.lu": {
-      "midend": 46,
-      "naive": 49,
-      "ratio": 0.939
-    },
-    "corpus/faults/overflow_field_read.lu": {
-      "midend": 5,
-      "naive": 5,
-      "ratio": 1.0
-    },
-    "corpus/faults/overflow_interp_operand.lu": {
-      "midend": 5,
-      "naive": 5,
-      "ratio": 1.0
-    },
-    "corpus/faults/overflow_list_pop_i32.lu": {
-      "midend": 132,
-      "naive": 132,
-      "ratio": 1.0
-    },
-    "corpus/faults/overflow_list_pop_i64.lu": {
-      "midend": 131,
-      "naive": 131,
-      "ratio": 1.0
-    },
-    "corpus/faults/region_cap_breach.lu": {
-      "midend": 85,
-      "naive": 90,
-      "ratio": 0.944
-    },
-    "corpus/faults/repeat_negative.lu": {
-      "midend": 5,
-      "naive": 5,
-      "ratio": 1.0
-    },
-    "corpus/faults/trap_skips_root_defers.lu": {
-      "midend": 14,
-      "naive": 14,
-      "ratio": 1.0
-    },
-    "corpus/faults/wrap_high_as_i32.lu": {
-      "midend": 5,
-      "naive": 5,
-      "ratio": 1.0
-    },
-    "corpus/faults/wrap_top_bit_as_int.lu": {
-      "midend": 5,
-      "naive": 5,
-      "ratio": 1.0
-    },
-    "corpus/fs/bytes_dirs.lu": {
-      "midend": 1418,
-      "naive": 1423,
-      "ratio": 0.996
-    },
-    "corpus/fs/error_row.lu": {
-      "midend": 275,
-      "naive": 275,
-      "ratio": 1.0
-    },
-    "corpus/fs/fstat.lu": {
-      "midend": 759,
-      "naive": 765,
-      "ratio": 0.992
-    },
-    "corpus/fs/open_nonblock.lu": {
-      "midend": 1021,
-      "naive": 1021,
-      "ratio": 1.0
-    },
-    "corpus/fs/roundtrip.lu": {
-      "midend": 303,
-      "naive": 303,
-      "ratio": 1.0
-    },
-    "corpus/generics/box_method.lu": {
-      "midend": 18,
-      "naive": 67,
-      "ratio": 0.269
-    },
-    "corpus/generics/explicit_apply.lu": {
-      "midend": 68,
-      "naive": 80,
-      "ratio": 0.85
-    },
-    "corpus/generics/first_of_list.lu": {
-      "midend": 125,
-      "naive": 137,
-      "ratio": 0.912
-    },
-    "corpus/generics/hundred_shapes.lu": {
-      "midend": 408,
-      "naive": 228,
-      "ratio": 1.789
-    },
-    "corpus/generics/list_imported_elem/main.lu": {
-      "midend": 94,
-      "naive": 94,
-      "ratio": 1.0
-    },
-    "corpus/generics/list_struct_elem.lu": {
-      "midend": 94,
-      "naive": 94,
-      "ratio": 1.0
-    },
-    "corpus/generics/list_wrapping_elem.lu": {
-      "midend": 196,
-      "naive": 197,
-      "ratio": 0.995
-    },
-    "corpus/generics/pair_of.lu": {
-      "midend": 16,
-      "naive": 16,
-      "ratio": 1.0
-    },
-    "corpus/generics/two_instances.lu": {
-      "midend": 40,
-      "naive": 117,
-      "ratio": 0.342
-    },
-    "corpus/generics/two_level_raise.lu": {
-      "midend": 39,
-      "naive": 298,
-      "ratio": 0.131
-    },
-    "corpus/grammar/bang_errunion.lu": {
-      "midend": 20,
-      "naive": 92,
-      "ratio": 0.217
-    },
-    "corpus/grammar/bang_not.lu": {
-      "midend": 4,
-      "naive": 4,
-      "ratio": 1.0
-    },
-    "corpus/grammar/bom_at_start.lu": {
-      "midend": 8,
-      "naive": 8,
-      "ratio": 1.0
-    },
-    "corpus/grammar/brackets_generic_call.lu": {
-      "midend": 41,
-      "naive": 53,
-      "ratio": 0.774
-    },
-    "corpus/grammar/defer_loop_turn.lu": {
-      "midend": 28,
-      "naive": 33,
-      "ratio": 0.848
-    },
-    "corpus/grammar/else_chain.lu": {
-      "midend": 283,
-      "naive": 301,
-      "ratio": 0.94
-    },
-    "corpus/grammar/else_default.lu": {
-      "midend": 182,
-      "naive": 182,
-      "ratio": 1.0
-    },
-    "corpus/grammar/else_default_newline.lu": {
-      "midend": 182,
-      "naive": 182,
-      "ratio": 1.0
-    },
-    "corpus/grammar/if_then_arm.lu": {
-      "midend": 45,
-      "naive": 54,
-      "ratio": 0.833
-    },
-    "corpus/grammar/if_then_block.lu": {
-      "midend": 8,
-      "naive": 8,
-      "ratio": 1.0
-    },
-    "corpus/grammar/if_then_chain.lu": {
-      "midend": 50,
-      "naive": 186,
-      "ratio": 0.269
-    },
-    "corpus/grammar/if_then_ident.lu": {
-      "midend": 12,
-      "naive": 12,
-      "ratio": 1.0
-    },
-    "corpus/grammar/if_then_let.lu": {
-      "midend": 20,
-      "naive": 20,
-      "ratio": 1.0
-    },
-    "corpus/grammar/if_then_member.lu": {
-      "midend": 24,
-      "naive": 66,
-      "ratio": 0.364
-    },
-    "corpus/grammar/if_then_paren_default.lu": {
-      "midend": 148,
-      "naive": 140,
-      "ratio": 1.057
-    },
-    "corpus/grammar/if_then_stmt.lu": {
-      "midend": 51,
-      "naive": 56,
-      "ratio": 0.911
-    },
-    "corpus/grammar/if_then_width.lu": {
-      "midend": 8,
-      "naive": 8,
-      "ratio": 1.0
-    },
-    "corpus/grammar/index_origin_closure.lu": {
-      "midend": 68,
-      "naive": 68,
-      "ratio": 1.0
-    },
-    "corpus/grammar/index_origin_file.lu": {
-      "midend": 218,
-      "naive": 248,
-      "ratio": 0.879
-    },
-    "corpus/grammar/index_origin_scopes.lu": {
-      "midend": 163,
-      "naive": 182,
-      "ratio": 0.896
-    },
-    "corpus/grammar/intdot_range.lu": {
-      "midend": 41,
-      "naive": 49,
-      "ratio": 0.837
-    },
-    "corpus/grammar/interp_nested.lu": {
-      "midend": 30,
-      "naive": 30,
-      "ratio": 1.0
-    },
-    "corpus/grammar/let_group.lu": {
-      "midend": 20,
-      "naive": 20,
-      "ratio": 1.0
-    },
-    "corpus/grammar/let_group_destructure.lu": {
-      "midend": 16,
-      "naive": 40,
-      "ratio": 0.4
-    },
-    "corpus/grammar/list_lit_arg.lu": {
-      "midend": 31,
-      "naive": 31,
-      "ratio": 1.0
-    },
-    "corpus/grammar/list_lit_empty.lu": {
-      "midend": 37,
-      "naive": 37,
-      "ratio": 1.0
-    },
-    "corpus/grammar/list_lit_index.lu": {
-      "midend": 67,
-      "naive": 67,
-      "ratio": 1.0
-    },
-    "corpus/grammar/list_lit_let.lu": {
-      "midend": 47,
-      "naive": 47,
-      "ratio": 1.0
-    },
-    "corpus/grammar/list_lit_multiline.lu": {
-      "midend": 31,
-      "naive": 31,
-      "ratio": 1.0
-    },
-    "corpus/grammar/list_lit_nested.lu": {
-      "midend": 56,
-      "naive": 56,
-      "ratio": 1.0
-    },
-    "corpus/grammar/match_arm_at_binding.lu": {
-      "midend": 31,
-      "naive": 122,
-      "ratio": 0.254
-    },
-    "corpus/grammar/match_arm_product_nested.lu": {
-      "midend": 65,
-      "naive": 195,
-      "ratio": 0.333
-    },
-    "corpus/grammar/match_range.lu": {
-      "midend": 257,
-      "naive": 239,
-      "ratio": 1.075
-    },
-    "corpus/grammar/match_range_char.lu": {
-      "midend": 149,
-      "naive": 132,
-      "ratio": 1.129
-    },
-    "corpus/grammar/match_switch.lu": {
-      "midend": 61,
-      "naive": 66,
-      "ratio": 0.924
-    },
-    "corpus/grammar/newline_trailing.lu": {
-      "midend": 42,
-      "naive": 42,
-      "ratio": 1.0
-    },
-    "corpus/grammar/range_type_char.lu": {
-      "midend": 18,
-      "naive": 28,
-      "ratio": 0.643
-    },
-    "corpus/grammar/range_type_inclusive.lu": {
-      "midend": 24,
-      "naive": 50,
-      "ratio": 0.48
-    },
-    "corpus/grammar/range_type_overflow.lu": {
-      "midend": 5,
-      "naive": 19,
-      "ratio": 0.263
-    },
-    "corpus/grammar/range_type_param.lu": {
-      "midend": 18,
-      "naive": 38,
-      "ratio": 0.474
-    },
-    "corpus/grammar/range_type_return.lu": {
-      "midend": 29,
-      "naive": 55,
-      "ratio": 0.527
-    },
-    "corpus/grammar/shebang.lu": {
-      "midend": 8,
-      "naive": 8,
-      "ratio": 1.0
-    },
-    "corpus/grammar/struct_pattern_match_arm.lu": {
-      "midend": 6,
-      "naive": 11,
-      "ratio": 0.545
-    },
-    "corpus/grammar/structlit_paren.lu": {
-      "midend": 4,
-      "naive": 4,
-      "ratio": 1.0
-    },
-    "corpus/grammar/tuple_pattern_match_arm.lu": {
-      "midend": 59,
-      "naive": 94,
-      "ratio": 0.628
-    },
-    "corpus/hello.lu": {
-      "midend": 9,
-      "naive": 9,
-      "ratio": 1.0
-    },
-    "corpus/io/eprint.lu": {
-      "midend": 20,
-      "naive": 20,
-      "ratio": 1.0
-    },
-    "corpus/json/query.lu": {
-      "midend": 454,
-      "naive": 454,
-      "ratio": 1.0
-    },
-    "corpus/json/rows.lu": {
-      "midend": 219,
-      "naive": 219,
-      "ratio": 1.0
-    },
-    "corpus/kernels/churn_b3.lu": {
-      "midend": 44,
-      "naive": 59,
-      "ratio": 0.746
-    },
-    "corpus/kernels/ct_cswap.lu": {
-      "midend": 25,
-      "naive": 25,
-      "ratio": 1.0
-    },
-    "corpus/kernels/ct_tag_compare.lu": {
-      "midend": 28,
-      "naive": 28,
-      "ratio": 1.0
-    },
-    "corpus/kernels/guarded_stencil.lu": {
-      "midend": 166,
-      "naive": 144,
-      "ratio": 1.153
-    },
-    "corpus/kernels/hot_counter.lu": {
-      "midend": 48,
-      "naive": 64,
-      "ratio": 0.75
-    },
-    "corpus/kernels/hot_header.lu": {
-      "midend": 72,
-      "naive": 81,
-      "ratio": 0.889
-    },
-    "corpus/kernels/hot_header_alias.lu": {
-      "midend": 78,
-      "naive": 90,
-      "ratio": 0.867
-    },
-    "corpus/kernels/hot_scale_versioned.lu": {
-      "midend": 147,
-      "naive": 80,
-      "ratio": 1.837
-    },
-    "corpus/kernels/hot_sum_reduce.lu": {
-      "midend": 140,
-      "naive": 150,
-      "ratio": 0.933
-    },
-    "corpus/kernels/sha256_block.lu": {
-      "midend": 1389,
-      "naive": 1451,
-      "ratio": 0.957
-    },
-    "corpus/kernels/walk_twice.lu": {
-      "midend": 26,
-      "naive": 68,
-      "ratio": 0.382
-    },
-    "corpus/lints/allow_item.lu": {
-      "midend": 8,
-      "naive": 14,
-      "ratio": 0.571
-    },
-    "corpus/lints/allow_nothing.lu": {
-      "midend": 8,
-      "naive": 13,
-      "ratio": 0.615
-    },
-    "corpus/lints/allow_unknown_code.lu": {
-      "midend": 8,
-      "naive": 13,
-      "ratio": 0.615
-    },
-    "corpus/lints/ancestor_import/main.lu": {
-      "midend": 10,
-      "naive": 27,
-      "ratio": 0.37
-    },
-    "corpus/lints/as_view_consuming.lu": {
-      "midend": 6,
-      "naive": 26,
-      "ratio": 0.231
-    },
-    "corpus/lints/binder_capitalized.lu": {
-      "midend": 7,
-      "naive": 13,
-      "ratio": 0.538
-    },
-    "corpus/lints/discarded_result.lu": {
-      "midend": 14,
-      "naive": 57,
-      "ratio": 0.246
-    },
-    "corpus/lints/else_arithmetic.lu": {
-      "midend": 149,
-      "naive": 134,
-      "ratio": 1.112
-    },
-    "corpus/lints/else_comparison.lu": {
-      "midend": 11,
-      "naive": 52,
-      "ratio": 0.212
-    },
-    "corpus/lints/float_zero_minus.lu": {
-      "midend": 12,
-      "naive": 12,
-      "ratio": 1.0
-    },
-    "corpus/lints/get_prefix.lu": {
-      "midend": 6,
-      "naive": 18,
-      "ratio": 0.333
-    },
-    "corpus/lints/get_without_row.lu": {
-      "midend": 6,
-      "naive": 18,
-      "ratio": 0.333
-    },
-    "corpus/lints/index_origin_get.lu": {
-      "midend": 113,
-      "naive": 113,
-      "ratio": 1.0
-    },
-    "corpus/lints/match_str_arm_unreachable.lu": {
       "midend": 22,
-      "naive": 154,
-      "ratio": 0.143
+      "naive": 30,
+      "ratio": 0.733
     },
-    "corpus/lints/mut_in_interp.lu": {
+    "corpus/faults/assert_msg_name.lu": {
+      "midend": 34,
+      "naive": 97,
+      "ratio": 0.351
+    },
+    "corpus/faults/assert_msg_name_fails.lu": {
       "midend": 11,
       "naive": 27,
       "ratio": 0.407
     },
-    "corpus/lints/mut_param_unwritten.lu": {
-      "midend": 7,
-      "naive": 22,
-      "ratio": 0.318
+    "corpus/faults/assert_msg_try.lu": {
+      "midend": 57,
+      "naive": 157,
+      "ratio": 0.363
     },
-    "corpus/lints/narrowing_literal.lu": {
-      "midend": 4,
-      "naive": 4,
+    "corpus/faults/bounds_slice.lu": {
+      "midend": 27,
+      "naive": 28,
+      "ratio": 0.964
+    },
+    "corpus/faults/byte_view_slice_reversed.lu": {
+      "midend": 20,
+      "naive": 33,
+      "ratio": 0.606
+    },
+    "corpus/faults/cast_float_nan_trap.lu": {
+      "midend": 15,
+      "naive": 15,
       "ratio": 1.0
     },
-    "corpus/lints/one_item_module/main.lu": {
-      "midend": 6,
-      "naive": 12,
-      "ratio": 0.5
+    "corpus/faults/cast_float_overflow_trap.lu": {
+      "midend": 14,
+      "naive": 14,
+      "ratio": 1.0
     },
-    "corpus/lints/pkg_item_unused/main.lu": {
-      "midend": 6,
-      "naive": 13,
-      "ratio": 0.462
+    "corpus/faults/cast_float_to_int_truncate.lu": {
+      "midend": 41,
+      "naive": 41,
+      "ratio": 1.0
     },
-    "corpus/lints/predicate_shape.lu": {
+    "corpus/faults/cast_narrow_sign_trap.lu": {
+      "midend": 6,
+      "naive": 6,
+      "ratio": 1.0
+    },
+    "corpus/faults/cast_narrow_unsigned_to_signed_trap.lu": {
+      "midend": 6,
+      "naive": 6,
+      "ratio": 1.0
+    },
+    "corpus/faults/cast_narrow_width_trap.lu": {
+      "midend": 37,
+      "naive": 42,
+      "ratio": 0.881
+    },
+    "corpus/faults/char_cast_negative_trap.lu": {
+      "midend": 6,
+      "naive": 6,
+      "ratio": 1.0
+    },
+    "corpus/faults/char_cast_range_trap.lu": {
+      "midend": 6,
+      "naive": 6,
+      "ratio": 1.0
+    },
+    "corpus/faults/char_cast_surrogate_trap.lu": {
+      "midend": 6,
+      "naive": 6,
+      "ratio": 1.0
+    },
+    "corpus/faults/div_zero_rem.lu": {
+      "midend": 6,
+      "naive": 6,
+      "ratio": 1.0
+    },
+    "corpus/faults/index_origin_min_overflow.lu": {
+      "midend": 25,
+      "naive": 25,
+      "ratio": 1.0
+    },
+    "corpus/faults/index_origin_zero.lu": {
+      "midend": 34,
+      "naive": 34,
+      "ratio": 1.0
+    },
+    "corpus/faults/int_shift_count_negative.lu": {
       "midend": 8,
-      "naive": 19,
-      "ratio": 0.421
+      "naive": 27,
+      "ratio": 0.296
     },
-    "corpus/lints/prefix_statement.lu": {
-      "midend": 4,
-      "naive": 4,
-      "ratio": 1.0
-    },
-    "corpus/lints/pub_undocumented.lu": {
-      "midend": 6,
-      "naive": 18,
-      "ratio": 0.333
-    },
-    "corpus/lints/raw_interp_braces.lu": {
+    "corpus/faults/int_shift_left_overflow.lu": {
       "midend": 8,
-      "naive": 8,
-      "ratio": 1.0
+      "naive": 34,
+      "ratio": 0.235
     },
-    "corpus/lints/region_call_allocates.lu": {
-      "midend": 66,
-      "naive": 68,
-      "ratio": 0.971
-    },
-    "corpus/lints/region_never_allocates.lu": {
-      "midend": 4,
-      "naive": 8,
-      "ratio": 0.5
-    },
-    "corpus/lints/shadow_prelude.lu": {
+    "corpus/faults/int_shift_left_past_width.lu": {
       "midend": 8,
-      "naive": 13,
-      "ratio": 0.615
+      "naive": 34,
+      "ratio": 0.235
     },
-    "corpus/lints/tag_case_payload.lu": {
-      "midend": 9,
-      "naive": 56,
-      "ratio": 0.161
+    "corpus/faults/int_shift_left_sign_bit.lu": {
+      "midend": 8,
+      "naive": 39,
+      "ratio": 0.205
     },
-    "corpus/lints/tag_name_collision.lu": {
-      "midend": 13,
-      "naive": 58,
-      "ratio": 0.224
-    },
-    "corpus/lints/take_returned.lu": {
-      "midend": 6,
-      "naive": 12,
-      "ratio": 0.5
-    },
-    "corpus/memory/byte_list_ledger.lu": {
-      "midend": 218,
-      "naive": 221,
-      "ratio": 0.986
-    },
-    "corpus/memory/byte_producers_ledger.lu": {
-      "midend": 800,
-      "naive": 798,
-      "ratio": 1.003
-    },
-    "corpus/memory/byte_view_escape.lu": {
-      "midend": 13,
-      "naive": 13,
-      "ratio": 1.0
-    },
-    "corpus/memory/carried_quotient_nested.lu": {
-      "midend": 506,
-      "naive": 403,
-      "ratio": 1.256
-    },
-    "corpus/memory/carried_quotient_pair.lu": {
-      "midend": 423,
-      "naive": 289,
-      "ratio": 1.464
-    },
-    "corpus/memory/checked_unsigned.lu": {
-      "midend": 10,
-      "naive": 22,
-      "ratio": 0.455
-    },
-    "corpus/memory/closure_cluster_split.lu": {
-      "midend": 3194,
-      "naive": 4589,
-      "ratio": 0.696
-    },
-    "corpus/memory/closure_kill_list.lu": {
-      "midend": 91,
-      "naive": 94,
-      "ratio": 0.968
-    },
-    "corpus/memory/closure_value_paths.lu": {
-      "midend": 62,
-      "naive": 62,
-      "ratio": 1.0
-    },
-    "corpus/memory/consumed_walk_charges_nothing.lu": {
-      "midend": 132,
-      "naive": 154,
-      "ratio": 0.857
-    },
-    "corpus/memory/defer_order.lu": {
-      "midend": 13,
-      "naive": 13,
-      "ratio": 1.0
-    },
-    "corpus/memory/destructure_bind.lu": {
-      "midend": 28,
-      "naive": 57,
-      "ratio": 0.491
-    },
-    "corpus/memory/destructure_partial_live.lu": {
-      "midend": 10,
-      "naive": 10,
-      "ratio": 1.0
-    },
-    "corpus/memory/div_zero.lu": {
+    "corpus/faults/int_truth_neg_u64_trap.lu": {
       "midend": 5,
       "naive": 5,
       "ratio": 1.0
     },
-    "corpus/memory/excl_disjoint_ok.lu": {
-      "midend": 18,
-      "naive": 54,
-      "ratio": 0.333
-    },
-    "corpus/memory/exclusivity.lu": {
-      "midend": 76,
-      "naive": 107,
-      "ratio": 0.71
-    },
-    "corpus/memory/foreign_root_aliasing.lu": {
-      "midend": 177,
-      "naive": 177,
+    "corpus/faults/int_truth_neg_u8_trap.lu": {
+      "midend": 5,
+      "naive": 5,
       "ratio": 1.0
     },
-    "corpus/memory/list_elem_assign.lu": {
-      "midend": 213,
-      "naive": 225,
-      "ratio": 0.947
-    },
-    "corpus/memory/list_mixed_width_struct.lu": {
-      "midend": 89,
-      "naive": 95,
-      "ratio": 0.937
-    },
-    "corpus/memory/list_pop_empty.lu": {
-      "midend": 396,
-      "naive": 407,
-      "ratio": 0.973
-    },
-    "corpus/memory/list_session_struct.lu": {
-      "midend": 196,
-      "naive": 224,
-      "ratio": 0.875
-    },
-    "corpus/memory/list_slice.lu": {
-      "midend": 235,
-      "naive": 245,
-      "ratio": 0.959
-    },
-    "corpus/memory/list_slice_edges.lu": {
-      "midend": 79,
-      "naive": 79,
+    "corpus/faults/int_truth_u64_add_trap.lu": {
+      "midend": 5,
+      "naive": 5,
       "ratio": 1.0
     },
-    "corpus/memory/list_slice_inline_owned.lu": {
-      "midend": 102,
-      "naive": 102,
+    "corpus/faults/int_truth_u64_cast_trap.lu": {
+      "midend": 5,
+      "naive": 5,
       "ratio": 1.0
     },
-    "corpus/memory/list_slice_owned_call.lu": {
-      "midend": 136,
-      "naive": 137,
+    "corpus/faults/int_truth_uint_sub_trap.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/faults/int_truth_wrap_div_zero.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/faults/int_truth_wrap_rem_zero_signed.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/faults/list_slice_oob.lu": {
+      "midend": 22,
+      "naive": 22,
+      "ratio": 1.0
+    },
+    "corpus/faults/list_slice_reversed.lu": {
+      "midend": 22,
+      "naive": 22,
+      "ratio": 1.0
+    },
+    "corpus/faults/overflow_add.lu": {
+      "midend": 6,
+      "naive": 6,
+      "ratio": 1.0
+    },
+    "corpus/faults/overflow_call_result.lu": {
+      "midend": 8,
+      "naive": 18,
+      "ratio": 0.444
+    },
+    "corpus/faults/overflow_elem_read.lu": {
+      "midend": 45,
+      "naive": 45,
+      "ratio": 1.0
+    },
+    "corpus/faults/overflow_elem_write.lu": {
+      "midend": 47,
+      "naive": 50,
+      "ratio": 0.94
+    },
+    "corpus/faults/overflow_field_read.lu": {
+      "midend": 6,
+      "naive": 6,
+      "ratio": 1.0
+    },
+    "corpus/faults/overflow_interp_operand.lu": {
+      "midend": 6,
+      "naive": 6,
+      "ratio": 1.0
+    },
+    "corpus/faults/overflow_list_pop_i32.lu": {
+      "midend": 133,
+      "naive": 133,
+      "ratio": 1.0
+    },
+    "corpus/faults/overflow_list_pop_i64.lu": {
+      "midend": 132,
+      "naive": 132,
+      "ratio": 1.0
+    },
+    "corpus/faults/region_cap_breach.lu": {
+      "midend": 86,
+      "naive": 91,
+      "ratio": 0.945
+    },
+    "corpus/faults/repeat_negative.lu": {
+      "midend": 6,
+      "naive": 6,
+      "ratio": 1.0
+    },
+    "corpus/faults/trap_skips_root_defers.lu": {
+      "midend": 15,
+      "naive": 15,
+      "ratio": 1.0
+    },
+    "corpus/faults/wrap_high_as_i32.lu": {
+      "midend": 6,
+      "naive": 6,
+      "ratio": 1.0
+    },
+    "corpus/faults/wrap_top_bit_as_int.lu": {
+      "midend": 6,
+      "naive": 6,
+      "ratio": 1.0
+    },
+    "corpus/fs/bytes_dirs.lu": {
+      "midend": 1641,
+      "naive": 1646,
+      "ratio": 0.997
+    },
+    "corpus/fs/change_rows.lu": {
+      "midend": 1668,
+      "naive": 1367,
+      "ratio": 1.22
+    },
+    "corpus/fs/copy_chunk.lu": {
+      "midend": 1831,
+      "naive": 1352,
+      "ratio": 1.354
+    },
+    "corpus/fs/error_row.lu": {
+      "midend": 318,
+      "naive": 318,
+      "ratio": 1.0
+    },
+    "corpus/fs/fstat.lu": {
+      "midend": 886,
+      "naive": 892,
       "ratio": 0.993
     },
-    "corpus/memory/map_absent_else.lu": {
-      "midend": 194,
-      "naive": 205,
-      "ratio": 0.946
-    },
-    "corpus/memory/map_char_bool_keys.lu": {
-      "midend": 195,
-      "naive": 195,
+    "corpus/fs/hard_link.lu": {
+      "midend": 1205,
+      "naive": 1205,
       "ratio": 1.0
     },
-    "corpus/memory/map_count.lu": {
-      "midend": 392,
-      "naive": 441,
-      "ratio": 0.889
+    "corpus/fs/mode_symlink.lu": {
+      "midend": 2432,
+      "naive": 2445,
+      "ratio": 0.995
     },
-    "corpus/memory/map_int_keys.lu": {
-      "midend": 140,
-      "naive": 154,
-      "ratio": 0.909
+    "corpus/fs/open_nonblock.lu": {
+      "midend": 1186,
+      "naive": 1186,
+      "ratio": 1.0
     },
-    "corpus/memory/map_set_generic.lu": {
-      "midend": 98,
-      "naive": 115,
+    "corpus/fs/os_error.lu": {
+      "midend": 888,
+      "naive": 940,
+      "ratio": 0.945
+    },
+    "corpus/fs/read_at.lu": {
+      "midend": 1390,
+      "naive": 1390,
+      "ratio": 1.0
+    },
+    "corpus/fs/remove_dir_refused.lu": {
+      "midend": 313,
+      "naive": 313,
+      "ratio": 1.0
+    },
+    "corpus/fs/roundtrip.lu": {
+      "midend": 358,
+      "naive": 358,
+      "ratio": 1.0
+    },
+    "corpus/fs/seek_tell.lu": {
+      "midend": 2429,
+      "naive": 2012,
+      "ratio": 1.207
+    },
+    "corpus/fs/set_times.lu": {
+      "midend": 1577,
+      "naive": 1598,
+      "ratio": 0.987
+    },
+    "corpus/fs/std_write_bytes.lu": {
+      "midend": 414,
+      "naive": 344,
+      "ratio": 1.203
+    },
+    "corpus/fs/truncate.lu": {
+      "midend": 2037,
+      "naive": 1936,
+      "ratio": 1.052
+    },
+    "corpus/generics/box_method.lu": {
+      "midend": 19,
+      "naive": 68,
+      "ratio": 0.279
+    },
+    "corpus/generics/explicit_apply.lu": {
+      "midend": 69,
+      "naive": 81,
       "ratio": 0.852
     },
-    "corpus/memory/map_std_keys.lu": {
-      "midend": 413,
-      "naive": 293,
-      "ratio": 1.41
+    "corpus/generics/first_of_list.lu": {
+      "midend": 126,
+      "naive": 138,
+      "ratio": 0.913
     },
-    "corpus/memory/move_ok.lu": {
-      "midend": 42,
-      "naive": 49,
-      "ratio": 0.857
+    "corpus/generics/hundred_shapes.lu": {
+      "midend": 409,
+      "naive": 229,
+      "ratio": 1.786
     },
-    "corpus/memory/mut_param_aggregate_store.lu": {
-      "midend": 44,
-      "naive": 53,
-      "ratio": 0.83
-    },
-    "corpus/memory/mut_param_field_lend.lu": {
-      "midend": 107,
-      "naive": 82,
-      "ratio": 1.305
-    },
-    "corpus/memory/oob_bounds.lu": {
-      "midend": 33,
-      "naive": 33,
+    "corpus/generics/list_imported_elem/main.lu": {
+      "midend": 95,
+      "naive": 95,
       "ratio": 1.0
     },
-    "corpus/memory/prov_holy_grail.lu": {
-      "midend": 52,
-      "naive": 59,
-      "ratio": 0.881
+    "corpus/generics/list_struct_elem.lu": {
+      "midend": 95,
+      "naive": 95,
+      "ratio": 1.0
     },
-    "corpus/memory/prov_two_phase.lu": {
+    "corpus/generics/list_wrapping_elem.lu": {
+      "midend": 197,
+      "naive": 198,
+      "ratio": 0.995
+    },
+    "corpus/generics/pair_of.lu": {
+      "midend": 17,
+      "naive": 17,
+      "ratio": 1.0
+    },
+    "corpus/generics/two_instances.lu": {
+      "midend": 41,
+      "naive": 118,
+      "ratio": 0.347
+    },
+    "corpus/generics/two_level_raise.lu": {
+      "midend": 40,
+      "naive": 299,
+      "ratio": 0.134
+    },
+    "corpus/grammar/attr_implemented_set.lu": {
+      "midend": 67,
+      "naive": 72,
+      "ratio": 0.931
+    },
+    "corpus/grammar/bang_errunion.lu": {
+      "midend": 21,
+      "naive": 93,
+      "ratio": 0.226
+    },
+    "corpus/grammar/bang_not.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/grammar/bom_at_start.lu": {
+      "midend": 9,
+      "naive": 9,
+      "ratio": 1.0
+    },
+    "corpus/grammar/brackets_generic_call.lu": {
+      "midend": 42,
+      "naive": 54,
+      "ratio": 0.778
+    },
+    "corpus/grammar/cfg_target_arch.lu": {
+      "midend": 11,
+      "naive": 11,
+      "ratio": 1.0
+    },
+    "corpus/grammar/cfg_target_freestanding.lu": {
+      "midend": 13,
+      "naive": 13,
+      "ratio": 1.0
+    },
+    "corpus/grammar/defer_loop_turn.lu": {
+      "midend": 29,
+      "naive": 34,
+      "ratio": 0.853
+    },
+    "corpus/grammar/else_chain.lu": {
+      "midend": 284,
+      "naive": 302,
+      "ratio": 0.94
+    },
+    "corpus/grammar/else_default.lu": {
+      "midend": 183,
+      "naive": 183,
+      "ratio": 1.0
+    },
+    "corpus/grammar/else_default_newline.lu": {
+      "midend": 183,
+      "naive": 183,
+      "ratio": 1.0
+    },
+    "corpus/grammar/if_then_arm.lu": {
+      "midend": 46,
+      "naive": 55,
+      "ratio": 0.836
+    },
+    "corpus/grammar/if_then_block.lu": {
+      "midend": 9,
+      "naive": 9,
+      "ratio": 1.0
+    },
+    "corpus/grammar/if_then_chain.lu": {
+      "midend": 51,
+      "naive": 187,
+      "ratio": 0.273
+    },
+    "corpus/grammar/if_then_ident.lu": {
+      "midend": 13,
+      "naive": 13,
+      "ratio": 1.0
+    },
+    "corpus/grammar/if_then_let.lu": {
+      "midend": 21,
+      "naive": 21,
+      "ratio": 1.0
+    },
+    "corpus/grammar/if_then_member.lu": {
+      "midend": 25,
+      "naive": 67,
+      "ratio": 0.373
+    },
+    "corpus/grammar/if_then_paren_default.lu": {
+      "midend": 149,
+      "naive": 141,
+      "ratio": 1.057
+    },
+    "corpus/grammar/if_then_stmt.lu": {
+      "midend": 52,
+      "naive": 57,
+      "ratio": 0.912
+    },
+    "corpus/grammar/if_then_width.lu": {
+      "midend": 9,
+      "naive": 9,
+      "ratio": 1.0
+    },
+    "corpus/grammar/index_origin_closure.lu": {
+      "midend": 72,
+      "naive": 72,
+      "ratio": 1.0
+    },
+    "corpus/grammar/index_origin_file.lu": {
+      "midend": 219,
+      "naive": 249,
+      "ratio": 0.88
+    },
+    "corpus/grammar/index_origin_scopes.lu": {
+      "midend": 166,
+      "naive": 185,
+      "ratio": 0.897
+    },
+    "corpus/grammar/intdot_range.lu": {
+      "midend": 42,
+      "naive": 50,
+      "ratio": 0.84
+    },
+    "corpus/grammar/interp_nested.lu": {
+      "midend": 31,
+      "naive": 31,
+      "ratio": 1.0
+    },
+    "corpus/grammar/let_group.lu": {
+      "midend": 21,
+      "naive": 21,
+      "ratio": 1.0
+    },
+    "corpus/grammar/let_group_destructure.lu": {
+      "midend": 17,
+      "naive": 41,
+      "ratio": 0.415
+    },
+    "corpus/grammar/list_lit_arg.lu": {
+      "midend": 32,
+      "naive": 32,
+      "ratio": 1.0
+    },
+    "corpus/grammar/list_lit_empty.lu": {
+      "midend": 38,
+      "naive": 38,
+      "ratio": 1.0
+    },
+    "corpus/grammar/list_lit_index.lu": {
+      "midend": 57,
+      "naive": 57,
+      "ratio": 1.0
+    },
+    "corpus/grammar/list_lit_let.lu": {
+      "midend": 48,
+      "naive": 48,
+      "ratio": 1.0
+    },
+    "corpus/grammar/list_lit_multiline.lu": {
+      "midend": 32,
+      "naive": 32,
+      "ratio": 1.0
+    },
+    "corpus/grammar/list_lit_nested.lu": {
+      "midend": 57,
+      "naive": 57,
+      "ratio": 1.0
+    },
+    "corpus/grammar/match_arm_at_binding.lu": {
+      "midend": 32,
+      "naive": 123,
+      "ratio": 0.26
+    },
+    "corpus/grammar/match_arm_deep_tree.lu": {
+      "midend": 10,
+      "naive": 43,
+      "ratio": 0.233
+    },
+    "corpus/grammar/match_arm_or_inside_product.lu": {
+      "midend": 37,
+      "naive": 66,
+      "ratio": 0.561
+    },
+    "corpus/grammar/match_arm_product_nested.lu": {
+      "midend": 66,
+      "naive": 196,
+      "ratio": 0.337
+    },
+    "corpus/grammar/match_arm_str_in_product.lu": {
+      "midend": 26,
+      "naive": 83,
+      "ratio": 0.313
+    },
+    "corpus/grammar/match_nullary_variant.lu": {
+      "midend": 28,
+      "naive": 208,
+      "ratio": 0.135
+    },
+    "corpus/grammar/match_range.lu": {
+      "midend": 258,
+      "naive": 240,
+      "ratio": 1.075
+    },
+    "corpus/grammar/match_range_char.lu": {
+      "midend": 150,
+      "naive": 133,
+      "ratio": 1.128
+    },
+    "corpus/grammar/match_switch.lu": {
+      "midend": 62,
+      "naive": 67,
+      "ratio": 0.925
+    },
+    "corpus/grammar/newline_trailing.lu": {
+      "midend": 43,
+      "naive": 43,
+      "ratio": 1.0
+    },
+    "corpus/grammar/range_header_inclusive_max.lu": {
+      "midend": 41,
+      "naive": 45,
+      "ratio": 0.911
+    },
+    "corpus/grammar/range_type_char.lu": {
+      "midend": 19,
+      "naive": 29,
+      "ratio": 0.655
+    },
+    "corpus/grammar/range_type_inclusive.lu": {
+      "midend": 25,
+      "naive": 51,
+      "ratio": 0.49
+    },
+    "corpus/grammar/range_type_overflow.lu": {
+      "midend": 6,
+      "naive": 20,
+      "ratio": 0.3
+    },
+    "corpus/grammar/range_type_param.lu": {
+      "midend": 19,
+      "naive": 39,
+      "ratio": 0.487
+    },
+    "corpus/grammar/range_type_return.lu": {
+      "midend": 30,
+      "naive": 56,
+      "ratio": 0.536
+    },
+    "corpus/grammar/range_value_wide_iter.lu": {
+      "midend": 23,
+      "naive": 46,
+      "ratio": 0.5
+    },
+    "corpus/grammar/shebang.lu": {
+      "midend": 9,
+      "naive": 9,
+      "ratio": 1.0
+    },
+    "corpus/grammar/struct_pattern_match_arm.lu": {
+      "midend": 7,
+      "naive": 12,
+      "ratio": 0.583
+    },
+    "corpus/grammar/structlit_paren.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/grammar/tuple_pattern_match_arm.lu": {
+      "midend": 60,
+      "naive": 95,
+      "ratio": 0.632
+    },
+    "corpus/hello.lu": {
+      "midend": 10,
+      "naive": 10,
+      "ratio": 1.0
+    },
+    "corpus/io/eprint.lu": {
+      "midend": 21,
+      "naive": 21,
+      "ratio": 1.0
+    },
+    "corpus/json/dup_count_distinct.lu": {
+      "midend": 139,
+      "naive": 139,
+      "ratio": 1.0
+    },
+    "corpus/json/dup_kind.lu": {
+      "midend": 222,
+      "naive": 222,
+      "ratio": 1.0
+    },
+    "corpus/json/dup_last_wins.lu": {
+      "midend": 139,
+      "naive": 139,
+      "ratio": 1.0
+    },
+    "corpus/json/dup_nested.lu": {
+      "midend": 271,
+      "naive": 271,
+      "ratio": 1.0
+    },
+    "corpus/json/dup_path.lu": {
+      "midend": 173,
+      "naive": 173,
+      "ratio": 1.0
+    },
+    "corpus/json/dup_render.lu": {
+      "midend": 90,
+      "naive": 90,
+      "ratio": 1.0
+    },
+    "corpus/json/dup_thrice.lu": {
+      "midend": 222,
+      "naive": 222,
+      "ratio": 1.0
+    },
+    "corpus/json/query.lu": {
+      "midend": 455,
+      "naive": 455,
+      "ratio": 1.0
+    },
+    "corpus/json/rows.lu": {
+      "midend": 220,
+      "naive": 220,
+      "ratio": 1.0
+    },
+    "corpus/kernels/churn_b3.lu": {
+      "midend": 45,
+      "naive": 60,
+      "ratio": 0.75
+    },
+    "corpus/kernels/ct_cswap.lu": {
+      "midend": 26,
+      "naive": 26,
+      "ratio": 1.0
+    },
+    "corpus/kernels/ct_tag_compare.lu": {
+      "midend": 29,
+      "naive": 29,
+      "ratio": 1.0
+    },
+    "corpus/kernels/guarded_stencil.lu": {
+      "midend": 167,
+      "naive": 145,
+      "ratio": 1.152
+    },
+    "corpus/kernels/hot_counter.lu": {
+      "midend": 49,
+      "naive": 65,
+      "ratio": 0.754
+    },
+    "corpus/kernels/hot_header.lu": {
+      "midend": 73,
+      "naive": 82,
+      "ratio": 0.89
+    },
+    "corpus/kernels/hot_header_alias.lu": {
+      "midend": 79,
+      "naive": 91,
+      "ratio": 0.868
+    },
+    "corpus/kernels/hot_scale_versioned.lu": {
+      "midend": 148,
+      "naive": 81,
+      "ratio": 1.827
+    },
+    "corpus/kernels/hot_sum_reduce.lu": {
+      "midend": 141,
+      "naive": 151,
+      "ratio": 0.934
+    },
+    "corpus/kernels/lshr_top_bits.lu": {
+      "midend": 124,
+      "naive": 144,
+      "ratio": 0.861
+    },
+    "corpus/kernels/sha256_block.lu": {
+      "midend": 1390,
+      "naive": 1458,
+      "ratio": 0.953
+    },
+    "corpus/kernels/walk_twice.lu": {
+      "midend": 27,
+      "naive": 69,
+      "ratio": 0.391
+    },
+    "corpus/kernels/wrap_lshr_fold.lu": {
+      "midend": 12,
+      "naive": 12,
+      "ratio": 1.0
+    },
+    "corpus/link/module_c.lu": {
+      "midend": 15,
+      "naive": 27,
+      "ratio": 0.556
+    },
+    "corpus/lints/allow_item.lu": {
+      "midend": 9,
+      "naive": 15,
+      "ratio": 0.6
+    },
+    "corpus/lints/allow_nothing.lu": {
+      "midend": 9,
+      "naive": 14,
+      "ratio": 0.643
+    },
+    "corpus/lints/allow_unknown_code.lu": {
+      "midend": 9,
+      "naive": 14,
+      "ratio": 0.643
+    },
+    "corpus/lints/ancestor_import/main.lu": {
+      "midend": 11,
+      "naive": 28,
+      "ratio": 0.393
+    },
+    "corpus/lints/as_view_consuming.lu": {
+      "midend": 7,
+      "naive": 27,
+      "ratio": 0.259
+    },
+    "corpus/lints/assume_reassigned.lu": {
+      "midend": 11,
+      "naive": 11,
+      "ratio": 1.0
+    },
+    "corpus/lints/binder_capitalized.lu": {
+      "midend": 8,
+      "naive": 14,
+      "ratio": 0.571
+    },
+    "corpus/lints/discarded_result.lu": {
+      "midend": 15,
+      "naive": 58,
+      "ratio": 0.259
+    },
+    "corpus/lints/else_arithmetic.lu": {
+      "midend": 150,
+      "naive": 135,
+      "ratio": 1.111
+    },
+    "corpus/lints/else_comparison.lu": {
+      "midend": 12,
+      "naive": 53,
+      "ratio": 0.226
+    },
+    "corpus/lints/float_zero_minus.lu": {
+      "midend": 13,
+      "naive": 13,
+      "ratio": 1.0
+    },
+    "corpus/lints/get_prefix.lu": {
+      "midend": 7,
+      "naive": 19,
+      "ratio": 0.368
+    },
+    "corpus/lints/get_without_row.lu": {
+      "midend": 7,
+      "naive": 19,
+      "ratio": 0.368
+    },
+    "corpus/lints/index_origin_get.lu": {
+      "midend": 114,
+      "naive": 114,
+      "ratio": 1.0
+    },
+    "corpus/lints/match_str_arm_unreachable.lu": {
+      "midend": 23,
+      "naive": 155,
+      "ratio": 0.148
+    },
+    "corpus/lints/mut_in_interp.lu": {
+      "midend": 12,
+      "naive": 28,
+      "ratio": 0.429
+    },
+    "corpus/lints/mut_param_unwritten.lu": {
+      "midend": 8,
+      "naive": 23,
+      "ratio": 0.348
+    },
+    "corpus/lints/narrowing_literal.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/lints/one_item_module/main.lu": {
+      "midend": 7,
+      "naive": 13,
+      "ratio": 0.538
+    },
+    "corpus/lints/pkg_item_unused/main.lu": {
+      "midend": 7,
+      "naive": 14,
+      "ratio": 0.5
+    },
+    "corpus/lints/predicate_shape.lu": {
+      "midend": 9,
+      "naive": 20,
+      "ratio": 0.45
+    },
+    "corpus/lints/prefix_statement.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/lints/pub_undocumented.lu": {
+      "midend": 7,
+      "naive": 19,
+      "ratio": 0.368
+    },
+    "corpus/lints/raw_interp_braces.lu": {
+      "midend": 9,
+      "naive": 9,
+      "ratio": 1.0
+    },
+    "corpus/lints/region_call_allocates.lu": {
+      "midend": 67,
+      "naive": 69,
+      "ratio": 0.971
+    },
+    "corpus/lints/region_never_allocates.lu": {
+      "midend": 5,
+      "naive": 9,
+      "ratio": 0.556
+    },
+    "corpus/lints/safety_comment_missing.lu": {
+      "midend": 9,
+      "naive": 9,
+      "ratio": 1.0
+    },
+    "corpus/lints/shadow_prelude.lu": {
+      "midend": 9,
+      "naive": 14,
+      "ratio": 0.643
+    },
+    "corpus/lints/shadow_prelude_call.lu": {
+      "midend": 11,
+      "naive": 29,
+      "ratio": 0.379
+    },
+    "corpus/lints/shadow_prelude_local.lu": {
+      "midend": 14,
+      "naive": 14,
+      "ratio": 1.0
+    },
+    "corpus/lints/tag_case_payload.lu": {
+      "midend": 10,
+      "naive": 57,
+      "ratio": 0.175
+    },
+    "corpus/lints/tag_name_collision.lu": {
+      "midend": 14,
+      "naive": 59,
+      "ratio": 0.237
+    },
+    "corpus/lints/take_returned.lu": {
+      "midend": 7,
+      "naive": 13,
+      "ratio": 0.538
+    },
+    "corpus/membrane/export_called.lu": {
+      "midend": 11,
+      "naive": 20,
+      "ratio": 0.55
+    },
+    "corpus/membrane/export_child.lu": {
+      "midend": 16,
+      "naive": 39,
+      "ratio": 0.41
+    },
+    "corpus/membrane/extern_let_image.lu": {
+      "midend": 26,
+      "naive": 26,
+      "ratio": 1.0
+    },
+    "corpus/membrane/extern_libc.lu": {
+      "midend": 41,
+      "naive": 46,
+      "ratio": 0.891
+    },
+    "corpus/memory/byte_list_ledger.lu": {
+      "midend": 219,
+      "naive": 222,
+      "ratio": 0.986
+    },
+    "corpus/memory/byte_producers_ledger.lu": {
+      "midend": 891,
+      "naive": 889,
+      "ratio": 1.002
+    },
+    "corpus/memory/bytes_scan.lu": {
+      "midend": 896,
+      "naive": 339,
+      "ratio": 2.643
+    },
+    "corpus/memory/carried_quotient_nested.lu": {
+      "midend": 507,
+      "naive": 414,
+      "ratio": 1.225
+    },
+    "corpus/memory/carried_quotient_pair.lu": {
+      "midend": 424,
+      "naive": 295,
+      "ratio": 1.437
+    },
+    "corpus/memory/checked_unsigned.lu": {
+      "midend": 11,
+      "naive": 23,
+      "ratio": 0.478
+    },
+    "corpus/memory/closure_cluster_split.lu": {
+      "midend": 3196,
+      "naive": 4591,
+      "ratio": 0.696
+    },
+    "corpus/memory/closure_kill_list.lu": {
+      "midend": 104,
+      "naive": 104,
+      "ratio": 1.0
+    },
+    "corpus/memory/closure_value_paths.lu": {
+      "midend": 69,
+      "naive": 69,
+      "ratio": 1.0
+    },
+    "corpus/memory/consumed_walk_charges_nothing.lu": {
+      "midend": 133,
+      "naive": 155,
+      "ratio": 0.858
+    },
+    "corpus/memory/copy_independent.lu": {
+      "midend": 475,
+      "naive": 512,
+      "ratio": 0.928
+    },
+    "corpus/memory/ctl_index_else_once.lu": {
+      "midend": 115,
+      "naive": 126,
+      "ratio": 0.913
+    },
+    "corpus/memory/ctl_index_return_break_once.lu": {
+      "midend": 139,
+      "naive": 147,
+      "ratio": 0.946
+    },
+    "corpus/memory/ctl_index_try_once.lu": {
+      "midend": 234,
+      "naive": 420,
+      "ratio": 0.557
+    },
+    "corpus/memory/ctl_index_try_once_receivers.lu": {
+      "midend": 502,
+      "naive": 864,
+      "ratio": 0.581
+    },
+    "corpus/memory/ctl_nested_index_try_once.lu": {
+      "midend": 131,
+      "naive": 221,
+      "ratio": 0.593
+    },
+    "corpus/memory/ctl_slice_endpoints.lu": {
+      "midend": 112,
+      "naive": 98,
+      "ratio": 1.143
+    },
+    "corpus/memory/ctl_slice_endpoints_call.lu": {
+      "midend": 185,
+      "naive": 169,
+      "ratio": 1.095
+    },
+    "corpus/memory/ctl_slice_endpoints_indexed_base.lu": {
+      "midend": 183,
+      "naive": 159,
+      "ratio": 1.151
+    },
+    "corpus/memory/ctl_slice_endpoints_nested.lu": {
+      "midend": 101,
+      "naive": 95,
+      "ratio": 1.063
+    },
+    "corpus/memory/ctl_slice_endpoints_str.lu": {
+      "midend": 147,
+      "naive": 177,
+      "ratio": 0.831
+    },
+    "corpus/memory/ctl_slice_try_once.lu": {
+      "midend": 178,
+      "naive": 317,
+      "ratio": 0.562
+    },
+    "corpus/memory/ctl_store_index_try_once.lu": {
+      "midend": 761,
+      "naive": 720,
+      "ratio": 1.057
+    },
+    "corpus/memory/ctl_store_order.lu": {
+      "midend": 51,
+      "naive": 58,
+      "ratio": 0.879
+    },
+    "corpus/memory/ctl_store_order_captured.lu": {
+      "midend": 70,
+      "naive": 76,
+      "ratio": 0.921
+    },
+    "corpus/memory/ctl_store_order_compound.lu": {
+      "midend": 58,
+      "naive": 65,
+      "ratio": 0.892
+    },
+    "corpus/memory/ctl_store_order_map.lu": {
+      "midend": 172,
+      "naive": 199,
+      "ratio": 0.864
+    },
+    "corpus/memory/ctl_store_order_nested.lu": {
+      "midend": 219,
+      "naive": 229,
+      "ratio": 0.956
+    },
+    "corpus/memory/ctl_store_order_nested_index.lu": {
+      "midend": 196,
+      "naive": 218,
+      "ratio": 0.899
+    },
+    "corpus/memory/ctl_store_order_raw.lu": {
+      "midend": 25,
+      "naive": 28,
+      "ratio": 0.893
+    },
+    "corpus/memory/defer_order.lu": {
+      "midend": 14,
+      "naive": 14,
+      "ratio": 1.0
+    },
+    "corpus/memory/destructure_bind.lu": {
+      "midend": 29,
+      "naive": 58,
+      "ratio": 0.5
+    },
+    "corpus/memory/destructure_partial_live.lu": {
+      "midend": 11,
+      "naive": 11,
+      "ratio": 1.0
+    },
+    "corpus/memory/distinct_copy_scalar.lu": {
+      "midend": 28,
+      "naive": 45,
+      "ratio": 0.622
+    },
+    "corpus/memory/div_zero.lu": {
+      "midend": 6,
+      "naive": 6,
+      "ratio": 1.0
+    },
+    "corpus/memory/elem_char_bool_key_revive.lu": {
+      "midend": 267,
+      "naive": 267,
+      "ratio": 1.0
+    },
+    "corpus/memory/elem_const_dyn_loan.lu": {
+      "midend": 82,
+      "naive": 88,
+      "ratio": 0.932
+    },
+    "corpus/memory/elem_const_field_mut_pair.lu": {
+      "midend": 112,
+      "naive": 116,
+      "ratio": 0.966
+    },
+    "corpus/memory/elem_const_field_of_elem.lu": {
+      "midend": 101,
+      "naive": 103,
+      "ratio": 0.981
+    },
+    "corpus/memory/elem_const_iter_mut.lu": {
+      "midend": 145,
+      "naive": 154,
+      "ratio": 0.942
+    },
+    "corpus/memory/elem_const_move_heap.lu": {
+      "midend": 81,
+      "naive": 81,
+      "ratio": 1.0
+    },
+    "corpus/memory/elem_const_mut_pair.lu": {
+      "midend": 74,
+      "naive": 74,
+      "ratio": 1.0
+    },
+    "corpus/memory/elem_const_nested_call.lu": {
+      "midend": 166,
+      "naive": 164,
+      "ratio": 1.012
+    },
+    "corpus/memory/elem_const_nested_mut.lu": {
+      "midend": 158,
+      "naive": 158,
+      "ratio": 1.0
+    },
+    "corpus/memory/elem_const_read_after_mut.lu": {
+      "midend": 52,
+      "naive": 67,
+      "ratio": 0.776
+    },
+    "corpus/memory/elem_const_read_while_take.lu": {
+      "midend": 91,
+      "naive": 101,
+      "ratio": 0.901
+    },
+    "corpus/memory/elem_const_store_revives.lu": {
+      "midend": 118,
+      "naive": 124,
+      "ratio": 0.952
+    },
+    "corpus/memory/elem_const_swap.lu": {
+      "midend": 72,
+      "naive": 72,
+      "ratio": 1.0
+    },
+    "corpus/memory/elem_const_swap_heap.lu": {
+      "midend": 174,
+      "naive": 182,
+      "ratio": 0.956
+    },
+    "corpus/memory/elem_const_take_while_mut.lu": {
+      "midend": 121,
+      "naive": 124,
+      "ratio": 0.976
+    },
+    "corpus/memory/elem_dyn_proofs_legs.lu": {
+      "midend": 691,
+      "naive": 707,
+      "ratio": 0.977
+    },
+    "corpus/memory/elem_dyn_read_after_mut.lu": {
+      "midend": 52,
+      "naive": 67,
+      "ratio": 0.776
+    },
+    "corpus/memory/elem_header_methods_after_move.lu": {
+      "midend": 130,
+      "naive": 136,
+      "ratio": 0.956
+    },
+    "corpus/memory/elem_header_methods_after_move_map.lu": {
+      "midend": 90,
+      "naive": 90,
+      "ratio": 1.0
+    },
+    "corpus/memory/elem_header_methods_after_move_pool.lu": {
       "midend": 56,
       "naive": 56,
       "ratio": 1.0
     },
-    "corpus/memory/region_ambient_ok.lu": {
-      "midend": 75,
+    "corpus/memory/elem_header_methods_under_claim.lu": {
+      "midend": 83,
+      "naive": 85,
+      "ratio": 0.976
+    },
+    "corpus/memory/elem_key_move_map.lu": {
+      "midend": 127,
+      "naive": 127,
+      "ratio": 1.0
+    },
+    "corpus/memory/elem_len_after_move.lu": {
+      "midend": 71,
+      "naive": 71,
+      "ratio": 1.0
+    },
+    "corpus/memory/elem_loop_induction_mut.lu": {
+      "midend": 93,
+      "naive": 99,
+      "ratio": 0.939
+    },
+    "corpus/memory/elem_member_read_after_mut.lu": {
+      "midend": 42,
+      "naive": 51,
+      "ratio": 0.824
+    },
+    "corpus/memory/elem_member_read_under_claims.lu": {
+      "midend": 203,
+      "naive": 219,
+      "ratio": 0.927
+    },
+    "corpus/memory/elem_move_one_place.lu": {
+      "midend": 64,
+      "naive": 64,
+      "ratio": 1.0
+    },
+    "corpus/memory/elem_offset_mut_pair.lu": {
+      "midend": 74,
       "naive": 74,
-      "ratio": 1.014
+      "ratio": 1.0
+    },
+    "corpus/memory/elem_pool_handle_revive.lu": {
+      "midend": 75,
+      "naive": 75,
+      "ratio": 1.0
+    },
+    "corpus/memory/elem_same_index_revive.lu": {
+      "midend": 109,
+      "naive": 112,
+      "ratio": 0.973
+    },
+    "corpus/memory/elem_str_key_revive.lu": {
+      "midend": 244,
+      "naive": 244,
+      "ratio": 1.0
+    },
+    "corpus/memory/elem_tuple_pos_move.lu": {
+      "midend": 26,
+      "naive": 26,
+      "ratio": 1.0
+    },
+    "corpus/memory/elem_tuple_pos_mut.lu": {
+      "midend": 15,
+      "naive": 35,
+      "ratio": 0.429
+    },
+    "corpus/memory/excl_disjoint_ok.lu": {
+      "midend": 19,
+      "naive": 55,
+      "ratio": 0.345
+    },
+    "corpus/memory/exclusivity.lu": {
+      "midend": 58,
+      "naive": 105,
+      "ratio": 0.552
+    },
+    "corpus/memory/field_shorthand_copy.lu": {
+      "midend": 15,
+      "naive": 15,
+      "ratio": 1.0
+    },
+    "corpus/memory/field_shorthand_mixed_runs.lu": {
+      "midend": 50,
+      "naive": 50,
+      "ratio": 1.0
+    },
+    "corpus/memory/field_shorthand_nested_runs.lu": {
+      "midend": 37,
+      "naive": 37,
+      "ratio": 1.0
+    },
+    "corpus/memory/field_shorthand_return_take.lu": {
+      "midend": 37,
+      "naive": 43,
+      "ratio": 0.86
+    },
+    "corpus/memory/foreign_root_aliasing.lu": {
+      "midend": 178,
+      "naive": 180,
+      "ratio": 0.989
+    },
+    "corpus/memory/handle_stale.lu": {
+      "midend": 36,
+      "naive": 36,
+      "ratio": 1.0
+    },
+    "corpus/memory/index_store_copies_list.lu": {
+      "midend": 92,
+      "naive": 92,
+      "ratio": 1.0
+    },
+    "corpus/memory/index_store_copies_map.lu": {
+      "midend": 102,
+      "naive": 102,
+      "ratio": 1.0
+    },
+    "corpus/memory/index_store_copy_elem.lu": {
+      "midend": 158,
+      "naive": 158,
+      "ratio": 1.0
+    },
+    "corpus/memory/index_store_read_param.lu": {
+      "midend": 105,
+      "naive": 122,
+      "ratio": 0.861
+    },
+    "corpus/memory/list_elem_assign.lu": {
+      "midend": 214,
+      "naive": 226,
+      "ratio": 0.947
+    },
+    "corpus/memory/list_elem_copy_loop.lu": {
+      "midend": 95,
+      "naive": 133,
+      "ratio": 0.714
+    },
+    "corpus/memory/list_mixed_width_struct.lu": {
+      "midend": 90,
+      "naive": 96,
+      "ratio": 0.938
+    },
+    "corpus/memory/list_pop_empty.lu": {
+      "midend": 397,
+      "naive": 408,
+      "ratio": 0.973
+    },
+    "corpus/memory/list_session_struct.lu": {
+      "midend": 201,
+      "naive": 227,
+      "ratio": 0.885
+    },
+    "corpus/memory/list_slice.lu": {
+      "midend": 170,
+      "naive": 180,
+      "ratio": 0.944
+    },
+    "corpus/memory/list_slice_edges.lu": {
+      "midend": 80,
+      "naive": 80,
+      "ratio": 1.0
+    },
+    "corpus/memory/list_slice_inline_owned.lu": {
+      "midend": 92,
+      "naive": 92,
+      "ratio": 1.0
+    },
+    "corpus/memory/list_slice_owned_call.lu": {
+      "midend": 126,
+      "naive": 127,
+      "ratio": 0.992
+    },
+    "corpus/memory/map_absent_else.lu": {
+      "midend": 195,
+      "naive": 206,
+      "ratio": 0.947
+    },
+    "corpus/memory/map_char_bool_keys.lu": {
+      "midend": 196,
+      "naive": 196,
+      "ratio": 1.0
+    },
+    "corpus/memory/map_count.lu": {
+      "midend": 393,
+      "naive": 442,
+      "ratio": 0.889
+    },
+    "corpus/memory/map_int_keys.lu": {
+      "midend": 141,
+      "naive": 155,
+      "ratio": 0.91
+    },
+    "corpus/memory/map_remove.lu": {
+      "midend": 460,
+      "naive": 481,
+      "ratio": 0.956
+    },
+    "corpus/memory/map_set_generic.lu": {
+      "midend": 99,
+      "naive": 116,
+      "ratio": 0.853
+    },
+    "corpus/memory/map_std_keys.lu": {
+      "midend": 414,
+      "naive": 294,
+      "ratio": 1.408
+    },
+    "corpus/memory/move_field_siblings_ok.lu": {
+      "midend": 17,
+      "naive": 17,
+      "ratio": 1.0
+    },
+    "corpus/memory/move_ok.lu": {
+      "midend": 44,
+      "naive": 51,
+      "ratio": 0.863
+    },
+    "corpus/memory/mut_arg_element.lu": {
+      "midend": 298,
+      "naive": 321,
+      "ratio": 0.928
+    },
+    "corpus/memory/mut_claim_cond_write.lu": {
+      "midend": 45,
+      "naive": 82,
+      "ratio": 0.549
+    },
+    "corpus/memory/mut_claim_if_else.lu": {
+      "midend": 69,
+      "naive": 69,
+      "ratio": 1.0
+    },
+    "corpus/memory/mut_claim_if_no_else.lu": {
+      "midend": 69,
+      "naive": 69,
+      "ratio": 1.0
+    },
+    "corpus/memory/mut_claim_match_arms.lu": {
+      "midend": 80,
+      "naive": 125,
+      "ratio": 0.64
+    },
+    "corpus/memory/mut_claim_nested_copy_read.lu": {
+      "midend": 43,
+      "naive": 56,
+      "ratio": 0.768
+    },
+    "corpus/memory/mut_claim_nested_disjoint_reads.lu": {
+      "midend": 115,
+      "naive": 127,
+      "ratio": 0.906
+    },
+    "corpus/memory/mut_claim_nested_get.lu": {
+      "midend": 77,
+      "naive": 86,
+      "ratio": 0.895
+    },
+    "corpus/memory/mut_claim_nested_header.lu": {
+      "midend": 47,
+      "naive": 47,
+      "ratio": 1.0
+    },
+    "corpus/memory/mut_claim_nested_map.lu": {
+      "midend": 32,
+      "naive": 36,
+      "ratio": 0.889
+    },
+    "corpus/memory/mut_claim_nested_read_elem.lu": {
+      "midend": 45,
+      "naive": 55,
+      "ratio": 0.818
+    },
+    "corpus/memory/mut_claim_nested_read_whole.lu": {
+      "midend": 60,
+      "naive": 60,
+      "ratio": 1.0
+    },
+    "corpus/memory/mut_claim_operand_read.lu": {
+      "midend": 12,
+      "naive": 22,
+      "ratio": 0.545
+    },
+    "corpus/memory/mut_claim_two_phase_reads.lu": {
+      "midend": 195,
+      "naive": 265,
+      "ratio": 0.736
+    },
+    "corpus/memory/mut_elem_excl.lu": {
+      "midend": 64,
+      "naive": 64,
+      "ratio": 1.0
+    },
+    "corpus/memory/mut_param_aggregate_store.lu": {
+      "midend": 45,
+      "naive": 54,
+      "ratio": 0.833
+    },
+    "corpus/memory/mut_param_field_lend.lu": {
+      "midend": 108,
+      "naive": 83,
+      "ratio": 1.301
+    },
+    "corpus/memory/mut_param_restore_elem.lu": {
+      "midend": 92,
+      "naive": 92,
+      "ratio": 1.0
+    },
+    "corpus/memory/mut_param_restore_field.lu": {
+      "midend": 40,
+      "naive": 40,
+      "ratio": 1.0
+    },
+    "corpus/memory/mut_param_restore_map.lu": {
+      "midend": 154,
+      "naive": 154,
+      "ratio": 1.0
+    },
+    "corpus/memory/mut_param_restore_whole.lu": {
+      "midend": 40,
+      "naive": 40,
+      "ratio": 1.0
+    },
+    "corpus/memory/mut_place_nested.lu": {
+      "midend": 194,
+      "naive": 235,
+      "ratio": 0.826
+    },
+    "corpus/memory/mut_read_overlap.lu": {
+      "midend": 25,
+      "naive": 27,
+      "ratio": 0.926
+    },
+    "corpus/memory/mut_two_fields_one_region.lu": {
+      "midend": 37,
+      "naive": 38,
+      "ratio": 0.974
+    },
+    "corpus/memory/nested_fn_mut_param.lu": {
+      "midend": 163,
+      "naive": 165,
+      "ratio": 0.988
+    },
+    "corpus/memory/oob_bounds.lu": {
+      "midend": 34,
+      "naive": 34,
+      "ratio": 1.0
+    },
+    "corpus/memory/packed_field_raw_read.lu": {
+      "midend": 50,
+      "naive": 50,
+      "ratio": 1.0
+    },
+    "corpus/memory/packed_fields_at_offset_of.lu": {
+      "midend": 390,
+      "naive": 315,
+      "ratio": 1.238
+    },
+    "corpus/memory/pool_accessors.lu": {
+      "midend": 295,
+      "naive": 295,
+      "ratio": 1.0
+    },
+    "corpus/memory/pool_place_write.lu": {
+      "midend": 226,
+      "naive": 249,
+      "ratio": 0.908
+    },
+    "corpus/memory/prov_addr_with_addr.lu": {
+      "midend": 35,
+      "naive": 40,
+      "ratio": 0.875
+    },
+    "corpus/memory/prov_cast_round_trip.lu": {
+      "midend": 34,
+      "naive": 39,
+      "ratio": 0.872
+    },
+    "corpus/memory/prov_expose_round_trip.lu": {
+      "midend": 25,
+      "naive": 30,
+      "ratio": 0.833
+    },
+    "corpus/memory/prov_holy_grail.lu": {
+      "midend": 54,
+      "naive": 61,
+      "ratio": 0.885
+    },
+    "corpus/memory/prov_is_null.lu": {
+      "midend": 20,
+      "naive": 20,
+      "ratio": 1.0
+    },
+    "corpus/memory/prov_narrow_cast.lu": {
+      "midend": 27,
+      "naive": 27,
+      "ratio": 1.0
+    },
+    "corpus/memory/prov_narrow_cast_trap.lu": {
+      "midend": 15,
+      "naive": 15,
+      "ratio": 1.0
+    },
+    "corpus/memory/prov_two_phase.lu": {
+      "midend": 57,
+      "naive": 57,
+      "ratio": 1.0
+    },
+    "corpus/memory/push_copies_element.lu": {
+      "midend": 474,
+      "naive": 476,
+      "ratio": 0.996
+    },
+    "corpus/memory/push_grow_guarded_index.lu": {
+      "midend": 176,
+      "naive": 152,
+      "ratio": 1.158
+    },
+    "corpus/memory/push_grow_nested_guarded_index.lu": {
+      "midend": 379,
+      "naive": 334,
+      "ratio": 1.135
+    },
+    "corpus/memory/raw_aligned_control.lu": {
+      "midend": 62,
+      "naive": 62,
+      "ratio": 1.0
+    },
+    "corpus/memory/raw_compound_assign.lu": {
+      "midend": 26,
+      "naive": 26,
+      "ratio": 1.0
+    },
+    "corpus/memory/raw_deref.lu": {
+      "midend": 18,
+      "naive": 18,
+      "ratio": 1.0
+    },
+    "corpus/memory/raw_deref_signed.lu": {
+      "midend": 19,
+      "naive": 19,
+      "ratio": 1.0
+    },
+    "corpus/memory/raw_field_store.lu": {
+      "midend": 48,
+      "naive": 48,
+      "ratio": 1.0
+    },
+    "corpus/memory/raw_field_store_compound.lu": {
+      "midend": 52,
+      "naive": 55,
+      "ratio": 0.945
+    },
+    "corpus/memory/raw_field_store_nested.lu": {
+      "midend": 29,
+      "naive": 36,
+      "ratio": 0.806
+    },
+    "corpus/memory/raw_field_store_packed.lu": {
+      "midend": 39,
+      "naive": 45,
+      "ratio": 0.867
+    },
+    "corpus/memory/raw_lshr_top_bits.lu": {
+      "midend": 98,
+      "naive": 115,
+      "ratio": 0.852
+    },
+    "corpus/memory/raw_ptr_mut_param.lu": {
+      "midend": 24,
+      "naive": 40,
+      "ratio": 0.6
+    },
+    "corpus/memory/raw_ptr_private_sig.lu": {
+      "midend": 21,
+      "naive": 32,
+      "ratio": 0.656
+    },
+    "corpus/memory/raw_repr_align_layout.lu": {
+      "midend": 447,
+      "naive": 331,
+      "ratio": 1.35
+    },
+    "corpus/memory/raw_repr_c_layout.lu": {
+      "midend": 148,
+      "naive": 158,
+      "ratio": 0.937
+    },
+    "corpus/memory/raw_repr_packed_layout.lu": {
+      "midend": 319,
+      "naive": 269,
+      "ratio": 1.186
+    },
+    "corpus/memory/raw_store_call_writes.lu": {
+      "midend": 25,
+      "naive": 24,
+      "ratio": 1.042
+    },
+    "corpus/memory/read_param_indexed_caller.lu": {
+      "midend": 95,
+      "naive": 94,
+      "ratio": 1.011
+    },
+    "corpus/memory/read_param_move_legal.lu": {
+      "midend": 96,
+      "naive": 171,
+      "ratio": 0.561
+    },
+    "corpus/memory/recv_claim_arg_reads.lu": {
+      "midend": 482,
+      "naive": 500,
+      "ratio": 0.964
+    },
+    "corpus/memory/recv_view_arg_callee_view_write.lu": {
+      "midend": 36,
+      "naive": 44,
+      "ratio": 0.818
+    },
+    "corpus/memory/recv_view_arg_elem.lu": {
+      "midend": 66,
+      "naive": 98,
+      "ratio": 0.673
+    },
+    "corpus/memory/recv_view_arg_field_recv.lu": {
+      "midend": 29,
+      "naive": 34,
+      "ratio": 0.853
+    },
+    "corpus/memory/recv_view_arg_list_field.lu": {
+      "midend": 52,
+      "naive": 56,
+      "ratio": 0.929
+    },
+    "corpus/memory/recv_view_arg_nested_field.lu": {
+      "midend": 29,
+      "naive": 34,
+      "ratio": 0.853
+    },
+    "corpus/memory/recv_view_arg_outside_write.lu": {
+      "midend": 27,
+      "naive": 32,
+      "ratio": 0.844
+    },
+    "corpus/memory/recv_view_arg_relend.lu": {
+      "midend": 33,
+      "naive": 41,
+      "ratio": 0.805
+    },
+    "corpus/memory/recv_view_arg_two_fields.lu": {
+      "midend": 29,
+      "naive": 34,
+      "ratio": 0.853
+    },
+    "corpus/memory/recv_view_arg_two_view_third.lu": {
+      "midend": 30,
+      "naive": 35,
+      "ratio": 0.857
+    },
+    "corpus/memory/region_ambient_ok.lu": {
+      "midend": 76,
+      "naive": 75,
+      "ratio": 1.013
     },
     "corpus/memory/region_bytes_query.lu": {
-      "midend": 115,
-      "naive": 110,
+      "midend": 116,
+      "naive": 111,
       "ratio": 1.045
     },
     "corpus/memory/region_bytes_value.lu": {
-      "midend": 112,
-      "naive": 117,
-      "ratio": 0.957
+      "midend": 113,
+      "naive": 118,
+      "ratio": 0.958
     },
     "corpus/memory/region_cap_boundary.lu": {
-      "midend": 119,
-      "naive": 119,
+      "midend": 120,
+      "naive": 120,
       "ratio": 1.0
     },
     "corpus/memory/region_container_freeze_ok.lu": {
-      "midend": 81,
-      "naive": 87,
-      "ratio": 0.931
+      "midend": 82,
+      "naive": 88,
+      "ratio": 0.932
     },
     "corpus/memory/region_container_reclaim.lu": {
+      "midend": 90,
+      "naive": 103,
+      "ratio": 0.874
+    },
+    "corpus/memory/region_copyout_exits.lu": {
       "midend": 89,
-      "naive": 102,
-      "ratio": 0.873
+      "naive": 230,
+      "ratio": 0.387
+    },
+    "corpus/memory/region_copyout_loop.lu": {
+      "midend": 229,
+      "naive": 258,
+      "ratio": 0.888
+    },
+    "corpus/memory/region_copyout_map.lu": {
+      "midend": 466,
+      "naive": 482,
+      "ratio": 0.967
+    },
+    "corpus/memory/region_copyout_struct.lu": {
+      "midend": 183,
+      "naive": 237,
+      "ratio": 0.772
     },
     "corpus/memory/region_freeze_ok.lu": {
-      "midend": 12,
-      "naive": 23,
-      "ratio": 0.522
+      "midend": 13,
+      "naive": 24,
+      "ratio": 0.542
     },
     "corpus/memory/region_infer_list_builder.lu": {
-      "midend": 27,
-      "naive": 75,
-      "ratio": 0.36
+      "midend": 28,
+      "naive": 76,
+      "ratio": 0.368
     },
     "corpus/memory/region_infer_request_handler.lu": {
-      "midend": 27,
-      "naive": 81,
-      "ratio": 0.333
+      "midend": 28,
+      "naive": 82,
+      "ratio": 0.341
     },
     "corpus/memory/region_infer_tree_transform.lu": {
-      "midend": 10,
-      "naive": 92,
-      "ratio": 0.109
+      "midend": 11,
+      "naive": 93,
+      "ratio": 0.118
+    },
+    "corpus/memory/region_kept_arg_legal.lu": {
+      "midend": 594,
+      "naive": 666,
+      "ratio": 0.892
     },
     "corpus/memory/region_multiopen_ok.lu": {
-      "midend": 101,
-      "naive": 111,
-      "ratio": 0.91
+      "midend": 104,
+      "naive": 114,
+      "ratio": 0.912
     },
-    "corpus/memory/region_multiopen_values_ok.lu": {
-      "midend": 10,
-      "naive": 10,
+    "corpus/memory/region_multiopen_swap.lu": {
+      "midend": 70,
+      "naive": 70,
       "ratio": 1.0
     },
+    "corpus/memory/region_multiopen_values_ok.lu": {
+      "midend": 11,
+      "naive": 11,
+      "ratio": 1.0
+    },
+    "corpus/memory/region_net_read_charged.lu": {
+      "midend": 861,
+      "naive": 884,
+      "ratio": 0.974
+    },
+    "corpus/memory/region_os_cwd_charged.lu": {
+      "midend": 139,
+      "naive": 143,
+      "ratio": 0.972
+    },
+    "corpus/memory/region_scalar_freeze.lu": {
+      "midend": 12,
+      "naive": 12,
+      "ratio": 1.0
+    },
+    "corpus/memory/region_scalar_mut.lu": {
+      "midend": 46,
+      "naive": 52,
+      "ratio": 0.885
+    },
+    "corpus/memory/region_scalar_store.lu": {
+      "midend": 150,
+      "naive": 168,
+      "ratio": 0.893
+    },
+    "corpus/memory/region_scalar_value.lu": {
+      "midend": 69,
+      "naive": 99,
+      "ratio": 0.697
+    },
+    "corpus/memory/region_str_call_inside.lu": {
+      "midend": 80,
+      "naive": 80,
+      "ratio": 1.0
+    },
+    "corpus/memory/region_str_call_static.lu": {
+      "midend": 30,
+      "naive": 143,
+      "ratio": 0.21
+    },
+    "corpus/memory/region_str_charged.lu": {
+      "midend": 72,
+      "naive": 78,
+      "ratio": 0.923
+    },
+    "corpus/memory/region_str_producers_charged.lu": {
+      "midend": 195,
+      "naive": 200,
+      "ratio": 0.975
+    },
+    "corpus/memory/region_str_view_for_inside.lu": {
+      "midend": 985,
+      "naive": 1017,
+      "ratio": 0.969
+    },
+    "corpus/memory/region_str_view_inside.lu": {
+      "midend": 224,
+      "naive": 225,
+      "ratio": 0.996
+    },
     "corpus/memory/region_unit_tail_call.lu": {
-      "midend": 132,
-      "naive": 134,
+      "midend": 133,
+      "naive": 135,
       "ratio": 0.985
     },
     "corpus/memory/region_value_pass.lu": {
-      "midend": 136,
-      "naive": 79,
-      "ratio": 1.722
+      "midend": 137,
+      "naive": 80,
+      "ratio": 1.713
     },
     "corpus/memory/region_value_return.lu": {
-      "midend": 37,
-      "naive": 51,
-      "ratio": 0.725
+      "midend": 38,
+      "naive": 52,
+      "ratio": 0.731
+    },
+    "corpus/memory/static_const_let.lu": {
+      "midend": 34,
+      "naive": 34,
+      "ratio": 1.0
+    },
+    "corpus/memory/static_qualified/main.lu": {
+      "midend": 13,
+      "naive": 13,
+      "ratio": 1.0
+    },
+    "corpus/memory/static_qualified_let/main.lu": {
+      "midend": 22,
+      "naive": 22,
+      "ratio": 1.0
+    },
+    "corpus/memory/static_qualified_var/main.lu": {
+      "midend": 34,
+      "naive": 34,
+      "ratio": 1.0
+    },
+    "corpus/memory/static_str_literals.lu": {
+      "midend": 36,
+      "naive": 36,
+      "ratio": 1.0
+    },
+    "corpus/memory/static_var.lu": {
+      "midend": 114,
+      "naive": 90,
+      "ratio": 1.267
+    },
+    "corpus/memory/static_var_call_deep.lu": {
+      "midend": 34,
+      "naive": 32,
+      "ratio": 1.063
+    },
+    "corpus/memory/static_var_call_writes.lu": {
+      "midend": 22,
+      "naive": 22,
+      "ratio": 1.0
+    },
+    "corpus/memory/static_wrapping.lu": {
+      "midend": 28,
+      "naive": 35,
+      "ratio": 0.8
+    },
+    "corpus/memory/store_rhs_first_list.lu": {
+      "midend": 183,
+      "naive": 173,
+      "ratio": 1.058
+    },
+    "corpus/memory/store_rhs_first_map.lu": {
+      "midend": 100,
+      "naive": 105,
+      "ratio": 0.952
+    },
+    "corpus/memory/store_rhs_first_pool.lu": {
+      "midend": 74,
+      "naive": 81,
+      "ratio": 0.914
     },
     "corpus/memory/struct_destructure_partial_live.lu": {
-      "midend": 10,
-      "naive": 10,
+      "midend": 11,
+      "naive": 11,
       "ratio": 1.0
     },
     "corpus/memory/struct_pattern_binder.lu": {
-      "midend": 22,
-      "naive": 61,
-      "ratio": 0.361
+      "midend": 23,
+      "naive": 62,
+      "ratio": 0.371
     },
     "corpus/memory/unsafe_c_alloc_native.lu": {
-      "midend": 10,
-      "naive": 10,
+      "midend": 11,
+      "naive": 11,
       "ratio": 1.0
+    },
+    "corpus/memory/unsafe_creation_not_use.lu": {
+      "midend": 26,
+      "naive": 26,
+      "ratio": 1.0
+    },
+    "corpus/memory/unsafe_noalias.lu": {
+      "midend": 28,
+      "naive": 28,
+      "ratio": 1.0
+    },
+    "corpus/memory/versioned_loop_cross_module/main.lu": {
+      "midend": 289,
+      "naive": 282,
+      "ratio": 1.025
+    },
+    "corpus/memory/versioned_loop_inlined_root.lu": {
+      "midend": 289,
+      "naive": 282,
+      "ratio": 1.025
     },
     "corpus/memory/view_set_norm.lu": {
       "midend": 35,
       "naive": 43,
       "ratio": 0.814
     },
-    "corpus/net/accept_posture.lu": {
-      "midend": 1857,
-      "naive": 1878,
-      "ratio": 0.989
-    },
-    "corpus/net/accept_race.lu": {
-      "midend": 3314,
-      "naive": 3378,
-      "ratio": 0.981
-    },
-    "corpus/net/byte_roundtrip.lu": {
-      "midend": 931,
-      "naive": 911,
-      "ratio": 1.022
-    },
-    "corpus/net/echo_bytes.lu": {
-      "midend": 1180,
-      "naive": 1116,
-      "ratio": 1.057
-    },
-    "corpus/net/echo_roundtrip.lu": {
-      "midend": 930,
-      "naive": 935,
-      "ratio": 0.995
-    },
-    "corpus/net/inherit_listener.lu": {
-      "midend": 1576,
-      "naive": 1589,
-      "ratio": 0.992
-    },
-    "corpus/net/line_reader_bytes.lu": {
-      "midend": 1110,
-      "naive": 1127,
-      "ratio": 0.985
-    },
-    "corpus/net/nodelay.lu": {
-      "midend": 1362,
-      "naive": 1384,
-      "ratio": 0.984
-    },
-    "corpus/net/peer_close_after_serve.lu": {
-      "midend": 1064,
-      "naive": 1108,
-      "ratio": 0.96
-    },
-    "corpus/net/read_deadline.lu": {
-      "midend": 619,
-      "naive": 623,
-      "ratio": 0.994
-    },
-    "corpus/net/refused_row.lu": {
-      "midend": 447,
-      "naive": 450,
-      "ratio": 0.993
-    },
-    "corpus/net/reuse_port.lu": {
-      "midend": 1992,
-      "naive": 2005,
-      "ratio": 0.994
-    },
-    "corpus/net/spawn_accept.lu": {
-      "midend": 907,
-      "naive": 911,
-      "ratio": 0.996
-    },
-    "corpus/net/syscall_first.lu": {
-      "midend": 1120,
-      "naive": 1139,
-      "ratio": 0.983
-    },
-    "corpus/net/unix_echo.lu": {
-      "midend": 1150,
-      "naive": 1155,
-      "ratio": 0.996
-    },
-    "corpus/net/wait_readiness.lu": {
-      "midend": 1349,
-      "naive": 1379,
-      "ratio": 0.978
-    },
-    "corpus/net/writev_gather.lu": {
-      "midend": 1552,
-      "naive": 1484,
-      "ratio": 1.046
-    },
-    "corpus/os/args_cwd.lu": {
-      "midend": 114,
-      "naive": 115,
-      "ratio": 0.991
-    },
-    "corpus/os/cpus.lu": {
-      "midend": 134,
-      "naive": 134,
-      "ratio": 1.0
-    },
-    "corpus/os/env_roundtrip.lu": {
-      "midend": 265,
-      "naive": 265,
-      "ratio": 1.0
-    },
-    "corpus/os/exit_code.lu": {
-      "midend": 10,
-      "naive": 10,
-      "ratio": 1.0
-    },
-    "corpus/os/random_differs.lu": {
-      "midend": 158,
-      "naive": 142,
-      "ratio": 1.113
-    },
-    "corpus/os/random_edges.lu": {
-      "midend": 61,
-      "naive": 66,
-      "ratio": 0.924
-    },
-    "corpus/os/random_negative_trap.lu": {
-      "midend": 15,
-      "naive": 15,
-      "ratio": 1.0
-    },
-    "corpus/os/signal_loopback.lu": {
-      "midend": 165,
-      "naive": 165,
-      "ratio": 1.0
-    },
-    "corpus/os/signal_supervisor.lu": {
-      "midend": 196,
-      "naive": 199,
-      "ratio": 0.985
-    },
-    "corpus/os/spawn_rows.lu": {
-      "midend": 131,
-      "naive": 131,
-      "ratio": 1.0
-    },
-    "corpus/overflow.lu": {
-      "midend": 17,
-      "naive": 22,
-      "ratio": 0.773
-    },
-    "corpus/procs.lu": {
-      "midend": 443,
-      "naive": 443,
-      "ratio": 1.0
-    },
-    "corpus/projects/count.lu": {
-      "midend": 481,
-      "naive": 483,
-      "ratio": 0.996
-    },
-    "corpus/projects/count_dir.lu": {
-      "midend": 782,
-      "naive": 793,
-      "ratio": 0.986
-    },
-    "corpus/projects/rpn.lu": {
-      "midend": 663,
-      "naive": 694,
-      "ratio": 0.955
-    },
-    "corpus/projects/wordtree.lu": {
-      "midend": 379,
-      "naive": 473,
-      "ratio": 0.801
-    },
-    "corpus/resolve/bare_sibling/pair.lu": {
-      "midend": 10,
-      "naive": 10,
-      "ratio": 1.0
-    },
-    "corpus/resolve/forward/main.lu": {
-      "midend": 8,
-      "naive": 13,
-      "ratio": 0.615
-    },
-    "corpus/resolve/leaf_twins/main.lu": {
-      "midend": 26,
-      "naive": 44,
-      "ratio": 0.591
-    },
-    "corpus/resolve/pkgvis/main.lu": {
-      "midend": 8,
-      "naive": 13,
-      "ratio": 0.615
-    },
-    "corpus/resolve/plain_subdir/main.lu": {
-      "midend": 12,
-      "naive": 18,
-      "ratio": 0.667
-    },
-    "corpus/resolve/same_name/main.lu": {
-      "midend": 10,
-      "naive": 31,
-      "ratio": 0.323
-    },
-    "corpus/resolve/standalone_pair/left.lu": {
-      "midend": 8,
-      "naive": 8,
-      "ratio": 1.0
-    },
-    "corpus/resolve/standalone_pair/right.lu": {
-      "midend": 8,
-      "naive": 8,
-      "ratio": 1.0
-    },
-    "corpus/resolve/two_mod/main.lu": {
-      "midend": 8,
-      "naive": 26,
-      "ratio": 0.308
-    },
-    "corpus/rows/cross_module_arms/main.lu": {
-      "midend": 183,
-      "naive": 258,
-      "ratio": 0.709
-    },
-    "corpus/rows/else_tag_payload.lu": {
-      "midend": 157,
-      "naive": 128,
-      "ratio": 1.227
-    },
-    "corpus/rows/error_alias_ident.lu": {
-      "midend": 12,
-      "naive": 19,
-      "ratio": 0.632
-    },
-    "corpus/rows/error_alias_row.lu": {
-      "midend": 22,
-      "naive": 66,
-      "ratio": 0.333
-    },
-    "corpus/rows/error_alias_transparent.lu": {
-      "midend": 34,
-      "naive": 126,
-      "ratio": 0.27
-    },
-    "corpus/rows/error_alias_union.lu": {
-      "midend": 22,
-      "naive": 66,
-      "ratio": 0.333
-    },
-    "corpus/rows/eu_main_err_exit.lu": {
-      "midend": 33,
-      "naive": 33,
-      "ratio": 1.0
-    },
-    "corpus/rows/handler_diverge_call.lu": {
-      "midend": 17,
-      "naive": 82,
-      "ratio": 0.207
-    },
-    "corpus/rows/handler_diverge_trap.lu": {
-      "midend": 15,
-      "naive": 82,
-      "ratio": 0.183
-    },
-    "corpus/rows/handler_match_tags.lu": {
-      "midend": 118,
-      "naive": 249,
-      "ratio": 0.474
-    },
-    "corpus/rows/hof_tail.lu": {
-      "midend": 183,
-      "naive": 188,
-      "ratio": 0.973
-    },
-    "corpus/rows/inferred_private.lu": {
-      "midend": 196,
-      "naive": 143,
-      "ratio": 1.371
-    },
-    "corpus/rows/iter_diverging_else_bound.lu": {
-      "midend": 174,
-      "naive": 180,
-      "ratio": 0.967
-    },
-    "corpus/rows/nested_row_merge_payload.lu": {
-      "midend": 24,
-      "naive": 111,
-      "ratio": 0.216
-    },
-    "corpus/rows/nested_row_param.lu": {
-      "midend": 8,
-      "naive": 24,
-      "ratio": 0.333
-    },
-    "corpus/rows/nested_row_return.lu": {
-      "midend": 10,
-      "naive": 48,
-      "ratio": 0.208
-    },
-    "corpus/rows/open_row_growth.lu": {
-      "midend": 12,
-      "naive": 87,
-      "ratio": 0.138
-    },
-    "corpus/rows/propagate/main.lu": {
-      "midend": 27,
-      "naive": 341,
-      "ratio": 0.079
-    },
-    "corpus/rows/qmark_defer.lu": {
-      "midend": 284,
-      "naive": 307,
-      "ratio": 0.925
-    },
-    "corpus/rows/tag_arg_position.lu": {
-      "midend": 14,
-      "naive": 44,
-      "ratio": 0.318
-    },
-    "corpus/rows/tag_let_position.lu": {
-      "midend": 4,
-      "naive": 6,
-      "ratio": 0.667
-    },
-    "corpus/rows/tag_shadow_local.lu": {
-      "midend": 10,
-      "naive": 34,
-      "ratio": 0.294
-    },
-    "corpus/rows/to_int_parse.lu": {
+    "corpus/memory/volatile_widths.lu": {
       "midend": 80,
       "naive": 80,
       "ratio": 1.0
     },
-    "corpus/strings/boundary_battery.lu": {
-      "midend": 960,
-      "naive": 1000,
-      "ratio": 0.96
+    "corpus/net/accept_posture.lu": {
+      "midend": 1859,
+      "naive": 1880,
+      "ratio": 0.989
     },
-    "corpus/strings/builtin_methods.lu": {
-      "midend": 460,
-      "naive": 470,
-      "ratio": 0.979
+    "corpus/net/accept_race.lu": {
+      "midend": 3316,
+      "naive": 3380,
+      "ratio": 0.981
     },
-    "corpus/strings/byte_view.lu": {
-      "midend": 93,
-      "naive": 117,
-      "ratio": 0.795
+    "corpus/net/byte_roundtrip.lu": {
+      "midend": 934,
+      "naive": 914,
+      "ratio": 1.022
     },
-    "corpus/strings/byte_view_lend.lu": {
-      "midend": 182,
-      "naive": 457,
-      "ratio": 0.398
+    "corpus/net/echo_bytes.lu": {
+      "midend": 1182,
+      "naive": 1118,
+      "ratio": 1.057
     },
-    "corpus/strings/byte_view_slice_lent.lu": {
-      "midend": 87,
-      "naive": 190,
-      "ratio": 0.458
+    "corpus/net/echo_roundtrip.lu": {
+      "midend": 932,
+      "naive": 937,
+      "ratio": 0.995
     },
-    "corpus/strings/bytes_roundtrip.lu": {
-      "midend": 340,
-      "naive": 355,
-      "ratio": 0.958
+    "corpus/net/inherit_listener.lu": {
+      "midend": 1578,
+      "naive": 1591,
+      "ratio": 0.992
     },
-    "corpus/strings/bytes_view_walk.lu": {
-      "midend": 78,
-      "naive": 93,
-      "ratio": 0.839
+    "corpus/net/line_reader_bytes.lu": {
+      "midend": 1112,
+      "naive": 1129,
+      "ratio": 0.985
     },
-    "corpus/strings/char_battery.lu": {
-      "midend": 89,
-      "naive": 94,
-      "ratio": 0.947
-    },
-    "corpus/strings/char_interp.lu": {
-      "midend": 84,
-      "naive": 84,
-      "ratio": 1.0
-    },
-    "corpus/strings/char_order.lu": {
-      "midend": 46,
-      "naive": 67,
-      "ratio": 0.687
-    },
-    "corpus/strings/chars_walk.lu": {
-      "midend": 382,
-      "naive": 400,
-      "ratio": 0.955
-    },
-    "corpus/strings/concat_mix_char.lu": {
-      "midend": 146,
-      "naive": 156,
-      "ratio": 0.936
-    },
-    "corpus/strings/concat_plus.lu": {
-      "midend": 85,
-      "naive": 85,
-      "ratio": 1.0
-    },
-    "corpus/strings/empty_needle.lu": {
-      "midend": 71,
-      "naive": 71,
-      "ratio": 1.0
-    },
-    "corpus/strings/equality_lanes.lu": {
-      "midend": 362,
-      "naive": 361,
-      "ratio": 1.003
-    },
-    "corpus/strings/float_format.lu": {
-      "midend": 43,
-      "naive": 43,
-      "ratio": 1.0
-    },
-    "corpus/strings/format_spec_full.lu": {
-      "midend": 50,
-      "naive": 50,
-      "ratio": 1.0
-    },
-    "corpus/strings/format_spec_width.lu": {
-      "midend": 22,
-      "naive": 22,
-      "ratio": 1.0
-    },
-    "corpus/strings/from_utf8_border.lu": {
-      "midend": 1305,
-      "naive": 385,
-      "ratio": 3.39
-    },
-    "corpus/strings/interp_value_position.lu": {
-      "midend": 18,
-      "naive": 50,
-      "ratio": 0.36
-    },
-    "corpus/strings/interp_values.lu": {
-      "midend": 1068,
-      "naive": 959,
-      "ratio": 1.114
-    },
-    "corpus/strings/match_str_const_scrutinee.lu": {
-      "midend": 226,
-      "naive": 237,
-      "ratio": 0.954
-    },
-    "corpus/strings/match_str_dispatch.lu": {
-      "midend": 559,
-      "naive": 559,
-      "ratio": 1.0
-    },
-    "corpus/strings/multiline_escapes.lu": {
-      "midend": 8,
-      "naive": 8,
-      "ratio": 1.0
-    },
-    "corpus/strings/raw_fences.lu": {
-      "midend": 16,
-      "naive": 16,
-      "ratio": 1.0
-    },
-    "corpus/strings/slice_boundary_sweep.lu": {
-      "midend": 313,
-      "naive": 336,
-      "ratio": 0.932
-    },
-    "corpus/strings/slice_oob_trap.lu": {
-      "midend": 5,
-      "naive": 5,
-      "ratio": 1.0
-    },
-    "corpus/strings/split_clause.lu": {
-      "midend": 2005,
-      "naive": 1370,
-      "ratio": 1.464
-    },
-    "corpus/strings/str_uni_leading_zeros.lu": {
-      "midend": 66,
-      "naive": 66,
-      "ratio": 1.0
-    },
-    "corpus/strings/to_int.lu": {
-      "midend": 1629,
-      "naive": 645,
-      "ratio": 2.526
-    },
-    "corpus/test/conc_schedules_test.lu": {
-      "midend": 121,
-      "naive": 123,
+    "corpus/net/nodelay.lu": {
+      "midend": 1364,
+      "naive": 1386,
       "ratio": 0.984
     },
-    "corpus/time/monotonic.lu": {
-      "midend": 22,
-      "naive": 22,
+    "corpus/net/peer_close_after_serve.lu": {
+      "midend": 1066,
+      "naive": 1110,
+      "ratio": 0.96
+    },
+    "corpus/net/read_deadline.lu": {
+      "midend": 621,
+      "naive": 625,
+      "ratio": 0.994
+    },
+    "corpus/net/refused_row.lu": {
+      "midend": 448,
+      "naive": 451,
+      "ratio": 0.993
+    },
+    "corpus/net/reuse_port.lu": {
+      "midend": 1994,
+      "naive": 2007,
+      "ratio": 0.994
+    },
+    "corpus/net/spawn_accept.lu": {
+      "midend": 909,
+      "naive": 913,
+      "ratio": 0.996
+    },
+    "corpus/net/syscall_first.lu": {
+      "midend": 1122,
+      "naive": 1141,
+      "ratio": 0.983
+    },
+    "corpus/net/unix_echo.lu": {
+      "midend": 1176,
+      "naive": 1181,
+      "ratio": 0.996
+    },
+    "corpus/net/wait_readiness.lu": {
+      "midend": 1351,
+      "naive": 1381,
+      "ratio": 0.978
+    },
+    "corpus/net/writev_gather.lu": {
+      "midend": 1559,
+      "naive": 1491,
+      "ratio": 1.046
+    },
+    "corpus/net/writev_head_gather.lu": {
+      "midend": 1549,
+      "naive": 1420,
+      "ratio": 1.091
+    },
+    "corpus/os/args_cwd.lu": {
+      "midend": 115,
+      "naive": 116,
+      "ratio": 0.991
+    },
+    "corpus/os/chdir_relative.lu": {
+      "midend": 1084,
+      "naive": 941,
+      "ratio": 1.152
+    },
+    "corpus/os/core_limit_rows.lu": {
+      "midend": 931,
+      "naive": 365,
+      "ratio": 2.551
+    },
+    "corpus/os/cpus.lu": {
+      "midend": 135,
+      "naive": 135,
       "ratio": 1.0
     },
-    "corpus/traits/dyn_ok.lu": {
-      "midend": 69,
-      "naive": 136,
-      "ratio": 0.507
-    },
-    "corpus/traits/op_eq_imported/main.lu": {
-      "midend": 113,
-      "naive": 66,
-      "ratio": 1.712
-    },
-    "corpus/traits/op_eq_inverting.lu": {
-      "midend": 22,
-      "naive": 40,
-      "ratio": 0.55
-    },
-    "corpus/traits/op_money.lu": {
-      "midend": 22,
-      "naive": 82,
-      "ratio": 0.268
-    },
-    "corpus/traits/op_ord_struct.lu": {
-      "midend": 34,
-      "naive": 142,
-      "ratio": 0.239
-    },
-    "corpus/traits/op_total_num.lu": {
-      "midend": 165,
-      "naive": 234,
-      "ratio": 0.705
-    },
-    "corpus/traits/prim_impl.lu": {
-      "midend": 10,
-      "naive": 28,
-      "ratio": 0.357
-    },
-    "corpus/typecheck/bool_cmp.lu": {
-      "midend": 40,
-      "naive": 44,
-      "ratio": 0.909
-    },
-    "corpus/typecheck/byte_casts.lu": {
-      "midend": 39,
-      "naive": 39,
+    "corpus/os/env_roundtrip.lu": {
+      "midend": 266,
+      "naive": 266,
       "ratio": 1.0
     },
-    "corpus/typecheck/byte_shapes.lu": {
-      "midend": 178,
-      "naive": 288,
-      "ratio": 0.618
+    "corpus/os/env_unset.lu": {
+      "midend": 464,
+      "naive": 464,
+      "ratio": 1.0
     },
-    "corpus/typecheck/cast_int_to_float.lu": {
+    "corpus/os/exec_rows.lu": {
+      "midend": 313,
+      "naive": 313,
+      "ratio": 1.0
+    },
+    "corpus/os/exit_code.lu": {
+      "midend": 11,
+      "naive": 11,
+      "ratio": 1.0
+    },
+    "corpus/os/group_rows.lu": {
+      "midend": 2218,
+      "naive": 893,
+      "ratio": 2.484
+    },
+    "corpus/os/ids_read.lu": {
+      "midend": 818,
+      "naive": 823,
+      "ratio": 0.994
+    },
+    "corpus/os/ids_rows.lu": {
+      "midend": 2163,
+      "naive": 1681,
+      "ratio": 1.287
+    },
+    "corpus/os/job_poll_rows.lu": {
+      "midend": 452,
+      "naive": 457,
+      "ratio": 0.989
+    },
+    "corpus/os/job_rows.lu": {
+      "midend": 816,
+      "naive": 816,
+      "ratio": 1.0
+    },
+    "corpus/os/pipe_round_trip.lu": {
+      "midend": 947,
+      "naive": 773,
+      "ratio": 1.225
+    },
+    "corpus/os/random_differs.lu": {
+      "midend": 159,
+      "naive": 143,
+      "ratio": 1.112
+    },
+    "corpus/os/random_edges.lu": {
+      "midend": 62,
+      "naive": 67,
+      "ratio": 0.925
+    },
+    "corpus/os/random_negative_trap.lu": {
       "midend": 16,
       "naive": 16,
       "ratio": 1.0
     },
-    "corpus/typecheck/cast_set.lu": {
-      "midend": 4,
-      "naive": 4,
+    "corpus/os/signal_loopback.lu": {
+      "midend": 167,
+      "naive": 167,
       "ratio": 1.0
     },
-    "corpus/typecheck/closure_return.lu": {
-      "midend": 274,
-      "naive": 285,
-      "ratio": 0.961
+    "corpus/os/signal_one_rows.lu": {
+      "midend": 858,
+      "naive": 626,
+      "ratio": 1.371
     },
-    "corpus/typecheck/float_nan_cmp.lu": {
-      "midend": 50,
-      "naive": 50,
+    "corpus/os/signal_reserved_rows.lu": {
+      "midend": 1068,
+      "naive": 1121,
+      "ratio": 0.953
+    },
+    "corpus/os/signal_shell_rows.lu": {
+      "midend": 1507,
+      "naive": 820,
+      "ratio": 1.838
+    },
+    "corpus/os/signal_supervisor.lu": {
+      "midend": 198,
+      "naive": 201,
+      "ratio": 0.985
+    },
+    "corpus/os/spawn_fds_rows.lu": {
+      "midend": 372,
+      "naive": 372,
       "ratio": 1.0
     },
-    "corpus/typecheck/float_rem.lu": {
-      "midend": 21,
+    "corpus/os/spawn_rows.lu": {
+      "midend": 132,
+      "naive": 132,
+      "ratio": 1.0
+    },
+    "corpus/os/term_editor_rows.lu": {
+      "midend": 535,
+      "naive": 270,
+      "ratio": 1.981
+    },
+    "corpus/os/umask.lu": {
+      "midend": 407,
+      "naive": 145,
+      "ratio": 2.807
+    },
+    "corpus/overflow.lu": {
+      "midend": 18,
       "naive": 23,
-      "ratio": 0.913
+      "ratio": 0.783
     },
-    "corpus/typecheck/fn_value_captured_int.lu": {
-      "midend": 94,
-      "naive": 86,
-      "ratio": 1.093
+    "corpus/procs.lu": {
+      "midend": 527,
+      "naive": 528,
+      "ratio": 0.998
     },
-    "corpus/typecheck/fn_value_capturing.lu": {
-      "midend": 73,
-      "naive": 67,
-      "ratio": 1.09
+    "corpus/projects/count.lu": {
+      "midend": 536,
+      "naive": 538,
+      "ratio": 0.996
     },
-    "corpus/typecheck/fn_value_import/main.lu": {
-      "midend": 61,
-      "naive": 99,
-      "ratio": 0.616
+    "corpus/projects/count_dir.lu": {
+      "midend": 885,
+      "naive": 896,
+      "ratio": 0.988
     },
-    "corpus/typecheck/let_shadow_var_ok.lu": {
-      "midend": 8,
-      "naive": 31,
-      "ratio": 0.258
+    "corpus/projects/rpn.lu": {
+      "midend": 664,
+      "naive": 695,
+      "ratio": 0.955
     },
-    "corpus/typecheck/main_unit_row.lu": {
-      "midend": 7,
-      "naive": 7,
-      "ratio": 1.0
+    "corpus/projects/wordtree.lu": {
+      "midend": 380,
+      "naive": 474,
+      "ratio": 0.802
     },
-    "corpus/typecheck/match_arm_product_unreachable.lu": {
-      "midend": 6,
+    "corpus/regions.lu": {
+      "midend": 182,
+      "naive": 214,
+      "ratio": 0.85
+    },
+    "corpus/resolve/bare_sibling/pair.lu": {
+      "midend": 11,
       "naive": 11,
-      "ratio": 0.545
-    },
-    "corpus/typecheck/match_chain_reuse.lu": {
-      "midend": 96,
-      "naive": 175,
-      "ratio": 0.549
-    },
-    "corpus/typecheck/match_exhaustive.lu": {
-      "midend": 17,
-      "naive": 141,
-      "ratio": 0.121
-    },
-    "corpus/typecheck/match_guard_const.lu": {
-      "midend": 41,
-      "naive": 62,
-      "ratio": 0.661
-    },
-    "corpus/typecheck/match_narrow_scrutinee.lu": {
-      "midend": 43,
-      "naive": 62,
-      "ratio": 0.694
-    },
-    "corpus/typecheck/match_unreachable.lu": {
-      "midend": 5,
-      "naive": 6,
-      "ratio": 0.833
-    },
-    "corpus/typecheck/nested_fn_value.lu": {
-      "midend": 40,
-      "naive": 40,
       "ratio": 1.0
     },
-    "corpus/typecheck/numlit_annotation_float.lu": {
-      "midend": 8,
-      "naive": 8,
-      "ratio": 1.0
-    },
-    "corpus/typecheck/numlit_arith_through.lu": {
-      "midend": 10,
-      "naive": 10,
-      "ratio": 1.0
-    },
-    "corpus/typecheck/numlit_c2f.lu": {
-      "midend": 20,
-      "naive": 20,
-      "ratio": 1.0
-    },
-    "corpus/typecheck/numlit_compare_adopts.lu": {
-      "midend": 14,
+    "corpus/resolve/forward/main.lu": {
+      "midend": 9,
       "naive": 14,
-      "ratio": 1.0
+      "ratio": 0.643
     },
-    "corpus/typecheck/numlit_div_float.lu": {
+    "corpus/resolve/leaf_twins/main.lu": {
+      "midend": 27,
+      "naive": 45,
+      "ratio": 0.6
+    },
+    "corpus/resolve/pkgvis/main.lu": {
+      "midend": 9,
+      "naive": 14,
+      "ratio": 0.643
+    },
+    "corpus/resolve/plain_subdir/main.lu": {
+      "midend": 13,
+      "naive": 19,
+      "ratio": 0.684
+    },
+    "corpus/resolve/same_name/main.lu": {
+      "midend": 11,
+      "naive": 32,
+      "ratio": 0.344
+    },
+    "corpus/resolve/standalone_pair/left.lu": {
       "midend": 9,
       "naive": 9,
       "ratio": 1.0
     },
-    "corpus/typecheck/numlit_div_int.lu": {
-      "midend": 8,
-      "naive": 8,
+    "corpus/resolve/standalone_pair/right.lu": {
+      "midend": 9,
+      "naive": 9,
       "ratio": 1.0
     },
-    "corpus/typecheck/numlit_extremes.lu": {
+    "corpus/resolve/two_mod/main.lu": {
+      "midend": 9,
+      "naive": 27,
+      "ratio": 0.333
+    },
+    "corpus/rows/cross_module_arms/main.lu": {
+      "midend": 184,
+      "naive": 259,
+      "ratio": 0.71
+    },
+    "corpus/rows/defer_else_handles.lu": {
+      "midend": 362,
+      "naive": 235,
+      "ratio": 1.54
+    },
+    "corpus/rows/else_own_failure.lu": {
+      "midend": 450,
+      "naive": 432,
+      "ratio": 1.042
+    },
+    "corpus/rows/else_return_tag.lu": {
+      "midend": 185,
+      "naive": 273,
+      "ratio": 0.678
+    },
+    "corpus/rows/else_tag_payload.lu": {
+      "midend": 158,
+      "naive": 129,
+      "ratio": 1.225
+    },
+    "corpus/rows/else_try_block.lu": {
+      "midend": 206,
+      "naive": 226,
+      "ratio": 0.912
+    },
+    "corpus/rows/else_try_call_arg.lu": {
+      "midend": 182,
+      "naive": 202,
+      "ratio": 0.901
+    },
+    "corpus/rows/else_try_handler.lu": {
+      "midend": 437,
+      "naive": 395,
+      "ratio": 1.106
+    },
+    "corpus/rows/else_try_index.lu": {
+      "midend": 174,
+      "naive": 299,
+      "ratio": 0.582
+    },
+    "corpus/rows/else_try_nested_else.lu": {
+      "midend": 329,
+      "naive": 319,
+      "ratio": 1.031
+    },
+    "corpus/rows/errdefer_block_loop_break.lu": {
+      "midend": 206,
+      "naive": 236,
+      "ratio": 0.873
+    },
+    "corpus/rows/errdefer_block_nested.lu": {
+      "midend": 261,
+      "naive": 247,
+      "ratio": 1.057
+    },
+    "corpus/rows/errdefer_block_row.lu": {
+      "midend": 222,
+      "naive": 202,
+      "ratio": 1.099
+    },
+    "corpus/rows/errdefer_fn_tail_control.lu": {
+      "midend": 177,
+      "naive": 281,
+      "ratio": 0.63
+    },
+    "corpus/rows/error_alias_ident.lu": {
+      "midend": 13,
+      "naive": 20,
+      "ratio": 0.65
+    },
+    "corpus/rows/error_alias_qualified/main.lu": {
+      "midend": 632,
+      "naive": 482,
+      "ratio": 1.311
+    },
+    "corpus/rows/error_alias_row.lu": {
+      "midend": 23,
+      "naive": 67,
+      "ratio": 0.343
+    },
+    "corpus/rows/error_alias_transparent.lu": {
+      "midend": 35,
+      "naive": 127,
+      "ratio": 0.276
+    },
+    "corpus/rows/error_alias_union.lu": {
+      "midend": 23,
+      "naive": 67,
+      "ratio": 0.343
+    },
+    "corpus/rows/eu_bind_empty_row.lu": {
+      "midend": 25,
+      "naive": 23,
+      "ratio": 1.087
+    },
+    "corpus/rows/eu_bind_empty_row_handled.lu": {
+      "midend": 24,
+      "naive": 81,
+      "ratio": 0.296
+    },
+    "corpus/rows/eu_bind_empty_row_unit.lu": {
+      "midend": 15,
+      "naive": 15,
+      "ratio": 1.0
+    },
+    "corpus/rows/eu_main_err_exit.lu": {
+      "midend": 34,
+      "naive": 34,
+      "ratio": 1.0
+    },
+    "corpus/rows/first_list_literal_sum.lu": {
+      "midend": 91,
+      "naive": 103,
+      "ratio": 0.883
+    },
+    "corpus/rows/handler_diverge_call.lu": {
+      "midend": 18,
+      "naive": 83,
+      "ratio": 0.217
+    },
+    "corpus/rows/handler_diverge_trap.lu": {
+      "midend": 16,
+      "naive": 83,
+      "ratio": 0.193
+    },
+    "corpus/rows/handler_match_tags.lu": {
+      "midend": 119,
+      "naive": 250,
+      "ratio": 0.476
+    },
+    "corpus/rows/hof_tail.lu": {
+      "midend": 208,
+      "naive": 218,
+      "ratio": 0.954
+    },
+    "corpus/rows/inferred_private.lu": {
+      "midend": 211,
+      "naive": 158,
+      "ratio": 1.335
+    },
+    "corpus/rows/iter_diverging_else_bound.lu": {
+      "midend": 175,
+      "naive": 181,
+      "ratio": 0.967
+    },
+    "corpus/rows/match_row_bare_tag.lu": {
+      "midend": 241,
+      "naive": 189,
+      "ratio": 1.275
+    },
+    "corpus/rows/match_row_else_control.lu": {
+      "midend": 204,
+      "naive": 179,
+      "ratio": 1.14
+    },
+    "corpus/rows/match_row_nested.lu": {
+      "midend": 225,
+      "naive": 346,
+      "ratio": 0.65
+    },
+    "corpus/rows/match_row_payload_tag.lu": {
+      "midend": 323,
+      "naive": 349,
+      "ratio": 0.926
+    },
+    "corpus/rows/match_row_try_scrutinee.lu": {
+      "midend": 204,
+      "naive": 225,
+      "ratio": 0.907
+    },
+    "corpus/rows/match_row_wild_each_half.lu": {
+      "midend": 393,
+      "naive": 335,
+      "ratio": 1.173
+    },
+    "corpus/rows/nested_row_merge_payload.lu": {
+      "midend": 25,
+      "naive": 112,
+      "ratio": 0.223
+    },
+    "corpus/rows/nested_row_param.lu": {
+      "midend": 9,
+      "naive": 25,
+      "ratio": 0.36
+    },
+    "corpus/rows/nested_row_return.lu": {
+      "midend": 11,
+      "naive": 49,
+      "ratio": 0.224
+    },
+    "corpus/rows/open_row_growth.lu": {
+      "midend": 13,
+      "naive": 88,
+      "ratio": 0.148
+    },
+    "corpus/rows/propagate/main.lu": {
+      "midend": 28,
+      "naive": 342,
+      "ratio": 0.082
+    },
+    "corpus/rows/qmark_defer.lu": {
+      "midend": 285,
+      "naive": 308,
+      "ratio": 0.925
+    },
+    "corpus/rows/raised_call_arg_position.lu": {
+      "midend": 166,
+      "naive": 365,
+      "ratio": 0.455
+    },
+    "corpus/rows/tag_arg_position.lu": {
+      "midend": 15,
+      "naive": 45,
+      "ratio": 0.333
+    },
+    "corpus/rows/tag_let_position.lu": {
+      "midend": 5,
+      "naive": 7,
+      "ratio": 0.714
+    },
+    "corpus/rows/tag_shadow_local.lu": {
+      "midend": 11,
+      "naive": 35,
+      "ratio": 0.314
+    },
+    "corpus/rows/to_int_parse.lu": {
+      "midend": 81,
+      "naive": 81,
+      "ratio": 1.0
+    },
+    "corpus/rows/unit_discard_fallible_body_stmt.lu": {
+      "midend": 22,
+      "naive": 75,
+      "ratio": 0.293
+    },
+    "corpus/rows/unit_discard_if_value.lu": {
+      "midend": 17,
+      "naive": 47,
+      "ratio": 0.362
+    },
+    "corpus/rows/unit_discard_raise_stmts.lu": {
+      "midend": 119,
+      "naive": 181,
+      "ratio": 0.657
+    },
+    "corpus/rows/unit_discard_raise_unit_fn.lu": {
+      "midend": 45,
+      "naive": 58,
+      "ratio": 0.776
+    },
+    "corpus/rows/unit_discard_return_operand.lu": {
+      "midend": 13,
+      "naive": 18,
+      "ratio": 0.722
+    },
+    "corpus/rows/unit_discard_tail_if.lu": {
+      "midend": 50,
+      "naive": 103,
+      "ratio": 0.485
+    },
+    "corpus/rows/unit_discard_tail_if_chain.lu": {
+      "midend": 21,
+      "naive": 48,
+      "ratio": 0.438
+    },
+    "corpus/rows/unit_discard_tail_if_closure.lu": {
+      "midend": 47,
+      "naive": 51,
+      "ratio": 0.922
+    },
+    "corpus/rows/unit_discard_tail_if_leaves.lu": {
+      "midend": 75,
+      "naive": 173,
+      "ratio": 0.434
+    },
+    "corpus/rows/unit_discard_tail_if_value_row.lu": {
+      "midend": 19,
+      "naive": 60,
+      "ratio": 0.317
+    },
+    "corpus/rows/unit_discard_try_leaves.lu": {
+      "midend": 17,
+      "naive": 58,
+      "ratio": 0.293
+    },
+    "corpus/rows/unit_discard_unit_main.lu": {
+      "midend": 10,
+      "naive": 15,
+      "ratio": 0.667
+    },
+    "corpus/strings/boundary_battery.lu": {
+      "midend": 961,
+      "naive": 1001,
+      "ratio": 0.96
+    },
+    "corpus/strings/builtin_methods.lu": {
+      "midend": 461,
+      "naive": 471,
+      "ratio": 0.979
+    },
+    "corpus/strings/byte_view.lu": {
+      "midend": 94,
+      "naive": 118,
+      "ratio": 0.797
+    },
+    "corpus/strings/byte_view_lend.lu": {
+      "midend": 183,
+      "naive": 458,
+      "ratio": 0.4
+    },
+    "corpus/strings/byte_view_slice_lent.lu": {
+      "midend": 88,
+      "naive": 191,
+      "ratio": 0.461
+    },
+    "corpus/strings/bytes_roundtrip.lu": {
+      "midend": 341,
+      "naive": 356,
+      "ratio": 0.958
+    },
+    "corpus/strings/bytes_view_walk.lu": {
+      "midend": 79,
+      "naive": 94,
+      "ratio": 0.84
+    },
+    "corpus/strings/char_battery.lu": {
+      "midend": 90,
+      "naive": 95,
+      "ratio": 0.947
+    },
+    "corpus/strings/char_interp.lu": {
+      "midend": 85,
+      "naive": 85,
+      "ratio": 1.0
+    },
+    "corpus/strings/char_order.lu": {
+      "midend": 47,
+      "naive": 68,
+      "ratio": 0.691
+    },
+    "corpus/strings/chars_walk.lu": {
+      "midend": 383,
+      "naive": 401,
+      "ratio": 0.955
+    },
+    "corpus/strings/concat_mix_char.lu": {
+      "midend": 147,
+      "naive": 157,
+      "ratio": 0.936
+    },
+    "corpus/strings/concat_plus.lu": {
+      "midend": 86,
+      "naive": 86,
+      "ratio": 1.0
+    },
+    "corpus/strings/dollar_brace_escape.lu": {
+      "midend": 13,
+      "naive": 13,
+      "ratio": 1.0
+    },
+    "corpus/strings/empty_needle.lu": {
+      "midend": 72,
+      "naive": 72,
+      "ratio": 1.0
+    },
+    "corpus/strings/end_relative_get.lu": {
+      "midend": 668,
+      "naive": 709,
+      "ratio": 0.942
+    },
+    "corpus/strings/equality_lanes.lu": {
+      "midend": 363,
+      "naive": 362,
+      "ratio": 1.003
+    },
+    "corpus/strings/float_format.lu": {
+      "midend": 44,
+      "naive": 44,
+      "ratio": 1.0
+    },
+    "corpus/strings/format_spec_full.lu": {
+      "midend": 51,
+      "naive": 51,
+      "ratio": 1.0
+    },
+    "corpus/strings/format_spec_width.lu": {
+      "midend": 23,
+      "naive": 23,
+      "ratio": 1.0
+    },
+    "corpus/strings/from_utf8_border.lu": {
+      "midend": 1306,
+      "naive": 386,
+      "ratio": 3.383
+    },
+    "corpus/strings/interp_value_position.lu": {
+      "midend": 19,
+      "naive": 51,
+      "ratio": 0.373
+    },
+    "corpus/strings/interp_values.lu": {
+      "midend": 1070,
+      "naive": 961,
+      "ratio": 1.113
+    },
+    "corpus/strings/match_str_const_scrutinee.lu": {
+      "midend": 227,
+      "naive": 238,
+      "ratio": 0.954
+    },
+    "corpus/strings/match_str_dispatch.lu": {
+      "midend": 560,
+      "naive": 560,
+      "ratio": 1.0
+    },
+    "corpus/strings/multiline_escapes.lu": {
+      "midend": 9,
+      "naive": 9,
+      "ratio": 1.0
+    },
+    "corpus/strings/raw_fences.lu": {
+      "midend": 17,
+      "naive": 17,
+      "ratio": 1.0
+    },
+    "corpus/strings/slice_boundary_sweep.lu": {
+      "midend": 314,
+      "naive": 337,
+      "ratio": 0.932
+    },
+    "corpus/strings/slice_oob_trap.lu": {
+      "midend": 6,
+      "naive": 6,
+      "ratio": 1.0
+    },
+    "corpus/strings/split_clause.lu": {
+      "midend": 2006,
+      "naive": 1371,
+      "ratio": 1.463
+    },
+    "corpus/strings/str_uni_leading_zeros.lu": {
+      "midend": 67,
+      "naive": 67,
+      "ratio": 1.0
+    },
+    "corpus/strings/to_int.lu": {
+      "midend": 1605,
+      "naive": 643,
+      "ratio": 2.496
+    },
+    "corpus/test/conc_schedules_test.lu": {
+      "midend": 198,
+      "naive": 198,
+      "ratio": 1.0
+    },
+    "corpus/time/monotonic.lu": {
+      "midend": 23,
+      "naive": 23,
+      "ratio": 1.0
+    },
+    "corpus/traits/bound_literal_default.lu": {
+      "midend": 29,
+      "naive": 29,
+      "ratio": 1.0
+    },
+    "corpus/traits/dyn_ok.lu": {
+      "midend": 70,
+      "naive": 137,
+      "ratio": 0.511
+    },
+    "corpus/traits/op_eq_imported/main.lu": {
+      "midend": 114,
+      "naive": 67,
+      "ratio": 1.701
+    },
+    "corpus/traits/op_eq_inverting.lu": {
+      "midend": 23,
+      "naive": 41,
+      "ratio": 0.561
+    },
+    "corpus/traits/op_eq_item_import/main.lu": {
+      "midend": 74,
+      "naive": 56,
+      "ratio": 1.321
+    },
+    "corpus/traits/op_money.lu": {
+      "midend": 23,
+      "naive": 83,
+      "ratio": 0.277
+    },
+    "corpus/traits/op_ord_struct.lu": {
+      "midend": 35,
+      "naive": 143,
+      "ratio": 0.245
+    },
+    "corpus/traits/op_total_num.lu": {
+      "midend": 166,
+      "naive": 228,
+      "ratio": 0.728
+    },
+    "corpus/traits/prim_impl.lu": {
+      "midend": 11,
+      "naive": 29,
+      "ratio": 0.379
+    },
+    "corpus/typecheck/bool_cmp.lu": {
+      "midend": 41,
+      "naive": 45,
+      "ratio": 0.911
+    },
+    "corpus/typecheck/byte_casts.lu": {
+      "midend": 40,
+      "naive": 40,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/byte_shapes.lu": {
+      "midend": 189,
+      "naive": 296,
+      "ratio": 0.639
+    },
+    "corpus/typecheck/cast_int_to_float.lu": {
+      "midend": 17,
+      "naive": 17,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/cast_narrow_in_range.lu": {
+      "midend": 23,
+      "naive": 23,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/cast_narrow_wrapping_truncates.lu": {
+      "midend": 21,
+      "naive": 21,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/cast_set.lu": {
+      "midend": 5,
+      "naive": 5,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/closure_captured_closure/main.lu": {
+      "midend": 303,
+      "naive": 364,
+      "ratio": 0.832
+    },
+    "corpus/typecheck/closure_entry_to_module/main.lu": {
+      "midend": 167,
+      "naive": 313,
+      "ratio": 0.534
+    },
+    "corpus/typecheck/closure_inlined_one_liner/main.lu": {
+      "midend": 1659,
+      "naive": 2342,
+      "ratio": 0.708
+    },
+    "corpus/typecheck/closure_module_to_entry/main.lu": {
+      "midend": 278,
+      "naive": 247,
+      "ratio": 1.126
+    },
+    "corpus/typecheck/closure_module_to_module/main.lu": {
+      "midend": 281,
+      "naive": 252,
+      "ratio": 1.115
+    },
+    "corpus/typecheck/closure_param_call.lu": {
+      "midend": 61,
+      "naive": 61,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/closure_return.lu": {
+      "midend": 281,
+      "naive": 292,
+      "ratio": 0.962
+    },
+    "corpus/typecheck/float_nan_cmp.lu": {
+      "midend": 51,
+      "naive": 51,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/float_rem.lu": {
+      "midend": 22,
+      "naive": 24,
+      "ratio": 0.917
+    },
+    "corpus/typecheck/fn_never_extern.lu": {
+      "midend": 12,
+      "naive": 47,
+      "ratio": 0.255
+    },
+    "corpus/typecheck/fn_never_handler_arm.lu": {
+      "midend": 12,
+      "naive": 68,
+      "ratio": 0.176
+    },
+    "corpus/typecheck/fn_never_trap.lu": {
+      "midend": 16,
+      "naive": 72,
+      "ratio": 0.222
+    },
+    "corpus/typecheck/fn_param_shadows_import/main.lu": {
+      "midend": 26,
+      "naive": 29,
+      "ratio": 0.897
+    },
+    "corpus/typecheck/fn_param_shadows_item.lu": {
+      "midend": 31,
+      "naive": 28,
+      "ratio": 1.107
+    },
+    "corpus/typecheck/fn_value_captured_int.lu": {
+      "midend": 96,
+      "naive": 88,
+      "ratio": 1.091
+    },
+    "corpus/typecheck/fn_value_capturing.lu": {
+      "midend": 74,
+      "naive": 68,
+      "ratio": 1.088
+    },
+    "corpus/typecheck/fn_value_import/main.lu": {
+      "midend": 62,
+      "naive": 100,
+      "ratio": 0.62
+    },
+    "corpus/typecheck/fn_value_two_file_module/main.lu": {
+      "midend": 169,
+      "naive": 201,
+      "ratio": 0.841
+    },
+    "corpus/typecheck/int_not_byte.lu": {
+      "midend": 12,
+      "naive": 12,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/int_not_mask.lu": {
+      "midend": 18,
+      "naive": 18,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/int_not_signed.lu": {
+      "midend": 18,
+      "naive": 18,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/int_shift_value.lu": {
+      "midend": 196,
+      "naive": 400,
+      "ratio": 0.49
+    },
+    "corpus/typecheck/int_truth_signed_print.lu": {
+      "midend": 43,
+      "naive": 43,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/int_truth_u64_arith.lu": {
+      "midend": 34,
+      "naive": 34,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/int_truth_u64_cast.lu": {
+      "midend": 36,
+      "naive": 36,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/int_truth_u64_not.lu": {
       "midend": 14,
       "naive": 14,
       "ratio": 1.0
     },
-    "corpus/typecheck/numlit_list_element_width.lu": {
-      "midend": 131,
-      "naive": 131,
+    "corpus/typecheck/int_truth_unsigned_print.lu": {
+      "midend": 41,
+      "naive": 41,
       "ratio": 1.0
     },
-    "corpus/typecheck/numlit_u64_edge.lu": {
+    "corpus/typecheck/int_truth_wrap_div_signed.lu": {
+      "midend": 52,
+      "naive": 52,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/int_truth_wrap_div_unsigned.lu": {
+      "midend": 38,
+      "naive": 38,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/int_truth_wrap_mul_wide.lu": {
+      "midend": 14,
+      "naive": 14,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/int_truth_wrap_neg.lu": {
+      "midend": 32,
+      "naive": 32,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/int_truth_wrap_signed.lu": {
+      "midend": 69,
+      "naive": 69,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/int_truth_wrap_unsigned.lu": {
+      "midend": 69,
+      "naive": 69,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/let_shadow_var_ok.lu": {
+      "midend": 9,
+      "naive": 32,
+      "ratio": 0.281
+    },
+    "corpus/typecheck/list_lit_elem_i32.lu": {
+      "midend": 58,
+      "naive": 63,
+      "ratio": 0.921
+    },
+    "corpus/typecheck/list_tuple_elem.lu": {
+      "midend": 166,
+      "naive": 188,
+      "ratio": 0.883
+    },
+    "corpus/typecheck/main_unit_row.lu": {
       "midend": 8,
       "naive": 8,
       "ratio": 1.0
     },
-    "corpus/typecheck/receiver_modes.lu": {
-      "midend": 13,
-      "naive": 48,
-      "ratio": 0.271
+    "corpus/typecheck/match_arm_product_unreachable.lu": {
+      "midend": 7,
+      "naive": 12,
+      "ratio": 0.583
     },
-    "corpus/typecheck/unit_context_discard.lu": {
-      "midend": 276,
-      "naive": 310,
-      "ratio": 0.89
+    "corpus/typecheck/match_chain_reuse.lu": {
+      "midend": 97,
+      "naive": 176,
+      "ratio": 0.551
     },
-    "corpus/typecheck/unit_tail_value_discard.lu": {
-      "midend": 103,
-      "naive": 137,
-      "ratio": 0.752
+    "corpus/typecheck/match_exhaustive.lu": {
+      "midend": 18,
+      "naive": 142,
+      "ratio": 0.127
     },
-    "corpus/typecheck/variant_value/main.lu": {
-      "midend": 14,
-      "naive": 53,
-      "ratio": 0.264
+    "corpus/typecheck/match_guard_const.lu": {
+      "midend": 42,
+      "naive": 63,
+      "ratio": 0.667
     },
-    "corpus/typecheck/wrap_as_int_in_range.lu": {
+    "corpus/typecheck/match_narrow_scrutinee.lu": {
+      "midend": 44,
+      "naive": 63,
+      "ratio": 0.698
+    },
+    "corpus/typecheck/match_unreachable.lu": {
+      "midend": 6,
+      "naive": 7,
+      "ratio": 0.857
+    },
+    "corpus/typecheck/nested_fn_value.lu": {
+      "midend": 44,
+      "naive": 44,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_annotation_float.lu": {
+      "midend": 9,
+      "naive": 9,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_arith_through.lu": {
+      "midend": 11,
+      "naive": 11,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_binding_value_later_use.lu": {
+      "midend": 78,
+      "naive": 70,
+      "ratio": 1.114
+    },
+    "corpus/typecheck/numlit_c2f.lu": {
+      "midend": 21,
+      "naive": 21,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_compare_adopts.lu": {
+      "midend": 15,
+      "naive": 15,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_div_float.lu": {
       "midend": 10,
       "naive": 10,
       "ratio": 1.0
     },
-    "corpus/typecheck/wrap_narrow_cast.lu": {
+    "corpus/typecheck/numlit_div_int.lu": {
+      "midend": 9,
+      "naive": 9,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_extremes.lu": {
+      "midend": 15,
+      "naive": 15,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_list_element_width.lu": {
+      "midend": 132,
+      "naive": 132,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_radix.lu": {
+      "midend": 57,
+      "naive": 117,
+      "ratio": 0.487
+    },
+    "corpus/typecheck/numlit_u64_edge.lu": {
+      "midend": 9,
+      "naive": 9,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/numlit_wrapping_countdown.lu": {
+      "midend": 91,
+      "naive": 147,
+      "ratio": 0.619
+    },
+    "corpus/typecheck/receiver_modes.lu": {
+      "midend": 14,
+      "naive": 49,
+      "ratio": 0.286
+    },
+    "corpus/typecheck/straight_line_as_char.lu": {
       "midend": 12,
-      "naive": 12,
+      "naive": 37,
+      "ratio": 0.324
+    },
+    "corpus/typecheck/straight_line_as_narrow.lu": {
+      "midend": 11,
+      "naive": 30,
+      "ratio": 0.367
+    },
+    "corpus/typecheck/straight_line_as_sign.lu": {
+      "midend": 14,
+      "naive": 49,
+      "ratio": 0.286
+    },
+    "corpus/typecheck/straight_line_shl_assign.lu": {
+      "midend": 13,
+      "naive": 51,
+      "ratio": 0.255
+    },
+    "corpus/typecheck/straight_line_shl_const.lu": {
+      "midend": 11,
+      "naive": 32,
+      "ratio": 0.344
+    },
+    "corpus/typecheck/straight_line_shr_var.lu": {
+      "midend": 12,
+      "naive": 39,
+      "ratio": 0.308
+    },
+    "corpus/typecheck/straight_line_str_eq.lu": {
+      "midend": 36,
+      "naive": 106,
+      "ratio": 0.34
+    },
+    "corpus/typecheck/straight_line_str_order.lu": {
+      "midend": 37,
+      "naive": 80,
+      "ratio": 0.463
+    },
+    "corpus/typecheck/straight_line_wrap_div.lu": {
+      "midend": 12,
+      "naive": 32,
+      "ratio": 0.375
+    },
+    "corpus/typecheck/straight_line_wrap_rem.lu": {
+      "midend": 12,
+      "naive": 30,
+      "ratio": 0.4
+    },
+    "corpus/typecheck/unit_context_discard.lu": {
+      "midend": 277,
+      "naive": 311,
+      "ratio": 0.891
+    },
+    "corpus/typecheck/unit_tail_value_discard.lu": {
+      "midend": 104,
+      "naive": 138,
+      "ratio": 0.754
+    },
+    "corpus/typecheck/variant_value/main.lu": {
+      "midend": 15,
+      "naive": 54,
+      "ratio": 0.278
+    },
+    "corpus/typecheck/wrap_as_int_in_range.lu": {
+      "midend": 11,
+      "naive": 11,
+      "ratio": 1.0
+    },
+    "corpus/typecheck/wrap_narrow_cast.lu": {
+      "midend": 13,
+      "naive": 13,
       "ratio": 1.0
     }
   },
-  "recorded": "linux/x86-64 CI run 34354712981 (branch s143 at ef9f9e8 = trunk 5c729e8 + the s143 spec and ratchet commits, no lowering change), 2026-09-09: 293 paths, corpus geomean 0.759 || folded from run 34363520386 (s143 at 3103577, the lowering changes gated by name: 0 regressed, 0 improved): +5 new paths, -1 renamed path; 297 paths, corpus geomean 0.763 || folded from linux/x86-64 CI run 34543915446 (s149 at 2e5f45a, rebased on v0.2.10; the gate reported 308 recorded / 310 measured / 2 new / 0 regressed / 0 improved): +2 new paths, the two s149 witnesses \u2014 `fs/open_nonblock` 1.000 (the mid-end hands LLVM exactly what the naive lowering does for a straight-line fs witness) and `net/accept_posture` 0.989. Transcribed from that job's own `ir-volume new path` lines, never measured off the arm64 box: `bench-gates` SKIPS on macOS by design (D5, rig-pinned), so the linux lane is the only place these numbers exist. || folded from linux/x86-64 CI run 34553568310 (s150 at 4ae5e73, PR #315; the gate reported 310 recorded / 313 measured / 3 new / 1 improved / 1 regressed): +3 new paths, the s150 run witnesses \u2014 `conc/chan_struct_payload` 0.977, `typecheck/fn_value_captured_int` 1.093, `typecheck/fn_value_capturing` 1.090 (a fn value is now a load and an indirect call, and the mid-end has nothing to fold through a table). Transcribed from that job's own `ir-volume new path` lines; the regressed path (`rows/inferred_private` 1.371 -> 2.051, the inliner unrolling a recursive target into its new `.fv` forwarder) was fixed in the inliner and `typecheck/fn_value_import/main` ratcheted down 0.652 -> 0.616 (the same run's `improved to` line: the named function's forwarder dissolves its small target); `rows/inferred_private` keeps its 1.371 record until the lane measures the fixed inliner. || folded from linux/x86-64 CI run 34575761858 (s155 at eb2a31f, PR #328; the gate reported 327 recorded / 331 measured / 4 new / 0 regressed / 0 improved): +4 new paths, the s155 run witnesses \u2014 `traits/op_eq_inverting` 0.550, `traits/op_money` 0.268, `traits/op_ord_struct` 0.239 (an operator on a struct is a call into a two-line impl the inliner dissolves), `traits/op_total_num` 0.705. Transcribed from that job's own `ir-volume new path` lines. || folded from linux/x86-64 CI run 34604049101 (s154 at 27ce8c6, PR #338; the gate reported 332 recorded / 334 measured / 2 new / 0 regressed / 0 improved): +2 new paths, the two s154 witnesses that reach the run phase \u2014 `lints/else_arithmetic` 1.112 (three `else` defaults over two calls; the mid-end has nothing to fold through a row join) and `typecheck/unit_tail_value_discard` 0.752. Transcribed from that job's own `ir-volume new path` lines, never measured off the arm64 box: `bench-gates` SKIPS on macOS by design (D5, rig-pinned). The lane's other three witnesses are `fail(...)` files that never lower, so they contribute no path. || folded from linux/x86-64 CI run 34655409877 (s156 at 8aa7398, PR #350; the gate reported 334 recorded / 338 measured / 4 new / 0 regressed / 0 improved): +4 new paths, the four s156 witnesses that reach the run phase \u2014 `grammar/structlit_paren` 1.000 (it lowers for the first time: #341 took the equality out of it, so the file reaches the run rung its header now names), `memory/map_set_generic` 0.852, `traits/op_eq_imported/main` 1.712 (an operator dispatching into an imported module's impl, where the inliner has a cross-module target and the naive lowering has four instructions to beat) and `typecheck/float_rem` 0.913. Corpus geomean 0.763 -> 0.772 over n=338. Transcribed from that job's own `ir-volume new path` lines, never measured off the arm64 box: `bench-gates` SKIPS on macOS by design (D5, rig-pinned). The lane's fifth witness, `typecheck/interp_spec_on_union`, is a `fail(E0413)` file that never lowers, so it contributes no path; `traits/op_total_num`'s `impl Rem for f64` changed body (#327, the hand-spelled remainder became `self % other`) and did NOT move its 0.705 record \u2014 the gate reported 0 regressed."
+  "lane": "linux/x86-64",
+  "note": "The per-file IR-volume ratchet (wolf-lang#270, s143). `files` maps every run-phase corpus path the release tier emits to its LLVM IR instruction counts with the mid-end on (`midend`) and off (`naive`) and their ratio, measured on the linux/x86-64 CI lane (D5: gates are rig-pinned). `cargo xtask bench-gates` reds BY NAME when an existing path's ratio rises past its record by more than `slack` (relative: the ratios span 0.5 to 2.4, so one absolute tick would gate noise on the large and nothing on the small); a path absent from `files` is reported and never red; a recorded path the run cannot emit is reported as conservatism. `cargo xtask bench-gates --record` rewrites `files` from a run on the rig; the rest of this document is carried through. The corpus geomean that gated before s143 is printed as a reference only (bench/gates.json `corpus_geomean_reference`, and its history).",
+  "recorded": "linux/x86-64 CI run 34354712981 (branch s143 at ef9f9e8 = trunk 5c729e8 + the s143 spec and ratchet commits, no lowering change), 2026-09-09: 293 paths, corpus geomean 0.759 || folded from run 34363520386 (s143 at 3103577, the lowering changes gated by name: 0 regressed, 0 improved): +5 new paths, -1 renamed path; 297 paths, corpus geomean 0.763 || folded from linux/x86-64 CI run 34543915446 (s149 at 2e5f45a, rebased on v0.2.10; the gate reported 308 recorded / 310 measured / 2 new / 0 regressed / 0 improved): +2 new paths, the two s149 witnesses \u2014 `fs/open_nonblock` 1.000 (the mid-end hands LLVM exactly what the naive lowering does for a straight-line fs witness) and `net/accept_posture` 0.989. Transcribed from that job's own `ir-volume new path` lines, never measured off the arm64 box: `bench-gates` SKIPS on macOS by design (D5, rig-pinned), so the linux lane is the only place these numbers exist. || folded from linux/x86-64 CI run 34553568310 (s150 at 4ae5e73, PR #315; the gate reported 310 recorded / 313 measured / 3 new / 1 improved / 1 regressed): +3 new paths, the s150 run witnesses \u2014 `conc/chan_struct_payload` 0.977, `typecheck/fn_value_captured_int` 1.093, `typecheck/fn_value_capturing` 1.090 (a fn value is now a load and an indirect call, and the mid-end has nothing to fold through a table). Transcribed from that job's own `ir-volume new path` lines; the regressed path (`rows/inferred_private` 1.371 -> 2.051, the inliner unrolling a recursive target into its new `.fv` forwarder) was fixed in the inliner and `typecheck/fn_value_import/main` ratcheted down 0.652 -> 0.616 (the same run's `improved to` line: the named function's forwarder dissolves its small target); `rows/inferred_private` keeps its 1.371 record until the lane measures the fixed inliner. || folded from linux/x86-64 CI run 34575761858 (s155 at eb2a31f, PR #328; the gate reported 327 recorded / 331 measured / 4 new / 0 regressed / 0 improved): +4 new paths, the s155 run witnesses \u2014 `traits/op_eq_inverting` 0.550, `traits/op_money` 0.268, `traits/op_ord_struct` 0.239 (an operator on a struct is a call into a two-line impl the inliner dissolves), `traits/op_total_num` 0.705. Transcribed from that job's own `ir-volume new path` lines. || folded from linux/x86-64 CI run 34604049101 (s154 at 27ce8c6, PR #338; the gate reported 332 recorded / 334 measured / 2 new / 0 regressed / 0 improved): +2 new paths, the two s154 witnesses that reach the run phase \u2014 `lints/else_arithmetic` 1.112 (three `else` defaults over two calls; the mid-end has nothing to fold through a row join) and `typecheck/unit_tail_value_discard` 0.752. Transcribed from that job's own `ir-volume new path` lines, never measured off the arm64 box: `bench-gates` SKIPS on macOS by design (D5, rig-pinned). The lane's other three witnesses are `fail(...)` files that never lower, so they contribute no path. || folded from linux/x86-64 CI run 34655409877 (s156 at 8aa7398, PR #350; the gate reported 334 recorded / 338 measured / 4 new / 0 regressed / 0 improved): +4 new paths, the four s156 witnesses that reach the run phase \u2014 `grammar/structlit_paren` 1.000 (it lowers for the first time: #341 took the equality out of it, so the file reaches the run rung its header now names), `memory/map_set_generic` 0.852, `traits/op_eq_imported/main` 1.712 (an operator dispatching into an imported module's impl, where the inliner has a cross-module target and the naive lowering has four instructions to beat) and `typecheck/float_rem` 0.913. Corpus geomean 0.763 -> 0.772 over n=338. Transcribed from that job's own `ir-volume new path` lines, never measured off the arm64 box: `bench-gates` SKIPS on macOS by design (D5, rig-pinned). The lane's fifth witness, `typecheck/interp_spec_on_union`, is a `fail(E0413)` file that never lowers, so it contributes no path; `traits/op_total_num`'s `impl Rem for f64` changed body (#327, the hand-spelled remainder became `self % other`) and did NOT move its 0.705 record \u2014 the gate reported 0 regressed. || re-recorded by `cargo xtask bench-gates --record` on kasumi (linux/x86-64, `taskset -c 4-7`) at s256 `c9bf10ac` (PR #869), 2026-10-22, and held against the linux/x86-64 CI run 39794860445's own lines at the same head: every path the gate printed there (36 regressed by name, 336 new, 1 improved) carries the same midend/naive counts, and the population is the same (353 recorded / 694 measured / 342 new / 1 unmeasured). The cause of the 36: the entry shim now calls `__wolf_rt_stack_start` before `main` in every program ([conf.trap.stack], #866), one instruction on each side of every ratio, which pushes the smallest files past the 5% slack (7/17 -> 8/18 and so on). The 342 paths new since s156 enter the record; `memory/exclusivity` ratchets down 0.710 -> 0.552; `memory/byte_view_escape` (a Tier-R refusal, unmeasured since its record) leaves it. 694 paths. The run at the re-recorded head is the check: 694 recorded / 694 measured / 0 new / 0 regressed / 0 improved.",
+  "slack": 0.05
 }
