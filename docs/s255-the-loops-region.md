@@ -413,7 +413,42 @@ there too; its red is the positive twin), the E1010 note test (no
 
 ## 4. Evidence index
 
-Filled in as the work lands (kasumi `~/lanes/s255/`).
+All under kasumi `~/lanes/s255/` (the lane's scripts beside them; every
+job's `NAME.{log,pid,rc}` from `job.sh`).
+
+- `ev/rows-trunk.txt` — every new row at the base `0cb954a8` dist, red
+  (E1010/E1004/E0403) on checked, native and release; `ev/rows-head.txt`,
+  `rows-head2.txt` at the first head, `rows-head3.txt` at the final dist
+  (`wolf 0.2.34+dev.abf108d`): every run row `exit(0)`, every refusal its
+  code, lupin 0.1.55's column (`rows.sh`).
+- `gate1.log` — `region_kept_arg_lanes` red on five tests at `994162a1`
+  (the first verdict's hole); `gate2.log` the suites and gates green at
+  `49d6f681` but for the ledger line; `probes/p3.lu`, `p5.lu`, `p6.lu`
+  the verdict probes (one module; read with `--dump=mut-clean`).
+- `ci1.log` … `ci7.log` — the full gauntlet (`cargo xtask ci`) at each
+  head: clippy (`verdict.clone()`), the lexer/parser snapshots of the
+  new rows, `wolf fmt` on two rows, the charged row's newline, each
+  fixed in turn; `ci7.log` the green one; `snapall.log` the whole
+  workspace under `INSTA_UPDATE=always` (36 snapshot files, no
+  `cfg_dumps` move); `sig1.log` the descriptor-wait test green alone
+  (red once under load in `snapall`).
+- `ev/m-base.tsv`, `m-head.tsv`, `m-head3.tsv`, `m-diff.txt` — the
+  census (`measure.py`, `census.sh`): 1,154 files; `m-head3.tsv` with
+  the fixed driver.
+- `ev/mutclean-yew.txt`, `-aspen.txt` (the pause), `mutclean-yew-d4/d5/
+  d6.txt`, `mutclean-aspen-d4/d5/d6.txt` — `--dump=mut-clean` at each
+  witness head (`s255-ywdump.sh`).
+- `ev/wit-build-head.txt`, `wit-build-b7/b8/b9.txt` — the witness builds
+  (`s255-ywbuild.sh`; b9 both green).
+- `ev/witness-trunk.txt`, `witness-head.txt` — yew's `with-region.lu` and
+  aspen's two probes refused at the base, run at the head.
+- `ev/aspen-mem.txt` — aspen's rows (`aspen-mem.sh`, the final dist).
+- `ev/yew-mem.txt` — yew's rows (`s255-ywmem.sh`, the final dist).
+- `ev/yew-test-t3.txt` — yew's own suite on the witness (`s255-ywtest2.sh`).
+- `t1.log`, `snap.log`, `regen.log` — the targeted suites, the
+  mem_diagnostics snapshots, the anchors (the first pass).
+- `s255-plant`: CI run 39709618577 (`-f jobs=lint-test`, `tier
+  partial`), red.
 
 ## 6. The guide's memory paragraph (handed back, not written here)
 
@@ -631,3 +666,19 @@ values assigned in place, the reap list, `clip_init`/`clip_shutdown`
 emptied in place rather than `c = clip_new()`) and `feed_bytes` no
 longer seeding inside the read (the seeding between the blocks takes
 the burst through `tty_pending`). The memory rows follow.
+
+**aspen's rows** (`ev/aspen-mem.txt`, release binaries of `476edee` with
+the base dist and of `8fce150` with the final dist, `tools/mem` in the
+container under `taskset -c 0-3`, `ulimit -c 0`, the 100,000-file
+tree): listing 59,824 → **11,720 KiB** (C aspen 2,380–2,516); `-s`
+76,720 → **20,456** (C 2,560–2,712); `-J` 130,588 → **116,928** (C
+12,628–12,676); `--du` 135,360 → **124,992** (C 18,772–18,812);
+`-pugsD` 157,204 → **75,584** (C 3,448–3,452); every listing
+byte-identical before and after (md5 per mode). P4 scored: the listing
+under 12 MB — hit; `-s` under 14 — missed by 6 MB (the sort keeps every
+entry's name and stat to the end); `-J` and `--du` under 40 — missed,
+as P4 half-expected: the full-tree modes build the arena before
+emitting, and the arena is the floor (116–125 MB; ap02's, with the
+arena's own layout); `-pugsD` under 30 — missed (75 MB; the id-name
+caches and the columns). The level region recovers what the walk
+builds per level; what the modes keep is theirs.
