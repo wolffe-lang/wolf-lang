@@ -34,6 +34,7 @@
     "abi.native.closure": "04-abi.md",
     "abi.native.closure.object": "04-abi.md",
     "abi.native.dyn": "04-abi.md",
+    "abi.native.enum": "04-abi.md",
     "abi.native.layout": "04-abi.md",
     "abi.native.niche": "04-abi.md",
     "abi.native.nounwind": "04-abi.md",
