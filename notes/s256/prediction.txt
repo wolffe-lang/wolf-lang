@@ -1,0 +1,20 @@
+s256, GPT-6-Astra, before implementation, 2026-10-22.
+Base 0477ce62. Runtime inspection counted five production thread creation
+sites: pooled pthread worker, unix fallback worker, Windows worker,
+signal drain, reactor. Procs and compensation share the worker seam.
+macOS gives the high stack address; Linux returns low address plus size;
+the main thread needs a synthetic guard interval below the stack limit.
+Predicted witness overflow with an 8 MiB stack: native 50k..100k,
+release 150k..200k; task overflow already reports but lacks wolf-trap.
+Before reading s252 evidence, the read-mode rule says that a move lends
+inside the callee and keeps the caller live. After reading its actual
+spec amendment (no s252 note exists), the distinction is explicit:
+a later read of the moved path in the SAME frame is E1001; a second call
+must see the caller value intact. The indexed witness does the latter.
+Recommend preserving that reading and repairing checked move tracking;
+yew can keep the local binding, but must not read that path again inside
+its activation without reinitializing it. Path-in-place is the no-copy
+workaround; copy is a deep copy. There is no explicit lend keyword.
+The checked 128-frame budget is unsupported, not stack-overflow: preserve
+it as a separate instrument limit (R-s256-1). R-s256-2 is the read-mode
+reading above, not a request to silently outlaw the witness.
