@@ -89,11 +89,130 @@ helpers), `types.rs`, `verify.rs`, `parse.rs`/`print.rs`,
 
 ## 2. The cause
 
-(written after the change)
+### 2.1 Position-unified slots
+
+An enum value lowers (`lower.rs`, `wir_ty_frame`'s `ItemSig::Enum`
+arm) to the aggregate `{i64 tag, s0, s1, …}` where slot `i` is shared
+by every variant's `i`-th payload; a row's eu (`row_slot_tys`) has the
+same slots after its ok half. Both unified a slot by equality: the
+first variant's type claimed the position and a later variant with
+another type at it refused, by name, at the type — before any
+instruction of the body was lowered, which is why the refusal reached
+every program that *declared* such an enum, used or not, and why
+`std.json` (`Value`: `Bool(bool)`, `Int(int)`, `Num(f64)`,
+`Str(str)`, `Arr(List[Value])`, `Obj(Map[str, Value])`, six types in
+one slot) never lowered natively. The checked machine
+(`ubcheck.rs`) and lupin never had the question: their enum value is
+`Value::Enum { variant, payload: Vec<Value> }`, the variant and its
+own typed payloads, no slot storage at all.
+
+Everything downstream of the type was already positional and
+type-agnostic: `agg.make` at the constructor (`enum_value`, unfilled
+slots zeroed), `agg.get K+1` at the three pattern-read sites (the
+scalar-arm bind in `enter_match_arm_inner`, the product-arm walk in
+`product_arm_parts`' tag case and `product_sub`'s nested tag), the
+handler bind `else |Tag(p)|` reading `eu.err K`, `tagged_parts`
+splitting a caught row, `propagate_err` moving slots across a `?`
+widening, and the flat load/store helpers moving an enum through a
+`List`, a `Map` entry or a `mut` spill field by field. None of them
+cared what a slot's type was; they needed one type per slot that
+every variant could write and read.
+
+### 2.2 The second refusal underneath: `copy` of an enum
+
+Retiring the type refusal exposed the next one on the same rows:
+`(mut xs).push(W.L([1, 2, 3]))` and every `Value` pushed into a
+`List[Value]` copy the element in (`[mem.region.edge.elem]`), and
+`deep_copy_in` had no enum arm — "`copy` of an enum whose payload
+reaches heap storage" — nor a `Map` arm for values that reach the
+heap (`Obj(Map[str, Value])`). Neither was the union's: a uniform
+`enum E { A(List[int]), B(List[int]) }` in a list was refused the
+same way at 0.2.34 (a `str` payload is not "heap" to the copy —
+its bytes are shared by design — which is why `A(str)/B(str)` lists
+built before). A recursive enum adds the real problem: the copy of
+`Arr(List[Value])` copies each element, which is a `Value`, whose
+`Arr` arm copies a list of `Value`… an inline rebuild unrolls until
+the depth guard refuses at 16. §3.3 is the answer.
 
 ## 3. The layout
 
-(written after the change)
+### 3.1 The type
+
+`TypeData::Union(members)` (`types.rs`): the distinct member types of
+one slot, sorted by `TypeId` and flattened, so one set interns to one
+type and a one-member "union" is the member itself
+(`TypeInterner::union_of`). Printed `union{i64, {ptr, i64}}`; parsed
+back through `union_of`. Layout (`wolf_backend::layout`): size the
+largest member's, rounded up to the strictest member alignment,
+which is the slot's alignment; every member at offset 0. The ABI
+(`abi::scalar_leaves`) sees one INTEGER leaf of the union's size, so
+`{i64, union(8)}` still rides two registers and a 24-byte
+`{i64, union{i64, {ptr, i64}}}` goes by pointer, as a 24-byte
+aggregate always did.
+
+### 3.2 The ops
+
+Two value ops with explicit result types, pure and removable like
+`agg.*`: `%u: union{…} = union.make %v` (the operand a member, or a
+narrower union whose members are all members: `propagate_err`'s
+widening) and `%v: T = union.view %u` (T a member). Both emitters
+treat a union as they treat an aggregate — a stack slot in Cranelift,
+an entry `alloca [N x i8]` in the LLVM text — so `union.make` is a
+fresh slot plus `store_field` at offset 0 and `union.view` is
+`load_field` at offset 0: a scalar member is one typed store or load,
+an aggregate member a byte copy or a view into the slot's bytes. No
+`bitcast` appears anywhere, which answers the prediction's third
+question: a bitcast could not express it (the members differ in size
+and an aggregate member has no scalar), and the alloca round trip is
+what SROA already removes on the release tier. A union stored in
+memory moves as one blob: `%r: union{…} = load.union %p, %m` /
+`store.union %v, %p, %m` (the type on the annotation, since a typed
+mnemonic's suffix is one token); the verifier admits a union where it
+admits a scalar for `load`/`store`, and both emitters' `is_agg`
+include it so the blob copies `layout_of`'s size. `simplify` folds
+`union.view` of a visible `union.make` of the same member to the
+member; a view of another member never folds (it reads bytes as
+written).
+
+In lowering, the two unifiers collect every type a position sees and
+`union_of` them; four helpers do the rest. `into_slot(v, slot)` wraps
+a payload at a write (`enum_value`, the raise, `propagate_err`'s
+widening through `into_eu_slots`, `zero_of` — a union's zero is its
+first member's, wrapped). `slot_view(v, T)` / `slot_view_as(v,
+table, sema)` unwrap at a read: the scalar-arm bind carries the
+arm's variant payload type into `enter_match_arm_inner` through
+`view_binds` (a payload bound by an or-pattern over a union slot is
+refused by name: two variants, two views), the two product-walk
+reads view through the variant's `payload_sema_tys`, and the handler
+bind reads the row's tag payload types through
+`handler_slot_views`. `tagged_parts` and the fallible-row rebuild
+stay positional: they move slot values between an eu and its
+`{tag, slots}` mirror, whose slot types agree by construction. The
+flat helpers (`flat_size`, `flat_align`, `load_flat`/`store_flat` and
+their raw twins, `read_mut_ref`) treat a union as a scalar-sized
+blob, with `natural_layout` mirroring the backend's rule so the blob
+and `layout_of` agree byte for byte.
+
+### 3.3 `copy` of an enum: a function per layout
+
+`deep_copy_in` and `deep_copy_out` gain an enum arm, but not an
+inline one. `enum_copy_call` queues a `PendingKind::Copy` task —
+`{Enum}.copy.m{module}.t{wir type id}` (`.copyout.` for the
+`copy region` rebuild), `(T) -> T` — once per layout and calls it;
+the task drains after the body that asked, like a closure body
+(`lower_copy_body`, under the same typed body so a generic enum's
+arguments resolve), and its body is `deep_copy_enum`: `agg.get 0`,
+an `emit_switch` over the variant tags, and under each variant the
+payloads that reach storage read through the variant's view, copied
+(`deep_copy_in` again — for a nested `Value` that is a call to the
+same function, the recursion the checked machine's `copy_out` does
+at run time), written back through `into_slot`, the slots a variant
+does not own carried unchanged; the result through a declared
+variable the arms assign. `deep_copy_in`'s `Map` arm copies values
+that reach the heap entry by entry exactly as `deep_copy_out` already
+walked them (`__wolf_rt_map_copy`, then each `(K, V)` entry at the
+list prefix's stride). A payload-free enum or one whose payloads
+reach nothing never arrives: `copy_reaches_heap` answers first.
 
 ## 4. Measurements
 
