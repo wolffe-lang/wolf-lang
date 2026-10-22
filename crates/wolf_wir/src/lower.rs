@@ -11001,7 +11001,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                         }
                         let id = self.b.module.tag_id(&callee_text);
                         let tag = self.b.iconst(types::I64, id);
-                        let payloads = self.into_eu_slots(eu, &payloads, e.span)?;
+                        let payloads = self.wrap_eu_slots(eu, &payloads, e.span)?;
                         return Ok(Flow::Val(Some(self.b.ins_eu_make_err(eu, tag, &payloads))));
                     }
                     return Err(refuse("calls outside the resolved surface", e.span));
@@ -17115,7 +17115,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     } else {
                         z.deep_copy_in(x, ftab, fty, span, depth + 1)?
                     };
-                    parts.push(z.into_slot(c, slot));
+                    parts.push(z.wrap_slot(c, slot));
                 }
                 for (k, &slot) in fields.iter().enumerate().skip(parts.len()) {
                     let x = z
@@ -21757,7 +21757,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let Some(&slot) = fields.get(k + 1) else {
                 return Err(refuse("a payload the enum's slots do not carry", span));
             };
-            parts.push(self.into_slot(pv, slot));
+            parts.push(self.wrap_slot(pv, slot));
         }
         for &fty in &fields[parts.len()..] {
             let z = self.zero_of(fty, span)?;
@@ -21772,7 +21772,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
     /// itself when the slot is its type, else the slot's union holding
     /// it (`union.make`). A value that is already a union of a subset
     /// of the slot's members widens by the same op.
-    fn into_slot(&mut self, v: Value, slot: TypeId) -> Value {
+    fn wrap_slot(&mut self, v: Value, slot: TypeId) -> Value {
         let vt = self.b.func.value_ty(v);
         if vt == slot || !self.b.module.types.is_union(slot) {
             return v;
@@ -22386,15 +22386,15 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
             let sv = self.b.ins_eu_err_slot(v, k);
             payloads.push(sv);
         }
-        let payloads = self.into_eu_slots(target, &payloads, span)?;
+        let payloads = self.wrap_eu_slots(target, &payloads, span)?;
         Ok(self.b.ins_eu_make_err(target, tag, &payloads))
     }
 
     /// Payload values written into the error-payload slots of `eu`
-    /// (s257): each through [`Self::into_slot`]; a value whose type is
+    /// (s257): each through [`Self::wrap_slot`]; a value whose type is
     /// neither the slot nor a member of the slot's union refuses by
     /// name rather than mistype the write.
-    fn into_eu_slots(&mut self, eu: TypeId, payloads: &[Value], span: Span) -> R<Vec<Value>> {
+    fn wrap_eu_slots(&mut self, eu: TypeId, payloads: &[Value], span: Span) -> R<Vec<Value>> {
         let types::TypeData::Eu { slots, .. } = self.b.module.types.get(eu).clone() else {
             return Err(refuse("payloads for a non-union type", span));
         };
@@ -22423,7 +22423,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                     span,
                 ));
             }
-            out.push(self.into_slot(pv, slot));
+            out.push(self.wrap_slot(pv, slot));
         }
         Ok(out)
     }
@@ -25446,7 +25446,7 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         if let Some(members) = self.b.module.types.union_members(t) {
             let first = members[0];
             let z = self.zero_of(first, span)?;
-            return Ok(self.into_slot(z, t));
+            return Ok(self.wrap_slot(z, t));
         }
         Err(refuse("a zero value of this type", span))
     }
