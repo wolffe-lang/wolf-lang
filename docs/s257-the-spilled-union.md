@@ -5,6 +5,11 @@ Lane note. **Fable 5.1. Crawl 54.** Branch `s257` off wolf-lang trunk
 §1 was written and committed before the first line of the change; §4
 holds the numbers measured after it.
 
+Rebased onto trunk `94cd52bc` (s256 landed: the overflow trap, the
+move marks, and `e667a2ad`, which runs the checked machine as the
+container shell's child in `signal_gaps_lanes` — the one test §4.6
+found red on kasumi at trunk `0477ce62`); the rebase was clean.
+
 ## 1. The prediction
 
 Written before the change, from reading `crates/wolf_wir/src/lower.rs`
