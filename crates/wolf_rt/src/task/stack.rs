@@ -592,9 +592,9 @@ fn install_on(sig: libc::c_int) {
     }
 }
 
-/// Install the guard-fault reporter (idempotent; called at pool init —
-/// a binary that never spawns never installs a handler — and, s246, by
-/// a program's first choice for a sent `SEGMENT_FAULT` or `BUS_ERROR`).
+/// Install the guard-fault reporter (idempotent). System-thread entry,
+/// pool init and the first explicit sent-fault disposition all use this
+/// same process-wide installation; guard ranges remain thread-local.
 /// s246: on `SIGBUS` on every unix host (macOS only before): the sent
 /// rule must hold for both fault meanings the runtime owns, and a real
 /// bus error outside a guard still dies the ordinary way (the handler

@@ -20,6 +20,23 @@ did not start on 22.04).
 | windows x86-64 | **yes — bring-up (s60a)** | refuses by name (s60c) | **yes (s60b)** | WSAPoll (s60b; IOCP: s60c) | **yes (s60b)** — Ctrl+C/Break/close; external reload/upgrade the named gap | none (s60c: DWARF-in-COFF + lldb) |
 
 
+## Linux and macOS stack overflow
+
+A guard fault on the main thread or a runtime thread reports
+`wolf-trap: stack-overflow` and exits 134. An alternate signal stack
+keeps the reporter off the exhausted stack. The report includes the
+fault PC; it does not yet resolve a source line or function name.
+Stack bounds and alternate stacks are registered at program entry and
+at each runtime thread entry, including fallback, signal and reactor
+threads. No pool or background thread starts just to install the reporter.
+A fault outside the current thread's guard remains a signal death;
+sent SIGSEGV/SIGBUS retain the program's signal disposition.
+
+This is not the checked machine's call-depth budget: its 128-frame
+limit still answers `unsupported` (`call depth budget exhausted`).
+The native stack limit depends on the host and thread. Overflow ends
+the process even inside a proc; exhausted frames never run containment.
+
 ## windows x86-64 — the s60a bring-up, the s60b task layer
 
 Here is the learner's bar and what meets it. On a Windows 10/11 x64
@@ -66,8 +83,9 @@ calls wolf's `main` shim.
   the guard page, never a call), installed at pool init, matching only
   that status, terminating the process through `TerminateProcess` with
   no unwinding through wolf frames and no containment (an overflow is
-  process death on every host, and `stack-overflow` is not in the
-  closed trap vocabulary, so it is never a proc's `fault(kind)`). The
+  process death on every host, never a proc's `fault(kind)`). This
+  Windows reporter still uses the legacy text rather than the new
+  `wolf-trap: stack-overflow` vocabulary. The
   overflowing thread reports from the stack guarantee
   `SetThreadStackGuarantee` holds back (the altstack twin). The main
   thread reports too once the pool is up (`wolf-rt: stack overflow`,

@@ -68,10 +68,10 @@
 //! exactly as s28 froze the trap contract before s31 consumed it
 //! fully.
 //!
-//! A binary that never spawns pays for none of this: pool, registry,
-//! signal handler, and stack store are all lazily initialized on
-//! first use, and the driver's `--gc-sections` link drops the symbols
-//! outright (Target 1's CI test holds both halves).
+//! The pool, proc registry and pooled stack store remain lazy. On
+//! Linux/macOS the guard reporter alone is installed before user main
+//! (s256, [conf.trap.stack]), with one alternate stack when the caller
+//! did not already provide one; it starts no worker or background thread.
 
 mod chan;
 mod conc_abi;
