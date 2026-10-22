@@ -821,7 +821,7 @@ fn record_in(
 /// The bits `mode`'s child reported for `field` (`SigIgn`, `SigCgt`) in a
 /// run's standard error (`reserved_child.lu` writes them before it says it
 /// is ready), or `None` when it wrote none.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn child_mask(stderr: &str, mode: &str, field: &str) -> Option<u64> {
     let key = format!("{mode}: {field}: ");
     let line = stderr.lines().find(|l| l.starts_with(&key))?;
@@ -833,7 +833,7 @@ fn child_mask(stderr: &str, mode: &str, field: &str) -> Option<u64> {
 /// glibc's `posix_spawn` starts a child where the kernel refuses `clone3`:
 /// CI's docker runner, measured) it lives and exits 0; at the default it
 /// dies of 33.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn end_by_masks(stderr: &str, mode: &str) -> &'static str {
     let bit = 1u64 << 32;
     let ign = child_mask(stderr, mode, "SigIgn").expect("the child's SigIgn");
