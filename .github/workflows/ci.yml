@@ -156,6 +156,7 @@ jobs:
     if: contains(fromJSON(needs.plan.outputs.jobs || '[]'), 'lint-test')
     runs-on: ubuntu-latest
     # s226: trunk ran 29m42s at 7d85c701 with bench smoke (~4–5 min) after the gauntlet, and s226's checked-machine rows add ~3.5 min.
+    # s255: 45 timed out twice on docs-only commits (the job ran 44:43 green at 0c041c2d; trunk's gauntlet step 28 min, s255's 32–37; the setup steps swing 1–11 min).
     timeout-minutes: 60
     # r10/#253: the pairing gate (crates/wolf_driver/tests/pairing.rs, D57)
     # only fires where a sibling lupin binary exists, and no runner had one,
