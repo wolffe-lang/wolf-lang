@@ -475,7 +475,7 @@ job's `NAME.{log,pid,rc}` from `job.sh`).
   native phase broken from its 36th file by `ci10`'s `dist-smoke` step
   pruning `target/dist`, which `toolchain/std` symlinked into (E0301,
   `std` with no `process`) — the toolchain is copies since; `ev/yew-
-  test-t7.txt` the suite again, alone (its verdict in §5).
+  test-t7.txt` the suite again, alone: green on both tiers (§5).
 - `t1.log`, `snap.log`, `regen.log` — the targeted suites, the
   mem_diagnostics snapshots, the anchors (the first pass).
 - `s255-plant` (`ee215a59`): CI run 39709618577 (`-f jobs=lint-test`,
@@ -770,7 +770,13 @@ caller's to keep. The suite at `ad88c06` (`ev/yew-test-t6.txt`): the
 checked tier green on every file, `text_coords_test` among them; the
 native phase lost its `std` to the gauntlet's `dist-smoke` prune at its
 36th file (the toolchain dir symlinked into `target/dist`; copies now)
-and was run again alone (`ev/yew-test-t7.txt`): its verdict below.
+and was run again alone (`ev/yew-test-t7.txt`): **green on both
+tiers** — `wolf test --deny-warnings src` rc 0 with every one of the 36
+test files ok on the checked machine, `text_coords_test` among them, and
+every one of the 57 native test binaries built and ok (0 FAILED); 82
+SKIP lines, the count the suite printed at `f16e8ea` too (its own
+counted skips: `os_exe()` under `wolf test`, the checked machine's step
+budget on the long editor tests).
 
 **yew's rows** (`ptymem.py`, 4,000 keys typed into a 10,000-line file
 in I mode, then 4,000 line moves; the container, `taskset -c 0-3`,
