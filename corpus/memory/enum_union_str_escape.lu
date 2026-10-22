@@ -1,0 +1,34 @@
+//! check: fail(E1004)
+//! phase: typecheck
+//! conforms: mem.region.edge, abi.native.enum
+//!
+//! s257 — a `str` payload in a union slot is still a region-tracked
+//! pointer: the value is read through the active variant's type, not
+//! the slot's storage, so a `Text` built in `pass` cannot be stored
+//! into `st`'s variable (E1004, the region edge; lupin traps
+//! `region-fault` at the same store). The sibling scalar variant
+//! shares the slot and is not tracked at all.
+
+enum V {
+    Int(int),
+    Text(str),
+}
+
+fn main() -> !int {
+    let st = region()
+    in st {
+        let seq0 = 0
+        var o = V.Int(0)
+        region pass {
+            let s = "built in pass, {seq0} uses"
+            in st {
+                o = V.Text(s)
+            }
+        }
+        match o {
+            Int(n) => { print("{n}") }
+            Text(t) => { print("{t}") }
+        }
+    }
+    0
+}

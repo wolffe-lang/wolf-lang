@@ -1,0 +1,49 @@
+//! check: run(exit=0, stdout="n 5\ns five\nl 3 sum 6\n12\n")
+//! phase: run
+//! conforms: abi.native.enum, ty.match.exhaustive
+//!
+//! s257 — three variants, three slot types in one position: a scalar,
+//! a `str` (a two-word aggregate) and a `List[int]` (a header
+//! pointer). The slot's storage is the widest member at the strictest
+//! alignment; a `List[W]` of them moves each element as one blob.
+
+enum W {
+    N(int),
+    S(str),
+    L(List[int]),
+}
+
+fn show(w: W) -> str {
+    match w {
+        N(n) => "n {n}",
+        S(s) => "s {s}",
+        L(xs) => {
+            var sum = 0
+            for x in xs { sum = sum + x }
+            "l {xs.len} sum {sum}"
+        }
+    }
+}
+
+fn weight(w: W) -> int {
+    match w {
+        N(n) => n,
+        S(s) => s.len,
+        L(xs) => xs.len,
+    }
+}
+
+fn main() -> !int {
+    var all = List[W]()
+    (mut all).push(W.N(5))
+    (mut all).push(W.S("five"))
+    (mut all).push(W.L([1, 2, 3]))
+    for w in all {
+        let line = show(w)
+        print("{line}")
+    }
+    var total = 0
+    for w in all { total = total + weight(w) }
+    print("{total}")
+    0
+}

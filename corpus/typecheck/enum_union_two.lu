@@ -1,0 +1,42 @@
+//! check: run(exit=0, stdout="int 3\ntext wolf\nint -7\n")
+//! phase: run
+//! conforms: abi.native.enum, ty.match.exhaustive
+//!
+//! s257 — the smallest spilled union: two variants whose payload slot
+//! disagrees (`int` against `str`). Refused by name on every compiled
+//! tier through 0.2.34 ("enum payload slots with conflicting types
+//! across variants"); the slot is a union now, read and written
+//! through the active variant's view.
+
+enum V {
+    Int(int),
+    Text(str),
+}
+
+fn show(v: V) -> str {
+    match v {
+        Int(n) => "int {n}",
+        Text(s) => "text {s}",
+    }
+}
+
+fn negate(mut v: V) {
+    match v {
+        Int(n) => { v = V.Int(0 - n) }
+        Text(_) => {}
+    }
+}
+
+fn main() -> !int {
+    let a = V.Int(3)
+    let b = V.Text("wolf")
+    let sa = show(a)
+    let sb = show(b)
+    print("{sa}")
+    print("{sb}")
+    var c = V.Int(7)
+    negate(mut c)
+    let sc = show(c)
+    print("{sc}")
+    0
+}

@@ -1,0 +1,108 @@
+//! check: run(exit=0, stdout="[null,true,42,1.5,\"wolf\",{\"k\":[7,false]}]\ndepth 3 nodes 10\n")
+//! phase: run
+//! conforms: abi.native.enum, ty.match.exhaustive
+//!
+//! s257 — the JSON-shaped value tree (`std.json`'s `Value`, the shape
+//! that refused natively through 0.2.34): seven variants over
+//! null/bool/int/float/str/list/map, recursive through `List[Value]`
+//! and `Map[str, Value]`. Built, walked three times (rendered, then
+//! measured twice) and printed; the same bytes on every tier. Each
+//! object holds one key, so `pairs()`'s order is never observed.
+
+enum Value {
+    Null,
+    Bool(bool),
+    Int(int),
+    Num(f64),
+    Str(str),
+    Arr(List[Value]),
+    Obj(Map[str, Value]),
+}
+
+fn render(v: Value) -> str {
+    match v {
+        Null => "null",
+        Bool(b) => "{b}",
+        Int(n) => "{n}",
+        Num(x) => "{x}",
+        Str(s) => "\"{s}\"",
+        Arr(xs) => {
+            var out = "["
+            var first = true
+            for x in xs {
+                if !first { out = out + "," }
+                first = false
+                out = out + render(x)
+            }
+            out + "]"
+        }
+        Obj(m) => {
+            var out = "{{"
+            var first = true
+            for (k, x) in m.pairs() {
+                if !first { out = out + "," }
+                first = false
+                let inner = render(x)
+                out = out + "\"{k}\":" + inner
+            }
+            out + "}}"
+        }
+    }
+}
+
+fn depth(v: Value) -> int {
+    match v {
+        Arr(xs) => {
+            var d = 0
+            for x in xs { let e = depth(x); if e > d { d = e } }
+            d + 1
+        }
+        Obj(m) => {
+            var d = 0
+            for (_, x) in m.pairs() {
+                let e = depth(x)
+                if e > d { d = e }
+            }
+            d + 1
+        }
+        _ => 0,
+    }
+}
+
+fn nodes(v: Value) -> int {
+    match v {
+        Arr(xs) => {
+            var n = 1
+            for x in xs { n = n + nodes(x) }
+            n
+        }
+        Obj(m) => {
+            var n = 1
+            for (_, x) in m.pairs() { n = n + nodes(x) }
+            n
+        }
+        _ => 1,
+    }
+}
+
+fn main() -> !int {
+    var inner = List[Value]()
+    (mut inner).push(Value.Int(7))
+    (mut inner).push(Value.Bool(false))
+    var obj = Map[str, Value]()
+    obj["k"] = Value.Arr(inner)
+    var top = List[Value]()
+    (mut top).push(Value.Null)
+    (mut top).push(Value.Bool(true))
+    (mut top).push(Value.Int(42))
+    (mut top).push(Value.Num(1.5))
+    (mut top).push(Value.Str("wolf"))
+    (mut top).push(Value.Obj(obj))
+    let doc = Value.Arr(top)
+    let text = render(doc)
+    print("{text}")
+    let d = depth(doc)
+    let n = nodes(doc)
+    print("depth {d} nodes {n}")
+    0
+}

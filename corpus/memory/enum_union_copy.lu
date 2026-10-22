@@ -1,0 +1,32 @@
+//! check: run(exit=0, stdout="i 4\nf 2.5\ni 4\n")
+//! phase: run
+//! conforms: abi.native.enum, mem.tier0.move.3
+//!
+//! s257 — `copy` of an enum whose union slot holds an `int` or an
+//! `f64`: nothing reaches the heap, so the copy is the value's bytes,
+//! and the original reads the same after the copy is rebound.
+
+enum N {
+    I(int),
+    F(f64),
+}
+
+fn show(n: N) -> str {
+    match n {
+        I(i) => "i {i}",
+        F(x) => "f {x}",
+    }
+}
+
+fn main() -> !int {
+    let a = N.I(4)
+    var b = copy a
+    let sa = show(a)
+    print("{sa}")
+    b = N.F(2.5)
+    let sb = show(b)
+    print("{sb}")
+    let sa2 = show(a)
+    print("{sa2}")
+    0
+}
