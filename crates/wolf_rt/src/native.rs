@@ -1112,3 +1112,9 @@ mod tests {
         assert_eq!(trap_kind_name(999), "unknown");
     }
 }
+
+/// Runtime startup before user main; no workers or other descriptors are made.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_stack_start() {
+    crate::task::enter_runtime_thread();
+}

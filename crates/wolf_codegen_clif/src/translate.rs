@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 250] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 251] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -85,6 +85,7 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 250] = [
     // `main` — the entry shim's first call in a program that names a
     // parking net call; a refusal is one stderr line and exit 71.
     ("__wolf_rt_reactor_start", 0, false),
+    ("__wolf_rt_stack_start", 0, false),
     // s243 (#763, `[os.signal.hub]`): the signal hub made before `main`
     // in a program that names a call which makes it; a refusal is one
     // stderr line and exit 71.

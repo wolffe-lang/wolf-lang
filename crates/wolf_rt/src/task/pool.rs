@@ -1041,6 +1041,7 @@ mod os {
         let flag = done.clone();
         let h = std::thread::Builder::new()
             .spawn(move || {
+                super::super::enter_runtime_thread();
                 run();
                 flag.store(true, SeqCst);
                 super::EXITING.fetch_sub(1, SeqCst);

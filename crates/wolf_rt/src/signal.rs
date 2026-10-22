@@ -631,7 +631,10 @@ mod sys {
             READER_STATE.store(READER_STARTING, Ordering::SeqCst);
             if let Err(e) = std::thread::Builder::new()
                 .name("wolf-signal".into())
-                .spawn(move || reader_main(h))
+                .spawn(move || {
+                    crate::task::enter_runtime_thread();
+                    reader_main(h)
+                })
             {
                 READER_STATE.store(READER_NONE, Ordering::SeqCst);
                 return Err(e);

@@ -35,17 +35,29 @@ fn fault_run(dir: &Path, exe: &str, depth: &str) -> Option<Output> {
             eprintln!("SKIP: stack_overflow on macOS requires a disposable CI runner");
             return None;
         }
-        return Some(Command::new("sh").current_dir(dir)
-            .args(["-c", "ulimit -c 0; ulimit -s 8192; \"$1\" \"$2\"", "s256"])
-            .arg(format!("./{exe}")).arg(depth).output().unwrap());
+        return Some(
+            Command::new("sh")
+                .current_dir(dir)
+                .args(["-c", "ulimit -c 0; ulimit -s 8192; \"$1\" \"$2\"", "s256"])
+                .arg(format!("./{exe}"))
+                .arg(depth)
+                .output()
+                .unwrap(),
+        );
     }
     let engines = std::env::var("WOLF_JOBWAIT_ENGINE")
-        .map(|e| vec![e]).unwrap_or_else(|_| vec!["docker".into(), "podman".into()]);
+        .map(|e| vec![e])
+        .unwrap_or_else(|_| vec!["docker".into(), "podman".into()]);
     let image = std::env::var("WOLF_JOBWAIT_IMAGE")
         .unwrap_or_else(|_| "docker.io/library/ubuntu:24.04".into());
     for engine in engines {
-        if !Command::new(&engine).args(["run", "--rm", "--network", "none", &image, "true"])
-            .output().is_ok_and(|o| o.status.success()) { continue; }
+        if !Command::new(&engine)
+            .args(["run", "--rm", "--network", "none", &image, "true"])
+            .output()
+            .is_ok_and(|o| o.status.success())
+        {
+            continue;
+        }
         return Some(Command::new(engine)
             .args(["run", "--rm", "--network", "none", "--cpuset-cpus", "0-3", "-v"])
             .arg(format!("{}:/w", dir.display()))
@@ -53,8 +65,10 @@ fn fault_run(dir: &Path, exe: &str, depth: &str) -> Option<Output> {
                 "ulimit -c 0; ulimit -s 8192; grep -E 'SigBlk|SigIgn' /proc/self/status; \"$1\" \"$2\"", "s256"])
             .arg(format!("./{exe}")).arg(depth).output().unwrap());
     }
-    assert!(std::env::var_os("WOLF_JOBWAIT_REQUIRE_CONTAINER").is_none(),
-        "s256 stack_overflow: required container unavailable");
+    assert!(
+        std::env::var_os("WOLF_JOBWAIT_REQUIRE_CONTAINER").is_none(),
+        "s256 stack_overflow: required container unavailable"
+    );
     eprintln!("SKIP: stack_overflow: no container ran {image}");
     None
 }
@@ -62,29 +76,51 @@ fn fault_run(dir: &Path, exe: &str, depth: &str) -> Option<Output> {
 #[test]
 #[cfg(unix)]
 fn stack_overflow_is_named_on_both_tiers_and_threads() {
-    let status = Command::new(env!("CARGO")).args(["build", "-p", "wolf_rt"]).status().unwrap();
+    let status = Command::new(env!("CARGO"))
+        .args(["build", "-p", "wolf_rt"])
+        .status()
+        .unwrap();
     assert!(status.success());
     let base = Path::new(env!("CARGO_TARGET_TMPDIR")).join("s256-overflow");
     for fixture in ["deep", "task"] {
         let dir = base.join(fixture);
         std::fs::create_dir_all(&dir).unwrap();
-        std::fs::copy(root().join(format!("crates/wolf_driver/tests/fixtures/two_machines/{fixture}.lu")),
-            dir.join("main.lu")).unwrap();
+        std::fs::copy(
+            root().join(format!(
+                "crates/wolf_driver/tests/fixtures/two_machines/{fixture}.lu"
+            )),
+            dir.join("main.lu"),
+        )
+        .unwrap();
         for tier in ["native", "release"] {
             let mut build = Command::new(env!("CARGO_BIN_EXE_wolf"));
-            build.current_dir(&dir).args(["build", "main.lu", "-o", tier]);
-            if tier == "release" { build.arg("--release"); }
+            build
+                .current_dir(&dir)
+                .args(["build", "main.lu", "-o", tier]);
+            if tier == "release" {
+                build.arg("--release");
+            }
             let out = build.output().unwrap();
             if lane_exit::environment_refusal(&out, tier) {
-                eprintln!("SKIP: stack_overflow {tier}"); continue;
+                eprintln!("SKIP: stack_overflow {tier}");
+                continue;
             }
             assert!(out.status.success(), "{fixture}/{tier} build: {out:?}");
             for depth in ["200000", "250000", "300000"] {
-                let Some(out) = fault_run(&dir, tier, depth) else { continue; };
+                let Some(out) = fault_run(&dir, tier, depth) else {
+                    continue;
+                };
                 let stderr = String::from_utf8_lossy(&out.stderr);
                 eprintln!("s256 {fixture}/{tier}/{depth}: {:?}\n{stderr}", out.status);
-                assert_eq!(out.status.code(), Some(134), "{fixture}/{tier}/{depth}: {stderr}");
-                assert!(stderr.lines().any(|l| l == "wolf-trap: stack-overflow"), "{stderr}");
+                assert_eq!(
+                    out.status.code(),
+                    Some(134),
+                    "{fixture}/{tier}/{depth}: {stderr}"
+                );
+                assert!(
+                    stderr.lines().any(|l| l == "wolf-trap: stack-overflow"),
+                    "{stderr}"
+                );
             }
         }
     }

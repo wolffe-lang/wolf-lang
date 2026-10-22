@@ -911,6 +911,7 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
     // one that names `os_signal_wait_fd` makes the descriptor waits' wake
     // pipe last, so no wait makes a descriptor once the program runs.
     let starts: Vec<&str> = [
+        (true, "__wolf_rt_stack_start"),
         (names_a_park(m), REACTOR_START),
         (names_a_hub_call(m), SIGNAL_START),
         (names_a_descriptor_wait(m), WAIT_FD_START),

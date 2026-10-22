@@ -39,8 +39,8 @@
 
 #![cfg(unix)]
 
-use std::cell::UnsafeCell;
-use std::sync::atomic::{AtomicBool, AtomicPtr, Ordering::SeqCst};
+use std::cell::{Cell, RefCell, UnsafeCell};
+use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 
 /// Guard region at the low end. Larger than one page so big frames
 /// cannot leap it undetected in the debug tier.
@@ -117,7 +117,6 @@ impl TaskStack {
             unsafe { libc::munmap(base.cast(), total) };
             return None;
         }
-        register_guard(base as usize, base as usize + GUARD);
         Some(TaskStack { base, total })
     }
 
@@ -141,6 +140,7 @@ impl TaskStack {
     /// Install this span's altstack on the calling thread (worker
     /// entry) so the overflow report has room to run.
     pub fn enter(&self) {
+        register_guard(self.base as usize, self.base as usize + GUARD);
         let (sp, len) = self.altstack();
         let ss = libc::stack_t {
             ss_sp: sp.cast(),
@@ -186,45 +186,155 @@ pub fn trim_range(lo: usize, len: usize, sp: usize) {
 
 // ---- guard registry + the overflow report --------------------------------
 //
-// Append-only lock-free list of guard ranges. Stacks are pooled and
-// never unmapped, so entries are never removed — the handler can walk
-// the list with plain atomic loads (async-signal-safe).
-
-struct GuardNode {
-    lo: usize,
-    hi: usize,
-    next: *const GuardNode,
+// Guard bounds belong to the current thread, not a process-wide registry:
+// a wild pointer into another worker's guard is not this thread overflowing.
+thread_local! {
+    static CURRENT_GUARD: Cell<(usize, usize)> = const { Cell::new((0, 0)) };
+    static OWN_ALT: RefCell<Option<AltStack>> = const { RefCell::new(None) };
 }
 
-static GUARDS: AtomicPtr<GuardNode> = AtomicPtr::new(std::ptr::null_mut());
-
 fn register_guard(lo: usize, hi: usize) {
-    let node = Box::into_raw(Box::new(GuardNode {
-        lo,
-        hi,
-        next: std::ptr::null(),
-    }));
-    loop {
-        let head = GUARDS.load(SeqCst);
-        // SAFETY: node is ours until the CAS publishes it.
-        unsafe { (*node).next = head };
-        if GUARDS.compare_exchange(head, node, SeqCst, SeqCst).is_ok() {
-            return;
-        }
-    }
+    CURRENT_GUARD.with(|g| g.set((lo, hi)));
 }
 
 fn guard_hit(addr: usize) -> bool {
-    let mut p = GUARDS.load(SeqCst) as *const GuardNode;
-    while !p.is_null() {
-        // SAFETY: nodes are never freed.
-        let n = unsafe { &*p };
-        if addr >= n.lo && addr < n.hi {
-            return true;
+    CURRENT_GUARD.with(|g| {
+        let (lo, hi) = g.get();
+        lo <= addr && addr < hi
+    })
+}
+
+struct AltStack(*mut libc::c_void);
+impl Drop for AltStack {
+    fn drop(&mut self) {
+        // SAFETY: our thread is leaving, outside any handler. Disable
+        // before unmapping; no other thread can use this signal stack.
+        unsafe {
+            let disabled = libc::stack_t {
+                ss_sp: std::ptr::null_mut(),
+                ss_flags: libc::SS_DISABLE,
+                ss_size: 0,
+            };
+            libc::sigaltstack(&disabled, std::ptr::null_mut());
+            libc::munmap(self.0, ALT);
         }
-        p = n.next;
     }
-    false
+}
+
+/// Register a system-provided stack (main, fallback, signal or reactor
+/// thread). The pooled pthread path registers its own explicit guard.
+/// Reuse an existing altstack, notably a Rust thread's, without owning it.
+pub fn enter_thread() {
+    if CURRENT_GUARD.with(|g| g.get().1 != 0) {
+        return;
+    }
+    // SAFETY: pthread queries describe only this live thread. The Linux
+    // main-thread attributes include its RLIMIT_STACK range; macOS gives
+    // the high address, rather than the low one. Neither query faults.
+    let bounds = unsafe {
+        #[cfg(target_os = "linux")]
+        {
+            let mut attr: libc::pthread_attr_t = std::mem::zeroed();
+            let mut low = std::ptr::null_mut();
+            let mut len = 0;
+            let mut guard = 0;
+            if libc::pthread_getattr_np(libc::pthread_self(), &mut attr) != 0 {
+                return;
+            }
+            let rc = libc::pthread_attr_getstack(&attr, &mut low, &mut len);
+            let grc = libc::pthread_attr_getguardsize(&attr, &mut guard);
+            libc::pthread_attr_destroy(&mut attr);
+            if rc != 0 || grc != 0 || len == 0 {
+                return;
+            }
+            let hi = low as usize;
+            (hi.saturating_sub(guard.max(page())), hi)
+        }
+        #[cfg(target_os = "macos")]
+        {
+            let thread = libc::pthread_self();
+            let top = libc::pthread_get_stackaddr_np(thread) as usize;
+            let len = libc::pthread_get_stacksize_np(thread);
+            let hi = top.saturating_sub(len);
+            (hi.saturating_sub(page()), hi)
+        }
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        {
+            return;
+        }
+    };
+    // SAFETY: queried signal-stack descriptor is local; a fresh mapping
+    // outlives all handler invocations and is owned by this thread's TLS.
+    unsafe {
+        let mut old: libc::stack_t = std::mem::zeroed();
+        if libc::sigaltstack(std::ptr::null(), &mut old) != 0 {
+            return;
+        }
+        if old.ss_flags & libc::SS_DISABLE != 0 {
+            let ptr = libc::mmap(
+                std::ptr::null_mut(),
+                ALT,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+                -1,
+                0,
+            );
+            if ptr == libc::MAP_FAILED {
+                return;
+            }
+            let ss = libc::stack_t {
+                ss_sp: ptr,
+                ss_flags: 0,
+                ss_size: ALT,
+            };
+            if libc::sigaltstack(&ss, std::ptr::null_mut()) != 0 {
+                libc::munmap(ptr, ALT);
+                return;
+            }
+            OWN_ALT.with(|a| *a.borrow_mut() = Some(AltStack(ptr)));
+        }
+    }
+    register_guard(bounds.0, bounds.1);
+    install_overflow_handler();
+}
+
+// Read the instruction address from the kernel's saved context. No
+// unwinder, loader lock, allocation, symbol lookup or file I/O in a handler.
+unsafe fn fault_pc(ctx: *mut libc::c_void) -> usize {
+    // SAFETY: SA_SIGINFO supplied a ucontext for this delivery.
+    unsafe {
+        let uc = &*ctx.cast::<libc::ucontext_t>();
+        #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+        {
+            uc.uc_mcontext.gregs[libc::REG_RIP as usize] as usize
+        }
+        #[cfg(all(target_os = "linux", target_arch = "aarch64"))]
+        {
+            uc.uc_mcontext.pc as usize
+        }
+        #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+        {
+            (*uc.uc_mcontext).__ss.__pc as usize
+        }
+        #[cfg(all(target_os = "macos", target_arch = "x86_64"))]
+        {
+            (*uc.uc_mcontext).__ss.__rip as usize
+        }
+        #[cfg(not(any(
+            all(
+                target_os = "linux",
+                any(target_arch = "x86_64", target_arch = "aarch64")
+            ),
+            all(
+                target_os = "macos",
+                any(target_arch = "x86_64", target_arch = "aarch64")
+            )
+        )))]
+        {
+            let _ = uc;
+            0
+        }
+    }
 }
 
 // The faulting task's label, pre-rendered per worker thread so the
@@ -379,7 +489,7 @@ pub fn reinstall_after_exec(sigs: [libc::c_int; 2]) {
 extern "C" fn overflow_handler(
     sig: libc::c_int,
     info: *mut libc::siginfo_t,
-    _ctx: *mut libc::c_void,
+    ctx: *mut libc::c_void,
 ) {
     // SAFETY: si_addr is valid for SIGSEGV/SIGBUS with SA_SIGINFO.
     #[cfg(target_os = "linux")]
@@ -408,13 +518,22 @@ extern "C" fn overflow_handler(
     if guard_hit(addr) {
         // "wolf-rt: stack overflow in task '<label>'\n" — byte-built,
         // write(2) direct, then a deterministic trap-discipline exit.
-        let mut msg = [0u8; 160];
+        let mut msg = [0u8; 256];
         let mut n = 0;
         let mut put = |s: &[u8]| {
             let k = s.len().min(msg.len() - n);
             msg[n..n + k].copy_from_slice(&s[..k]);
             n += k;
         };
+        put(b"wolf-trap: stack-overflow\n  at pc=0x");
+        // SAFETY: ctx is the kernel context passed to this SA_SIGINFO handler.
+        let pc = unsafe { fault_pc(ctx) };
+        let mut hex = [b'0'; 2 * std::mem::size_of::<usize>()];
+        for (i, byte) in hex.iter_mut().rev().enumerate() {
+            *byte = b"0123456789abcdef"[(pc >> (i * 4)) & 15];
+        }
+        put(&hex);
+        put(b"\n");
         put(b"wolf-rt: stack overflow in task '");
         FAULT_LABEL.with(|b| {
             // SAFETY: thread-local, handler runs on the faulting thread.
@@ -428,10 +547,7 @@ extern "C" fn overflow_handler(
         // s248 (`[os.term.restore]`): the registered terminal restore,
         // after the report — async-signal-safe, one try at its claim.
         crate::term::restore_in_handler();
-        // Same exit discipline as __wolf_rt_trap: reported outcome,
-        // never a raw signal death. (The trap-kind vocabulary is
-        // closed at s06; adding `stack-overflow` to it is a spec
-        // change owed to the c07 closeout.)
+        // [conf.trap.stack]: process death, never proc containment or unwind.
         // SAFETY: _exit is async-signal-safe.
         unsafe { libc::_exit(crate::native::TRAP_EXIT_CODE) };
     }
@@ -481,6 +597,19 @@ pub fn install_overflow_handler() {
     use std::sync::Once;
     static ONCE: Once = Once::new();
     ONCE.call_once(|| {
+        // Preserve an ignored SENT signal across exec/startup. A real
+        // guard fault is still ours, even when the sent meaning is ignored.
+        for sig in [libc::SIGSEGV, libc::SIGBUS] {
+            // SAFETY: reading this process's signal disposition.
+            unsafe {
+                let mut old: libc::sigaction = std::mem::zeroed();
+                if libc::sigaction(sig, std::ptr::null(), &mut old) == 0
+                    && old.sa_sigaction == libc::SIG_IGN
+                {
+                    sent_flag(sig).unwrap().store(true, SeqCst);
+                }
+            }
+        }
         install_on(libc::SIGSEGV);
         install_on(libc::SIGBUS);
     });
@@ -495,6 +624,7 @@ mod tests {
         let s = TaskStack::map().expect("mmap");
         assert_eq!(s.stack_len(), reserve_size());
         let lo = s.stack_lo() as usize;
+        register_guard(lo - GUARD, lo);
         assert!(guard_hit(lo - 1));
         assert!(guard_hit(lo - GUARD));
         assert!(!guard_hit(lo));

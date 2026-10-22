@@ -1,0 +1,138 @@
+{"commit":"0477ce6","diagnostics":[],"file":"corpus/memory/read_param_indexed_caller.lu","impl":"wolfgang","impl_version":"0.2.34+dev.0477ce6","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"trap(use-after-move)","warnings":[],"x-trap-clause":"mem.tier0.move.2","x-trap-pos":[23,5],"x-trap-span":[553,564]}
+indexed/--checked rc=0
+{"commit":"0477ce6","diagnostics":[],"file":"corpus/memory/read_param_indexed_caller.lu","impl":"wolfgang","impl_version":"0.2.34+dev.0477ce6","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"1 1 1\n","stdout_sha256":"a7c6882a45dbaefd37c17f1da98fee82c0ba4fa5d79908d624741725ff887328","verdict":"exit(0)","warnings":[]}
+indexed/--native rc=0
+{"commit":"0477ce6","diagnostics":[],"file":"corpus/memory/read_param_indexed_caller.lu","impl":"wolfgang","impl_version":"0.2.34+dev.0477ce6","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"1 1 1\n","stdout_sha256":"a7c6882a45dbaefd37c17f1da98fee82c0ba4fa5d79908d624741725ff887328","verdict":"exit(0)","warnings":[]}
+indexed/--release rc=0
+build/deep/native rc=0
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+depth 50000: 50000 50000
+deep/native/50000 rc=0
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x000055beec11f0a8
+wolf-rt: stack overflow in task ''
+deep/native/100000 rc=134
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x00005572ae8a80a8
+wolf-rt: stack overflow in task ''
+deep/native/150000 rc=134
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x0000563ece6b80a8
+wolf-rt: stack overflow in task ''
+deep/native/200000 rc=134
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x0000559ccba870c1
+wolf-rt: stack overflow in task ''
+deep/native/250000 rc=134
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x00005637a3fee0c1
+wolf-rt: stack overflow in task ''
+deep/native/300000 rc=134
+build/deep/release rc=0
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+depth 50000: 50000 50000
+deep/release/50000 rc=0
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+depth 100000: 100000 100000
+deep/release/100000 rc=0
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+depth 150000: 150000 150000
+deep/release/150000 rc=0
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x0000564685f5ceb6
+wolf-rt: stack overflow in task ''
+deep/release/200000 rc=134
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x0000560999e5ceea
+wolf-rt: stack overflow in task ''
+deep/release/250000 rc=134
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x000055deef2e3eb2
+wolf-rt: stack overflow in task ''
+deep/release/300000 rc=134
+build/task/native rc=0
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+depth 50000: 50000 50000
+task/native/50000 rc=0
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x0000557741efc351
+wolf-rt: stack overflow in task 'main.task0.entry'
+task/native/100000 rc=134
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x0000563216d4b351
+wolf-rt: stack overflow in task 'main.task0.entry'
+task/native/150000 rc=134
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x000055ea08dd0351
+wolf-rt: stack overflow in task 'main.task0.entry'
+task/native/200000 rc=134
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x000055adb2f42351
+wolf-rt: stack overflow in task 'main.task0.entry'
+task/native/250000 rc=134
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x000055711952b351
+wolf-rt: stack overflow in task 'main.task0.entry'
+task/native/300000 rc=134
+build/task/release rc=0
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+depth 50000: 50000 50000
+task/release/50000 rc=0
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+depth 100000: 100000 100000
+task/release/100000 rc=0
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+depth 150000: 150000 150000
+task/release/150000 rc=0
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x000055cef367b0b6
+wolf-rt: stack overflow in task 'main.task0.entry'
+task/release/200000 rc=134
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x000055874c5430b6
+wolf-rt: stack overflow in task 'main.task0.entry'
+task/release/250000 rc=134
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+wolf-trap: stack-overflow
+  at pc=0x000055d89b64d0b6
+wolf-rt: stack overflow in task 'main.task0.entry'
+task/release/300000 rc=134

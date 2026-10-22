@@ -815,7 +815,10 @@ fn reactor() -> std::io::Result<&'static Reactor> {
         THREAD_STATE.store(THREAD_STARTING, SeqCst);
         if let Err(e) = std::thread::Builder::new()
             .name("wolf-reactor".into())
-            .spawn(move || reactor_main(r))
+            .spawn(move || {
+                crate::task::enter_runtime_thread();
+                reactor_main(r)
+            })
         {
             THREAD_STATE.store(THREAD_NONE, SeqCst);
             return Err(e);

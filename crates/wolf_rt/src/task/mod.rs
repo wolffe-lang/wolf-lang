@@ -887,3 +887,9 @@ mod par_tests {
         );
     }
 }
+
+/// Register the calling thread for guard-fault reporting without starting a pool.
+pub(crate) fn enter_runtime_thread() {
+    #[cfg(unix)]
+    stack::enter_thread();
+}
