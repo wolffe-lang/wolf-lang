@@ -449,6 +449,41 @@ fn logic_on_numbers_is_e0409() {
     assert!(codes(&tc).contains(&"E0409"), "{:?}", codes(&tc));
 }
 
+/// o1 (wolf-lang#879, `[type.row.operand]`): a method call on a `!T` is
+/// E0409 at the receiver AHEAD of every resolution step. A blanket impl
+/// would take the row as its `T` (0.2.34 got as far as refusing "a
+/// `Probe` method on a non-nominal receiver"), and the clause says
+/// nothing reads a row, so no impl is consulted. Nothing is refused.
+#[test]
+fn method_on_a_row_is_e0409_before_any_impl() {
+    let tc = check_one(
+        "trait Probe {\n    fn probe(self) -> int\n}\n\n\
+         impl[T] Probe for T {\n    fn probe(self) -> int {\n        7\n    }\n}\n\n\
+         fn mk() -> int ! {none} {\n    3\n}\n\n\
+         fn main() -> int {\n    let r = mk()\n    let v = r.probe()\n    print(\"{v}\")\n    0\n}\n",
+    );
+    assert_eq!(codes(&tc), ["E0409"], "refusals: {:?}", tc.not_yet);
+    assert!(tc.not_yet.is_empty(), "{:?}", tc.not_yet);
+    assert_eq!(
+        tc.diagnostics[0].message,
+        "`.probe(…)` cannot be applied to `int ! {none}`"
+    );
+}
+
+/// o1: the method arm still types the call's arguments, as every
+/// refusal in `concrete_method_call` does — an error inside one is
+/// reported beside the row's, and a member read answers `<error>` so
+/// nothing after it cascades (one E0409 per read, however it is used).
+#[test]
+fn method_on_a_row_still_types_its_arguments() {
+    let tc = check_one(
+        "fn mk() -> str ! {none} {\n    \"-j4\"\n}\n\n\
+         fn main() -> int {\n    let r = mk()\n    if r.starts_with(if true { \"4\" } else { 4 }) {\n        print(\"yes\")\n    }\n    let n = r.len + 1\n    print(\"{n}\")\n    0\n}\n",
+    );
+    assert_eq!(codes(&tc), ["E0409", "E0401", "E0409"], "{:?}", tc.not_yet);
+    assert!(tc.not_yet.is_empty(), "{:?}", tc.not_yet);
+}
+
 #[test]
 fn return_type_mismatch_has_provenance_chain() {
     let tc = check_one("fn answer() -> int { \"forty-two\" }\nfn main() -> !int { answer() }\n");
