@@ -223,11 +223,33 @@ fn a_call_s_str_held_outside_its_region_is_refused() {
     refused_everywhere(&corpus("memory/region_str_call_held.lu"));
 }
 
-/// #612's own first witness: stored through a `mut` parameter's map.
-/// Red at trunk 85de08ff.
+/// #612's own first witness: stored through a `mut` parameter's map,
+/// `copy`d. Red at trunk 85de08ff; admitted by s255
+/// (`[mem.region.outer-write]`): the `copy` at the store into the outer
+/// `st` is the materializing copy, made in the map's own region, so the
+/// row runs on checked, native and release and reads its own bytes back.
+/// lupin 0.1.55 shares the copy's bytes and traps `region-fault` — the
+/// is-lane's column, pinned here so a lupin that mirrors the clause
+/// moves this assertion on purpose.
 #[test]
-fn a_call_s_str_stored_through_a_mut_parameter_is_refused() {
-    refused_everywhere(&corpus("memory/region_str_call_index_store.lu"));
+fn a_call_s_str_copied_into_a_mut_parameter_s_map_runs() {
+    let entry = corpus("memory/region_str_call_index_store.lu");
+    for flag in ["--checked", "--native", "--release"] {
+        let Some(obs) = lane(&entry, flag) else {
+            assert_ne!(flag, "--checked", "the checked lane always runs");
+            continue;
+        };
+        assert_eq!(obs.verdict, "exit(0)", "{flag} on the admitted row: {:?}", obs.codes);
+        assert_eq!(obs.stdout, "[piece 7 3-7]\n", "{flag} stdout on the admitted row");
+    }
+    if let Some(lupin) = lupin_says(&entry) {
+        assert_eq!(
+            lupin.verdict,
+            "trap(region-fault)",
+            "lupin {} shares a copied str's bytes (its column in docs/s255)",
+            lupin.version
+        );
+    }
 }
 
 /// The callee hands back a view of its argument's region bytes. Red at

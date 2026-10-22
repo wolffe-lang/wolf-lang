@@ -1830,8 +1830,9 @@ impl<'t> Lowerer<'t> {
                      container replaced by `copy`, a call handing it to a clean \
                      parameter, or a mutator that stores nothing (`pop`, `clear`, `reset`, \
                      `reserve`). A flat field or whole store of anything else — a `copy` \
-                     included, which lands in the callee's entry ambient — is what `{}` \
-                     does here. Keep that value in storage `{}` already owns (`List[byte]` \
+                     included, which lands in the callee's entry ambient; another \
+                     argument's value, whose region the callee does not own — is what \
+                     `{}` does here. Keep that value in storage `{}` already owns (`List[byte]` \
                      pushes, `reset` then pushes), or build it outside the block \
                      [mem.region.outer-write].",
                     u.callee, u.param
@@ -9610,29 +9611,45 @@ impl<'t> Lowerer<'t> {
     /// s255 (`[mem.region.outer-write]`): the ambient-clean verdict of
     /// each `mut` parameter, read off this body's own lowering. A
     /// parameter is clean when, over the whole body, its root never
-    /// held or shared a site of the body's ambient region — the
-    /// caller's region, where every temporary the callee builds lands
-    /// (D12), or the proc's own for a `spawn proc` entry. Under the
-    /// clause that is exactly: scalar stores, container stores of
-    /// scalars or of `copy`s (the container's own region), containers
-    /// replaced by `copy` (the old header's), calls handing the
-    /// parameter to a clean parameter, and the mutators that store
-    /// nothing; a flat field or whole store of anything else — a `copy`
-    /// included, whose target is the entry ambient — is not. A move out
-    /// of the parameter is covered by its re-initialization (the move
-    /// checker demands one before every return): that store is read
-    /// here like any other.
+    /// held or shared a site outside ITS OWN region — the generalized
+    /// parameter region its storage arrived in, where its containers
+    /// grow and the copies aimed at it land — other than its own entry
+    /// sites and the static region's. Everything else is the caller's
+    /// and the callee cannot know it outlives the parameter: the body's
+    /// ambient (the caller's region, where every temporary the callee
+    /// builds lands, D12; the proc's own for a `spawn proc` entry),
+    /// another parameter's bytes or region (a `take` argument pushed, a
+    /// `str` or fn-value argument stored: `region_kept_arg_take`,
+    /// `region_kept_arg_closure` — the first verdict read only the
+    /// ambient and let both through), a region parameter's region
+    /// (`in keep { }`), a block's. Under the clause that is exactly:
+    /// scalar stores, container stores of scalars or of `copy`s (the
+    /// container's own region), containers replaced by `copy` (the old
+    /// header's), calls handing the parameter to a clean parameter, and
+    /// the mutators that store nothing; a flat field or whole store of
+    /// anything else — a `copy` included, whose target is the entry
+    /// ambient — is not. A move out of the parameter is covered by its
+    /// re-initialization (the move checker demands one before every
+    /// return): that store is read here like any other.
     fn mut_clean_verdicts(&self) -> Vec<(u32, Result<(), Span>)> {
-        let ambient_root = self.ambient.first().copied();
-        let is_ambient = |r: RegionId| Some(r) == ambient_root || Some(r) == self.proc_region;
         self.param_locals
             .iter()
             .map(|&(l, idx)| {
+                let own: Option<RegionId> = self
+                    .param_regions
+                    .iter()
+                    .find(|&&(_, pi)| pi == idx)
+                    .map(|&(r, _)| r);
                 let mut first: Option<Span> = None;
                 let held = self.holds.get(&l).into_iter().flat_map(|m| m.iter());
                 let shared = self.shares.get(&l).into_iter().flat_map(|m| m.iter());
                 for (&s, &sp) in held.chain(shared) {
-                    if is_ambient(self.sites[s.0 as usize].region)
+                    let site = &self.sites[s.0 as usize];
+                    let own_entry = self.param_index.get(&s) == Some(&idx);
+                    let own_region = own == Some(site.region);
+                    let is_static =
+                        self.rt.regions[site.region.0 as usize].kind == RegionKind::Static;
+                    if !(own_entry || own_region || is_static)
                         && first.is_none_or(|f| (sp.file, sp.lo) < (f.file, f.lo))
                     {
                         first = Some(sp);
