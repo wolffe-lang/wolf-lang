@@ -1,0 +1,24 @@
+//! check: fail(E0409)
+//! phase: resolve
+//! conforms: type.row.operand, gram.type.row
+//!
+//! wolf-lang#879 (o1): the method-call twin of row_operand_member —
+//! `rest.starts_with("4")` on a `str ! {none}`. A method call reads its
+//! receiver as member access does, so it is the same E0409 at the
+//! receiver, never the "methods on builtin types" refusal and never a
+//! run (lupin 0.1.55 printed `yes`).
+
+fn strip(s: str) -> str ! {none} {
+    if s.starts_with("-j") {
+        return s[2..]
+    }
+    none
+}
+
+fn main() -> int {
+    let rest = strip("-j4")
+    if rest.starts_with("4") {
+        print("yes")
+    }
+    0
+}

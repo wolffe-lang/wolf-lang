@@ -1,0 +1,26 @@
+//! check: fail(E0409)
+//! phase: resolve
+//! conforms: type.row.operand, gram.type.row
+//!
+//! wolf-lang#879 (o1, from a wollf run of the mk project): a `!str`
+//! read through `.len`. `[type.row.operand]` — a `!T` is two values,
+//! never one, and no operator reads it; member access is a read, so
+//! `rest.len` on a `str ! {none}` is E0409 at the base, with the
+//! handle-first note (`rest?.len`, `(rest else "").len`). Before o1
+//! the compiler filed this under conservatism ("members on this
+//! type") and lupin 0.1.55 ran it, printing the payload's length
+//! through the row.
+
+fn strip(s: str) -> str ! {none} {
+    if s.starts_with("-j") {
+        return s[2..]
+    }
+    none
+}
+
+fn main() -> int {
+    let rest = strip("-j4")
+    let n = rest.len
+    print("n: {n}")
+    0
+}
