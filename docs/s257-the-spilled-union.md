@@ -175,9 +175,9 @@ member; a view of another member never folds (it reads bytes as
 written).
 
 In lowering, the two unifiers collect every type a position sees and
-`union_of` them; four helpers do the rest. `into_slot(v, slot)` wraps
+`union_of` them; four helpers do the rest. `wrap_slot(v, slot)` wraps
 a payload at a write (`enum_value`, the raise, `propagate_err`'s
-widening through `into_eu_slots`, `zero_of` — a union's zero is its
+widening through `wrap_eu_slots`, `zero_of` — a union's zero is its
 first member's, wrapped). `slot_view(v, T)` / `slot_view_as(v,
 table, sema)` unwrap at a read: the scalar-arm bind carries the
 arm's variant payload type into `enter_match_arm_inner` through
@@ -206,7 +206,7 @@ an `emit_switch` over the variant tags, and under each variant the
 payloads that reach storage read through the variant's view, copied
 (`deep_copy_in` again — for a nested `Value` that is a call to the
 same function, the recursion the checked machine's `copy_out` does
-at run time), written back through `into_slot`, the slots a variant
+at run time), written back through `wrap_slot`, the slots a variant
 does not own carried unchanged; the result through a declared
 variable the arms assign. `deep_copy_in`'s `Map` arm copies values
 that reach the heap entry by entry exactly as `deep_copy_out` already
