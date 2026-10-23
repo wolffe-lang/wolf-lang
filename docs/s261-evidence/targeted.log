@@ -1,0 +1,81 @@
+targeted started Fri Oct 23 01:19:51 PM UTC 2026 825deb53
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+   Compiling wolf_driver v0.2.35 (/home/mfwolffe/lanes/s261/wolf-lang/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.54s
+     Running tests/env_argv_lanes.rs (target/debug/deps/env_argv_lanes-251d10f3040bee9d)
+
+running 8 tests
+
+running 1 test
+test checked_argv_option_rejects_invalid_and_wrong_lane_inputs ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.01s
+
+test checked_argv_option_rejects_invalid_and_wrong_lane_inputs ... ok
+test unix::checked_invocation_shim ... ok
+
+running 1 test
+test program_name_cannot_escape_its_region ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+test program_name_cannot_escape_its_region ... ok
+
+running 1 test
+test native_utf8_and_empty_arguments_agree_on_every_host ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.14s
+
+test native_utf8_and_empty_arguments_agree_on_every_host ... ok
+
+running 1 test
+test checked_byte_argv_and_text_traps_are_exact ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.02s
+
+test checked_byte_argv_and_text_traps_are_exact ... ok
+
+running 1 test
+test unix::invocation_name_is_not_the_resolved_executable_on_all_tiers ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.33s
+
+s261 native argv0="program": PASS
+s261 native argv0="/home/mfwolffe/lanes/s261/wolf-lang/target/tmp/s261-native/program": PASS
+s261 native argv0="./program": PASS
+s261 native argv0="./hound": PASS
+s261 native argv0="NAME": PASS
+s261 release argv0="program": PASS
+s261 release argv0="/home/mfwolffe/lanes/s261/wolf-lang/target/tmp/s261-release/program": PASS
+s261 release argv0="./program": PASS
+s261 release argv0="./hound": PASS
+s261 release argv0="NAME": PASS
+s261 checked argv0="program": PASS
+s261 checked argv0="/home/mfwolffe/lanes/s261/wolf-lang/target/tmp/s261-checked-name/program": PASS
+s261 checked argv0="./program": PASS
+s261 checked argv0="./hound": PASS
+s261 checked argv0="NAME": PASS
+test unix::invocation_name_is_not_the_resolved_executable_on_all_tiers ... ok
+
+running 1 test
+test unix::non_utf8_environment_keeps_its_existing_rows ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.35s
+
+s261 native-env: env_get=utf8, env_vars omits entry, PASS
+s261 release-env: env_get=utf8, env_vars omits entry, PASS
+s261 checked-env: env_get=utf8, env_vars omits entry, PASS
+test unix::non_utf8_environment_keeps_its_existing_rows ... ok
+
+running 1 test
+test unix::non_utf8_arguments_survive_or_trap_without_rust_panics ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 1.44s
+
+s261 native-bytes: invalid arguments/name preserved or named trap, PASS
+s261 release-bytes: invalid arguments/name preserved or named trap, PASS
+test unix::non_utf8_arguments_survive_or_trap_without_rust_panics ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.02s
+
+targeted-rc=0 Fri Oct 23 01:19:56 PM UTC 2026

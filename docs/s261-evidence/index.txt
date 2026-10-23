@@ -1,0 +1,84 @@
+s261 evidence index (2026-10-23)
+
+Prediction f9954814 was committed before the first implementation change,
+then rebased cleanly onto s260 at 2f89a712. Runtime and checked execution
+changes do not overlap s260's spawn/wait paths. No host package or Mac build.
+
+Toolchains (release asset digests verified and read twice on kasumi):
+wolf 0.2.35 (wolfgang, pin cf0c13d), paired with lupin 0.1.56 pin 294d626
+wolf linux x86-64 archive: 4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a
+lupin linux x86-64 archive: ad703550ac4787e8e4bb26989d591a731410274d7332f2b4e8b9a64c878822cc
+Rust 1.97.1; kasumi, taskset -c 4-7, CARGO_INCREMENTAL=0.
+The per-argv-witness image is the lane's own archlinux:base-devel image
+with clang installed INSIDE that image. Every pool argv test has its own
+network-less PID namespace; no host socket is mounted.
+
+R-s261-1 and R-s261-2 asked and accepted as recommended. env_arg0 -> str;
+env_args -> argv[1..]; env_args_bytes -> every argument, name first.
+One trap kind, argument-utf8, with the OS index in the message, normal
+native trap exit 134 (not a signal); checked protocol trap(argument-utf8)
+with trap_message. Explicit checked input is repeated --argv-hex=HEX,
+first occurrence argv[0]. Empty argument accepted; NUL, malformed hex,
+signed pseudo-hex, and use outside --checked refused. Windows byte argv
+uses the OS-string representation; Unix bytes are verbatim.
+
+env_get already returns utf8, env_vars already skips invalid entries:
+measured on all three tiers before/after (baseline.log, targeted.log).
+The contract's env_var wording is the legacy text surface; the runtime
+family in scope is env_get/env_vars, neither using args()'s unwrap.
+
+baseline.log: immutable wolf 0.2.35 builds both native tiers, then a real
+argument xFFy aborts each with Rust's unwrap panic, exit 134. env_arg0 is
+E0301 on native/release/checked. The checked frontend given a raw xFFy
+argument panics, exit 101; it had no machine argv input channel (the new
+hex option is unknown, exit 2). This is not called a checked-machine
+abort: the old machine cannot be handed byte argv at all.
+
+targeted.log: 8 tests green, zero skips. Native/release/checked each pass
+PATH-bare, absolute, ./program, symlink ./hound, and bash exec -a NAME.
+The checked subprocess captures its kernel argv[0] and supplies it to the
+machine's explicit byte input; it does not run wolf run --checked.
+Byte-exact invalid arguments/name, independently decoded text readers,
+indexed trap messages, default absent argv, UTF-8 and empty arguments,
+hex validation, and ambient-region E1010 are checked. The native UTF-8
+smoke is portable to Windows (the release tier remains Unix-only).
+
+regen.log: workspace clippy with -D warnings green; corpus snapshots
+regenerated. Anchors 693 -> 695, added exec.checked.argv and os.env.argv;
+reverse set difference empty (no anchor dropped). Lowering ledger adds
+only os/arg0 and os/args_bytes. No existing corpus row changed.
+
+differ-*-before.log and differ-*-after.log: same complete head corpus,
+same lupin 0.1.56, A changed from exactly merged base 2f89a712 to this
+lane. All six passes ran inside own network-less containers, cores 4-7.
+Each exits 1 for the EXISTING hard divergences, not for a new discrepancy.
+differ-moves.txt asserts the exact per-file movement: only os/arg0 and
+os/args_bytes leave completeness; A's run coverage gains two; B/both and
+all hard-divergence counts are unchanged.
+
+Prediction scored:
+1. Correct: argv[0] was dropped by runtime args().skip(1), not startup;
+   the driver also used args(), and the checked argv was an empty Vec<String>.
+2. Correct: neither environment reader shares the unwrap.
+3. Freestanding has no process argv and refuses both new calls by name,
+   in the existing freestanding_target strict gate (both compiler tiers).
+4. Correct: exactly two conformance rows enter; the full differ moves
+   exactly those two on checked/native/release. No unexplained movement.
+
+README read, current. No statement moved in its module/command list,
+archive list, install/build instructions, or release/tier descriptions.
+
+CI plant: s261-plant at 243a90af drops argv[0] and restores args() unwrap;
+smallest dispatch jobs=lint-test, run 39957879873. Its verdict and the
+final-head gauntlet/PR/full-tier runs are indexed in PR wolf-lang#904.
+The final local gauntlet is /home/mfwolffe/lanes/s261/ev/gauntlet.log;
+it prints the exact head, dates, skips, every gate and its final status.
+
+Issues to file (none filed by this lane):
+wolf-std: program-name and byte-args wrappers; name-first byte contract,
+text trap behavior, and wrapper witnesses. The std lane chooses names.
+wolf-interp: both new builtins, exact argv bytes/name, single argument-utf8
+kind with OS-indexed message, default absent argv, the explicit argv
+input on its equivalent conformance entry point, and the new corpus rows.
+Byte-path calls stay wolf-lang#687's work. Issues to close after merge:
+wolf-lang#899 and #406, with std/lupin asks separately tracked.

@@ -1,0 +1,29 @@
+checked classification changes: 2
+corpus/os/arg0.lu [{"a": "fail(E0301)", "b": "unsupported", "class": "Completeness", "file": "corpus/os/arg0.lu"}] -> []
+corpus/os/args_bytes.lu [{"a": "fail(E0301)", "b": "unsupported", "class": "Completeness", "file": "corpus/os/args_bytes.lu"}] -> []
+other emitted-record detail changes: []
+before differ: 1221 file(s) — 819 agreement(s), 261 completeness note(s), 6 SOUNDNESS finding(s), 102 unsupported (3 forward pin(s)); 27 hard divergence(s)
+before differ: run-rung coverage — A executed 738, B executed 935, BOTH executed 712 of 1159 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+after differ: 1221 file(s) — 819 agreement(s), 259 completeness note(s), 6 SOUNDNESS finding(s), 102 unsupported (3 forward pin(s)); 27 hard divergence(s)
+after differ: run-rung coverage — A executed 740, B executed 935, BOTH executed 712 of 1159 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+
+native classification changes: 2
+corpus/os/arg0.lu [{"a": "fail(E0301)", "b": "unsupported", "class": "Completeness", "file": "corpus/os/arg0.lu"}] -> []
+corpus/os/args_bytes.lu [{"a": "fail(E0301)", "b": "unsupported", "class": "Completeness", "file": "corpus/os/args_bytes.lu"}] -> []
+other emitted-record detail changes: ['corpus/conc/atomic_ub_uaf.lu', 'corpus/memory/unsafe_ub_uaf.lu', 'corpus/memory/volatile_ub_uaf.lu']
+before differ: 1221 file(s) — 803 agreement(s), 261 completeness note(s), 20 SOUNDNESS finding(s), 104 unsupported (3 forward pin(s)); 41 hard divergence(s)
+before differ: run-rung coverage — A executed 742, B executed 935, BOTH executed 710 of 1159 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+after differ: 1221 file(s) — 803 agreement(s), 259 completeness note(s), 20 SOUNDNESS finding(s), 104 unsupported (3 forward pin(s)); 41 hard divergence(s)
+after differ: run-rung coverage — A executed 744, B executed 935, BOTH executed 710 of 1159 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+
+release classification changes: 2
+corpus/os/arg0.lu [{"a": "fail(E0301)", "b": "unsupported", "class": "Completeness", "file": "corpus/os/arg0.lu"}] -> []
+corpus/os/args_bytes.lu [{"a": "fail(E0301)", "b": "unsupported", "class": "Completeness", "file": "corpus/os/args_bytes.lu"}] -> []
+other emitted-record detail changes: ['corpus/memory/volatile_ub_uaf.lu']
+before differ: 1221 file(s) — 803 agreement(s), 261 completeness note(s), 20 SOUNDNESS finding(s), 104 unsupported (3 forward pin(s)); 41 hard divergence(s)
+before differ: run-rung coverage — A executed 742, B executed 935, BOTH executed 710 of 1159 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+after differ: 1221 file(s) — 803 agreement(s), 259 completeness note(s), 20 SOUNDNESS finding(s), 104 unsupported (3 forward pin(s)); 41 hard divergence(s)
+after differ: run-rung coverage — A executed 744, B executed 935, BOTH executed 710 of 1159 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+
+Only the two new argv rows change classification on every tier.
+The pre-existing nonzero hard-divergence counts remain 27 checked and 41 native/release; no new hard divergence.

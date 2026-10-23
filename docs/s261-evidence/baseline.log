@@ -1,0 +1,81 @@
+wolf 0.2.35 (wolfgang, pin cf0c13d)
+paired with lupin 0.1.56 (reference interpreter), pin 294d626
+wolf build: note: ld.lld not found on PATH — linking with the system linker (lld ships with the toolchain; packaging is c13)
+baseline build args native rc=0
+/home/mfwolffe/lanes/s261/baseline-in-container.sh: line 12:    15 Aborted                    (core dumped) "$L/baseline/args/$tier" "$(printf 'x\377y')" > "$L/ev/baseline-$tier.stdout" 2> "$L/ev/baseline-$tier.stderr"
+baseline invalid argv native rc=134
+
+thread '<unnamed>' (15) panicked at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/env.rs:876:51:
+called `Result::unwrap()` on an `Err` value: "x\xFFy"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+fatal runtime error: failed to initiate panic, error 5, aborting
+wolf build: note: ld.lld not found on PATH — linking with the system linker (lld ships with the toolchain; packaging is c13)
+error[E0301]: nothing named `env_arg0` is in scope
+ --> /home/mfwolffe/lanes/s261/baseline/name/main.lu:1:19
+  |
+1 | fn main() { print(env_arg0()) }
+  |                   ^^^^^^^^ not found
+  |
+help: did you mean `env_args`?
+  |
+1 | fn main() { print(env_args()) }
+  |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+baseline arg0 native build rc=2
+wolf build: note: ld.lld not found on PATH — linking with the system linker (lld ships with the toolchain; packaging is c13)
+baseline env native build rc=0
+utf8
+0
+baseline env native rc=0
+wolf build: note: ld.lld not found on PATH — linking with the system linker (lld ships with the toolchain; packaging is c13)
+baseline build args release rc=0
+/home/mfwolffe/lanes/s261/baseline-in-container.sh: line 12:    46 Aborted                    (core dumped) "$L/baseline/args/$tier" "$(printf 'x\377y')" > "$L/ev/baseline-$tier.stdout" 2> "$L/ev/baseline-$tier.stderr"
+baseline invalid argv release rc=134
+
+thread '<unnamed>' (46) panicked at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/env.rs:876:51:
+called `Result::unwrap()` on an `Err` value: "x\xFFy"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+fatal runtime error: failed to initiate panic, error 5, aborting
+wolf build: note: ld.lld not found on PATH — linking with the system linker (lld ships with the toolchain; packaging is c13)
+error[E0301]: nothing named `env_arg0` is in scope
+ --> /home/mfwolffe/lanes/s261/baseline/name/main.lu:1:19
+  |
+1 | fn main() { print(env_arg0()) }
+  |                   ^^^^^^^^ not found
+  |
+help: did you mean `env_args`?
+  |
+1 | fn main() { print(env_args()) }
+  |
+
+wolf build: the package does not compile; fix the errors above (`wolf --explain E0301` explains this code, or any other, by name)
+baseline arg0 release build rc=2
+wolf build: note: ld.lld not found on PATH — linking with the system linker (lld ships with the toolchain; packaging is c13)
+baseline env release build rc=0
+utf8
+0
+baseline env release rc=0
+{"commit":"cf0c13d","diagnostics":[{"code":"E0301","severity":"error","span":[18,26]}],"file":"/home/mfwolffe/lanes/s261/baseline/name/main.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"resolve","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E0301)","warnings":[]}
+error[E0301]: nothing named `env_arg0` is in scope
+ --> /home/mfwolffe/lanes/s261/baseline/name/main.lu:1:19
+  |
+1 | fn main() { print(env_arg0()) }
+  |                   ^^^^^^^^ not found
+  |
+help: did you mean `env_args`?
+  |
+1 | fn main() { print(env_args()) }
+  |
+
+baseline checked arg0 rc=0
+
+thread 'main' (73) panicked at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/env.rs:876:51:
+called `Result::unwrap()` on an `Err` value: "x\xFFy"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+baseline checked raw invalid argument rc=101
+wolf conform-run: unknown flag `--argv-hex=7368`
+baseline checked byte argv channel rc=2
+{"commit":"cf0c13d","diagnostics":[],"file":"/home/mfwolffe/lanes/s261/baseline/env/main.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"utf8\n0\n","stdout_sha256":"ad9fe54b3bde52fdee9aac0be967078dfed8e32af371b9837a40876891abe373","verdict":"exit(0)","warnings":[]}
+baseline checked env rc=0
+baseline-rc=0 Fri Oct 23 01:09:15 PM UTC 2026
