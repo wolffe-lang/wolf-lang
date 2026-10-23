@@ -67,7 +67,7 @@ fn argument_text(a: &std::ffi::OsStr, index: usize) -> &str {
 /// `out` must address 16 writable bytes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_env_arg0(out: i64) {
-    let a = std::env::args_os().next().unwrap_or_default();
+    let a = std::env::args_os().nth(1).unwrap_or_default();
     let text = argument_text(&a, 0);
     let p = crate::str::region_copy(text.as_bytes());
     unsafe { write_pair(out, p as i64, text.len() as i64) };
@@ -77,8 +77,8 @@ pub unsafe extern "C" fn __wolf_rt_env_arg0(out: i64) {
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_env_args() -> i64 {
     let hdr = crate::list::new_list(16);
-    for (index, a) in std::env::args_os().enumerate().skip(1) {
-        push_str(hdr, argument_text(&a, index));
+    for a in std::env::args().skip(1) {
+        push_str(hdr, &a);
     }
     hdr as i64
 }
