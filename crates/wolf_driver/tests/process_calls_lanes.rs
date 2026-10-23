@@ -78,7 +78,8 @@ fn report(line: &str) {
 
 /// The pairing at this lane, which predates the mirror of every answer
 /// s253 adds (each pinned below by what it was measured to say).
-const PRE_MIRROR_LUPIN: &str = "0.1.55";
+// r40: the published 0.1.56 archive still predates these six names.
+const PRE_MIRROR_LUPIN: &[&str] = &["0.1.55", "0.1.56"];
 
 #[derive(Debug)]
 struct Obs {
@@ -243,7 +244,7 @@ fn judge_lupin(obs: &Obs, name: &str, want: &str, lupin: &Lupin<'_>) {
         "== lupin {} on {name}: {} {}\n{}",
         obs.version, obs.verdict, obs.reason, obs.stdout
     );
-    let pre = obs.version == PRE_MIRROR_LUPIN;
+    let pre = PRE_MIRROR_LUPIN.contains(&obs.version.as_str());
     let refuses = |calls: &[&str], unresolved: bool| {
         assert_eq!(
             obs.verdict, "unsupported",
