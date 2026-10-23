@@ -1,0 +1,20 @@
+head b5b7631263bcef96f24d6f851f66bc80a4c675e5
+Fri Oct 23 09:43:12 AM UTC 2026
+a real-time handler this program did not make: none
+
+REPORT adopt.lu release: exit Some(0): zero=invalid one=invalid two=invalid negative=invalid past=invalid | link before: pipe:[912578675] | a child before the adopt holds 5: no | adopt: io |  ||  || out-release: ""
+
+thread 'an_inherited_descriptor_is_adopted' (2388193) panicked at crates/wolf_driver/tests/process_calls_lanes.rs:529:9:
+assertion `left == right` failed: #815: the release binary
+  left: "zero=invalid one=invalid two=invalid negative=invalid past=invalid\nlink before: pipe:[912578675]\na child before the adopt holds 5: no\nadopt: io\n"
+ right: "zero=invalid one=invalid two=invalid negative=invalid past=invalid\nlink before: out-release\na child before the adopt holds 5: yes\nadopted as handle 3\nlink after the adopt: out-release\n5 again while it is a handle: io\nevery other number in 3..63 not io: none\na child after the adopt holds 5: no\n5 after the close: io\nlink after the close: none\n"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test an_inherited_descriptor_is_adopted ... FAILED
+== lupin 0.1.56 on signal_reserved_rows.lu: unsupported `os_signal_realtime` reads the C library's signal range: std has no `SIGRTMIN` or `SIGRTMAX`, and this machine admits no `unsafe` ([os.signal.host], [os.signal.group.note] R8)
+
+test the_c_librarys_numbers_on_every_host ... ok
+error: test failed, to rerun pass `-p wolf_driver --test process_calls_lanes`
+xtask ci: step `test` failed
+gauntlet-rc=1
+Fri Oct 23 09:50:57 AM UTC 2026
+ 05:50:57 up 6 days, 18:08,  8 users,  load average: 44.43, 21.70, 8.52
