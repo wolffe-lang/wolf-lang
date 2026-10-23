@@ -303,7 +303,9 @@ pub const PRELUDE: &[Ambient] = &[
     // (stdc02+) DELEGATE to these — the builtin spelling is not the
     // std API. `os_spawn` is argv-array ONLY: no shell-string spawn
     // exists anywhere, by construction (injection off the table).
+    host("env_arg0"),
     host("env_args"),
+    host("env_args_bytes"),
     host("env_get"),
     host("env_set"),
     // s225 (wolf-lang#534, `[os.env.unset]`): the removal `env_set`

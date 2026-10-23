@@ -14319,6 +14319,12 @@ pub fn host_builtin_sig(table: &mut TypeTable, name: &str) -> Option<(Vec<TyId>,
         // hold (`=`/NUL, empty) as `invalid`. `env_args`/`env_vars`
         // are `List[str]` — args in order, vars as sorted `K=V`
         // lines (determinism; the std facade owns richer shapes).
+        "env_arg0" => (Vec::new(), str_),
+        "env_args_bytes" => {
+            let bytes = byte_list(table);
+            let argv = table.intern(TyKind::List(bytes));
+            (Vec::new(), argv)
+        }
         "env_args" | "env_vars" => {
             let list_str = table.intern(TyKind::List(str_));
             (Vec::new(), list_str)
