@@ -439,6 +439,7 @@ fn run_with_five(prog: &Path, args: &[&str], dir: &Path, out: &Path) -> Output {
     use std::os::unix::process::CommandExt as _;
     let file = std::fs::File::create(out).expect("the out file");
     let raw = file.as_raw_fd();
+    eprintln!("REPORT run_with_five: source fd={raw}, target fd=5");
     let mut cmd = Command::new(prog);
     cmd.args(args)
         .current_dir(dir)
@@ -488,6 +489,28 @@ fn adopt_want(out: &str) -> String {
         link(out),
         link(out)
     )
+}
+
+/// #903: a release-only seam for the repeated fd-5 witness. The
+/// subprocess runner reserves 3/4 so File::create must return 5;
+/// ordinary workspace tests also exercise this helper without reserves.
+#[cfg(unix)]
+#[test]
+fn inherited_descriptor_adoption_release_only() {
+    let dir = scratch("adopt_release_fd5");
+    let exe = build(&fixture("adopt.lu"), &dir, "adopt", true)
+        .expect("the release-only descriptor witness must compile");
+    let file = dir.join("out-release");
+    let out = run_with_five(&exe, &[], &dir, &file);
+    let stdout = String::from_utf8_lossy(&out.stdout).replace('\r', "");
+    eprintln!(
+        "REPORT release-only adopt: status={:?}, stdout={stdout:?}, stderr={:?}",
+        out.status,
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(stdout, adopt_want("out-release"));
+    assert_eq!(std::fs::read_to_string(file).unwrap(), "X\nR");
 }
 
 /// #815: a program started with descriptor 5 open on a file adopts it as
