@@ -453,6 +453,16 @@ and runs ran there); `docs/s260-evidence/range-diff.txt` maps each one
 to its rebased commit. CI's new musl check (#886,
 `cargo check --workspace --locked --target x86_64-unknown-linux-musl`)
 and the freebsd cross-check, in a container at `88eb24b4`: exit 0 both.
+The gauntlet at `88eb24b4` with lupin 0.1.55 is void (it stopped at the
+pairing test: `PAIRING` names 0.1.56 now). At `b5b76312` with lupin
+0.1.56 (same settings otherwise) it went red once more at `test` in the
+flaky adopt test, the same shape on the release binary ("link before:
+pipe:[…]", `docs/s260-evidence/gauntlet9-red.log`), and the rerun there
+(10:01:08–10:22:58 UTC, `ev/gauntlet10.log`,
+`docs/s260-evidence/gauntlet10-summary.log`) exited 0, "all steps
+green": 329 test results, none failed; ir-volume 0 regressed;
+differ-self 1,219 files, 0 divergences; lane-coverage floors held; the
+SKIP census the same seven, all the host's.
 
 **The anchors.** `cargo xtask spec-extract` regenerated at the head:
 `spec/anchors.json` byte-identical to trunk `e2ed1607`'s, 693 keys on
@@ -632,9 +642,10 @@ head against 0.2.34: 21 static divergences, trunk's.
 - **wolf-lang — `an_inherited_descriptor_is_adopted` is flaky**
   (`process_calls_lanes.rs`, s253): `run_with_five`'s `dup2(raw, 5)` is a
   no-op when the out file is already 5 in the test process, so 5 keeps
-  close-on-exec and the program starts without it (inferred; red once in
-  five gauntlets, `s260-evidence/gauntlet6-red.log`); the helper should move a
-  source that sits on 5 (`F_DUPFD` above it) or clear `FD_CLOEXEC` there.
+  close-on-exec and the program starts without it (inferred; red in the
+  lane's gauntlets 6 and 9, green in 2–5, 7 and 10,
+  `s260-evidence/gauntlet{6,9}-red.log`); the helper should move a source
+  that sits on 5 (`F_DUPFD` above it) or clear `FD_CLOEXEC` there.
 - **pelt — a `#!`-less file on the plain-command path**: `os_spawn_fds`
   answers `io` with `ENOEXEC` now, where it ran the file under `/bin/sh`;
   the plain command should run it as pelt's `exec` already does
