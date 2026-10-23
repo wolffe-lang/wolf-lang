@@ -39,15 +39,17 @@ The org has 20 concurrent CI jobs for every repository, 5 of them macOS.
 for the tier and is red unless the plan succeeded, every job it chose
 succeeded and every other job was skipped.
 
-| run | tier | jobs |
+| run | tier | jobs selected by the planner |
 |---|---|---|
-| a pull request's push | `tier pr` | linux lint + test + corpus (the whole `cargo xtask ci`), the fuzz smoke |
-| push to `trunk`, the nightly (02:07 UTC), `gh workflow run ci`, a pull request carrying **`full-matrix`** | `tier full` | those, the macOS native gauntlet's three shards, build + test on macOS and windows, the freebsd cross-check |
-| a pull request that changes **only prose** | `tier noop` | none |
+| ordinary pull-request run | `tier pr` | `plan-test`, `lint-test`, `fuzz-smoke` |
+| pull request with `full-matrix`, trunk push, or dispatch with no jobs/tier | `tier full` | `plan-test`, `lint-test`, `fuzz-smoke`, `build-test`, `freebsd-check` (all selectable jobs except `native-macos`) |
+| nightly, dispatch with `tier=release`, or pull request with `release-matrix` | `tier release` | `plan-test`, `lint-test`, `native-macos`, `fuzz-smoke`, `build-test`, `freebsd-check` (every selectable job) |
+| prose-only pull request, or planner's label no-op cases | `tier noop` | none |
+| dispatch naming jobs | `tier partial` | only the named dependency-closed jobs |
 
-- **A PR merges only with a green `tier full` at its head.** `tier pr` is
-  not the merge gate: it never ran macOS, windows or freebsd, and
-  `lane-audit.sh` fails a head that has no green `tier full`.
+`plan`, `tier` and `nightly-red` are workflow jobs but are not selectable; `tier` is the verdict job and `nightly-red` runs after it. The three `native-macos` shards are in `tier release`, not `tier full`.
+
+- **Merge gates (ruling #104):** `Footprint: notes` needs the audit only; `Footprint: module` needs a green `tier pr`; `Footprint: cross-cutting` needs the `full-matrix` label and a green `tier full` at the final head. Every module or cross-cutting PR also needs a green `tier pr` before merge.
 - Open the PR **without** the label (`opened` and `labeled` together start
   two full runs, and the second cancels the first). Push until the head is
   the one to merge, then `gh pr edit <N> --add-label full-matrix` and wait.
