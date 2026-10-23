@@ -1,7 +1,10 @@
 # s260 — the three wrong answers t06 replayed (wolf-lang#642, #682, #683)
 
 Lane note. **Opus 5.5. Crawl 54.** Branch `s260` off wolf-lang trunk
-`06cff722`. Contract: `sprints/compiler/s260-the-three-wrong-answers.md`.
+`06cff722`, rebased onto `e2ed1607` (s259, #893) before the final head —
+one conflict, the CHANGELOG's Unreleased section, resolved with s260
+above s259; the prediction commit is `9f7e7b74` after the rebase.
+Contract: `sprints/compiler/s260-the-three-wrong-answers.md`.
 Toolchains: wolf 0.2.34 (`9da7bdcf`, linux x86-64 archive `88a9dd3d…`,
 read twice) the control, lupin 0.1.55 (archive `1152abc0…`, read twice)
 the reference.
@@ -143,8 +146,9 @@ native, release, `wolf conform-run --json --checked`, and lupin 0.1.55's
 `conform-run` — inside an `archlinux:base-devel` container on cpus 0–3,
 `ulimit -c 0`, `SigBlk`/`SigIgn` printed first (all zero). The control
 is the wolf 0.2.34 release archive (`9da7bdc`), the head the lane's own
-`cargo xtask dist` at `37c3cc37` (the code-final commit; what follows it
-is tests' formatting, the CHANGELOG and this note). The logs and the
+`cargo xtask dist` at `37c3cc37` — the pre-rebase twin of `f27ebf3b`
+(the rebase took only s259's compiler-side commits, none of which touch
+the runtime, the checked machine's os and fs tiers or these programs). The logs and the
 scripts are under `docs/s260-evidence/` (`v034-*.log` the control,
 `head-rows.log` the head, `strace.log` the rungs, `probes/` the
 programs that are not fixtures).
@@ -324,6 +328,59 @@ such call — the clause's compute-bound half, the checkpoint story
 `conc_abi.rs` records. The `when` row one frame down is not in the
 table: a `Mutex[int]` parameter is refused by the checker (E0401, "a
 `when` operand must be `Mutex[_]`"), filed as found.
+
+## 4. The gauntlet, the plants, the differ
+
+**`cargo xtask ci`** on kasumi under `taskset -c 4-7` at `7111883b` (the
+rebased head with the rows' snapshots; kasumi `~/lanes/s260/ev/gauntlet3.log`,
+its step and summary lines `s260-evidence/gauntlet3-summary.log`), the
+container rows required (`WOLF_JOBWAIT_REQUIRE_CONTAINER=1` and its
+siblings), `LUPIN` set with `WOLF_PAIRING_REQUIRE_SIBLING=1`: exit 0,
+04:17:38–04:39:43 UTC, "all steps green" — `fmt`, `fmt-fixpoint`,
+`clippy`, `rt-none`, `test` (329 test binaries, 0 failed), `fuzz-check`,
+`deps-check`, `corpus`, `abi-check`, `debug-check`, `midend-rate`,
+`bench-gates` (the ir-volume table: 694 recorded, 716 measured, 22 new,
+0 regressed), `spec-extract`, `conformance` (693 anchors), `print-gate`,
+`diag-catalog`, `doc-catalog`, `fmt-lu`, `fmt-fuzz`, `audit-surface`,
+`dist-smoke`, `differ-self` (1,219 files, 0 divergences, 21 in the
+conservatism ledger, 3 forward pins), `lane-coverage` (floors held,
+221/242/242/256/207; 385 static rejections). The SKIP census
+(`RUST_TEST_NOCAPTURE=1`): seven lines, all the host's — 4 × `lldb not
+installed`, 2 × `core (on): this host's core_pattern pipes cores to a
+program`, 1 × `the clang drift witness runs on macOS/aarch64 hosts
+only`; none in this lane's tests (lupin was required and ran). The
+first run, before the rebase, stopped at `fmt` (the three lane tests),
+the second at `test` on the two copy rows' missing token-stream
+snapshots; each `.snap.new` was read before it was moved into place
+(the lexer and declaration snapshots, and two `lowers` lines in the
+lowering ledger). The commit after `7111883b` makes `kill_park_lanes`
+unix-only, inert on linux.
+
+**The anchors.** `cargo xtask spec-extract` regenerated at the head:
+`spec/anchors.json` byte-identical to trunk `e2ed1607`'s, 693 keys on
+both sides, nothing in either difference — the `[os.fs.copy]` sentence
+added no tag.
+
+**The plants** (`workflow_dispatch -f jobs=lint-test`, `tier partial`;
+each branch is `7111883b` plus one commit that reverts the item's
+behaviour in the smallest lint-clean edit, every test left in place):
+
+| item | branch, commit | what the plant does | run, job | red on |
+|---|---|---|---|---|
+| #642 | `s260-plant-642` `57526c32` | the read/write rung never seeks back; the checked machine never puts back | 39899683181, `lint + test + corpus (linux x86-64)` 120238170633 | `copy_write_lanes`: 0 passed, 3 failed — the two rows on every machine and t06's witness |
+| #682 | `s260-plant-682` `550d484d` | the exec hook answers `Ok`, so the standard library's `execvp` runs | 39899685124, job 120238180662 | `spawn_noexec_lanes`: 1 passed, 2 failed — the spawn rows and the hooked plain spawn (`os_exec`, which the plant does not touch, stays green) |
+| #683 | `s260-plant-683` `699a2925` | `LEAVES = false` on x86-64 System V: the park returns into the program | 39899686795, job 120238185898 | `kill_park_lanes`: 3 passed, 12 failed — exactly the twelve sites wrong at 0.2.34; the entry-frame receive, the `when` and the row count stay green |
+
+Cargo stops at the first red test binary, so each plant was also run on
+kasumi at the same head with `--no-fail-fast` (`s260-evidence/plant-local.log`):
+#642 reddens its three `wolf_rt::fs` crate tests (the read-only sink,
+`/dev/full`, the partial write) beside the lane test's three; #682 its
+two `wolf_rt::os` crate tests (every spawn, the shim's `ENOEXEC`) beside
+the lane test's two; #683 reddens the lane rows only — the leave's own
+crate tests return early when the host does not leave, and nothing in
+them parks. At the head every one of these is green.
+
+**The differ** — §4.1 below.
 
 ## 5. Rulings (asked, each with a recommendation; implemented where reversible)
 
