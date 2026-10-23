@@ -849,7 +849,11 @@ enum BuildStop {
     Errors(Option<wolf_diag::Code>),
     /// A construct the pipeline cannot handle yet (conservatism
     /// ledger): the deepest phase that DID complete + the reason.
-    Refused { phase: &'static str, reason: String },
+    Refused {
+        phase: &'static str,
+        reason: String,
+        span: Option<wolf_span::Span>,
+    },
     /// Environment problem (no cc, missing libwolf_rt.a) — exit 2.
     Environment(String),
 }
@@ -1226,7 +1230,8 @@ fn compile_native(
         gate(sources, &mut pending, Vec::new(), true)?;
         return Err(BuildStop::Refused {
             phase: "resolve",
-            reason: format!("{} @{}..{}", nyc.construct, nyc.span.lo, nyc.span.hi),
+            reason: nyc.construct.to_string(),
+            span: Some(nyc.span),
         });
     }
     gate(sources, &mut pending, tc.diagnostics.clone(), false)?;
@@ -1259,7 +1264,8 @@ fn compile_native(
         gate(sources, &mut pending, Vec::new(), true)?;
         return Err(BuildStop::Refused {
             phase: "typecheck",
-            reason: format!("{} @{}..{}", nyc.construct, nyc.span.lo, nyc.span.hi),
+            reason: nyc.construct.to_string(),
+            span: Some(nyc.span),
         });
     }
     gate(sources, &mut pending, mem.diagnostics.clone(), true)?;
@@ -1273,7 +1279,8 @@ fn compile_native(
     if let Some(nyc) = build.not_yet.first() {
         return Err(BuildStop::Refused {
             phase: "mem",
-            reason: format!("{} @{}..{}", nyc.construct, nyc.span.lo, nyc.span.hi),
+            reason: nyc.construct.to_string(),
+            span: Some(nyc.span),
         });
     }
     let mut module = build.module;
@@ -1306,6 +1313,7 @@ fn compile_native(
         return Err(BuildStop::Refused {
             phase: "wir",
             reason,
+            span: None,
         });
     }
     // kw12: read on the same lowered module the scan read (a call the
@@ -1450,7 +1458,11 @@ fn compile_native(
     // Backend: the driver drives the TRAIT; ClifBackend is the s28
     // implementation behind it (capabilities, never identity).
     let refuse = |phase: &'static str, e: wolf_backend::BackendError| match e {
-        wolf_backend::BackendError::Unsupported(reason) => BuildStop::Refused { phase, reason },
+        wolf_backend::BackendError::Unsupported(reason) => BuildStop::Refused {
+            phase,
+            reason,
+            span: None,
+        },
         wolf_backend::BackendError::Environment(reason) => BuildStop::Environment(reason),
         wolf_backend::BackendError::Internal(msg) => {
             eprintln!("wolf build: ICE: backend: {msg}");
@@ -2164,6 +2176,7 @@ fn compile_unit(
         wolf_backend::BackendError::Unsupported(reason) => BuildStop::Refused {
             phase: "wir",
             reason,
+            span: None,
         },
         wolf_backend::BackendError::Environment(reason) => BuildStop::Environment(reason),
         wolf_backend::BackendError::Internal(msg) => {
@@ -2968,7 +2981,7 @@ const EXIT_REFUSED: i32 = 4;
 /// stderr says which.
 const EXIT_TOOL_ERROR: i32 = 2;
 
-fn report_build_stop(cmd: &str, stop: BuildStop) -> ! {
+fn report_build_stop(cmd: &str, stop: BuildStop, sources: &Sources) -> ! {
     match stop {
         BuildStop::Errors(first) => {
             // Every code carries an explanation, and nothing in the
@@ -2987,11 +3000,21 @@ fn report_build_stop(cmd: &str, stop: BuildStop) -> ! {
             eprintln!("wolf {cmd}: the package does not compile; fix the errors above ({explain})");
             std::process::exit(EXIT_REJECTED);
         }
-        BuildStop::Refused { phase, reason } => {
+        BuildStop::Refused {
+            phase,
+            reason,
+            span,
+        } => {
             eprintln!(
                 "wolf {cmd}: cannot compile this yet — {reason} (pipeline is honest \
                  through `{phase}`; the conservatism ledger, not a bug in your program)"
             );
+            if let Some(span) = span {
+                eprint!(
+                    "{}",
+                    wolf_diag::render_source_span(span, sources, &RenderOptions::default())
+                );
+            }
             std::process::exit(EXIT_REFUSED);
         }
         BuildStop::Environment(msg) => {
@@ -3046,7 +3069,7 @@ fn build(args: &[String]) {
         None,
     ) {
         Ok(()) => {}
-        Err(stop) => report_build_stop("build", stop),
+        Err(stop) => report_build_stop("build", stop, &sources),
     }
 }
 
@@ -3116,7 +3139,7 @@ fn run(args: &[String]) {
         None,
     ) {
         Ok(()) => {}
-        Err(stop) => report_build_stop("run", stop),
+        Err(stop) => report_build_stop("run", stop, &sources),
     }
     let status = std::process::Command::new(&out)
         .args(&cli.prog_args)
@@ -3241,7 +3264,7 @@ fn run_script(cli: &mut BuildCli, text: &str) -> ! {
         script.project.as_ref(),
     ) {
         Ok(()) => {}
-        Err(stop) => report_build_stop("run", stop),
+        Err(stop) => report_build_stop("run", stop, &sources),
     }
     exec(&out);
 }
@@ -3513,9 +3536,23 @@ fn native_run(
             eprintln!("wolf conform-run: ICE: native rung found errors after a clean ladder");
             std::process::exit(2);
         }
-        Err(BuildStop::Refused { phase, reason }) => {
+        Err(BuildStop::Refused {
+            phase,
+            reason,
+            span,
+        }) => {
             eprintln!("wolf conform-run --native: unsupported — {reason}");
-            record_refusal(x_ext, &reason, None);
+            if let Some(span) = span {
+                eprint!(
+                    "{}",
+                    wolf_diag::render_source_span(
+                        span,
+                        &scratch_sources,
+                        &RenderOptions::default()
+                    )
+                );
+            }
+            record_refusal(x_ext, &reason, span, &scratch_sources);
             (phase, "unsupported".to_string(), all)
         }
         Err(BuildStop::Environment(msg)) => {
@@ -3551,15 +3588,17 @@ fn native_run(
 /// spawn). The counterparty never emits these keys, so they take no
 /// part in comparison.
 fn report_refusal(
+    sources: &Sources,
     nyc: Option<&wolf_sema::check::NotYet>,
     x_ext: &mut Vec<(&'static str, serde_json::Value)>,
 ) {
     if let Some(nyc) = nyc {
-        eprintln!(
-            "wolf conform-run: unsupported — {} @{}..{}",
-            nyc.construct, nyc.span.lo, nyc.span.hi
+        eprintln!("wolf conform-run: unsupported — {}", nyc.construct);
+        eprint!(
+            "{}",
+            wolf_diag::render_source_span(nyc.span, sources, &RenderOptions::default())
         );
-        record_refusal(x_ext, nyc.construct, Some(nyc.span));
+        record_refusal(x_ext, nyc.construct, Some(nyc.span), sources);
     }
 }
 
@@ -3569,10 +3608,18 @@ fn record_refusal(
     x_ext: &mut Vec<(&'static str, serde_json::Value)>,
     construct: &str,
     span: Option<wolf_span::Span>,
+    sources: &Sources,
 ) {
     x_ext.push(("x-unsupported-construct", serde_json::json!(construct)));
     if let Some(span) = span {
         x_ext.push(("x-unsupported-span", serde_json::json!([span.lo, span.hi])));
+        if let Some(file) = sources.file_name(span.file) {
+            x_ext.push(("x-unsupported-file", serde_json::json!(file)));
+        }
+        if let Some((line, col)) = sources.line_col(span.file, span.lo) {
+            x_ext.push(("x-unsupported-line", serde_json::json!(line)));
+            x_ext.push(("x-unsupported-col", serde_json::json!(col)));
+        }
     }
 }
 
@@ -3615,10 +3662,14 @@ fn checked_run(
             // Surface the refusal on stderr (the rich channel); the
             // record stays `unsupported` — the conservatism ledger.
             eprintln!(
-                "wolf conform-run --checked: unsupported — {} @{}..{}",
-                nyc.construct, nyc.span.lo, nyc.span.hi
+                "wolf conform-run --checked: unsupported — {}",
+                nyc.construct
             );
-            record_refusal(x_ext, nyc.construct, Some(nyc.span));
+            eprint!(
+                "{}",
+                wolf_diag::render_source_span(nyc.span, sources, &RenderOptions::default())
+            );
+            record_refusal(x_ext, nyc.construct, Some(nyc.span), sources);
             ("mem", "unsupported".to_string(), all)
         }
         Ok(outcome) => {
@@ -3702,6 +3753,7 @@ fn ct_build_gate(
 /// could not see ([ct.taint.verify]'s fail-closed clause). Packages
 /// with no marked fn pay nothing: the sig scan is the whole cost.
 fn ct_gate(
+    sources: &Sources,
     pkg: &wolf_sema::Package,
     tc: &wolf_sema::Typecheck,
     mut all: Vec<Diagnostic>,
@@ -3721,7 +3773,7 @@ fn ct_gate(
     };
     let build = wolf_wir::lower_package(pkg, tc);
     if !build.not_yet.is_empty() {
-        report_refusal(build.not_yet.first(), x_ext);
+        report_refusal(sources, build.not_yet.first(), x_ext);
         return Err(("mem", "unsupported".to_string(), all));
     }
     let violations = wolf_wir::ct_check_module(&build.module);
@@ -3751,6 +3803,7 @@ fn ct_gate(
 /// it executes nothing, so `pass` is the whole of what the record can
 /// honestly say: the ladder completed and found nothing to report.
 fn wir_rung(
+    sources: &Sources,
     pkg: &wolf_sema::Package,
     tc: &wolf_sema::Typecheck,
     zstats: bool,
@@ -3759,7 +3812,7 @@ fn wir_rung(
 ) -> (&'static str, String, Vec<Diagnostic>) {
     let build = wolf_wir::lower_package(pkg, tc);
     if !build.not_yet.is_empty() {
-        report_refusal(build.not_yet.first(), x_ext);
+        report_refusal(sources, build.not_yet.first(), x_ext);
         return ("mem", "unsupported".to_string(), all);
     }
     if let Err(e) = wolf_wir::verify_module(&build.module) {
@@ -4053,7 +4106,7 @@ fn conform_run(args: &[String]) {
             "wolf conform-run: unsupported — {construct} (a freestanding program is an object \
              for a boot stub; no machine here runs one)"
         );
-        record_refusal(&mut x_ext, &construct, None);
+        record_refusal(&mut x_ext, &construct, None, &sources);
         ("none", "unsupported".to_string(), Vec::new())
     } else if phase.as_deref() == Some("none") {
         ("none", "unsupported".to_string(), Vec::new())
@@ -4196,7 +4249,7 @@ fn conform_run(args: &[String]) {
                                 if let Some(w) = waiting_w1002(&lints, &allow_regions, &all) {
                                     ("resolve", format!("fail({w})"), all)
                                 } else {
-                                    report_refusal(tc.not_yet.first(), &mut x_ext);
+                                    report_refusal(&sources, tc.not_yet.first(), &mut x_ext);
                                     ("resolve", "unsupported".to_string(), all)
                                 }
                             } else {
@@ -4232,7 +4285,11 @@ fn conform_run(args: &[String]) {
                                         {
                                             ("resolve", format!("fail({w})"), all)
                                         } else {
-                                            report_refusal(mem.not_yet.first(), &mut x_ext);
+                                            report_refusal(
+                                                &sources,
+                                                mem.not_yet.first(),
+                                                &mut x_ext,
+                                            );
                                             ("typecheck", "unsupported".to_string(), all)
                                         }
                                     } else {
@@ -4267,7 +4324,13 @@ fn conform_run(args: &[String]) {
                                             // unverified secret path.
                                             // Free when no fn carries
                                             // the attribute.
-                                            match ct_gate(&res.package, &tc, all, &mut x_ext) {
+                                            match ct_gate(
+                                                &sources,
+                                                &res.package,
+                                                &tc,
+                                                all,
+                                                &mut x_ext,
+                                            ) {
                                                 Err(stop) => stop,
                                                 Ok(all) => {
                                                     if checked {
@@ -4312,6 +4375,7 @@ fn conform_run(args: &[String]) {
                                                         // refusal keeps the
                                                         // ladder at mem.
                                                         wir_rung(
+                                                            &sources,
                                                             &res.package,
                                                             &tc,
                                                             zstats,

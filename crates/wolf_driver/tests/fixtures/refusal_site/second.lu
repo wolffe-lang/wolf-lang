@@ -1,0 +1,5 @@
+fn helper() -> int {
+    let value = true
+    value.not_compiled()
+    0
+}
