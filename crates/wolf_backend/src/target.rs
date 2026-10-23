@@ -431,6 +431,16 @@ mod tests {
                 RefusalClass::HostedRuntime,
             ),
             (
+                "__wolf_rt_env_arg0",
+                "`env_arg0`",
+                RefusalClass::HostedRuntime,
+            ),
+            (
+                "__wolf_rt_env_args_bytes",
+                "`env_args_bytes`",
+                RefusalClass::HostedRuntime,
+            ),
+            (
                 "__wolf_rt_env_args",
                 "`env_args`",
                 RefusalClass::HostedRuntime,

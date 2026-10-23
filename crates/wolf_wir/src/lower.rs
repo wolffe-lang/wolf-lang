@@ -10802,7 +10802,9 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
         // entry).
         if matches!(
             callee_text.as_str(),
-            "env_args"
+            "env_arg0"
+                | "env_args"
+                | "env_args_bytes"
                 | "env_get"
                 | "env_set"
                 // s225 (#534, `[os.env.unset]`): `env_set`'s shape with
@@ -15994,11 +15996,17 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 .ok_or_else(|| refuse("an os/time call with missing arguments", e.span))
         };
         match name {
-            "env_args" | "env_vars" => {
-                let sym = if name == "env_args" {
-                    "__wolf_rt_env_args"
-                } else {
-                    "__wolf_rt_env_vars"
+            "env_arg0" => {
+                let (region, slot) = self.rt_slot(16);
+                self.rt_call_slot("__wolf_rt_env_arg0", &[], slot, region, None);
+                let value = self.load_str_slot(slot, region, e.span)?;
+                Ok(Flow::Val(Some(value)))
+            }
+            "env_args" | "env_args_bytes" | "env_vars" => {
+                let sym = match name {
+                    "env_args" => "__wolf_rt_env_args",
+                    "env_args_bytes" => "__wolf_rt_env_args_bytes",
+                    _ => "__wolf_rt_env_vars",
                 };
                 let r = self.rt_call(sym, &[], Some(types::PTR)).expect("list");
                 Ok(Flow::Val(Some(r)))
