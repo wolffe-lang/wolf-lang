@@ -1,0 +1,23 @@
+//! member: false
+//! t06's replay of wolf-lang#642 (`sprints/triage/t06-evidence/642.txt`),
+//! unchanged: a 17-byte `in.txt` copied onto descriptor 1, which the
+//! harness points at `/dev/full`. Until s260: `copy=-2 os_error=28 (No
+//! space left on device) offset_after=17 left_to_read=0 of 17`.
+
+fn main() -> int {
+    let fd = fs_open("in.txt") else |_| {
+        eprint("open failed")
+        return 2
+    }
+    let n = fs_copy_chunk(fd, 1, 262144) else |e| match e {
+        eof => -1,
+        io => -2,
+    }
+    let code = os_error()
+    let at = fs_tell(fd) else -9
+    let rest = fs_read_chunk(fd, 262144) else |_| {
+        List[byte]()
+    }
+    eprint("copy={n} os_error={code} ({os_error_text(code)}) offset_after={at} left_to_read={rest.len} of 17")
+    0
+}
