@@ -1,0 +1,19 @@
+//! check: run(exit=0, stdout="true")
+//! phase: run
+//! conforms: os.env.argv, os.host.sigs
+//!
+//! A native conformance runner starts a program with an invocation name;
+//! the checked machine has none by default. Both readers agree on the
+//! name's bytes in their own execution context, without inventing a path.
+
+fn main() -> !int {
+    let name = env_arg0()
+    let argv = env_args_bytes()
+    var same = name.len == 0
+    if argv.len > 0 {
+        let decoded = str_from_utf8(argv[0])?
+        same = name == decoded
+    }
+    print("{same}")
+    0
+}

@@ -260,6 +260,20 @@ fn hosted_allocating_and_float_constructs_are_refused_by_name() {
             "hosted runtime",
         ),
         (
+            "env_arg0",
+            "",
+            "env_arg0().len",
+            "`env_arg0`",
+            "hosted runtime",
+        ),
+        (
+            "env_args_bytes",
+            "",
+            "env_args_bytes().len",
+            "`env_args_bytes`",
+            "hosted runtime",
+        ),
+        (
             "env_args",
             "",
             "env_args().len",

@@ -1,0 +1,15 @@
+//! check: run(exit=0, stdout="args: 0")
+//! phase: run
+//! conforms: os.env.argv, os.host.sigs, type.byte
+//!
+//! Conform-run supplies no program arguments. argv[0], where present,
+//! belongs only to the byte form, not env_args. Subtract only an actual
+//! name, since the default checked argv is entirely absent.
+
+fn main() {
+    let text = env_args()
+    let argv = env_args_bytes()
+    let inputs = if argv.len > 0 { argv.len - 1 } else { 0 }
+    assert(inputs == text.len)
+    print("args: {inputs}")
+}
