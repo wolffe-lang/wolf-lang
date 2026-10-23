@@ -1,0 +1,24 @@
+s261 prediction, before implementation (2026-10-23)
+
+Base: origin/trunk cf0c13d38479f444b69bb8356ad5709d07eff323 (rebase onto s260 when landed).
+Authority: wolf/sprints/compiler/s261-the-program-name.md; RULES sections 1-10.
+
+Prediction
+- Native argv[0] is dropped in wolf_rt/src/os.rs::__wolf_rt_env_args via args().skip(1), not at runtime startup. The checked machine has an empty Vec<String>, no supplied argv. The driver also unwraps std::env::args() before forwarding program arguments.
+- env_get uses std::env::var and returns utf8, rather than unwrapping. env_vars uses vars_os and skips invalid entries. Neither shares #406's panic. No semantic change is owed to either.
+- rt-none has no host process or argv; both new calls will be refused by name as hosted-runtime requirements, matching env_args.
+- Two new conformance rows will enter: os/arg0 and os/args_bytes. Existing rows should not move. The checked defaults to an absent argv: env_arg0 returns empty text and env_args_bytes an empty list, rather than inventing the compiler's name.
+- Explicit checked argv will use repeated --argv-hex=HEX on conform-run (first occurrence argv[0]), since Unix NUL cannot occur in an argument. The option is checked-only; ordinary conformance runs retain their default empty input.
+
+Rulings asked and taken as recommended by the orchestrator
+R-s261-1: env_arg0() -> str, env_args() unchanged (argv[1..]).
+R-s261-2: env_args_bytes() -> List[List[byte]], argv[0] first. env_args and env_arg0 trap by OS index on invalid UTF-8; message: argument N is not UTF-8; read it with env_args_bytes(). env_get/env_vars unchanged. No lossy conversion.
+
+Inputs re-derived
+wolf-lang#899/#406/#687 read with gh issue view. #687 byte paths are excluded.
+spec/11-os.md [os.host.sigs] at env_args; spec/prelude.json.
+Runtime os.rs:57; env_get:70; vars_os:118.
+Checked ubcheck.rs args field:1560, env_args arm:9038.
+freestanding_target.rs env_args refusal:263.
+pelt notes/sh17-the-posix-gaps.md:69-70,414; wolf/sprints/crawl-54.md ct00 record (GNU grep 3.12 uses argv[0] verbatim).
+Clean-room: only maintainer code, public specifications/manpages and black-box probes; no implementation sources outside the maintainer's repositories.
