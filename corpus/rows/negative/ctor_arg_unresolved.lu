@@ -1,5 +1,5 @@
 //! check: fail(E0301)
-//! phase: typecheck
+//! phase: resolve
 //! conforms: gram.amb.brackets
 //!
 //! wolf-lang#890: a missing type name in generic application is a
