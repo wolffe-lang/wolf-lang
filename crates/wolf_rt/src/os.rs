@@ -1532,7 +1532,7 @@ unsafe fn __wolf_rt_os_wait_status_parks(h: i64, out: i64) -> i64 {
 pub unsafe extern "C" fn __wolf_rt_os_wait_status(h: i64, out: i64) -> i64 {
     let r = unsafe { __wolf_rt_os_wait_status_parks(h, out) };
     // SAFETY: the shim's last step; the body's locals are dropped.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
     r
 }
 
@@ -1585,7 +1585,7 @@ unsafe fn __wolf_rt_os_wait_status_core_parks(h: i64, out: i64) -> i64 {
 pub unsafe extern "C" fn __wolf_rt_os_wait_status_core(h: i64, out: i64) -> i64 {
     let r = unsafe { __wolf_rt_os_wait_status_core_parks(h, out) };
     // SAFETY: the shim's last step; the body's locals are dropped.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
     r
 }
 
@@ -1749,7 +1749,7 @@ unsafe fn __wolf_rt_os_wait_parks(h: i64, out: i64) -> i64 {
 pub unsafe extern "C" fn __wolf_rt_os_wait(h: i64, out: i64) -> i64 {
     let r = unsafe { __wolf_rt_os_wait_parks(h, out) };
     // SAFETY: the shim's last step; the body's locals are dropped.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
     r
 }
 

@@ -2355,7 +2355,7 @@ fn __wolf_rt_os_signal_wait_parks(mask: i64) -> i64 {
 pub extern "C" fn __wolf_rt_os_signal_wait(mask: i64) -> i64 {
     let r = __wolf_rt_os_signal_wait_parks(mask);
     // SAFETY: the shim's last step; the body's locals are dropped.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
     r
 }
 
@@ -2421,7 +2421,7 @@ fn __wolf_rt_os_signal_wait_fd_parks(fd: i64, mask: i64) -> i64 {
 pub extern "C" fn __wolf_rt_os_signal_wait_fd(fd: i64, mask: i64) -> i64 {
     let r = __wolf_rt_os_signal_wait_fd_parks(fd, mask);
     // SAFETY: the shim's last step; the body's locals are dropped.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
     r
 }
 
@@ -2470,7 +2470,7 @@ pub unsafe extern "C" fn __wolf_rt_os_signal_wait_fds(
 ) -> i64 {
     let r = unsafe { __wolf_rt_os_signal_wait_fds_parks(fds, mask, deadline_ms, out) };
     // SAFETY: the shim's last step; the body's locals are dropped.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
     r
 }
 

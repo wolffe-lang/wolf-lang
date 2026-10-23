@@ -128,3 +128,35 @@ pub(crate) fn host_wait<R>(f: impl FnOnce() -> R) -> R {
         f()
     }
 }
+
+/// A killed compiled task leaves at the exit of a runtime call that parks
+/// (s260, wolf-lang#683): [`task::leave_if_killed`] where the task layer
+/// exists; elsewhere no task runs a compiled body, so there is nothing to
+/// leave and this is nothing (the `host_wait` posture, above).
+///
+/// # Safety
+///
+/// As [`task::leave_if_killed`]'s: the calling shim's last step, with
+/// nothing in its frame left to drop.
+#[inline]
+pub(crate) unsafe fn leave_if_killed() {
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    // SAFETY: the caller's contract, passed on.
+    unsafe {
+        task::leave_if_killed()
+    }
+}
+
+/// `time_sleep_ms`'s sleep (s260, wolf-lang#683): one its proc's kill ends
+/// where the task layer exists ([`task::sleep_unless_killed`]); the host's
+/// sleep elsewhere, as before.
+pub(crate) fn sleep_unless_killed(d: std::time::Duration) {
+    #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+    {
+        task::sleep_unless_killed(d)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+    {
+        std::thread::sleep(d)
+    }
+}

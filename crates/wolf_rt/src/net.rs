@@ -1775,7 +1775,7 @@ unsafe fn __wolf_rt_net_wait_parks(hdr: i64, deadline: i64, out: i64) -> i64 {
 pub unsafe extern "C" fn __wolf_rt_net_wait(hdr: i64, deadline: i64, out: i64) -> i64 {
     let r = unsafe { __wolf_rt_net_wait_parks(hdr, deadline, out) };
     // SAFETY: the shim's last step; the body's locals are dropped.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
     r
 }
 
@@ -1805,7 +1805,7 @@ unsafe fn __wolf_rt_net_connect_unix_parks(pp: i64, pl: i64) -> i64 {
 pub unsafe extern "C" fn __wolf_rt_net_connect_unix(pp: i64, pl: i64) -> i64 {
     let r = unsafe { __wolf_rt_net_connect_unix_parks(pp, pl) };
     // SAFETY: the shim's last step; the body's locals are dropped.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
     r
 }
 
@@ -1847,7 +1847,7 @@ fn __wolf_rt_net_accept_parks(fd: i64) -> i64 {
 pub extern "C" fn __wolf_rt_net_accept(fd: i64) -> i64 {
     let r = __wolf_rt_net_accept_parks(fd);
     // SAFETY: the shim's last step; the body's locals are dropped.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
     r
 }
 
@@ -1877,7 +1877,7 @@ unsafe fn __wolf_rt_net_connect_parks(ap: i64, al: i64) -> i64 {
 pub unsafe extern "C" fn __wolf_rt_net_connect(ap: i64, al: i64) -> i64 {
     let r = unsafe { __wolf_rt_net_connect_parks(ap, al) };
     // SAFETY: the shim's last step; the body's locals are dropped.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
     r
 }
 
@@ -1953,7 +1953,7 @@ unsafe fn __wolf_rt_net_read_parks(fd: i64, max: i64, out: i64) -> i64 {
 pub unsafe extern "C" fn __wolf_rt_net_read(fd: i64, max: i64, out: i64) -> i64 {
     let r = unsafe { __wolf_rt_net_read_parks(fd, max, out) };
     // SAFETY: the shim's last step; the body's locals are dropped.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
     r
 }
 
@@ -1980,7 +1980,7 @@ unsafe fn __wolf_rt_net_write_parks(fd: i64, sp: i64, sl: i64) -> i64 {
 pub unsafe extern "C" fn __wolf_rt_net_write(fd: i64, sp: i64, sl: i64) -> i64 {
     let r = unsafe { __wolf_rt_net_write_parks(fd, sp, sl) };
     // SAFETY: the shim's last step; the body's locals are dropped.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
     r
 }
 
@@ -2012,7 +2012,7 @@ unsafe fn __wolf_rt_net_read_bytes_parks(fd: i64, max: i64, out: i64) -> i64 {
 pub unsafe extern "C" fn __wolf_rt_net_read_bytes(fd: i64, max: i64, out: i64) -> i64 {
     let r = unsafe { __wolf_rt_net_read_bytes_parks(fd, max, out) };
     // SAFETY: the shim's last step; the body's locals are dropped.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
     r
 }
 
@@ -2045,7 +2045,7 @@ unsafe fn __wolf_rt_net_write_bytes_parks(fd: i64, hdr: i64) -> i64 {
 pub unsafe extern "C" fn __wolf_rt_net_write_bytes(fd: i64, hdr: i64) -> i64 {
     let r = unsafe { __wolf_rt_net_write_bytes_parks(fd, hdr) };
     // SAFETY: the shim's last step; the body's locals are dropped.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
     r
 }
 
@@ -2095,7 +2095,7 @@ unsafe fn __wolf_rt_net_writev_parks(fd: i64, hdr: i64) -> i64 {
 pub unsafe extern "C" fn __wolf_rt_net_writev(fd: i64, hdr: i64) -> i64 {
     let r = unsafe { __wolf_rt_net_writev_parks(fd, hdr) };
     // SAFETY: the shim's last step; the body's locals are dropped.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
     r
 }
 
@@ -2152,7 +2152,7 @@ unsafe fn __wolf_rt_net_writev_head_parks(fd: i64, hp: i64, hl: i64, hdr: i64) -
 pub unsafe extern "C" fn __wolf_rt_net_writev_head(fd: i64, hp: i64, hl: i64, hdr: i64) -> i64 {
     let r = unsafe { __wolf_rt_net_writev_head_parks(fd, hp, hl, hdr) };
     // SAFETY: the shim's last step; the body's locals are dropped.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
     r
 }
 

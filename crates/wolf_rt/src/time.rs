@@ -62,16 +62,16 @@ pub extern "C" fn __wolf_rt_time_unix_ms() -> i64 {
 /// task's worker was simply gone for the duration — two sleeping tasks
 /// on a one-cpu host left no worker for anything else). s260 (#683): a
 /// task's sleep is one its proc's kill ends, and a killed compiled task
-/// leaves here instead of running on ([`crate::task::leave_if_killed`]).
+/// leaves here instead of running on ([`crate::leave_if_killed`]).
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_time_sleep_ms(ms: i64) {
     if ms > 0 {
         crate::host_wait(|| {
-            crate::task::sleep_unless_killed(std::time::Duration::from_millis(ms as u64));
+            crate::sleep_unless_killed(std::time::Duration::from_millis(ms as u64));
         });
     }
     // SAFETY: called by compiled code directly; nothing left to drop.
-    unsafe { crate::task::leave_if_killed() };
+    unsafe { crate::leave_if_killed() };
 }
 
 #[cfg(test)]
