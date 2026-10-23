@@ -164,8 +164,14 @@ type Pin = (&'static str, &'static str, &'static str, &'static str);
 
 /// lupin 0.1.55, the 0.2.34 pairing, runs each witness, reading the
 /// payload through the row (measured on kasumi, s258): one pin per row.
-const MEMBER_PRE_MIRROR: &[Pin] = &[("0.1.55", "e642f26", "exit(0)", "n: 1\n")];
-const METHOD_PRE_MIRROR: &[Pin] = &[("0.1.55", "e642f26", "exit(0)", "yes\n")];
+const MEMBER_PRE_MIRROR: &[Pin] = &[
+    ("0.1.55", "e642f26", "exit(0)", "n: 1\n"),
+    ("0.1.56", "28547b4", "exit(0)", "n: 1\n"),
+];
+const METHOD_PRE_MIRROR: &[Pin] = &[
+    ("0.1.55", "e642f26", "exit(0)", "yes\n"),
+    ("0.1.56", "28547b4", "exit(0)", "yes\n"),
+];
 
 /// Every wolfgang lane answers `verdict` with exactly `codes` and
 /// `stdout`; lupin answers the same, or what `pins` measured for its
