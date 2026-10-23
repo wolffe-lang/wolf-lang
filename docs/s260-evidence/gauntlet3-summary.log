@@ -1,0 +1,40 @@
+head 7111883beadf8ca315c4906b2b45560544b8d11c
+Fri Oct 23 04:17:38 AM UTC 2026
+== xtask ci: fmt
+== xtask ci: fmt-fixpoint
+== xtask ci: clippy
+== xtask ci: rt-none
+== xtask ci: test
+SKIP: the clang drift witness runs on macOS/aarch64 hosts only
+SKIP: lldb not installed (required on the macOS CI lane)
+SKIP: lldb not installed (required on the macOS CI lane)
+SKIP: core (on): this host's core_pattern pipes cores to a program, which would write the core outside the test's directory
+SKIP: core (on): this host's core_pattern pipes cores to a program, which would write the core outside the test's directory
+== xtask ci: fuzz-check
+== xtask ci: deps-check
+== xtask ci: corpus
+== xtask ci: abi-check
+== xtask ci: debug-check
+SKIP: lldb not installed (required on the macOS CI lane)
+.SKIP: lldb not installed (required on the macOS CI lane)
+== xtask ci: midend-rate
+== xtask ci: bench-gates
+bench-gates: ir-volume per-file table: 694 recorded, 716 measured, 22 new, 0 unmeasured, 0 improved, 0 regressed
+== xtask ci: spec-extract
+== xtask ci: conformance
+conformance: 693 anchors, 367 covered (326 debt), 484 forward tags, 46 untagged non-litmus files
+== xtask ci: print-gate
+== xtask ci: diag-catalog
+== xtask ci: doc-catalog
+== xtask ci: fmt-lu
+== xtask ci: fmt-fuzz
+== xtask ci: audit-surface
+== xtask ci: dist-smoke
+== xtask ci: differ-self
+differ: 1219 file(s), 0 divergence(s), 21 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 0, B executed 0, BOTH executed 0 of 1157 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+== xtask ci: lane-coverage
+lane-coverage: floors held (checked/native/release/union/all-three ≥ 221/242/242/256/207)
+xtask ci: all steps green
+gauntlet-rc=0
+Fri Oct 23 04:39:43 AM UTC 2026

@@ -1,0 +1,36 @@
+7111883b wolf_wir: the lowering ledger gains the two s260 copy rows (both lower)
+===== plant 642
+planted 642
+  rt: test fs::tests::a_failed_copy_write_puts_the_source_back ... FAILED
+  rt: test fs::tests::a_copy_into_dev_full_keeps_its_bytes ... FAILED
+  rt: test fs::tests::a_partial_copy_write_puts_back_only_the_shortfall ... FAILED
+  rt: test result: FAILED. 21 passed; 3 failed; 0 ignored; 0 measured; 318 filtered out; finished in 0.00s
+  lane: test a_failed_copy_write_puts_the_source_back_on_every_lane ... FAILED
+  lane: test a_copy_into_dev_full_keeps_its_bytes_on_every_lane ... FAILED
+  lane: test t06_witness_into_dev_full_keeps_its_bytes ... FAILED
+  lane: test result: FAILED. 0 passed; 3 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+===== plant 682
+planted 682
+  rt: test os::tests::a_file_with_no_shebang_is_io_on_every_spawn ... FAILED
+  rt: test os::tests::spawn_fds_keeps_the_enoexec_number ... FAILED
+  rt: test result: FAILED. 35 passed; 2 failed; 0 ignored; 0 measured; 305 filtered out; finished in 0.13s
+  lane: test a_hooked_plain_spawn_is_io_too ... FAILED
+  lane: test a_file_with_no_shebang_is_io_on_every_spawn_and_every_lane ... FAILED
+  lane: test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+===== plant 683
+planted 683
+  rt: test result: ok. 85 passed; 0 failed; 0 ignored; 0 measured; 257 filtered out; finished in 2.54s
+  lane: test a_procs_join ... FAILED
+  lane: test a_scope_join ... FAILED
+  lane: test a_receive_one_frame_down ... FAILED
+  lane: test a_select_one_frame_down ... FAILED
+  lane: test a_sleep ... FAILED
+  lane: test net_accept ... FAILED
+  lane: test net_read_one_frame_down ... FAILED
+  lane: test net_write ... FAILED
+  lane: test os_signal_wait ... FAILED
+  lane: test os_signal_wait_fds ... FAILED
+  lane: test the_issues_witness_net_read ... FAILED
+  lane: test os_wait_leaves_when_the_child_ends ... FAILED
+  lane: test result: FAILED. 3 passed; 12 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.14s
+plant-local-done
