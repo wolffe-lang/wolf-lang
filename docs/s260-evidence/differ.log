@@ -1,0 +1,35 @@
+== control without std 2026-10-23T00:42:20-04:00
+== before build 2026-10-23T00:42:20-04:00
+dist-before rc=0
+dist-head rc=0
+== differ head checked vs lupin 0.1.55 2026-10-23T00:45:04-04:00
+rc=1
+differ: 1219 file(s) — 812 agreement(s), 259 completeness note(s), 9 SOUNDNESS finding(s), 104 unsupported (3 forward pin(s)); 30 hard divergence(s)
+differ: run-rung coverage — A executed 738, B executed 931, BOTH executed 708 of 1157 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+== differ head native vs lupin 0.1.55 2026-10-23T00:45:41-04:00
+rc=1
+differ: 1219 file(s) — 796 agreement(s), 259 completeness note(s), 23 SOUNDNESS finding(s), 106 unsupported (3 forward pin(s)); 44 hard divergence(s)
+differ: run-rung coverage — A executed 742, B executed 931, BOTH executed 706 of 1157 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+== differ before checked vs lupin 0.1.55 2026-10-23T00:46:45-04:00
+rc=1
+differ: 1219 file(s) — 813 agreement(s), 259 completeness note(s), 9 SOUNDNESS finding(s), 104 unsupported (3 forward pin(s)); 29 hard divergence(s)
+differ: run-rung coverage — A executed 738, B executed 931, BOTH executed 708 of 1157 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+== differ before native vs lupin 0.1.55 2026-10-23T00:47:22-04:00
+rc=1
+differ: 1219 file(s) — 797 agreement(s), 259 completeness note(s), 23 SOUNDNESS finding(s), 106 unsupported (3 forward pin(s)); 43 hard divergence(s)
+differ: run-rung coverage — A executed 742, B executed 931, BOTH executed 706 of 1157 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+== differ control checked vs lupin 0.1.55 2026-10-23T00:48:25-04:00
+rc=1
+differ: 1219 file(s) — 816 agreement(s), 265 completeness note(s), 0 SOUNDNESS finding(s), 107 unsupported (3 forward pin(s)); 21 hard divergence(s)
+differ: run-rung coverage — A executed 719, B executed 931, BOTH executed 694 of 1157 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+== differ control native vs lupin 0.1.55 2026-10-23T00:49:02-04:00
+rc=1
+differ: 1219 file(s) — 794 agreement(s), 265 completeness note(s), 14 SOUNDNESS finding(s), 116 unsupported (3 forward pin(s)); 34 hard divergence(s)
+differ: run-rung coverage — A executed 716, B executed 931, BOTH executed 685 of 1157 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+== differ plain head vs before 2026-10-23T00:50:05-04:00
+rc=0
+differ: 1219 file(s), 0 divergence(s), 21 in conservatism ledger (unsupported), 3 of them forward pin(s)
+== differ plain head vs control 2026-10-23T00:50:10-04:00
+rc=1
+differ: 1219 file(s), 21 divergence(s), 31 in conservatism ledger (unsupported), 3 of them forward pin(s)
+== done 2026-10-23T00:50:15-04:00

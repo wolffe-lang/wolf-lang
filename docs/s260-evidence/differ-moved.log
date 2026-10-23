@@ -1,0 +1,61 @@
+== checked: head vs before: 1 ledger line(s) differ
+   corpus/fs/copy_chunk_failed_write.lu | head: {"class": "Verdict", "detail": "Exit(0) vs Exit(1)", "file": "corpus/fs/copy_chunk_failed_write.lu"} | before: null
+== checked: head vs control: 25 ledger line(s) differ
+   corpus/fs/copy_chunk_failed_write.lu | head: {"class": "Verdict", "detail": "Exit(0) vs Exit(1)", "file": "corpus/fs/copy_chunk_failed_write.lu"} | control: null
+   corpus/memory/distinct_copy_scalar.lu | head: null | control: {"a": "fail(E1001)", "b": "exit(0)", "class": "Completeness", "file": "corpus/memory/distinct_copy_scalar.lu"}
+   corpus/memory/list_reserve.lu | head: null | control: {"a": "fail(E0301)", "b": "unsupported", "class": "Completeness", "file": "corpus/memory/list_reserve.lu"}
+   corpus/memory/list_reset.lu | head: null | control: {"a": "fail(E0301)", "b": "unsupported", "class": "Completeness", "file": "corpus/memory/list_reset.lu"}
+   corpus/memory/read_param_indexed_caller.lu | head: null | control: {"class": "Verdict", "detail": "Trap(\"use-after-move\") vs Exit(0)", "file": "corpus/memory/read_param_indexed_caller.lu"}
+   corpus/memory/region_copy_shares_str.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_copy_shares_str.lu"} | control: null
+   corpus/memory/region_os_cwd_return.lu | head: {"a": "fail(E1010)", "b": "exit(0)", "class": "Completeness", "file": "corpus/memory/region_os_cwd_return.lu"} | control: null
+   corpus/memory/region_outer_write_call.lu | head: null | control: {"a": "fail(E1010)", "b": "exit(0)", "class": "Completeness", "file": "corpus/memory/region_outer_write_call.lu"}
+   corpus/memory/region_outer_write_charged.lu | head: null | control: {"a": "fail(E1010)", "b": "exit(0)", "class": "Completeness", "file": "corpus/memory/region_outer_write_charged.lu"}
+   corpus/memory/region_outer_write_field.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_outer_write_field.lu"} | control: null
+   corpus/memory/region_outer_write_index.lu | head: null | control: {"a": "fail(E1004)", "b": "exit(0)", "class": "Completeness", "file": "corpus/memory/region_outer_write_index.lu"}
+   corpus/memory/region_outer_write_map.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_outer_write_map.lu"} | control: null
+   corpus/memory/region_outer_write_reset.lu | head: null | control: {"a": "fail(E0301)", "b": "unsupported", "class": "Completeness", "file": "corpus/memory/region_outer_write_reset.lu"}
+   corpus/memory/region_outer_write_scalar.lu | head: null | control: {"a": "fail(E1010)", "b": "exit(0)", "class": "Completeness", "file": "corpus/memory/region_outer_write_scalar.lu"}
+   corpus/memory/region_outer_write_str_push.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_outer_write_str_push.lu"} | control: null
+   corpus/memory/region_outer_write_struct.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_outer_write_struct.lu"} | control: null
+   corpus/memory/region_scalar_freeze.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_scalar_freeze.lu"} | control: null
+   corpus/memory/region_scalar_mut.lu | head: null | control: {"a": "fail(E1010)", "b": "exit(0)", "class": "Completeness", "file": "corpus/memory/region_scalar_mut.lu"}
+   corpus/memory/region_scalar_store.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_scalar_store.lu"} | control: null
+   corpus/memory/region_scalar_value.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_scalar_value.lu"} | control: null
+   corpus/memory/region_str_call_index_store.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_str_call_index_store.lu"} | control: null
+   corpus/os/core_limit_rows.lu | head: null | control: {"a": "fail(E0301)", "b": "unsupported", "class": "Completeness", "file": "corpus/os/core_limit_rows.lu"}
+   corpus/rows/negative/ctor_arg_unresolved.lu | head: {"a": "fail(E0301)", "b": "fail(E0301)", "class": "Completeness", "file": "corpus/rows/negative/ctor_arg_unresolved.lu"} | control: null
+   corpus/rows/negative/row_operand_member.lu | head: {"a": "fail(E0409)", "b": "exit(0)", "class": "Completeness", "file": "corpus/rows/negative/row_operand_member.lu"} | control: null
+   corpus/rows/negative/row_operand_method.lu | head: {"a": "fail(E0409)", "b": "exit(0)", "class": "Completeness", "file": "corpus/rows/negative/row_operand_method.lu"} | control: null
+== native: head vs before: 4 ledger line(s) differ
+   corpus/conc/atomic_ub_uaf.lu | head: {"a": "exit(49)", "b": "ub(mem.ub)", "class": "SOUNDNESS", "file": "corpus/conc/atomic_ub_uaf.lu"} | before: {"a": "exit(152)", "b": "ub(mem.ub)", "class": "SOUNDNESS", "file": "corpus/conc/atomic_ub_uaf.lu"}
+   corpus/fs/copy_chunk_failed_write.lu | head: {"class": "Verdict", "detail": "Exit(0) vs Exit(1)", "file": "corpus/fs/copy_chunk_failed_write.lu"} | before: null
+   corpus/memory/unsafe_ub_uaf.lu | head: {"a": "exit(116)", "b": "ub(mem.ub)", "class": "SOUNDNESS", "file": "corpus/memory/unsafe_ub_uaf.lu"} | before: {"a": "exit(175)", "b": "ub(mem.ub)", "class": "SOUNDNESS", "file": "corpus/memory/unsafe_ub_uaf.lu"}
+   corpus/memory/volatile_ub_uaf.lu | head: {"a": "exit(190)", "b": "ub(mem.ub)", "class": "SOUNDNESS", "file": "corpus/memory/volatile_ub_uaf.lu"} | before: {"a": "exit(3)", "b": "ub(mem.ub)", "class": "SOUNDNESS", "file": "corpus/memory/volatile_ub_uaf.lu"}
+== native: head vs control: 27 ledger line(s) differ
+   corpus/conc/atomic_ub_uaf.lu | head: {"a": "exit(49)", "b": "ub(mem.ub)", "class": "SOUNDNESS", "file": "corpus/conc/atomic_ub_uaf.lu"} | control: {"a": "exit(14)", "b": "ub(mem.ub)", "class": "SOUNDNESS", "file": "corpus/conc/atomic_ub_uaf.lu"}
+   corpus/fs/copy_chunk_failed_write.lu | head: {"class": "Verdict", "detail": "Exit(0) vs Exit(1)", "file": "corpus/fs/copy_chunk_failed_write.lu"} | control: null
+   corpus/memory/distinct_copy_scalar.lu | head: null | control: {"a": "fail(E1001)", "b": "exit(0)", "class": "Completeness", "file": "corpus/memory/distinct_copy_scalar.lu"}
+   corpus/memory/list_reserve.lu | head: null | control: {"a": "fail(E0301)", "b": "unsupported", "class": "Completeness", "file": "corpus/memory/list_reserve.lu"}
+   corpus/memory/list_reset.lu | head: null | control: {"a": "fail(E0301)", "b": "unsupported", "class": "Completeness", "file": "corpus/memory/list_reset.lu"}
+   corpus/memory/region_copy_shares_str.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_copy_shares_str.lu"} | control: null
+   corpus/memory/region_os_cwd_return.lu | head: {"a": "fail(E1010)", "b": "exit(0)", "class": "Completeness", "file": "corpus/memory/region_os_cwd_return.lu"} | control: null
+   corpus/memory/region_outer_write_call.lu | head: null | control: {"a": "fail(E1010)", "b": "exit(0)", "class": "Completeness", "file": "corpus/memory/region_outer_write_call.lu"}
+   corpus/memory/region_outer_write_charged.lu | head: null | control: {"a": "fail(E1010)", "b": "exit(0)", "class": "Completeness", "file": "corpus/memory/region_outer_write_charged.lu"}
+   corpus/memory/region_outer_write_field.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_outer_write_field.lu"} | control: null
+   corpus/memory/region_outer_write_index.lu | head: null | control: {"a": "fail(E1004)", "b": "exit(0)", "class": "Completeness", "file": "corpus/memory/region_outer_write_index.lu"}
+   corpus/memory/region_outer_write_map.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_outer_write_map.lu"} | control: null
+   corpus/memory/region_outer_write_reset.lu | head: null | control: {"a": "fail(E0301)", "b": "unsupported", "class": "Completeness", "file": "corpus/memory/region_outer_write_reset.lu"}
+   corpus/memory/region_outer_write_scalar.lu | head: null | control: {"a": "fail(E1010)", "b": "exit(0)", "class": "Completeness", "file": "corpus/memory/region_outer_write_scalar.lu"}
+   corpus/memory/region_outer_write_str_push.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_outer_write_str_push.lu"} | control: null
+   corpus/memory/region_outer_write_struct.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_outer_write_struct.lu"} | control: null
+   corpus/memory/region_scalar_freeze.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_scalar_freeze.lu"} | control: null
+   corpus/memory/region_scalar_mut.lu | head: null | control: {"a": "fail(E1010)", "b": "exit(0)", "class": "Completeness", "file": "corpus/memory/region_scalar_mut.lu"}
+   corpus/memory/region_scalar_store.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_scalar_store.lu"} | control: null
+   corpus/memory/region_scalar_value.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_scalar_value.lu"} | control: null
+   corpus/memory/region_str_call_index_store.lu | head: {"a": "exit(0)", "b": "trap(region-fault)", "class": "SOUNDNESS", "file": "corpus/memory/region_str_call_index_store.lu"} | control: null
+   corpus/memory/unsafe_ub_uaf.lu | head: {"a": "exit(116)", "b": "ub(mem.ub)", "class": "SOUNDNESS", "file": "corpus/memory/unsafe_ub_uaf.lu"} | control: {"a": "exit(218)", "b": "ub(mem.ub)", "class": "SOUNDNESS", "file": "corpus/memory/unsafe_ub_uaf.lu"}
+   corpus/memory/volatile_ub_uaf.lu | head: {"a": "exit(190)", "b": "ub(mem.ub)", "class": "SOUNDNESS", "file": "corpus/memory/volatile_ub_uaf.lu"} | control: {"a": "exit(80)", "b": "ub(mem.ub)", "class": "SOUNDNESS", "file": "corpus/memory/volatile_ub_uaf.lu"}
+   corpus/os/core_limit_rows.lu | head: null | control: {"a": "fail(E0301)", "b": "unsupported", "class": "Completeness", "file": "corpus/os/core_limit_rows.lu"}
+   corpus/rows/negative/ctor_arg_unresolved.lu | head: {"a": "fail(E0301)", "b": "fail(E0301)", "class": "Completeness", "file": "corpus/rows/negative/ctor_arg_unresolved.lu"} | control: null
+   corpus/rows/negative/row_operand_member.lu | head: {"a": "fail(E0409)", "b": "exit(0)", "class": "Completeness", "file": "corpus/rows/negative/row_operand_member.lu"} | control: null
+   corpus/rows/negative/row_operand_method.lu | head: {"a": "fail(E0409)", "b": "exit(0)", "class": "Completeness", "file": "corpus/rows/negative/row_operand_method.lu"} | control: null
