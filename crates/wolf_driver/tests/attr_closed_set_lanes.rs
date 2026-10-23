@@ -394,6 +394,12 @@ fn the_implemented_attributes_still_compile() {
                 verdict: "unsupported",
                 stdout: "",
             },
+            // r40: measured on the published 0.1.56 archive.
+            Pin {
+                version: "0.1.56",
+                verdict: "unsupported",
+                stdout: "",
+            },
         ],
     );
 }
