@@ -1,0 +1,1 @@
+phase=before total=50 green=0 red=50 source-fd5=50

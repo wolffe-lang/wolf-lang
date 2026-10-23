@@ -1,0 +1,8 @@
+
+running 1 test
+REPORT run_with_five: source fd=5, target fd=5
+REPORT release-only adopt: status=ExitStatus(unix_wait_status(0)), stdout="zero=invalid one=invalid two=invalid negative=invalid past=invalid\nlink before: out-release\na child before the adopt holds 5: yes\nadopted as handle 3\nlink after the adopt: out-release\n5 again while it is a handle: io\nevery other number in 3..63 not io: none\na child after the adopt holds 5: no\n5 after the close: io\nlink after the close: none\n", stderr=""
+test inherited_descriptor_adoption_release_only ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.31s
+

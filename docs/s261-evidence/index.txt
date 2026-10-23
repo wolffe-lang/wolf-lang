@@ -104,3 +104,19 @@ The inherited process/signal container subrows also ran under taskset
 are not renumbered inside a container. The gauntlet/compiler ran under
 4-7 and this lane's own argv suite was explicitly cpuset 4-7 throughout;
 we do not claim every inherited process subrow stayed on 4-7.
+
+#903 was assigned to this lane after the second gauntlet hit it.
+Prediction-903.txt was committed before changing the helper. Added a
+release-only seam, run alone 50 times before and after inside own
+network-less containers, taskset/cpuset 4-7. The subprocess reserves
+fd 3/4 with /dev/null; the File created by run_with_five is fd 5 in
+all 100 runs (explicitly checked), without changing the outer host's
+fd table. Before/after counts are in adopt-*-50.txt and the per-run
+statuses in adopt-*-50.log, with one complete example of each.
+
+The fix is in the test helper only: after dup2, explicitly clear
+FD_CLOEXEC on child-owned descriptor 5. dup2(5,5) does not clear it;
+otherwise exec closed the file, and a runtime pipe could reuse 5.
+No compiler/runtime behavior changes, no gate disabled or serialized.
+The before red and after green score the addendum's prediction. #903
+is now an issue to close on this PR, not another issue to file.

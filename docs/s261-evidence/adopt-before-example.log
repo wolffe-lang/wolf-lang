@@ -1,0 +1,19 @@
+
+running 1 test
+REPORT run_with_five: source fd=5, target fd=5
+REPORT release-only adopt: status=ExitStatus(unix_wait_status(0)), stdout="zero=invalid one=invalid two=invalid negative=invalid past=invalid\nlink before: pipe:[923304870]\na child before the adopt holds 5: no\nadopt: io\n", stderr=""
+
+thread 'inherited_descriptor_adoption_release_only' (2) panicked at crates/wolf_driver/tests/process_calls_lanes.rs:512:5:
+assertion `left == right` failed
+  left: "zero=invalid one=invalid two=invalid negative=invalid past=invalid\nlink before: pipe:[923304870]\na child before the adopt holds 5: no\nadopt: io\n"
+ right: "zero=invalid one=invalid two=invalid negative=invalid past=invalid\nlink before: out-release\na child before the adopt holds 5: yes\nadopted as handle 3\nlink after the adopt: out-release\n5 again while it is a handle: io\nevery other number in 3..63 not io: none\na child after the adopt holds 5: no\n5 after the close: io\nlink after the close: none\n"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test inherited_descriptor_adoption_release_only ... FAILED
+
+failures:
+
+failures:
+    inherited_descriptor_adoption_release_only
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.30s
+
