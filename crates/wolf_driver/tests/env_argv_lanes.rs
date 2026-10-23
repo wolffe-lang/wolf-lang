@@ -193,6 +193,7 @@ fn checked_argv_option_rejects_invalid_and_wrong_lane_inputs() {
     for flags in [
         vec!["--checked", "--argv-hex=f"],
         vec!["--checked", "--argv-hex=gg"],
+        vec!["--checked", "--argv-hex=+1"],
         vec!["--checked", "--argv-hex=00"],
         vec!["--checked", "--argv-hex=é"],
         vec!["--argv-hex="],

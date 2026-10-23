@@ -4026,7 +4026,7 @@ fn conform_run(args: &[String]) {
                 eprintln!("wolf conform-run: --argv-hex needs even hexadecimal bytes without NUL");
                 std::process::exit(2);
             };
-            if !hex.is_ascii() || hex.len() % 2 != 0 {
+            if !hex.bytes().all(|b| b.is_ascii_hexdigit()) || hex.len() % 2 != 0 {
                 fail();
             }
             let bytes: Vec<u8> = hex
