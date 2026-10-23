@@ -897,42 +897,9 @@ mod os {
     #[cfg(not(target_os = "macos"))]
     use libc::pthread_attr_setstack;
 
-    // pthread_t is an opaque handle, not memory to dereference. On musl
-    // it is pointer-shaped, unlike glibc's integer-shaped binding.
-    struct JoinableThread(libc::pthread_t);
-
-    // SAFETY: the handle names one joinable thread and moves to exactly
-    // one joiner. The store's mutex protects ownership; no code dereferences
-    // the handle or joins it twice. POSIX permits joining from another thread.
-    unsafe impl Send for JoinableThread {}
-
-    impl JoinableThread {
-        fn join(self) -> libc::c_int {
-            // SAFETY: ownership of this joinable handle is consumed here.
-            unsafe { libc::pthread_join(self.0, std::ptr::null_mut()) }
-        }
-    }
-
-    #[test]
-    fn joinable_thread_handle_can_cross_threads() {
-        extern "C" fn done(_: *mut libc::c_void) -> *mut libc::c_void {
-            std::ptr::null_mut()
-        }
-        // SAFETY: a fresh joinable thread, default attributes, no borrowed data.
-        let handle = unsafe {
-            let mut tid = std::mem::zeroed();
-            assert_eq!(
-                libc::pthread_create(&mut tid, std::ptr::null(), done, std::ptr::null_mut()),
-                0
-            );
-            JoinableThread(tid)
-        };
-        assert_eq!(std::thread::spawn(move || handle.join()).join().unwrap(), 0);
-    }
-
     struct Store {
         free: Vec<TaskStack>,
-        retired: Vec<(JoinableThread, TaskStack)>,
+        retired: Vec<(libc::pthread_t, TaskStack)>,
     }
 
     static STORE: OnceLock<Mutex<Store>> = OnceLock::new();
@@ -951,7 +918,7 @@ mod os {
         if let Some((thread, stack)) = st.retired.pop() {
             // SAFETY: the pthread_t was parked by its own thread on
             // exit and joined exactly once, here.
-            let _ = thread.join();
+            unsafe { libc::pthread_join(thread, std::ptr::null_mut()) };
             return Some(stack);
         }
         if let Some(s) = st.free.pop() {
@@ -964,11 +931,7 @@ mod os {
     fn park_retired(stack: TaskStack) {
         // SAFETY: pthread_self of the exiting worker.
         let me = unsafe { libc::pthread_self() };
-        store()
-            .lock()
-            .unwrap()
-            .retired
-            .push((JoinableThread(me), stack));
+        store().lock().unwrap().retired.push((me, stack));
         // s247: parked for the join; a fork may join it now.
         super::EXITING.fetch_sub(1, SeqCst);
     }
@@ -984,7 +947,7 @@ mod os {
             // SAFETY: the pthread_t was parked by its own thread on
             // exit and is joined exactly once, here (take_stack pops it
             // under the same lock, so never both).
-            let _ = thread.join();
+            unsafe { libc::pthread_join(thread, std::ptr::null_mut()) };
             st.free.push(stack);
         }
         drop(st);
