@@ -2766,7 +2766,16 @@ mod tests {
             let src = __wolf_rt_fs_open(ap, al, fs_mode::READ);
             let ro = __wolf_rt_fs_open(rp, rl, fs_mode::READ);
             out[0] = -1;
-            assert_eq!(__wolf_rt_fs_copy_chunk(src, ro, 262_144, o), fs_code::IO);
+            // The shim answers the host's kind and lowering coarsens a tag
+            // the row does not declare to `io` (the module doc): windows
+            // refuses this write as `ERROR_ACCESS_DENIED`, `denied` here,
+            // and a program reads `io` on every host (`copy_write_lanes`).
+            let want = if cfg!(windows) {
+                fs_code::DENIED
+            } else {
+                fs_code::IO
+            };
+            assert_eq!(__wolf_rt_fs_copy_chunk(src, ro, 262_144, o), want);
             assert_eq!(out[0], 0, "the sink took nothing");
             assert_ne!(__wolf_rt_os_error(), 0, "the write's number is kept");
             #[cfg(target_os = "linux")]
