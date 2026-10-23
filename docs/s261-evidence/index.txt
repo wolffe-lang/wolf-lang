@@ -82,3 +82,25 @@ kind with OS-indexed message, default absent argv, the explicit argv
 input on its equivalent conformance entry point, and the new corpus rows.
 Byte-path calls stay wolf-lang#687's work. Issues to close after merge:
 wolf-lang#899 and #406, with std/lupin asks separately tracked.
+
+Finalization evidence:
+The first whole gauntlet at da28a6d0 was red at the canonical prelude-copy
+test: env_args_bytes and env_args were ordered differently in the manual
+JSON edit than in the generated table. Regenerated the JSON, documented
+the additive prelude names in Unreleased, and prelude_list is now 4/4.
+That red run already passed all 8 argv tests and all 7 freestanding_target
+tests, including both new by-name refusals. Full final-head gauntlet is
+rerun, not inferred from the earlier targeted greens.
+
+Seen red in CI: run 39957879873, linux lint+test+corpus job 120428231087,
+s261-plant at 243a90af. env_argv_lanes: 5 passed, 2 failed, exactly
+unix::invocation_name_is_not_the_resolved_executable_on_all_tiers and
+unix::non_utf8_arguments_survive_or_trap_without_rust_panics. The name
+was dropped and the argument unwrap restored; no unrelated gate caused
+this red. The orchestrator read these named failures.
+
+The inherited process/signal container subrows also ran under taskset
+-c 0-3, by RULES section 5 to reproduce a four-CPU runner. Those CPU IDs
+are not renumbered inside a container. The gauntlet/compiler ran under
+4-7 and this lane's own argv suite was explicitly cpuset 4-7 throughout;
+we do not claim every inherited process subrow stayed on 4-7.

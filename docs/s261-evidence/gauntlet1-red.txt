@@ -1,0 +1,43 @@
+head da28a6d0cfe2890c1f19f5d7ebe92d59b692e4ad
+Fri Oct 23 01:24:56 PM UTC 2026
+ 09:24:56 up 6 days, 21:42,  6 users,  load average: 0.06, 0.42, 0.61
+Filesystem      Size  Used Avail Use% Mounted on
+/dev/nvme0n1p2  928G  848G   76G  92% /home
+allowed CPUs 4
+== xtask ci: fmt
+== xtask ci: fmt-fixpoint
+dist: wolf-std 2386522eb059cca5a84108562c2c0a0e72345d34 fetched from https://github.com/wolffe-lang/wolf-std.git
+fmt-fixpoint: 1299 file(s) formatted twice — 1221 corpus, 55 std (wolf-std 2386522eb0), 23 fmt regressions, 0 named — every one a fixed point
+== xtask ci: clippy
+    Checking wolf_driver v0.2.35 (/home/mfwolffe/lanes/s261/wolf-lang/crates/wolf_driver)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.77s
+== xtask ci: rt-none
+rt-none: target/x86_64-unknown-none/release/libwolf_rt_none.a
+== xtask ci: test
+   Compiling gimli v0.33.0
+running 4 tests
+
+thread 'the_committed_copy_is_the_output' (790487) panicked at crates/wolf_driver/tests/prelude_list.rs:111:5:
+spec/prelude.json is stale: regenerate it with `cargo run -p wolf_driver -- prelude --json > spec/prelude.json`, and name the change in the CHANGELOG (`cargo xtask prelude-diff <last tag> HEAD --markdown`)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test the_committed_copy_is_the_output ... FAILED
+test every_table_row_is_in_the_output ... ok
+test the_output_is_the_schema ... ok
+test the_human_table_and_the_usage_error ... ok
+
+failures:
+
+failures:
+    the_committed_copy_is_the_output
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p wolf_driver --test prelude_list`
+xtask ci: step `test` failed
+gauntlet-rc=1
+Fri Oct 23 01:32:51 PM UTC 2026
+ 09:32:51 up 6 days, 21:50,  6 users,  load average: 36.61, 9.84, 3.97
+xtask ci: step `test` failed
+gauntlet-rc=1
+Fri Oct 23 01:32:51 PM UTC 2026
+ 09:32:51 up 6 days, 21:50,  6 users,  load average: 36.61, 9.84, 3.97

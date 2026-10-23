@@ -1,0 +1,1 @@
+**New prelude names.** HEAD adds `env_arg0` and `env_args_bytes` (`env_arg0`: function, `[os.host.sigs]`; `env_args_bytes`: function, `[os.host.sigs]`). A module that declares a function, type or binding named `env_arg0` and `env_args_bytes` now draws W0304 (it shadows the ambient name), which `--deny-warnings` makes fatal: rename yours. (`cargo xtask prelude-diff v0.2.35 HEAD`)
