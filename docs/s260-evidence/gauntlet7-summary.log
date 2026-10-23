@@ -1,0 +1,60 @@
+head 9b4bf274903ec3468f268650230e2c3c3b4e6a29
+Fri Oct 23 07:04:55 AM UTC 2026
+ 03:04:55 up 6 days, 15:22,  9 users,  load average: 1.45, 5.83, 7.32
+== xtask ci: fmt
+== xtask ci: fmt-fixpoint
+== xtask ci: clippy
+== xtask ci: rt-none
+== xtask ci: test
+== xtask ci: fuzz-check
+== xtask ci: deps-check
+== xtask ci: corpus
+== xtask ci: abi-check
+== xtask ci: debug-check
+== xtask ci: midend-rate
+== xtask ci: bench-gates
+== xtask ci: spec-extract
+== xtask ci: conformance
+== xtask ci: print-gate
+== xtask ci: diag-catalog
+== xtask ci: doc-catalog
+== xtask ci: fmt-lu
+== xtask ci: fmt-fuzz
+== xtask ci: audit-surface
+== xtask ci: dist-smoke
+== xtask ci: differ-self
+== xtask ci: lane-coverage
+bench-gates: ir-volume new path corpus/fs/copy_chunk_dev_full.lu = 1.000 (midend 1096 / naive 1096) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/fs/copy_chunk_failed_write.lu = 1.000 (midend 1470 / naive 1470) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/enum_union_copy.lu = 0.414 (midend 53 / naive 128) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/enum_union_take.lu = 0.408 (midend 51 / naive 125) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/list_reserve.lu = 0.969 (midend 185 / naive 191) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/list_reset.lu = 0.957 (midend 288 / naive 301) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_copy_shares_str.lu = 0.980 (midend 50 / naive 51) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_call.lu = 0.925 (midend 247 / naive 267) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_charged.lu = 0.853 (midend 122 / naive 143) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_field.lu = 0.981 (midend 260 / naive 265) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_index.lu = 0.971 (midend 202 / naive 208) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_map.lu = 0.976 (midend 332 / naive 340) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_reset.lu = 0.902 (midend 175 / naive 194) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_scalar.lu = 0.945 (midend 256 / naive 271) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_str_push.lu = 0.929 (midend 157 / naive 169) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_outer_write_struct.lu = 0.898 (midend 184 / naive 205) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/memory/region_str_call_index_store.lu = 0.874 (midend 188 / naive 215) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/rows/row_member_handled.lu = 1.178 (midend 311 / naive 264) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/rows/row_union_payloads.lu = 0.857 (midend 288 / naive 336) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/typecheck/enum_union_three.lu = 0.639 (midend 321 / naive 502) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/typecheck/enum_union_tree.lu = 1.066 (midend 1513 / naive 1419) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume new path corpus/typecheck/enum_union_two.lu = 0.744 (midend 145 / naive 195) — reported, not gated; `cargo xtask bench-gates --record` on the linux rig records it
+bench-gates: ir-volume per-file table: 694 recorded, 716 measured, 22 new, 0 unmeasured, 0 improved, 0 regressed
+conformance: 693 anchors, 367 covered (326 debt), 484 forward tags, 46 untagged non-litmus files
+differ: 1219 file(s), 0 divergence(s), 21 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 0, B executed 0, BOTH executed 0 of 1157 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+lane-coverage: floors held (checked/native/release/union/all-three ≥ 221/242/242/256/207)
+xtask ci: all steps green
+gauntlet-rc=0
+      2 SKIP: core (on): this host's core_pattern pipes cores to a program, which would write the core outside the test's directory
+      4 SKIP: lldb not installed (required on the macOS CI lane)
+      1 SKIP: the clang drift witness runs on macOS/aarch64 hosts only
+Fri Oct 23 07:26:29 AM UTC 2026
+ 03:26:29 up 6 days, 15:44,  8 users,  load average: 1.32, 2.35, 4.30

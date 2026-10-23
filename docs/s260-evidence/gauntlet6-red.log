@@ -1,0 +1,28 @@
+head 96d69657947806ceba7cd4c68f43e8c9ed1af452
+Fri Oct 23 06:49:09 AM UTC 2026
+4:== xtask ci: fmt
+5:== xtask ci: fmt-fixpoint
+8:== xtask ci: clippy
+17:== xtask ci: rt-none
+19:== xtask ci: test
+REPORT adopt.lu native: exit Some(0): zero=invalid one=invalid two=invalid negative=invalid past=invalid | link before: pipe:[902926834] | a child before the adopt holds 5: no | adopt: io |  ||  || out-native: ""
+
+thread 'an_inherited_descriptor_is_adopted' (1018189) panicked at crates/wolf_driver/tests/process_calls_lanes.rs:528:9:
+assertion `left == right` failed: #815: the native binary
+  left: "zero=invalid one=invalid two=invalid negative=invalid past=invalid\nlink before: pipe:[902926834]\na child before the adopt holds 5: no\nadopt: io\n"
+ right: "zero=invalid one=invalid two=invalid negative=invalid past=invalid\nlink before: out-native\na child before the adopt holds 5: yes\nadopted as handle 3\nlink after the adopt: out-native\n5 again while it is a handle: io\nevery other number in 3..63 not io: none\na child after the adopt holds 5: no\n5 after the close: io\nlink after the close: none\n"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test an_inherited_descriptor_is_adopted ... FAILED
+== checked on core_limit_rows.lu: exit(0) 
+failures:
+
+failures:
+    an_inherited_descriptor_is_adopted
+
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 44.65s
+
+error: test failed, to rerun pass `-p wolf_driver --test process_calls_lanes`
+xtask ci: step `test` failed
+gauntlet-rc=1
+Fri Oct 23 06:58:32 AM UTC 2026
+ 02:58:32 up 6 days, 15:16, 10 users,  load average: 22.33, 15.50, 9.86
