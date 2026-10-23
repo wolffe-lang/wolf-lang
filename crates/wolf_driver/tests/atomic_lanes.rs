@@ -481,6 +481,7 @@ fn the_plain_counter_is_a_race_and_asserts_nothing() {
             | "0.1.53"
             | "0.1.54"
             | "0.1.55"
+            | "0.1.56"
     ) {
         assert_eq!(
             lupin.verdict, "trap(race)",
