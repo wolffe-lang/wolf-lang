@@ -328,6 +328,7 @@ pub fn test_cmd(args: &[String]) {
     let opts = RunOpts {
         echo,
         under_test: true,
+        ..RunOpts::default()
     };
 
     // ---- discovery: `*_test.lu` files, sorted (deterministic order) --

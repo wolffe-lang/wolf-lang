@@ -153,7 +153,19 @@ mod inherited_sigpipe {
 }
 
 fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let raw: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    let run_mode = raw.first().is_some_and(|a| a == "run");
+    let args: Vec<String> = raw
+        .iter()
+        .map(|a| match a.to_str() {
+            Some(s) => s.to_string(),
+            None if run_mode => a.to_string_lossy().into_owned(),
+            None => {
+                eprintln!("wolf: compiler arguments must be UTF-8");
+                std::process::exit(2);
+            }
+        })
+        .collect();
     // `wolf <command> --help` (#250). Only in the SECOND position: in
     // run mode everything after the entry file is the program's own
     // argv, and a toolchain that swallows a program's `--help` is a
@@ -217,7 +229,7 @@ fn main() {
             }
         },
         Some("build") => build(&args[1..]),
-        Some("run") => run(&args[1..]),
+        Some("run") => run(&args[1..], &raw[1..]),
         Some("fix") => fix(&args[1..]),
         Some("test") => test_cmd::test_cmd(&args[1..]),
         Some("conform-run") => conform_run(&args[1..]),
@@ -2750,7 +2762,7 @@ struct BuildCli {
     opts: BuildOpts,
     /// Arguments after the file (`wolf run prog.lu -- args…` or just
     /// trailing words): the program's argv.
-    prog_args: Vec<String>,
+    prog_args: Vec<std::ffi::OsString>,
     /// s53 script-mode posture (`--locked`, `--update`, `--offline`,
     /// `--yes`). Ignored by `wolf build` of a non-script.
     script: script_cmd::Posture,
@@ -2766,13 +2778,7 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         eprintln!("wolf {cmd}: {msg}");
         std::process::exit(2);
     };
-    let (args, std_root) = match take_std_root(args).and_then(|(a, f)| {
-        let root = effective_std_root(f)?;
-        Ok((a, root))
-    }) {
-        Ok(v) => v,
-        Err(e) => fail(&e),
-    };
+    let mut std_flag = None;
     let mut file: Option<String> = None;
     let mut out: Option<PathBuf> = None;
     let mut opts = BuildOpts {
@@ -2791,18 +2797,26 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         target: None,
         manifest_target: true,
     };
-    let mut prog_args: Vec<String> = Vec::new();
+    let mut prog_args: Vec<std::ffi::OsString> = Vec::new();
     let mut script = script_cmd::Posture::default();
     let mut i = 0;
     while i < args.len() {
         let a = &args[i];
         if run_mode && file.is_some() {
             // Everything after the file belongs to the program.
-            prog_args.push(a.clone());
+            prog_args.push(a.into());
             i += 1;
             continue;
         }
-        if a == "-o" || a == "--out" {
+        if let Some(path) = a.strip_prefix("--std-root=") {
+            std_flag = Some(PathBuf::from(path));
+        } else if a == "--std-root" {
+            i += 1;
+            let Some(path) = args.get(i) else {
+                fail("--std-root needs a directory")
+            };
+            std_flag = Some(PathBuf::from(path));
+        } else if a == "-o" || a == "--out" {
             i += 1;
             match args.get(i) {
                 Some(v) => out = Some(PathBuf::from(v)),
@@ -2941,6 +2955,7 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
     opts.cache_root = wolf_sema::anchor_entry(Path::new(&file))
         .parent()
         .map(Path::to_path_buf);
+    let std_root = effective_std_root(std_flag).unwrap_or_else(|e| fail(&e));
     BuildCli {
         file,
         out,
@@ -3076,8 +3091,16 @@ fn build(args: &[String]) {
 /// `wolf run <file.lu> [prog args…]` — build into the package cache
 /// and exec, exit code propagated (the cargo-run sugar promised at
 /// s12). All build flags apply; the binary lands in `.lu-cache/bin/`.
-fn run(args: &[String]) {
+fn run(args: &[String], raw: &[std::ffi::OsString]) {
     let mut cli = parse_build_cli("run", args, true);
+    // Parsing compiler flags uses text, but the program's suffix must
+    // never round-trip through String: Unix argv is arbitrary bytes.
+    let start = raw.len() - cli.prog_args.len();
+    if raw[..start].iter().any(|a| a.to_str().is_none()) {
+        eprintln!("wolf run: compiler arguments must be UTF-8");
+        std::process::exit(2);
+    }
+    cli.prog_args = raw[start..].to_vec();
     if cli.opts.emit != Emit::Bin {
         eprintln!("wolf run: --emit makes no sense here; use `wolf build`");
         std::process::exit(2);
@@ -3652,12 +3675,24 @@ fn checked_run(
     run_stdout: &mut Option<String>,
     x_ext: &mut Vec<(&'static str, serde_json::Value)>,
     seed: Option<u64>,
+    argv: &[Vec<u8>],
 ) -> (&'static str, String, Vec<Diagnostic>) {
-    use wolf_mem::ubcheck::{self, Budget, Verdict};
+    use wolf_mem::ubcheck::{self, Budget, RunOpts, Verdict};
     // s226 (`[exec.checked.sched]`): `--seed=N` selects the checked
     // machine's schedule; absent, every decision takes its first
     // candidate (seed 0).
-    match ubcheck::run_checked_seeded(pkg, tc, Budget::default(), "", "main", seed.unwrap_or(0)) {
+    match ubcheck::run_checked_with_opts(
+        pkg,
+        tc,
+        Budget::default(),
+        "",
+        "main",
+        seed.unwrap_or(0),
+        RunOpts {
+            argv,
+            ..RunOpts::default()
+        },
+    ) {
         Err(nyc) => {
             // Surface the refusal on stderr (the rich channel); the
             // record stays `unsupported` — the conservatism ledger.
@@ -3950,6 +3985,7 @@ fn conform_run(args: &[String]) {
     let mut seed: Option<u64> = None;
     // s226: a seed reached a checked execution.
     let mut checked_seeded = false;
+    let mut argv: Vec<Vec<u8>> = Vec::new();
     // kw04 (`[abi.target]`, kw00 F1 §4): `--target <triple>`. No machine
     // here runs a freestanding program — it has no `main`, no host
     // process, no runtime — so the freestanding target is refused by
@@ -3985,6 +4021,28 @@ fn conform_run(args: &[String]) {
     };
     let args = &args_seen[..];
     for a in args {
+        if let Some(hex) = a.strip_prefix("--argv-hex=") {
+            let fail = || -> ! {
+                eprintln!("wolf conform-run: --argv-hex needs even hexadecimal bytes without NUL");
+                std::process::exit(2);
+            };
+            if !hex.is_ascii() || hex.len() % 2 != 0 {
+                fail();
+            }
+            let bytes: Vec<u8> = hex
+                .as_bytes()
+                .chunks_exact(2)
+                .map(|pair| {
+                    std::str::from_utf8(pair)
+                        .ok()
+                        .and_then(|s| u8::from_str_radix(s, 16).ok())
+                        .filter(|b| *b != 0)
+                        .unwrap_or_else(|| fail())
+                })
+                .collect();
+            argv.push(bytes);
+            continue;
+        }
         if a == "--json" {
             continue; // accepted per [proto.invoke.cli]
         }
@@ -4066,6 +4124,10 @@ fn conform_run(args: &[String]) {
     // blocks them too, and the machine's own thread — which puts back
     // the mask this process started with — is the one a signal sent to
     // the process is handed to.
+    if !argv.is_empty() && (!checked || native || release) {
+        eprintln!("wolf conform-run: --argv-hex requires --checked and no native/release lane");
+        std::process::exit(2);
+    }
     if checked {
         wolf_mem::ubcheck::route_signals_to_the_machine();
     }
@@ -4353,6 +4415,7 @@ fn conform_run(args: &[String]) {
                                                             &mut run_stdout,
                                                             &mut x_ext,
                                                             seed,
+                                                            &argv,
                                                         )
                                                     } else if native || release {
                                                         // The s28 native rung:

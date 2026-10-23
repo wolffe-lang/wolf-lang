@@ -343,7 +343,7 @@ beside `wolf` itself); the compiler never links a C frontend.",
         usage: &[
             "conform-run <file.lu> [--phase=<p>] [--seed=N] [--json]",
             "[--error-format=human|json] [--dump=regions|cfg|wir] [--zstats]",
-            "[--checked] [--native] [--release] [--std-root <dir>]",
+            "[--checked [--argv-hex=HEX ...]] [--native] [--release] [--std-root <dir>]",
             "[--deny-warnings]",
         ],
         about: "\
@@ -352,6 +352,12 @@ record in the specification's format, stderr the diagnostics. This is
 how the compiler and the reference interpreter are compared against
 each other on the same program. Not a verb you need in order to write
 wolf.
+
+`--argv-hex=HEX` supplies one byte-exact argument to the checked machine;
+repeat it in argv order, with argv[0] first (an empty HEX is an empty
+argument). Only hexadecimal pairs are accepted, without NUL bytes. It
+requires `--checked`, without `--native` or `--release`. Without it the
+checked argv is empty; the compiler's own argv is never exposed.
 
 `--deny-warnings` promotes every warning to an error, so a program
 that warns is `fail(CODE)` in the record — the gate a consumer coupled
