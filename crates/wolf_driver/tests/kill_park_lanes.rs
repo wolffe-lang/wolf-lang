@@ -24,7 +24,11 @@
 //! (R-s260-2); the checked machine and lupin serialize a host wait with
 //! the program, so their proc ends before the kill (`normal`), which is
 //! their recorded posture, not a defect. Native runs again under
-//! `taskset -c 0-3` on linux.
+//! `taskset -c 0-3` on linux. Unix only: the `os_wait` row starts the
+//! host's `sleep`, and windows' parks are held to the leave by
+//! `wolf_rt::task::leave`'s own tests, which run there.
+
+#![cfg(unix)]
 
 mod lane_exit;
 
