@@ -157,7 +157,9 @@ i >= 0` never fails and `i -= 1` wraps past zero. Annotate the
 counter (`var i: int = 15`) and cast at the use (`h >> (i * 4) as
 wrapping[u64]`). lupin 0.1.54 and 0.1.55 accept an `int` count on a wrapping
 shift and so end that loop after sixteen turns where the three
-compiling machines do not: lupin's divergence, listed for wolf-interp.
+compiling machines do not. From 0.1.56, lupin infers the same wrapping
+counter and rejects an annotated `int` shift count with E0401 (is79,
+wolf-interp#273); the older releases keep their measured answers.
 
 ## §3 The numeric cast `[type.numlit.cast]`
 
@@ -1371,7 +1373,7 @@ are that pattern, named.)
   index rebuild and aspen's level buffers as one method each. Witness
   `corpus/memory/list_reset.lu`, and
   `corpus/memory/region_outer_write_reset.lu` for the rebuild inside a
-  turn. **lupin** 0.1.55 resolves neither name (`unsupported`):
+  turn. **lupin** 0.1.55 and 0.1.56 resolve neither name (`unsupported`):
   wolf-interp owes both.
 
 ## §13 The range type `[type.range]`
