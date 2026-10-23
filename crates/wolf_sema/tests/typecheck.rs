@@ -927,3 +927,80 @@ fn a_moded_module_fn_is_called_by_name_only() {
         shadowed.not_yet
     );
 }
+
+#[test]
+fn container_brackets_keep_their_admitted_tuple_and_generic_types() {
+    for src in [
+        "fn main() -> int { let xs = List[(str, int)](); 0 }",
+        "fn collect[T](x: T) -> int { let xs = List[T](); 0 }\nfn main() -> int { 0 }",
+    ] {
+        let tc = check_one(src);
+        assert!(
+            tc.fully_checked(),
+            "{:?} / {:?}",
+            tc.diagnostics,
+            tc.not_yet
+        );
+    }
+}
+
+#[test]
+fn container_brackets_name_only_the_shapes_still_declined() {
+    for (src, construct) in [
+        (
+            "fn main() -> int { let xs = List[1 + 2](); 0 }",
+            "a non-type expression in a type-argument bracket",
+        ),
+        (
+            "fn main() -> int { let T = 1; let xs = List[T](); 0 }",
+            "a value-bound name in a type-argument bracket",
+        ),
+        (
+            "fn main() -> int { let xs = List[int, str](); 0 }",
+            "a prelude container with this type-argument count",
+        ),
+        (
+            "fn main() -> int { let xs = List[range[int]](); 0 }",
+            "a nested type application outside the builtin type constructors",
+        ),
+        (
+            "fn main() -> int { let xs = List[never](); 0 }",
+            "a known name without an admitted type-argument form",
+        ),
+        (
+            "fn main() -> int { let xs = List[Scope](); 0 }",
+            "a known name without an admitted type-argument form",
+        ),
+    ] {
+        let tc = check_one(src);
+        assert_eq!(tc.not_yet.len(), 1, "{:?}", tc.not_yet);
+        assert_eq!(tc.not_yet[0].construct, construct);
+        assert!(
+            tc.diagnostics.iter().all(|d| d.code.as_str() != "E0301"),
+            "{:?}",
+            tc.diagnostics
+        );
+    }
+}
+
+#[test]
+fn missing_container_type_names_report_the_leaf_without_cascades() {
+    for (arg, name) in [
+        ("Map[str, Nope]", "Nope"),
+        ("Map[Nope, str]", "Nope"),
+        ("List[Nope]", "Nope"),
+        ("Pool[Nope]", "Nope"),
+        ("Map[str, List[Nope]]", "Nope"),
+        ("List[(str, Nope)]", "Nope"),
+        ("List[Nope[int]]", "Nope"),
+    ] {
+        let src = format!("fn main() -> int {{ let xs = {arg}(); 0 }}");
+        let tc = check_one(&src);
+        assert!(tc.not_yet.is_empty(), "{arg}: {:?}", tc.not_yet);
+        assert_eq!(codes(&tc), ["E0301"], "{arg}: {:?}", tc.diagnostics);
+        let d = &tc.diagnostics[0];
+        let span = d.primary.span;
+        assert_eq!(&src[span.lo as usize..span.hi as usize], name);
+        assert_eq!(d.message, format!("nothing named `{name}` is in scope"));
+    }
+}

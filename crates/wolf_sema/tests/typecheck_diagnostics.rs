@@ -849,3 +849,11 @@ fn tuple_type_in_bracket_position() {
         "fn first(xs: List[(str, int)]) -> int { xs[0].1 }\n\nfn main() -> !int {\n    var out = List[(str, int)]()\n    (mut out).push((\"ada\", 91))\n    let m = Map[str, (int, bool)]()\n    let one = List[(int)]()\n    var nested = List[List[(int, int)]]()\n    first(out) - 91 + m.len + one.len + nested.len\n}\n",
     );
 }
+
+#[test]
+fn e0301_container_type_argument_is_unresolved_not_declined() {
+    snap_one(
+        "e0301_container_type_argument",
+        "fn main() -> int {\n    let in_flight = Map[str, Child]()\n    0\n}\n",
+    );
+}

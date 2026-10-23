@@ -1,0 +1,13 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+assertion_line: 37
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0301]: nothing named `Child` is in scope
+ --> mem:///main.lu:2:30
+  |
+2 |     let in_flight = Map[str, Child]()
+  |                              ^^^^^ not found
+  |
+  = note: `Map[…]` is generic application here; each argument must name a type — import and
+    qualify the type you mean
