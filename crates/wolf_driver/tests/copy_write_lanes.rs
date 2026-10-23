@@ -28,7 +28,7 @@
 mod lane_exit;
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::Command;
 
 fn wolf() -> &'static str {
     env!("CARGO_BIN_EXE_wolf")
@@ -139,8 +139,9 @@ fn lupin_says(entry: &Path) -> Option<Obs> {
 
 /// The environment skip, strictly (#550, #571): an exit 2 is a skip
 /// only when the host cannot run the tier at all; a compile error is
-/// never one.
-fn unavailable(out: &Output, tier: &str) -> bool {
+/// never one. (Only the linux witness builds a program itself.)
+#[cfg(target_os = "linux")]
+fn unavailable(out: &std::process::Output, tier: &str) -> bool {
     if !lane_exit::environment_refusal(out, tier) {
         return false;
     }
