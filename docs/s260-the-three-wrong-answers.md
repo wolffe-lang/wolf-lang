@@ -431,6 +431,29 @@ steps green", 329 test results, none failed; ir-volume 0 regressed;
 differ-self 1,219 files, 0 divergences; lane-coverage floors held; the
 SKIP census the same seven, all the host's.
 
+**The rebase onto v0.2.35.** After full run 39924169946 went green at
+`0c177bb7`, trunk moved to `cf0c13d3` (r40, wolf 0.2.35 tagged) and the
+lane was rebased onto it. `git range-diff e2ed1607..0c177bb7
+cf0c13d3..88eb24b4`: 40 of 42 commits `=`, the two CHANGELOG commits `!`
+by their context alone (trunk's file has no `## Unreleased`, so the
+rebase carried the s260 block into 0.2.35's section), and one new
+commit, `88eb24b4`, that moves the block, byte-identical, under a fresh
+`## Unreleased` above 0.2.35 (`docs/s260-evidence/range-diff.txt`).
+r40 moved `PAIRING` to lupin 0.1.56 (archive sha256 `ad703550…822cc`,
+read twice; build pin `294d626`, records `28547b4`), and the lane's
+pre-mirror pins named 0.1.55 alone, so 0.1.56 reddened them by name, as
+designed: it still loses the failed write's 17 bytes, still answers
+`io` with `os_error()` 0 for every spawn, and its `os_exec` still runs
+the file under `/bin/sh` (measured on kasumi, `ev/lane3.log`; the
+fifteen kill rows and the `/dev/full` row passed against it unchanged).
+Two commits pin 0.1.56 beside 0.1.55, one per test file (`a745c56c`,
+`3892d86d`); nothing else moved. Every commit sha this note cites before
+this paragraph names the series before the rebase (the gauntlets, plants
+and runs ran there); `docs/s260-evidence/range-diff.txt` maps each one
+to its rebased commit. CI's new musl check (#886,
+`cargo check --workspace --locked --target x86_64-unknown-linux-musl`)
+and the freebsd cross-check, in a container at `88eb24b4`: exit 0 both.
+
 **The anchors.** `cargo xtask spec-extract` regenerated at the head:
 `spec/anchors.json` byte-identical to trunk `e2ed1607`'s, 693 keys on
 both sides, nothing in either difference — the `[os.fs.copy]` sentence
@@ -583,12 +606,13 @@ head against 0.2.34: 21 static divergences, trunk's.
 **To file**, each with its witness in this lane's rows:
 
 - **wolf-interp — `fs_copy_chunk`'s failed write loses the bytes**
-  (lupin 0.1.55): the `[os.fs.copy]` sentence to mirror;
+  (lupin 0.1.55 and 0.1.56): the `[os.fs.copy]` sentence to mirror;
   `fs/copy_chunk_failed_write.lu` is the one hard divergence this lane
   adds to the pairing ledger, pinned by version and commit in
   `copy_write_lanes.rs`.
 - **wolf-interp — `os_exec` runs a `#!`-less file under `/bin/sh`, and
-  `os_error()` stays 0 after a spawn or exec refusal** (lupin 0.1.55,
+  `os_error()` stays 0 after a spawn or exec refusal** (lupin 0.1.55 and
+  0.1.56,
   `fixtures/spawn_noexec/`): `[os.proc.exec]`'s "no machine re-runs it"
   and the `ENOEXEC` number; pinned in `spawn_noexec_lanes.rs`.
 - **wolf-lang — `[os.fs.error]`'s "the os family does not at this pin"
