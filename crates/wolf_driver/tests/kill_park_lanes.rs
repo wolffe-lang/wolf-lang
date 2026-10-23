@@ -160,8 +160,7 @@ fn every_lane(name: &str, compiled: &str, machine: &str) {
             compiled,
             "{name} on {tier} ({ISSUE})"
         );
-        if tier == "native" && cfg!(target_os = "linux") && Path::new("/usr/bin/taskset").exists()
-        {
+        if tier == "native" && cfg!(target_os = "linux") && Path::new("/usr/bin/taskset").exists() {
             let mut t = Command::new("taskset");
             t.args(["-c", "0-3"]).arg(dir.join(tier));
             let run = run_in(t, &dir);
@@ -194,7 +193,11 @@ fn every_lane(name: &str, compiled: &str, machine: &str) {
     let mut l = Command::new(lupin);
     l.args(["conform-run", "main.lu", "--json"]);
     let out = run_in(l, &dir);
-    assert_eq!(record_stdout(&out, "lupin"), machine, "{name} on lupin, the reference");
+    assert_eq!(
+        record_stdout(&out, "lupin"),
+        machine,
+        "{name} on lupin, the reference"
+    );
 }
 
 macro_rules! site {

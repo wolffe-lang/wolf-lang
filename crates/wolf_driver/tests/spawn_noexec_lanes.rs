@@ -116,14 +116,20 @@ fn wolfgang_runs(fixture: &str) -> Vec<(String, String)> {
         assert!(out.status.success(), "{fixture} {tier} build: {out:?}");
         let run = run_in(Command::new(dir.join(tier)), &dir);
         assert!(run.status.success(), "{fixture} {tier}: {run:?}");
-        seen.push((tier.to_string(), String::from_utf8_lossy(&run.stdout).into_owned()));
+        seen.push((
+            tier.to_string(),
+            String::from_utf8_lossy(&run.stdout).into_owned(),
+        ));
         if tier == "native" && cfg!(target_os = "linux") && Path::new("/usr/bin/taskset").exists() {
             let again = stage(fixture, "taskset");
             std::fs::copy(dir.join(tier), again.join(tier)).unwrap();
             let mut t = Command::new("taskset");
             t.args(["-c", "0-3"]).arg(again.join(tier));
             let run = run_in(t, &again);
-            assert!(run.status.success(), "{fixture} native under taskset: {run:?}");
+            assert!(
+                run.status.success(),
+                "{fixture} native under taskset: {run:?}"
+            );
             seen.push((
                 "native, taskset -c 0-3".into(),
                 String::from_utf8_lossy(&run.stdout).into_owned(),

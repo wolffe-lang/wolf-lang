@@ -175,8 +175,7 @@ const FAILED_WRITE_PRE_MIRROR: &[Pin] = &[(
     "copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n",
 )];
 
-const FAILED_WRITE: &str =
-    "copy=io took_nothing=true os_error_set=true offset_after=0\nretry=17 same=true\ncleaned=true\n";
+const FAILED_WRITE: &str = "copy=io took_nothing=true os_error_set=true offset_after=0\nretry=17 same=true\ncleaned=true\n";
 const DEV_FULL: &str =
     "copy=io os_error_set=true offset_after=0 left_to_read=17 of 17\ncleaned=true\n";
 
@@ -255,7 +254,9 @@ fn t06_witness_into_dev_full_keeps_its_bytes() {
     std::fs::write(dir.join("in.txt"), "alpha\nbeta\ngamma\n").unwrap();
     for tier in ["native", "release"] {
         let mut build = Command::new(wolf());
-        build.current_dir(&dir).args(["build", "main.lu", "-o", tier]);
+        build
+            .current_dir(&dir)
+            .args(["build", "main.lu", "-o", tier]);
         if tier == "release" {
             build.arg("--release");
         }
