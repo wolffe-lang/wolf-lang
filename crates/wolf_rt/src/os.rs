@@ -321,9 +321,12 @@ impl ChildTable {
             .stderr(Stdio::inherit());
         #[cfg_attr(not(unix), allow(unused_variables))]
         let hooked = keep_pipe_ignore(&mut cmd);
-        // s260 (#682): a hooked spawn execs the program itself.
+        // s260 (#682): a hooked spawn execs the program itself, and so
+        // does every spawn off glibc ([`EXEC_ALWAYS_OURS`]).
         #[cfg(unix)]
-        if hooked && let Some(plan) = ExecPlan::new(prog, rest, &[]) {
+        if (hooked || EXEC_ALWAYS_OURS)
+            && let Some(plan) = ExecPlan::new(prog, rest, &[])
+        {
             exec_last(&mut cmd, plan);
         }
         let spawned = cmd.spawn();
@@ -435,9 +438,12 @@ impl ChildTable {
         if !inherit.is_empty() {
             return Err("unsupported");
         }
-        // s260 (#682): last, the exec itself — never `execvp`'s shell.
+        // s260 (#682): last, the exec itself — never `execvp`'s shell,
+        // and off glibc never `posix_spawn`'s ([`EXEC_ALWAYS_OURS`]).
         #[cfg(unix)]
-        if hooked && let Some(plan) = ExecPlan::new(exe, args, env) {
+        if (hooked || EXEC_ALWAYS_OURS)
+            && let Some(plan) = ExecPlan::new(exe, args, env)
+        {
             exec_last(&mut cmd, plan);
         }
         match cmd.spawn() {
@@ -1041,7 +1047,21 @@ pub(crate) fn keep_pipe_ignore(cmd: &mut Command) -> bool {
 // search goes on, anything else (`ENOEXEC` among them) is the spawn's
 // error, which the standard library carries back to the parent. A spawn
 // with no hook keeps the standard library's `posix_spawn` path, which
-// does not fall back on glibc (the empty-map rows were already `io`).
+// does not fall back on glibc (the empty-map rows were already `io`) but
+// does on macOS, so off glibc every spawn ends with the hook
+// ([`EXEC_ALWAYS_OURS`]).
+
+/// s260 (#682): whether a spawn that needs no hook of its own still ends
+/// with [`exec_last`]. A hookless `Command` is spawned with
+/// `posix_spawn`, and the C libraries part on a `#!`-less file there:
+/// glibc's answers `ENOEXEC` (t06 at 0.2.34 and s260's rows on kasumi:
+/// `spawn_fds[]` and `spawn` were `io`), macOS's runs it under
+/// `/bin/sh` (CI run 39906953002, macos-latest: `./noshebang spawn: RAN
+/// status 0`, `./junk spawn: RAN status 126`), and none other was
+/// measured. So the exec is the hook's everywhere but glibc, which keeps
+/// the cheaper `posix_spawn` it was measured on.
+#[cfg(unix)]
+pub(crate) const EXEC_ALWAYS_OURS: bool = !cfg!(all(target_os = "linux", target_env = "gnu"));
 
 /// The exec a hooked spawn ends with: everything `execve` needs, made
 /// before the fork so the child allocates nothing.
