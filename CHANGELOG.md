@@ -1,6 +1,210 @@
 # Changelog
 
-## Unreleased
+## 0.2.35 — 2026-10-23
+
+Mixed-payload enums and rows now compile natively and on the release
+tier. This is the release for `std.json`, and for an enum such as
+`enum Value { Int(int), Text(str) }` that the compiler previously
+refused because its payload slots disagreed. Each conflicting slot is
+a union, sized for its largest member and aligned for its strictest
+member; the active variant writes and reads its own typed view.
+Uniform slots keep their old layout. Copying an enum whose payload
+reaches the heap uses a per-layout, tag-switched copy function;
+recursive enums copy recursively, and maps of such values copy their
+entries. The checked machine and lupin already ran these programs
+(`[abi.native.enum]`, s257).
+
+A member read or method call on `!T` is now E0409 at the base, not
+"cannot compile this yet". `rest.len` and `rest.starts_with("4")` on a
+`str ! {none}` must handle the row: the diagnostic names `rest?.len`
+and `(rest else "").len`. The method check precedes impl lookup,
+including a blanket impl. This closes the refusal that sent a caller
+looking for a missing builtin implementation when its operand was an
+unhandled row (`[type.row.operand]`, s258).
+
+### A region per loop turn
+
+A region block can write a scalar or an explicit materializing `copy`
+into an outer value without keeping that block's data. The copy is
+made in the outer value's region, including fresh string bytes and
+container buffers; container growth uses the container's own region.
+A call passing `mut` is admitted when the callee is ambient-clean,
+proved callee-first over the build and to a fixpoint for recursion.
+Other keeping stores stay E1010/E1004, with the store and repair named.
+`wolf conform-run --dump=mut-clean` prints each parameter's verdict
+and first keeping store (`[mem.region.outer-write]`, s255).
+
+`List.reserve(n)` grows capacity without changing length or elements;
+`List.reset()` empties the list and keeps its buffer. A long-lived
+list can therefore be rebuilt inside a per-turn region by resetting
+and pushing, rather than replacing its header and retaining another
+buffer until the outer region ends. `clear` makes no buffer-retention
+promise. An outer store's materializing copy pays a deep copy in the
+outer region; programs without that store pay nothing for this rule.
+
+### Faults and portability
+
+Physical stack overflow now reports `wolf-trap: stack-overflow`, the
+fault PC and exit 134 on the main thread and runtime threads, on
+native and release. Unix uses one process-wide SIGSEGV/SIGBUS handler,
+per-thread guard bounds and alternate stacks; the report performs no
+allocation, symbol lookup or unwinding. The checked machine's bounded
+recursion refusal is a different event, not a promise to reach the
+same depth. A move through a checked `read` view now empties the
+callee's path only, preserving the caller's container as both compiled
+tiers do (`[conf.trap.stack]`, `[mem.tier0.mode.read]`, s256).
+
+The musl portability patch is applied in this release (#886). The
+checked machine and runtime make the C locale with `newlocale(0, …)`
+rather than a libc-specific `LC_ALL_MASK` binding. Retired pthread
+handles use an opaque, ownership-carrying wrapper that moves to one
+joiner, never a pointer to dereference. CI's Linux lint job checks
+the workspace for `x86_64-unknown-linux-musl`; no libc feature change
+was needed. This is a compile-portability fix, not a new compiler
+archive: the four existing archive targets remain, and #887 tracks
+the separate musl archive.
+
+### Refusals name their source
+
+A spanned conservatism refusal now shows the source file, line,
+column and caret, rather than file-relative offsets detached from
+their file. JSON retains its existing fields and adds
+`x-unsupported-file`, `x-unsupported-line` and `x-unsupported-col`;
+backend refusals with no source identity do not invent one. An
+unresolved container argument such as `Map[str, Child]()` is E0301 at
+`Child`, with a note to import and qualify the type. Tuple and rigid
+generic arguments that already worked keep working; remaining
+declined bracket shapes are named individually (s259).
+
+### The rest of the cycle
+
+Cross-module closure and function-value records now resolve their
+out-of-object vtable slots by the same imported symbol a function
+address uses, on both backends. Deduplication pins the functions those
+records name. This fixes the release-tier refusals for a closure made
+in one module and called from another, including an inlined maker;
+partitioning and the inliner are unchanged (s251).
+
+An adapter of a Copy scalar is Copy; an adapter of a string, container
+or struct still moves. Module state of `wrapping[T]` is static data.
+A value whose type reaches no storage names no region, so scalar-only
+structs, enums and rows can leave a region or survive its freeze.
+Storage-holding values retain their region rules. The diagnostic for
+`~x` names integer `!x`; a brace on the next line after a control
+header gets the joining edit; and a read-parameter reuse names the
+parameter and the two ways to read twice (s252).
+
+`wolf test --nocapture` exposes both output streams, passing SKIPs
+included. A native fallback is named on its row and counted in the
+summary; JSON adds the refusal in `native` and a native count.
+`--no-native-fallback` makes a checked-only suite explicit. Under the
+test runner the checked machine refuses `os_exe()` by name, so a main
+test that re-executes itself runs natively as its own executable.
+Exit status is unchanged. `wolf fmt` is a fixed point on member calls
+whose arguments break across lines, with `fmt-fixpoint` in the gauntlet
+(s250).
+
+The process tier adds core-limit reads and changes, a no-core exit,
+an inherited descriptor adopted into the handle table, and host OS
+and architecture names. The C library's reserved signal numbers answer
+`invalid` before a host call. The filesystem tier adds access checks,
+locks, a handle's stat record, FIFOs, non-blocking mode and partial
+pipe writes; open mode bit 16 refuses a final symlink, and bit 62 in a
+wait descriptor asks for write readiness. `os_cwd()` allocates in the
+ambient region, so keeping it past that region is E1010 (s253, s254).
+
+| prelude surface | 0.2.34 | 0.2.35 |
+|---|---:|---:|
+| functions | 154 | 167 |
+| W0304 names | 186 | 199 |
+| all names | 194 | 207 |
+| spec anchors | 672 | 693 |
+
+The new function names are `fs_access`, `fs_adopt`, `fs_fstat_record`,
+`fs_lock`, `fs_mkfifo`, `fs_set_nonblock`, `fs_unlock`, `fs_write_some`,
+`os_arch`, `os_core_limit`, `os_core_off`, `os_name` and
+`os_set_core_limit`. No prelude name was removed.
+
+### The bundled std and pairing
+
+The archive bundles wolf-std
+`2386522eb059cca5a84108562c2c0a0e72345d34` (sc70), replacing
+`e036bec318ad81ecd5a025612bc2c2adb17527f3`. It includes sc69's editor,
+process, sync and path wrappers and sc70's local civil time, TZif and
+POSIX rule reader, conversion and C-locale formatting in `std.time`.
+The staged `std/STD-REV` names that exact commit; no std ledger cell
+was edited for this compiler release.
+
+| bundled-std measurement | result |
+|---|---|
+| std-test entry files | 524 |
+| changed ledger cells | 13; named below, not silently flipped |
+| doc-examples | 533 blocks, 1,599 lane observations, GREEN |
+| std.json on native / release | 9 / 9 run their directives, matching outputs |
+| named Linux host skips | 2, directory_accounts on checked and native |
+
+The fixed std's aggregate `std-test` is RED on the cells below, not a
+claimed green run. The native JSON graduations belong to sc72 after
+this release; the other interpreter movements are findings to review
+at its paired pin, not waivers added here.
+
+| file under tests/ | lane | ledger at 2386522e | observed |
+|---|---|---|---|
+| fs/sync_rows.lu | lupin | unsupported | run |
+| json/navigation.lu | native | unsupported | run |
+| json/navigation_rows.lu | native | unsupported | run |
+| json/number_posture_and_depth.lu | native | unsupported | run |
+| json/parse_misses.lu | native | unsupported | run |
+| json/parse_shapes.lu | native | unsupported | run |
+| json/pretty_and_escape.lu | native | unsupported | run |
+| json/stringify_shapes.lu | native | unsupported | run |
+| json/unescape_shapes.lu | native | unsupported | run |
+| json/values_and_accessors.lu | native | unsupported | run |
+| term/mode_bits_set.lu | lupin | divergent(stdout) | unsupported |
+| term/restore_rows.lu | lupin | unsupported | run |
+| time/monotonic_ns.lu | lupin | unsupported | run |
+
+The first isolated-container run also reported a directive mismatch on
+`process/join_own_group.lu` on checked and native: the inherited process
+group was outside the PID namespace, so its own group read as zero.
+The published compiler and the candidate gave the same result there;
+both passed the unchanged directive when the container established its
+own session. Those original reds and the session-controlled retakes are
+retained, not ledger changes. `os/users/directory_accounts.lu` prints
+its named skip where the directory service is absent; the interpreter
+refuses the user-id call by name instead.
+
+The paired interpreter is lupin **0.1.56**, with its spec/corpus pin
+unchanged at `294d626`. It serves real OS entropy even under `--seed`,
+mirrors the scalar-region and wrapping rules, and resolves the earlier
+editor/storage names. It still refuses canonical paths outside its
+served tree and the host operations it cannot implement. Its process
+and filesystem gaps from this cycle, outer-region materializing
+copies, the two List methods and the row-member rule remain named
+lag, measured before carrying any version-keyed entry. The full
+published-0.2.34 compiler control and the published-0.1.55 interpreter
+control are retained; movement is not attributed to the new pairing
+by assumption.
+
+### Downstream at 0.2.35
+
+| repository | next step |
+|---|---|
+| wolf-std | sc72 re-pin; #92 in-place helpers on reset/reserve; #93 JSON header and the measured native ledger graduations; #94; #91 README |
+| pelt | update the wolf, lupin and std pins |
+| lope | update the pins |
+| aspen | update the pins and adopt std.time where appropriate |
+| boreutils | update the pins; measure the published pair on both tiers |
+| lobo | update the pins |
+| yew | yw06 pin; #40 prompt-menu refill can use the new region/list rules |
+| wolf-book | #92 graduate ch27/ex27-3; update the release pins |
+| wolf-web | #68 retire the carried portability patch at lupin 0.1.56 |
+| wolf-lsp | absorb the measured prelude delta |
+| tree-sitter-wolf | absorb the measured prelude delta |
+| pax | next pins lane; consume #887's compiler archive only when published |
+| muzzle | update the pins |
+
+### Changes recorded before the release pairing
 
 - s259 (#889): conservatism refusals show the source file, line, column and caret; JSON records retain their fields and add the refusal's location.
 - s259 (#890): an unresolved container type argument is E0301 at the name, not a refusal; remaining declined bracket shapes are named individually.
