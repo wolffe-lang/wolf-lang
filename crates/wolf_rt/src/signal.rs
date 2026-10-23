@@ -2345,9 +2345,18 @@ pub extern "C" fn __wolf_rt_os_signal_listen(mask: i64) -> i64 {
 
 /// `os_signal_wait(set: int) -> int ! {io}` — the delivered meaning
 /// (>= 0), or a negated code (`-IO`) on failure.
+fn __wolf_rt_os_signal_wait_parks(mask: i64) -> i64 {
+    wait(mask)
+}
+
+/// The exported shim (s260, #683): [`__wolf_rt_os_signal_wait_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_os_signal_wait(mask: i64) -> i64 {
-    wait(mask)
+    let r = __wolf_rt_os_signal_wait_parks(mask);
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::task::leave_if_killed() };
+    r
 }
 
 /// `os_signal_raise(sig: int) -> () ! {io}` — 0 ok, else io.
@@ -2402,9 +2411,18 @@ pub extern "C" fn __wolf_rt_os_signal_poll(mask: i64) -> i64 {
 /// `os_signal_wait_fd(fd: int, set: int) -> int ! {io, unsupported}`
 /// (s234) — the meaning taken (> 0), 0 when `fd` has something to read,
 /// or a negated `sig_code`.
+fn __wolf_rt_os_signal_wait_fd_parks(fd: i64, mask: i64) -> i64 {
+    wait_fd(fd, mask)
+}
+
+/// The exported shim (s260, #683): [`__wolf_rt_os_signal_wait_fd_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_os_signal_wait_fd(fd: i64, mask: i64) -> i64 {
-    wait_fd(fd, mask)
+    let r = __wolf_rt_os_signal_wait_fd_parks(fd, mask);
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::task::leave_if_killed() };
+    r
 }
 
 /// `os_signal_wait_fds(fds: List[int], set: int, deadline_ms: int) ->
@@ -2417,8 +2435,7 @@ pub extern "C" fn __wolf_rt_os_signal_wait_fd(fd: i64, mask: i64) -> i64 {
 ///
 /// `fds` must be a live `List[int]` header; `out` must address 16
 /// writable bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_os_signal_wait_fds(
+unsafe fn __wolf_rt_os_signal_wait_fds_parks(
     fds: i64,
     mask: i64,
     deadline_ms: i64,
@@ -2436,6 +2453,25 @@ pub unsafe extern "C" fn __wolf_rt_os_signal_wait_fds(
         }
         Err(c) => c,
     }
+}
+
+/// The exported shim (s260, #683): [`__wolf_rt_os_signal_wait_fds_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_os_signal_wait_fds_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_signal_wait_fds(
+    fds: i64,
+    mask: i64,
+    deadline_ms: i64,
+    out: i64,
+) -> i64 {
+    let r = unsafe { __wolf_rt_os_signal_wait_fds_parks(fds, mask, deadline_ms, out) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::task::leave_if_killed() };
+    r
 }
 
 /// `os_signal_ignored() -> int ! {unsupported}` (s232) — the ignored
