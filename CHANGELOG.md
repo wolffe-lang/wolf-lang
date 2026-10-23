@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- s259 (#889): conservatism refusals show the source file, line, column and caret; JSON records retain their fields and add the refusal's location.
+- s259 (#890): an unresolved container type argument is E0301 at the name, not a refusal; remaining declined bracket shapes are named individually.
+
 s258 — a member read on a `!T` is E0409 (wolf-lang#879). `rest.len`
 and `rest.starts_with("4")` on a `str ! {none}` were refused as "cannot
 compile this yet" (members on this type, methods on builtin types; exit
