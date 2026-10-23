@@ -85,6 +85,12 @@ const PRE_MIRROR_LUPIN: &[(&str, &str)] = &[("0.1.54", "0e536e8"), ("0.1.55", "e
 /// resolve" (0.1.55 on `wait_fds_race.lu`, measured, r39).
 const LISTEN_REFUSED_BY_NAME: &[&str] = &["0.1.55"];
 
+/// r40: the published .56 resolves the wait, then both wait fixtures
+/// reach the listen, refused by name. No unlisted build inherits this pin.
+fn listen_before_wait(version: &str, commit: &str) -> bool {
+    version == "0.1.56" && commit.starts_with("28547b4")
+}
+
 /// The native or release binary of `entry`. A compile error FAILS the
 /// gate (it is the defect at a pre-fix head, never an environment).
 fn build(entry: &Path, dir: &Path, release: bool) -> Option<PathBuf> {
@@ -443,6 +449,11 @@ fn every_lane(name: &str, steps: &[(&str, Act)], first: &str, check: &dyn Fn(&st
             let (v, why, version, commit) = lupin_record(&text);
             eprintln!("s248 {name} [lupin {version} {commit}] end={end:?} verdict={v} why={why:?}");
             assert_eq!(v, "unsupported", "lupin on {name}: {text}");
+            let first = if first == "os_signal_wait_fds" && listen_before_wait(&version, &commit) {
+                "os_signal_listen"
+            } else {
+                first
+            };
             assert!(
                 why.contains(&format!("`{first}`")),
                 "lupin on {name} refused for another reason than `{first}`: {why}"
@@ -628,9 +639,12 @@ fn every_lane_plain(name: &str, secs: u64, want: &str, first: &[&str]) {
             if PRE_MIRROR_LUPIN
                 .iter()
                 .any(|(v, c)| *v == version && commit.starts_with(c))
+                || listen_before_wait(&version, &commit)
             {
                 assert_eq!(verdict, "unsupported", "pre-mirror lupin on {name}");
-                let measured = if LISTEN_REFUSED_BY_NAME.contains(&version.as_str()) {
+                let measured = if LISTEN_REFUSED_BY_NAME.contains(&version.as_str())
+                    || listen_before_wait(&version, &commit)
+                {
                     first.contains(&"os_signal_listen")
                         && why.contains("`os_signal_listen`")
                         && !why.contains("does not resolve")
