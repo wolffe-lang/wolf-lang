@@ -219,9 +219,11 @@ anchor changed.
 ## Differ and conservatism ledgers
 
 Same corpus on both sides: 1,217 files, 1,155 non-member entries. The
-implementation is the code through `5429021d`; subsequent commits are
-prose only. Every tool is used without a bundled std beside its binary
-except where the command explicitly supplies a corpus fixture root.
+implementation is the compiler code through `5429021d`. The only later
+non-prose change corrects the new row's phase header and its token and
+declaration snapshots; the compiled program is unchanged. Every tool
+is used without a bundled std beside its binary except where the
+command explicitly supplies a corpus fixture root.
 
 R-s259-4 was accepted: `xtask differ` does not pass the fixture std root
 that `xtask corpus`, lowering tests and lane coverage pass. A small
@@ -309,6 +311,17 @@ from the implementation's file/line/column frame, as shown above.
 One initial preflight is explicitly excluded: all workspace tests
 passed, then rustdoc could not find a dependency after a concurrent
 rebuild in the same target directory invalidated its crate metadata.
+A subsequent stable run passed every workspace test, including rustdoc,
+then the corpus gate caught the new row's `phase: typecheck` marker:
+headers name the deepest *passing* phase, so the marker must be
+`resolve` even though the E0301 record names the failing checker rung.
+`f6712940` corrects that marker and its two deliberately reviewed
+snapshots. The red run is retained as `phase-header-ci.*`. The corrected
+corpus gate reports `1217 file(s), 0 bad`, 381 enforced fail pins and
+3 forward pins; all four driver tests pass. The 79-record matrix
+(`final-witness-matrix.jsonl`) and before/after static self-check were
+repeated and have the same verdicts and 22-to-21 ledger delta.
+
 The final-head gauntlet runs with stable sources and no other cargo
 process in that target directory, under `taskset -c 4-7`,
 `CARGO_INCREMENTAL=0`, `LUPIN` set to the verified reference,
@@ -322,7 +335,7 @@ Evidence on kasumi, under `~/lanes/s259/ev/`:
 
 | evidence | files |
 |---|---|
-| all witness tiers, including real std | `witness-matrix.jsonl`, `witness-matrix.rc` |
+| all witness tiers, including real std | `witness-matrix.jsonl`, `final-witness-matrix.jsonl`, adjacent `.rc` files |
 | human before/after and mk case | `base-refusal-screen.log`, `head-refusal-screen.log`, `head-mk-screen.log`, adjacent `.rc` files |
 | raw triage passes | `rows-base-differ-*.log`, `rows-strip-differ-*.log`, `head-differ-*.log`, adjacent `.rc` files |
 | fixture-aware triage passes | `fixture-base-differ-*.log`, `fixture-strip-differ-*.log`, `fixture-head-differ-*.log`, adjacent `.rc` files |
