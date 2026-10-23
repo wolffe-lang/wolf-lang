@@ -1512,8 +1512,7 @@ pub extern "C" fn __wolf_rt_os_proc_pid(h: i64) -> i64 {
 /// # Safety
 ///
 /// `out` must address 8 writable bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_os_wait_status(h: i64, out: i64) -> i64 {
+unsafe fn __wolf_rt_os_wait_status_parks(h: i64, out: i64) -> i64 {
     match children().wait_status(h, false) {
         Ok(st) => {
             unsafe { write_word(out, st) };
@@ -1521,6 +1520,20 @@ pub unsafe extern "C" fn __wolf_rt_os_wait_status(h: i64, out: i64) -> i64 {
         }
         Err(t) => proc_code_of_tag(t),
     }
+}
+
+/// The exported shim (s260, #683): [`__wolf_rt_os_wait_status_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_os_wait_status_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_wait_status(h: i64, out: i64) -> i64 {
+    let r = unsafe { __wolf_rt_os_wait_status_parks(h, out) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::task::leave_if_killed() };
+    r
 }
 
 /// `os_wait_poll() -> (int, int) ! {io}` (s242, wolf-lang#680,
@@ -1552,8 +1565,7 @@ pub unsafe extern "C" fn __wolf_rt_os_wait_poll(out: i64) -> i64 {
 /// # Safety
 ///
 /// `out` must address 8 writable bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_os_wait_status_core(h: i64, out: i64) -> i64 {
+unsafe fn __wolf_rt_os_wait_status_core_parks(h: i64, out: i64) -> i64 {
     match children().wait_status(h, true) {
         Ok(st) => {
             unsafe { write_word(out, st) };
@@ -1561,6 +1573,20 @@ pub unsafe extern "C" fn __wolf_rt_os_wait_status_core(h: i64, out: i64) -> i64 
         }
         Err(t) => proc_code_of_tag(t),
     }
+}
+
+/// The exported shim (s260, #683): [`__wolf_rt_os_wait_status_core_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_os_wait_status_core_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_wait_status_core(h: i64, out: i64) -> i64 {
+    let r = unsafe { __wolf_rt_os_wait_status_core_parks(h, out) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::task::leave_if_killed() };
+    r
 }
 
 /// `os_wait_poll_core() -> (int, int) ! {io}` (s246, ruling #88 R3 D,
@@ -1697,8 +1723,7 @@ pub unsafe extern "C" fn __wolf_rt_os_spawn(hdr: i64) -> i64 {
 /// # Safety
 ///
 /// `out` must address 8 writable bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_os_wait(h: i64, out: i64) -> i64 {
+unsafe fn __wolf_rt_os_wait_parks(h: i64, out: i64) -> i64 {
     // The wait blocks with the table UNLOCKED past a short snapshot?
     // No: unlike the net shims, `Child::wait` needs `&mut Child`, so
     // the wait holds the lock — one child, one waiter is the corpus
@@ -1712,6 +1737,20 @@ pub unsafe extern "C" fn __wolf_rt_os_wait(h: i64, out: i64) -> i64 {
         }
         Err(t) => proc_code_of_tag(t),
     }
+}
+
+/// The exported shim (s260, #683): [`__wolf_rt_os_wait_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_os_wait_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_os_wait(h: i64, out: i64) -> i64 {
+    let r = unsafe { __wolf_rt_os_wait_parks(h, out) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::task::leave_if_killed() };
+    r
 }
 
 /// `os_kill(h) -> () ! {io}` — terminate the child; the handle stays
