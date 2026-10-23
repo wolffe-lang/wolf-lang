@@ -845,8 +845,9 @@ fn run_task(task: Box<Task>) {
             }
             Body::C { entry, env } => {
                 // SAFETY: codegen's contract — `entry` is the lowered
-                // task body, `env` its moved environment.
-                let tag = unsafe { entry(env.0) };
+                // task body, `env` its moved environment. Entered so that
+                // a killed task can leave at its park (s260, #683).
+                let tag = unsafe { super::leave::run_compiled(entry, env.0) };
                 if tag == 0 {
                     ExitReason::Normal
                 } else if tag == super::conc_abi::CANCEL_TAG {

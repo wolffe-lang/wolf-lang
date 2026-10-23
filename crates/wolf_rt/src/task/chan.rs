@@ -1107,8 +1107,7 @@ pub unsafe extern "C" fn __wolf_rt_chan_free(ch: *mut c_void) {
 /// # Safety
 ///
 /// `ch` must be a live channel handle.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_chan_send(ch: *mut c_void, val: u64) -> i32 {
+unsafe fn __wolf_rt_chan_send_parks(ch: *mut c_void, val: u64) -> i32 {
     // SAFETY: borrow the caller's handle.
     let ch = unsafe { hold(ch) };
     let r = ch.send(val);
@@ -1123,6 +1122,20 @@ pub unsafe extern "C" fn __wolf_rt_chan_send(ch: *mut c_void, val: u64) -> i32 {
     status(r)
 }
 
+/// The exported shim (s260, #683): [`__wolf_rt_chan_send_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_chan_send_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_chan_send(ch: *mut c_void, val: u64) -> i32 {
+    let r = unsafe { __wolf_rt_chan_send_parks(ch, val) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { super::leave_if_killed() };
+    r
+}
+
 /// Send a region value — the affine move (`[conc.chan.move]`): routes
 /// the handle through the `__wolf_rt_region_transfer` seam, then
 /// moves the word. After 0 (ok) the donor may not touch the handle
@@ -1132,11 +1145,24 @@ pub unsafe extern "C" fn __wolf_rt_chan_send(ch: *mut c_void, val: u64) -> i32 {
 /// # Safety
 ///
 /// `ch` a live channel handle; `region` a live region handle.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_chan_send_region(ch: *mut c_void, region: *mut c_void) -> i32 {
+unsafe fn __wolf_rt_chan_send_region_parks(ch: *mut c_void, region: *mut c_void) -> i32 {
     // SAFETY: borrow the caller's handle; region per caller contract.
     let ch = unsafe { hold(ch) };
     status(unsafe { ch.send_region(region) })
+}
+
+/// The exported shim (s260, #683): [`__wolf_rt_chan_send_region_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_chan_send_region_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_chan_send_region(ch: *mut c_void, region: *mut c_void) -> i32 {
+    let r = unsafe { __wolf_rt_chan_send_region_parks(ch, region) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { super::leave_if_killed() };
+    r
 }
 
 /// Receive one payload word into `*out`: 0 ok, 1 closed (drained), 2
@@ -1145,8 +1171,7 @@ pub unsafe extern "C" fn __wolf_rt_chan_send_region(ch: *mut c_void, region: *mu
 /// # Safety
 ///
 /// `ch` a live channel handle; `out` writable when non-null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_chan_recv(ch: *mut c_void, out: *mut u64) -> i32 {
+unsafe fn __wolf_rt_chan_recv_parks(ch: *mut c_void, out: *mut u64) -> i32 {
     // SAFETY: borrow the caller's handle.
     let ch = unsafe { hold(ch) };
     match ch.recv() {
@@ -1160,6 +1185,20 @@ pub unsafe extern "C" fn __wolf_rt_chan_recv(ch: *mut c_void, out: *mut u64) -> 
         Err(ChanErr::Closed) => ST_CLOSED,
         Err(ChanErr::Cancelled) => ST_CANCELLED,
     }
+}
+
+/// The exported shim (s260, #683): [`__wolf_rt_chan_recv_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_chan_recv_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_chan_recv(ch: *mut c_void, out: *mut u64) -> i32 {
+    let r = unsafe { __wolf_rt_chan_recv_parks(ch, out) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { super::leave_if_killed() };
+    r
 }
 
 /// Close the channel (idempotent; `[conc.chan.close]`).
@@ -1207,8 +1246,7 @@ pub mod select_verdict {
 ///
 /// `arms` must address `n` valid descriptors whose channel handles
 /// are live; `out_val`/`out_status` writable when non-null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_select(
+unsafe fn __wolf_rt_select_parks(
     arms: *const WolfSelectArm,
     n: i64,
     timeout_ns: i64,
@@ -1265,6 +1303,27 @@ pub unsafe extern "C" fn __wolf_rt_select(
         Selected::Else => select_verdict::ELSE,
         Selected::Cancelled => select_verdict::CANCELLED,
     }
+}
+
+/// The exported shim (s260, #683): [`__wolf_rt_select_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_select_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_select(
+    arms: *const WolfSelectArm,
+    n: i64,
+    timeout_ns: i64,
+    has_else: i8,
+    out_val: *mut u64,
+    out_status: *mut i32,
+) -> i64 {
+    let r = unsafe { __wolf_rt_select_parks(arms, n, timeout_ns, has_else, out_val, out_status) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { super::leave_if_killed() };
+    r
 }
 
 // ---- acceptance tests ----------------------------------------------------

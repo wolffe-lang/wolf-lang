@@ -31,10 +31,16 @@
 //! What lands vs. what stays refused is the s73 ledger's:
 //! blocking-point and error-edge teardown land; kill delivery to a
 //! COMPUTE-BOUND native body still awaits the checkpoint story
-//! (`--checked` back-edge polls, c07's recorded refusal), and a
-//! killed task inside a row-less intermediate frame resumes that one
-//! frame until its next blocking point or row edge (recorded gap,
-//! same class).
+//! (`--checked` back-edge polls, c07's recorded refusal).
+//!
+//! s260 (wolf-lang#683): the branch returned ONE frame, so a killed
+//! task parked a frame down resumed its caller, and the parks whose
+//! rows have no cancellation (`net_read`'s `io`, a sleep, a join)
+//! answered the program instead. A compiled task is now entered through
+//! `leave::run_compiled`, and every park ends with `leave_if_killed`: a
+//! killed task's frames are discarded and the entry answers
+//! [`CANCEL_TAG`] — this poll leaves the same way, so the branch it
+//! guards is reached only where no compiled task is entered.
 
 use core::ffi::c_void;
 
@@ -74,8 +80,18 @@ pub extern "C" fn __wolf_rt_task_value(value: i64) {
 /// the caller must return without running further user code), else 0.
 /// The cancel twin is the status value the blocking op already
 /// returned; this only separates kill from polite cancel.
+///
+/// s260 (#683): a killed compiled task does not come back from the poll
+/// at all — it leaves here ([`super::leave`]), so not even the frame's
+/// caller runs on; the 1 is the answer only where no compiled task is
+/// entered on this thread.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_task_killed() -> i8 {
+    if super::leave::in_killed_compiled_task() {
+        // SAFETY: called by compiled code directly; this frame holds
+        // nothing to drop.
+        unsafe { super::leave::leave_if_killed() };
+    }
     match pool::current_scope() {
         Some(s) => i8::from(s.is_killed()),
         None => 0,
@@ -142,8 +158,9 @@ pub unsafe extern "C" fn __wolf_rt_proc_spawn_outcome(
         PROC_VALUE.with(|c| c.set(0));
         let tag = pool::suppress_kill_unwind(|| {
             // SAFETY: caller contract — lowered proc body + the proc's
-            // own copy of its env.
-            unsafe { entry(env_ptr) }
+            // own copy of its env. Entered so that a kill can leave the
+            // body at its park (s260, #683).
+            unsafe { super::leave::run_compiled(entry, env_ptr) }
         });
         drop(owned);
         match tag {

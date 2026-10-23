@@ -55,6 +55,24 @@ thread_local! {
     static WHEN_DEPTH: Cell<u32> = const { Cell::new(0) };
 }
 
+/// The calling thread's `when` depth (s260: a compiled task's entry
+/// records it, [`super::leave`]).
+pub(crate) fn depth() -> u32 {
+    WHEN_DEPTH.with(Cell::get)
+}
+
+/// After a compiled task LEFT at a park (s260, `[conc.proc.kill]`): its
+/// frames are gone, any set they held stays held (step 1's consequence:
+/// cross-proc state is channels' and supervisors'), and this thread is
+/// about to run other tasks. Put the depth back to the entry's and give
+/// the thread a fresh holder token, so the next task here is neither
+/// flagged as nested nor taken for the holder of a set it never acquired
+/// (which would be a self-acquire, `trap(deadlock)`).
+pub(crate) fn after_leave(depth: u32) {
+    WHEN_DEPTH.with(|d| d.set(depth));
+    HOLDER.with(|h| h.set(0));
+}
+
 fn holder_token() -> u64 {
     HOLDER.with(|h| {
         if h.get() == 0 {
@@ -326,8 +344,7 @@ pub unsafe extern "C" fn __wolf_rt_sync_payload(cell: *mut c_void) -> *mut u64 {
 /// # Safety
 ///
 /// `cells` must address `n` live cell handles.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_when_acquire(cells: *const *mut c_void, n: i64) -> i32 {
+unsafe fn __wolf_rt_when_acquire_parks(cells: *const *mut c_void, n: i64) -> i32 {
     // SAFETY: caller contract — n live handles, borrowed only.
     let (_arcs, refs) = unsafe { borrow_cells(cells, n) };
     match when_acquire(&refs) {
@@ -337,6 +354,20 @@ pub unsafe extern "C" fn __wolf_rt_when_acquire(cells: *const *mut c_void, n: i6
             crate::native::__wolf_rt_trap(crate::native::trap_code::DEADLOCK)
         }
     }
+}
+
+/// The exported shim (s260, #683): [`__wolf_rt_when_acquire_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_when_acquire_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_when_acquire(cells: *const *mut c_void, n: i64) -> i32 {
+    let r = unsafe { __wolf_rt_when_acquire_parks(cells, n) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { super::leave_if_killed() };
+    r
 }
 
 /// Release the whole set in reverse canonical order (`when` exit).

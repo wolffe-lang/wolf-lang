@@ -79,6 +79,7 @@ mod deque;
 #[cfg(any(test, feature = "sched-test"))]
 pub mod det;
 mod hooks;
+mod leave;
 mod parked;
 mod pool;
 mod proc;
@@ -113,6 +114,7 @@ pub(crate) use hooks::det_in_domain;
 pub(crate) use hooks::sched_point;
 #[cfg(test)]
 pub(crate) use hooks::test_hook;
+pub(crate) use leave::{leave_if_killed, sleep_unless_killed};
 pub(crate) use parked::{Wake, park_on};
 pub(crate) use pool::compensated;
 pub(crate) use pool::kill_teardown_check;
@@ -275,7 +277,11 @@ pub(crate) fn name_from_raw(ptr: *const u8, len: i64) -> String {
 pub unsafe extern "C" fn __wolf_rt_scope_new(name: *const u8, len: i64) -> *mut c_void {
     let name = name_from_raw(name, len);
     let inner = ScopeInner::new(&name, current_scope().as_ref());
-    Arc::into_raw(inner).cast_mut().cast()
+    let raw = Arc::into_raw(inner);
+    // s260 (#683): a compiled task that leaves inside the block still
+    // joins it (the runtime does, `leave.rs`).
+    leave::scope_opened(raw);
+    raw.cast_mut().cast()
 }
 
 /// Spawn `entry(env)` under `scope`. `env` moves: the task owns it
@@ -433,13 +439,21 @@ pub unsafe extern "C" fn __wolf_rt_par_map(
 /// dead after this call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_scope_join_free(scope: *mut c_void) -> i64 {
-    // SAFETY: consumes the caller's handle.
-    let inner = unsafe { Arc::from_raw(scope.cast::<ScopeInner>()) };
-    match inner.join() {
-        None => 0,
-        Some(ExitReason::Error { tag }) => tag,
-        Some(_) => -1,
-    }
+    leave::scope_closed(scope.cast::<ScopeInner>().cast_const());
+    let tag = {
+        // SAFETY: consumes the caller's handle.
+        let inner = unsafe { Arc::from_raw(scope.cast::<ScopeInner>()) };
+        match inner.join() {
+            None => 0,
+            Some(ExitReason::Error { tag }) => tag,
+            Some(_) => -1,
+        }
+    };
+    // s260 (#683): the join is a park (its killed children leave at
+    // theirs); a killed task leaves here, never back into the program.
+    // SAFETY: called by compiled code directly; `inner` is dropped.
+    unsafe { leave::leave_if_killed() };
+    tag
 }
 
 /// The explicit `checkpoint()` cancel poll (`[conc.cancel.points]`):

@@ -1274,8 +1274,9 @@ pub unsafe extern "C" fn __wolf_rt_proc_spawn(
         // C ABI frames below: suppress the kill-teardown unwind for
         // their whole extent (`[conc.cancel.c]`).
         let tag = pool::suppress_kill_unwind(|| {
-            // SAFETY: caller contract — lowered proc body + moved env.
-            unsafe { entry(moved_env.0) }
+            // SAFETY: caller contract — lowered proc body + moved env;
+            // entered so that a kill can leave it at its park (s260).
+            unsafe { super::leave::run_compiled(entry, moved_env.0) }
         });
         if tag == 0 {
             ProcOutcome::Value(0)
@@ -1312,10 +1313,15 @@ pub extern "C" fn __wolf_rt_proc_monitor(proc: u64) -> *mut c_void {
 /// trap (stale-handle), like `monitor`'s.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_proc_join(proc: u64) -> u64 {
-    match join(proc) {
+    let word = match join(proc) {
         Ok(r) => r.encode(),
         Err(ProcErr::Stale) => native::__wolf_rt_trap(native::trap_code::STALE_HANDLE),
-    }
+    };
+    // s260 (#683): the join is a park; a killed joiner leaves here rather
+    // than answer `cancelled` to its `else`.
+    // SAFETY: called by compiled code directly; nothing left to drop.
+    unsafe { super::leave_if_killed() };
+    word
 }
 
 /// Link `a` and `b` (`b == 0` spells `w.link()`: the caller's domain,
@@ -1340,6 +1346,10 @@ pub extern "C" fn __wolf_rt_proc_kill(proc: u64) {
     if kill(proc).is_err() {
         native::__wolf_rt_trap(native::trap_code::STALE_HANDLE);
     }
+    // s260 (#683): the kill waits for its target's end; a killer that was
+    // itself killed meanwhile leaves here.
+    // SAFETY: called by compiled code directly; nothing left to drop.
+    unsafe { super::leave_if_killed() };
 }
 
 /// Cancel `proc` (`[conc.proc.cancel]`). Stale ids trap.
