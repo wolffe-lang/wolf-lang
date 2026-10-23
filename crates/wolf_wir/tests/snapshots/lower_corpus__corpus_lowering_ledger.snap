@@ -817,6 +817,8 @@ net/unix_echo.lu: lowers
 net/wait_readiness.lu: lowers
 net/writev_gather.lu: lowers
 net/writev_head_gather.lu: lowers
+os/arg0.lu: lowers
+os/args_bytes.lu: lowers
 os/args_cwd.lu: lowers
 os/chdir_relative.lu: lowers
 os/core_limit_rows.lu: lowers
