@@ -452,6 +452,12 @@ fn run_with_five(prog: &Path, args: &[&str], dir: &Path, out: &Path) -> Output {
             if libc::dup2(raw, 5) < 0 {
                 return Err(std::io::Error::last_os_error());
             }
+            // dup2(5, 5) is a no-op: File::create's close-on-exec bit
+            // survives unless we clear it explicitly on our target.
+            let flags = libc::fcntl(5, libc::F_GETFD);
+            if flags < 0 || libc::fcntl(5, libc::F_SETFD, flags & !libc::FD_CLOEXEC) < 0 {
+                return Err(std::io::Error::last_os_error());
+            }
             for fd in 3..1024 {
                 if fd != 5 {
                     libc::close(fd);
