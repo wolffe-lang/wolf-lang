@@ -181,7 +181,11 @@ editor/storage names. It still refuses canonical paths outside its
 served tree and the host operations it cannot implement. Its process
 and filesystem gaps from this cycle, outer-region materializing
 copies, the two List methods and the row-member rule remain named
-lag, measured before carrying any version-keyed entry. The full
+lag, measured before carrying any version-keyed entry. The six
+outer-copy SOUNDNESS-class rows are wolf-interp#289, carried only for
+published lupin 0.1.55 and 0.1.56 records; unlisted releases must mirror
+the materializing copy. is81 takes that debt with #287's row-member
+mirror. The full
 published-0.2.34 compiler control and the published-0.1.55 interpreter
 control are retained; movement is not attributed to the new pairing
 by assumption.
@@ -191,6 +195,7 @@ by assumption.
 | repository | next step |
 |---|---|
 | wolf-std | sc72 re-pin; #92 in-place helpers on reset/reserve; #93 JSON header and the measured native ledger graduations; #94; #91 README |
+| wolf-interp | is81: #289 outer-region materializing copies and List.reserve/reset, with #287 row-member E0409 |
 | pelt | update the wolf, lupin and std pins |
 | lope | update the pins |
 | aspen | update the pins and adopt std.time where appropriate |
