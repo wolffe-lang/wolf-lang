@@ -148,10 +148,10 @@ native, release, `wolf conform-run --json --checked`, and lupin 0.1.55's
 is the wolf 0.2.34 release archive (`9da7bdc`), the head the lane's own
 `cargo xtask dist` at `37c3cc37` — the pre-rebase twin of `f27ebf3b`
 (the rebase took only s259's compiler-side commits, none of which touch
-the runtime, the checked machine's os and fs tiers or these programs). The logs and the
-scripts are under `docs/s260-evidence/` (`v034-*.log` the control,
-`head-rows.log` the head, `strace.log` the rungs, `probes/` the
-programs that are not fixtures).
+the runtime, the checked machine's os and fs tiers or these programs).
+The logs and the scripts are under `docs/s260-evidence/` (`v034-*.log`
+the control, `head-rows.log` the head, `strace.log` the rungs, `probes/`
+the programs that are not fixtures).
 
 ## 1. A failed copy write (#642, `[os.fs.copy]`)
 
@@ -166,26 +166,32 @@ each refused by the pairing of a regular file and `/dev/full`
 in its own buffer; lupin 0.1.55 too.
 
 **The answer (R-s260-1, the contract's recommendation, implemented).**
-The read/write rung writes as far as the sink takes the bytes (a
-counted `write` loop in place of `write_all`), then puts the source
-back by the shortfall — `lseek(src, -(read - written), SEEK_CUR)` — so
-after any `io` the source stands exactly past what the sink took; the
-count taken goes through the call's out word beside the `io` (a program
-reads it as the offset's advance; nothing in the language reads an out
-word on the error arm today). The kernel rungs fail before a byte moves,
-so they needed nothing. A source that cannot seek (a pipe, a terminal,
+The read/write rung writes as far as the sink takes the bytes (a counted
+`write` loop in place of `write_all`), then puts the source back by the
+shortfall — `lseek(src, -(read - written), SEEK_CUR)` — so after any
+`io` the source stands exactly past what the sink took; the count taken
+goes through the call's out word beside the `io` (a program reads it as
+the offset's advance; nothing in the language reads an out word on the
+error arm today). The kernel rungs fail before a byte moves, so they
+needed nothing. A source that cannot seek (a pipe, a terminal,
 descriptor 0 after `read_line` read ahead) keeps its offset and the
 shortfall is lost, as it is for a read then a failed write by hand. The
 side is named by rule, not by a new tag: the failing call's number is in
 `os_error()`, and a caller that must say which side failed retries the
 read — after a write's failure the bytes are there again, and the write
-after them fails as the copy's did. That is the inference boreutils'
-`cat` already makes (bu19's `copy_bytes`: "the copy failed and the
-fallback did not" is the write's failure), so its expectations were read
-and not changed; until this lane the inference worked only because its
-fallback read met the END of the file and reported success, which the
-differential case caught. The checked machine mirrors it (its handed
-input buffer moves its own position back).
+after them fails as the copy's did. That is what boreutils' `cat`
+already does (`src/cat.lu` at `f138736a`, the fast path `6b5105c7`,
+bu19's adoption: on the copy's `io` the rest of the operand goes through
+`copy_through`, the read-then-write loop whose own failure names its
+side), so its expectations were read and not changed. Until this lane
+that fallback met the END of the file — the copy had taken the bytes —
+and failed at nothing, and `cat` reached its last line, "a copy that
+failed and a fallback that did not is the write's failure", by
+inference; now the fallback reads the bytes again and its own write
+fails, so `cat: write error: No space left on device` comes from the
+side that failed, and the inference is reached only on a source that
+cannot seek. The checked machine mirrors it (its handed input buffer
+moves its own position back).
 
 | row | 0.2.34 native / release | 0.2.34 checked | head, all three | lupin 0.1.55 |
 |---|---|---|---|---|
@@ -233,29 +239,33 @@ ANY spawn of a process that ignores `SIGPIPE` or holds a fault ignored,
 because `keep_pipe_ignore` installs a hook to hand the ignore on
 (`[os.signal.disp]`), so `os_spawn(["./noshebang"])` ran too.
 
-**The fix.** A hooked spawn's last hook is the exec, made by the
-runtime (`os::ExecPlan`, `exec_last`): the candidates (the name as
-written when it holds `/`, else each directory of the child's `PATH` in
-order, `/usr/bin:/bin` when it has none, as `os_exec` reads it), `argv`
-and the child's whole environment are built in the parent; the child
-walks the candidates with `execve` alone — `ENOENT`/`ENOTDIR` try the
-next, `EACCES` is remembered and the search goes on, anything else
-(`ENOEXEC` among them) is the spawn's error, which the standard library
-carries back. The documented contract of `pre_exec` ("run just before
-the exec function is invoked"; an `Err` is the spawn's error) is what
-this rests on. A spawn with no hook keeps `posix_spawn`'s fast path.
-The spawn family and `os_exec` now keep the program step's host number
-in `os_error()` — cleared on entry, the refusal's number left behind, 0
-for a refusal decided before the host (the shape, a forged source) —
-which is what lets a shell say "not an executable format" without
-reading the file's first bytes (R-s260-3 on the spec sentence this
-contradicts). The checked machine carries the same plan as a hand mirror
-(wolf_mem and wolf_rt may not see each other), its overlay applied to the
-environment. `spawn_noexec_lanes.rs` (unix) runs the three fixtures on
-native, release (and native under `taskset -c 0-3`), the checked machine
-and lupin; the crate tests cover every spawn with the marker the file
-would write, the shim's `ENOEXEC`, the refusals decided first, and the
-argv and environment a hooked exec hands on.
+**The fix.** A hooked spawn's last hook is the exec, made by the runtime
+(`os::ExecPlan`, `exec_last`): the candidates (the name as written when
+it holds `/`, else each directory of the child's `PATH` in order,
+`/usr/bin:/bin` when it has none, as `os_exec` reads it), `argv` and the
+child's whole environment are built in the parent; the child walks the
+candidates with `execve` alone — `ENOENT`/`ENOTDIR` try the next,
+`EACCES` is remembered and the search goes on, anything else (`ENOEXEC`
+among them) is the spawn's error, which the standard library carries
+back. The documented contract of `pre_exec` ("run just before the exec
+function is invoked"; an `Err` is the spawn's error) is what this rests
+on. A spawn with no hook keeps `posix_spawn`'s fast path. The spawn
+family and `os_exec` now keep the program step's host number in
+`os_error()` — cleared on entry, the refusal's number left behind, 0 for
+a refusal decided before the host (the shape, a forged source) — which
+is what lets a shell say "not an executable format" without reading the
+file's first bytes (R-s260-3 on the spec sentence this contradicts).
+Downstream: pelt's `exec` already runs a `#!`-less file itself (XCU
+2.9.1.4, `notes/sh05-the-exec.md`), but its plain-command path never saw
+one — the spawn ran it under `/bin/sh` — and now meets `io` with
+`ENOEXEC` there, the shape its `exec` path already handles. The checked
+machine carries the same plan as a hand mirror (wolf_mem and wolf_rt may
+not see each other), its overlay applied to the environment.
+`spawn_noexec_lanes.rs` (unix) runs the three fixtures on native,
+release (and native under `taskset -c 0-3`), the checked machine and
+lupin; the crate tests cover every spawn with the marker the file would
+write, the shim's `ENOEXEC`, the refusals decided first, and the argv
+and environment a hooked exec hands on.
 
 ## 3. A killed proc at its park (#683, `[conc.proc.kill]` step 1)
 
