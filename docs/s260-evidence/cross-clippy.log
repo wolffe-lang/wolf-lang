@@ -1,0 +1,66 @@
+# s260: the cross-target checks before the push of the full run's fixes,
+# kasumi, in a localhost/px57-rust container (--cpuset-cpus 4-7), each
+# target added to the container's toolchain only. Scripts: kasumi
+# ~/lanes/s260/cross{,3,4}.sh; logs ~/lanes/s260/ev/cross{1,3,4}.log and
+# ev/x/*.log. Head 2c529ab7, trunk e2ed1607 (a clone inside the container).
+#
+# 1. cross1: `cargo check --workspace --target x86_64-unknown-freebsd`, as CI.
+# 2. cross3: `cargo clippy -p wolf_rt -p wolf_mem --lib --tests --target T
+#    -- -D warnings`, head and trunk, the (file, message) pairs compared
+#    (line numbers dropped). Its apple and msvc lines are VOID: both sides
+#    stopped at blake3's build script (no macOS SDK; no ml64.exe), so their
+#    empty sets compare equal and say nothing.
+# 3. cross4: the same for aarch64-apple-darwin and x86_64-pc-windows-gnu
+#    with blake3's C compiler and archiver stubbed (an empty object; a
+#    check links nothing): apple exit 0 on both sides; windows-gnu the
+#    same two trunk lints on both. msvc itself was not checked here.
+#
+Fri Oct 23 06:28:43 AM UTC 2026
+check x86_64-unknown-freebsd rc=0
+
+x86_64-unknown-freebsd head rc=101
+x86_64-unknown-freebsd trunk rc=101
+== x86_64-unknown-freebsd (file, message) head vs trunk
+(same)
+== aarch64-apple-darwin (file, message) head vs trunk
+(same)
+== x86_64-pc-windows-msvc (file, message) head vs trunk
+(same)
+
+aarch64-apple-darwin head rc=0
+aarch64-apple-darwin trunk rc=0
+== aarch64-apple-darwin (file, message) head vs trunk
+(same)
+x86_64-pc-windows-gnu head rc=101
+x86_64-pc-windows-gnu trunk rc=101
+== x86_64-pc-windows-gnu (file, message) head vs trunk
+(same)
+
+-- x/aarch64-apple-darwin-head.sites
+-- x/x86_64-pc-windows-gnu-head.sites
+      1 crates/wolf_rt/src/os.rs | error: function `wait_status_of` is never used
+      2 crates/wolf_rt/src/os.rs | error: you seem to be trying to use `match` to destructure a single infallible pattern. Consider using `let`
+-- x/x86_64-pc-windows-msvc-head.sites (void, see 2)
+-- x/x86_64-unknown-freebsd-head.sites
+      1 crates/wolf_rt/src/coredump.rs | error: useless conversion to the same type: `i64`
+      1 crates/wolf_rt/src/handles.rs | error: method `values` is never used
+      1 crates/wolf_rt/src/list.rs | error: function `new_list_len` is never used
+      2 crates/wolf_rt/src/list.rs | error: function `raw_parts` is never used
+      9 crates/wolf_rt/src/net.rs | error: this let-binding has unit value
+      2 crates/wolf_rt/src/os.rs | error: you seem to be trying to use `match` to destructure a single infallible pattern. Consider using `let`
+      1 crates/wolf_rt/src/stdfd.rs | error: function `off_std` is never used
+      1 crates/wolf_rt/src/stdfd.rs | error: function `pipe_off_std` is never used
+-- x/aarch64-apple-darwin-trunk.sites
+-- x/x86_64-pc-windows-gnu-trunk.sites
+      1 crates/wolf_rt/src/os.rs | error: function `wait_status_of` is never used
+      2 crates/wolf_rt/src/os.rs | error: you seem to be trying to use `match` to destructure a single infallible pattern. Consider using `let`
+-- x/x86_64-pc-windows-msvc-trunk.sites (void, see 2)
+-- x/x86_64-unknown-freebsd-trunk.sites
+      1 crates/wolf_rt/src/coredump.rs | error: useless conversion to the same type: `i64`
+      1 crates/wolf_rt/src/handles.rs | error: method `values` is never used
+      1 crates/wolf_rt/src/list.rs | error: function `new_list_len` is never used
+      2 crates/wolf_rt/src/list.rs | error: function `raw_parts` is never used
+      9 crates/wolf_rt/src/net.rs | error: this let-binding has unit value
+      2 crates/wolf_rt/src/os.rs | error: you seem to be trying to use `match` to destructure a single infallible pattern. Consider using `let`
+      1 crates/wolf_rt/src/stdfd.rs | error: function `off_std` is never used
+      1 crates/wolf_rt/src/stdfd.rs | error: function `pipe_off_std` is never used
