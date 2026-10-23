@@ -183,7 +183,9 @@ parser contract):
   (kind unspecified), or `trap(kind)` with kind from the closed
   set: `overflow`, `div-zero`, `bounds`, `use-after-move`, `exclusivity`,
   `region-fault`, `stale-handle`, `alloc-contract`, `assert`, `race`,
-  `ub`, `deadlock`, `stack-overflow`. The set is closed; extension requires revising this
+  `ub`, `deadlock`, `stack-overflow`, `argument-utf8`
+  (`[os.env.argv]`: a text argv reader met an argument that is not UTF-8).
+  The set is closed; extension requires revising this
   spec. (Revised 2026-08-10, deliberately: `deadlock` added by the
   spec/03 amendment `[conc.deadlock.trap]` — is06 finding S-3 showed
   the vocabulary had no spelling for an all-tasks-blocked outcome.)
@@ -507,6 +509,16 @@ exhausted` arrived — an OOM where an honest refusal was owed.)
   `trap(race)` there and runs here — `[conc.mm.hb.chan]` is the
   clause; wolf-interp#227, ruled A (#63), 2026-10-11. Witnesses: `corpus/conc/atomic_race_plain.lu`
   and the driver's `checked_tasks_lanes`.)
+- `[exec.checked.argv]` `conform-run --checked` accepts repeated
+  `--argv-hex=HEX`, one argument per occurrence in OS argv order,
+  **argv[0] first**. HEX is an even number of hexadecimal digits;
+  empty HEX is an empty argument; NUL bytes are rejected (an OS argv
+  element cannot contain NUL). Without the option the machine has
+  an empty argv, never the compiler process's own arguments.
+  The option is refused by name unless `--checked` is selected and
+  neither `--native` nor `--release` is selected. It does not change
+  the input for any other execution tier. `wolf run --checked` is a
+  native checked build, not this machine's execution interface.
 - `[exec.checked.budget]` **The tier keeps two budgets — steps AND
   bytes — and exhausting either is `unsupported`, never a verdict.**
   The *step* budget counts expression evaluations (20,000,000 at
