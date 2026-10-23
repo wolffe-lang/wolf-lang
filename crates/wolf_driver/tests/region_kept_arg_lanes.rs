@@ -26,6 +26,22 @@ mod lane_exit;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// wolf-interp#289: only these published records retain the pre-mirror
+/// outer-copy answer. An unlisted release or dev commit must mirror wolf.
+fn copy_before_mirror(version: &str, commit: &str) -> bool {
+    [("0.1.55", "e642f26"), ("0.1.56", "28547b4")]
+        .iter()
+        .any(|(v, c)| *v == version && commit.starts_with(c))
+}
+
+#[test]
+fn the_copy_pin_names_only_the_measured_release_records() {
+    assert!(copy_before_mirror("0.1.55", "e642f26"));
+    assert!(copy_before_mirror("0.1.56", "28547b4"));
+    assert!(!copy_before_mirror("0.1.57", "28547b4"));
+    assert!(!copy_before_mirror("0.1.56", "unknown"));
+}
+
 fn wolf() -> &'static str {
     env!("CARGO_BIN_EXE_wolf")
 }
@@ -35,6 +51,7 @@ struct Obs {
     verdict: String,
     stdout: String,
     version: String,
+    commit: String,
     codes: Vec<String>,
 }
 
@@ -42,6 +59,7 @@ fn parse_obs(bytes: &[u8], what: &str) -> Obs {
     let rec: serde_json::Value =
         serde_json::from_slice(bytes).unwrap_or_else(|e| panic!("{what} record parses: {e}"));
     Obs {
+        commit: rec["commit"].as_str().unwrap_or("").to_string(),
         verdict: rec["verdict"].as_str().unwrap_or("").to_string(),
         stdout: rec["stdout_inline"].as_str().unwrap_or("").to_string(),
         version: rec["impl_version"].as_str().unwrap_or("").to_string(),
@@ -381,11 +399,19 @@ fn a_copy_of_a_struct_at_a_store_into_an_outer_value_runs() {
         );
     }
     if let Some(lupin) = lupin_says(&entry) {
-        assert_eq!(
-            lupin.verdict, "trap(region-fault)",
-            "lupin {} shares a copied str's bytes (its column in docs/s255)",
-            lupin.version
-        );
+        if copy_before_mirror(&lupin.version, &lupin.commit) {
+            assert_eq!(
+                lupin.verdict, "trap(region-fault)",
+                "lupin {} {} retains the measured wolf-interp#289 lag",
+                lupin.version, lupin.commit
+            );
+        } else {
+            assert_eq!(lupin.verdict, "exit(0)", "unlisted lupin must mirror #289");
+            assert_eq!(
+                lupin.stdout, "28\nbuilt in pass, 0 uses\n",
+                "mirrored copy's bytes"
+            );
+        }
     }
 }
 

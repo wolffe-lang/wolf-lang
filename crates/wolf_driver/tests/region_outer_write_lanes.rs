@@ -7,12 +7,13 @@
 //! `cargo xtask corpus` runs a `phase: run` row natively and a refusal
 //! row on the default lane; this gate runs each of s255's rows on the
 //! checked machine, native and release, and asserts one answer. lupin
-//! 0.1.55 (the PAIRING) is asserted at what it answers today: it shares
+//! 0.1.55 and 0.1.56 are pinned by their published records (#289): each shares
 //! `copy`'s bytes, so it traps `region-fault` where a copied `str` is
 //! read back after its block; it tracks the list itself and never pinned
 //! a `mut` argument, so the scalar-push, index and clean-call rows run;
-//! it resolves neither `reserve` nor `reset`. A lupin that follows the
-//! clause is loud here and its column gets rewritten with it.
+//! it resolves neither `reserve` nor `reset`. Every unlisted release
+//! must follow the run rows' compiler answer; negative controls keep
+//! their explicit static/dynamic comparison.
 //!
 //! The resident-set rows (`[mem.region.outer-write]`'s point): the
 //! fixture `fixtures/outer_write/main.lu` is `region_outer_write_call.lu`
@@ -31,6 +32,22 @@ mod lane_exit;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+/// wolf-interp#289: only these published records retain the pre-mirror
+/// outer-copy answer. An unlisted release or dev commit must mirror wolf.
+fn copy_before_mirror(version: &str, commit: &str) -> bool {
+    [("0.1.55", "e642f26"), ("0.1.56", "28547b4")]
+        .iter()
+        .any(|(v, c)| *v == version && commit.starts_with(c))
+}
+
+#[test]
+fn the_copy_pin_names_only_the_measured_release_records() {
+    assert!(copy_before_mirror("0.1.55", "e642f26"));
+    assert!(copy_before_mirror("0.1.56", "28547b4"));
+    assert!(!copy_before_mirror("0.1.57", "28547b4"));
+    assert!(!copy_before_mirror("0.1.56", "unknown"));
+}
+
 fn wolf() -> &'static str {
     env!("CARGO_BIN_EXE_wolf")
 }
@@ -47,12 +64,16 @@ struct Obs {
     verdict: String,
     stdout: String,
     diags: Vec<serde_json::Value>,
+    version: String,
+    commit: String,
 }
 
 fn parse_obs(bytes: &[u8], what: &str) -> Obs {
     let rec: serde_json::Value =
         serde_json::from_slice(bytes).unwrap_or_else(|e| panic!("{what} record parses: {e}"));
     Obs {
+        commit: rec["commit"].as_str().unwrap_or("").to_string(),
+        version: rec["impl_version"].as_str().unwrap_or("").to_string(),
         verdict: rec["verdict"].as_str().unwrap_or("").to_string(),
         stdout: rec["stdout_inline"].as_str().unwrap_or("").to_string(),
         diags: rec["diagnostics"].as_array().cloned().unwrap_or_default(),
@@ -152,7 +173,16 @@ fn run_row(rel: &str, want: &str, lupin: Lupin, why: &str) {
                 assert_eq!(l.verdict, "exit(0)", "{rel}: lupin's verdict");
                 assert_eq!(l.stdout, want, "{rel}: lupin's answer");
             }
-            Lupin::Verdict(v) => assert_eq!(l.verdict, v, "{rel}: lupin's verdict (its own)"),
+            Lupin::Verdict(v) if copy_before_mirror(&l.version, &l.commit) => {
+                assert_eq!(l.verdict, v, "{rel}: measured pre-mirror lupin");
+            }
+            Lupin::Verdict(_) => {
+                assert_eq!(
+                    l.verdict, "exit(0)",
+                    "{rel}: unlisted lupin must mirror #289"
+                );
+                assert_eq!(l.stdout, want, "{rel}: unlisted lupin's mirrored output");
+            }
         }
     }
 }
