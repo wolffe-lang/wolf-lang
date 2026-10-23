@@ -1,0 +1,18 @@
+== 0.2.34 copy_chunk_failed_write --checked
+{"commit":"9da7bdc","diagnostics":[],"file":"corpus/fs/copy_chunk_failed_write.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n","verdict":"exit(1)","warnings":[]}
+== 0.2.34 copy_chunk_failed_write --native
+{"commit":"9da7bdc","diagnostics":[],"file":"corpus/fs/copy_chunk_failed_write.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n","verdict":"exit(1)","warnings":[]}
+== 0.2.34 copy_chunk_failed_write --release
+{"commit":"9da7bdc","diagnostics":[],"file":"corpus/fs/copy_chunk_failed_write.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n","verdict":"exit(1)","warnings":[]}
+== lupin copy_chunk_failed_write
+{"protocol":1,"impl":"lupin","impl_version":"0.1.55","commit":"e642f26","file":"corpus/fs/copy_chunk_failed_write.lu","phase_reached":"run","seeded":false,"diagnostics":[],"warnings":[],"verdict":"exit(1)","stdout_inline":"copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n"}
+
+== 0.2.34 copy_chunk_dev_full --checked
+{"commit":"9da7bdc","diagnostics":[],"file":"corpus/fs/copy_chunk_dev_full.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"copy=io os_error_set=true offset_after=17 left_to_read=0 of 17\ncleaned=true\n","verdict":"exit(0)","warnings":[]}
+== 0.2.34 copy_chunk_dev_full --native
+{"commit":"9da7bdc","diagnostics":[],"file":"corpus/fs/copy_chunk_dev_full.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"copy=io os_error_set=true offset_after=17 left_to_read=0 of 17\ncleaned=true\n","verdict":"exit(0)","warnings":[]}
+== 0.2.34 copy_chunk_dev_full --release
+{"commit":"9da7bdc","diagnostics":[],"file":"corpus/fs/copy_chunk_dev_full.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"copy=io os_error_set=true offset_after=17 left_to_read=0 of 17\ncleaned=true\n","verdict":"exit(0)","warnings":[]}
+== lupin copy_chunk_dev_full
+{"protocol":1,"impl":"lupin","impl_version":"0.1.55","commit":"e642f26","file":"corpus/fs/copy_chunk_dev_full.lu","phase_reached":"resolve","seeded":false,"diagnostics":[],"warnings":[],"verdict":"unsupported","stdout_sha256":null,"stdout_inline":null,"x-unsupported":"`fs_open_mode(\"/dev/full\")` resolves outside the working directory — `..` applied and symlinks followed, as the host would (`[os.fs.path.domain]`); this machine serves the fs tier over REAL files inside its own tree and declines the rest by name rather than observing it","x-unsupported-at":"run"}
+

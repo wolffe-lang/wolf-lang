@@ -1,0 +1,18 @@
+// The /dev/full sink as a table handle (on the checked machine and
+// lupin, descriptor 1 is the machine's own capture).
+fn main() -> int {
+    let src = fs_open("in.txt") else |_| { return 2 }
+    let dst = fs_open_mode("/dev/full", 1) else |_| {
+        print("no /dev/full")
+        return 0
+    }
+    let n = fs_copy_chunk(src, dst, 262144) else |e| match e {
+        eof => -1,
+        io => -2,
+    }
+    let code = os_error()
+    let at = fs_tell(src) else -9
+    let rest = fs_read_chunk(src, 262144) else |_| List[byte]()
+    print("copy={n} os_error={code} offset_after={at} left_to_read={rest.len} of 17")
+    0
+}

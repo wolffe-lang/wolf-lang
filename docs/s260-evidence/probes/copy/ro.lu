@@ -1,0 +1,16 @@
+// A handle opened for reading only, used as the copy's destination:
+// its write fails on every host.
+fn main() -> int {
+    fs_write_text("ro.txt", "") else |_| { return 3 }
+    let src = fs_open("in.txt") else |_| { return 2 }
+    let dst = fs_open("ro.txt") else |_| { return 2 }
+    let n = fs_copy_chunk(src, dst, 64) else |e| match e {
+        eof => -1,
+        io => -2,
+    }
+    let code = os_error()
+    let at = fs_tell(src) else -9
+    let rest = fs_read_chunk(src, 64) else |_| List[byte]()
+    print("copy={n} os_error_set={code != 0} offset_after={at} left_to_read={rest.len} of 17")
+    0
+}

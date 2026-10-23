@@ -1,0 +1,36 @@
+== v034 native
+copy_file_range(4, NULL, 1, NULL, 262144, 0) = -1 EINVAL (Invalid argument)
+sendfile(1, 4, NULL, 262144)            = -1 EINVAL (Invalid argument)
+splice(4, NULL, 1, NULL, 262144, SPLICE_F_MOVE) = -1 EINVAL (Invalid argument)
+write(1, "alpha\nbeta\ngamma\n", 17)    = -1 ENOSPC (No space left on device)
+lseek(3, 0, SEEK_CUR)                   = 17
+copy=-2 os_error=28 (No space left on device) offset_after=17 left_to_read=0 of 17
+== v034 release
+copy_file_range(4, NULL, 1, NULL, 262144, 0) = -1 EINVAL (Invalid argument)
+sendfile(1, 4, NULL, 262144)            = -1 EINVAL (Invalid argument)
+splice(4, NULL, 1, NULL, 262144, SPLICE_F_MOVE) = -1 EINVAL (Invalid argument)
+write(1, "alpha\nbeta\ngamma\n", 17)    = -1 ENOSPC (No space left on device)
+lseek(3, 0, SEEK_CUR)                   = 17
+copy=-2 os_error=28 (No space left on device) offset_after=17 left_to_read=0 of 17
+== head native
+lseek(3, 0, SEEK_CUR)                   = 3197
+lseek(3, 3113, SEEK_SET)                = 3113
+copy_file_range(4, NULL, 1, NULL, 262144, 0) = -1 EINVAL (Invalid argument)
+sendfile(1, 4, NULL, 262144)            = -1 EINVAL (Invalid argument)
+splice(4, NULL, 1, NULL, 262144, SPLICE_F_MOVE) = -1 EINVAL (Invalid argument)
+write(1, "alpha\nbeta\ngamma\n", 17)    = -1 ENOSPC (No space left on device)
+lseek(4, -17, SEEK_CUR)                 = 0
+lseek(3, 0, SEEK_CUR)                   = 0
+read(3, "alpha\nbeta\ngamma\n", 262144) = 17
+copy=-2 os_error=28 (No space left on device) offset_after=0 left_to_read=17 of 17
+== head release
+lseek(3, 0, SEEK_CUR)                   = 3201
+lseek(3, 3117, SEEK_SET)                = 3117
+copy_file_range(4, NULL, 1, NULL, 262144, 0) = -1 EINVAL (Invalid argument)
+sendfile(1, 4, NULL, 262144)            = -1 EINVAL (Invalid argument)
+splice(4, NULL, 1, NULL, 262144, SPLICE_F_MOVE) = -1 EINVAL (Invalid argument)
+write(1, "alpha\nbeta\ngamma\n", 17)    = -1 ENOSPC (No space left on device)
+lseek(4, -17, SEEK_CUR)                 = 0
+lseek(3, 0, SEEK_CUR)                   = 0
+read(3, "alpha\nbeta\ngamma\n", 262144) = 17
+copy=-2 os_error=28 (No space left on device) offset_after=0 left_to_read=17 of 17

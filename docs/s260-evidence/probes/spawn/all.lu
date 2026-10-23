@@ -1,0 +1,40 @@
+fn show(what: str, h: int, code: int) {
+    if h >= 0 {
+        let s = os_wait(h) else |_| -99
+        print("{what}: RAN status {s}")
+    } else {
+        print("{what}: refused {h} os_error={code}")
+    }
+}
+
+fn main() -> int {
+    let none = List[str]()
+    for exe in ["./noshebang", "./junk"] {
+        let a = os_spawn_fds(exe, none, [1, 1]) else |e| match e {
+            io => -1, denied => -2, invalid => -3, not_found => -4, unsupported => -5,
+        }
+        show("{exe} spawn_fds[1,1]", a, os_error())
+        let b = os_spawn_fds(exe, none, List[int]()) else |e| match e {
+            io => -1, denied => -2, invalid => -3, not_found => -4, unsupported => -5,
+        }
+        show("{exe} spawn_fds[]", b, os_error())
+        let c = os_spawn([exe]) else |e| match e {
+            io => -1, denied => -2, not_found => -4,
+        }
+        show("{exe} spawn", c, os_error())
+        let d = os_spawn_with(exe, none, List[int]()) else |e| match e {
+            io => -1, denied => -2, not_found => -4, unsupported => -5,
+        }
+        show("{exe} spawn_with[]", d, os_error())
+        let j = os_spawn_job(exe, none, [1, 1], -1, -1, 0) else |e| match e {
+            io => -1, denied => -2, invalid => -3, not_found => -4, unsupported => -5,
+        }
+        show("{exe} spawn_job[1,1]", j, os_error())
+    }
+    os_exec("./noshebang", ["noshebang"], List[str](), List[int]()) else |e| {
+        let code = os_error()
+        let t = match e { io => "io", denied => "denied", invalid => "invalid", not_found => "not_found", unsupported => "unsupported" }
+        print("./noshebang exec: refused {t} os_error={code}")
+    }
+    0
+}

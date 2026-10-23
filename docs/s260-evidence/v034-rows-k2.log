@@ -1,0 +1,74 @@
+--- v034 k2/full_handle native
+copy=-2 os_error=28 offset_after=17 left_to_read=0 of 17
+rc=0
+--- v034 k2/full_handle release
+copy=-2 os_error=28 offset_after=17 left_to_read=0 of 17
+rc=0
+--- v034 k2/full_handle checked
+{"commit":"9da7bdc","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"copy=-2 os_error=28 offset_after=17 left_to_read=0 of 17\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 k2/full_handle lupin
+main.lu: unsupported: `fs_open_mode("/dev/full")` resolves outside the working directory — `..` applied and symlinks followed, as the host would (`[os.fs.path.domain]`); this machine serves the fs tier over REAL files inside its own tree and declines the rest by name rather than observing it
+rc=4
+--- v034 k2/net_read_helper native
+else-arm-ran
+after-park-ran [else]
+join: killed; kill prompt
+rc=0
+--- v034 k2/net_read_helper release
+else-arm-ran
+after-park-ran [else]
+join: killed; kill prompt
+rc=0
+--- v034 k2/net_read_helper checked
+{"commit":"9da7bdc","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 k2/net_read_helper lupin
+join: killed; kill prompt
+rc=0
+--- v034 k2/select_helper native
+after-park-ran 0
+join: killed; kill prompt
+rc=0
+--- v034 k2/select_helper release
+after-park-ran 0
+join: killed; kill prompt
+rc=0
+--- v034 k2/select_helper checked
+{"commit":"9da7bdc","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 k2/select_helper lupin
+join: killed; kill prompt
+rc=0
+--- v034 k2/signal_wait native
+else-arm-ran
+after-park-ran -7
+join: killed; kill prompt
+rc=0
+--- v034 k2/signal_wait release
+else-arm-ran
+after-park-ran -7
+join: killed; kill prompt
+rc=0
+--- v034 k2/signal_wait checked
+{"commit":"9da7bdc","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 k2/signal_wait lupin
+join: killed; kill prompt
+rc=0
+--- v034 k2/signal_wait_fds native
+else-arm-ran
+after-park-ran -7
+join: killed; kill prompt
+rc=0
+--- v034 k2/signal_wait_fds release
+else-arm-ran
+after-park-ran -7
+join: killed; kill prompt
+rc=0
+--- v034 k2/signal_wait_fds checked
+{"commit":"9da7bdc","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 k2/signal_wait_fds lupin
+join: killed; kill prompt
+rc=0

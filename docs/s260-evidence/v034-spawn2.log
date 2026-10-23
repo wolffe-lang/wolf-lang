@@ -1,0 +1,67 @@
+--- v034 spawn2/exec_row native
+exec: io os_error=0 marker=false
+rc=0
+--- v034 spawn2/exec_row release
+exec: io os_error=0 marker=false
+rc=0
+--- v034 spawn2/exec_row checked
+{"commit":"9da7bdc","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"exec: io os_error=0 marker=false\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 spawn2/exec_row lupin
+rc=0
+--- v034 spawn2/spawn_rows native
+./noshebang spawn_fds[1,1]: RAN status 0
+./noshebang spawn_fds[]: io os_error=0
+./noshebang spawn: io os_error=0
+./noshebang spawn_job[1,1]: RAN status 0
+./junk: ./junk: cannot execute binary file
+./junk spawn_fds[1,1]: RAN status 126
+./junk spawn_fds[]: io os_error=0
+./junk spawn: io os_error=0
+./junk: ./junk: cannot execute binary file
+./junk spawn_job[1,1]: RAN status 126
+./control spawn_fds[1,1]: RAN status 7
+./control spawn_fds[]: RAN status 7
+./control spawn: RAN status 7
+./control spawn_job[1,1]: RAN status 7
+./noshebang spawn, BROKEN_PIPE ignored: RAN status 0
+marker=true
+rc=0
+--- v034 spawn2/spawn_rows release
+./noshebang spawn_fds[1,1]: RAN status 0
+./noshebang spawn_fds[]: io os_error=0
+./noshebang spawn: io os_error=0
+./noshebang spawn_job[1,1]: RAN status 0
+./junk: ./junk: cannot execute binary file
+./junk spawn_fds[1,1]: RAN status 126
+./junk spawn_fds[]: io os_error=0
+./junk spawn: io os_error=0
+./junk: ./junk: cannot execute binary file
+./junk spawn_job[1,1]: RAN status 126
+./control spawn_fds[1,1]: RAN status 7
+./control spawn_fds[]: RAN status 7
+./control spawn: RAN status 7
+./control spawn_job[1,1]: RAN status 7
+./noshebang spawn, BROKEN_PIPE ignored: RAN status 0
+marker=true
+rc=0
+--- v034 spawn2/spawn_rows checked
+./junk: ./junk: cannot execute binary file
+./junk: ./junk: cannot execute binary file
+{"commit":"9da7bdc","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"./noshebang spawn_fds[1,1]: RAN status 0\n./noshebang spawn_fds[]: io os_error=0\n./noshebang spawn: io os_error=0\n./noshebang spawn_job[1,1]: RAN status 0\n./junk spawn_fds[1,1]: RAN status 126\n./junk spawn_fds[]: io os_error=0\n./junk spawn: io os_error=0\n./junk spawn_job[1,1]: RAN status 126\n./control spawn_fds[1,1]: RAN status 7\n./control spawn_fds[]: RAN status 7\n./control spawn: RAN status 7\n./control spawn_job[1,1]: RAN status 7\n./noshebang spawn, BROKEN_PIPE ignored: RAN status 0\nmarker=true\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 spawn2/spawn_rows lupin
+./noshebang spawn_fds[1,1]: io os_error=0
+./noshebang spawn_fds[]: io os_error=0
+./noshebang spawn: io os_error=0
+./noshebang spawn_job[1,1]: io os_error=0
+./junk spawn_fds[1,1]: io os_error=0
+./junk spawn_fds[]: io os_error=0
+./junk spawn: io os_error=0
+./junk spawn_job[1,1]: io os_error=0
+./control spawn_fds[1,1]: RAN status 7
+./control spawn_fds[]: RAN status 7
+./control spawn: RAN status 7
+./control spawn_job[1,1]: RAN status 7
+main.lu: unsupported: `os_signal_ignore` sets a signal's disposition: this machine admits no `unsafe` and std has no `sigaction` ([os.signal.disp], [os.term.note] R8)
+rc=4

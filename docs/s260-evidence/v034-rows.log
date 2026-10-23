@@ -1,0 +1,351 @@
+--- v034 copy/ro native
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+copy=-2 os_error_set=true offset_after=17 left_to_read=0 of 17
+rc=0
+--- v034 copy/ro release
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+copy=-2 os_error_set=true offset_after=17 left_to_read=0 of 17
+rc=0
+--- v034 copy/ro checked
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+{"commit":"9da7bdc","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"copy=-2 os_error_set=true offset_after=17 left_to_read=0 of 17\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 copy/ro lupin
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+copy=-2 os_error_set=true offset_after=17 left_to_read=0 of 17
+rc=0
+--- v034 copy/witness native
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+copy=-2 os_error=28 (No space left on device) offset_after=17 left_to_read=0 of 17
+rc=0
+--- v034 copy/witness release
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+copy=-2 os_error=28 (No space left on device) offset_after=17 left_to_read=0 of 17
+rc=0
+--- v034 copy/witness checked
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+copy=17 os_error=0 () offset_after=17 left_to_read=0 of 17
+
+thread 'main' (6) panicked at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/io/stdio.rs:1166:9:
+failed printing to stdout: No space left on device (os error 28)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+rc=101
+--- v034 copy/witness lupin
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+copy=17 os_error=0 () offset_after=17 left_to_read=0 of 17
+rc=0
+--- v034 spawn/all native
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+unexpectedly-ran
+./noshebang spawn_fds[1,1]: RAN status 0
+./noshebang spawn_fds[]: refused -1 os_error=0
+./noshebang spawn: refused -1 os_error=0
+./noshebang spawn_with[]: refused -1 os_error=0
+unexpectedly-ran
+./noshebang spawn_job[1,1]: RAN status 0
+./junk: ./junk: cannot execute binary file
+./junk spawn_fds[1,1]: RAN status 126
+./junk spawn_fds[]: refused -1 os_error=0
+./junk spawn: refused -1 os_error=0
+./junk spawn_with[]: refused -1 os_error=0
+./junk: ./junk: cannot execute binary file
+./junk spawn_job[1,1]: RAN status 126
+./noshebang exec: refused io os_error=0
+rc=0
+--- v034 spawn/all release
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+unexpectedly-ran
+./noshebang spawn_fds[1,1]: RAN status 0
+./noshebang spawn_fds[]: refused -1 os_error=0
+./noshebang spawn: refused -1 os_error=0
+./noshebang spawn_with[]: refused -1 os_error=0
+unexpectedly-ran
+./noshebang spawn_job[1,1]: RAN status 0
+./junk: ./junk: cannot execute binary file
+./junk spawn_fds[1,1]: RAN status 126
+./junk spawn_fds[]: refused -1 os_error=0
+./junk spawn: refused -1 os_error=0
+./junk spawn_with[]: refused -1 os_error=0
+./junk: ./junk: cannot execute binary file
+./junk spawn_job[1,1]: RAN status 126
+./noshebang exec: refused io os_error=0
+rc=0
+--- v034 spawn/all checked
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+unexpectedly-ran
+unexpectedly-ran
+./junk: ./junk: cannot execute binary file
+./junk: ./junk: cannot execute binary file
+./noshebang spawn_fds[1,1]: RAN status 0
+./noshebang spawn_fds[]: refused -1 os_error=0
+./noshebang spawn: refused -1 os_error=0
+./noshebang spawn_with[]: refused -1 os_error=0
+./noshebang spawn_job[1,1]: RAN status 0
+./junk spawn_fds[1,1]: RAN status 126
+./junk spawn_fds[]: refused -1 os_error=0
+./junk spawn: refused -1 os_error=0
+./junk spawn_with[]: refused -1 os_error=0
+./junk spawn_job[1,1]: RAN status 126
+{"commit":"9da7bdc","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"./noshebang exec: refused io os_error=0\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 spawn/all lupin
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+./noshebang spawn_fds[1,1]: refused -1 os_error=0
+./noshebang spawn_fds[]: refused -1 os_error=0
+./noshebang spawn: refused -1 os_error=0
+./noshebang spawn_with[]: refused -1 os_error=0
+./noshebang spawn_job[1,1]: refused -1 os_error=0
+./junk spawn_fds[1,1]: refused -1 os_error=0
+./junk spawn_fds[]: refused -1 os_error=0
+./junk spawn: refused -1 os_error=0
+./junk spawn_with[]: refused -1 os_error=0
+./junk spawn_job[1,1]: refused -1 os_error=0
+unexpectedly-ran
+rc=0
+--- v034 spawn/witness native
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+unexpectedly-ran
+BAD child ran status 0
+control-ran
+control status 0
+rc=9
+--- v034 spawn/witness release
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+unexpectedly-ran
+BAD child ran status 0
+control-ran
+control status 0
+rc=9
+--- v034 spawn/witness checked
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+unexpectedly-ran
+control-ran
+{"commit":"9da7bdc","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"BAD child ran status 0\ncontrol status 0\n","verdict":"exit(9)","warnings":[]}
+rc=0
+--- v034 spawn/witness lupin
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+bad=io
+control-ran
+control status 0
+rc=0
+--- v034 kill/chan_recv_entry native
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+join: killed; kill prompt
+rc=0
+--- v034 kill/chan_recv_entry release
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+join: killed; kill prompt
+rc=0
+--- v034 kill/chan_recv_entry checked
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+{"commit":"9da7bdc","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 kill/chan_recv_entry lupin
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+join: killed; kill prompt
+rc=0
+--- v034 kill/chan_recv_helper native
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+after-park-ran 0
+join: killed; kill prompt
+rc=0
+--- v034 kill/chan_recv_helper release
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+after-park-ran 0
+join: killed; kill prompt
+rc=0
+--- v034 kill/chan_recv_helper checked
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+{"commit":"9da7bdc","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 kill/chan_recv_helper lupin
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+join: killed; kill prompt
+rc=0
+--- v034 kill/net_accept native
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+else-arm-ran
+after-park-ran -1
+join: killed; kill prompt
+rc=0
+--- v034 kill/net_accept release
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+else-arm-ran
+after-park-ran -1
+join: killed; kill prompt
+rc=0
+--- v034 kill/net_accept checked
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+{"commit":"9da7bdc","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 kill/net_accept lupin
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+join: killed; kill prompt
+rc=0
+--- v034 kill/net_read native
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+join: killed; the pipe: woke [the-else-arm-ran]
+rc=0
+--- v034 kill/net_read release
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+join: killed; the pipe: woke [the-else-arm-ran]
+rc=0
+--- v034 kill/net_read checked
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+{"commit":"9da7bdc","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; the pipe: (nothing on the pipe)\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 kill/net_read lupin
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+join: killed; the pipe: (nothing on the pipe)
+rc=0
+--- v034 kill/net_write native
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+else-arm-ran
+after-park-ran
+join: killed; kill prompt
+rc=0
+--- v034 kill/net_write release
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+else-arm-ran
+after-park-ran
+join: killed; kill prompt
+rc=0
+--- v034 kill/net_write checked
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+{"commit":"9da7bdc","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 kill/net_write lupin
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+join: killed; kill prompt
+rc=0
+--- v034 kill/os_wait native
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+after-park-ran 0
+join: killed; kill slow
+rc=0
+--- v034 kill/os_wait release
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+after-park-ran 0
+join: killed; kill slow
+rc=0
+--- v034 kill/os_wait checked
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+{"commit":"9da7bdc","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"after-park-ran 0\njoin: normal; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 kill/os_wait lupin
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+after-park-ran 0
+join: normal; kill prompt
+rc=0
+--- v034 kill/proc_join native
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+else-arm-ran
+after-park-ran -1
+join: killed; kill prompt
+rc=0
+--- v034 kill/proc_join release
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+else-arm-ran
+after-park-ran -1
+join: killed; kill prompt
+rc=0
+--- v034 kill/proc_join checked
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+{"commit":"9da7bdc","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 kill/proc_join lupin
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+join: killed; kill prompt
+rc=0
+--- v034 kill/scope_join native
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+after-park-ran
+join: killed; kill prompt
+rc=0
+--- v034 kill/scope_join release
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+after-park-ran
+join: killed; kill prompt
+rc=0
+--- v034 kill/scope_join checked
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+{"commit":"9da7bdc","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 kill/scope_join lupin
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+join: killed; kill prompt
+rc=0
+--- v034 kill/select_helper native
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+after-park-ran 0
+join: killed; kill prompt
+rc=0
+--- v034 kill/select_helper release
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+after-park-ran 0
+join: killed; kill prompt
+rc=0
+--- v034 kill/select_helper checked
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+{"commit":"9da7bdc","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"timeout-arm-ran\nafter-park-ran 0\njoin: normal; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 kill/select_helper lupin
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+timeout-arm-ran
+after-park-ran 0
+join: normal; kill prompt
+rc=0
+--- v034 kill/signal_wait_fds native
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+else-arm-ran
+after-park-ran -7
+join: normal; kill prompt
+rc=0
+--- v034 kill/signal_wait_fds release
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+else-arm-ran
+after-park-ran -7
+join: normal; kill prompt
+rc=0
+--- v034 kill/signal_wait_fds checked
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+{"commit":"9da7bdc","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"else-arm-ran\nafter-park-ran -7\njoin: normal; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 kill/signal_wait_fds lupin
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+join: killed; kill prompt
+rc=0
+--- v034 kill/sleep native
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+after-park-ran
+join: killed; kill slow
+rc=0
+--- v034 kill/sleep release
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+after-park-ran
+join: killed; kill slow
+rc=0
+--- v034 kill/sleep checked
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+{"commit":"9da7bdc","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 kill/sleep lupin
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+join: killed; kill prompt
+rc=0
+--- v034 kill/when_acquire native
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+join: killed; kill prompt
+rc=0
+--- v034 kill/when_acquire release
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+join: killed; kill prompt
+rc=0
+--- v034 kill/when_acquire checked
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+{"commit":"9da7bdc","diagnostics":[],"file":"./main.lu","impl":"wolfgang","impl_version":"0.2.34","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- v034 kill/when_acquire lupin
+SigBlk:	0000000000000000 SigIgn:	0000000000000000 
+join: killed; kill prompt
+rc=0

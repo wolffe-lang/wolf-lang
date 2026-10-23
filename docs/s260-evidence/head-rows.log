@@ -1,0 +1,341 @@
+--- head copy/full_handle native
+copy=-2 os_error=28 offset_after=0 left_to_read=17 of 17
+rc=0
+--- head copy/full_handle release
+copy=-2 os_error=28 offset_after=0 left_to_read=17 of 17
+rc=0
+--- head copy/full_handle checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"copy=-2 os_error=28 offset_after=0 left_to_read=17 of 17\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head copy/full_handle lupin
+main.lu: unsupported: `fs_open_mode("/dev/full")` resolves outside the working directory — `..` applied and symlinks followed, as the host would (`[os.fs.path.domain]`); this machine serves the fs tier over REAL files inside its own tree and declines the rest by name rather than observing it
+rc=4
+--- head copy/ro native
+copy=-2 os_error_set=true offset_after=0 left_to_read=17 of 17
+rc=0
+--- head copy/ro release
+copy=-2 os_error_set=true offset_after=0 left_to_read=17 of 17
+rc=0
+--- head copy/ro checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"copy=-2 os_error_set=true offset_after=0 left_to_read=17 of 17\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head copy/ro lupin
+copy=-2 os_error_set=true offset_after=17 left_to_read=0 of 17
+rc=0
+--- head copy/witness native
+copy=-2 os_error=28 (No space left on device) offset_after=0 left_to_read=17 of 17
+rc=0
+--- head copy/witness release
+copy=-2 os_error=28 (No space left on device) offset_after=0 left_to_read=17 of 17
+rc=0
+--- head copy/witness checked
+copy=17 os_error=0 () offset_after=17 left_to_read=0 of 17
+
+thread 'main' (6) panicked at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/io/stdio.rs:1166:9:
+failed printing to stdout: No space left on device (os error 28)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+rc=101
+--- head copy/witness lupin
+copy=17 os_error=0 () offset_after=17 left_to_read=0 of 17
+rc=0
+--- head spawn/all native
+./noshebang spawn_fds[1,1]: refused -1 os_error=8
+./noshebang spawn_fds[]: refused -1 os_error=8
+./noshebang spawn: refused -1 os_error=8
+./noshebang spawn_with[]: refused -1 os_error=8
+./noshebang spawn_job[1,1]: refused -1 os_error=8
+./junk spawn_fds[1,1]: refused -1 os_error=8
+./junk spawn_fds[]: refused -1 os_error=8
+./junk spawn: refused -1 os_error=8
+./junk spawn_with[]: refused -1 os_error=8
+./junk spawn_job[1,1]: refused -1 os_error=8
+./noshebang exec: refused io os_error=8
+rc=0
+--- head spawn/all release
+./noshebang spawn_fds[1,1]: refused -1 os_error=8
+./noshebang spawn_fds[]: refused -1 os_error=8
+./noshebang spawn: refused -1 os_error=8
+./noshebang spawn_with[]: refused -1 os_error=8
+./noshebang spawn_job[1,1]: refused -1 os_error=8
+./junk spawn_fds[1,1]: refused -1 os_error=8
+./junk spawn_fds[]: refused -1 os_error=8
+./junk spawn: refused -1 os_error=8
+./junk spawn_with[]: refused -1 os_error=8
+./junk spawn_job[1,1]: refused -1 os_error=8
+./noshebang exec: refused io os_error=8
+rc=0
+--- head spawn/all checked
+./noshebang spawn_fds[1,1]: refused -1 os_error=8
+./noshebang spawn_fds[]: refused -1 os_error=8
+./noshebang spawn: refused -1 os_error=8
+./noshebang spawn_with[]: refused -1 os_error=8
+./noshebang spawn_job[1,1]: refused -1 os_error=8
+./junk spawn_fds[1,1]: refused -1 os_error=8
+./junk spawn_fds[]: refused -1 os_error=8
+./junk spawn: refused -1 os_error=8
+./junk spawn_with[]: refused -1 os_error=8
+./junk spawn_job[1,1]: refused -1 os_error=8
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"./noshebang exec: refused io os_error=8\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head spawn/all lupin
+./noshebang spawn_fds[1,1]: refused -1 os_error=0
+./noshebang spawn_fds[]: refused -1 os_error=0
+./noshebang spawn: refused -1 os_error=0
+./noshebang spawn_with[]: refused -1 os_error=0
+./noshebang spawn_job[1,1]: refused -1 os_error=0
+./junk spawn_fds[1,1]: refused -1 os_error=0
+./junk spawn_fds[]: refused -1 os_error=0
+./junk spawn: refused -1 os_error=0
+./junk spawn_with[]: refused -1 os_error=0
+./junk spawn_job[1,1]: refused -1 os_error=0
+unexpectedly-ran
+rc=0
+--- head spawn/witness native
+bad=io
+control-ran
+control status 0
+rc=0
+--- head spawn/witness release
+bad=io
+control-ran
+control status 0
+rc=0
+--- head spawn/witness checked
+control-ran
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"bad=io\ncontrol status 0\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head spawn/witness lupin
+bad=io
+control-ran
+control status 0
+rc=0
+--- head spawn2/exec_row native
+exec: io os_error=8 marker=false
+rc=0
+--- head spawn2/exec_row release
+exec: io os_error=8 marker=false
+rc=0
+--- head spawn2/exec_row checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"exec: io os_error=8 marker=false\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head spawn2/exec_row lupin
+rc=0
+--- head spawn2/spawn_rows native
+./noshebang spawn_fds[1,1]: io os_error=8
+./noshebang spawn_fds[]: io os_error=8
+./noshebang spawn: io os_error=8
+./noshebang spawn_job[1,1]: io os_error=8
+./junk spawn_fds[1,1]: io os_error=8
+./junk spawn_fds[]: io os_error=8
+./junk spawn: io os_error=8
+./junk spawn_job[1,1]: io os_error=8
+./control spawn_fds[1,1]: RAN status 7
+./control spawn_fds[]: RAN status 7
+./control spawn: RAN status 7
+./control spawn_job[1,1]: RAN status 7
+./noshebang spawn, BROKEN_PIPE ignored: io os_error=8
+marker=false
+rc=0
+--- head spawn2/spawn_rows release
+./noshebang spawn_fds[1,1]: io os_error=8
+./noshebang spawn_fds[]: io os_error=8
+./noshebang spawn: io os_error=8
+./noshebang spawn_job[1,1]: io os_error=8
+./junk spawn_fds[1,1]: io os_error=8
+./junk spawn_fds[]: io os_error=8
+./junk spawn: io os_error=8
+./junk spawn_job[1,1]: io os_error=8
+./control spawn_fds[1,1]: RAN status 7
+./control spawn_fds[]: RAN status 7
+./control spawn: RAN status 7
+./control spawn_job[1,1]: RAN status 7
+./noshebang spawn, BROKEN_PIPE ignored: io os_error=8
+marker=false
+rc=0
+--- head spawn2/spawn_rows checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"./noshebang spawn_fds[1,1]: io os_error=8\n./noshebang spawn_fds[]: io os_error=8\n./noshebang spawn: io os_error=8\n./noshebang spawn_job[1,1]: io os_error=8\n./junk spawn_fds[1,1]: io os_error=8\n./junk spawn_fds[]: io os_error=8\n./junk spawn: io os_error=8\n./junk spawn_job[1,1]: io os_error=8\n./control spawn_fds[1,1]: RAN status 7\n./control spawn_fds[]: RAN status 7\n./control spawn: RAN status 7\n./control spawn_job[1,1]: RAN status 7\n./noshebang spawn, BROKEN_PIPE ignored: io os_error=8\nmarker=false\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head spawn2/spawn_rows lupin
+./noshebang spawn_fds[1,1]: io os_error=0
+./noshebang spawn_fds[]: io os_error=0
+./noshebang spawn: io os_error=0
+./noshebang spawn_job[1,1]: io os_error=0
+./junk spawn_fds[1,1]: io os_error=0
+./junk spawn_fds[]: io os_error=0
+./junk spawn: io os_error=0
+./junk spawn_job[1,1]: io os_error=0
+./control spawn_fds[1,1]: RAN status 7
+./control spawn_fds[]: RAN status 7
+./control spawn: RAN status 7
+./control spawn_job[1,1]: RAN status 7
+main.lu: unsupported: `os_signal_ignore` sets a signal's disposition: this machine admits no `unsafe` and std has no `sigaction` ([os.signal.disp], [os.term.note] R8)
+rc=4
+--- head kill/chan_recv_entry native
+join: killed; kill prompt
+rc=0
+--- head kill/chan_recv_entry release
+join: killed; kill prompt
+rc=0
+--- head kill/chan_recv_entry checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head kill/chan_recv_entry lupin
+join: killed; kill prompt
+rc=0
+--- head kill/chan_recv_helper native
+join: killed; kill prompt
+rc=0
+--- head kill/chan_recv_helper release
+join: killed; kill prompt
+rc=0
+--- head kill/chan_recv_helper checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head kill/chan_recv_helper lupin
+join: killed; kill prompt
+rc=0
+--- head kill/net_accept native
+join: killed; kill prompt
+rc=0
+--- head kill/net_accept release
+join: killed; kill prompt
+rc=0
+--- head kill/net_accept checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head kill/net_accept lupin
+join: killed; kill prompt
+rc=0
+--- head kill/net_read native
+join: killed; the pipe: (nothing on the pipe)
+rc=0
+--- head kill/net_read release
+join: killed; the pipe: (nothing on the pipe)
+rc=0
+--- head kill/net_read checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; the pipe: (nothing on the pipe)\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head kill/net_read lupin
+join: killed; the pipe: (nothing on the pipe)
+rc=0
+--- head kill/net_read_helper native
+join: killed; kill prompt
+rc=0
+--- head kill/net_read_helper release
+join: killed; kill prompt
+rc=0
+--- head kill/net_read_helper checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head kill/net_read_helper lupin
+join: killed; kill prompt
+rc=0
+--- head kill/net_write native
+join: killed; kill prompt
+rc=0
+--- head kill/net_write release
+join: killed; kill prompt
+rc=0
+--- head kill/net_write checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head kill/net_write lupin
+join: killed; kill prompt
+rc=0
+--- head kill/os_wait native
+join: killed; kill slow
+rc=0
+--- head kill/os_wait release
+join: killed; kill slow
+rc=0
+--- head kill/os_wait checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"after-park-ran 0\njoin: normal; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head kill/os_wait lupin
+after-park-ran 0
+join: normal; kill prompt
+rc=0
+--- head kill/proc_join native
+join: killed; kill prompt
+rc=0
+--- head kill/proc_join release
+join: killed; kill prompt
+rc=0
+--- head kill/proc_join checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head kill/proc_join lupin
+join: killed; kill prompt
+rc=0
+--- head kill/scope_join native
+join: killed; kill prompt
+rc=0
+--- head kill/scope_join release
+join: killed; kill prompt
+rc=0
+--- head kill/scope_join checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head kill/scope_join lupin
+join: killed; kill prompt
+rc=0
+--- head kill/select_helper native
+join: killed; kill prompt
+rc=0
+--- head kill/select_helper release
+join: killed; kill prompt
+rc=0
+--- head kill/select_helper checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head kill/select_helper lupin
+join: killed; kill prompt
+rc=0
+--- head kill/signal_wait native
+join: killed; kill prompt
+rc=0
+--- head kill/signal_wait release
+join: killed; kill prompt
+rc=0
+--- head kill/signal_wait checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head kill/signal_wait lupin
+join: killed; kill prompt
+rc=0
+--- head kill/signal_wait_fds native
+join: killed; kill prompt
+rc=0
+--- head kill/signal_wait_fds release
+join: killed; kill prompt
+rc=0
+--- head kill/signal_wait_fds checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head kill/signal_wait_fds lupin
+join: killed; kill prompt
+rc=0
+--- head kill/sleep native
+join: killed; kill prompt
+rc=0
+--- head kill/sleep release
+join: killed; kill prompt
+rc=0
+--- head kill/sleep checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head kill/sleep lupin
+join: killed; kill prompt
+rc=0
+--- head kill/when_acquire native
+join: killed; kill prompt
+rc=0
+--- head kill/when_acquire release
+join: killed; kill prompt
+rc=0
+--- head kill/when_acquire checked
+{"commit":"37c3cc3","impl":"wolfgang","impl_version":"0.2.34+dev.37c3cc3","phase_reached":"run","protocol":1,"seeded":false,"stdout_inline":"join: killed; kill prompt\n","verdict":"exit(0)","warnings":[]}
+rc=0
+--- head kill/when_acquire lupin
+join: killed; kill prompt
+rc=0
