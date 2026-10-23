@@ -390,7 +390,43 @@ the lane test's two; #683 reddens the lane rows only — the leave's own
 crate tests return early when the host does not leave, and nothing in
 them parks. At the head every one of these is green.
 
-**The differ** — §4.1 below.
+**4.1 The differ** (`s260-evidence/differ.log`, the moved lines
+`differ-moved.log`). Every wolf in one configuration, the corpus's own
+(no `std/` beside the binary; 0.2.34's archive files copied without
+it): head = `target/release/wolf` of this lane's dist at `7111883b`,
+before = the base `e2ed1607`'s own dist, control = 0.2.34. `cargo xtask
+differ <wolf> <lupin 0.1.55> --triage --<tier>`, 1,219 files, 1,157
+entries:
+
+| A | tier | agreements | completeness | SOUNDNESS | unsupported (forward) | hard | A ran / B ran / both |
+|---|---|---|---|---|---|---|---|
+| head `7111883b` | checked | 812 | 259 | 9 | 104 (3) | 30 | 738 / 931 / 708 |
+| before `e2ed1607` | checked | 813 | 259 | 9 | 104 (3) | 29 | 738 / 931 / 708 |
+| 0.2.34 `9da7bdc` | checked | 816 | 265 | 0 | 107 (3) | 21 | 719 / 931 / 694 |
+| head `7111883b` | native | 796 | 259 | 23 | 106 (3) | 44 | 742 / 931 / 706 |
+| before `e2ed1607` | native | 797 | 259 | 23 | 106 (3) | 43 | 742 / 931 / 706 |
+| 0.2.34 `9da7bdc` | native | 794 | 265 | 14 | 116 (3) | 34 | 716 / 931 / 685 |
+
+**Against the base**, the ledgers differ by exactly one line on each
+tier: `fs/copy_chunk_failed_write.lu` leaves the agreements (at the base
+wolf and lupin both lose the bytes, `exit(1)` with the same stdout) and
+enters as a hard `Verdict` divergence (`Exit(0) vs Exit(1)`): lupin 0.1.55
+lags the clause — wolf-interp's to mirror, pinned in `copy_write_lanes.rs`.
+`fs/copy_chunk_dev_full.lu` does not enter the ledger (lupin declines
+`/dev/full` by name, `unsupported` on both sides of the comparison). On
+native, `conc/atomic_ub_uaf`, `memory/unsafe_ub_uaf` and
+`memory/volatile_ub_uaf` print a different exit status in each run
+inside the same SOUNDNESS class: undefined behaviour, not a move. The
+spawn and kill witnesses are driver fixtures, not corpus files, so the
+differ does not see them. The plain pass head against before reports 0
+divergences (the static rungs; no row of this lane's is static).
+**Against 0.2.34** the other 24 lines (checked; 26 on native with the UB
+rows) are trunk's since the tag — s252's region-scalar rows, s254's
+`region_os_cwd_return`, s255's outer-write and `List` rows, s256's
+`read_param_indexed_caller`, s253's `core_limit_rows`, s258's
+`row_operand_member`/`_method`, s259's `ctor_arg_unresolved` — each in
+the same class at the base; none of them is this lane's. The plain pass
+head against 0.2.34: 21 static divergences, trunk's.
 
 ## 5. Rulings (asked, each with a recommendation; implemented where reversible)
 
@@ -465,4 +501,9 @@ them parks. At the head every one of these is green.
    receive — and answered `cancelled` to the joiner's `else` (a failure
    arm, so three sites, not two). The mechanism built is the one
    predicted (a context saved at the entry, restored at the shim's exit).
-4. Scored in §4 below.
+4. **Right, with one thing not said.** No existing corpus row moved; the
+   failed-write row moved on every compiled tier and the checked machine
+   (0.2.34 loses the bytes, the head puts them back) and diverges from
+   lupin 0.1.55, which lags — the one line the ledger gains against the
+   base, on each tier. Not said: the `/dev/full` row stays out of the
+   ledger, because lupin declines the device by name.
