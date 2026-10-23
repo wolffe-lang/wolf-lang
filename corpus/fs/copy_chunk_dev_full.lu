@@ -1,0 +1,38 @@
+//! check: run(exit=0, stdout="copy=io os_error_set=true offset_after=0 left_to_read=17 of 17\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.copy, os.fs.error, err.union
+//!
+//! s260 (wolf-lang#642, `[os.fs.copy]`) — `cat f > /dev/full` through
+//! the copy, with the offset read back: the issue's witness with the
+//! sink opened by path, so every machine sees the same handle (on the
+//! checked machine descriptor 1 is the machine's own capture). On linux
+//! `copy_file_range`, `sendfile` and `splice` refuse a regular file into
+//! `/dev/full` and the read/write rung's write fails with `ENOSPC`. A
+//! host with no `/dev/full` (macOS, windows) has no such device, so its
+//! `else` takes the sink every host refuses, a handle opened for reading
+//! only — the same failed write, the same line. Until s260: `offset_after=17
+//! left_to_read=0`.
+
+fn main() -> !int {
+    let a = "target/s260-full-in.tmp"
+    let r = "target/s260-full-ro.tmp"
+    fs_write_text(a, "alpha\nbeta\ngamma\n")?
+    fs_write_text(r, "")?
+    let src = fs_open(a)?
+    let sink = fs_open_mode("/dev/full", 1) else |_| { fs_open(r)? }
+    let n = fs_copy_chunk(src, sink, 262144) else |e| match e {
+        eof => -1,
+        io => -2,
+    }
+    let code = os_error()
+    let at = fs_tell(src)?
+    let rest = fs_read_chunk(src, 262144) else |_| List[byte]()
+    let shown = if n == -2 then "io" else "{n}"
+    print("copy={shown} os_error_set={code != 0} offset_after={at} left_to_read={rest.len} of 17")
+    fs_close(src)?
+    fs_close(sink)?
+    fs_remove(a)?
+    fs_remove(r)?
+    print("cleaned={!fs_exists(a) && !fs_exists(r)}")
+    0
+}

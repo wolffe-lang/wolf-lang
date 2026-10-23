@@ -1,0 +1,49 @@
+//! check: run(exit=0, stdout="copy=io took_nothing=true os_error_set=true offset_after=0\nretry=17 same=true\ncleaned=true")
+//! phase: run
+//! conforms: os.fs.copy, os.fs.error, err.union
+//!
+//! s260 (wolf-lang#642, `[os.fs.copy]`, R-s260-1) — a copy whose WRITE
+//! fails keeps what it read. The sink is a handle opened for reading
+//! only: its write fails on every host (`EBADF` on unix, an access
+//! refusal on windows), and on linux every kernel rung refuses the
+//! pairing first, so the write that fails is the read/write rung's —
+//! the rung that read 17 bytes before it. Until s260 the source then
+//! stood at 17 with nothing to say how many were lost (t06's replay of
+//! the issue); now:
+//!
+//!   copy            `io`, the write's number in `os_error()`, and the
+//!                   source put back to 0 — after any `io` it stands
+//!                   exactly past what the sink took, here nothing;
+//!   retry           the next copy, into a sink that takes them, moves
+//!                   all 17 bytes and they are the file's.
+
+fn main() -> !int {
+    let a = "target/s260-copy-in.tmp"
+    let r = "target/s260-copy-ro.tmp"
+    let b = "target/s260-copy-out.tmp"
+    fs_write_text(a, "alpha\nbeta\ngamma\n")?
+    fs_write_text(r, "")?
+    let src = fs_open(a)?
+    let ro = fs_open(r)?
+    let start = fs_tell(src)?
+    let n = fs_copy_chunk(src, ro, 262144) else |e| match e {
+        eof => -1,
+        io => -2,
+    }
+    let code = os_error()
+    let at = fs_tell(src)?
+    let shown = if n == -2 then "io" else "{n}"
+    print("copy={shown} took_nothing={at == start} os_error_set={code != 0} offset_after={at}")
+    let dst = fs_create(b)?
+    let moved = fs_copy_chunk(src, dst, 262144)?
+    fs_close(dst)?
+    let back = fs_read_text(b)?
+    print("retry={moved} same={back == "alpha\nbeta\ngamma\n"}")
+    fs_close(src)?
+    fs_close(ro)?
+    fs_remove(a)?
+    fs_remove(r)?
+    fs_remove(b)?
+    print("cleaned={!fs_exists(a) && !fs_exists(r) && !fs_exists(b)}")
+    0
+}
