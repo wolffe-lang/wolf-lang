@@ -120,3 +120,9 @@ otherwise exec closed the file, and a runtime pipe could reuse 5.
 No compiler/runtime behavior changes, no gate disabled or serialized.
 The before red and after green score the addendum's prediction. #903
 is now an issue to close on this PR, not another issue to file.
+
+The pre-fix third gauntlet reached str_list_fs_native's exact runtime
+symbol inventory and exposed the stale expected total 252. Updated it
+to 254 and explicitly required both new argv export names. The focused
+inventory test is green. The descriptor fix is independent of this
+bookkeeping, and the final whole gauntlet runs after both commits.
