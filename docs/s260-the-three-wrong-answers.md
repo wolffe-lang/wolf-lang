@@ -134,3 +134,268 @@ nothing built or run by this lane yet.
    lupin 0.1.55 (lupin lags, item 1). The spawn and kill witnesses live
    in driver lane tests (they spawn children or need a container), not
    in the differ's corpus.
+
+## How the rows were measured
+
+On kasumi (linux x86-64, CachyOS, podman 6.1.3): each program built on
+the host with the toolchain under test (`taskset -c 4-7`), every run —
+native, release, `wolf conform-run --json --checked`, and lupin 0.1.55's
+`conform-run` — inside an `archlinux:base-devel` container on cpus 0–3,
+`ulimit -c 0`, `SigBlk`/`SigIgn` printed first (all zero). The control
+is the wolf 0.2.34 release archive (`9da7bdc`), the head the lane's own
+`cargo xtask dist` at `37c3cc37` (the code-final commit; what follows it
+is tests' formatting, the CHANGELOG and this note). The logs and the
+scripts are under `docs/s260-evidence/` (`v034-*.log` the control,
+`head-rows.log` the head, `strace.log` the rungs, `probes/` the
+programs that are not fixtures).
+
+## 1. A failed copy write (#642, `[os.fs.copy]`)
+
+**What the clause said.** One transfer of at most `max` bytes, both
+offsets advancing, `io` "from either side" — and nothing about the
+bytes a read had already taken when the write fails. **What the
+runtime did.** linux tries `copy_file_range`, `sendfile` and `splice`,
+each refused by the pairing of a regular file and `/dev/full`
+(`EINVAL`), then the read/write rung: one `read` of 17 bytes, one
+`write` that fails `ENOSPC`, and `io` with the source at 17
+(`strace.log`, both builds). The checked machine lost them the same way
+in its own buffer; lupin 0.1.55 too.
+
+**The answer (R-s260-1, the contract's recommendation, implemented).**
+The read/write rung writes as far as the sink takes the bytes (a
+counted `write` loop in place of `write_all`), then puts the source
+back by the shortfall — `lseek(src, -(read - written), SEEK_CUR)` — so
+after any `io` the source stands exactly past what the sink took; the
+count taken goes through the call's out word beside the `io` (a program
+reads it as the offset's advance; nothing in the language reads an out
+word on the error arm today). The kernel rungs fail before a byte moves,
+so they needed nothing. A source that cannot seek (a pipe, a terminal,
+descriptor 0 after `read_line` read ahead) keeps its offset and the
+shortfall is lost, as it is for a read then a failed write by hand. The
+side is named by rule, not by a new tag: the failing call's number is in
+`os_error()`, and a caller that must say which side failed retries the
+read — after a write's failure the bytes are there again, and the write
+after them fails as the copy's did. That is the inference boreutils'
+`cat` already makes (bu19's `copy_bytes`: "the copy failed and the
+fallback did not" is the write's failure), so its expectations were read
+and not changed; until this lane the inference worked only because its
+fallback read met the END of the file and reported success, which the
+differential case caught. The checked machine mirrors it (its handed
+input buffer moves its own position back).
+
+| row | 0.2.34 native / release | 0.2.34 checked | head, all three | lupin 0.1.55 |
+|---|---|---|---|---|
+| t06's witness, fd 1 on `/dev/full` | `offset_after=17 left_to_read=0` | fd 1 is the capture: `copy=17` | native, release: `offset_after=0 left_to_read=17` (checked: the capture) | `copy=17` (its own buffer) |
+| `/dev/full` by handle | `offset_after=17` | `offset_after=17` | `offset_after=0 left_to_read=17`, `os_error=28` | `unsupported` by name (`[os.fs.path.domain]`) |
+| a sink opened for reading only | `offset_after=17` | `offset_after=17` | `offset_after=0`, the retry moves 17 | `offset_after=17` |
+| a pipe with one page free (crate test, linux) | — | — | `io`, `out` = the page taken, offset = the page | — |
+
+The corpus rows: `fs/copy_chunk_failed_write.lu` (the read-only sink,
+every host: `EBADF` on unix refuses every kernel rung, an access refusal
+on windows) and `fs/copy_chunk_dev_full.lu` (`cat f > /dev/full` with the
+offset read back; a host with no `/dev/full`, macOS and windows, takes the
+read-only sink in its `else`, the same line). `copy_write_lanes.rs` holds
+the checked machine, native and release to both, lupin 0.1.55 pinned by
+version and record commit (`e642f26`) to its measured loss, and t06's
+own program with descriptor 1 on `/dev/full` on linux. The crate tests
+(`wolf_rt::fs`): the read-only sink, `/dev/full` twice (the remembered
+rung goes straight to the loop and still keeps the bytes), and a partial
+write into a non-blocking pipe with one page free.
+
+## 2. A file without `#!` (#682, `[os.proc.exec]`)
+
+**What the clause said.** "A file without the `#!` line the kernel
+needs is `io` (`ENOEXEC`): no machine re-runs it under `/bin/sh`."
+**What the runtime did** (`v034-spawn2.log`, `v034-rows.log`):
+
+| call | 0.2.34 native, release, checked | head, all three | lupin 0.1.55 |
+|---|---|---|---|
+| `os_spawn_fds(.., [1, 1])` | RAN (`junk`: bash's `cannot execute binary file`, 126) | `io`, `os_error=8` | `io`, `os_error=0` |
+| `os_spawn_job(.., [1, 1], ..)` | RAN | `io`, 8 | `io`, 0 |
+| `os_spawn_fds(.., [])`, `os_spawn`, `os_spawn_with(.., [])` | `io`, `os_error=0` | `io`, 8 | `io`, 0 |
+| `os_spawn` once the program ignores `BROKEN_PIPE` | RAN | `io`, 8 | `unsupported` (`os_signal_ignore`, no `unsafe`) |
+| `os_exec` | `io`, 0 | `io`, 8 | RAN (lupin replaced itself with `/bin/sh noshebang`; no record) |
+| the `#!/bin/sh` control, every call | runs, status 7 | runs, status 7 | runs |
+
+**Whose fallback it was: the C library's.** No `/bin/sh` appears
+anywhere in `wolf_rt`'s spawn path. A spawn with a `pre_exec` hook is
+forked by the standard library and exec'd with `execvp`, and
+`execvp(3)` documents the fallback: when `execve` answers `ENOEXEC` it
+runs the file under the shell. A spawn with no hook takes the standard
+library's `posix_spawn` path, which on glibc does not fall back. The
+hooked spawns are more than the issue's: every non-empty map, every job
+spawn, a non-empty inherit set, and — found while building the fix —
+ANY spawn of a process that ignores `SIGPIPE` or holds a fault ignored,
+because `keep_pipe_ignore` installs a hook to hand the ignore on
+(`[os.signal.disp]`), so `os_spawn(["./noshebang"])` ran too.
+
+**The fix.** A hooked spawn's last hook is the exec, made by the
+runtime (`os::ExecPlan`, `exec_last`): the candidates (the name as
+written when it holds `/`, else each directory of the child's `PATH` in
+order, `/usr/bin:/bin` when it has none, as `os_exec` reads it), `argv`
+and the child's whole environment are built in the parent; the child
+walks the candidates with `execve` alone — `ENOENT`/`ENOTDIR` try the
+next, `EACCES` is remembered and the search goes on, anything else
+(`ENOEXEC` among them) is the spawn's error, which the standard library
+carries back. The documented contract of `pre_exec` ("run just before
+the exec function is invoked"; an `Err` is the spawn's error) is what
+this rests on. A spawn with no hook keeps `posix_spawn`'s fast path.
+The spawn family and `os_exec` now keep the program step's host number
+in `os_error()` — cleared on entry, the refusal's number left behind, 0
+for a refusal decided before the host (the shape, a forged source) —
+which is what lets a shell say "not an executable format" without
+reading the file's first bytes (R-s260-3 on the spec sentence this
+contradicts). The checked machine carries the same plan as a hand mirror
+(wolf_mem and wolf_rt may not see each other), its overlay applied to the
+environment. `spawn_noexec_lanes.rs` (unix) runs the three fixtures on
+native, release (and native under `taskset -c 0-3`), the checked machine
+and lupin; the crate tests cover every spawn with the marker the file
+would write, the shim's `ENOEXEC`, the refusals decided first, and the
+argv and environment a hooked exec hands on.
+
+## 3. A killed proc at its park (#683, `[conc.proc.kill]` step 1)
+
+**What the clause said.** The proc's task tree is cancelled "without
+running any further user code". **How the parked read was woken.** Not
+by the deadline and not by a descriptor's close: by the kill itself.
+`kill_mark` sets the scope's `killed` flag and `ScopeInner::cancel`
+calls the parked registry's `wake_all`; the reactor's `wait_on` sees the
+flag, claims its own wait and completes it `Cancelled`;
+`kill_teardown_check` unwinds a Rust task but is a no-op on a compiled
+frame (`IN_RUST_TASK` is false under `suppress_kill_unwind`), and
+`wait_raw` answered `io` — so the program's `else` ran, then its next
+statements, and the proc ended only when it returned. The channel and
+`when` waits answer status 2 to the lowered teardown branch, which
+returns ONE frame: right in the proc's entry frame, wrong one frame up.
+
+**The leave (R-s260-4).** Compiled frames have no unwind tables
+(`[abi.native.nounwind]`), and the contained-trap path parks the thread
+for good — one thread per kill, which a server that kills a proc per
+timed-out request (lobo's #678 workaround) could not afford. So a
+compiled task is now entered through `task::leave::run_compiled`, whose
+`enter` (a naked function, a few instructions on x86-64 System V,
+windows x64 and aarch64) saves the callee-saved registers, the stack
+pointer at the entry and the floating-point control words, then calls
+the entry. Every runtime call that parks ends with `leave_if_killed`:
+when the task's scope is killed, `leave` restores that state and
+returns from `enter` with `CANCEL_TAG`, discarding every frame between —
+the task's compiled frames and the shim's own, whose locals were dropped
+before the call. The worker thread goes back to the pool; the reaper
+sees the tree quiesce, bulk-frees the ledger (`[mem.region.proc]`), and
+the join answers `killed`. What the discarded frames held is answered
+in `leave.rs`'s doc: a scope the task opened and had not joined is
+joined by the runtime before the task is retired (its children are in
+the killed tree and leave at their parks), so the reaper still frees
+the regions after the whole tree is at rest; a `when` set held stays
+held (step 1's stated consequence) and the thread's holder token and
+depth are renewed; channel references, files and sockets are not
+released (their release is code the program would have run). A CET
+shadow stack, where a host enables one, is unwound by the same count
+(`rdsspq` reads 0 and nothing happens where none is). `time_sleep_ms`
+in a task became a sleep the kill ends (a condvar the parked registry
+nudges; a polite cancel still does not end it — a sleep is not a
+cancellation point). The lowered poll `__wolf_rt_task_killed` leaves the
+same way, so its branch is reached only off a compiled task.
+
+**Every parking site** (`v034-rows*.log`, `head-rows.log`; the fixtures
+are `fixtures/kill_park/`, the gate `kill_park_lanes.rs`):
+
+| site | woken by the kill at 0.2.34 | 0.2.34 native / release | head native / release | checked, lupin (both pins) |
+|---|---|---|---|---|
+| `net_read` (the witness) | yes, `io` | `else` ran, the pipe written | nothing runs, `killed` | nothing runs |
+| `net_read` one frame down | yes, `io` | `else` and the caller ran | nothing runs | nothing runs |
+| `net_accept` | yes, `io` | `else` and after ran | nothing runs | nothing runs |
+| `net_write` (16 MiB, peer not reading) | yes, `io` | `else` and after ran | nothing runs | nothing runs |
+| `ch.recv()` in the entry frame | yes, status 2 | right (the teardown branch) | nothing runs | nothing runs |
+| `ch.recv()` one frame down | yes, status 2 | the caller ran on | nothing runs | nothing runs |
+| `select` one frame down | yes, status 2 | the caller ran on | nothing runs | nothing runs |
+| `when` acquisition | yes, status 2 | right (entry frame) | nothing runs | nothing runs |
+| `os_signal_wait` | yes (a 100 ms look), `io` | `else` and after ran | nothing runs | nothing runs |
+| `os_signal_wait_fds` | yes, `io` | `else` and after ran | nothing runs | nothing runs |
+| `o.join()` | yes (its monitor receive), `cancelled` | `else` and after ran | nothing runs | nothing runs |
+| `scope { }`'s join | when the children end | the code after the block ran | nothing runs | nothing runs |
+| `time_sleep_ms(3000)` | no (a host sleep) | ran after the sleep; kill `slow` | the kill ends it: nothing runs, `prompt` | nothing runs |
+| `os_wait` (child sleeps 2 s) | no (the host's `waitpid`) | ran after; kill `slow` | leaves when the child ends: nothing runs, kill `slow` (R-s260-2) | the machine serializes the host wait: the proc ends `normal` before the kill |
+| `w.kill()`'s own wait | when the target ends | — | leaves after it | — |
+| the dial, pipe and terminal reads, `read_line` | no (the kernel) | — | leave when the host returns, if the call is one of the shims above; fs reads are not (R-s260-2) | — |
+
+A task that is computing when the kill lands runs on until its next
+such call — the clause's compute-bound half, the checkpoint story
+`conc_abi.rs` records. The `when` row one frame down is not in the
+table: a `Mutex[int]` parameter is refused by the checker (E0401, "a
+`when` operand must be `Mutex[_]`"), filed as found.
+
+## 5. Rulings (asked, each with a recommendation; implemented where reversible)
+
+- **R-s260-1 — the failed write on the read/write rung** (#642). Asked:
+  what does `fs_copy_chunk` answer when its write fails after its read
+  answered bytes? Recommended and implemented (the contract's): write
+  what the sink takes, answer `io` with the write's number in
+  `os_error()`, put the source back by the shortfall so after any `io` it
+  stands exactly past what was written, the count beside the `io` in the
+  out word; a source that cannot seek loses the shortfall, stated; the
+  side named by rule (retry the read). The clause gained the sentence by
+  its own commit. Not chosen: the short-write convention (answer the
+  partial count, fail on the next call) — equally lossless, but it splits
+  one failure across two calls and changes what a caller that loops to
+  `eof` sees on a disk that fills mid-chunk.
+- **R-s260-2 — the parks no kill can end without user code** (#683).
+  Asked: what of a park the runtime cannot wake? Measured: `os_wait`,
+  `os_wait_status` and `os_wait_status_core` hold the child table in the
+  host's `waitpid`; the dials (`net_connect`, `net_connect_unix`) block in
+  the kernel; reads and writes of pipes and terminals through the fs
+  table, and `read_line`, block in the kernel. None of them runs user code
+  after the kill at the head where it is a shim this lane wrapped (the
+  child waits and the dials leave when the host returns), but the kill
+  itself waits that long (`os_wait`: `kill slow`), and the fs calls are
+  not wrapped (they are no park of the runtime's, and every fs call would
+  pay the look). Recommended, not implemented here (it is a design of
+  its own): the child wait through the signal hub's `SIGCHLD` or a pidfd
+  in the reactor, so a kill can claim it as it claims a readiness wait;
+  the dial non-blocking under the reactor; and the fs table's pipe and
+  terminal reads through the readiness set. Issue to file.
+- **R-s260-3 — `os_error()` for the os family** (#682). Asked: the
+  contract asks for `ENOEXEC` in `os_error()` from both calls, and
+  `[os.fs.error]` says "the os family does not [set it] at this pin" —
+  a sentence `os_fork` already contradicts (s247). Recommended and
+  implemented for the runtime and the checked machine: the spawn family
+  and `os_exec` keep the program step's number (cleared on entry, 0 for a
+  refusal decided before the host). The spec sentence is not moved here
+  (the contract moves `[os.fs.copy]` only); recommended: amend it to
+  name the os calls that set the word (`os_fork`, the spawns, `os_exec`).
+  Issue to file.
+- **R-s260-4 — how a killed compiled task leaves** (#683). Asked: the
+  frames cannot be unwound; how does the park leave them? Recommended and
+  implemented: discard them by restoring the state saved at the task's
+  entry (`leave.rs`), the thread back in the pool, a scope the frames
+  left open joined by the runtime, a `when` set they held left held. Not
+  chosen: the contained trap's answer (park the thread for good), which
+  costs a thread and its stack per kill. Reversible (one module and the
+  wrapped shims).
+
+## 6. The prediction, scored
+
+1. **Right.** linux: the three kernel refusals, then the read/write rung
+   (`strace.log`; the crate test asserts the remembered rung is the loop);
+   macOS has no `/dev/full` and a read-only sink is the failing write every
+   host has (linux refuses it on every kernel rung, `EBADF`); the checked
+   machine and lupin 0.1.55 lost the bytes too.
+2. **Right, and short by one shape.** The fallback was the C library's
+   `execvp`, reached only by hooked spawns; the hookless spawns and
+   `os_exec` answered `io`; `os_error()` was 0 after every one; the checked
+   machine ran the file too; lupin answered `io` for every spawn. Missed:
+   `os_spawn` is hooked whenever the process ignores `SIGPIPE` or holds a
+   fault ignored (`keep_pipe_ignore`), so the "no hook" list was wrong for
+   such a program (found while building the fix, measured RAN at 0.2.34).
+   Not predicted: lupin's `os_exec` RUNS the file (it replaces itself
+   through the same `execvp`).
+3. **Right on the count and the mechanism, wrong on one site.** Eight
+   parks, the kill's wake through the parked registry, the failure arm at
+   the reactor's and the signal hub's waits, the one-frame gap at the
+   channel waits, the host sleep and the host `waitpid` not woken, the
+   scope join returning into the code after the block — all as measured.
+   Wrong: `w.join()` IS woken by the kill — it is a monitor-channel
+   receive — and answered `cancelled` to the joiner's `else` (a failure
+   arm, so three sites, not two). The mechanism built is the one
+   predicted (a context saved at the entry, restored at the shim's exit).
+4. Scored in §4 below.
