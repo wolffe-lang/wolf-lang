@@ -9268,9 +9268,12 @@ impl<'t> Machine<'t> {
                 let pipe_ignored = self.program_pipe_ignored();
                 checked_sig::keep_pipe_ignore(&mut cmd, pipe_ignored);
                 // s260 (#682): that hook makes the spawn `execvp`'s, whose
-                // `ENOEXEC` fallback is `/bin/sh`; the exec is made here.
+                // `ENOEXEC` fallback is `/bin/sh` (and off glibc so is a
+                // hookless spawn's); the exec is made here.
                 #[cfg(unix)]
-                if pipe_ignored && let Some(plan) = ExecPlan::new(prog, rest, &self.env_overlay) {
+                if (pipe_ignored || EXEC_ALWAYS_OURS)
+                    && let Some(plan) = ExecPlan::new(prog, rest, &self.env_overlay)
+                {
                     exec_last(&mut cmd, plan);
                 }
                 let spawned = cmd.spawn();
@@ -9332,9 +9335,12 @@ impl<'t> Machine<'t> {
                 let pipe_ignored = self.program_pipe_ignored();
                 checked_sig::keep_pipe_ignore(&mut cmd, pipe_ignored);
                 // s260 (#682): that hook makes the spawn `execvp`'s, whose
-                // `ENOEXEC` fallback is `/bin/sh`; the exec is made here.
+                // `ENOEXEC` fallback is `/bin/sh` (and off glibc so is a
+                // hookless spawn's); the exec is made here.
                 #[cfg(unix)]
-                if pipe_ignored && let Some(plan) = ExecPlan::new(&exe, &words, &self.env_overlay) {
+                if (pipe_ignored || EXEC_ALWAYS_OURS)
+                    && let Some(plan) = ExecPlan::new(&exe, &words, &self.env_overlay)
+                {
                     exec_last(&mut cmd, plan);
                 }
                 let spawned = cmd.spawn();
@@ -14535,6 +14541,13 @@ impl ExecPlan {
     }
 }
 
+/// `wolf_rt::os::EXEC_ALWAYS_OURS`, mirrored: off glibc a hookless
+/// spawn's `posix_spawn` runs a `#!`-less file under `/bin/sh` (macOS,
+/// CI run 39906953002) or was never measured, so every spawn there ends
+/// with [`exec_last`].
+#[cfg(unix)]
+const EXEC_ALWAYS_OURS: bool = !cfg!(all(target_os = "linux", target_env = "gnu"));
+
 /// Make `plan`'s exec `cmd`'s last hook (registered after every other).
 #[cfg(unix)]
 fn exec_last(cmd: &mut std::process::Command, plan: ExecPlan) {
@@ -14579,8 +14592,11 @@ fn spawn_mapped(
     if map.is_empty() && job.is_none() {
         cmd.stdin(std::process::Stdio::null());
         // s260 (#682): a hook makes the standard library exec with
-        // `execvp`, whose `ENOEXEC` fallback is `/bin/sh`.
-        if pipe_ignored && let Some(plan) = ExecPlan::new(exe, args, env) {
+        // `execvp`, whose `ENOEXEC` fallback is `/bin/sh`; off glibc a
+        // hookless spawn's `posix_spawn` falls back too.
+        if (pipe_ignored || EXEC_ALWAYS_OURS)
+            && let Some(plan) = ExecPlan::new(exe, args, env)
+        {
             exec_last(&mut cmd, plan);
         }
         return cmd.spawn();
