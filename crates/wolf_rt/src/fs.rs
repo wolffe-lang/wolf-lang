@@ -1614,30 +1614,61 @@ thread_local! {
     static COPY_BUF: core::cell::RefCell<Vec<u8>> = const { core::cell::RefCell::new(Vec::new()) };
 }
 
+/// A transfer that failed: the host's error and how many bytes the sink
+/// took before it (0 for every failure but the read/write rung's write).
+type CopyFail = (std::io::Error, usize);
+
 /// One read of at most `n` bytes from `s` and a write of all of it to
 /// `d`: the rung every host has. Descriptor 0 reads through std's buffer
 /// once `read_line` has run ([`STDIN_BUFFERED`]).
-fn copy_loop(src_fd: i64, s: &File, d: &File, n: usize) -> std::io::Result<usize> {
+///
+/// s260 (wolf-lang#642, `[os.fs.copy]`, R-s260-1): a write that fails
+/// after the read has answered bytes writes as many as the sink takes,
+/// then puts the source back by the shortfall (a seek of `-(read -
+/// written)` from its current offset), so the source stands exactly past
+/// what was written and the next read meets the bytes again. A source
+/// that cannot seek (a pipe, a terminal, descriptor 0 read ahead into
+/// std's buffer) cannot be put back: the shortfall is lost there, as it
+/// is for `fs_read_chunk` then a failed `fs_write_chunk`. The count
+/// written travels beside the error.
+fn copy_loop(src_fd: i64, s: &File, d: &File, n: usize) -> Result<usize, CopyFail> {
+    use std::io::Seek as _;
     COPY_BUF.with(|b| {
         let mut buf = b.borrow_mut();
         if buf.len() < COPY_BUF_BYTES {
             buf.resize(COPY_BUF_BYTES, 0);
         }
         let want = &mut buf[..n.min(COPY_BUF_BYTES)];
-        let k = if src_fd == 0 && STDIN_BUFFERED.load(std::sync::atomic::Ordering::Relaxed) {
-            std::io::stdin().lock().read(want)?
+        let buffered = src_fd == 0 && STDIN_BUFFERED.load(std::sync::atomic::Ordering::Relaxed);
+        let k = if buffered {
+            std::io::stdin().lock().read(want).map_err(|e| (e, 0))?
         } else {
             let mut g = s;
             loop {
                 match g.read(want) {
                     Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
-                    r => break r?,
+                    r => break r.map_err(|e| (e, 0))?,
                 }
             }
         };
-        if k > 0 {
-            let mut w = d;
-            w.write_all(&want[..k])?;
+        let mut w = 0;
+        let mut out = d;
+        while w < k {
+            let fail = match out.write(&want[w..k]) {
+                Ok(0) => std::io::Error::from(std::io::ErrorKind::WriteZero),
+                Ok(m) => {
+                    w += m;
+                    continue;
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
+                Err(e) => e,
+            };
+            if !buffered {
+                let mut g = s;
+                // Best effort: a source that cannot seek keeps its offset.
+                let _ = g.seek(std::io::SeekFrom::Current(-((k - w) as i64)));
+            }
+            return Err((fail, w));
         }
         Ok(k)
     })
@@ -1724,7 +1755,7 @@ mod kernel {
 /// One transfer of at most `n` bytes (`n > 0`). A write to 1 or 2 holds
 /// std's stream lock after a flush, as [`std_write`] does, so the copy
 /// lands in program order with `print`.
-fn copy_once(src_fd: i64, dst_fd: i64, s: &File, d: &File, n: usize) -> std::io::Result<usize> {
+fn copy_once(src_fd: i64, dst_fd: i64, s: &File, d: &File, n: usize) -> Result<usize, CopyFail> {
     let _out = (dst_fd == 1).then(|| {
         let mut l = std::io::stdout().lock();
         let _ = l.flush();
@@ -1759,7 +1790,8 @@ fn copy_once(src_fd: i64, dst_fd: i64, s: &File, d: &File, n: usize) -> std::io:
                     return Ok(k);
                 }
                 kernel::Rung::Refused => level += 1,
-                kernel::Rung::Failed(e) => return Err(e),
+                // A kernel rung that fails moved nothing.
+                kernel::Rung::Failed(e) => return Err((e, 0)),
             }
         }
         remember(RUNG_LOOP);
@@ -1776,6 +1808,9 @@ fn copy_once(src_fd: i64, dst_fd: i64, s: &File, d: &File, n: usize) -> std::io:
 /// handles first (closed or forged is `io`; 0, 1 and 2 are the standard
 /// streams), then `max` (at or below zero answers 0 without the host),
 /// the 1 GiB clamp, and zero bytes moved at a positive `max` is `eof`.
+/// On `io` (s260, wolf-lang#642) `out` holds the bytes the sink took
+/// before the failure — 0 unless the read/write rung's write failed part
+/// way — and the source stands exactly past them ([`copy_loop`]).
 ///
 /// # Safety
 ///
@@ -1799,7 +1834,12 @@ pub unsafe extern "C" fn __wolf_rt_fs_copy_chunk(src: i64, dst: i64, max: i64, o
     }
     let n = (max as u64).min(COPY_CLAMP as u64) as usize;
     match copy_once(src, dst, &s, &d, n) {
-        Err(e) => code_of(&e),
+        // s260 (#642): the count the sink took rides `out` beside the
+        // `io`; the program reads it as the source offset's advance.
+        Err((e, wrote)) => {
+            unsafe { write_word(out, wrote as i64) };
+            code_of(&e)
+        }
         Ok(0) => fs_code::EOF,
         Ok(k) => {
             unsafe { write_word(out, k as i64) };
@@ -2699,6 +2739,136 @@ mod tests {
         }
         assert_eq!(std::fs::read(&b).unwrap(), b"rung zero\nthrough a pipe\n");
         assert_eq!(std::fs::read(&c).unwrap(), b"rung zero\n");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// s260 (#642, `[os.fs.copy]`, R-s260-1): a write that fails on the
+    /// read/write rung loses nothing a seekable source can give back. A
+    /// handle opened for reading only is a sink every host refuses, and on
+    /// linux every kernel rung refuses it first (`EBADF`), so the write
+    /// that fails is the loop's: `io`, `out` 0 (the sink took nothing),
+    /// the write's number in `os_error()`, the source put back to 0, and
+    /// the next copy into a sink that takes them moves all 17 bytes.
+    #[test]
+    fn a_failed_copy_write_puts_the_source_back() {
+        let dir = scratch("copy-failed-write");
+        let a = dir.join("in.txt").display().to_string();
+        let r = dir.join("ro.txt").display().to_string();
+        let b = dir.join("out.txt").display().to_string();
+        std::fs::write(&a, b"alpha\nbeta\ngamma\n").unwrap();
+        std::fs::write(&r, b"").unwrap();
+        let (ap, al) = pair_of(&a);
+        let (rp, rl) = pair_of(&r);
+        let (bp, bl) = pair_of(&b);
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        unsafe {
+            let src = __wolf_rt_fs_open(ap, al, fs_mode::READ);
+            let ro = __wolf_rt_fs_open(rp, rl, fs_mode::READ);
+            out[0] = -1;
+            assert_eq!(__wolf_rt_fs_copy_chunk(src, ro, 262_144, o), fs_code::IO);
+            assert_eq!(out[0], 0, "the sink took nothing");
+            assert_ne!(__wolf_rt_os_error(), 0, "the write's number is kept");
+            #[cfg(target_os = "linux")]
+            assert_eq!(
+                COPY_RUNG.with(core::cell::Cell::get).2,
+                RUNG_LOOP,
+                "every kernel rung refused the pairing"
+            );
+            assert_eq!(__wolf_rt_fs_tell(src, o), fs_code::OK);
+            assert_eq!(out[0], 0, "the source was put back by all 17 bytes");
+            let dst = __wolf_rt_fs_open(bp, bl, fs_mode::WRITE);
+            assert_eq!(__wolf_rt_fs_copy_chunk(src, dst, 262_144, o), fs_code::OK);
+            assert_eq!(out[0], 17, "a retry meets every byte");
+            for fd in [src, ro, dst] {
+                assert_eq!(__wolf_rt_fs_close(fd), fs_code::OK);
+            }
+        }
+        assert_eq!(std::fs::read(&b).unwrap(), b"alpha\nbeta\ngamma\n");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// s260 (#642): t06's witness at the runtime — a 17-byte file into
+    /// `/dev/full` refuses `copy_file_range`, `sendfile` and `splice` and
+    /// fails on the loop's write with `ENOSPC`; the source stays at 0,
+    /// and so it does on the second call, which the remembered rung sends
+    /// straight to the loop.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_copy_into_dev_full_keeps_its_bytes() {
+        let dir = scratch("copy-dev-full");
+        let a = dir.join("in.txt").display().to_string();
+        std::fs::write(&a, b"alpha\nbeta\ngamma\n").unwrap();
+        let (ap, al) = pair_of(&a);
+        let (fp, fl) = pair_of("/dev/full");
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        unsafe {
+            let src = __wolf_rt_fs_open(ap, al, fs_mode::READ);
+            let full = __wolf_rt_fs_open(fp, fl, fs_mode::WRITE);
+            assert!(full >= FIRST_HANDLE as i64, "/dev/full opens");
+            for call in 0..2 {
+                out[0] = -1;
+                assert_eq!(__wolf_rt_fs_copy_chunk(src, full, 262_144, o), fs_code::IO);
+                assert_eq!(out[0], 0, "call {call}: the sink took nothing");
+                assert_eq!(__wolf_rt_os_error(), i64::from(libc::ENOSPC));
+                assert_eq!(COPY_RUNG.with(core::cell::Cell::get).2, RUNG_LOOP);
+                assert_eq!(__wolf_rt_fs_tell(src, o), fs_code::OK);
+                assert_eq!(out[0], 0, "call {call}: nothing read is lost");
+            }
+            for fd in [src, full] {
+                assert_eq!(__wolf_rt_fs_close(fd), fs_code::OK);
+            }
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// s260 (#642): a sink that takes PART of the chunk. A non-blocking
+    /// pipe with one page free takes 4 KiB of a 10,000-byte chunk and then
+    /// answers `EAGAIN`: the call is `io` with the count the sink took in
+    /// `out`, and the source stands exactly past that count — put back by
+    /// the shortfall, not by the whole read. (The loop rung is seeded for
+    /// the pair: a file into a pipe is `splice` on linux.)
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_partial_copy_write_puts_back_only_the_shortfall() {
+        use std::io::Read as _;
+        use std::os::fd::FromRawFd as _;
+        let dir = scratch("copy-partial-write");
+        let a = dir.join("in.bin").display().to_string();
+        let bytes: Vec<u8> = (0..=255u8).cycle().take(10_000).collect();
+        std::fs::write(&a, &bytes).unwrap();
+        let (ap, al) = pair_of(&a);
+        let mut out = [0i64; 1];
+        let o = out.as_mut_ptr() as i64;
+        unsafe {
+            let mut fds = [0i32; 2];
+            assert_eq!(libc::pipe(fds.as_mut_ptr()), 0);
+            let fl = libc::fcntl(fds[1], libc::F_GETFL);
+            assert_eq!(libc::fcntl(fds[1], libc::F_SETFL, fl | libc::O_NONBLOCK), 0);
+            let page = [0u8; 4096];
+            while libc::write(fds[1], page.as_ptr().cast(), page.len()) > 0 {}
+            let mut rd = std::fs::File::from_raw_fd(fds[0]);
+            let mut sink = [0u8; 4096];
+            rd.read_exact(&mut sink).unwrap();
+            let src = __wolf_rt_fs_open(ap, al, fs_mode::READ);
+            let dst = mint_file(std::fs::File::from_raw_fd(fds[1]));
+            COPY_RUNG.with(|c| c.set((src, dst, RUNG_LOOP)));
+            out[0] = -1;
+            assert_eq!(__wolf_rt_fs_copy_chunk(src, dst, 10_000, o), fs_code::IO);
+            let took = out[0];
+            assert!(
+                (1..10_000).contains(&took),
+                "the sink took part of the chunk: {took}"
+            );
+            assert_eq!(__wolf_rt_os_error(), i64::from(libc::EAGAIN));
+            assert_eq!(__wolf_rt_fs_tell(src, o), fs_code::OK);
+            assert_eq!(out[0], took, "the source stands past what was written");
+            for fd in [src, dst] {
+                assert_eq!(__wolf_rt_fs_close(fd), fs_code::OK);
+            }
+            drop(rd);
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 
