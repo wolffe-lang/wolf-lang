@@ -6637,6 +6637,10 @@ impl<'t> Lowerer<'t> {
         if callee.kind == SyntaxKind::PathExpr && self.text(callee.span) == "os_cwd" {
             return self.is_str_or_str_row(e.span);
         }
+        // s261: the invocation name is copied into the ambient region.
+        if callee.kind == SyntaxKind::PathExpr && self.text(callee.span) == "env_arg0" {
+            return self.is_str_or_str_row(e.span);
+        }
         if !self.is_str_expr(e.span) {
             return false;
         }

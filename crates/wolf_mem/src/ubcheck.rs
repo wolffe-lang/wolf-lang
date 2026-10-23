@@ -272,7 +272,9 @@ pub enum Echo {
 
 /// What a checked run is FOR, beyond its budget and its entry (s250).
 #[derive(Debug, Clone, Copy, Default)]
-pub struct RunOpts {
+pub struct RunOpts<'a> {
+    /// Complete byte argv, including argv[0]; empty when not supplied.
+    pub argv: &'a [Vec<u8>],
     /// See [`Echo`].
     pub echo: Echo,
     /// The run is a `wolf test` test (s250, wolf-lang#810): `os_exe()`
@@ -1553,11 +1555,9 @@ struct Machine<'t> {
     /// `io`). `os_kill` does NOT tombstone: kill-then-wait is the
     /// natural pair and the wait observes the `signal` outcome.
     children: Vec<Option<std::process::Child>>,
-    /// The program's argv (s40 `env_args`): conform-run supplies none
-    /// — the checked lane's default is empty, mirroring the stdin
-    /// posture (the native lane reads the process's real argv; `wolf
-    /// run file.lu args…` passes them through).
-    args: Vec<String>,
+    /// Complete byte argv, supplied by RunOpts; default empty, never
+    /// the compiler process's arguments. Text readers decode on demand.
+    args: Vec<Vec<u8>>,
     /// Machine-local environment overlay (s40 `env_set`): checked
     /// writes land HERE, never in the host process's environment —
     /// the checked machine is a threaded test host and `setenv` is
@@ -2580,7 +2580,7 @@ pub fn run_checked_fn_with(
     budget: Budget,
     stdin: &str,
     entry: &str,
-    opts: RunOpts,
+    opts: RunOpts<'_>,
 ) -> Result<RunOutcome, NotYet> {
     run_checked_with_opts(pkg, tc, budget, stdin, entry, 0, opts)
 }
@@ -2599,14 +2599,14 @@ pub fn run_checked_seeded(
     run_checked_with_opts(pkg, tc, budget, stdin, entry, seed, RunOpts::default())
 }
 
-fn run_checked_with_opts(
+pub fn run_checked_with_opts(
     pkg: &Package,
     tc: &Typecheck,
     budget: Budget,
     stdin: &str,
     entry: &str,
     seed: u64,
-    opts: RunOpts,
+    opts: RunOpts<'_>,
 ) -> Result<RunOutcome, NotYet> {
     // #382: the machine runs on a thread whose stack it sizes itself,
     // never on its caller's. The call-depth budget is a depth the
@@ -2708,7 +2708,7 @@ fn run_checked_fn_here<'t>(
     stdin: &str,
     entry: &str,
     seed: u64,
-    opts: RunOpts,
+    opts: RunOpts<'_>,
     conc: Option<(
         std::sync::Arc<tasks::Hub<'t>>,
         std::sync::mpsc::Sender<tasks::SpawnReq<'t>>,
@@ -2743,6 +2743,7 @@ fn run_checked_fn_here<'t>(
     m.budget = budget;
     m.echo = opts.echo;
     m.under_test = opts.under_test;
+    m.args = opts.argv.to_vec();
     m.stdin = stdin.to_string();
     m.sched = tasks::Sched::new(seed);
     if let Some((hub, spawner)) = conc {
@@ -9072,9 +9073,48 @@ impl<'t> Machine<'t> {
             }
         };
         match name {
-            "env_args" => {
-                let items: Vec<Value> = self.args.iter().cloned().map(Value::Str).collect();
+            "env_arg0" | "env_args" => {
+                let range = if name == "env_arg0" {
+                    0..self.args.len().min(1)
+                } else {
+                    self.args.len().min(1)..self.args.len()
+                };
+                let mut items = Vec::new();
+                for index in range {
+                    let text =
+                        match std::str::from_utf8(&self.args[index]) {
+                            Ok(text) => text.to_string(),
+                            Err(_) => return self.trap_with(
+                                "argument-utf8",
+                                "os.env.argv",
+                                span,
+                                Some(format!(
+                                    "argument {index} is not UTF-8; read it with env_args_bytes()"
+                                )),
+                            ),
+                        };
+                    self.charge_mem(text.len() as u64)?;
+                    items.push(Value::Str(text));
+                }
+                if name == "env_arg0" {
+                    let value = items.pop().unwrap_or(Value::Str(String::new()));
+                    let rid = self.ambient.last().copied().unwrap_or(0);
+                    if let Value::Str(text) = &value {
+                        self.charge_region_bytes(rid, text.len() as u64, span)?;
+                    }
+                    return Ok(Flow::Val(value));
+                }
+                let id = self.mint_list(items, span)?;
+                Ok(Flow::Val(Value::List(id)))
+            }
+            "env_args_bytes" => {
                 self.charge_mem(self.args.iter().map(|a| a.len() as u64).sum())?;
+                let mut items = Vec::new();
+                for index in 0..self.args.len() {
+                    let bytes = self.args[index].iter().copied().map(Value::Byte).collect();
+                    let inner = self.mint_list(bytes, span)?;
+                    items.push(Value::List(inner));
+                }
                 let id = self.mint_list(items, span)?;
                 Ok(Flow::Val(Value::List(id)))
             }
@@ -12084,7 +12124,7 @@ impl<'t> Machine<'t> {
             // host operation (json is pure computation), errors are
             // the declared D30 rows, and the comptime sandbox is the
             // one refusal site.
-            "env_args" | "env_get" | "env_set" | "env_vars" | "os_cwd" | "os_exe" | "os_cpus"
+            "env_arg0" | "env_args_bytes" | "env_args" | "env_get" | "env_set" | "env_vars" | "os_cwd" | "os_exe" | "os_cpus"
             | "os_exit"
             | "os_spawn" | "os_spawn_with" | "os_wait" | "os_kill" | "os_signal_listen"
             | "os_spawn_fds" | "os_pipe" | "os_chdir" | "os_isatty"
