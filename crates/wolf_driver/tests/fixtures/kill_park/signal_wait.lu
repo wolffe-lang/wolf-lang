@@ -1,0 +1,35 @@
+//! member: false
+//! s260 (wolf-lang#683, `[conc.proc.kill]` step 1) — `os_signal_wait`
+//! on a meaning nobody raises.
+//! The clause: the killed proc runs no further user code, so nothing it
+//! would print after the park appears; the join answers `killed`.
+
+fn parked() -> int {
+    os_signal_listen(16384) else |_| { return 1 }
+    let m = os_signal_wait(16384) else |_| {
+        print("else-arm-ran")
+        -7
+    }
+    print("after-park-ran {m}")
+    0
+}
+
+fn main() -> !int {
+    
+    let w = spawn proc parked()
+    time_sleep_ms(300)
+    let t0 = time_now_ms()
+    w.kill()
+    let dt = time_now_ms() - t0
+    var how = "normal"
+    let _v = w.join() else |e| match e {
+        killed => { how = "killed"; 0 },
+        cancelled => { how = "cancelled"; 0 },
+        error => { how = "error"; 0 },
+        fault => { how = "fault"; 0 },
+    }
+    time_sleep_ms(100)
+    let slow = if dt >= 1000 then "slow" else "prompt"
+    print("join: {how}; kill {slow}")
+    0
+}

@@ -1,0 +1,37 @@
+//! member: false
+//! s260 (wolf-lang#683, `[conc.proc.kill]` step 1) — `os_wait` on a
+//! child that sleeps 2 s: the host's `waitpid`, which no kill can end —
+//! the proc leaves when the child does, and the kill waits for that
+//! (`slow`, R-s260-2).
+//! The clause: the killed proc runs no further user code, so nothing it
+//! would print after the park appears; the join answers `killed`.
+
+fn parked() -> int {
+    let h = os_spawn(["sleep", "2"]) else |_| { return 1 }
+    let s = os_wait(h) else |_| {
+        print("else-arm-ran")
+        -1
+    }
+    print("after-park-ran {s}")
+    0
+}
+
+fn main() -> !int {
+    
+    let w = spawn proc parked()
+    time_sleep_ms(300)
+    let t0 = time_now_ms()
+    w.kill()
+    let dt = time_now_ms() - t0
+    var how = "normal"
+    let _v = w.join() else |e| match e {
+        killed => { how = "killed"; 0 },
+        cancelled => { how = "cancelled"; 0 },
+        error => { how = "error"; 0 },
+        fault => { how = "fault"; 0 },
+    }
+    time_sleep_ms(100)
+    let slow = if dt >= 1000 then "slow" else "prompt"
+    print("join: {how}; kill {slow}")
+    0
+}

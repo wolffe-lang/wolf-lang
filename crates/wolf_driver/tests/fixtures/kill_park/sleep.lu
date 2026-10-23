@@ -1,0 +1,32 @@
+//! member: false
+//! s260 (wolf-lang#683, `[conc.proc.kill]` step 1) —
+//! `time_sleep_ms(3000)`: until s260 a host sleep the kill could not
+//! end — the proc ran on after it and the kill waited it out (`slow`).
+//! The clause: the killed proc runs no further user code, so nothing it
+//! would print after the park appears; the join answers `killed`.
+
+fn parked() -> int {
+    time_sleep_ms(3000)
+    print("after-park-ran")
+    0
+}
+
+fn main() -> !int {
+    
+    let w = spawn proc parked()
+    time_sleep_ms(300)
+    let t0 = time_now_ms()
+    w.kill()
+    let dt = time_now_ms() - t0
+    var how = "normal"
+    let _v = w.join() else |e| match e {
+        killed => { how = "killed"; 0 },
+        cancelled => { how = "cancelled"; 0 },
+        error => { how = "error"; 0 },
+        fault => { how = "fault"; 0 },
+    }
+    time_sleep_ms(100)
+    let slow = if dt >= 1000 then "slow" else "prompt"
+    print("join: {how}; kill {slow}")
+    0
+}

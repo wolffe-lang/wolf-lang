@@ -1,0 +1,40 @@
+//! member: false
+//! s260 (wolf-lang#683, `[conc.proc.kill]` step 1) — a one-arm `select`
+//! one frame down, the same gap.
+//! The clause: the killed proc runs no further user code, so nothing it
+//! would print after the park appears; the join answers `killed`.
+
+fn inner() -> int {
+    let ch = channel[int](0)
+    var got = 0
+    select {
+        v from ch => { got = v },
+    }
+    got
+}
+
+fn parked() -> int {
+    let v = inner()
+    print("after-park-ran {v}")
+    0
+}
+
+fn main() -> !int {
+    
+    let w = spawn proc parked()
+    time_sleep_ms(300)
+    let t0 = time_now_ms()
+    w.kill()
+    let dt = time_now_ms() - t0
+    var how = "normal"
+    let _v = w.join() else |e| match e {
+        killed => { how = "killed"; 0 },
+        cancelled => { how = "cancelled"; 0 },
+        error => { how = "error"; 0 },
+        fault => { how = "fault"; 0 },
+    }
+    time_sleep_ms(100)
+    let slow = if dt >= 1000 then "slow" else "prompt"
+    print("join: {how}; kill {slow}")
+    0
+}

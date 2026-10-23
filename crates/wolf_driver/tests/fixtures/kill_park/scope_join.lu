@@ -1,0 +1,37 @@
+//! member: false
+//! s260 (wolf-lang#683, `[conc.proc.kill]` step 1) — a `scope { }`
+//! whose task is parked in a receive: the scope's join, then the code
+//! after the block.
+//! The clause: the killed proc runs no further user code, so nothing it
+//! would print after the park appears; the join answers `killed`.
+
+fn parked() -> int {
+    scope s {
+        s.spawn(fn() {
+            let ch = channel[int](0)
+            let _v = ch.recv() else |_| { return }
+        })
+    }
+    print("after-park-ran")
+    0
+}
+
+fn main() -> !int {
+    
+    let w = spawn proc parked()
+    time_sleep_ms(300)
+    let t0 = time_now_ms()
+    w.kill()
+    let dt = time_now_ms() - t0
+    var how = "normal"
+    let _v = w.join() else |e| match e {
+        killed => { how = "killed"; 0 },
+        cancelled => { how = "cancelled"; 0 },
+        error => { how = "error"; 0 },
+        fault => { how = "fault"; 0 },
+    }
+    time_sleep_ms(100)
+    let slow = if dt >= 1000 then "slow" else "prompt"
+    print("join: {how}; kill {slow}")
+    0
+}

@@ -1,0 +1,44 @@
+//! member: false
+//! s260 (wolf-lang#683, `[conc.proc.kill]` step 1) — `net_read` one
+//! frame down: the read's `else` and the caller after it.
+//! The clause: the killed proc runs no further user code, so nothing it
+//! would print after the park appears; the join answers `killed`.
+
+fn inner(sock: int) -> str {
+    let got = net_read(sock, 64) else |_| {
+        print("else-arm-ran")
+        "else"
+    }
+    got
+}
+
+fn parked(sock: int) -> int {
+    net_deadline(sock, 60000) else |_| {}
+    let got = inner(sock)
+    print("after-park-ran [{got}]")
+    0
+}
+
+fn main() -> !int {
+    
+    let l = net_listen("127.0.0.1:0")?
+    let p = net_port(l)?
+    let cli = net_connect("127.0.0.1:{p}")?
+    let srv = net_accept(l)?
+    let w = spawn proc parked(srv)
+    time_sleep_ms(300)
+    let t0 = time_now_ms()
+    w.kill()
+    let dt = time_now_ms() - t0
+    var how = "normal"
+    let _v = w.join() else |e| match e {
+        killed => { how = "killed"; 0 },
+        cancelled => { how = "cancelled"; 0 },
+        error => { how = "error"; 0 },
+        fault => { how = "fault"; 0 },
+    }
+    time_sleep_ms(100)
+    let slow = if dt >= 1000 then "slow" else "prompt"
+    print("join: {how}; kill {slow}")
+    0
+}
