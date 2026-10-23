@@ -41,15 +41,15 @@ succeeded and every other job was skipped.
 
 | run | tier | jobs selected by the planner |
 |---|---|---|
-| ordinary pull-request run | `tier pr` | `plan-test`, `lint-test`, `fuzz-smoke` |
-| pull request with `full-matrix`, trunk push, or dispatch with no jobs/tier | `tier full` | `plan-test`, `lint-test`, `fuzz-smoke`, `build-test`, `freebsd-check` (all selectable jobs except `native-macos`) |
+| pull request with PR-class paths and no full-class path or tier label | `tier pr` | `plan-test`, `lint-test`, `fuzz-smoke` |
+| pull request with `full-matrix`, push to `trunk`, dispatch with `tier=full` or with no jobs/tier, or pull request with an unclassified/unreadable path (including no paths) | `tier full` | `plan-test`, `lint-test`, `fuzz-smoke`, `build-test`, `freebsd-check` (all selectable jobs except `native-macos`) |
 | nightly, dispatch with `tier=release`, or pull request with `release-matrix` | `tier release` | `plan-test`, `lint-test`, `native-macos`, `fuzz-smoke`, `build-test`, `freebsd-check` (every selectable job) |
 | prose-only pull request, or planner's label no-op cases | `tier noop` | none |
-| dispatch naming jobs | `tier partial` | only the named dependency-closed jobs |
+| dispatch naming dependency-closed jobs | `tier partial` | only the named jobs |
 
 `plan`, `tier` and `nightly-red` are workflow jobs but are not selectable; `tier` is the verdict job and `nightly-red` runs after it. The three `native-macos` shards are in `tier release`, not `tier full`.
 
-- **Merge gates (ruling #104):** `Footprint: notes` needs the audit only; `Footprint: module` needs a green `tier pr`; `Footprint: cross-cutting` needs the `full-matrix` label and a green `tier full` at the final head. Every module or cross-cutting PR also needs a green `tier pr` before merge.
+- **Merge gates:** `Footprint: notes` needs the audit only; `Footprint: module` needs a green `tier pr`; `Footprint: cross-cutting` needs the `full-matrix` label and a green `tier full` at the final head. Every module or cross-cutting PR also needs a green `tier pr` before merge.
 - Open the PR **without** the label (`opened` and `labeled` together start
   two full runs, and the second cancels the first). Push until the head is
   the one to merge, then `gh pr edit <N> --add-label full-matrix` and wait.
