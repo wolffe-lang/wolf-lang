@@ -1,0 +1,17 @@
+#903 addendum, before the helper change (2026-10-23)
+
+Ruling from the coordinator: fix the inherited-descriptor test flake in
+this lane, as its own commit. Run a release-only test alone 50 times
+before/after under taskset -c 4-7; before has at least one red, after none.
+
+Prediction: when File::create(out) returns fd 5, dup2(5,5) leaves the
+source's FD_CLOEXEC bit set. exec closes it, and runtime pipes can reuse
+5; fs_adopt then reports io instead of adopting the file. Reserving fd
+3 and 4 in an isolated test subprocess makes its out file land on 5,
+so the release-only witness should fail before the fix on every run.
+Clearing FD_CLOEXEC on the child-owned target after dup2 should make
+50/50 pass, without changing runtime behavior or test concurrency.
+
+Only subprocess-owned fds are changed. The 50-run loops use throwaway
+network-less containers, cpuset 4-7. The pre-fix whole gauntlet in flight
+is not evidence for the new final head. No gate is disabled or serialized.
