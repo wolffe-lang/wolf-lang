@@ -1,0 +1,52 @@
+head=f48f30de051057595284cf4ade83a182c34b00d3 Fri Oct 23 03:34:48 PM UTC 2026
+unchanged focused RSS run 1/5
+
+running 1 test
+copy_int: VmHWM 2968 kB at 20000 turns, 2936 kB at 40000
+copy_int: VmHWM 3000 kB at 20000 turns, 2920 kB at 40000
+test a_loop_keeping_a_scalar_is_flat ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.20s
+
+focused-rc=0
+unchanged focused RSS run 2/5
+
+running 1 test
+copy_int: VmHWM 2928 kB at 20000 turns, 2980 kB at 40000
+copy_int: VmHWM 3000 kB at 20000 turns, 2956 kB at 40000
+test a_loop_keeping_a_scalar_is_flat ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.21s
+
+focused-rc=0
+unchanged focused RSS run 3/5
+
+running 1 test
+copy_int: VmHWM 2968 kB at 20000 turns, 2992 kB at 40000
+copy_int: VmHWM 2960 kB at 20000 turns, 2956 kB at 40000
+test a_loop_keeping_a_scalar_is_flat ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.20s
+
+focused-rc=0
+unchanged focused RSS run 4/5
+
+running 1 test
+copy_int: VmHWM 2912 kB at 20000 turns, 2956 kB at 40000
+copy_int: VmHWM 2960 kB at 20000 turns, 2972 kB at 40000
+test a_loop_keeping_a_scalar_is_flat ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.19s
+
+focused-rc=0
+unchanged focused RSS run 5/5
+
+running 1 test
+copy_int: VmHWM 3004 kB at 20000 turns, 2988 kB at 40000
+copy_int: VmHWM 2928 kB at 20000 turns, 2992 kB at 40000
+test a_loop_keeping_a_scalar_is_flat ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 9 filtered out; finished in 1.20s
+
+focused-rc=0
+focused-rss-red=0/5

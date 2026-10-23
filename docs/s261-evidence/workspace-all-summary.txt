@@ -1,0 +1,9 @@
+local-validation-head=f48f30de051057595284cf4ade83a182c34b00d3 Fri Oct 23 03:09:57 PM UTC 2026
+stage-release-rc=0
+workspace-all-rc=101 Fri Oct 23 03:27:08 PM UTC 2026
+command: taskset -c 4-7 cargo test --workspace --no-fail-fast
+Every workspace target and doc-test ran; exactly one failed test:
+test a_loop_keeping_a_scalar_is_flat ... FAILED
+All count pins and later targets passed. Native scalar-copy RSS measured 2924->3012 KiB at 20000->40000 turns (4.5056 B/turn, limit <4).
+No threshold or code was changed. Same executable passed five unchanged focused reruns, native and LLVM each time; raw samples in rss-followup.log.
+This nonzero run is not presented as a green. The whole gauntlet must pass at the committed validation head before any push.
