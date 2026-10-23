@@ -86,6 +86,8 @@ pub mod trap_code {
     pub const DEADLOCK: i32 = 12;
     /// Physical stack exhaustion, uncontained ([conf.trap.stack]).
     pub const STACK_OVERFLOW: i32 = 13;
+    /// A text argv reader met an argument that is not UTF-8 ([os.env.argv]).
+    pub const ARGUMENT_UTF8: i32 = 14;
 }
 
 /// The vocabulary name of a trap code (`trap(<name>)` in verdicts).
@@ -104,6 +106,7 @@ pub fn trap_kind_name(code: i32) -> &'static str {
         trap_code::UB => "ub",
         trap_code::DEADLOCK => "deadlock",
         trap_code::STACK_OVERFLOW => "stack-overflow",
+        trap_code::ARGUMENT_UTF8 => "argument-utf8",
         _ => "unknown",
     }
 }
@@ -186,9 +189,18 @@ fn try_contain_trap(kind: i32) {
 /// Callable from any thread at any time; takes no pointers.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_trap(kind: i32) -> ! {
+    trap_with_message(kind, "")
+}
+
+/// The ordinary contained trap path, with an optional human-readable
+/// detail on its own line, preserving the first-line conformance ABI.
+pub(crate) fn trap_with_message(kind: i32, message: &str) -> ! {
     try_contain_trap(kind);
     let mut err = std::io::stderr().lock();
     write_trap_report(&mut err, kind, None);
+    if !message.is_empty() {
+        let _ = writeln!(err, "  {message}");
+    }
     let _ = err.flush();
     drop(err);
     // s248 (`[os.term.restore]`): the registered terminal restore, after
@@ -1122,6 +1134,7 @@ mod tests {
             (trap_code::BOUNDS, "bounds"),
             (trap_code::UB, "ub"),
             (trap_code::DEADLOCK, "deadlock"),
+            (trap_code::ARGUMENT_UTF8, "argument-utf8"),
         ] {
             assert_eq!(trap_kind_name(code), name);
         }
