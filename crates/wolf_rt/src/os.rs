@@ -2637,7 +2637,10 @@ mod tests {
             let mut t = ChildTable::new();
             let rows: [(&str, Result<i64, ProcErr>); 4] = [
                 ("spawn_fds", t.spawn_fds(e, &[], &[(1, Some(fd))])),
-                ("spawn_job", t.spawn_job(e, &[], &[(1, Some(fd))], &JobOpts::PLAIN)),
+                (
+                    "spawn_job",
+                    t.spawn_job(e, &[], &[(1, Some(fd))], &JobOpts::PLAIN),
+                ),
                 ("spawn_with", t.spawn_with(e, &[], &[fd])),
                 ("spawn", t.spawn(&[e])),
             ];
@@ -2645,14 +2648,22 @@ mod tests {
                 assert_eq!(r, Err("io"), "{what} {e}");
             }
             // The word is the last call's: each row above set it.
-            assert_eq!(crate::fs::__wolf_rt_os_error(), i64::from(libc::ENOEXEC), "{e}");
+            assert_eq!(
+                crate::fs::__wolf_rt_os_error(),
+                i64::from(libc::ENOEXEC),
+                "{e}"
+            );
         }
-        assert!(!marker.exists(), "nothing ran the #!-less file under /bin/sh");
+        assert!(
+            !marker.exists(),
+            "nothing ran the #!-less file under /bin/sh"
+        );
         let c = ctl.to_str().unwrap();
         let mut t = ChildTable::new();
         for h in [
             t.spawn_fds(c, &[], &[(1, Some(fd))]).unwrap(),
-            t.spawn_job(c, &[], &[(1, Some(fd))], &JobOpts::PLAIN).unwrap(),
+            t.spawn_job(c, &[], &[(1, Some(fd))], &JobOpts::PLAIN)
+                .unwrap(),
             t.spawn_with(c, &[], &[fd]).unwrap(),
             t.spawn(&[c]).unwrap(),
         ] {
@@ -2670,10 +2681,20 @@ mod tests {
     #[test]
     fn spawn_fds_keeps_the_enoexec_number() {
         let [d, nos, _, _, marker] = noexec_files("shim");
-        assert_eq!(spawn_fds_shim(nos.to_str().unwrap(), &[], &[1, 1]), -proc_code::IO);
+        assert_eq!(
+            spawn_fds_shim(nos.to_str().unwrap(), &[], &[1, 1]),
+            -proc_code::IO
+        );
         assert_eq!(crate::fs::__wolf_rt_os_error(), i64::from(libc::ENOEXEC));
-        assert_eq!(spawn_fds_shim(nos.to_str().unwrap(), &[], &[1]), -proc_code::INVALID);
-        assert_eq!(crate::fs::__wolf_rt_os_error(), 0, "the shape is decided first");
+        assert_eq!(
+            spawn_fds_shim(nos.to_str().unwrap(), &[], &[1]),
+            -proc_code::INVALID
+        );
+        assert_eq!(
+            crate::fs::__wolf_rt_os_error(),
+            0,
+            "the shape is decided first"
+        );
         assert_eq!(
             spawn_fds_shim("wolf-s260-no-such-program", &[], &[1, 1]),
             -proc_code::NOT_FOUND
