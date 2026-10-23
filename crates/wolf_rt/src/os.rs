@@ -8,7 +8,7 @@
 //! process. Everything else mirrors: `env_vars` is sorted `K=V` with
 //! non-UTF-8 entries skipped, `env_get` rows are `missing`/`utf8`,
 //! `env_set` rejects `=`/NUL/empty names as `invalid`, argv drops the
-//! program name.
+//! program name in `env_args`; `env_arg0` and `env_args_bytes` retain it.
 //!
 //! The process trio (`os_spawn`/`os_wait`/`os_kill`) crossed at s107
 //! (c26's last crossing, wolf-lang#118): a [`ChildTable`] over
@@ -49,15 +49,49 @@ use std::sync::Mutex;
 use crate::list::push_str;
 use crate::str::{ambient_copy, view, write_pair, write_word};
 
-/// `env_args() -> List[str]` — the program's arguments, program name
-/// dropped (argv[0] is the binary's path, not the program's input).
-/// Non-UTF-8 arguments are skipped (unreachable through the str
-/// tier).
+/// Decode an argument without Rust's `env::args` panic. The index is
+/// the OS argv index, including the program name at zero.
+fn argument_text(a: &std::ffi::OsStr, index: usize) -> &str {
+    a.to_str().unwrap_or_else(|| {
+        crate::native::trap_with_message(
+            crate::native::trap_code::ARGUMENT_UTF8,
+            &format!("argument {index} is not UTF-8; read it with env_args_bytes()"),
+        )
+    })
+}
+
+/// `env_arg0() -> str`: the invocation name, never the resolved executable.
+/// An absent argv[0] answers empty text. Invalid UTF-8 traps by index.
+///
+/// # Safety
+/// `out` must address 16 writable bytes.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_env_arg0(out: i64) {
+    let a = std::env::args_os().next().unwrap_or_default();
+    let text = argument_text(&a, 0);
+    let p = crate::str::region_copy(text.as_bytes());
+    unsafe { write_pair(out, p as i64, text.len() as i64) };
+}
+
+/// `env_args() -> List[str]`: argv[1..], trapping on invalid UTF-8.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_env_args() -> i64 {
     let hdr = crate::list::new_list(16);
-    for a in std::env::args().skip(1) {
-        push_str(hdr, &a);
+    for (index, a) in std::env::args_os().enumerate().skip(1) {
+        push_str(hdr, argument_text(&a, index));
+    }
+    hdr as i64
+}
+
+/// `env_args_bytes() -> List[List[byte]]`: all argv, argv[0] first.
+/// Unix bytes are verbatim; Windows uses the host's WTF-8 encoding,
+/// matching `fs_read_dir_entries`'s OS-string representation.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_env_args_bytes() -> i64 {
+    let hdr = crate::list::new_list(8);
+    for a in std::env::args_os() {
+        let inner = crate::list::from_bytes(a.as_encoded_bytes()) as i64;
+        crate::list::push_raw(hdr, (&raw const inner).cast());
     }
     hdr as i64
 }
