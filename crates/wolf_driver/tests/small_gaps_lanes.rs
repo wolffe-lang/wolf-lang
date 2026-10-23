@@ -4,13 +4,10 @@
 //! `cargo xtask corpus` runs a `phase: run` row natively and a refusal
 //! row on the default lane; this gate runs each of s252's rows on the
 //! checked machine, native and release, and asserts one answer. lupin
-//! (the PAIRING sibling) is asserted at what 0.1.54 answered and 0.1.55,
-//! the pairing since 0.2.34, answers alike on every row: where it
-//! agrees, the same answer; where it owes a clause (`[mem.static.3]`'s
-//! `wrapping[T]`, `[mem.region.scalar]`) or diverges
-//! (`numlit_wrapping_countdown.lu`: it accepts an `int` count on a
-//! wrapping shift), its own answer, so a lupin that follows — or moves
-//! the other way — is loud here and its column gets rewritten with it.
+//! (the PAIRING sibling) now mirrors these rows from 0.1.56 (is79).
+//! 0.1.54 and 0.1.55 keep their exact pre-mirror verdicts and countdown
+//! bytes. An unlisted release must match the three wolfgang lanes;
+//! a future regression is loud rather than inheriting an old waiver.
 
 mod lane_exit;
 
@@ -26,12 +23,14 @@ struct Obs {
     verdict: String,
     stdout: String,
     warnings: Vec<String>,
+    version: String,
 }
 
 fn parse_obs(bytes: &[u8], what: &str) -> Obs {
     let rec: serde_json::Value =
         serde_json::from_slice(bytes).unwrap_or_else(|e| panic!("{what} record parses: {e}"));
     Obs {
+        version: rec["impl_version"].as_str().unwrap_or("").to_string(),
         verdict: rec["verdict"].as_str().unwrap_or("").to_string(),
         stdout: rec["stdout_inline"].as_str().unwrap_or("").to_string(),
         warnings: rec["warnings"]
@@ -115,7 +114,11 @@ fn corpus(rel: &str) -> PathBuf {
     p
 }
 
-/// What lupin (0.1.54 and 0.1.55) answers, when it is not the three lanes'.
+/// is79 shipped these mirrors in 0.1.56; the two earlier releases keep
+/// their measured answers. Every unlisted release is held to the mirror.
+const PRE_MIRROR_LUPIN: &[&str] = &["0.1.54", "0.1.55"];
+
+/// The pre-is79 answer, or the answer shared by all releases.
 enum Lupin {
     Same,
     Verdict(&'static str),
@@ -140,17 +143,25 @@ fn run_row(rel: &str, want: &str, warns: &[&str], lupin: Lupin, why: &str) {
                 assert_eq!(l.verdict, "exit(0)", "{rel}: lupin's verdict");
                 assert_eq!(l.stdout, want, "{rel}: lupin's answer");
             }
-            Lupin::Verdict(v) => assert_eq!(
+            Lupin::Verdict(v) if PRE_MIRROR_LUPIN.contains(&l.version.as_str()) => assert_eq!(
                 l.verdict, v,
                 "{rel}: lupin's column moved — rewrite it here, in the row's \
                  header and in the clause's lupin sentence"
             ),
-            Lupin::Run(out) => {
+            Lupin::Run(out) if PRE_MIRROR_LUPIN.contains(&l.version.as_str()) => {
                 assert_eq!(l.verdict, "exit(0)", "{rel}: lupin's verdict");
                 assert_eq!(
                     l.stdout, out,
                     "{rel}: lupin's divergence moved — rewrite its column"
                 );
+            }
+            Lupin::Verdict(_) | Lupin::Run(_) => {
+                assert_eq!(
+                    l.verdict, "exit(0)",
+                    "{rel}: lupin {} mirrors is79",
+                    l.version
+                );
+                assert_eq!(l.stdout, want, "{rel}: lupin {} mirrors is79", l.version);
             }
         }
     }
