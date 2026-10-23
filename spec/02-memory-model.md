@@ -163,7 +163,7 @@ vocabulary.
      two indices are equal at run time — `xs[i]` against `xs[k + 1]`
      with `k = i - 1`.
 
-  **Where the machines stand (wolf 0.2.34; lupin 0.1.55).** wolfgang makes moves element-granular: items
+  **Where the machines stand (wolf 0.2.35; lupin 0.1.56).** wolfgang makes moves element-granular: items
   1(a)–(c) hold for a moved element, item 3 holds (wolf-lang#460, where
   any index store revived a moved sibling and native aliased it, is
   fixed), and R3 holds for a store through the same plain local of a
@@ -182,7 +182,7 @@ vocabulary.
   lend of `m[k]` is a typing question (the read is `V ! {none}`,
   `[mem.map.absent]`, E0401 today) that this clause does not answer.
   lupin separates elements at run time and is the oracle for which
-  element a move empties and for the exclusivity trap; at 0.1.55 every
+  element a move empties and for the exclusivity trap; at 0.1.56 every
   read of a moved element traps (wolffe-lang/wolf-interp#141), a whole
   read of a place holding a moved part traps (wolffe-lang/wolf-interp#143),
   a non-`Copy` value read out of a `Map` moves out of it
@@ -929,7 +929,9 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   none at run time; refusals removed. **lupin** 0.1.54 and 0.1.55 run the `mut`
   shapes and the copied call result, and trap `region-fault` on the
   literal, binding, enum, `for`, `take`-store and frozen-write shapes:
-  wolf-interp owes this clause. Witnesses
+  those are the pre-mirror answers. From 0.1.56, lupin implements this
+  clause (is79, wolf-interp#271): the scalar-only shapes run, while
+  storage keeps its region and its faults. Witnesses
   `corpus/memory/region_scalar_value.lu`, `region_scalar_mut.lu`,
   `region_scalar_store.lu`, `region_scalar_freeze.lu`, and what is
   still refused: `region_scalar_list_store.lu` (E1004),
@@ -1054,7 +1056,7 @@ fact, polymorphism defaults), `.docs/refs/papers/verona-refcaps.pdf`
   verdict that falls (measured over yew's and aspen's trees in s255's
   note). The repair for a refused program is one word at the store, or
   `reset` then pushes into storage the value already owns. **lupin**
-  0.1.55 shares `copy`'s bytes: it traps `region-fault` where a copied
+  0.1.55 and 0.1.56 share `copy`'s bytes: each traps `region-fault` where a copied
   `str` is read back after its block (`region_outer_write_str_push`,
   `_struct`, `_map`, `_field`), runs the scalar-push, index and clean-call
   rows to the same answer, and resolves neither `reserve` nor `reset`
