@@ -9265,14 +9265,17 @@ impl<'t> Machine<'t> {
                 // s225: and with the program's environment.
                 overlay_child_env(&mut cmd, &self.env_overlay);
                 // s232: and an ignored BROKEN_PIPE still ignored.
-                checked_sig::keep_pipe_ignore(&mut cmd, self.program_pipe_ignored());
+                let pipe_ignored = self.program_pipe_ignored();
+                checked_sig::keep_pipe_ignore(&mut cmd, pipe_ignored);
+                // s260 (#682): that hook makes the spawn `execvp`'s, whose
+                // `ENOEXEC` fallback is `/bin/sh`; the exec is made here.
+                #[cfg(unix)]
+                if pipe_ignored && let Some(plan) = ExecPlan::new(prog, rest, &self.env_overlay) {
+                    exec_last(&mut cmd, plan);
+                }
                 let spawned = cmd.spawn();
                 match spawned {
-                    Err(e) => Ok(tag(match e.kind() {
-                        std::io::ErrorKind::NotFound => "not_found",
-                        std::io::ErrorKind::PermissionDenied => "denied",
-                        _ => "io",
-                    })),
+                    Err(e) => Ok(tag(spawn_refusal(&e))),
                     Ok(child) => {
                         let h = self.children.len() as i64;
                         self.children.push(Some(child));
@@ -9326,14 +9329,17 @@ impl<'t> Machine<'t> {
                 // s225: and with the program's environment.
                 overlay_child_env(&mut cmd, &self.env_overlay);
                 // s232: and an ignored BROKEN_PIPE still ignored.
-                checked_sig::keep_pipe_ignore(&mut cmd, self.program_pipe_ignored());
+                let pipe_ignored = self.program_pipe_ignored();
+                checked_sig::keep_pipe_ignore(&mut cmd, pipe_ignored);
+                // s260 (#682): that hook makes the spawn `execvp`'s, whose
+                // `ENOEXEC` fallback is `/bin/sh`; the exec is made here.
+                #[cfg(unix)]
+                if pipe_ignored && let Some(plan) = ExecPlan::new(&exe, &words, &self.env_overlay) {
+                    exec_last(&mut cmd, plan);
+                }
                 let spawned = cmd.spawn();
                 match spawned {
-                    Err(e) => Ok(tag(match e.kind() {
-                        std::io::ErrorKind::NotFound => "not_found",
-                        std::io::ErrorKind::PermissionDenied => "denied",
-                        _ => "io",
-                    })),
+                    Err(e) => Ok(tag(spawn_refusal(&e))),
                     Ok(child) => {
                         let h = self.children.len() as i64;
                         self.children.push(Some(child));
@@ -9401,11 +9407,7 @@ impl<'t> Machine<'t> {
                     &self.env_overlay,
                     self.program_pipe_ignored(),
                 ) {
-                    Err(e) => Ok(tag(match e.kind() {
-                        std::io::ErrorKind::NotFound => "not_found",
-                        std::io::ErrorKind::PermissionDenied => "denied",
-                        _ => "io",
-                    })),
+                    Err(e) => Ok(tag(spawn_refusal(&e))),
                     Ok(child) => {
                         let h = self.children.len() as i64;
                         self.children.push(Some(child));
@@ -9590,11 +9592,7 @@ impl<'t> Machine<'t> {
                     &self.env_overlay,
                     self.program_pipe_ignored(),
                 ) {
-                    Err(e) => Ok(tag(match e.kind() {
-                        std::io::ErrorKind::NotFound => "not_found",
-                        std::io::ErrorKind::PermissionDenied => "denied",
-                        _ => "io",
-                    })),
+                    Err(e) => Ok(tag(spawn_refusal(&e))),
                     Ok(child) => {
                         let h = self.children.len() as i64;
                         self.children.push(Some(child));
@@ -12155,6 +12153,15 @@ impl<'t> Machine<'t> {
                     n if n.starts_with("time_") || n == "os_clock_ns" => {
                         self.time_builtin(n, argv, e.span)
                     }
+                    // s260 (#682): the spawn family and the exec keep the
+                    // program step's host number, as the fs family does.
+                    n @ ("os_spawn" | "os_spawn_with" | "os_spawn_fds" | "os_spawn_job"
+                    | "os_exec") => {
+                        FS_HOST_ERROR.with(|c| c.set(0));
+                        let r = self.os_builtin(n, argv, e.span);
+                        self.last_os_error = FS_HOST_ERROR.with(std::cell::Cell::get);
+                        r
+                    }
                     n => self.os_builtin(n, argv, e.span),
                 };
             }
@@ -14369,6 +14376,8 @@ fn exec_replace(
             let _ = std::env::set_current_dir(d);
         }
         undo(&saved, &staged);
+        // s260 (#682): the failed `execve`'s number, for `os_error()`.
+        FS_HOST_ERROR.with(|c| c.set(i64::from(errno)));
         Err(match errno {
             libc::ENOENT | libc::ENOTDIR => "not_found",
             libc::EACCES | libc::EPERM => "denied",
@@ -14406,6 +14415,137 @@ fn overlay_child_env(cmd: &mut std::process::Command, overlay: &HashMap<String, 
     }
 }
 
+/// s260 (#682): a spawn the host refused, as its row, the host's number
+/// kept for `os_error()` — `wolf_rt::os::spawn_refusal`'s twin.
+fn spawn_refusal(e: &std::io::Error) -> &'static str {
+    fs_host_error(e);
+    match e.kind() {
+        std::io::ErrorKind::NotFound => "not_found",
+        std::io::ErrorKind::PermissionDenied => "denied",
+        _ => "io",
+    }
+}
+
+/// s260 (wolf-lang#682, `[os.proc.exec]`): the HAND MIRROR of
+/// `wolf_rt::os::ExecPlan` — wolf_mem and wolf_rt may not see each other
+/// (D15). A spawn with a `pre_exec` hook is forked by the standard
+/// library and exec'd with the C library's `execvp`, which runs a file
+/// the kernel refuses with `ENOEXEC` under `/bin/sh`; so a hooked spawn's
+/// LAST step is the exec, made here with `execve` alone over the
+/// candidates (the name as written when it holds `/`, else each `PATH`
+/// directory), `argv` and the child's whole environment (the host's,
+/// this machine's overlay applied), all built before the fork.
+/// `ENOENT`/`ENOTDIR` try the next candidate, `EACCES` is remembered,
+/// anything else is the spawn's error.
+#[cfg(unix)]
+struct ExecPlan {
+    paths: Vec<std::ffi::CString>,
+    _argv: Vec<std::ffi::CString>,
+    argp: Vec<*const libc::c_char>,
+    _envs: Vec<std::ffi::CString>,
+    envp: Vec<*const libc::c_char>,
+}
+
+// SAFETY: the pointers address the plan's own `CString`s, which never
+// move and live as long as the plan; the child reads them after `fork`.
+#[cfg(unix)]
+unsafe impl Send for ExecPlan {}
+#[cfg(unix)]
+unsafe impl Sync for ExecPlan {}
+
+#[cfg(unix)]
+impl ExecPlan {
+    fn new(exe: &str, args: &[String], overlay: &HashMap<String, Option<String>>) -> Option<Self> {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt as _;
+        let mut env: Vec<(Vec<u8>, Vec<u8>)> = std::env::vars_os()
+            .map(|(k, v)| (k.as_bytes().to_vec(), v.as_bytes().to_vec()))
+            .collect();
+        for (k, v) in overlay {
+            env.retain(|(ek, _)| ek.as_slice() != k.as_bytes());
+            if let Some(v) = v {
+                env.push((k.as_bytes().to_vec(), v.as_bytes().to_vec()));
+            }
+        }
+        let search = env
+            .iter()
+            .find(|(k, _)| k.as_slice() == b"PATH")
+            .map(|(_, v)| v.clone())
+            .unwrap_or_else(|| EXEC_DEFAULT_PATH.as_bytes().to_vec());
+        let mut paths = Vec::new();
+        if exe.contains('/') {
+            paths.push(CString::new(exe).ok()?);
+        } else {
+            for dir in search.split(|&b| b == b':') {
+                let mut p = if dir.is_empty() {
+                    b"./".to_vec()
+                } else {
+                    let mut d = dir.to_vec();
+                    while d.len() > 1 && d.last() == Some(&b'/') {
+                        d.pop();
+                    }
+                    d.push(b'/');
+                    d
+                };
+                p.extend_from_slice(exe.as_bytes());
+                paths.push(CString::new(p).ok()?);
+            }
+        }
+        let argv: Vec<CString> = std::iter::once(exe)
+            .chain(args.iter().map(String::as_str))
+            .map(|a| CString::new(a).ok())
+            .collect::<Option<_>>()?;
+        let envs: Vec<CString> = env
+            .into_iter()
+            .map(|(mut k, v)| {
+                k.push(b'=');
+                k.extend_from_slice(&v);
+                CString::new(k).ok()
+            })
+            .collect::<Option<_>>()?;
+        let mut argp: Vec<*const libc::c_char> = argv.iter().map(|c| c.as_ptr()).collect();
+        argp.push(std::ptr::null());
+        let mut envp: Vec<*const libc::c_char> = envs.iter().map(|c| c.as_ptr()).collect();
+        envp.push(std::ptr::null());
+        Some(ExecPlan {
+            paths,
+            _argv: argv,
+            argp,
+            _envs: envs,
+            envp,
+        })
+    }
+
+    /// In the child, after `fork`: `execve` each candidate; only
+    /// async-signal-safe calls over arrays built before the fork.
+    fn exec(&self) -> std::io::Error {
+        let mut denied = false;
+        for p in &self.paths {
+            // SAFETY: the plan's own NUL-terminated strings and
+            // NULL-terminated pointer arrays.
+            unsafe { libc::execve(p.as_ptr(), self.argp.as_ptr(), self.envp.as_ptr()) };
+            let e = std::io::Error::last_os_error();
+            match e.raw_os_error() {
+                Some(libc::ENOENT | libc::ENOTDIR) => {}
+                Some(libc::EACCES) => denied = true,
+                _ => return e,
+            }
+        }
+        std::io::Error::from_raw_os_error(if denied { libc::EACCES } else { libc::ENOENT })
+    }
+}
+
+/// Make `plan`'s exec `cmd`'s last hook (registered after every other).
+#[cfg(unix)]
+fn exec_last(cmd: &mut std::process::Command, plan: ExecPlan) {
+    use std::os::unix::process::CommandExt as _;
+    // SAFETY: `execve` and an `errno` read over prepared arrays — the
+    // async-signal-safe `pre_exec` contract.
+    unsafe {
+        cmd.pre_exec(move || Err(plan.exec()));
+    }
+}
+
 /// s215 (`[os.proc.fds]`): spawn `exe` with `args` in `cwd` (the
 /// process's own when `None`) and the child's descriptors placed as
 /// `map` says — `wolf_rt::os::ChildTable::spawn_fds`'s mechanics,
@@ -14438,6 +14578,11 @@ fn spawn_mapped(
     }
     if map.is_empty() && job.is_none() {
         cmd.stdin(std::process::Stdio::null());
+        // s260 (#682): a hook makes the standard library exec with
+        // `execvp`, whose `ENOEXEC` fallback is `/bin/sh`.
+        if pipe_ignored && let Some(plan) = ExecPlan::new(exe, args, env) {
+            exec_last(&mut cmd, plan);
+        }
         return cmd.spawn();
     }
     // s219 (`[os.proc.job]`): the group, the terminal and the defaults,
@@ -14514,6 +14659,10 @@ fn spawn_mapped(
             }
             Ok(())
         });
+    }
+    // s260 (#682): last, the exec itself — never `execvp`'s shell.
+    if let Some(plan) = ExecPlan::new(exe, args, env) {
+        exec_last(&mut cmd, plan);
     }
     let child = cmd.spawn()?;
     // The parent's half of the double call; a failure is ignored (the
