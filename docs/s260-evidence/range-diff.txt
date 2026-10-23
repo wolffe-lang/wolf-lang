@@ -1,0 +1,66 @@
+# s260: git range-diff --no-color e2ed1607..0c177bb7 cf0c13d3..88eb24b4
+# (the series at the green full run 39924169946, against it rebased onto v0.2.35's trunk)
+ 1:  9f7e7b74 =  1:  a6005a8a docs: s260 note — the prediction, before the first change
+ 2:  8895a240 =  2:  c37dde5b spec: [os.fs.copy] — a failed write puts the source back by the shortfall; the side by rule (#642, R-s260-1)
+ 3:  f17ccdec =  3:  58413250 wolf_rt: fs_copy_chunk's read/write rung writes what the sink takes and seeks the source back by the shortfall; the count beside io (#642)
+ 4:  c6245a42 =  4:  6d941197 wolf_mem: the checked machine's fs_copy_chunk writes what the sink takes and puts the source back by the shortfall (#642)
+ 5:  7d1afb86 =  5:  25558e05 corpus: fs/copy_chunk_failed_write and fs/copy_chunk_dev_full — a failed copy write keeps the source's bytes (#642)
+ 6:  a01e70d6 =  6:  b2c2d7fb wolf_driver: copy_write_lanes — the failed-write rows on every machine, lupin 0.1.55 pinned; t06's /dev/full witness on native and release (#642)
+ 7:  0e35f064 =  7:  6032462e wolf_rt: a hooked spawn execs the program itself, never execvp's /bin/sh fallback; the spawn family keeps the program step's number in os_error (#682)
+ 8:  0328b321 =  8:  15a352b0 wolf_rt: os_exec keeps a failed execve's number in os_error (ENOEXEC for a #!-less file) (#682)
+ 9:  bccb875e =  9:  b3370aa2 wolf_mem: the checked machine's hooked spawns exec the program themselves; the spawn family and os_exec keep the program step's number (#682)
+10:  236f68d2 = 10:  2f11cd66 wolf_driver: spawn_noexec_lanes — the #!-less file is io with ENOEXEC on every spawn and os_exec, every machine; lupin 0.1.55 pinned (#682)
+11:  6c12f4b2 = 11:  aaef2c53 wolf_rt: a killed compiled task leaves at its park — entries saved by run_compiled, frames discarded by leave_if_killed; the task layer's parks (channels, select, when, scope and proc joins, the kill, the lowered poll) end with it (#683)
+12:  8ed0240f = 12:  d36c7d37 wolf_rt: the net shims that park (read, write, accept, wait, the dials) leave a killed compiled task at their exit (#683)
+13:  9db6c784 = 13:  64fd0687 wolf_rt: the signal hub's waits leave a killed compiled task at their exit (#683)
+14:  79f93a06 = 14:  c6fe705a wolf_rt: time_sleep_ms in a task is a sleep the kill ends, and a killed compiled task leaves after it (#683)
+15:  abf785c1 = 15:  cf254e54 wolf_rt: rustfmt the s260 spawn tests (#682)
+16:  424a26b7 = 16:  64908bed wolf_rt: the child waits leave a killed compiled task when the host returns (#683)
+17:  f27ebf3b = 17:  15722ffc wolf_driver: kill_park_lanes — one row per parking site, native and release (and taskset -c 0-3), the checked machine, lupin the reference (#683)
+18:  c53259cc ! 18:  15c32c3e CHANGELOG: s260 — the failed copy write, the #!-less spawn, the killed park (#642, #682, #683)
+    @@ Commit message
+         CHANGELOG: s260 — the failed copy write, the #!-less spawn, the killed park (#642, #682, #683)
+     
+      ## CHANGELOG.md ##
+    -@@
+    +@@ CHANGELOG.md: by assumption.
+      
+    - ## Unreleased
+    + ### Changes recorded before the release pairing
+      
+     +s260 — the three wrong answers t06 replayed (wolf-lang#642, #682, #683).
+     +
+19:  73293c36 = 19:  3b70b731 wolf_driver: rustfmt the three s260 lane tests
+20:  17d63b82 = 20:  952b6b2a docs: s260 evidence — the rows at 0.2.34 and at the head, the rungs under strace, the probes
+21:  c66302ea = 21:  b7c259c7 docs: s260 note — the three items measured, the parking sites, the rulings, the prediction scored
+22:  f81c0269 = 22:  c5c9d5ec wolf_lex: token-stream snapshots of the two s260 copy rows
+23:  811c5fb9 = 23:  aa39fba2 wolf_parse: declaration snapshots of the two s260 copy rows
+24:  7111883b = 24:  7bfcc402 wolf_wir: the lowering ledger gains the two s260 copy rows (both lower)
+25:  e2ffde03 = 25:  21a0a52e wolf_driver: kill_park_lanes runs on unix (its os_wait row starts the host's sleep)
+26:  44731438 = 26:  d7caba0c docs: s260 evidence — the gauntlet's summary at 7111883b, the plants with --no-fail-fast
+27:  282d38d4 = 27:  f61ef2d2 docs: s260 note — the rebase, the gauntlet, the anchors, the plants
+28:  7ac4874d = 28:  54068c11 docs: s260 note — boreutils' cat and pelt's exec read against the fixes
+29:  8e552993 = 29:  7293e682 docs: s260 evidence — the differ's counts and every moved ledger line
+30:  1e57fc34 = 30:  41401802 docs: s260 note — the differ, and the fourth prediction scored
+31:  f1b8f769 = 31:  61e8150b docs: s260 note — the issues to close and to file; the README read
+32:  3d0bb03c = 32:  e2432ea3 wolf_rt: the leave and the kill-ended sleep through crate-level wrappers gated as task is, so hosts without the task layer (freebsd) compile (#683)
+33:  27e4312a = 33:  8a19a137 wolf_rt: the failed-write crate test reads windows' raw code for a read-only sink, denied, which lowering coarsens to io (#642)
+34:  d0456901 = 34:  234230a5 wolf_driver: copy_write_lanes' strict skip is the linux witness's alone (no dead code on macOS and windows)
+35:  a5a05581 = 35:  ec1e92ce wolf_rt: off glibc every spawn ends with the runtime's own exec, since macOS's posix_spawn runs a #!-less file under /bin/sh (#682)
+36:  2c529ab7 = 36:  1b504e8b wolf_mem: the checked machine's spawns end with its own exec off glibc too, mirroring the runtime (#682)
+37:  b1386fbd ! 37:  a39a19f8 changelog: s260 — off glibc every spawn's exec is the runtime's (#682)
+    @@ Commit message
+         changelog: s260 — off glibc every spawn's exec is the runtime's (#682)
+     
+      ## CHANGELOG.md ##
+    -@@
+    +@@ CHANGELOG.md: by assumption.
+      s260 — the three wrong answers t06 replayed (wolf-lang#642, #682, #683).
+      
+      - **A copy whose write fails keeps what it read** (`[os.fs.copy]`, #642): the read/write rung writes what the sink takes and puts the source back by the shortfall, so after any `io` the source stands exactly past the bytes written (`cat f > /dev/full` left it at 17 with nothing to retry); the checked machine does the same.
+38:  3ce36b3d = 38:  7ca23439 docs: s260 evidence — the cross-target check and clippy against trunk
+39:  96d69657 = 39:  2aa8e126 docs: s260 note — the full run's three reds, macOS's posix_spawn fallback, the second prediction rescored
+40:  9b4bf274 = 40:  9a9ae338 docs: s260 note — what the red legs did not reach
+41:  d7c16c8c = 41:  e2cca36f docs: s260 evidence — the red gauntlet's flake and the green rerun
+42:  0c177bb7 = 42:  df91c95a docs: s260 note — the gauntlet after the fold, and the flaky adopt test to file
+ -:  -------- > 43:  88eb24b4 changelog: s260 under a fresh Unreleased above 0.2.35 (the rebase onto v0.2.35 carried it into 0.2.35's section)
