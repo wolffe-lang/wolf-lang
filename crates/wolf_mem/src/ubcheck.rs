@@ -8063,19 +8063,30 @@ impl<'t> Machine<'t> {
                 if bytes.is_empty() {
                     return Ok(tag("eof"));
                 }
-                let wrote = if fs_is_std(dst) {
-                    self.std_write(dst, &bytes)
+                // s260 (#642, `[os.fs.copy]`, R-s260-1): the sink takes
+                // what it takes, and a failed write puts the source back
+                // by the shortfall — the native read/write rung's answer.
+                let taken = if matches!(dst, 1 | 2) {
+                    self.std_write(dst, &bytes).map(|r| match r {
+                        Ok(()) => (bytes.len(), None),
+                        Err(e) => (0, Some(e)),
+                    })
+                } else if fs_is_std(dst) {
+                    std_stream_dup(dst).map(|f| write_counted(&f, &bytes))
                 } else {
                     usize::try_from(dst)
                         .ok()
                         .and_then(|i| self.files.get_mut(i))
                         .and_then(Option::as_mut)
-                        .map(|f| f.write_all(&bytes))
+                        .map(|f| write_counted(f, &bytes))
                 };
-                match wrote {
+                match taken {
                     None => Ok(tag("io")),
-                    Some(Err(e)) => Ok(tag(&errtag(&e, &["io"]))),
-                    Some(Ok(())) => Ok(Flow::Val(Value::Int(bytes.len() as i64))),
+                    Some((n, None)) => Ok(Flow::Val(Value::Int(n as i64))),
+                    Some((n, Some(e))) => {
+                        self.copy_put_back(src, bytes.len() - n);
+                        Ok(tag(&errtag(&e, &["io"])))
+                    }
                 }
             }
             _ => self.refuse("this io/fs builtin", span),
@@ -8118,6 +8129,32 @@ impl<'t> Machine<'t> {
     /// stream `fd`. 1 and 2 are this machine's CAPTURE (the record's
     /// stdout and the `eprint` channel), in program order with `print`
     /// by construction; 0 is the `wolf` process's descriptor.
+    /// s260 (#642, `[os.fs.copy]`): put a copy's source back by the
+    /// `short` bytes it read and the sink did not take. Descriptor 0's
+    /// handed input buffer moves its own position back; a real stream or
+    /// a table file seeks (best effort: a source that cannot seek keeps
+    /// its offset, and the shortfall is lost, as the clause says).
+    fn copy_put_back(&mut self, src: i64, short: usize) {
+        use std::io::{Seek as _, SeekFrom};
+        if short == 0 {
+            return;
+        }
+        let back = SeekFrom::Current(-(short as i64));
+        if src == 0 && !self.stdin.is_empty() {
+            self.stdin_pos = self.stdin_pos.saturating_sub(short);
+        } else if fs_is_std(src) {
+            if let Some(f) = std_stream_dup(src) {
+                let _ = (&f).seek(back);
+            }
+        } else if let Some(f) = usize::try_from(src)
+            .ok()
+            .and_then(|i| self.files.get_mut(i))
+            .and_then(Option::as_mut)
+        {
+            let _ = f.seek(back);
+        }
+    }
+
     fn std_write(&mut self, fd: i64, bytes: &[u8]) -> Option<std::io::Result<()>> {
         use std::io::Write as _;
         match fd {
@@ -16341,6 +16378,24 @@ pub fn host_error_text(code: i64) -> String {
 /// Descriptor 0, 1 or 2, duplicated (`dup`; `DuplicateHandle`): the
 /// duplicate shares the stream's offset, so a seek through it is a
 /// seek of the stream, and dropping it closes only the duplicate.
+/// s260 (#642): write `bytes` to `f` as far as it takes them — the count
+/// written and the error that stopped the write, if one did (`write_all`
+/// answers the error alone, and the count is the copy's answer).
+fn write_counted(f: &std::fs::File, bytes: &[u8]) -> (usize, Option<std::io::Error>) {
+    use std::io::Write as _;
+    let mut w = 0;
+    let mut g = f;
+    while w < bytes.len() {
+        match g.write(&bytes[w..]) {
+            Ok(0) => return (w, Some(std::io::ErrorKind::WriteZero.into())),
+            Ok(n) => w += n,
+            Err(e) if e.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(e) => return (w, Some(e)),
+        }
+    }
+    (w, None)
+}
+
 fn std_stream_dup(fd: i64) -> Option<std::fs::File> {
     #[cfg(unix)]
     {
