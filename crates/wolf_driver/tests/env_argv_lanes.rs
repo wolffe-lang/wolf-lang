@@ -85,7 +85,6 @@ fn checked(file: &Path, argv: &[&[u8]]) -> (serde_json::Value, Output) {
     let record = serde_json::from_slice(&out.stdout).expect("one record");
     (record, out)
 }
-#[cfg(unix)]
 fn build(file: &Path, release: bool) -> PathBuf {
     let binary = file.parent().unwrap().join(if cfg!(windows) {
         "program.exe"
@@ -110,7 +109,6 @@ fn build(file: &Path, release: bool) -> PathBuf {
     );
     binary
 }
-#[cfg(unix)]
 fn success(out: &Output, expected: &[u8]) {
     assert!(
         out.status.success(),
@@ -119,6 +117,23 @@ fn success(out: &Output, expected: &[u8]) {
         String::from_utf8_lossy(&out.stderr)
     );
     assert_eq!(out.stdout, expected);
+}
+
+#[test]
+fn native_utf8_and_empty_arguments_agree_on_every_host() {
+    if isolated("native_utf8_and_empty_arguments_agree_on_every_host") {
+        return;
+    }
+    let dir = root("native-portable");
+    let file = source(
+        &dir,
+        "fn main() -> !int {\n    let text = env_args()\n    let argv = env_args_bytes()\n    let name = str_from_utf8(argv[0])?\n    let first = str_from_utf8(argv[1])?\n    let same = name == env_arg0() && first == text[0]\n    print(\"{same} {text.len} {argv.len} {text[1].len} {argv[2].len}\")\n    0\n}\n",
+    );
+    let binary = build(&file, false);
+    success(
+        &Command::new(binary).args(["snow é", ""]).output().unwrap(),
+        b"true 2 3 0 0\n",
+    );
 }
 
 #[test]
