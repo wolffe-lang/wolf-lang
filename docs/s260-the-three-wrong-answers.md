@@ -232,7 +232,11 @@ anywhere in `wolf_rt`'s spawn path. A spawn with a `pre_exec` hook is
 forked by the standard library and exec'd with `execvp`, and
 `execvp(3)` documents the fallback: when `execve` answers `ENOEXEC` it
 runs the file under the shell. A spawn with no hook takes the standard
-library's `posix_spawn` path, which on glibc does not fall back. The
+library's `posix_spawn` path, which on glibc does not fall back — and on
+macOS does: the macos-latest leg of full run 39906953002 measured
+`./noshebang spawn_fds[]: RAN status 0` and `./noshebang spawn: RAN
+status 0` (`./junk`: `RAN status 126`, the shell's refusal) beside `io`
+with 8 for both hooked rows. The
 hooked spawns are more than the issue's: every non-empty map, every job
 spawn, a non-empty inherit set, and — found while building the fix —
 ANY spawn of a process that ignores `SIGPIPE` or holds a fault ignored,
@@ -249,7 +253,10 @@ candidates with `execve` alone — `ENOENT`/`ENOTDIR` try the next,
 among them) is the spawn's error, which the standard library carries
 back. The documented contract of `pre_exec` ("run just before the exec
 function is invoked"; an `Err` is the spawn's error) is what this rests
-on. A spawn with no hook keeps `posix_spawn`'s fast path. The spawn
+on. A spawn with no hook keeps `posix_spawn`'s fast path on glibc only,
+where it was measured not to fall back (`os::EXEC_ALWAYS_OURS`): off
+glibc — macOS measured, freebsd and musl not — every spawn ends with the
+plan. The spawn
 family and `os_exec` now keep the program step's host number in
 `os_error()` — cleared on entry, the refusal's number left behind, 0 for
 a refusal decided before the host (the shape, a forged source) — which
@@ -365,6 +372,41 @@ snapshots; each `.snap.new` was read before it was moved into place
 (the lexer and declaration snapshots, and two `lowers` lines in the
 lowering ledger). The commit after `7111883b` makes `kill_park_lanes`
 unix-only, inert on linux.
+
+**The full run's reds, folded in.** Full run 39906953002 (at `f1b8f769`)
+went red on three legs the linux gauntlet cannot see, each fixed by its
+own commit:
+- `cross-check (freebsd x86-64, tier-2)`: E0433 at every new
+  `crate::task::leave_if_killed()` site, because `wolf_rt/src/lib.rs`
+  configures `task` only on linux, macOS and windows. The leave and the
+  kill-ended sleep now go through crate-level wrappers gated as `task` is
+  (a no-op leave and the host sleep where it is configured out),
+  `3d0bb03c`.
+- `build + test (windows-latest)`: the failed-write crate test expected
+  the coarsened `io` from the shim, but the shim answers the host kind and
+  windows refuses a write to a read-only handle as an access refusal,
+  `denied` (2), which lowering coarsens to `io` for the program (the
+  prediction's own "an access refusal on windows"); the test reads the
+  raw code per host, `27e4312a`. And `copy_write_lanes`' strict-skip
+  helper was dead code off linux, `d0456901`. The win64 `enter`/`leave`
+  assembled and passed there (`enter_answers_the_entrys_value`,
+  `a_leave_discards_the_frames_below_the_entry`).
+- `build + test (macos-latest)`: the aarch64 `enter`/`leave` passed (all
+  fifteen `kill_park_lanes` rows, both crate tests) and
+  `copy_write_lanes` passed; `spawn_noexec_lanes` failed on the hookless
+  rows, `posix_spawn`'s fallback (§2). Every spawn off glibc now ends
+  with the runtime's own exec, `a5a05581`, and the checked machine's,
+  `2c529ab7`.
+
+Before the push, in a container on kasumi (each target added to the
+container's toolchain only): `cargo check --workspace --target
+x86_64-unknown-freebsd` exit 0 at `2c529ab7`; `cargo clippy -p wolf_rt -p
+wolf_mem --lib --tests -- -D warnings` for `x86_64-unknown-freebsd`,
+`aarch64-apple-darwin` and `x86_64-pc-windows-gnu` at the head and at
+trunk `e2ed1607`, the (file, message) sets identical on each target —
+apple clean on both (blake3's C objects stubbed, since a check links
+nothing), the freebsd and windows-gnu lints all trunk's; msvc is CI's alone (no
+`ml64.exe` here) (`docs/s260-evidence/cross-clippy.log`).
 
 **The anchors.** `cargo xtask spec-extract` regenerated at the head:
 `spec/anchors.json` byte-identical to trunk `e2ed1607`'s, 693 keys on
@@ -491,7 +533,10 @@ head against 0.2.34: 21 static divergences, trunk's.
    fault ignored (`keep_pipe_ignore`), so the "no hook" list was wrong for
    such a program (found while building the fix, measured RAN at 0.2.34).
    Not predicted: lupin's `os_exec` RUNS the file (it replaces itself
-   through the same `execvp`).
+   through the same `execvp`). Left open and measured wrong-way: macOS's
+   `posix_spawn` falls back too (full run 39906953002), so on macOS the
+   hookless rows RAN at the first fix and the exec is now the runtime's
+   on every spawn off glibc.
 3. **Right on the count and the mechanism, wrong on one site.** Eight
    parks, the kill's wake through the parked registry, the failure arm at
    the reactor's and the signal hub's waits, the one-frame gap at the
