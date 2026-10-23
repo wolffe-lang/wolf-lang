@@ -507,3 +507,46 @@ head against 0.2.34: 21 static divergences, trunk's.
    lupin 0.1.55, which lags — the one line the ledger gains against the
    base, on each tier. Not said: the `/dev/full` row stays out of the
    ledger, because lupin declines the device by name.
+
+## 7. Issues
+
+**To close** (on the merge): wolf-lang#642, #682, #683.
+
+**To file**, each with its witness in this lane's rows:
+
+- **wolf-interp — `fs_copy_chunk`'s failed write loses the bytes**
+  (lupin 0.1.55): the `[os.fs.copy]` sentence to mirror;
+  `fs/copy_chunk_failed_write.lu` is the one hard divergence this lane
+  adds to the pairing ledger, pinned by version and commit in
+  `copy_write_lanes.rs`.
+- **wolf-interp — `os_exec` runs a `#!`-less file under `/bin/sh`, and
+  `os_error()` stays 0 after a spawn or exec refusal** (lupin 0.1.55,
+  `fixtures/spawn_noexec/`): `[os.proc.exec]`'s "no machine re-runs it"
+  and the `ENOEXEC` number; pinned in `spawn_noexec_lanes.rs`.
+- **wolf-lang — `[os.fs.error]`'s "the os family does not at this pin"
+  is stale** (R-s260-3): `os_fork` since s247, the spawn family and
+  `os_exec` since s260 keep the word.
+- **wolf-lang — the parks no kill can end** (R-s260-2): `os_wait`,
+  `os_wait_status`, `os_wait_status_core` (the host's `waitpid` under the
+  child table), the dials, the fs table's pipe and terminal reads and
+  `read_line`; a proc's kill waits for the host (`fixtures/kill_park/
+  os_wait.lu`, `kill slow`).
+- **wolf-lang — a `when` over `Mutex[int]` parameters is E0401**:
+  `fn inner(m: Mutex[int], n: Mutex[int]) -> int { when (m, n) { m += 1 }
+  7 }` answers "this is `Mutex[int]`, but a `when` operand must be
+  `Mutex[_]`", and the call `inner(m, n)` on `Mutex(0)`s "`Mutex[{integer}]`
+  … needs `Mutex[int]`" (wolf 0.2.34, kasumi; found writing the `when`
+  row one frame down, which is why that row is not in the table).
+- **pelt — a `#!`-less file on the plain-command path**: `os_spawn_fds`
+  answers `io` with `ENOEXEC` now, where it ran the file under `/bin/sh`;
+  the plain command should run it as pelt's `exec` already does
+  (XCU 2.9.1.4).
+
+**Not filed** (postures, recorded): the checked machine and lupin
+serialize a host wait with the program, so a proc parked in `os_wait`
+ends `normal` before a kill reaches it; boreutils' `cat` keeps its
+"failed copy, clean fallback" inference, now reached only on a source
+that cannot seek.
+
+**README** read against the pass: nothing it states moved (the windows
+task-layer sentence still holds); current.
