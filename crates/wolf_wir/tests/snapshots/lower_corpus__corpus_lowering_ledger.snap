@@ -168,6 +168,8 @@ ffi.lu: not mem-clean (pre-wir rungs own it)
 fs/bytes_dirs.lu: lowers
 fs/change_rows.lu: lowers
 fs/copy_chunk.lu: lowers
+fs/copy_chunk_dev_full.lu: lowers
+fs/copy_chunk_failed_write.lu: lowers
 fs/error_row.lu: lowers
 fs/fstat.lu: lowers
 fs/hard_link.lu: lowers
