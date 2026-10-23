@@ -1,0 +1,10 @@
+---
+source: crates/wolf_diag/tests/render_snapshots.rs
+assertion_line: 327
+expression: "wolf_diag::render_source_span(span, &sources, &RenderOptions::default())"
+---
+ --> demo.lu:3:2
+  |
+3 |     value.not_compiled()
+  |     ^^^^^^^^^^^^^^^^^^^^
+  |

@@ -315,3 +315,29 @@ fn a_repeated_teach_note_renders_once_per_group() {
     );
     insta::assert_snapshot!("teach_note_grouped", reporter.take_output());
 }
+
+#[test]
+fn refusal_site_uses_the_diagnostic_frame_without_an_error_code() {
+    let src = "fn helper() -> int {\n\tlet value = true\n\tvalue.not_compiled()\n\t0\n}\n";
+    let (sources, file) = one_file(src);
+    let lo = src.find("value.not_compiled").unwrap() as u32;
+    let span = Span::new(file, lo, lo + "value.not_compiled()".len() as u32);
+    assert_eq!(sources.file_name(file), Some("demo.lu"));
+    assert_eq!(sources.line_col(file, lo), Some((3, 2)));
+    insta::assert_snapshot!(
+        "refusal_site",
+        wolf_diag::render_source_span(span, &sources, &RenderOptions::default())
+    );
+}
+
+#[test]
+fn refusal_site_with_no_registered_source_does_not_invent_a_location() {
+    let sources = Sources::new();
+    let file = FileId::from_index(7);
+    assert_eq!(sources.file_name(file), None);
+    assert_eq!(sources.line_col(file, 3), None);
+    assert_eq!(
+        wolf_diag::render_source_span(Span::new(file, 3, 9), &sources, &RenderOptions::default()),
+        " --> file#7 @ bytes 3..9\n"
+    );
+}

@@ -51,7 +51,7 @@ mod render_json;
 pub mod suggest;
 
 pub use registry::{Code, CodeInfo, codes, explain};
-pub use render::{RenderOptions, Sources, render_human};
+pub use render::{RenderOptions, Sources, render_human, render_source_span};
 pub use render_json::{DIAG_SCHEMA_VERSION, render_json_line, render_json_line_with_files};
 
 /// How bad it is. An error rejects meaning and cannot be configured

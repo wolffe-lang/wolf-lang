@@ -88,6 +88,11 @@ impl Sources {
         self.files.get(&file)
     }
 
+    /// The registered display path, shared by human and record renderers.
+    pub fn file_name(&self, file: FileId) -> Option<&str> {
+        self.get(file).map(|entry| entry.name.as_str())
+    }
+
     /// 1-based `(line, col)` of a byte offset in an interned file —
     /// the span spelling a PERSON reads, next to the byte offsets a
     /// machine compares (`[conf.trap.render]`: one span spelling per
@@ -308,6 +313,32 @@ pub fn render_human(d: &Diagnostic, sources: &Sources, opts: &RenderOptions) -> 
         render_suggestion(&mut out, d, sugg, sources, gw, opts, &p);
     }
 
+    out
+}
+
+/// Render a source site without a diagnostic header or error code.
+/// Conservatism refusals name an implementation gap, not a program error,
+/// but use exactly the diagnostic renderer's locus and caret machinery.
+pub fn render_source_span(span: Span, sources: &Sources, opts: &RenderOptions) -> String {
+    let p = Palette::new(opts.color, Severity::Error);
+    let mut out = String::new();
+    let Some(entry) = sources.get(span.file) else {
+        return format!(
+            " --> file#{} @ bytes {}..{}\n",
+            span.file.index(),
+            span.lo,
+            span.hi
+        );
+    };
+    let gw = (entry.index.line_of(end_offset(span)) + 1)
+        .to_string()
+        .len();
+    let anns = [Ann {
+        span,
+        label: String::new(),
+        primary: true,
+    }];
+    render_group(&mut out, entry, &anns, true, gw, opts, &p);
     out
 }
 
