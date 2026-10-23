@@ -1,0 +1,28 @@
+---
+source: crates/wolf_lex/tests/corpus_snapshots.rs
+assertion_line: 41
+expression: lexed.dump(&bytes)
+---
+    lead  InnerDocComment 0..16 "//! member: true"
+    lead  Whitespace 16..17 "\n"
+    lead  InnerDocComment 17..84 "//! Minimal process facade: the same…"
+    lead  Whitespace 84..85 "\n"
+    lead  InnerDocComment 85..145 "//! shipped std.process.Child, witho…"
+    lead  Whitespace 145..147 "\n\n"
+Kw(Pub) 147..150 "pub"
+    trail Whitespace 150..151 " "
+Kw(Struct) 151..157 "struct"
+    trail Whitespace 157..158 " "
+Ident 158..163 "Child"
+    trail Whitespace 163..164 " "
+Punct(LBrace) 164..165 "{"
+    lead  Whitespace 165..170 "\n    "
+Ident 170..174 "slot"
+Punct(Colon) 174..175 ":"
+    trail Whitespace 175..176 " "
+Ident 176..179 "int"
+Punct(Comma) 179..180 ","
+    lead  Whitespace 180..181 "\n"
+Punct(RBrace) 181..182 "}"
+Term 182..183 "\n"
+Eof 183..183 ""

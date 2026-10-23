@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
+expression: dump
+---
+UseDecl 208..224 path=std.process
+FnDecl 225..297 name=main body=Block

@@ -1,0 +1,13 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: gram.amb.brackets
+//!
+//! wolf-lang#890: the imported type is qualified, unlike the missing
+//! bare Child in the mk harness. No child process is started.
+
+use std.process
+
+fn main() -> int {
+    let in_flight = Map[str, process.Child]()
+    0
+}

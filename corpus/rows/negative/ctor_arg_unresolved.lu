@@ -1,0 +1,11 @@
+//! check: fail(E0301)
+//! phase: typecheck
+//! conforms: gram.amb.brackets
+//!
+//! wolf-lang#890: a missing type name in generic application is a
+//! program error, not a conservatism refusal.
+
+fn main() -> int {
+    let in_flight = Map[str, Nope]()
+    0
+}

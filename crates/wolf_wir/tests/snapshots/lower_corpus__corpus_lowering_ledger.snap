@@ -1,5 +1,6 @@
 ---
 source: crates/wolf_wir/tests/lower_corpus.rs
+assertion_line: 362
 expression: "lines.join(\"\\n\")"
 ---
 comptime/align_of_layout.lu: not mem-clean (pre-wir rungs own it)
@@ -865,6 +866,7 @@ resolve/two_mod/main.lu: lowers
 resolve/unused/main.lu: not mem-clean (pre-wir rungs own it)
 rows/coarsen.lu: lowers
 rows/cross_module_arms/main.lu: lowers
+rows/ctor_arg_qualified/main.lu: lowers
 rows/defer_else_handles.lu: lowers
 rows/else_own_failure.lu: lowers
 rows/else_return_tag.lu: lowers
@@ -901,6 +903,7 @@ rows/match_row_nested.lu: lowers
 rows/match_row_payload_tag.lu: lowers
 rows/match_row_try_scrutinee.lu: lowers
 rows/match_row_wild_each_half.lu: lowers
+rows/negative/ctor_arg_unresolved.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/dup_tags.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/errdefer_infallible.lu: not mem-clean (pre-wir rungs own it)
 rows/negative/error_alias_cycle.lu: not mem-clean (pre-wir rungs own it)

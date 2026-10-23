@@ -1,0 +1,7 @@
+//! member: true
+//! Minimal process facade: the same qualified nominal shape as the
+//! shipped std.process.Child, without starting any process.
+
+pub struct Child {
+    slot: int,
+}
