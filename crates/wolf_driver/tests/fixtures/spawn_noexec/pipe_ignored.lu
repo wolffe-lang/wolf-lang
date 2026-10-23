@@ -1,0 +1,27 @@
+//! member: false
+//! s260 (wolf-lang#682) — the plain spawn a hook reaches: a program that
+//! ignores `BROKEN_PIPE` hands the ignore on to its children
+//! (`[os.signal.disp]`), which installs a `pre_exec` hook on even
+//! `os_spawn`, and until s260 that hook made the spawn `execvp`'s, so
+//! the `#!`-less `noshebang` RAN under `/bin/sh` (0.2.34, kasumi).
+
+fn show(what: str, h: int) {
+    let code = os_error()
+    if h >= 0 {
+        let s = os_wait(h) else |_| -99
+        print("{what}: RAN status {s}")
+    } else {
+        let t = if h == -1 then "io" else if h == -2 then "denied" else if h == -4 then "not_found" else "other"
+        print("{what}: {t} os_error={code}")
+    }
+}
+
+fn main() -> int {
+    os_signal_ignore(2048) else |_| { print("ignore refused") }
+    let p = os_spawn(["./noshebang"]) else |e| match e {
+        io => -1, denied => -2, not_found => -4,
+    }
+    show("./noshebang spawn, BROKEN_PIPE ignored", p)
+    print("marker={fs_exists("ran-marker")}")
+    0
+}

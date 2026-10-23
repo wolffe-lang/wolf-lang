@@ -1,0 +1,19 @@
+//! member: false
+//! s260 (wolf-lang#682, `[os.proc.exec]`) — `os_exec` on the `#!`-less
+//! file the harness wrote (`noshebang`, which would write `ran-marker`):
+//! `io` with `ENOEXEC` (8) in `os_error()`, the process still this one.
+
+fn main() -> int {
+    os_exec("./noshebang", ["noshebang"], List[str](), List[int]()) else |e| {
+        let code = os_error()
+        let t = match e {
+            io => "io",
+            denied => "denied",
+            invalid => "invalid",
+            not_found => "not_found",
+            unsupported => "unsupported",
+        }
+        print("exec: {t} os_error={code} marker={fs_exists("ran-marker")}")
+    }
+    0
+}

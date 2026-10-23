@@ -1,0 +1,43 @@
+//! member: false
+//! s260 (wolf-lang#682, `[os.proc.exec]`) — every spawn of the family on
+//! the issue's files, which the harness writes into the working
+//! directory: `noshebang` (text with no `#!` line that would write
+//! `ran-marker` if anything ran it), `junk` (four NUL bytes) and
+//! `control` (`#!/bin/sh`, `exit 7`), all executable. Each row is the
+//! call's answer and `os_error()` after it; `ENOEXEC` is 8 on linux and
+//! macOS. (`pipe_ignored.lu` is the plain spawn a hook reaches.)
+
+fn show(what: str, h: int) {
+    let code = os_error()
+    if h >= 0 {
+        let s = os_wait(h) else |_| -99
+        print("{what}: RAN status {s}")
+    } else {
+        let t = if h == -1 then "io" else if h == -2 then "denied" else if h == -4 then "not_found" else "other"
+        print("{what}: {t} os_error={code}")
+    }
+}
+
+fn main() -> int {
+    let none = List[str]()
+    for exe in ["./noshebang", "./junk", "./control"] {
+        let a = os_spawn_fds(exe, none, [1, 1]) else |e| match e {
+            io => -1, denied => -2, invalid => -3, not_found => -4, unsupported => -5,
+        }
+        show("{exe} spawn_fds[1,1]", a)
+        let b = os_spawn_fds(exe, none, List[int]()) else |e| match e {
+            io => -1, denied => -2, invalid => -3, not_found => -4, unsupported => -5,
+        }
+        show("{exe} spawn_fds[]", b)
+        let c = os_spawn([exe]) else |e| match e {
+            io => -1, denied => -2, not_found => -4,
+        }
+        show("{exe} spawn", c)
+        let j = os_spawn_job(exe, none, [1, 1], -1, -1, 0) else |e| match e {
+            io => -1, denied => -2, invalid => -3, not_found => -4, unsupported => -5,
+        }
+        show("{exe} spawn_job[1,1]", j)
+    }
+    print("marker={fs_exists("ran-marker")}")
+    0
+}
