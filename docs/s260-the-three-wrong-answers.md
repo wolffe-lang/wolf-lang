@@ -412,6 +412,25 @@ apple clean on both (blake3's C objects stubbed, since a check links
 nothing), the freebsd and windows-gnu lints all trunk's; msvc is CI's alone (no
 `ml64.exe` here) (`docs/s260-evidence/cross-clippy.log`).
 
+**The gauntlet after the fold.** `cargo xtask ci` at `96d69657` (same
+settings, kasumi `ev/gauntlet6.log`) went red once at `test`, in a test
+this lane did not touch: `process_calls_lanes::an_inherited_descriptor_is_adopted`
+(s253, #815), its program started without descriptor 5 ("link before:
+pipe:[…]", the signal hub's pipe on 5; `docs/s260-evidence/gauntlet6-red.log`).
+The helper `run_with_five` `dup2`s the out file onto 5 in the child, and
+the one way that leaves the program without 5 is the out file already
+being 5 in the test process: the call then does nothing (dup2(2): the
+same number is returned untouched), so 5 keeps its close-on-exec and the
+exec drops it (inferred from the page and the row, not reproduced);
+nothing since `3d0bb03c` changes a linux spawn
+(`EXEC_ALWAYS_OURS` is false on glibc), and the same test passed in the
+four gauntlets before it. Filed as an issue below, not fixed here. The
+rerun at `9b4bf274` (07:04:55–07:26:29 UTC, `ev/gauntlet7.log`, its step
+and summary lines `s260-evidence/gauntlet7-summary.log`): exit 0, "all
+steps green", 329 test results, none failed; ir-volume 0 regressed;
+differ-self 1,219 files, 0 divergences; lane-coverage floors held; the
+SKIP census the same seven, all the host's.
+
 **The anchors.** `cargo xtask spec-extract` regenerated at the head:
 `spec/anchors.json` byte-identical to trunk `e2ed1607`'s, 693 keys on
 both sides, nothing in either difference — the `[os.fs.copy]` sentence
@@ -586,6 +605,12 @@ head against 0.2.34: 21 static divergences, trunk's.
   `Mutex[_]`", and the call `inner(m, n)` on `Mutex(0)`s "`Mutex[{integer}]`
   … needs `Mutex[int]`" (wolf 0.2.34, kasumi; found writing the `when`
   row one frame down, which is why that row is not in the table).
+- **wolf-lang — `an_inherited_descriptor_is_adopted` is flaky**
+  (`process_calls_lanes.rs`, s253): `run_with_five`'s `dup2(raw, 5)` is a
+  no-op when the out file is already 5 in the test process, so 5 keeps
+  close-on-exec and the program starts without it (inferred; red once in
+  five gauntlets, `s260-evidence/gauntlet6-red.log`); the helper should move a
+  source that sits on 5 (`F_DUPFD` above it) or clear `FD_CLOEXEC` there.
 - **pelt — a `#!`-less file on the plain-command path**: `os_spawn_fds`
   answers `io` with `ENOEXEC` now, where it ran the file under `/bin/sh`;
   the plain command should run it as pelt's `exec` already does
