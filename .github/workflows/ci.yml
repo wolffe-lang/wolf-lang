@@ -234,6 +234,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: the freestanding runtime's target (kw12, libwolf_rt_none.a)
         run: rustup target add x86_64-unknown-none
+      - name: the musl portability target (#886)
+        run: rustup target add x86_64-unknown-linux-musl
+      - name: check the musl build (#886)
+        run: cargo check --workspace --locked --target x86_64-unknown-linux-musl
       - name: the image s236's id and owner witnesses run inside (it
           supplies a C library, sh, id and taskset; the containers
           themselves get no network)

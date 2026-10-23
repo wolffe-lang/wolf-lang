@@ -1733,8 +1733,11 @@ mod sys {
         // SAFETY: a locale made from the name "C" (or none), installed
         // on this thread only for the read and put back; the text is
         // copied out before the lock is let go.
+        // newlocale(3): with a null base, every category absent from
+        // the mask uses POSIX (equivalent to C). A zero mask therefore
+        // makes the whole C locale without libc-specific mask bindings.
         unsafe {
-            let c_locale = libc::newlocale(libc::LC_ALL_MASK, c"C".as_ptr(), std::ptr::null_mut());
+            let c_locale = libc::newlocale(0, c"C".as_ptr(), std::ptr::null_mut());
             let before = if c_locale.is_null() {
                 std::ptr::null_mut()
             } else {
