@@ -453,13 +453,6 @@ struct Expect {
 
 type R<T> = Result<T, NotYet>;
 
-/// Brackets hold expressions (D29); a missing type name is a program
-/// error, while a shape we cannot read as a type is still a refusal.
-enum BracketTypeError {
-    Unresolved { name: String, span: Span },
-    Declined(NotYet),
-}
-
 struct LoopCtx {
     saw_break: bool,
 }
@@ -6633,33 +6626,31 @@ impl<'a> Checker<'a> {
         // arguments; the key is checked where it is spelled (E0418).
         let mut map_key: Option<(TyId, Span)> = None;
         let elem = match (name, ty_nodes.as_slice()) {
-            ("Map", [k, v]) => {
-                let kt = self.container_type_arg(k, name)?;
-                let vt = self.container_type_arg(v, name)?;
-                if matches!(self.kind_of(kt), TyKind::Error)
-                    || matches!(self.kind_of(vt), TyKind::Error)
-                {
-                    if let Some(a) = args {
-                        self.synth_args_loosely(a)?;
-                    }
-                    return Ok(self.error_ty());
+            ("Map", [k, v]) => match (self.type_from_bracket_arg(k), self.type_from_bracket_arg(v))
+            {
+                (Some(kt), Some(vt)) => {
+                    map_key = Some((kt, k.span));
+                    vt
                 }
-                map_key = Some((kt, k.span));
-                vt
-            }
-            (_, [one]) if name != "Map" => {
-                let t = self.container_type_arg(one, name)?;
-                if matches!(self.kind_of(t), TyKind::Error) {
-                    if let Some(a) = args {
-                        self.synth_args_loosely(a)?;
-                    }
-                    return Ok(self.error_ty());
+                _ => {
+                    return Err(NotYet {
+                        construct: "this prelude container instantiation (generic data)",
+                        span: e.span,
+                    });
                 }
-                t
-            }
+            },
+            (_, [one]) if name != "Map" => match self.type_from_bracket_arg(one) {
+                Some(t) => t,
+                None => {
+                    return Err(NotYet {
+                        construct: "this prelude container instantiation (generic data)",
+                        span: e.span,
+                    });
+                }
+            },
             _ => {
                 return Err(NotYet {
-                    construct: "a prelude container with this type-argument count",
+                    construct: "this prelude container instantiation (generic data)",
                     span: e.span,
                 });
             }
@@ -6706,72 +6697,19 @@ impl<'a> Checker<'a> {
     /// (`List[handle Node]`); a bare path resolves as a type head
     /// (prims, generics, named items). Anything else: not a type.
     fn type_from_bracket_arg(&mut self, node: &GreenNode) -> Option<TyId> {
-        self.bracket_type_arg(node).ok()
-    }
-
-    /// Only container constructors claim E0301 here; other consumers keep
-    /// their existing diagnostics/refusals for bracket expressions.
-    fn container_type_arg(&mut self, node: &GreenNode, container: &str) -> R<TyId> {
-        match self.bracket_type_arg(node) {
-            Ok(t) => Ok(t),
-            Err(BracketTypeError::Declined(nyc)) => Err(nyc),
-            Err(BracketTypeError::Unresolved { name, span }) => {
-                self.diags.push(
-                    Diagnostic::error(codes::E0301, span, format!("nothing named `{name}` is in scope"))
-                        .with_label("not found")
-                        .with_note(format!("`{container}[…]` is generic application here; each argument must name a type — import and qualify the type you mean")),
-                );
-                Ok(self.error_ty())
-            }
-        }
-    }
-
-    /// A type-head miss is not a scope miss when the name denotes a
-    /// value, an unloaded std stub, or a builtin whose type form is not
-    /// admitted here. Keep those genuine declines out of E0301.
-    fn bracket_type_name_known(&self, name: &str) -> bool {
-        prelude::in_prelude(name)
-            || prelude::is_builtin_type(name)
-            || self.generics.iter().any(|g| g == name)
-            || bindings_for(self.pkg(), self.module, self.file)
-                .iter()
-                .any(|b| b.name == name)
-            || self.pkg().tables[self.module].get(name).is_some()
-    }
-
-    fn bracket_type_arg(&mut self, node: &GreenNode) -> Result<TyId, BracketTypeError> {
-        let decline = |construct| {
-            BracketTypeError::Declined(NotYet {
-                construct,
-                span: node.span,
-            })
-        };
-        let ambiguous = || decline("an ambiguous expression in a type-argument bracket");
         if is_type_kind(node.kind) {
-            return Ok(self.lower_ty(node));
+            return Some(self.lower_ty(node));
         }
         // A nested builtin instantiation (`channel[List[int]]`): the
         // element spells as an expression (D29), so the bracket shape
         // recurses here.
         if node.kind == SyntaxKind::BracketApply {
-            let b = BracketApply::cast(node).ok_or_else(ambiguous)?;
-            let head = b.callee().ok_or_else(ambiguous)?;
-            let t = PathExpr::cast(head)
-                .ok_or_else(ambiguous)?
-                .ident()
-                .ok_or_else(ambiguous)?;
+            let b = BracketApply::cast(node)?;
+            let head = b.callee()?;
+            let t = PathExpr::cast(head)?.ident()?;
             let name = self.text(t.span);
             if self.lookup_local(&name).is_some() {
-                return Err(decline("a value-bound head in a type-argument bracket"));
-            }
-            if !self.bracket_type_name_known(&name)
-                && matches!(
-                    self.lo
-                        .resolve_type_head(self.module, self.file, &[(name.clone(), t.span)]),
-                    crate::sig::TypeHead::Unknown
-                )
-            {
-                return Err(BracketTypeError::Unresolved { name, span: t.span });
+                return None;
             }
             let inner: Vec<_> = b
                 .args()
@@ -6782,26 +6720,22 @@ impl<'a> Checker<'a> {
             if name == "Map"
                 && let [k, v] = inner.as_slice()
             {
-                let kt = self.bracket_type_arg(k)?;
-                let vt = self.bracket_type_arg(v)?;
+                let kt = self.type_from_bracket_arg(k)?;
+                let vt = self.type_from_bracket_arg(v)?;
                 if !crate::types::map_key_admitted(&self.kind_of(kt)) {
                     let shown = self.show(kt);
                     let nominal = matches!(self.kind_of(kt), TyKind::Nominal { .. });
                     let d = crate::sig::map_key_refusal(&shown, nominal, k.span);
                     self.diags.push(d);
                 }
-                return Ok(self.lo.table.intern(TyKind::Map(kt, vt)));
+                return Some(self.lo.table.intern(TyKind::Map(kt, vt)));
             }
-            let [one] = inner.as_slice() else {
-                return Err(decline(
-                    "a nested type application with this argument count",
-                ));
-            };
-            let elem = self.bracket_type_arg(one)?;
+            let [one] = inner.as_slice() else { return None };
+            let elem = self.type_from_bracket_arg(one)?;
             return match name.as_str() {
-                "List" => Ok(self.lo.table.intern(TyKind::List(elem))),
-                "Pool" => Ok(self.lo.table.intern(TyKind::Pool(elem))),
-                "channel" => Ok(self.lo.table.intern(TyKind::Chan(elem))),
+                "List" => Some(self.lo.table.intern(TyKind::List(elem))),
+                "Pool" => Some(self.lo.table.intern(TyKind::Pool(elem))),
+                "channel" => Some(self.lo.table.intern(TyKind::Chan(elem))),
                 // `wrapping[uN]` in element position (#132): the one
                 // builtin type constructor, validated exactly as the
                 // type-position lowering validates it (integer prims
@@ -6813,11 +6747,9 @@ impl<'a> Checker<'a> {
                         TyKind::Prim(p) if p.is_integer()
                     ) =>
                 {
-                    Ok(self.lo.table.intern(TyKind::Wrapping(elem)))
+                    Some(self.lo.table.intern(TyKind::Wrapping(elem)))
                 }
-                _ => Err(decline(
-                    "a nested type application outside the builtin type constructors",
-                )),
+                _ => None,
             };
         }
         // A qualified element (`List[geo.Point]`, #140): an imported
@@ -6827,39 +6759,23 @@ impl<'a> Checker<'a> {
         // has the same layout as a local one; the container must not
         // care where its element type was declared.
         if node.kind == SyntaxKind::MemberExpr {
-            let m = MemberExpr::cast(node).ok_or_else(ambiguous)?;
-            let bt = PathExpr::cast(m.base().ok_or_else(ambiguous)?)
-                .ok_or_else(ambiguous)?
-                .ident()
-                .ok_or_else(ambiguous)?;
+            let m = MemberExpr::cast(node)?;
+            let bt = PathExpr::cast(m.base()?)?.ident()?;
             let bname = self.text(bt.span);
             if self.lookup_local(&bname).is_some() {
-                return Err(decline("a value-bound head in a qualified type argument"));
+                return None;
             }
-            let mt = m.member().ok_or_else(ambiguous)?;
+            let mt = m.member()?;
             let mname = self.text(mt.span);
             return match self.lo.resolve_type_head(
                 self.module,
                 self.file,
-                &[(bname.clone(), bt.span), (mname.clone(), mt.span)],
+                &[(bname, bt.span), (mname, mt.span)],
             ) {
                 crate::sig::TypeHead::Item { module, name } => {
-                    if self.pkg().tables[module].get(&name).is_none() {
-                        return Err(BracketTypeError::Unresolved {
-                            name: format!("{bname}.{mname}"),
-                            span: node.span,
-                        });
-                    }
-                    Ok(self.lo.named_item_type(module, &name, self.file, node))
+                    Some(self.lo.named_item_type(module, &name, self.file, node))
                 }
-                crate::sig::TypeHead::Poisoned => Ok(self.error_ty()),
-                crate::sig::TypeHead::Unknown if self.bracket_type_name_known(&bname) => Err(
-                    decline("a qualified type argument without a loaded type definition"),
-                ),
-                crate::sig::TypeHead::Unknown => Err(BracketTypeError::Unresolved {
-                    name: format!("{bname}.{mname}"),
-                    span: node.span,
-                }),
+                _ => None,
             };
         }
         // A tuple element (`List[(str, int)]()`, wolf-lang#349): brackets
@@ -6868,54 +6784,39 @@ impl<'a> Checker<'a> {
         // bracket argument in its own right; a parenthesized single head
         // is that head.
         if node.kind == SyntaxKind::ParenExpr {
-            let inner = ParenExpr::cast(node)
-                .ok_or_else(ambiguous)?
-                .expr()
-                .ok_or_else(ambiguous)?;
-            return self.bracket_type_arg(inner);
+            let inner = ParenExpr::cast(node)?.expr()?;
+            return self.type_from_bracket_arg(inner);
         }
         if node.kind == SyntaxKind::TupleExpr {
-            let elems: Vec<&GreenNode> = TupleExpr::cast(node)
-                .ok_or_else(ambiguous)?
-                .elems()
-                .collect();
+            let elems: Vec<&GreenNode> = TupleExpr::cast(node)?.elems().collect();
             let mut tys = Vec::with_capacity(elems.len());
             for el in elems {
-                tys.push(self.bracket_type_arg(el)?);
+                tys.push(self.type_from_bracket_arg(el)?);
             }
-            return Ok(self.lo.table.intern(TyKind::Tuple(tys)));
+            return Some(self.lo.table.intern(TyKind::Tuple(tys)));
         }
         if node.kind != SyntaxKind::PathExpr {
-            return Err(decline("a non-type expression in a type-argument bracket"));
+            return None;
         }
-        let t = PathExpr::cast(node)
-            .ok_or_else(ambiguous)?
-            .ident()
-            .ok_or_else(ambiguous)?;
+        let t = PathExpr::cast(node)?.ident()?;
         let name = self.text(t.span);
         if self.lookup_local(&name).is_some() {
-            return Err(decline("a value-bound name in a type-argument bracket"));
+            return None;
         }
         if let Some(p) = Prim::from_name(&name) {
-            return Ok(self.lo.table.prim(p));
+            return Some(self.lo.table.prim(p));
         }
         if self.generics.contains(&name) {
-            return Ok(self.lo.table.intern(TyKind::Rigid(name)));
+            return Some(self.lo.table.intern(TyKind::Rigid(name)));
         }
         match self
             .lo
-            .resolve_type_head(self.module, self.file, &[(name.clone(), t.span)])
+            .resolve_type_head(self.module, self.file, &[(name, t.span)])
         {
             crate::sig::TypeHead::Item { module, name } => {
-                Ok(self.lo.named_item_type(module, &name, self.file, node))
+                Some(self.lo.named_item_type(module, &name, self.file, node))
             }
-            crate::sig::TypeHead::Poisoned => Ok(self.error_ty()),
-            crate::sig::TypeHead::Unknown if self.bracket_type_name_known(&name) => Err(decline(
-                "a known name without an admitted type-argument form",
-            )),
-            crate::sig::TypeHead::Unknown => {
-                Err(BracketTypeError::Unresolved { name, span: t.span })
-            }
+            _ => None,
         }
     }
 
