@@ -19,8 +19,9 @@
 //! the by-path row is that machine's witness).
 //!
 //! lupin 0.1.55 (the 0.2.34 pairing, record commit `e642f26`) loses the
-//! bytes too, measured on kasumi: its run of the failed-write row is
-//! pinned by version AND commit, so a newer lupin that still loses them
+//! bytes too, measured on kasumi, and so does 0.1.56 (the 0.2.35 pairing,
+//! record commit `28547b4`): each run of the failed-write row is pinned
+//! by version AND commit, so a newer lupin that still loses them
 //! reds by name (wolf-interp owes the mirror). It declines `/dev/full`
 //! by name (`[os.fs.path.domain]`: it serves real files inside its own
 //! tree), a posture, not a lag.
@@ -167,14 +168,22 @@ fn corpus(rel: &str) -> PathBuf {
 /// (version, record commit, verdict, stdout).
 type Pin = (&'static str, &'static str, &'static str, &'static str);
 
-/// lupin 0.1.55 loses the 17 bytes (kasumi, s260): the source stands at
-/// 17, the retry is `eof` and `main`'s `?` ends the run with it.
-const FAILED_WRITE_PRE_MIRROR: &[Pin] = &[(
-    "0.1.55",
-    "e642f26",
-    "exit(1)",
-    "copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n",
-)];
+/// lupin 0.1.55 and 0.1.56 lose the 17 bytes (kasumi, s260): the source
+/// stands at 17, the retry is `eof` and `main`'s `?` ends the run with it.
+const FAILED_WRITE_PRE_MIRROR: &[Pin] = &[
+    (
+        "0.1.55",
+        "e642f26",
+        "exit(1)",
+        "copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n",
+    ),
+    (
+        "0.1.56",
+        "28547b4",
+        "exit(1)",
+        "copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n",
+    ),
+];
 
 const FAILED_WRITE: &str = "copy=io took_nothing=true os_error_set=true offset_after=0\nretry=17 same=true\ncleaned=true\n";
 const DEV_FULL: &str =
