@@ -45,6 +45,7 @@ struct Obs {
     stdout: String,
     reason: String,
     version: String,
+    commit: String,
 }
 
 fn parse_obs(bytes: &[u8], what: &str) -> Obs {
@@ -70,6 +71,7 @@ fn parse_obs(bytes: &[u8], what: &str) -> Obs {
             }
         },
         version: field("impl_version"),
+        commit: field("commit"),
     }
 }
 
@@ -200,6 +202,25 @@ fn judge_lupin(obs: &Obs, name: &str, want: &str, calls: &[&str]) {
         report(&format!(
             "REPORT PINNED pre-mirror lupin {} on {name}: {}",
             obs.version, obs.reason
+        ));
+    } else if name == "realpath.lu" && obs.version == "0.1.56" && obs.commit.starts_with("28547b4")
+    {
+        // is79 serves canonicalization only inside its tree. This fixture
+        // deliberately asks for /tmp too; do not call that an absent name.
+        assert_eq!(
+            (obs.verdict.as_str(), obs.stdout.as_str()),
+            ("unsupported", "")
+        );
+        assert!(
+            obs.reason
+                .starts_with("`fs_realpath(\"/tmp\")` resolves outside the working directory"),
+            "{obs:?}"
+        );
+        assert!(obs.reason.contains("[os.fs.path.domain]"), "{obs:?}");
+        assert!(!obs.reason.contains("does not resolve"), "{obs:?}");
+        report(&format!(
+            "PINNED lupin {} {} served-tree boundary: {}",
+            obs.version, obs.commit, obs.reason
         ));
     } else {
         assert_eq!(
