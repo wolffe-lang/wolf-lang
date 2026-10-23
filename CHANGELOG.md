@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+s261 — the invocation name and byte-exact arguments (#899, #406).
+
+- **Two prelude additions:** `env_arg0() -> str` returns the invocation name, not the resolved executable; `env_args_bytes() -> List[List[byte]]` returns every argument with argv[0] first. Existing `env_args()` still returns argv[1..]. Local declarations with either new prelude name may now warn (W0304).
+- Text argv readers report `trap(argument-utf8)` with the OS argument index and a recommendation to use the byte reader, instead of Rust's unwrap panic. The normal native trap status is 134. `env_get` and `env_vars` keep their existing UTF-8 behavior.
+- `conform-run --checked` accepts repeated `--argv-hex=HEX`, one byte argument per occurrence, argv[0] first. The freestanding target refuses both new calls by name because it has no host argv.
+
+
 s260 — the three wrong answers t06 replayed (wolf-lang#642, #682, #683).
 
 - **A copy whose write fails keeps what it read** (`[os.fs.copy]`, #642): the read/write rung writes what the sink takes and puts the source back by the shortfall, so after any `io` the source stands exactly past the bytes written (`cat f > /dev/full` left it at 17 with nothing to retry); the checked machine does the same.
