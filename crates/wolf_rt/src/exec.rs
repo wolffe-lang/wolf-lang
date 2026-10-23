@@ -197,6 +197,10 @@ fn code_of(tag: &str) -> i64 {
 /// headers; `map` a live `List[int]` header.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_os_exec(ep: i64, el: i64, argv: i64, env: i64, map: i64) -> i64 {
+    // s260 (#682): a failed `execve`'s number is kept in `os_error()`
+    // (`ENOEXEC` for a file with no `#!` line); every refusal decided
+    // before the exec leaves 0.
+    crate::fs::os_error_clear();
     let exe = unsafe { view(ep, el) };
     let (Some(av), Some(ev), Some(flat)) = (
         unsafe { crate::list::str_pair_elems(argv) },
@@ -348,6 +352,7 @@ mod unix {
             let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
             crate::os::reinstall_faults(faults);
             restore(&saved, &staged);
+            crate::fs::os_error_set(i64::from(errno));
             Err(match errno {
                 libc::ENOENT | libc::ENOTDIR => "not_found",
                 libc::EACCES | libc::EPERM => "denied",
@@ -481,5 +486,37 @@ mod tests {
             "0's flags back"
         );
         drop(f);
+    }
+
+    /// s260 (#682): a file with no `#!` line is `io` with `ENOEXEC` in
+    /// `os_error()`, the process left as it was — and nothing ran it
+    /// (the marker the file would write is absent); a refusal decided
+    /// before the exec leaves the word 0.
+    #[cfg(unix)]
+    #[test]
+    fn a_file_with_no_shebang_is_io_with_enoexec() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let d = std::env::temp_dir().join(format!("wolf_rt_s260_exec_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let marker = d.join("ran");
+        let nos = d.join("noshebang");
+        std::fs::write(&nos, format!("echo ran > '{}'\n", marker.display())).unwrap();
+        std::fs::set_permissions(&nos, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let e = nos.to_str().unwrap();
+        let (ep, el) = (e.as_ptr() as i64, e.len() as i64);
+        let argv = crate::list::new_list(16);
+        crate::list::push_str(argv, "noshebang");
+        let env = crate::list::new_list(16);
+        let map = crate::list::new_list(8);
+        let r = unsafe { __wolf_rt_os_exec(ep, el, argv as i64, env as i64, map as i64) };
+        assert_eq!(r, proc_code::IO);
+        assert_eq!(crate::fs::__wolf_rt_os_error(), i64::from(libc::ENOEXEC));
+        assert!(!marker.exists(), "no machine re-runs it under /bin/sh");
+        let empty = crate::list::new_list(16);
+        let r = unsafe { __wolf_rt_os_exec(ep, el, empty as i64, env as i64, map as i64) };
+        assert_eq!(r, proc_code::INVALID, "an empty argv is the shape's");
+        assert_eq!(crate::fs::__wolf_rt_os_error(), 0);
+        let _ = std::fs::remove_dir_all(&d);
     }
 }
