@@ -1,0 +1,7 @@
+The 1ff410b6 PR-tier run 39966476733 and local whole gauntlet both failed only host_table_spec:162 vs160.
+The spec/checker signature and order equalities above that count already passed.
+Updated the exact count and the current prose in [os.host.sigs] to162 in one commit.
+Whole spec, CONTRIBUTING, and every test were grepped for numeric160/252 and spelled-out totals.
+No other current total pin remains: other matches are historical sprint/count references, byte sizes/data, exit statuses, and snapshot spans. CONTRIBUTING has none.
+The prose hunk is confined to [os.host.sigs], not the os-error paragraph s262 edits.
+host_table_spec:2/2 green. Anchor sets695/695, added[], dropped[], byte-identical.
