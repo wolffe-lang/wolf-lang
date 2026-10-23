@@ -390,11 +390,15 @@ own commit:
   raw code per host, `27e4312a`. And `copy_write_lanes`' strict-skip
   helper was dead code off linux, `d0456901`. The win64 `enter`/`leave`
   assembled and passed there (`enter_answers_the_entrys_value`,
-  `a_leave_discards_the_frames_below_the_entry`).
-- `build + test (macos-latest)`: the aarch64 `enter`/`leave` passed (all
-  fifteen `kill_park_lanes` rows, both crate tests) and
-  `copy_write_lanes` passed; `spawn_noexec_lanes` failed on the hookless
-  rows, `posix_spawn`'s fallback (§2). Every spawn off glibc now ends
+  `a_leave_discards_the_frames_below_the_entry`); the leg stops at its
+  first red binary, so `wolf_rt`'s integration tests and the crates after
+  it did not run.
+- `build + test (macos-latest)`: the aarch64 `enter`/`leave` passed all
+  fifteen `kill_park_lanes` rows and `copy_write_lanes` passed;
+  `spawn_noexec_lanes` failed on the hookless rows, `posix_spawn`'s
+  fallback (§2), and stopped the leg there (the driver's later binaries,
+  `wolf_mem`, `wolf_rt` and the rest did not run, the two crate tests of
+  the leave among them). Every spawn off glibc now ends
   with the runtime's own exec, `a5a05581`, and the checked machine's,
   `2c529ab7`.
 
