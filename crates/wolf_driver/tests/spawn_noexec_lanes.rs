@@ -17,7 +17,9 @@
 //! lupin 0.1.55 (record commit `e642f26`, build pin `294d626`) answers
 //! `io` for every spawn but leaves `os_error()` 0, and its `os_exec` RUNS the file (it
 //! replaces itself through `CommandExt::exec`, the same `execvp`): both
-//! pinned by version and commit, wolf-interp's to mirror. It declines
+//! pinned by version and commit, wolf-interp's to mirror. 0.1.56 (the
+//! 0.2.35 pairing, record commit `28547b4`, the same build pin) answers
+//! both the same, measured on kasumi, and is pinned beside it. It declines
 //! `os_signal_ignore` by name (no `unsafe`), a posture.
 //!
 //! The fixtures spawn host programs (`sh` through the control), so this
@@ -210,7 +212,11 @@ const ROWS: &str = "\
 marker=false
 ";
 
-/// lupin 0.1.55: every spawn `io`, but `os_error()` left 0 (kasumi, s260).
+/// lupins that predate the mirror, by version and record commit.
+const PRE_MIRROR: &[(&str, &str)] = &[("0.1.55", "e642f26"), ("0.1.56", "28547b4")];
+
+/// lupin 0.1.55 and 0.1.56: every spawn `io`, but `os_error()` left 0
+/// (kasumi, s260).
 const ROWS_LUPIN_0_1_55: &str = "\
 ./noshebang spawn_fds[1,1]: io os_error=0
 ./noshebang spawn_fds[]: io os_error=0
@@ -244,8 +250,11 @@ fn a_file_with_no_shebang_is_io_on_every_spawn_and_every_lane() {
         return;
     }
     assert!(
-        rec["impl_version"] == "0.1.55" && rec["commit"] == "e642f26" && got == ROWS_LUPIN_0_1_55,
-        "lupin {version}'s rows: {got:?} (want the clause's, or 0.1.55's pinned rows)"
+        PRE_MIRROR
+            .iter()
+            .any(|(v, c)| rec["impl_version"] == *v && rec["commit"] == *c)
+            && got == ROWS_LUPIN_0_1_55,
+        "lupin {version}'s rows: {got:?} (want the clause's, or the pinned pre-mirror rows)"
     );
 }
 
@@ -291,14 +300,16 @@ fn os_exec_on_a_file_with_no_shebang_is_io_with_enoexec() {
     {
         return;
     }
-    // lupin 0.1.55 (its `--version` names build pin `294d626`; the
-    // records say `e642f26`) replaces itself with `/bin/sh noshebang`: no
-    // record, the marker written.
+    // lupin 0.1.55 and 0.1.56 (their `--version` names build pin
+    // `294d626`; the records say `e642f26` and `28547b4`) replace
+    // themselves with `/bin/sh noshebang`: no record, the marker written.
     assert!(
-        version.contains("lupin 0.1.55 ")
+        PRE_MIRROR
+            .iter()
+            .any(|(v, _)| version.contains(&format!("lupin {v} ")))
             && version.contains("294d626")
             && out.stdout.is_empty()
             && dir.join("ran-marker").exists(),
-        "lupin {version}'s exec: {out:?} (want the clause's answer, or 0.1.55's pinned run)"
+        "lupin {version}'s exec: {out:?} (want the clause's answer, or the pinned pre-mirror run)"
     );
 }
