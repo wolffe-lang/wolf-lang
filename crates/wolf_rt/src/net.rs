@@ -808,10 +808,10 @@ thread_local! {
 
 /// One readiness park in the reactor, resolved as the row the net
 /// tier answers: `timeout` when the budget fires first, `io` for a
-/// killed proc on a non-unwindable frame (the result is moot but must
-/// be a row — the compiled teardown branch is codegen's; pool.rs's
-/// honest s34 refusal, unchanged). The net flavor of the wait is
-/// kill-only — see reactor.rs's cancellation section.
+/// killed proc on a non-unwindable frame — a row no compiled program
+/// sees since s260 (#683): the shim's exit leaves the killed task
+/// (`task::leave`) before the row returns. The net flavor of the wait
+/// is kill-only — see reactor.rs's cancellation section.
 #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
 fn wait_raw(
     raw: crate::poll::RawIo,
@@ -1737,8 +1737,7 @@ pub(crate) fn wait_ready(handles: &[i64], deadline_ms: i64) -> Result<Vec<i64>, 
 /// # Safety
 ///
 /// `hdr` a live `List[int]` header; `out` 8 writable bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_net_wait(hdr: i64, deadline: i64, out: i64) -> i64 {
+unsafe fn __wolf_rt_net_wait_parks(hdr: i64, deadline: i64, out: i64) -> i64 {
     crate::fs::os_error_clear();
     #[cfg(any(unix, windows))]
     {
@@ -1766,6 +1765,20 @@ pub unsafe extern "C" fn __wolf_rt_net_wait(hdr: i64, deadline: i64, out: i64) -
     }
 }
 
+/// The exported shim (s260, #683): [`__wolf_rt_net_wait_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_net_wait_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_wait(hdr: i64, deadline: i64, out: i64) -> i64 {
+    let r = unsafe { __wolf_rt_net_wait_parks(hdr, deadline, out) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::task::leave_if_killed() };
+    r
+}
+
 /// `net_connect_unix(path) -> int ! {unsupported, refused, not_found,
 /// denied, io}` (s136, #227) — the stream's fd, or `-code`. See
 /// [`NetTable::connect_unix`].
@@ -1773,14 +1786,27 @@ pub unsafe extern "C" fn __wolf_rt_net_wait(hdr: i64, deadline: i64, out: i64) -
 /// # Safety
 ///
 /// A valid str pair.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_net_connect_unix(pp: i64, pl: i64) -> i64 {
+unsafe fn __wolf_rt_net_connect_unix_parks(pp: i64, pl: i64) -> i64 {
     crate::fs::os_error_clear();
     let path = unsafe { view(pp, pl) };
     match dial_unix(path).and_then(|s| tbl().push_stream(s)) {
         Ok(fd) => fd,
         Err(t) => -code_of_tag(t),
     }
+}
+
+/// The exported shim (s260, #683): [`__wolf_rt_net_connect_unix_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_net_connect_unix_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_connect_unix(pp: i64, pl: i64) -> i64 {
+    let r = unsafe { __wolf_rt_net_connect_unix_parks(pp, pl) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::task::leave_if_killed() };
+    r
 }
 
 /// `net_port(fd) -> int ! {io}` — the bound local port (>= 0), or
@@ -1803,8 +1829,7 @@ pub extern "C" fn __wolf_rt_net_port(fd: i64) -> i64 {
 /// again for what remains of it, never for a fresh budget and never
 /// in the kernel. Since s141 the take comes first: a connection
 /// already queued is answered with no park.
-#[unsafe(no_mangle)]
-pub extern "C" fn __wolf_rt_net_accept(fd: i64) -> i64 {
+fn __wolf_rt_net_accept_parks(fd: i64) -> i64 {
     crate::fs::os_error_clear();
     let spec = match tbl().park_spec(fd, false) {
         Ok(spec) => spec,
@@ -1816,6 +1841,16 @@ pub extern "C" fn __wolf_rt_net_accept(fd: i64) -> i64 {
     }
 }
 
+/// The exported shim (s260, #683): [`__wolf_rt_net_accept_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+#[unsafe(no_mangle)]
+pub extern "C" fn __wolf_rt_net_accept(fd: i64) -> i64 {
+    let r = __wolf_rt_net_accept_parks(fd);
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::task::leave_if_killed() };
+    r
+}
+
 /// `net_connect(addr) -> int ! {refused, timeout, io}` — the blocking
 /// dial (the module doc's recorded delta); the stream's fd, or
 /// `-code`.
@@ -1823,14 +1858,27 @@ pub extern "C" fn __wolf_rt_net_accept(fd: i64) -> i64 {
 /// # Safety
 ///
 /// A valid str pair.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_net_connect(ap: i64, al: i64) -> i64 {
+unsafe fn __wolf_rt_net_connect_parks(ap: i64, al: i64) -> i64 {
     crate::fs::os_error_clear();
     let addr = unsafe { view(ap, al) };
     match dial(addr).and_then(|s| tbl().push_stream(s)) {
         Ok(fd) => fd,
         Err(t) => -code_of_tag(t),
     }
+}
+
+/// The exported shim (s260, #683): [`__wolf_rt_net_connect_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_net_connect_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_connect(ap: i64, al: i64) -> i64 {
+    let r = unsafe { __wolf_rt_net_connect_parks(ap, al) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::task::leave_if_killed() };
+    r
 }
 
 /// The read shims' shared head: the park spec is also the `io` check
@@ -1876,8 +1924,7 @@ fn write_shim(fd: i64, bytes: &[u8]) -> i64 {
 /// # Safety
 ///
 /// `out` must address 16 writable bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_net_read(fd: i64, max: i64, out: i64) -> i64 {
+unsafe fn __wolf_rt_net_read_parks(fd: i64, max: i64, out: i64) -> i64 {
     crate::fs::os_error_clear();
     let emit = |bytes: &[u8]| match core::str::from_utf8(bytes) {
         Ok(s) => {
@@ -1896,6 +1943,20 @@ pub unsafe extern "C" fn __wolf_rt_net_read(fd: i64, max: i64, out: i64) -> i64 
     read_shim(fd, max, emit).unwrap_or_else(|code| code)
 }
 
+/// The exported shim (s260, #683): [`__wolf_rt_net_read_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_net_read_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_read(fd: i64, max: i64, out: i64) -> i64 {
+    let r = unsafe { __wolf_rt_net_read_parks(fd, max, out) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::task::leave_if_killed() };
+    r
+}
+
 /// `net_write(fd, s) -> () ! {closed, io}` — the whole buffer, the
 /// syscall first; a park on `WouldBlock` against the budget, and a
 /// fired budget is `TIMEOUT`, which the row coarsens to `io`.
@@ -1903,11 +1964,24 @@ pub unsafe extern "C" fn __wolf_rt_net_read(fd: i64, max: i64, out: i64) -> i64 
 /// # Safety
 ///
 /// A valid str pair.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_net_write(fd: i64, sp: i64, sl: i64) -> i64 {
+unsafe fn __wolf_rt_net_write_parks(fd: i64, sp: i64, sl: i64) -> i64 {
     crate::fs::os_error_clear();
     let s = unsafe { view(sp, sl) };
     write_shim(fd, s.as_bytes())
+}
+
+/// The exported shim (s260, #683): [`__wolf_rt_net_write_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_net_write_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_write(fd: i64, sp: i64, sl: i64) -> i64 {
+    let r = unsafe { __wolf_rt_net_write_parks(fd, sp, sl) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::task::leave_if_killed() };
+    r
 }
 
 /// `net_read_bytes(fd, max) -> List[byte] ! {closed, timeout, io}` —
@@ -1919,14 +1993,27 @@ pub unsafe extern "C" fn __wolf_rt_net_write(fd: i64, sp: i64, sl: i64) -> i64 {
 /// # Safety
 ///
 /// `out` must address 8 writable bytes (the list header word).
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_net_read_bytes(fd: i64, max: i64, out: i64) -> i64 {
+unsafe fn __wolf_rt_net_read_bytes_parks(fd: i64, max: i64, out: i64) -> i64 {
     crate::fs::os_error_clear();
     let emit = |bytes: &[u8]| {
         unsafe { write_bytes_list(out, bytes) };
         net_code::OK
     };
     read_shim(fd, max, emit).unwrap_or_else(|code| code)
+}
+
+/// The exported shim (s260, #683): [`__wolf_rt_net_read_bytes_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_net_read_bytes_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_read_bytes(fd: i64, max: i64, out: i64) -> i64 {
+    let r = unsafe { __wolf_rt_net_read_bytes_parks(fd, max, out) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::task::leave_if_killed() };
+    r
 }
 
 /// `net_write_bytes(fd, bytes) -> () ! {closed, invalid, io}` — the
@@ -1940,13 +2027,26 @@ pub unsafe extern "C" fn __wolf_rt_net_read_bytes(fd: i64, max: i64, out: i64) -
 /// # Safety
 ///
 /// `hdr` must be a live `List[byte]` header.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_net_write_bytes(fd: i64, hdr: i64) -> i64 {
+unsafe fn __wolf_rt_net_write_bytes_parks(fd: i64, hdr: i64) -> i64 {
     crate::fs::os_error_clear();
     let Some(bytes) = (unsafe { crate::list::u8_elems(hdr) }) else {
         return net_code::INVALID;
     };
     write_shim(fd, bytes)
+}
+
+/// The exported shim (s260, #683): [`__wolf_rt_net_write_bytes_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_net_write_bytes_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_write_bytes(fd: i64, hdr: i64) -> i64 {
+    let r = unsafe { __wolf_rt_net_write_bytes_parks(fd, hdr) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::task::leave_if_killed() };
+    r
 }
 
 /// `net_writev(fd, parts) -> () ! {closed, io}` (s141, #254,
@@ -1960,8 +2060,7 @@ pub unsafe extern "C" fn __wolf_rt_net_write_bytes(fd: i64, hdr: i64) -> i64 {
 ///
 /// `hdr` must be a live `List[List[byte]]` header whose elements are
 /// live `List[byte]` headers.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_net_writev(fd: i64, hdr: i64) -> i64 {
+unsafe fn __wolf_rt_net_writev_parks(fd: i64, hdr: i64) -> i64 {
     crate::fs::os_error_clear();
     let Some(heads) = (unsafe { crate::list::i64_elems(hdr) }) else {
         return net_code::IO;
@@ -1986,6 +2085,20 @@ pub unsafe extern "C" fn __wolf_rt_net_writev(fd: i64, hdr: i64) -> i64 {
     }
 }
 
+/// The exported shim (s260, #683): [`__wolf_rt_net_writev_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_net_writev_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_writev(fd: i64, hdr: i64) -> i64 {
+    let r = unsafe { __wolf_rt_net_writev_parks(fd, hdr) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::task::leave_if_killed() };
+    r
+}
+
 /// `net_writev_head(fd, head, parts) -> () ! {closed, io}` (s160, #299,
 /// `[os.net.writev.head]`): the gather with a `str` head. `head` is the
 /// two words a `str` already is, so its bytes enter the vector where
@@ -1999,8 +2112,7 @@ pub unsafe extern "C" fn __wolf_rt_net_writev(fd: i64, hdr: i64) -> i64 {
 /// `hp`/`hl` must be a valid str pair; `hdr` must be a live
 /// `List[List[byte]]` header whose elements are live `List[byte]`
 /// headers.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn __wolf_rt_net_writev_head(fd: i64, hp: i64, hl: i64, hdr: i64) -> i64 {
+unsafe fn __wolf_rt_net_writev_head_parks(fd: i64, hp: i64, hl: i64, hdr: i64) -> i64 {
     crate::fs::os_error_clear();
     let Some(heads) = (unsafe { crate::list::i64_elems(hdr) }) else {
         return net_code::IO;
@@ -2028,6 +2140,20 @@ pub unsafe extern "C" fn __wolf_rt_net_writev_head(fd: i64, hp: i64, hl: i64, hd
         Ok(()) => net_code::OK,
         Err(t) => code_of_tag(t),
     }
+}
+
+/// The exported shim (s260, #683): [`__wolf_rt_net_writev_head_parks`], then a killed
+/// compiled task leaves instead of returning into the program.
+///
+/// # Safety
+///
+/// As [`__wolf_rt_net_writev_head_parks`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_net_writev_head(fd: i64, hp: i64, hl: i64, hdr: i64) -> i64 {
+    let r = unsafe { __wolf_rt_net_writev_head_parks(fd, hp, hl, hdr) };
+    // SAFETY: the shim's last step; the body's locals are dropped.
+    unsafe { crate::task::leave_if_killed() };
+    r
 }
 
 /// `net_nodelay(fd, on) -> () ! {io}` (s141, #254, `[os.net.nodelay]`):

@@ -83,7 +83,9 @@
 //! (`[conc.cancel.points]`): a cancelled scope surfaces
 //! [`IoWait::Cancelled`] as a value, and a KILLED proc's task
 //! terminates at the wait by kill teardown (`[conc.proc.kill]`, no
-//! further user code). The net flavor is kill-only: the net row
+//! further user code) — a Rust task by the unwind, a compiled one (s260,
+//! wolf-lang#683) by the leave at the calling shim's exit
+//! (`task::leave`), which until s260 answered the program the row. The net flavor is kill-only: the net row
 //! vocabulary `{refused, timeout, closed, io}` has no cancellation
 //! row — surfacing one is the native lowering's row-ABI work, still
 //! an honest refusal there — so a merely-cancelled net wait keeps
