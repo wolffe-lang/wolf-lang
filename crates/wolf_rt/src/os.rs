@@ -281,6 +281,20 @@ fn wait_forked(pid: libc::pid_t) -> Option<libc::c_int> {
     }
 }
 
+/// A spawn the host refused, as its row: `not_found`, `denied`, or `io`
+/// for the rest (`ENOEXEC` among them since s260, #682). The host's
+/// number is kept in `os_error()` (`[os.fs.error]`'s word; s260): a
+/// shell that must say "not an executable format" reads `ENOEXEC` there
+/// instead of guessing from the file's first bytes.
+fn spawn_refusal(e: &std::io::Error) -> ProcErr {
+    crate::fs::os_error_record(e);
+    match e.kind() {
+        std::io::ErrorKind::NotFound => "not_found",
+        std::io::ErrorKind::PermissionDenied => "denied",
+        _ => "io",
+    }
+}
+
 impl ChildTable {
     /// `const` so the shim tier's process table ([`CHILDREN`]) can
     /// live in a `static Mutex` without lazy-init machinery (the
@@ -305,14 +319,16 @@ impl ChildTable {
             .stdin(Stdio::null())
             .stdout(Stdio::inherit())
             .stderr(Stdio::inherit());
-        keep_pipe_ignore(&mut cmd);
+        #[cfg_attr(not(unix), allow(unused_variables))]
+        let hooked = keep_pipe_ignore(&mut cmd);
+        // s260 (#682): a hooked spawn execs the program itself.
+        #[cfg(unix)]
+        if hooked && let Some(plan) = ExecPlan::new(prog, rest, &[]) {
+            exec_last(&mut cmd, plan);
+        }
         let spawned = cmd.spawn();
         match spawned {
-            Err(e) => Err(match e.kind() {
-                std::io::ErrorKind::NotFound => "not_found",
-                std::io::ErrorKind::PermissionDenied => "denied",
-                _ => "io",
-            }),
+            Err(e) => Err(spawn_refusal(&e)),
             Ok(child) => {
                 let h = self.children.len() as i64;
                 self.children.push(Some(Kid::Spawned(child)));
@@ -382,7 +398,8 @@ impl ChildTable {
         for (k, v) in env {
             cmd.env(k, v);
         }
-        keep_pipe_ignore(&mut cmd);
+        #[cfg_attr(not(unix), allow(unused_variables))]
+        let hooked = keep_pipe_ignore(&mut cmd) || !inherit.is_empty();
         #[cfg(unix)]
         if !inherit.is_empty() {
             use std::os::unix::process::CommandExt as _;
@@ -418,12 +435,13 @@ impl ChildTable {
         if !inherit.is_empty() {
             return Err("unsupported");
         }
+        // s260 (#682): last, the exec itself — never `execvp`'s shell.
+        #[cfg(unix)]
+        if hooked && let Some(plan) = ExecPlan::new(exe, args, env) {
+            exec_last(&mut cmd, plan);
+        }
         match cmd.spawn() {
-            Err(e) => Err(match e.kind() {
-                std::io::ErrorKind::NotFound => "not_found",
-                std::io::ErrorKind::PermissionDenied => "denied",
-                _ => "io",
-            }),
+            Err(e) => Err(spawn_refusal(&e)),
             Ok(child) => {
                 let h = self.children.len() as i64;
                 self.children.push(Some(Kid::Spawned(child)));
@@ -588,12 +606,12 @@ impl ChildTable {
                     Ok(())
                 });
             }
+            // s260 (#682): last, the exec itself — never `execvp`'s shell.
+            if let Some(plan) = ExecPlan::new(exe, args, &[]) {
+                exec_last(&mut cmd, plan);
+            }
             match cmd.spawn() {
-                Err(e) => Err(match e.kind() {
-                    std::io::ErrorKind::NotFound => "not_found",
-                    std::io::ErrorKind::PermissionDenied => "denied",
-                    _ => "io",
-                }),
+                Err(e) => Err(spawn_refusal(&e)),
                 Ok(child) => {
                     // The parent's half of the double call.
                     let pid = child.id() as libc::pid_t;
@@ -957,7 +975,7 @@ pub(crate) fn reinstall_faults(faults: [libc::c_int; 2]) {
 /// died of it), so when this process ignores `SIGPIPE` now the child
 /// sets it ignored again, last, before it runs. Nothing is added when it
 /// is not ignored: the common spawn keeps Rust's fast path.
-pub(crate) fn keep_pipe_ignore(cmd: &mut Command) {
+pub(crate) fn keep_pipe_ignore(cmd: &mut Command) -> bool {
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt as _;
@@ -980,7 +998,8 @@ pub(crate) fn keep_pipe_ignore(cmd: &mut Command) {
         // ignores is held by the stack guard's handler, which the child's
         // exec resets to the default; the child sets it ignored instead.
         let faults = ignored_faults();
-        if faults.iter().any(|&s| s != 0) {
+        let held = faults.iter().any(|&s| s != 0);
+        if held {
             // SAFETY: `signal` is async-signal-safe; the numbers are copied.
             unsafe {
                 cmd.pre_exec(move || {
@@ -993,9 +1012,155 @@ pub(crate) fn keep_pipe_ignore(cmd: &mut Command) {
                 });
             }
         }
+        ignored || held
     }
     #[cfg(not(unix))]
-    let _ = cmd;
+    {
+        let _ = cmd;
+        false
+    }
+}
+
+// --------------------- s260: a hooked spawn execs, never execvp (#682) --
+//
+// `[os.proc.exec]`: "a file without the `#!` line the kernel needs is
+// `io` (`ENOEXEC`): no machine re-runs it under `/bin/sh`." A spawn that
+// installs a `pre_exec` hook (every non-empty descriptor map, every job
+// spawn, a non-empty inherit set, and any spawn whose process ignores
+// `SIGPIPE` or holds a fault ignored — [`keep_pipe_ignore`]) makes the
+// standard library fork and exec the program with the C library's
+// `execvp`, and `execvp(3)` documents that when `execve` answers
+// `ENOEXEC` it runs the file under `/bin/sh` instead (t06 measured it at
+// 0.2.34: a `#!`-less text file RAN through `os_spawn_fds(.., [1, 1])`,
+// and `junk` got bash's own `cannot execute binary file`). So the hook's
+// LAST step is the exec, made here: the program's candidates (the name
+// as written when it holds `/`, else each `PATH` directory in order, as
+// `execvp` searches them), `argv` and the child's whole environment are
+// built in the parent, and the child walks the candidates with `execve`
+// alone — `ENOENT`/`ENOTDIR` try the next, `EACCES` is remembered and the
+// search goes on, anything else (`ENOEXEC` among them) is the spawn's
+// error, which the standard library carries back to the parent. A spawn
+// with no hook keeps the standard library's `posix_spawn` path, which
+// does not fall back on glibc (the empty-map rows were already `io`).
+
+/// The exec a hooked spawn ends with: everything `execve` needs, made
+/// before the fork so the child allocates nothing.
+#[cfg(unix)]
+pub(crate) struct ExecPlan {
+    paths: Vec<std::ffi::CString>,
+    _argv: Vec<std::ffi::CString>,
+    argp: Vec<*const libc::c_char>,
+    _envs: Vec<std::ffi::CString>,
+    envp: Vec<*const libc::c_char>,
+}
+
+// SAFETY: the pointers address the plan's own `CString`s, which never
+// move once built (the `Vec`s of `CString` hold heap buffers) and live
+// as long as the plan; the child reads them after `fork`, read-only.
+#[cfg(unix)]
+unsafe impl Send for ExecPlan {}
+#[cfg(unix)]
+unsafe impl Sync for ExecPlan {}
+
+#[cfg(unix)]
+impl ExecPlan {
+    /// The plan for `exe` with `args` (argv[0] is `exe`, as
+    /// `Command::new(exe)` makes it) and this process's environment with
+    /// `extra` set over it. `None` for a NUL in any word: the standard
+    /// library refuses that spawn itself, before any hook.
+    pub(crate) fn new(exe: &str, args: &[&str], extra: &[(&str, &str)]) -> Option<ExecPlan> {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt as _;
+        let mut env: Vec<(Vec<u8>, Vec<u8>)> = std::env::vars_os()
+            .map(|(k, v)| (k.as_bytes().to_vec(), v.as_bytes().to_vec()))
+            .collect();
+        for &(k, v) in extra {
+            env.retain(|(ek, _)| ek.as_slice() != k.as_bytes());
+            env.push((k.as_bytes().to_vec(), v.as_bytes().to_vec()));
+        }
+        let search = env
+            .iter()
+            .find(|(k, _)| k.as_slice() == b"PATH")
+            .map(|(_, v)| v.clone())
+            .unwrap_or_else(|| crate::exec::DEFAULT_PATH.as_bytes().to_vec());
+        let mut paths = Vec::new();
+        if exe.contains('/') {
+            paths.push(CString::new(exe).ok()?);
+        } else {
+            for dir in search.split(|&b| b == b':') {
+                let mut p = if dir.is_empty() {
+                    b"./".to_vec()
+                } else {
+                    let mut d = dir.to_vec();
+                    while d.len() > 1 && d.last() == Some(&b'/') {
+                        d.pop();
+                    }
+                    d.push(b'/');
+                    d
+                };
+                p.extend_from_slice(exe.as_bytes());
+                paths.push(CString::new(p).ok()?);
+            }
+        }
+        let argv: Vec<CString> = std::iter::once(exe)
+            .chain(args.iter().copied())
+            .map(|a| CString::new(a).ok())
+            .collect::<Option<_>>()?;
+        let envs: Vec<CString> = env
+            .into_iter()
+            .map(|(mut k, v)| {
+                k.push(b'=');
+                k.extend_from_slice(&v);
+                CString::new(k).ok()
+            })
+            .collect::<Option<_>>()?;
+        let mut argp: Vec<*const libc::c_char> = argv.iter().map(|c| c.as_ptr()).collect();
+        argp.push(std::ptr::null());
+        let mut envp: Vec<*const libc::c_char> = envs.iter().map(|c| c.as_ptr()).collect();
+        envp.push(std::ptr::null());
+        Some(ExecPlan {
+            paths,
+            _argv: argv,
+            argp,
+            _envs: envs,
+            envp,
+        })
+    }
+
+    /// In the child, after `fork`: `execve` each candidate in turn.
+    /// Returns only on failure, with the error the spawn answers. Only
+    /// async-signal-safe calls (`execve`, the `errno` read) over arrays
+    /// built before the fork.
+    fn exec(&self) -> std::io::Error {
+        let mut denied = false;
+        for p in &self.paths {
+            // SAFETY: NUL-terminated strings and NULL-terminated pointer
+            // arrays, all the plan's own and alive.
+            unsafe { libc::execve(p.as_ptr(), self.argp.as_ptr(), self.envp.as_ptr()) };
+            let e = std::io::Error::last_os_error();
+            match e.raw_os_error() {
+                Some(libc::ENOENT | libc::ENOTDIR) => {}
+                Some(libc::EACCES) => denied = true,
+                _ => return e,
+            }
+        }
+        std::io::Error::from_raw_os_error(if denied { libc::EACCES } else { libc::ENOENT })
+    }
+}
+
+/// Make `plan`'s exec the LAST step of `cmd`'s hooks: registered after
+/// every other `pre_exec`, so the descriptors, the group, the terminal
+/// and the dispositions are in place when it runs, and the standard
+/// library's own exec is never reached (it runs only when this returns
+/// an error, which it reports instead).
+#[cfg(unix)]
+pub(crate) fn exec_last(cmd: &mut Command, plan: ExecPlan) {
+    use std::os::unix::process::CommandExt as _;
+    // SAFETY: the hook calls only `execve` and reads `errno` over the
+    // plan's prepared arrays — the async-signal-safe `pre_exec` contract.
+    unsafe {
+        cmd.pre_exec(move || Err(plan.exec()));
+    }
 }
 
 pub mod proc_code {
@@ -1116,6 +1281,8 @@ fn proc_code_of_tag(tag: ProcErr) -> i64 {
 /// `inherit` a live `List[int]` header.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_os_spawn_with(ep: i64, el: i64, args: i64, inherit: i64) -> i64 {
+    // s260 (#682): the family keeps the program step's host number.
+    crate::fs::os_error_clear();
     let exe = unsafe { view(ep, el) };
     let Some(pairs) = (unsafe { crate::list::str_pair_elems(args) }) else {
         return -proc_code::IO;
@@ -1153,6 +1320,8 @@ pub unsafe extern "C" fn __wolf_rt_os_spawn_with(ep: i64, el: i64, args: i64, in
 /// a live `List[int]` header.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_os_spawn_fds(ep: i64, el: i64, args: i64, map: i64) -> i64 {
+    // s260 (#682): the family keeps the program step's host number.
+    crate::fs::os_error_clear();
     let exe = unsafe { view(ep, el) };
     let Some(pairs) = (unsafe { crate::list::str_pair_elems(args) }) else {
         return -proc_code::IO;
@@ -1220,6 +1389,8 @@ pub unsafe extern "C" fn __wolf_rt_os_spawn_job(
     tty: i64,
     defaults: i64,
 ) -> i64 {
+    // s260 (#682): the family keeps the program step's host number.
+    crate::fs::os_error_clear();
     let exe = unsafe { view(ep, el) };
     let Some(pairs) = (unsafe { crate::list::str_pair_elems(args) }) else {
         return -proc_code::IO;
@@ -1507,6 +1678,8 @@ pub unsafe extern "C" fn __wolf_rt_os_isatty(fd: i64, out: i64) -> i64 {
 /// pairs.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn __wolf_rt_os_spawn(hdr: i64) -> i64 {
+    // s260 (#682): the family keeps the program step's host number.
+    crate::fs::os_error_clear();
     let Some(pairs) = (unsafe { crate::list::str_pair_elems(hdr) }) else {
         return -proc_code::IO;
     };
@@ -2420,5 +2593,122 @@ mod tests {
         let h = crate::fs::mint_file(std::fs::File::open(&p).unwrap());
         assert_eq!(spawn_job_shim("true", &[], &[], 0, h, 0), -proc_code::IO);
         let _ = std::fs::remove_file(&p);
+    }
+
+    /// s260 (#682, `[os.proc.exec]`): the three files of the issue — a
+    /// `#!`-less text file that would leave a marker if anything ran it,
+    /// four NUL bytes, and a `#!/bin/sh` control — executable, in a fresh
+    /// directory. Returns (dir, noshebang, junk, control, marker).
+    #[cfg(unix)]
+    fn noexec_files(name: &str) -> [std::path::PathBuf; 5] {
+        use std::os::unix::fs::PermissionsExt as _;
+        let d = std::env::temp_dir().join(format!("wolf_rt_s260_{name}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let marker = d.join("ran");
+        let nos = d.join("noshebang");
+        let junk = d.join("junk");
+        let ctl = d.join("control");
+        std::fs::write(&nos, format!("echo ran > '{}'\n", marker.display())).unwrap();
+        std::fs::write(&junk, b"\0\0\0\0").unwrap();
+        std::fs::write(&ctl, "#!/bin/sh\nexit 7\n").unwrap();
+        for f in [&nos, &junk, &ctl] {
+            std::fs::set_permissions(f, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        [d, nos, junk, ctl, marker]
+    }
+
+    /// s260 (#682): every spawn of the family answers `io` for a file the
+    /// kernel will not exec, with `ENOEXEC` in `os_error()`, and nothing
+    /// runs it under `/bin/sh`: the descriptor map (the issue's call),
+    /// the job spawn, a non-empty inherit set, and the plain spawn — which
+    /// this test binary hooks too, because the Rust runtime ignores
+    /// `SIGPIPE` (`keep_pipe_ignore`), the shape t06 did not reach. The
+    /// `#!/bin/sh` control still runs through every one of them.
+    #[cfg(unix)]
+    #[test]
+    fn a_file_with_no_shebang_is_io_on_every_spawn() {
+        let [d, nos, junk, ctl, marker] = noexec_files("spawn");
+        let w = crate::fs::mint_file(std::fs::File::create(d.join("out")).unwrap());
+        let held = crate::fs::dup_of(w).unwrap();
+        let fd = std::os::fd::AsRawFd::as_raw_fd(&held);
+        for exe in [&nos, &junk] {
+            let e = exe.to_str().unwrap();
+            let mut t = ChildTable::new();
+            let rows: [(&str, Result<i64, ProcErr>); 4] = [
+                ("spawn_fds", t.spawn_fds(e, &[], &[(1, Some(fd))])),
+                ("spawn_job", t.spawn_job(e, &[], &[(1, Some(fd))], &JobOpts::PLAIN)),
+                ("spawn_with", t.spawn_with(e, &[], &[fd])),
+                ("spawn", t.spawn(&[e])),
+            ];
+            for (what, r) in rows {
+                assert_eq!(r, Err("io"), "{what} {e}");
+            }
+            // The word is the last call's: each row above set it.
+            assert_eq!(crate::fs::__wolf_rt_os_error(), i64::from(libc::ENOEXEC), "{e}");
+        }
+        assert!(!marker.exists(), "nothing ran the #!-less file under /bin/sh");
+        let c = ctl.to_str().unwrap();
+        let mut t = ChildTable::new();
+        for h in [
+            t.spawn_fds(c, &[], &[(1, Some(fd))]).unwrap(),
+            t.spawn_job(c, &[], &[(1, Some(fd))], &JobOpts::PLAIN).unwrap(),
+            t.spawn_with(c, &[], &[fd]).unwrap(),
+            t.spawn(&[c]).unwrap(),
+        ] {
+            assert_eq!(t.wait(h), Ok(7), "the control runs");
+        }
+        drop(held);
+        crate::fs::__wolf_rt_fs_close(w);
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// s260 (#682): the shim answers `-IO` with `ENOEXEC` in `os_error()`
+    /// (the issue's witness at the C surface), and a refusal decided
+    /// before the program step leaves the word 0.
+    #[cfg(unix)]
+    #[test]
+    fn spawn_fds_keeps_the_enoexec_number() {
+        let [d, nos, _, _, marker] = noexec_files("shim");
+        assert_eq!(spawn_fds_shim(nos.to_str().unwrap(), &[], &[1, 1]), -proc_code::IO);
+        assert_eq!(crate::fs::__wolf_rt_os_error(), i64::from(libc::ENOEXEC));
+        assert_eq!(spawn_fds_shim(nos.to_str().unwrap(), &[], &[1]), -proc_code::INVALID);
+        assert_eq!(crate::fs::__wolf_rt_os_error(), 0, "the shape is decided first");
+        assert_eq!(
+            spawn_fds_shim("wolf-s260-no-such-program", &[], &[1, 1]),
+            -proc_code::NOT_FOUND
+        );
+        assert_eq!(crate::fs::__wolf_rt_os_error(), i64::from(libc::ENOENT));
+        assert!(!marker.exists());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// s260 (#682): what the hooked exec hands the program — argv[0] as
+    /// written and the words after it, this process's environment with
+    /// the seam's additions over it, and a bare name found along `PATH`.
+    #[cfg(unix)]
+    #[test]
+    fn the_hooked_exec_hands_argv_and_the_environment() {
+        let d = std::env::temp_dir().join(format!("wolf_rt_s260_argv_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let out = d.join("seen");
+        let script = format!(
+            "printf '%s|%s|%s|%s' \"$0\" \"$1\" \"$2\" \"$S260_SEEN\" > '{}'",
+            out.display()
+        );
+        let null = std::fs::File::open("/dev/null").unwrap();
+        let mut t = ChildTable::new();
+        let h = t
+            .spawn_with_env(
+                "sh",
+                &["-c", &script, "word one"],
+                &[std::os::fd::AsRawFd::as_raw_fd(&null)],
+                &[("S260_SEEN", "over")],
+            )
+            .unwrap();
+        assert_eq!(t.wait(h), Ok(0));
+        assert_eq!(std::fs::read_to_string(&out).unwrap(), "word one|||over");
+        let _ = std::fs::remove_dir_all(&d);
     }
 }
