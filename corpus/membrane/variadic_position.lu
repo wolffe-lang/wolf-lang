@@ -1,0 +1,8 @@
+//! check: fail(E0822)
+//! phase: parse
+//! conforms: abi.c.variadic.syntax
+//! An unnamed tail cannot be followed by another named parameter.
+
+export fn sum(n: i32, ..., last: i32) -> i64 {
+    0
+}

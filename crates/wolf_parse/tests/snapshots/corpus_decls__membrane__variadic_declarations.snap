@@ -1,0 +1,6 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 156..199 name=printf extern
+FnDecl 200..243 name=sum export body=Block

@@ -709,9 +709,19 @@ impl<'a> Fmt<'a> {
             return start;
         };
         let consumed = self.consumed.borrow();
+        // Whitespace BETWEEN consumed header comments is unconsumed
+        // too, but starting there would re-emit the later comments.
+        // The raw suffix begins only after the last consumed span.
+        let after = t
+            .leading
+            .iter()
+            .filter(|s| consumed.contains(&(s.lo, s.hi)))
+            .map(|s| s.hi)
+            .max()
+            .unwrap_or(start);
         t.leading
             .iter()
-            .find(|s| !consumed.contains(&(s.lo, s.hi)))
+            .find(|s| s.lo >= after && !consumed.contains(&(s.lo, s.hi)))
             .map_or_else(|| t.span.lo, |s| s.lo)
             .max(start)
     }

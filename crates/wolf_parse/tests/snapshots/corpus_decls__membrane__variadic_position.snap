@@ -1,0 +1,7 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+expression: dump
+---
+FnDecl 144..198 name=sum export body=Block
+-- diagnostics --
+E0822 [Error] 166..168 `...` must end a C membrane's parameter list, after a fixed parameter

@@ -124,3 +124,21 @@ fn w0301_partial_format_diagnostic_snapshot() {
     let rendered = wolf_diag::render_human(&d, &sources, &wolf_diag::RenderOptions::default());
     insta::assert_snapshot!("w0301_partial_format", rendered);
 }
+
+#[test]
+fn invalid_variadic_tail_is_preserved_without_fallback() {
+    let src = include_bytes!("../../../corpus/membrane/variadic_position.lu");
+    let formatted = wolf_fmt::format_text(src);
+    assert!(formatted.partial);
+    assert!(
+        !formatted.fell_back,
+        "{}",
+        String::from_utf8_lossy(&wolf_fmt::render_unchecked(src))
+    );
+    assert!(
+        String::from_utf8(formatted.text.clone())
+            .unwrap()
+            .contains("(n: i32, ..., last: i32)")
+    );
+    assert_eq!(wolf_fmt::format_text(&formatted.text).text, formatted.text);
+}
