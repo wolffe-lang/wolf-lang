@@ -669,7 +669,7 @@ ast_node!(
 
 impl<'a> ParamList<'a> {
     pub fn is_variadic(self) -> bool {
-        self.0.child_token(SyntaxKind::DotDot).is_some()
+        self.0.nodes().any(|n| n.kind == SyntaxKind::VariadicParam)
     }
 
     pub fn params(self) -> impl Iterator<Item = Param<'a>> {

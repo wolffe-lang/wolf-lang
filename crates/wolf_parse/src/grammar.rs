@@ -391,12 +391,14 @@ fn param_list(p: &mut Parser<'_>, c_membrane: bool) -> bool {
         }
         // The lexer keeps `..` and `.` separate (range punctuation).
         // Only the adjacent pair spells the C ellipsis; retain both
-        // direct tokens on ParamList, never a phantom named parameter.
+        // tokens in a dedicated list element, never a named parameter.
         if p.at_punct(Punct::DotDot) && p.nth(1) == TokenKind::Punct(Punct::Dot) {
             let span = p.current_span();
             let adjacent = span.hi == p.nth_span(1).lo;
+            let ellipsis = p.start();
             p.bump();
             p.bump();
+            ellipsis.complete(p, SyntaxKind::VariadicParam);
             if !c_membrane || fixed == 0 || !adjacent || !p.at_punct(Punct::RParen) {
                 p.error(
                     wolf_diag::codes::E0822,

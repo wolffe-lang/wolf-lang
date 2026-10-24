@@ -97,7 +97,7 @@ pub enum SyntaxKind {
     /// a direct child of `SourceFile`, position-enforced by the parser.
     InnerAttribute,
     GenericParamList, GenericParam, TypeBound,
-    ParamList, Param, ViewSet, RetType,
+    ParamList, Param, VariadicParam, ViewSet, RetType,
     StructDef, EnumDef, StructField, EnumVariant,
     ErrorRow, RowEntry,
     /// One whole string episode (`StrBegin … StrEnd`) in a declaration
