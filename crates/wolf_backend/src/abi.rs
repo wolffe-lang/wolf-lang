@@ -98,6 +98,8 @@
 //! `[abi.err.row]`) — [`plan_sig`] with [`Conv::C`] over an eu
 //! signature is therefore a caller bug and panics in debug builds.
 
+pub mod variadic;
+
 use wolf_wir::ir::SigData;
 use wolf_wir::types::{TypeData, TypeId, TypeInterner};
 

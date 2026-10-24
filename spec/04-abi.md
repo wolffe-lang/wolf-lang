@@ -369,6 +369,25 @@ C membranes are extended: `import c` still admits only its modelled set
   registers used, fixed arguments included, in `0..=8`. The caller's
   stack is 16-byte aligned at the call instruction. Every compiling
   tier keeps the same contract.
+  The native implementation may use a C-entry trampoline and a fixed-arity
+  private core. The trampoline saves all six GP and eight SSE argument
+  registers before using scratch registers (`rax`, `r10`, `r11`); the
+  core receives the fixed arguments unchanged plus a final hidden pointer
+  to the initialized list. The pointer uses the next GP slot, or an
+  8-byte stack slot after the named stack arguments when GP is exhausted.
+  Relative to the trampoline's adjusted `rsp`, named stack arguments for
+  the core occupy the initial bytes; the hidden pointer's stack slot, if
+  any, follows; the 24-byte list is next at 8-byte alignment; the 176-byte
+  save area follows at 16-byte alignment. The frame allocation is the
+  smallest size covering those areas that is 8 modulo 16: the entry's
+  return address makes the original `rsp` 8 modulo 16, so the core call
+  is aligned. The overflow pointer addresses the original incoming stack
+  after the named stack arguments, not the core's copied argument area.
+  A tail-call shim for an outgoing variadic call sets `%al` immediately
+  before jumping to the C symbol, preserving all argument registers and
+  the caller's stack layout. These private shims are not extra C ABI
+  parameters; the release emitter may use its native variadic operations
+  instead, but must expose the same cursor layout and argument sequence.
 - `[abi.c.variadic.list]` `VaList` is a builtin C-layout record, size 24,
   alignment 8: `gp_offset: u32` at byte 0, `fp_offset: u32` at byte 4,
   `overflow_arg_area: *u8` at byte 8 and `reg_save_area: *u8` at byte 16.
