@@ -1,0 +1,49 @@
+   Compiling cranelift-object v0.134.3
+   Compiling wolf_codegen_clif v0.2.35 (/work/crates/wolf_codegen_clif)
+   Compiling wolf_driver v0.2.35 (/work/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.52s
+     Running tests/exec_lanes.rs (target/debug/deps/exec_lanes-e451b05014a6b402)
+
+running 6 tests
+control descriptor set: open=
+PASS the --checked lane on os/env_unset.lu
+PASS the --checked lane on os/exec_rows.lu
+PASS the --native lane on os/env_unset.lu
+PASS the --native lane on os/exec_rows.lu
+PASS the checked lane on image.lu (pid 306)
+PASS the native lane on image.lu (pid 314)
+PASS the checked lane on fd_map.lu
+PASS the native lane on fd_map.lu
+PASS the --release lane on os/env_unset.lu
+PASS the native (taskset -c 0-3) lane on image.lu (pid 316)
+PASS the checked lane on unset_child.lu
+PASS lupin 0.1.56 at 28547b4 on os/env_unset.lu
+test env_unset_round_trips ... ok
+PASS the release lane on image.lu (pid 391)
+PASS the native (taskset -c 0-3) lane on fd_map.lu
+PASS the release lane on fd_map.lu
+PASS the native lane on unset_child.lu
+PASS the --release lane on os/exec_rows.lu
+PASS the release (taskset -c 0-3) lane on image.lu (pid 395)
+PASS the lupin lane on image.lu (pid 428)
+test exec_replaces_the_image_and_keeps_the_pid ... ok
+PASS the release (taskset -c 0-3) lane on fd_map.lu
+PASS lupin 0.1.56 at 28547b4 on os/exec_rows.lu
+test an_exec_of_a_bad_shape_is_invalid_and_returns ... ok
+REFUSED BY NAME the lupin lane on fd_map.lu: lupin 0.1.56 at 28547b4 unsupported
+test exec_places_the_map ... ok
+PASS the native (taskset -c 0-3) lane on unset_child.lu
+PASS the release lane on unset_child.lu
+PASS the checked lane on fail.lu
+PASS the native lane on fail.lu
+PASS the release (taskset -c 0-3) lane on unset_child.lu
+PASS the lupin lane on unset_child.lu
+test a_child_no_longer_sees_a_removed_variable ... ok
+PASS the native (taskset -c 0-3) lane on fail.lu
+PASS the release lane on fail.lu
+PASS the release (taskset -c 0-3) lane on fail.lu
+PASS the lupin lane on fail.lu
+test a_failed_exec_answers_its_row_and_puts_the_process_back ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+

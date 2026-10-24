@@ -1,0 +1,7 @@
+default dispositions: plain=SigIgn:	0000000000000000 wrapped=SigIgn:	0000000000000000
+inherited ignored dispositions: plain=SigIgn:	0000000001001000 wrapped=SigIgn:	0000000001001000
+pid 9's current affinity list: 6-9
+pid 13's current affinity list: 6
+pid 17's current affinity list: 6-9
+s263 taskset: requested CPU set does not fit block B
+taskset selftest passed
