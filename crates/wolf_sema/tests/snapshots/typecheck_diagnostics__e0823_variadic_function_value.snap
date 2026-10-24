@@ -1,0 +1,10 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0823]: `sum` is variadic — call it by name, not through a function value
+ --> mem:///main.lu:2:21
+  |
+2 | fn main() { let f = sum }
+  |                     ^^^
+  |

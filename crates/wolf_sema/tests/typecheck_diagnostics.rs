@@ -857,3 +857,11 @@ fn e0301_container_type_argument_is_unresolved_not_declined() {
         "fn main() -> int {\n    let in_flight = Map[str, Child]()\n    0\n}\n",
     );
 }
+
+#[test]
+fn e0823_variadic_function_value() {
+    snap_one(
+        "e0823_variadic_function_value",
+        "export fn sum(n: i32, ...) -> i64 { 0 }\nfn main() { let f = sum }\n",
+    );
+}

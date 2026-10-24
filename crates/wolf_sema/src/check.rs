@@ -135,6 +135,8 @@ pub struct CallSig {
     /// unsafe-tier by D11, gated to `unsafe` blocks by wolf_mem
     /// (E1301) and recorded as an attribution fact for s23/c10.
     pub c_call: bool,
+    /// This named call crosses a C variadic boundary, including exports.
+    pub variadic: bool,
 }
 
 /// Which rule admitted an `as` cast (s17). `Numeric` lowers to a real
@@ -3486,6 +3488,7 @@ impl<'a> Checker<'a> {
                 ctor: true,
                 params: Vec::new(),
                 c_call: false,
+                variadic: false,
             },
         ));
         Ok(self.lo.table.intern(TyKind::Chan(elem)))
@@ -3518,6 +3521,7 @@ impl<'a> Checker<'a> {
                 ctor: true,
                 params: Vec::new(),
                 c_call: false,
+                variadic: false,
             },
         ));
         Ok(self.lo.table.intern(TyKind::Mutex(payload)))
@@ -5244,6 +5248,16 @@ impl<'a> Checker<'a> {
     fn item_value_ty(&mut self, module: usize, name: &str, span: Span) -> R<TyId> {
         match self.sigs.get(module, name) {
             Some(ItemSig::Fn(f)) => {
+                if f.variadic {
+                    self.diags.push(Diagnostic::error(
+                        codes::E0823,
+                        span,
+                        format!(
+                            "`{name}` is variadic — call it by name, not through a function value"
+                        ),
+                    ));
+                    return Ok(self.error_ty());
+                }
                 if !f.generics.is_empty() {
                     return Err(NotYet {
                         construct: "a generic function used as a value (comptime)",
@@ -6688,6 +6702,7 @@ impl<'a> Checker<'a> {
                 ctor: true,
                 params: Vec::new(),
                 c_call: false,
+                variadic: false,
             },
         ));
         Ok(match name {
@@ -7205,6 +7220,7 @@ impl<'a> Checker<'a> {
             trusted: None,
             consttime: None,
             membrane: None,
+            variadic: false,
         };
         self.dispatch_method(
             mname,
@@ -7261,6 +7277,7 @@ impl<'a> Checker<'a> {
             trusted: None,
             consttime: None,
             membrane: None,
+            variadic: false,
         };
         self.dispatch.push((
             e.span,
@@ -7482,6 +7499,7 @@ impl<'a> Checker<'a> {
             trusted: None,
             consttime: None,
             membrane: None,
+            variadic: false,
         };
         // E1101 rides on `spawn`'s argument: while the task closure
         // checks, assignments to bindings below this depth are
@@ -7704,6 +7722,7 @@ impl<'a> Checker<'a> {
             trusted: None,
             consttime: None,
             membrane: None,
+            variadic: false,
         };
         self.dispatch_method(
             mname,
@@ -7886,6 +7905,7 @@ impl<'a> Checker<'a> {
                 ctor: false,
                 params: params.clone(),
                 c_call: false,
+                variadic: false,
             },
         ));
         self.receiver_mode_law(base, recv_mode, None, mname, member_span);
@@ -8099,6 +8119,7 @@ impl<'a> Checker<'a> {
             trusted: None,
             consttime: None,
             membrane: None,
+            variadic: false,
         };
         self.dispatch_method(
             mname,
@@ -8524,6 +8545,7 @@ impl<'a> Checker<'a> {
                 ctor: false,
                 params: method.sig.params.clone(),
                 c_call: false,
+                variadic: false,
             },
         ));
         // Blame span for the Self obligation: the argument that pins
@@ -8697,6 +8719,7 @@ impl<'a> Checker<'a> {
                 ctor: false,
                 params,
                 c_call: true,
+                variadic: false,
             },
         ));
         self.call_fixed(&label, &param_tys, ret, e, args)
@@ -9056,6 +9079,7 @@ impl<'a> Checker<'a> {
         if sig.comptime {
             self.note_comptime_call(e.span);
         }
+        let call_index = self.calls.len();
         self.calls.push((
             e.span,
             CallSig {
@@ -9068,6 +9092,7 @@ impl<'a> Checker<'a> {
                 // `extern "c" fn` is a call into imported C — the same
                 // raw-tier operation as `c.malloc` (E1301).
                 c_call: sig.membrane == Some(crate::sig::Membrane::Import),
+                variadic: sig.variadic,
             },
         ));
         // s14 instantiation: each generic parameter becomes a fresh
@@ -9091,7 +9116,9 @@ impl<'a> Checker<'a> {
             map.insert(g.name.clone(), v);
         }
         let arg_nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
-        if arg_nodes.len() != sig.params.len() {
+        if arg_nodes.len() < sig.params.len()
+            || (!sig.variadic && arg_nodes.len() != sig.params.len())
+        {
             self.wrong_arg_count(
                 name,
                 e.span,
@@ -9130,7 +9157,19 @@ impl<'a> Checker<'a> {
                     self.check_expr(v, &exp)?;
                 }
                 None => {
-                    self.synth_expr(v)?;
+                    let ty = self.synth_expr(v)?;
+                    if sig.variadic {
+                        // The memory checker must see tail arguments too:
+                        // they are read values, never hidden moded places.
+                        self.calls[call_index].1.params.push(ParamSig {
+                            name: format!("unnamed argument {}", i - sig.params.len() + 1),
+                            ty,
+                            span: v.span,
+                            mode: None,
+                            view: None,
+                            store: false,
+                        });
+                    }
                 }
             }
         }
@@ -9198,6 +9237,7 @@ impl<'a> Checker<'a> {
                             })
                             .collect(),
                         c_call: false,
+                        variadic: false,
                     },
                 ));
                 for (i, arg) in arg_nodes.iter().enumerate() {
@@ -9275,6 +9315,7 @@ impl<'a> Checker<'a> {
                             })
                             .collect(),
                         c_call: false,
+                        variadic: false,
                     },
                 ));
                 Ok(ret)
@@ -9441,6 +9482,7 @@ impl<'a> Checker<'a> {
                             })
                             .collect(),
                         c_call: false,
+                        variadic: false,
                     },
                 ));
                 for (i, arg) in arg_nodes.iter().enumerate() {
@@ -10287,6 +10329,7 @@ impl<'a> Checker<'a> {
                 ctor: false,
                 params: sig.params.clone(),
                 c_call: false,
+                variadic: false,
             },
         ));
         self.receiver_mode_law(recv, recv_mode, selfp.mode, label, decl_span);
@@ -13195,6 +13238,7 @@ impl<'a> Checker<'a> {
                 ctor: false,
                 params: params.clone(),
                 c_call: false,
+                variadic: false,
             },
         ));
         for (i, arg) in arg_nodes.iter().enumerate() {

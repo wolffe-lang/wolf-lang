@@ -1263,3 +1263,42 @@ fn a_blocking_channel_operation_on_the_only_task_is_deadlock() {
         }
     }
 }
+
+#[test]
+fn variadic_calls_are_named_checked_refusals_both_ways() {
+    for (src, direction) in [
+        (
+            "extern \"c\" fn sum(n: i32, ...) -> i64\nfn main() -> int { unsafe { sum(1, 42 as i64) as int } }\n",
+            "into C",
+        ),
+        (
+            "export fn sum(n: i32, ...) -> i64 { 0 }\nfn main() -> int { sum(1, 42 as i64) as int }\n",
+            "to a wolf definition",
+        ),
+    ] {
+        let mut loader = MemoryLoader::new("variadic");
+        loader.add_file(&[], "main.lu", src);
+        let res = resolve_package_with(&mut loader, &AliasTable::default(), true).unwrap();
+        assert!(res.diagnostics.is_empty(), "{:?}", res.diagnostics);
+        let tc = typecheck_package_with(&res.package, true);
+        assert!(
+            tc.fully_checked(),
+            "{:?} / {:?}",
+            tc.diagnostics,
+            tc.not_yet
+        );
+        let mem = wolf_mem::check_package(&res.package, &tc);
+        assert!(
+            mem.diagnostics
+                .iter()
+                .all(|d| d.severity != wolf_diag::Severity::Error),
+            "{:?}",
+            mem.diagnostics
+        );
+        assert!(mem.not_yet.is_empty(), "{:?}", mem.not_yet);
+        let refusal = ubcheck::run_checked(&res.package, &tc, Budget::default()).unwrap_err();
+        assert!(refusal.construct.contains("variadic"), "{refusal:?}");
+        assert!(refusal.construct.contains(direction), "{refusal:?}");
+        assert!(refusal.construct.contains("sum"), "{refusal:?}");
+    }
+}

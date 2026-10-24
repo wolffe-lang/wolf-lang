@@ -349,3 +349,16 @@ fn version_only_bump_moves_no_hash() {
     assert_eq!(dflt[0].toolchain, env!("CARGO_PKG_VERSION"));
     assert_eq!(dflt[0].export_hash, new[0].export_hash);
 }
+
+#[test]
+fn variadic_marker_participates_in_interface_hashes() {
+    let fixed = interfaces(&[(&[], "main.lu", "pub extern \"c\" fn f(n: i32) -> i32\n")]);
+    let variadic = interfaces(&[(
+        &[],
+        "main.lu",
+        "pub extern \"c\" fn f(n: i32, ...) -> i32\n",
+    )]);
+    assert_ne!(encode(&fixed[0]), encode(&variadic[0]));
+    assert_ne!(fixed[0].export_hash, variadic[0].export_hash);
+    assert_ne!(fixed[0].pkg_hash, variadic[0].pkg_hash);
+}

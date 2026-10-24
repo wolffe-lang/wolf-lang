@@ -3134,6 +3134,9 @@ impl<'t> Machine<'t> {
         let ctx = self.ctxs[body].as_ref().expect("callable body has ctx");
         let node = ctx.node;
         let decl = wolf_ast::FnDecl::cast(node).expect("fn body");
+        if decl.is_variadic() {
+            return self.refuse("a C variadic definition on the checked machine", node.span);
+        }
         let Some(block) = decl.body() else {
             return self.refuse("extern fn without a body", node.span);
         };
@@ -11919,6 +11922,18 @@ impl<'t> Machine<'t> {
             return Ok(Flow::Val(v));
         }
         let cs: Option<&CallSig> = self.ctx().calls.get(&e.span).copied();
+        if let Some(cs) = cs.filter(|c| c.variadic) {
+            let direction = if cs.c_call {
+                "into C"
+            } else {
+                "to a wolf definition"
+            };
+            let construct = Box::leak(format!(
+                "a C variadic call {direction} `{}` (the checked machine has no variadic membrane)",
+                cs.callee,
+            ).into_boxed_str());
+            return self.refuse(construct, e.span);
+        }
         // C intrinsics (the is04 modelled set).
         if cs.map(|c| c.c_call).unwrap_or(false) {
             let name = cs.expect("c_call has sig").callee.clone();
