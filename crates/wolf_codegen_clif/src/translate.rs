@@ -839,6 +839,7 @@ struct Tx<'a, 'b> {
     cur_span_lo: Option<u32>,
     blocks: HashMap<WBlock, cranelift_codegen::ir::Block>,
     vals: HashMap<wolf_wir::ir::Value, Repr>,
+    read_lends: HashMap<wolf_wir::ir::Value, wolf_wir::ir::Value>,
     /// Slots owned by aggregate-typed block params of non-entry blocks.
     param_slots: HashMap<(WBlock, usize), cranelift_codegen::ir::StackSlot>,
     /// sret addresses (entry params), in aggregate-result order.
@@ -912,6 +913,7 @@ pub(crate) fn translate_function(
         cur_span_lo: None,
         blocks: HashMap::new(),
         vals: HashMap::new(),
+        read_lends: wolf_backend::read_lend::borrowed_aggregates(m, f),
         param_slots: HashMap::new(),
         sret: Vec::new(),
         trap_blocks: HashMap::new(),
@@ -1932,6 +1934,11 @@ impl<'a, 'b> Tx<'a, 'b> {
 
             // ---- aggregates ----
             Opcode::AggMake => {
+                if let Some(&ptr) = self.read_lends.get(&results[0]) {
+                    let addr = self.scalar(ptr)?;
+                    self.vals.insert(results[0], Repr::Addr(addr));
+                    return Ok(());
+                }
                 let rty = self.f.value_ty(results[0]);
                 let TypeData::Agg(fields) = self.m.types.get(rty).clone() else {
                     return Err(ice("agg.make of non-aggregate"));

@@ -626,6 +626,7 @@ pub(crate) struct Fx<'a> {
     /// Symbols defined in this module (no `declare` for them).
     defined: &'a HashSet<String>,
     vals: HashMap<WValue, Repr>,
+    read_lends: HashMap<WValue, WValue>,
     /// Entry-block `alloca` lines (LLVM allocas must not sit in loops).
     allocas: Vec<String>,
     blocks: Vec<LBlock>,
@@ -767,6 +768,7 @@ pub(crate) fn emit_function(
         funcs,
         defined,
         vals: HashMap::new(),
+        read_lends: wolf_backend::read_lend::borrowed_aggregates(m, f),
         allocas: Vec::new(),
         blocks: Vec::new(),
         cur: 0,
@@ -2410,6 +2412,11 @@ impl<'a> Fx<'a> {
 
             // ---- aggregates ----
             Opcode::AggMake => {
+                if let Some(&ptr) = self.read_lends.get(&results[0]) {
+                    let addr = self.op(ptr)?;
+                    self.vals.insert(results[0], Repr::Addr(addr));
+                    return Ok(());
+                }
                 let rty = self.f.value_ty(results[0]);
                 let TypeData::Agg(fields) = self.m.types.get(rty).clone() else {
                     return Err(ice("agg.make of non-aggregate"));
