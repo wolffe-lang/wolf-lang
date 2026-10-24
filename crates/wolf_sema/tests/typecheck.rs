@@ -1007,6 +1007,7 @@ fn missing_container_type_names_report_the_leaf_without_cascades() {
 
 #[test]
 fn variadic_call_checks_fixed_prefix_and_accepts_tail() {
+    let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-linux-gnu");
     let tc = check_one(
         "extern \"c\" fn f(n: i32, ...) -> i32\nfn invoke() -> i32 { unsafe { f(1, 2 as u8, 3 as f32) } }\n",
     );
@@ -1030,6 +1031,75 @@ fn variadic_call_checks_fixed_prefix_and_accepts_tail() {
     assert!(codes(&tc).contains(&"E0402"), "{:?}", tc.diagnostics);
     let tc = check_one(
         "extern \"c\" fn f(n: i32, ...) -> i32\nfn invoke() -> i32 { unsafe { f(true, 1) } }\n",
+    );
+    assert!(codes(&tc).contains(&"E0401"), "{:?}", tc.diagnostics);
+}
+
+#[test]
+fn variadic_list_builtins_allow_nonvariadic_consumers() {
+    let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-linux-gnu");
+    let tc = check_one(
+        "fn consume(ap: VaList) -> i64 { unsafe { var cp = va_copy(ap); let x = va_arg[i64](mut cp); va_end(mut cp); x } }\nexport fn sum(n: i32, ...) -> i64 { unsafe { var ap = va_start(); let x = consume(ap); va_end(mut ap); x } }\n",
+    );
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+}
+
+#[test]
+fn variadic_start_in_nested_frame_is_rejected() {
+    let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-linux-gnu");
+    let tc =
+        check_one("export fn f(n: i32, ...) { let g = fn() { unsafe { let ap = va_start() } } }\n");
+    assert!(codes(&tc).contains(&"E0824"), "{:?}", tc.diagnostics);
+}
+
+#[test]
+fn variadic_arg_requires_promoted_type() {
+    let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-linux-gnu");
+    for ty in ["i8", "i16", "u8", "u16", "byte", "bool", "f32"] {
+        let tc = check_one(&format!(
+            "fn consume(mut ap: VaList) {{ unsafe {{ va_arg[{ty}](mut ap) }} }}\n"
+        ));
+        assert!(codes(&tc).contains(&"E0401"), "{ty}: {:?}", tc.diagnostics);
+    }
+}
+
+#[test]
+fn variadic_list_layout_is_the_c_record_not_a_pointer() {
+    let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-linux-gnu");
+    let tc = check_one("fn f(ap: *VaList) {}\n");
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+    let mut table = tc.sigs.table.clone();
+    let list = table.intern(wolf_sema::types::TyKind::VaList);
+    let layout = wolf_sema::layout::c_layout(&tc.sigs, &table, list).unwrap();
+    assert_eq!((layout.size, layout.align), (24, 8));
+    assert_eq!(
+        layout.fields.iter().map(|f| f.offset).collect::<Vec<_>>(),
+        [0, 4, 8, 16]
+    );
+    let ptr = table.intern(wolf_sema::types::TyKind::Ptr(list));
+    assert_eq!(
+        wolf_sema::layout::c_layout(&tc.sigs, &table, ptr)
+            .unwrap()
+            .size,
+        8
+    );
+}
+
+#[test]
+fn variadic_tail_rejects_non_c_values() {
+    let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-linux-gnu");
+    let tc = check_one(
+        "extern \"c\" fn f(n: i32, ...)\nfn invoke() { unsafe { f(1, \"not a C string\") } }\n",
     );
     assert!(codes(&tc).contains(&"E0401"), "{:?}", tc.diagnostics);
 }

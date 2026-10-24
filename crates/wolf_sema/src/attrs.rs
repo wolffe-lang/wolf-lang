@@ -726,7 +726,28 @@ fn check_abi(node: &GreenNode, src: &[u8], diags: &mut Vec<Diagnostic>) {
     );
 }
 
+/// The first variadic contract is Linux x86-64 only, not every SysV host.
+pub fn variadic_target_diagnostic(target: &str, span: Span) -> Option<Diagnostic> {
+    if matches!(
+        target,
+        "x86_64-unknown-linux-gnu" | "x86_64-unknown-linux-musl"
+    ) {
+        return None;
+    }
+    Some(Diagnostic::error(
+        codes::E0826,
+        span,
+        format!("C variadic membranes are unsupported on `{target}` — use x86-64 Linux"),
+    ))
+}
+
 fn walk(node: &GreenNode, top: bool, src: &[u8], target: &str, diags: &mut Vec<Diagnostic>) {
+    if FnDecl::cast(node).is_some_and(|f| f.is_variadic())
+        && let Some(d) = variadic_target_diagnostic(target, node.span)
+    {
+        diags.push(d);
+    }
+
     for attr in node.nodes().filter_map(wolf_ast::Attribute::cast) {
         for item in attr.items() {
             check_item(&item, node, top, src, target, diags);

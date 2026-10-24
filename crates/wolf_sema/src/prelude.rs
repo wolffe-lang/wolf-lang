@@ -148,6 +148,11 @@ pub const PRELUDE: &[Ambient] = &[
     // — the type of `a..b`. A prelude NAME, like `List`, not a
     // `BUILTIN_TYPES` prim: it takes an argument.
     ty("range", Some("type.range.name")),
+    ty("VaList", Some("abi.c.variadic.list")),
+    fun("va_start", Some("abi.c.variadic.builtins")),
+    fun("va_arg", Some("abi.c.variadic.builtins")),
+    fun("va_copy", Some("abi.c.variadic.builtins")),
+    fun("va_end", Some("abi.c.variadic.builtins")),
     // small helpers the corpus leans on
     fun("min", None),
     fun("zip", None),

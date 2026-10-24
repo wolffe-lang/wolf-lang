@@ -202,3 +202,22 @@ fn a_dropped_item_is_never_defined() {
         res.package.diagnostics
     );
 }
+
+#[test]
+fn e0826_variadic_target_refusal() {
+    let _target = wolf_sema::attrs::enter_build_target("aarch64-apple-darwin");
+    insta::assert_snapshot!(
+        "e0826_apple_variadic",
+        render_attrs("export fn sum(n: i32, ...) -> i64 { 0 }\n")
+    );
+    for target in [
+        "aarch64-unknown-linux-gnu",
+        "x86_64-pc-windows-msvc",
+        "x86_64-unknown-freebsd",
+        "x86_64-unknown-none",
+    ] {
+        let _target = wolf_sema::attrs::enter_build_target(target);
+        let out = render_attrs("extern \"c\" fn f(n: i32, ...)\n");
+        assert!(out.contains("E0826") && out.contains(target), "{out}");
+    }
+}

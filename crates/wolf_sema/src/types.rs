@@ -174,6 +174,8 @@ pub enum TyKind {
     /// The unit type: blocks without a value, `fn` without `->`.
     Unit,
     Prim(Prim),
+    /// SysV C variable-argument cursor (`[abi.c.variadic.list]`).
+    VaList,
     /// `wrapping[T]` over an integer prim (X3: intended overflow is a
     /// type, never a mode).
     Wrapping(TyId),
@@ -523,6 +525,7 @@ pub fn render(
         // interface or a diagnostic reads back as source would.
         TyKind::Never => "never".to_string(),
         TyKind::Unit => "()".to_string(),
+        TyKind::VaList => "VaList".to_string(),
         TyKind::Prim(p) => p.name().to_string(),
         TyKind::Wrapping(t) => format!("wrapping[{}]", render(table, *t, resolve)),
         TyKind::Tuple(ts) => {

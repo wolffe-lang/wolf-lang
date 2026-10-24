@@ -1266,6 +1266,7 @@ fn a_blocking_channel_operation_on_the_only_task_is_deadlock() {
 
 #[test]
 fn variadic_calls_are_named_checked_refusals_both_ways() {
+    let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-linux-gnu");
     for (src, direction) in [
         (
             "extern \"c\" fn sum(n: i32, ...) -> i64\nfn main() -> int { unsafe { sum(1, 42 as i64) as int } }\n",

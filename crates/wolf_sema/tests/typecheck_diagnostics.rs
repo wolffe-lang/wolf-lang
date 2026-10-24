@@ -860,8 +860,27 @@ fn e0301_container_type_argument_is_unresolved_not_declined() {
 
 #[test]
 fn e0823_variadic_function_value() {
+    let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-linux-gnu");
     snap_one(
         "e0823_variadic_function_value",
         "export fn sum(n: i32, ...) -> i64 { 0 }\nfn main() { let f = sum }\n",
+    );
+}
+
+#[test]
+fn e0824_start_without_variadic_frame() {
+    let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-linux-gnu");
+    snap_one(
+        "e0824_start_without_frame",
+        "fn f() { unsafe { let ap = va_start() } }\n",
+    );
+}
+
+#[test]
+fn e0825_second_start() {
+    let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-linux-gnu");
+    snap_one(
+        "e0825_second_start",
+        "export fn f(n: i32, ...) { unsafe { let ap = va_start(); let bp = va_start() } }\n",
     );
 }

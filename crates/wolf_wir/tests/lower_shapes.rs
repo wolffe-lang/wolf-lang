@@ -1251,6 +1251,7 @@ fn str_ordering_against_itself_is_the_length_compare() {
 /// Until native prologues consume the metadata, ellipses must not erase.
 #[test]
 fn variadic_membranes_never_lower_as_fixed_arity() {
+    let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-linux-gnu");
     for src in [
         "extern \"c\" fn sum(n: i32, ...) -> i64\nfn main() -> int { unsafe { sum(1, 42 as i64) as int } }\n",
         "export fn sum(n: i32, ...) -> i64 { 0 }\nfn main() -> int { 0 }\n",

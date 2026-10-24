@@ -89,7 +89,11 @@ pub fn typecheck_package(res: &Resolution) -> Typecheck {
 pub fn typecheck_package_with(pkg: &Package, single_thread: bool) -> Typecheck {
     let sigs = build_sigs(pkg);
     let tasks = collect_bodies(pkg);
-    let run = |b: &BodyRef| check_body(pkg, &sigs, b);
+    let target = crate::attrs::build_target();
+    let run = |b: &BodyRef| {
+        let _target = crate::attrs::enter_build_target(&target);
+        check_body(pkg, &sigs, b)
+    };
     let results: Vec<BodyResult> = if single_thread {
         tasks.iter().map(run).collect()
     } else {

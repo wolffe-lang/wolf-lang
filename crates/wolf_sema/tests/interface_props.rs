@@ -352,6 +352,7 @@ fn version_only_bump_moves_no_hash() {
 
 #[test]
 fn variadic_marker_participates_in_interface_hashes() {
+    let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-linux-gnu");
     let fixed = interfaces(&[(&[], "main.lu", "pub extern \"c\" fn f(n: i32) -> i32\n")]);
     let variadic = interfaces(&[(
         &[],

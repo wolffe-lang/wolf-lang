@@ -225,6 +225,7 @@ fn transfer(src: &TypeTable, dst: &mut TypeTable, ty: TyId) -> TyId {
         TyKind::Error | TyKind::Var(_) => dst.error(),
         TyKind::Never => dst.never(),
         TyKind::Unit => dst.unit(),
+        TyKind::VaList => dst.intern(TyKind::VaList),
         TyKind::Prim(p) => dst.prim(p),
         TyKind::Rigid(n) => dst.intern(TyKind::Rigid(n)),
         TyKind::Nominal { module, name, args } => {

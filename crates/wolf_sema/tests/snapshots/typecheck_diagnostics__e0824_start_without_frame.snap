@@ -1,0 +1,10 @@
+---
+source: crates/wolf_sema/tests/typecheck_diagnostics.rs
+expression: "render_types(&[(&[], \"main.lu\", src)])"
+---
+error[E0824]: `va_start` needs the current function's C variadic frame
+ --> mem:///main.lu:1:28
+  |
+1 | fn f() { unsafe { let ap = va_start() } }
+  |                            ^^^^^^^^^^
+  |

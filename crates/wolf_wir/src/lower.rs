@@ -1798,23 +1798,7 @@ const MEMBRANE_FN_VALUE: &str = "an `export`/`extern \"c\"` function as a value 
 /// names, is not built; a refusal is the honest stand-in, never a
 /// guessed layout).
 fn c_crossing(table: &TypeTable, sigs: &SigTables, ty: TyId, depth: u32) -> bool {
-    if depth > 16 {
-        return false;
-    }
-    match table.kind(ty) {
-        TyKind::Prim(p) => !matches!(p, Prim::Str | Prim::Char),
-        TyKind::Ptr(_) => true,
-        TyKind::Nominal { module, name, args } if args.is_empty() => {
-            match sigs.get(*module as usize, name) {
-                Some(ItemSig::Struct(ss)) if ss.repr_c && !ss.generic => ss
-                    .fields
-                    .iter()
-                    .all(|f| c_crossing(&sigs.table, sigs, f.ty, depth + 1)),
-                _ => false,
-            }
-        }
-        _ => false,
-    }
+    wolf_sema::layout::c_value_compatible(sigs, table, ty, depth)
 }
 
 /// kw08: the `#[repr(c, packed)]` or `#[repr(c, align(N))]` struct a
@@ -2596,6 +2580,12 @@ fn wir_ty_frame(
         // (channels, sync cells, task scopes); proc ids and exit
         // reasons are plain words ([conc.proc.1], [conc.proc.exit]).
         TyKind::Chan(_) | TyKind::Mutex(_) | TyKind::TaskScope => Ok(Some(types::PTR)),
+        TyKind::VaList => Ok(Some(it.intern(types::TypeData::Agg(vec![
+            types::I32,
+            types::I32,
+            types::PTR,
+            types::PTR,
+        ])))),
         TyKind::Proc(_) | TyKind::ExitReason => Ok(Some(types::I64)),
         // s158 (`[type.range]`): a `range[T]` VALUE is the pair of its
         // endpoints — the same two-field aggregate `(T, T)` lowers to,
