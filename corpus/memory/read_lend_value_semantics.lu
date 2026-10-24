@@ -5,6 +5,7 @@
 //! into a write to the caller. Nested fields retain their own layout.
 
 struct Inner { flag: bool, n: int, items: List[int] }
+
 struct Outer { tag: int, inner: Inner, tail: int }
 
 #[consttime(public(b))]
