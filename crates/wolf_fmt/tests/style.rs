@@ -771,3 +771,17 @@ fn an_attribute_on_an_assignment_keeps_its_line() {
         "fn main() -> int {\n    var n = 1\n    #[cfg(target = \"x86_64-unknown-none\")]\n    n = n + 1\n    #[index(1)]\n    n += 2\n    n\n}\n",
     );
 }
+
+/// A C ellipsis is a real list element, but never gets a trailing comma.
+#[test]
+fn variadic_parameter_list_preserves_ellipsis() {
+    check(
+        "extern \"c\" fn f(n:i32,...) -> i32\n",
+        "extern \"c\" fn f(n: i32, ...) -> i32\n",
+    );
+    let src = "export fn f(aaaaaaaaaaaaaaaaaaaaaaa: i32, bbbbbbbbbbbbbbbbbbbbbbb: f64, ccccccccccccccccccccccc: i64, ...) -> i64 { 0 }\n";
+    let out = fmt(src);
+    assert!(out.contains("\n    ...\n)"), "{out}");
+    assert!(!out.contains("...,"), "{out}");
+    assert_eq!(fmt(&out), out);
+}

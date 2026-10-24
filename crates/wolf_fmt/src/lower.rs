@@ -1278,7 +1278,9 @@ impl<'a> Fmt<'a> {
         // comma. Minting one made the broken form unparseable, the
         // reparse guard kept the one-line original, and the pattern was
         // a 183-column fixed point that `--check` accepted.
-        let rest_last = elems.last().is_some_and(|e| e.kind == K::RestPat);
+        let rest_last = elems
+            .last()
+            .is_some_and(|e| matches!(e.kind, K::RestPat | K::VariadicParam));
         if one_tuple && elems.len() == 1 {
             inner.push(Doc::text(","));
         } else if !rest_last {
