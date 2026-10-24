@@ -1,0 +1,26 @@
+Clean-room inputs read
+- wolf-lang issue #515 (both original parse witnesses), via gh issue view.
+- wolf-lang base 7b7b1753: spec/04-abi.md C membranes and targets;
+  crates/wolf_backend/src/abi.rs; muzzle/docs/LEDGER.md (lc01).
+- AMD64 ABI 1.0, March 12, 2025, sections 3.2.3 and 3.5.7,
+  figures 3.33–3.34, from the psABI project's published PDF:
+  https://gitlab.com/x86-psABIs/x86-64-ABI/-/jobs/artifacts/master/raw/x86-64-ABI/abi.pdf?job=build
+- C17 section 7.16 read in WG14 N2310 (November 6, 2018, diff-marked
+  C17-to-C2x working draft), https://www.open-std.org/jtc1/sc22/wg14/www/docs/n2310.pdf.
+  N2176 was downloaded but is password-protected and could not be read;
+  it is not claimed as verified. N2310's 7.16 is the readable text used.
+No compiler implementation, libc implementation or stdarg header source read.
+
+Orchestrator responded A on R-s263-1 through R-s263-5, subject to the
+maintainer's spec review. In particular va_arg is legal in a nonvariadic
+consumer of a live list, and C's decayed va_list parameter is *VaList.
+
+Nomad specification checks after edits
+- cargo run -j4 --quiet -p xtask -- spec-extract: exit 0, 705 anchors.
+- cargo run -j4 --quiet -p xtask -- spec-extract --check: exit 0.
+- cargo test -j4 -p xtask spec::: 9 tests passed.
+Memory guard: vm_stat free+inactive+speculative >= 8 GiB before cargo.
+19f346cc723dbeb6ad80494614291f4e85aba3caca48dcfd537d33f82af6d6ac  /Users/mfwolffe/lanes/s263/inputs/psabi/abi.pdf
+6a01dfbfd271a2b6682e48a13a68cf4b599beb3b7e39512bc74989d0b5991029  /Users/mfwolffe/lanes/s263/inputs/c17/n2310.pdf
+19f346cc723dbeb6ad80494614291f4e85aba3caca48dcfd537d33f82af6d6ac  /Users/mfwolffe/lanes/s263/inputs/psabi/abi.pdf
+6a01dfbfd271a2b6682e48a13a68cf4b599beb3b7e39512bc74989d0b5991029  /Users/mfwolffe/lanes/s263/inputs/c17/n2310.pdf
