@@ -913,7 +913,7 @@ pub(crate) fn translate_function(
         cur_span_lo: None,
         blocks: HashMap::new(),
         vals: HashMap::new(),
-        read_lends: wolf_backend::read_lend::borrowed_aggregates(m, f),
+        read_lends: HashMap::new(), // s264 plant: restore native aggregate snapshots.
         param_slots: HashMap::new(),
         sret: Vec::new(),
         trap_blocks: HashMap::new(),
