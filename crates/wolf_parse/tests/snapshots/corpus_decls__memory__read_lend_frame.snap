@@ -1,0 +1,13 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
+expression: dump
+---
+StructDecl 371..6297 name=Big fields=401
+FnDecl 6299..6382 name=peek_read attrs=1 body=Block
+FnDecl 6384..6488 name=peek_mut attrs=1 body=Block
+FnDecl 6490..6551 name=peek_inline body=Block
+FnDecl 6553..6644 name=step_read attrs=1 body=Block
+FnDecl 6646..6739 name=step_mut attrs=1 body=Block
+FnDecl 6741..6812 name=step_inline body=Block
+FnDecl 6814..14449 name=main body=Block

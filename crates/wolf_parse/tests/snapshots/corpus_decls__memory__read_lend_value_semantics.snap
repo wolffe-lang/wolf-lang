@@ -1,0 +1,11 @@
+---
+source: crates/wolf_parse/tests/corpus_decls.rs
+assertion_line: 58
+expression: dump
+---
+StructDecl 231..284 name=Inner fields=3
+StructDecl 286..336 name=Outer fields=3
+FnDecl 338..507 name=rebound attrs=1 body=Block
+FnDecl 509..645 name=reader attrs=1 body=Block
+FnDecl 647..847 name=run attrs=1 body=Block
+FnDecl 849..1103 name=main body=Block

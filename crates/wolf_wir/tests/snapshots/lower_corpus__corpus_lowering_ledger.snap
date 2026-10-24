@@ -606,6 +606,8 @@ memory/raw_ub_misaligned_u32_read.lu: lowers
 memory/raw_ub_misaligned_u32_write.lu: lowers
 memory/raw_ub_misaligned_u64_read.lu: lowers
 memory/raw_ub_misaligned_u64_write.lu: lowers
+memory/read_lend_frame.lu: lowers
+memory/read_lend_value_semantics.lu: lowers
 memory/read_param_escape_field.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_generic.lu: not mem-clean (pre-wir rungs own it)
 memory/read_param_escape_local.lu: not mem-clean (pre-wir rungs own it)
