@@ -1,0 +1,41 @@
+//! check: run(exit=0)
+//! phase: run
+//! conforms: mem.tier0.mode.read, mem.tier0.excl.1
+//! s264: forwarding a read argument must not turn a local rebinding
+//! into a write to the caller. Nested fields retain their own layout.
+
+struct Inner { flag: bool, n: int, items: List[int] }
+struct Outer { tag: int, inner: Inner, tail: int }
+
+#[consttime(public(b))]
+fn rebound(b: Outer) -> int {
+    var local = b
+    local.tag = 90
+    local.inner.n = 70
+    local.tag + local.inner.n + local.inner.items.len
+}
+
+#[consttime(public(b))]
+fn reader(b: Outer) -> int {
+    if b.inner.flag { b.tag + b.inner.n + b.tail + b.inner.items.len } else { 0 }
+}
+
+#[consttime(public(b))]
+fn run(mut b: Outer) {
+    assert(rebound(b) == 161)
+    assert(b.tag == 1)
+    assert(b.inner.n == 2)
+    assert(reader(b) == 7)
+    b.inner.n = 4
+    assert(reader(b) == 9)
+}
+
+fn main() {
+    var xs = List[int]()
+    (mut xs).push(5)
+    var b = Outer { tag: 1, inner: Inner { flag: true, n: 2, items: xs }, tail: 3 }
+    run(mut b)
+    assert(b.inner.n == 4)
+    assert(b.inner.items.len == 1)
+    print("read-lend-values: ok")
+}
