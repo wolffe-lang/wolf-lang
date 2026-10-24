@@ -46,3 +46,32 @@ Every run holds hasu-B.lock, --memory 12g and taskset -c 6-11 INSIDE.
 CARGO_INCREMENTAL=0; CARGO_HOME and CARGO_TARGET_DIR are inside the lane.
 README read, current for this preparatory checkpoint; native execution of
 variadics is not claimed yet.
+
+Intermediate gauntlet correction (after 4a2266f8):
+The first full run stopped at the test step, exit 1, because the Python
+executable taskset shim introduced ignored SIGPIPE and SIGXFSZ dispositions
+(SigIgn 0x1001000). The plain native exec row passed; the taskset row failed.
+The full failed log and exit marker are retained in this evidence directory.
+There were 55 affinity translations in that run and seven loud SKIP lines:
+rt-none missing target (1), macOS-only clang drift witness (1), absent gdb
+(2), absent lldb (2), and editor_restore's absent nested container engine (1).
+Those are counts only through the aborted test step, not a complete gate.
+
+The replacement /usr/bin/taskset is a POSIX shell entry that invokes Python
+only as a child to calculate/log the CPU-list replacement. The shell itself
+execs taskset.real, so CPython's signal changes cannot reach the target.
+Selftests hold plain and wrapped SigIgn equal both with default dispositions
+(0) and with SIGPIPE/SIGXFSZ deliberately ignored (0x1001000). They also verify
+one-/four-CPU mappings, oversize rejection, and preservation of target argv
+including a -p argument, whitespace and an empty argument.
+Corrected image id:
+efa05c7609b9cff00daace5571f5c5c3d3f5aa99f773ad95393639f1b903f8a8.
+`cargo test -p wolf_driver --test exec_lanes -- --nocapture` then passed all
+six tests, including native and release image.lu through the translated
+four-CPU lane. No compiler/runtime fix was made for this environment fault.
+
+Final acceptance still must install x86_64-unknown-none in an image-owned
+Rust 1.97.1 toolchain and select that toolchain in run-hasu.sh (its current
+RUSTC/RUSTDOC point to the read-only Nix toolchain, which lacks that target).
+No host package or configuration is to be changed. The upcoming rerun is
+still an intermediate frontend checkpoint, not final native acceptance.
