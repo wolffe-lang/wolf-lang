@@ -1,0 +1,6 @@
+FROM docker.io/library/ubuntu@sha256:a2d43bffc46670d7108bb3c0468c67c5557c4c92e83e1e34cbff1322ad1b94dc
+RUN taskset -c 6-11 sh -c 'apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ca-certificates curl git build-essential clang lld python3 pkg-config libssl-dev time && rm -rf /var/lib/apt/lists/*'
+WORKDIR /work
+RUN taskset -c 6-11 cp /usr/bin/taskset /usr/bin/taskset.real
+COPY taskset-shim.py /usr/bin/taskset
+RUN /usr/bin/taskset.real -c 6-11 chmod 755 /usr/bin/taskset

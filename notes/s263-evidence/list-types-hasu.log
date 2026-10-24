@@ -1,0 +1,67 @@
+ Downloading crates ...
+  Downloaded equivalent v1.0.2
+  Downloaded indexmap v2.14.0
+  Downloaded hashbrown v0.17.1
+  Downloaded hashbrown v0.16.1
+  Downloaded gimli v0.33.0
+   Compiling wolf_diag v0.2.35 (/work/crates/wolf_diag)
+   Compiling wolf_ast v0.2.35 (/work/crates/wolf_ast)
+   Compiling equivalent v1.0.2
+   Compiling hashbrown v0.17.1
+   Compiling fnv v1.0.7
+   Compiling hashbrown v0.16.1
+   Compiling wolf_lex v0.2.35 (/work/crates/wolf_lex)
+   Compiling wolf_parse v0.2.35 (/work/crates/wolf_parse)
+   Compiling indexmap v2.14.0
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+   Compiling gimli v0.33.0
+   Compiling wolf_mem v0.2.35 (/work/crates/wolf_mem)
+   Compiling wolf_wir v0.2.35 (/work/crates/wolf_wir)
+   Compiling wolf_backend v0.2.35 (/work/crates/wolf_backend)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.39s
+     Running unittests src/lib.rs (target/debug/deps/wolf_backend-d066bf241ba6c745)
+
+running 5 tests
+test abi::variadic::tests::offsets_match_the_psabi_record_and_full_save_area ... ok
+test abi::variadic::tests::independent_banks_overflow_and_named_vector_count ... ok
+test abi::variadic::tests::mixed_aggregate_rollback_preserves_the_other_bank ... ok
+test abi::variadic::tests::named_overflow_is_not_the_whole_stack_area ... ok
+test abi::variadic::tests::hidden_sret_precedes_named_arguments_and_tokens_erase ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 0.00s
+
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.41s
+     Running tests/typecheck.rs (target/debug/deps/typecheck-0aaf88459bb7a7f5)
+
+running 4 tests
+test variadic_start_in_nested_frame_is_rejected ... ok
+test variadic_list_builtins_allow_nonvariadic_consumers ... ok
+test variadic_call_checks_fixed_prefix_and_accepts_tail ... ok
+test variadic_arg_requires_promoted_type ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 53 filtered out; finished in 0.00s
+
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.75s
+     Running tests/typecheck_diagnostics.rs (target/debug/deps/typecheck_diagnostics-73d67885ea555bd0)
+
+running 3 tests
+test e0823_variadic_function_value ... ok
+updated snapshot /work/crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0825_second_start.snap
+updated snapshot /work/crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0824_start_without_frame.snap
+test e0824_start_without_variadic_frame ... ok
+test e0825_second_start ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 65 filtered out; finished in 0.06s
+
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.70s
+     Running tests/attr_diagnostics.rs (target/debug/deps/attr_diagnostics-7d545cd9316e3a52)
+
+running 1 test
+updated snapshot /work/crates/wolf_sema/tests/snapshots/attr_diagnostics__e0826_apple_variadic.snap
+test e0826_variadic_target_refusal ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.04s
+

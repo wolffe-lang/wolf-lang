@@ -1,0 +1,21 @@
+wolf 0.2.35 (wolfgang, pin cf0c13d)
+paired with lupin 0.1.56 (reference interpreter), pin 294d626
+lupin 0.1.56 (wolf-interp, reference interpreter at pin 294d626)
+error[E0201]: expected a parameter
+ --> /work/probes/import/main.lu:1:32
+  |
+1 | extern "c" fn printf(fmt: *u8, ...) -> i32
+  |                                ^^
+  |
+
+{"commit":"cf0c13d","diagnostics":[{"code":"E0201","severity":"error","span":[31,33]}],"file":"/work/probes/import/main.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"parse","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E0201)","warnings":[]}
+import process exit=0
+error[E0201]: expected a parameter
+ --> /work/probes/export/main.lu:1:23
+  |
+1 | export fn sum(n: i32, ...) -> i64 { 0 }
+  |                       ^^
+  |
+
+{"commit":"cf0c13d","diagnostics":[{"code":"E0201","severity":"error","span":[22,24]}],"file":"/work/probes/export/main.lu","impl":"wolfgang","impl_version":"0.2.35","phase_reached":"parse","protocol":1,"seeded":false,"stdout_inline":null,"stdout_sha256":null,"verdict":"fail(E0201)","warnings":[]}
+export process exit=0

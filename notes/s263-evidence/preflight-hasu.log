@@ -1,0 +1,308 @@
+diag-catalog: voice: 5248 reader-facing strings carry no internal ids
+diag-catalog: wrote docs/diagnostics.md (192 codes) and docs/warnings.md (34 warnings)
+spec-extract: spec/grammar.ebnf is in sync
+   Compiling wolf_diag v0.2.35 (/work/crates/wolf_diag)
+   Compiling wolf_lex v0.2.35 (/work/crates/wolf_lex)
+   Compiling wolf_parse v0.2.35 (/work/crates/wolf_parse)
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+   Compiling wolf_mem v0.2.35 (/work/crates/wolf_mem)
+   Compiling wolf_wir v0.2.35 (/work/crates/wolf_wir)
+   Compiling wolf_backend v0.2.35 (/work/crates/wolf_backend)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.64s
+     Running unittests src/lib.rs (target/debug/deps/wolf_backend-d066bf241ba6c745)
+
+running 6 tests
+test abi::variadic::tests::hidden_sret_precedes_named_arguments_and_tokens_erase ... ok
+test abi::variadic::tests::independent_banks_overflow_and_named_vector_count ... ok
+test abi::variadic::tests::mixed_aggregate_rollback_preserves_the_other_bank ... ok
+test abi::variadic::tests::offsets_match_the_psabi_record_and_full_save_area ... ok
+test abi::variadic::tests::named_overflow_is_not_the_whole_stack_area ... ok
+test abi::variadic::tests::trampoline_frame_keeps_context_save_area_and_return_address_disjoint ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 27 filtered out; finished in 0.00s
+
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.11s
+     Running tests/typecheck.rs (target/debug/deps/typecheck-0aaf88459bb7a7f5)
+
+running 6 tests
+test variadic_list_layout_is_the_c_record_not_a_pointer ... ok
+test variadic_start_in_nested_frame_is_rejected ... ok
+test variadic_tail_rejects_non_c_values ... ok
+test variadic_list_builtins_allow_nonvariadic_consumers ... ok
+test variadic_call_checks_fixed_prefix_and_accepts_tail ... ok
+test variadic_arg_requires_promoted_type ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 53 filtered out; finished in 0.00s
+
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.76s
+     Running tests/typecheck_diagnostics.rs (target/debug/deps/typecheck_diagnostics-73d67885ea555bd0)
+
+running 3 tests
+test e0823_variadic_function_value ... ok
+test e0825_second_start ... ok
+test e0824_start_without_variadic_frame ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 65 filtered out; finished in 0.03s
+
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.71s
+     Running tests/attr_diagnostics.rs (target/debug/deps/attr_diagnostics-7d545cd9316e3a52)
+
+running 1 test
+test e0826_variadic_target_refusal ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.03s
+
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.54s
+     Running unittests src/lib.rs (target/debug/deps/wolf_sema-3f8a168fe4ccb3a9)
+
+running 10 tests
+test prelude::tests::conc_handle_types_are_prelude_names ... ok
+test prelude::tests::prelude_and_builtins_answer ... ok
+test prelude::tests::provisional_rows_are_the_exempt_stand_ins ... ok
+test prelude::tests::range_is_a_type_position_prelude_name ... ok
+test prelude::tests::std_lookup_by_segments ... ok
+test sig::tests::prelude_containers_lower_as_builtins ... ok
+test resolve::tests::std_root_keeps_prelude_ambient_and_checks_real_members ... ok
+test prelude::tests::marks_come_from_host_rows ... ok
+test prelude::tests::names_are_unique_and_resolvable ... ok
+test prelude::tests::host_anchor_iff_host_signature ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 96 filtered out; finished in 0.00s
+
+     Running tests/attr_diagnostics.rs (target/debug/deps/attr_diagnostics-7d545cd9316e3a52)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+
+     Running tests/audit_surface.rs (target/debug/deps/audit_surface-5b186aa04ef6427c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 6 filtered out; finished in 0.00s
+
+     Running tests/conc_diagnostics.rs (target/debug/deps/conc_diagnostics-7fed74fd72cc0866)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
+
+     Running tests/ctfe_diagnostics.rs (target/debug/deps/ctfe_diagnostics-e47ecb7fa154cdf2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+
+     Running tests/ctfe_engine.rs (target/debug/deps/ctfe_engine-27ff193f19f5a52a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+     Running tests/diagnostics.rs (target/debug/deps/diagnostics-f261f1da98bbc438)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 19 filtered out; finished in 0.00s
+
+     Running tests/host_table_spec.rs (target/debug/deps/host_table_spec-716af9f85466aa04)
+
+running 1 test
+test a_non_host_prelude_name_has_no_host_signature ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/interface_pretty.rs (target/debug/deps/interface_pretty-1d415ca1fc5d00c1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/interface_props.rs (target/debug/deps/interface_props-af10536d7695a769)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 14 filtered out; finished in 0.00s
+
+     Running tests/layout_diagnostics.rs (target/debug/deps/layout_diagnostics-3baf68a78e87610a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+     Running tests/lint_diagnostics.rs (target/debug/deps/lint_diagnostics-d6e7ed024180c5ca)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.00s
+
+     Running tests/method_diagnostics.rs (target/debug/deps/method_diagnostics-4ba641bac8450661)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 0.00s
+
+     Running tests/methods_engine.rs (target/debug/deps/methods_engine-897f4cddec01810b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 16 filtered out; finished in 0.00s
+
+     Running tests/origin_diagnostics.rs (target/debug/deps/origin_diagnostics-ccfc0d2204bd5050)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+     Running tests/pattern_diagnostics.rs (target/debug/deps/pattern_diagnostics-e2fdb8e7ac4ac4a5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.00s
+
+     Running tests/prelude_names.rs (target/debug/deps/prelude_names-d5047bfbd5deb277)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/row_diagnostics.rs (target/debug/deps/row_diagnostics-d217e31c5f0dcacc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 15 filtered out; finished in 0.00s
+
+     Running tests/rows_engine.rs (target/debug/deps/rows_engine-bfc4bff7be268f48)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s215.rs (target/debug/deps/sandbox_s215-e35d73cfc37f4941)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s225.rs (target/debug/deps/sandbox_s225-1fbe97c6652d6fd5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s230.rs (target/debug/deps/sandbox_s230-0d3e77ddd82a7a84)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s232.rs (target/debug/deps/sandbox_s232-d46224cdac0ec709)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s234.rs (target/debug/deps/sandbox_s234-9c7d92107f2e868c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s236.rs (target/debug/deps/sandbox_s236-3e8b25b8480a2f5f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s241.rs (target/debug/deps/sandbox_s241-db4a46f123ffd366)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s242.rs (target/debug/deps/sandbox_s242-0988293e0224cbf7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s246.rs (target/debug/deps/sandbox_s246-26d85028d19cba17)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s247.rs (target/debug/deps/sandbox_s247-07477454ba97f4d1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s248.rs (target/debug/deps/sandbox_s248-55eebe4e5e97d748)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s253.rs (target/debug/deps/sandbox_s253-b47d143ada0a86c6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s254.rs (target/debug/deps/sandbox_s254-4d03d450054b6a07)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/struct_pattern_diagnostics.rs (target/debug/deps/struct_pattern_diagnostics-e68a0359187bc34b)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests/trait_diagnostics.rs (target/debug/deps/trait_diagnostics-5b009b638a3db42e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 20 filtered out; finished in 0.00s
+
+     Running tests/traits_engine.rs (target/debug/deps/traits_engine-e52949d452574615)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 28 filtered out; finished in 0.00s
+
+     Running tests/typecheck.rs (target/debug/deps/typecheck-0aaf88459bb7a7f5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 59 filtered out; finished in 0.00s
+
+     Running tests/typecheck_diagnostics.rs (target/debug/deps/typecheck_diagnostics-73d67885ea555bd0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 68 filtered out; finished in 0.00s
+
+     Running tests/wave_diagnostics.rs (target/debug/deps/wave_diagnostics-3f297b140262d253)
+
+running 1 test
+test w0304_shadowed_prelude_fn ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 35 filtered out; finished in 0.03s
+
+   Compiling wolf_fmt v0.2.35 (/work/crates/wolf_fmt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.97s
+     Running tests/style.rs (target/debug/deps/style-a7826ab6244192d1)
+
+running 1 test
+test variadic_parameter_list_preserves_ellipsis ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 0.00s
+
