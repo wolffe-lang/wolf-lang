@@ -231,9 +231,14 @@ fn decl_keyword_typo(p: &Parser<'_>) -> Option<wolf_diag::Diagnostic> {
 pub(crate) fn fn_item(p: &mut Parser<'_>, m: Marker) {
     // fn_qual* : 'comptime' | 'extern' STRING | 'export'
     let mut saw_extern = false;
+    let mut saw_export = false;
     loop {
         match p.current() {
-            TokenKind::Kw(Keyword::Comptime | Keyword::Export) => p.bump(),
+            TokenKind::Kw(Keyword::Comptime) => p.bump(),
+            TokenKind::Kw(Keyword::Export) => {
+                saw_export = true;
+                p.bump();
+            }
             TokenKind::Kw(Keyword::Extern) => {
                 saw_extern = true;
                 p.bump();
@@ -296,7 +301,7 @@ pub(crate) fn fn_item(p: &mut Parser<'_>, m: Marker) {
         generic_param_list(p);
     }
     let params_ok = if p.at_punct(Punct::LParen) {
-        param_list(p)
+        param_list(p, saw_extern || saw_export)
     } else {
         // One report per broken header: a missing name was already
         // diagnosed above.
@@ -367,11 +372,12 @@ pub(crate) fn fn_item(p: &mut Parser<'_>, m: Marker) {
 }
 
 /// `(param, …)`. Returns whether the closing `)` was found.
-fn param_list(p: &mut Parser<'_>) -> bool {
+fn param_list(p: &mut Parser<'_>, c_membrane: bool) -> bool {
     let m = p.start();
     let opener = p.current_span();
     p.bump(); // `(`
     let mut closed = true;
+    let mut fixed = 0;
     loop {
         p.eat_terms();
         if p.at_punct(Punct::RParen) {
@@ -383,9 +389,34 @@ fn param_list(p: &mut Parser<'_>) -> bool {
             closed = false;
             break;
         }
+        // The lexer keeps `..` and `.` separate (range punctuation).
+        // Only the adjacent pair spells the C ellipsis; retain both
+        // direct tokens on ParamList, never a phantom named parameter.
+        if p.at_punct(Punct::DotDot) && p.nth(1) == TokenKind::Punct(Punct::Dot) {
+            let span = p.current_span();
+            let adjacent = span.hi == p.nth_span(1).lo;
+            p.bump();
+            p.bump();
+            if !c_membrane || fixed == 0 || !adjacent || !p.at_punct(Punct::RParen) {
+                p.error(
+                    wolf_diag::codes::E0822,
+                    span,
+                    "`...` must end a C membrane's parameter list, after a fixed parameter",
+                );
+                p.recover_until(true, |k| k == TokenKind::Punct(Punct::RParen));
+            }
+            if p.at_punct(Punct::RParen) {
+                p.bump();
+            } else {
+                unclosed(p, opener, "(");
+                closed = false;
+            }
+            break;
+        }
         let before = p.pos();
         let diags_before = p.diags.len();
         param(p);
+        fixed += 1;
         if p.diags.len() > diags_before {
             // The broken parameter was reported; the separator miss
             // that follows is the same wreck.

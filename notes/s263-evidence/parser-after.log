@@ -1,0 +1,238 @@
+   Compiling wolf_parse v0.2.35 (/Users/mfwolffe/lanes/s263/crates/wolf_parse)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.89s
+     Running unittests src/lib.rs (target/debug/deps/wolf_parse-851ca966e721a437)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ambiguity_trees.rs (target/debug/deps/ambiguity_trees-14d839f5df75cdc9)
+
+running 1 test
+test ambiguity_corpus_tree_shapes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/blast_radius.rs (target/debug/deps/blast_radius-dd0358f34b75107e)
+
+running 10 tests
+test line_leading_else_reaches_exactly_one_statement_back ... ok
+test colon_mutation_in_generics_is_structural ... ok
+test scope_read_as_match_is_two_wreck_sites ... ok
+test struct_body_read_as_let_is_one_wreck_site_within_the_bound ... ok
+test three_separate_breaks_are_three_sites_not_a_cascade ... ok
+test swapped_match_keyword_keeps_the_tight_bound ... ok
+test nested_item_inside_a_spilled_body_is_one_stray_run ... ok
+test keyword_named_parameter_keeps_the_structural_bound ... ok
+test the_budget_1000_sweep_cases_hold ... ok
+test single_token_mutations_have_bounded_blast_radius ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.70s
+
+     Running tests/broken_suite.rs (target/debug/deps/broken_suite-144daa652bb0763e)
+
+running 1 test
+test broken_fixtures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/corpus_decls.rs (target/debug/deps/corpus_decls-46e1bbfdeddf20f3)
+
+running 1 test
+test corpus_declaration_structure ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.10s
+
+     Running tests/corpus_parse.rs (target/debug/deps/corpus_parse-0b06dd0d8c51ca6f)
+
+running 1 test
+test corpus_parse_expectations ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/decl_grammar.rs (target/debug/deps/decl_grammar-022d927fd60feefe)
+
+running 36 tests
+test enum_item_variants ... ok
+test generic_struct_and_enum ... ok
+test error_set_alias_is_an_item_with_a_row ... ok
+test fn_generics_bounds_and_type_params ... ok
+test binding_patterns ... ok
+test a_bare_alias_name_after_the_bang_is_a_row ... ok
+test attributes_generic_syntax ... ok
+test binding_comma_group ... ok
+test binding_single_stays_flat ... ok
+test fn_return_types ... ok
+test bindings_let_var_const ... ok
+test fn_qualifiers ... ok
+test import_c ... ok
+test fn_params_modes_self_view_set ... ok
+test error_set_alias_parses_in_a_block_too ... ok
+test error_is_contextual_not_reserved ... ok
+test a_type_or_path_continued_onto_a_column_zero_line_is_clean ... ok
+test bodies_are_parsed_and_lossless ... ok
+test inherent_impl_on_generic_subject ... ok
+test inner_attribute_heads_the_file ... ok
+test semicolon_terms_between_items ... ok
+test postfix_row_in_param_and_let_positions ... ok
+test struct_item_fields ... ok
+test expr_list_separators_are_required ... ok
+test struct_pattern_rest_must_be_last ... ok
+test trait_alias_form_carries_a_bound_list ... ok
+test struct_patterns ... ok
+test pattern_separators_are_required ... ok
+test trait_and_impl_members_reentrant ... ok
+test use_group_and_alias ... ok
+test type_args_types_and_const_generics ... ok
+test use_plain_path ... ok
+test type_items_all_defs ... ok
+test visibility_pub_and_pkg ... ok
+test total_on_nasty_inputs ... ok
+test type_forms ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/diagnostics.rs (target/debug/deps/diagnostics-f85b4b292acb50b3)
+
+running 32 tests
+test e0008_keyword_parameter_reports_once ... ok
+test a_type_declaration_without_eq_reports_once ... ok
+test a_function_value_takes_no_return_type ... ok
+test a_malformed_paren_type_list_reports_once ... ok
+test a_malformed_generic_parameter_list_reports_once ... ok
+test e0002_empty_statement ... ok
+test e0203_unexpected_top_level_tokens ... ok
+test e0205_malformed_generics ... ok
+test e0204_malformed_attribute ... ok
+test e0203_keyword_typo_suggests_fn ... ok
+test e0007_interp_nesting_too_deep ... ok
+test e0001_leading_operator_continuation ... ok
+test e0006_struct_literal_in_condition ... ok
+test range_forms_with_an_endpoint_parse_clean ... ok
+test recovery_stops_at_a_contextual_error_declaration ... ok
+test e0003_comparison_chain ... ok
+test e0207_expected_pattern ... ok
+test e0210_moded_receiver_outside_receiver_position ... ok
+test e0201_pattern_separator_fix ... ok
+test e0209_negative_index ... ok
+test e0211_inner_attribute_after_first_item ... ok
+test e0208_assignment_in_expression ... ok
+test e0206_expected_type ... ok
+test e0211_inner_attribute_in_statement_position ... ok
+test e0201_expr_list_separator_fix ... ok
+test e0202_unclosed_delimiter ... ok
+test e0201_open_range_patterns ... ok
+test e0008_keyword_used_as_identifier ... ok
+test e0201_if_forms ... ok
+test e0201_binding_group_teach_notes ... ok
+test e0201_expected_token ... ok
+test e0201_brace_on_next_line ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/expr_grammar.rs (target/debug/deps/expr_grammar-6e04e7ae23a1e8f2)
+
+running 68 tests
+test amp_mut_is_one_prefix_operator ... ok
+test assume_noalias_statement ... ok
+test block_trailing_expression_vs_statement ... ok
+test assignment_in_expression_position_is_e0208 ... ok
+test blocks_are_expressions ... ok
+test borrow_from_expression ... ok
+test block_bodied_arm_needs_no_comma ... ok
+test assignment_and_compound_assignment_statements ... ok
+test bare_if_with_else_leading_its_line ... ok
+test asm_with_typed_operands ... ok
+test bracket_apply_covers_index_and_generic_application ... ok
+test an_index_store_admits_take ... ok
+test braced_if_followed_by_bare_else_is_still_the_defaulting_operator ... ok
+test bare_if_in_value_position ... ok
+test bracket_args_admit_type_only_forms ... ok
+test bare_if_own_else_binds_before_the_defaulting_else ... ok
+test bare_if_refusals_are_one_e0201_each ... ok
+test bare_if_in_a_match_arm_and_as_a_statement ... ok
+test cast_binds_tighter_than_arithmetic ... ok
+test call_and_index_args_take_x1_mode_markers ... ok
+test closure_as_non_final_argument_stops_at_comma ... ok
+test closure_expression_body_extends_maximally ... ok
+test closure_params_take_modes_and_ascriptions ... ok
+test defer_and_errdefer ... ok
+test comparison_chaining_is_e0003 ... ok
+test else_after_complete_expression_is_defaulting_even_after_if ... ok
+test else_after_if_belongs_to_if_when_viable ... ok
+test else_starting_a_line_after_a_complete_expression_is_defaulting ... ok
+test else_handler_payload_pattern ... ok
+test empty_statement_is_e0002 ... ok
+test else_defaulting_forms ... ok
+test else_starting_a_line_continues_the_if ... ok
+test expr_bodied_arm_needs_comma_before_next_arm ... ok
+test int_literal_members_and_tuple_access ... ok
+test interpolated_width_inside_format_spec ... ok
+test if_chain_links_pick_their_own_form ... ok
+test interpolations_parse_as_expressions ... ok
+test jump_expressions_compose ... ok
+test line_initial_bracket_never_attaches ... ok
+test leading_operator_continuation_is_e0001 ... ok
+test interp_nesting_past_eight_is_e0007 ... ok
+test logic_tiers_nest_and_under_or ... ok
+test lone_from_end_index ... ok
+test members_are_keyword_transparent ... ok
+test multiplication_binds_tighter_than_addition ... ok
+test match_arms_guards_or_patterns_bindings ... ok
+test move_copy_shared_prefix_operators ... ok
+test prefix_binds_tighter_than_binary_looser_than_postfix ... ok
+test question_chains_at_max_binding_power ... ok
+test parenthesized_struct_literal_in_condition_parses ... ok
+test nested_items_in_blocks ... ok
+test every_expression_kind_is_classified ... ok
+test scrutinee_brace_opens_the_block ... ok
+test range_forms_and_end_relative_endpoints ... ok
+test spaceship_is_an_ordinary_comparison ... ok
+test semicolons_separate_single_line_blocks ... ok
+test struct_literal_in_condition_is_e0006 ... ok
+test region_sugar_and_value_forms_are_distinct_kinds ... ok
+test struct_literals_and_shorthand ... ok
+test then_before_a_block_is_the_braced_form ... ok
+test scope_select_spawn_when ... ok
+test trailing_operator_continuation_parses ... ok
+test list_literals_are_primary_and_indexing_is_postfix ... ok
+test take_outside_an_index_store_is_e0201 ... ok
+test tuples_grouping_and_one_tuple ... ok
+test when_requires_two_operands ... ok
+test unsafe_block_and_inline_c ... ok
+test then_is_contextual_not_reserved ... ok
+
+test result: ok. 68 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/render.rs (target/debug/deps/render-cb84fcf5a7d576b2)
+
+running 3 tests
+test span_inside_interpolation ... ok
+test unclosed_paren_two_locus ... ok
+test negative_index_hint ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/tree_invariants.rs (target/debug/deps/tree_invariants-ad1785efae9d72c7)
+
+running 2 tests
+test every_lexed_token_exactly_once_in_order ... ok
+test corpus_token_streams_preserved ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/variadic.rs (target/debug/deps/variadic-6ed354579f8650bc)
+
+running 3 tests
+test c_variadic_import_and_export_parse ... ok
+test ellipsis_is_final_and_membrane_only ... ok
+test e0822_ellipsis_diagnostic ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests wolf_parse
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

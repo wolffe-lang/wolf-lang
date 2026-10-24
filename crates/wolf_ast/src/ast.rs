@@ -179,6 +179,11 @@ impl<'a> FnDecl<'a> {
         self.0.nodes().find_map(ParamList::cast)
     }
 
+    /// A final C ellipsis is signature metadata, not a named parameter.
+    pub fn is_variadic(self) -> bool {
+        self.params().is_some_and(ParamList::is_variadic)
+    }
+
     pub fn ret_ty(self) -> Option<RetType<'a>> {
         self.0.nodes().find_map(RetType::cast)
     }
@@ -663,6 +668,10 @@ ast_node!(
 );
 
 impl<'a> ParamList<'a> {
+    pub fn is_variadic(self) -> bool {
+        self.0.child_token(SyntaxKind::DotDot).is_some()
+    }
+
     pub fn params(self) -> impl Iterator<Item = Param<'a>> {
         self.0.nodes().filter_map(Param::cast)
     }
