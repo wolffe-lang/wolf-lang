@@ -1,0 +1,10 @@
+//! check: pass
+//! phase: parse
+//! conforms: abi.c.variadic.syntax, gram.item.fn
+//! The ellipsis is not a named parameter in either membrane direction.
+
+extern "c" fn printf(fmt: *u8, ...) -> i32
+
+export fn sum(n: i32, ...) -> i64 {
+    0
+}

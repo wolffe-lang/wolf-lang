@@ -1,0 +1,93 @@
+    Checking wolf_fmt v0.2.35 (/work/crates/wolf_fmt)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.53s
+   Compiling wolf_fmt v0.2.35 (/work/crates/wolf_fmt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.39s
+     Running unittests src/lib.rs (target/debug/deps/wolf_backend-00a39adb53158fa5)
+
+running 33 tests
+test abi::tests::a_module_named_c_is_not_the_membrane ... ok
+test abi::tests::apple_arm64_sret_consumes_no_argument_register ... ok
+test abi::tests::apple_arm64_register_exhaustion_refuses_by_shape ... ok
+test abi::tests::c_aggregates_revert_wholesale_when_registers_exhaust ... ok
+test abi::tests::apple_arm64_hfa_and_gp_classification ... ok
+test abi::tests::convention_version_participates_in_mangling ... ok
+test abi::tests::eu_returns_put_the_discriminant_in_the_first_int_register ... ok
+test abi::tests::scalars_pass_direct_and_tokens_erase ... ok
+test abi::tests::the_c_namespace_is_the_membrane ... ok
+test abi::tests::small_aggregates_scalarize_with_sysv_classes ... ok
+test abi::tests::three_eightbytes_are_memory_class ... ok
+test abi::tests::win64_scalars_direct_and_aggregates_refused_by_shape ... ok
+test abi::variadic::tests::hidden_sret_precedes_named_arguments_and_tokens_erase ... ok
+test abi::variadic::tests::independent_banks_overflow_and_named_vector_count ... ok
+test abi::variadic::tests::mixed_aggregate_rollback_preserves_the_other_bank ... ok
+test abi::variadic::tests::named_overflow_is_not_the_whole_stack_area ... ok
+test abi::variadic::tests::offsets_match_the_psabi_record_and_full_save_area ... ok
+test dwarf::tests::line_col_is_one_based ... ok
+test layout::tests::eu_layout_tag_first ... ok
+test dwarf::tests::synthetic_functions_are_skipped ... ok
+test layout::tests::scalar_and_agg_layout ... ok
+test dwarf::tests::emits_line_and_info_sections_with_relocs ... ok
+test dwarf::tests::deterministic_output ... ok
+test layout::tests::tokens_have_no_layout ... ok
+test target::tests::every_runtime_family_has_a_surface_name ... ok
+test target::tests::the_flag_names_the_freestanding_target_or_the_host ... ok
+test layout::tests::union_is_the_widest_member_at_the_strictest_alignment ... ok
+test abi::variadic::tests::trampoline_frame_keeps_context_save_area_and_return_address_disjoint ... ok
+test target::tests::the_message_names_the_construct_and_the_target ... ok
+test target::tests::the_freestanding_runtime_carries_the_allocating_families_only ... ok
+test tests::mangling_folds_the_module_path ... ok
+test tests::mangling_is_deterministic_and_distinguishes_sigs ... ok
+test tests::null_backend_implements_the_trait ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/wolf_fmt-e97a1352d012bd03)
+
+running 7 tests
+test doc::tests::blank_lines_carry_no_indent ... ok
+test doc::tests::flat_group_stays_flat ... ok
+test doc::tests::hardline_forces_all_enclosing_groups ... ok
+test doc::tests::if_break_selects_by_mode ... ok
+test doc::tests::line_suffix_rides_to_line_end ... ok
+test doc::tests::width_counts_chars_not_bytes ... ok
+test doc::tests::wide_group_breaks_with_indent ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/broken.rs (target/debug/deps/broken-fc092ef3c3c63fe6)
+
+running 7 tests
+test clean_files_are_not_partial ... ok
+test error_region_bytes_are_identical ... ok
+test clean_siblings_format_around_a_broken_item ... ok
+test broken_statement_passes_through_with_margin ... ok
+test invalid_variadic_tail_is_preserved_without_fallback ... ok
+test wolf_parse_broken_suite_never_panics_and_stays_partial ... ok
+test w0301_partial_format_diagnostic_snapshot ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/properties.rs (target/debug/deps/properties-f26eb81aa6d74c20)
+
+running 6 tests
+proptest: FileFailurePersistence::SourceParallel set, but failed to find lib.rs or main.rs
+proptest: FileFailurePersistence::SourceParallel set, but failed to find lib.rs or main.rs
+test banked_classes_are_still_open ... ok
+test fuzz_regressions ... ok
+test programs_fully_format ... ok
+
+thread 'corpus_idempotence_and_round_trip' (197) panicked at crates/wolf_fmt/tests/properties.rs:48:9:
+/work/crates/wolf_fmt/../../corpus/membrane/variadic_position.lu: self-check fell back
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test corpus_idempotence_and_round_trip ... FAILED
+test corpus_stability_formatting_is_identity ... ok
+test soup_upholds_invariants ... ok
+
+failures:
+
+failures:
+    corpus_idempotence_and_round_trip
+
+test result: FAILED. 5 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.72s
+
+error: test failed, to rerun pass `-p wolf_fmt --test properties`

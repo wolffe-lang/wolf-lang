@@ -4,7 +4,8 @@
 //! exactly its expected code — nothing more, nothing less.
 //!
 //! Expectations come from the corpus directive headers (`//! check:`).
-//! Codes E0300+ are post-parse tiers (resolution, sema, memory,
+//! E0822 is the C-membrane ellipsis position check, emitted by parsing.
+//! Other codes E0300+ are post-parse tiers (resolution, sema, memory,
 //! runtime): those files must *parse* cleanly here; their failure
 //! belongs to later phases.
 
@@ -35,7 +36,7 @@ fn expected_parse_failure(src: &str) -> Option<String> {
         return None;
     }
     let num: u32 = code.strip_prefix('E')?.parse().ok()?;
-    (num < 300).then(|| code.to_string())
+    (num < 300 || code == "E0822").then(|| code.to_string())
 }
 
 /// The `.lu` files directly in `dir` (no recursion — a module is one
@@ -241,7 +242,7 @@ fn corpus_parse_expectations() {
     // by-design refusals with a fix-it: grammar/if_brace_next_line
     // (E0201, a header's `{` on the next line, wolf-lang#822) and
     // typecheck/int_not_tilde (E0107, `~` for wolf's `!`, wolf-lang#800).
-    assert_eq!(fail, 37, "syntax-tier fail-file count drifted");
+    assert_eq!(fail, 38, "syntax-tier fail-file count drifted");
     assert_eq!(
         member_fail, 2,
         "member-sibling fail-file count drifted (the broken_sibling \
