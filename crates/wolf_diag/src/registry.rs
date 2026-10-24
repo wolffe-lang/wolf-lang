@@ -1607,6 +1607,33 @@ stored in a wolf function value. Call the variadic function by its name
 instead, or write a fixed-arity wrapper that performs the named call.
 "#);
 
+code!(E0824, "va_start outside a C variadic definition", r#"
+`va_start` obtains the unnamed arguments of the function currently
+executing. Only a variadic C definition has that frame. A nested
+function or closure has its own frame and cannot start its enclosing
+function's list. Pass a live `VaList` to a consumer instead: `va_arg`,
+`va_copy`, and `va_end` do not require a variadic definition.
+"#);
+
+code!(E0825, "a second va_start in one definition", r#"
+A variadic definition spells `va_start()` once. To obtain another
+independent cursor, call `va_copy(ap)` on a live list and end that copy
+with `va_end(mut copy)` before returning. A copy shares the argument
+storage with its source, so neither cursor can outlive the variadic
+invocation that supplied those arguments.
+"#);
+
+code!(E0826, "C variadic membranes on an unsupported target", r#"
+C variadic calls, definitions and `VaList` operations currently use the
+Linux x86-64 System V ABI only. AAPCS64, Apple arm64 and Windows x64
+have different variable-argument conventions; they cannot use this
+record or prologue. Select x86-64 Linux, or provide a fixed-arity C
+wrapper on the other target. FreeBSD and freestanding targets are also
+refused until their own variadic witnesses have been validated.
+"#);
+
+
+
 
 
 // ------------------------------------------------------------------------

@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+s263 — C variadic surface and ABI planning (in progress, #515).
+
+- **Five prelude additions:** `VaList`, `va_start`, `va_arg`, `va_copy`,
+  and `va_end`. Declarations shadowing these names may now warn (W0304).
+- A final ellipsis parses on C membrane declarations and definitions;
+  invalid positions, function-value uses, invalid starts and unsupported
+  targets have named diagnostics. The checked machine refuses variadic
+  calls in both directions. Native and release execution is still pending
+  in this preparatory checkpoint; the new clause is not yet a shipping
+  implementation claim.
+
+
 s261 — the invocation name and byte-exact arguments (#899, #406).
 
 - **Two prelude additions:** `env_arg0() -> str` returns the invocation name, not the resolved executable; `env_args_bytes() -> List[List[byte]]` returns every argument with argv[0] first. Existing `env_args()` still returns argv[1..]. Local declarations with either new prelude name may now warn (W0304).

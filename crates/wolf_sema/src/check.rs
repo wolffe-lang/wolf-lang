@@ -567,6 +567,8 @@ struct Checker<'a> {
     /// Inside a `comptime fn` body: its own calls evaluate only when
     /// the evaluator walks them — never registered as root sites.
     in_comptime_fn: bool,
+    in_variadic: bool,
+    va_start_seen: Option<Span>,
     /// Row-sealing mode (s15): tags raised or propagated by this body
     /// are absorbed here instead of width-checked; diagnostics are
     /// discarded by the caller ([`collect_body_rows`]).
@@ -799,6 +801,8 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         trace_points: Vec::new(),
         comptime_calls: Vec::new(),
         in_comptime_fn: false,
+        in_variadic: false,
+        va_start_seen: None,
         collect: None,
         row_fix: None,
         dispatch: Vec::new(),
@@ -984,6 +988,8 @@ pub(crate) fn collect_body_rows(
         trace_points: Vec::new(),
         comptime_calls: Vec::new(),
         in_comptime_fn: false,
+        in_variadic: false,
+        va_start_seen: None,
         collect: Some(RowSink::default()),
         row_fix: None,
         dispatch: Vec::new(),
@@ -1288,6 +1294,7 @@ impl<'a> Checker<'a> {
         };
         let d = FnDecl::cast(node).expect("kind");
         self.in_comptime_fn = sig.comptime;
+        self.in_variadic = sig.variadic;
         self.install_generics(&sig.generics);
         self.validate_sig_projections(&sig);
         let because = sig.ret_span.unwrap_or(sig.name_span);
@@ -8187,6 +8194,9 @@ impl<'a> Checker<'a> {
                     if let Some((module, item)) = self.named_fn_target(&name) {
                         return self.call_named(&item, module, callee.span, e, d.args());
                     }
+                    if matches!(name.as_str(), "va_start" | "va_arg" | "va_copy" | "va_end") {
+                        return self.call_va_builtin(&name, None, e, d.args());
+                    }
                     // kw11 (`[conc.mm.fence]`): the fence builtin.
                     if name == "fence" {
                         return self.call_fence(e, d.args());
@@ -8274,6 +8284,23 @@ impl<'a> Checker<'a> {
             if self.lookup_local(&name).is_none() && name == "channel" {
                 return self.call_channel_ctor(b, e, d.args());
             }
+            if name == "va_arg"
+                && self.lookup_local(&name).is_none()
+                && self.named_fn_target(&name).is_none()
+            {
+                let nodes: Vec<_> = b
+                    .args()
+                    .into_iter()
+                    .flat_map(|a| a.args())
+                    .filter_map(Arg::value)
+                    .collect();
+                let ty = if let [one] = nodes.as_slice() {
+                    self.type_from_bracket_arg(one)
+                } else {
+                    None
+                };
+                return self.call_va_builtin(&name, ty, e, d.args());
+            }
             // #111: explicit generic application — `pick[int](xs, 0)`.
             // The bracket args are TYPES, one per generic parameter in
             // declaration order; they seed the same instantiation the
@@ -8333,6 +8360,125 @@ impl<'a> Checker<'a> {
         // locals/fields, higher-order parameters).
         let callee_ty = self.synth_expr(callee)?;
         self.call_by_type(callee_ty, callee, e, d.args())
+    }
+
+    /// Raw C cursor builtins: only starting a cursor depends on the
+    /// surrounding variadic frame. Consumers may take a live list.
+    fn call_va_builtin(
+        &mut self,
+        name: &str,
+        type_arg: Option<TyId>,
+        e: &GreenNode,
+        args: Option<ArgList<'_>>,
+    ) -> R<TyId> {
+        if let Some(d) =
+            crate::attrs::variadic_target_diagnostic(&crate::attrs::build_target(), e.span)
+        {
+            self.diags.push(d);
+        }
+        let list = self.lo.table.intern(TyKind::VaList);
+        let unit = self.lo.table.unit();
+        let ret = match name {
+            "va_start" => {
+                if !self.in_variadic || self.in_closure {
+                    self.diags.push(Diagnostic::error(
+                        codes::E0824,
+                        e.span,
+                        "`va_start` needs the current function's C variadic frame",
+                    ));
+                } else if let Some(first) = self.va_start_seen {
+                    self.diags.push(Diagnostic::error(codes::E0825, e.span,
+                        "`va_start` is already spelled in this function — use `va_copy` for another cursor")
+                        .with_secondary(first, "the first start is here"));
+                } else {
+                    self.va_start_seen = Some(e.span);
+                }
+                list
+            }
+            "va_copy" => list,
+            "va_end" => unit,
+            "va_arg" => {
+                let Some(ty) = type_arg else {
+                    self.diags.push(Diagnostic::error(
+                        codes::E0812,
+                        e.span,
+                        "`va_arg` needs one promoted C type, as in `va_arg[i32](mut ap)`",
+                    ));
+                    return Ok(self.error_ty());
+                };
+                if matches!(
+                    self.lo.table.kind(ty),
+                    TyKind::Prim(
+                        Prim::I8
+                            | Prim::I16
+                            | Prim::U8
+                            | Prim::U16
+                            | Prim::Byte
+                            | Prim::Bool
+                            | Prim::F32
+                    )
+                ) {
+                    self.diags.push(Diagnostic::error(codes::E0401, e.span,
+                        "`va_arg` reads the promoted type — use `i32` for narrow integers or `f64` for `f32`"));
+                } else if !crate::layout::c_value_compatible(self.sigs, &self.lo.table, ty, 0) {
+                    self.diags.push(Diagnostic::error(
+                        codes::E0401,
+                        e.span,
+                        "`va_arg` needs a C-compatible argument type",
+                    ));
+                }
+                ty
+            }
+            _ => unreachable!("closed cursor builtin set"),
+        };
+        let params = if name == "va_start" {
+            vec![]
+        } else {
+            vec![ParamSig {
+                name: "ap".into(),
+                ty: list,
+                span: e.span,
+                mode: (name != "va_copy").then_some(wolf_ast::ParamMode::Mut),
+                view: None,
+                store: false,
+            }]
+        };
+        let nodes: Vec<_> = args.into_iter().flat_map(|a| a.args()).collect();
+        if nodes.len() != params.len() {
+            self.wrong_arg_count(name, e.span, None, params.len(), nodes.len());
+        }
+        for (i, arg) in nodes.iter().enumerate() {
+            if let Some(value) = Arg::value(*arg) {
+                if i < params.len() {
+                    self.check_expr(
+                        value,
+                        &Expect {
+                            ty: list,
+                            reason: Reason::ArgOfCall {
+                                callee: name.into(),
+                                index: i,
+                            },
+                            because: None,
+                        },
+                    )?;
+                } else {
+                    self.synth_expr(value)?;
+                }
+            }
+        }
+        self.calls.push((
+            e.span,
+            CallSig {
+                callee: name.into(),
+                decl_span: None,
+                has_self: false,
+                ctor: false,
+                params,
+                c_call: true,
+                variadic: false,
+            },
+        ));
+        Ok(ret)
     }
 
     /// A bare name that resolves to a function item (module item or
@@ -9159,6 +9305,21 @@ impl<'a> Checker<'a> {
                 None => {
                     let ty = self.synth_expr(v)?;
                     if sig.variadic {
+                        let resolved = self.shallow(ty);
+                        if !matches!(self.lo.table.kind(resolved), TyKind::Var(_))
+                            && !crate::layout::c_value_compatible(
+                                self.sigs,
+                                &self.lo.table,
+                                resolved,
+                                0,
+                            )
+                        {
+                            self.diags.push(Diagnostic::error(
+                                codes::E0401,
+                                v.span,
+                                "an unnamed C argument must have a C-compatible value type",
+                            ));
+                        }
                         // The memory checker must see tail arguments too:
                         // they are read values, never hidden moded places.
                         self.calls[call_index].1.params.push(ParamSig {

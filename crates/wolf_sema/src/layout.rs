@@ -79,6 +79,32 @@ pub fn prim_size(p: Prim) -> Option<u64> {
     })
 }
 
+/// The modeled by-value C membrane, distinct from layout queries:
+/// `char` has a queryable size, but is not a C character type; packed
+/// and over-aligned composites have layouts but no by-value lowering.
+pub fn c_value_compatible(sigs: &SigTables, table: &TypeTable, ty: TyId, depth: u32) -> bool {
+    if depth > 16 {
+        return false;
+    }
+    match table.kind(ty) {
+        TyKind::Prim(p) => !matches!(p, Prim::Str | Prim::Char),
+        TyKind::Ptr(_) | TyKind::VaList => true,
+        TyKind::Nominal { module, name, args } if args.is_empty() => {
+            match sigs.get(*module as usize, name) {
+                Some(ItemSig::Struct(ss))
+                    if ss.repr_c && !ss.generic && !ss.packed && ss.align.is_none() =>
+                {
+                    ss.fields
+                        .iter()
+                        .all(|f| c_value_compatible(sigs, &sigs.table, f.ty, depth + 1))
+                }
+                _ => false,
+            }
+        }
+        _ => false,
+    }
+}
+
 /// The clause's layout of `ty` (in `table`), or why it has none.
 pub fn c_layout(sigs: &SigTables, table: &TypeTable, ty: TyId) -> Result<CLayout, NoCLayout> {
     layout_in(sigs, table, ty, 0)
@@ -110,6 +136,23 @@ fn layout_in(
     match table.kind(ty) {
         TyKind::Prim(p) => prim_size(*p).map(CLayout::scalar).ok_or_else(none),
         TyKind::Ptr(_) => Ok(CLayout::scalar(8)),
+        TyKind::VaList => Ok(CLayout {
+            size: 24,
+            align: 8,
+            fields: [
+                ("gp_offset", 0, 4),
+                ("fp_offset", 4, 4),
+                ("overflow_arg_area", 8, 8),
+                ("reg_save_area", 16, 8),
+            ]
+            .into_iter()
+            .map(|(name, offset, size)| FieldLayout {
+                name: name.into(),
+                offset,
+                layout: CLayout::scalar(size),
+            })
+            .collect(),
+        }),
         TyKind::Wrapping(inner) | TyKind::Distinct(inner) => {
             layout_in(sigs, table, *inner, depth + 1)
         }

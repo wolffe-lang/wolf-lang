@@ -1874,7 +1874,7 @@ impl<'a> Lower<'a> {
                 } else if segs.len() == 1
                     && matches!(
                         first.as_str(),
-                        "List" | "Pool" | "channel" | "Map" | "range" | "Scope" | "Proc"
+                        "List" | "Pool" | "channel" | "Map" | "range" | "Scope" | "Proc" | "VaList"
                     )
                 {
                     // The two prelude containers the Tier-2 corpus
@@ -1969,6 +1969,15 @@ impl<'a> Lower<'a> {
                         // argument is not decoration: it is what
                         // makes the handle useful.
                         ("Scope", &[]) => self.table.intern(TyKind::TaskScope),
+                        ("VaList", &[]) => {
+                            if let Some(d) = crate::attrs::variadic_target_diagnostic(
+                                &crate::attrs::build_target(),
+                                node.span,
+                            ) {
+                                self.diags.push(d);
+                            }
+                            self.table.intern(TyKind::VaList)
+                        }
                         ("Proc", &[val]) => self.table.intern(TyKind::Proc(val)),
                         ("Scope" | "Proc", _) => {
                             self.diags.push(conc_handle_arity_refusal(
