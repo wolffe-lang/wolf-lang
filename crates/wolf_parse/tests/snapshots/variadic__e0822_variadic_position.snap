@@ -1,0 +1,22 @@
+---
+source: crates/wolf_parse/tests/variadic.rs
+expression: "format!(\"{d:#?}\")"
+---
+Diagnostic {
+    code: E0822,
+    severity: Error,
+    message: "`...` must end a C membrane's parameter list, after a fixed parameter",
+    primary: LabeledSpan {
+        span: Span {
+            file: FileId(
+                0,
+            ),
+            lo: 20,
+            hi: 22,
+        },
+        label: "",
+    },
+    secondary: [],
+    notes: [],
+    suggestions: [],
+}

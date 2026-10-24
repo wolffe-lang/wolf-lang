@@ -1590,6 +1590,16 @@ nothing), and the form anywhere but a module's top level. Write
 through it with `p[0]` or `p.read_volatile()` in an `unsafe` block.
 "#);
 
+code!(E0822, "an ellipsis outside the end of a C parameter list", r#"
+Only a C membrane (`extern "c" fn` or `export fn`) can take unnamed
+arguments. Write `, ...` after its last fixed parameter, with no name,
+type, mode or trailing comma. At least one fixed parameter is required.
+An ordinary wolf function has fixed arity; an ellipsis cannot turn it
+into a variadic function. Use an export if a C-compatible variadic
+entry is intended, or pass a typed container to an ordinary function.
+"#);
+
+
 // ------------------------------------------------------------------------
 // E1xxx — the memory tier (c04, spec/02). s18 registers the Tier-0
 // value/exclusivity codes; s19 the region-inference codes (E1004
