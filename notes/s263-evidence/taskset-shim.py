@@ -1,11 +1,10 @@
 #!/usr/bin/python3
-"""Lane-only affinity translation; never installed on the host."""
+"""Print an argv replacement for the shell shim; never exec the target."""
 import json
 import os
 import re
 import sys
 
-REAL = "/usr/bin/taskset.real"
 ALLOWED = set(range(6, 12))
 args = sys.argv[1:]
 
@@ -33,11 +32,19 @@ def parse_list(value):
     return cpus
 
 
-# Existing-pid/query forms are untouched, as the orchestration ruling asks.
-if any(a in ("--pid", "--help", "--version") or
-       (a.startswith("-") and not a.startswith("--") and "p" in a[1:])
-       for a in args):
-    os.execv(REAL, [REAL] + args)
+# Inspect only taskset's option prefix, never the target command's options.
+# The shell wrapper handles passthrough without exposing the target to
+# CPython's SIGPIPE/SIGXFSZ defaults.
+for option in args:
+    if not option.startswith("-"):
+        break
+    if option in ("--pid", "--help", "--version") or (
+        not option.startswith("--") and "p" in option[1:]
+    ):
+        print("-1:")
+        sys.exit(0)
+    if option.startswith("--cpu-list="):
+        break
 
 index = 0
 list_mode = False
@@ -54,7 +61,8 @@ while index < len(args) and args[index].startswith("-"):
         fail("unsupported affinity option " + repr(option))
     index += 1
 if index >= len(args):
-    os.execv(REAL, [REAL] + args)
+    print("-1:")
+    sys.exit(0)
 requested = args[index].split("=", 1)[1] if inline else args[index]
 if list_mode:
     cpus = parse_list(requested)
@@ -71,11 +79,11 @@ if not cpus or len(cpus) > 6:
 assigned = cpus if cpus <= ALLOWED else set(range(6, 6 + len(cpus)))
 replacement = ",".join(map(str, sorted(assigned))) if list_mode else format(sum(1 << i for i in assigned), "x")
 if assigned != cpus:
-    record = {"requested": requested, "assigned": sorted(assigned), "argv": sys.argv, "pid": os.getpid()}
+    record = {"requested": requested, "assigned": sorted(assigned), "argv": [os.environ.get("S263_TASKSET_ARGV0", "taskset")] + args, "pid": os.getppid()}
     fd = os.open("/work/notes/s263-evidence/taskset-translations.log", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
     try:
         os.write(fd, (json.dumps(record, separators=(",", ":")) + "\n").encode())
     finally:
         os.close(fd)
-args[index] = "--cpu-list=" + replacement if inline else replacement
-os.execv(REAL, [REAL] + args)
+replacement = "--cpu-list=" + replacement if inline else replacement
+print(str(index) + ":" + replacement)
