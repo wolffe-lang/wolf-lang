@@ -1,0 +1,2 @@
+{"requested":"0-3","assigned":[6,7,8,9],"argv":["/usr/bin/taskset","-c","0-3","sh","-c","taskset -pc $$"],"pid":2}
+{"requested":"0","assigned":[6],"argv":["/usr/bin/taskset","-c","0","sh","-c","taskset -pc $$"],"pid":4}

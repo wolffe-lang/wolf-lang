@@ -1,0 +1,1213 @@
+   Compiling wolf_parse v0.2.35 (/work/crates/wolf_parse)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.26s
+     Running unittests src/lib.rs (target/debug/deps/wolf_backend-00a39adb53158fa5)
+
+running 33 tests
+test abi::tests::a_module_named_c_is_not_the_membrane ... ok
+test abi::tests::apple_arm64_hfa_and_gp_classification ... ok
+test abi::tests::apple_arm64_sret_consumes_no_argument_register ... ok
+test abi::tests::apple_arm64_register_exhaustion_refuses_by_shape ... ok
+test abi::tests::convention_version_participates_in_mangling ... ok
+test abi::tests::c_aggregates_revert_wholesale_when_registers_exhaust ... ok
+test abi::tests::eu_returns_put_the_discriminant_in_the_first_int_register ... ok
+test abi::tests::scalars_pass_direct_and_tokens_erase ... ok
+test abi::tests::the_c_namespace_is_the_membrane ... ok
+test abi::tests::small_aggregates_scalarize_with_sysv_classes ... ok
+test abi::tests::three_eightbytes_are_memory_class ... ok
+test abi::tests::win64_scalars_direct_and_aggregates_refused_by_shape ... ok
+test abi::variadic::tests::hidden_sret_precedes_named_arguments_and_tokens_erase ... ok
+test abi::variadic::tests::independent_banks_overflow_and_named_vector_count ... ok
+test abi::variadic::tests::offsets_match_the_psabi_record_and_full_save_area ... ok
+test abi::variadic::tests::mixed_aggregate_rollback_preserves_the_other_bank ... ok
+test abi::variadic::tests::named_overflow_is_not_the_whole_stack_area ... ok
+test dwarf::tests::line_col_is_one_based ... ok
+test layout::tests::eu_layout_tag_first ... ok
+test dwarf::tests::synthetic_functions_are_skipped ... ok
+test layout::tests::scalar_and_agg_layout ... ok
+test dwarf::tests::emits_line_and_info_sections_with_relocs ... ok
+test layout::tests::tokens_have_no_layout ... ok
+test target::tests::every_runtime_family_has_a_surface_name ... ok
+test target::tests::the_flag_names_the_freestanding_target_or_the_host ... ok
+test layout::tests::union_is_the_widest_member_at_the_strictest_alignment ... ok
+test dwarf::tests::deterministic_output ... ok
+test target::tests::the_message_names_the_construct_and_the_target ... ok
+test target::tests::the_freestanding_runtime_carries_the_allocating_families_only ... ok
+test tests::mangling_folds_the_module_path ... ok
+test tests::mangling_is_deterministic_and_distinguishes_sigs ... ok
+test abi::variadic::tests::trampoline_frame_keeps_context_save_area_and_return_address_disjoint ... ok
+test tests::null_backend_implements_the_trait ... ok
+
+test result: ok. 33 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/wolf_fmt-e97a1352d012bd03)
+
+running 7 tests
+test doc::tests::flat_group_stays_flat ... ok
+test doc::tests::blank_lines_carry_no_indent ... ok
+test doc::tests::hardline_forces_all_enclosing_groups ... ok
+test doc::tests::if_break_selects_by_mode ... ok
+test doc::tests::line_suffix_rides_to_line_end ... ok
+test doc::tests::wide_group_breaks_with_indent ... ok
+test doc::tests::width_counts_chars_not_bytes ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/broken.rs (target/debug/deps/broken-fc092ef3c3c63fe6)
+
+running 7 tests
+test clean_files_are_not_partial ... ok
+test error_region_bytes_are_identical ... ok
+test clean_siblings_format_around_a_broken_item ... ok
+test broken_statement_passes_through_with_margin ... ok
+test invalid_variadic_tail_is_preserved_without_fallback ... ok
+test wolf_parse_broken_suite_never_panics_and_stays_partial ... ok
+test w0301_partial_format_diagnostic_snapshot ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/properties.rs (target/debug/deps/properties-f26eb81aa6d74c20)
+
+running 6 tests
+test banked_classes_are_still_open ... ok
+proptest: FileFailurePersistence::SourceParallel set, but failed to find lib.rs or main.rs
+proptest: FileFailurePersistence::SourceParallel set, but failed to find lib.rs or main.rs
+test fuzz_regressions ... ok
+test programs_fully_format ... ok
+test corpus_stability_formatting_is_identity ... ok
+test soup_upholds_invariants ... ok
+test corpus_idempotence_and_round_trip ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.71s
+
+     Running tests/style.rs (target/debug/deps/style-a7826ab6244192d1)
+
+running 61 tests
+test a_chain_with_nothing_to_break_still_breaks_at_every_dot ... ok
+test a_call_broken_after_the_dot_is_a_last_resort ... ok
+test a_braced_if_chain_breaks_as_one ... ok
+test a_closure_body_keeps_its_space ... ok
+test a_signature_past_the_width_breaks_its_parameter_list_not_its_error_row ... ok
+test a_dot_break_that_cannot_achieve_the_width_is_not_taken ... ok
+test a_leading_else_is_relaid_onto_the_closing_brace_line ... ok
+test a_type_application_is_not_a_break_point ... ok
+test a_braced_block_in_an_argument_list_is_the_lists_break_not_the_dots ... ok
+test an_index_store_keeps_its_take ... ok
+test an_attribute_on_an_assignment_keeps_its_line ... ok
+test bare_if_keeps_the_parens_around_a_defaulting_else ... ok
+test bare_if_in_a_match_arm_and_a_call ... ok
+test bare_if_normalizes_spacing_inside_the_form ... ok
+test bare_if_past_the_width_breaks_to_the_braced_form_once ... ok
+test blank_lines_inside_items_cap_at_one ... ok
+test binding_group_never_splits_into_statements ... ok
+test bare_if_with_a_leading_else_is_relaid_trailing ... ok
+test binding_group_fits_on_one_line ... ok
+test binding_group_breaks_one_binder_per_line ... ok
+test empty_blocks_close_up ... ok
+test else_block_holding_only_an_if_collapses_to_else_if ... ok
+test comment_fidelity ... ok
+test file_ends_with_exactly_one_newline ... ok
+test exactly_one_blank_line_between_items ... ok
+test bare_if_stays_bare_and_braced_stays_braced ... ok
+test error_set_aliases_format_as_declarations ... ok
+test four_space_indent_no_tabs ... ok
+test fitting_lists_collapse_to_one_line_without_trailing_comma ... ok
+test fn_headers_and_error_rows_are_tight ... ok
+test guard_clause_blocks_stay_inline_with_semicolons ... ok
+test import_block_gets_one_blank_after_and_none_within ... ok
+test hugged_trailing_block_arguments_keep_the_call_flat ... ok
+test inner_doc_header_is_preserved_untouched_with_one_blank_after ... ok
+test long_binary_chains_break_after_the_operator ... ok
+test imports_sort_std_first_then_packages_then_import_c ... ok
+test long_member_chains_break_after_the_dot ... ok
+test multiline_blocks_are_never_joined ... ok
+test open_brace_on_construct_line_and_else_on_close_line ... ok
+test match_bodies_are_multiline_with_trailing_commas_either_way ... ok
+test if_chain_links_keep_their_own_form ... ok
+test list_literals_break_like_argument_lists ... ok
+test short_continuations_collapse ... ok
+test parens_around_negative_literal_index_are_kept ... ok
+test statements_never_share_a_line_outside_inline_blocks ... ok
+test redundant_parens_drop_per_the_precedence_table ... ok
+test operator_spacing_is_canonical ... ok
+test stray_semicolons_between_statements_are_stripped ... ok
+test string_episodes_are_verbatim ... ok
+test needed_parens_are_kept ... ok
+test struct_defs_respect_source_multiline_and_gain_trailing_commas ... ok
+test then_before_a_block_is_dropped ... ok
+test then_is_an_identifier_everywhere_else ... ok
+test trait_alias_form_is_one_line ... ok
+test trailing_comment_continuation_keeps_its_column ... ok
+test three_statement_inline_blocks_break_and_lose_semicolons ... ok
+test trait_and_impl_bodies_are_always_multiline ... ok
+test width_100_breaks_arg_lists_with_trailing_comma ... ok
+test struct_pattern_with_rest_breaks_and_ends_at_the_rest ... ok
+test the_parens_around_a_binary_else_fallback_are_kept ... ok
+test variadic_parameter_list_preserves_ellipsis ... ok
+
+test result: ok. 61 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/x4_region.rs (target/debug/deps/x4_region-61fd84996a376b77)
+
+running 13 tests
+test in_block_inside_a_closure_is_untouched ... ok
+test in_block_not_immediately_following_is_untouched ... ok
+test merely_mentioned_region_is_untouched ... ok
+test frozen_region_is_untouched ... ok
+test annotated_or_commented_lets_are_untouched ... ok
+test desugar_equivalence_over_rewrite_fixtures ... ok
+test plain_value_region_rewrites_to_block_sugar ... ok
+test rc_strategy_rides_into_the_sugar ... ok
+test pool_strategy_rides_into_the_sugar ... ok
+test re_entered_region_is_untouched ... ok
+test statement_position_in_block_rewrites_too ... ok
+test sent_region_is_untouched ... ok
+test returned_region_is_untouched ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/wolf_parse-fb45b35fe7a7355a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ambiguity_trees.rs (target/debug/deps/ambiguity_trees-254553b607c0576f)
+
+running 1 test
+test ambiguity_corpus_tree_shapes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/blast_radius.rs (target/debug/deps/blast_radius-48cf4cdd9c47cb51)
+
+running 10 tests
+test line_leading_else_reaches_exactly_one_statement_back ... ok
+test colon_mutation_in_generics_is_structural ... ok
+test scope_read_as_match_is_two_wreck_sites ... ok
+test struct_body_read_as_let_is_one_wreck_site_within_the_bound ... ok
+test nested_item_inside_a_spilled_body_is_one_stray_run ... ok
+test swapped_match_keyword_keeps_the_tight_bound ... ok
+test keyword_named_parameter_keeps_the_structural_bound ... ok
+test three_separate_breaks_are_three_sites_not_a_cascade ... ok
+test the_budget_1000_sweep_cases_hold ... ok
+blast radius: 1223 corpus files, 3513 mutations at budget 3, 0 violation(s)
+test single_token_mutations_have_bounded_blast_radius ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s
+
+     Running tests/broken_suite.rs (target/debug/deps/broken_suite-d6f6871160f3b83b)
+
+running 1 test
+test broken_fixtures ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/corpus_decls.rs (target/debug/deps/corpus_decls-00c64162349ebe2a)
+
+running 1 test
+test corpus_declaration_structure ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.71s
+
+     Running tests/corpus_parse.rs (target/debug/deps/corpus_parse-4a3f1a0a9276b342)
+
+running 1 test
+test corpus_parse_expectations ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/decl_grammar.rs (target/debug/deps/decl_grammar-8097626030544557)
+
+running 36 tests
+test binding_single_stays_flat ... ok
+test a_type_or_path_continued_onto_a_column_zero_line_is_clean ... ok
+test binding_comma_group ... ok
+test a_bare_alias_name_after_the_bang_is_a_row ... ok
+test binding_patterns ... ok
+test attributes_generic_syntax ... ok
+test bindings_let_var_const ... ok
+test enum_item_variants ... ok
+test bodies_are_parsed_and_lossless ... ok
+test error_set_alias_is_an_item_with_a_row ... ok
+test error_set_alias_parses_in_a_block_too ... ok
+test error_is_contextual_not_reserved ... ok
+test fn_generics_bounds_and_type_params ... ok
+test fn_params_modes_self_view_set ... ok
+test fn_qualifiers ... ok
+test import_c ... ok
+test generic_struct_and_enum ... ok
+test fn_return_types ... ok
+test inherent_impl_on_generic_subject ... ok
+test semicolon_terms_between_items ... ok
+test inner_attribute_heads_the_file ... ok
+test struct_item_fields ... ok
+test struct_pattern_rest_must_be_last ... ok
+test postfix_row_in_param_and_let_positions ... ok
+test expr_list_separators_are_required ... ok
+test trait_alias_form_carries_a_bound_list ... ok
+test pattern_separators_are_required ... ok
+test struct_patterns ... ok
+test trait_and_impl_members_reentrant ... ok
+test type_args_types_and_const_generics ... ok
+test total_on_nasty_inputs ... ok
+test use_plain_path ... ok
+test use_group_and_alias ... ok
+test visibility_pub_and_pkg ... ok
+test type_items_all_defs ... ok
+test type_forms ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/diagnostics.rs (target/debug/deps/diagnostics-284c93a034f01fd8)
+
+running 32 tests
+test a_type_declaration_without_eq_reports_once ... ok
+test a_function_value_takes_no_return_type ... ok
+test a_malformed_generic_parameter_list_reports_once ... ok
+test a_malformed_paren_type_list_reports_once ... ok
+test e0008_keyword_parameter_reports_once ... ok
+test e0003_comparison_chain ... ok
+test e0007_interp_nesting_too_deep ... ok
+test e0001_leading_operator_continuation ... ok
+test e0006_struct_literal_in_condition ... ok
+test e0002_empty_statement ... ok
+test e0008_keyword_used_as_identifier ... ok
+test e0201_expr_list_separator_fix ... ok
+test e0201_binding_group_teach_notes ... ok
+test e0201_open_range_patterns ... ok
+test e0201_if_forms ... ok
+test e0201_expected_token ... ok
+test e0201_pattern_separator_fix ... ok
+test e0203_keyword_typo_suggests_fn ... ok
+test e0201_brace_on_next_line ... ok
+test e0202_unclosed_delimiter ... ok
+test e0204_malformed_attribute ... ok
+test e0203_unexpected_top_level_tokens ... ok
+test e0205_malformed_generics ... ok
+test e0206_expected_type ... ok
+test e0207_expected_pattern ... ok
+test range_forms_with_an_endpoint_parse_clean ... ok
+test e0208_assignment_in_expression ... ok
+test e0210_moded_receiver_outside_receiver_position ... ok
+test recovery_stops_at_a_contextual_error_declaration ... ok
+test e0211_inner_attribute_after_first_item ... ok
+test e0209_negative_index ... ok
+test e0211_inner_attribute_in_statement_position ... ok
+
+test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/expr_grammar.rs (target/debug/deps/expr_grammar-eacca63fd5ca9876)
+
+running 68 tests
+test assume_noalias_statement ... ok
+test amp_mut_is_one_prefix_operator ... ok
+test assignment_in_expression_position_is_e0208 ... ok
+test asm_with_typed_operands ... ok
+test assignment_and_compound_assignment_statements ... ok
+test an_index_store_admits_take ... ok
+test bare_if_in_value_position ... ok
+test bare_if_with_else_leading_its_line ... ok
+test block_bodied_arm_needs_no_comma ... ok
+test bare_if_in_a_match_arm_and_as_a_statement ... ok
+test bare_if_refusals_are_one_e0201_each ... ok
+test bare_if_own_else_binds_before_the_defaulting_else ... ok
+test block_trailing_expression_vs_statement ... ok
+test braced_if_followed_by_bare_else_is_still_the_defaulting_operator ... ok
+test bracket_apply_covers_index_and_generic_application ... ok
+test bracket_args_admit_type_only_forms ... ok
+test blocks_are_expressions ... ok
+test call_and_index_args_take_x1_mode_markers ... ok
+test borrow_from_expression ... ok
+test cast_binds_tighter_than_arithmetic ... ok
+test closure_as_non_final_argument_stops_at_comma ... ok
+test comparison_chaining_is_e0003 ... ok
+test closure_expression_body_extends_maximally ... ok
+test closure_params_take_modes_and_ascriptions ... ok
+test defer_and_errdefer ... ok
+test else_after_complete_expression_is_defaulting_even_after_if ... ok
+test else_after_if_belongs_to_if_when_viable ... ok
+test else_starting_a_line_after_a_complete_expression_is_defaulting ... ok
+test empty_statement_is_e0002 ... ok
+test else_starting_a_line_continues_the_if ... ok
+test else_handler_payload_pattern ... ok
+test else_defaulting_forms ... ok
+test expr_bodied_arm_needs_comma_before_next_arm ... ok
+test int_literal_members_and_tuple_access ... ok
+test interpolated_width_inside_format_spec ... ok
+test interp_nesting_past_eight_is_e0007 ... ok
+test if_chain_links_pick_their_own_form ... ok
+test interpolations_parse_as_expressions ... ok
+test jump_expressions_compose ... ok
+test leading_operator_continuation_is_e0001 ... ok
+test line_initial_bracket_never_attaches ... ok
+test logic_tiers_nest_and_under_or ... ok
+test lone_from_end_index ... ok
+test members_are_keyword_transparent ... ok
+test multiplication_binds_tighter_than_addition ... ok
+test match_arms_guards_or_patterns_bindings ... ok
+test move_copy_shared_prefix_operators ... ok
+test nested_items_in_blocks ... ok
+test prefix_binds_tighter_than_binary_looser_than_postfix ... ok
+test parenthesized_struct_literal_in_condition_parses ... ok
+test question_chains_at_max_binding_power ... ok
+test every_expression_kind_is_classified ... ok
+test list_literals_are_primary_and_indexing_is_postfix ... ok
+test scrutinee_brace_opens_the_block ... ok
+test semicolons_separate_single_line_blocks ... ok
+test region_sugar_and_value_forms_are_distinct_kinds ... ok
+test range_forms_and_end_relative_endpoints ... ok
+test scope_select_spawn_when ... ok
+test struct_literal_in_condition_is_e0006 ... ok
+test spaceship_is_an_ordinary_comparison ... ok
+test struct_literals_and_shorthand ... ok
+test take_outside_an_index_store_is_e0201 ... ok
+test trailing_operator_continuation_parses ... ok
+test then_before_a_block_is_the_braced_form ... ok
+test then_is_contextual_not_reserved ... ok
+test tuples_grouping_and_one_tuple ... ok
+test when_requires_two_operands ... ok
+test unsafe_block_and_inline_c ... ok
+
+test result: ok. 68 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/render.rs (target/debug/deps/render-cb50e2bfae10824c)
+
+running 3 tests
+test span_inside_interpolation ... ok
+test negative_index_hint ... ok
+test unclosed_paren_two_locus ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/tree_invariants.rs (target/debug/deps/tree_invariants-2f9a0272a61f0e1f)
+
+running 2 tests
+test every_lexed_token_exactly_once_in_order ... ok
+test corpus_token_streams_preserved ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s
+
+     Running tests/variadic.rs (target/debug/deps/variadic-5a20a76a8c9afe26)
+
+running 3 tests
+test c_variadic_import_and_export_parse ... ok
+test ellipsis_is_final_and_membrane_only ... ok
+test e0822_ellipsis_diagnostic ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running unittests src/lib.rs (target/debug/deps/wolf_sema-3f8a168fe4ccb3a9)
+
+running 106 tests
+test attrs::tests::a_predicate_names_a_triple_or_its_architecture ... ok
+test attrs::tests::an_unknown_string_is_not_a_target ... ok
+test attrs::tests::the_build_target_is_the_host_until_a_build_selects_one ... ok
+test attrs::tests::the_host_is_a_known_target_or_names_itself ... ok
+test check::char_literal_tests::cook_covers_the_ruled_escape_set ... ok
+test check::char_literal_tests::cook_refuses_malformed_text ... ok
+test attrs::tests::a_failing_cfg_drops_a_statement ... ok
+test ctfe::norm::tests::closed_expressions_compare_by_value ... ok
+test attrs::tests::a_failing_cfg_drops_its_item_and_a_holding_one_keeps_it ... ok
+test attrs::tests::an_undecidable_predicate_is_refused_and_keeps_its_node ... ok
+test ctfe::norm::tests::ring_normalization_makes_commutation_invisible ... ok
+test ctfe::norm::tests::the_witness_line_holds_exactly_where_documented ... ok
+test ctfe::value::tests::nan_canonicalization_is_width_aware ... ok
+test ctfe::value::tests::interning_is_structural_and_hashes_are_content ... ok
+test ctfe::value::tests::sharing_is_not_allocation ... ok
+test exhaust::tests::bool_full_split_is_exhaustive ... ok
+test exhaust::tests::bool_missing_arm_witnesses_false ... ok
+test exhaust::tests::int_literals_never_complete ... ok
+test exhaust::tests::enum_missing_variants_named ... ok
+test exhaust::tests::int_ranges_subsume_and_witness_past_them ... ok
+test exhaust::tests::open_row_needs_rest ... ok
+test exhaust::tests::fallible_column_splits_both_halves ... ok
+test exhaust::tests::redundant_arm_is_useless ... ok
+test exhaust::tests::or_pattern_expands ... ok
+test exhaust::tests::sealed_row_closes ... ok
+test exhaust::tests::wildcard_closes_everything ... ok
+test exhaust::tests::tuple_nesting ... ok
+test fmtspec::tests::grammar_parses_every_field ... ok
+test fmtspec::tests::float_fixed_and_exp_match_decimal ... ok
+test fmtspec::tests::float_shortest_matches_decimal_to_str ... ok
+test fmtspec::tests::grammar_refuses_what_it_cannot_mean ... ok
+test fmtspec::tests::mismatches_are_ruled_out ... ok
+test fmtspec::tests::nonfinite_specs_stay_honest ... ok
+test fmtspec::tests::packing_round_trips_the_fields ... ok
+test fmtspec::tests::padding_matches_wolf_std ... ok
+test fmtspec::tests::sign_zero_and_bases_match_wolf_std ... ok
+test fmtspec::tests::str_precision_respects_boundaries ... ok
+test graph::tests::import_loads_and_orders_deps_first ... ok
+test graph::tests::duplicate_definitions_across_files_report_e0302 ... ok
+test graph::tests::cycle_reports_the_full_path ... ok
+test graph::tests::lazy_loading_skips_unimported_siblings ... ok
+test graph::tests::private_item_import_is_e0304 ... ok
+test graph::tests::item_and_group_imports_bind ... ok
+test graph::tests::self_import_is_e0306 ... ok
+test graph::tests::std_root_missing_module_is_e0301 ... ok
+test graph::tests::std_root_item_import_binds ... ok
+test graph::tests::std_root_private_item_is_e0304 ... ok
+test graph::tests::std_root_nested_modules_resolve ... ok
+test ctfe::norm::tests::property_beyond_forms_never_silently_unify ... ok
+test interface::tests::decode_rejects_garbage ... ok
+test graph::tests::std_use_binds_fs ... ok
+test graph::tests::without_std_root_stub_fences_unknown_std ... ok
+test graph::tests::std_root_resolves_real_std_modules ... ok
+test interface::tests::private_items_never_serialize ... ok
+test layout::tests::scalars_are_their_size ... ok
+test prelude::tests::conc_handle_types_are_prelude_names ... ok
+test interface::tests::signatures_qualify_resolved_paths ... ok
+test interface::tests::round_trip_is_lossless ... ok
+test prelude::tests::prelude_and_builtins_answer ... ok
+test prelude::tests::provisional_rows_are_the_exempt_stand_ins ... ok
+test prelude::tests::range_is_a_type_position_prelude_name ... ok
+test prelude::tests::std_lookup_by_segments ... ok
+test prelude::tests::names_are_unique_and_resolvable ... ok
+test resolve::tests::arg_position_defers_through_an_import ... ok
+test resolve::tests::a_trait_alias_rhs_marks_its_imports_used ... ok
+test prelude::tests::host_anchor_iff_host_signature ... ok
+test resolve::tests::capitalized_miss_defers_as_row_tag ... ok
+test resolve::tests::clean_single_file_resolves ... ok
+test resolve::tests::forward_references_across_files_resolve ... ok
+test prelude::tests::marks_come_from_host_rows ... ok
+test resolve::tests::pkg_visibility_is_enough_in_package ... ok
+test resolve::tests::private_member_access_is_e0304 ... ok
+test resolve::tests::operator_trait_import_is_used_by_its_operator ... ok
+test resolve::tests::std_root_keeps_prelude_ambient_and_checks_real_members ... ok
+test resolve::tests::suppression_keeps_wrecked_regions_quiet ... ok
+test resolve::tests::single_thread_env_matches_parallel ... ok
+test rewrite::tests::cycles_are_rejected_not_chased ... ok
+test rewrite::tests::foreign_base_projections_are_opaque ... ok
+test resolve::tests::unused_import_is_machine_fixable ... ok
+test rewrite::tests::normalization_is_confluent_under_rule_reordering ... ok
+test rewrite::tests::transitive_rules_resolve_through_each_other ... ok
+test sig::tests::alias_expansion_and_cycle_guard ... ok
+test sig::tests::cross_module_types_are_nominal_and_shared ... ok
+test sig::tests::fn_signatures_elaborate_to_interned_types ... ok
+test rewrite::tests::single_rule_normalizes_to_fixed_point ... ok
+test sig::tests::generic_instantiations_elaborate ... ok
+test sig::tests::missing_global_annotation_is_e0407_with_fixit ... ok
+test sig::tests::prelude_containers_lower_as_builtins ... ok
+test sig::tests::wrapping_is_a_builtin_integer_constructor ... ok
+test strlit::tests::every_literal_shape_cooks_to_its_value ... ok
+test types::tests::diff_names_the_differing_part_only ... ok
+test types::tests::interning_respects_structural_equality ... ok
+test resolve::tests::lowercase_miss_defers_only_when_a_row_spells_it ... ok
+test types::tests::rendering_reads_like_source ... ok
+test unify::tests::err_unions_require_equal_rows_inside_the_unifier ... ok
+test unify::tests::join_prefers_the_non_diverging_branch ... ok
+test unify::tests::levels_keep_the_root_shallow_and_adjust_captures ... ok
+test unify::tests::literals_check_against_context_kinds ... ok
+test unify::tests::occurs_check_rejects_infinite_types ... ok
+test unify::tests::row_unification_rolls_back_bit_identical ... ok
+test unify::tests::row_tail_variable_absorbs_the_remainder ... ok
+test unify::tests::rows_unify_by_tag_sets_with_pointwise_payloads ... ok
+test unify::tests::snapshot_rollback_is_bit_identical ... ok
+test resolve::tests::typo_gets_a_suggestion ... ok
+test resolve::tests::arg_position_defers_when_callee_row_spells_the_tag ... ok
+test ctfe::norm::tests::property_linear_equivalence_class_closed_under_shuffles ... ok
+
+test result: ok. 106 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/attr_diagnostics.rs (target/debug/deps/attr_diagnostics-7d545cd9316e3a52)
+
+running 15 tests
+test a_dropped_item_is_never_defined ... ok
+test e0817_misplaced ... ok
+test e0817_contract_not_implemented ... ok
+test e0817_repr_arguments ... ok
+test e0817_cfg_unknown_predicate ... ok
+test e0817_cfg_unknown_target ... ok
+test e0817_section_shapes ... ok
+test e0817_unknown_attribute ... ok
+test e0818_abi_string ... ok
+test e0820_alignment_values ... ok
+test e0820_combinations ... ok
+test e0826_variadic_target_refusal ... ok
+test e0821_extern_let_shapes ... ok
+test packed_and_aligned_reprs_are_accepted ... ok
+test the_implemented_set_is_silent ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/audit_surface.rs (target/debug/deps/audit_surface-5b186aa04ef6427c)
+
+running 6 tests
+test manifest_stub_parser ... ok
+test declared_trusted_module_audits_clean ... ok
+test trusted_roster_rides_both_interface_hashes ... ok
+test e1303_undeclared_trusted_module_is_a_build_error ... ok
+test surface_inventory_snapshot ... ok
+test e1306_a_call_off_the_assembly_roster ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/conc_diagnostics.rs (target/debug/deps/conc_diagnostics-7fed74fd72cc0866)
+
+running 17 tests
+test conc_handle_bare_proc_arity ... ok
+test conc_handles_clean_in_signature ... ok
+test conc_handle_applied_scope_arity ... ok
+test conc_handle_completion_type_mismatch ... ok
+test e1101_clean_task_local_lend ... ok
+test channel_in_signature_position_is_chan ... ok
+test e1101_mut_lend_receiver ... ok
+test e1101_clean_when_guarded ... ok
+test e1101_projection_write ... ok
+test e1101_task_capture_write ... ok
+test e1101_mut_lend_argument ... ok
+test e1101_two_spawns_note_once ... ok
+test e1102_unsendable_payload ... ok
+test e1103_clean_sequential_whens ... ok
+test e1102_clean_sendable_payloads ... ok
+test e1103_nested_through_closure ... ok
+test e1103_nested_when ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/ctfe_diagnostics.rs (target/debug/deps/ctfe_diagnostics-e47ecb7fa154cdf2)
+
+running 15 tests
+test e0701_sandbox_fs ... ok
+test e0701_sandbox_exec ... ok
+test e0701_sandbox_clock ... ok
+test e0701_sandbox_ffi ... ok
+test e0707_witness_line_note ... ok
+test e0705_runtime_argument ... ok
+test e0706_overflow_at_declared_width ... ok
+test e0708_layout_unresolved ... ok
+test e0709_budget_cannot_be_zero ... ok
+test e0710_comptime_assert_failed ... ok
+test e0710_comptime_assert_failed_with_message ... ok
+test generated_impl_error_carries_provenance_chain ... ok
+test e0704_depth_folded_frames ... ok
+test e0702_fuel_exhaustion_fixit ... ok
+test e0703_heap_exhaustion ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s
+
+     Running tests/ctfe_engine.rs (target/debug/deps/ctfe_engine-27ff193f19f5a52a)
+
+running 10 tests
+test derive_eq_refuses_non_primitive_fields_with_provenance ... ok
+test list_construction_at_comptime_is_a_named_gap ... ok
+test implements_answers_true_and_false ... ok
+test nan_results_canonicalize ... ok
+test derive_eq_generated_impl_passes_s14_checking ... ok
+test two_arg_assert_passes_at_comptime ... ok
+test evaluate_boundary_fib_memoizes ... ok
+test single_thread_and_parallel_checking_agree ... ok
+test typebuild_typeinfo_round_trip ... ok
+test same_host_determinism_shuffled_call_orders ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/diagnostics.rs (target/debug/deps/diagnostics-f261f1da98bbc438)
+
+running 19 tests
+test e0301_no_such_module_teaches_formation ... ok
+test e0301_missing_module_item ... ok
+test e0301_item_defined_in_standalone_file ... ok
+test e0301_standalone_sibling_defines_the_name ... ok
+test e0301_module_all_standalone ... ok
+test e0301_std_group_and_deep_path_name_the_missing_std_root ... ok
+test e0301_std_item_names_the_missing_std_root ... ok
+test e0302_duplicate_definition_across_files ... ok
+test e0305_unused_import_machine_applicable_fix ... ok
+test e0304_private_item_names_required_visibility ... ok
+test e0303_import_cycle_full_path ... ok
+test e0410_global_let_assign ... ok
+test e0410_let_compound_assign ... ok
+test e0306_duplicate_import ... ok
+test e0410_let_field_assign ... ok
+test e0410_let_reassign ... ok
+test e0410_non_cases_stay_clean ... ok
+test e0410_scope_shapes_stay_clean ... ok
+test e0301_unresolved_name_with_typo_suggestion ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/host_table_spec.rs (target/debug/deps/host_table_spec-716af9f85466aa04)
+
+running 2 tests
+test a_non_host_prelude_name_has_no_host_signature ... ok
+test the_spec_host_table_is_the_checker_table ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/interface_pretty.rs (target/debug/deps/interface_pretty-1d415ca1fc5d00c1)
+
+running 1 test
+test two_mod_interface_dump ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/interface_props.rs (target/debug/deps/interface_props-af10536d7695a769)
+
+running 14 tests
+test dep_signature_change_propagates_through_dep_hashes ... ok
+test independent_rebuilds_are_byte_identical ... ok
+test adding_a_private_item_changes_nothing ... ok
+test loader_round_trips_every_module ... ok
+test file_order_within_the_directory_changes_nothing ... ok
+test item_reorder_within_a_file_changes_nothing ... ok
+test explicit_row_source_order_is_canonicalized ... ok
+test pkg_only_edit_changes_only_pkg_hash ... ok
+test private_inferred_row_churn_moves_no_hash ... ok
+test variadic_marker_participates_in_interface_hashes ... ok
+test version_only_bump_moves_no_hash ... ok
+test body_edit_changes_neither_hash ... ok
+test pub_signature_edit_changes_both_hashes ... ok
+test whitespace_edit_changes_nothing ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/layout_diagnostics.rs (target/debug/deps/layout_diagnostics-3baf68a78e87610a)
+
+running 8 tests
+test a_copied_packed_field_may_be_lent_and_a_scalar_read ... ok
+test e0820_an_aligned_struct_inside_a_packed_one ... ok
+test e0403_offset_of_a_field_the_struct_lacks ... ok
+test e0708_names_the_native_field ... ok
+test e0708_align_and_offset_of_a_native_layout_struct ... ok
+test e0819_through_a_nested_field_and_a_read_aggregate ... ok
+test e0819_a_mut_claim_of_a_packed_field ... ok
+test the_queries_answer_the_c_layout ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/lint_diagnostics.rs (target/debug/deps/lint_diagnostics-d6e7ed024180c5ca)
+
+running 4 tests
+test clean_files_scan_empty ... ok
+test allow_regions_cover_the_attributed_item ... ok
+test w0302_unknown_code_in_allow ... ok
+test w0303_allow_of_nothing ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/method_diagnostics.rs (target/debug/deps/method_diagnostics-4ba641bac8450661)
+
+running 16 tests
+test e0004_float_exponent_member ... ok
+test e0403_unknown_method_typo ... ok
+test e0804_builtin_list_push_bare_receiver ... ok
+test e0803_two_trait_ambiguity ... ok
+test e0401_to_int_row_in_the_mismatch ... ok
+test e0804_bare_mut_receiver ... ok
+test e0805_bool_to_int ... ok
+test e0805_str_to_int ... ok
+test e0804_superfluous_mode ... ok
+test e0804_wrong_mode ... ok
+test e0810_dyn_cast_of_a_temporary ... ok
+test e0807_out_of_scope_trait ... ok
+test e1307_volatile_pointee_not_one_access ... ok
+test e0811_dyn_cast_without_an_impl ... ok
+test e1308_atomic_pointee_not_a_fixed_width_integer ... ok
+test e1309_order_not_admitted ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/methods_engine.rs (target/debug/deps/methods_engine-897f4cddec01810b)
+
+running 16 tests
+test dyn_receiver_dispatches_by_name ... ok
+test associated_function_calls_on_the_type ... ok
+test cast_set_recorded ... ok
+test enum_construction_and_match ... ok
+test a_str_method_outside_the_set_is_std_str_s ... ok
+test inherent_method_call_types_and_dispatches ... ok
+test archetype_receiver_resolves_through_bounds ... ok
+test interpolation_holes_refuse_unrendered_kinds_by_name ... ok
+test inherent_shadows_trait_method ... ok
+test interpolation_holes_accept_the_rendered_kinds ... ok
+test open_row_admits_new_tags_and_rest_arm_consumes ... ok
+test moded_receivers_follow_the_declaration ... ok
+test to_int_is_in_the_builtin_set ... ok
+test trait_method_in_scope_dispatches ... ok
+test trait_default_body_uses_self_methods ... ok
+test unreachable_arm_warns_but_body_checks ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/origin_diagnostics.rs (target/debug/deps/origin_diagnostics-ccfc0d2204bd5050)
+
+running 7 tests
+test origin_regions_innermost_wins_and_absence_is_zero ... ok
+test origin_file_default_reaches_everything_and_marks_nothing_extra ... ok
+test e0813_unknown_inner_attribute ... ok
+test e0813_duplicate_marker ... ok
+test e0813_marker_without_an_origin ... ok
+test e0813_origin_out_of_range ... ok
+test w0317_get_literal_in_one_origin_scope ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/pattern_diagnostics.rs (target/debug/deps/pattern_diagnostics-e2fdb8e7ac4ac4a5)
+
+running 23 tests
+test e0602_pattern_unknown_tag ... ok
+test e0801_fallible_value_witness ... ok
+test e0801_enum_witnesses ... ok
+test e0801_fallible_value_half ... ok
+test e0801_fallible_missing_tag ... ok
+test e0401_range_mixed_endpoints ... ok
+test e0801_guard_non_contribution ... ok
+test e0802_duplicate_literal ... ok
+test e0801_int_witness ... ok
+test e0801_witness_past_range ... ok
+test e0802_literal_inside_earlier_range ... ok
+test e0801_row_missing_tag ... ok
+test e0806_range_in_let ... ok
+test e0806_refutable_let ... ok
+test e0802_unreachable_after_full_split ... ok
+test e0808_range_str_endpoints ... ok
+test e0808_payload_arity ... ok
+test e0815_empty_range_same_ends ... ok
+test e0808_variant_over_int ... ok
+test e0815_empty_range_backwards ... ok
+test e0809_single_tag_covers ... ok
+test e0816_tag_variant_collision ... ok
+test e0809_handler_uncovered ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/prelude_names.rs (target/debug/deps/prelude_names-d5047bfbd5deb277)
+
+running 3 tests
+test the_list_by_kind ... ok
+test every_cited_anchor_is_a_spec_clause ... ok
+test w0304_is_what_the_resolver_says ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/row_diagnostics.rs (target/debug/deps/row_diagnostics-d217e31c5f0dcacc)
+
+running 15 tests
+test e0601_duplicate_tag_in_row ... ok
+test e0603_try_on_infallible ... ok
+test e0602_missing_tag_with_fixit ... ok
+test e0601_error_set_alias_entry_takes_no_payload ... ok
+test e0602_large_rows_render_tags_only ... ok
+test e0604_try_in_infallible_fn ... ok
+test e0607_errdefer_in_infallible_fn ... ok
+test e0608_else_on_infallible ... ok
+test e0605_pub_inferred_row ... ok
+test e0609_nested_layer_payload_conflict ... ok
+test e0610_error_set_alias_cycle ... ok
+test e0606_payload_mismatch_on_shared_tag ... ok
+test error_set_aliases_are_transparent_both_ways ... ok
+test e0611_try_under_defer ... ok
+test e0611_try_under_errdefer ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/rows_engine.rs (target/debug/deps/rows_engine-bfc4bff7be268f48)
+
+running 23 tests
+test else_on_infallible_value_is_e0608 ... ok
+test errdefer_needs_a_fallible_function ... ok
+test else_handler_binds_the_row_value ... ok
+test abstract_row_rejects_concrete_injection ... ok
+test cleanups_and_trace_points_ride_the_typed_hir ... ok
+test hof_row_tail_polymorphism_via_row_variables ... ok
+test let_annotation_row_types_bare_tag ... ok
+test param_row_accepts_tag_at_call_site ... ok
+test inferred_rows_seal_through_recursion_and_pointers ... ok
+test lowercase_declared_tag_raises_and_matches ... ok
+test pub_inferred_row_is_e0605_with_state_the_row_fixit ... ok
+test pub_inferred_row_that_cannot_fail_suggests_dropping_the_bang ... ok
+test mutual_recursion_reaches_the_fixpoint ... ok
+test raising_an_undeclared_tag_is_e0602 ... ok
+test return_boundary_also_widens ... ok
+test tag_payload_arity_mismatch_is_e0606 ... ok
+test shared_tag_payload_conflict_is_e0606 ... ok
+test propagation_widens_across_module_hops ... ok
+test try_on_infallible_value_is_e0603 ... ok
+test tag_payloads_check_pointwise ... ok
+test try_in_infallible_function_is_e0604_with_fixit ... ok
+test try_missing_tag_is_e0602_with_row_extending_fixit ... ok
+test try_widens_into_a_larger_row ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s215.rs (target/debug/deps/sandbox_s215-e35d73cfc37f4941)
+
+running 3 tests
+test each_s215_builtin_has_its_ruled_category ... ok
+test the_reasons_a_refusal_prints ... ok
+test the_spawn_with_a_map_is_exec ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s225.rs (target/debug/deps/sandbox_s225-1fbe97c6652d6fd5)
+
+running 2 tests
+test each_s225_builtin_has_its_category ... ok
+test the_reasons_a_refusal_prints ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s230.rs (target/debug/deps/sandbox_s230-0d3e77ddd82a7a84)
+
+running 2 tests
+test each_s230_builtin_has_its_category ... ok
+test each_s230_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s232.rs (target/debug/deps/sandbox_s232-d46224cdac0ec709)
+
+running 2 tests
+test each_s232_builtin_has_its_category ... ok
+test each_s232_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s234.rs (target/debug/deps/sandbox_s234-9c7d92107f2e868c)
+
+running 2 tests
+test each_s234_builtin_has_its_category ... ok
+test each_s234_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s236.rs (target/debug/deps/sandbox_s236-3e8b25b8480a2f5f)
+
+running 2 tests
+test each_s236_builtin_has_its_category ... ok
+test each_s236_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s241.rs (target/debug/deps/sandbox_s241-db4a46f123ffd366)
+
+running 2 tests
+test each_s241_builtin_has_its_category ... ok
+test each_s241_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s242.rs (target/debug/deps/sandbox_s242-0988293e0224cbf7)
+
+running 2 tests
+test the_poll_is_exec_with_the_wait ... ok
+test the_poll_has_its_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s246.rs (target/debug/deps/sandbox_s246-26d85028d19cba17)
+
+running 2 tests
+test each_s246_builtin_has_its_category ... ok
+test each_s246_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s247.rs (target/debug/deps/sandbox_s247-07477454ba97f4d1)
+
+running 2 tests
+test the_fork_has_its_category ... ok
+test the_fork_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s248.rs (target/debug/deps/sandbox_s248-55eebe4e5e97d748)
+
+running 2 tests
+test each_s248_builtin_has_its_category ... ok
+test each_s248_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s253.rs (target/debug/deps/sandbox_s253-b47d143ada0a86c6)
+
+running 2 tests
+test each_s253_builtin_has_its_category ... ok
+test each_s253_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/sandbox_s254.rs (target/debug/deps/sandbox_s254-4d03d450054b6a07)
+
+running 2 tests
+test each_s254_builtin_has_its_category ... ok
+test each_s254_builtin_has_a_signature ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/struct_pattern_diagnostics.rs (target/debug/deps/struct_pattern_diagnostics-e68a0359187bc34b)
+
+running 5 tests
+test e0814_duplicate_field ... ok
+test e0814_missing_field_without_rest ... ok
+test e0814_empty_field_list ... ok
+test e0403_unknown_field_in_pattern ... ok
+test clean_struct_patterns_bind ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/trait_diagnostics.rs (target/debug/deps/trait_diagnostics-5b009b638a3db42e)
+
+running 20 tests
+test e0501_add_this_bound ... ok
+test e0502_operator_without_impl ... ok
+test e0301_operator_trait_not_in_scope ... ok
+test e0501_operator_ord_and_neg ... ok
+test e0501_operator_capability ... ok
+test e0502_unmet_bound_at_call_site ... ok
+test e0503_bound_not_a_trait ... ok
+test e0507_alias_bound_is_not_implemented ... ok
+test e0505_uncovered_param ... ok
+test e0503_alias_bound_cycle ... ok
+test e0506_blanket_overlap ... ok
+test e0504_orphan_impl ... ok
+test e0509_dyn_assoc_escape ... ok
+test e0507_conformance_mismatch ... ok
+test e0508_dyn_generic_method ... ok
+test e0510_dyn_self_position ... ok
+test e0512_no_gats ... ok
+test e0511_no_hkp ... ok
+test e0513_rewrite_cycle ... ok
+test e0514_heterogeneous_operator_method ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/traits_engine.rs (target/debug/deps/traits_engine-e52949d452574615)
+
+running 28 tests
+test arithmetic_on_archetypes_is_definition_site_e0501 ... ok
+test adapter_does_not_inherit_base_impls ... ok
+test associated_consts_reach_generic_bodies_through_bounds ... ok
+test associated_types_normalize_through_the_rewrite_engine ... ok
+test adapter_types_are_their_own_nominals_with_free_casts ... ok
+test equality_on_archetypes_is_definition_site_e0501 ... ok
+test dyn_objects_satisfy_their_own_trait ... ok
+test impl_conformance_mismatches_are_e0507 ... ok
+test hkp_and_gats_are_catalog_rejections ... ok
+test impl_member_bodies_check_with_self_bound ... ok
+test dyn_safety_violations_have_their_own_codes ... ok
+test impl_addition_moves_hashes_generic_body_edits_do_not ... ok
+test alias_bound_means_every_trait_in_its_list ... ok
+test inherent_impl_bodies_and_self_receiver_check ... ok
+test non_trait_bounds_are_e0503 ... ok
+test instantiation_errors_land_at_the_call_site_only ... ok
+test isolated_namespaces_allow_method_name_collisions ... ok
+test overlapping_impls_are_e0506_including_blankets ... ok
+test orphan_impls_are_e0504 ... ok
+test outputs_never_drive_input_inference ... ok
+test rewrite_cycles_in_impls_are_e0513 ... ok
+test qualified_call_on_concrete_type_selects_the_impl ... ok
+test operators_on_user_types_record_their_dispatch ... ok
+test trait_default_bodies_check_against_archetype ... ok
+test satisfaction_is_cached_and_blanket_impls_match ... ok
+test unstated_capability_errors_at_the_definition ... ok
+test uncovered_impl_params_are_e0505 ... ok
+test trait_impl_and_bounded_generic_fully_check ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/typecheck.rs (target/debug/deps/typecheck-0aaf88459bb7a7f5)
+
+running 59 tests
+test assert_takes_an_optional_message ... ok
+test arithmetic_and_locals_infer_through_context ... ok
+test calling_a_struct_is_e0406 ... ok
+test assert_wrong_arity_is_e0402 ... ok
+test closures_take_parameter_types_from_context ... ok
+test closures_record_their_capture_sets ... ok
+test a_moded_nested_fn_is_called_by_name_only ... ok
+test container_brackets_keep_their_admitted_tuple_and_generic_types ... ok
+test cross_module_calls_check_against_dependency_signatures ... ok
+test deferred_row_tag_returns_through_err_union ... ok
+test equality_on_structs_goes_through_eq ... ok
+test else_defaulting_and_try_check_since_s15 ... ok
+test declared_tag_resolves_at_argument_and_let ... ok
+test container_brackets_name_only_the_shapes_still_declined ... ok
+test float_literals_default_f64 ... ok
+test generic_identity_body_checks_with_rigid_vars ... ok
+test a_moded_module_fn_is_called_by_name_only ... ok
+test hello_world_fully_checks ... ok
+test if_branch_mismatch_is_honest_both_ways ... ok
+test generic_instantiation_checks_since_s14 ... ok
+test in_target_must_be_a_region ... ok
+test infinite_type_is_e0404 ... ok
+test logic_on_numbers_is_e0409 ... ok
+test literal_defaulting_is_a_rule ... ok
+test local_shadows_declared_tag_and_w0305_warns ... ok
+test match_with_literal_patterns_checks ... ok
+test missing_struct_fields_are_e0408 ... ok
+test method_on_a_row_is_e0409_before_any_impl ... ok
+test method_on_a_row_still_types_its_arguments ... ok
+test nested_closure_captures_propagate ... ok
+test nested_fn_refusals_are_named ... ok
+test nested_fn_checks_and_binds ... ok
+test inference_is_stable_under_statement_permutation ... ok
+test ok_injection_accepts_plain_value_at_err_union ... ok
+test missing_container_type_names_report_the_leaf_without_cascades ... ok
+test nested_row_payload_conflict_is_e0609 ... ok
+test return_type_mismatch_has_provenance_chain ... ok
+test str_compared_to_number_still_reports ... ok
+test str_relational_operators_type ... ok
+test nested_row_flattens ... ok
+test str_methods_type_since_s37 ... ok
+test suppressed_regions_stay_quiet_in_typecheck ... ok
+test parallel_and_sequential_agree ... ok
+test str_slicing_types_since_s37 ... ok
+test unannotated_global_walks_but_reports_e0407 ... ok
+test tuple_destructuring_is_irrefutable_and_checked ... ok
+test struct_fields_on_nominal_values_check ... ok
+test uninferable_closure_param_is_e0405 ... ok
+test unknown_field_is_e0403_with_typo_suggestion ... ok
+test regions_type_since_s19_freeze_since_s20 ... ok
+test unsafe_blocks_typecheck_since_s22_but_asm_still_refuses ... ok
+test variadic_list_layout_is_the_c_record_not_a_pointer ... ok
+test variadic_tail_rejects_non_c_values ... ok
+test variadic_start_in_nested_frame_is_rejected ... ok
+test variadic_list_builtins_allow_nonvariadic_consumers ... ok
+test wrong_arg_count_is_e0402_with_definition_site ... ok
+test wrapping_types_are_integer_family ... ok
+test variadic_call_checks_fixed_prefix_and_accepts_tail ... ok
+test variadic_arg_requires_promoted_type ... ok
+
+test result: ok. 59 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/typecheck_diagnostics.rs (target/debug/deps/typecheck_diagnostics-73d67885ea555bd0)
+
+running 68 tests
+test assert_false_diverges_in_fallback ... ok
+test closure_return_types_against_the_closure ... ok
+test closure_return_disagreeing_with_the_tail ... ok
+test e0301_bare_variant_two_homes ... ok
+test e0401_byte_narrowing_teach_note ... ok
+test e0301_bare_variant_value ... ok
+test e0401_argument_vs_return_confusion ... ok
+test e0301_container_type_argument_is_unresolved_not_declined ... ok
+test e0401_if_branch_mismatch ... ok
+test e0401_condition_needs_bool ... ok
+test e0401_deep_fn_type_diff ... ok
+test e0401_int_float_no_implicit_conversion ... ok
+test e0401_computed_assert_still_owes_t ... ok
+test e0401_byte_widening_teach_note ... ok
+test e0401_list_element_mismatch_blames_the_first_miss ... ok
+test e0401_let_annotation_provenance ... ok
+test e0401_match_arms_disagree ... ok
+test e0401_range_outside_the_closed_family ... ok
+test e0401_return_mismatch_provenance ... ok
+test e0402_assert_arity ... ok
+test e0403_range_has_only_start_and_end ... ok
+test e0405_uninferable_closure_param ... ok
+test e0402_wrong_arg_count ... ok
+test e0404_infinite_type ... ok
+test e0403_unknown_field_typo ... ok
+test e0409_logic_on_numbers ... ok
+test e0407_unannotated_global ... ok
+test e0406_struct_called_like_fn ... ok
+test e0408_missing_struct_field ... ok
+test e0411_from_end_single_position ... ok
+test e0411_char_index_hint ... ok
+test e0412_zero_with_align ... ok
+test e0412_malformed_spec ... ok
+test e0412_align_as_fill ... ok
+test e0409_str_plus_mixes ... ok
+test e0413_precision_on_int ... ok
+test e0413_hex_on_str ... ok
+test e0409_row_on_either_side ... ok
+test e0409_row_member_and_method ... ok
+test e0414_generic_main ... ok
+test e0414_main_with_params ... ok
+test e0414_str_main ... ok
+test e0414_non_root_main_is_ordinary ... ok
+test e0415_fitting_stays_clean ... ok
+test e0414_legal_shapes_are_silent ... ok
+test e0415_annotated_narrow ... ok
+test e0415_default_i32_overflow ... ok
+test e0415_negative_and_unsigned ... ok
+test e0415_wrapping_literal ... ok
+test e0416_str_index_and_compound ... ok
+test e0416_str_slice_assign ... ok
+test e0419_empty_list_literal_without_a_context ... ok
+test e0417_map_compound_assign ... ok
+test e0418_map_key_outside_the_four ... ok
+test e0502_literal_default_no_candidate ... ok
+test e0824_start_without_variadic_frame ... ok
+test e0823_variadic_function_value ... ok
+test e0825_second_start ... ok
+test e1607_public_names_no_parameter ... ok
+test e1607_malformed_argument_shapes ... ok
+test e0502_literal_default_two_candidates ... ok
+test e1607_well_formed_stays_clean ... ok
+test empty_list_literals_take_the_context_they_are_in ... ok
+test literal_default_follows_the_bound ... ok
+test map_admitted_keys_stay_clean ... ok
+test str_plus_char_is_append ... ok
+test range_is_a_nameable_type_with_start_and_end ... ok
+test tuple_type_in_bracket_position ... ok
+
+test result: ok. 68 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/wave_diagnostics.rs (target/debug/deps/wave_diagnostics-3f297b140262d253)
+
+running 36 tests
+test provisional_standins_are_exempt_from_w0304 ... ok
+test package_shape_counterparts_stay_silent ... ok
+test arbiter_clean_shapes_stay_silent ... ok
+test w0305_local_shadows_tag_at_argument ... ok
+test w0305_tag_collides_with_item ... ok
+test w0304_shadowed_prelude_fn ... ok
+test w0304_shadowed_intrinsic_binding ... ok
+test w0306_prefix_operator_statement ... ok
+test w0307_comparison_after_else ... ok
+test w0310_get_prefix ... ok
+test w0309_raw_literal_interp_braces ... ok
+test w0308_mut_argument_in_interpolation ... ok
+test w0312_as_view_consumes ... ok
+test w0311_predicate_not_bool ... ok
+test w0313_pub_without_doc ... ok
+test w0314_one_item_module ... ok
+test w0315_pkg_item_unused ... ok
+test w0316_ancestor_import ... ok
+test w0318_arithmetic_after_else ... ok
+test w0401_literal_does_not_fit_cast ... ok
+test w0402_zero_minus_negation ... ok
+test w0601_discarded_fallible_result ... ok
+test w0602_pub_anonymous_row ... ok
+test w0603_none_with_payload ... ok
+test w0601_unit_context_tail ... ok
+test w1002_fix_applicability_is_honest ... ok
+test w1002_mut_param_never_written ... ok
+test w0604_get_without_row ... ok
+test w1003_take_returned_unchanged ... ok
+test w0603_tag_case_contradicts_payload ... ok
+test w0801_capitalized_binder ... ok
+test when_bodies_are_exempt_from_w1101 ... ok
+test writes_through_projections_stay_silent ... ok
+test w1101_task_writes_captured_copy ... ok
+test w1102_capture_then_reassign ... ok
+test w1302_assume_operand_reassigned ... ok
+
+test result: ok. 36 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+   Doc-tests wolf_backend
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests wolf_fmt
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests wolf_parse
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests wolf_sema
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
