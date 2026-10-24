@@ -1,0 +1,17 @@
+s263 Prediction — recorded before implementation
+Base: wolf-lang 7b7b1753.
+The new C variadic clause will take approximately 100 lines.
+The first Wolf-to-C floating-point witness will fail at the missing %al SSE
+count; overflow witnesses will then expose stack alignment errors.
+The release inliner needs a guard against inlining variadic definitions.
+Muzzle's 50 printf cases will not all pass the first time: signed formatting
+and argument consumption are likely first failures.
+
+Rulings requested, not decided; proceeding with the recommended A options:
+R-s263-1: builtin VaList with free functions (A), rather than a std opaque array (B).
+R-s263-2: silent C default promotions (A), rather than explicit-cast errors (B).
+R-s263-3: checked-machine unsupported by name in both directions (A), rather
+than interpreting variadic Wolf definitions (B).
+
+Report .md output is prohibited by the lane wrapper. The final five-section
+report will use the PR-body fallback, with evidence in notes/s263-evidence/.
