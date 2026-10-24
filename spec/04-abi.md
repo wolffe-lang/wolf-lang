@@ -203,9 +203,9 @@ AAPCS64, win64, Apple arm64 deltas).
   function wolf calls: a call is a call into imported C, the raw-tier
   operation E1301 gates to `unsafe` (as `c.malloc` is,
   `[mem.unsafe.scope]`), and lowers to the plain symbol `f` under the C
-  plan, with exactly the declared prototype (a variadic C function
-  declared without its varargs is the author's error, as in C;
-  wolf-lang#515). A narrow integer or `bool` argument is widened to 32
+  plan, with exactly the declared prototype; a variadic prototype
+  ends in `...` by `[abi.c.variadic]`. Declaring a variadic C function
+  without its varargs is the author's error, as in C. A narrow integer or `bool` argument is widened to 32
   bits by the caller according to its signedness, the rule C callers
   keep and clang's callees and the Apple arm64 ABI rely on. The
   program's link supplies `f` (the C library, or an object linked
@@ -331,6 +331,104 @@ AAPCS64, win64, Apple arm64 deltas).
 - `[abi.c.panic]` A wolf fault reaching an `extern "c"` or `export`
   boundary **aborts the process** (after the fault report). There is no
   `c-unwind` at v1; C frames are never unwound (`[conc.cancel.c]`).
+
+### C variable arguments `[abi.c.variadic]`
+
+This clause follows the System V AMD64 psABI 1.0, §3.2.3 (classification
+and parameter passing) and §3.5.7 "Variable Argument Lists", figures
+3.33–3.34, and C17 §7.16 (list lifetime and access). Only hand-declared
+C membranes are extended: `import c` still admits only its modelled set
+(`[abi.c.import]`), even when a header records a variadic prototype.
+
+- `[abi.c.variadic.syntax]` A C membrane's parameter list may end in
+  `, ...`, after at least one fixed parameter: `extern "c" fn f(n: i32,
+  ...) -> i64` declares one; `export fn f(n: i32, ...) -> i64 { ... }`
+  defines one. An `extern "c" fn` with a body is likewise a definition.
+  The ellipsis has no name, type or passing mode. An ellipsis anywhere
+  else in a parameter list, or on an ordinary wolf function, is E0822.
+  A variadic function is callable by name only, never a function value
+  (E0823): wolf function values carry fixed arity, not this C contract.
+- `[abi.c.variadic.call]` A call supplies every fixed argument, checked
+  against its declared type, followed by zero or more unnamed arguments.
+  The compiler silently applies C's default argument promotions only to
+  the unnamed arguments: `i8`, `i16`, `u8`, `u16`, `byte` and `bool` to
+  `i32`, and `f32` to `f64`; the remaining sized integers, `int`, `uint`,
+  `f64` and raw pointers retain their type. Narrow signed values are
+  sign-extended; unsigned values and `bool` are zero-extended. `str`,
+  containers, function values and other non-C shapes are refused by name.
+  A promoted argument is read using its promoted type, not its source
+  type. Fixed arguments do not receive default promotions.
+- `[abi.c.variadic.sysv]` On x86-64 Linux the fixed and promoted arguments
+  share the SysV register budgets, in source order: six INTEGER registers
+  (`rdi`, `rsi`, `rdx`, `rcx`, `r8`, `r9`) and eight SSE registers
+  (`xmm0`–`xmm7`). Exhaustion is independent by class; overflow arguments
+  occupy aligned stack slots in source order. Aggregates keep §3.2.3's
+  classification and whole-aggregate register rollback. A hidden C
+  result pointer consumes a GP register before the named arguments.
+  Immediately before the call, `%al` is the number of vector argument
+  registers used, fixed arguments included, in `0..=8`. The caller's
+  stack is 16-byte aligned at the call instruction. Every compiling
+  tier keeps the same contract.
+- `[abi.c.variadic.list]` `VaList` is a builtin C-layout record, size 24,
+  alignment 8: `gp_offset: u32` at byte 0, `fp_offset: u32` at byte 4,
+  `overflow_arg_area: *u8` at byte 8 and `reg_save_area: *u8` at byte 16.
+  C's `va_list` is an array of one such record; in a C parameter it
+  decays to a pointer. Spell that parameter **`*VaList`** in a wolf
+  import or export, for example `extern "c" fn vprintf(fmt: *u8,
+  ap: *VaList) -> i32`. Passing a `VaList` record by value is not an
+  implicit array decay and is not the C `va_list` parameter ABI.
+- `[abi.c.variadic.builtins]` The raw-tier builtins require `unsafe`:
+  `va_start() -> VaList`, `va_arg[T](mut ap: VaList) -> T`,
+  `va_copy(ap: VaList) -> VaList`, and `va_end(mut ap: VaList) -> ()`.
+  `va_start` obtains this invocation's unnamed arguments and is legal
+  only in a variadic definition (E0824). A definition spells it once;
+  a second occurrence is E0825: use `va_copy` for another cursor.
+  `va_arg`, `va_copy` and `va_end` also work in nonvariadic consumers
+  of a live list. In particular a `vfmt` receiving `*VaList` can copy
+  the pointed-to record, consume its copy, and end it without advancing
+  the caller's cursor. A copy owns its cursor state, not the argument
+  storage. Neither the original nor a copy may outlive the variadic
+  invocation whose register and stack storage it points into.
+- `[abi.c.variadic.start]` A variadic definition saves incoming argument
+  registers before its body can clobber them. The register save area is
+  176 bytes: six 8-byte GP slots at offsets 0–40 and eight 16-byte SSE
+  slots at offsets 48–160. Nonvariadic definitions do not allocate this
+  area. `va_start` initializes `gp_offset` to the named GP bytes consumed
+  (at most 48), `fp_offset` to 48 plus the named SSE slots consumed
+  (at most 176), the overflow pointer to the first unnamed stack slot,
+  and the save pointer to that invocation's save area. Inlining must
+  not move this prologue or `va_start` into a caller's frame.
+- `[abi.c.variadic.arg]` `va_arg[T]` classifies `T` as §3.2.3 does. If
+  all required GP and SSE slots remain, it loads the value from their
+  save slots (reassembling an aggregate when needed), then advances the
+  GP cursor by 8 per GP slot and the FP cursor by 16 per SSE slot.
+  Otherwise it reads the whole value from the overflow area, aligned
+  upwards to the type's alignment, then advances by its size rounded
+  up to 8. This does not consume any remaining register slots.
+  `va_copy` copies all four fields. `va_end` ends that cursor's lifetime;
+  it need not release storage. Every start or copy must have a matching
+  end before return. Access after end, access past the supplied argument
+  count, or access with a type incompatible with the promoted argument
+  is undefined, with C17 §7.16.1.1's signed/unsigned representability
+  and void-pointer/character-pointer exceptions. The compiler rejects
+  `va_arg` of a type that cannot survive default promotions by name.
+- `[abi.c.variadic.targets]` This support is target-specific. A variadic
+  declaration, definition, call or list builtin on any other target is
+  E0826, naming the target; no other target borrows the SysV layout.
+
+  | target | variadic C membrane |
+  |---|---|
+  | x86-64 Linux (SysV AMD64) | supported, both directions |
+  | aarch64 Linux (AAPCS64) | unsupported, E0826; distinct list and save areas |
+  | aarch64 macOS (Apple arm64) | unsupported, E0826; unnamed arguments use the stack |
+  | x86-64 Windows (MSVC x64) | unsupported, E0826; distinct register and shadow-space rules |
+  | x86-64 FreeBSD, x86-64 freestanding, and every other target | unsupported, E0826 |
+
+- `[abi.c.variadic.checked]` The checked machine has no C membrane:
+  a variadic call into C is `unsupported`, naming that call; a call from
+  wolf to a variadic wolf definition is likewise `unsupported`, naming
+  the definition. The list builtins are unsupported there by name,
+  rather than interpreted as ordinary fixed-arity calls.
 
 ## §3 Callback and pointer rules `[abi.callback]`
 

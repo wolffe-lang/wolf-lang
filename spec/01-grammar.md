@@ -328,7 +328,7 @@ fn_qual   ::= 'comptime' | 'extern' STRING | 'export'
 generics  ::= '[' generic_param (',' generic_param)* ','? ']'
 generic_param ::= IDENT (':' bound)? | IDENT ':' 'type'
 bound     ::= path ('+' path)*
-params    ::= param (',' param)* ','?
+params    ::= param (',' param)* (',' '...' | ','?)
 param     ::= param_mode? IDENT ':' type | param_mode? 'self' view_set?
 param_mode ::= 'mut' | 'take'
 view_set  ::= '.' '{' IDENT (',' IDENT)* '}'
@@ -336,6 +336,9 @@ fn_ret    ::= '->' ret_type
 ret_type  ::= type ('!' (error_row | path))?   /* `-> !T` parses via type's '!' type */
 ```
 
+- A final `, ...` is restricted to a C membrane, after at least one
+  fixed parameter (`[abi.c.variadic.syntax]`). It is not a parameter
+  named `...`, and cannot have a type, mode or trailing comma.
 - Modes (D10 Tier 0): default is `read` (no keyword — the absence *is* the
   syntax); `mut` = exclusive inout; `take` = consume.
 - View sets: `fn norm(mut self.{x, y})` — field-granular exclusivity.
