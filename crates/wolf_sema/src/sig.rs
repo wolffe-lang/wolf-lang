@@ -124,6 +124,9 @@ pub struct FnSig {
     /// (`[abi.c.export]`, `[abi.c.import]`): `None` for an ordinary
     /// wolf function.
     pub membrane: Option<Membrane>,
+    /// A C ellipsis follows the named parameters (`[abi.c.variadic]`).
+    /// Kept separately: it is neither a parameter nor a wolf fn type.
+    pub variadic: bool,
 }
 
 /// The two sides of the C membrane a function item can stand on
@@ -930,6 +933,7 @@ impl<'a> Lower<'a> {
             trusted: trusted_attr(node, |sp| self.text(file, sp)),
             consttime,
             membrane: Membrane::of(d),
+            variadic: d.is_variadic(),
         }
     }
 

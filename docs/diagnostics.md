@@ -1677,6 +1677,27 @@ through it with `p[0]` or `p.read_volatile()` in an `unsafe` block.
 
 Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__membrane__extern_let_not_ptr.snap, crates/wolf_sema/tests/snapshots/attr_diagnostics__e0821_extern_let_shapes.snap
 
+## E0822 — an ellipsis outside the end of a C parameter list
+
+Only a C membrane (`extern "c" fn` or `export fn`) can take unnamed
+arguments. Write `, ...` after its last fixed parameter, with no name,
+type, mode or trailing comma. At least one fixed parameter is required.
+An ordinary wolf function has fixed arity; an ellipsis cannot turn it
+into a variadic function. Use an export if a C-compatible variadic
+entry is intended, or pass a typed container to an ordinary function.
+
+Fixtures: crates/wolf_parse/tests/snapshots/variadic__e0822_variadic_position.snap
+
+## E0823 — a variadic function used as a function value
+
+A wolf function value has a fixed parameter list. A C variadic function
+also accepts unnamed arguments, whose promoted types determine their
+register and stack locations at each call. That contract cannot be
+stored in a wolf function value. Call the variadic function by its name
+instead, or write a fixed-arity wrapper that performs the named call.
+
+Fixtures: crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0823_variadic_function_value.snap
+
 ## E1001 — this value was moved away (or never given one) before this use
 
 In wolf, assignment and argument passing *move* a value: after

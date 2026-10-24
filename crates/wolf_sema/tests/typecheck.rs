@@ -1004,3 +1004,32 @@ fn missing_container_type_names_report_the_leaf_without_cascades() {
         assert_eq!(d.message, format!("nothing named `{name}` is in scope"));
     }
 }
+
+#[test]
+fn variadic_call_checks_fixed_prefix_and_accepts_tail() {
+    let tc = check_one(
+        "extern \"c\" fn f(n: i32, ...) -> i32\nfn invoke() -> i32 { unsafe { f(1, 2 as u8, 3 as f32) } }\n",
+    );
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+    let tc = check_one(
+        "extern \"c\" fn f(n: i32, ...) -> i32\nfn invoke() -> i32 { unsafe { f(0) } }\n",
+    );
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+    let tc =
+        check_one("extern \"c\" fn f(n: i32, ...) -> i32\nfn invoke() -> i32 { unsafe { f() } }\n");
+    assert!(codes(&tc).contains(&"E0402"), "{:?}", tc.diagnostics);
+    let tc = check_one(
+        "extern \"c\" fn f(n: i32, ...) -> i32\nfn invoke() -> i32 { unsafe { f(true, 1) } }\n",
+    );
+    assert!(codes(&tc).contains(&"E0401"), "{:?}", tc.diagnostics);
+}

@@ -952,6 +952,9 @@ fn render_params(ctx: &SigCtx<'_>, params: ParamList<'_>) -> String {
         }
         parts.push(s);
     }
+    if params.is_variadic() {
+        parts.push("...".to_string());
+    }
     parts.join(", ")
 }
 

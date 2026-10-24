@@ -1247,3 +1247,22 @@ fn str_ordering_against_itself_is_the_length_compare() {
     assert!(!body.contains("call "), "no call: {body}");
     assert!(!body.contains("load.i8"), "and no byte is read: {body}");
 }
+
+/// Until native prologues consume the metadata, ellipses must not erase.
+#[test]
+fn variadic_membranes_never_lower_as_fixed_arity() {
+    for src in [
+        "extern \"c\" fn sum(n: i32, ...) -> i64\nfn main() -> int { unsafe { sum(1, 42 as i64) as int } }\n",
+        "export fn sum(n: i32, ...) -> i64 { 0 }\nfn main() -> int { 0 }\n",
+    ] {
+        let build = lower(src);
+        assert!(
+            build
+                .not_yet
+                .iter()
+                .any(|n| n.construct.contains("variadic")),
+            "{:?}",
+            build.not_yet
+        );
+    }
+}

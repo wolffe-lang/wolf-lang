@@ -1599,6 +1599,15 @@ into a variadic function. Use an export if a C-compatible variadic
 entry is intended, or pass a typed container to an ordinary function.
 "#);
 
+code!(E0823, "a variadic function used as a function value", r#"
+A wolf function value has a fixed parameter list. A C variadic function
+also accepts unnamed arguments, whose promoted types determine their
+register and stack locations at each call. That contract cannot be
+stored in a wolf function value. Call the variadic function by its name
+instead, or write a fixed-arity wrapper that performs the named call.
+"#);
+
+
 
 // ------------------------------------------------------------------------
 // E1xxx — the memory tier (c04, spec/02). s18 registers the Tier-0

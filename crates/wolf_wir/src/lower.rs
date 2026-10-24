@@ -874,6 +874,12 @@ fn lower_body(
     let Some(block) = d.body() else {
         return Ok(None);
     };
+    if fsig.variadic {
+        return Err(refuse(
+            "a C variadic definition (native variadic lowering pending)",
+            span,
+        ));
+    }
     // s93: a generic body lowers only as an INSTANCE — the worklist
     // hands one in as a substitution. Reached with none (the plain pass
     // over `tc.bodies`), the ARCHETYPE has nothing to lower: its
@@ -12241,6 +12247,12 @@ impl<'t, 'b, 'm> Lowerer<'t, 'b, 'm> {
                 e.span,
             ));
         };
+        if fsig.variadic {
+            return Err(refuse(
+                "a C variadic call (native variadic lowering pending)",
+                e.span,
+            ));
+        }
         membrane_sig_check(&self.sigs.table, self.sigs, fsig)?;
         let cname = cs.callee.rsplit('.').next().unwrap_or(&cs.callee);
         if module_c_defines(self.sigs, cname) {

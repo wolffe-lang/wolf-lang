@@ -1,0 +1,59 @@
+   Compiling wolf_diag v0.2.35 (/work/crates/wolf_diag)
+   Compiling wolf_ast v0.2.35 (/work/crates/wolf_ast)
+   Compiling wolf_lex v0.2.35 (/work/crates/wolf_lex)
+   Compiling wolf_parse v0.2.35 (/work/crates/wolf_parse)
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+   Compiling wolf_mem v0.2.35 (/work/crates/wolf_mem)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.03s
+     Running tests/ubcheck.rs (target/debug/deps/ubcheck-83405903528a182d)
+
+running 1 test
+test variadic_calls_are_named_checked_refusals_both_ways ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 56 filtered out; finished in 0.00s
+
+   Compiling wolf_wir v0.2.35 (/work/crates/wolf_wir)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.30s
+     Running tests/lower_shapes.rs (target/debug/deps/lower_shapes-1a5e291969ec7fbe)
+
+running 1 test
+test variadic_membranes_never_lower_as_fixed_arity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 31 filtered out; finished in 0.00s
+
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.75s
+     Running tests/typecheck.rs (target/debug/deps/typecheck-0aaf88459bb7a7f5)
+
+running 1 test
+test variadic_call_checks_fixed_prefix_and_accepts_tail ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 53 filtered out; finished in 0.00s
+
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.52s
+     Running tests/interface_props.rs (target/debug/deps/interface_props-af10536d7695a769)
+
+running 1 test
+test variadic_marker_participates_in_interface_hashes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+
+   Compiling wolf_sema v0.2.35 (/work/crates/wolf_sema)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.76s
+     Running tests/typecheck_diagnostics.rs (target/debug/deps/typecheck_diagnostics-73d67885ea555bd0)
+
+running 1 test
+test e0823_variadic_function_value ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 65 filtered out; finished in 0.03s
+
+   Compiling wolf_fmt v0.2.35 (/work/crates/wolf_fmt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.87s
+     Running tests/style.rs (target/debug/deps/style-a7826ab6244192d1)
+
+running 1 test
+test variadic_parameter_list_preserves_ellipsis ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 60 filtered out; finished in 0.00s
+
