@@ -26,7 +26,7 @@
 //!   release binaries are built on the host and run inside; the checked
 //!   machine and lupin are the host's `wolf` and `lupin` binaries,
 //!   mounted. The process-spawning rows also run under
-//!   `taskset -c 0-3`, asked from INSIDE the container (wolf-lang#570).
+//!   `taskset` on four CPUs of the allocation, asked from INSIDE the container (wolf-lang#570).
 //!
 //! **The engine.** `WOLF_IDS_ENGINE` names it; otherwise the first of
 //! `docker` and `podman` that answers. `WOLF_IDS_IMAGE` names the image
@@ -50,6 +50,7 @@
 //! `unsafe`).
 
 mod lane_exit;
+mod test_cpus;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -621,7 +622,7 @@ mod container {
     /// `name` (a fixture) on every machine, each in a container of its
     /// own started with `extra`: the checked machine and lupin under
     /// `conform-run`, the native and release binaries built on the host
-    /// and run inside — plainly, and under `taskset -c 0-3` asked from
+    /// and run inside — plainly, and under `taskset` on four CPUs of the allocation asked from
     /// inside when the container has four cpus. `check` judges each
     /// stdout; `threads` says whether the binaries must report more
     /// than one thread on standard error (`threads: N`).
@@ -678,13 +679,16 @@ mod container {
         );
         check(&checked.stdout, &format!("checked on {name}"));
 
-        let four = b.cpus() >= 4;
-        if !four {
+        // The pinned rows ask the container's own `taskset` for four of
+        // the allocation (`test_cpus`, wolf-lang#925).
+        let four = if b.cpus() >= 4 {
+            test_cpus::subset(4, test)
+        } else {
             eprintln!(
-                "SKIP: {test}: the container has fewer than four cpus — the taskset -c 0-3 rows \
-                 did not run"
+                "SKIP: {test}: the container has fewer than four cpus — the pinned rows did not run"
             );
-        }
+            None
+        };
         for release in [false, true] {
             let tier = if release { "release" } else { "native" };
             let Some(exe) = build(&entry, &dir, release) else {
@@ -693,10 +697,10 @@ mod container {
             let inside = format!("/w/{}", exe.file_name().unwrap().to_string_lossy());
             let mut rows: Vec<(String, Vec<&str>)> =
                 vec![(tier.to_string(), vec![inside.as_str()])];
-            if four {
+            if let Some(list) = &four {
                 rows.push((
-                    format!("{tier} taskset -c 0-3"),
-                    vec!["taskset", "-c", "0-3", inside.as_str()],
+                    format!("{tier} taskset -c {list}"),
+                    vec!["taskset", "-c", list.as_str(), inside.as_str()],
                 ));
             }
             for (row, argv) in rows {
