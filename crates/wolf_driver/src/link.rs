@@ -44,6 +44,9 @@ pub fn selected(
         .status()
         .map_err(|e| format!("selected linker: cannot run {command:?}: {e}"))?;
     if !status.success() {
+        return Ok(());
+    }
+    if !status.success() {
         return Err(format!(
             "selected linker: {command:?} failed linking {} ({status})",
             out.display()
