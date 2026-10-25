@@ -283,11 +283,15 @@ the wall numbers become publishable, not so they become gates.
 | **the naive-C baseline still makes the calls its thesis needs** (s79, `baseline_calls` in the manifest vs `nm -u`) | symbol presence is a property of the binary. Not stable across clang majors — and a clang that deletes our baseline's workload is exactly the event worth a red build |
 | correctness sinks across all lanes | equality, not timing |
 | `bench diff --gate` on `*_hits` / `*hit_rate` counters | unchanged from s31 |
+| **the runtime's own start-up and exit, in system calls** (s265, wolf-lang#918): a release-tier `corpus/hello.lu` against its C twin `bench/startup/hello.c`, each traced once by `strace`, the difference held at or below `bench/startup.json` | a count of calls, not a clock: the loader's calls appear in both binaries and cancel, so it is a property of the wolf build on a given C library. 0.2.35's entry made every program pay seventeen more (a main-thread stack query through stdio, an altstack unmapped at exit) and nothing saw it |
 
 **Report-only** (nightly, dedicated runner, published with distributions):
 every `ns_per_op`, every speedup and geomean, the X3 overhead delta, the
-metadata-bonus delta, LLVM's share of build wall time, `max_rss`, and all
-`*_per_sec` throughput. These decide **M2** — over three consecutive
+metadata-bonus delta, LLVM's share of build wall time, `max_rss`, all
+`*_per_sec` throughput, and the start-up wall time `bench-gates` prints
+beside its count (fifty interleaved starts of the wolf and C hellos, the
+medians and their ratio: on kasumi the start's spread is about the size
+of the change the count exists for, s265). These decide **M2** — over three consecutive
 nightly runs on the dedicated runner — but they never fail a PR.
 
 ## 8. The M2 gate
