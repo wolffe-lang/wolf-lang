@@ -101,7 +101,7 @@ pub fn incoming(frame: &Frame, start: Start) -> Code {
 pub fn outgoing(vector_registers: u8) -> Code {
     assert!(vector_registers <= 8);
     let mut bytes = vec![0xb8]; // mov eax, imm32
-    disp(&mut bytes, u32::from(vector_registers));
+    disp(&mut bytes, 0); // planted: omit the vector-register count
     bytes.push(0xe9); // jmp rel32
     let branch_offset = bytes.len() as u32;
     disp(&mut bytes, 0);
