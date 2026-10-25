@@ -149,6 +149,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - run: python3 ci/tiers-test.py
+      - run: python3 ci/link-inputs-test.py
 
   lint-test:
     name: lint + test + corpus (linux x86-64)
@@ -276,8 +277,11 @@ jobs:
           sysroot by digest and a musl runtime from this checkout
         run: |
           ci/fetch-entry-bundle
-          cargo build --locked -p wolf_rt --target x86_64-unknown-linux-musl
-          echo "WOLF_STATIC_ENTRY_MUSL_RT=$PWD/target/x86_64-unknown-linux-musl/debug/libwolf_rt.a" >> "$GITHUB_ENV"
+          # Share the static-entry job's release recipe with the real linker.
+          cargo xtask dist-rt --target x86_64-unknown-linux-musl
+          rt=$PWD/target/dist-rt/x86_64-unknown-linux-musl/release/libwolf_rt.a
+          sha256sum "$rt"; sha256sum "$rt"; stat -c '%s bytes' "$rt"
+          echo "WOLF_STATIC_ENTRY_MUSL_RT=$rt" >> "$GITHUB_ENV"
           ld.lld --version; ld.bfd --version | head -1
       - name: the sibling lupin that PAIRING names, from its own release page
         env:
@@ -313,11 +317,6 @@ jobs:
           .lupin/lupin --version
       - name: build pinned clef for the assembler seam
         run: ci/build-test-clef
-      - name: cache pinned musl link bundle (ligature#13)
-        uses: actions/cache@v4
-        with:
-          path: .link-bundle-cache
-          key: ld02-musl-link-bundle-6f99a2794da54b2dd85f06713d736b27862a7cd0da9e28bd940d975a4603a1d1
       - name: verify musl link bundle and build pinned ligature
         run: |
           mkdir -p target/link-bundle-negative

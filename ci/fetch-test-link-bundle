@@ -1,36 +1,28 @@
 #!/usr/bin/env python3
-"""Fetch the digest-pinned real-linker inputs (ligature#13); verify cached bytes too."""
+"""Reuse static-entry's pinned musl members and this checkout's musl runtime.
+
+ci/fetch-entry-bundle verifies the published bundle and its members twice.
+Its old libwolf_rt.a is never selected: CI builds the runtime with
+cargo xtask dist-rt and exports WOLF_STATIC_ENTRY_MUSL_RT before this step.
+"""
 import hashlib
 import os
 import pathlib
+import subprocess
 import sys
-import tarfile
-import urllib.request
 
-SHA = "6f99a2794da54b2dd85f06713d736b27862a7cd0da9e28bd940d975a4603a1d1"
-NAME = "ld02-musl-link-bundle.tar.gz"
-URL = "https://github.com/wolffe-lang/ligature/releases/download/link-bundle-2026-10-25/" + NAME
 root = pathlib.Path(__file__).resolve().parent.parent
-cache = pathlib.Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else root / ".link-bundle-cache"
-cache.mkdir(parents=True, exist_ok=True)
-archive = cache / NAME
-if not archive.exists():
-    partial = cache / (NAME + ".partial")
-    urllib.request.urlretrieve(URL, partial)
-    partial.replace(archive)
+subprocess.run([sys.executable, str(root / "ci/fetch-entry-bundle"), *sys.argv[1:]], check=True)
+rt = os.environ.get("WOLF_STATIC_ENTRY_MUSL_RT")
+sysroot = os.environ.get("WOLF_STATIC_ENTRY_SYSROOT")
+if not rt or not pathlib.Path(rt).is_file():
+    raise SystemExit("REFUSED missing head-built musl runtime: build cargo xtask dist-rt and set WOLF_STATIC_ENTRY_MUSL_RT")
+if not sysroot or not pathlib.Path(sysroot).is_dir():
+    raise SystemExit("REFUSED missing verified musl sysroot: run ci/fetch-entry-bundle before this step")
 for _ in range(2):
-    with archive.open("rb") as stream:
-        actual = hashlib.file_digest(stream, "sha256").hexdigest()
-    if actual != SHA:
-        raise SystemExit(f"REFUSED {NAME}: sha256 {actual}, expected {SHA}")
-    print(f"{SHA}  {archive}", flush=True)
-stage = root / "target/test-link-bundle"
-stage.mkdir(parents=True, exist_ok=True)
-with tarfile.open(archive) as bundle:
-    bundle.extractall(stage, filter="data")
-for name in ("libwolf_rt.a", "sysroot/crt1.o", "sysroot/crti.o", "sysroot/crtn.o", "sysroot/libc.a", "sysroot/libunwind.a"):
-    if not (stage / name).is_file():
-        raise SystemExit(f"REFUSED missing bundle input {name}")
+    with open(rt, "rb") as stream:
+        digest = hashlib.file_digest(stream, "sha256").hexdigest()
+    print(f"{digest}  {rt}", flush=True)
 if os.environ.get("GITHUB_ENV"):
     with open(os.environ["GITHUB_ENV"], "a") as env:
-        env.write(f"WOLF_TEST_LIGATURE_RT={stage}/libwolf_rt.a\nLIGATURE_SYSROOT={stage}/sysroot\n")
+        env.write(f"WOLF_TEST_LIGATURE_RT={rt}\nLIGATURE_SYSROOT={sysroot}\n")
