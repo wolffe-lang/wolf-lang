@@ -1,10 +1,18 @@
 //! check: pass
 //! phase: wir
-//! conforms: abi.c.variadic.syntax, gram.item.fn
+//! conforms: abi.c.variadic.syntax, gram.item.fn, gram.item.attr.cfg
 //! The ellipsis is not a named parameter in either membrane direction.
+//! Select hosted SysV declarations; other targets refuse declarations too.
+//! The ordinary function keeps this lowering witness nonempty on every host.
 
+#[cfg(target = "x86_64-unknown-linux-gnu")]
 extern "c" fn printf(fmt: *u8, ...) -> i32
 
+#[cfg(target = "x86_64-unknown-linux-gnu")]
 export fn sum(n: i32, ...) -> i64 {
+    0
+}
+
+fn lowering_anchor() -> i64 {
     0
 }

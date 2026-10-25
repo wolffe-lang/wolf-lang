@@ -362,6 +362,38 @@ fn corpus_lowering_ledger() {
     insta::assert_snapshot!("corpus_lowering_ledger", lines.join("\n"));
 }
 
+/// The shared ledger must not change with its host. The variadic clause
+/// refuses declarations themselves off-target, so this corpus row selects
+/// its hosted SysV declarations before resolution and keeps an ordinary
+/// function on every target. Do not turn the other-host row into an empty
+/// module or make the ledger silently waive an unsupported declaration.
+#[test]
+fn variadic_declaration_corpus_lowers_on_every_target() {
+    let entry = corpus_root().join("membrane/variadic_declarations.lu");
+    for target in [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu",
+        "aarch64-apple-darwin",
+        "x86_64-pc-windows-msvc",
+        "x86_64-unknown-freebsd",
+        "x86_64-unknown-none",
+    ] {
+        let _target = wolf_sema::attrs::enter_build_target(target);
+        let dump = lower_entry(&entry)
+            .unwrap_or_else(|| panic!("{target}: row must be mem-clean"))
+            .unwrap_or_else(|why| panic!("{target}: lowering refused: {why:?}"));
+        assert!(
+            dump.contains("lowering_anchor"),
+            "{target}: nonempty witness"
+        );
+        assert_eq!(
+            dump.contains("variadic("),
+            target == "x86_64-unknown-linux-gnu",
+            "{target}: only the hosted SysV declarations are selected: {dump}",
+        );
+    }
+}
+
 /// The determinism gate: two independent runs, byte-identical dumps.
 #[test]
 fn corpus_dumps_are_deterministic() {

@@ -2,5 +2,6 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 154..197 name=printf extern
-FnDecl 198..241 name=sum export body=Block
+FnDecl 328..415 name=printf attrs=1 extern
+FnDecl 416..503 name=sum attrs=1 export body=Block
+FnDecl 505..542 name=lowering_anchor body=Block
