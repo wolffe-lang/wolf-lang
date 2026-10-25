@@ -29,6 +29,8 @@ void __wolf_rt_main_start(int argc, char **argv, char **envp) {
         exit(97);
     }
 }
+/* What an older compiler's shim calls; the runtime still defines it. */
+void __wolf_rt_stack_start(void) {}
 
 void __wolf_rt_trap(int kind) {
     const char *name =
