@@ -1,0 +1,67 @@
+//! member: false
+//! SysV variadic entry, ordinary live-list consumer, and nested forwarding.
+
+fn consume(ap: VaList, n: i32) -> i64 {
+    // # Safety: n i64 values remain and the originating frame is live.
+    unsafe {
+        var cp = va_copy(ap)
+        var result: i64 = 0
+        var i: i32 = 0
+        while i < n {
+            result += va_arg[i64](mut cp)
+            i += 1
+        }
+        va_end(mut cp)
+        result
+    }
+}
+
+export fn s263_sum(n: i32, ...) -> i64 {
+    // # Safety: the C test passes exactly n i64 values.
+    unsafe {
+        var ap = va_start()
+        let result = consume(ap, n)
+        va_end(mut ap)
+        result
+    }
+}
+
+export fn s263_other(n: i32, ...) -> i64 {
+    // # Safety: the caller passes one VaList record, not a decayed C array.
+    unsafe {
+        var ap = va_start()
+        let incoming = va_arg[VaList](mut ap)
+        let result = consume(incoming, n)
+        va_end(mut ap)
+        result
+    }
+}
+
+export fn s263_forward(n: i32, ...) -> i64 {
+    // # Safety: both variadic frames stay live until the nested call returns.
+    unsafe {
+        var ap = va_start()
+        let result = s263_other(n, ap)
+        va_end(mut ap)
+        result
+    }
+}
+
+export fn s263_vfmt(fmt: *u8, input: *VaList) -> i64 {
+    // # Safety: input is C's live decayed va_list; fmt points to a byte.
+    unsafe {
+        var cp = va_copy(input[0])
+        let a = va_arg[i32](mut cp)
+        let b = va_arg[i32](mut cp)
+        let c = va_arg[i32](mut cp)
+        let message = va_arg[*u8](mut cp)
+        va_end(mut cp)
+        a as i64 + b as i64 + c as i64 + fmt[0] as i64 + message[0] as i64
+    }
+}
+
+export fn s263_layout() -> bool {
+    size_of(VaList) == 24 && align_of(VaList) == 8 &&
+        offset_of(VaList, gp_offset) == 0 && offset_of(VaList, fp_offset) == 4 &&
+        offset_of(VaList, overflow_arg_area) == 8 && offset_of(VaList, reg_save_area) == 16
+}

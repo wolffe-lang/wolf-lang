@@ -1248,22 +1248,54 @@ fn str_ordering_against_itself_is_the_length_compare() {
     assert!(!body.contains("load.i8"), "and no byte is read: {body}");
 }
 
-/// Until native prologues consume the metadata, ellipses must not erase.
+/// The ellipsis survives lowering and canonical text, never fixed arity.
 #[test]
-fn variadic_membranes_never_lower_as_fixed_arity() {
+fn variadic_membranes_keep_their_call_contract() {
     let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-linux-gnu");
     for src in [
         "extern \"c\" fn sum(n: i32, ...) -> i64\nfn main() -> int { unsafe { sum(1, 42 as i64) as int } }\n",
         "export fn sum(n: i32, ...) -> i64 { 0 }\nfn main() -> int { 0 }\n",
     ] {
-        let build = lower(src);
-        assert!(
-            build
-                .not_yet
-                .iter()
-                .any(|n| n.construct.contains("variadic")),
-            "{:?}",
-            build.not_yet
-        );
+        let text = dump(src);
+        assert!(text.contains("variadic(1)"), "{text}");
     }
+}
+
+#[test]
+fn variadic_builtins_and_differing_promoted_tails_round_trip() {
+    let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-linux-gnu");
+    let text = dump(
+        r#"
+extern "c" fn sink(fmt: *u8, ...) -> i32
+export fn sum(n: i32, ...) -> i64 {
+    unsafe {
+        var ap = va_start()
+        var cp = va_copy(ap)
+        let x = va_arg[i64](mut cp)
+        va_end(mut cp)
+        va_end(mut ap)
+        x
+    }
+}
+fn main() -> int {
+    unsafe {
+        let a: i8 = -2
+        let b: u16 = 65535
+        let x: f32 = 1.5
+        sink(0 as *u8, a, b, true)
+        sink(0 as *u8, x)
+        sum(1, 42 as i64) as int - 42
+    }
+}
+"#,
+    );
+    for spelling in ["va.start", "va.arg", "va.end", "fpromote", "variadic(1)"] {
+        assert!(text.contains(spelling), "missing {spelling}: {text}");
+    }
+}
+
+#[test]
+fn local_function_named_va_start_is_not_a_builtin() {
+    let text = dump("fn main() -> int { let va_start = fn() 41; va_start() as int }\n");
+    assert!(!text.contains("va.start"), "{text}");
 }

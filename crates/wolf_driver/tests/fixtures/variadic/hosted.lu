@@ -1,0 +1,43 @@
+//! member: false
+//! Hosted-only float/default-promotion and snprintf witnesses.
+
+extern "c" fn snprintf(out: *u8, capacity: u64, fmt: *u8, ...) -> i32
+extern "c" fn s263_harness() -> i32
+
+export fn s263_floats(seed: f64, n: i32, ...) -> f64 {
+    // # Safety: the C test supplies n promoted doubles.
+    unsafe {
+        var ap = va_start()
+        var result = seed
+        var i: i32 = 0
+        while i < n {
+            result += va_arg[f64](mut ap)
+            i += 1
+        }
+        va_end(mut ap)
+        result
+    }
+}
+
+export fn s263_outgoing(out: *u8, capacity: u64, fmt: *u8, message: *u8) -> i32 {
+    // # Safety: out has capacity bytes, the format matches these promoted types.
+    unsafe {
+        let a: i8 = -7
+        let b: i16 = -300
+        let c: u8 = 250
+        let d: u16 = 65000
+        let octet: byte = 65 as byte
+        let small: f32 = 1.25
+        let wide: u32 = 4000000000
+        let negative: i64 = -5000000000
+        let positive: u64 = 9000000000
+        snprintf(out, capacity, fmt, a, b, c, d, true, octet, -1234 as i32, wide,
+            negative, positive, message,
+            small, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5)
+    }
+}
+
+fn main() -> int {
+    // # Safety: the C harness takes no arguments and returns a test status.
+    unsafe { s263_harness() as int }
+}
