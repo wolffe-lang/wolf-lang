@@ -301,7 +301,11 @@ fn load_licensed(
                         _ => return false, // external, indirect, unknown
                     }
                 }
-                Opcode::CallInd | Opcode::RcDup | Opcode::RcDrop => return false,
+                Opcode::CallInd
+                | Opcode::VaArg
+                | Opcode::VaEnd
+                | Opcode::RcDup
+                | Opcode::RcDrop => return false,
                 _ => {}
             }
         }

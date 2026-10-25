@@ -161,7 +161,10 @@ pub(crate) fn canonicalize(f: &Function) -> Canon {
 
 /// `(mut ptr, i64, mem.r0) -> f64` — shared by `fn` headers and `decl`s.
 pub(crate) fn render_sig(m: &Module, sig: SigId) -> String {
-    let data = &m.sigs[sig];
+    render_sig_data(m, &m.sigs[sig])
+}
+
+fn render_sig_data(m: &Module, data: &crate::ir::SigData) -> String {
     let params: Vec<String> = data
         .params
         .iter()
@@ -175,7 +178,23 @@ pub(crate) fn render_sig(m: &Module, sig: SigId) -> String {
         let res: Vec<String> = data.results.iter().map(|&t| m.types.display(t)).collect();
         write!(s, " -> {}", res.join(", ")).unwrap();
     }
+    if let Some(fixed) = data.variadic {
+        write!(s, " variadic({fixed})").unwrap();
+    }
     s
+}
+
+fn render_decl_sig(m: &Module, sig: SigId) -> String {
+    let mut data = m.sigs[sig].clone();
+    if let Some(fixed) = data.variadic {
+        data.params = data
+            .params
+            .into_iter()
+            .filter(|p| !m.types.is_token(p.ty))
+            .take(fixed as usize)
+            .collect();
+    }
+    render_sig_data(m, &data)
 }
 
 fn render_args(canon: &Canon, args: &[Value]) -> String {
@@ -305,6 +324,10 @@ pub(crate) fn render_inst(m: &Module, f: &Function, canon: &Canon, inst: Inst) -
                 render_args(canon, &args)
             )
             .unwrap();
+            let sig = f.ext_funcs[ef].sig;
+            if data.op == Opcode::Call && m.sigs[sig].variadic.is_some() {
+                write!(s, " : {}", render_sig(m, sig)).unwrap();
+            }
         }
         Aux::Data(idx) => {
             let name = m
@@ -538,7 +561,7 @@ pub fn print_selected(m: &Module, funcs: &[crate::ir::FuncId]) -> String {
     }
     let mut out = String::new();
     for (name, sig) in &decls {
-        writeln!(out, "decl @{name}{}", render_sig(m, *sig)).unwrap();
+        writeln!(out, "decl @{name}{}", render_decl_sig(m, *sig)).unwrap();
     }
     let mut any_head = !decls.is_empty();
     for (i, d) in m.data.iter().enumerate() {

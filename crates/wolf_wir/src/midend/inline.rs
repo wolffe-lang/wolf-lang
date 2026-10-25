@@ -260,6 +260,9 @@ pub(crate) fn run(
             }
             let hot = scope.hotness(name);
             let callee = &m.funcs[cid];
+            if m.sigs[callee.sig].variadic.is_some() {
+                continue; // the incoming save area belongs to its own invocation
+            }
             if callee.consttime.is_some() {
                 continue; // c28 [ct.attr.barrier]: never dissolved into a caller
             }

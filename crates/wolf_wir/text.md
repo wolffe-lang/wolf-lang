@@ -37,6 +37,7 @@ consttime := "consttime" "(" [ INT { "," INT } ] ")"
             ; listed signature parameter indices are SECRET (the taint
             ; sources); canonical form is sorted and deduplicated.
 sig      := "(" [ param { "," param } ] ")" [ "->" type { "," type } ]
+            [ "variadic" "(" INT ")" ]
 param    := [ "mut" | "read" | "take" ] type
 type     := "i8" | "i16" | "i32" | "i64" | "f32" | "f64" | "bool"
           | "ptr" | "io" | "mem.r" INT
@@ -57,6 +58,7 @@ op-line  := "iconst." sty INT | "fconst." fty FLOAT | "bconst" BOOL
           ;   iadd.sat isub.sat imul.sat band bor bxor shl lshr ashr
           | fop VALUE "," VALUE                     ; fadd fsub fmul fdiv frem
           | "fneg" VALUE | "fma" VALUE "," VALUE "," VALUE
+          | "fpromote" VALUE                       ; f32 -> f64
           | "icmp." icc VALUE "," VALUE             ; eq ne slt sle sgt
           ;   sge ult ule ugt uge
           | "fcmp." fcc VALUE "," VALUE             ; eq ne lt le gt ge
@@ -66,7 +68,10 @@ op-line  := "iconst." sty INT | "fconst." fty FLOAT | "bconst" BOOL
           | "store." sty VALUE "," VALUE "," VALUE  ; value, addr, token
           | "agg.make" VALUE { "," VALUE }
           | "agg.get" VALUE "," INT
-          | "call" "@" name "(" [ VALUE { "," VALUE } ] ")"
+          | "call" "@" name "(" [ VALUE { "," VALUE } ] ")" [ ":" sig ]
+          | "va.start"                             ; ptr, current C frame
+          | "va.arg" VALUE "," VALUE                ; ptr + mem -> T + mem
+          | "va.end" VALUE "," VALUE                ; ptr + mem -> mem
           | "jmp" edge
           | "br" VALUE "," edge "," edge
           | "ret" [ VALUE { "," VALUE } ]
@@ -145,3 +150,20 @@ b3:
   ret %7
 }
 ```
+
+## C variadic signatures
+
+`variadic(N)` records the number of fixed non-token parameters. A
+variadic definition is an export with exactly those fixed parameters.
+A declaration prints that fixed prototype; every variadic `call` prints
+its complete promoted signature after `:`, including its effect tokens.
+Calls to the same symbol may differ only beyond their fixed C prefix.
+Their result types and fixed types agree; indirect function values cannot
+carry this contract. The annotation participates in canonical hashes.
+
+`va.start`, `va.arg` and `va.end` carry explicit result types. Only a
+variadic export may use `va.start`. `va.arg` consumes the cursor's memory
+token and returns the successor plus a promoted C value; `va.end` consumes
+and succeeds the token without a value. Both are opaque memory barriers,
+not removable pure values. An inliner must retain a variadic definition's
+frame. `fpromote` is the pure, exact f32-to-f64 C default promotion.

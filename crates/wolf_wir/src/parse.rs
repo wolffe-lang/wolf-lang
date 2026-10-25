@@ -813,7 +813,19 @@ fn parse_sig(line: &mut Line, module: &mut Module) -> PResult<SigId> {
             }
         }
     }
-    Ok(module.make_sig(params, results))
+    if matches!(line.peek(), Some(Tok::Ident(word)) if word == "variadic") {
+        line.next();
+        line.expect(Tok::LParen)?;
+        let lex = line.num()?;
+        let fixed = parse_u64(line, &lex)?;
+        if fixed > u32::MAX as u64 {
+            return line.fail("variadic prefix is too large");
+        }
+        line.expect(Tok::RParen)?;
+        Ok(module.make_variadic_sig(params, results, fixed as u32))
+    } else {
+        Ok(module.make_sig(params, results))
+    }
 }
 
 fn parse_type(line: &mut Line, module: &mut Module) -> PResult<TypeId> {
@@ -1000,7 +1012,7 @@ fn parse_function(
     let sig = parse_sig(&mut sig_line, &mut p.module)?;
     sig_line.expect_end()?;
     if let Some(&prev) = p.known_sigs.get(&name)
-        && p.module.sigs[prev] != p.module.sigs[sig]
+        && !p.module.sigs[prev].same_callee_contract(&p.module.sigs[sig], &p.module.types)
     {
         return head.fail(format!("conflicting signature for `@{name}`"));
     }
@@ -1190,6 +1202,7 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
         ("frem", Opcode::Frem),
         ("fneg", Opcode::Fneg),
         ("fma", Opcode::Fma),
+        ("fpromote", Opcode::Fpromote),
         ("ptr.off", Opcode::PtrOff),
         ("ptr.to_int", Opcode::PtrToInt),
         ("ptr.from_int", Opcode::PtrFromInt),
@@ -1199,6 +1212,9 @@ fn parse_mnemonic(line: &Line, name: &str) -> PResult<Mnemonic> {
         ("func.addr", Opcode::FuncAddr),
         ("call", Opcode::Call),
         ("call.ind", Opcode::CallInd),
+        ("va.start", Opcode::VaStart),
+        ("va.arg", Opcode::VaArg),
+        ("va.end", Opcode::VaEnd),
         ("jmp", Opcode::Jmp),
         ("br", Opcode::Br),
         ("ret", Opcode::Ret),
@@ -1411,6 +1427,10 @@ fn parse_inst(
             let lex = line.num()?;
             aux = Aux::Int(parse_i64(line, &lex)?);
             vec![mn.ty.expect("typed mnemonic")]
+        }
+        Opcode::Fpromote => {
+            args = parse_val_list(line, values, func)?;
+            vec![types::F64]
         }
         Opcode::Fconst => {
             let ty = mn.ty.expect("typed mnemonic");
@@ -1706,7 +1726,7 @@ fn parse_inst(
                 }
                 _ => return line.fail("expected `@callee` after `call`"),
             };
-            let Some(&sig) = p.known_sigs.get(&callee) else {
+            let Some(&declared_sig) = p.known_sigs.get(&callee) else {
                 return line.fail(format!(
                     "call to `@{callee}` before its `decl` or definition"
                 ));
@@ -1714,11 +1734,25 @@ fn parse_inst(
             line.expect(Tok::LParen)?;
             args = parse_val_list(line, values, func)?;
             line.expect(Tok::RParen)?;
-            // Import (dedup by name within the function).
+            let sig = if line.peek() == Some(&Tok::Colon) {
+                line.next();
+                let actual = parse_sig(line, &mut p.module)?;
+                if p.module.sigs[declared_sig].variadic.is_none()
+                    || !p.module.sigs[declared_sig]
+                        .same_callee_contract(&p.module.sigs[actual], &p.module.types)
+                {
+                    return line
+                        .fail("inline call signature conflicts with the C variadic prototype");
+                }
+                actual
+            } else {
+                declared_sig
+            };
+            // Import by full call-site signature, not just symbol.
             let existing = func
                 .ext_funcs
                 .iter()
-                .find(|(_, d)| d.name == callee)
+                .find(|(_, d)| d.name == callee && p.module.sigs[d.sig] == p.module.sigs[sig])
                 .map(|(k, _)| k);
             let ef = match existing {
                 Some(k) => k,

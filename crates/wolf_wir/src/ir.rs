@@ -101,6 +101,40 @@ impl Param {
 pub struct SigData {
     pub params: Vec<Param>,
     pub results: Vec<TypeId>,
+    /// C variadic fixed prefix, counted before token erasure. The count
+    /// includes NON-TOKEN parameters only. A definition holds its fixed
+    /// params; each call site holds its complete promoted argument list.
+    pub variadic: Option<u32>,
+}
+
+impl SigData {
+    /// One C symbol has one fixed prototype, but each variadic call has
+    /// its own promoted tail and caller-local effect-token signature.
+    pub fn same_callee_contract(&self, other: &Self, types: &TypeInterner) -> bool {
+        if self == other {
+            return true;
+        }
+        let (Some(a), Some(b)) = (self.variadic, other.variadic) else {
+            return false;
+        };
+        if a != b || self.results != other.results {
+            return false;
+        }
+        let left: Vec<_> = self
+            .params
+            .iter()
+            .filter(|p| !types.is_token(p.ty))
+            .collect();
+        let right: Vec<_> = other
+            .params
+            .iter()
+            .filter(|p| !types.is_token(p.ty))
+            .collect();
+        let n = a as usize;
+        left.len() >= n
+            && right.len() >= n
+            && left[..n].iter().zip(&right[..n]).all(|(x, y)| x.ty == y.ty)
+    }
 }
 
 /// A callee: resolved by name at link/lower time; the signature is the
@@ -645,7 +679,24 @@ impl Module {
     }
 
     pub fn make_sig(&mut self, params: Vec<Param>, results: Vec<TypeId>) -> SigId {
-        self.sigs.push(SigData { params, results })
+        self.sigs.push(SigData {
+            params,
+            results,
+            variadic: None,
+        })
+    }
+
+    pub fn make_variadic_sig(
+        &mut self,
+        params: Vec<Param>,
+        results: Vec<TypeId>,
+        fixed: u32,
+    ) -> SigId {
+        self.sigs.push(SigData {
+            params,
+            results,
+            variadic: Some(fixed),
+        })
     }
 
     pub fn add_func(&mut self, func: Function) -> FuncId {

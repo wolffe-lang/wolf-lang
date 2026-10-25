@@ -110,6 +110,7 @@ pub struct ClifBackend {
     per_function_sections: bool,
     /// kw09: (object symbol, section name) for each placed function.
     fn_sections: Vec<(String, String)>,
+    variadic_shims: Vec<translate::VariadicShim>,
 }
 
 impl ClifBackend {
@@ -217,6 +218,7 @@ impl ClifBackend {
             target,
             per_function_sections,
             fn_sections: Vec::new(),
+            variadic_shims: Vec::new(),
         })
     }
 
@@ -273,6 +275,9 @@ impl Backend for ClifBackend {
         } else {
             wolf_backend::abi::Conv::Wolf
         };
+        if module.sigs[sig].variadic.is_some() {
+            translate::check_variadic_target(&self.module)?;
+        }
         let mut si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv())?;
         if let Some(f) = module.funcs.get(id).filter(|f| f.export) {
             si = translate::with_ret_ext(si, f.ret_ext);
@@ -293,13 +298,58 @@ impl Backend for ClifBackend {
             }
             self.fn_sections.push((symbol.to_string(), sec));
         }
+        let variadic = module.sigs[sig].variadic.is_some();
+        // Cranelift owns only the fixed core. The public entry is filled in
+        // after ObjectModule::finish, using the ordinary object writer API.
         let fid = self
             .module
-            .declare_function(symbol, clif_linkage(linkage), &si.clif)
+            .declare_function(
+                symbol,
+                if variadic {
+                    cranelift_module::Linkage::Import
+                } else {
+                    clif_linkage(linkage)
+                },
+                &si.clif,
+            )
             .map_err(|e| BackendError::Internal(e.to_string()))?;
-        self.funcs
-            .insert(name.to_string(), translate::FuncEntry { fid, sig });
-        self.by_id.insert(id.as_u32(), fid);
+        let core = if variadic && linkage != Linkage::Import {
+            si.clif.params.push(cranelift_codegen::ir::AbiParam::new(
+                cranelift_codegen::ir::types::I64,
+            ));
+            let core_name = format!("_W.va.core.{}", id.as_u32());
+            if let Some(section) = module.funcs.get(id).and_then(|f| f.section.clone()) {
+                self.fn_sections.push((core_name.clone(), section));
+            }
+            let core = self
+                .module
+                .declare_function(&core_name, cranelift_module::Linkage::Local, &si.clif)
+                .map_err(|e| BackendError::Internal(e.to_string()))?;
+            let frame = wolf_backend::abi::variadic::frame(&module.types, &module.sigs[sig])
+                .map_err(BackendError::Unsupported)?;
+            let fixed = module.sigs[sig].variadic.expect("variadic definition") as usize;
+            let plan = wolf_backend::abi::variadic::plan(&module.types, &module.sigs[sig], fixed)
+                .map_err(BackendError::Unsupported)?;
+            self.variadic_shims.push(translate::VariadicShim {
+                fid,
+                target: core_name,
+                code: wolf_backend::abi::variadic::x64::incoming(&frame, plan.start),
+                linkage,
+            });
+            Some(core)
+        } else {
+            None
+        };
+        self.funcs.insert(
+            name.to_string(),
+            translate::FuncEntry {
+                fid,
+                sig,
+                core,
+                symbol: symbol.to_string(),
+            },
+        );
+        self.by_id.insert(id.as_u32(), core.unwrap_or(fid));
         self.symbols.push(SymbolInfo {
             name: symbol.to_string(),
             linkage,
@@ -321,7 +371,7 @@ impl Backend for ClifBackend {
                 func.name
             )));
         };
-        let (fid, sig) = (entry.fid, entry.sig);
+        let (fid, sig) = (entry.core.unwrap_or(entry.fid), entry.sig);
         let conv = if func.export {
             wolf_backend::abi::Conv::C
         } else {
@@ -330,6 +380,11 @@ impl Backend for ClifBackend {
         let mut si = translate::sig_info(module, sig, conv, self.module.isa().default_call_conv())?;
         if func.export {
             si = translate::with_ret_ext(si, func.ret_ext);
+        }
+        if module.sigs[sig].variadic.is_some() {
+            si.clif.params.push(cranelift_codegen::ir::AbiParam::new(
+                cranelift_codegen::ir::types::I64,
+            ));
         }
         let mut ctx = self.module.make_context();
         ctx.func.signature = si.clif.clone();
@@ -347,6 +402,7 @@ impl Backend for ClifBackend {
                 &self.funcs,
                 &mut self.rt,
                 &mut self.imports,
+                &mut self.variadic_shims,
                 &mut self.data_ids,
                 &self.site_files,
                 &mut self.site_file_data,
@@ -511,6 +567,53 @@ impl Backend for ClifBackend {
             RelocationEncoding, RelocationFlags, RelocationKind, SymbolFlags, SymbolKind,
             SymbolScope,
         };
+        for shim in &self.variadic_shims {
+            let section = product.object.add_section(
+                Vec::new(),
+                format!(".text.wolf.va.{}", shim.fid.as_u32()).into_bytes(),
+                cranelift_object::object::SectionKind::Text,
+            );
+            let symbol = product.function_symbol(shim.fid);
+            // Imported placeholders have Unknown scope. Establish the
+            // definition's binding before add_symbol_data validates it.
+            product.object.symbol_mut(symbol).scope = if shim.linkage == Linkage::Local {
+                SymbolScope::Compilation
+            } else {
+                SymbolScope::Dynamic
+            };
+            product
+                .object
+                .add_symbol_data(symbol, section, &shim.code.bytes, 16);
+            let target = match product.object.symbol_id(shim.target.as_bytes()) {
+                Some(id) => id,
+                None => product.object.add_symbol(Symbol {
+                    name: shim.target.as_bytes().to_vec(),
+                    value: 0,
+                    size: 0,
+                    kind: SymbolKind::Text,
+                    scope: SymbolScope::Dynamic,
+                    weak: false,
+                    section: SymbolSection::Undefined,
+                    flags: SymbolFlags::None,
+                }),
+            };
+            product
+                .object
+                .add_relocation(
+                    section,
+                    Relocation {
+                        offset: u64::from(shim.code.branch_offset),
+                        symbol: target,
+                        addend: -4,
+                        flags: RelocationFlags::Generic {
+                            kind: RelocationKind::PltRelative,
+                            encoding: RelocationEncoding::X86Branch,
+                            size: 32,
+                        },
+                    },
+                )
+                .map_err(|e| BackendError::Internal(e.to_string()))?;
+        }
         // Section naming is format-aware (s59): ELF spells DWARF
         // sections `.debug_*`; Mach-O spells them `__debug_*` inside
         // the `__DWARF` segment (which `segment_name(Debug)` already
