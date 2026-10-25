@@ -1,0 +1,172 @@
+ld02b waiting for the CPUs 4-7 lock (2026-10-25T09:51:56Z); job ld02b-check: bash /home/mfwolffe/lanes/ld02b/scripts/check.sh
+check head=fceea2f757332c395c9c682af2c5fb03e6dccebd start=2026-10-25T09:51:56Z
+    Checking cfg-if v1.0.4
+    Checking wolf_span v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_span)
+    Checking unicode-ident v1.0.24
+    Checking libc v0.2.189
+    Checking cpufeatures v0.3.0
+    Checking arrayvec v0.7.8
+    Checking constant_time_eq v0.4.2
+    Checking wolf_diag v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_diag)
+    Checking wolf_ast v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_ast)
+    Checking arrayref v0.3.9
+    Checking blake3 v1.8.6
+    Checking wolf_lex v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_lex)
+    Checking crossbeam-utils v0.8.22
+    Checking either v1.17.0
+    Checking fnv v1.0.7
+    Checking memchr v2.8.3
+    Checking crossbeam-epoch v0.9.20
+    Checking wolf_rt v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_rt)
+    Checking wolf_parse v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_parse)
+    Checking crossbeam-deque v0.8.7
+    Checking rayon-core v1.13.0
+    Checking foldhash v0.2.0
+    Checking hashbrown v0.17.1
+    Checking rayon v1.12.0
+    Checking serde_core v1.0.229
+    Checking smallvec v1.15.2
+    Checking zmij v1.0.23
+    Checking itoa v1.0.18
+    Checking zerofrom v0.1.8
+    Checking stable_deref_trait v1.2.1
+    Checking yoke v0.8.3
+    Checking wolf_fmt v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_fmt)
+    Checking equivalent v1.0.2
+    Checking indexmap v2.14.0
+    Checking log v0.4.33
+    Checking wolf_sema v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_sema)
+    Checking zerovec v0.11.6
+    Checking hashbrown v0.16.1
+    Checking tinystr v0.8.3
+    Checking serde_json v1.0.151
+    Checking writeable v0.6.3
+    Checking gimli v0.33.0
+    Checking litemap v0.8.2
+    Checking icu_locale_core v2.2.0
+    Checking zerotrie v0.2.4
+    Checking potential_utf v0.1.5
+    Checking utf8_iter v1.0.4
+    Checking icu_collections v2.2.0
+    Checking icu_normalizer_data v2.2.0
+    Checking icu_properties_data v2.2.0
+    Checking libm v0.2.16
+    Checking icu_provider v2.2.0
+    Checking icu_properties v2.2.0
+    Checking icu_normalizer v2.2.0
+    Checking serde v1.0.229
+    Checking idna_adapter v1.2.2
+    Checking wasmtime-internal-core v47.0.3
+    Checking percent-encoding v2.3.2
+    Checking idna v1.1.0
+    Checking form_urlencoded v1.2.2
+    Checking allocator-api2 v0.2.21
+    Checking url v2.5.8
+    Checking cranelift-bitset v0.134.3
+    Checking bumpalo v3.20.3
+    Checking cranelift-entity v0.134.3
+    Checking crossbeam-channel v0.5.16
+    Checking rustc-hash v2.1.3
+    Checking bitflags v1.3.2
+    Checking arbitrary v1.4.2
+    Checking lsp-types v0.95.1
+    Checking lsp-server v0.10.0
+    Checking cranelift-bforest v0.134.3
+    Checking cranelift-control v0.134.3
+    Checking regalloc2 v0.15.2
+    Checking cranelift-assembler-x64 v0.134.3
+    Checking wolf_mem v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_mem)
+    Checking wolf_query v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_query)
+    Checking target-lexicon v0.13.5
+    Checking cranelift-codegen-shared v0.134.3
+    Checking wolf_cimport v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_cimport)
+    Checking anyhow v1.0.104
+    Checking crc32fast v1.5.0
+    Checking object v0.39.1
+    Checking wolf_wir v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_wir)
+    Checking wolf_lsp v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_lsp)
+    Checking wolf_pkg v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_pkg)
+    Checking wolf_doc v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_doc)
+   Compiling rustix v1.1.4
+   Compiling getrandom v0.4.3
+    Checking bitflags v2.13.1
+    Checking linux-raw-sys v0.12.1
+    Checking fastrand v2.5.0
+    Checking once_cell v1.21.4
+    Checking console v0.16.4
+    Checking cranelift-codegen v0.134.3
+    Checking similar v2.7.0
+   Compiling getrandom v0.3.4
+   Compiling zerocopy v0.8.56
+    Checking rand_core v0.9.5
+    Checking tempfile v3.27.0
+   Compiling autocfg v1.5.1
+    Checking insta v1.48.0
+   Compiling num-traits v0.2.19
+    Checking wait-timeout v0.2.1
+    Checking bit-vec v0.8.0
+    Checking quick-error v1.2.3
+    Checking rusty-fork v0.3.1
+    Checking bit-set v0.8.0
+    Checking rand_xorshift v0.4.0
+    Checking rand v0.9.5
+    Checking unarray v0.1.4
+    Checking regex-syntax v0.8.11
+    Checking ppv-lite86 v0.2.21
+    Checking xtask v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/xtask)
+    Checking rand_chacha v0.9.0
+    Checking proptest v1.11.0
+    Checking wolf_rt_none v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_rt_none)
+    Checking wolf_backend v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_backend)
+    Checking wolf_codegen_llvm v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_codegen_llvm)
+    Checking cranelift-module v0.134.3
+    Checking cranelift-frontend v0.134.3
+    Checking cranelift-object v0.134.3
+    Checking wolf_codegen_clif v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_codegen_clif)
+    Checking wolf_driver v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_driver)
+    Finished `dev` profile [unoptimized] target(s) in 34.86s
+   Compiling wolf_driver v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_driver)
+    Finished `test` profile [unoptimized] target(s) in 1.80s
+     Running tests/linker_select.rs (target/debug/deps/linker_select-43c014412c25d4c0)
+
+running 15 tests
+test linux::absent_selected_linker_is_final ... ok
+test linker_option_requires_a_nonempty_path ... ok
+test linux::cli_linker_overrides_environment ... ok
+test linux::environment_linker_overrides_cc ... ok
+test linux::configured_path_and_output_spaces_preserve_cc_argv ... ok
+test linux::failed_selected_linker_is_final ... ok
+test linux::object_emission_does_not_invoke_linker ... ok
+test linux::empty_environment_and_no_selection_keep_cc ... ok
+test linux::malformed_selected_output_is_refused ... ok
+test linux::run_uses_selected_linker_before_entry ... ok
+test linux::foreign_selected_output_is_refused ... ok
+test selected_linker_does_not_enable_foreign_targets ... ok
+test linux::release_uses_selected_linker_without_replacing_clang_codegen ... ok
+test linux::successful_no_output_cannot_reuse_stale_executable ... ok
+
+thread 'linux::root_assembly_objects_and_trap_aliases_reach_selected_linker' (2274) panicked at crates/wolf_driver/tests/linker_select.rs:330:13:
+-o
+output program
+/home/mfwolffe/lanes/ld02b/scratch/tmp/wolf-link-2353-767188873/00-c00.o
+/home/mfwolffe/lanes/ld02b/scratch/tmp/wolf-link-2353-767188873/01-asm-seven source.o
+/home/mfwolffe/lanes/ld02b/wolf-lang/target/debug/libwolf_rt.a
+-lpthread
+-ldl
+-lm
+-Wl,--gc-sections
+-Wl,--undefined=__wolf_rt_trap_at
+-Wl,--defsym=wolf_trap=__wolf_rt_trap_at
+
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test linux::root_assembly_objects_and_trap_aliases_reach_selected_linker ... FAILED
+
+failures:
+
+failures:
+    linux::root_assembly_objects_and_trap_aliases_reach_selected_linker
+
+test result: FAILED. 14 passed; 1 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.63s
+
+error: test failed, to rerun pass `-p wolf_driver --test linker_select`
+ld02b check exit=101 2026-10-25T09:52:37Z

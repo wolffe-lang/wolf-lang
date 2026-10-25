@@ -1,0 +1,97 @@
+{
+  "format": "wolf.ld02b.evidence.v1",
+  "implementation_head": "d90f975ad4f1dc799d0043b7e103c5d82679fe1f",
+  "prediction": {
+    "link_calls": "One shared compile_native -> link_objects; selection bypasses the unchanged Unix/Windows link_staged variants.",
+    "test_count": "Predicted 16; implemented 16 Linux integration tests plus one pure selection unit test. Non-Linux has a named host-refusal test.",
+    "cc_flag": "No compatibility flag needed; default path unchanged."
+  },
+  "recommendations": {
+    "R-ld02-2": "A: CLI --linker > nonempty WOLF_LD > existing platform path, no selected-tool fallback.",
+    "R-ld02-4": "A: selected cc-shaped tools only on native Linux ELF; Windows and non-Linux hosts refuse by name; preserve platform defaults."
+  },
+  "inputs": {
+    "wolf_lang": "253d80abd02a3f47ded45091f019abe2dc50b7b0",
+    "ligature": "3f20641375d0493b5c62f802f435d624de172ede",
+    "wolf_archive_sha256": "4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a",
+    "lupin_archive_sha256": "ad703550ac4787e8e4bb26989d591a731410274d7332f2b4e8b9a64c878822cc",
+    "bundled_std": "2386522eb059cca5a84108562c2c0a0e72345d34",
+    "ligature_built_sha256": "90b25789b8523bea5f4ff5c7c85ba1dd2b5459d6450c113ac9583096fab62b57",
+    "musl_runtime_sha256": "9d859b9e6b5319f5a6f609e73ba0d71981d2dfa489882648ac9f454cd9db739c"
+  },
+  "fast_gate": {
+    "log": "check.log",
+    "exit": 0,
+    "steps": [
+      "cargo fmt --all -- --check",
+      "cargo clippy --workspace --all-targets -- -D warnings",
+      "15 linker_select integration rows; real-linker row explicitly filtered for this fast pass",
+      "one pure selection unit row",
+      "python3 ci/tiers-test.py"
+    ],
+    "first_red": "check-first-red.log: release module staging is 00-c00.o, not 00-root.o; corrected in d90f975a."
+  },
+  "real_linker": {
+    "source_pin": "3f206413",
+    "build": "Built from pinned source inside the bounded container with complete wolf 0.2.35; output digest read twice.",
+    "first_run": "seam-superseded.log: 13 process rows and real exit/native execution+verify passed; stopped the superseded container (exit 143) to run final-source gauntlet. This is not a complete seam green.",
+    "final_cases": [
+      "exit",
+      "hello",
+      "assembly with a root-manifest source"
+    ],
+    "tiers": [
+      "native",
+      "release"
+    ],
+    "ci_gap": "The real row loudly skips unless WOLF_TEST_LIGATURE is supplied; strict local gauntlet sets WOLF_TEST_LIGATURE_REQUIRE=1, matching runtime and sysroot. Exact bundle publication is pax#167; no public availability claimed."
+  },
+  "plants": [
+    {
+      "pr": 959,
+      "head": "ba8281d6d978395dfaf2e0971efaadf834bb68b6",
+      "run": 40181908874,
+      "first_state": "in_progress",
+      "job": "lint-test",
+      "step": "explicit linker selection and refusals",
+      "row": "linux::failed_selected_linker_is_final",
+      "break": "Return success for selected nonzero tool exit."
+    },
+    {
+      "pr": 960,
+      "head": "0114fa4939e90c64503c8514089fff6430b3e4fd",
+      "run": 40181915607,
+      "first_state": "in_progress",
+      "job": "lint-test",
+      "step": "explicit linker selection and refusals",
+      "row": "linux::foreign_selected_output_is_refused",
+      "break": "Return success for malformed/foreign ELF output."
+    }
+  ],
+  "long_job": {
+    "host": "kasumi",
+    "pid": 2839291,
+    "start_utc": "2026-10-25T09:54:39Z",
+    "head": "d90f975ad4f1dc799d0043b7e103c5d82679fe1f",
+    "pid_path": "/home/mfwolffe/lanes/ld02b/evidence/final.pid",
+    "log": "/home/mfwolffe/lanes/ld02b/evidence/final.log",
+    "exit_marker": "/home/mfwolffe/lanes/ld02b/evidence/final.exit",
+    "gauntlet_log": "/home/mfwolffe/lanes/ld02b/evidence/gauntlet.log",
+    "gauntlet_exit": "/home/mfwolffe/lanes/ld02b/evidence/gauntlet.exit",
+    "after_bench": "/home/mfwolffe/lanes/ld02b/evidence/after-bench/",
+    "known_red": "wolf-lang#952 startup row 23 on kasumi Arch; must be measured in this run, never waived. Every other gauntlet step and all eleven post-bench steps must exit 0.",
+    "status": "Running, not green; final.exit absent at handoff preparation."
+  },
+  "container": {
+    "cpus": "4-7 under kasumi-cores-4-7.lock, released between gauntlet and post-bench container",
+    "pids": 16384,
+    "nproc": 32768,
+    "memory": "12g",
+    "core_limit": 0,
+    "pid1": "foreign uid 0, isolated PID namespace, no host PID",
+    "incremental": false,
+    "rust_dev_test_debug": 0,
+    "size_at_launch": "1.8G"
+  },
+  "notes": "Five-section narrative belongs in the PR body; no standalone Markdown report file written under the session report-file restriction. No wrapper refusal claimed."
+}

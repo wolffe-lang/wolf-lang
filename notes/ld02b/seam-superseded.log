@@ -1,0 +1,158 @@
+ld02b waiting for the CPUs 4-7 lock (2026-10-25T09:41:52Z); job ld02b-seam: bash /home/mfwolffe/lanes/ld02b/scripts/seam.sh
+ld02b seam head=67b84d4c90ce0afb8dbff387d39cb4bb9b6e060e start=2026-10-25T09:41:52Z
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+NoNewPrivs:	1
+Cpus_allowed_list:	4-7
+90b25789b8523bea5f4ff5c7c85ba1dd2b5459d6450c113ac9583096fab62b57  /home/mfwolffe/lanes/ld02b/ligature/target/ligature
+0fde34eb9e7f6fecaabee17ed069eb009a7bfbfd157312efeeb604f76217cbc1  /home/mfwolffe/lanes/ld02b/clef/target/clef
+9d859b9e6b5319f5a6f609e73ba0d71981d2dfa489882648ac9f454cd9db739c  /home/mfwolffe/lanes/ld02b/link-inputs/libwolf_rt.a
+51dba24287eb9b1e74f3c7cb8ea5464491d3a4ba54c016722f149179d08f90f6  /home/mfwolffe/lanes/ld02b/link-inputs/sysroot/crt1.o
+5cbc84c78a23cdddda0db8cdcd5ec3b5a15b6b555510bd97e4c5a0334aca7b49  /home/mfwolffe/lanes/ld02b/link-inputs/sysroot/crti.o
+d884ee5f9120490b98bb43496f88983ee379a0d2ebf027574fcca7eae9aaa1e7  /home/mfwolffe/lanes/ld02b/link-inputs/sysroot/crtn.o
+8e69a73c464a86fd8b278f3aa08ab2640b720157e92b45a2d34441c22248ddd4  /home/mfwolffe/lanes/ld02b/link-inputs/sysroot/libc.a
+264296d61db52859cc7a8cd6a7a09fc62bde189aa3ea8867fb62ef5129b694bc  /home/mfwolffe/lanes/ld02b/link-inputs/sysroot/libunwind.a
+90b25789b8523bea5f4ff5c7c85ba1dd2b5459d6450c113ac9583096fab62b57  /home/mfwolffe/lanes/ld02b/ligature/target/ligature
+0fde34eb9e7f6fecaabee17ed069eb009a7bfbfd157312efeeb604f76217cbc1  /home/mfwolffe/lanes/ld02b/clef/target/clef
+9d859b9e6b5319f5a6f609e73ba0d71981d2dfa489882648ac9f454cd9db739c  /home/mfwolffe/lanes/ld02b/link-inputs/libwolf_rt.a
+51dba24287eb9b1e74f3c7cb8ea5464491d3a4ba54c016722f149179d08f90f6  /home/mfwolffe/lanes/ld02b/link-inputs/sysroot/crt1.o
+5cbc84c78a23cdddda0db8cdcd5ec3b5a15b6b555510bd97e4c5a0334aca7b49  /home/mfwolffe/lanes/ld02b/link-inputs/sysroot/crti.o
+d884ee5f9120490b98bb43496f88983ee379a0d2ebf027574fcca7eae9aaa1e7  /home/mfwolffe/lanes/ld02b/link-inputs/sysroot/crtn.o
+8e69a73c464a86fd8b278f3aa08ab2640b720157e92b45a2d34441c22248ddd4  /home/mfwolffe/lanes/ld02b/link-inputs/sysroot/libc.a
+264296d61db52859cc7a8cd6a7a09fc62bde189aa3ea8867fb62ef5129b694bc  /home/mfwolffe/lanes/ld02b/link-inputs/sysroot/libunwind.a
+   Compiling unicode-ident v1.0.24
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling crossbeam-utils v0.8.22
+   Compiling wolf_span v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_span)
+   Compiling foldhash v0.2.0
+   Compiling shlex v2.0.1
+   Compiling hashbrown v0.17.1
+   Compiling cfg-if v1.0.4
+   Compiling stable_deref_trait v1.2.1
+   Compiling find-msvc-tools v0.1.10
+   Compiling cc v1.4.2
+   Compiling syn v2.0.119
+   Compiling syn v3.0.3
+   Compiling wolf_diag v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_diag)
+   Compiling crossbeam-epoch v0.9.20
+   Compiling crossbeam-deque v0.8.7
+   Compiling blake3 v1.8.6
+   Compiling wolf_lex v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_lex)
+   Compiling cpufeatures v0.3.0
+   Compiling arrayvec v0.7.8
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayref v0.3.9
+   Compiling smallvec v1.15.2
+   Compiling rayon-core v1.13.0
+   Compiling cranelift-srcgen v0.134.3
+   Compiling cranelift-assembler-x64-meta v0.134.3
+   Compiling synstructure v0.13.2
+   Compiling displaydoc v0.2.7
+   Compiling wolf_ast v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_ast)
+   Compiling libm v0.2.16
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling wolf_parse v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_parse)
+   Compiling zerofrom v0.1.8
+   Compiling yoke v0.8.3
+   Compiling equivalent v1.0.2
+   Compiling wasmtime-internal-core v47.0.3
+   Compiling either v1.17.0
+   Compiling indexmap v2.14.0
+   Compiling zerovec v0.11.6
+   Compiling rayon v1.12.0
+   Compiling litemap v0.8.2
+   Compiling tinystr v0.8.3
+   Compiling cranelift-isle v0.134.3
+   Compiling writeable v0.6.3
+   Compiling icu_locale_core v2.2.0
+   Compiling potential_utf v0.1.5
+   Compiling zerotrie v0.2.4
+   Compiling icu_properties_data v2.2.0
+   Compiling icu_normalizer_data v2.2.0
+   Compiling libc v0.2.189
+   Compiling log v0.4.33
+   Compiling cranelift-codegen-shared v0.134.3
+   Compiling heck v0.5.0
+   Compiling hashbrown v0.16.1
+   Compiling serde_core v1.0.229
+   Compiling fnv v1.0.7
+   Compiling utf8_iter v1.0.4
+   Compiling wolf_sema v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_sema)
+   Compiling icu_collections v2.2.0
+   Compiling cranelift-codegen-meta v0.134.3
+   Compiling gimli v0.33.0
+   Compiling icu_provider v2.2.0
+   Compiling cranelift-bitset v0.134.3
+   Compiling cranelift-assembler-x64 v0.134.3
+   Compiling target-lexicon v0.13.5
+   Compiling allocator-api2 v0.2.21
+   Compiling memchr v2.8.3
+   Compiling cranelift-codegen v0.134.3
+   Compiling bumpalo v3.20.3
+   Compiling cranelift-entity v0.134.3
+   Compiling serde v1.0.229
+   Compiling arbitrary v1.4.2
+   Compiling rustc-hash v2.1.3
+   Compiling zmij v1.0.23
+   Compiling regalloc2 v0.15.2
+   Compiling cranelift-control v0.134.3
+   Compiling cranelift-bforest v0.134.3
+   Compiling icu_normalizer v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling serde_derive v1.0.229
+   Compiling anyhow v1.0.104
+   Compiling crc32fast v1.5.0
+   Compiling serde_json v1.0.151
+   Compiling idna_adapter v1.2.2
+   Compiling wolf_mem v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_mem)
+   Compiling percent-encoding v2.3.2
+   Compiling itoa v1.0.18
+   Compiling object v0.39.1
+   Compiling form_urlencoded v1.2.2
+   Compiling idna v1.1.0
+   Compiling wolf_fmt v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_fmt)
+   Compiling wolf_wir v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_wir)
+   Compiling wolf_query v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_query)
+   Compiling url v2.5.8
+   Compiling wolf_rt v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_rt)
+   Compiling serde_repr v0.1.21
+   Compiling crossbeam-channel v0.5.16
+   Compiling bitflags v1.3.2
+   Compiling lsp-types v0.95.1
+   Compiling wolf_backend v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_backend)
+   Compiling lsp-server v0.10.0
+   Compiling wolf_cimport v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_cimport)
+   Compiling wolf_codegen_llvm v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_codegen_llvm)
+   Compiling wolf_pkg v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_pkg)
+   Compiling wolf_doc v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_doc)
+   Compiling wolf_lsp v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_lsp)
+   Compiling cranelift-module v0.134.3
+   Compiling cranelift-frontend v0.134.3
+   Compiling cranelift-object v0.134.3
+   Compiling wolf_codegen_clif v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_codegen_clif)
+   Compiling wolf_driver v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_driver)
+    Finished `dev` profile [unoptimized] target(s) in 30.70s
+   Compiling wolf_driver v0.2.35 (/home/mfwolffe/lanes/ld02b/wolf-lang/crates/wolf_driver)
+    Finished `test` profile [unoptimized] target(s) in 0.28s
+     Running tests/linker_select.rs (target/debug/deps/linker_select-43c014412c25d4c0)
+
+running 14 tests
+test linker_option_requires_a_nonempty_path ... ok
+test linux::absent_selected_linker_is_final ... ok
+test linux::cli_linker_overrides_environment ... ok
+test linux::configured_path_and_output_spaces_preserve_cc_argv ... ok
+test linux::environment_linker_overrides_cc ... ok
+test linux::failed_selected_linker_is_final ... ok
+test linux::empty_environment_and_no_selection_keep_cc ... ok
+test linux::object_emission_does_not_invoke_linker ... ok
+test linux::malformed_selected_output_is_refused ... ok
+test linux::run_uses_selected_linker_before_entry ... ok
+test selected_linker_does_not_enable_foreign_targets ... ok
+test linux::successful_no_output_cannot_reuse_stale_executable ... ok
+test linux::foreign_selected_output_is_refused ... ok
+test linux::every_root_manifest_program_links_with_real_ligature_on_both_tiers has been running for over 60 seconds
+PASS: real ligature root-manifest program exit, release=false
+ld02b seam exit=143 2026-10-25T09:51:01Z
