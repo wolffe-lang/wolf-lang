@@ -180,7 +180,9 @@ held equal to `pthread_getattr_np`'s):
 That leaves 51 calls and +25 us (+10 %): the eager query is still a
 procfs read the start does not need.
 
-**R-s265-1 (asked; recommendation B implemented, `26d3a10d`).** What the
+**R-s265-1 = B (asked with the numbers below; ruled B by the
+orchestrator, 2026-10-24; implemented `26d3a10d`, the handler's rule
+comment amended to say why in `7bfef3f1`).** What the
 cost buys: `[conf.trap.stack]` — a main-thread stack overflow reported as
 `wolf-trap: stack-overflow` with its PC and exit 134, not a bare signal
 death (0.2.34's exit 139). The release intended it; the cost is the
@@ -200,7 +202,8 @@ query, not the safety.
   and its PC on native and release, as on 0.2.35 (`item3/short2.log`);
   `tests/stack_overflow.rs` ok. What it changes: the handler now reads a
   file on the main thread's first fault, which the s256 comment ruled
-  out ("no ... file I/O in a handler"; the comment is amended); the
+  out ("no ... file I/O in a handler"; `7bfef3f1` says the rule changed
+  and why); the
   binaries are BIND_NOW (`item3/bindings.txt`), so no symbol lookup runs
   there; a map that cannot be read at that moment (no descriptor free)
   leaves no guard and the fault dies the ordinary way — the same answer
@@ -210,8 +213,8 @@ query, not the safety.
   is the one that would not set it. Not recommended.
 
 **Recommendation: B**, measured above: it returns 36 of the 38.9 us and
-keeps every report. If the ruling is A: revert `26d3a10d` and
-`df1bf08b` and record 16.
+keeps every report. Ruled B; had it been A, `26d3a10d` and `df1bf08b`
+would have been reverted and 16 recorded.
 
 ## 4. The gates
 
@@ -242,7 +245,11 @@ keeps every report. If the ruling is A: revert `26d3a10d` and
 
 ## 2. The bisection, yew's rows, the gauntlet and the differ
 
-PENDING: phase 2b on kasumi (`tools/phase2b.sh`, pid 2493612, log
+PENDING: phase 2b on kasumi (`tools/phase2b.sh`; first run pid 2493612
+built the three yew cells and stopped at the bisection's first checkout
+on a path bug in `tools/bisect.sh` — `$HOME` inside the container is the
+scratch home — fixed in `9c739827` and resumed from the bisection step;
+log
 `~/lanes/s265/evidence/phase2b/phase2b.log`, exit marker
 `~/lanes/s265/evidence/phase2b/phase2b.exit`): yew's three cells built
 (a 0.2.34, b 0.2.35, fix the head), the fifteen landing commits and
