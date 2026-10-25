@@ -19,7 +19,7 @@
 //!
 //! Machines: the checked machine under `conform-run --checked`, the
 //! native and release binaries — plain, and on linux again under
-//! `taskset -c 0-3` (wolf-lang#570) — and lupin under `conform-run`. The
+//! `taskset` on four CPUs of the allocation (wolf-lang#570) — and lupin under `conform-run`. The
 //! programs write to `/dev/tty`, never to standard output (the checked
 //! machine and lupin buffer standard output into their record), but for
 //! the race and the rows, which run without a terminal.
@@ -27,6 +27,7 @@
 #![cfg(unix)]
 
 mod lane_exit;
+mod test_cpus;
 
 use std::io::{Read as _, Write as _};
 use std::os::fd::{AsRawFd as _, FromRawFd as _};
@@ -122,17 +123,6 @@ fn build(entry: &Path, dir: &Path, release: bool) -> Option<PathBuf> {
     }
     assert!(out.status.success(), "wolf build failed: {stderr}");
     Some(exe)
-}
-
-/// `taskset` on linux, from PATH (NixOS keeps it outside `/usr/bin`).
-fn taskset() -> Option<PathBuf> {
-    if !cfg!(target_os = "linux") {
-        return None;
-    }
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|d| d.join("taskset"))
-        .find(|p| p.is_file())
 }
 
 /// How a run under the terminal ended.
@@ -376,15 +366,12 @@ fn lanes(name: &str) -> (PathBuf, Vec<Lane>) {
             argv: vec![exe.clone()],
             lupin: false,
         });
-        if let Some(t) = taskset() {
+        if let Some(pin) = test_cpus::pin(4, module_path!()) {
+            let mut argv = pin.argv();
+            argv.push(exe);
             out.push(Lane {
-                name: format!("{tier} taskset -c 0-3"),
-                argv: vec![
-                    t.to_string_lossy().into_owned(),
-                    "-c".into(),
-                    "0-3".into(),
-                    exe,
-                ],
+                name: format!("{tier} {}", pin.label()),
+                argv,
                 lupin: false,
             });
         }
@@ -615,10 +602,8 @@ fn every_lane_plain(name: &str, secs: u64, want: &str, first: &[&str]) {
             continue;
         };
         let mut runs = vec![(tier.to_string(), Command::new(&exe))];
-        if let Some(t) = taskset() {
-            let mut c = Command::new(t);
-            c.args(["-c", "0-3"]).arg(&exe);
-            runs.push((format!("{tier} taskset -c 0-3"), c));
+        if let Some(pin) = test_cpus::pin(4, module_path!()) {
+            runs.push((format!("{tier} {}", pin.label()), pin.command(&exe)));
         }
         for (lane, cmd) in runs {
             let (code, stdout, stderr) = bounded(cmd, &dir, secs).unwrap_or_else(|| {
