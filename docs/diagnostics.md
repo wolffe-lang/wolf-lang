@@ -1686,7 +1686,7 @@ An ordinary wolf function has fixed arity; an ellipsis cannot turn it
 into a variadic function. Use an export if a C-compatible variadic
 entry is intended, or pass a typed container to an ordinary function.
 
-Fixtures: crates/wolf_parse/tests/snapshots/corpus_decls__membrane__variadic_position.snap, crates/wolf_parse/tests/snapshots/variadic__e0822_variadic_position.snap
+Fixtures: crates/wolf_lex/tests/snapshots/corpus_snapshots__membrane__variadic_position.snap, crates/wolf_parse/tests/snapshots/corpus_decls__membrane__variadic_position.snap, crates/wolf_parse/tests/snapshots/variadic__e0822_variadic_position.snap
 
 ## E0823 — a variadic function used as a function value
 
