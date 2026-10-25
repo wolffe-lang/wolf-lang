@@ -1,0 +1,250 @@
+=== trunk code at 1549db55 (debug build), nomad
+wolf 0.2.35+dev.unknown (wolfgang)
+Darwin 25.4.0
+build native exit=0
+build release exit=0
+== native
+os_spawn ok: spawned os_error 0 status 0
+os_spawn_with ok: spawned os_error 0 status 0
+os_spawn_fds ok: spawned os_error 0 status 0
+os_spawn_job ok: spawned os_error 0 status 0
+os_spawn missing: not_found os_error 2 'No such file or directory'
+os_spawn_with missing: not_found os_error 2 'No such file or directory'
+os_spawn_fds missing: not_found os_error 2 'No such file or directory'
+os_spawn_job missing: not_found os_error 2 'No such file or directory'
+os_exec missing: not_found os_error 2 'No such file or directory'
+os_spawn noexec: io os_error 8 'Exec format error'
+os_spawn_with noexec: io os_error 8 'Exec format error'
+os_spawn_fds noexec: io os_error 8 'Exec format error'
+os_spawn_job noexec: io os_error 8 'Exec format error'
+os_exec noexec: io os_error 8 'Exec format error'
+os_spawn nox: denied os_error 13 'Permission denied'
+os_spawn_with nox: denied os_error 13 'Permission denied'
+os_spawn_fds nox: denied os_error 13 'Permission denied'
+os_spawn_job nox: denied os_error 13 'Permission denied'
+os_exec nox: denied os_error 13 'Permission denied'
+os_spawn dir: denied os_error 13 'Permission denied'
+os_spawn_with dir: denied os_error 13 'Permission denied'
+os_spawn_fds dir: denied os_error 13 'Permission denied'
+os_spawn_job dir: denied os_error 13 'Permission denied'
+os_exec dir: denied os_error 13 'Permission denied'
+os_spawn big: io os_error 7 'Argument list too long'
+os_spawn_with big: io os_error 7 'Argument list too long'
+os_spawn_fds big: io os_error 7 'Argument list too long'
+os_spawn_job big: io os_error 7 'Argument list too long'
+os_exec big: io os_error 7 'Argument list too long'
+ran
+os_spawn busy: spawned os_error 0 status 0
+ran
+os_spawn_with busy: spawned os_error 0 status 0
+ran
+os_spawn_fds busy: spawned os_error 0 status 0
+ran
+os_spawn_job busy: spawned os_error 0 status 0
+ran
+probe-native exit=0
+== release
+os_spawn ok: spawned os_error 0 status 0
+os_spawn_with ok: spawned os_error 0 status 0
+os_spawn_fds ok: spawned os_error 0 status 0
+os_spawn_job ok: spawned os_error 0 status 0
+os_spawn missing: not_found os_error 2 'No such file or directory'
+os_spawn_with missing: not_found os_error 2 'No such file or directory'
+os_spawn_fds missing: not_found os_error 2 'No such file or directory'
+os_spawn_job missing: not_found os_error 2 'No such file or directory'
+os_exec missing: not_found os_error 2 'No such file or directory'
+os_spawn noexec: io os_error 8 'Exec format error'
+os_spawn_with noexec: io os_error 8 'Exec format error'
+os_spawn_fds noexec: io os_error 8 'Exec format error'
+os_spawn_job noexec: io os_error 8 'Exec format error'
+os_exec noexec: io os_error 8 'Exec format error'
+os_spawn nox: denied os_error 13 'Permission denied'
+os_spawn_with nox: denied os_error 13 'Permission denied'
+os_spawn_fds nox: denied os_error 13 'Permission denied'
+os_spawn_job nox: denied os_error 13 'Permission denied'
+os_exec nox: denied os_error 13 'Permission denied'
+os_spawn dir: denied os_error 13 'Permission denied'
+os_spawn_with dir: denied os_error 13 'Permission denied'
+os_spawn_fds dir: denied os_error 13 'Permission denied'
+os_spawn_job dir: denied os_error 13 'Permission denied'
+os_exec dir: denied os_error 13 'Permission denied'
+os_spawn big: io os_error 7 'Argument list too long'
+os_spawn_with big: io os_error 7 'Argument list too long'
+os_spawn_fds big: io os_error 7 'Argument list too long'
+os_spawn_job big: io os_error 7 'Argument list too long'
+os_exec big: io os_error 7 'Argument list too long'
+ran
+os_spawn busy: spawned os_error 0 status 0
+ran
+os_spawn_with busy: spawned os_error 0 status 0
+ran
+os_spawn_fds busy: spawned os_error 0 status 0
+ran
+os_spawn_job busy: spawned os_error 0 status 0
+ran
+probe-release exit=0
+== checked
+conform-run exit=0
+os_spawn ok: spawned os_error 0 status 0
+os_spawn_with ok: spawned os_error 0 status 0
+os_spawn_fds ok: spawned os_error 0 status 0
+os_spawn_job ok: spawned os_error 0 status 0
+os_spawn missing: not_found os_error 2 'No such file or directory'
+os_spawn_with missing: not_found os_error 2 'No such file or directory'
+os_spawn_fds missing: not_found os_error 2 'No such file or directory'
+os_spawn_job missing: not_found os_error 2 'No such file or directory'
+os_exec missing: not_found os_error 0 ''
+os_spawn noexec: io os_error 8 'Exec format error'
+os_spawn_with noexec: io os_error 8 'Exec format error'
+os_spawn_fds noexec: io os_error 8 'Exec format error'
+os_spawn_job noexec: io os_error 8 'Exec format error'
+os_exec noexec: io os_error 8 'Exec format error'
+os_spawn nox: denied os_error 13 'Permission denied'
+os_spawn_with nox: denied os_error 13 'Permission denied'
+os_spawn_fds nox: denied os_error 13 'Permission denied'
+os_spawn_job nox: denied os_error 13 'Permission denied'
+os_exec nox: denied os_error 0 ''
+os_spawn dir: denied os_error 13 'Permission denied'
+os_spawn_with dir: denied os_error 13 'Permission denied'
+os_spawn_fds dir: denied os_error 13 'Permission denied'
+os_spawn_job dir: denied os_error 13 'Permission denied'
+os_exec dir: denied os_error 0 ''
+os_spawn big: io os_error 7 'Argument list too long'
+os_spawn_with big: io os_error 7 'Argument list too long'
+os_spawn_fds big: io os_error 7 'Argument list too long'
+os_spawn_job big: io os_error 7 'Argument list too long'
+os_exec big: io os_error 7 'Argument list too long'
+os_spawn busy: spawned os_error 0 status 0
+os_spawn_with busy: spawned os_error 0 status 0
+os_spawn_fds busy: spawned os_error 0 status 0
+os_spawn_job busy: spawned os_error 0 status 0
+(no record: the exec replaced the machine)
+=== control: published 0.2.35, nomad
+wolf 0.2.35 (wolfgang, pin cf0c13d)
+Darwin 25.4.0
+build native exit=0
+build release exit=0
+== native
+os_spawn ok: spawned os_error 0 status 0
+os_spawn_with ok: spawned os_error 0 status 0
+os_spawn_fds ok: spawned os_error 0 status 0
+os_spawn_job ok: spawned os_error 0 status 0
+os_spawn missing: not_found os_error 0 ''
+os_spawn_with missing: not_found os_error 0 ''
+os_spawn_fds missing: not_found os_error 0 ''
+os_spawn_job missing: not_found os_error 0 ''
+os_exec missing: not_found os_error 0 ''
+./bin: ./bin: cannot execute binary file
+os_spawn noexec: spawned os_error 0 status 126
+./bin: ./bin: cannot execute binary file
+os_spawn_with noexec: spawned os_error 0 status 126
+./bin: ./bin: cannot execute binary file
+os_spawn_fds noexec: spawned os_error 0 status 126
+./bin: ./bin: cannot execute binary file
+os_spawn_job noexec: spawned os_error 0 status 126
+os_exec noexec: io os_error 0 ''
+os_spawn nox: denied os_error 0 ''
+os_spawn_with nox: denied os_error 0 ''
+os_spawn_fds nox: denied os_error 0 ''
+os_spawn_job nox: denied os_error 0 ''
+os_exec nox: denied os_error 0 ''
+os_spawn dir: denied os_error 0 ''
+os_spawn_with dir: denied os_error 0 ''
+os_spawn_fds dir: denied os_error 0 ''
+os_spawn_job dir: denied os_error 0 ''
+os_exec dir: denied os_error 0 ''
+os_spawn big: io os_error 0 ''
+os_spawn_with big: io os_error 0 ''
+os_spawn_fds big: io os_error 0 ''
+os_spawn_job big: io os_error 0 ''
+os_exec big: io os_error 0 ''
+ran
+os_spawn busy: spawned os_error 0 status 0
+ran
+os_spawn_with busy: spawned os_error 0 status 0
+ran
+os_spawn_fds busy: spawned os_error 0 status 0
+ran
+os_spawn_job busy: spawned os_error 0 status 0
+ran
+probe-native exit=0
+== release
+os_spawn ok: spawned os_error 0 status 0
+os_spawn_with ok: spawned os_error 0 status 0
+os_spawn_fds ok: spawned os_error 0 status 0
+os_spawn_job ok: spawned os_error 0 status 0
+os_spawn missing: not_found os_error 0 ''
+os_spawn_with missing: not_found os_error 0 ''
+os_spawn_fds missing: not_found os_error 0 ''
+os_spawn_job missing: not_found os_error 0 ''
+os_exec missing: not_found os_error 0 ''
+./bin: ./bin: cannot execute binary file
+os_spawn noexec: spawned os_error 0 status 126
+./bin: ./bin: cannot execute binary file
+os_spawn_with noexec: spawned os_error 0 status 126
+./bin: ./bin: cannot execute binary file
+os_spawn_fds noexec: spawned os_error 0 status 126
+./bin: ./bin: cannot execute binary file
+os_spawn_job noexec: spawned os_error 0 status 126
+os_exec noexec: io os_error 0 ''
+os_spawn nox: denied os_error 0 ''
+os_spawn_with nox: denied os_error 0 ''
+os_spawn_fds nox: denied os_error 0 ''
+os_spawn_job nox: denied os_error 0 ''
+os_exec nox: denied os_error 0 ''
+os_spawn dir: denied os_error 0 ''
+os_spawn_with dir: denied os_error 0 ''
+os_spawn_fds dir: denied os_error 0 ''
+os_spawn_job dir: denied os_error 0 ''
+os_exec dir: denied os_error 0 ''
+os_spawn big: io os_error 0 ''
+os_spawn_with big: io os_error 0 ''
+os_spawn_fds big: io os_error 0 ''
+os_spawn_job big: io os_error 0 ''
+os_exec big: io os_error 0 ''
+ran
+os_spawn busy: spawned os_error 0 status 0
+ran
+os_spawn_with busy: spawned os_error 0 status 0
+ran
+os_spawn_fds busy: spawned os_error 0 status 0
+ran
+os_spawn_job busy: spawned os_error 0 status 0
+ran
+probe-release exit=0
+== checked
+conform-run exit=0
+os_spawn ok: spawned os_error 0 status 0
+os_spawn_with ok: spawned os_error 0 status 0
+os_spawn_fds ok: spawned os_error 0 status 0
+os_spawn_job ok: spawned os_error 0 status 0
+os_spawn missing: not_found os_error 0 ''
+os_spawn_with missing: not_found os_error 0 ''
+os_spawn_fds missing: not_found os_error 0 ''
+os_spawn_job missing: not_found os_error 0 ''
+os_exec missing: not_found os_error 0 ''
+os_spawn noexec: spawned os_error 0 status 126
+os_spawn_with noexec: spawned os_error 0 status 126
+os_spawn_fds noexec: spawned os_error 0 status 126
+os_spawn_job noexec: spawned os_error 0 status 126
+os_exec noexec: io os_error 0 ''
+os_spawn nox: denied os_error 0 ''
+os_spawn_with nox: denied os_error 0 ''
+os_spawn_fds nox: denied os_error 0 ''
+os_spawn_job nox: denied os_error 0 ''
+os_exec nox: denied os_error 0 ''
+os_spawn dir: denied os_error 0 ''
+os_spawn_with dir: denied os_error 0 ''
+os_spawn_fds dir: denied os_error 0 ''
+os_spawn_job dir: denied os_error 0 ''
+os_exec dir: denied os_error 0 ''
+os_spawn big: io os_error 0 ''
+os_spawn_with big: io os_error 0 ''
+os_spawn_fds big: io os_error 0 ''
+os_spawn_job big: io os_error 0 ''
+os_exec big: io os_error 0 ''
+os_spawn busy: spawned os_error 0 status 0
+os_spawn_with busy: spawned os_error 0 status 0
+os_spawn_fds busy: spawned os_error 0 status 0
+os_spawn_job busy: spawned os_error 0 status 0
+(no record: the exec replaced the machine)

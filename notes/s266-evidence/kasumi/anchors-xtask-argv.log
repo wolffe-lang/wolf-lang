@@ -1,0 +1,21 @@
+s266 job m5 start=2026-10-25T06:01:03Z head=96b8ae6c049526093a4bc23ad56c9db02391ddb5 pid=2989274
+s266 waiting for the CPUs 4-7 lock (2026-10-25T06:01:03Z); job s266-m5: bash /home/mfwolffe/lanes/s266/scripts/m5.sh
+head 8dcd25e0
+clippy exit=101
+    |
+    = help: consider moving this into a const block: `const { assert!(..) }`
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#assertions_on_constants
+
+error: could not compile `wolf_driver` (test "spawn_errno_lanes") due to 2 previous errors
+xtask tests exit=0
+test result: ok. 76 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s 
+env_argv_lanes exit=0
+s266 pty-native: a terminal's byte argument traps by index or reads as bytes, PASS
+.s266 pty-release: a terminal's byte argument traps by index or reads as bytes, PASS
+.s261 native-bytes: invalid arguments/name preserved or named trap, PASS
+s261 release-bytes: invalid arguments/name preserved or named trap, PASS
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.24s
+spec-extract (write) exit=0
+spec-extract --check exit=0
+anchors: trunk 705, head 705; only at trunk []; only at head []
+s266 job m5 exit=0 end=2026-10-25T06:01:37Z

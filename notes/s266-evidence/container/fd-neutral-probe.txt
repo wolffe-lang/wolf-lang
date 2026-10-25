@@ -1,0 +1,20 @@
+s266: the shim against the real taskset with a standard descriptor closed
+by the caller (kasumi, the lane's container, 2026-10-25T06:18Z).
+
+Before the fix (`fd-a.sh` = `#!/bin/sh` + `exec ls -l /proc/self/fd`,
+caller closed 2): the program found the SCRIPT open on 2 —
+    2 -> /home/mfwolffe/lanes/s266/scratch/fd-a.sh
+and through the shim, request 4 (passthrough), 2 closed: fds 0 1 2 3
+(2 the shim's script, 3 ls's own) where the real taskset gives 0 1 2
+(2 ls's own). stdfd_lanes read descriptor 2 "open" (three reds in
+item5-before-take1.log).
+
+After the fix (the shim closes the descriptor holding its own script
+before it execs; container/taskset-shim.sh), `ls -l /proc/self/fd` under
+the shim, request 0 (translated) and 4 (passthrough), k closed:
+    k=0: 0->/proc/N/fd 1->pipe 2->/dev/null     (ls's own fd on 0)
+    k=1: (no output: 1 closed)
+    k=2: 0->/dev/null 1->pipe 2->/proc/N/fd     (ls's own fd on 2)
+    real taskset, 4, 2 closed: 0->/dev/null 1->pipe 2->/proc/N/fd
+An ignored SIGPIPE still arrives: `SigIgn: 0000000000001000`;
+`taskset -c 0-3` → `Cpus_allowed_list: 4-7`.

@@ -1,0 +1,9 @@
+# s266's gauntlet image. The base's /usr/bin is replaced by a snapshot of
+# the host's (kasumi), whose /usr/lib, /usr/share and /usr/include are
+# mounted read-only at run time, so the container runs the host's own
+# toolchain (clang, lld, strace, qemu) without installing anything.
+# taskset is the lane's POSIX sh shim over the host's real taskset.
+FROM docker.io/library/archlinux:base-devel
+COPY usr-bin/ /usr/bin/
+COPY taskset-shim.sh /usr/bin/taskset
+COPY s266-exec-clean /usr/bin/s266-exec-clean

@@ -1,0 +1,23 @@
+s266 job m4 start=2026-10-25T05:49:58Z head=1549db55f985cbdf84630c52cdd7b1a3c5de9016 pid=1998394
+s266 waiting for the CPUs 4-7 lock (2026-10-25T05:49:58Z); job s266-m4: bash /home/mfwolffe/lanes/s266/scripts/m4.sh
+== at 0599df8a: #936's witness
+spawn-errno-red exit=101 test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.19s 
+native: os_error() rows differ
+got  "os_exec bare-missing: not_found os_error 0 ''"
+want "os_exec bare-missing: not_found os_error 2 'No such file or directory'"
+== at 96b8ae6c: the fixes
+spawn-errno exit=0 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.67s 
+s266 native: every row's number, PASS
+s266 release: every row's number, PASS
+s266 checked: every row's number, PASS
+spawn-noexec exit=0 test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.45s 
+exec-lanes exit=0 test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.52s 
+process-calls exit=0 test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s 
+byte-surface exit=0 test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.62s 
+refusal-site exit=101 test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.15s 
+rt-lib exit=0 test result: ok. 343 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.92s 
+mem-lib exit=0 test result: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s 
+corpus exit=0
+corpus: 1228 file(s), 0 bad — phase ledger enforced via conform-run
+corpus: fail-pin ledger: 382 rule(s) the compiler enforces, 3 forward pin(s) it does not implement yet
+s266 job m4 exit=0 end=2026-10-25T05:51:35Z

@@ -1,0 +1,197 @@
+s266 waiting for the CPUs 4-7 lock (2026-10-25T05:36:23Z); job s266-m1: bash /home/mfwolffe/lanes/s266/scripts/m1.sh
+=== trunk (a5378e3f code, debug build)
+wolf 0.2.35+dev.unknown (wolfgang)
+Linux 7.2.8-1-cachyos
+build native exit=0
+build release exit=0
+== native
+os_spawn ok: spawned os_error 0 status 0
+os_spawn_with ok: spawned os_error 0 status 0
+os_spawn_fds ok: spawned os_error 0 status 0
+os_spawn_job ok: spawned os_error 0 status 0
+os_spawn missing: not_found os_error 2 'No such file or directory'
+os_spawn_with missing: not_found os_error 2 'No such file or directory'
+os_spawn_fds missing: not_found os_error 2 'No such file or directory'
+os_spawn_job missing: not_found os_error 2 'No such file or directory'
+os_exec missing: not_found os_error 2 'No such file or directory'
+os_spawn busy: io os_error 26 'Text file busy'
+os_spawn_with busy: io os_error 26 'Text file busy'
+os_spawn_fds busy: io os_error 26 'Text file busy'
+os_spawn_job busy: io os_error 26 'Text file busy'
+os_exec busy: io os_error 26 'Text file busy'
+os_spawn noexec: io os_error 8 'Exec format error'
+os_spawn_with noexec: io os_error 8 'Exec format error'
+os_spawn_fds noexec: io os_error 8 'Exec format error'
+os_spawn_job noexec: io os_error 8 'Exec format error'
+os_exec noexec: io os_error 8 'Exec format error'
+os_spawn nox: denied os_error 13 'Permission denied'
+os_spawn_with nox: denied os_error 13 'Permission denied'
+os_spawn_fds nox: denied os_error 13 'Permission denied'
+os_spawn_job nox: denied os_error 13 'Permission denied'
+os_exec nox: denied os_error 13 'Permission denied'
+os_spawn dir: denied os_error 13 'Permission denied'
+os_spawn_with dir: denied os_error 13 'Permission denied'
+os_spawn_fds dir: denied os_error 13 'Permission denied'
+os_spawn_job dir: denied os_error 13 'Permission denied'
+os_exec dir: denied os_error 13 'Permission denied'
+os_spawn big: io os_error 7 'Argument list too long'
+os_spawn_with big: io os_error 7 'Argument list too long'
+os_spawn_fds big: io os_error 7 'Argument list too long'
+os_spawn_job big: io os_error 7 'Argument list too long'
+os_exec big: io os_error 7 'Argument list too long'
+probe-native exit=0
+== release
+os_spawn ok: spawned os_error 0 status 0
+os_spawn_with ok: spawned os_error 0 status 0
+os_spawn_fds ok: spawned os_error 0 status 0
+os_spawn_job ok: spawned os_error 0 status 0
+os_spawn missing: not_found os_error 2 'No such file or directory'
+os_spawn_with missing: not_found os_error 2 'No such file or directory'
+os_spawn_fds missing: not_found os_error 2 'No such file or directory'
+os_spawn_job missing: not_found os_error 2 'No such file or directory'
+os_exec missing: not_found os_error 2 'No such file or directory'
+os_spawn busy: io os_error 26 'Text file busy'
+os_spawn_with busy: io os_error 26 'Text file busy'
+os_spawn_fds busy: io os_error 26 'Text file busy'
+os_spawn_job busy: io os_error 26 'Text file busy'
+os_exec busy: io os_error 26 'Text file busy'
+os_spawn noexec: io os_error 8 'Exec format error'
+os_spawn_with noexec: io os_error 8 'Exec format error'
+os_spawn_fds noexec: io os_error 8 'Exec format error'
+os_spawn_job noexec: io os_error 8 'Exec format error'
+os_exec noexec: io os_error 8 'Exec format error'
+os_spawn nox: denied os_error 13 'Permission denied'
+os_spawn_with nox: denied os_error 13 'Permission denied'
+os_spawn_fds nox: denied os_error 13 'Permission denied'
+os_spawn_job nox: denied os_error 13 'Permission denied'
+os_exec nox: denied os_error 13 'Permission denied'
+os_spawn dir: denied os_error 13 'Permission denied'
+os_spawn_with dir: denied os_error 13 'Permission denied'
+os_spawn_fds dir: denied os_error 13 'Permission denied'
+os_spawn_job dir: denied os_error 13 'Permission denied'
+os_exec dir: denied os_error 13 'Permission denied'
+os_spawn big: io os_error 7 'Argument list too long'
+os_spawn_with big: io os_error 7 'Argument list too long'
+os_spawn_fds big: io os_error 7 'Argument list too long'
+os_spawn_job big: io os_error 7 'Argument list too long'
+os_exec big: io os_error 7 'Argument list too long'
+probe-release exit=0
+== checked
+conform-run exit=0
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys; r=json.load(open(sys.argv[1])); print(r["verdict"]); print(r.get("stdout_inline",""), end="")
+                       ~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/json/__init__.py", line 298, in load
+    return loads(fp.read(),
+        cls=cls, object_hook=object_hook,
+        parse_float=parse_float, parse_int=parse_int,
+        parse_constant=parse_constant, object_pairs_hook=object_pairs_hook, **kw)
+  File "/usr/lib/python3.14/json/__init__.py", line 352, in loads
+    return _default_decoder.decode(s)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/usr/lib/python3.14/json/decoder.py", line 345, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/json/decoder.py", line 363, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)
+=== control: published 0.2.35
+wolf 0.2.35 (wolfgang, pin cf0c13d)
+Linux 7.2.8-1-cachyos
+build native exit=0
+build release exit=0
+== native
+os_spawn ok: spawned os_error 0 status 0
+os_spawn_with ok: spawned os_error 0 status 0
+os_spawn_fds ok: spawned os_error 0 status 0
+os_spawn_job ok: spawned os_error 0 status 0
+os_spawn missing: not_found os_error 0 ''
+os_spawn_with missing: not_found os_error 0 ''
+os_spawn_fds missing: not_found os_error 0 ''
+os_spawn_job missing: not_found os_error 0 ''
+os_exec missing: not_found os_error 0 ''
+os_spawn busy: io os_error 0 ''
+os_spawn_with busy: io os_error 0 ''
+os_spawn_fds busy: io os_error 0 ''
+os_spawn_job busy: io os_error 0 ''
+os_exec busy: io os_error 0 ''
+os_spawn noexec: io os_error 0 ''
+os_spawn_with noexec: io os_error 0 ''
+os_spawn_fds noexec: io os_error 0 ''
+./bin: ./bin: cannot execute binary file
+os_spawn_job noexec: spawned os_error 0 status 126
+os_exec noexec: io os_error 0 ''
+os_spawn nox: denied os_error 0 ''
+os_spawn_with nox: denied os_error 0 ''
+os_spawn_fds nox: denied os_error 0 ''
+os_spawn_job nox: denied os_error 0 ''
+os_exec nox: denied os_error 0 ''
+os_spawn dir: denied os_error 0 ''
+os_spawn_with dir: denied os_error 0 ''
+os_spawn_fds dir: denied os_error 0 ''
+os_spawn_job dir: denied os_error 0 ''
+os_exec dir: denied os_error 0 ''
+os_spawn big: io os_error 0 ''
+os_spawn_with big: io os_error 0 ''
+os_spawn_fds big: io os_error 0 ''
+os_spawn_job big: io os_error 0 ''
+os_exec big: io os_error 0 ''
+probe-native exit=0
+== release
+os_spawn ok: spawned os_error 0 status 0
+os_spawn_with ok: spawned os_error 0 status 0
+os_spawn_fds ok: spawned os_error 0 status 0
+os_spawn_job ok: spawned os_error 0 status 0
+os_spawn missing: not_found os_error 0 ''
+os_spawn_with missing: not_found os_error 0 ''
+os_spawn_fds missing: not_found os_error 0 ''
+os_spawn_job missing: not_found os_error 0 ''
+os_exec missing: not_found os_error 0 ''
+os_spawn busy: io os_error 0 ''
+os_spawn_with busy: io os_error 0 ''
+os_spawn_fds busy: io os_error 0 ''
+os_spawn_job busy: io os_error 0 ''
+os_exec busy: io os_error 0 ''
+os_spawn noexec: io os_error 0 ''
+os_spawn_with noexec: io os_error 0 ''
+os_spawn_fds noexec: io os_error 0 ''
+./bin: ./bin: cannot execute binary file
+os_spawn_job noexec: spawned os_error 0 status 126
+os_exec noexec: io os_error 0 ''
+os_spawn nox: denied os_error 0 ''
+os_spawn_with nox: denied os_error 0 ''
+os_spawn_fds nox: denied os_error 0 ''
+os_spawn_job nox: denied os_error 0 ''
+os_exec nox: denied os_error 0 ''
+os_spawn dir: denied os_error 0 ''
+os_spawn_with dir: denied os_error 0 ''
+os_spawn_fds dir: denied os_error 0 ''
+os_spawn_job dir: denied os_error 0 ''
+os_exec dir: denied os_error 0 ''
+os_spawn big: io os_error 0 ''
+os_spawn_with big: io os_error 0 ''
+os_spawn_fds big: io os_error 0 ''
+os_spawn_job big: io os_error 0 ''
+os_exec big: io os_error 0 ''
+probe-release exit=0
+== checked
+conform-run exit=0
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json,sys; r=json.load(open(sys.argv[1])); print(r["verdict"]); print(r.get("stdout_inline",""), end="")
+                       ~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/json/__init__.py", line 298, in load
+    return loads(fp.read(),
+        cls=cls, object_hook=object_hook,
+        parse_float=parse_float, parse_int=parse_int,
+        parse_constant=parse_constant, object_pairs_hook=object_pairs_hook, **kw)
+  File "/usr/lib/python3.14/json/__init__.py", line 352, in loads
+    return _default_decoder.decode(s)
+           ~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/usr/lib/python3.14/json/decoder.py", line 345, in decode
+    obj, end = self.raw_decode(s, idx=_w(s, 0).end())
+               ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/json/decoder.py", line 363, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value) from None
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)

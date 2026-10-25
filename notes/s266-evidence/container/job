@@ -1,0 +1,16 @@
+#!/bin/bash
+# s266: run one command in the lane's container, detached-friendly:
+# `job NAME CMD...` writes evidence/NAME.{pid,log,exit}; the exit file
+# holds the command's own exit status (never a pipe's).
+set -u
+lane="$HOME/lanes/s266"
+name=$1; shift
+printf '%s\n' "$$" > "$lane/evidence/$name.pid"
+rm -f "$lane/evidence/$name.exit"
+exec > "$lane/evidence/$name.log" 2>&1
+echo "s266 job $name start=$(date -u +%FT%TZ) head=$(git -C "$lane/wolf-lang" rev-parse HEAD) pid=$$"
+S266_JOB="$name" "$lane/scripts/ctr" "$@"
+rc=$?
+printf '%s\n' "$rc" > "$lane/evidence/$name.exit"
+echo "s266 job $name exit=$rc end=$(date -u +%FT%TZ)"
+exit "$rc"

@@ -1,0 +1,65 @@
+memgate: free+inactive+speculative = 12734 MiB (floor 8192 MiB)
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/pool.rs:691:22
+    |
+691 |                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |                      ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+691 -                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+691 +                     .try_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:632:38
+    |
+632 |     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |                                      ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+632 -     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+632 +     self_slot(sig).is_some_and(|n| n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:644:23
+    |
+644 |             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |                       ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+644 -             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+644 +             let _ = n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |
+
+
+running 9 tests
+.....s261 native-env: env_get=utf8, env_vars omits entry, PASS
+s261 native argv0="program": PASS
+s261 native argv0="/Users/mfwolffe/lanes/s266/wolf-lang/target/tmp/s261-native/program": PASS
+s261 native argv0="./program": PASS
+s261 native argv0="./hound": PASS
+s261 native argv0="NAME": PASS
+s261 release-env: env_get=utf8, env_vars omits entry, PASS
+s261 checked-env: env_get=utf8, env_vars omits entry, PASS
+.s261 release argv0="program": PASS
+s261 release argv0="/Users/mfwolffe/lanes/s266/wolf-lang/target/tmp/s261-release/program": PASS
+s261 release argv0="./program": PASS
+s261 release argv0="./hound": PASS
+s261 release argv0="NAME": PASS
+s266 pty-native: a terminal's byte argument traps by index or reads as bytes, PASS
+s261 checked argv0="program": PASS
+s261 checked argv0="/Users/mfwolffe/lanes/s266/wolf-lang/target/tmp/s261-checked-name/program": PASS
+s261 checked argv0="./program": PASS
+s261 checked argv0="./hound": PASS
+s261 checked argv0="NAME": PASS
+.s266 pty-release: a terminal's byte argument traps by index or reads as bytes, PASS
+.s261 native-bytes: invalid arguments/name preserved or named trap, PASS
+s261 release-bytes: invalid arguments/name preserved or named trap, PASS
+.
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.44s
+

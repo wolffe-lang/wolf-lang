@@ -1,0 +1,28 @@
+s266 job m6-before start=2026-10-25T06:25:44Z head=14b7286a5d94ab41bf92e95a24a8b542b9e5c096 pid=87229
+s266 waiting for the CPUs 4-7 lock (2026-10-25T06:25:44Z); job s266-m6-before: bash /home/mfwolffe/lanes/s266/scripts/m6.sh before
+head 14b7286a label=before WOLF_TEST_CPUS=unset taskset=/usr/bin/taskset
+Cpus_allowed_list:	4-7
+pinning gates exit=0
+passed 153 failed 0
+SKIP lines: 33
+     17 SKIP: stack_overflow: no container ran docker.io/library/ubuntu:24.04
+      1 SKIP: tty: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+      1 SKIP: storm_limit: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+      1 SKIP: storm: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+      1 SKIP: stops: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live job-wait witnesses did not run on this box
+      1 SKIP: restore: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: time=\"2026-10-25T06:26:01Z\" level=error msg=\"cannot find UID/GID for user mfwolffe: no subuid ranges found for user \\\"mfwolffe\\\" in /etc/subuid - check rootless mode in man pages.\""]) — the rows did not run
+      1 SKIP: reserved: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live witnesses did not run
+      1 SKIP: pgid: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live group witnesses did not run on this box
+      1 SKIP: owner: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the witness that sets ids and owners did not run on this box
+      1 SKIP: nonblock: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the rows did not run
+      1 SKIP: loop: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the fork witnesses did not run
+      1 SKIP: group_fault: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live witnesses did not run
+      1 SKIP: fifo: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the rows did not run
+      1 SKIP: exit_by: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live witnesses did not run
+      1 SKIP: core: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live witnesses did not run
+      1 SKIP: clip: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the rows did not run
+      1 SKIP: all_user: no container engine ran docker.io/library/ubuntu:24.04 (["docker: No such file or directory (os error 2)", "podman: Trying to pull docker.io/library/ubuntu:24.04..."]) — the live group witnesses did not run on this box
+requests: 180; translated: 180; refused: 0
+     13 "requested":"0"
+    167 "requested":"0-3"
+s266 job m6-before exit=0 end=2026-10-25T06:28:23Z

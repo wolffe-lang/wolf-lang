@@ -1,0 +1,97 @@
+//! s266 probe (wolf-lang#936; pelt sh26's `probe/wolf-spawn-errno/`
+//! shape): what each spawn call and `os_exec` answer — the row and
+//! `os_error()` — for each reason a program cannot run. `run.sh`
+//! prepares the directory: `busy` held open for writing, `bin` with no
+//! `#!` line, `nox` without an execute bit, `dd` a directory.
+
+fn big_args() -> List[str] {
+    var xs = List[str]()
+    let word = "x".repeat(4096)
+    for _ in 0..1024 {
+        (mut xs).push(word)
+    }
+    xs
+}
+
+fn report(call: str, label: str, row: str) {
+    let code = os_error()
+    print("{call} {label}: {row} os_error {code} '{os_error_text(code)}'")
+}
+
+fn spawned(call: str, label: str, h: int) {
+    let code = os_error()
+    let st = os_wait_status(h) else -1
+    print("{call} {label}: spawned os_error {code} status {st}")
+}
+
+fn via_spawn(label: str, path: str, args: List[str]) {
+    var argv = List[str]()
+    (mut argv).push(path)
+    for a in args {
+        (mut argv).push(a)
+    }
+    let h = os_spawn(argv) else |e| {
+        report("os_spawn", label, "{e}")
+        return
+    }
+    spawned("os_spawn", label, h)
+}
+
+fn via_with(label: str, path: str, args: List[str]) {
+    let h = os_spawn_with(path, args, List[int]()) else |e| {
+        report("os_spawn_with", label, "{e}")
+        return
+    }
+    spawned("os_spawn_with", label, h)
+}
+
+fn via_fds(label: str, path: str, args: List[str]) {
+    let h = os_spawn_fds(path, args, List[int]()) else |e| {
+        report("os_spawn_fds", label, "{e}")
+        return
+    }
+    spawned("os_spawn_fds", label, h)
+}
+
+fn via_job(label: str, path: str, args: List[str]) {
+    let h = os_spawn_job(path, args, List[int](), 0, -1, 0) else |e| {
+        report("os_spawn_job", label, "{e}")
+        return
+    }
+    spawned("os_spawn_job", label, h)
+}
+
+fn via_exec(label: str, path: str, args: List[str]) {
+    var argv = List[str]()
+    (mut argv).push(path)
+    for a in args {
+        (mut argv).push(a)
+    }
+    os_exec(path, argv, List[str](), List[int]()) else |e| {
+        report("os_exec", label, "{e}")
+        return
+    }
+}
+
+fn row(label: str, path: str, args: List[str]) {
+    via_spawn(label, path, args)
+    via_with(label, path, args)
+    via_fds(label, path, args)
+    via_job(label, path, args)
+    if label != "ok" {
+        via_exec(label, path, args)
+    }
+}
+
+fn main() {
+    let none = List[str]()
+    row("ok", "/usr/bin/true", none)
+    row("missing", "./nope", none)
+    row("noexec", "./bin", none)
+    row("nox", "./nox", none)
+    row("dir", "./dd", none)
+    row("big", "/usr/bin/true", big_args())
+    // Last: where the host lets a file held open for writing run (macOS),
+    // this row's `os_exec` succeeds and the probe is replaced.
+    row("busy", "./busy", none)
+}

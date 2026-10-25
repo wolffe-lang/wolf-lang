@@ -1,0 +1,18 @@
+== nomad Darwin 25.4.0, published 0.2.35 (wolf 0.2.35 (wolfgang, pin cf0c13d))
+-- native, through the pty, argv grep -F \xff
+argv [b'argv/w0235/grep-native', b'-F', b'\xff']
+transcript b'\nthread \'<unnamed>\' (3724487) panicked at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/env.rs:876:51:\ncalled `Result::unwrap()` on an `Err` value: "\\xFF"\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nfatal runtime error: failed to initiate panic, error 5, aborting\n'
+status signal 6
+-- release, through the pty, argv grep -F \xff
+argv [b'argv/w0235/grep-release', b'-F', b'\xff']
+transcript b'\nthread \'<unnamed>\' (3724611) panicked at /rustc/8bab26f4f68e0e26f0bb7960be334d5b520ea452/library/std/src/env.rs:876:51:\ncalled `Result::unwrap()` on an `Err` value: "\\xFF"\nnote: run with `RUST_BACKTRACE=1` environment variable to display a backtrace\nfatal runtime error: failed to initiate panic, error 5, aborting\n'
+status signal 6
+== nomad, trunk + s266 (96b8ae6c, debug build)
+-- native, through the pty, argv grep -F \xff
+argv [b'argv/wtrunk/grep-native', b'-F', b'\xff']
+transcript b'wolf-trap: argument-utf8\n  argument 2 is not UTF-8; read it with env_args_bytes()\n'
+status 134
+-- release, through the pty, argv grep -F \xff
+argv [b'argv/wtrunk/grep-release', b'-F', b'\xff']
+transcript b'wolf-trap: argument-utf8\n  argument 2 is not UTF-8; read it with env_args_bytes()\n'
+status 134

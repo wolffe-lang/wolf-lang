@@ -1,0 +1,44 @@
+s266 waiting for the CPUs 4-7 lock (2026-10-25T05:40:17Z); job s266-m2: bash /home/mfwolffe/lanes/s266/scripts/m2.sh
+== at 12250eec: the row
+wolf run else_fallback_range_refused exit=4
+wolf run: cannot compile this yet — open-ended or end-relative ranges (slicing) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+  --> corpus/rows/else_fallback_range_refused.lu:19:39
+   |
+19 |     let v = rest[rest.find(":=") else 0 + 2..]
+   |                                       ^^^^^^^
+   |
+wolf run else_fallback_paren_slice exit=0
+[ value]
+wolf run else_fallback_bound_slice exit=0
+[ value]
+refusal_site row at the witness commit: exit=101
+thread 'an_else_fallback_range_names_the_fallback_and_says_to_parenthesise' (206) panicked at crates/wolf_driver/tests/refusal_site.rs:189:5:
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 4 filtered out; finished in 0.01s
+== at df29dd01: the fix
+wolf run else_fallback_range_refused exit=4
+wolf run: cannot compile this yet — an open-ended or end-relative range as an `else` fallback (slicing) (pipeline is honest through `resolve`; the conservatism ledger, not a bug in your program)
+  --> corpus/rows/else_fallback_range_refused.lu:19:39
+   |
+19 |     let v = rest[rest.find(":=") else 0 + 2..]
+   |                                       ^^^^^^^
+   |
+  = note: the `else` fallback extends to the end of the expression; parenthesise `(… else 0)`
+fmt --check else_fallback_range_refused exit=0
+wolf run else_fallback_paren_slice exit=0
+[ value]
+fmt --check else_fallback_paren_slice exit=0
+wolf run else_fallback_bound_slice exit=0
+[ value]
+fmt --check else_fallback_bound_slice exit=0
+refusal_site at the fix: exit=101
+test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+lex snapshots exit=0
+decls snapshots exit=0
+lex snapshots rerun exit=0
+decls snapshots rerun exit=0
+?? crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__else_fallback_bound_slice.snap
+?? crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__else_fallback_paren_slice.snap
+?? crates/wolf_lex/tests/snapshots/corpus_snapshots__rows__else_fallback_range_refused.snap
+?? crates/wolf_parse/tests/snapshots/corpus_decls__rows__else_fallback_bound_slice.snap
+?? crates/wolf_parse/tests/snapshots/corpus_decls__rows__else_fallback_paren_slice.snap
+?? crates/wolf_parse/tests/snapshots/corpus_decls__rows__else_fallback_range_refused.snap

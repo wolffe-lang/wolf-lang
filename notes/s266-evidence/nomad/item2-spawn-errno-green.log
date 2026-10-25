@@ -1,0 +1,86 @@
+memgate: free+inactive+speculative = 12584 MiB (floor 8192 MiB)
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/pool.rs:691:22
+    |
+691 |                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |                      ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+691 -                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+691 +                     .try_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:632:38
+    |
+632 |     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |                                      ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+632 -     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+632 +     self_slot(sig).is_some_and(|n| n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:644:23
+    |
+644 |             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |                       ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+644 -             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+644 +             let _ = n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |
+
+
+running 1 test
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/pool.rs:691:22
+    |
+691 |                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |                      ^^^^^^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+help: replace the use of the deprecated method
+    |
+691 -                     .fetch_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+691 +                     .try_update(SeqCst, SeqCst, |u| (u > p.target).then(|| u - 1))
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:632:38
+    |
+632 |     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |                                      ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+632 -     self_slot(sig).is_some_and(|n| n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+632 +     self_slot(sig).is_some_and(|n| n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1)).is_ok())
+    |
+
+warning: use of deprecated method `std::sync::atomic::Atomic::<usize>::fetch_update`: renamed to `try_update` for consistency
+   --> crates/wolf_rt/src/task/stack.rs:644:23
+    |
+644 |             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |                       ^^^^^^^^^^^^
+    |
+help: replace the use of the deprecated method
+    |
+644 -             let _ = n.fetch_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+644 +             let _ = n.try_update(SeqCst, SeqCst, |k| k.checked_sub(1));
+    |
+
+warning: `wolf_rt` (lib) generated 3 warnings (run `cargo fix --lib -p wolf_rt` to apply 3 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+s266 native: every row's number, PASS
+s266 release: every row's number, PASS
+s266 checked: every row's number, PASS
+s266: 2 of the two native tiers ran
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.28s
+
