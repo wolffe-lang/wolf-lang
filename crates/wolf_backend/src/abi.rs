@@ -654,8 +654,8 @@ fn plan_sig_sysv(types: &TypeInterner, sig: &SigData, conv: Conv) -> SigPlan {
                 }
             } else {
                 match scalar_class(types, p.ty) {
-                    Some(RegClass::Int) => int_left -= 1,
-                    Some(RegClass::Sse) => sse_left -= 1,
+                    Some(RegClass::Int) => int_left = (int_left - 1).max(0),
+                    Some(RegClass::Sse) => sse_left = (sse_left - 1).max(0),
                     None => {}
                 }
                 ParamPass::Direct(p.ty)
@@ -873,6 +873,20 @@ mod tests {
         let c = plan_sig(&m.types, &m.sigs[sig], Conv::C, CTarget::SysvX64);
         assert_eq!(c.rets[0], RetPass::Sret { disc_in_reg: false });
         assert_eq!(c.params[4], ParamPass::Memory);
+    }
+
+    #[test]
+    fn exhausted_scalar_bank_does_not_demote_other_class_aggregate() {
+        let mut m = Module::new();
+        let float_pair = m.types.intern(TypeData::Agg(vec![types::F64, types::F64]));
+        let int_pair = m.types.intern(TypeData::Agg(vec![types::I64, types::I64]));
+        for (scalar, count, aggregate) in [(types::I64, 7, float_pair), (types::F64, 9, int_pair)] {
+            let mut params = vec![Param::val(scalar); count];
+            params.push(Param::val(aggregate));
+            let sig = m.make_sig(params, vec![]);
+            let plan = plan_sig(&m.types, &m.sigs[sig], Conv::C, CTarget::SysvX64);
+            assert!(matches!(plan.params.last(), Some(ParamPass::Split(_))));
+        }
     }
 
     #[test]

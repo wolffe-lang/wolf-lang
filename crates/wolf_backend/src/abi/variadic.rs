@@ -4,6 +4,8 @@
 //! These are plans, not a second calling convention: classification
 //! comes from the ordinary C plan, including aggregate rollback.
 
+pub mod x64;
+
 use super::{CTarget, Conv, ParamPass, RegClass, RetPass, Unit, plan_sig};
 use crate::layout;
 use wolf_wir::ir::SigData;
