@@ -5,11 +5,29 @@ set -euo pipefail
 pin=996a3ccdf160923757c4ce6aa474efdffa2135b3
 root=$(git rev-parse --show-toplevel)
 tree=${1:-$root/target/test-clef}
+# s267: the tree must be its OWN checkout. rust-cache restores target/ with
+# what it kept of an earlier run's clone, and in a tree whose .git directory
+# survives but no longer holds a repository, `git -C "$tree"` silently
+# answers the enclosing wolf-lang checkout instead (the pin test below then
+# failed with no output). The default tree is cloned again; a tree the
+# caller named is refused by name, never removed.
+own() {
+    [ "$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" = "$(cd "$1" && pwd -P)" ]
+}
+if [ -d "$tree/.git" ] && ! own "$tree"; then
+    if [ -n "${1:-}" ]; then
+        echo "build-test-clef: $tree has a .git that is not its own repository" >&2
+        exit 1
+    fi
+    echo "build-test-clef: $tree is not a checkout of its own (a restored cache); cloning it again"
+    rm -rf "$tree"
+fi
 if [ ! -d "$tree/.git" ]; then
     git clone --no-checkout https://github.com/wolffe-lang/clef.git "$tree"
     git -C "$tree" checkout --detach "$pin"
 fi
-[ "$(git -C "$tree" rev-parse HEAD)" = "$pin" ]
+head=$(git -C "$tree" rev-parse HEAD)
+[ "$head" = "$pin" ] || { echo "build-test-clef: $tree is at $head, not $pin" >&2; exit 1; }
 git -C "$tree" diff --exit-code HEAD -- src tools/fetch-toolchain wolf-toolchain.toml
 "$tree/tools/fetch-toolchain"
 mkdir -p "$tree/target"
