@@ -2,7 +2,8 @@
 //! manifest's `asm` sources, read for their roster, assembled for the
 //! build's target, and handed to the link or placed beside the object.
 //!
-//! The assembler is the C driver the build already trusts for that
+//! An explicit `--assembler` / `WOLF_AS` uses the as-shaped protocol.
+//! Otherwise the assembler is the C driver the build already trusts for that
 //! target: on the freestanding target, the release tier's clang
 //! (`WOLF_CLANG`, else `clang`) with `--target=x86_64-unknown-none-elf`,
 //! which assembles ELF x86-64 from any host; on a hosted target, the
@@ -90,70 +91,108 @@ pub fn beside(out: &Path, spelled: &str) -> PathBuf {
 /// Assemble `src` into `obj` for `target`. Errors name the source and
 /// the command; a freestanding object that is not ELF x86-64 is refused
 /// (an assembler that ignored `--target` must not reach a kernel link).
-pub fn assemble(spelled: &str, src: &Path, obj: &Path, target: Target) -> Result<(), String> {
+pub fn assemble(
+    spelled: &str,
+    src: &Path,
+    obj: &Path,
+    target: Target,
+    assembler: Option<&Path>,
+) -> Result<(), String> {
     if cfg!(windows) && !target.is_freestanding() {
         return Err(format!(
             "assembly source `{spelled}`: a hosted windows build has no assembler step yet \
              (the link is a COFF linker, not a C driver); target x86_64-unknown-none \
-             assembles with clang from any host"
+             assembles with clang or an explicit assembler from any host"
         ));
     }
-    let (prog, mut args): (String, Vec<String>) = if target.is_freestanding() {
-        let clang = std::env::var("WOLF_CLANG")
-            .ok()
-            .filter(|v| !v.is_empty())
-            .unwrap_or_else(|| "clang".to_string());
-        (clang, vec!["--target=x86_64-unknown-none-elf".to_string()])
+    let selected = selection(assembler, std::env::var_os("WOLF_AS"));
+    let mut command = if let Some(prog) = &selected {
+        let mut command = std::process::Command::new(prog);
+        if target.is_freestanding() || cfg!(target_arch = "x86_64") {
+            command.arg("--64");
+        }
+        command.arg("-o").arg(obj).arg(src);
+        command
     } else {
-        (
-            std::env::var("CC").unwrap_or_else(|_| "cc".to_string()),
-            Vec::new(),
-        )
+        let mut command = if target.is_freestanding() {
+            let clang = std::env::var_os("WOLF_CLANG")
+                .filter(|v| !v.is_empty())
+                .unwrap_or_else(|| "clang".into());
+            let mut command = std::process::Command::new(clang);
+            command.arg("--target=x86_64-unknown-none-elf");
+            command
+        } else {
+            std::process::Command::new(std::env::var_os("CC").unwrap_or_else(|| "cc".into()))
+        };
+        command.arg("-c").arg(src).arg("-o").arg(obj);
+        command
     };
-    args.extend([
-        "-c".to_string(),
-        src.to_string_lossy().into_owned(),
-        "-o".to_string(),
-        obj.to_string_lossy().into_owned(),
-    ]);
-    let run = std::process::Command::new(&prog)
-        .args(&args)
+    let run = command
         .output()
-        .map_err(|e| {
-            format!(
-                "assembly source `{spelled}`: cannot run `{prog}` ({e}); {}",
-                if target.is_freestanding() {
-                    "target x86_64-unknown-none assembles with clang (WOLF_CLANG, else `clang` \
-                     on PATH), the release tier's own toolchain"
-                } else {
-                    "a hosted build assembles with its link's C driver (CC, else `cc`)"
-                }
-            )
-        })?;
+        .map_err(|e| format!("assembly source `{spelled}`: cannot run {command:?} ({e})"))?;
     if !run.status.success() {
         return Err(format!(
-            "assembly source `{spelled}` did not assemble (`{prog} {}`):\n{}",
-            args.join(" "),
+            "assembly source `{spelled}` did not assemble ({command:?}, {}):\n{}",
+            run.status,
             String::from_utf8_lossy(&run.stderr).trim_end()
         ));
     }
-    if target.is_freestanding() {
+    // Preserve the freestanding guard on every host. An explicitly selected
+    // assembler on Linux must also produce the host's ELF relocatable object.
+    if target.is_freestanding() || (selected.is_some() && cfg!(target_os = "linux")) {
+        use object::Object;
         let bytes = std::fs::read(obj)
             .map_err(|e| format!("assembly source `{spelled}`: read {}: {e}", obj.display()))?;
-        // ELF magic, ELFCLASS64, little-endian, e_machine EM_X86_64 (62).
-        let elf_x86_64 = bytes.len() >= 20
-            && bytes[..4] == *b"\x7fELF"
-            && bytes[4] == 2
-            && bytes[5] == 1
-            && u16::from_le_bytes([bytes[18], bytes[19]]) == 62;
-        if !elf_x86_64 {
+        let arch = if target.is_freestanding() || cfg!(target_arch = "x86_64") {
+            object::Architecture::X86_64
+        } else {
+            object::Architecture::Aarch64
+        };
+        let valid = object::File::parse(&*bytes).is_ok_and(|file| {
+            file.format() == object::BinaryFormat::Elf
+                && file.is_64()
+                && file.is_little_endian()
+                && file.architecture() == arch
+                && file.kind() == object::ObjectKind::Relocatable
+        });
+        if !valid {
+            let expected = if arch == object::Architecture::X86_64 {
+                "ELF x86-64"
+            } else {
+                "ELF AArch64"
+            };
             return Err(format!(
-                "assembly source `{spelled}`: `{prog}` did not produce an ELF x86-64 object \
-                 for target x86_64-unknown-none"
+                "assembly source `{spelled}`: {command:?} did not produce an {expected} object \
+                 for target {target:?}"
             ));
         }
     }
     Ok(())
+}
+
+/// Selection is pure so precedence tests never mutate the process environment.
+fn selection(cli: Option<&Path>, env: Option<std::ffi::OsString>) -> Option<PathBuf> {
+    cli.map(Path::to_path_buf)
+        .or_else(|| env.filter(|value| !value.is_empty()).map(PathBuf::from))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn assembler_cli_over_environment_over_default() {
+        assert_eq!(
+            selection(Some(Path::new("cli tool")), Some("env tool".into())),
+            Some("cli tool".into())
+        );
+        assert_eq!(
+            selection(None, Some("env tool".into())),
+            Some("env tool".into())
+        );
+        assert_eq!(selection(None, Some("".into())), None);
+        assert_eq!(selection(None, None), None);
+    }
 }
 
 /// The roster of the `wolf.pkg` beside `entry`, for the checked

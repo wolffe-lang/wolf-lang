@@ -40,7 +40,7 @@ blake3.workspace = true
 # no new crate enters the graph.
 rayon.workspace = true
 
-[dev-dependencies]
+# as02a validates assembler output before it reaches the linker.
 # s30 debug tests: parse the built executable's ELF sections to assert
 # .debug_* presence (the ledger's readelf-style check, tool-free).
 # kw12: `archive` reads the freestanding runtime's members
