@@ -391,6 +391,108 @@ mod unix {
         }
     }
 
+    /// Run `binary` with `args` on a fresh pseudo-terminal (its own
+    /// session, the terminal its controlling one) and read the terminal
+    /// until the program is gone: the path an interactive user takes.
+    fn pty_run(binary: &Path, args: &[&std::ffi::OsStr]) -> (std::process::ExitStatus, String) {
+        use std::io::Read as _;
+        use std::os::fd::FromRawFd as _;
+        use std::os::unix::fs::OpenOptionsExt as _;
+        use std::process::Stdio;
+        // SAFETY: pty calls on descriptors this test owns; the child's
+        // hook makes only async-signal-safe calls.
+        unsafe {
+            let m = libc::posix_openpt(libc::O_RDWR | libc::O_NOCTTY);
+            assert!(m >= 0, "posix_openpt");
+            assert_eq!(libc::grantpt(m), 0, "grantpt");
+            assert_eq!(libc::unlockpt(m), 0, "unlockpt");
+            let name = std::ffi::CStr::from_ptr(libc::ptsname(m))
+                .to_string_lossy()
+                .into_owned();
+            let mut master = std::fs::File::from_raw_fd(m);
+            let slave = std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .custom_flags(libc::O_NOCTTY)
+                .open(&name)
+                .expect("open the pty's slave");
+            let reader = std::thread::spawn(move || {
+                let mut text = Vec::new();
+                let mut b = [0u8; 4096];
+                loop {
+                    match master.read(&mut b) {
+                        Ok(0) | Err(_) => return text,
+                        Ok(n) => text.extend_from_slice(&b[..n]),
+                    }
+                }
+            });
+            let mut cmd = Command::new(binary);
+            cmd.args(args)
+                .stdin(Stdio::from(slave.try_clone().expect("dup")))
+                .stdout(Stdio::from(slave.try_clone().expect("dup")))
+                .stderr(Stdio::from(slave));
+            cmd.pre_exec(|| {
+                if libc::setsid() < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                if libc::ioctl(0, libc::TIOCSCTTY as _, 0) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+            let status = cmd.status().expect("run under the pty");
+            // The last slave copy goes with the command; the master then
+            // reads the end of the transcript.
+            drop(cmd);
+            let text = reader.join().expect("pty reader");
+            (status, String::from_utf8_lossy(&text).replace('\r', ""))
+        }
+    }
+
+    /// wolf-lang#923 (scent#8, ct03): on macOS 0.2.35's native process
+    /// aborted in Rust's `env::args` (`called Result::unwrap() on an Err
+    /// value: "\xFF"`, SIGABRT) before the program could read a byte
+    /// argument. `[os.env.argv]` says what the text reader owes instead,
+    /// and s261 made the runtime do it: the trap by index, exit 134, no
+    /// Rust panic. Asked here through a terminal, as a user meets it, on
+    /// both native tiers; the byte reader beside it keeps the byte.
+    #[test]
+    fn a_terminal_invocation_with_a_non_utf8_argument_traps_by_index() {
+        if isolated("unix::a_terminal_invocation_with_a_non_utf8_argument_traps_by_index") {
+            return;
+        }
+        let bad = std::ffi::OsString::from_vec(b"\xff".to_vec());
+        let ok = std::ffi::OsStr::new("-F");
+        for (tier, release) in [("pty-native", false), ("pty-release", true)] {
+            let dir = root(tier);
+            let file = source(&dir, "fn main() { print(\"{env_args().len}\") }\n");
+            let binary = build(&file, release);
+            let (status, text) = pty_run(&binary, &[ok, &bad]);
+            assert_eq!(status.code(), Some(134), "{tier}: {status:?} {text:?}");
+            assert!(
+                text.contains("wolf-trap: argument-utf8\n"),
+                "{tier}: {text:?}"
+            );
+            assert!(
+                text.contains("argument 2 is not UTF-8; read it with env_args_bytes()"),
+                "{tier}: {text:?}"
+            );
+            assert!(!text.contains("panicked"), "{tier}: {text:?}");
+            assert!(!text.contains("fatal runtime error"), "{tier}: {text:?}");
+            source(
+                &dir,
+                "fn main() {\n    let a = env_args_bytes()\n    print(\"{a.len} {a[2].len} {a[2][0] as int}\")\n}\n",
+            );
+            let binary = build(&file, release);
+            let (status, text) = pty_run(&binary, &[ok, &bad]);
+            assert!(status.success(), "{tier}: {status:?} {text:?}");
+            assert_eq!(text, "3 1 255\n", "{tier}");
+            eprintln!(
+                "s266 {tier}: a terminal's byte argument traps by index or reads as bytes, PASS"
+            );
+        }
+    }
+
     #[test]
     fn non_utf8_environment_keeps_its_existing_rows() {
         if isolated("unix::non_utf8_environment_keeps_its_existing_rows") {
