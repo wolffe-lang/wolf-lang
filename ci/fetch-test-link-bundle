@@ -1,0 +1,35 @@
+#!/usr/bin/env python3
+"""Fetch the digest-pinned real-linker inputs (ligature#13); verify cached bytes too."""
+import hashlib
+import os
+import pathlib
+import tarfile
+import urllib.request
+
+SHA = "6f99a2794da54b2dd85f06713d736b27862a7cd0da9e28bd940d975a4603a1d1"
+NAME = "ld02-musl-link-bundle.tar.gz"
+URL = "https://github.com/wolffe-lang/ligature/releases/download/link-bundle-2026-10-25/" + NAME
+root = pathlib.Path(__file__).resolve().parent.parent
+cache = root / ".link-bundle-cache"
+cache.mkdir(exist_ok=True)
+archive = cache / NAME
+if not archive.exists():
+    partial = cache / (NAME + ".partial")
+    urllib.request.urlretrieve(URL, partial)
+    partial.replace(archive)
+for _ in range(2):
+    with archive.open("rb") as stream:
+        actual = hashlib.file_digest(stream, "sha256").hexdigest()
+    if actual != SHA:
+        raise SystemExit(f"REFUSED {NAME}: sha256 {actual}, expected {SHA}")
+    print(f"{SHA}  {archive}", flush=True)
+stage = root / "target/test-link-bundle"
+stage.mkdir(parents=True, exist_ok=True)
+with tarfile.open(archive) as bundle:
+    bundle.extractall(stage, filter="data")
+for name in ("libwolf_rt.a", "sysroot/crt1.o", "sysroot/crti.o", "sysroot/crtn.o", "sysroot/libc.a", "sysroot/libunwind.a"):
+    if not (stage / name).is_file():
+        raise SystemExit(f"REFUSED missing bundle input {name}")
+if os.environ.get("GITHUB_ENV"):
+    with open(os.environ["GITHUB_ENV"], "a") as env:
+        env.write(f"WOLF_TEST_LIGATURE_RT={stage}/libwolf_rt.a\nLIGATURE_SYSROOT={stage}/sysroot\n")

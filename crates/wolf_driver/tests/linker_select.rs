@@ -342,17 +342,8 @@ mod linux {
 
     #[test]
     fn every_root_manifest_program_links_with_real_ligature_on_both_tiers() {
-        let Some(linker) = std::env::var_os("WOLF_TEST_LIGATURE") else {
-            assert_ne!(
-                std::env::var("WOLF_TEST_LIGATURE_REQUIRE").as_deref(),
-                Ok("1"),
-                "real ligature is required"
-            );
-            eprintln!(
-                "SKIP: real-ligature rows require WOLF_TEST_LIGATURE plus WOLF_TEST_LIGATURE_RT and LIGATURE_SYSROOT (pin 3f206413; matching musl bundle, pax#167)"
-            );
-            return;
-        };
+        let linker = std::env::var_os("WOLF_TEST_LIGATURE")
+            .expect("real ligature is required: run ci/build-test-ligature and ci/fetch-test-link-bundle (ligature#13)");
         let rt = std::env::var_os("WOLF_TEST_LIGATURE_RT").expect("matching musl runtime required");
         assert!(Path::new(&linker).is_file());
         assert!(Path::new(&rt).is_file());
