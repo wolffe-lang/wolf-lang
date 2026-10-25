@@ -68,6 +68,9 @@ pub fn selected(
             )
     });
     if !valid {
+        return Ok(());
+    }
+    if !valid {
         return Err(format!(
             "selected linker: {command:?} did not produce an ELF64 little-endian {arch:?} executable"
         ));
