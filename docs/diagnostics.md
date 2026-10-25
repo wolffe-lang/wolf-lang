@@ -1686,7 +1686,7 @@ An ordinary wolf function has fixed arity; an ellipsis cannot turn it
 into a variadic function. Use an export if a C-compatible variadic
 entry is intended, or pass a typed container to an ordinary function.
 
-Fixtures: crates/wolf_parse/tests/snapshots/variadic__e0822_variadic_position.snap
+Fixtures: crates/wolf_parse/tests/snapshots/corpus_decls__membrane__variadic_position.snap, crates/wolf_parse/tests/snapshots/variadic__e0822_variadic_position.snap
 
 ## E0823 — a variadic function used as a function value
 
@@ -1721,11 +1721,12 @@ Fixtures: crates/wolf_sema/tests/snapshots/typecheck_diagnostics__e0825_second_s
 ## E0826 — C variadic membranes on an unsupported target
 
 C variadic calls, definitions and `VaList` operations currently use the
-Linux x86-64 System V ABI only. AAPCS64, Apple arm64 and Windows x64
+Linux x86-64 or x86_64-unknown-none System V ABI. AAPCS64, Apple arm64 and Windows x64
 have different variable-argument conventions; they cannot use this
 record or prologue. Select x86-64 Linux, or provide a fixed-arity C
-wrapper on the other target. FreeBSD and freestanding targets are also
-refused until their own variadic witnesses have been validated.
+wrapper on the other target. FreeBSD remains refused. The freestanding
+target keeps its floating-value ban; variadic entry saves of vector state
+are guarded by the incoming C caller's vector-register count.
 
 Fixtures: crates/wolf_sema/tests/snapshots/attr_diagnostics__e0826_apple_variadic.snap
 

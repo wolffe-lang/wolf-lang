@@ -11934,6 +11934,16 @@ impl<'t> Machine<'t> {
             ).into_boxed_str());
             return self.refuse(construct, e.span);
         }
+        if let Some(cs) = cs.filter(|c| c.is_va_builtin()) {
+            let construct = match cs.callee.as_str() {
+                "va_start" => "the va_start C variadic cursor builtin on the checked machine",
+                "va_arg" => "the va_arg C variadic cursor builtin on the checked machine",
+                "va_copy" => "the va_copy C variadic cursor builtin on the checked machine",
+                "va_end" => "the va_end C variadic cursor builtin on the checked machine",
+                _ => unreachable!("closed builtin set"),
+            };
+            return self.refuse(construct, e.span);
+        }
         // C intrinsics (the is04 modelled set).
         if cs.map(|c| c.c_call).unwrap_or(false) {
             let name = cs.expect("c_call has sig").callee.clone();

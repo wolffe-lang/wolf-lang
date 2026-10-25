@@ -48,6 +48,7 @@ impl ValId {
 pub enum CtType {
     Unit,
     Prim(Prim),
+    VaList,
     Tuple(Vec<CtType>),
     /// A nominal struct/enum by its semantic identity.
     Nominal {
@@ -66,11 +67,61 @@ pub enum CtType {
 }
 
 impl CtType {
+    fn contains_va_list(&self) -> bool {
+        match self {
+            CtType::VaList => true,
+            CtType::Tuple(types) => types.iter().any(Self::contains_va_list),
+            CtType::Synth { fields } => fields.iter().any(|(_, ty)| ty.contains_va_list()),
+            _ => false,
+        }
+    }
+
+    fn encode_new_type(&self, out: &mut Vec<u8>) {
+        let text = |out: &mut Vec<u8>, s: &str| {
+            out.extend_from_slice(&(s.len() as u64).to_le_bytes());
+            out.extend_from_slice(s.as_bytes());
+        };
+        match self {
+            CtType::VaList => out.push(0),
+            CtType::Unit => out.push(1),
+            CtType::Prim(p) => {
+                out.push(2);
+                text(out, p.name());
+            }
+            CtType::Tuple(types) => {
+                out.push(3);
+                out.extend_from_slice(&(types.len() as u64).to_le_bytes());
+                for ty in types {
+                    ty.encode_new_type(out);
+                }
+            }
+            CtType::Nominal { module, name } => {
+                out.push(4);
+                out.extend_from_slice(&module.to_le_bytes());
+                text(out, name);
+            }
+            CtType::Synth { fields } => {
+                out.push(5);
+                out.extend_from_slice(&(fields.len() as u64).to_le_bytes());
+                for (name, ty) in fields {
+                    text(out, name);
+                    ty.encode_new_type(out);
+                }
+            }
+            CtType::TypeTy => out.push(6),
+            CtType::Opaque(name) => {
+                out.push(7);
+                text(out, name);
+            }
+        }
+    }
+
     /// Render as source would spell it (diagnostics + hashes).
     pub fn render(&self) -> String {
         match self {
             CtType::Unit => "()".to_string(),
             CtType::Prim(p) => p.name().to_string(),
+            CtType::VaList => "VaList".to_string(),
             CtType::Tuple(ts) => {
                 let parts: Vec<String> = ts.iter().map(CtType::render).collect();
                 format!("({})", parts.join(", "))
@@ -231,7 +282,12 @@ impl ValueArena {
             }
             ValueKind::Type(t) => {
                 out.push(9);
-                out.extend_from_slice(t.render().as_bytes());
+                if t.contains_va_list() {
+                    out.push(0xff); // not a UTF-8 source-name byte
+                    t.encode_new_type(&mut out);
+                } else {
+                    out.extend_from_slice(t.render().as_bytes());
+                }
             }
             ValueKind::Range { lo, hi } => {
                 out.push(10);
@@ -397,6 +453,23 @@ mod tests {
             b.intern(ValueKind::Tuple(vec![x2, s]))
         };
         assert_eq!(a.content_hash(t1), b.content_hash(t2));
+    }
+
+    #[test]
+    fn va_list_type_hashes_do_not_alias_a_shadowing_nominal() {
+        let mut arena = ValueArena::new();
+        let nominal = CtType::Nominal {
+            module: 0,
+            name: "VaList".into(),
+        };
+        let builtin = arena.ty(CtType::VaList);
+        let shadow = arena.ty(nominal.clone());
+        assert_eq!(arena.render(builtin), arena.render(shadow));
+        assert_ne!(arena.content_hash(builtin), arena.content_hash(shadow));
+        let left = arena.ty(CtType::Tuple(vec![CtType::VaList, nominal.clone()]));
+        let right = arena.ty(CtType::Tuple(vec![nominal, CtType::VaList]));
+        assert_eq!(arena.render(left), arena.render(right));
+        assert_ne!(arena.content_hash(left), arena.content_hash(right));
     }
 
     #[test]

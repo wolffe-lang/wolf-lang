@@ -234,7 +234,7 @@ pub fn asm_roster_check(
             continue;
         };
         for (span, call) in &body.calls {
-            if !call.c_call || call.callee.starts_with("c.") {
+            if !call.c_call || call.callee.starts_with("c.") || call.is_va_builtin() {
                 continue;
             }
             let name = call.callee.rsplit('.').next().unwrap_or(&call.callee);

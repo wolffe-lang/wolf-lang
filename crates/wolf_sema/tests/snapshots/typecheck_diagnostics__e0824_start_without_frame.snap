@@ -8,3 +8,5 @@ error[E0824]: `va_start` needs the current function's C variadic frame
 1 | fn f() { unsafe { let ap = va_start() } }
   |                            ^^^^^^^^^^
   |
+  = note: Move `va_start()` into the function with `...`, or pass a live `VaList` into this
+    consumer.

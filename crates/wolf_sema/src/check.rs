@@ -139,6 +139,19 @@ pub struct CallSig {
     pub variadic: bool,
 }
 
+impl CallSig {
+    /// Compiler-owned raw cursor operations are not external symbols.
+    /// A same-named declared function or local function value is NOT one.
+    pub fn is_va_builtin(&self) -> bool {
+        self.c_call
+            && self.decl_span.is_none()
+            && matches!(
+                self.callee.as_str(),
+                "va_start" | "va_arg" | "va_copy" | "va_end"
+            )
+    }
+}
+
 /// Which rule admitted an `as` cast (s17). `Numeric` lowers to a real
 /// conversion in c05; `Adapter` and `Identity` are layout no-ops (the
 /// D28 layout-identity fact).
@@ -5228,6 +5241,14 @@ impl<'a> Checker<'a> {
             let unit = self.lo.table.unit();
             return Ok(self.lo.table.intern(TyKind::Fn(vec![str_], unit)));
         }
+        if name == "VaList" {
+            if let Some(d) =
+                crate::attrs::variadic_target_diagnostic(&crate::attrs::build_target(), e.span)
+            {
+                self.diags.push(d);
+            }
+            return Ok(self.lo.table.intern(TyKind::TypeTy));
+        }
         if prelude::in_prelude(&name) {
             return Err(NotYet {
                 construct: "a std/prelude stub without a signature",
@@ -5262,7 +5283,7 @@ impl<'a> Checker<'a> {
                         format!(
                             "`{name}` is variadic — call it by name, not through a function value"
                         ),
-                    ));
+                    ).with_note("Write a named call with its arguments, or write a wrapper with a fixed parameter list."));
                     return Ok(self.error_ty());
                 }
                 if !f.generics.is_empty() {
@@ -6772,6 +6793,16 @@ impl<'a> Checker<'a> {
         if is_type_kind(node.kind) {
             return Ok(self.lower_ty(node));
         }
+        // Brackets are expression-shaped: `*u8` parses as a prefix
+        // expression here, but at a generic type argument it names a
+        // raw-pointer type. Resolve the pointee as a type, never a value.
+        if let Some(prefix) = PrefixExpr::cast(node)
+            && prefix.op().is_some_and(|op| op.kind == SyntaxKind::Star)
+        {
+            let pointee = prefix.operand().ok_or_else(ambiguous)?;
+            let pointee = self.bracket_type_arg(pointee)?;
+            return Ok(self.lo.table.intern(TyKind::Ptr(pointee)));
+        }
         // A nested builtin instantiation (`channel[List[int]]`): the
         // element spells as an expression (D29), so the bracket shape
         // recurses here.
@@ -6932,6 +6963,15 @@ impl<'a> Checker<'a> {
                 Ok(self.lo.named_item_type(module, &name, self.file, node))
             }
             crate::sig::TypeHead::Poisoned => Ok(self.error_ty()),
+            crate::sig::TypeHead::Unknown if name == "VaList" => {
+                if let Some(d) = crate::attrs::variadic_target_diagnostic(
+                    &crate::attrs::build_target(),
+                    node.span,
+                ) {
+                    self.diags.push(d);
+                }
+                Ok(self.lo.table.intern(TyKind::VaList))
+            }
             crate::sig::TypeHead::Unknown if self.bracket_type_name_known(&name) => Err(decline(
                 "a known name without an admitted type-argument form",
             )),
@@ -8385,11 +8425,12 @@ impl<'a> Checker<'a> {
                         codes::E0824,
                         e.span,
                         "`va_start` needs the current function's C variadic frame",
-                    ));
+                    ).with_note("Move `va_start()` into the function with `...`, or pass a live `VaList` into this consumer."));
                 } else if let Some(first) = self.va_start_seen {
                     self.diags.push(Diagnostic::error(codes::E0825, e.span,
                         "`va_start` is already spelled in this function — use `va_copy` for another cursor")
-                        .with_secondary(first, "the first start is here"));
+                        .with_secondary(first, "the first start is here")
+                        .with_note("Keep one `va_start()` and make another cursor with `va_copy(ap)`; end each cursor before returning."));
                 } else {
                     self.va_start_seen = Some(e.span);
                 }

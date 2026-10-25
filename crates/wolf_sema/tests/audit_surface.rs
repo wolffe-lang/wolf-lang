@@ -143,3 +143,36 @@ fn e1306_a_call_off_the_assembly_roster() {
     let rendered = render_human(&diags[0], &sources, &RenderOptions::default());
     insta::assert_snapshot!("audit_e1306_off_roster", rendered);
 }
+
+#[test]
+fn variadic_builtins_are_not_assembly_symbols() {
+    let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-none");
+    let res = resolve(&[(
+        &[],
+        "main.lu",
+        "export fn sum(n: i32, ...) -> i64 { unsafe { var ap = va_start(); var cp = va_copy(ap); let x = va_arg[i64](mut cp); va_end(mut cp); va_end(mut ap); x } }\n",
+    )]);
+    let tc = wolf_sema::typecheck_package_with(&res.package, true);
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+    assert!(audit::asm_roster_check(&tc, &[], &[], &["probe.S".into()]).is_empty());
+    let mut loader = MemoryLoader::new("shadow");
+    loader.add_file(
+        &[],
+        "main.lu",
+        "extern \"c\" fn va_start() -> int\nfn main() -> int { unsafe { va_start() } }\n",
+    );
+    let res = resolve_package_with(&mut loader, &AliasTable::default(), true).unwrap();
+    let tc = wolf_sema::typecheck_package_with(&res.package, true);
+    let diagnostics = audit::asm_roster_check(&tc, &[], &[], &["probe.S".into()]);
+    assert_eq!(diagnostics.len(), 1);
+    assert_eq!(
+        diagnostics[0].code.as_str(),
+        "E1306",
+        "a declared extern is still on the roster"
+    );
+}

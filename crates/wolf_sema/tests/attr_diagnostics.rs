@@ -214,7 +214,6 @@ fn e0826_variadic_target_refusal() {
         "aarch64-unknown-linux-gnu",
         "x86_64-pc-windows-msvc",
         "x86_64-unknown-freebsd",
-        "x86_64-unknown-none",
     ] {
         let _target = wolf_sema::attrs::enter_build_target(target);
         let out = render_attrs("extern \"c\" fn f(n: i32, ...)\n");
