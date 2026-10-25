@@ -941,6 +941,8 @@ fn a_str_method_outside_the_set_comes_from_std_str() {
     )
     .expect("write fixture");
     let out = Command::new(wolf())
+        // This row promises no configured std; the test runner may have one.
+        .env_remove("WOLF_STD")
         .arg("conform-run")
         .arg(&entry)
         .args(["--json", "--checked"])
@@ -972,6 +974,8 @@ fn a_str_method_outside_the_set_comes_from_std_str() {
     );
     // And `wolf build`'s own voice — the line the maintainer reads.
     let out = Command::new(wolf())
+        // This row promises no configured std; the test runner may have one.
+        .env_remove("WOLF_STD")
         .arg("build")
         .arg(&entry)
         .arg("-o")
@@ -987,6 +991,66 @@ fn a_str_method_outside_the_set_comes_from_std_str() {
             ),
         "build names the method and the std root: {stderr}"
     );
+}
+
+/// With a configured home, the same spelling is a missing method (E0403),
+/// not an unconfigured-home error (E0301). Pin both the protocol and CLI
+/// diagnostics independently of the runner's WOLF_STD or a sibling checkout.
+#[test]
+fn a_missing_str_method_with_a_configured_home_is_e0403() {
+    let dir = Path::new(env!("CARGO_TARGET_TMPDIR")).join("s263_str_home_missing_method");
+    let root = dir.join("std");
+    std::fs::create_dir_all(root.join("str")).expect("mkdir std.str");
+    std::fs::write(
+        root.join("str/str.lu"),
+        "pub fn identity(s: str) -> str { s }\n",
+    )
+    .expect("write std.str without to_float");
+    let entry = dir.join("main.lu");
+    std::fs::write(
+        &entry,
+        "fn main() -> !int {\n    let x = \"3.5\".to_float() else 0.0\n    print(\"{x}\")\n    0\n}\n",
+    )
+    .expect("write fixture");
+    for protocol in [true, false] {
+        let mut cmd = Command::new(wolf());
+        cmd.env("WOLF_STD", &root);
+        if protocol {
+            cmd.arg("conform-run")
+                .arg(&entry)
+                .args(["--json", "--checked"]);
+        } else {
+            cmd.arg("build")
+                .arg(&entry)
+                .arg("-o")
+                .arg(dir.join("never-linked"));
+        }
+        let out = cmd.output().expect("wolf runs");
+        if protocol {
+            assert!(
+                out.status.success(),
+                "{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+            let rec: serde_json::Value = serde_json::from_slice(&out.stdout).expect("a record");
+            assert_eq!(rec["verdict"], "fail(E0403)");
+            assert_eq!(rec["phase_reached"], "typecheck");
+            assert_eq!(rec["diagnostics"].as_array().unwrap().len(), 1);
+            assert_eq!(rec["diagnostics"][0]["code"], "E0403");
+            assert!(rec["x-unsupported-construct"].is_null());
+        } else {
+            assert_eq!(out.status.code(), Some(2));
+        }
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("error[E0403]: `str` has no method named `to_float`"),
+            "{stderr}"
+        );
+        assert!(
+            stderr.contains("std.str") && !stderr.contains("no standard library is configured"),
+            "{stderr}"
+        );
+    }
 }
 
 // ---------------------------------------- s142: fs_fstat (#261) --
