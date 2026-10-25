@@ -18,8 +18,17 @@ const RT_STUB: &str = r#"
 #include <stdio.h>
 #include <stdlib.h>
 
-/* Startup ABI only; actual guard faults are the driver's isolated tests. */
-void __wolf_rt_stack_start(void) {}
+/* Startup ABI only; actual guard faults are the driver's isolated tests.
+   s267 (`[abi.target.main]`): the shim's first call hands over the C
+   entry's own arguments, so argv ends where argc says (ISO C: argv[argc]
+   is a null pointer) and the environment array is there; anything else
+   is the shim passing something other than main's parameters. */
+void __wolf_rt_main_start(int argc, char **argv, char **envp) {
+    if (argc < 1 || argv == NULL || argv[argc] != NULL || envp == NULL) {
+        fprintf(stderr, "wolf-entry: main's arguments did not arrive\n");
+        exit(97);
+    }
+}
 
 void __wolf_rt_trap(int kind) {
     const char *name =
