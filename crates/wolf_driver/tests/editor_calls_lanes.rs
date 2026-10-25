@@ -5,7 +5,7 @@
 //!
 //! Each witness runs on the checked machine and lupin under
 //! `conform-run`, and as native and release binaries run directly — on
-//! linux the binaries again under `taskset -c 0-3` (wolf-lang#570) — and
+//! linux the binaries again under `taskset` on four CPUs of the allocation (wolf-lang#570) — and
 //! every machine's standard output is printed, so a `--nocapture` log is
 //! the table. Nothing here is signalled, faulted or forked: the fault
 //! shim of the save's witness ends the program by `_exit` at a storage
@@ -18,6 +18,7 @@
 //! (wolf-interp#268).
 
 mod lane_exit;
+mod test_cpus;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -137,17 +138,6 @@ fn build(entry: &Path, dir: &Path, stem: &str, release: bool) -> Option<PathBuf>
     Some(exe)
 }
 
-/// `taskset` on linux, from PATH (NixOS keeps it outside `/usr/bin`).
-fn taskset() -> Option<PathBuf> {
-    if !cfg!(target_os = "linux") {
-        return None;
-    }
-    let path = std::env::var_os("PATH")?;
-    std::env::split_paths(&path)
-        .map(|d| d.join("taskset"))
-        .find(|p| p.is_file())
-}
-
 /// The sibling lupin, found exactly as `pairing.rs` finds it, or a loud
 /// skip — a failure under `WOLF_PAIRING_REQUIRE_SIBLING`.
 fn lupin_or_skip() -> Option<PathBuf> {
@@ -234,7 +224,7 @@ fn judge_lupin(obs: &Obs, name: &str, want: &str, calls: &[&str]) {
 
 /// `entry` on every machine, in `dir`: the checked machine and lupin
 /// under `conform-run`, the native and release binaries run directly
-/// (and under `taskset -c 0-3` on linux). Each stdout is held to `want`
+/// (and under `taskset` on four CPUs of the allocation on linux). Each stdout is held to `want`
 /// as `check` reads it; lupin 0.1.54 and 0.1.55 to the refusal of `call`.
 fn every_lane(entry: &Path, dir: &Path, call: &[&str], check: &dyn Fn(&str, &str)) -> String {
     let name = entry.file_name().unwrap().to_string_lossy().to_string();
@@ -267,10 +257,8 @@ fn every_lane(entry: &Path, dir: &Path, call: &[&str], check: &dyn Fn(&str, &str
             continue;
         };
         let mut runs = vec![(tier.to_string(), Command::new(&exe))];
-        if let Some(t) = taskset() {
-            let mut c = Command::new(t);
-            c.args(["-c", "0-3"]).arg(&exe);
-            runs.push((format!("{tier} taskset -c 0-3"), c));
+        if let Some(pin) = test_cpus::pin(4, module_path!()) {
+            runs.push((format!("{tier} {}", pin.label()), pin.command(&exe)));
         }
         for (lane, cmd) in runs {
             let out = run_in(cmd, dir);
