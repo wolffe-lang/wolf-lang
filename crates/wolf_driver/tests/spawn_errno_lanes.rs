@@ -258,19 +258,17 @@ fn every_spawn_and_a_failed_exec_carry_the_hosts_number() {
         got.push_str(l);
         got.push('\n');
     }
+    let replaced = cfg!(target_os = "macos");
     match &record {
         Some(rec) => {
             assert!(
-                cfg!(not(target_os = "macos")),
+                !replaced,
                 "checked: macOS's busy exec should have replaced the machine: {rec}"
             );
             assert_eq!(rec["verdict"], "exit(0)", "checked: {rec}");
             got.push_str(rec["stdout_inline"].as_str().unwrap_or(""));
         }
-        None => assert!(
-            cfg!(target_os = "macos"),
-            "checked: no record on linux: {stdout}"
-        ),
+        None => assert!(replaced, "checked: no record on linux: {stdout}"),
     }
     same("checked", &got, &want);
     eprintln!("s266 checked: every row's number, PASS");
