@@ -185,7 +185,7 @@ pub unsafe extern "C" fn __wolf_rt_env_arg0(out: i64) {
 pub extern "C" fn __wolf_rt_env_args() -> i64 {
     let hdr = crate::list::new_list(16);
     for (index, a) in arguments().iter().enumerate().skip(1) {
-        push_str(hdr, argument_text(&a, index));
+        push_str(hdr, argument_text(a, index));
     }
     hdr as i64
 }
