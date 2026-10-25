@@ -7,6 +7,7 @@ use std::process::{Command, ExitCode};
 use std::time::Instant;
 
 use xtask::corpus::{self, Directives};
+use xtask::release::{self as rel, ReadBack};
 use xtask::stats;
 
 mod bench_t1;
@@ -84,6 +85,8 @@ fn main() -> ExitCode {
         Some("fuzz-smoke") => fuzz_smoke(),
         Some("fmt-fuzz") => fmt_fuzz(&args[1..]),
         Some("dist") => dist(),
+        Some("dist-rt") => dist_rt(&args[1..]),
+        Some("release-readback") => release_readback_cmd(&args[1..]),
         Some("rt-none") => match rt_none() {
             Ok(_) => ExitCode::SUCCESS,
             Err(()) => ExitCode::FAILURE,
@@ -103,7 +106,7 @@ fn main() -> ExitCode {
         Some("prelude-diff") => prelude_diff_cmd(&args[1..]),
         _ => {
             eprintln!(
-                "usage: cargo xtask <ci [--shard <name>] [--plan]|deps-check|corpus|peel|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|release-notes|spec-extract|conformance|differ|lane-coverage|print-gate|diag-catalog|doc-catalog|fmt-lu|fmt-fixpoint|audit-surface|midend-rate|prelude-diff>"
+                "usage: cargo xtask <ci [--shard <name>] [--plan]|deps-check|corpus|peel|bench|bench-gates|fuzz-smoke|fmt-fuzz|dist|dist-rt|release-readback|release-notes|spec-extract|conformance|differ|lane-coverage|print-gate|diag-catalog|doc-catalog|fmt-lu|fmt-fixpoint|audit-surface|midend-rate|prelude-diff>"
             );
             eprintln!(
                 "       cargo xtask release-notes <TAG> [--out FILE]\n\
@@ -5742,6 +5745,320 @@ fn dist() -> ExitCode {
         }
         Err(e) => {
             eprintln!("dist: smoke — cannot run {}: {e}", hello.display());
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// `cargo xtask dist-rt [--target x86_64-unknown-linux-musl]` (s266,
+/// wolf-lang#935): the musl runtime archive the release publishes beside
+/// the host archives — `libwolf_rt.a` for the target, built with PAX's
+/// `tools/mkwolf` recipe ([`rel::musl_rustflags`]; the module doc of
+/// `xtask::release` says why each flag), staged as
+/// `target/dist/wolf-rt-<version>-<target>/` with `LICENSE`,
+/// `LICENSE-EXCEPTION` and `SHA256SUMS`, tarred beside it, and the
+/// release body's section written to `<stem>.notes.md` with both digests.
+/// The target must be installed (`rustup target add`); a build that
+/// still asks for one of glibc's large-file names is refused, because it
+/// would be the GNU archive under another name.
+fn dist_rt(args: &[String]) -> ExitCode {
+    let mut target = rel::MUSL_TARGET.to_string();
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--target" => match it.next() {
+                Some(t) => target = t.clone(),
+                None => {
+                    eprintln!("dist-rt: --target needs a triple");
+                    return ExitCode::from(2);
+                }
+            },
+            other => {
+                eprintln!("dist-rt: unknown argument {other}");
+                return ExitCode::from(2);
+            }
+        }
+    }
+    if target != rel::MUSL_TARGET {
+        eprintln!(
+            "dist-rt: only {} is built (wolf-lang#935); {target} is not",
+            rel::MUSL_TARGET
+        );
+        return ExitCode::from(2);
+    }
+    let version = env!("CARGO_PKG_VERSION");
+    let rust = std::fs::read_to_string("rust-toolchain.toml")
+        .ok()
+        .and_then(|t| {
+            t.lines().find_map(|l| {
+                l.trim()
+                    .strip_prefix("channel")
+                    .and_then(|r| r.split('"').nth(1).map(str::to_string))
+            })
+        })
+        .unwrap_or_else(|| "unknown".to_string());
+    let src = std::fs::canonicalize(".").expect("the checkout");
+    let tdir = src.join("target/dist-rt");
+    let registry = std::env::var_os("CARGO_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cargo")))
+        .expect("CARGO_HOME or HOME");
+    let flags = rel::musl_rustflags(
+        &src.to_string_lossy(),
+        &tdir.to_string_lossy(),
+        &registry.to_string_lossy(),
+    );
+    eprintln!("dist-rt: RUSTFLAGS={flags}");
+    let mut build = Command::new("cargo");
+    build
+        .args(["build", "--release", "--locked", "--target", &target])
+        .args(["-p", "wolf_driver", "-p", "wolf_rt", "-p", "wolf_cimport"])
+        .env("CARGO_TARGET_DIR", &tdir)
+        .env("RUSTFLAGS", &flags)
+        .env_remove("CARGO_ENCODED_RUSTFLAGS");
+    for (k, v) in version_stamp() {
+        build.env(k, v);
+    }
+    if !build.status().map(|s| s.success()).unwrap_or(false) {
+        eprintln!(
+            "dist-rt: the {target} build failed (is the target installed? `rustup target add {target}`)"
+        );
+        return ExitCode::FAILURE;
+    }
+    let lib = tdir.join(&target).join("release/libwolf_rt.a");
+    let Ok(lib_bytes) = std::fs::metadata(&lib).map(|m| m.len()) else {
+        eprintln!("dist-rt: the build left no {}", lib.display());
+        return ExitCode::FAILURE;
+    };
+    // The glibc-only names, by `nm -u` (undefined symbols): the archive
+    // ligature's link failed on asked for `open64` and `fstat64`.
+    match Command::new("nm").arg("-u").arg(&lib).output() {
+        Ok(o) if o.status.success() => {
+            let text = String::from_utf8_lossy(&o.stdout);
+            let asked: Vec<&str> = rel::GLIBC_ONLY_SYMBOLS
+                .iter()
+                .copied()
+                .filter(|s| text.split_whitespace().any(|w| w == *s))
+                .collect();
+            let undefined = text
+                .lines()
+                .filter(|l| l.trim_start().starts_with("U "))
+                .count();
+            if !asked.is_empty() {
+                eprintln!(
+                    "dist-rt: {} still asks for {} — not a musl runtime",
+                    lib.display(),
+                    asked.join(", ")
+                );
+                return ExitCode::FAILURE;
+            }
+            eprintln!(
+                "dist-rt: {undefined} undefined symbol(s), none of {}",
+                rel::GLIBC_ONLY_SYMBOLS.join(", ")
+            );
+        }
+        _ => {
+            eprintln!("dist-rt: `nm -u` could not read {}", lib.display());
+            return ExitCode::FAILURE;
+        }
+    }
+    let dist = Path::new("target/dist");
+    let stem = rel::rt_archive_stem(version);
+    let stage = dist.join(&stem);
+    let archive = dist.join(format!("{stem}.tar.gz"));
+    let _ = std::fs::remove_dir_all(&stage);
+    let _ = std::fs::remove_file(&archive);
+    std::fs::create_dir_all(&stage).expect("mkdir dist-rt stage");
+    std::fs::copy(&lib, stage.join("libwolf_rt.a")).expect("stage libwolf_rt.a");
+    for f in ["LICENSE", "crates/wolf_rt/LICENSE-EXCEPTION"] {
+        let dest = stage.join(Path::new(f).file_name().expect("named file"));
+        std::fs::copy(f, dest).expect("stage a license file");
+    }
+    let lib_digest = match sha256_file(&stage.join("libwolf_rt.a")) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("dist-rt: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    std::fs::write(
+        stage.join("SHA256SUMS"),
+        format!("{lib_digest}  libwolf_rt.a\n"),
+    )
+    .expect("write SHA256SUMS");
+    if !run_ok(
+        "tar",
+        &[
+            "-C",
+            "target/dist",
+            "-czf",
+            &archive.to_string_lossy(),
+            &stem,
+        ],
+    ) {
+        eprintln!("dist-rt: tar failed");
+        return ExitCode::FAILURE;
+    }
+    let archive_digest = match sha256_file(&archive) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("dist-rt: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let notes = rel::rt_notes(version, &rust, &archive_digest, &lib_digest, lib_bytes);
+    let notes_path = dist.join(format!("{stem}.notes.md"));
+    std::fs::write(&notes_path, &notes).expect("write the notes section");
+    eprintln!("dist-rt: {}", archive.display());
+    eprintln!("dist-rt: libwolf_rt.a sha256 {lib_digest} ({lib_bytes} bytes)");
+    eprintln!("dist-rt: {stem}.tar.gz sha256 {archive_digest}");
+    eprintln!(
+        "dist-rt: the release body's section is {}",
+        notes_path.display()
+    );
+    ExitCode::SUCCESS
+}
+
+/// A file's SHA-256, by the host's own tool (`sha256sum`, or macOS's
+/// `shasum -a 256`): xtask carries no hashing crate (D15's thin graph).
+fn sha256_file(path: &Path) -> Result<String, String> {
+    let tries: [(&str, &[&str]); 2] = [("sha256sum", &[]), ("shasum", &["-a", "256"])];
+    for (tool, pre) in tries {
+        let Ok(o) = Command::new(tool).args(pre).arg(path).output() else {
+            continue;
+        };
+        if !o.status.success() {
+            return Err(format!("{tool} {}: {}", path.display(), o.status));
+        }
+        let text = String::from_utf8_lossy(&o.stdout);
+        let hex = text
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if hex.len() == 64 && hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Ok(hex);
+        }
+        return Err(format!("{tool} printed no digest for {}", path.display()));
+    }
+    Err("neither sha256sum nor shasum is on PATH".to_string())
+}
+
+/// `cargo xtask release-readback --notes FILE --assets DIR` (s266,
+/// wolf-lang#935; r40 item 3's read-back, in the workflow): every file in
+/// DIR hashed twice, the musl archive unpacked and its `libwolf_rt.a`
+/// hashed twice, and [`rel::readback`]'s verdict over the release body
+/// in FILE. release.yml runs it on the draft's assets before `publish`
+/// (and on a dry run's artifacts); exit 1 names every failure.
+fn release_readback_cmd(args: &[String]) -> ExitCode {
+    let mut notes: Option<PathBuf> = None;
+    let mut assets: Option<PathBuf> = None;
+    let mut it = args.iter();
+    while let Some(a) = it.next() {
+        match (a.as_str(), it.next()) {
+            ("--notes", Some(v)) => notes = Some(PathBuf::from(v)),
+            ("--assets", Some(v)) => assets = Some(PathBuf::from(v)),
+            _ => {
+                eprintln!("usage: cargo xtask release-readback --notes FILE --assets DIR");
+                return ExitCode::from(2);
+            }
+        }
+    }
+    let (Some(notes), Some(assets)) = (notes, assets) else {
+        eprintln!("usage: cargo xtask release-readback --notes FILE --assets DIR");
+        return ExitCode::from(2);
+    };
+    let Ok(body) = std::fs::read_to_string(&notes) else {
+        eprintln!("release-readback: cannot read {}", notes.display());
+        return ExitCode::FAILURE;
+    };
+    let mut names: Vec<String> = match std::fs::read_dir(&assets) {
+        Ok(rd) => rd
+            .flatten()
+            .filter(|e| e.path().is_file())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect(),
+        Err(e) => {
+            eprintln!("release-readback: {}: {e}", assets.display());
+            return ExitCode::FAILURE;
+        }
+    };
+    names.sort();
+    let twice = |p: &Path, name: &str| -> Result<ReadBack, String> {
+        Ok(ReadBack {
+            name: name.to_string(),
+            first: sha256_file(p)?,
+            second: sha256_file(p)?,
+        })
+    };
+    let mut files = Vec::new();
+    for n in &names {
+        match twice(&assets.join(n), n) {
+            Ok(r) => files.push(r),
+            Err(e) => {
+                eprintln!("release-readback: {e}");
+                return ExitCode::FAILURE;
+            }
+        }
+    }
+    let version = env!("CARGO_PKG_VERSION");
+    let stem = rel::rt_archive_stem(version);
+    let mut lib = None;
+    if names.iter().any(|n| *n == format!("{stem}.tar.gz")) {
+        let unpack = std::env::temp_dir().join(format!("wolf-readback-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&unpack);
+        std::fs::create_dir_all(&unpack).expect("mkdir readback unpack");
+        let tarball = std::path::absolute(assets.join(format!("{stem}.tar.gz")))
+            .expect("absolute archive path");
+        if run_ok(
+            "tar",
+            &[
+                "-C",
+                &unpack.to_string_lossy(),
+                "-xzf",
+                &tarball.to_string_lossy(),
+            ],
+        ) {
+            let inner = unpack.join(&stem).join("libwolf_rt.a");
+            if inner.is_file() {
+                match twice(&inner, "libwolf_rt.a") {
+                    Ok(r) => {
+                        let sums = std::fs::read_to_string(unpack.join(&stem).join("SHA256SUMS"))
+                            .unwrap_or_default();
+                        if !sums.contains(&r.first) {
+                            eprintln!(
+                                "release-readback: the archive's SHA256SUMS does not name its                                  libwolf_rt.a ({})",
+                                r.first
+                            );
+                            return ExitCode::FAILURE;
+                        }
+                        lib = Some(r);
+                    }
+                    Err(e) => {
+                        eprintln!("release-readback: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(&unpack);
+    }
+    match rel::readback(version, &body, &files, lib.as_ref()) {
+        Ok(table) => {
+            for row in &table {
+                println!("{row}");
+            }
+            eprintln!(
+                "release-readback: {} file(s) read twice, the musl runtime's digests in the notes: \
+                 GREEN",
+                table.len()
+            );
+            ExitCode::SUCCESS
+        }
+        Err(bad) => {
+            for b in &bad {
+                eprintln!("release-readback: RED: {b}");
+            }
             ExitCode::FAILURE
         }
     }
