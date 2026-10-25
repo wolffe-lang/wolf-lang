@@ -251,7 +251,18 @@ pub fn exec_now(
             };
             placed.push((t as InheritFd, src));
         }
-        let program = resolve_program(exe, search_path(env))?;
+        // s266 (#936, R-s266-3 A): the search's own refusals carry the
+        // number `execvp(3)` reports, as the spawns' search does —
+        // `ENOENT` when no candidate exists, `EACCES` when one is a file
+        // without an execute bit; a name holding `/` is the kernel's.
+        let program = resolve_program(exe, search_path(env)).inspect_err(|tag| {
+            let n = if *tag == "denied" {
+                libc::EACCES
+            } else {
+                libc::ENOENT
+            };
+            crate::fs::os_error_set(i64::from(n));
+        })?;
         let r = unix::exec_mapped(&program, argv, env, &placed);
         drop(held);
         r
