@@ -3106,6 +3106,7 @@ fn build(args: &[String]) {
     // (`--verbose` names the choice); elsewhere a missing lld is worth
     // a heads-up.
     if !cfg!(any(target_os = "macos", windows))
+        && link::selection(cli.opts.linker.as_deref(), std::env::var_os("WOLF_LD")).is_none()
         && lld_fuse_flag().is_none()
         && cli.opts.emit == Emit::Bin
     {
