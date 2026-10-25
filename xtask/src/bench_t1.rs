@@ -1932,6 +1932,9 @@ pub fn bench_gates(args: &[String]) -> ExitCode {
         }
     }
 
+    // ---- gate 4: what a program pays before and after main ---------
+    startup_gate(dir, wolf, record, &mut failures);
+
     if failures.is_empty() {
         eprintln!("bench-gates: deterministic bench gates green");
         ExitCode::SUCCESS
@@ -1941,6 +1944,167 @@ pub fn bench_gates(args: &[String]) -> ExitCode {
         }
         ExitCode::FAILURE
     }
+}
+
+/// The start-up row's record (s265, wolf-lang#918).
+const STARTUP_PATH: &str = "bench/startup.json";
+
+/// s265 (wolf-lang#918): the start-up row. 0.2.35's entry shim began
+/// registering the main thread's stack guard before `main` (s256), and
+/// every program paid for it — a release-tier hello world 39 us slower on
+/// kasumi (+16 %), seventeen more system calls — with no row anywhere to
+/// see it. The DETERMINISTIC half gates: `corpus/hello.lu` on the release
+/// tier and its C twin (`bench/startup/hello.c`, the host's clang) are
+/// each traced by strace(1), and the difference in system calls from
+/// `execve` to exit is the runtime's own start-up and exit; the dynamic
+/// loader's calls appear in both and cancel, so the number holds for a
+/// given wolf build on a given C library. It may not rise above
+/// `bench/startup.json`'s record (`--record` ratchets it down). The WALL
+/// half is report-only: fifty interleaved starts of each, the medians
+/// and their ratio printed; on kasumi the start's spread is about the
+/// size of the change the gate exists for (the s265 note), so D5 keeps
+/// it out of the merge gate. No `strace` on PATH is a loud skip, or a
+/// failure where `WOLF_SYSCALL_REQUIRE_STRACE` is set (every CI job).
+fn startup_gate(dir: &Path, wolf: &Path, record: bool, failures: &mut Vec<String>) {
+    let Some(strace) = which_on_path("strace") else {
+        if std::env::var_os("WOLF_SYSCALL_REQUIRE_STRACE").is_some() {
+            failures.push(
+                "startup: WOLF_SYSCALL_REQUIRE_STRACE is set and there is no `strace` on \
+                 PATH — the start-up row's instrument may not answer with a skip"
+                    .to_string(),
+            );
+        } else {
+            eprintln!("bench-gates: startup: SKIPPED — no `strace` on PATH (s265's row)");
+        }
+        return;
+    };
+    let wolf_bin = dir.join("startup-hello-wolf");
+    let c_bin = dir.join("startup-hello-c");
+    let built = Command::new(wolf)
+        .args(["build", "corpus/hello.lu", "-o"])
+        .arg(&wolf_bin)
+        .args(["--release", "--no-cache"])
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !built {
+        failures.push("startup: corpus/hello.lu would not build on the release tier".to_string());
+        return;
+    }
+    if !clang_build(&["-O2"], &c_bin, Path::new("bench/startup/hello.c")) {
+        failures.push("startup: bench/startup/hello.c would not build".to_string());
+        return;
+    }
+    let trace = |bin: &Path, name: &str| -> Option<(usize, usize)> {
+        let log = dir.join(format!("startup-{name}.strace"));
+        let ok = Command::new(&strace)
+            .arg("-qq")
+            .arg("-o")
+            .arg(&log)
+            .arg(bin)
+            .stdout(std::process::Stdio::null())
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        let text = std::fs::read_to_string(&log).ok().filter(|_| ok)?;
+        startup_syscalls(&text)
+    };
+    let (Some((wolf_pre, wolf_all)), Some((c_pre, c_all))) =
+        (trace(&wolf_bin, "wolf"), trace(&c_bin, "c"))
+    else {
+        failures.push(
+            "startup: a traced hello failed or wrote no `hello, wolf` line (see \
+             target/bench-gates/startup-*.strace)"
+                .to_string(),
+        );
+        return;
+    };
+    let got = wolf_all as i64 - c_all as i64;
+    eprintln!(
+        "bench-gates: startup syscalls wolf {wolf_all} ({wolf_pre} before the first write), \
+         C {c_all} ({c_pre}); the runtime's own: {got}"
+    );
+    let doc: serde_json::Value = std::fs::read_to_string(STARTUP_PATH)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or(serde_json::Value::Null);
+    let rec = doc["hello_minus_c_syscalls"].as_i64();
+    match rec {
+        Some(r) if got > r => failures.push(format!(
+            "startup: a release-tier hello world makes {got} more system calls than its C twin, \
+             recorded {r} ({STARTUP_PATH}) — something new runs before or after `main` in every \
+             wolf program (wolf-lang#918's shape); see target/bench-gates/startup-wolf.strace"
+        )),
+        Some(r) if got < r => eprintln!(
+            "bench-gates: startup: {got} is below the recorded {r} — `--record` ratchets it down"
+        ),
+        Some(_) => {}
+        None => failures.push(format!(
+            "startup: {STARTUP_PATH} records no hello_minus_c_syscalls — `--record` on the \
+             linux rig writes it"
+        )),
+    }
+    if record && rec.is_none_or(|r| got < r) {
+        let mut doc = if doc.is_object() { doc } else { serde_json::json!({}) };
+        doc["hello_minus_c_syscalls"] = serde_json::json!(got);
+        let text = serde_json::to_string_pretty(&doc).expect("json") + "\n";
+        match std::fs::write(STARTUP_PATH, text) {
+            Ok(()) => eprintln!("bench-gates: startup: recorded {got} into {STARTUP_PATH}"),
+            Err(e) => failures.push(format!("startup: could not write {STARTUP_PATH}: {e}")),
+        }
+    }
+    // The wall half, report-only (D5).
+    let mut wolf_ns = Vec::new();
+    let mut c_ns = Vec::new();
+    for i in 0..53 {
+        for (bin, out) in [(&wolf_bin, &mut wolf_ns), (&c_bin, &mut c_ns)] {
+            let t0 = Instant::now();
+            let ok = Command::new(bin)
+                .stdout(std::process::Stdio::null())
+                .status()
+                .is_ok_and(|s| s.success());
+            if ok && i >= 3 {
+                out.push(t0.elapsed().as_nanos() as f64);
+            }
+        }
+    }
+    if wolf_ns.len() == 50 && c_ns.len() == 50 {
+        let (Some(w), Some(c)) = (stats::median(&wolf_ns), stats::median(&c_ns)) else {
+            return;
+        };
+        eprintln!(
+            "bench-gates: startup wall (report-only): wolf median {:.1} us, C {:.1} us, \
+             ratio {:.2} over 50 interleaved starts",
+            w / 1e3,
+            c / 1e3,
+            w / c
+        );
+    }
+}
+
+/// `strace -qq` text → `(calls before the first write to stdout, all
+/// calls)`, the `execve` line and exit lines excluded; `None` when no
+/// line writes the hello.
+fn startup_syscalls(text: &str) -> Option<(usize, usize)> {
+    let calls: Vec<&str> = text
+        .lines()
+        .filter(|l| !l.starts_with("+++") && !l.starts_with("---") && !l.starts_with("execve("))
+        .filter(|l| !l.trim().is_empty())
+        .collect();
+    let first = calls
+        .iter()
+        .position(|l| l.starts_with("write(1, \"hello, wolf"))?;
+    // exit_group never returns, so strace prints it unfinished: count it.
+    Some((first, calls.len()))
+}
+
+/// The first `name` on `PATH`, if any.
+fn which_on_path(name: &str) -> Option<PathBuf> {
+    std::env::var_os("PATH").and_then(|p| {
+        std::env::split_paths(&p)
+            .map(|d| d.join(name))
+            .find(|c| c.is_file())
+    })
 }
 
 /// `bench gate <t1.jsonl>` — re-derive the M2 verdict from stored data.
@@ -2065,5 +2229,23 @@ pub fn gate_render(path: &str, scored: &[Scored], outcome: &t1::GateOutcome) -> 
     } else {
         eprintln!("  M2 primary gate: DOES NOT HOLD — M2 is not declared");
         ExitCode::FAILURE
+    }
+}
+
+#[cfg(test)]
+mod startup_tests {
+    use super::startup_syscalls;
+
+    #[test]
+    fn startup_counts_skip_execve_and_exit_lines() {
+        let t = "execve(\"./h\", [\"./h\"], 0x7ffd /* 3 vars */) = 0\n\
+                 brk(NULL) = 0x55\n\
+                 openat(AT_FDCWD, \"/proc/self/maps\", O_RDONLY|O_CLOEXEC) = 3\n\
+                 write(1, \"hello, wolf\\n\", 12) = 12\n\
+                 munmap(0x7f, 32768) = 0\n\
+                 exit_group(0) = ?\n\
+                 +++ exited with 0 +++\n";
+        assert_eq!(startup_syscalls(t), Some((2, 5)));
+        assert_eq!(startup_syscalls("execve() = 0\nexit_group(0) = ?\n"), None);
     }
 }
