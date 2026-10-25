@@ -522,6 +522,31 @@ C membranes are extended: `import c` still admits only its modelled set
   `export fn` the boot code calls (`[abi.c.export]`: one global symbol
   under its own name, the C convention, kept by every tier). `main` is
   an ordinary function there, mangled like any other.
+- `[abi.target.main]` On a hosted target the program's entry is the C
+  `main` the compiler emits around wolf's `main`, on every tier, and its
+  signature is ABI: `int main(int argc, char **argv, char **envp)`, the
+  three arguments the C library's start-up passes (ISO C 5.1.2.2.1, and
+  the environment argument of its J.5.1). Its first call, before
+  anything else runs, hands the three to the hosted runtime,
+  `__wolf_rt_main_start(argc, argv, envp)` (`argc` a 32-bit integer, the
+  two arrays pointers), which records them and registers the main
+  thread's stack (`[conf.trap.stack]`); then come the start-ups a
+  program names (`[os.net.reactor]`, `[os.signal.hub]`,
+  `[os.signal.wait.fd]`), and then wolf's `main`. On every unix C
+  library the argv readers (`[os.env.argv]`) answer from that record:
+  a program linked statically against musl reads the arguments a glibc
+  link reads (s267, wolf-lang#962: until then the entry took nothing and
+  the readers used a capture that glibc's start-up fills and musl's does
+  not, so a static musl link read no arguments at all). Windows' readers
+  keep the host's own arguments (WTF-8 for the OS's UTF-16). `envp` is
+  recorded as passed and read by no builtin at this cut: `env_vars` and
+  `env_get` read the live environment, which `env_set` and `env_unset`
+  (`[os.env.unset]`) write. An object an older compiler made calls
+  `__wolf_rt_stack_start()` instead, which the runtime still defines, so
+  it links, and its readers keep the C library's capture. A wolf object
+  linked under a foreign `main` (a C program's) has no such entry and
+  reads that capture too. The freestanding target has no entry shim
+  (`[abi.target.entry]`).
 - `[abi.target.none.hooks]` A freestanding object imports at most (a)
   `wolf_trap(kind: i32, file: *u8, file_len: i64, line: i64, col: i64)`,
   the one trap hook (K8(a)): every trap of both tiers calls it with the
