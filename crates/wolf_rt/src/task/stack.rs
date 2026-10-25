@@ -428,10 +428,14 @@ fn main_stack_bounds(here: usize, pg: usize) -> Option<(usize, usize)> {
     Some((floor.saturating_sub(pg), floor))
 }
 
+/// A guard range, `[lo, hi)`.
+#[cfg(target_os = "linux")]
+pub type GuardRange = (usize, usize);
+
 /// s265: the main thread's guard both ways, `(cheap, pthread)`, for the
 /// equivalence test (`tests/main_stack_bounds.rs`, run on the main thread).
 #[cfg(target_os = "linux")]
-pub fn main_guard_both() -> (Option<(usize, usize)>, Option<(usize, usize)>) {
+pub fn main_guard_both() -> (Option<GuardRange>, Option<GuardRange>) {
     let marker = 0u8;
     let here = std::hint::black_box(&raw const marker) as usize;
     (main_stack_bounds(here, page()), pthread_bounds())

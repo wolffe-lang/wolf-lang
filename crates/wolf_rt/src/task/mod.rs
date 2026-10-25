@@ -913,7 +913,7 @@ pub(crate) fn enter_runtime_thread() {
 /// test (`tests/main_stack_bounds.rs`). Linux; call it on the main thread.
 #[cfg(target_os = "linux")]
 #[doc(hidden)]
-pub fn main_guard_both() -> (Option<(usize, usize)>, Option<(usize, usize)>) {
+pub fn main_guard_both() -> (Option<stack::GuardRange>, Option<stack::GuardRange>) {
     stack::main_guard_both()
 }
 
