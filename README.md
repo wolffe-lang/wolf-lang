@@ -28,7 +28,10 @@ says which compiler tiers run on which host. From the release after
 0.2.35 the page also carries `wolf-rt-<version>-x86_64-unknown-linux-musl.tar.gz`:
 the runtime, `libwolf_rt.a`, built for musl (the recipe PAX's image uses),
 for linking wolf objects statically against musl; its digests are in the
-release notes (#935).
+release notes (#935). Take the objects and the runtime from the same
+release: the compiler's entry hands the program's arguments to the
+runtime (#962), and an object an older compiler made links but reads no
+arguments under musl.
 
 ```sh
 printf 'fn main() {\n  print("hello, wolf")\n}\n' > hello.lu
