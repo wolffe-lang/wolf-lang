@@ -18,6 +18,13 @@ s267 — the static entry (#962).
   so the entry has the instructions it had. The published link bundle's
   runtime is 0.2.35's: a new bundle carries the fixed `libwolf_rt.a`.
 
+- **Choose a cc-shaped linker on native Linux**: `--linker PATH` overrides
+  nonempty `WOLF_LD`, then the unchanged platform link path. Selected-tool
+  errors and malformed or foreign ELF output are final, without cc fallback.
+  Paths with spaces are passed intact. Assembly and release LLVM code
+  generation remain separate; Windows, Mach-O and foreign-target support
+  are not expanded.
+
 - **Choose the assembler for root-manifest assembly sources** (#937):
   `--assembler PATH` overrides `WOLF_AS`, then the existing target-specific
   C driver. An explicitly selected tool receives the as-shaped argv and is

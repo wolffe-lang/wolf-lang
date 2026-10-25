@@ -741,6 +741,32 @@ C membranes are extended: `import c` still admits only its modelled set
 
 ## §7 Linker control `[abi.link]`
 
+The hosted toolchain's link step in `wolf build` and `wolf run` selects
+`--linker PATH` (also `--linker=PATH`), then a nonempty `WOLF_LD`, then
+the existing platform path. A selected linker is one executable path,
+not shell text; spaces remain inside an argv element. On native Linux
+it receives the cc-shaped protocol: `-o OUTPUT`, staged module and
+root-manifest assembly objects in order, the runtime archive, then
+`-lpthread -ldl -lm -Wl,--gc-sections`. A program importing `wolf_trap`
+also adds `-Wl,--undefined=__wolf_rt_trap_at` and
+`-Wl,--defsym=wolf_trap=__wolf_rt_trap_at`. No `-fuse-ld` discovery flag
+is added to a selected tool. This protocol is not a raw `ld` command.
+
+A selected tool's absent executable, nonzero exit, missing output or
+invalid output is final: no retry through cc. The result must parse as
+ELF64, little-endian, for the host architecture, with executable or
+shared-object type (the latter admits PIE). A prior output is removed
+before invocation, so a successful no-output tool cannot reuse it.
+With neither choice, Unix retains `CC`/`cc` and its existing lld probe;
+macOS retains Apple's driver and signing/debug handling; Windows
+retains its COFF discovery path, including the distinct `WOLF_LINKER`.
+Explicit cc-shaped linkers on hosted Windows and non-Linux hosts are
+refused by name. Foreign hosted targets remain refused. Object-only
+builds do not invoke a linker; freestanding images remain the consuming
+build's responsibility. The assembler and the release backend's clang
+IR-to-object step are separate and unchanged. Ligature requires a
+matching musl runtime and sysroot; selection does not substitute either.
+
 - `[abi.link.section]` `#[section(".name")]` on a function or on a
   module `let`/`var` (`[mem.static]`) places its code or data in the
   object section `.name`, on both compiling tiers, hosted and

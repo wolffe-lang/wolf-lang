@@ -312,6 +312,10 @@ jobs:
           .lupin/lupin --version
       - name: build pinned clef for the assembler seam
         run: ci/build-test-clef
+      - name: explicit linker selection and refusals
+        run: |
+          cargo build -p wolf_rt
+          cargo test -p wolf_driver --test linker_select -- --nocapture
       - name: explicit assembler selection and refusals
         run: cargo test -p wolf_driver --test assembler_select -- --nocapture
       - name: full gauntlet (fmt, clippy, test, deps-check, corpus)
