@@ -922,6 +922,17 @@ pub const SIGNAL_START: &str = "__wolf_rt_signal_start";
 /// (s246, wolf-lang#781, `[os.signal.wait.fd]`), after [`SIGNAL_START`].
 pub const WAIT_FD_START: &str = "__wolf_rt_signal_wait_fd_start";
 
+/// The entry shim's first call in every hosted program (s267,
+/// wolf-lang#962, `[abi.target.main]`): the C entry's `(argc, argv, envp)`
+/// handed to the runtime, which records them for the argv readers and
+/// then registers the main thread (what `__wolf_rt_stack_start` did alone
+/// before it).
+pub const MAIN_START: &str = "__wolf_rt_main_start";
+
+/// The C entry's parameters, `int argc, char **argv, char **envp`: the
+/// entry shim's signature and [`MAIN_START`]'s (s267).
+pub const C_MAIN_PARAMS: [types::TypeId; 3] = [types::I32, types::I64, types::I64];
+
 /// s248 (wolf-lang#794, `[os.term.restore]`): the runtime's restore on a
 /// return from `main`, which the entry shim calls before it returns in a
 /// program that names [`TERM_RESTORE_AT_EXIT`].
@@ -995,8 +1006,16 @@ pub fn names_a_descriptor_wait(m: &WirModule) -> bool {
     )
 }
 
-/// Append the C-entry shim to a WIR module: `main(argc, argv)` — in
-/// truth a niladic CLIF function — that calls wolf's `@main`. A plain
+/// The entry shim's signature: [`C_MAIN_PARAMS`] in, the C exit code out.
+fn c_main_sig(m: &mut WirModule) -> SigId {
+    let params = C_MAIN_PARAMS.iter().map(|&t| wolf_wir::ir::Param::val(t)).collect();
+    m.make_sig(params, vec![types::I32])
+}
+
+/// Append the C-entry shim to a WIR module: `int main(int argc, char
+/// **argv, char **envp)` ([`C_MAIN_PARAMS`], `[abi.target.main]`), whose
+/// first call hands the three to the runtime ([`MAIN_START`]) and whose
+/// last calls wolf's `@main`. A plain
 /// `() -> i64` main truncates its result to the C exit code. An
 /// error-union main (`!int`, s29 `[abi.err]`) branches on the
 /// discriminant: the ok value becomes the exit code; an error value
@@ -1013,8 +1032,18 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
     // the signal hub makes the hub there too, after the set; s246 (#781):
     // one that names `os_signal_wait_fd` makes the descriptor waits' wake
     // pipe last, so no wait makes a descriptor once the program runs.
+    // s267 (#962, `[abi.target.main]`): every hosted program hands the C
+    // entry's `(argc, argv, envp)` to the runtime first ([`MAIN_START`]),
+    // so the argv readers answer what the program was started with on any
+    // C library — a static musl link read `argc=0` when the shim took
+    // nothing and the runtime read a capture only glibc's start-up fills.
+    // It replaces the `__wolf_rt_stack_start()` call this list began with,
+    // so the shim has the instructions it had.
+    let main_start_sig = m.make_sig(
+        C_MAIN_PARAMS.iter().map(|&t| wolf_wir::ir::Param::val(t)).collect(),
+        vec![],
+    );
     let starts: Vec<&str> = [
-        (true, "__wolf_rt_stack_start"),
         (names_a_park(m), REACTOR_START),
         (names_a_hub_call(m), SIGNAL_START),
         (names_a_descriptor_wait(m), WAIT_FD_START),
@@ -1024,6 +1053,9 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
     .collect();
     let start_sig = (!starts.is_empty()).then(|| m.make_sig(vec![], vec![]));
     let start = |f: &mut Function, b0: wolf_wir::ir::Block| {
+        let entry_args = f.block_params(b0);
+        let callee = f.import_func(MAIN_START, main_start_sig);
+        f.append_inst(b0, Opcode::Call, &entry_args, &[], Aux::Callee(callee));
         if let Some(sig) = start_sig {
             for &sym in &starts {
                 let callee = f.import_func(sym, sig);
@@ -1069,9 +1101,9 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
     // (the checked rung and lupin both print and exit 0). The shim calls
     // it for its effects and hands the process a 0.
     if sd.results.is_empty() {
-        let shim_sig = m.make_sig(vec![], vec![types::I32]);
+        let shim_sig = c_main_sig(m);
         let mut f = Function::new("__wolf_main_shim", shim_sig);
-        let b0 = f.make_block(&[]);
+        let b0 = f.make_block(&C_MAIN_PARAMS);
         start(&mut f, b0);
         let callee = f.import_func("main", entry_sig);
         f.append_inst(b0, Opcode::Call, &[], &[], Aux::Callee(callee));
@@ -1093,9 +1125,9 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
     };
     let tags = m.tags.clone();
     let err_sig = m.make_sig(vec![wolf_wir::ir::Param::val(types::I64); 6], vec![]);
-    let shim_sig = m.make_sig(vec![], vec![types::I32]);
+    let shim_sig = c_main_sig(m);
     let mut f = Function::new("__wolf_main_shim", shim_sig);
-    let b0 = f.make_block(&[]);
+    let b0 = f.make_block(&C_MAIN_PARAMS);
     start(&mut f, b0);
     let callee = f.import_func("main", entry_sig);
     let (_, res) = f.append_inst(b0, Opcode::Call, &[], &[res_ty], Aux::Callee(callee));

@@ -54,7 +54,7 @@ use wolf_wir::types::{TypeData, TypeId};
 /// i64 words (32-byte cap) — reports `error: <name>` on stdout and
 /// exits 1, the documented D30 process behavior for a `main` that
 /// returns an error value.
-pub const RT_SYMBOLS: [(&str, usize, bool); 254] = [
+pub const RT_SYMBOLS: [(&str, usize, bool); 255] = [
     ("__wolf_rt_trap", 1, false),
     // s125: the sited trap — kind, then the site as immediates the
     // per-site cold block materializes: file path rodata (ptr, len)
@@ -86,6 +86,10 @@ pub const RT_SYMBOLS: [(&str, usize, bool); 254] = [
     // parking net call; a refusal is one stderr line and exit 71.
     ("__wolf_rt_reactor_start", 0, false),
     ("__wolf_rt_stack_start", 0, false),
+    // s267 (#962, `[abi.target.main]`): the entry shim's first call, the C
+    // entry's `(argc, argv, envp)` (`argc` crosses as i32) for the argv
+    // readers, then the main thread's start-up `stack_start` made alone.
+    ("__wolf_rt_main_start", 3, false),
     // s243 (#763, `[os.signal.hub]`): the signal hub made before `main`
     // in a program that names a call which makes it; a refusal is one
     // stderr line and exit 71.
@@ -1443,12 +1447,15 @@ impl<'a, 'b> Tx<'a, 'b> {
                     .ok_or_else(|| ice(format!("unknown runtime symbol {name}")))?;
                 let mut sig = Signature::new(self.om.isa().default_call_conv());
                 for i in 0..nparams {
-                    // The trap code is i32; the bool shims take an i8
-                    // where the value crosses (WIR bool crosses as
-                    // I8); the f64 write shim takes a real f64; every
-                    // other shim param is a pointer/size/packed-spec
-                    // i64.
-                    let ty = if (name == "__wolf_rt_trap" || name == "__wolf_rt_trap_at") && i == 0
+                    // The trap code and the C entry's argc (s267) are
+                    // i32; the bool shims take an i8 where the value
+                    // crosses (WIR bool crosses as I8); the f64 write
+                    // shim takes a real f64; every other shim param is a
+                    // pointer/size/packed-spec i64.
+                    let ty = if (name == "__wolf_rt_trap"
+                        || name == "__wolf_rt_trap_at"
+                        || name == "__wolf_rt_main_start")
+                        && i == 0
                     {
                         ctypes::I32
                     } else if (name == "__wolf_rt_print_bool" && i == 0)
