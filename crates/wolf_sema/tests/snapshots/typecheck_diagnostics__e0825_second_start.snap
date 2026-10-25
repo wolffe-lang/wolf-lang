@@ -9,3 +9,5 @@ error[E0825]: `va_start` is already spelled in this function — use `va_copy` f
   |                                              ---------- the first start is here
   |                                                                   ^^^^^^^^^^
   |
+  = note: Keep one `va_start()` and make another cursor with `va_copy(ap)`; end each cursor before
+    returning.

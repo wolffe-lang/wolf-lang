@@ -1103,3 +1103,22 @@ fn variadic_tail_rejects_non_c_values() {
     );
     assert!(codes(&tc).contains(&"E0401"), "{:?}", tc.diagnostics);
 }
+
+#[test]
+fn variadic_arg_accepts_pointer_type_brackets() {
+    let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-linux-gnu");
+    let tc = check_one("fn consume(mut ap: VaList) -> *u8 { unsafe { va_arg[*u8](mut ap) } }\n");
+    assert!(
+        tc.fully_checked(),
+        "{:?} / {:?}",
+        tc.diagnostics,
+        tc.not_yet
+    );
+}
+
+#[test]
+fn variadic_list_is_not_generic() {
+    let _target = wolf_sema::attrs::enter_build_target("x86_64-unknown-linux-gnu");
+    let tc = check_one("fn f(ap: VaList[i32]) {}\n");
+    assert!(codes(&tc).contains(&"E0812"), "{:?}", tc.diagnostics);
+}

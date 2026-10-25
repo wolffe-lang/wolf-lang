@@ -1758,6 +1758,9 @@ impl<'a> Engine<'a> {
             let v = self.arena.ty(CtType::Prim(p));
             return Ok(PathVal::Value(v));
         }
+        if name == "VaList" {
+            return Ok(PathVal::Value(self.arena.ty(CtType::VaList)));
+        }
         if is_root && root.runtime_locals.iter().any(|n| n == name) {
             return Ok(fault(FaultKind::NotComptime {
                 what: format!("`{name}` is a runtime value"),
@@ -2058,6 +2061,9 @@ impl<'a> Engine<'a> {
                             module: module as u32,
                             name: name.clone(),
                         });
+                    }
+                    if name == "VaList" {
+                        return Some(CtType::VaList);
                     }
                 }
                 Some(CtType::Opaque(self.text(file, node.span)))

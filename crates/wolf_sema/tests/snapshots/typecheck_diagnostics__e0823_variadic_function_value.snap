@@ -8,3 +8,4 @@ error[E0823]: `sum` is variadic — call it by name, not through a function valu
 2 | fn main() { let f = sum }
   |                     ^^^
   |
+  = note: Write a named call with its arguments, or write a wrapper with a fixed parameter list.

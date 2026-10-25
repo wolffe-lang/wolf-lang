@@ -5,18 +5,20 @@ expression: "format!(\"{d:#?}\")"
 Diagnostic {
     code: E0822,
     severity: Error,
-    message: "`...` must end a C membrane's parameter list, after a fixed parameter",
+    message: "`...` belongs after the last named parameter of an `extern \"c\" fn` or `export fn`",
     primary: LabeledSpan {
         span: Span {
             file: FileId(
                 0,
             ),
             lo: 20,
-            hi: 22,
+            hi: 23,
         },
         label: "",
     },
     secondary: [],
-    notes: [],
+    notes: [
+        "Move `...` after the last named parameter, with no type, mode or trailing comma.",
+    ],
     suggestions: [],
 }

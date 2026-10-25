@@ -393,18 +393,19 @@ fn param_list(p: &mut Parser<'_>, c_membrane: bool) -> bool {
         // Only the adjacent pair spells the C ellipsis; retain both
         // tokens in a dedicated list element, never a named parameter.
         if p.at_punct(Punct::DotDot) && p.nth(1) == TokenKind::Punct(Punct::Dot) {
-            let span = p.current_span();
-            let adjacent = span.hi == p.nth_span(1).lo;
+            let first = p.current_span();
+            let span = Span::new(first.file, first.lo, p.nth_span(1).hi);
+            let adjacent = first.hi == p.nth_span(1).lo;
             let ellipsis = p.start();
             p.bump();
             p.bump();
             ellipsis.complete(p, SyntaxKind::VariadicParam);
             if !c_membrane || fixed == 0 || !adjacent || !p.at_punct(Punct::RParen) {
-                p.error(
+                p.push_diag(wolf_diag::Diagnostic::error(
                     wolf_diag::codes::E0822,
                     span,
-                    "`...` must end a C membrane's parameter list, after a fixed parameter",
-                );
+                    "`...` belongs after the last named parameter of an `extern \"c\" fn` or `export fn`",
+                ).with_note("Move `...` after the last named parameter, with no type, mode or trailing comma."));
                 p.recover_until(true, |k| k == TokenKind::Punct(Punct::RParen));
             }
             if p.at_punct(Punct::RParen) {

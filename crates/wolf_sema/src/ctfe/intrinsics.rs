@@ -367,6 +367,7 @@ pub fn ty_to_ct(table: &TypeTable, ty: TyId) -> CtType {
     match table.kind(ty) {
         TyKind::Unit => CtType::Unit,
         TyKind::Prim(p) => CtType::Prim(*p),
+        TyKind::VaList => CtType::VaList,
         TyKind::TypeTy => CtType::TypeTy,
         TyKind::Tuple(ts) => CtType::Tuple(ts.iter().map(|&t| ty_to_ct(table, t)).collect()),
         TyKind::Nominal { module, name, args } if args.is_empty() => CtType::Nominal {
@@ -483,6 +484,7 @@ impl<'a> Engine<'a> {
     /// kw08): a scalar's, or a `#[repr(c)]` struct's; E0708 otherwise.
     fn ct_layout(&self, ct: &CtType) -> Result<crate::layout::CLayout, FaultKind> {
         let res = match ct {
+            CtType::VaList => Ok(crate::layout::va_list_layout()),
             CtType::Prim(p) => crate::layout::prim_size(*p)
                 .map(|n| crate::layout::CLayout {
                     size: n,
@@ -526,6 +528,7 @@ impl<'a> Engine<'a> {
         let mut table = self.sigs.table.clone();
         let ty = match ct {
             CtType::Prim(p) => table.prim(p),
+            CtType::VaList => table.intern(TyKind::VaList),
             CtType::Unit => table.unit(),
             CtType::Nominal { module, name } => table.intern(TyKind::Nominal {
                 module,
@@ -550,6 +553,7 @@ impl<'a> Engine<'a> {
     pub(super) fn build_typeinfo(&mut self, ct: &CtType) -> ValId {
         let (kind, name) = match ct {
             CtType::Prim(p) => ("prim", p.name().to_string()),
+            CtType::VaList => ("struct", "VaList".to_string()),
             CtType::Unit => ("unit", "()".to_string()),
             CtType::Tuple(_) => ("tuple", ct.render()),
             CtType::Nominal { module, name } => {
@@ -597,6 +601,15 @@ impl<'a> Engine<'a> {
 
     fn field_list(&mut self, ct: &CtType) -> Vec<ValId> {
         match ct {
+            CtType::VaList => [
+                ("gp_offset", CtType::Prim(Prim::U32)),
+                ("fp_offset", CtType::Prim(Prim::U32)),
+                ("overflow_arg_area", CtType::Opaque("*u8".into())),
+                ("reg_save_area", CtType::Opaque("*u8".into())),
+            ]
+            .into_iter()
+            .map(|(name, ty)| self.field_value(name, ty))
+            .collect(),
             CtType::Nominal { module, name } => {
                 let Some(ItemSig::Struct(s)) = self.sigs.get(*module as usize, name) else {
                     return Vec::new();
@@ -674,6 +687,7 @@ impl<'a> Engine<'a> {
             let self_kind = self.sigs.table.kind(imp.self_ty);
             let hit = match (ct, self_kind) {
                 (CtType::Prim(p), TyKind::Prim(q)) => p == q,
+                (CtType::VaList, TyKind::VaList) => true,
                 (
                     CtType::Nominal { module, name },
                     TyKind::Nominal {

@@ -1978,6 +1978,14 @@ impl<'a> Lower<'a> {
                             }
                             self.table.intern(TyKind::VaList)
                         }
+                        ("VaList", _) => {
+                            self.diags.push(Diagnostic::error(
+                                codes::E0812,
+                                node.span,
+                                "`VaList` is one C-layout record and takes no type arguments",
+                            ));
+                            self.table.error()
+                        }
                         ("Proc", &[val]) => self.table.intern(TyKind::Proc(val)),
                         ("Scope" | "Proc", _) => {
                             self.diags.push(conc_handle_arity_refusal(

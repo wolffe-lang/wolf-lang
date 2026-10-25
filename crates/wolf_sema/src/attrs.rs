@@ -726,19 +726,19 @@ fn check_abi(node: &GreenNode, src: &[u8], diags: &mut Vec<Diagnostic>) {
     );
 }
 
-/// The first variadic contract is Linux x86-64 only, not every SysV host.
+/// SysV variadics on Linux x86-64 and its freestanding C membrane.
 pub fn variadic_target_diagnostic(target: &str, span: Span) -> Option<Diagnostic> {
     if matches!(
         target,
-        "x86_64-unknown-linux-gnu" | "x86_64-unknown-linux-musl"
+        "x86_64-unknown-linux-gnu" | "x86_64-unknown-linux-musl" | "x86_64-unknown-none"
     ) {
         return None;
     }
     Some(Diagnostic::error(
         codes::E0826,
         span,
-        format!("C variadic membranes are unsupported on `{target}` — use x86-64 Linux"),
-    ))
+        format!("target `{target}` does not support C's unnamed arguments"),
+    ).with_note("Build for Linux x86-64 or x86_64-unknown-none, or declare a C wrapper with a fixed parameter list."))
 }
 
 fn walk(node: &GreenNode, top: bool, src: &[u8], target: &str, diags: &mut Vec<Diagnostic>) {

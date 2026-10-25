@@ -1625,11 +1625,12 @@ invocation that supplied those arguments.
 
 code!(E0826, "C variadic membranes on an unsupported target", r#"
 C variadic calls, definitions and `VaList` operations currently use the
-Linux x86-64 System V ABI only. AAPCS64, Apple arm64 and Windows x64
+Linux x86-64 or x86_64-unknown-none System V ABI. AAPCS64, Apple arm64 and Windows x64
 have different variable-argument conventions; they cannot use this
 record or prologue. Select x86-64 Linux, or provide a fixed-arity C
-wrapper on the other target. FreeBSD and freestanding targets are also
-refused until their own variadic witnesses have been validated.
+wrapper on the other target. FreeBSD remains refused. The freestanding
+target keeps its floating-value ban; variadic entry saves of vector state
+are guarded by the incoming C caller's vector-register count.
 "#);
 
 

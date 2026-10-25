@@ -358,7 +358,8 @@ C membranes are extended: `import c` still admits only its modelled set
   containers, function values and other non-C shapes are refused by name.
   A promoted argument is read using its promoted type, not its source
   type. Fixed arguments do not receive default promotions.
-- `[abi.c.variadic.sysv]` On x86-64 Linux the fixed and promoted arguments
+- `[abi.c.variadic.sysv]` On x86-64 Linux and `x86_64-unknown-none`,
+  the fixed and promoted arguments
   share the SysV register budgets, in source order: six INTEGER registers
   (`rdi`, `rsi`, `rdx`, `rcx`, `r8`, `r9`) and eight SSE registers
   (`xmm0`–`xmm7`). Exhaustion is independent by class; overflow arguments
@@ -381,7 +382,9 @@ C membranes are extended: `import c` still admits only its modelled set
   save area follows at 16-byte alignment. The frame allocation is the
   smallest size covering those areas that is 8 modulo 16: the entry's
   return address makes the original `rsp` 8 modulo 16, so the core call
-  is aligned. The overflow pointer addresses the original incoming stack
+  is aligned. The top eight padding bytes hold the caller's saved frame
+  pointer; the trampoline establishes and restores its own frame chain.
+  The overflow pointer addresses the original incoming stack
   after the named stack arguments, not the core's copied argument area.
   A tail-call shim for an outgoing variadic call sets `%al` immediately
   before jumping to the C symbol, preserving all argument registers and
@@ -431,8 +434,9 @@ C membranes are extended: `import c` still admits only its modelled set
   is undefined, with C17 §7.16.1.1's signed/unsigned representability
   and void-pointer/character-pointer exceptions. The compiler rejects
   `va_arg` of a type that cannot survive default promotions by name.
-- `[abi.c.variadic.targets]` This support is target-specific. A variadic
-  declaration, definition, call or list builtin on any other target is
+- `[abi.c.variadic.targets]` This support is target-specific: Linux
+  x86-64 and `x86_64-unknown-none`. A variadic declaration, definition,
+  call or list builtin on any other target is
   E0826, naming the target; no other target borrows the SysV layout.
 
   | target | variadic C membrane |
@@ -441,7 +445,8 @@ C membranes are extended: `import c` still admits only its modelled set
   | aarch64 Linux (AAPCS64) | unsupported, E0826; distinct list and save areas |
   | aarch64 macOS (Apple arm64) | unsupported, E0826; unnamed arguments use the stack |
   | x86-64 Windows (MSVC x64) | unsupported, E0826; distinct register and shadow-space rules |
-  | x86-64 FreeBSD, x86-64 freestanding, and every other target | unsupported, E0826 |
+  | x86-64 freestanding (`x86_64-unknown-none`) | supported; wolf floating values remain refused; vector saves only under the incoming `%al` guard |
+  | x86-64 FreeBSD and every other target | unsupported, E0826 |
 
 - `[abi.c.variadic.checked]` The checked machine has no C membrane:
   a variadic call into C is `unsupported`, naming that call; a call from
@@ -612,19 +617,36 @@ C membranes are extended: `import c` still admits only its modelled set
   the pair, the List lands in its own thread's region. Without it
   (the control), the List lands in the other thread's.
 - `[abi.target.none.codegen]` Code generated for `x86_64-unknown-none`
-  uses no red zone, no x87/MMX/SSE/AVX register and no stack protector,
+  uses no red zone, no x87/MMX/SSE/AVX register (apart from the narrowly
+  guarded C variadic entry saves below) and no stack protector,
   keeps frame pointers, and is position-independent under the small
   code model (K10(a) = A: it links in the -2 GiB higher half and loads
   anywhere). The release tier emits the triple
   `x86_64-unknown-none-elf`, and `noredzone`, `"frame-pointer"="all"`
   and `"target-features"="-mmx,-sse,-sse2,-sse3,-ssse3,-sse4.1,-sse4.2,-avx,-avx2,+soft-float"`
-  on every function; the native tier's frames never use the red zone
+  on every nonvariadic function; the native tier's frames never use the red zone
   and its integer code uses no vector register (proven by disassembly
   on every object the gate builds). A floating-point value of any type
   is refused by name on this target (K10(b) = A). Witness for the whole
   section: `crates/wolf_driver/tests/freestanding_target.rs`, which
   links both tiers' objects with an assembly boot stub and trap hook,
   no libc and no runtime, and runs them.
+  A C variadic definition is the one vector-save exception: its entry
+  may save `xmm0`–`xmm7` only inside a block guarded by the incoming
+  `%al` (`test %al,%al; je` skips the whole save block). A plain
+  register-to-register move may preserve that incoming low byte in
+  another register; the guard may test that proven copy, but no load,
+  arithmetic or intervening overwrite may establish its provenance.
+  No other part
+  of the freestanding object may use SSE. A C caller passing vector
+  arguments has already enabled SSE; a caller passing none sets `%al`
+  to zero, and the shim executes no SSE instruction. Wolf's ordinary
+  floating-value ban remains, so freestanding wolf callers always set
+  `%al` to zero. The release tier permits this entry block through
+  per-function attributes only on variadic definitions, never relaxing
+  a nonvariadic function's contract. Object disassembly gates both the
+  guard and the absence of SSE elsewhere; the integer-only muzzle
+  acceptance runs on this real target, without libc or a hosted runtime.
 
 ## §6 Assembly `[abi.asm]`
 
@@ -752,7 +774,9 @@ C membranes are extended: `import c` still admits only its modelled set
   `rip`; when `h` returns, the trampoline reloads the registers from
   the frame, drops the vector and the error code and returns with
   `iretq` (SDM vol. 3A §6.14.2–§6.14.3, APM vol. 2 §8.9). No x87, SSE or
-  AVX state is saved, because the freestanding target generates none,
+  AVX state is saved: ordinary freestanding code generates none, and
+  a C variadic entry's optional guarded XMM saves only read incoming
+  vector state (`[abi.target.none.codegen]`),
   and an interrupt taken in kernel code overwrites nothing live below
   %rsp, because it keeps no red zone (`[abi.target.none.codegen]`).
   The interrupt descriptor table is data the program builds: its

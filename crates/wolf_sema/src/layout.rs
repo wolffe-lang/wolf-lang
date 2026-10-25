@@ -105,6 +105,27 @@ pub fn c_value_compatible(sigs: &SigTables, table: &TypeTable, ty: TyId, depth: 
     }
 }
 
+/// The builtin cursor's published C record layout.
+pub fn va_list_layout() -> CLayout {
+    CLayout {
+        size: 24,
+        align: 8,
+        fields: [
+            ("gp_offset", 0, 4),
+            ("fp_offset", 4, 4),
+            ("overflow_arg_area", 8, 8),
+            ("reg_save_area", 16, 8),
+        ]
+        .into_iter()
+        .map(|(name, offset, size)| FieldLayout {
+            name: name.into(),
+            offset,
+            layout: CLayout::scalar(size),
+        })
+        .collect(),
+    }
+}
+
 /// The clause's layout of `ty` (in `table`), or why it has none.
 pub fn c_layout(sigs: &SigTables, table: &TypeTable, ty: TyId) -> Result<CLayout, NoCLayout> {
     layout_in(sigs, table, ty, 0)
@@ -136,23 +157,7 @@ fn layout_in(
     match table.kind(ty) {
         TyKind::Prim(p) => prim_size(*p).map(CLayout::scalar).ok_or_else(none),
         TyKind::Ptr(_) => Ok(CLayout::scalar(8)),
-        TyKind::VaList => Ok(CLayout {
-            size: 24,
-            align: 8,
-            fields: [
-                ("gp_offset", 0, 4),
-                ("fp_offset", 4, 4),
-                ("overflow_arg_area", 8, 8),
-                ("reg_save_area", 16, 8),
-            ]
-            .into_iter()
-            .map(|(name, offset, size)| FieldLayout {
-                name: name.into(),
-                offset,
-                layout: CLayout::scalar(size),
-            })
-            .collect(),
-        }),
+        TyKind::VaList => Ok(va_list_layout()),
         TyKind::Wrapping(inner) | TyKind::Distinct(inner) => {
             layout_in(sigs, table, *inner, depth + 1)
         }

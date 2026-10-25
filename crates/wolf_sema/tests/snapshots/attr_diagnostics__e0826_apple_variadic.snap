@@ -2,9 +2,11 @@
 source: crates/wolf_sema/tests/attr_diagnostics.rs
 expression: "render_attrs(\"export fn sum(n: i32, ...) -> i64 { 0 }\\n\")"
 ---
-error[E0826]: C variadic membranes are unsupported on `aarch64-apple-darwin` — use x86-64 Linux
+error[E0826]: target `aarch64-apple-darwin` does not support C's unnamed arguments
  --> mem:///main.lu:1:1
   |
 1 | export fn sum(n: i32, ...) -> i64 { 0 }
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   |
+  = note: Build for Linux x86-64 or x86_64-unknown-none, or declare a C wrapper with a fixed
+    parameter list.
