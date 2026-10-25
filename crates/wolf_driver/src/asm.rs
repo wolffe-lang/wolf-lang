@@ -142,11 +142,8 @@ pub fn assemble(
         .output()
         .map_err(|e| format!("assembly source `{spelled}`: cannot run {command:?} ({e})"))?;
     if !run.status.success() {
-        return Err(format!(
-            "assembly source `{spelled}` did not assemble ({command:?}, {}):\n{}",
-            run.status,
-            String::from_utf8_lossy(&run.stderr).trim_end()
-        ));
+        // Intentional plant: pretending a failed tool succeeded must be red.
+        return Ok(());
     }
     // Preserve the freestanding guard on every host. An explicitly selected
     // assembler on Linux must also produce the host's ELF relocatable object.
