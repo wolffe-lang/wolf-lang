@@ -18,11 +18,31 @@
 # exactly one release carries the tag, and asserts the #226 shape after
 # the flag moves: one release, public, zero drafts.
 
+# THE MUSL RUNTIME (s266, wolf-lang#935). Beside the four host archives
+# the release publishes `wolf-rt-<version>-x86_64-unknown-linux-musl.tar.gz`:
+# `libwolf_rt.a` for musl, built with PAX's `tools/mkwolf` recipe
+# (`cargo xtask dist-rt`), its two digests appended to the release body,
+# and a `readback` job that downloads every asset of the draft, hashes each
+# twice and holds the musl section's digests to the bytes before `publish`
+# may run (r40 item 3's read-back, in the workflow).
+#
+# THE DRY RUN. `workflow_dispatch` (any branch, `dry` true, the only kind a
+# dispatch may be) runs every build and the read-back with no tag and no
+# release: the notes come from the CHANGELOG's `## Unreleased`, every
+# archive travels as a workflow artifact, and nothing is uploaded,
+# published or dispatched. A release is cut by a tag push alone.
+
 name: release
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "a dry run: build, digest and read back; no release (must stay true)"
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -45,10 +65,28 @@ jobs:
       # tag with no CHANGELOG entry fails the job here, by name. A
       # pre-release tag (`v0.2.16-rc.1`) reads the entry of the release it
       # rehearses.
+      - name: a dispatch is a dry run, never a release
+        if: github.event_name == 'workflow_dispatch' && inputs.dry != true
+        run: |
+          echo "::error::a release is cut by a tag push; a dispatch runs only with dry=true"
+          exit 1
       - name: release notes from the CHANGELOG
+        if: github.event_name == 'push'
         shell: bash
         run: cargo xtask release-notes "${GITHUB_REF_NAME}" --out target/release-notes.md
+      # The dry run's notes: the entry the next tag will read.
+      - name: release notes from the CHANGELOG's Unreleased (dry run)
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: cargo xtask release-notes Unreleased --out target/release-notes.md
+      - name: keep the notes for the read-back
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: target/release-notes.md
+          if-no-files-found: error
       - name: create the draft release, exactly once
+        if: github.event_name == 'push'
         id: create
         env:
           GH_TOKEN: ${{ github.token }}
@@ -113,6 +151,7 @@ jobs:
       # By release id, never by tag (#226). `--clobber` by hand: a same-named
       # asset from a re-run is deleted first, and the deletion is named.
       - name: upload to release ${{ needs.create.outputs.release_id }}
+        if: github.event_name == 'push'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
@@ -134,15 +173,132 @@ jobs:
               "https://uploads.github.com/repos/${GH_REPO}/releases/${RELEASE_ID}/assets?name=${name}" \
               --input "$f" --jq '"uploaded \(.name): \(.size) bytes, \(.state)"'
           done
-      # The linux archives go to the run gate as workflow artifacts, so the
-      # gate runs the bytes this job built without touching the release API.
-      - name: keep the archive for the run gate
-        if: startsWith(matrix.os, 'ubuntu')
+      # Every archive is a workflow artifact too: the run gate runs the
+      # linux bytes this job built without touching the release API, and a
+      # dry run's read-back reads all four from here.
+      - name: keep the archive for the run gate and the dry read-back
         uses: actions/upload-artifact@v4
         with:
           name: archive-${{ matrix.os }}
           path: target/dist/*.tar.gz
           if-no-files-found: error
+
+  # wolf-lang#935: the musl runtime, on the GNU archive's own image so its
+  # `libwolf_rt_none.a` can be compared byte for byte (rt-none is
+  # freestanding: the musl host needs no other).
+  dist-musl:
+    name: dist (x86_64-unknown-linux-musl runtime)
+    needs: create
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      WOLF_RT_NONE_REQUIRE: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: the musl and freestanding targets
+        run: rustup target add x86_64-unknown-linux-musl x86_64-unknown-none
+      - name: build the musl runtime archive (PAX's mkwolf recipe)
+        run: cargo xtask dist-rt --target x86_64-unknown-linux-musl
+      - name: the freestanding runtime, against the GNU archive's
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo xtask rt-none
+          sha256sum target/x86_64-unknown-none/release/libwolf_rt_none.a | tee target/dist/rt-none-musl-host.sha256
+      - name: keep the musl archive and its notes section
+        uses: actions/upload-artifact@v4
+        with:
+          name: musl-rt
+          path: |
+            target/dist/wolf-rt-*-x86_64-unknown-linux-musl.tar.gz
+            target/dist/wolf-rt-*-x86_64-unknown-linux-musl.notes.md
+            target/dist/rt-none-musl-host.sha256
+          if-no-files-found: error
+      # By release id, never by tag (#226), as the host archives go; then
+      # the section joins the release body, replacing one a re-run left.
+      - name: upload to release ${{ needs.create.outputs.release_id }} and add the digests to its notes
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_ID: ${{ needs.create.outputs.release_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          archives=(target/dist/wolf-rt-*-x86_64-unknown-linux-musl.tar.gz)
+          notes=(target/dist/wolf-rt-*-x86_64-unknown-linux-musl.notes.md)
+          test "${#archives[@]}" -eq 1 && test "${#notes[@]}" -eq 1 \
+            || { echo "::error::dist-rt left ${#archives[@]} archive(s) and ${#notes[@]} notes section(s)"; exit 1; }
+          f=${archives[0]}
+          name=$(basename "$f")
+          for aid in $(gh api --paginate "repos/${GH_REPO}/releases/${RELEASE_ID}/assets" \
+                         --jq ".[] | select(.name == \"${name}\") | .id"); do
+            gh api --method DELETE "repos/${GH_REPO}/releases/assets/${aid}"
+            echo "replaced existing asset ${name} (${aid})"
+          done
+          gh api --method POST -H "Content-Type: application/gzip" \
+            "https://uploads.github.com/repos/${GH_REPO}/releases/${RELEASE_ID}/assets?name=${name}" \
+            --input "$f" --jq '"uploaded \(.name): \(.size) bytes, \(.state)"'
+          gh api "repos/${GH_REPO}/releases/${RELEASE_ID}" --jq .body > body.md
+          # Everything from the marker on is a previous run's section.
+          awk '/^<!-- wolf-rt-musl -->$/ { exit } { print }' body.md > body-head.md
+          { cat body-head.md; echo; cat "${notes[0]}"; } > body-new.md
+          gh api --method PATCH "repos/${GH_REPO}/releases/${RELEASE_ID}" \
+            -F body=@body-new.md --jq '"the release body carries the musl section (\(.body | length) characters)"'
+
+  # The read-back (r40 item 3's shape, before the flag moves): every asset
+  # of the draft downloaded by id and hashed twice, the musl archive
+  # unpacked, and its two digests held to the release body. A dry run reads
+  # the workflow's artifacts and the notes it would have written.
+  readback:
+    name: read back the assets and the musl digests
+    needs: [create, dist, dist-musl]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: the draft's assets and body
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_ID: ${{ needs.create.outputs.release_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p readback/assets
+          gh api "repos/${GH_REPO}/releases/${RELEASE_ID}" --jq .body > readback/notes.md
+          gh api --paginate "repos/${GH_REPO}/releases/${RELEASE_ID}/assets" \
+            --jq '.[] | "\(.id)\t\(.name)"' > readback/assets.tsv
+          while IFS=$'\t' read -r aid name; do
+            gh api -H "Accept: application/octet-stream" \
+              "repos/${GH_REPO}/releases/assets/${aid}" > "readback/assets/${name}"
+            echo "downloaded ${name} (${aid}): $(wc -c < "readback/assets/${name}") bytes"
+          done < readback/assets.tsv
+      - name: the dry run's artifacts
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/download-artifact@v4
+        with:
+          path: readback/artifacts
+      - name: the dry run's assets and the notes it would write
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p readback/assets
+          cp readback/artifacts/archive-*/*.tar.gz readback/artifacts/musl-rt/*.tar.gz readback/assets/
+          { cat readback/artifacts/release-notes/release-notes.md; echo; \
+            cat readback/artifacts/musl-rt/*.notes.md; } > readback/notes.md
+          echo "rt-none, the musl job's build: $(cat readback/artifacts/musl-rt/rt-none-musl-host.sha256)"
+          mkdir rtnone && tar -xzf readback/assets/wolf-*-x86_64-unknown-linux-gnu.tar.gz -C rtnone
+          echo "rt-none, the GNU archive's:    $(sha256sum rtnone/*/libwolf_rt_none.a)"
+      - name: the read-back
+        run: cargo xtask release-readback --notes readback/notes.md --assets readback/assets
 
   # #447: a green release means the artifact RUNS, not that it uploaded.
   # 0.2.15's x86-64 archive printed `--version` and then the native tier
@@ -192,7 +348,8 @@ jobs:
             echo "::error::${need} is above the 2.35 floor (#447) — this archive will not start on Ubuntu 22.04"
             exit 1
           fi
-          # The D57 stamp: bare at a release tag; an rc rehearses on a +dev build.
+          # The D57 stamp: bare at a release tag; an rc rehearses on a +dev build
+          # (and a dry run, which has no tag, says +dev).
           v=$("$wolf" --version | head -1)
           echo "$v"
           if [ "$PRERELEASE" = "false" ]; then
@@ -238,7 +395,8 @@ jobs:
   # job runs ONLY if all of them succeeded.
   publish:
     name: publish (un-draft)
-    needs: [create, dist, run-gate]
+    needs: [create, dist, dist-musl, readback, run-gate]
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - name: publish the release
@@ -261,12 +419,14 @@ jobs:
           test "$(cut -f1 releases.tsv)" = "$RELEASE_ID" \
             || { echo "::error::the one release on $tag is $(cut -f1 releases.tsv), not the $RELEASE_ID this run created"; exit 1; }
           # The evidence, in the log, before the flag moves: one archive per
-          # matrix host. A green leg implies its upload, so this is a
-          # tripwire on the glob rather than a second gate on the hosts.
+          # matrix host and the musl runtime (#935). A green leg implies its
+          # upload, so this is a tripwire on the glob rather than a second
+          # gate on the hosts; `readback` already held their bytes.
           gh api --paginate "repos/${GH_REPO}/releases/${RELEASE_ID}/assets" --jq '.[].name' | sort | tee assets.txt
           count=$(grep -c '\.tar\.gz$' assets.txt || true)
-          if [ "$count" -lt 4 ]; then
-            echo "::error::publish: $tag carries $count archives, wanted 4 — leaving it a draft" >&2
+          musl=$(grep -c '^wolf-rt-.*-x86_64-unknown-linux-musl\.tar\.gz$' assets.txt || true)
+          if [ "$count" -lt 5 ] || [ "$musl" -ne 1 ]; then
+            echo "::error::publish: $tag carries $count archives ($musl musl runtime), wanted 4 hosts and 1 musl runtime — leaving it a draft" >&2
             exit 1
           fi
           gh api --method PATCH "repos/${GH_REPO}/releases/${RELEASE_ID}" -F draft=false \
@@ -304,7 +464,7 @@ jobs:
   # red matrix never silences the mirror.
   grammar-mirror:
     name: dispatch tree-sitter-wolf's corpus gate
-    if: ${{ !contains(github.ref_name, '-') }}
+    if: ${{ github.event_name == 'push' && !contains(github.ref_name, '-') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
