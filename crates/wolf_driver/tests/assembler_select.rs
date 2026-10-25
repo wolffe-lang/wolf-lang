@@ -84,7 +84,7 @@ mod linux {
     use std::os::unix::fs::PermissionsExt;
 
     fn tool(dir: &Path, body: &str) -> PathBuf {
-        let path = dir.join("assembler with spaces");
+        let path = dir.join("assembler with spaces and 'quote");
         std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
         path
@@ -185,6 +185,22 @@ mod linux {
             ],
         );
         assert!(!dir.join("output object.asm-seven source.o").exists());
+    }
+
+    #[test]
+    fn a_successful_tool_cannot_reuse_a_stale_object() {
+        let dir = package("stale output");
+        success(build(&dir).arg("--assembler=as").output().unwrap());
+        assert!(dir.join("output object.asm-seven source.o").is_file());
+        let as_path = tool(&dir, "exit 0");
+        refused(
+            build(&dir)
+                .arg("--assembler")
+                .arg(as_path)
+                .output()
+                .unwrap(),
+            &["seven source.S", "read output object.asm-seven source.o"],
+        );
     }
 
     fn corrupt_output(case: &str, bytes: &[u8]) {
