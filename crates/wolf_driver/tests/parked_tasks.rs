@@ -19,8 +19,9 @@
 //!
 //! The gates:
 //! - the witness completes, native and release, on every cpu set this
-//!   host can pin: `loop 0 64` under `taskset -c 0` and `loop 0 1000`
-//!   under `-c 0-3` and on all cores (linux); all cores elsewhere;
+//!   host can pin: `loop 0 64` on one cpu and `loop 0 1000` on four and
+//!   on all cores (linux; the one and the four are the allocation's,
+//!   `test_cpus`, wolf-lang#925); all cores elsewhere;
 //! - every tier answers it alike at N = 64: the checked machine
 //!   (`wolf conform-run --checked --json`; `wolf run --checked` is the
 //!   native build) and lupin print the line the compiled tiers print;
@@ -37,6 +38,7 @@
 //! missing lupin under `WOLF_PAIRING_REQUIRE_SIBLING`.
 
 mod lane_exit;
+mod test_cpus;
 
 use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
@@ -178,19 +180,16 @@ fn build(name: &str, tier: &str) -> Option<PathBuf> {
     Some(exe)
 }
 
-/// The cpu sets this host can pin to: `None` is all cores.
-fn cpu_sets() -> Vec<Option<&'static str>> {
+/// The cpu sets this host can pin to: `None` is all cores. On linux the
+/// witness runs on one and four of the allocation as well, never
+/// skipping them.
+fn cpu_sets(test: &str) -> Vec<Option<test_cpus::Pin>> {
     if cfg!(target_os = "linux") {
-        let ok = Command::new("taskset")
-            .arg("--version")
-            .output()
-            .is_ok_and(|o| o.status.success());
-        assert!(
-            ok,
-            "`taskset` (util-linux) is part of this gate's linux host: the witness must run \
-             on 1 and 4 cpus as well as all cores, never skip them"
-        );
-        vec![Some("0"), Some("0-3"), None]
+        vec![
+            Some(test_cpus::pin_required(1, test)),
+            Some(test_cpus::pin_required(4, test)),
+            None,
+        ]
     } else {
         eprintln!(
             "NOTE: no cpu-affinity tool on this host; the witness runs on all cores only \
@@ -200,17 +199,13 @@ fn cpu_sets() -> Vec<Option<&'static str>> {
     }
 }
 
-fn label(set: Option<&str>) -> String {
-    set.map_or("all cores".to_string(), |c| format!("taskset -c {c}"))
+fn label(set: Option<&test_cpus::Pin>) -> String {
+    set.map_or("all cores".to_string(), test_cpus::Pin::label)
 }
 
-fn command(exe: &Path, set: Option<&str>, args: &[&str]) -> Command {
+fn command(exe: &Path, set: Option<&test_cpus::Pin>, args: &[&str]) -> Command {
     let mut cmd = match set {
-        Some(cpus) => {
-            let mut c = Command::new("taskset");
-            c.args(["-c", cpus]).arg(exe);
-            c
-        }
+        Some(pin) => pin.command(exe),
         None => Command::new(exe),
     };
     cmd.args(args);
@@ -259,7 +254,7 @@ fn finish(mut child: Child, t0: Instant, limit: Duration) -> Run {
     }
 }
 
-fn run_bounded(exe: &Path, set: Option<&str>, args: &[&str], limit: Duration) -> Run {
+fn run_bounded(exe: &Path, set: Option<&test_cpus::Pin>, args: &[&str], limit: Duration) -> Run {
     let t0 = Instant::now();
     let child = command(exe, set, args)
         .stdout(Stdio::piped())
@@ -281,13 +276,13 @@ fn last_line(s: &str) -> &str {
 /// limit of 7), 1,000 on four cpus and on all cores. Off linux the fd
 /// limit decides: 1,000 where it holds 2,001 sockets with room, else 64;
 /// windows runs 256.
-fn loop_n(set: Option<&str>, fds: u64) -> usize {
+fn loop_n(set: Option<&test_cpus::Pin>, fds: u64) -> usize {
     if cfg!(windows) {
         // WSAPoll rebuilds its whole armed list on every wake (s60b).
         return 256;
     }
     match set {
-        Some("0") => 64,
+        Some(pin) if pin.n == 1 => 64,
         _ if fds >= 4_096 => 1_000,
         _ => 64,
     }
@@ -302,7 +297,8 @@ fn the_witness_completes_on_every_cpu_set() {
         let Some(exe) = build("waitwolf", tier) else {
             continue;
         };
-        for set in cpu_sets() {
+        for set in cpu_sets("the_witness_completes_on_every_cpu_set") {
+            let set = set.as_ref();
             let n = loop_n(set, fds);
             let ns = n.to_string();
             let r = run_bounded(&exe, set, &["loop", "0", &ns], Duration::from_secs(45));
@@ -554,7 +550,7 @@ struct Soak {
 
 /// Run `park MODE M HOLD` (the soak fixture); once it says `parked:`,
 /// wait for the threads to settle, then sample twice `window` apart.
-fn soak(exe: &Path, set: Option<&str>, mode: &str, m: usize, hold_ms: u64) -> Soak {
+fn soak(exe: &Path, set: Option<&test_cpus::Pin>, mode: &str, m: usize, hold_ms: u64) -> Soak {
     let ms = m.to_string();
     let hs = hold_ms.to_string();
     let t0 = Instant::now();
@@ -636,12 +632,19 @@ fn ten_thousand_parked_tasks_hold_and_release() {
     let Some(exe) = build("park", "native") else {
         return;
     };
-    let mut runs: Vec<(&str, Option<&str>)> =
+    let mut runs: Vec<(&str, Option<test_cpus::Pin>)> =
         vec![("chan", None), ("read", None), ("accept", None)];
     if cfg!(target_os = "linux") {
-        runs.push(("chan", Some("0")));
+        runs.push((
+            "chan",
+            Some(test_cpus::pin_required(
+                1,
+                "ten_thousand_parked_tasks_hold_and_release",
+            )),
+        ));
     }
-    for (mode, set) in runs {
+    for (mode, set) in &runs {
+        let (mode, set) = (*mode, set.as_ref());
         // The same mode at 100 tasks is the baseline the per-task
         // figure is taken against.
         let base = soak(&exe, set, mode, 100, 4_000);
