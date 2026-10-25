@@ -220,9 +220,12 @@ fn an_else_fallback_range_names_the_fallback_and_says_to_parenthesise() {
             "    let rest = \"a\"\n    let v = rest[rest.find(\"a\") else (2..)]\n    print(v)\n",
         ),
     ] {
-        let file = dir.path().join(format!("{name}.lu"));
+        // One directory each: a directory is one module (D32).
+        let sub = dir.path().join(name);
+        std::fs::create_dir(&sub).unwrap();
+        let file = sub.join("main.lu");
         std::fs::write(&file, format!("fn main() -> int {{\n{body}    0\n}}\n")).unwrap();
-        let out = build(&file, &dir.path().join(name), None);
+        let out = build(&file, &sub.join("out"), None);
         let stderr = String::from_utf8(out.stderr).unwrap();
         assert_eq!(out.status.code(), Some(4), "{name}: {stderr}");
         assert!(
