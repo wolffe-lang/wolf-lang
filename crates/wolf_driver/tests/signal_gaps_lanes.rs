@@ -30,7 +30,7 @@
 //!   it has no handler for), the test's own directory its working
 //!   directory, `ulimit -c 0` unless the row is the core's; on macOS on
 //!   CI's throwaway runner only (`GITHUB_ACTIONS`), `ulimit -c 0`, never
-//!   the cores-on row. The process rows also run under `taskset -c 0-3`,
+//!   the cores-on row. The process rows also run under `taskset` on four CPUs of the allocation,
 //!   asked from inside (wolf-lang#570).
 //!
 //! **Cores.** A core is written only where the container's working
@@ -59,6 +59,7 @@
 //! lupin is held to the mirror (wolf-interp issues listed in the PR).
 
 mod lane_exit;
+mod test_cpus;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
@@ -439,16 +440,13 @@ fn the_one_meaning_shape_rows_on_every_host() {
 // ------------------------------------------------------------ unix --
 
 /// `exe out` started with 0 on `/dev/null` and 1 closed (in the child,
-/// between fork and exec), optionally under `taskset -c 0-3`.
+/// between fork and exec), optionally pinned (`test_cpus`, #925).
 #[cfg(unix)]
-fn run_with_one_closed(exe: &Path, out: &Path, taskset: bool) -> Output {
+fn run_with_one_closed(exe: &Path, out: &Path, pin: Option<&test_cpus::Pin>) -> Output {
     use std::os::unix::process::CommandExt as _;
-    let mut cmd = if taskset {
-        let mut c = Command::new("taskset");
-        c.args(["-c", "0-3"]).arg(exe);
-        c
-    } else {
-        Command::new(exe)
+    let mut cmd = match pin {
+        Some(pin) => pin.command(exe),
+        None => Command::new(exe),
     };
     cmd.arg(out)
         .stdin(std::fs::File::open("/dev/null").expect("/dev/null opens"))
@@ -464,21 +462,11 @@ fn run_with_one_closed(exe: &Path, out: &Path, taskset: bool) -> Output {
     cmd.output().expect("the program runs")
 }
 
-/// Whether `taskset` runs here (linux; wolf-lang#570's four-cpu rows).
-#[cfg(unix)]
-fn taskset_runs() -> bool {
-    cfg!(target_os = "linux")
-        && Command::new("taskset")
-            .args(["-c", "0", "true"])
-            .output()
-            .is_ok_and(|o| o.status.success())
-}
-
 /// #781: a descriptor wait makes no descriptor while the program runs, so
 /// a closed 1 stays closed to another task: two seconds of
 /// `os_signal_wait_fd(0, INTERRUPT)` on one task (descriptor 0 at its
 /// end, so each wait answers 0 at once) beside `fs_fstat(1)` on main,
-/// both tiers, all cpus and under `taskset -c 0-3`. Red at 0.2.32:
+/// both tiers, all cpus and under `taskset` on four CPUs of the allocation. Red at 0.2.32:
 /// `fs_fstat(1)` answered ok 760,739 times of 13,607,478 (kasumi), the
 /// wake pipe each wait made sitting on the closed 1 until the runtime
 /// moved it.
@@ -487,25 +475,27 @@ fn taskset_runs() -> bool {
 fn a_descriptor_wait_makes_no_descriptor_while_the_program_runs() {
     let dir = scratch("race781");
     let entry = fixture("race781.lu");
-    let four = taskset_runs();
-    if !four && cfg!(target_os = "linux") {
-        eprintln!("SKIP: no taskset here — the taskset -c 0-3 rows did not run");
-    }
+    // wolf-lang#570's four-cpu rows, on four of the allocation (#925).
+    let four = test_cpus::pin(
+        4,
+        "a_descriptor_wait_makes_no_descriptor_while_the_program_runs",
+    );
     for release in [false, true] {
         let tier = if release { "release" } else { "native" };
         let Some(exe) = build(&entry, &dir, "race", release) else {
             continue;
         };
         for taskset in [false, true] {
-            if taskset && !four {
+            let pin = if taskset { four.as_ref() } else { None };
+            if taskset && pin.is_none() {
                 continue;
             }
             let out_file = dir.join(format!("out-{tier}-{taskset}"));
-            let run = run_with_one_closed(&exe, &out_file, taskset);
+            let run = run_with_one_closed(&exe, &out_file, pin);
             let text = std::fs::read_to_string(&out_file).unwrap_or_default();
             report(&format!(
                 "REPORT race781 {tier}{}: exit {:?}: {}{}",
-                if taskset { " (taskset -c 0-3)" } else { "" },
+                pin.map_or(String::new(), |p| format!(" ({})", p.label())),
                 run.status.code(),
                 text.trim(),
                 String::from_utf8_lossy(&run.stderr)
@@ -730,13 +720,19 @@ impl Live {
 }
 
 /// A compiled machine's row: the binary's name in the test's directory,
-/// and whether it runs under `taskset -c 0-3`.
+/// and again under `taskset` on four of the allocation (`test_cpus`).
 #[cfg(unix)]
 fn compiled_rows(live: &Live, entry: &Path, stem: &str, test: &str) -> Vec<(String, String)> {
-    let four = live.four_cpus();
-    if !four && cfg!(target_os = "linux") {
-        eprintln!("SKIP: {test}: fewer than four cpus — the taskset -c 0-3 rows did not run");
-    }
+    // The pinned rows: four of the allocation (`test_cpus`, wolf-lang#925),
+    // asked of the place's own `taskset`.
+    let four = if live.four_cpus() {
+        test_cpus::subset(4, test)
+    } else {
+        if cfg!(target_os = "linux") {
+            eprintln!("SKIP: {test}: fewer than four cpus — the pinned rows did not run");
+        }
+        None
+    };
     let mut rows = Vec::new();
     for release in [false, true] {
         let tier = if release { "release" } else { "native" };
@@ -745,10 +741,10 @@ fn compiled_rows(live: &Live, entry: &Path, stem: &str, test: &str) -> Vec<(Stri
         };
         let name = exe.file_name().unwrap().to_string_lossy().to_string();
         rows.push((tier.to_string(), live.at(&name)));
-        if four {
+        if let Some(list) = &four {
             rows.push((
-                format!("{tier} taskset -c 0-3"),
-                format!("taskset -c 0-3 {}", live.at(&name)),
+                format!("{tier} taskset -c {list}"),
+                format!("taskset -c {list} {}", live.at(&name)),
             ));
         }
     }
