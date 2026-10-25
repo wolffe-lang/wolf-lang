@@ -8,6 +8,9 @@ E=$L/evidence/phase2b; mkdir -p $E
 exec > $E/phase2b.log 2>&1
 echo $$ > $E/phase2b.pid
 trap 'rc=$?; echo $rc > $E/phase2b.exit; date -u; echo "phase2b exit=$rc"' EXIT
+# The phase's exit is its worst step's: a step that goes red ends the
+# phase nonzero even when later steps run (RULES §1: no 0 over a red).
+worst=0
 step() { echo "=== $1 $(date -u +%T) $($L/scripts/hostload.sh)"; }
 # Resumable: S265_FROM=<step key> skips the steps before it (yew, bisect,
 # hello, yewtime, rows, gauntlet, differ); each step's own work also skips
@@ -116,6 +119,9 @@ rc=\$?; echo \$rc > $E/gauntlet.exit; echo gauntlet exit=\$rc
 tail -40 $E/gauntlet.log
 grep -E 'bench-gates: startup' $E/gauntlet.log
 "
+g=$(cat $E/gauntlet.exit 2>/dev/null || echo 2)
+echo "gauntlet step exit=$g"
+[ "$g" = 0 ] || worst=$g
 
 fi
 if want differ; then
@@ -128,9 +134,14 @@ for tier in checked native release; do
   unset WOLF_CHECKED WOLF_NATIVE WOLF_RELEASE
   case \$tier in checked) export WOLF_CHECKED=1;; native) export WOLF_NATIVE=1;; release) export WOLF_RELEASE=1;; esac
   target/debug/xtask differ $L/wolf-head/target/debug/wolf $L/tc/0.2.35/wolf > $E/differ-\$tier.log 2>&1
-  echo \"differ \$tier exit=\$?\"; tail -12 $E/differ-\$tier.log
+  echo \$? > $E/differ-\$tier.exit
+  echo \"differ \$tier exit=\$(cat $E/differ-\$tier.exit) (1: divergences, listed and named in the note; 2: a fault)\"; tail -12 $E/differ-\$tier.log
 done
 "
 du -sh $L/target; df -h --output=avail $L | tail -1
 fi
+for t in checked native release; do
+  d=$(cat $E/differ-$t.exit 2>/dev/null || echo 0); [ "$d" -le 1 ] || worst=$d
+done
 step "done"
+exit $worst
