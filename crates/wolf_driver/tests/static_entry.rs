@@ -292,6 +292,13 @@ mod linux {
     /// One link's eight cells: build (shared), link, run, judge; every cell
     /// printed before the verdict.
     fn cells(label: &str, how: Link) {
+        let rt = glibc_rt();
+        assert!(
+            !matches!(how, Link::Glibc) || rt.is_file(),
+            "{label}: no host runtime at {} (`cargo build -p wolf_rt` makes it, \
+             or point WOLF_RT_LIB at one)",
+            rt.display()
+        );
         let dir = root().join(label);
         std::fs::create_dir_all(&dir).unwrap();
         let mut wrong = Vec::new();
