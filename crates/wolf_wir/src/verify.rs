@@ -199,6 +199,19 @@ impl<'a> Verifier<'a> {
 
     fn check_entry_sig(&self) -> VResult {
         let sig = &self.m.sigs[self.f.sig];
+        if let Some(fixed) = sig.variadic {
+            let n = sig
+                .params
+                .iter()
+                .filter(|p| !self.m.types.is_token(p.ty))
+                .count();
+            if !self.f.export || fixed as usize != n {
+                return Err(self.fail(
+                    ErrClass::EntrySig,
+                    "a variadic definition must be an export with exactly its fixed parameters",
+                ));
+            }
+        }
         for &t in &sig.results {
             if self.m.types.is_token(t) {
                 return Err(self.fail(
@@ -489,6 +502,59 @@ impl<'a> Verifier<'a> {
                 }
                 self.same_tys(inst, &[args[0], args[1], results[0]])?;
             }
+            Opcode::Fpromote => {
+                self.expect_counts(inst, 1, 1)?;
+                if self.f.value_ty(args[0]) != crate::types::F32
+                    || self.f.value_ty(results[0]) != crate::types::F64
+                {
+                    return Err(self.type_err(inst, "fpromote requires f32 -> f64"));
+                }
+            }
+            Opcode::VaStart => {
+                self.expect_counts(inst, 0, 1)?;
+                if !self.f.export
+                    || self.m.sigs[self.f.sig].variadic.is_none()
+                    || self.f.value_ty(results[0]) != crate::types::PTR
+                    || data.aux != Aux::None
+                {
+                    return Err(
+                        self.type_err(inst, "va.start requires a variadic export and returns ptr")
+                    );
+                }
+            }
+            Opcode::VaEnd => {
+                self.expect_counts(inst, 2, 1)?;
+                let token = self.f.value_ty(args[1]);
+                if self.f.value_ty(args[0]) != crate::types::PTR
+                    || !matches!(types.get(token), TypeData::Mem(_))
+                    || self.f.value_ty(results[0]) != token
+                    || data.aux != Aux::None
+                {
+                    return Err(
+                        self.type_err(inst, "va.end needs ptr + mem and returns successor mem")
+                    );
+                }
+            }
+            Opcode::VaArg => {
+                self.expect_counts(inst, 2, 2)?;
+                let token = self.f.value_ty(args[1]);
+                let result = self.f.value_ty(results[0]);
+                let supported = matches!(
+                    types.get(result),
+                    TypeData::I32 | TypeData::I64 | TypeData::F64 | TypeData::Ptr
+                ) || matches!(types.get(result), TypeData::Agg(fields) if !fields.is_empty());
+                if self.f.value_ty(args[0]) != crate::types::PTR
+                    || !matches!(types.get(token), TypeData::Mem(_))
+                    || self.f.value_ty(results[1]) != token
+                    || !supported
+                    || data.aux != Aux::None
+                {
+                    return Err(self.type_err(
+                        inst,
+                        "va.arg needs ptr + mem and returns a promoted C value + successor mem",
+                    ));
+                }
+            }
             Opcode::Fneg => {
                 self.expect_counts(inst, 1, 1)?;
                 if !float(args[0]) {
@@ -774,6 +840,11 @@ impl<'a> Verifier<'a> {
                 if self.f.value_ty(results[0]) != crate::types::PTR {
                     return Err(self.type_err(inst, "func.addr result must be ptr"));
                 }
+                if self.m.sigs[self.f.ext_funcs[ef].sig].variadic.is_some() {
+                    return Err(
+                        self.type_err(inst, "a variadic function cannot be a function value")
+                    );
+                }
             }
             Opcode::Call => {
                 let Aux::Callee(ef) = data.aux else {
@@ -884,6 +955,9 @@ impl<'a> Verifier<'a> {
                     return Err(self.type_err(inst, "call.ind names a missing signature"));
                 }
                 let sig = &self.m.sigs[sigid];
+                if sig.variadic.is_some() {
+                    return Err(self.type_err(inst, "call.ind cannot carry a C variadic signature"));
+                }
                 let call_err = |msg: String| {
                     self.fail(ErrClass::CallSig, format!("{}: {msg}", self.at_inst(inst)))
                 };
@@ -1385,7 +1459,12 @@ impl<'a> Verifier<'a> {
                     out.push(tok);
                 }
             }
-            Opcode::RegionFree | Opcode::RcDup | Opcode::RcDrop | Opcode::SyncFreeze => {
+            Opcode::RegionFree
+            | Opcode::RcDup
+            | Opcode::RcDrop
+            | Opcode::SyncFreeze
+            | Opcode::VaArg
+            | Opcode::VaEnd => {
                 if let Some(&tok) = args.get(1) {
                     out.push(tok);
                 }
@@ -2367,11 +2446,39 @@ pub fn verify_module(m: &Module) -> VResult {
         }
     }
     for (name, sig) in &sigs_by_name {
+        if let Some(fixed) = sig.variadic {
+            let params: Vec<_> = sig
+                .params
+                .iter()
+                .filter(|p| !m.types.is_token(p.ty))
+                .collect();
+            if fixed as usize > params.len()
+                || params.iter().any(|p| {
+                    !matches!(
+                        p.mode,
+                        crate::ir::Mode::Val | crate::ir::Mode::Sext | crate::ir::Mode::Zext
+                    )
+                })
+                || params.iter().skip(fixed as usize).any(|p| {
+                    matches!(
+                        m.types.get(p.ty),
+                        TypeData::I8 | TypeData::I16 | TypeData::F32 | TypeData::Bool
+                    )
+                })
+            {
+                return Err(VerifyError {
+                    class: ErrClass::CallSig,
+                    func: name.clone(),
+                    msg: "invalid fixed prefix or unpromoted C variadic tail".into(),
+                    dump: String::new(),
+                });
+            }
+        }
         match seen.get(name.as_str()) {
             None => {
                 seen.insert(name.as_str(), sig);
             }
-            Some(prev) if *prev == sig => {}
+            Some(prev) if prev.same_callee_contract(sig, &m.types) => {}
             Some(_) => {
                 return Err(VerifyError {
                     class: ErrClass::CallSig,

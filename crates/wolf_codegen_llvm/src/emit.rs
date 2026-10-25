@@ -138,11 +138,20 @@ enum ScopeClass {
 /// blocks, one for one, or they are not here at all.
 pub type BranchWeights = std::sync::Arc<BTreeMap<String, Vec<u64>>>;
 
-/// The function attributes every define carries on the freestanding
+/// The function attributes nonvariadic definitions carry on the freestanding
 /// target (kw04, `[abi.target.none.codegen]`): `noredzone`, frame
 /// pointers kept, and the no-MMX/SSE/AVX feature set with soft float.
 pub const FREESTANDING_FN_ATTRS: &str = " noredzone \"frame-pointer\"=\"all\" \
      \"target-features\"=\"-mmx,-sse,-sse2,-sse3,-ssse3,-sse4.1,-sse4.2,-avx,-avx2,+soft-float\"";
+
+/// Freestanding variadic entries must preserve incoming SSE varargs for
+/// a C consumer of their list. `noimplicitfloat` keeps integer copies
+/// and bodies from acquiring vector instructions; SSE2 is enabled only
+/// for the ABI's AL-guarded register-save prologue. The disassembly
+/// regression checks this boundary, rather than trusting attributes.
+const FREESTANDING_VARIADIC_FN_ATTRS: &str = " noredzone noimplicitfloat \
+     \"frame-pointer\"=\"all\" \
+     \"target-features\"=\"-mmx,+sse,+sse2,-sse3,-ssse3,-sse4.1,-sse4.2,-avx,-avx2,-soft-float\"";
 
 /// How the emitter treats the proven-fact channels.
 #[derive(Clone, Debug, Default)]
@@ -331,6 +340,23 @@ fn nyi(msg: impl Into<String>) -> BackendError {
     BackendError::Unsupported(msg.into())
 }
 
+/// The list layout below is the Linux/freestanding SysV AMD64 contract.
+fn require_variadic_target(opts: &EmitOptions) -> Result<(), BackendError> {
+    let target = opts.target.or_else(crate::ReleaseTarget::host);
+    if matches!(
+        target,
+        Some(crate::ReleaseTarget::LinuxX64 | crate::ReleaseTarget::X86_64None)
+    ) {
+        return Ok(());
+    }
+    let name = target
+        .map(|t| t.triple().to_string())
+        .unwrap_or_else(|| format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS));
+    Err(nyi(format!(
+        "C variadic arguments are unsupported on {name} (E0826)"
+    )))
+}
+
 /// One loaded byte chunk of a clobber-safe copy: (offset, type, temp).
 type Chunk = (u32, &'static str, String);
 
@@ -429,9 +455,39 @@ pub(crate) struct LSig {
     /// The flat return components (empty = void).
     pub ret_comps: Vec<String>,
     pub sret_first: bool,
+    /// LLVM arity of the fixed prefix (including hidden sret pointers).
+    pub variadic_fixed: Option<usize>,
 }
 
 impl LSig {
+    /// Declarations carry only the fixed prototype, never a call's tail.
+    fn prototype(&self) -> String {
+        match self.variadic_fixed {
+            Some(n) => {
+                let mut params = self.ll_params[..n].to_vec();
+                params.push("...".to_string());
+                params.join(", ")
+            }
+            None => self.ll_params.join(", "),
+        }
+    }
+
+    /// LLVM call syntax needs the explicit variadic function TYPE.
+    /// Parameter attributes belong on operands, not in that type.
+    fn call_type(&self) -> String {
+        match self.variadic_fixed {
+            Some(n) => {
+                let mut types: Vec<_> = self.ll_params[..n]
+                    .iter()
+                    .map(|p| p.split_whitespace().next().expect("parameter type"))
+                    .collect();
+                types.push("...");
+                format!("{} ({})", self.ret_ty(), types.join(", "))
+            }
+            None => self.ret_ty(),
+        }
+    }
+
     pub fn ret_ty(&self) -> String {
         match self.ret_comps.len() {
             0 => "void".to_string(),
@@ -456,6 +512,12 @@ pub(crate) fn sig_info(
 ) -> Result<LSig, BackendError> {
     let data = &m.sigs[sig];
     let ctarget = opts.ctarget();
+    if data.variadic.is_some() {
+        require_variadic_target(opts)?;
+        if conv != Conv::C {
+            return Err(nyi("variadic signature requires a C membrane"));
+        }
+    }
     let plan = abi::plan_sig(&m.types, data, conv, ctarget);
     if let Some(why) = plan.refusals.first() {
         return Err(BackendError::Unsupported(format!(
@@ -512,6 +574,8 @@ pub(crate) fn sig_info(
         }
     }
     let mut params = Vec::with_capacity(data.params.len());
+    let mut fixed_left = data.variadic;
+    let mut variadic_fixed = fixed_left.filter(|&n| n == 0).map(|_| ll_params.len());
     for (pass, p) in plan.params.iter().zip(data.params.iter()) {
         match pass {
             ParamPass::Token => params.push(Slot::Token),
@@ -582,6 +646,18 @@ pub(crate) fn sig_info(
                 }
             },
         }
+        if !matches!(pass, ParamPass::Token)
+            && let Some(left) = fixed_left.as_mut()
+            && *left > 0
+        {
+            *left -= 1;
+            if *left == 0 {
+                variadic_fixed = Some(ll_params.len());
+            }
+        }
+    }
+    if fixed_left.is_some_and(|left| left != 0) {
+        return Err(ice("variadic fixed prefix exceeds signature arity"));
     }
     ll_params.extend(sret_trailing);
     Ok(LSig {
@@ -590,6 +666,7 @@ pub(crate) fn sig_info(
         ll_params,
         ret_comps,
         sret_first,
+        variadic_fixed,
     })
 }
 
@@ -726,6 +803,9 @@ pub(crate) fn emit_function(
     let conv = if f.export { Conv::C } else { Conv::Wolf };
     let opts = cx.opts.clone();
     let si = sig_info(m, f.sig, conv, &opts)?;
+    if si.variadic_fixed.is_some_and(|n| n != si.ll_params.len()) {
+        return Err(ice("variadic definition contains unnamed parameters"));
+    }
     // PGO block counts for THIS body, positional over the canonical
     // order. Silenced by `strip_facts` with every other fact channel.
     //
@@ -1523,7 +1603,7 @@ impl<'a> Fx<'a> {
         let decl = format!(
             "declare {} @\"{symbol}\"({}) nounwind",
             si.ret_ty(),
-            si.ll_params.join(", ")
+            si.prototype()
         );
         self.ensure_decl(&symbol, decl);
         Ok(Some(symbol))
@@ -2247,6 +2327,12 @@ impl<'a> Fx<'a> {
                 self.line(format!("  {t} = {mn} {from} {a} to {to}"));
                 self.vals.insert(results[0], Repr::Scalar(t));
             }
+            Opcode::Fpromote => {
+                let value = self.op(args[0])?;
+                let result = self.tmp();
+                self.line(format!("  {result} = fpext float {value} to double"));
+                self.vals.insert(results[0], Repr::Scalar(result));
+            }
             Opcode::Sitofp | Opcode::Uitofp => {
                 // int → float (D54.4): the free widening direction.
                 let from = self.sty(args[0])?;
@@ -2609,6 +2695,29 @@ impl<'a> Fx<'a> {
                 }
                 self.vals
                     .insert(results[0], Repr::Scalar(format!("@\"{sym}\"")));
+            }
+
+            // ---- C variable arguments (psABI §3.5.7) ----
+            Opcode::VaStart => {
+                require_variadic_target(&self.cx.opts)?;
+                if self.m.sigs[self.f.sig].variadic.is_none() {
+                    return Err(nyi("va_start outside a variadic definition"));
+                }
+                let list = self.new_slot(Layout {
+                    size: abi::variadic::VA_LIST_SIZE,
+                    align: abi::variadic::VA_LIST_ALIGN,
+                });
+                self.intrinsic("declare void @llvm.va_start(ptr)");
+                self.line(format!("  call void @llvm.va_start(ptr {list})"));
+                self.vals.insert(results[0], Repr::Scalar(list));
+            }
+            Opcode::VaArg => self.lower_va_arg(&args, &results)?,
+            Opcode::VaEnd => {
+                require_variadic_target(&self.cx.opts)?;
+                let list = self.op(args[0])?;
+                self.intrinsic("declare void @llvm.va_end(ptr)");
+                self.line(format!("  call void @llvm.va_end(ptr {list})"));
+                self.vals.insert(results[0], Repr::Token);
             }
 
             // ---- calls ----
@@ -3181,6 +3290,131 @@ impl<'a> Fx<'a> {
         Ok(())
     }
 
+    /// SysV AMD64 psABI §3.5.7, steps 1–11. Do not use LLVM's
+    /// scalar `va_arg` instruction for aggregates: a mixed aggregate
+    /// draws from two discontiguous register banks and must roll back
+    /// BOTH banks if either lacks space. The shared classifier is the
+    /// same one the C call plan uses (§3.2.3).
+    fn lower_va_arg(&mut self, args: &[WValue], results: &[WValue]) -> Result<(), BackendError> {
+        require_variadic_target(&self.cx.opts)?;
+        let ty = self.f.value_ty(results[0]);
+        if matches!(
+            self.m.types.get(ty),
+            TypeData::Bool | TypeData::I8 | TypeData::I16 | TypeData::F32
+        ) {
+            return Err(nyi("va_arg requires a default-promoted type"));
+        }
+        let layout = self.layout_of(ty)?;
+        let list = self.op(args[0])?;
+        let dst = self.new_slot(layout);
+        let gp_ptr = list.clone();
+        let fp_ptr = self.gep(&list, 4);
+        let overflow_ptr = self.gep(&list, 8);
+        let save_ptr = self.gep(&list, 16);
+        self.tmp += 1;
+        let id = self.tmp;
+        let reg_label = format!("va.reg{id}");
+        let stack_label = format!("va.stack{id}");
+        let done_label = format!("va.done{id}");
+        if let Some(units) = abi::classify_units(&self.m.types, ty) {
+            let gp_slots = units.iter().filter(|u| u.class == RegClass::Int).count() as u32;
+            let fp_slots = units.iter().filter(|u| u.class == RegClass::Sse).count() as u32;
+            let gp = self.tmp();
+            let fp = self.tmp();
+            self.line(format!("  {gp} = load i32, ptr {gp_ptr}, align 4"));
+            self.line(format!("  {fp} = load i32, ptr {fp_ptr}, align 4"));
+            let gp_fits = self.tmp();
+            let fp_fits = self.tmp();
+            let fits = self.tmp();
+            self.line(format!(
+                "  {gp_fits} = icmp ule i32 {gp}, {}",
+                abi::variadic::GP_LIMIT - gp_slots * 8
+            ));
+            self.line(format!(
+                "  {fp_fits} = icmp ule i32 {fp}, {}",
+                abi::variadic::FP_LIMIT - fp_slots * 16
+            ));
+            self.line(format!("  {fits} = and i1 {gp_fits}, {fp_fits}"));
+            self.line(format!(
+                "  br i1 {fits}, label %{reg_label}, label %{stack_label}"
+            ));
+            self.cur = self.new_block(reg_label);
+            let save = self.tmp();
+            self.line(format!("  {save} = load ptr, ptr {save_ptr}, align 8"));
+            let gp64 = self.tmp();
+            let fp64 = self.tmp();
+            self.line(format!("  {gp64} = zext i32 {gp} to i64"));
+            self.line(format!("  {fp64} = zext i32 {fp} to i64"));
+            let mut used_gp = 0;
+            let mut used_fp = 0;
+            for unit in units {
+                let (cursor, offset) = match unit.class {
+                    RegClass::Int => {
+                        let offset = used_gp * 8;
+                        used_gp += 1;
+                        (&gp64, offset)
+                    }
+                    RegClass::Sse => {
+                        let offset = used_fp * 16;
+                        used_fp += 1;
+                        (&fp64, offset)
+                    }
+                };
+                let bank = self.tmp();
+                self.line(format!(
+                    "  {bank} = getelementptr i8, ptr {save}, i64 {cursor}"
+                ));
+                let src = self.gep(&bank, offset);
+                let target = self.gep(&dst, i64::from(unit.offset));
+                // Exact-size copies also handle partial final eightbytes.
+                let size = u32::from(unit.bytes).min(layout.size.saturating_sub(unit.offset));
+                self.copy_bytes(&target, &src, size, "", "")?;
+            }
+            let gp_next = self.tmp();
+            let fp_next = self.tmp();
+            self.line(format!("  {gp_next} = add i32 {gp}, {}", gp_slots * 8));
+            self.line(format!("  {fp_next} = add i32 {fp}, {}", fp_slots * 16));
+            self.line(format!("  store i32 {gp_next}, ptr {gp_ptr}, align 4"));
+            self.line(format!("  store i32 {fp_next}, ptr {fp_ptr}, align 4"));
+            self.line(format!("  br label %{done_label}"));
+            self.cur = self.new_block(stack_label);
+        }
+        // Steps 7–10: align the overflow cursor; consume the whole
+        // argument without changing either register cursor.
+        let overflow = self.tmp();
+        self.line(format!(
+            "  {overflow} = load ptr, ptr {overflow_ptr}, align 8"
+        ));
+        let align = layout.align.max(8);
+        let address = self.tmp();
+        let biased = self.tmp();
+        let aligned = self.tmp();
+        let src = self.tmp();
+        self.line(format!("  {address} = ptrtoint ptr {overflow} to i64"));
+        self.line(format!("  {biased} = add i64 {address}, {}", align - 1));
+        self.line(format!(
+            "  {aligned} = and i64 {biased}, {}",
+            -i64::from(align)
+        ));
+        self.line(format!("  {src} = inttoptr i64 {aligned} to ptr"));
+        self.copy_bytes(&dst, &src, layout.size, "", "")?;
+        let next = self.gep(&src, i64::from(layout.size.next_multiple_of(8)));
+        self.line(format!("  store ptr {next}, ptr {overflow_ptr}, align 8"));
+        self.line(format!("  br label %{done_label}"));
+        self.cur = self.new_block(done_label);
+        let value = if is_agg(self.m, ty) {
+            Repr::Addr(dst)
+        } else {
+            let scalar = scalar_ty(self.m, ty).ok_or_else(|| ice("va_arg of token"))?;
+            let value = self.tmp();
+            self.line(format!("  {value} = load {scalar}, ptr {dst}, align 1"));
+            Repr::Scalar(value)
+        };
+        self.vals.insert(results[0], value);
+        self.vals.insert(results[1], Repr::Token);
+        Ok(())
+    }
+
     /// Lower one call, executing the callee's ABI plan (tokens erased,
     /// small aggregates in registers, big ones through memory, error
     /// unions per `[abi.err.repr]`).
@@ -3225,7 +3459,7 @@ impl<'a> Fx<'a> {
         let decl = format!(
             "declare {} @\"{symbol}\"({}){extra} nounwind",
             si.ret_ty(),
-            si.ll_params.join(", ")
+            si.prototype()
         );
         self.ensure_decl(&symbol, decl);
 
@@ -3326,7 +3560,8 @@ impl<'a> Fx<'a> {
         }
         let ret_ty = si.ret_ty();
         let na = self.call_noalias_suffix(args);
-        let rendered = format!("call {ret_ty} {callee_ll}({}){na}", cargs.join(", "));
+        let call_type = si.call_type();
+        let rendered = format!("call {call_type} {callee_ll}({}){na}", cargs.join(", "));
         let retval = if si.ret_comps.is_empty() {
             self.line(format!("  {rendered}"));
             String::new()
@@ -3434,13 +3669,17 @@ impl<'a> Fx<'a> {
             pi += 1;
         }
         debug_assert_eq!(pi, n_ll);
+        if si.variadic_fixed.is_some() {
+            named.push("...".to_string());
+        }
         // c28 [ct.attr.barrier]: a consttime fn is `noinline` at the
         // release tier — the WIR-verified body stays one symbol, so
         // the contract's guarantee attaches to the code that runs and
         // the asm witness can find it in the disassembly. `optnone`
         // is deliberately NOT emitted: optimizing WITHIN the body is
         // welcome; dissolving the body's boundary is not.
-        let noinline = if self.f.consttime.is_some() {
+        // A variadic register-save area belongs to this invocation only.
+        let noinline = if self.f.consttime.is_some() || si.variadic_fixed.is_some() {
             " noinline"
         } else {
             ""
@@ -3454,10 +3693,15 @@ impl<'a> Fx<'a> {
         };
         // kw04 (`[abi.target.none.codegen]`): kernel code generation on
         // the freestanding target — no red zone (an interrupt lands on
-        // the same stack), frame pointers kept, and no MMX/SSE/AVX
-        // state (K10: floats are refused, so nothing needs it).
+        // the same stack), frame pointers kept, and no implicit vector
+        // state. Variadic entries alone may save incoming XMM varargs
+        // under AL != 0; ordinary definitions retain the no-SSE set.
         let target_attrs = if self.cx.opts.target == Some(crate::ReleaseTarget::X86_64None) {
-            FREESTANDING_FN_ATTRS
+            if si.variadic_fixed.is_some() {
+                FREESTANDING_VARIADIC_FN_ATTRS
+            } else {
+                FREESTANDING_FN_ATTRS
+            }
         } else {
             ""
         };

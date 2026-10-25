@@ -1913,6 +1913,7 @@ impl<'m> FuncBuilder<'m> {
                 | Opcode::Frem
                 | Opcode::Fneg
                 | Opcode::Fma
+                | Opcode::Fpromote
                 | Opcode::Icmp
                 | Opcode::Fcmp
                 | Opcode::Sext

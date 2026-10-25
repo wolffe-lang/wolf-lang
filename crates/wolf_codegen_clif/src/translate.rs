@@ -820,6 +820,8 @@ struct Tx<'a, 'b> {
     rt: &'a mut HashMap<&'static str, cranelift_module::FuncId>,
     /// C membrane imports declared so far (`c.*` callee → func id).
     imports: &'a mut HashMap<String, cranelift_module::FuncId>,
+    variadic_shims: &'a mut Vec<VariadicShim>,
+    va_context: Option<CValue>,
     /// Module data blobs defined so far (`data.addr` targets, s31):
     /// WIR data index → object data id. Lazily defined on first
     /// reference, so an object carries exactly the data it uses.
@@ -868,6 +870,32 @@ struct Tx<'a, 'b> {
 pub(crate) struct FuncEntry {
     pub fid: cranelift_module::FuncId,
     pub sig: SigId,
+    pub core: Option<cranelift_module::FuncId>,
+    pub symbol: String,
+}
+
+/// Code inserted after CLIF object finalization. Imported placeholders let
+/// ordinary CLIF calls refer to these entries without a fake CLIF body.
+pub(crate) struct VariadicShim {
+    pub fid: cranelift_module::FuncId,
+    pub target: String,
+    pub code: abi::variadic::x64::Code,
+    pub linkage: wolf_backend::Linkage,
+}
+
+pub(crate) fn check_variadic_target(om: &ObjectModule) -> Result<(), BackendError> {
+    let triple = om.isa().triple();
+    if triple.architecture != target_lexicon::Architecture::X86_64
+        || !matches!(
+            triple.operating_system,
+            target_lexicon::OperatingSystem::Linux | target_lexicon::OperatingSystem::None_
+        )
+    {
+        return Err(nyi(format!(
+            "C variable arguments are unsupported on {triple}; require x86-64 Linux or x86_64-unknown-none (SysV AMD64)"
+        )));
+    }
+    Ok(())
 }
 
 fn ice(msg: impl Into<String>) -> BackendError {
@@ -892,6 +920,7 @@ pub(crate) fn translate_function(
     funcs: &HashMap<String, FuncEntry>,
     rt: &mut HashMap<&'static str, cranelift_module::FuncId>,
     imports: &mut HashMap<String, cranelift_module::FuncId>,
+    variadic_shims: &mut Vec<VariadicShim>,
     data_ids: &mut HashMap<u32, cranelift_module::DataId>,
     site_files: &HashMap<u32, wolf_backend::dwarf::SourceFile>,
     site_file_data: &mut HashMap<u32, cranelift_module::DataId>,
@@ -906,6 +935,8 @@ pub(crate) fn translate_function(
         funcs,
         rt,
         imports,
+        variadic_shims,
+        va_context: None,
         data_ids,
         site_files,
         site_file_data,
@@ -1047,6 +1078,10 @@ impl<'a, 'b> Tx<'a, 'b> {
                     next += 1;
                 }
             }
+        }
+        if self.m.sigs[self.f.sig].variadic.is_some() {
+            check_variadic_target(self.om)?;
+            self.va_context = cparams.last().copied();
         }
         let sret_base = if si.sret_first { 0 } else { next };
         for k in 0..n_sret {
@@ -1810,6 +1845,11 @@ impl<'a, 'b> Tx<'a, 'b> {
             }
 
             // ---- conversions ----
+            Opcode::Fpromote => {
+                let a = self.scalar(args[0])?;
+                let r = self.b.ins().fpromote(ctypes::F64, a);
+                self.vals.insert(results[0], Repr::Scalar(r));
+            }
             Opcode::Sext | Opcode::Zext | Opcode::Itrunc => {
                 let a = self.scalar(args[0])?;
                 let ty = scalar_clif_ty(self.m, self.f.value_ty(results[0]))
@@ -2154,6 +2194,22 @@ impl<'a, 'b> Tx<'a, 'b> {
                 let gv = self.om.declare_data_in_func(did, self.b.func);
                 let p = self.b.ins().symbol_value(ctypes::I64, gv);
                 self.vals.insert(results[0], Repr::Scalar(p));
+            }
+
+            // ---- C variable arguments ----
+            Opcode::VaStart => {
+                check_variadic_target(self.om)?;
+                let p = self
+                    .va_context
+                    .ok_or_else(|| nyi("va_start outside a variadic definition"))?;
+                self.vals.insert(results[0], Repr::Scalar(p));
+            }
+            Opcode::VaArg => {
+                self.lower_va_arg(&args, &results)?;
+            }
+            Opcode::VaEnd => {
+                check_variadic_target(self.om)?;
+                self.vals.insert(results[0], Repr::Token);
             }
 
             // ---- calls ----
@@ -2700,6 +2756,117 @@ impl<'a, 'b> Tx<'a, 'b> {
         Ok(())
     }
 
+    /// psABI §3.5.7: the banks are independent, but a mixed aggregate
+    /// consumes both atomically or neither. The SSE save stride is 16,
+    /// independent of the width of the value carried in that slot.
+    fn lower_va_arg(
+        &mut self,
+        args: &[wolf_wir::ir::Value],
+        results: &[wolf_wir::ir::Value],
+    ) -> Result<(), BackendError> {
+        check_variadic_target(self.om)?;
+        let ty = self.f.value_ty(results[0]);
+        if !matches!(
+            self.m.types.get(ty),
+            TypeData::I32 | TypeData::I64 | TypeData::F64 | TypeData::Ptr | TypeData::Agg(_)
+        ) {
+            return Err(nyi(
+                "va_arg requires a promoted C scalar or C-compatible aggregate",
+            ));
+        }
+        let layout = self.layout_of(ty)?;
+        let list = self.scalar(args[0])?;
+        let flags = MemFlagsData::trusted();
+        let overflow = self.b.create_block();
+        let done = self.b.create_block();
+        let address = self.b.append_block_param(done, ctypes::I64);
+        if let Some(units) = abi::classify_units(&self.m.types, ty) {
+            let gp_slots = units.iter().filter(|u| u.class == RegClass::Int).count() as u32;
+            let fp_slots = units.iter().filter(|u| u.class == RegClass::Sse).count() as u32;
+            let gp = self.b.ins().load(ctypes::I32, flags, list, 0);
+            let fp = self.b.ins().load(ctypes::I32, flags, list, 4);
+            let gp_ok = self.b.ins().icmp_imm_s(
+                IntCC::UnsignedLessThanOrEqual,
+                gp,
+                i64::from(abi::variadic::GP_LIMIT - gp_slots * 8),
+            );
+            let fp_ok = self.b.ins().icmp_imm_s(
+                IntCC::UnsignedLessThanOrEqual,
+                fp,
+                i64::from(abi::variadic::FP_LIMIT - fp_slots * 16),
+            );
+            let fits = self.b.ins().band(gp_ok, fp_ok);
+            let registers = self.b.create_block();
+            self.b.ins().brif(fits, registers, &[], overflow, &[]);
+            self.b.switch_to_block(registers);
+            let save = self.b.ins().load(ctypes::I64, flags, list, 16);
+            let gp_wide = self.b.ins().uextend(ctypes::I64, gp);
+            let fp_wide = self.b.ins().uextend(ctypes::I64, fp);
+            let gp_base = self.b.ins().iadd(save, gp_wide);
+            let fp_base = self.b.ins().iadd(save, fp_wide);
+            let slot = self.new_slot(Layout {
+                size: layout.size.next_multiple_of(8).max(8),
+                align: layout.align.max(8),
+            });
+            let value = self.b.ins().stack_addr(ctypes::I64, slot, 0);
+            let (mut ngp, mut nfp) = (0, 0);
+            for unit in &units {
+                let (base, offset) = match unit.class {
+                    RegClass::Int => {
+                        let off = ngp * 8;
+                        ngp += 1;
+                        (gp_base, off)
+                    }
+                    RegClass::Sse => {
+                        let off = nfp * 16;
+                        nfp += 1;
+                        (fp_base, off)
+                    }
+                };
+                let part = self.b.ins().load(unit_clif_ty(unit), flags, base, offset);
+                self.store_unit(value, unit, part);
+            }
+            if gp_slots != 0 {
+                let next = self.b.ins().iadd_imm_s(gp, i64::from(gp_slots * 8));
+                self.b.ins().store(flags, next, list, 0);
+            }
+            if fp_slots != 0 {
+                let next = self.b.ins().iadd_imm_s(fp, i64::from(fp_slots * 16));
+                self.b.ins().store(flags, next, list, 4);
+            }
+            self.b.ins().jump(done, &[BlockArg::Value(value)]);
+        } else {
+            self.b.ins().jump(overflow, &[]);
+        }
+        self.b.switch_to_block(overflow);
+        let raw = self.b.ins().load(ctypes::I64, flags, list, 8);
+        let align = layout.align.max(8);
+        let rounded = self.b.ins().iadd_imm_s(raw, i64::from(align - 1));
+        let mask = self.b.ins().iconst(ctypes::I64, -i64::from(align));
+        let value = self.b.ins().band(rounded, mask);
+        let next = self
+            .b
+            .ins()
+            .iadd_imm_s(value, i64::from(layout.size.next_multiple_of(8)));
+        self.b.ins().store(flags, next, list, 8);
+        self.b.ins().jump(done, &[BlockArg::Value(value)]);
+        self.b.switch_to_block(done);
+        let result = if is_agg(self.m, ty) {
+            // Materialize an SSA value, not a mutable view of C's save area.
+            let slot = self.new_slot(layout);
+            let copy = self.b.ins().stack_addr(ctypes::I64, slot, 0);
+            self.copy_bytes(copy, address, layout.size);
+            Repr::Addr(copy)
+        } else {
+            self.load_field(address, 0, ty)?
+        };
+        self.vals.insert(results[0], result);
+        for &token in &results[1..] {
+            self.vals.insert(token, Repr::Token);
+        }
+        Ok(())
+    }
+
     /// Lower one call, executing the callee's ABI plan: tokens erased,
     /// small aggregates in registers, big ones through memory, error
     /// unions per `[abi.err.repr]`. The convention is the callee's:
@@ -2713,6 +2880,36 @@ impl<'a, 'b> Tx<'a, 'b> {
         results: &[wolf_wir::ir::Value],
     ) -> Result<(), BackendError> {
         let cc = self.om.isa().default_call_conv();
+        if let Some(fixed) = self.m.sigs[sig].variadic {
+            check_variadic_target(self.om)?;
+            let symbol = if let Some(entry) = self.funcs.get(callee) {
+                entry.symbol.clone()
+            } else if self.callee_is_export(callee) {
+                callee.to_string()
+            } else if let Some(symbol) = abi::c_import_symbol_in(self.m, callee) {
+                symbol.to_string()
+            } else {
+                return Err(nyi(format!("variadic call to non-C function `{callee}`")));
+            };
+            let si = sig_info(self.m, sig, Conv::C, cc)?;
+            let plan = abi::variadic::plan(&self.m.types, &self.m.sigs[sig], fixed as usize)
+                .map_err(nyi)?;
+            // A distinct private entry for every call shape avoids the module
+            // declaration cache's single fixed signature per C symbol.
+            let name = format!("_W.va.call.{}", self.variadic_shims.len());
+            let fid = self
+                .om
+                .declare_function(&name, cranelift_module::Linkage::Import, &si.clif)
+                .map_err(|e| ice(e.to_string()))?;
+            self.variadic_shims.push(VariadicShim {
+                fid,
+                target: symbol,
+                code: abi::variadic::x64::outgoing(plan.vector_registers),
+                linkage: wolf_backend::Linkage::Local,
+            });
+            let fref = self.om.declare_func_in_func(fid, self.b.func);
+            return self.emit_call_body(CallTarget::Direct(fref), &si, sig, args, results);
+        }
         // Resolve the callee: module function (wolf conv), `c.*`
         // import (C membrane, unmangled libc symbol), or runtime shim.
         let (fref, conv) = if let Some(&(fr, conv)) = self.fref_cache.get(callee) {

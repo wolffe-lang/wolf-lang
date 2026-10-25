@@ -1452,3 +1452,32 @@ fn hdrprom_refuses_a_variant_address_on_the_chain() {
         "the refusal is counted under the alias arm: {stats}"
     );
 }
+
+#[test]
+fn variadic_entry_prologue_is_an_inlining_barrier() {
+    let source = r#"
+decl @reader(i32) -> i64 variadic(1)
+export fn @reader(i32) -> i64 variadic(1) {
+b0(%n: i32):
+  %ap: ptr = va.start
+  %m: mem.r0 = region.foreign 1
+  %v: i64, %next: mem.r0 = va.arg %ap, %m
+  %end: mem.r0 = va.end %ap, %next
+  ret %v
+}
+fn @main() -> i64 {
+b0:
+  %n = iconst.i32 1
+  %value = iconst.i64 42
+  %out = call @reader(%n, %value) : (i32, i64) -> i64 variadic(1)
+  ret %out
+}
+"#;
+    let (out, stats) = pipeline(source);
+    assert_eq!(
+        stats.inlined_calls, 0,
+        "the prologue must retain its invocation: {stats}"
+    );
+    assert!(out.contains("call @reader"), "{out}");
+    assert_eq!(out.matches("va.start").count(), 1, "{out}");
+}

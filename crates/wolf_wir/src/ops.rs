@@ -317,6 +317,8 @@ pub enum Opcode {
     Fneg,
     /// `%r = fma %a, %b, %c` — fused multiply-add, a*b+c with one rounding.
     Fma,
+    /// Exact widening of one f32 value to f64 (C default promotion).
+    Fpromote,
 
     // ---- compares ------------------------------------------------------
     /// `%r = icmp.CC %a, %b` — integer compare, result `bool`.
@@ -399,6 +401,15 @@ pub enum Opcode {
     /// no region tokens, so an indirect call neither consumes nor
     /// mints tokens (the verifier enforces it).
     CallInd,
+    /// `%p: ptr = va.start`: initialized 24-byte cursor in the current
+    /// variadic invocation. The pointer never outlives its frame.
+    VaStart,
+    /// `%v: T, %m2: mem.rN = va.arg %p, %m`: fetch the next promoted
+    /// C value and advance the cursor at %p; consume/mint its token.
+    VaArg,
+    /// `%m2: mem.rN = va.end %p, %m`: end the cursor lifetime. Native
+    /// SysV needs no instruction; LLVM retains the intrinsic pairing.
+    VaEnd,
 
     // ---- terminators (exactly one per block; NO unwind form, D30) ------
     /// `jmp bN(%args…)` — unconditional branch, passing block arguments.
@@ -544,14 +555,17 @@ impl Opcode {
         matches!(self, Opcode::Jmp | Opcode::Br | Opcode::Ret | Opcode::Trap)
     }
 
-    /// True for both call forms — direct (`call`) and indirect
-    /// (`call.ind`). The mid-end's schedule-point/barrier tests key
+    /// True for direct/indirect calls and opaque cursor effects
+    /// (`va.arg`, `va.end`). The mid-end's schedule-point/barrier tests key
     /// on "is this a call", not "is this a NAMED call": an indirect
     /// callee is at least as opaque as a named one, so every pass
     /// that treats `call` as a barrier must treat `call.ind` the
     /// same or it will hoist/sink/coalesce across it unsoundly.
     pub fn is_call(self) -> bool {
-        matches!(self, Opcode::Call | Opcode::CallInd)
+        matches!(
+            self,
+            Opcode::Call | Opcode::CallInd | Opcode::VaArg | Opcode::VaEnd
+        )
     }
 
     /// True for mnemonics still reserved (c05): representable in
@@ -583,6 +597,9 @@ impl Opcode {
                     | Opcode::EuErr
                     | Opcode::UnionMake
                     | Opcode::UnionView
+                    | Opcode::VaStart
+                    | Opcode::VaArg
+                    | Opcode::VaEnd
             )
     }
 
@@ -622,6 +639,7 @@ impl Opcode {
             Opcode::Frem => "frem",
             Opcode::Fneg => "fneg",
             Opcode::Fma => "fma",
+            Opcode::Fpromote => "fpromote",
             Opcode::Icmp => "icmp",
             Opcode::Fcmp => "fcmp",
             Opcode::Sext => "sext",
@@ -642,6 +660,9 @@ impl Opcode {
             Opcode::FuncAddr => "func.addr",
             Opcode::Call => "call",
             Opcode::CallInd => "call.ind",
+            Opcode::VaStart => "va.start",
+            Opcode::VaArg => "va.arg",
+            Opcode::VaEnd => "va.end",
             Opcode::Jmp => "jmp",
             Opcode::Br => "br",
             Opcode::Ret => "ret",

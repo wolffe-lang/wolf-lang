@@ -726,3 +726,51 @@ fn ptr_int_bridges_verify_and_round_trip() {
         ErrClass::Type,
     );
 }
+
+#[test]
+fn variadic_cursor_needs_its_own_export_frame() {
+    expect_reject(
+        "fn @f() -> ptr {\nb0:\n %ap: ptr = va.start\n ret %ap\n}\n",
+        ErrClass::Type,
+    );
+    expect_reject(
+        "fn @f(i32) variadic(1) {\nb0(%n: i32):\n ret\n}\n",
+        ErrClass::EntrySig,
+    );
+}
+
+#[test]
+fn variadic_tail_must_already_be_promoted() {
+    expect_reject(
+        "decl @f(i32) -> i32 variadic(1)\nfn @main() -> i32 {\nb0:\n %n = iconst.i32 1\n %small = iconst.i8 7\n %r = call @f(%n, %small) : (i32, i8) -> i32 variadic(1)\n ret %r\n}\n",
+        ErrClass::CallSig,
+    );
+}
+
+#[test]
+fn variadic_cursor_effects_require_a_successor_token() {
+    expect_reject(
+        "fn @f(ptr, mem.r0) -> i64 {\nb0(%p: ptr, %m: mem.r0):\n %r: i64, %next: mem.r1 = va.arg %p, %m\n ret %r\n}\n",
+        ErrClass::Type,
+    );
+    expect_reject(
+        "fn @f(ptr, mem.r0) {\nb0(%p: ptr, %m: mem.r0):\n %next: mem.r1 = va.end %p, %m\n ret\n}\n",
+        ErrClass::Type,
+    );
+}
+
+#[test]
+fn variadic_function_address_is_rejected() {
+    expect_reject(
+        "decl @f(i32) -> i64 variadic(1)\nfn @main() -> ptr {\nb0:\n %p = func.addr @f()\n ret %p\n}\n",
+        ErrClass::Type,
+    );
+}
+
+#[test]
+fn fpromote_requires_the_exact_float_widths() {
+    expect_reject(
+        "fn @f(f64) -> f64 {\nb0(%v: f64):\n %r = fpromote %v\n ret %r\n}\n",
+        ErrClass::Type,
+    );
+}
