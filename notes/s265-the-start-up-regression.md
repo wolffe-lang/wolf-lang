@@ -401,10 +401,18 @@ takes enough starts; a median of three will keep missing by chance.
 
 ## 8. PENDING at the PR's opening
 
-`tools/gauntlet2.sh` on kasumi: the copy_write test at trunk `6480a27b`
-with lupin 0.1.56 (the attribution), then the gauntlet at the rebased
-head `53b95d3a` with every step past a red one run alone; it exits with
-the worst step. Its log and exits land in `gauntlet2/` when it ends.
+- `tools/gauntlet2.sh` on kasumi: the gauntlet at the rebased head
+  `53b95d3a`, every step past a red one run alone, exiting with the worst
+  step. Its first part, the copy_write test at trunk `6480a27b`, ran with
+  `CARGO_TARGET_DIR` set (unlike the gauntlet) and failed two rows with
+  `error: not_found`, among them one the head passes
+  (`a_copy_into_dev_full_keeps_its_bytes_on_every_lane`): an environment
+  difference of mine, so it attributes nothing.
+- `tools/attr2.sh`, queued on the lane lock behind it: the same test at
+  trunk `6480a27b` and at the head, both in the gauntlet's own
+  configuration (the worktree's `target/`), same container, same lupin
+  0.1.56. Red at trunk too: pre-existing (the lupin pin list stops at
+  0.1.55), cited, not fixed here; green at trunk: this lane's.
 
 ## Done-when (the contract's)
 
