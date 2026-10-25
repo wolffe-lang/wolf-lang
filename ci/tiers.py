@@ -116,6 +116,8 @@ RULES = [
     ("bench/**", PR),
     ("ci/**", PR),
     ("docs/**", PR),
+    # Lane evidence includes executable reproducers and test inputs.
+    ("notes/**", PR),
     ("assets/**", PR),
     (".github/**", PR),
     (".cargo/**", PR),
