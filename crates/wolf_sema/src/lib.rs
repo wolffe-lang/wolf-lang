@@ -228,7 +228,8 @@ pub mod unify;
 pub(crate) mod wave;
 
 pub use check::{
-    BodyRef, BodyResult, CallSig, CastKind, Dispatch, NotYet, TaskCapture, TypedBody, check_body,
+    BodyRef, BodyResult, CallSig, CastKind, Dispatch, ELSE_FALLBACK_RANGE, NotYet, TaskCapture,
+    TypedBody, check_body, ledger_note,
 };
 pub use coerce::Coercion;
 pub use ctfe::{Budget, CtfeStats, Engine, Fold, ValueArena, ValueKind};

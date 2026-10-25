@@ -74,6 +74,23 @@ pub struct NotYet {
     pub span: Span,
 }
 
+/// The range refusal when the refused range is an `else` fallback
+/// (s266, wolf-lang#932). `s[i else 0 + 2..]` is `s[i else (0 + 2..)]`
+/// by `[gram.amb.else]`, so the open-ended range the ledger declines is
+/// the fallback the program did not mean; the refusal names it.
+pub const ELSE_FALLBACK_RANGE: &str =
+    "an open-ended or end-relative range as an `else` fallback (slicing)";
+
+/// The note a refusal carries to its reader, by construct (s266,
+/// wolf-lang#932, R-s266-1 A): the driver prints it under the refusal
+/// and `conform-run` records it as `x-unsupported-note`. `None` for
+/// every construct with nothing to add.
+pub fn ledger_note(construct: &str) -> Option<&'static str> {
+    (construct == ELSE_FALLBACK_RANGE).then_some(
+        "the `else` fallback extends to the end of the expression; parenthesise `(… else 0)`",
+    )
+}
+
 /// The per-body result contract (s13).
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)] // Checked is the overwhelmingly common case
@@ -609,6 +626,11 @@ struct Checker<'a> {
     /// [`Checker::check_slice_endpoints`], not by the general
     /// range-value rule that refuses those forms.
     slice_pos_ranges: HashSet<Span>,
+    /// The fallback operand of every `else` checked so far (s266,
+    /// wolf-lang#932): a refused range that IS one of these is reported
+    /// as [`ELSE_FALLBACK_RANGE`], because the program meant
+    /// `(x else 0) + 2..` and the fallback swallowed the range.
+    else_fallbacks: HashSet<Span>,
     /// Member resolutions (s133): (use span, declaration name span).
     member_refs: Vec<(Span, Span)>,
     /// Every tag name spelled in an error row of the item under check
@@ -825,6 +847,7 @@ pub fn check_body(pkg: &Package, sigs: &SigTables, body: &BodyRef) -> BodyResult
         match_facts: Vec::new(),
         calls: Vec::new(),
         slice_pos_ranges: HashSet::new(),
+        else_fallbacks: HashSet::new(),
         member_refs: Vec::new(),
         row_tags: BTreeSet::new(),
         expect_enum: None,
@@ -1012,6 +1035,7 @@ pub(crate) fn collect_body_rows(
         match_facts: Vec::new(),
         calls: Vec::new(),
         slice_pos_ranges: HashSet::new(),
+        else_fallbacks: HashSet::new(),
         member_refs: Vec::new(),
         row_tags: BTreeSet::new(),
         expect_enum: None,
@@ -6116,8 +6140,17 @@ impl<'a> Checker<'a> {
         }
         let endpoints: Vec<&GreenNode> = d.endpoints().collect();
         if endpoints.len() != 2 || endpoints.iter().any(|n| n.kind == SyntaxKind::FromEndExpr) {
+            // #932: `s[i else 0 + 2..]` reaches here as the fallback
+            // `0 + 2..` (`[gram.amb.else]`: the default takes a
+            // complete expression), so the refusal names the fallback
+            // and carries the note `ledger_note` hands the driver.
+            let construct = if self.else_fallbacks.contains(&e.span) {
+                ELSE_FALLBACK_RANGE
+            } else {
+                "open-ended or end-relative ranges (slicing)"
+            };
             return Err(NotYet {
-                construct: "open-ended or end-relative ranges (slicing)",
+                construct,
                 span: e.span,
             });
         }
@@ -6384,6 +6417,7 @@ impl<'a> Checker<'a> {
                     }
                 }
                 if let Some(fb) = d.fallback() {
+                    self.else_fallbacks.insert(fb.span);
                     let fexp = Expect {
                         ty: ok,
                         reason: Reason::ElseFallback,
@@ -6399,6 +6433,7 @@ impl<'a> Checker<'a> {
             }
             TyKind::Error | TyKind::Never => {
                 if let Some(fb) = d.fallback() {
+                    self.else_fallbacks.insert(fb.span);
                     self.push_scope();
                     self.synth_expr(fb)?;
                     self.pop_scope();

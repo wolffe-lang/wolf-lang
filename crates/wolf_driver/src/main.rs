@@ -3030,6 +3030,11 @@ fn report_build_stop(cmd: &str, stop: BuildStop, sources: &Sources) -> ! {
                     wolf_diag::render_source_span(span, sources, &RenderOptions::default())
                 );
             }
+            // s266 (#932, R-s266-1 A): a refusal whose construct names
+            // a likelier mistake than a gap says so under the source.
+            if let Some(note) = wolf_sema::ledger_note(&reason) {
+                eprintln!("  = note: {note}");
+            }
             std::process::exit(EXIT_REFUSED);
         }
         BuildStop::Environment(msg) => {
@@ -3634,6 +3639,10 @@ fn record_refusal(
     sources: &Sources,
 ) {
     x_ext.push(("x-unsupported-construct", serde_json::json!(construct)));
+    // s266 (#932): the refusal's note, where its construct has one.
+    if let Some(note) = wolf_sema::ledger_note(construct) {
+        x_ext.push(("x-unsupported-note", serde_json::json!(note)));
+    }
     if let Some(span) = span {
         x_ext.push(("x-unsupported-span", serde_json::json!([span.lo, span.hi])));
         if let Some(file) = sources.file_name(span.file) {
