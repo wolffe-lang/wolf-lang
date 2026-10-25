@@ -1,0 +1,21 @@
+26d3a10d Resolve the main thread's guard at its first fault, not before main
+hello, wolf
+release head: 47 calls
+gate wolf: 47 calls
+gate c: 35 calls
+main_stack_bounds: stack limit 4 MiB: exit status: 0
+main_stack_bounds: stack limit 8191 KiB (not a page multiple): exit status: 0
+main_stack_bounds: stack limit 64 MiB: exit status: 0
+main_stack_bounds: no stack limit: exit status: 0
+main_stack_bounds: a 1 MiB environment: exit status: 0
+main_stack_bounds: ok
+     Running tests/stack_overflow.rs (/home/mfwolffe/lanes/s265/target/debug/deps/stack_overflow-c979d5fd8ec06639)
+stack_overflow: ok (named deterministic fault)
+0.2.35 native depth=200000 exit=134 wolf-trap: stack-overflow|  at pc=0x000055821b14d0a1|
+0.2.35 native depth=300000 exit=134 wolf-trap: stack-overflow|  at pc=0x0000561a5004511b|
+0.2.35 release depth=200000 exit=134 wolf-trap: stack-overflow|  at pc=0x00005610d72ddea6|
+0.2.35 release depth=300000 exit=134 wolf-trap: stack-overflow|  at pc=0x000055dd9efcbea2|
+head native depth=200000 exit=134 wolf-trap: stack-overflow|  at pc=0x00005611b3e5b261|
+head native depth=300000 exit=134 wolf-trap: stack-overflow|  at pc=0x000055931f75a261|
+head release depth=200000 exit=134 wolf-trap: stack-overflow|  at pc=0x000055f3edaef052|
+head release depth=300000 exit=134 wolf-trap: stack-overflow|  at pc=0x0000559667be9052|

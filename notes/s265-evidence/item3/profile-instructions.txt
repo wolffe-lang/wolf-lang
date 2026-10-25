@@ -1,0 +1,9 @@
+== 0.2.34: samples by dso for comm hello-0.2.34 (1 sample = 500 user instructions, 200 starts)
+   19549 total = 48872 instructions a start
+   19549 
+== 0.2.35: samples by dso for comm hello-0.2.35 (1 sample = 500 user instructions, 200 starts)
+   22746 total = 56865 instructions a start
+   22746 
+== head: samples by dso for comm hello-head (1 sample = 500 user instructions, 200 starts)
+   21462 total = 53655 instructions a start
+   21462 

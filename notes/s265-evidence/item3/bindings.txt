@@ -1,0 +1,15 @@
+s265: dynamic bindings at load (LD_DEBUG=bindings, `binding file` lines), and
+the user-space instructions with every library bound at load (LD_BIND_NOW=1,
+perf stat -r 20). The hellos are linked BIND_NOW (readelf -d: FLAGS BIND_NOW,
+FLAGS_1 NOW PIE), so no lookup is deferred into a handler. kasumi, 2026-10-25.
+
+0.2.34 bindings=141
+0.2.35 bindings=158
+head(eager direct read, 2c825949) bindings=160
+c bindings=93
+new at the head over 0.2.34: _exit getpid getrlimit mmap open pthread_attr_destroy
+  pthread_attr_getguardsize pthread_attr_getstack pthread_getattr_np pthread_self
+  pthread_sigmask raise sigaction sigaddset sigaltstack sigemptyset sysconf
+  tcgetattr tcsetattr
+LD_BIND_NOW=1 instructions:u  0.2.34 209,797  head(2c825949) 278,697
+relocations (readelf -r, R_X86_64 lines): 0.2.34 564, head 597

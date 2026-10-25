@@ -1,0 +1,46 @@
+2c825949 Record the start-up row at sixteen system calls over C
+ crates/wolf_rt/src/native.rs | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+   --> crates/wolf_rt/src/task/mod.rs:923:15
+    |
+923 | pub(crate) fn enter_main_thread() {
+    |               ^^^^^^^^^^^^^^^^^
+    |
+hello, wolf
+ crates/wolf_rt/src/task/stack.rs | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+hello, wolf
+ crates/wolf_rt/src/task/stack.rs | 5 +----
+ 1 file changed, 1 insertion(+), 4 deletions(-)
+hello, wolf
+0.2.34	42 calls	63,page-faults:u 173381,instructions:u 
+0.2.35	59 calls	69,page-faults:u 259616,instructions:u 
+head	51 calls	67,page-faults:u 242282,instructions:u 
+V1	42 calls	63,page-faults:u 173363,instructions:u 
+V2	47 calls	63,page-faults:u 182038,instructions:u 
+V3	44 calls	64,page-faults:u 180988,instructions:u 
+c	35 calls	53,page-faults:u 112486,instructions:u 
+label	n	median_ns	p10_ns	p90_ns	min_ns	max_ns	spread
+v0.2.34	50	239296	229263	272134	224386	332674	0.179
+v0.2.35	50	279554	269302	306279	261553	402826	0.132
+head	50	263170	257172	284649	254041	359753	0.104
+V1	50	237711	230379	267738	227796	375101	0.157
+V2	50	240577	231898	257642	227860	264214	0.107
+V3	50	241821	232264	269968	228658	321295	0.156
+c	50	209632	199810	236940	194741	420332	0.177
+label	n	median_ns	p10_ns	p90_ns	min_ns	max_ns	spread
+v0.2.34	50	241270	233276	281365	224798	426511	0.199
+v0.2.35	50	282662	270433	311248	264903	460552	0.144
+head	50	265430	257317	286421	253341	413577	0.110
+V1	50	237241	228767	268468	227163	338568	0.167
+V2	50	239237	231765	259678	228075	576661	0.117
+V3	50	239611	231480	252229	227846	272076	0.087
+c	50	207155	199744	228820	196441	263653	0.140
+label	n	median_ns	p10_ns	p90_ns	min_ns	max_ns	spread
+v0.2.34	50	244726	230895	265133	226283	375586	0.140
+v0.2.35	50	276539	270287	304586	267997	449491	0.124
+head	50	266887	257572	294355	253957	454051	0.138
+V1	50	237595	229895	260914	224399	326897	0.131
+V2	50	241797	233426	271641	228863	404349	0.158
+V3	50	238541	232779	259943	229432	323742	0.114
+c	50	205244	198799	224801	196104	373918	0.127

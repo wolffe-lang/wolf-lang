@@ -1,0 +1,23 @@
+Sun Oct 25 12:11:53 AM UTC 2026
+fetched bisection commits
+fetched head
+Sun Oct 25 12:12:02 AM UTC 2026
+0fac3d09 Record s265 start-up prediction
+   Compiling wolf_rt v0.2.35 (/home/mfwolffe/lanes/s265/wolf-head/crates/wolf_rt)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.07s
+     Running tests/main_stack_bounds.rs (/home/mfwolffe/lanes/s265/target/debug/deps/main_stack_bounds-86ba8885e6e26641)
+main_stack_bounds: parent: cheap Some((7ffd3ada4000, 7ffd3ada5000)) pthread Some((7ffd3ada4000, 7ffd3ada5000))
+main_stack_bounds: child: cheap Some((7ffef1436000, 7ffef1437000)) pthread Some((7ffef1436000, 7ffef1437000))
+main_stack_bounds: stack limit 4 MiB: exit status: 0
+main_stack_bounds: child: cheap Some((7fffdb924000, 7fffdb925000)) pthread Some((7fffdb924000, 7fffdb925000))
+main_stack_bounds: stack limit 8191 KiB (not a page multiple): exit status: 0
+main_stack_bounds: child: cheap Some((7ffcf469d000, 7ffcf469e000)) pthread Some((7ffcf469d000, 7ffcf469e000))
+main_stack_bounds: stack limit 64 MiB: exit status: 0
+main_stack_bounds: child: cheap Some((558d6d3ec000, 558d6d3ed000)) pthread Some((558d6d3ec000, 558d6d3ed000))
+main_stack_bounds: no stack limit: exit status: 0
+main_stack_bounds: child: cheap Some((7fff1d42e000, 7fff1d42f000)) pthread Some((7fff1d42e000, 7fff1d42f000))
+main_stack_bounds: a 1 MiB environment: exit status: 0
+main_stack_bounds: ok
+bash: line 8: target/debug/wolf: No such file or directory
+Sun Oct 25 12:12:31 AM UTC 2026
+SHORT1 DONE
