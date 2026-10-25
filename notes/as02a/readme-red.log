@@ -1,0 +1,65 @@
+as02a job full3 start=2026-10-25T08:05:02Z head=7ace5fd28c5a64172fe1f52fd906c80cd4486174 pid=1939079
+as02a waiting for the CPUs 4-7 lock (2026-10-25T08:05:02Z); job as02a-job: bash /home/mfwolffe/lanes/as02a/scripts/gauntlet.sh
+test protocol::tests::verdict_grammar ... ok
+test protocol::tests::wrong_version_rejected ... ok
+test readme::tests::scanner_separates_absolute_from_relative ... ok
+test protocol::tests::warnings_are_additive_and_compared_when_shared ... ok
+
+thread 'readme::tests::shipped_readme_has_no_relative_links' (305583) panicked at xtask/src/readme.rs:69:9:
+README.md is installed to share/doc, where these resolve to nothing — use https://github.com/wolffe-lang/wolf-lang/blob/trunk/…: ["spec/04-abi.md#6-assembly-abiasm"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test release::tests::a_digest_line_needs_sixty_four_hex_digits ... ok
+test readme::tests::shipped_readme_names_the_std_mechanism ... ok
+test readme::tests::shipped_readme_still_links ... ok
+test readme::tests::shipped_readme_has_no_relative_links ... FAILED
+test release::tests::a_missing_digest_line_is_red_by_name ... ok
+test release::tests::a_whole_release_reads_back ... ok
+test release::tests::every_disagreement_is_named ... ok
+test release::tests::the_notes_section_parses_back_to_its_two_digests ... ok
+test release::tests::the_flags_are_mkwolfs_with_the_target_remap_last_but_one ... ok
+test spec::tests::a_bare_bracket_literal_does_not_swallow_the_next_anchor ... ok
+test spec::tests::anchor_scan_edges_hold ... ok
+test spec::tests::extracts_in_order_and_ignores_other_fences ... ok
+test spec::tests::link_check_finds_dangling ... ok
+test spec::tests::every_registered_namespace_publishes_anchors ... ok
+test spec::tests::every_published_anchor_sits_in_a_registered_namespace ... ok
+test stats::tests::big_move_is_significant ... ok
+test spec::tests::the_clause_and_registered_ns_agree ... ok
+test spec::tests::the_clause_and_forward_ns_agree ... ok
+test stats::tests::same_distribution_is_unchanged ... ok
+test stats::tests::small_move_inside_noise_is_unchanged ... ok
+test t1::tests::a_baseline_that_lost_its_allocation_is_named ... ok
+test t1::tests::a_delta_inside_one_bucket_is_not_a_reading ... ok
+test t1::tests::a_folded_lane_contributes_no_number ... ok
+test t1::tests::a_loss_below_the_floor_is_also_a_tie ... ok
+test t1::tests::a_population_change_is_reported_and_never_red ... ok
+test t1::tests::a_win_below_the_floor_is_a_tie ... ok
+test stats::tests::median_and_mad ... ok
+test t1::tests::an_existing_path_that_worsens_past_the_slack_is_red_by_name ... ok
+test t1::tests::exceptions_are_read_from_marker_lines ... ok
+test t1::tests::floor_is_the_relative_spread ... ok
+test t1::tests::floor_never_drops_below_the_practical_two_percent ... ok
+test t1::tests::gate_fails_on_an_undocumented_big_loss ... ok
+test t1::tests::gate_fails_when_too_many_exceptions_are_declared ... ok
+test t1::tests::gate_reports_families_separately ... ok
+test t1::tests::geomean_of_ratios ... ok
+test t1::tests::ir_instruction_counting_ignores_scaffolding ... ok
+test t1::tests::ir_ratio_needs_a_denominator ... ok
+test t1::tests::loss_percent_is_how_much_slower_wolf_is ... ok
+test t1::tests::manifest_rejects_junk ... ok
+test t1::tests::sink_comparison_is_exact_for_integers ... ok
+test t1::tests::manifest_round_trip ... ok
+test t1::tests::the_clock_quantum_is_one_tick_over_the_wall ... ok
+test t1::tests::unmeasured_and_improved_paths_are_reported_not_gated ... ok
+test t1::tests::vectorization_witness_counts_remarks ... ok
+test spec::tests::no_spec_document_names_an_unregistered_namespace ... ok
+
+failures:
+
+failures:
+    readme::tests::shipped_readme_has_no_relative_links
+
+test result: FAILED. 75 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p xtask --lib`
+xtask ci: step `test` failed

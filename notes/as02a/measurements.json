@@ -1,0 +1,94 @@
+{
+  "lane": "as02a",
+  "base": "e65b89e5",
+  "clef_commit": "996a3ccdf160923757c4ce6aa474efdffa2135b3",
+  "clef_sha256": "6ce3230dd4f7352f3251cff6dcf79308954031129a0fc28e59d635a5710750e0",
+  "wolf_archive_sha256": "4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a",
+  "lupin_archive_sha256": "ad703550ac4787e8e4bb26989d591a731410274d7332f2b4e8b9a64c878822cc",
+  "digest_readbacks": 2,
+  "strict_check": {
+    "head": "2d744242",
+    "log": "check.log",
+    "exit": 0,
+    "integration_tests": 16,
+    "selection_unit_tests": 1,
+    "existing_assembly_tests": 6,
+    "fmt": 0,
+    "clippy": 0,
+    "ci_planner": 0,
+    "real_clef_skips": 0
+  },
+  "corpus": {
+    "x86_64_sources": 43,
+    "tiers": [
+      "native",
+      "release"
+    ],
+    "outside_scope": [
+      "seven_aarch64_macos.S (AArch64 Mach-O)"
+    ],
+    "log": "clef-corpus.log"
+  },
+  "fresh_package": {
+    "tiers": [
+      "native",
+      "release"
+    ],
+    "expected_exit": 7,
+    "observed_exit": [
+      7,
+      7
+    ]
+  },
+  "checked_boundary": "unsupported: a call into assembly `kw_seven`",
+  "witness_export_rosters": {
+    "hosted": [
+      "kw_seven"
+    ],
+    "second_manifest_source": [
+      "another"
+    ],
+    "freestanding_stub": [
+      "wolf_trap",
+      "kw_outb",
+      "kw_big"
+    ]
+  },
+  "roster_semantics": "textual .globl/.global only; macros and includes do not expand the roster; unchanged",
+  "plants": [
+    {
+      "pr": 955,
+      "head": "a494b442",
+      "run": 40174784840,
+      "first_and_only_state": "in_progress",
+      "expected_red_row": "linux::failed_selected_assembler_is_final",
+      "red_observed": false
+    },
+    {
+      "pr": 956,
+      "head": "3229792a",
+      "run": 40174790345,
+      "first_and_only_state": "in_progress",
+      "expected_red_row": "linux::coff_selected_output_is_refused",
+      "red_observed": false
+    }
+  ],
+  "local_gauntlet": {
+    "first_code_head": "7ace5fd2",
+    "status": "README relative-link test failed; fixed by c332ca05; final rerun pending",
+    "retained_failure": "readme-red.log",
+    "known_startup_baseline_issue": "wolf-lang#952 (23 on kasumi Arch; not waived)",
+    "host_directory": "/home/mfwolffe/lanes/as02a/evidence"
+  },
+  "resources": {
+    "cpus": "4-7",
+    "lock": "/home/mfwolffe/lanes/kasumi-cores-4-7.lock",
+    "pids_limit": 16384,
+    "nproc": 32768,
+    "core_limit": 0,
+    "incremental": false,
+    "rust_dev_debug": 0,
+    "rust_test_debug": 0,
+    "disk_note": "The first full-debug attempt exceeded 10 GB and was stopped; its target was pruned. The debug-info-disabled rerun was 8.2 GB at 08:22Z."
+  }
+}

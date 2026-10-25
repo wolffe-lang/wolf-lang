@@ -1,0 +1,49 @@
+as02a job seam3 start=2026-10-25T07:55:32Z head=dbc525560a57478b1dcac9acbf8c4c27cede6644 pid=1828525
+as02a waiting for the CPUs 4-7 lock (2026-10-25T07:55:32Z); job as02a-job: bash /home/mfwolffe/lanes/as02a/scripts/seam.sh
+wolf: 4cc4045bbbb605c07835bc4f32685953c784eeef4cd3139a48b457dfc90dad1a verified twice
+lupin: ad703550ac4787e8e4bb26989d591a731410274d7332f2b4e8b9a64c878822cc verified twice
+6ce3230dd4f7352f3251cff6dcf79308954031129a0fc28e59d635a5710750e0  /home/mfwolffe/lanes/as02a/clef/target/clef
+6ce3230dd4f7352f3251cff6dcf79308954031129a0fc28e59d635a5710750e0  /home/mfwolffe/lanes/as02a/clef/target/clef
+   Compiling wolf_driver v0.2.35 (/home/mfwolffe/lanes/as02a/wolf-lang/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.54s
+     Running tests/assembler_select.rs (target/debug/deps/assembler_select-a474426539d01449)
+
+running 15 tests
+test assembler_option_requires_a_nonempty_path ... ok
+test an_explicit_assembler_does_not_enable_foreign_targets ... ok
+test linux::cli_assembler_overrides_environment ... ok
+test linux::configured_path_and_source_and_output_spaces_preserve_argv ... ok
+test linux::empty_environment_keeps_legacy_driver ... ok
+test linux::coff_selected_output_is_refused ... ok
+test linux::environment_assembler_overrides_legacy_driver ... ok
+test linux::failed_selected_assembler_is_final ... ok
+test linux::macho_selected_output_is_refused ... ok
+test linux::missing_selected_assembler_is_final ... ok
+REFUSED BY SCOPE: seven_aarch64_macos.S (clef is ELF x86-64 only)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
+test linux::malformed_selected_output_is_refused ... ok
+test linux::every_root_manifest_source_uses_real_clef_on_both_tiers ... ok
+test linux::wrong_machine_and_class_selected_output_are_refused ... ok
+test linux::fresh_package_links_and_runs_with_real_clef ... ok
+PASS: all 43 root-manifest sources via real clef; release=false
+test linux::pinned_corpus_sources_all_pass_through_the_root_manifest ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s
+
+PASS: all 43 root-manifest sources via real clef; release=true
+   Compiling wolf_driver v0.2.35 (/home/mfwolffe/lanes/as02a/wolf-lang/crates/wolf_driver)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.30s
+     Running tests/asm_link.rs (target/debug/deps/asm_link-ac5ae106638e9bf9)
+
+running 6 tests
+test a_call_no_listed_source_defines_is_e1306 ... ok
+test the_checked_machine_refuses_a_call_into_assembly_by_name ... ok
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
+test the_manifest_refuses_a_missing_source_a_non_list_and_a_dependency_by_name ... ok
+test listed_assembly_is_assembled_for_the_target_beside_the_object ... ok
+test linked::the_kernel_and_its_listed_assembly_link_without_libc_and_run ... ok
+test a_hosted_program_links_its_listed_assembly_on_both_tiers ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+as02a job seam3 exit=0 end=2026-10-25T07:55:36Z
