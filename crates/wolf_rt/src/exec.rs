@@ -363,7 +363,10 @@ mod unix {
             let errno = std::io::Error::last_os_error().raw_os_error().unwrap_or(0);
             crate::os::reinstall_faults(faults);
             restore(&saved, &staged);
-            crate::fs::os_error_set(i64::from(errno));
+            // PLANT (s266, never merged): ENOEXEC leaves os_error() at 0.
+            if errno != libc::ENOEXEC {
+                crate::fs::os_error_set(i64::from(errno));
+            }
             Err(match errno {
                 libc::ENOENT | libc::ENOTDIR => "not_found",
                 libc::EACCES | libc::EPERM => "denied",

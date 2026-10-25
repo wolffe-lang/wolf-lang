@@ -321,7 +321,11 @@ fn wait_forked(pid: libc::pid_t) -> Option<libc::c_int> {
 /// shell that must say "not an executable format" reads `ENOEXEC` there
 /// instead of guessing from the file's first bytes.
 fn spawn_refusal(e: &std::io::Error) -> ProcErr {
-    crate::fs::os_error_record(e);
+    // PLANT (s266, never merged): ENOEXEC (8 on linux and macOS) leaves
+    // os_error() at 0; #936's rows must go red.
+    if e.raw_os_error() != Some(8) {
+        crate::fs::os_error_record(e);
+    }
     match e.kind() {
         std::io::ErrorKind::NotFound => "not_found",
         std::io::ErrorKind::PermissionDenied => "denied",
