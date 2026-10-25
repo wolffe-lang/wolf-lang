@@ -50,6 +50,13 @@ layer: `hello.exe` builds and runs, traps report and exit 134, and
 signal delivery do not run on windows yet. [`docs/platforms.md`](https://github.com/wolffe-lang/wolf-lang/blob/trunk/docs/platforms.md)
 is the per-host ledger.
 
+The development compiler supports hand-declared C variadic calls and
+exported variadic functions on Linux x86-64 and `x86_64-unknown-none`.
+`VaList` and `va_start`, `va_arg`, `va_copy`, `va_end` provide list access;
+C's `va_list` parameter is spelled `*VaList`. Other targets report E0826,
+and the checked machine refuses these calls by name. This support is
+not in the 0.2.35 release archive; build from source to use it.
+
 ### Building from source
 
 ```sh
