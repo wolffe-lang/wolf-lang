@@ -14271,7 +14271,45 @@ const EXEC_DEFAULT_PATH: &str = "/usr/bin:/bin";
 /// or a file without an execute bit `denied`): this machine writes its
 /// print buffers out before the exec, so a refusal it can see coming
 /// must come before that, or the bytes would leave the record.
+///
+/// s266 (#936, `[os.fs.error]`): every refusal here keeps the number the
+/// exec would have met in `os_error()` — the look's own error, `EACCES`
+/// for a directory or a file without an execute bit (the kernel's answer
+/// for both), and for a bare name what `execvp(3)` reports (`ENOENT`, or
+/// `EACCES` when a candidate lacked the bit), as native's search does.
 fn exec_resolve(
+    exe: &str,
+    path: &str,
+    cwd: &Option<std::path::PathBuf>,
+) -> Result<String, &'static str> {
+    let r = exec_resolve_program(exe, path, cwd);
+    if let Err(tag) = r
+        && FS_HOST_ERROR.with(std::cell::Cell::get) == 0
+    {
+        FS_HOST_ERROR.with(|c| c.set(program_refusal_number(tag)));
+    }
+    r
+}
+
+/// The number a program-step refusal decided without the kernel carries:
+/// `EACCES` for `denied`, `ENOENT` otherwise (s266, #936).
+fn program_refusal_number(tag: &str) -> i64 {
+    #[cfg(unix)]
+    {
+        i64::from(if tag == "denied" {
+            libc::EACCES
+        } else {
+            libc::ENOENT
+        })
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = tag;
+        0
+    }
+}
+
+fn exec_resolve_program(
     exe: &str,
     path: &str,
     cwd: &Option<std::path::PathBuf>,
@@ -14281,11 +14319,14 @@ fn exec_resolve(
     }
     if exe.contains('/') {
         return match std::fs::metadata(resolve_in(cwd, exe.to_string())) {
-            Err(e) => Err(match e.kind() {
-                std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory => "not_found",
-                std::io::ErrorKind::PermissionDenied => "denied",
-                _ => "io",
-            }),
+            Err(e) => {
+                fs_host_error(&e);
+                Err(match e.kind() {
+                    std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory => "not_found",
+                    std::io::ErrorKind::PermissionDenied => "denied",
+                    _ => "io",
+                })
+            }
             Ok(md) if !md.is_file() || !exec_bit(&md) => Err("denied"),
             Ok(_) => Ok(exe.to_string()),
         };
