@@ -1,0 +1,8 @@
+ld02b prediction before implementation
+Base: wolf-lang 253d80ab; ligature 3f206413.
+One compile_native link_objects call is shared by native/release; link_staged has Unix and Windows implementations.
+Predict 16 new named test rows including process argv/errors, selected output verification, default CC, platform refusals, and strict real-ligature corpus native/release.
+CC compatibility needs no flag: default platform path unchanged; selected tool receives the existing cc-shaped argv without the lld discovery flag.
+R-ld02-2 recommendation A: CLI --linker > nonempty WOLF_LD > platform path; selected failure is final.
+Selected linkers supported on native Linux ELF; hosted Windows and unsupported hosts/foreign targets are refused by name.
+Real ligature needs the matching musl runtime/sysroot, not the GNU runtime. The release clang IR path is unchanged.
