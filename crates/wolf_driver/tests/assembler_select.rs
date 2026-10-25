@@ -282,7 +282,7 @@ mod linux {
                 "real clef is required"
             );
             eprintln!(
-                "SKIP: real-clef assembler rows require WOLF_TEST_CLEF (tools/build-test-clef, pin 996a3ccd)"
+                "SKIP: real-clef assembler rows require WOLF_TEST_CLEF (ci/build-test-clef, pin 996a3ccd)"
             );
             None
         }

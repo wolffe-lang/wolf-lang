@@ -294,7 +294,7 @@ jobs:
           tar -xzf ".lupin/$asset" -C .lupin --strip-components=1
           .lupin/lupin --version
       - name: build pinned clef for the assembler seam
-        run: tools/build-test-clef
+        run: ci/build-test-clef
       - name: explicit assembler selection and refusals
         run: cargo test -p wolf_driver --test assembler_select -- --nocapture
       - name: full gauntlet (fmt, clippy, test, deps-check, corpus)
