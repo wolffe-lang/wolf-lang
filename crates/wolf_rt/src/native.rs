@@ -994,13 +994,36 @@ pub unsafe extern "C" fn __wolf_rt_region_free(handle: *mut core::ffi::c_void) {
 pub unsafe extern "C" fn __wolf_rt_region_freeze(_handle: *mut core::ffi::c_void) {}
 
 /// Runtime startup before user main; no workers or other descriptors are
-/// made. Defined on every host (the entry shim always calls it); it
-/// registers the main thread only where `task` and its guard reporter
-/// exist (linux, macOS, windows: `lib.rs`'s gate on `pub mod task`).
+/// made. Defined on every host; it registers the main thread only where
+/// `task` and its guard reporter exist (linux, macOS, windows: `lib.rs`'s
+/// gate on `pub mod task`). Since s267 the entry shim calls
+/// [`__wolf_rt_main_start`], which ends here; this symbol stays exported
+/// for objects an older compiler made.
 #[unsafe(no_mangle)]
 pub extern "C" fn __wolf_rt_stack_start() {
     #[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
     crate::task::enter_main_thread();
+}
+
+/// The entry shim's first call (s267, wolf-lang#962, `[abi.target.main]`):
+/// the C entry's `(argc, argv, envp)`, recorded for the argv readers
+/// before user `main` runs ([`crate::os`]'s entry record), then the main
+/// thread's start-up ([`__wolf_rt_stack_start`]). One call where the shim
+/// made one before, so the shim's instruction count did not move.
+///
+/// # Safety
+/// `argv` is null or addresses `argc` pointers to NUL-terminated strings
+/// that live until the program ends, and `envp` is null or the C entry's
+/// environment array, exactly as the C library's start-up hands them to
+/// `main`; called once, from the entry shim, before any other thread.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn __wolf_rt_main_start(
+    argc: i32,
+    argv: *const *const core::ffi::c_char,
+    envp: *const *const core::ffi::c_char,
+) {
+    crate::os::record_entry(argc, argv, envp);
+    __wolf_rt_stack_start();
 }
 
 #[cfg(test)]
