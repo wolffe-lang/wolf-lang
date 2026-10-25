@@ -142,6 +142,25 @@ mod linux {
     }
 
     #[test]
+    fn release_uses_selected_linker_without_replacing_clang_codegen() {
+        let dir = package("release selection");
+        success(
+            build(&dir)
+                .args(["--release", "--linker=cc"])
+                .env("CC", "/missing/cc")
+                .output()
+                .unwrap(),
+        );
+        assert_eq!(
+            Command::new(dir.join("output program"))
+                .status()
+                .unwrap()
+                .code(),
+            Some(7)
+        );
+    }
+
+    #[test]
     fn environment_linker_overrides_cc() {
         let dir = package("environment");
         let path = tool(&dir, "exec cc \"$@\"");
