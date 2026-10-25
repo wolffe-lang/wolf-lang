@@ -1,0 +1,29 @@
+=== yew builds 00:25:10 load=2.47/2.91/4.12 busy: cpu4=1% cpu5=2% cpu6=1% cpu7=0% cpu12=0% cpu13=0% cpu14=1% cpu15=0% 
+ src/edit/cmdparse.lu | 2 +-
+ src/term/tty.lu      | 3 +++
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+BUILD a 0.2.34 00:25:11
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 12:53.13
+	Maximum resident set size (kbytes): 1810100
+	Exit status: 0
+BUILD b 0.2.35 00:38:04
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 14:06.64
+	Maximum resident set size (kbytes): 2043024
+	Exit status: 0
+BUILD fix head 00:52:11
+	Elapsed (wall clock) time (h:mm:ss or m:ss): 14:54.29
+	Maximum resident set size (kbytes): 2101792
+	Exit status: 0
+c2eac3011db9d5065519860be7010b9863c8fc0c68e8f4f2ddd4931df9f03335  /home/mfwolffe/lanes/s265/yew-a/target/release/yew
+ce383f1bb297acb5b157f7e2bccf717c98e0930a7584ac588bd4945dc1c8c550  /home/mfwolffe/lanes/s265/yew-b/target/release/yew
+7b5b3fc274c56b1a0cd6bf6ccf1e7283549cf0def478a69ebe3d65716ad71e54  /home/mfwolffe/lanes/s265/yew-fix/target/release/yew
+   text	   data	    bss	    dec	    hex	filename
+5901992	  24408	   4818	5931218	 5a80d2	/home/mfwolffe/lanes/s265/yew-a/target/release/yew
+6002602	  24520	   2442	6029564	 5c00fc	/home/mfwolffe/lanes/s265/yew-b/target/release/yew
+6032611	  25296	   4515	6062422	 5c8156	/home/mfwolffe/lanes/s265/yew-fix/target/release/yew
+=== bisection builds 01:07:06 load=3.67/2.85/2.45 busy: cpu4=2% cpu5=1% cpu6=1% cpu7=2% cpu12=0% cpu13=1% cpu14=0% cpu15=0% 
+=== 9da7bdcf v0.2.34 01:07:07
+fatal: cannot change to '/home/mfwolffe/lanes/s265/scratch/home/lanes/s265/wolf-lang': No such file or directory
+checkout 9da7bdcf FAILED
+Sun Oct 25 01:07:07 AM UTC 2026
+phase2b exit=1

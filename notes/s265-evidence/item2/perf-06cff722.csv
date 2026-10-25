@@ -1,0 +1,5 @@
+# started on Sun Oct 25 01:19:59 2026
+
+0.24,msec,task-clock:u,0.49%,247434,100.00,0.804,CPUs utilized
+69,,page-faults:u,0.29%,247434,100.00,286.734,K/sec
+259556,,instructions:u,0.02%,247434,100.00,,

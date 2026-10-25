@@ -1,0 +1,8 @@
+{"class":"Verdict","detail":"Exit(85) vs Exit(210)","file":"corpus/conc/atomic_ub_uaf.lu"}
+{"class":"Verdict","detail":"Exit(0) vs Exit(1)","file":"corpus/fs/copy_chunk_failed_write.lu"}
+{"class":"Verdict","detail":"Exit(225) vs Exit(69)","file":"corpus/memory/unsafe_ub_uaf.lu"}
+{"class":"Verdict","detail":"Exit(126) vs Exit(9)","file":"corpus/memory/volatile_ub_uaf.lu"}
+{"class":"Verdict","detail":"Exit(0) vs Fail(\"E0301\")","file":"corpus/os/arg0.lu"}
+{"class":"Verdict","detail":"Exit(0) vs Fail(\"E0301\")","file":"corpus/os/args_bytes.lu"}
+differ: 1221 file(s), 6 divergence(s), 22 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 753, B executed 751, BOTH executed 751 of 1159 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)

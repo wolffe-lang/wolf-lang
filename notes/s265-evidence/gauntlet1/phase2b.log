@@ -1,0 +1,303 @@
+phase2b from step: bisect
+=== bisection builds 01:09:16 load=0.42/1.84/2.13 busy: cpu4=1% cpu5=0% cpu6=0% cpu7=0% cpu12=0% cpu13=0% cpu14=0% cpu15=1% 
+=== 9da7bdcf v0.2.34 01:09:18
+wolf 0.2.34+dev.9da7bdc (wolfgang, pin 9da7bdc)
+091f2d8991ae1ea52e0dc16a674464abe0523b7b2feb49a874dcbf2d9f88cd6e  /home/mfwolffe/lanes/s265/bisect/hello-9da7bdcf
+built 9da7bdcf in 53 s; target 3.5G; free   62G
+=== 50e8d0f8 s252-landed 01:10:11
+wolf 0.2.34+dev.50e8d0f (wolfgang, pin 50e8d0f)
+091f2d8991ae1ea52e0dc16a674464abe0523b7b2feb49a874dcbf2d9f88cd6e  /home/mfwolffe/lanes/s265/bisect/hello-50e8d0f8
+built 50e8d0f8 in 51 s; target 3.5G; free   62G
+=== 4732696d s250-landed 01:11:02
+wolf 0.2.34+dev.4732696 (wolfgang, pin 4732696)
+091f2d8991ae1ea52e0dc16a674464abe0523b7b2feb49a874dcbf2d9f88cd6e  /home/mfwolffe/lanes/s265/bisect/hello-4732696d
+built 4732696d in 37 s; target 3.5G; free   62G
+=== 0cb954a8 s254-landed 01:11:39
+wolf 0.2.34+dev.0cb954a (wolfgang, pin 0cb954a)
+c1994dc238431ddcc1c897ff08ba4bf3ceb9e83183cf9d13ad797ab5907ea7e3  /home/mfwolffe/lanes/s265/bisect/hello-0cb954a8
+built 0cb954a8 in 48 s; target 3.5G; free   62G
+=== b308dafc s253-landed 01:12:27
+wolf 0.2.34+dev.b308daf (wolfgang, pin b308daf)
+db6090fdc37cf6821b9517e398fb0ecc2f73b271e962c0d693c43432a49ac944  /home/mfwolffe/lanes/s265/bisect/hello-b308dafc
+built b308dafc in 49 s; target 3.5G; free   62G
+=== 0477ce62 s251-landed 01:13:16
+wolf 0.2.34+dev.0477ce6 (wolfgang, pin 0477ce6)
+db6090fdc37cf6821b9517e398fb0ecc2f73b271e962c0d693c43432a49ac944  /home/mfwolffe/lanes/s265/bisect/hello-0477ce62
+built 0477ce62 in 24 s; target 3.5G; free   62G
+=== a49ddaa2 s256-before-handler 01:13:40
+wolf 0.2.34+dev.a49ddaa (wolfgang, pin a49ddaa)
+db6090fdc37cf6821b9517e398fb0ecc2f73b271e962c0d693c43432a49ac944  /home/mfwolffe/lanes/s265/bisect/hello-a49ddaa2
+built a49ddaa2 in 5 s; target 3.5G; free   62G
+=== 75279748 s256-handler 01:13:46
+wolf 0.2.34+dev.7527974 (wolfgang, pin 7527974)
+cda1e2e10235733b0114f566e3374b41f9c8d9afa63041e0114475c915509d12  /home/mfwolffe/lanes/s265/bisect/hello-75279748
+built 75279748 in 13 s; target 3.5G; free   62G
+=== 94cd52bc s256-landed 01:13:59
+wolf 0.2.34+dev.94cd52b (wolfgang, pin 94cd52b)
+d2b4584610d1c1c136a8fae8c5fd6563552573f2bbfd0771fc8c8fc838c9bd95  /home/mfwolffe/lanes/s265/bisect/hello-94cd52bc
+built 94cd52bc in 34 s; target 3.5G; free   62G
+=== 76a3c8b6 s255-landed 01:14:33
+wolf 0.2.34+dev.76a3c8b (wolfgang, pin 76a3c8b)
+462c6e7600967c22fc59660782657fe5b238166281b5a0f91350b752bf9f70f7  /home/mfwolffe/lanes/s265/bisect/hello-76a3c8b6
+built 76a3c8b6 in 54 s; target 3.5G; free   62G
+=== 79550724 s258-landed 01:15:27
+wolf 0.2.34+dev.7955072 (wolfgang, pin 7955072)
+462c6e7600967c22fc59660782657fe5b238166281b5a0f91350b752bf9f70f7  /home/mfwolffe/lanes/s265/bisect/hello-79550724
+built 79550724 in 54 s; target 3.5G; free   62G
+=== 06cff722 s257-landed 01:16:21
+wolf 0.2.34+dev.06cff72 (wolfgang, pin 06cff72)
+462c6e7600967c22fc59660782657fe5b238166281b5a0f91350b752bf9f70f7  /home/mfwolffe/lanes/s265/bisect/hello-06cff722
+built 06cff722 in 25 s; target 3.5G; free   62G
+=== e2ed1607 s259-landed 01:16:46
+wolf 0.2.34+dev.e2ed160 (wolfgang, pin e2ed160)
+462c6e7600967c22fc59660782657fe5b238166281b5a0f91350b752bf9f70f7  /home/mfwolffe/lanes/s265/bisect/hello-e2ed1607
+built e2ed1607 in 51 s; target 3.5G; free   62G
+=== 7ac8c981 musl-patch 01:17:37
+wolf 0.2.34+dev.7ac8c98 (wolfgang, pin 7ac8c98)
+4951429571162eec56958006065d0184882b8fb18260b2251e6c0d497f06afb6  /home/mfwolffe/lanes/s265/bisect/hello-7ac8c981
+built 7ac8c981 in 35 s; target 3.5G; free   62G
+=== cf0c13d3 v0.2.35 01:18:12
+wolf 0.2.35+dev.cf0c13d (wolfgang, pin cf0c13d)
+2a40240c7090d29820f9ffe63af1976ee8d6b4529d376714ece209c4b0a88231  /home/mfwolffe/lanes/s265/bisect/hello-cf0c13d3
+built cf0c13d3 in 55 s; target 3.5G; free   62G
+BISECT BUILDS DONE 01:19:07
+=== 7b7b1753 trunk 01:19:07
+wolf 0.2.35+dev.7b7b175 (wolfgang, pin 7b7b175)
+0316cf7bddca8073afd0c1a81150f995dc3858cff1b240c038eab5d04447ee0c  /home/mfwolffe/lanes/s265/bisect/hello-7b7b1753
+built 7b7b1753 in 49 s; target 3.5G; free   62G
+BISECT BUILDS DONE 01:19:56
+3.5G	/home/mfwolffe/lanes/s265/target
+  62G
+1.3G	/home/mfwolffe/lanes/s265/target
+  63G
+=== hello timings 01:19:57 load=4.00/3.72/3.04 busy: cpu4=0% cpu5=2% cpu6=1% cpu7=0% cpu12=0% cpu13=0% cpu14=0% cpu15=1% 
+label	n	median_ns	p10_ns	p90_ns	min_ns	max_ns	spread
+v0.2.34	50	233886	225401	265069	214144	297499	0.170
+v0.2.35	50	269390	257252	291249	250421	356605	0.126
+9da7bdcf	50	230511	222221	264852	214529	307224	0.185
+50e8d0f8	50	227735	220455	265400	215491	545234	0.197
+4732696d	50	229190	219767	268632	211396	317831	0.213
+0cb954a8	50	233819	222669	285010	221895	335635	0.267
+b308dafc	50	232307	222900	267637	215958	291793	0.193
+0477ce62	50	232005	222940	240747	216452	311981	0.077
+a49ddaa2	50	233583	220225	256439	213354	295051	0.155
+75279748	50	267130	258442	306133	249646	369707	0.179
+94cd52bc	50	269416	255025	323596	245947	353916	0.255
+76a3c8b6	50	269406	251795	305803	248178	339014	0.200
+79550724	50	265183	251031	293654	248377	382085	0.161
+06cff722	50	267594	255759	334725	245907	377316	0.295
+e2ed1607	50	268688	257027	305217	246012	365031	0.179
+7ac8c981	50	270337	259766	312408	244058	419981	0.195
+cf0c13d3	50	272415	256915	318362	250387	341883	0.226
+7b7b1753	50	267835	253090	325313	250458	349196	0.270
+head	50	235074	222814	266020	220126	292843	0.184
+V1	50	228734	219594	246522	212546	327959	0.118
+c	50	202559	190755	267360	187630	350421	0.378
+label	n	median_ns	p10_ns	p90_ns	min_ns	max_ns	spread
+v0.2.34	50	231582	223638	265262	217117	320324	0.180
+v0.2.35	50	268579	258741	300152	251224	445953	0.154
+9da7bdcf	50	229038	222047	269915	216601	292023	0.209
+50e8d0f8	50	229449	222104	251372	214890	297433	0.128
+4732696d	50	233448	219389	290628	212626	353622	0.305
+0cb954a8	50	232863	219768	262501	216781	318539	0.184
+b308dafc	50	231407	222604	254513	219285	276168	0.138
+0477ce62	50	232000	221726	246651	216988	291722	0.107
+a49ddaa2	50	232813	219816	258704	216795	316910	0.167
+75279748	50	267586	254937	299731	250023	365676	0.167
+94cd52bc	50	270535	260457	333945	247603	411911	0.272
+76a3c8b6	50	270712	258823	295997	249693	341212	0.137
+79550724	50	267074	254639	301056	248789	388999	0.174
+06cff722	50	264885	251995	311970	245449	378472	0.226
+e2ed1607	50	266660	254071	307328	248617	375581	0.200
+7ac8c981	50	270700	256181	333064	248830	549965	0.284
+cf0c13d3	50	269008	256674	328772	251640	352990	0.268
+7b7b1753	50	269189	259311	304380	250728	338773	0.167
+head	50	239145	228846	274716	225624	294772	0.192
+V1	50	230900	222257	289329	214843	335147	0.290
+c	50	201084	193594	239194	184071	313364	0.227
+label	n	median_ns	p10_ns	p90_ns	min_ns	max_ns	spread
+v0.2.34	50	228128	221845	243619	213259	317539	0.095
+v0.2.35	50	266496	254529	290545	242440	304925	0.135
+9da7bdcf	50	228823	220325	248640	213725	315371	0.124
+50e8d0f8	50	230379	220331	276583	217941	332808	0.244
+4732696d	50	228232	222097	239732	215047	294720	0.077
+0cb954a8	50	230207	222827	255979	211645	287649	0.144
+b308dafc	50	228862	221798	266525	211390	296785	0.195
+0477ce62	50	232105	218733	264921	212678	339777	0.199
+a49ddaa2	50	231509	221480	250561	206688	300467	0.126
+75279748	50	269667	256918	301009	241039	355099	0.164
+94cd52bc	50	267337	255126	298467	248177	324223	0.162
+76a3c8b6	50	267114	257519	285769	249017	305471	0.106
+79550724	50	265276	255902	327951	249607	342204	0.272
+06cff722	50	267184	254793	295087	244856	366400	0.151
+e2ed1607	50	265717	255104	293680	248156	346352	0.145
+7ac8c981	50	268247	258533	287681	250945	478816	0.109
+cf0c13d3	50	268412	257818	293078	253514	388470	0.131
+7b7b1753	50	266818	257160	294165	251592	327399	0.139
+head	50	235463	222916	252793	216061	301420	0.127
+V1	50	230921	220724	265099	215994	316796	0.192
+c	50	197708	191966	212558	184425	276545	0.104
+v0.2.34	42 calls	63,page-faults:u 173389,instructions:u 
+ 329628	  11320	    954	 341902	  5378e	/home/mfwolffe/lanes/s265/witness/hello/hello-0.2.34
+v0.2.35	59 calls	69,page-faults:u 259625,instructions:u 
+ 336950	  11656	   1650	 350256	  55830	/home/mfwolffe/lanes/s265/witness/hello/hello-0.2.35
+9da7bdcf	42 calls	63,page-faults:u 173388,instructions:u 
+ 329628	  11320	    954	 341902	  5378e	/home/mfwolffe/lanes/s265/bisect/hello-9da7bdcf
+50e8d0f8	42 calls	63,page-faults:u 173388,instructions:u 
+ 329628	  11320	    954	 341902	  5378e	/home/mfwolffe/lanes/s265/bisect/hello-50e8d0f8
+4732696d	42 calls	63,page-faults:u 173388,instructions:u 
+ 329628	  11320	    954	 341902	  5378e	/home/mfwolffe/lanes/s265/bisect/hello-4732696d
+0cb954a8	42 calls	63,page-faults:u 173389,instructions:u 
+ 330144	  11320	    426	 341890	  53782	/home/mfwolffe/lanes/s265/bisect/hello-0cb954a8
+b308dafc	42 calls	64,page-faults:u 173394,instructions:u 
+ 330376	  11320	    202	 341898	  5378a	/home/mfwolffe/lanes/s265/bisect/hello-b308dafc
+0477ce62	42 calls	64,page-faults:u 173394,instructions:u 
+ 330376	  11320	    202	 341898	  5378a	/home/mfwolffe/lanes/s265/bisect/hello-0477ce62
+a49ddaa2	42 calls	64,page-faults:u 173394,instructions:u 
+ 330376	  11320	    202	 341898	  5378a	/home/mfwolffe/lanes/s265/bisect/hello-a49ddaa2
+75279748	59 calls	69,page-faults:u 259543,instructions:u 
+ 337348	  11728	   1202	 350278	  55846	/home/mfwolffe/lanes/s265/bisect/hello-75279748
+94cd52bc	59 calls	69,page-faults:u 259501,instructions:u 
+ 337348	  11728	   1202	 350278	  55846	/home/mfwolffe/lanes/s265/bisect/hello-94cd52bc
+76a3c8b6	59 calls	69,page-faults:u 259642,instructions:u 
+ 337396	  11728	   1154	 350278	  55846	/home/mfwolffe/lanes/s265/bisect/hello-76a3c8b6
+79550724	59 calls	69,page-faults:u 259591,instructions:u 
+ 337396	  11728	   1154	 350278	  55846	/home/mfwolffe/lanes/s265/bisect/hello-79550724
+06cff722	59 calls	69,page-faults:u 259556,instructions:u 
+ 337396	  11728	   1154	 350278	  55846	/home/mfwolffe/lanes/s265/bisect/hello-06cff722
+e2ed1607	59 calls	69,page-faults:u 259605,instructions:u 
+ 337396	  11728	   1154	 350278	  55846	/home/mfwolffe/lanes/s265/bisect/hello-e2ed1607
+7ac8c981	59 calls	69,page-faults:u 259624,instructions:u 
+ 336950	  11656	   1650	 350256	  55830	/home/mfwolffe/lanes/s265/bisect/hello-7ac8c981
+cf0c13d3	59 calls	69,page-faults:u 259601,instructions:u 
+ 336950	  11656	   1650	 350256	  55830	/home/mfwolffe/lanes/s265/bisect/hello-cf0c13d3
+7b7b1753	59 calls	69,page-faults:u 259557,instructions:u 
+ 337942	  11704	    610	 350256	  55830	/home/mfwolffe/lanes/s265/bisect/hello-7b7b1753
+head	47 calls	64,page-faults:u 183497,instructions:u 
+ 338398	  11696	   4258	 354352	  56830	/home/mfwolffe/lanes/s265/witness/hello/hello-head
+V1	42 calls	63,page-faults:u 173371,instructions:u 
+ 331284	  11320	   3386	 345990	  54786	/home/mfwolffe/lanes/s265/witness/hello/hello-V1
+c	35 calls	53,page-faults:u 112494,instructions:u 
+   1288	    584	      8	   1880	    758	/home/mfwolffe/lanes/s265/witness/hello/hello-c
+=== yew timings 01:20:00 load=3.76/3.67/3.03 busy: cpu4=0% cpu5=1% cpu6=0% cpu7=0% cpu12=0% cpu13=0% cpu14=1% cpu15=0% 
+mode	label	n	median_us	p10_us	p90_us	min_us	max_us	spread
+cold	a	50	24668.8	24245.7	40581.7	23899.8	48170.4	0.662
+cold	b	50	24740.0	24385.9	39403.9	24291.1	74786.5	0.607
+cold	fix	50	24524.3	24198.2	33487.1	24071.2	43264.1	0.379
+mode	label	n	median_us	p10_us	p90_us	min_us	max_us	spread
+clean	a	50	2505.5	2375.0	2614.7	2290.6	2671.0	0.096
+clean	b	50	2521.4	2457.1	2601.3	2425.3	2715.6	0.057
+clean	fix	50	2527.0	2419.9	2642.7	2350.3	2699.7	0.088
+mode	label	n	median_us	p10_us	p90_us	min_us	max_us	spread
+cold	a	50	24663.4	24437.5	25595.2	24303.5	34084.4	0.047
+cold	b	50	24765.0	24503.6	25213.9	24298.9	34814.2	0.029
+cold	fix	50	24751.5	24534.9	25575.6	24367.0	34680.3	0.042
+mode	label	n	median_us	p10_us	p90_us	min_us	max_us	spread
+clean	a	50	2485.5	2405.3	2589.0	2353.1	2760.3	0.074
+clean	b	50	2569.5	2484.0	2625.1	2447.7	2681.8	0.055
+clean	fix	50	2546.0	2452.8	2640.4	2387.1	2784.8	0.074
+mode	label	n	median_us	p10_us	p90_us	min_us	max_us	spread
+cold	a	50	24535.9	24267.7	25047.4	23986.5	25687.2	0.032
+cold	b	50	24636.9	24317.2	25438.9	24023.0	25912.3	0.046
+cold	fix	50	24609.4	24323.5	25675.1	24064.2	143638.1	0.055
+mode	label	n	median_us	p10_us	p90_us	min_us	max_us	spread
+clean	a	50	2529.2	2429.4	2640.8	2368.2	2690.9	0.084
+clean	b	50	2557.9	2470.4	2680.6	2423.0	2702.9	0.082
+clean	fix	50	2560.6	2457.6	2650.9	2396.7	3020.4	0.075
+=== behaviour rows at the head 01:20:25 load=3.04/3.50/2.99 busy: cpu4=3% cpu5=3% cpu6=2% cpu7=2% cpu12=1% cpu13=6% cpu14=2% cpu15=1% 
+af7b2e03 Record R-s265-1 = B and the resumed phase in the note
+main_stack_bounds: parent: cheap Some((7ffc1185c000, 7ffc1185d000)) pthread Some((7ffc1185c000, 7ffc1185d000))
+main_stack_bounds: child: cheap Some((7ffcf7572000, 7ffcf7573000)) pthread Some((7ffcf7572000, 7ffcf7573000))
+main_stack_bounds: stack limit 4 MiB: exit status: 0
+main_stack_bounds: child: cheap Some((7ffeab670000, 7ffeab671000)) pthread Some((7ffeab670000, 7ffeab671000))
+main_stack_bounds: stack limit 8191 KiB (not a page multiple): exit status: 0
+main_stack_bounds: child: cheap Some((7ffc19a9b000, 7ffc19a9c000)) pthread Some((7ffc19a9b000, 7ffc19a9c000))
+main_stack_bounds: stack limit 64 MiB: exit status: 0
+main_stack_bounds: child: cheap Some((55edfd6e3000, 55edfd6e4000)) pthread Some((55edfd6e3000, 55edfd6e4000))
+main_stack_bounds: no stack limit: exit status: 0
+main_stack_bounds: child: cheap Some((7fff15d77000, 7fff15d78000)) pthread Some((7fff15d77000, 7fff15d78000))
+main_stack_bounds: a 1 MiB environment: exit status: 0
+main_stack_bounds: ok
+     Running tests/stack_overflow.rs (/home/mfwolffe/lanes/s265/target/debug/deps/stack_overflow-c979d5fd8ec06639)
+stack_overflow: ok (named deterministic fault)
+running 2 tests
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.54s
+=== gauntlet at the head 01:20:32 load=2.87/3.46/2.98 busy: cpu4=6% cpu5=6% cpu6=3% cpu7=4% cpu12=1% cpu13=0% cpu14=0% cpu15=2% 
+af7b2e03 Record R-s265-1 = B and the resumed phase in the note
+SigBlk:	0000000000000000
+SigIgn:	0000000000000000
+Cpus_allowed_list:	4-7
+16384
+32768
+32768
+gauntlet exit=1
+X12: corpus/conc/proc_kill_defers.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout "released"
+X12: corpus/conc/proc_cancel_defers.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout "defer-ran\nreleased"
+X12: corpus/conc/proc_spawn_loop.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout ""
+X12: corpus/net/spawn_accept.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout "echo: howl\n"
+test the_same_seed_gives_the_same_output_ten_times ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.76s
+
+     Running tests/container_access.rs (target/debug/deps/container_access-314b89b6bc557afc)
+
+running 5 tests
+test a_list_sum_carries_no_per_element_call ... ok
+test a_provable_index_emits_no_bounds_check ... ok
+test a_list_loop_reaches_the_vectorizer ... ok
+test for_over_a_list_is_a_counted_loop ... ok
+test an_unprovable_index_still_traps_bounds ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/copy_write_lanes.rs (target/debug/deps/copy_write_lanes-37d27d1ba9956a62)
+
+running 3 tests
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+test t06_witness_into_dev_full_keeps_its_bytes ... ok
+test a_copy_into_dev_full_keeps_its_bytes_on_every_lane ... ok
+
+thread 'a_failed_copy_write_puts_the_source_back_on_every_lane' (40014) panicked at crates/wolf_driver/tests/copy_write_lanes.rs:221:5:
+lupin 0.1.56 (28547b4)'s answer on fs/copy_chunk_failed_write.lu: ("unsupported", ""), want the clause's or a pre-mirror pin ([("0.1.55", "e642f26", "exit(1)", "copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n"), ("0.1.56", "28547b4", "exit(1)", "copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n")])
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test a_failed_copy_write_puts_the_source_back_on_every_lane ... FAILED
+
+failures:
+
+failures:
+    a_failed_copy_write_puts_the_source_back_on_every_lane
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+error: test failed, to rerun pass `-p wolf_driver --test copy_write_lanes`
+xtask ci: step `test` failed
+=== differ against 0.2.35 01:24:42 load=2.87/3.34/3.07 busy: cpu4=0% cpu5=0% cpu6=0% cpu7=0% cpu12=0% cpu13=0% cpu14=0% cpu15=0% 
+differ checked exit=1
+{"class":"Verdict","detail":"Exit(0) vs Exit(1)","file":"corpus/fs/copy_chunk_failed_write.lu"}
+{"class":"Verdict","detail":"Exit(0) vs Fail(\"E0301\")","file":"corpus/os/arg0.lu"}
+{"class":"Verdict","detail":"Exit(0) vs Fail(\"E0301\")","file":"corpus/os/args_bytes.lu"}
+differ: 1221 file(s), 3 divergence(s), 27 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 748, B executed 746, BOTH executed 746 of 1159 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+differ native exit=1
+{"class":"Verdict","detail":"Exit(85) vs Exit(210)","file":"corpus/conc/atomic_ub_uaf.lu"}
+{"class":"Verdict","detail":"Exit(0) vs Exit(1)","file":"corpus/fs/copy_chunk_failed_write.lu"}
+{"class":"Verdict","detail":"Exit(225) vs Exit(69)","file":"corpus/memory/unsafe_ub_uaf.lu"}
+{"class":"Verdict","detail":"Exit(126) vs Exit(9)","file":"corpus/memory/volatile_ub_uaf.lu"}
+{"class":"Verdict","detail":"Exit(0) vs Fail(\"E0301\")","file":"corpus/os/arg0.lu"}
+{"class":"Verdict","detail":"Exit(0) vs Fail(\"E0301\")","file":"corpus/os/args_bytes.lu"}
+differ: 1221 file(s), 6 divergence(s), 22 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 753, B executed 751, BOTH executed 751 of 1159 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+differ release exit=1
+{"class":"Verdict","detail":"Exit(137) vs Exit(41)","file":"corpus/conc/atomic_ub_uaf.lu"}
+{"class":"Verdict","detail":"Exit(0) vs Exit(1)","file":"corpus/fs/copy_chunk_failed_write.lu"}
+{"class":"Verdict","detail":"Exit(213) vs Exit(234)","file":"corpus/memory/unsafe_ub_uaf.lu"}
+{"class":"Verdict","detail":"Exit(193) vs Exit(43)","file":"corpus/memory/volatile_ub_uaf.lu"}
+{"class":"Verdict","detail":"Exit(0) vs Fail(\"E0301\")","file":"corpus/os/arg0.lu"}
+{"class":"Verdict","detail":"Exit(0) vs Fail(\"E0301\")","file":"corpus/os/args_bytes.lu"}
+differ: 1221 file(s), 6 divergence(s), 22 in conservatism ledger (unsupported), 3 of them forward pin(s)
+differ: run-rung coverage — A executed 753, B executed 751, BOTH executed 751 of 1159 entries ([proto.cmp.coverage]; `cargo xtask lane-coverage` is the gated union across A's lanes)
+14G	/home/mfwolffe/lanes/s265/target
+  59G
+=== done 01:30:05 load=1.95/2.45/2.76 busy: cpu4=3% cpu5=2% cpu6=1% cpu7=0% cpu12=0% cpu13=1% cpu14=0% cpu15=0% 
+Sun Oct 25 01:30:06 AM UTC 2026
+phase2b exit=0

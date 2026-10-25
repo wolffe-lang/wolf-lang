@@ -1,0 +1,150 @@
+REPORT lupin on /home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/checked_net_write/writev_head/main.lu: exit(0) "wrote 8388608 bytes to a task\nthe reader ran before the writes ended: true, and read every byte: true\nfilled 8 MiB\n" in 222.128613ms
+REPORT writev_head: lupin's answer: filled 8 MiB before the reader's byte came back
+REPORT checked machine (seed 7) on /home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/checked_net_write/writev/main.lu: exit(0) "wrote 8388608 bytes to a task\nthe reader ran before the writes ended: true, and read every byte: true\nfilled 8 MiB\n" in 452.996721ms
+REPORT writev: the checked machine under seed 7: filled 8 MiB before the reader's byte came back
+REPORT checked machine (seed 7) on /home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/checked_net_write/write_bytes/main.lu: exit(0) "wrote 8388608 bytes to a task\nthe reader ran before the writes ended: true, and read every byte: true\nfilled 8 MiB\n" in 463.757806ms
+REPORT write_bytes: the checked machine under seed 7: filled 8 MiB before the reader's byte came back
+REPORT native on /home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/checked_net_write/writev_head/main.lu: exit(0) "wrote 8388608 bytes to a task\nthe reader ran before the writes ended: true, and read every byte: true\nfilled 8 MiB\n" in 172.142137ms
+REPORT writev_head: the native tier's answer: filled 8 MiB before the reader's byte came back
+test a_big_headed_write_beside_its_reader_hands_the_cpu_on ... ok
+REPORT checked machine (seed 42) on /home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/checked_net_write/writev/main.lu: exit(0) "wrote 8388608 bytes to a task\nthe reader ran before the writes ended: true, and read every byte: true\nfilled 8 MiB\n" in 404.261263ms
+REPORT writev: the checked machine under seed 42: filled 8 MiB before the reader's byte came back
+REPORT checked machine (seed 42) on /home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/checked_net_write/write_bytes/main.lu: exit(0) "wrote 8388608 bytes to a task\nthe reader ran before the writes ended: true, and read every byte: true\nfilled 8 MiB\n" in 443.575601ms
+REPORT write_bytes: the checked machine under seed 42: filled 8 MiB before the reader's byte came back
+REPORT lupin on /home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/checked_net_write/writev/main.lu: exit(0) "wrote 8388608 bytes to a task\nthe reader ran before the writes ended: true, and read every byte: true\nfilled 8 MiB\n" in 392.686989ms
+REPORT writev: lupin's answer: filled 8 MiB before the reader's byte came back
+REPORT lupin on /home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/checked_net_write/write_bytes/main.lu: exit(0) "wrote 8388608 bytes to a task\nthe reader ran before the writes ended: true, and read every byte: true\nfilled 8 MiB\n" in 445.444141ms
+REPORT write_bytes: lupin's answer: filled 8 MiB before the reader's byte came back
+REPORT native on /home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/checked_net_write/writev/main.lu: exit(0) "wrote 8388608 bytes to a task\nthe reader ran before the writes ended: true, and read every byte: true\nfilled 8 MiB\n" in 141.474733ms
+REPORT writev: the native tier's answer: filled 8 MiB before the reader's byte came back
+test a_big_gathered_write_beside_its_reader_hands_the_cpu_on ... ok
+REPORT native on /home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/checked_net_write/write_bytes/main.lu: exit(0) "wrote 8388608 bytes to a task\nthe reader ran before the writes ended: true, and read every byte: true\nfilled 8 MiB\n" in 140.887424ms
+REPORT write_bytes: the native tier's answer: filled 8 MiB before the reader's byte came back
+test a_big_byte_write_beside_its_reader_hands_the_cpu_on ... ok
+REPORT checked machine on /home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/checked_net_write/deadline/main.lu: exit(0) "beside io, alone io\n" in 2.443638979s
+REPORT checked machine (seed 1) on /home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/checked_net_write/deadline/main.lu: exit(0) "beside io, alone io\n" in 2.463779188s
+REPORT checked machine (seed 7) on /home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/checked_net_write/deadline/main.lu: exit(0) "beside io, alone io\n" in 2.458896657s
+REPORT checked machine (seed 42) on /home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/checked_net_write/deadline/main.lu: exit(0) "beside io, alone io\n" in 2.449233687s
+REPORT lupin on /home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/checked_net_write/deadline/main.lu: exit(0) "beside io, alone io\n" in 1.835110382s
+REPORT native on /home/mfwolffe/lanes/s265/wolf-head/crates/wolf_driver/tests/fixtures/checked_net_write/deadline/main.lu: exit(0) "beside io, alone io\n" in 1.916816969s
+test the_write_deadline_still_decides_beside_other_tasks ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.22s
+
+     Running tests/checked_tasks_lanes.rs (target/debug/deps/checked_tasks_lanes-5556c546dc3126fb)
+
+running 11 tests
+test a_self_acquisition_through_a_call_is_a_deadlock ... ok
+test a_channel_less_shared_write_is_a_race ... ok
+test a_deadlock_is_reported_by_name ... ok
+test an_atomic_and_a_plain_access_race ... ok
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+test par_results_move_back_in_order ... ok
+test a_race_free_program_is_accepted ... ok
+test the_rendezvous_receive_orders_the_senders_next_access ... ok
+test the_same_seed_is_the_same_run ... ok
+REPORT: 45 rows on the checked machine, 45 held to lupin
+test every_conc_run_row_agrees_with_lupin ... ok
+test the_plain_counter_is_a_race ... ok
+test every_conc_run_row_is_seed_stable has been running for over 60 seconds
+test every_conc_run_row_is_seed_stable ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 103.73s
+
+     Running tests/cimport.rs (target/debug/deps/cimport-ccd173d6bfd1c5aa)
+
+running 7 tests
+test an_unknown_target_is_refused ... ok
+test a_second_import_of_unchanged_inputs_spawns_no_worker_process ... ok
+test imports_a_header_and_dumps_the_artifact ... ok
+test changing_a_define_changes_the_cache_key ... ok
+test refusals_are_reported_by_name_with_a_way_out ... ok
+test the_same_header_imports_differently_per_target ... ok
+test a_missing_worker_refuses_by_name ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/closure_cross_module.rs (target/debug/deps/closure_cross_module-db87f8e003f7787e)
+
+running 4 tests
+test the_checked_machine_runs_the_six_rows ... ok
+test the_six_rows_run_on_the_native_tier ... ok
+test the_six_rows_run_on_release_under_the_per_module_partition ... ok
+test the_six_rows_run_on_release_under_clusters ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.87s
+
+     Running tests/conc_native.rs (target/debug/deps/conc_native-1e8892b9482920c1)
+
+running 18 tests
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+test failing_child_cancels_sibling_and_reraises ... ok
+test cancelled_proc_runs_defers ... ok
+test a_spawn_under_a_loop_gives_every_task_its_own_captures ... ok
+test a_proc_spawned_in_a_loop_runs_on_both_tiers ... ok
+test killed_proc_skips_defers ... ok
+test linked_procs_share_fate ... ok
+test freeze_publishes_across_tasks ... ok
+test message_passing_moves_the_region ... ok
+test select_two_ready_arms_is_conforming_either_way ... ok
+test the_defer_law_holds_on_the_release_tier ... ok
+test the_kitchen_sink_procs_file_runs ... ok
+test the_mid_end_does_not_merge_two_iterations_capture_records ... ok
+test two_sequential_selects_with_timeouts_run ... ok
+X12: corpus/conc/spawn_fanout_loop.lu (release=false) — 10 runs at seed 1234, verdict exit(0) stdout "204\n"
+test when_multi_acquires_whole_sets ... ok
+test wolf_test_schedules_explores_a_native_body ... ok
+test the_release_tier_runs_the_conc_corpus ... ok
+X12: corpus/conc/select_seeded.lu (release=false) — 10 runs at seed 1234, verdict exit(0) stdout ""
+X12: corpus/conc/message_passing.lu (release=false) — 10 runs at seed 1234, verdict exit(0) stdout ""
+X12: corpus/procs.lu (release=false) — 10 runs at seed 1234, verdict exit(0) stdout ""
+mid-end conc differential: 24 seeded run pair(s) identical
+test mid_end_does_not_change_seeded_conc_behavior ... ok
+X12: corpus/conc/proc_kill_defers.lu (release=false) — 10 runs at seed 1234, verdict exit(0) stdout "released"
+X12: corpus/conc/proc_cancel_defers.lu (release=false) — 10 runs at seed 1234, verdict exit(0) stdout "defer-ran\nreleased"
+X12: corpus/conc/proc_spawn_loop.lu (release=false) — 10 runs at seed 1234, verdict exit(0) stdout ""
+X12: corpus/net/spawn_accept.lu (release=false) — 10 runs at seed 1234, verdict exit(0) stdout "echo: howl\n"
+X12: corpus/conc/spawn_fanout_loop.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout "204\n"
+X12: corpus/conc/select_seeded.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout ""
+X12: corpus/conc/message_passing.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout ""
+X12: corpus/procs.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout ""
+X12: corpus/conc/proc_kill_defers.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout "released"
+X12: corpus/conc/proc_cancel_defers.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout "defer-ran\nreleased"
+X12: corpus/conc/proc_spawn_loop.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout ""
+X12: corpus/net/spawn_accept.lu (release=true) — 10 runs at seed 1234, verdict exit(0) stdout "echo: howl\n"
+test the_same_seed_gives_the_same_output_ten_times ... ok
+
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 16.76s
+
+     Running tests/container_access.rs (target/debug/deps/container_access-314b89b6bc557afc)
+
+running 5 tests
+test a_list_sum_carries_no_per_element_call ... ok
+test a_provable_index_emits_no_bounds_check ... ok
+test a_list_loop_reaches_the_vectorizer ... ok
+test for_over_a_list_is_a_counted_loop ... ok
+test an_unprovable_index_still_traps_bounds ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running tests/copy_write_lanes.rs (target/debug/deps/copy_write_lanes-37d27d1ba9956a62)
+
+running 3 tests
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+test t06_witness_into_dev_full_keeps_its_bytes ... ok
+test a_copy_into_dev_full_keeps_its_bytes_on_every_lane ... ok
+
+thread 'a_failed_copy_write_puts_the_source_back_on_every_lane' (40014) panicked at crates/wolf_driver/tests/copy_write_lanes.rs:221:5:
+lupin 0.1.56 (28547b4)'s answer on fs/copy_chunk_failed_write.lu: ("unsupported", ""), want the clause's or a pre-mirror pin ([("0.1.55", "e642f26", "exit(1)", "copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n"), ("0.1.56", "28547b4", "exit(1)", "copy=io took_nothing=false os_error_set=true offset_after=17\nerror: eof\n")])
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test a_failed_copy_write_puts_the_source_back_on_every_lane ... FAILED
+
+failures:
+
+failures:
+    a_failed_copy_write_puts_the_source_back_on_every_lane
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+error: test failed, to rerun pass `-p wolf_driver --test copy_write_lanes`
+xtask ci: step `test` failed
