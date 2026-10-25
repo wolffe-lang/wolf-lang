@@ -630,7 +630,7 @@ pub fn ignored_sent_faults() -> [libc::c_int; 2] {
 pub fn reinstall_after_exec(sigs: [libc::c_int; 2]) {
     for sig in sigs {
         if sig != 0 {
-            install_on(sig);
+            let _ = install_on(sig);
         }
     }
 }
@@ -721,9 +721,10 @@ extern "C" fn overflow_handler(
     }
 }
 
-/// The guard-fault reporter on one signal.
-fn install_on(sig: libc::c_int) {
-    // SAFETY: installing a handler with a static extern fn.
+/// The guard-fault reporter on one signal; the disposition it replaced
+/// (`None` when the host refused the change).
+fn install_on(sig: libc::c_int) -> Option<libc::sighandler_t> {
+    // SAFETY: installing a handler with a static extern fn; `old` is ours.
     unsafe {
         let mut sa: libc::sigaction = std::mem::zeroed();
         sa.sa_sigaction = overflow_handler
@@ -731,7 +732,8 @@ fn install_on(sig: libc::c_int) {
             as usize;
         sa.sa_flags = libc::SA_SIGINFO | libc::SA_ONSTACK;
         libc::sigemptyset(&mut sa.sa_mask);
-        libc::sigaction(sig, &sa, std::ptr::null_mut());
+        let mut old: libc::sigaction = std::mem::zeroed();
+        (libc::sigaction(sig, &sa, &mut old) == 0).then_some(old.sa_sigaction)
     }
 }
 
@@ -748,19 +750,13 @@ pub fn install_overflow_handler() {
     ONCE.call_once(|| {
         // Preserve an ignored SENT signal across exec/startup. A real
         // guard fault is still ours, even when the sent meaning is ignored.
+        // s265 (wolf-lang#918): the disposition replaced is read by the
+        // installing call itself, one `sigaction` a signal, not two.
         for sig in [libc::SIGSEGV, libc::SIGBUS] {
-            // SAFETY: reading this process's signal disposition.
-            unsafe {
-                let mut old: libc::sigaction = std::mem::zeroed();
-                if libc::sigaction(sig, std::ptr::null(), &mut old) == 0
-                    && old.sa_sigaction == libc::SIG_IGN
-                {
-                    sent_flag(sig).unwrap().store(true, SeqCst);
-                }
+            if install_on(sig) == Some(libc::SIG_IGN) {
+                sent_flag(sig).unwrap().store(true, SeqCst);
             }
         }
-        install_on(libc::SIGSEGV);
-        install_on(libc::SIGBUS);
     });
 }
 
