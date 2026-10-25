@@ -78,7 +78,7 @@ pub const COMMANDS: &[Cmd] = &[
             "[--verbose] [--checked] [--release] [--codegen-report]",
             "[--profile-gen[=<dir>]] [--profile=<file.wprof>] [--std-root <dir>]",
             "[--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings]",
-            "[--error-limit=N] [--target x86_64-unknown-none]",
+            "[--error-limit=N] [--target x86_64-unknown-none] [--assembler PATH]",
         ],
         about: "\
 The entry file's directory is the package (D32): every plain `.lu` file
@@ -87,6 +87,15 @@ beside it is part of the same module. Two tiers compile the same source
 through LLVM. A construct the pipeline cannot yet handle is REFUSED by
 name, with the deepest phase that completed; nothing is silently
 interpreted instead.
+
+`--assembler PATH` (or `--assembler=PATH`) overrides `WOLF_AS` for
+root-manifest assembly sources. The selected program receives `--64`
+(on x86-64), `-o OUTPUT SOURCE`; it is a path, not a shell command.
+Failure is final. Without either choice, assembly uses the existing
+CC/cc (hosted) or WOLF_CLANG/clang (freestanding) driver. This does not
+replace the linker or the release backend's clang IR compilation, and
+it does not enable hosted Windows assembly or foreign hosted targets.
+For `wolf run`, put build flags before the entry file.
 
 `--target x86_64-unknown-none` (or `target: \"x86_64-unknown-none\"` in
 `wolf.pkg`) builds a freestanding object for a kernel: `--emit=obj`
@@ -103,7 +112,7 @@ hosted runtime, allocates, or uses a float is refused by name.",
             "[--verbose] [--checked] [--release] [--codegen-report]",
             "[--profile-gen[=<dir>]] [--profile=<file.wprof>] [--std-root <dir>]",
             "[--allow|--warn|--deny <W####|W##xx|warnings>] [--deny-warnings]",
-            "[--error-limit=N] [prog args…]",
+            "[--error-limit=N] [--assembler PATH] [prog args…]",
         ],
         about: "\
 Every `wolf build` flag applies. The executable lands in the package's

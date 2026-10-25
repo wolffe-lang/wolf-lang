@@ -659,12 +659,23 @@ C membranes are extended: `import c` still admits only its modelled set
 - `[abi.asm.link]` `asm: ["boot/io.S", …]` in the ROOT manifest
   (`[pkg.manifest.schema]`) lists assembly sources, each path relative to
   the manifest's directory; a listed file that does not exist is refused
-  naming it. The driver assembles each with the C driver the build
-  already uses for its target — on `x86_64-unknown-none` the release
-  tier's clang (`WOLF_CLANG`, else `clang`) with
-  `--target=x86_64-unknown-none-elf`, from any host, and the result must
-  be an ELF x86-64 object; on a hosted target the link's `CC` (else
-  `cc`) — and hands the objects to the link, or, under `--emit=obj -o
+  naming it. `wolf build` and `wolf run` select an assembler by
+  `--assembler PATH` (also `--assembler=PATH`), then a nonempty `WOLF_AS`,
+  then the existing target-specific C driver. An explicit selection is
+  one executable path, not shell text: it receives `-o OUTPUT SOURCE`,
+  preceded by `--64` for x86-64 (freestanding or hosted), never `-c` or
+  a clang target flag. Paths are separate argv elements, including spaces.
+  A failed invocation or invalid output is final; no other tool is retried.
+  With no selection, `x86_64-unknown-none` uses clang (`WOLF_CLANG`, else
+  `clang`) with `--target=x86_64-unknown-none-elf`; a hosted build uses
+  the link's `CC` (else `cc`), both with `-c SOURCE -o OUTPUT`.
+  A freestanding result must be an ELF64 little-endian x86-64 relocatable
+  object, from any host. Explicit assemblers on Linux must likewise emit
+  an ELF64 little-endian relocatable object for the host architecture.
+  Hosted Windows assembly and foreign hosted targets remain refused;
+  selecting an assembler enables neither. The release backend's clang
+  IR-to-object step is code generation, not this seam, and is unchanged.
+  The driver hands assembly objects to the link, or, under `--emit=obj -o
   K.o`, writes each beside the program's object as `K.asm-<stem>.o` for
   the boot code's link (K6(b): the consuming build links a freestanding
   image). A routine is reached through a bodyless `extern "c" fn`

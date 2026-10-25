@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Choose the assembler for root-manifest assembly sources** (#937):
+  `--assembler PATH` overrides `WOLF_AS`, then the existing target-specific
+  C driver. An explicitly selected tool receives the as-shaped argv and is
+  never silently replaced after a failure. Freestanding ELF verification
+  remains, and explicitly selected Linux assemblers also have their output
+  checked. The linker and the release backend's LLVM path are unchanged.
+
 s266 — the small ones (#932, #936, #923, #935, #925).
 
 - **An `else` fallback that swallowed a range says so.** `rest[rest.find(":=") else 0 + 2..]` reads as the fallback `0 + 2..` (`[gram.amb.else]`), an open-ended range the compiler declines; the refusal used to name the slicing ledger and call it "not a bug in your program". It now names "an open-ended or end-relative range as an `else` fallback (slicing)" and adds the note "the `else` fallback extends to the end of the expression; parenthesise `(… else 0)`"; `conform-run` records the note as `x-unsupported-note` (#932, R-s266-1 A).
