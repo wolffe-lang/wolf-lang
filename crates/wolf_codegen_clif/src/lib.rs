@@ -1008,11 +1008,8 @@ pub fn names_a_descriptor_wait(m: &WirModule) -> bool {
 
 /// The entry shim's signature: [`C_MAIN_PARAMS`] in, the C exit code out.
 fn c_main_sig(m: &mut WirModule) -> SigId {
-    let params = C_MAIN_PARAMS
-        .iter()
-        .map(|&t| wolf_wir::ir::Param::val(t))
-        .collect();
-    m.make_sig(params, vec![types::I32])
+    // PLANT (s267): the niladic shim restored.
+    m.make_sig(vec![], vec![types::I32])
 }
 
 /// Append the C-entry shim to a WIR module: `int main(int argc, char
@@ -1042,13 +1039,8 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
     // nothing and the runtime read a capture only glibc's start-up fills.
     // It replaces the `__wolf_rt_stack_start()` call this list began with,
     // so the shim has the instructions it had.
-    let main_start_sig = m.make_sig(
-        C_MAIN_PARAMS
-            .iter()
-            .map(|&t| wolf_wir::ir::Param::val(t))
-            .collect(),
-        vec![],
-    );
+    // PLANT (s267): the niladic start call's signature restored.
+    let main_start_sig = m.make_sig(vec![], vec![]);
     let starts: Vec<&str> = [
         (names_a_park(m), REACTOR_START),
         (names_a_hub_call(m), SIGNAL_START),
@@ -1059,9 +1051,9 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
     .collect();
     let start_sig = (!starts.is_empty()).then(|| m.make_sig(vec![], vec![]));
     let start = |f: &mut Function, b0: wolf_wir::ir::Block| {
-        let entry_args = f.block_params(b0);
-        let callee = f.import_func(MAIN_START, main_start_sig);
-        f.append_inst(b0, Opcode::Call, &entry_args, &[], Aux::Callee(callee));
+        // PLANT (s267): the niladic start call restored.
+        let callee = f.import_func("__wolf_rt_stack_start", main_start_sig);
+        f.append_inst(b0, Opcode::Call, &[], &[], Aux::Callee(callee));
         if let Some(sig) = start_sig {
             for &sym in &starts {
                 let callee = f.import_func(sym, sig);
@@ -1109,7 +1101,7 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
     if sd.results.is_empty() {
         let shim_sig = c_main_sig(m);
         let mut f = Function::new("__wolf_main_shim", shim_sig);
-        let b0 = f.make_block(&C_MAIN_PARAMS);
+        let b0 = f.make_block(&[]);
         start(&mut f, b0);
         let callee = f.import_func("main", entry_sig);
         f.append_inst(b0, Opcode::Call, &[], &[], Aux::Callee(callee));
@@ -1133,7 +1125,7 @@ pub fn add_entry_shim(m: &mut WirModule) -> Result<FuncId, BackendError> {
     let err_sig = m.make_sig(vec![wolf_wir::ir::Param::val(types::I64); 6], vec![]);
     let shim_sig = c_main_sig(m);
     let mut f = Function::new("__wolf_main_shim", shim_sig);
-    let b0 = f.make_block(&C_MAIN_PARAMS);
+    let b0 = f.make_block(&[]);
     start(&mut f, b0);
     let callee = f.import_func("main", entry_sig);
     let (_, res) = f.append_inst(b0, Opcode::Call, &[], &[res_ty], Aux::Callee(callee));
