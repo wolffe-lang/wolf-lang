@@ -66,7 +66,7 @@ for assembly files listed in the root `wolf.pkg`. The flag wins over the
 environment, and failures are not retried with another tool. The default
 remains the target's C driver. Selecting an assembler does not replace the
 linker or the release compiler's LLVM path. See `wolf build --help` and
-[the assembly contract](spec/04-abi.md#6-assembly-abiasm).
+[the assembly contract](https://github.com/wolffe-lang/wolf-lang/blob/trunk/spec/04-abi.md#6-assembly-abiasm).
 
 ### Building from source
 
