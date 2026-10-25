@@ -7,16 +7,22 @@ s265 — the start-up regression (wolf-lang#918).
 - **Programs start as fast as on 0.2.34 again.** 0.2.35's entry asked for the main thread's stack bounds before `main` (`pthread_getattr_np`, which reads `/proc/self/maps` through stdio), installed the overflow reporter and unmapped its altstack at exit: a release-tier hello world paid 17 more system calls and about 37 us a start on kasumi (+16 %), every program alike. The bounds are now resolved by the handler on the main thread's first fault, read with `open`/`read`/`close` alone (R-s265-1 B); the altstack lives as long as the process; each fault signal takes one `sigaction`. A hello world now pays 5 calls and about 5 us over 0.2.34. A main-thread overflow still reports `wolf-trap: stack-overflow`, its PC and exit 134 on native and release (`[conf.trap.stack]`).
 - **bench-gates has a start-up row**: the system calls of a release-tier `corpus/hello.lu` minus its C twin's (`bench/startup/hello.c`), held at `bench/startup.json` (12); the wall time beside it is printed, report-only.
 
-s263 — C variadic surface and ABI planning (in progress, #515).
+s263 — C variadics in both directions (#515).
 
 - **Five prelude additions:** `VaList`, `va_start`, `va_arg`, `va_copy`,
   and `va_end`. Declarations shadowing these names may now warn (W0304).
-- A final ellipsis parses on C membrane declarations and definitions;
-  invalid positions, function-value uses, invalid starts and unsupported
-  targets have named diagnostics. The checked machine refuses variadic
-  calls in both directions. Native and release execution is still pending
-  in this preparatory checkpoint; the new clause is not yet a shipping
-  implementation claim.
+- Hand-declared C calls and exported variadic definitions work on Linux
+  x86-64 and `x86_64-unknown-none`, on native and release. Unnamed narrow
+  integers promote to `i32`, and `f32` promotes to `f64`; register overflow,
+  C-created lists, independent cursor copies and nested forwarding follow
+  the SysV ABI. C's decayed `va_list` parameter is spelled `*VaList`.
+- Other targets report E0826; the checked machine refuses both directions
+  by name. The header importer remains limited to its modelled call set.
+- Freestanding nonvariadic code remains SSE-free. Variadic entry saves are
+  guarded by incoming AL (or a proven unchanged register copy); a zero
+  vector count executes no SSE. The ordinary floating-value ban remains.
+- Formatting a malformed first item no longer repeats comments from the
+  already-emitted module header.
 
 s261 — the invocation name and byte-exact arguments (#899, #406).
 
