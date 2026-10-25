@@ -86,9 +86,9 @@ pub const ELSE_FALLBACK_RANGE: &str =
 /// and `conform-run` records it as `x-unsupported-note`. `None` for
 /// every construct with nothing to add.
 pub fn ledger_note(construct: &str) -> Option<&'static str> {
-    (construct == ELSE_FALLBACK_RANGE).then_some(
-        "the `else` fallback extends to the end of the expression; parenthesise `(… else 0)`",
-    )
+    // PLANT (s266, never merged): the #932 note is gone; the row must go red.
+    let _ = construct;
+    None
 }
 
 /// The per-body result contract (s13).
