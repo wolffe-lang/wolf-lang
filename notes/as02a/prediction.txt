@@ -1,0 +1,18 @@
+as02a prediction, before implementation
+
+Inputs: wolf-lang e65b89e5; clef 996a3ccd (as01 contract and seam
+controls, FORMATS/EXPAND/README read at that commit). No census pin moves.
+Two driver call sites change: emit=obj and linked native/release builds.
+Predict 16 new named tests covering selection, argv, refusals and real clef.
+The existing ELF x86-64 check stays; release clang IR generation stays.
+
+R-as02-1 recommendation A: CLI --assembler > nonempty WOLF_AS > legacy
+WOLF_CLANG/clang for freestanding, CC/cc for hosted. Failure is final.
+R-as02-4 recommendation A: --64 is the x86-64 as mode flag (freestanding
+or x86-64 host), not a universal 64-bit flag on AArch64 assemblers.
+Implement these recommendations without deciding a ruling.
+
+Hosted Windows and foreign hosted triples remain refused by name. Checked
+assembly remains unsupported; the exported-symbol roster stays text-derived.
+Linux container gauntlet on kasumi CPUs 4-7; startup bench row 23 is the
+known wolf-lang#952 failure, not waived. Run every later step separately.
