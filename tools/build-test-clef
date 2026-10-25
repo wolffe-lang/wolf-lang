@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Build the independently pinned assembler used by assembler_select's real rows.
+# An existing checkout/archive cache may be supplied for an offline container.
+set -euo pipefail
+pin=996a3ccdf160923757c4ce6aa474efdffa2135b3
+root=$(git rev-parse --show-toplevel)
+tree=${1:-$root/target/test-clef}
+if [ ! -d "$tree/.git" ]; then
+    git clone --no-checkout https://github.com/wolffe-lang/clef.git "$tree"
+    git -C "$tree" checkout --detach "$pin"
+fi
+[ "$(git -C "$tree" rev-parse HEAD)" = "$pin" ]
+git -C "$tree" diff --exit-code HEAD -- src tools/fetch-toolchain wolf-toolchain.toml
+"$tree/tools/fetch-toolchain"
+mkdir -p "$tree/target"
+"$tree/.wolf-bin/wolf/wolf-0.2.35-x86_64-unknown-linux-gnu/wolf" build \
+    --deny-warnings "$tree/src/clef.lu" -o "$tree/target/clef"
+sha256sum "$tree/target/clef"
+sha256sum "$tree/target/clef"
+if [ -n "${GITHUB_ENV:-}" ]; then
+    printf 'WOLF_TEST_CLEF=%s/target/clef\nWOLF_TEST_CLEF_REQUIRE=1\n' "$tree" >> "$GITHUB_ENV"
+fi

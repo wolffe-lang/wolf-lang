@@ -943,6 +943,8 @@ struct BuildOpts {
     /// test` never do — a record is reproducible from the file and the
     /// flags alone.
     manifest_target: bool,
+    /// Explicit as-shaped assembler; otherwise WOLF_AS then the legacy driver.
+    assembler: Option<PathBuf>,
 }
 
 impl BuildOpts {
@@ -964,6 +966,7 @@ impl BuildOpts {
             error_limit: 0,
             target: None,
             manifest_target: false,
+            assembler: None,
         }
     }
 }
@@ -1992,7 +1995,8 @@ fn compile_native(
         // the build's own, `K.asm-<stem>.o`, for the boot code's link.
         for (spelled, src) in &listed_asm.sources {
             let obj = asm::beside(out, spelled);
-            asm::assemble(spelled, src, &obj, target).map_err(BuildStop::Environment)?;
+            asm::assemble(spelled, src, &obj, target, opts.assembler.as_deref())
+                .map_err(BuildStop::Environment)?;
             if opts.verbose {
                 eprintln!("wolf build: assembled {spelled} -> {}", obj.display());
             }
@@ -2034,7 +2038,7 @@ fn compile_native(
             std::process::id(),
             objects.len()
         ));
-        let assembled = asm::assemble(spelled, src, &tmp, target)
+        let assembled = asm::assemble(spelled, src, &tmp, target, opts.assembler.as_deref())
             .and_then(|()| std::fs::read(&tmp).map_err(|e| format!("read {}: {e}", tmp.display())));
         let _ = std::fs::remove_file(&tmp);
         let bytes = assembled.map_err(BuildStop::Environment)?;
@@ -2796,6 +2800,7 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
         error_limit: DEFAULT_ERROR_LIMIT,
         target: None,
         manifest_target: true,
+        assembler: None,
     };
     let mut prog_args: Vec<std::ffi::OsString> = Vec::new();
     let mut script = script_cmd::Posture::default();
@@ -2839,6 +2844,17 @@ fn parse_build_cli(cmd: &str, args: &[String], run_mode: bool) -> BuildCli {
                 Ok(n) => opts.error_limit = n,
                 Err(_) => fail("--error-limit needs a count (0 for no limit)"),
             }
+        } else if a == "--assembler" {
+            i += 1;
+            match args.get(i) {
+                Some(v) if !v.is_empty() => opts.assembler = Some(PathBuf::from(v)),
+                _ => fail("--assembler needs a path"),
+            }
+        } else if let Some(v) = a.strip_prefix("--assembler=") {
+            if v.is_empty() {
+                fail("--assembler needs a path");
+            }
+            opts.assembler = Some(PathBuf::from(v));
         } else if a == "--target" {
             // kw04 (`[abi.target]`, K1): the build's target triple.
             i += 1;
