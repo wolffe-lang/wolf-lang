@@ -187,25 +187,6 @@ fn selection(cli: Option<&Path>, env: Option<std::ffi::OsString>) -> Option<Path
         .or_else(|| env.filter(|value| !value.is_empty()).map(PathBuf::from))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn assembler_cli_over_environment_over_default() {
-        assert_eq!(
-            selection(Some(Path::new("cli tool")), Some("env tool".into())),
-            Some("cli tool".into())
-        );
-        assert_eq!(
-            selection(None, Some("env tool".into())),
-            Some("env tool".into())
-        );
-        assert_eq!(selection(None, Some("".into())), None);
-        assert_eq!(selection(None, None), None);
-    }
-}
-
 /// The roster of the `wolf.pkg` beside `entry`, for the checked
 /// machine's refusal text (`[abi.asm.machines]`). conform-run's record
 /// is reproducible from the file and the flags alone, so the manifest
@@ -236,4 +217,23 @@ pub fn roster_beside(entry: &Path) -> Vec<String> {
         sources: Vec::new(),
         roster,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn assembler_cli_over_environment_over_default() {
+        assert_eq!(
+            selection(Some(Path::new("cli tool")), Some("env tool".into())),
+            Some("cli tool".into())
+        );
+        assert_eq!(
+            selection(None, Some("env tool".into())),
+            Some("env tool".into())
+        );
+        assert_eq!(selection(None, Some("".into())), None);
+        assert_eq!(selection(None, None), None);
+    }
 }
