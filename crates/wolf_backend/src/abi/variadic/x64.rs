@@ -40,7 +40,7 @@ pub fn incoming(frame: &Frame, start: Start) -> Code {
         frame.frame_bytes,
         frame.save_offset + super::SAVE_AREA_SIZE + 8
     );
-    let stack_bytes = frame.frame_bytes - 8;
+    let stack_bytes = frame.frame_bytes - 16; // planted: reserve eight bytes too few
     let mut bytes = vec![0x55, 0x48, 0x89, 0xe5]; // push rbp; mov rbp, rsp
     bytes.extend([0x48, 0x81, 0xec]); // sub rsp, imm32
     disp(&mut bytes, stack_bytes);
