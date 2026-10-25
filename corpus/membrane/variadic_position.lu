@@ -1,5 +1,5 @@
 //! check: fail(E0822)
-//! phase: parse
+//! phase: lex
 //! conforms: abi.c.variadic.syntax
 //! An unnamed tail cannot be followed by another named parameter.
 

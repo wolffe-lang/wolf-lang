@@ -1,5 +1,5 @@
 //! check: pass
-//! phase: parse
+//! phase: wir
 //! conforms: abi.c.variadic.syntax, gram.item.fn
 //! The ellipsis is not a named parameter in either membrane direction.
 

@@ -2,6 +2,6 @@
 source: crates/wolf_parse/tests/corpus_decls.rs
 expression: dump
 ---
-FnDecl 144..198 name=sum export body=Block
+FnDecl 142..196 name=sum export body=Block
 -- diagnostics --
-E0822 [Error] 166..169 `...` belongs after the last named parameter of an `extern "c" fn` or `export fn`
+E0822 [Error] 164..167 `...` belongs after the last named parameter of an `extern "c" fn` or `export fn`
