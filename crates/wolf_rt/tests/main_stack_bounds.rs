@@ -24,7 +24,11 @@ fn main() {
     let me = std::env::current_exe().expect("current_exe");
     let cases: [(&str, Option<libc::rlim_t>, usize); 5] = [
         ("stack limit 4 MiB", Some(4 << 20), 0),
-        ("stack limit 8191 KiB (not a page multiple)", Some(8191 << 10), 0),
+        (
+            "stack limit 8191 KiB (not a page multiple)",
+            Some(8191 << 10),
+            0,
+        ),
         ("stack limit 64 MiB", Some(64 << 20), 0),
         ("no stack limit", Some(libc::RLIM_INFINITY), 0),
         ("a 1 MiB environment", None, 1 << 20),
@@ -69,7 +73,10 @@ fn main() {
         eprintln!("main_stack_bounds: {name}: {st}");
         ok &= st.success();
     }
-    assert!(ok, "the cheap main-thread guard differs from pthread_getattr_np's");
+    assert!(
+        ok,
+        "the cheap main-thread guard differs from pthread_getattr_np's"
+    );
     println!("main_stack_bounds: ok");
 }
 

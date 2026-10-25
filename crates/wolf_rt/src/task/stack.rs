@@ -420,7 +420,9 @@ fn main_stack_bounds(here: usize, pg: usize) -> Option<(usize, usize)> {
         below
     } else {
         // Page-aligned up: the stack never grows past the limit.
-        hi.saturating_sub(rlim as usize).next_multiple_of(pg).max(below)
+        hi.saturating_sub(rlim as usize)
+            .next_multiple_of(pg)
+            .max(below)
     };
     let _ = lo;
     Some((floor.saturating_sub(pg), floor))
@@ -441,7 +443,12 @@ pub fn main_guard_both() -> (Option<(usize, usize)>, Option<(usize, usize)>) {
 #[cfg(target_os = "linux")]
 fn mapping_holding(addr: usize) -> Option<(usize, usize, usize)> {
     // SAFETY: a fixed path, our own buffer, the descriptor closed below.
-    let fd = unsafe { libc::open(c"/proc/self/maps".as_ptr(), libc::O_RDONLY | libc::O_CLOEXEC) };
+    let fd = unsafe {
+        libc::open(
+            c"/proc/self/maps".as_ptr(),
+            libc::O_RDONLY | libc::O_CLOEXEC,
+        )
+    };
     if fd < 0 {
         return None;
     }

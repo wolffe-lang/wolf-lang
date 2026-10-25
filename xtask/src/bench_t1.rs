@@ -2045,7 +2045,11 @@ fn startup_gate(dir: &Path, wolf: &Path, record: bool, failures: &mut Vec<String
         )),
     }
     if record && rec.is_none_or(|r| got < r) {
-        let mut doc = if doc.is_object() { doc } else { serde_json::json!({}) };
+        let mut doc = if doc.is_object() {
+            doc
+        } else {
+            serde_json::json!({})
+        };
         doc["hello_minus_c_syscalls"] = serde_json::json!(got);
         let text = serde_json::to_string_pretty(&doc).expect("json") + "\n";
         match std::fs::write(STARTUP_PATH, text) {
