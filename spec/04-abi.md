@@ -755,7 +755,8 @@ is added to a selected tool. This protocol is not a raw `ld` command.
 A selected tool's absent executable, nonzero exit, missing output or
 invalid output is final: no retry through cc. The result must parse as
 ELF64, little-endian, for the host architecture, with executable or
-shared-object type (the latter admits PIE). A prior output is removed
+shared-object type (the latter admits PIE), and a nonzero entry inside
+an executable segment's file-backed bytes. A prior output is removed
 before invocation, so a successful no-output tool cannot reuse it.
 With neither choice, Unix retains `CC`/`cc` and its existing lld probe;
 macOS retains Apple's driver and signing/debug handling; Windows

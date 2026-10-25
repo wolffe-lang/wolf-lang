@@ -266,6 +266,9 @@ mod linux {
         bytes = original.clone();
         bytes[4] = 1; // ELFCLASS32.
         corrupt_output("wrong class", &bytes);
+        bytes = original.clone();
+        bytes[24..32].fill(0); // No executable entry, as in a shared library.
+        corrupt_output("missing entry", &bytes);
         bytes = original;
         bytes[16] = 1; // ET_REL, not an executable.
         corrupt_output("relocatable", &bytes);

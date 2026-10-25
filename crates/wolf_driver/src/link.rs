@@ -49,7 +49,7 @@ pub fn selected(
             out.display()
         ));
     }
-    use object::Object;
+    use object::{Object, ObjectSegment};
     let bytes =
         std::fs::read(out).map_err(|e| format!("selected linker: read {}: {e}", out.display()))?;
     let arch = if cfg!(target_arch = "x86_64") {
@@ -66,6 +66,16 @@ pub fn selected(
                 file.kind(),
                 object::ObjectKind::Executable | object::ObjectKind::Dynamic
             )
+            && file.entry() != 0
+            && file.segments().any(|segment| {
+                matches!(segment.flags(), object::SegmentFlags::Elf { p_flags } if p_flags & 1 != 0)
+                    && file
+                        .entry()
+                        .checked_sub(segment.address())
+                        .is_some_and(|offset| {
+                            segment.data().is_ok_and(|data| offset < data.len() as u64)
+                        })
+            })
     });
     if !valid {
         return Err(format!(
