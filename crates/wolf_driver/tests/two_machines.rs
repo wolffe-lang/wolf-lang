@@ -1,6 +1,7 @@
 //! s256 (#866, #867). Faults run only in a container or on a disposable
 //! macOS CI runner. A compiler refusal is never a successful overflow.
 mod lane_exit;
+mod test_cpus;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -78,8 +79,11 @@ fn fault_run(dir: &Path, exe: &str, depth: &str, fallback: bool) -> Option<Outpu
         {
             continue;
         }
+        // Four of the allocation (`test_cpus`, wolf-lang#925), never a
+        // fixed `0-3` another lane may own.
+        let cpus = test_cpus::subset(4, "stack_overflow_is_named_on_both_tiers_and_threads")?;
         return Some(Command::new(engine)
-            .args(["run", "--rm", "--network", "none", "--cpuset-cpus", "0-3", "-v"])
+            .args(["run", "--rm", "--network", "none", "--cpuset-cpus", &cpus, "-v"])
             .arg(format!("{}:/w", dir.display()))
             .args(["-e", &format!("WOLF_TASK_STACK={reserve}")])
             .args(["-w", "/w", &image, "sh", "-c",
